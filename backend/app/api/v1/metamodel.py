@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 import uuid
 
@@ -19,6 +20,12 @@ from app.models.relation_type import RelationType
 from app.models.resource_type import ResourceType
 from app.models.stakeholder import Stakeholder
 from app.models.user import User
+from app.services.extensions.registry import extension_registry
+from app.services.hierarchy import (
+    HIERARCHY_LEVEL_KEY,
+    backfill_hierarchy_levels_for_type,
+    hierarchy_level_field_def,
+)
 from app.services.permission_service import PermissionService
 
 logger = logging.getLogger("turboea.metamodel")
@@ -40,6 +47,76 @@ def _scoring_signature(fields_schema: list | None, section_config: dict | None) 
                 field_weights[field["key"]] = field.get("weight", 1)
     dq_cfg = (section_config or {}).get("__dataQuality") or {}
     return {"fields": field_weights, "dq": dq_cfg}
+
+
+# ── Extension-gated field capabilities ─────────────────────────────────
+#
+# Two advanced field-authoring capabilities ship as INERT core plumbing: the
+# schema understands them and the card detail renders them unconditionally, but
+# an admin can only *author* them when an installed, enabled, licensed extension
+# grants the matching capability (see registry.grants_for). This is the
+# monetisation boundary — the free core never exposes a UI to create these, and
+# the API strips any attempt to add them without the grant. Rendering is never
+# gated (a licence lapse must never blank a card or delete data), and existing
+# values are grandfathered so a lapse can't block unrelated metamodel edits.
+CAP_FIELD_HELP = "metamodel.field_help"
+CAP_CUSTOM_FIELD_TYPES = "metamodel.custom_field_types"
+_BUILTIN_FIELD_TYPES = frozenset(
+    {
+        "text",
+        "multiline_text",
+        "number",
+        "cost",
+        "boolean",
+        "date",
+        "url",
+        "single_select",
+        "multiple_select",
+    }
+)
+
+
+def _enforce_field_gating(
+    new_schema: list | None, old_schema: list | None, granted: set[str]
+) -> list:
+    """Drop gated field attributes (help text, custom ``ext.*`` types) unless an
+    extension grants them. Grandfathers already-stored values verbatim so a
+    lapse never mutates card data or blocks an unrelated edit."""
+    new_schema = new_schema or []
+    help_granted = CAP_FIELD_HELP in granted
+    custom_granted = CAP_CUSTOM_FIELD_TYPES in granted
+    if help_granted and custom_granted:
+        return new_schema
+
+    old_fields: dict[str, dict] = {}
+    for section in old_schema or []:
+        for f in section.get("fields", []) if isinstance(section, dict) else []:
+            if isinstance(f, dict) and "key" in f:
+                old_fields[f["key"]] = f
+
+    for section in new_schema:
+        if not isinstance(section, dict):
+            continue
+        for f in section.get("fields", []):
+            if not isinstance(f, dict):
+                continue
+            old = old_fields.get(f.get("key")) or {}
+            if not help_granted:
+                # Grandfather only the exact stored help; drop anything new/changed.
+                for attr in ("help", "helpTranslations"):
+                    if f.get(attr) != old.get(attr):
+                        if old.get(attr) is None:
+                            f.pop(attr, None)
+                        else:
+                            f[attr] = old[attr]
+            if not custom_granted:
+                ftype = f.get("type")
+                if isinstance(ftype, str) and ftype.startswith("ext."):
+                    old_type = old.get("type")
+                    if old_type == ftype:
+                        continue  # grandfather an already-stored custom type
+                    f["type"] = old_type if old_type in _BUILTIN_FIELD_TYPES else "text"
+    return new_schema
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -234,9 +311,22 @@ async def _cleanup_removed_fields_and_options(
         for f in section.get("fields", []):
             new_fields[f["key"]] = f
 
-    # 1) Removed fields — delete the key from attributes JSONB
+    # 1) Removed fields — delete the key from attributes JSONB.
+    #    Extension-contributed fields (stamped ``ext``) are exempt: an
+    #    extension's disable/uninstall path removes them from the schema *while
+    #    preserving the stored values* (see field_contributions.remove_field_
+    #    contributions), and a manual metamodel edit that drops the field must
+    #    honour the same contract rather than hard-deleting the data.
     removed_field_keys = set(old_fields.keys()) - set(new_fields.keys())
     for fk in removed_field_keys:
+        if old_fields[fk].get("ext"):
+            logger.info(
+                "Skipping data cleanup for extension-owned field '%s' on type '%s' "
+                "(values preserved for re-enable)",
+                fk,
+                type_key,
+            )
+            continue
         result = await db.execute(
             text(
                 "UPDATE cards SET attributes = attributes - :field_key "
@@ -450,6 +540,55 @@ async def get_option_usage(
     }
 
 
+def _has_hierarchy_level_field(schema: list) -> bool:
+    return any(
+        isinstance(s, dict) and f.get("key") == HIERARCHY_LEVEL_KEY
+        for s in (schema or [])
+        for f in s.get("fields", [])
+    )
+
+
+def _inject_hierarchy_level_field(schema: list) -> list:
+    """Return a copy of ``schema`` with the readonly ``hierarchyLevel`` field.
+
+    No-op copy when a field keyed ``hierarchyLevel`` already exists anywhere
+    (never hijack an admin-authored field). Appends to the first section,
+    creating a ``General`` section when the schema is empty. Always returns a
+    fresh list so a caller reassigning to a JSONB column triggers dirty tracking.
+    """
+    schema = copy.deepcopy(schema or [])
+    if _has_hierarchy_level_field(schema):
+        return schema
+    if schema:
+        schema[0].setdefault("fields", []).append(hierarchy_level_field_def())
+    else:
+        schema = [{"section": "General", "fields": [hierarchy_level_field_def()]}]
+    return schema
+
+
+def _remove_injected_hierarchy_level_field(schema: list) -> list:
+    """Return a copy of ``schema`` without the auto-injected ``hierarchyLevel`` def.
+
+    Only strips the injected shape (readonly number keyed ``hierarchyLevel``);
+    leaves a non-matching admin-authored field alone and never touches stored
+    card attribute values.
+    """
+    schema = copy.deepcopy(schema or [])
+    for section in schema:
+        if not isinstance(section, dict):
+            continue
+        section["fields"] = [
+            f
+            for f in section.get("fields", [])
+            if not (
+                f.get("key") == HIERARCHY_LEVEL_KEY
+                and f.get("readonly")
+                and f.get("type") == "number"
+            )
+        ]
+    return schema
+
+
 @router.post("/types", status_code=201)
 async def create_type(
     body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
@@ -467,6 +606,14 @@ async def create_type(
         {"key": "responsible", "label": "Responsible"},
         {"key": "observer", "label": "Observer"},
     ]
+    await extension_registry.refresh_from_db(db)
+    fields_schema = _enforce_field_gating(
+        body.get("fields_schema", []), [], extension_registry.granted_capabilities()
+    )
+    # Auto-add the readonly hierarchyLevel field for hierarchical types (after
+    # gating, which only strips help/ext.* fields — a plain number field is safe).
+    if body.get("has_hierarchy"):
+        fields_schema = _inject_hierarchy_level_field(fields_schema)
     t = CardType(
         key=body["key"],
         label=body["label"],
@@ -477,7 +624,7 @@ async def create_type(
         has_hierarchy=body.get("has_hierarchy", False),
         has_successors=body.get("has_successors", False),
         subtypes=body.get("subtypes", []),
-        fields_schema=body.get("fields_schema", []),
+        fields_schema=fields_schema,
         stakeholder_roles=body.get("stakeholder_roles", default_roles),
         built_in=False,
         is_hidden=False,
@@ -535,11 +682,20 @@ async def update_type(
             t.fields_schema or [],
             body["fields_schema"] or [],
         )
+        # Strip extension-gated field attributes (help text, custom types) that
+        # aren't unlocked by a licensed extension — grandfathering stored values.
+        await extension_registry.refresh_from_db(db)
+        body["fields_schema"] = _enforce_field_gating(
+            body["fields_schema"] or [],
+            t.fields_schema or [],
+            extension_registry.granted_capabilities(),
+        )
 
     # Snapshot the data-quality-relevant config so we can re-score existing
     # cards if (and only if) the admin changed field weights or the built-in
     # contributor weights.
     old_signature = _scoring_signature(t.fields_schema, t.section_config)
+    old_has_hierarchy = t.has_hierarchy
 
     updatable = [
         "label",
@@ -567,6 +723,21 @@ async def update_type(
     # relation type — on their next save.
     if t.has_successors:
         await _ensure_successor_relation_type(db, t.key)
+
+    # Keep the auto-injected hierarchyLevel field in sync with has_hierarchy.
+    # Runs on the final merged state so it self-heals older hierarchical types
+    # on any save (idempotent — same style as _ensure_successor_relation_type).
+    if t.has_hierarchy:
+        if not _has_hierarchy_level_field(t.fields_schema or []):
+            t.fields_schema = _inject_hierarchy_level_field(t.fields_schema or [])
+        if not old_has_hierarchy:
+            # Newly hierarchical — backfill existing cards so the column/filter
+            # is populated immediately instead of lazily per card edit.
+            await backfill_hierarchy_levels_for_type(db, key)
+    else:
+        # Hierarchy disabled — drop the injected field def but KEEP card
+        # attribute values (invisible without a def, meaningful again on re-enable).
+        t.fields_schema = _remove_injected_hierarchy_level_field(t.fields_schema or [])
 
     await db.commit()
     await db.refresh(t)

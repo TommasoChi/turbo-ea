@@ -23,6 +23,15 @@ def _read_version() -> str:
 
 APP_VERSION = _read_version()
 
+# The vendor's extension catalogue — a hard constant, deliberately NOT an
+# environment variable. The Store tab on Admin → Extensions is part of the
+# product on every install; there is no opt-in/opt-out configuration
+# (repointing it means forking, exactly like the trusted vendor keys in
+# app/core/extension_signing.py). Air-gapped instances need nothing: an
+# unreachable catalogue degrades to a friendly offline hint and the
+# file-based install flow is always fully functional.
+EXTENSION_STORE_URL = "https://store.turbo-ea.org"
+
 
 class Settings:
     PROJECT_NAME: str = "Turbo EA"
@@ -85,6 +94,20 @@ class Settings:
     # Public base URL used in email links — seeded from the stored email
     # settings (app_base_url) at startup / on save; empty means localhost.
     _app_base_url: str = ""
+
+    # Control-plane ops API (optional — the /api/v1/ops router only accepts
+    # requests when this Ed25519 public key (base64 raw 32 bytes) is set.
+    # Managed Turbo EA Cloud deployments inject it; self-hosted installs
+    # leave it empty and the ops API answers 404.
+    OPS_PUBLIC_KEY: str = os.getenv("OPS_PUBLIC_KEY", "")
+
+    # Base URL of the vendor's extension catalogue (static hosting serving
+    # catalog.json + the public .teax bundles). Powers the in-product Store
+    # tab: the backend proxies the catalogue and downloads bundles from
+    # here — read-only, no account, no token, and every download goes
+    # through the same signature verification as a manual upload. A code
+    # constant by design (see the module-level comment) — no env override.
+    EXTENSION_STORE_URL: str = EXTENSION_STORE_URL
 
     # AI / LLM (optional — disabled by default)
     AI_PROVIDER_URL: str = os.getenv("AI_PROVIDER_URL", "")

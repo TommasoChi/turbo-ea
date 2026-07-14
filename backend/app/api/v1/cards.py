@@ -73,6 +73,7 @@ from app.services.card_uniqueness import check_sibling_name_unique
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.data_quality import calc_data_quality
 from app.services.event_bus import event_bus
+from app.services.hierarchy import HIERARCHY_LEVEL_KEY
 from app.services.permission_service import PermissionService
 
 # Fields that PPM budget/cost lines manage — calculations must not overwrite these.
@@ -250,44 +251,92 @@ async def _check_hierarchy_depth(
         )
 
 
-async def _sync_capability_level(db: AsyncSession, card: Card) -> None:
-    """Auto-compute capabilityLevel for BusinessCapability based on parent depth.
+async def _sync_hierarchy_levels(db: AsyncSession, card: Card) -> list[Card]:
+    """Recompute hierarchy-level attributes for a card and its ACTIVE subtree.
 
-    Macros are pinned: a card whose own ``capabilityLevel`` is ``"Macro"``
-    keeps that value regardless of where it sits. For everyone else, if the
-    chain root is a macro, we subtract one from the depth so the macro
-    occupies position 0 and its children correctly resolve to L1, L2, …
-    Cascades to children recursively.
+    For any ``has_hierarchy`` card type, writes ``attributes.hierarchyLevel``
+    (raw tree depth, 1 = root, not capped). For BusinessCapability it *also*
+    maintains ``attributes.capabilityLevel`` (macro-aware, capped L1..L5) —
+    macros stay pinned to ``"Macro"`` and never get their capabilityLevel
+    recomputed, but do receive a raw ``hierarchyLevel`` like every node.
+
+    Cascades into ACTIVE descendants and returns every visited card whose level
+    value actually changed, so callers can re-run calculations only where the
+    tree position moved.
     """
-    if card.type != "BusinessCapability":
-        return
+    hier_cache: dict[str, bool] = {}
 
-    own_attrs = card.attributes or {}
-    if own_attrs.get("capabilityLevel") == MACRO_CAPABILITY_LEVEL_KEY:
-        # Macros are roots — refresh nothing, but still cascade so children
-        # that just got re-parented to this macro pick up the right level.
-        children_result = await db.execute(
-            select(Card).where(Card.parent_id == card.id, Card.status == "ACTIVE")
-        )
-        for child in children_result.scalars().all():
-            await _sync_capability_level(db, child)
+    async def _is_hierarchical(type_key: str) -> bool:
+        if type_key not in hier_cache:
+            hier_cache[type_key] = bool(
+                await db.scalar(select(CardType.has_hierarchy).where(CardType.key == type_key))
+            )
+        return hier_cache[type_key]
+
+    changed: list[Card] = []
+    await _sync_hierarchy_node(db, card, changed, _is_hierarchical)
+    return changed
+
+
+async def _sync_hierarchy_node(
+    db: AsyncSession,
+    card: Card,
+    changed: list[Card],
+    is_hierarchical,
+) -> None:
+    hier = await is_hierarchical(card.type)
+    is_bizcap = card.type == "BusinessCapability"
+    # Nothing to compute for a card that is neither hierarchical nor a
+    # BusinessCapability (capabilityLevel is maintained for BusinessCapability
+    # regardless of the has_hierarchy flag — preserving pre-existing behaviour).
+    if not hier and not is_bizcap:
         return
 
     depth, root_is_macro = await _walk_ancestor_chain(db, card.parent_id, exclude={card.id})
+    attrs = dict(card.attributes or {})
+    dirty = False
 
-    logical_depth = max(depth - 1, 0) if root_is_macro else depth
-    level_key = f"L{min(logical_depth + 1, 5)}"
-    attrs = dict(own_attrs)
-    if attrs.get("capabilityLevel") != level_key:
-        attrs["capabilityLevel"] = level_key
+    if hier:
+        raw_level = depth + 1  # NOT macro-aware, NOT capped
+        if attrs.get(HIERARCHY_LEVEL_KEY) != raw_level:
+            attrs[HIERARCHY_LEVEL_KEY] = raw_level
+            dirty = True
+
+    if is_bizcap:
+        # Macros are pinned — keep "Macro", never recompute their capabilityLevel.
+        if attrs.get("capabilityLevel") != MACRO_CAPABILITY_LEVEL_KEY:
+            logical_depth = max(depth - 1, 0) if root_is_macro else depth
+            level_key = f"L{min(logical_depth + 1, 5)}"
+            if attrs.get("capabilityLevel") != level_key:
+                attrs["capabilityLevel"] = level_key
+                dirty = True
+
+    if dirty:
         card.attributes = attrs
+        changed.append(card)
 
-    # Cascade to direct children
+    # Cascade to ACTIVE direct children
     children_result = await db.execute(
         select(Card).where(Card.parent_id == card.id, Card.status == "ACTIVE")
     )
     for child in children_result.scalars().all():
-        await _sync_capability_level(db, child)
+        await _sync_hierarchy_node(db, child, changed, is_hierarchical)
+
+
+async def _recalc_changed_descendants(
+    db: AsyncSession, changed: list[Card], primary_card_id: uuid.UUID
+) -> None:
+    """Re-run calculations for descendants whose hierarchy level moved.
+
+    Keeps formulas that reference ``hierarchy_level`` / ``parent`` correct after
+    a subtree is re-parented. The primary card is skipped — its caller runs
+    calculations for it separately (so ordering stays parent-before-children).
+    """
+    for c in changed:
+        if c.id == primary_card_id:
+            continue
+        excl = await _get_ppm_exclusions(db, c)
+        await run_calculations_for_card(db, c, exclude_fields=excl)
 
 
 def _card_to_response(card: Card, *, strip_cost_keys: frozenset[str] = frozenset()) -> CardResponse:
@@ -719,8 +768,9 @@ async def create_card(
     if card.parent_id:
         await _check_hierarchy_depth(db, card, card.parent_id)
 
-    # Auto-set capability level for BusinessCapability
-    await _sync_capability_level(db, card)
+    # Auto-set hierarchy levels (hierarchyLevel for any hierarchical type;
+    # capabilityLevel for BusinessCapability)
+    changed_levels = await _sync_hierarchy_levels(db, card)
 
     # Compute data quality score
     card.data_quality = await calc_data_quality(db, card)
@@ -728,6 +778,7 @@ async def create_card(
     # Run calculated fields (skip PPM-managed cost fields if PPM data exists)
     ppm_excl = await _get_ppm_exclusions(db, card)
     await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
+    await _recalc_changed_descendants(db, changed_levels, card.id)
 
     await event_bus.publish(
         "card.created",
@@ -783,6 +834,33 @@ async def bulk_create_cards(
     """
     await PermissionService.require_permission(db, user, "inventory.create")
 
+    rows = list(body.cards)
+
+    # `row_index` is used as a dict key throughout this handler (parent
+    # resolution, topo sort, per-row results) and by the caller to pair each
+    # response back to its source row. Duplicate indices would silently
+    # collapse rows — one card dropped, both reported "created" with the same
+    # id. Reject them loudly so a buggy caller fails fast instead of losing
+    # data quietly (see issue #767: the importer used to send per-sheet row
+    # numbers that collided across sheets). Checked before the dry-run
+    # savepoint is opened so the error path leaves no dangling transaction.
+    seen_indices: set[int] = set()
+    duplicate_indices: set[int] = set()
+    for r in rows:
+        if r.row_index in seen_indices:
+            duplicate_indices.add(r.row_index)
+        else:
+            seen_indices.add(r.row_index)
+    if duplicate_indices:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Duplicate row_index values in batch: "
+                f"{', '.join(str(i) for i in sorted(duplicate_indices))}. "
+                "Each card must carry a unique row_index."
+            ),
+        )
+
     # Dry-run isolation: wrap the whole batch in our own savepoint so the
     # discard at the end only undoes our work and never reaches a wrapping
     # transaction (e.g. the savepoint that backs the integration-test
@@ -790,7 +868,6 @@ async def bulk_create_cards(
     # transaction and take fixture data with it.
     dry_run_savepoint = await db.begin_nested() if body.dry_run else None
 
-    rows = list(body.cards)
     by_index: dict[int, CardBulkCreateResult] = {}
 
     # Build a resolver scoped to every type that might serve as a parent.
@@ -807,20 +884,31 @@ async def bulk_create_cards(
         parent_row_idx: int | None = None
         # Only look up a same-batch parent when the row didn't supply a UUID.
         if r.parent_id is None and r.parent_name:
-            # Try exact `(parent_path, parent_name)` first, then bare name.
-            keys = [_path_key(r.type, r.parent_path or [], r.parent_name)]
-            # Same-name siblings may share a parent_path that includes the
-            # path segments — also try the bare-name index as a fallback.
-            keys.append(_path_key(r.type, [], r.parent_name))
+            # The child references its parent by the FULL ancestor chain
+            # (`parent_path` = every level above the parent, `parent_name` =
+            # the parent itself).
+            full_ref = _path_key(r.type, r.parent_path or [], r.parent_name)
+            bare_ref = _path_key(r.type, [], r.parent_name)
+            bare_fallback: int | None = None
             for other in rows:
-                if other is r:
+                if other is r or other.type != r.type:
                     continue
-                if other.type != r.type:
-                    continue
-                other_key = _path_key(other.type, other.parent_path or [], other.name)
-                if other_key in keys:
+                # Exact `(parent_path, name)` match wins.
+                if _path_key(other.type, other.parent_path or [], other.name) == full_ref:
                     parent_row_idx = other.row_index
                     break
+                # Bare-name match is the fallback. A parent row indexes itself
+                # under its OWN (shorter) parent_path, while the child names it
+                # with the full ancestor chain, so the full keys never line up
+                # for hierarchies 3+ levels deep — the topo edge would be lost
+                # and a deep child could be processed before its parent exists
+                # ("Parent not found"). Matching the bare name restores the
+                # ordering edge; it mirrors the resolution pass below, which
+                # also falls back to the bare-name index.
+                if bare_fallback is None and _path_key(other.type, [], other.name) == bare_ref:
+                    bare_fallback = other.row_index
+            if parent_row_idx is None:
+                parent_row_idx = bare_fallback
         parent_row_of[r.row_index] = parent_row_idx
 
     # Kahn's algorithm: produce a list of row_indices in topo order.
@@ -853,6 +941,12 @@ async def bulk_create_cards(
 
     for row_idx in order:
         r = rows_by_index[row_idx]
+        # Per-row savepoint so a row that fails at flush time (e.g. a database
+        # integrity error) rolls back only itself. Without this, one failed
+        # flush poisons the whole session transaction and every subsequent row
+        # cascades with "transaction has been rolled back" — defeating the
+        # per-row result reporting this handler is built around.
+        row_sp = await db.begin_nested()
         try:
             await _validate_url_attributes(db, r.type, r.attributes or {})
 
@@ -923,10 +1017,11 @@ async def bulk_create_cards(
 
             if card.parent_id:
                 await _check_hierarchy_depth(db, card, card.parent_id)
-            await _sync_capability_level(db, card)
+            changed_levels = await _sync_hierarchy_levels(db, card)
             card.data_quality = await calc_data_quality(db, card)
             ppm_excl = await _get_ppm_exclusions(db, card)
             await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
+            await _recalc_changed_descendants(db, changed_levels, card.id)
 
             if not body.dry_run:
                 await event_bus.publish(
@@ -936,7 +1031,18 @@ async def bulk_create_cards(
                     card_id=card.id,
                     user_id=user.id,
                 )
-
+        except HTTPException as exc:
+            await row_sp.rollback()
+            by_index[r.row_index] = CardBulkCreateResult(
+                row_index=r.row_index, status="failed", error=exc.detail
+            )
+        except Exception as exc:  # noqa: BLE001 — surface anything to the user
+            await row_sp.rollback()
+            by_index[r.row_index] = CardBulkCreateResult(
+                row_index=r.row_index, status="failed", error=str(exc)
+            )
+        else:
+            await row_sp.commit()
             # Index this freshly-created card so subsequent rows can reference
             # it as a parent (under both its full path and bare-name keys).
             full_key = _path_key(r.type, r.parent_path or [], r.name)
@@ -946,14 +1052,6 @@ async def bulk_create_cards(
 
             by_index[r.row_index] = CardBulkCreateResult(
                 row_index=r.row_index, status="created", id=str(card.id)
-            )
-        except HTTPException as exc:
-            by_index[r.row_index] = CardBulkCreateResult(
-                row_index=r.row_index, status="failed", error=exc.detail
-            )
-        except Exception as exc:  # noqa: BLE001 — surface anything to the user
-            by_index[r.row_index] = CardBulkCreateResult(
-                row_index=r.row_index, status="failed", error=str(exc)
             )
 
     for cycle_idx in cycle_rows:
@@ -1060,6 +1158,9 @@ async def cards_counts(
 async def get_card(
     card_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
+    await PermissionService.require_permission(
+        db, user, "inventory.view", card_id=uuid.UUID(card_id), card_permission="card.view"
+    )
     result = await db.execute(
         select(Card)
         .where(Card.id == uuid.UUID(card_id))
@@ -1076,10 +1177,13 @@ async def get_card(
 
 @router.get("/{card_id}/hierarchy")
 async def get_hierarchy(
-    card_id: str, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)
+    card_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     """Return ancestors (root→parent), children, and computed level."""
     uid = uuid.UUID(card_id)
+    await PermissionService.require_permission(
+        db, user, "inventory.view", card_id=uid, card_permission="card.view"
+    )
     result = await db.execute(select(Card).where(Card.id == uid))
     card = result.scalar_one_or_none()
     if not card:
@@ -1118,7 +1222,7 @@ async def get_hierarchy(
 async def relation_summary(
     card_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """Per-relation-type / per-direction neighbour counts for one card.
 
@@ -1131,6 +1235,9 @@ async def relation_summary(
     relations.
     """
     uid = uuid.UUID(card_id)
+    await PermissionService.require_permission(
+        db, user, "inventory.view", card_id=uid, card_permission="card.view"
+    )
     card = await db.get(Card, uid)
     if not card:
         raise HTTPException(404, "Card not found")
@@ -1440,9 +1547,12 @@ async def bulk_archive_cards(
     cascaded_card_ids = [str(cid) for cid in (descendants_set | related_set) if cid in flipped_ids]
 
     for fcard in flipped:
+        event_data = {"id": str(fcard.id), "type": fcard.type, "name": fcard.name}
+        if body.reason:
+            event_data["reason"] = body.reason
         await event_bus.publish(
             "card.archived",
-            {"id": str(fcard.id), "type": fcard.type, "name": fcard.name},
+            event_data,
             db=db,
             card_id=fcard.id,
             user_id=user.id,
@@ -1839,11 +1949,17 @@ async def update_card(
             if status_breaking & changes.keys():
                 card.approval_status = "BROKEN"
 
-        # Auto-sync capability level when parent changes or level is missing
-        if "parent_id" in changes or (
-            card.type == "BusinessCapability" and not (card.attributes or {}).get("capabilityLevel")
+        # Auto-sync hierarchy levels when the parent changes or a level is
+        # missing (lazy heal). Covers hierarchyLevel for any hierarchical type
+        # and capabilityLevel for BusinessCapability.
+        current_attrs = card.attributes or {}
+        changed_levels: list[Card] = []
+        if (
+            "parent_id" in changes
+            or current_attrs.get(HIERARCHY_LEVEL_KEY) is None
+            or (card.type == "BusinessCapability" and not current_attrs.get("capabilityLevel"))
         ):
-            await _sync_capability_level(db, card)
+            changed_levels = await _sync_hierarchy_levels(db, card)
 
         # Recalculate completion
         card.data_quality = await calc_data_quality(db, card)
@@ -1851,6 +1967,9 @@ async def update_card(
         # Run calculated fields (skip PPM-managed cost fields if PPM data exists)
         ppm_excl = await _get_ppm_exclusions(db, card)
         await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
+        # Re-run calcs for descendants whose level moved (after the card's own
+        # run, so a child formula reading a parent's computed field sees it fresh)
+        await _recalc_changed_descendants(db, changed_levels, card.id)
 
         def _serialize_val(v: object) -> object:
             """Convert a value to something JSON-serialisable."""
@@ -1906,7 +2025,7 @@ async def update_card(
 async def get_archive_impact(
     card_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """Pre-flight payload for the archive/delete dialog.
 
@@ -1915,6 +2034,9 @@ async def get_archive_impact(
     the relations list endpoint at `/api/v1/relations`.
     """
     uid = uuid.UUID(card_id)
+    await PermissionService.require_permission(
+        db, user, "inventory.view", card_id=uid, card_permission="card.view"
+    )
     res = await db.execute(select(Card).where(Card.id == uid))
     primary = res.scalar_one_or_none()
     if not primary:
@@ -2186,7 +2308,7 @@ async def archive_card(
 async def get_restore_impact(
     card_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """List the cards that were archived together with this one and are still archived.
 
@@ -2195,6 +2317,9 @@ async def get_restore_impact(
     individually restored are filtered out.
     """
     uid = uuid.UUID(card_id)
+    await PermissionService.require_permission(
+        db, user, "inventory.view", card_id=uid, card_permission="card.view"
+    )
     res = await db.execute(select(Card).where(Card.id == uid))
     primary = res.scalar_one_or_none()
     if not primary:
@@ -2461,10 +2586,13 @@ async def fix_hierarchy_names(
 async def get_history(
     card_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
+    await PermissionService.require_permission(
+        db, user, "inventory.view", card_id=uuid.UUID(card_id), card_permission="card.view"
+    )
     q = (
         select(Event)
         .where(Event.card_id == uuid.UUID(card_id))

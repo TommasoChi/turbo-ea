@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import logging
+import math
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -22,6 +23,7 @@ from app.models.card import Card
 from app.models.card_type import CardType
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
+from app.services.hierarchy import compute_hierarchy_level
 
 logger = logging.getLogger("turboea.calculations")
 
@@ -72,6 +74,14 @@ def _ABS(value: float | None) -> float | None:  # noqa: N802
     if value is None:
         return None
     return abs(value)
+
+
+def _LN(value: float | None) -> float | None:  # noqa: N802
+    """Natural logarithm. Non-positive, None, and non-numeric input all yield
+    None (never raise) so a formula can't crash on empty/zero field values."""
+    if not isinstance(value, (int, float)) or value <= 0:
+        return None
+    return math.log(value)
 
 
 def _COALESCE(*args: Any) -> Any:  # noqa: N802
@@ -150,6 +160,7 @@ SAFE_FUNCTIONS = {
     "COUNT": _COUNT,
     "ROUND": _ROUND,
     "ABS": _ABS,
+    "LN": _LN,
     "COALESCE": _COALESCE,
     "LOWER": _LOWER,
     "UPPER": _UPPER,
@@ -271,12 +282,38 @@ async def _build_context(db: AsyncSession, card: Card) -> dict[str, Any]:
         for c in children_cards
     ]
 
+    # Parent card (same ACTIVE filter as children/relations). None — not an
+    # empty dict — when absent so `IF(parent, parent.attributes.x, …)` and
+    # `COALESCE(parent, …)` behave; an empty dict would still crash on the
+    # nested `parent.attributes.x` access.
+    parent = None
+    if card.parent_id:
+        parent_result = await db.execute(select(Card).where(Card.id == card.parent_id))
+        parent_card = parent_result.scalar_one_or_none()
+        if parent_card and parent_card.status == "ACTIVE":
+            parent = _DotDict(
+                {
+                    "id": str(parent_card.id),
+                    "name": parent_card.name,
+                    "type": parent_card.type,
+                    "subtype": parent_card.subtype,
+                    "attributes": _DotDict(parent_card.attributes or {}),
+                }
+            )
+
+    # Hierarchy depth (1 = root). Computed live so it's independent of the
+    # persisted attributes.hierarchyLevel (immune to sync/backfill ordering)
+    # and defined for non-hierarchical types too (always 1).
+    hierarchy_level = await compute_hierarchy_level(db, card.parent_id, exclude={card.id})
+
     return {
         "data": data,
         "relations": relations,
         "relation_count": relation_count,
         "children": children,
         "children_count": len(children),
+        "parent": parent,
+        "hierarchy_level": hierarchy_level,
         "None": None,
         "True": True,
         "False": False,
@@ -513,15 +550,35 @@ async def validate_formula(formula: str, target_type_key: str, db: AsyncSession)
             for field in section.get("fields", []):
                 key = field["key"]
                 ftype = field.get("type", "text")
-                if ftype in ("number", "cost"):
-                    dummy_data[key] = 0
-                elif ftype == "boolean":
+                if ftype == "boolean":
                     dummy_data[key] = False
                 elif ftype in ("single_select", "multiple_select"):
                     opts = field.get("options", [])
                     dummy_data[key] = opts[0]["key"] if opts else None
                 else:
-                    dummy_data[key] = ""
+                    # Everything else — number/cost, text-ish, ext.* custom
+                    # types, unknowns — is seeded as a NON-ZERO number. The old
+                    # 0/"" seeds failed legitimate formulas: `3 * data.rating`
+                    # over an ext.* field hit 3 * "" → "" and blew up on the
+                    # next arithmetic op, and a ratio over numeric fields hit
+                    # 0/(0*0) → ZeroDivisionError. A dummy of 1 exercises the
+                    # same code paths with realistic input; the string builtins
+                    # (LOWER/UPPER/CONTAINS) are isinstance-guarded, so a
+                    # numeric dummy never crashes a string formula.
+                    dummy_data[key] = 1
+
+        # A populated dummy parent so `parent.attributes.someField` validates;
+        # hierarchy_level of 2 so both branches of `hierarchy_level == 1` checks
+        # exercise cleanly.
+        dummy_parent = _DotDict(
+            {
+                "id": "00000000-0000-0000-0000-000000000000",
+                "name": "Parent",
+                "type": target_type_key,
+                "subtype": None,
+                "attributes": _DotDict(dict(dummy_data)),
+            }
+        )
 
         context = {
             "data": dummy_data,
@@ -529,6 +586,8 @@ async def validate_formula(formula: str, target_type_key: str, db: AsyncSession)
             "relation_count": _DotDict(),
             "children": [],
             "children_count": 0,
+            "parent": dummy_parent,
+            "hierarchy_level": 2,
             "None": None,
             "True": True,
             "False": False,

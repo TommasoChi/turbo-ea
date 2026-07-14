@@ -15,6 +15,7 @@
         "type": "object"
       },
       "ADRCreate": {
+        "additionalProperties": false,
         "properties": {
           "alternatives_considered": {
             "anyOf": [
@@ -59,6 +60,20 @@
               }
             ],
             "title": "Decision"
+          },
+          "linked_card_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Card Ids"
           },
           "related_decisions": {
             "default": [],
@@ -94,6 +109,25 @@
         "title": "ADRRejectRequest",
         "type": "object"
       },
+      "ADRSignRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "title": "ADRSignRequest",
+        "type": "object"
+      },
       "ADRSignatureRequest": {
         "properties": {
           "message": {
@@ -123,6 +157,7 @@
         "type": "object"
       },
       "ADRUpdate": {
+        "additionalProperties": false,
         "properties": {
           "alternatives_considered": {
             "anyOf": [
@@ -134,6 +169,18 @@
               }
             ],
             "title": "Alternatives Considered"
+          },
+          "attributes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attributes"
           },
           "consequences": {
             "anyOf": [
@@ -167,6 +214,20 @@
               }
             ],
             "title": "Decision"
+          },
+          "linked_card_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Card Ids"
           },
           "related_decisions": {
             "anyOf": [
@@ -687,6 +748,20 @@
         "title": "Body_import_bpmn_api_v1_bpm_processes__process_id__diagram_import_post",
         "type": "object"
       },
+      "Body_upload_bundle_api_v1_admin_extensions_install_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_bundle_api_v1_admin_extensions_install_post",
+        "type": "object"
+      },
       "Body_upload_favicon_api_v1_settings_favicon_post": {
         "properties": {
           "file": {
@@ -796,6 +871,18 @@
               }
             ],
             "title": "Card Type"
+          },
+          "column_filter_model": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Filter Model"
           },
           "column_state": {
             "anyOf": [
@@ -915,6 +1002,18 @@
               }
             ],
             "title": "Card Type"
+          },
+          "column_filter_model": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Filter Model"
           },
           "column_state": {
             "anyOf": [
@@ -1382,6 +1481,18 @@
               }
             ],
             "title": "Child Strategy"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "required": [
@@ -2106,6 +2217,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtype"
           },
           "type": {
             "title": "Type",
@@ -4137,6 +4259,19 @@
         "title": "EmailSettingsPayload",
         "type": "object"
       },
+      "EnabledIn": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "EnabledIn",
+        "type": "object"
+      },
       "EnabledLocalesPayload": {
         "properties": {
           "locales": {
@@ -4151,6 +4286,43 @@
           "locales"
         ],
         "title": "EnabledLocalesPayload",
+        "type": "object"
+      },
+      "EntitlementOut": {
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "grace_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Until"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "EntitlementOut",
         "type": "object"
       },
       "EolCycle": {
@@ -4311,8 +4483,244 @@
         "title": "EolProductMatch",
         "type": "object"
       },
+      "ExtensionInstallOut": {
+        "properties": {
+          "applied_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "diff": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "extension_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extension Key"
+          },
+          "extension_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extension Version"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "previewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previewed At"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "status"
+        ],
+        "title": "ExtensionInstallOut",
+        "type": "object"
+      },
+      "ExtensionOut": {
+        "properties": {
+          "capabilities": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "entitlement": {
+            "$ref": "#/components/schemas/EntitlementOut"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "version",
+          "status",
+          "enabled",
+          "entitlement"
+        ],
+        "title": "ExtensionOut",
+        "type": "object"
+      },
+      "ExtensionStatusOut": {
+        "properties": {
+          "entitlement_state": {
+            "title": "Entitlement State",
+            "type": "string"
+          },
+          "grants": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Grants",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "version",
+          "entitlement_state"
+        ],
+        "title": "ExtensionStatusOut",
+        "type": "object"
+      },
       "FieldMappingIn": {
         "properties": {
+          "default_value": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Value"
+          },
           "direction": {
             "default": "snow_leads",
             "pattern": "^(snow_leads|turbo_leads)$",
@@ -4325,6 +4733,7 @@
             "type": "boolean"
           },
           "snow_field": {
+            "default": "",
             "title": "Snow Field",
             "type": "string"
           },
@@ -4357,8 +4766,7 @@
           }
         },
         "required": [
-          "turbo_field",
-          "snow_field"
+          "turbo_field"
         ],
         "title": "FieldMappingIn",
         "type": "object"
@@ -4390,6 +4798,15 @@
       },
       "FieldMappingOut": {
         "properties": {
+          "default_value": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Value"
+          },
           "direction": {
             "title": "Direction",
             "type": "string"
@@ -4701,6 +5118,104 @@
           "catalogue_ids"
         ],
         "title": "ImportRequest",
+        "type": "object"
+      },
+      "InstanceOut": {
+        "properties": {
+          "instance_id": {
+            "title": "Instance Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id"
+        ],
+        "title": "InstanceOut",
+        "type": "object"
+      },
+      "LicenseIn": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "LicenseIn",
+        "type": "object"
+      },
+      "LicenseOut": {
+        "properties": {
+          "customer_id": {
+            "default": "",
+            "title": "Customer Id",
+            "type": "string"
+          },
+          "entitlements": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Entitlements",
+            "type": "array"
+          },
+          "grace_days": {
+            "title": "Grace Days",
+            "type": "integer"
+          },
+          "issued_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued At"
+          },
+          "key_id": {
+            "default": "",
+            "title": "Key Id",
+            "type": "string"
+          },
+          "licensee": {
+            "title": "Licensee",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "uploaded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded At"
+          }
+        },
+        "required": [
+          "licensee",
+          "grace_days",
+          "entitlements"
+        ],
+        "title": "LicenseOut",
         "type": "object"
       },
       "LoginBrandingPayload": {
@@ -6131,6 +6646,24 @@
           "committed_at"
         ],
         "title": "MutationBatchOut",
+        "type": "object"
+      },
+      "NavbarStylePayload": {
+        "properties": {
+          "navbar_bg": {
+            "default": "#1a1a2e",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Navbar Bg",
+            "type": "string"
+          },
+          "navbar_fg": {
+            "default": "#ffffff",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Navbar Fg",
+            "type": "string"
+          }
+        },
+        "title": "NavbarStylePayload",
         "type": "object"
       },
       "NotificationPreferencesUpdate": {
@@ -9046,6 +9579,65 @@
         "title": "ReporterOut",
         "type": "object"
       },
+      "RescueAccessRequest": {
+        "properties": {
+          "break_glass": {
+            "default": false,
+            "title": "Break Glass",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "operator_email": {
+            "maxLength": 320,
+            "title": "Operator Email",
+            "type": "string"
+          },
+          "operator_name": {
+            "maxLength": 200,
+            "title": "Operator Name",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "title": "Reason",
+            "type": "string"
+          },
+          "request_id": {
+            "maxLength": 64,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "operator_email",
+          "operator_name",
+          "reason",
+          "expires_at"
+        ],
+        "title": "RescueAccessRequest",
+        "type": "object"
+      },
+      "RescueAccessRevoke": {
+        "properties": {
+          "request_id": {
+            "maxLength": 64,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "title": "RescueAccessRevoke",
+        "type": "object"
+      },
       "ResetPasswordRequest": {
         "properties": {
           "password": {
@@ -10772,7 +11364,48 @@
         "title": "SignatureRequest",
         "type": "object"
       },
+      "SnowLinkOut": {
+        "description": "A resolved deep link from a card to its ServiceNow record.",
+        "properties": {
+          "connection_name": {
+            "title": "Connection Name",
+            "type": "string"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "sys_id": {
+            "title": "Sys Id",
+            "type": "string"
+          },
+          "table": {
+            "title": "Table",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_name",
+          "table",
+          "sys_id",
+          "url"
+        ],
+        "title": "SnowLinkOut",
+        "type": "object"
+      },
       "SoAWCreate": {
+        "additionalProperties": false,
         "properties": {
           "document_info": {
             "anyOf": [
@@ -10838,6 +11471,7 @@
         "type": "object"
       },
       "SoAWUpdate": {
+        "additionalProperties": false,
         "properties": {
           "document_info": {
             "anyOf": [
@@ -11281,6 +11915,163 @@
           }
         },
         "title": "StakeholderRoleUpdate",
+        "type": "object"
+      },
+      "StoreCatalogOut": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StoreItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "reachable": {
+            "default": false,
+            "title": "Reachable",
+            "type": "boolean"
+          },
+          "store_url": {
+            "default": "",
+            "title": "Store Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "configured"
+        ],
+        "title": "StoreCatalogOut",
+        "type": "object"
+      },
+      "StoreClaimIn": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "StoreClaimIn",
+        "type": "object"
+      },
+      "StoreClaimOut": {
+        "properties": {
+          "license": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LicenseOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "StoreClaimOut",
+        "type": "object"
+      },
+      "StoreInstallIn": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "StoreInstallIn",
+        "type": "object"
+      },
+      "StoreItemOut": {
+        "properties": {
+          "demo_url": {
+            "default": "",
+            "title": "Demo Url",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "entitlement_state": {
+            "default": "unlicensed",
+            "title": "Entitlement State",
+            "type": "string"
+          },
+          "installed_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Installed Version"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payment_link": {
+            "default": "",
+            "title": "Payment Link",
+            "type": "string"
+          },
+          "price": {
+            "default": "",
+            "title": "Price",
+            "type": "string"
+          },
+          "update_available": {
+            "default": false,
+            "title": "Update Available",
+            "type": "boolean"
+          },
+          "version": {
+            "default": "",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "StoreItemOut",
+        "type": "object"
+      },
+      "StoreRefreshOut": {
+        "properties": {
+          "refreshed": {
+            "title": "Refreshed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "refreshed"
+        ],
+        "title": "StoreRefreshOut",
         "type": "object"
       },
       "StructuredInsight": {
@@ -11887,6 +12678,18 @@
               }
             ],
             "title": "Lead Time Days"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
           },
           "recurrence_interval": {
             "default": 1,
@@ -12496,6 +13299,34 @@
           "ready"
         ],
         "title": "TurboLensStatusOut",
+        "type": "object"
+      },
+      "UiExtensionOut": {
+        "properties": {
+          "entitlement_state": {
+            "title": "Entitlement State",
+            "type": "string"
+          },
+          "entry": {
+            "title": "Entry",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "version",
+          "entry",
+          "entitlement_state"
+        ],
+        "title": "UiExtensionOut",
         "type": "object"
       },
       "UiPreferencesUpdate": {
@@ -13587,6 +14418,531 @@
         "summary": "Health"
       }
     },
+    "/api/v1/admin/extensions": {
+      "get": {
+        "operationId": "list_extensions_api_v1_admin_extensions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExtensionOut"
+                  },
+                  "title": "Response List Extensions Api V1 Admin Extensions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Extensions",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/install": {
+      "get": {
+        "operationId": "list_installs_api_v1_admin_extensions_install_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExtensionInstallOut"
+                  },
+                  "title": "Response List Installs Api V1 Admin Extensions Install Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Installs",
+        "tags": [
+          "Extensions"
+        ]
+      },
+      "post": {
+        "operationId": "upload_bundle_api_v1_admin_extensions_install_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_bundle_api_v1_admin_extensions_install_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionInstallOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Bundle",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/install/{install_id}": {
+      "delete": {
+        "operationId": "delete_install_api_v1_admin_extensions_install__install_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "install_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Install Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Install",
+        "tags": [
+          "Extensions"
+        ]
+      },
+      "get": {
+        "operationId": "get_install_api_v1_admin_extensions_install__install_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "install_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Install Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionInstallOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Install",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/install/{install_id}/apply": {
+      "post": {
+        "operationId": "apply_install_api_v1_admin_extensions_install__install_id__apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "install_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Install Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionInstallOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Install",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/instance": {
+      "get": {
+        "description": "This instance's licensing identity (TEA-XXXX-XXXX-XXXX).\n\nQuoted at purchase time (automatically by the in-app Buy button, or\npasted into the storefront's checkout field) so the store aggregates\nevery entitlement bought for this instance into one composite license.\nIdentity only \u2014 never a credential.",
+        "operationId": "get_instance_api_v1_admin_extensions_instance_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Instance",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/license": {
+      "delete": {
+        "description": "Remove the installed license (deactivate it, keep the audit rows).\n\nExtensions soft-disable exactly as on expiry \u2014 pages disappear, APIs\nrefuse, jobs pause \u2014 but **no data is deleted**, so applying a license\nagain restores everything. Idempotent-ish: 404 when there is nothing to\nremove so the UI can tell the admin.",
+        "operationId": "delete_license_api_v1_admin_extensions_license_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete License",
+        "tags": [
+          "Extensions"
+        ]
+      },
+      "get": {
+        "operationId": "get_license_api_v1_admin_extensions_license_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get License",
+        "tags": [
+          "Extensions"
+        ]
+      },
+      "put": {
+        "operationId": "put_license_api_v1_admin_extensions_license_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put License",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/store/catalog": {
+      "get": {
+        "operationId": "store_catalog_api_v1_admin_extensions_store_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreCatalogOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Store Catalog",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/store/claim": {
+      "post": {
+        "description": "Poll the store for the license of a just-completed purchase.\n\nThe Buy button generated ``token`` client-side and attached it to the\nStripe Payment Link as ``client_reference_id``; the store looks the\ncompleted checkout up by it and returns the issued license, which is\nverified against the trusted vendor keys before being applied \u2014 the\nexact same gate as a manual paste. ``pending`` means the checkout has\nnot completed yet (the frontend keeps polling).",
+        "operationId": "claim_store_purchase_api_v1_admin_extensions_store_claim_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreClaimIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreClaimOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Claim Store Purchase",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/store/install": {
+      "post": {
+        "description": "Download a catalogue bundle and run it through the upload pipeline.\n\nIdentical trust posture to a manual upload: the downloaded bytes are\nlanded in ``data/extension_installs/`` and the background job verifies\nthe vendor signature before anything is previewed or applied. Downloads\nare restricted to the configured store origin (SSRF guard) \u2014 a bundle\nhosted elsewhere must be installed via manual upload.",
+        "operationId": "install_from_store_api_v1_admin_extensions_store_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreInstallIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionInstallOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Install From Store",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/store/refresh-license": {
+      "post": {
+        "description": "Immediately refetch the license from the store (per-row Renew button,\nand the instant pickup of an additional purchase by an existing\ncustomer). Only works for store-issued licenses (renewal credential\npresent); returns ``refreshed: false`` when the store has nothing newer.",
+        "operationId": "refresh_store_license_api_v1_admin_extensions_store_refresh_license_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreRefreshOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Refresh Store License",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/{key}": {
+      "delete": {
+        "operationId": "uninstall_extension_api_v1_admin_extensions__key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Uninstall Extension",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/{key}/enabled": {
+      "put": {
+        "operationId": "set_extension_enabled_api_v1_admin_extensions__key__enabled_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnabledIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Extension Enabled",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
     "/api/v1/admin/workspace/export": {
       "get": {
         "operationId": "export_workspace_api_v1_admin_workspace_export_get",
@@ -14572,6 +15928,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ADRSignRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -20619,7 +21992,7 @@
     },
     "/api/v1/eol/mass-link": {
       "post": {
-        "description": "Bulk-link cards to EOL products/cycles.\n\nExpects a list of: [{card_id, eol_product, eol_cycle}].\nFor ITComponent type, lifecycle dates are synced from EOL data.",
+        "description": "Bulk-link cards to EOL products/cycles.\n\nExpects a list of: [{card_id, eol_product, eol_cycle}].\nOnly the EOL product/cycle association is recorded \u2014 lifecycle phase dates\n(including End of Life, the decommission date) are manually owned and are\nnever auto-filled from vendor EOL data.",
         "operationId": "mass_eol_link_api_v1_eol_mass_link_post",
         "requestBody": {
           "content": {
@@ -20988,7 +22361,7 @@
     },
     "/api/v1/events/stream": {
       "get": {
-        "description": "SSE endpoint. Accepts token via query parameter or httpOnly cookie.",
+        "description": "SSE endpoint. Accepts token via query parameter or httpOnly cookie.\n\nEvents are filtered per subscriber: `admin.events` holders receive the full\naudit stream, everyone else only their own user-directed events (see\n`_event_visible_to`).",
         "operationId": "event_stream_api_v1_events_stream_get",
         "parameters": [
           {
@@ -21025,6 +22398,117 @@
         "summary": "Event Stream",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/api/v1/ext-assets/{key}/{version}/{asset_path}": {
+      "get": {
+        "description": "Serve an extension's frontend bundle files.\n\nDeliberately unauthenticated: dynamic ``import()`` cannot carry an\nAuthorization header, and extension code is not a secret \u2014 the\nentitlement gate is the authenticated ``/extensions/ui-manifest``\nplus every ``/ext/{key}/`` data API. Same-origin serving keeps the\nstrict ``script-src 'self'`` CSP intact. The version segment exists\nfor cache-busting (assets are served immutable).",
+        "operationId": "get_extension_asset_api_v1_ext_assets__key___version___asset_path__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "asset_path",
+            "required": true,
+            "schema": {
+              "title": "Asset Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Extension Asset",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/extensions/status": {
+      "get": {
+        "description": "Least-privilege list of enabled extensions for any authenticated user.",
+        "operationId": "extensions_status_api_v1_extensions_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExtensionStatusOut"
+                  },
+                  "title": "Response Extensions Status Api V1 Extensions Status Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Extensions Status",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/extensions/ui-manifest": {
+      "get": {
+        "description": "UI bundles the frontend loader should import \u2014 THE entitlement gate\nfor extension UI. Only enabled extensions with a usable (active or\ngrace) entitlement and a frontend entry are listed.",
+        "operationId": "ui_manifest_api_v1_extensions_ui_manifest_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UiExtensionOut"
+                  },
+                  "title": "Response Ui Manifest Api V1 Extensions Ui Manifest Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ui Manifest",
+        "tags": [
+          "Extensions"
         ]
       }
     },
@@ -24088,6 +25572,123 @@
         "summary": "Mark Read",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/api/v1/ops/export": {
+      "get": {
+        "description": "Stream the full secret-stripped workspace bundle (same content as\nAdmin \u2192 Workspace export) for control-plane backups and GDPR data exports.",
+        "operationId": "ops_export_api_v1_ops_export_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ops Export",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/v1/ops/info": {
+      "get": {
+        "operationId": "ops_info_api_v1_ops_info_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ops Info",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/v1/ops/rescue-access": {
+      "delete": {
+        "description": "Immediately deactivate the rescue account created for a request.",
+        "operationId": "revoke_rescue_access_api_v1_ops_rescue_access_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RescueAccessRevoke"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Rescue Access",
+        "tags": [
+          "ops"
+        ]
+      },
+      "post": {
+        "description": "Create (or refresh) a time-boxed admin account for a control-plane operator.\n\nThe account is dedicated to this request (deterministic email derived from the\nrequest id), carries ``access_expires_at``, and is handed back as a single-use\npassword-setup link. Expiry is enforced instance-side by ``get_current_user``\nand the hourly deactivation loop \u2014 a control-plane outage cannot extend access.",
+        "operationId": "create_rescue_access_api_v1_ops_rescue_access_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RescueAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Rescue Access",
+        "tags": [
+          "ops"
         ]
       }
     },
@@ -27964,7 +29565,7 @@
     },
     "/api/v1/roles": {
       "get": {
-        "description": "List all roles. Any authenticated user can view roles.",
+        "description": "List all roles.\n\nAny authenticated user can resolve role labels/colors (for role chips), but\nonly `admin.roles` holders get the permission matrix and per-role user\ncounts \u2014 those stay admin-only.",
         "operationId": "list_roles_api_v1_roles_get",
         "parameters": [
           {
@@ -28427,6 +30028,54 @@
         "summary": "Update Saved Report",
         "tags": [
           "saved-reports"
+        ]
+      }
+    },
+    "/api/v1/servicenow/cards/{card_id}/links": {
+      "get": {
+        "description": "Return deep links to the ServiceNow record(s) a card is synced with.\n\nDerived read-only from the sync identity map \u2014 a card may map to more than\none ServiceNow record if it is covered by several mappings. The URL is the\ndirect record form on the connection's instance.",
+        "operationId": "list_card_servicenow_links_api_v1_servicenow_cards__card_id__links_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SnowLinkOut"
+                  },
+                  "title": "Response List Card Servicenow Links Api V1 Servicenow Cards  Card Id  Links Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Card Servicenow Links",
+        "tags": [
+          "ServiceNow"
         ]
       }
     },
@@ -30465,6 +32114,64 @@
         ]
       }
     },
+    "/api/v1/settings/navbar-style": {
+      "get": {
+        "description": "Public endpoint \u2014 returns the configured navbar colors.\n\nPublic because every authenticated user's shell needs the colors at boot\nand they are not sensitive. Falls back to the built-in navy defaults.",
+        "operationId": "get_navbar_style_api_v1_settings_navbar_style_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Navbar Style",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Admin endpoint \u2014 set the navbar background + text color for all users.",
+        "operationId": "update_navbar_style_api_v1_settings_navbar_style_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NavbarStylePayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Navbar Style",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/v1/settings/ppm-enabled": {
       "get": {
         "description": "Public endpoint \u2014 returns whether the PPM module is enabled.",
@@ -32406,6 +34113,44 @@
           }
         },
         "summary": "List All Todos",
+        "tags": [
+          "todos"
+        ]
+      },
+      "post": {
+        "description": "Create a todo that is not attached to a card \u2014 e.g. pointing at an\nADR, a risk, or an extension page via ``link``. Same shape and rules as\ncard todos (assignment notification included), just without a card.",
+        "operationId": "create_standalone_todo_api_v1_todos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TodoCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Standalone Todo",
         "tags": [
           "todos"
         ]

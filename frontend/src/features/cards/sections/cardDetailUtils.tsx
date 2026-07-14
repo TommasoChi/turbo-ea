@@ -1,6 +1,8 @@
+import { useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
+import Collapse from "@mui/material/Collapse";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import Checkbox from "@mui/material/Checkbox";
@@ -15,7 +17,133 @@ import { useTranslation } from "react-i18next";
 import type { CurrencyFormatter } from "@/hooks/useCurrency";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useFieldLabel, useOptionLabel } from "@/hooks/useResolveLabel";
-import type { FieldDef } from "@/types";
+import { ExtensionBoundary, useExtensionFieldTypes } from "@/lib/extensionHost";
+import type { FieldDef, Relation } from "@/types";
+
+// ── Subtype grouping for the Relations panel (#792) ─────────────
+export const SUBTYPE_GROUP_MIN = 8;
+export const NO_SUBTYPE_KEY = "__none__";
+
+export interface SubtypeBucket {
+  /** Subtype key, or the NO_SUBTYPE_KEY sentinel for the trailing bucket. */
+  key: string;
+  isNoSubtype: boolean;
+  rels: Relation[];
+}
+
+/**
+ * Bucket a relation-type's related cards by the "other" card's subtype.
+ *
+ * `subtypeKeysInOrder` is the target card type's metamodel subtype order;
+ * buckets are emitted in that order (empty ones skipped). A trailing
+ * no-subtype bucket collects cards whose subtype is falsy OR references a key
+ * no longer in the metamodel, so stale-key cards never silently vanish. Cards
+ * within a bucket are sorted alphabetically by name. Label resolution is
+ * intentionally left to the caller so this stays React/i18n-free and easy to
+ * unit-test.
+ */
+export function bucketRelationsBySubtype(
+  rels: Relation[],
+  fsId: string,
+  subtypeKeysInOrder: string[],
+): SubtypeBucket[] {
+  const known = new Set(subtypeKeysInOrder);
+  const groups = new Map<string, Relation[]>();
+  const noSubtype: Relation[] = [];
+  const other = (r: Relation) => (r.source_id === fsId ? r.target : r.source);
+  for (const r of rels) {
+    const st = other(r)?.subtype;
+    if (st && known.has(st)) {
+      const arr = groups.get(st) ?? [];
+      arr.push(r);
+      groups.set(st, arr);
+    } else {
+      noSubtype.push(r);
+    }
+  }
+  const byName = (a: Relation, b: Relation) =>
+    (other(a)?.name ?? "").localeCompare(other(b)?.name ?? "", undefined, {
+      sensitivity: "base",
+    });
+  const buckets: SubtypeBucket[] = [];
+  for (const key of subtypeKeysInOrder) {
+    const arr = groups.get(key);
+    if (arr && arr.length > 0) {
+      buckets.push({ key, isNoSubtype: false, rels: [...arr].sort(byName) });
+    }
+  }
+  if (noSubtype.length > 0) {
+    buckets.push({
+      key: NO_SUBTYPE_KEY,
+      isNoSubtype: true,
+      rels: [...noSubtype].sort(byName),
+    });
+  }
+  return buckets;
+}
+
+/**
+ * Whether subtype grouping is worth showing for a relation section: at least
+ * two real-subtype buckets AND a total large enough that a flat list is hard
+ * to scan.
+ */
+export function shouldGroupBySubtype(
+  buckets: SubtypeBucket[],
+  totalCount: number,
+  min: number = SUBTYPE_GROUP_MIN,
+): boolean {
+  const realBuckets = buckets.filter((b) => !b.isNoSubtype).length;
+  return realBuckets >= 2 && totalCount >= min;
+}
+
+// ── Field help text (localized, collapsible) ────────────────────
+/** Resolve a field's localized help text (helpTranslations[locale] || help). */
+export function useFieldHelp(): (field: FieldDef) => string {
+  const { i18n } = useTranslation();
+  const locale = i18n.language;
+  return (field: FieldDef) =>
+    (field.helpTranslations?.[locale] as string) || field.help || "";
+}
+
+/** Collapsible guidance rendered under a field during data entry. */
+export function FieldHelp({ text }: { text: string }) {
+  const { t } = useTranslation(["cards", "common"]);
+  const [open, setOpen] = useState(false);
+  if (!text) return null;
+  return (
+    <Box sx={{ mt: 0.25 }}>
+      <Box
+        component="button"
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        sx={{
+          all: "unset",
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 0.25,
+          color: "primary.main",
+          "&:hover": { textDecoration: "underline" },
+        }}
+      >
+        <MaterialSymbol icon="help" size={14} />
+        <Typography variant="caption" component="span">
+          {t("cards:utils.fieldHelp")}
+        </Typography>
+        <MaterialSymbol icon={open ? "expand_less" : "expand_more"} size={14} />
+      </Box>
+      <Collapse in={open}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block", mt: 0.25, whiteSpace: "pre-wrap" }}
+        >
+          {text}
+        </Typography>
+      </Collapse>
+    </Box>
+  );
+}
 
 // ── URL validation (matches backend _ALLOWED_URL_SCHEMES) ────────
 const ALLOWED_URL_SCHEMES = ["http://", "https://", "mailto:"];
@@ -138,6 +266,7 @@ export function FieldValue({
 }) {
   const { t } = useTranslation(["cards", "common"]);
   const optLabel = useOptionLabel();
+  const extFieldTypes = useExtensionFieldTypes();
 
   // Cost fields the user is not allowed to see render as a redacted placeholder
   // regardless of whether the backend stripped the value (defence in depth + UX).
@@ -156,6 +285,23 @@ export function FieldValue({
 
   if (value == null || value === "") {
     return <Typography variant="body2" color="text.secondary">—</Typography>;
+  }
+
+  // Extension-contributed custom field type: render its display component.
+  // When the extension is missing/disabled/unlicensed it is absent from the
+  // registry and we fall through to the plain read-only rendering below.
+  const customDisplay = extFieldTypes[field.type];
+  if (customDisplay?.contribution.display) {
+    const Display = customDisplay.contribution.display;
+    return (
+      <ExtensionBoundary extensionKey={customDisplay.extKey}>
+        <Display
+          field={{ key: field.key, label: field.label, type: field.type, config: field.config }}
+          value={value}
+          config={field.config ?? customDisplay.contribution.defaultConfig}
+        />
+      </ExtensionBoundary>
+    );
   }
 
   // Guard: if value is an object/array and the field type doesn't expect it, coerce to string
@@ -257,12 +403,34 @@ export function FieldEditor({
   const { t } = useTranslation(["cards", "common"]);
   const fieldLabel = useFieldLabel();
   const optLabel = useOptionLabel();
+  const help = useFieldHelp()(field);
+  const extFieldTypes = useExtensionFieldTypes();
 
   // Sanitize: ensure value passed to MUI is always the expected primitive type
   const strVal = typeof value === "string" ? value : (value != null ? safeString(value) : "");
   const numVal = typeof value === "number" ? value : (value != null && value !== "" ? Number(value) : "");
 
-  switch (field.type) {
+  const custom = extFieldTypes[field.type];
+
+  const control = (() => {
+    // Extension-contributed field type: render its editor. Missing/disabled/
+    // unlicensed → not in the registry → falls through to the built-in switch
+    // (default text input), so the stored value stays editable, never lost.
+    if (custom?.contribution.editor) {
+      const Editor = custom.contribution.editor;
+      return (
+        <ExtensionBoundary extensionKey={custom.extKey}>
+          <Editor
+            field={{ key: field.key, label: fieldLabel(field), type: field.type, config: field.config }}
+            value={value}
+            config={field.config ?? custom.contribution.defaultConfig}
+            onChange={onChange}
+            error={error}
+          />
+        </ExtensionBoundary>
+      );
+    }
+    switch (field.type) {
     case "single_select":
       return (
         <FormControl size="small" sx={{ minWidth: 200 }}>
@@ -468,5 +636,13 @@ export function FieldEditor({
           sx={{ minWidth: 300 }}
         />
       );
-  }
+    }
+  })();
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
+      {control}
+      <FieldHelp text={help} />
+    </Box>
+  );
 }

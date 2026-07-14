@@ -35,6 +35,10 @@ Alterar o tipo de cartão reinicia as seleções de agrupamento, cor e filtros (
 
 Quando as relações de um cartão têm um valor de «tipo» — por exemplo o **tipo de utilização** (Proprietário / Utilizador / Parte interessada) nas relações Organização→Aplicação, ou o **tipo de suporte** nas relações Aplicação→Capacidade de negócio — pode colorir os cartões por esse valor e filtrar por ele. **Agrupe o relatório pelo tipo de cartão relacionado** para os usar (por ex. *Agrupar por → Organização* para ativar o *tipo de utilização*): o subtipo aparece então sob o grupo **Subtipos de relação** na lista *Colorir por* e como a sua própria linha de filtros. Como cada cartão é apresentado sob um cartão relacionado, é colorido segundo *essa* relação — uma aplicação que é *Utilizador* de uma organização aparece como Utilizador aí, mesmo que pertença a outra.
 
+### Grupos aninhados
+
+Ao agrupar por um tipo de cartão relacionado que suporta hierarquia (como Capacidade de negócio ou Organização), um interruptor **Grupos aninhados** aparece ao lado do seletor *Agrupar por*. Ative-o para exibir os grupos como caixas aninhadas seguindo a hierarquia pai/filho do tipo relacionado — como no Mapa de Capacidades. O seletor **Profundidade de exibição** controla quantos níveis são expandidos: cada cartão aparece sob o seu grupo visível mais profundo, e os grupos abaixo do limite de profundidade elevam os seus cartões ao ancestral visível mais próximo. Ramos sem cartões são ocultados.
+
 ## Mapa de Capacidades
 
 ![Mapa de Capacidades de Negócio](../assets/img/pt/11_mapa_capacidades.png)
@@ -152,6 +156,8 @@ O **Relatório de Matriz** cria uma **grade de referência cruzada** entre dois 
 - **Células** — Indicam se um relacionamento existe (e quantos)
 
 Isso é útil para identificar lacunas de cobertura (capacidades sem aplicações de suporte) ou redundâncias (capacidades suportadas por muitas aplicações).
+
+Utilize o botão **Ocultar cartões sem relações** para ocultar linhas e colunas de cards que não têm relações, mantendo apenas os cards que participam em pelo menos uma relação. A visualização completa que mostra todos os cards continua a ser o comportamento predefinido.
 
 ## Relatório de Qualidade dos Dados
 

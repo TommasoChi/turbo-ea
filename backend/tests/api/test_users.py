@@ -91,6 +91,68 @@ class TestListUsers:
         assert "disabled@test.com" in emails
         assert "admin@test.com" in emails
 
+    # Fields the lite (non-admin) payload must never expose.
+    SENSITIVE_FIELDS = {
+        "role",
+        "auth_provider",
+        "has_password",
+        "pending_setup",
+        "last_login",
+        "created_at",
+        "locale",
+        "ui_preferences",
+    }
+
+    async def test_admin_gets_full_payload(self, client, db, users_env):
+        admin = users_env["admin"]
+        resp = await client.get("/api/v1/users", headers=auth_headers(admin))
+        assert resp.status_code == 200
+        row = resp.json()[0]
+        # Admin retains the full record (used by the Users admin screen).
+        assert self.SENSITIVE_FIELDS.issubset(row.keys())
+
+    @pytest.mark.parametrize("role_key", ["member", "viewer"])
+    async def test_non_admin_gets_lite_payload(self, client, db, users_env, role_key):
+        """A non-admin picker consumer sees only id/display_name/email/is_active
+        — never the PII / attacker-surface metadata."""
+        caller = users_env[role_key]
+        resp = await client.get("/api/v1/users", headers=auth_headers(caller))
+        assert resp.status_code == 200
+        rows = resp.json()
+        assert rows, "expected at least one user in the list"
+        for row in rows:
+            assert set(row.keys()) == {"id", "display_name", "email", "is_active"}
+            assert not self.SENSITIVE_FIELDS.intersection(row.keys())
+        # email stays — pickers display/search by it.
+        assert any(r["email"] == "admin@test.com" for r in rows)
+
+
+# -------------------------------------------------------------------
+# GET /users/{id}  (single)
+# -------------------------------------------------------------------
+
+
+class TestGetUser:
+    async def test_admin_gets_full_payload(self, client, db, users_env):
+        admin, member = users_env["admin"], users_env["member"]
+        resp = await client.get(f"/api/v1/users/{member.id}", headers=auth_headers(admin))
+        assert resp.status_code == 200
+        assert TestListUsers.SENSITIVE_FIELDS.issubset(resp.json().keys())
+
+    async def test_non_admin_reading_other_user_gets_lite_payload(self, client, db, users_env):
+        member, admin = users_env["member"], users_env["admin"]
+        resp = await client.get(f"/api/v1/users/{admin.id}", headers=auth_headers(member))
+        assert resp.status_code == 200
+        assert set(resp.json().keys()) == {"id", "display_name", "email", "is_active"}
+
+    async def test_non_admin_reading_self_gets_full_payload(self, client, db, users_env):
+        """A user reading their own profile gets the full record (defensive —
+        no frontend caller hits this today)."""
+        member = users_env["member"]
+        resp = await client.get(f"/api/v1/users/{member.id}", headers=auth_headers(member))
+        assert resp.status_code == 200
+        assert TestListUsers.SENSITIVE_FIELDS.issubset(resp.json().keys())
+
 
 # -------------------------------------------------------------------
 # POST /users  (create)
@@ -509,6 +571,39 @@ class TestUpdateUser:
         resp = await client.get("/api/v1/users/invitations", headers=auth_headers(admin))
         assert resp.status_code == 200
         assert any(inv["email"] == "import-with-invite@test.com" for inv in resp.json())
+
+    async def test_invite_email_failure_does_not_leak_exception_details(
+        self, client, db, users_env, monkeypatch
+    ):
+        """When sending the invitation email raises, the response reports the
+        failure generically — exception text (which can carry SMTP hostnames
+        or connection details) must only reach the server logs, never the
+        API response (CodeQL py/stack-trace-exposure)."""
+        import app.services.email_service as email_service
+
+        async def _boom(**kwargs):
+            raise RuntimeError("smtp-secret-host boom")
+
+        monkeypatch.setattr(email_service, "send_notification_email", _boom)
+
+        admin = users_env["admin"]
+        resp = await client.post(
+            "/api/v1/users",
+            json={
+                "email": "invite-fail@test.com",
+                "display_name": "Invite Fail",
+                "password": "StrongPass1",
+                "role": "member",
+                "send_email": True,
+            },
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["email_sent"] is False
+        assert body["email_error"]
+        assert "boom" not in body["email_error"]
+        assert "smtp-secret-host" not in body["email_error"]
 
     async def test_create_user_sso_enabled_without_invite_skips_invitation(
         self, client, db, users_env

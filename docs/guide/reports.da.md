@@ -35,6 +35,10 @@ Ved skift af korttype ryddes valg af gruppering, farvelægning og filtre (de ref
 
 Når et korts relationer bærer en «type»-værdi — for eksempel **anvendelsestypen** (Ejer / Bruger / Interessent) på Organisation→Applikation-relationer eller **supporttypen** på Applikation→Forretningskapabilitet-relationer — kan du farve kortene efter den værdi og filtrere på den. **Gruppér rapporten efter den relaterede korttype** for at bruge dem (f.eks. *Gruppér efter → Organisation* for at låse op for *anvendelsestype*): undertypen vises derefter under gruppen **Relationsundertyper** i *Farvelæg efter*-rullelisten og som sin egen filterrække. Da hvert kort vises under ét relateret kort, farves det efter *den* relation — en applikation, der er *Bruger* af én organisation, vises som Bruger der, selv om den ejes af en anden.
 
+### Indlejrede grupper
+
+Når du grupperer efter en relateret korttype, der understøtter hierarki (såsom Forretningskompetence eller Organisation), vises en **Indlejrede grupper**-kontakt ved siden af *Gruppér efter*-vælgeren. Aktivér den for at vise grupperne som bokse i bokse efter den relaterede types forælder/barn-hierarki — ligesom kompetencekortet. Vælgeren **Visningsdybde** styrer, hvor mange niveauer der udfoldes: hvert kort vises under sin dybeste synlige gruppe, og grupper under dybdegrænsen ruller deres kort op i den nærmeste synlige forfader. Grene uden kort skjules.
+
 ## Kompetencekort
 
 ![Forretningskompetencekort](../assets/img/en/11_capability_map.png)
@@ -152,6 +156,8 @@ Tidslinjeskyderen, Cost Source-valget og andre filtre bevares, mens du driller, 
 - **Celler** — Indikerer om en relation eksisterer (og hvor mange)
 
 Dette er nyttigt til at identificere dækningshuller (kompetencer uden understøttende applikationer) eller redundanser (kompetencer understøttet af for mange applikationer).
+
+Brug kontakten **Skjul ikke-relaterede kort** for at skjule rækker og kolonner for kort uden relationer, så kun kort, der indgår i mindst én relation, vises. Den fulde visning med alle kort forbliver standardindstillingen.
 
 ## Datakvalitetsrapport
 

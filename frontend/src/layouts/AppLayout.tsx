@@ -18,6 +18,7 @@ import ListItemButton from "@mui/material/ListItemButton";
 import Collapse from "@mui/material/Collapse";
 import Tooltip from "@mui/material/Tooltip";
 import useMediaQuery from "@mui/material/useMediaQuery";
+import { alpha } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import NotificationBell from "@/components/NotificationBell";
@@ -35,9 +36,11 @@ import { usePpmEnabled } from "@/hooks/usePpmEnabled";
 import { useTurboLensReady } from "@/hooks/useTurboLensReady";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import { useAppTitle } from "@/hooks/useAppTitle";
+import { useNavbarStyle } from "@/hooks/useNavbarStyle";
 import { SUPPORTED_LOCALES, LOCALE_LABELS, type SupportedLocale } from "@/i18n";
 import { useEnabledLocales } from "@/hooks/useEnabledLocales";
 import SearchDialog from "@/components/SearchDialog";
+import { getExtensionRoutesForGroup, useExtensionUI } from "@/lib/extensionHost";
 import CreateCardDialog from "@/components/CreateCardDialog";
 import type { BadgeCounts, Card } from "@/types";
 
@@ -91,6 +94,7 @@ const ADMIN_ITEM_DEFS: NavItemDef[] = [
   { labelKey: "admin.metamodel", icon: "settings_suggest", path: "/admin/metamodel", permission: "admin.metamodel" },
   { labelKey: "admin.usersAndRoles", icon: "group", path: "/admin/users", permission: "admin.users" },
   { labelKey: "admin.surveys", icon: "assignment", path: "/admin/surveys", permission: "surveys.manage" },
+  { labelKey: "admin.extensions", icon: "extension", path: "/admin/extensions", permission: "admin.manage_extensions" },
   { labelKey: "admin.settings", icon: "settings", path: "/admin/settings", permission: "admin.settings" },
 ];
 
@@ -119,6 +123,50 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   const { enabledLocales } = useEnabledLocales();
   const { mode, toggleMode } = useThemeMode();
   const appTitle = useAppTitle();
+  const { bg: navBg, fg: navFg } = useNavbarStyle();
+  // Derived translucent tints — one source (the configured text color) so the
+  // whole navbar/drawer palette follows the admin-chosen colors.
+  const nav = useMemo(
+    () => ({
+      bg: navBg,
+      fg: navFg,
+      fgMuted: alpha(navFg, 0.7), // inactive nav items
+      fgSubtle: alpha(navFg, 0.6), // drawer search icon
+      fgFaint: alpha(navFg, 0.5), // secondary text (drawer email, search placeholder)
+      activeBg: alpha(navFg, 0.12), // active pill
+      hoverBg: alpha(navFg, 0.1), // hover
+      divider: alpha(navFg, 0.1), // drawer dividers
+      fieldBg: alpha(navFg, 0.08), // drawer search field
+    }),
+    [navBg, navFg],
+  );
+  const uiExtensions = useExtensionUI();
+
+  // License-attention banner: extension admins see when an installed
+  // extension has entered its grace window or expired, driving the
+  // air-gapped renewal loop (request a new license file by email).
+  const [licenseAttention, setLicenseAttention] = useState<
+    { key: string; entitlement_state: string }[]
+  >([]);
+  const canManageExtensions = !!user.permissions?.["*"] || !!user.permissions?.["admin.manage_extensions"];
+  useEffect(() => {
+    if (!canManageExtensions) return;
+    let cancelled = false;
+    api
+      .get<{ key: string; version: string; entitlement_state: string }[]>("/extensions/status")
+      .then((rows) => {
+        if (cancelled) return;
+        setLicenseAttention(
+          rows.filter((r) => r.entitlement_state === "grace" || r.entitlement_state === "expired"),
+        );
+      })
+      .catch(() => {
+        /* endpoint absent or transient failure — no banner */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManageExtensions]);
 
   // Permission check helper
   const can = useCallback(
@@ -174,6 +222,46 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       return can(perm);
     };
 
+    // Inject extension routes that requested the Reports group as children of
+    // the Reports menu (desktop dropdown + mobile drawer both read `children`).
+    // Placed before the "saved" entry so they sit with the core reports. Labels
+    // are plain strings from the bundle, so t() falls through to them.
+    const reportExtChildren = getExtensionRoutesForGroup("reports").map(({ route }) => ({
+      labelKey: route.label,
+      icon: route.icon,
+      path: route.path,
+      permission: route.permission,
+    }));
+    if (reportExtChildren.length) {
+      items = items.map((item) => {
+        if (item.labelKey !== "reports") return item;
+        const kids = [...(item.children || [])];
+        const savedIdx = kids.findIndex((c) => c.path === "/reports/saved");
+        kids.splice(savedIdx >= 0 ? savedIdx : kids.length, 0, ...reportExtChildren);
+        return { ...item, children: kids };
+      });
+    }
+
+    // Append pages contributed by installed UI extensions as top-level entries.
+    // Routes that requested a core nav group (e.g. Reports, handled above) are
+    // skipped here; a route with an unrecognised navGroup surfaces nowhere in
+    // the nav (still reachable by URL). Labels are plain strings from the
+    // extension itself, so t() falls through to them.
+    for (const { plugin } of uiExtensions) {
+      for (const route of plugin.routes ?? []) {
+        if (route.navGroup) continue;
+        items = [
+          ...items,
+          {
+            labelKey: route.label,
+            icon: route.icon,
+            path: route.path,
+            permission: route.permission,
+          },
+        ];
+      }
+    }
+
     const resolve = (def: NavItemDef): NavItem => ({
       ...def,
       label: t(def.labelKey),
@@ -183,7 +271,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     });
 
     return items.filter((item) => hasPerm(item.permission)).map(resolve);
-  }, [bpmEnabled, ppmEnabled, grcEnabled, turboLensReady, can, t]);
+  }, [bpmEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, t]);
 
   // Resolve admin item labels via i18n and filter based on permissions
   const adminItems = useMemo(() => {
@@ -327,7 +415,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     !!children?.some((c) => location.pathname === c.path);
 
   const navBtnSx = (active: boolean) => ({
-    color: active ? "#fff" : "rgba(255,255,255,0.7)",
+    color: active ? nav.fg : nav.fgMuted,
     textTransform: "none" as const,
     fontWeight: active ? 700 : 500,
     fontSize: isCondensed ? "0.75rem" : "0.85rem",
@@ -335,8 +423,8 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     px: isCondensed ? 0.75 : 1.5,
     whiteSpace: "nowrap" as const,
     borderRadius: 1,
-    bgcolor: active ? "rgba(255,255,255,0.12)" : "transparent",
-    "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
+    bgcolor: active ? nav.activeBg : "transparent",
+    "&:hover": { bgcolor: nav.hoverBg },
   });
 
   const drawerNav = (path: string) => {
@@ -354,7 +442,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       anchor="left"
       open={drawerOpen}
       onClose={() => setDrawerOpen(false)}
-      PaperProps={{ sx: { width: 280, bgcolor: "#1a1a2e" } }}
+      PaperProps={{ sx: { width: 280, bgcolor: nav.bg } }}
     >
       {/* Brand header */}
       <Box
@@ -367,7 +455,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
           style={{ height: 45, maxWidth: 200, objectFit: "contain" }}
         />
       </Box>
-      <Divider sx={{ borderColor: "rgba(255,255,255,0.1)" }} />
+      <Divider sx={{ borderColor: nav.divider }} />
 
       {/* Search button */}
       <Box sx={{ px: 2, py: 1.5 }}>
@@ -378,14 +466,14 @@ export default function AppLayout({ children, user, onLogout }: Props) {
           }}
           sx={{
             borderRadius: 1,
-            bgcolor: "rgba(255,255,255,0.08)",
-            color: "rgba(255,255,255,0.5)",
+            bgcolor: nav.fieldBg,
+            color: nav.fgFaint,
             py: 0.75,
             px: 1.5,
             gap: 1,
           }}
         >
-          <MaterialSymbol icon="search" size={20} color="#999" />
+          <MaterialSymbol icon="search" size={20} color={nav.fgSubtle} />
           <Typography variant="body2" sx={{ flex: 1 }}>
             {t("search.placeholder")}
           </Typography>
@@ -400,8 +488,8 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                 onClick={() => setDrawerReportsOpen((p) => !p)}
                 sx={{
                   borderRadius: 1,
-                  color: isGroupActive(item.children) ? "#fff" : "rgba(255,255,255,0.7)",
-                  bgcolor: isGroupActive(item.children) ? "rgba(255,255,255,0.12)" : "transparent",
+                  color: isGroupActive(item.children) ? nav.fg : nav.fgMuted,
+                  bgcolor: isGroupActive(item.children) ? nav.activeBg : "transparent",
                 }}
               >
                 <ListItemIcon sx={{ minWidth: 36, color: "inherit" }}>
@@ -421,7 +509,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                       key={child.path}
                       selected={isActive(child.path)}
                       onClick={() => drawerNav(child.path)}
-                      sx={{ borderRadius: 1, color: "rgba(255,255,255,0.7)", "&.Mui-selected": { color: "#fff", bgcolor: "rgba(255,255,255,0.12)" } }}
+                      sx={{ borderRadius: 1, color: nav.fgMuted, "&.Mui-selected": { color: nav.fg, bgcolor: nav.activeBg } }}
                     >
                       <ListItemIcon sx={{ minWidth: 32, color: "inherit" }}>
                         <MaterialSymbol icon={child.icon} size={18} color="inherit" />
@@ -439,8 +527,8 @@ export default function AppLayout({ children, user, onLogout }: Props) {
               onClick={() => item.path && drawerNav(item.path)}
               sx={{
                 borderRadius: 1,
-                color: isActive(item.path) ? "#fff" : "rgba(255,255,255,0.7)",
-                "&.Mui-selected": { bgcolor: "rgba(255,255,255,0.12)" },
+                color: isActive(item.path) ? nav.fg : nav.fgMuted,
+                "&.Mui-selected": { bgcolor: nav.activeBg },
               }}
             >
               <ListItemIcon sx={{ minWidth: 36, color: "inherit" }}>
@@ -455,14 +543,14 @@ export default function AppLayout({ children, user, onLogout }: Props) {
 
         {showAdmin && (
           <>
-            <Divider sx={{ my: 1, borderColor: "rgba(255,255,255,0.1)" }} />
+            <Divider sx={{ my: 1, borderColor: nav.divider }} />
 
             {/* Admin section */}
             <ListItemButton
               onClick={() => setDrawerAdminOpen((p) => !p)}
               sx={{
                 borderRadius: 1,
-                color: isGroupActive(adminItems as { path: string }[]) ? "#fff" : "rgba(255,255,255,0.7)",
+                color: isGroupActive(adminItems as { path: string }[]) ? nav.fg : nav.fgMuted,
               }}
             >
               <ListItemIcon sx={{ minWidth: 36, color: "inherit" }}>
@@ -482,7 +570,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                     key={item.path}
                     selected={isActive(item.path)}
                     onClick={() => item.path && drawerNav(item.path)}
-                    sx={{ borderRadius: 1, color: "rgba(255,255,255,0.7)", "&.Mui-selected": { color: "#fff", bgcolor: "rgba(255,255,255,0.12)" } }}
+                    sx={{ borderRadius: 1, color: nav.fgMuted, "&.Mui-selected": { color: nav.fg, bgcolor: nav.activeBg } }}
                   >
                     <ListItemIcon sx={{ minWidth: 32, color: "inherit" }}>
                       <MaterialSymbol icon={item.icon} size={18} color="inherit" />
@@ -497,7 +585,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
 
         {can("inventory.create") && (
           <>
-            <Divider sx={{ my: 1, borderColor: "rgba(255,255,255,0.1)" }} />
+            <Divider sx={{ my: 1, borderColor: nav.divider }} />
 
             {/* Create */}
             <ListItemButton
@@ -505,7 +593,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                 setDrawerOpen(false);
                 setCreateOpen(true);
               }}
-              sx={{ borderRadius: 1, color: "rgba(255,255,255,0.7)" }}
+              sx={{ borderRadius: 1, color: nav.fgMuted }}
             >
               <ListItemIcon sx={{ minWidth: 36, color: "inherit" }}>
                 <MaterialSymbol icon="add" size={20} color="inherit" />
@@ -518,17 +606,17 @@ export default function AppLayout({ children, user, onLogout }: Props) {
 
       {/* User info at bottom */}
       <Box sx={{ mt: "auto", p: 2 }}>
-        <Divider sx={{ mb: 1.5, borderColor: "rgba(255,255,255,0.1)" }} />
-        <Typography variant="body2" sx={{ color: "#fff", fontWeight: 600 }}>
+        <Divider sx={{ mb: 1.5, borderColor: nav.divider }} />
+        <Typography variant="body2" sx={{ color: nav.fg, fontWeight: 600 }}>
           {user.display_name}
         </Typography>
-        <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.5)" }}>
+        <Typography variant="caption" sx={{ color: nav.fgFaint }}>
           {user.email}
         </Typography>
         <Button
           fullWidth
           size="small"
-          sx={{ mt: 1, color: "rgba(255,255,255,0.7)", textTransform: "none", justifyContent: "flex-start" }}
+          sx={{ mt: 1, color: nav.fgMuted, textTransform: "none", justifyContent: "flex-start" }}
           startIcon={<MaterialSymbol icon="logout" size={18} />}
           onClick={() => { setDrawerOpen(false); onLogout(); }}
         >
@@ -542,14 +630,14 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <AppBar
         position="fixed"
-        sx={{ bgcolor: "#1a1a2e" }}
+        sx={{ bgcolor: nav.bg }}
         elevation={0}
       >
         <Toolbar sx={{ gap: 0.5 }}>
           {/* Hamburger (mobile) */}
           {isMobile && (
             <IconButton
-              sx={{ color: "#fff", mr: 0.5 }}
+              sx={{ color: nav.fg, mr: 0.5 }}
               onClick={() => setDrawerOpen(true)}
             >
               <MaterialSymbol icon="menu" size={24} />
@@ -584,7 +672,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                     <Tooltip key={item.label} title={item.label}>
                       <IconButton
                         size="small"
-                        sx={{ color: isGroupActive(item.children) ? "#fff" : "rgba(255,255,255,0.7)" }}
+                        sx={{ color: isGroupActive(item.children) ? nav.fg : nav.fgMuted }}
                         onClick={(e) => setReportsMenu(e.currentTarget)}
                       >
                         <MaterialSymbol icon={item.icon} size={20} />
@@ -607,8 +695,8 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                     <IconButton
                       size="small"
                       sx={{
-                        color: isActive(item.path) ? "#fff" : "rgba(255,255,255,0.7)",
-                        bgcolor: isActive(item.path) ? "rgba(255,255,255,0.12)" : "transparent",
+                        color: isActive(item.path) ? nav.fg : nav.fgMuted,
+                        bgcolor: isActive(item.path) ? nav.activeBg : "transparent",
                       }}
                       // Render as a real anchor so Ctrl/Cmd+Click and middle-click
                       // open in a new tab natively.
@@ -674,7 +762,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
           {!isMobile && (
             <Tooltip title={t("search.tooltip", { shortcut: /Mac|iPod|iPhone|iPad/.test(navigator.platform) ? "\u2318K" : "Ctrl+K" })}>
               <IconButton
-                sx={{ color: "rgba(255,255,255,0.7)" }}
+                sx={{ color: nav.fgMuted }}
                 onClick={() => setSearchDialogOpen(true)}
               >
                 <MaterialSymbol icon="search" size={22} />
@@ -687,7 +775,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
             isMobile ? (
               <Tooltip title={t("create")}>
                 <IconButton
-                  sx={{ color: "#fff" }}
+                  sx={{ color: nav.fg }}
                   onClick={() => setCreateOpen(true)}
                 >
                   <MaterialSymbol icon="add_circle" size={24} />
@@ -711,7 +799,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
 
           {/* User menu */}
           <IconButton
-            sx={{ ml: isMobile ? 0 : 1, color: "#fff", flexShrink: 0 }}
+            sx={{ ml: isMobile ? 0 : 1, color: nav.fg, flexShrink: 0 }}
             onClick={(e) => setUserMenu(e.currentTarget)}
           >
             <MaterialSymbol icon="account_circle" size={28} />
@@ -1046,6 +1134,39 @@ export default function AppLayout({ children, user, onLogout }: Props) {
               }}
             >
               {t("impersonation.stop")}
+            </Button>
+          </Box>
+        )}
+        {licenseAttention.length > 0 && (
+          <Box
+            sx={{
+              px: 2,
+              py: 1,
+              bgcolor: "warning.main",
+              color: "warning.contrastText",
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              flexWrap: "wrap",
+            }}
+          >
+            <MaterialSymbol icon="license" size={18} />
+            <Typography variant="body2">
+              {t("extensionLicense.banner", {
+                defaultValue:
+                  "Extension license attention needed: {{keys}}. Request a renewed license file and apply it under Admin → Extensions.",
+                keys: licenseAttention
+                  .map((r) => `${r.key} (${r.entitlement_state})`)
+                  .join(", "),
+              })}
+            </Typography>
+            <Button
+              size="small"
+              color="inherit"
+              sx={{ ml: "auto" }}
+              onClick={() => navigate("/admin/extensions")}
+            >
+              {t("extensionLicense.manage", { defaultValue: "Manage" })}
             </Button>
           </Box>
         )}

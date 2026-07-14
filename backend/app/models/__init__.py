@@ -14,11 +14,18 @@ from app.models.diagram_group import DiagramGroup, diagram_group_members
 from app.models.document import Document
 from app.models.ea_principle import EAPrinciple
 from app.models.event import Event
+from app.models.extension import (
+    Extension,
+    ExtensionInstall,
+    ExtensionLicense,
+    ExtensionSchemaVersion,
+)
 from app.models.file_attachment import FileAttachment
 from app.models.kpi_snapshot import KpiSnapshot
 from app.models.migration import IdentityMap, Migration, StagedRecord
 from app.models.mutation_batch import MutationBatch
 from app.models.notification import Notification
+from app.models.ops_nonce import OpsRequestNonce
 from app.models.ppm_cost_line import PpmBudgetLine, PpmCostLine
 from app.models.ppm_dependency import PpmDependency
 from app.models.ppm_risk import PpmRisk
@@ -97,6 +104,10 @@ __all__ = [
     "SavedReport",
     "Todo",
     "Event",
+    "Extension",
+    "ExtensionInstall",
+    "ExtensionLicense",
+    "ExtensionSchemaVersion",
     "Document",
     "EAPrinciple",
     "Bookmark",
@@ -142,4 +153,5 @@ __all__ = [
     "SnowIdentityMap",
     "UserFavorite",
     "ResourceType",
+    "OpsRequestNonce",
 ]
