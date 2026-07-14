@@ -1,16 +1,19 @@
 name: Publish Docker images to GHCR
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*.*.*"]
+  # Disabled: publishing to GHCR is not wanted right now (builds were also
+  # failing). Re-enable the push/tag/schedule triggers below once ready to
+  # publish images again; workflow_dispatch is kept for a manual one-off run.
+  # push:
+  #   branches: [main]
+  #   tags: ["v*.*.*"]
   workflow_dispatch:
   # Weekly fresh rebuild so apk-package CVEs in the alpine bases are picked
   # up even during code-quiet weeks. Combined with `no-cache` below, this
   # guarantees `apk upgrade --no-cache` actually re-runs against the live
   # alpine repos instead of reusing a cached layer.
-  schedule:
-    - cron: "0 6 * * 1"
+  # schedule:
+  #   - cron: "0 6 * * 1"
 
 permissions:
   contents: read
