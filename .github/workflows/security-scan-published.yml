@@ -13,8 +13,12 @@ name: Daily security scan of published images
 # Manual run: `gh workflow run security-scan-published.yml`.
 
 on:
-  schedule:
-    - cron: "0 6 * * *"
+  # Disabled: the daily runs were failing outright (all jobs failing in
+  # ~20s, before the scan itself could meaningfully execute) and spamming
+  # repo watchers with failure emails. Re-enable once the underlying cause
+  # (e.g. published image availability/auth) is fixed.
+  # schedule:
+  #   - cron: "0 6 * * *"
   workflow_dispatch:
 
 permissions:
