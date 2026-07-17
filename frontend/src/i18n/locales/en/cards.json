@@ -1,5 +1,6 @@
 {
   "detail.title": "Card Detail",
+  "detail.unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?",
   "detail.backToTop": "Back to top",
   "detail.archivedBanner": "This card is archived.",
   "detail.purgeWarning_one": "It will be permanently deleted in {{count}} day.",
@@ -628,5 +629,7 @@
   "todos.recurrence.months_one": "Every month",
   "todos.recurrence.months_other": "Every {{count}} months",
   "todos.recurrence.years_one": "Every year",
-  "todos.recurrence.years_other": "Every {{count}} years"
+  "todos.recurrence.years_other": "Every {{count}} years",
+  "utils.cardId.tooltip": "Click to copy",
+  "utils.cardId.copied": "Copied!"
 }

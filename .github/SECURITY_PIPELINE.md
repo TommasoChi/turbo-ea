@@ -40,6 +40,30 @@ Two scanners covering the same layer is deliberate — different vuln DBs have d
 5. **Trivy gate** (CRITICAL only, `exit-code: 1`, `ignore-unfixed: true`) — fails the publish on any CRITICAL not in [`.github/trivy-allowlist`](trivy-allowlist). Introduced after CVE-2026-42945 ("NGINX Rift") slipped through the observe-only setup.
 6. **Scout observe** (`only-severities: critical,high`, `exit-code: false`) — SARIF → Security tab under `scout-<image>`. Gated on `DOCKERHUB_PAT` secret presence so the workflow stays green if credentials are removed.
 
+> **`:latest` publishing + apk freshness — the two things to know.**
+> 1. **What publishes `:latest`.** `latest=auto` + the two explicit `type=raw`
+>    entries mean `:latest` is retagged on **semver tag pushes** (`v*.*.*`
+>    releases), on **`workflow_dispatch` from `main`**, and on the **weekly
+>    `schedule`**. A plain merge to `main` publishes `:main` + `:sha-XXX` only —
+>    **not** `:latest`. So `:latest` (what docker-compose and the daily security
+>    scan consume) tracks releases + the weekly rebuild, not every commit.
+> 2. **Keeping cached builds apk-fresh.** `no-cache: true` is only set on
+>    `schedule` / `workflow_dispatch`; branch **and tag** pushes are `push`
+>    events, so they build **cached**. Because a `v*.*.*` tag push is cached yet
+>    publishes `:latest`, a release could otherwise ship `:latest` with a stale
+>    apk layer. The build step therefore also sets
+>    `no-cache-filters: backend,db,frontend,nginx,mcp-server` (plural — the
+>    singular form is silently ignored), which forces just the runtime stages
+>    (the ones running `apk upgrade --no-cache`) to rebuild against the live
+>    alpine repos on **every** build, cached ones included, while the expensive
+>    `frontend-build` / `backend-build` stages stay cached. This closes the curl
+>    8.19.0-r0 → 8.20.0-r0 gap seen in July 2026, where `:latest` kept shipping a
+>    cached, unpatched curl.
+>
+> To force a fresh `:latest` on demand (e.g. right after an alpine CVE fix lands
+> in the repo), run `docker-publish.yml` via **`workflow_dispatch` from `main`**
+> — it is `no-cache: true` and tags `:latest`.
+
 ### Weekly — Monday 06:00 UTC
 [`docker-publish.yml`](workflows/docker-publish.yml) re-runs with `no-cache: true` for cron events. The runtime Dockerfile stages each run `apk upgrade --no-cache`, so a forced rebuild against fresh alpine repos automatically picks up apk-package CVEs in pinned bases — no human in the loop.
 
@@ -87,6 +111,33 @@ have. To get the open alerts (CodeQL + Trivy + Scout) as a plain table:
    - **No patch, not exploitable in our usage path** → allowlist in `.github/trivy-allowlist`. **Required**: a comment block above the CVE explaining package, why it isn't exploitable for us, reviewer initials, date. Re-evaluate next quarter.
    - **No patch, exploitable** → don't ship. Mitigate at the nginx / app layer if possible; otherwise the workflow stays red until upstream fixes.
 3. Re-run the workflow.
+
+### An apk-fixable finding won't clear after republishing
+
+Symptom: a `curl` / `openssl` / `nghttp2` etc. CVE that Trivy marks `fixed`
+(a patched apk version exists) keeps showing open in the Security tab even after
+you republish the image.
+
+1. **Confirm the live image is actually patched.** Run
+   [`trivy-reconcile.yml`](workflows/trivy-reconcile.yml) with the default
+   `upload_sarif=false` and read the installed-vs-fixed table in the job log. If
+   the **installed** version is still the old one, the image itself is stale —
+   go to step 2. If it already shows the fixed version, the alert is just stale
+   in the tab — skip to step 3.
+2. **Republish so `:latest` carries the fix.** Since the build step sets
+   `no-cache-filter` on the runtime stages, any publish (a merge to `main`, or a
+   `workflow_dispatch` run of `docker-publish.yml`) now rebuilds `apk upgrade`
+   against the live alpine repos, so `:latest` picks up the fix and stays patched
+   across subsequent pushes. (Before that filter existed, a cached push would
+   overwrite the patched `:latest` right back to the stale layer.)
+3. **Close stale `<=medium` alerts.** The routine observe scans are
+   `HIGH,CRITICAL` only, so a MEDIUM alert created by an earlier all-severity
+   scan never auto-closes on rebuild. Run `trivy-reconcile.yml` with
+   `upload_sarif=true` — it uploads an all-severity SARIF to the same
+   `trivy-<image>` category, so GitHub closes everything now absent from the
+   rebuilt image. HIGH/CRITICAL alerts self-heal via the next publish/daily
+   observe once the image is patched, but the reconcile closes them immediately
+   too.
 
 ### The Trivy allowlist file
 

@@ -1,5 +1,6 @@
 {
   "detail.title": "Dettaglio scheda",
+  "detail.unsavedLeaveConfirm": "Ci sono modifiche non salvate. Uscire senza salvare?",
   "detail.backToTop": "Torna su",
   "detail.archivedBanner": "Questa scheda è archiviata.",
   "detail.purgeWarning_one": "Verrà eliminata definitivamente tra {{count}} giorno.",
@@ -628,5 +629,7 @@
   "todos.recurrence.months_one": "Ogni mese",
   "todos.recurrence.months_other": "Ogni {{count}} mesi",
   "todos.recurrence.years_one": "Ogni anno",
-  "todos.recurrence.years_other": "Ogni {{count}} anni"
+  "todos.recurrence.years_other": "Ogni {{count}} anni",
+  "utils.cardId.tooltip": "Clicca per copiare",
+  "utils.cardId.copied": "Copiato!"
 }

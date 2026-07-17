@@ -1,5 +1,6 @@
 {
   "detail.title": "卡片详情",
+  "detail.unsavedLeaveConfirm": "您有未保存的更改。不保存就离开吗？",
   "detail.backToTop": "返回顶部",
   "detail.archivedBanner": "此卡片已归档。",
   "detail.purgeWarning_one": "将在 {{count}} 天后被永久删除。",
@@ -628,5 +629,7 @@
   "todos.recurrence.months_one": "每月",
   "todos.recurrence.months_other": "每 {{count}} 月",
   "todos.recurrence.years_one": "每年",
-  "todos.recurrence.years_other": "每 {{count}} 年"
+  "todos.recurrence.years_other": "每 {{count}} 年",
+  "utils.cardId.tooltip": "点击复制",
+  "utils.cardId.copied": "已复制"
 }

@@ -30,8 +30,9 @@ import { useTypeLabel, useSubtypeLabel } from "@/hooks/useResolveLabel";
 import { useAiStatus } from "@/hooks/useAiStatus";
 import { useArchiveRetentionDays } from "@/hooks/useArchiveRetentionDays";
 import { api, ApiError } from "@/api/client";
-import { DataQualityPill } from "@/features/cards/sections";
+import { CardIdPill, DataQualityPill } from "@/features/cards/sections";
 import CardDetailContent from "@/features/cards/CardDetailContent";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import type {
   Card,
   CardEffectivePermissions,
@@ -95,6 +96,16 @@ export default function CardDetail() {
   const [nameDraft, setNameDraft] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
+
+  // Warn before leaving the page with unsaved edits (#843). Sections report
+  // their dirty state up through CardDetailContent; combine that with the
+  // inline title edit for the page-level unsaved-changes flag.
+  const [sectionsDirty, setSectionsDirty] = useState(false);
+  const titleDirty = editingName && nameDraft !== (card?.name ?? "");
+  useUnsavedChangesGuard(
+    sectionsDirty || titleDirty,
+    t("cards:detail.unsavedLeaveConfirm"),
+  );
 
   // Inline subtype editing
   const [subtypeAnchor, setSubtypeAnchor] = useState<HTMLElement | null>(null);
@@ -258,6 +269,7 @@ export default function CardDetail() {
   const hasSubtypes = !!(typeConfig?.subtypes && typeConfig.subtypes.length > 0);
   const isArchived = card.status === "ARCHIVED";
   const canEditSubtype = hasSubtypes && perms.can_edit && !isArchived;
+
 
   const handleApprovalAction = async (action: "approve" | "reject" | "reset") => {
     try {
@@ -517,7 +529,7 @@ export default function CardDetail() {
               )}
             </Box>
           )}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", rowGap: 0.5 }}>
             <Typography
               variant="body2"
               sx={{ color: typeConfig?.color || "text.secondary" }}
@@ -593,6 +605,9 @@ export default function CardDetail() {
                   )
                 )}
               </>
+            )}
+            {card.reference && (
+              <CardIdPill reference={card.reference} typeColor={typeConfig?.color} />
             )}
           </Box>
         </Box>
@@ -752,9 +767,11 @@ export default function CardDetail() {
       />
 
       <CardDetailContent
+        key={card.id}
         card={card}
         perms={perms}
         onCardUpdate={setCard}
+        onDirtyChange={setSectionsDirty}
         initialTab={initialTab}
         initialSubTab={initialSubTab}
         autoFieldKeys={ppmAutoFieldKeys}
