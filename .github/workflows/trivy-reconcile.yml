@@ -53,19 +53,12 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
 
-      # OCI image references must be all-lowercase. github.repository preserves
-      # the owner's actual casing (e.g. "TommasoChi/turbo-ea" on a fork), which
-      # is not a valid lowercase reference for Trivy. Compute it once.
-      - name: Compute lowercase repository
-        id: repo
-        run: echo "lower=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-
       # Diagnostic — always runs. Prints the installed vs fixed version per CVE
       # so we can tell "already patched, just stale" from "genuinely unfixed".
       - name: Trivy table (all severities, installed vs fixed)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}:latest
+          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image }}:latest
           scan-type: image
           scanners: vuln
           format: table
@@ -79,7 +72,7 @@ jobs:
         if: ${{ inputs.upload_sarif }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}:latest
+          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image }}:latest
           scan-type: image
           scanners: vuln
           format: sarif
