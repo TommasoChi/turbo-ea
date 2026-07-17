@@ -41,6 +41,13 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
 
+      # OCI image references must be all-lowercase. github.repository preserves
+      # the owner's actual casing (e.g. "TommasoChi/turbo-ea" on a fork), which
+      # is not a valid lowercase reference for Trivy/Scout. Compute it once.
+      - name: Compute lowercase repository
+        id: repo
+        run: echo "lower=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       # Observe step — surfaces HIGH + CRITICAL, including unfixed advisories
       # (`ignore-unfixed: false`) so actively-exploited zero-days appear here
       # before an upstream fix is available. Never fails the job; the gate
@@ -48,7 +55,7 @@ jobs:
       - name: Trivy scan (observe, HIGH + CRITICAL, incl. unfixed)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image }}:latest
+          image-ref: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}:latest
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
           severity: HIGH,CRITICAL
@@ -69,7 +76,7 @@ jobs:
       - name: Trivy gate (CRITICAL only, fixed)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image }}:latest
+          image-ref: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}:latest
           format: table
           severity: CRITICAL
           exit-code: "1"
@@ -86,7 +93,7 @@ jobs:
         uses: docker/scout-action@v1
         with:
           command: cves
-          image: ghcr.io/${{ github.repository }}/${{ matrix.image }}:latest
+          image: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}:latest
           only-severities: critical,high
           sarif-file: scout-${{ matrix.image }}.sarif
           exit-code: false
