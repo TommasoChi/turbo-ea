@@ -180,6 +180,9 @@
   "dashboard.activity.action.soaw.signatures_recalled": "отозвал подписи SoAW",
   "colorPicker.pickColor": "Выбрать цвет",
   "colorPicker.recent": "Недавние",
+  "colorPicker.contrastWarning": "Низкая контрастность: этот цвет может быть плохо различим в светлой или тёмной теме",
+  "colorPicker.previewLight": "Светлая",
+  "colorPicker.previewDark": "Тёмная",
   "timelineSlider.timeTravel": "Путешествие во времени",
   "timelineSlider.past": "Прошлое",
   "timelineSlider.future": "Будущее",
@@ -355,5 +358,10 @@
   "notFound.extensionHint": "Эта страница принадлежит расширению, которое не установлено, не включено или ещё загружается.",
   "actions.view": "Просмотр",
   "actions.moveUp": "Вверх",
-  "actions.moveDown": "Вниз"
+  "actions.moveDown": "Вниз",
+  "portal.signInHint": "Этот портал закрыт. Войдите с учётной записью вашей организации, чтобы просмотреть его.",
+  "portal.signInButton": "Войти через {{provider}}",
+  "portal.ssoUnavailable": "Единый вход сейчас недоступен для этого портала. Обратитесь к администратору портала.",
+  "portal.signInError": "Не удалось войти. Повторите попытку.",
+  "portal.signingIn": "Выполняется вход…"
 }

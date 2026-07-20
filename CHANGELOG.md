@@ -5,6 +5,83 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.23.1] - 2026-07-17
+
+### Security
+- **Frontend build toolchain upgraded from End-of-Life Node.js 20 to Node.js 24 LTS.** The `frontend-build` Docker stage now uses `node:24-alpine` and the frontend CI jobs run on Node 24. Node.js 20 reached End of Life on April 30, 2026; Node 24 is the Active LTS line, supported until April 2028. Node is build-time only — the shipped frontend image (nginx + static assets) is unchanged. (#853)
+
+## [2.23.0] - 2026-07-17
+
+### Added
+- **Card type colors are now fully customizable — including the built-in types** (discussion #740). The metamodel admin's color picker is no longer locked for built-in types, so you can align Turbo EA with TOGAF/ArchiMate visual conventions (business elements in yellow/orange, applications in blue, …). A **reset to default color** button appears whenever a built-in type's color differs from the standard palette, and the picker warns (without blocking) when a chosen color would be nearly invisible against light or dark backgrounds. The API now validates type colors as `#rrggbb` hex values.
+- **The type color picker shows a live preview in both themes.** Beside the palette, sample renderings of the type name, chip, card icon, subtype, card ID pill, and a dependency-view node update as you pick — once on a light background and once on a dark one — so you can see exactly how a color will look before saving.
+- **Text on colored chips and diagram shapes now picks black or white automatically for readability.** Card-type, tag, select-option, and related-card chips across the inventory, card detail, reports, and filter sidebars — as well as newly inserted DrawIO card shapes — compute their text color from the background instead of always using white, so pale custom colors stay legible in both light and dark mode. Dark mode no longer washes out pale type colors in the dependency views.
+
+### Fixed
+- The Compliance filter sidebar, Capability Map, and Process Map now use the metamodel colors for Application, IT Component, Data Object, and Business Capability instead of hardcoded defaults, so admin color customizations show up consistently.
+- **The notification bell now inherits the custom navigation bar text color** (#852). With a light custom navbar the bell was hardcoded white and nearly invisible; it now follows the configured text color like every other top-bar icon, while the red unread badge keeps its status color.
+
+## [2.22.4] - 2026-07-17
+
+### Fixed
+- **PPM status reports now label each health indicator.** In an Initiative's Status Reports tab, the three colored dots (Schedule, Cost, Scope) now show their dimension name next to each dot, with the RAG status (On Track / At Risk / Off Track) in the tooltip. Previously the indicators relied on color and position alone, which was ambiguous and inaccessible to users with color-vision deficiencies. (#849)
+
+## [2.22.3] - 2026-07-17
+
+### Fixed
+- **Email sending now works with SMTP servers that require implicit TLS/SSL on port 465.** Previously the SMTP backends always opened a plain connection (upgraded via STARTTLS), which servers expecting an immediate TLS handshake dropped before authentication ("Connection unexpectedly closed"). Port 465 now connects with implicit TLS automatically — for both the password and OAuth2 SMTP methods; port 587 with STARTTLS is unchanged.
+
+## [2.22.2] - 2026-07-17
+
+### Fixed
+- **The Matrix report no longer misaligns rows that have children.** When a card type with a parent/child hierarchy is used for the matrix rows and **Sort Rows** is set to **Hierarchy**, the data cells of the nested child rows now line up correctly under their column headers instead of drifting out of the grid.
+
+## [2.22.1] - 2026-07-17
+
+### Fixed
+- **Exporting a dependency diagram (Layered Dependency View) to PNG or SVG no longer shows `expand_less` / `expand_more` as raw text.** The small up/down hierarchy hint chevrons (shown when a card has a hidden parent or hidden children) now render as real chevrons in the exported image instead of leaking through as their icon names.
+
+## [2.22.0] - 2026-07-16
+
+### Fixed
+- **Editing several card sections at once no longer loses your work.** When you had the edit pencil open on more than one section of a card and typed into each, saving one section used to silently clear the unsaved text in the others. Each section now keeps its in-progress edits until you save or cancel it. (#843)
+
+### Added
+- **Turbo EA now warns you before leaving a card with unsaved edits.** If you try to reload, close the tab, click to another page, or use the browser Back button while a card section (or the card title) is still being edited, you'll be asked to confirm so you don't accidentally lose your changes.
+
+## [2.21.0] - 2026-07-16
+
+### Added
+- **Web portals can now be protected with single sign-on.** Each portal now has an access mode: **Anyone with the link** (the previous behaviour) or **Sign in with SSO**. In SSO mode, visitors must authenticate with your organization's identity provider before they can see any portal data — but they are never provisioned as Turbo EA users, so there is no account to manage, no role to assign, and no license consumed. Sign-in is transparent: a visitor already signed in with your identity provider lands on the portal with no prompt, and the flow reuses your existing SSO login configuration, so **no identity-provider changes are needed**. You can optionally restrict an SSO-gated portal to specific email domains. Configure it per portal in Admin → Settings → Web Portals.
+
+### Security
+- **Published web portals are no longer unavoidably world-readable.** SSO-gated portals return no card data until the visitor completes sign-in; the visitor session is a short-lived, per-portal, account-less cookie, and unpublishing a portal instantly revokes access in every mode.
+
+## [2.20.0] - 2026-07-15
+
+### Changed
+- **The GRC page now remembers your last active tab.** When you reopen GRC, it reopens on the tab you last used — including the Governance sub-tab, so leaving on Governance → Decisions brings you back to Decisions. An explicit link with a tab in its address still takes priority.
+
+## [2.19.0] - 2026-07-15
+
+### Added
+- **Extension store listings can now show a Details view.** A store card with extra metadata gains a **Details** button that opens a dialog with a longer description, a screenshot gallery, and source/licence credits. Listings without this metadata are unchanged.
+
+## [2.18.0] - 2026-07-15
+
+### Added
+- **Cards can now have a human-readable ID (e.g. `APP-00001`).** Toggle it on per card type — in Admin → Metamodel → the type editor — to give its cards a stable, human-readable ID. The number is always system-generated (configurable start + zero-padding); you only set the prefix (a suggested prefix is pre-filled from the type name and editable). IDs are globally unique, read-only, and never reused or changed once assigned; once a type has any ID, its format (prefix/start/min-digits) is locked so existing IDs can never drift. They appear as a copy-to-clipboard pill (tinted in the card type's color) beside the card's type on the detail page, as an optional sortable/filterable column in the inventory grid, in Excel exports, and are available in calculated-field formulas via `data.reference`. A dedicated **Generate IDs** button assigns IDs to existing cards on demand (the type Save button never backfills). (#811)
+
+## [2.17.1] - 2026-07-15
+
+### Changed
+- **Fiscal Year Start setting moved directly below Date Format** in Admin → Settings, grouping the two date-related preferences together.
+
+## [2.17.0] - 2026-07-15
+
+### Added
+- **Extensions can now be published as free.** A free extension installs and runs with no license — no purchase, no license file to paste. Free extensions are marked with a **Free** badge in Admin → Extensions and its Store tab, and the Buy/Renew actions are hidden for them. Signature verification is unchanged: a free extension is still vendor-signed. (Paid extensions continue to require a license exactly as before.)
+
 ## [2.16.0] - 2026-07-14
 
 ### Added

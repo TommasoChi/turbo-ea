@@ -34,6 +34,15 @@ Cliquez sur **+ Nouveau type** pour créer un type de fiche personnalisé. Confi
 
 Cliquez sur n'importe quel type pour ouvrir le **Tiroir de détail du type**. Vous pouvez y configurer :
 
+#### Couleur du type
+
+Chaque type de carte — y compris les types intégrés — possède une couleur personnalisable utilisée dans l'inventaire, les rapports, les vues de dépendances et les diagrammes. Vous pouvez ainsi aligner Turbo EA sur les conventions visuelles de votre organisation (par exemple les palettes TOGAF/ArchiMate : éléments métier en jaune/orange, applications en bleu).
+
+- Choisissez une couleur avec la pastille de couleur du panneau. Un avertissement apparaît lorsque la couleur choisie offre un contraste très faible sur fond clair ou sombre.
+- Les types intégrés affichent un bouton de **réinitialisation** à côté de la pastille dès que la couleur diffère de la valeur par défaut de Turbo EA, afin de toujours pouvoir revenir à la palette standard.
+- Le texte affiché sur les couleurs de type (puces, formes de diagramme) bascule automatiquement entre noir et blanc pour rester lisible, en mode clair comme en mode sombre.
+- Le sélecteur affiche un **aperçu en direct** à côté de la palette : nom du type, puce, icône de carte, sous-type, pastille d'ID de carte et nœud de vue de dépendances, rendus une fois en mode clair et une fois en mode sombre, mis à jour au fil de la sélection.
+
 #### Champs
 
 Les champs définissent les attributs personnalisés disponibles sur les fiches de ce type. Chaque champ possède :
@@ -60,6 +69,17 @@ Les champs sont organisés en **sections** sur la page de détail des fiches. Vo
 - Réorganiser les champs au sein d'une section par glisser-déposer, et déplacer un champ vers une autre section via son action **déplacer**
 
 Le nom de section special `__description` ajoute les champs à la section Description de la page de détail des fiches.
+
+#### ID de carte
+
+Activez la **génération d'ID de carte** pour attribuer aux cartes de ce type un ID stable et lisible (par exemple `APP-00001`). L'ID apparaît sous forme de pastille copiable à côté du type de la carte, comme colonne optionnelle (triable et filtrable) dans l'inventaire, dans les exports Excel et dans les formules des champs calculés (via `data.reference`).
+
+Le **numéro est toujours généré automatiquement** ; vous ne contrôlez que le **préfixe**. À l'activation, un préfixe suggéré (dérivé du nom du type, ex. `APP-`) s'affiche sous forme de texte — cliquez sur le crayon pour le modifier. Deux réglages ajustent le numéro :
+
+- **Début** — le premier numéro de la série (par défaut `1`).
+- **Chiffres min.** — largeur du remplissage par des zéros (par défaut `5`), donc `1` s'affiche `00001`. C'est un minimum ; les numéros s'allongent une fois dépassés. Un **Exemple** affiche en direct le premier ID.
+
+Les ID sont **uniques globalement, en lecture seule, jamais réutilisés ni modifiés**. La séquence de numéros est suivie **par préfixe sur tout l'espace de travail** : deux types partageant un préfixe forment une seule série continue et sans collision. Dès qu'une carte de ce type a un ID, tout le format — préfixe, début et chiffres min. — est verrouillé (les champs deviennent en lecture seule) ; vous pouvez encore désactiver la génération. L'enregistrement n'attribue jamais d'ID aux cartes existantes ; utilisez le bouton dédié **Générer les ID** pour combler le retard à la demande (avec barre de progression et confirmation).
 
 #### Évaluation de la qualité des données
 

@@ -34,6 +34,15 @@ Cliccate su **+ Nuovo tipo** per creare un tipo di card personalizzato. Configur
 
 Cliccate su qualsiasi tipo per aprire il **Cassetto dettaglio tipo**. Qui potete configurare:
 
+#### Colore del tipo
+
+Ogni tipo di scheda — inclusi quelli predefiniti — ha un colore personalizzabile usato nell'inventario, nei report, nelle viste delle dipendenze e nei diagrammi. Questo consente di allineare Turbo EA alle convenzioni visive della propria organizzazione (ad esempio le palette TOGAF/ArchiMate: elementi di business in giallo/arancione, applicazioni in blu).
+
+- Scegliere un colore con il campione di colore nel pannello. Un avviso appare quando il colore scelto ha un contrasto molto basso su sfondi chiari o scuri.
+- I tipi predefiniti mostrano un pulsante di **ripristino** accanto al campione di colore quando il colore differisce dal valore predefinito di Turbo EA, così è sempre possibile tornare alla palette standard.
+- Il testo mostrato sopra i colori del tipo (chip, forme dei diagrammi) passa automaticamente dal nero al bianco per la leggibilità, sia in modalità chiara sia in modalità scura.
+- Il selettore mostra un'**anteprima dal vivo** accanto alla palette: nome del tipo, chip, icona della scheda, sottotipo, pillola dell'ID scheda e un nodo della vista delle dipendenze, resi una volta in modalità chiara e una in modalità scura, aggiornati durante la selezione.
+
 #### Campi
 
 I campi definiscono gli attributi personalizzati disponibili sulle card di questo tipo. Ogni campo ha:
@@ -60,6 +69,17 @@ I campi sono organizzati in **sezioni** nella pagina di dettaglio della card. Po
 - Riordinare i campi all'interno di una sezione trascinandoli e spostare un campo in un'altra sezione tramite la sua azione **sposta**
 
 Il nome speciale di sezione `__description` aggiunge campi alla sezione Descrizione della pagina di dettaglio della card.
+
+#### ID scheda
+
+Attiva la **generazione ID scheda** per assegnare alle schede di questo tipo un ID stabile e leggibile (ad esempio `APP-00001`). L'ID appare come pillola copiabile accanto al tipo della scheda, come colonna opzionale (ordinabile e filtrabile) nell'inventario, nelle esportazioni Excel e nelle formule dei campi calcolati (tramite `data.reference`).
+
+Il **numero è sempre generato automaticamente**; puoi controllare solo il **prefisso**. All'attivazione viene mostrato come testo un prefisso suggerito (derivato dal nome del tipo, es. `APP-`) — clicca la matita per modificarlo. Due impostazioni regolano il numero:
+
+- **Inizia da** — il primo numero della serie (predefinito `1`).
+- **Cifre min.** — larghezza del riempimento con zeri (predefinito `5`), così `1` diventa `00001`. È un minimo; i numeri si allungano una volta superato. Un **Esempio** mostra in tempo reale il primo ID.
+
+Gli ID sono **univoci a livello globale, di sola lettura e non vengono mai riutilizzati o modificati**. La sequenza numerica è tracciata **per prefisso in tutto il workspace**, quindi due tipi che condividono un prefisso formano un'unica serie continua e senza collisioni. Una volta che una scheda di questo tipo ha un ID, l'intero formato — prefisso, inizio e cifre min. — è bloccato (i campi diventano di sola lettura); puoi comunque disattivare la generazione. Il salvataggio non assegna mai ID alle schede esistenti; usa il pulsante dedicato **Genera ID** per colmare l'arretrato su richiesta (con barra di avanzamento e conferma).
 
 #### Punteggio di qualità dei dati
 

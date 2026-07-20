@@ -180,6 +180,9 @@
   "dashboard.activity.action.soaw.signatures_recalled": "已撤回 SoAW 签名",
   "colorPicker.pickColor": "选择颜色",
   "colorPicker.recent": "最近使用",
+  "colorPicker.contrastWarning": "对比度低：此颜色在浅色或深色模式下可能难以看清",
+  "colorPicker.previewLight": "浅色",
+  "colorPicker.previewDark": "深色",
   "timelineSlider.timeTravel": "时间穿梭",
   "timelineSlider.past": "过去",
   "timelineSlider.future": "未来",
@@ -355,5 +358,10 @@
   "notFound.extensionHint": "此页面属于某个未安装、未启用或仍在加载中的扩展。",
   "actions.view": "查看",
   "actions.moveUp": "上移",
-  "actions.moveDown": "下移"
+  "actions.moveDown": "下移",
+  "portal.signInHint": "此门户受限。请使用您的组织账户登录以查看。",
+  "portal.signInButton": "使用 {{provider}} 登录",
+  "portal.ssoUnavailable": "此门户目前无法使用单点登录。请联系门户管理员。",
+  "portal.signInError": "登录失败。请重试。",
+  "portal.signingIn": "正在登录…"
 }

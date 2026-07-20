@@ -34,6 +34,15 @@ Klicken Sie auf **+ Neuer Typ**, um einen benutzerdefinierten Kartentyp zu erste
 
 Klicken Sie auf einen beliebigen Typ, um die **Typ-Detail-Schublade** zu öffnen. Hier können Sie konfigurieren:
 
+#### Typfarbe
+
+Jeder Kartentyp — auch die vordefinierten — hat eine anpassbare Farbe, die im Inventar, in Berichten, Abhängigkeitsansichten und Diagrammen verwendet wird. So können Sie Turbo EA an die visuellen Konventionen Ihrer Organisation anpassen (z. B. TOGAF/ArchiMate-Paletten: Geschäftselemente in Gelb/Orange, Anwendungen in Blau).
+
+- Wählen Sie eine Farbe über das Farbfeld im Drawer. Ein Hinweis erscheint, wenn die gewählte Farbe einen sehr geringen Kontrast zu hellen oder dunklen Hintergründen hat.
+- Vordefinierte Typen zeigen neben dem Farbfeld eine **Zurücksetzen**-Schaltfläche, sobald die Farbe vom Turbo-EA-Standard abweicht — Sie können also jederzeit zur Standardpalette zurückkehren.
+- Text auf Typfarben (Chips, Diagrammformen) wechselt für die Lesbarkeit automatisch zwischen Schwarz und Weiß, sowohl im hellen als auch im dunklen Modus.
+- Der Farbwähler zeigt neben der Palette eine **Live-Vorschau**: Typname, Chip, Kartensymbol, Subtyp, Karten-ID-Pill und ein Abhängigkeitsdiagramm-Knoten, jeweils einmal im hellen und einmal im dunklen Modus, die sich bei der Auswahl live aktualisiert.
+
 #### Felder
 
 Felder definieren die benutzerdefinierten Attribute, die auf Karten dieses Typs verfügbar sind. Jedes Feld hat:
@@ -60,6 +69,17 @@ Felder werden in **Abschnitte** auf der Kartendetailseite organisiert. Sie könn
 - Felder innerhalb eines Abschnitts per Drag-and-drop neu anordnen und über die **Verschieben**-Aktion in einen anderen Abschnitt verschieben
 
 Der spezielle Abschnittsname `__description` fügt Felder zum Beschreibungsabschnitt der Kartendetailseite hinzu.
+
+#### Karten-ID
+
+Aktivieren Sie **Karten-ID-Generierung**, um Karten dieses Typs eine stabile, lesbare ID zu geben (z. B. `APP-00001`). Die ID erscheint als Pille zum Kopieren neben dem Kartentyp auf der Detailseite, als optionale sortier- und filterbare Spalte im Inventar, in Excel-Exporten und in Formeln berechneter Felder (über `data.reference`).
+
+Die **Nummer wird immer automatisch erzeugt**; steuern lässt sich nur das **Präfix**. Beim Einschalten wird ein vorgeschlagenes Präfix (aus dem Typnamen abgeleitet, z. B. `APP-`) als Text angezeigt – zum Ändern auf den Stift klicken. Zwei Einstellungen steuern die Nummer:
+
+- **Beginn bei** – die erste Nummer der Serie (Standard `1`).
+- **Min. Stellen** – Breite der Nullauffüllung (Standard `5`), sodass `1` als `00001` erscheint. Es ist ein Minimum; die Nummern werden länger, sobald sie es überschreiten. Ein **Beispiel** zeigt live die erste ID.
+
+IDs sind **global eindeutig, schreibgeschützt und werden nie wiederverwendet oder geändert**. Die Nummernfolge wird **je Präfix workspaceweit** geführt, sodass Typen mit gleichem Präfix eine durchgehende, kollisionsfreie Serie bilden. Sobald Karten dieses Typs IDs haben, ist das gesamte Format – Präfix, Beginn und Min. Stellen – gesperrt (die Felder werden schreibgeschützt); nur das Ausschalten bleibt möglich. Das Speichern weist bestehenden Karten nie IDs zu; nutzen Sie die separate Schaltfläche **IDs generieren**, um den Rückstand bei Bedarf zu füllen (mit Fortschrittsanzeige und Bestätigung).
 
 #### Datenqualitätsbewertung
 

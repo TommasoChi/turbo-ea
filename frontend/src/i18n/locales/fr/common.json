@@ -180,6 +180,9 @@
   "dashboard.activity.action.soaw.signatures_recalled": "a rappelé les signatures d'un SoAW",
   "colorPicker.pickColor": "Choisir une couleur",
   "colorPicker.recent": "Récentes",
+  "colorPicker.contrastWarning": "Contraste faible : cette couleur peut être difficile à voir en mode clair ou sombre",
+  "colorPicker.previewLight": "Clair",
+  "colorPicker.previewDark": "Sombre",
   "timelineSlider.timeTravel": "Voyage dans le temps",
   "timelineSlider.past": "Passé",
   "timelineSlider.future": "Futur",
@@ -355,5 +358,10 @@
   "notFound.extensionHint": "Cette page appartient à une extension qui n'est pas installée, pas activée ou encore en cours de chargement.",
   "actions.view": "Voir",
   "actions.moveUp": "Monter",
-  "actions.moveDown": "Descendre"
+  "actions.moveDown": "Descendre",
+  "portal.signInHint": "Ce portail est restreint. Connectez-vous avec votre compte professionnel pour le consulter.",
+  "portal.signInButton": "Se connecter avec {{provider}}",
+  "portal.ssoUnavailable": "L'authentification unique n'est pas disponible pour ce portail actuellement. Veuillez contacter l'administrateur du portail.",
+  "portal.signInError": "Échec de la connexion. Veuillez réessayer.",
+  "portal.signingIn": "Connexion en cours…"
 }

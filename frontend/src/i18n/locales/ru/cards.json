@@ -1,5 +1,6 @@
 {
   "detail.title": "Карточка",
+  "detail.unsavedLeaveConfirm": "Есть несохранённые изменения. Уйти без сохранения?",
   "detail.backToTop": "Наверх",
   "detail.archivedBanner": "Эта карточка архивирована.",
   "detail.purgeWarning_one": "Она будет безвозвратно удалена через {{count}} день.",
@@ -628,5 +629,7 @@
   "todos.recurrence.months_one": "Каждый месяц",
   "todos.recurrence.months_other": "Каждые {{count}} мес.",
   "todos.recurrence.years_one": "Каждый год",
-  "todos.recurrence.years_other": "Каждые {{count}} лет"
+  "todos.recurrence.years_other": "Каждые {{count}} лет",
+  "utils.cardId.tooltip": "Нажмите, чтобы скопировать",
+  "utils.cardId.copied": "Скопировано!"
 }

@@ -30,11 +30,12 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
-import { lighten, useTheme } from "@mui/material/styles";
+import { useTheme } from "@mui/material/styles";
 import { toBlob, toSvg } from "html-to-image";
 import { saveAs } from "file-saver";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
+import { readableTypeColor } from "@/lib/color";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { getCurrentPhase } from "@/components/LifecycleBadge";
 import {
@@ -183,22 +184,9 @@ function buildFieldCatalog(types: CardType[], presentTypeKeys: Set<string>): Fie
 
 const LP_CIRCUMFERENCE = 2 * Math.PI * 15; // ~94.25
 
-/**
- * Returns a card-type color that reads cleanly against the active theme.
- * Card-type metamodel colors (e.g. `#003399` for BusinessCapability,
- * `#774fcc` for DataObject) are tuned for white-ish backgrounds — on the
- * dark theme paper they fall below 4.5:1 contrast and the borders / type
- * labels become unreadable. We lighten them to a fixed brightness in dark
- * mode while passing the original through untouched in light mode.
- */
-export function readableTypeColor(hex: string, isDark: boolean): string {
-  if (!isDark) return hex;
-  try {
-    return lighten(hex, 0.45);
-  } catch {
-    return hex;
-  }
-}
+// Shared with every other card-type color consumer — see lib/color.ts for the
+// luminance-gating rationale. Re-exported for existing importers.
+export { readableTypeColor };
 
 const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
   const typeLabel = useTypeLabel();
@@ -403,8 +391,11 @@ const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
         />
       )}
       {/* Hierarchy markers: a chevron hint when the card has a parent (above)
-          or children (below) that aren't on the diagram yet. Decorative only —
-          tagged `ldv-hierarchy-marker` so image export drops the font glyph. */}
+          or children (below) that aren't on the diagram yet. Decorative only.
+          Drawn as inline SVG (not a Material Symbols font glyph) so they
+          rasterise identically in the live view and in PNG/SVG image export —
+          `skipFonts: true` during export means a font ligature would otherwise
+          leak through as its raw icon name ("expand_less"/"expand_more"). */}
       {hiddenParent && (
         <Box
           className="ldv-hierarchy-marker"
@@ -420,7 +411,7 @@ const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
             pointerEvents: "none",
           }}
         >
-          <MaterialSymbol icon="expand_less" size={15} color={accent} />
+          <LdvChevron dir="up" color={accent} />
         </Box>
       )}
       {hiddenChildren && (
@@ -438,7 +429,7 @@ const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
             pointerEvents: "none",
           }}
         >
-          <MaterialSymbol icon="expand_more" size={15} color={accent} />
+          <LdvChevron dir="down" color={accent} />
         </Box>
       )}
       {/* Proposed "NEW" badge */}
@@ -634,6 +625,31 @@ const LdvDirectionArrow = memo(
   ),
 );
 LdvDirectionArrow.displayName = "LdvDirectionArrow";
+
+/**
+ * Hierarchy hint chevron (▲ hidden parent / ▼ hidden children) drawn as a
+ * vector SVG rather than a Material Symbols font glyph, so it rasterises
+ * identically in the live view and in PNG/SVG image export (export runs with
+ * `skipFonts: true`, so a font ligature would leak through as its raw icon
+ * name). Same rationale as `LdvDirectionArrow`.
+ */
+const LdvChevron = memo(({ dir, color }: { dir: "up" | "down"; color: string }) => (
+  <svg
+    width={14}
+    height={8}
+    viewBox="0 0 14 8"
+    fill="none"
+    stroke={color}
+    strokeWidth={1.6}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0 }}
+    aria-hidden
+  >
+    <polyline points={dir === "up" ? "1,6 7,2 13,6" : "1,2 7,6 13,2"} />
+  </svg>
+));
+LdvChevron.displayName = "LdvChevron";
 
 const LdvEdgeComponent = memo(
   ({

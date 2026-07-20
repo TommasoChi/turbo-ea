@@ -1,5 +1,6 @@
 {
   "detail.title": "Kartendetail",
+  "detail.unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
   "detail.backToTop": "Nach oben",
   "detail.archivedBanner": "Diese Karte ist archiviert.",
   "detail.purgeWarning_one": "Sie wird in {{count}} Tag endgültig gelöscht.",
@@ -628,5 +629,7 @@
   "todos.recurrence.months_one": "Jeden Monat",
   "todos.recurrence.months_other": "Alle {{count}} Monate",
   "todos.recurrence.years_one": "Jedes Jahr",
-  "todos.recurrence.years_other": "Alle {{count}} Jahre"
+  "todos.recurrence.years_other": "Alle {{count}} Jahre",
+  "utils.cardId.tooltip": "Zum Kopieren klicken",
+  "utils.cardId.copied": "Kopiert!"
 }

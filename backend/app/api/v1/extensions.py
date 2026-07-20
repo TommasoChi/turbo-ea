@@ -427,15 +427,26 @@ async def apply_install(
             status_code=400, detail=f"Cannot apply an upload in status {install.status!r}"
         )
     # Second gate: installing an extension requires a usable entitlement for
-    # its key (a valid signature alone is provenance, not activation).
+    # its key (a valid signature alone is provenance, not activation) — UNLESS
+    # the bundle is free. The extension row does not exist yet at apply time, so
+    # the registry can't see the manifest's free flag; re-read the on-disk
+    # bundle (which re-verifies the signature) to honour it here.
     await extension_registry.refresh_from_db(db)
     if install.extension_key and not extension_registry.entitlement(install.extension_key).usable:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "No usable license entitlement for this extension — upload the license file first"
-            ),
-        )
+        is_free = False
+        if install.storage_path:
+            try:
+                is_free = read_bundle(Path(install.storage_path)).free
+            except BundleError:
+                is_free = False
+        if not is_free:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "No usable license entitlement for this extension — "
+                    "upload the license file first"
+                ),
+            )
     install.status = "applying"
     await db.commit()
     await db.refresh(install)
@@ -485,13 +496,19 @@ class StoreItemOut(BaseModel):
     key: str
     name: str
     description: str = ""
+    long_description: str = ""
     price: str = ""
     payment_link: str = ""
     demo_url: str = ""
+    homepage: str = ""
+    license: str = ""
+    license_url: str = ""
+    screenshots: list[str] = []
     version: str = ""
     installed_version: str | None = None
     update_available: bool = False
     entitlement_state: str = "unlicensed"
+    free: bool = False
 
 
 class StoreCatalogOut(BaseModel):
@@ -510,6 +527,32 @@ def _version_tuple(value: str) -> tuple[int, ...]:
         return tuple(int(p) for p in value.strip().split("."))
     except (ValueError, AttributeError):
         return ()
+
+
+def _resolve_screenshots(base_url: str, raw: object) -> list[str]:
+    """Resolve catalogue screenshot paths to absolute, same-origin URLs.
+
+    The catalogue stores same-origin ``/screenshots/<key>/…`` paths. We
+    prefix each with the store base URL so the in-product ``<img src>``
+    resolves against the store origin (a relative path would otherwise
+    resolve against the Turbo EA instance's own origin and 404), and we
+    reject anything that is not a ``/``-rooted relative path — an off-origin
+    absolute URL, or a protocol-relative ``//host`` path — mirroring the
+    same-origin ``bundle_url`` guard so a tampered catalogue can never point
+    the browser at an arbitrary host.
+    """
+    if not isinstance(raw, list):
+        return []
+    base = base_url.rstrip("/")
+    out: list[str] = []
+    for entry in raw:
+        if not isinstance(entry, str):
+            continue
+        path = entry.strip()
+        if not path.startswith("/") or path.startswith("//"):
+            continue
+        out.append(base + path)
+    return out
 
 
 async def _fetch_store_catalog(base_url: str) -> list[dict]:
@@ -559,9 +602,14 @@ async def store_catalog(
                 key=key,
                 name=str(item.get("name") or key),
                 description=str(item.get("description") or ""),
+                long_description=str(item.get("long_description") or ""),
                 price=str(item.get("price") or ""),
                 payment_link=str(item.get("payment_link") or ""),
                 demo_url=str(item.get("demo_url") or ""),
+                homepage=str(item.get("homepage") or ""),
+                license=str(item.get("license") or ""),
+                license_url=str(item.get("license_url") or ""),
+                screenshots=_resolve_screenshots(base_url, item.get("screenshots")),
                 version=catalog_version,
                 installed_version=installed_version,
                 update_available=bool(
@@ -570,6 +618,7 @@ async def store_catalog(
                     and _version_tuple(catalog_version) > _version_tuple(installed_version)
                 ),
                 entitlement_state=extension_registry.entitlement(key).state,
+                free=item.get("free") is True,
             )
         )
     return StoreCatalogOut(configured=True, reachable=True, store_url=base_url, items=items)

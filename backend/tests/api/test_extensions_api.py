@@ -305,6 +305,25 @@ class TestInstallLifecycle:
         assert res.status_code == 403
         assert "entitlement" in res.json()["detail"]
 
+    async def test_free_extension_applies_without_license(self, client, db, vendor):
+        """A free bundle installs with no license — the free flag is honoured
+        at the apply gate even though the extension row does not exist yet."""
+        admin = await make_admin(db)
+        install = await upload_and_preview(client, db, admin, vendor, free=True)
+        res = await client.post(
+            f"/api/v1/admin/extensions/install/{install.id}/apply",
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 202, res.text
+        await ext_api.run_apply(db, install, admin)
+        assert install.status == "installed"
+
+        # Listed with a "free" entitlement (usable, no license present)
+        res = await client.get("/api/v1/admin/extensions", headers=auth_headers(admin))
+        listed = res.json()
+        assert listed[0]["key"] == "sample-ext"
+        assert listed[0]["entitlement"]["state"] == "free"
+
     async def test_tampered_bundle_fails_preview(self, client, db, vendor):
         admin = await make_admin(db)
         install = await upload_and_preview(
@@ -649,6 +668,46 @@ class TestStoreCatalog:
         assert item["installed_version"] == "0.9.0"
         assert item["update_available"] is True
         assert item["entitlement_state"] == "active"
+        # Details metadata absent from the catalogue → safe defaults.
+        assert item["long_description"] == ""
+        assert item["homepage"] == ""
+        assert item["license"] == ""
+        assert item["license_url"] == ""
+        assert item["screenshots"] == []
+
+    async def test_catalog_surfaces_details_metadata(self, client, db, vendor, monkeypatch):
+        admin = await make_admin(db)
+        mock_store(
+            monkeypatch,
+            catalog=catalog_payload(
+                long_description="A much longer description.\nSecond line.",
+                homepage="https://example.com/ext",
+                license="MIT",
+                license_url="https://example.com/license",
+                screenshots=[
+                    "/screenshots/sample-ext/a.png",
+                    "//evil.example.net/x.png",  # protocol-relative → dropped
+                    "https://evil.example.net/y.png",  # off-origin → dropped
+                    "/screenshots/sample-ext/b.png",
+                ],
+            ),
+        )
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        assert res.status_code == 200
+        (item,) = res.json()["items"]
+        assert item["long_description"] == "A much longer description.\nSecond line."
+        assert item["homepage"] == "https://example.com/ext"
+        assert item["license"] == "MIT"
+        assert item["license_url"] == "https://example.com/license"
+        # Only same-origin, /-rooted paths survive, resolved to absolute store URLs
+        # so the in-product <img> loads from the store origin rather than 404-ing
+        # against the Turbo EA instance's own origin.
+        assert item["screenshots"] == [
+            f"{STORE_URL}/screenshots/sample-ext/a.png",
+            f"{STORE_URL}/screenshots/sample-ext/b.png",
+        ]
 
     async def test_unlicensed_uninstalled_item(self, client, db, vendor, monkeypatch):
         admin = await make_admin(db)
@@ -660,6 +719,20 @@ class TestStoreCatalog:
         assert item["installed_version"] is None
         assert item["update_available"] is False
         assert item["entitlement_state"] == "unlicensed"
+        assert item["free"] is False
+
+    async def test_free_catalog_item_flag_surfaced(self, client, db, vendor, monkeypatch):
+        admin = await make_admin(db)
+        mock_store(
+            monkeypatch,
+            catalog=catalog_payload(key="free-ext", name="Free", free=True, payment_link=""),
+        )
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        (item,) = res.json()["items"]
+        assert item["free"] is True
+        assert item["payment_link"] == ""
 
     async def test_member_cannot_read_catalog(self, client, db, vendor, monkeypatch):
         member = await make_member(db)

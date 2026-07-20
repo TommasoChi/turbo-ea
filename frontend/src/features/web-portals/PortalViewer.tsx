@@ -6,6 +6,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
 import InputAdornment from "@mui/material/InputAdornment";
+import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import CardActionArea from "@mui/material/CardActionArea";
@@ -39,6 +40,7 @@ import type {
   PublicPortal,
   PortalCard,
   PortalCardListResponse,
+  PortalGate,
   TagGroup,
 } from "@/types";
 
@@ -81,13 +83,61 @@ function isVisible(
   return defaults[key] ?? fallback;
 }
 
+type ApiError = Error & { status?: number };
+
 async function publicGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  // credentials: "same-origin" so the httpOnly portal-session cookie is sent
+  // to the path-scoped public endpoints of an SSO-gated portal.
+  const res = await fetch(`${BASE}${path}`, { credentials: "same-origin" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || res.statusText);
+    const e = new Error(err.detail || res.statusText) as ApiError;
+    e.status = res.status;
+    throw e;
   }
   return res.json();
+}
+
+// Portal SSO reuses the app's existing /auth/callback redirect URI (already
+// registered with the IdP for login), so an SSO-gated portal needs no IdP
+// reconfiguration. The OAuth `state` carries the portal slug so the shared
+// callback can tell a portal sign-in apart from a normal login.
+const PORTAL_SSO_REDIRECT_PATH = "/auth/callback";
+
+function portalSilentKey(slug: string): string {
+  return `portal_silent_${slug}`;
+}
+
+// Send the browser to the IdP to authenticate a portal visitor. `silent` adds
+// prompt=none for a no-UI attempt that only completes if the visitor already
+// has an active IdP session; on any interaction requirement the IdP bounces
+// straight back with an error and we fall back to an explicit sign-in button.
+function doSsoRedirect(
+  sso: NonNullable<PortalGate["sso"]>,
+  slug: string,
+  silent: boolean,
+): void {
+  if (!sso.authorization_endpoint || !sso.client_id) return;
+  const nonce =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : String(Date.now());
+  sessionStorage.setItem("portal_sso_nonce", nonce);
+  const state = btoa(JSON.stringify({ t: "portal", slug, nonce, silent }));
+  const redirectUri = `${window.location.origin}${PORTAL_SSO_REDIRECT_PATH}`;
+  const params = new URLSearchParams({
+    client_id: sso.client_id,
+    response_type: "code",
+    redirect_uri: redirectUri,
+    scope: sso.scopes || "openid email profile",
+    response_mode: "query",
+    state,
+  });
+  if (silent) params.set("prompt", "none");
+  if (sso.extra_auth_params) {
+    Object.entries(sso.extra_auth_params).forEach(([k, v]) => params.set(k, v));
+  }
+  window.location.href = `${sso.authorization_endpoint}?${params.toString()}`;
 }
 
 function Icon({
@@ -261,6 +311,9 @@ export default function PortalViewer() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [portal, setPortal] = useState<PublicPortal | null>(null);
+  const [gate, setGate] = useState<PortalGate | null>(null);
+  const [locked, setLocked] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const [cards, setCards] = useState<PortalCard[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -282,12 +335,58 @@ export default function PortalViewer() {
 
   useEffect(() => {
     if (!slug) return;
+    let cancelled = false;
     setLoading(true);
-    publicGet<PublicPortal>(`/web-portals/public/${slug}`)
-      .then(setPortal)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    setError("");
+    setLocked(false);
+    setSigningIn(false);
+    (async () => {
+      try {
+        // The gate endpoint is always public: it tells us the access mode and,
+        // for SSO, the config needed to start the IdP redirect.
+        const g = await publicGet<PortalGate>(`/web-portals/public/${slug}/gate`);
+        if (cancelled) return;
+        setGate(g);
+        try {
+          // Works for public portals, and for SSO portals when a valid
+          // session cookie is already present.
+          const p = await publicGet<PublicPortal>(`/web-portals/public/${slug}`);
+          if (!cancelled) setPortal(p);
+        } catch (e) {
+          const status = (e as ApiError).status;
+          if (g.access_mode === "sso" && status === 401) {
+            const canSso = Boolean(g.sso?.authorization_endpoint && g.sso?.client_id);
+            const tried = sessionStorage.getItem(portalSilentKey(slug));
+            // First hit: try a silent (prompt=none) sign-in so a visitor who is
+            // already signed in with the IdP lands on the portal without any
+            // click. The shared /auth/callback marks the attempt "failed" and
+            // sends them back here if interaction is required, so we only ever
+            // auto-redirect once per session.
+            if (canSso && !tried) {
+              sessionStorage.setItem(portalSilentKey(slug), "pending");
+              if (!cancelled) setSigningIn(true);
+              doSsoRedirect(g.sso!, slug, true);
+              return;
+            }
+            if (!cancelled) setLocked(true);
+          } else {
+            throw e;
+          }
+        }
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
+
+  const handlePortalSsoLogin = useCallback(() => {
+    if (gate?.sso && slug) doSsoRedirect(gate.sso, slug, false);
+  }, [gate, slug]);
 
   // Derive visible relation types from card_config toggles (rel:key entries)
   const relToggles = portal?.card_config
@@ -410,18 +509,80 @@ export default function PortalViewer() {
     Object.values(relationFilters).some((v) => v !== "") ||
     tagFilter.length > 0;
 
-  if (loading) {
+  if (loading || signingIn) {
     return (
       <Box
         sx={{
           display: "flex",
+          flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
           minHeight: "100vh",
           bgcolor: "background.default",
+          gap: 2,
         }}
       >
         <CircularProgress />
+        {signingIn && (
+          <Typography variant="body2" color="text.secondary">
+            {t("portal.signingIn")}
+          </Typography>
+        )}
+      </Box>
+    );
+  }
+
+  if (locked && gate) {
+    const providerName = gate.sso?.provider_name || "SSO";
+    const canSignIn = Boolean(gate.sso?.authorization_endpoint && gate.sso?.client_id);
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "100vh",
+          bgcolor: "background.default",
+          gap: 2,
+          px: 3,
+          textAlign: "center",
+        }}
+      >
+        <Box
+          sx={{
+            width: 64,
+            height: 64,
+            borderRadius: 2,
+            bgcolor: TOOLBAR_COLOR,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Icon name="lock" size={32} color="#fff" />
+        </Box>
+        <Typography variant="h5" fontWeight={700}>
+          {gate.name}
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 420 }}>
+          {t("portal.signInHint")}
+        </Typography>
+        {canSignIn ? (
+          <Button
+            variant="contained"
+            size="large"
+            onClick={handlePortalSsoLogin}
+            startIcon={<Icon name="login" size={20} color="#fff" />}
+            sx={{ mt: 1, textTransform: "none" }}
+          >
+            {t("portal.signInButton", { provider: providerName })}
+          </Button>
+        ) : (
+          <Typography variant="body2" color="text.disabled" sx={{ maxWidth: 420 }}>
+            {t("portal.ssoUnavailable")}
+          </Typography>
+        )}
       </Box>
     );
   }

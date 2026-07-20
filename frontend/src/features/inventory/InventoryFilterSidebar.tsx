@@ -32,6 +32,7 @@ import Autocomplete from "@mui/material/Autocomplete";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useTypeLabel, useSubtypeLabel, useFieldLabel, useOptionLabel } from "@/hooks/useResolveLabel";
 import { api } from "@/api/client";
+import { readableTextColor } from "@/lib/color";
 import type {
   CardType,
   Bookmark,
@@ -943,7 +944,7 @@ export default function InventoryFilterSidebar({
                                           sx={{
                                             height: 20, fontSize: 12,
                                             ...(isEmpty ? { fontStyle: "italic" } : {}),
-                                            ...(opt?.color ? { bgcolor: opt.color, color: "#fff" } : {}),
+                                            ...(opt?.color ? { bgcolor: opt.color, color: readableTextColor(opt.color) } : {}),
                                           }}
                                           onDelete={() => setAttr(field.key, selected.filter((s) => s !== v))}
                                           onMouseDown={(e) => e.stopPropagation()}
@@ -1229,7 +1230,7 @@ export default function InventoryFilterSidebar({
                                             height: 20,
                                             fontSize: 12,
                                             ...(isEmpty ? { fontStyle: "italic" } : {}),
-                                            ...(tag?.color ? { bgcolor: tag.color, color: "#fff" } : {}),
+                                            ...(tag?.color ? { bgcolor: tag.color, color: readableTextColor(tag.color) } : {}),
                                           }}
                                           onDelete={() =>
                                             setGroupSelection(
@@ -1841,6 +1842,7 @@ const METADATA_COLUMNS = [
 export const CORE_COLUMNS = [
   { key: "core_type", icon: "category", tKey: "common:labels.type" as const },
   { key: "core_name", icon: "label", tKey: "common:labels.name" as const },
+  { key: "core_reference", icon: "tag", tKey: "columns.id" as const },
   { key: "core_path", icon: "account_tree", tKey: "columns.path" as const },
   { key: "core_description", icon: "description", tKey: "common:labels.description" as const },
   { key: "core_subtype", icon: "subdirectory_arrow_right", tKey: "common:labels.subtype" as const },

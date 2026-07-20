@@ -36,7 +36,7 @@ import { invalidateCache as invalidateMetamodel } from "@/hooks/useMetamodel";
 import { ExtensionBoundary, useExtensionUI } from "@/lib/extensionHost";
 
 interface EntitlementInfo {
-  state: "active" | "grace" | "expired" | "unlicensed";
+  state: "active" | "grace" | "expired" | "unlicensed" | "free";
   expires_at?: string | null;
   grace_until?: string | null;
 }
@@ -101,13 +101,19 @@ interface StoreItem {
   key: string;
   name: string;
   description: string;
+  long_description?: string;
   price: string;
   payment_link: string;
   demo_url?: string;
+  homepage?: string;
+  license?: string;
+  license_url?: string;
+  screenshots?: string[];
   version: string;
   installed_version?: string | null;
   update_available: boolean;
   entitlement_state: EntitlementInfo["state"];
+  free?: boolean;
 }
 
 interface StoreCatalog {
@@ -129,12 +135,13 @@ const TERMINAL = new Set(["previewed", "installed", "failed"]);
 
 const ENTITLEMENT_COLOR: Record<
   EntitlementInfo["state"],
-  "success" | "warning" | "error" | "default"
+  "success" | "warning" | "error" | "default" | "info"
 > = {
   active: "success",
   grace: "warning",
   expired: "error",
   unlicensed: "default",
+  free: "info",
 };
 
 const STATUS_COLOR: Record<string, "success" | "warning" | "error" | "default"> = {
@@ -172,6 +179,11 @@ export default function ExtensionsAdmin() {
   // or from per-row "Enter license…" (gateItem null).
   const [licenseDialogOpen, setLicenseDialogOpen] = useState(false);
   const [gateItem, setGateItem] = useState<StoreItem | null>(null);
+
+  // Store item "Details" dialog (long description, screenshots, credits).
+  const [detailsItem, setDetailsItem] = useState<StoreItem | null>(null);
+  // Full-size screenshot lightbox (nested inside the Details dialog).
+  const [zoomSrc, setZoomSrc] = useState<string | null>(null);
   const [licenseText, setLicenseText] = useState("");
   const [licenseBusy, setLicenseBusy] = useState(false);
   const [licenseError, setLicenseError] = useState<string | null>(null);
@@ -451,7 +463,14 @@ export default function ExtensionsAdmin() {
   };
 
   const handleInstallClick = (item: StoreItem) => {
-    if (item.entitlement_state === "active" || item.entitlement_state === "grace") {
+    if (
+      item.free ||
+      item.entitlement_state === "free" ||
+      item.entitlement_state === "active" ||
+      item.entitlement_state === "grace"
+    ) {
+      // Free extensions (and already-entitled ones) install straight away —
+      // no license needed.
       void startStoreInstall(item.key);
       return;
     }
@@ -583,19 +602,21 @@ export default function ExtensionsAdmin() {
 
   const entitlementChip = (ent: EntitlementInfo) => {
     const label =
-      ent.state === "active"
-        ? ent.expires_at
-          ? t("extensions.entitlement.activeUntil", "Active until {{date}}", {
-              date: fmtDate(ent.expires_at),
-            })
-          : t("extensions.entitlement.active", "Active")
-        : ent.state === "grace"
-          ? t("extensions.entitlement.grace", "Grace until {{date}}", {
-              date: fmtDate(ent.grace_until),
-            })
-          : ent.state === "expired"
-            ? t("extensions.entitlement.expired", "Expired")
-            : t("extensions.entitlement.unlicensed", "Unlicensed");
+      ent.state === "free"
+        ? t("extensions.entitlement.free", "Free")
+        : ent.state === "active"
+          ? ent.expires_at
+            ? t("extensions.entitlement.activeUntil", "Active until {{date}}", {
+                date: fmtDate(ent.expires_at),
+              })
+            : t("extensions.entitlement.active", "Active")
+          : ent.state === "grace"
+            ? t("extensions.entitlement.grace", "Grace until {{date}}", {
+                date: fmtDate(ent.grace_until),
+              })
+            : ent.state === "expired"
+              ? t("extensions.entitlement.expired", "Expired")
+              : t("extensions.entitlement.unlicensed", "Unlicensed");
     return <Chip size="small" color={ENTITLEMENT_COLOR[ent.state]} label={label} />;
   };
 
@@ -830,13 +851,22 @@ export default function ExtensionsAdmin() {
                             })}
                           />
                         )}
-                        {!item.installed_version && item.entitlement_state !== "unlicensed" && (
+                        {!item.installed_version && item.free && (
                           <Chip
                             size="small"
-                            color={ENTITLEMENT_COLOR[item.entitlement_state]}
-                            label={t("extensions.store.licensed", "Licensed")}
+                            color="info"
+                            label={t("extensions.entitlement.free", "Free")}
                           />
                         )}
+                        {!item.installed_version &&
+                          !item.free &&
+                          item.entitlement_state !== "unlicensed" && (
+                            <Chip
+                              size="small"
+                              color={ENTITLEMENT_COLOR[item.entitlement_state]}
+                              label={t("extensions.store.licensed", "Licensed")}
+                            />
+                          )}
                       </Stack>
                       <Typography variant="body2" color="text.secondary" sx={{ flex: 1, mb: 1.5 }}>
                         {item.description}
@@ -856,6 +886,19 @@ export default function ExtensionsAdmin() {
                         <Typography variant="subtitle2" sx={{ flex: 1 }}>
                           {item.price}
                         </Typography>
+                        {(item.long_description ||
+                          item.homepage ||
+                          item.license ||
+                          (item.screenshots?.length ?? 0) > 0) && (
+                          <Button
+                            size="small"
+                            color="inherit"
+                            onClick={() => setDetailsItem(item)}
+                            startIcon={<MaterialSymbol icon="info" size={18} />}
+                          >
+                            {t("extensions.store.details", "Details")}
+                          </Button>
+                        )}
                         {item.demo_url && (
                           <Button
                             size="small"
@@ -869,7 +912,8 @@ export default function ExtensionsAdmin() {
                             {t("extensions.store.seeInAction", "See it in action")}
                           </Button>
                         )}
-                        {item.payment_link &&
+                        {!item.free &&
+                          item.payment_link &&
                           item.entitlement_state === "unlicensed" &&
                           claiming?.itemKey !== item.key && (
                             <Button
@@ -885,7 +929,9 @@ export default function ExtensionsAdmin() {
                           <Button
                             size="small"
                             variant={
-                              item.entitlement_state === "unlicensed" ? "outlined" : "contained"
+                              !item.free && item.entitlement_state === "unlicensed"
+                                ? "outlined"
+                                : "contained"
                             }
                             disabled={storeBusyKey !== null || isWorking}
                             onClick={() => handleInstallClick(item)}
@@ -1084,7 +1130,7 @@ export default function ExtensionsAdmin() {
                           />
                         </TableCell>
                         <TableCell align="right">
-                          {ext.entitlement.state !== "active" && (
+                          {!["active", "free"].includes(ext.entitlement.state) && (
                             <Button
                               size="small"
                               onClick={() => void handleRenew()}
@@ -1233,6 +1279,114 @@ export default function ExtensionsAdmin() {
             {t("extensions.license.apply", "Apply license")}
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Store item "Details" dialog — long description, screenshots, credits. */}
+      <Dialog
+        open={detailsItem !== null}
+        onClose={() => setDetailsItem(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>{detailsItem?.name}</DialogTitle>
+        <DialogContent>
+          {detailsItem && (
+            <>
+              <Typography variant="body2" sx={{ whiteSpace: "pre-line" }}>
+                {detailsItem.long_description || detailsItem.description}
+              </Typography>
+              {(detailsItem.screenshots?.length ?? 0) > 0 && (
+                <Stack spacing={1.5} sx={{ mt: 2 }}>
+                  {detailsItem.screenshots?.map((src) => (
+                    <Box
+                      key={src}
+                      component="img"
+                      src={src}
+                      alt=""
+                      loading="lazy"
+                      onClick={() => setZoomSrc(src)}
+                      sx={{
+                        width: "100%",
+                        borderRadius: 1,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        cursor: "zoom-in",
+                      }}
+                    />
+                  ))}
+                </Stack>
+              )}
+              {(detailsItem.homepage || detailsItem.license) && (
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  alignItems="center"
+                  flexWrap="wrap"
+                  useFlexGap
+                  sx={{ mt: 2, color: "text.secondary" }}
+                >
+                  {detailsItem.homepage && (
+                    <Link
+                      href={detailsItem.homepage}
+                      target="_blank"
+                      rel="noopener"
+                      variant="body2"
+                    >
+                      {t("extensions.store.source", "Source")}
+                    </Link>
+                  )}
+                  {detailsItem.license && (
+                    <Typography variant="body2">
+                      {t("extensions.store.licenseLabel", "License")}:{" "}
+                      {detailsItem.license_url ? (
+                        <Link href={detailsItem.license_url} target="_blank" rel="noopener">
+                          {detailsItem.license}
+                        </Link>
+                      ) : (
+                        detailsItem.license
+                      )}
+                    </Typography>
+                  )}
+                </Stack>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailsItem(null)}>
+            {t("extensions.store.close", "Close")}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Full-size screenshot lightbox — nested inside the Details dialog.
+          Closes on click (image or backdrop) or Escape. */}
+      <Dialog
+        open={zoomSrc !== null}
+        onClose={() => setZoomSrc(null)}
+        disableRestoreFocus
+        maxWidth={false}
+        slotProps={{
+          paper: {
+            sx: { bgcolor: "transparent", boxShadow: "none", m: 0, cursor: "zoom-out" },
+          },
+        }}
+      >
+        {zoomSrc && (
+          <Box
+            component="img"
+            src={zoomSrc}
+            alt=""
+            onClick={() => setZoomSrc(null)}
+            sx={{
+              display: "block",
+              maxWidth: "90vw",
+              maxHeight: "90vh",
+              borderRadius: 1,
+              cursor: "zoom-out",
+            }}
+          />
+        )}
       </Dialog>
 
       <Dialog open={removeLicenseOpen} onClose={() => setRemoveLicenseOpen(false)}>

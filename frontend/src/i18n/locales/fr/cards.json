@@ -1,5 +1,6 @@
 {
   "detail.title": "Détail de la fiche",
+  "detail.unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
   "detail.backToTop": "Retour en haut",
   "detail.archivedBanner": "Cette fiche est archivée.",
   "detail.purgeWarning_one": "Elle sera définitivement supprimée dans {{count}} jour.",
@@ -628,5 +629,7 @@
   "todos.recurrence.months_one": "Chaque mois",
   "todos.recurrence.months_other": "Tous les {{count}} mois",
   "todos.recurrence.years_one": "Chaque année",
-  "todos.recurrence.years_other": "Tous les {{count}} ans"
+  "todos.recurrence.years_other": "Tous les {{count}} ans",
+  "utils.cardId.tooltip": "Cliquer pour copier",
+  "utils.cardId.copied": "Copié !"
 }

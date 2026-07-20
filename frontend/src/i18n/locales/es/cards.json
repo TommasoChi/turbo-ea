@@ -1,5 +1,6 @@
 {
   "detail.title": "Detalle de ficha",
+  "detail.unsavedLeaveConfirm": "Tiene cambios sin guardar. ¿Salir sin guardar?",
   "detail.backToTop": "Volver arriba",
   "detail.archivedBanner": "Esta ficha está archivada.",
   "detail.purgeWarning_one": "Será eliminada permanentemente en {{count}} día.",
@@ -628,5 +629,7 @@
   "todos.recurrence.months_one": "Cada mes",
   "todos.recurrence.months_other": "Cada {{count}} meses",
   "todos.recurrence.years_one": "Cada año",
-  "todos.recurrence.years_other": "Cada {{count}} años"
+  "todos.recurrence.years_other": "Cada {{count}} años",
+  "utils.cardId.tooltip": "Clic para copiar",
+  "utils.cardId.copied": "¡Copiado!"
 }

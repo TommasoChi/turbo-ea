@@ -121,7 +121,7 @@ function AppRoutes() {
       <Routes>
         {/* Public portal route — accessible without login */}
         <Route path="/portal/:slug" element={<Suspense fallback={<PageLoader />}><PortalViewer /></Suspense>} />
-        {/* SSO callback route */}
+        {/* SSO callback route — shared by user login and SSO-gated portals */}
         <Route path="/auth/callback" element={<SsoCallback onSsoCallback={ssoCallback} />} />
         {/* Password setup route (for invited users) */}
         <Route path="/auth/set-password" element={<SetPasswordPage onSetPassword={setPassword} />} />
@@ -144,6 +144,9 @@ function AppRoutes() {
     <Routes>
       {/* Public portal route — also accessible when logged in */}
       <Route path="/portal/:slug" element={<Suspense fallback={<PageLoader />}><PortalViewer /></Suspense>} />
+      {/* SSO callback — reachable while logged in too, so an admin previewing an
+          SSO portal completes the portal sign-in on the same shared route. */}
+      <Route path="/auth/callback" element={<SsoCallback onSsoCallback={ssoCallback} />} />
       {/* Authenticated routes */}
       <Route
         path="*"

@@ -34,6 +34,15 @@ Clique em **+ Novo Tipo** para criar um tipo de card personalizado. Configure:
 
 Clique em qualquer tipo para abrir o **Painel de Detalhe do Tipo**. Aqui você pode configurar:
 
+#### Cor do tipo
+
+Cada tipo de cartão — incluindo os nativos — tem uma cor personalizável usada no inventário, nos relatórios, nas vistas de dependências e nos diagramas. Isso permite alinhar o Turbo EA às convenções visuais da sua organização (por exemplo, paletas TOGAF/ArchiMate: elementos de negócio em amarelo/laranja, aplicações em azul).
+
+- Escolha uma cor com a amostra de cor no painel. Um aviso aparece quando a cor escolhida tem contraste muito baixo sobre fundos claros ou escuros.
+- Os tipos nativos mostram um botão de **redefinir** ao lado da amostra de cor sempre que a cor difere do padrão do Turbo EA, para que seja sempre possível voltar à paleta padrão.
+- O texto exibido sobre as cores do tipo (chips, formas de diagrama) alterna automaticamente entre preto e branco para manter a legibilidade, tanto no modo claro quanto no escuro.
+- O seletor mostra uma **pré-visualização ao vivo** ao lado da paleta: o nome do tipo, o chip, o ícone do cartão, o subtipo, a pílula de ID do cartão e um nó da vista de dependências, renderizados uma vez no modo claro e outra no modo escuro, atualizando-se durante a escolha.
+
 #### Campos
 
 Campos definem os atributos personalizados disponíveis nos cards deste tipo. Cada campo possui:
@@ -60,6 +69,17 @@ Campos são organizados em **seções** na página de detalhe do card. Você pod
 - Reordenar campos dentro de uma seção arrastando-os e mover um campo para outra seção pela ação **mover**
 
 O nome de seção especial `__description` adiciona campos à seção de Descrição da página de detalhe do card.
+
+#### ID do cartão
+
+Ative a **geração de ID do cartão** para atribuir aos cartões deste tipo um ID estável e legível (por exemplo `APP-00001`). O ID aparece como uma etiqueta copiável ao lado do tipo do cartão, como coluna opcional (ordenável e filtrável) no inventário, nas exportações para Excel e nas fórmulas de campos calculados (via `data.reference`).
+
+O **número é sempre gerado automaticamente**; você só controla o **prefixo**. Ao ativar, um prefixo sugerido (derivado do nome do tipo, ex. `APP-`) é mostrado como texto — clique no lápis para alterá-lo. Duas definições ajustam o número:
+
+- **Começar em** — o primeiro número da série (padrão `1`).
+- **Dígitos mín.** — largura do preenchimento com zeros (padrão `5`), então `1` aparece como `00001`. É um mínimo; os números aumentam ao ultrapassá-lo. Um **Exemplo** mostra ao vivo o primeiro ID.
+
+Os IDs são **globalmente únicos, somente leitura e nunca reutilizados ou alterados**. A sequência numérica é mantida **por prefixo em todo o workspace**, portanto dois tipos que partilham um prefixo formam uma única série contínua e sem colisões. Assim que um cartão deste tipo tem um ID, todo o formato — prefixo, início e dígitos mín. — fica bloqueado (os campos ficam somente leitura); ainda pode desativar a geração. Salvar nunca atribui IDs aos cartões existentes; use o botão dedicado **Gerar IDs** para preencher o backlog sob demanda (com barra de progresso e confirmação).
 
 #### Pontuação de qualidade dos dados
 

@@ -13,8 +13,10 @@ import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import InputAdornment from "@mui/material/InputAdornment";
+import { useTheme } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import type { CurrencyFormatter } from "@/hooks/useCurrency";
+import { readableTextColor, readableTypeColor } from "@/lib/color";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useFieldLabel, useOptionLabel } from "@/hooks/useResolveLabel";
 import { ExtensionBoundary, useExtensionFieldTypes } from "@/lib/extensionHost";
@@ -208,6 +210,71 @@ export function DataQualityPill({ value }: { value: number }) {
   );
 }
 
+// ── Card ID Pill (human-readable reference, #811) ────────────────
+/** Read-only, copy-to-clipboard pill. Colored in the card type's light tint —
+ * the same scheme the Layered Dependency View uses for its nodes (raw hex text in
+ * light mode / lightened in dark, over a low-alpha tint of the type color). */
+export function CardIdPill({
+  reference,
+  typeColor,
+}: {
+  reference: string | null | undefined;
+  typeColor?: string;
+}) {
+  const { t } = useTranslation(["cards", "common"]);
+  const theme = useTheme();
+  const [copied, setCopied] = useState(false);
+
+  if (!reference) return null;
+
+  const isDark = theme.palette.mode === "dark";
+  // Guard non-hex metamodel colors (mirrors LayeredDependencyView's fallback).
+  const hex = /^#[0-9a-fA-F]{6}$/.test(typeColor || "") ? (typeColor as string) : "#9e9e9e";
+  const accent = readableTypeColor(hex, isDark);
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const bg = `rgba(${r},${g},${b},${isDark ? 0.18 : 0.12})`;
+
+  const copy = () => {
+    void navigator.clipboard?.writeText(reference).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    });
+  };
+
+  return (
+    <Tooltip title={copied ? t("utils.cardId.copied") : t("utils.cardId.tooltip")}>
+      <Box
+        onClick={copy}
+        sx={{
+          height: 22,
+          borderRadius: "11px",
+          border: `1px solid ${accent}`,
+          bgcolor: bg,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 0.375,
+          px: 0.75,
+          cursor: "pointer",
+          boxSizing: "border-box",
+          maxWidth: "100%",
+        }}
+      >
+        <MaterialSymbol icon="tag" size={12} color={accent} />
+        <Typography
+          variant="caption"
+          fontWeight={700}
+          noWrap
+          sx={{ color: accent, lineHeight: 1, fontSize: "0.7rem", fontFamily: "monospace" }}
+        >
+          {reference}
+        </Typography>
+      </Box>
+    </Tooltip>
+  );
+}
+
 // ── Lifecycle Phase Labels ──────────────────────────────────────
 export const PHASES = ["plan", "phaseIn", "active", "phaseOut", "endOfLife"] as const;
 export const PHASE_LABELS: Record<string, string> = {
@@ -314,7 +381,7 @@ export function FieldValue({
     const strVal = typeof value === "string" ? value : safeString(value);
     const opt = field.options.find((o) => o.key === strVal);
     return opt ? (
-      <Chip size="small" label={optLabel(opt)} sx={{ ...SELECT_CHIP_BASE, width: w, ...(opt.color ? { bgcolor: opt.color, color: "#fff" } : {}) }} />
+      <Chip size="small" label={optLabel(opt)} sx={{ ...SELECT_CHIP_BASE, width: w, ...(opt.color ? { bgcolor: opt.color, color: readableTextColor(opt.color) } : {}) }} />
     ) : (
       <Tooltip title={t("utils.unknownOption", { key: strVal })}>
         <Chip size="small" label={strVal} variant="outlined" color="warning" sx={{ ...SELECT_CHIP_BASE, width: w }} />
@@ -331,7 +398,7 @@ export function FieldValue({
           const key = typeof v === "string" ? v : safeString(v);
           const opt = field.options!.find((o) => o.key === key);
           return opt ? (
-            <Chip key={key + i} size="small" label={optLabel(opt)} sx={{ ...SELECT_CHIP_BASE, width: w, ...(opt.color ? { bgcolor: opt.color, color: "#fff" } : {}) }} />
+            <Chip key={key + i} size="small" label={optLabel(opt)} sx={{ ...SELECT_CHIP_BASE, width: w, ...(opt.color ? { bgcolor: opt.color, color: readableTextColor(opt.color) } : {}) }} />
           ) : (
             <Chip key={key + i} size="small" label={key} variant="outlined" color="warning" sx={{ ...SELECT_CHIP_BASE, width: w }} />
           );
@@ -500,7 +567,13 @@ export function FieldEditor({
                         onDelete={() => onChange(arrVal.filter((v) => v !== key))}
                         sx={{
                           height: 22,
-                          ...(opt?.color ? { bgcolor: opt.color, color: "#fff", "& .MuiChip-deleteIcon": { color: "rgba(255,255,255,0.85)" } } : {}),
+                          ...(opt?.color
+                            ? {
+                                bgcolor: opt.color,
+                                color: readableTextColor(opt.color),
+                                "& .MuiChip-deleteIcon": { color: readableTextColor(opt.color), opacity: 0.85 },
+                              }
+                            : {}),
                         }}
                       />
                     );

@@ -34,6 +34,15 @@ Haga clic en **+ Nuevo Tipo** para crear un tipo de ficha personalizado. Configu
 
 Haga clic en cualquier tipo para abrir el **Panel de Detalle del Tipo**. Aquí puede configurar:
 
+#### Color del tipo
+
+Cada tipo de tarjeta — incluidos los integrados — tiene un color personalizable que se usa en el inventario, los informes, las vistas de dependencias y los diagramas. Esto permite alinear Turbo EA con las convenciones visuales de su organización (por ejemplo, paletas TOGAF/ArchiMate: elementos de negocio en amarillo/naranja, aplicaciones en azul).
+
+- Elija un color con la muestra de color del panel. Aparece un aviso cuando el color elegido tiene muy poco contraste sobre fondos claros u oscuros.
+- Los tipos integrados muestran un botón de **restablecer** junto a la muestra de color cuando el color difiere del predeterminado de Turbo EA, para poder volver siempre a la paleta estándar.
+- El texto mostrado sobre los colores de tipo (chips, formas de diagrama) cambia automáticamente entre negro y blanco para mantener la legibilidad, tanto en modo claro como oscuro.
+- El selector muestra una **vista previa en vivo** junto a la paleta: el nombre del tipo, el chip, el icono de la tarjeta, el subtipo, la píldora de ID de tarjeta y un nodo de la vista de dependencias, renderizados una vez en modo claro y otra en modo oscuro, actualizándose mientras elige.
+
 #### Campos
 
 Los campos definen los atributos personalizados disponibles en fichas de este tipo. Cada campo tiene:
@@ -60,6 +69,17 @@ Los campos se organizan en **secciones** en la página de detalle de la ficha. P
 - Reordenar campos dentro de una sección arrastrándolos, y mover un campo a otra sección desde su acción **mover**
 
 El nombre de sección especial `__description` agrega campos a la sección Descripción de la página de detalle.
+
+#### ID de tarjeta
+
+Active la **generación de ID de tarjeta** para asignar a las tarjetas de este tipo un ID estable y legible (por ejemplo `APP-00001`). El ID aparece como una etiqueta copiable junto al tipo de la tarjeta, como columna opcional (ordenable y filtrable) en el inventario, en las exportaciones a Excel y en las fórmulas de campos calculados (mediante `data.reference`).
+
+El **número siempre se genera automáticamente**; solo controla el **prefijo**. Al activarlo, se muestra como texto un prefijo sugerido (derivado del nombre del tipo, p. ej. `APP-`) — haga clic en el lápiz para cambiarlo. Dos ajustes definen el número:
+
+- **Empezar en** — el primer número de la serie (predeterminado `1`).
+- **Dígitos mín.** — ancho del relleno con ceros (predeterminado `5`), de modo que `1` se muestra `00001`. Es un mínimo; los números se amplían al superarlo. Un **Ejemplo** muestra en vivo el primer ID.
+
+Los ID son **únicos globalmente, de solo lectura y nunca se reutilizan ni cambian**. La secuencia numérica se lleva **por prefijo en todo el espacio de trabajo**, de modo que dos tipos que comparten prefijo forman una única serie continua y sin colisiones. Una vez que una tarjeta de este tipo tiene un ID, todo el formato — prefijo, inicio y dígitos mín. — se bloquea (los campos quedan de solo lectura); aún puede desactivar la generación. Guardar nunca asigna ID a las tarjetas existentes; use el botón dedicado **Generar ID** para completar el backlog bajo demanda (con barra de progreso y confirmación).
 
 #### Puntuación de calidad de datos
 
