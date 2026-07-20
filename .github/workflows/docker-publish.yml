@@ -1,19 +1,16 @@
 name: Publish Docker images to GHCR
 
 on:
-  # Disabled: publishing to GHCR is not wanted right now (builds were also
-  # failing). Re-enable the push/tag/schedule triggers below once ready to
-  # publish images again; workflow_dispatch is kept for a manual one-off run.
-  # push:
-  #   branches: [main]
-  #   tags: ["v*.*.*"]
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
   workflow_dispatch:
   # Weekly fresh rebuild so apk-package CVEs in the alpine bases are picked
   # up even during code-quiet weeks. Combined with `no-cache` below, this
   # guarantees `apk upgrade --no-cache` actually re-runs against the live
   # alpine repos instead of reusing a cached layer.
-  # schedule:
-  #   - cron: "0 6 * * 1"
+  schedule:
+    - cron: "0 6 * * 1"
 
 permissions:
   contents: read
@@ -46,6 +43,15 @@ jobs:
         image: [db, backend, frontend, nginx, mcp-server]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+
+      # OCI image references must be all-lowercase. github.repository preserves
+      # the owner's actual casing (e.g. "TommasoChi/turbo-ea" on a fork), which
+      # docker/metadata-action and build-push-action silently normalize but
+      # cosign/Trivy/Scout do not — they fail to parse the reference outright.
+      # Compute the lowercase form once and reuse it everywhere below.
+      - name: Compute lowercase repository
+        id: repo
+        run: echo "lower=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
@@ -124,7 +130,7 @@ jobs:
 
       - name: Sign image
         env:
-          IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.image }}
+          IMAGE: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
@@ -144,7 +150,7 @@ jobs:
       - name: Trivy image scan (observe, HIGH + CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}
+          image-ref: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
           severity: HIGH,CRITICAL
@@ -166,7 +172,7 @@ jobs:
       - name: Trivy image scan (gate, CRITICAL only)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}
+          image-ref: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}
           format: table
           severity: CRITICAL
           exit-code: "1"
@@ -189,7 +195,7 @@ jobs:
         uses: docker/scout-action@v1
         with:
           command: cves
-          image: ghcr.io/${{ github.repository }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}
+          image: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}
           only-severities: critical,high
           sarif-file: scout-${{ matrix.image }}.sarif
           exit-code: false
