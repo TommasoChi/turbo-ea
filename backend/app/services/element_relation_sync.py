@@ -24,6 +24,7 @@ ELEMENT_LINK_RELATION_MAP: dict[str, str] = {
     "application_id": "relProcessToApp",
     "data_object_id": "relProcessToDataObj",
     "it_component_id": "relProcessToITC",
+    "organization_id": "relProcessToOrg",
 }
 
 

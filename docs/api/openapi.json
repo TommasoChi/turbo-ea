@@ -4132,6 +4132,20 @@
         "title": "DuplicateClusterOut",
         "type": "object"
       },
+      "ElementOrganizationLink": {
+        "description": "Link one Organization card to an extracted BPMN element (M:N \u2014 a step\ncan involve more than one organizational actor, see\nprocess_element_organizations).",
+        "properties": {
+          "organization_id": {
+            "title": "Organization Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organization_id"
+        ],
+        "title": "ElementOrganizationLink",
+        "type": "object"
+      },
       "ElementUpdate": {
         "description": "Update EA cross-references on an extracted BPMN element.",
         "properties": {
@@ -17468,6 +17482,125 @@
           }
         },
         "summary": "Update Element",
+        "tags": [
+          "bpm"
+        ]
+      }
+    },
+    "/api/v1/bpm/processes/{process_id}/elements/{element_id}/organizations": {
+      "post": {
+        "description": "Link one Organization card to a BPMN element (additive \u2014 a step can\ninvolve more than one organizational actor, unlike application/data\nobject/IT component which are 1:1 per element).",
+        "operationId": "link_element_organization_api_v1_bpm_processes__process_id__elements__element_id__organizations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "process_id",
+            "required": true,
+            "schema": {
+              "title": "Process Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "element_id",
+            "required": true,
+            "schema": {
+              "title": "Element Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElementOrganizationLink"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Link Element Organization",
+        "tags": [
+          "bpm"
+        ]
+      }
+    },
+    "/api/v1/bpm/processes/{process_id}/elements/{element_id}/organizations/{organization_id}": {
+      "delete": {
+        "description": "Unlink one Organization card from a BPMN element.\n\nThe process-level relProcessToOrg relation is intentionally NOT removed\nhere \u2014 same additive-only sync policy as application/data object/IT\ncomponent (see element_relation_sync.py): it may have been created\nindependently, or may still apply via another element of the same\nprocess, so removing it automatically isn't safe.",
+        "operationId": "unlink_element_organization_api_v1_bpm_processes__process_id__elements__element_id__organizations__organization_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "process_id",
+            "required": true,
+            "schema": {
+              "title": "Process Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "element_id",
+            "required": true,
+            "schema": {
+              "title": "Element Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "organization_id",
+            "required": true,
+            "schema": {
+              "title": "Organization Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unlink Element Organization",
         "tags": [
           "bpm"
         ]

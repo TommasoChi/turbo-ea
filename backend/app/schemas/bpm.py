@@ -22,6 +22,14 @@ class ElementUpdate(BaseModel):
     custom_fields: dict | None = None
 
 
+class ElementOrganizationLink(BaseModel):
+    """Link one Organization card to an extracted BPMN element (M:N — a step
+    can involve more than one organizational actor, see
+    process_element_organizations)."""
+
+    organization_id: str
+
+
 class ProcessAssessmentCreate(BaseModel):
     assessment_date: date
     overall_score: int  # 1-5

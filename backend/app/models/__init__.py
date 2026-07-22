@@ -35,7 +35,7 @@ from app.models.ppm_task_comment import PpmTaskComment
 from app.models.ppm_wbs import PpmWbs
 from app.models.process_assessment import ProcessAssessment
 from app.models.process_diagram import ProcessDiagram
-from app.models.process_element import ProcessElement
+from app.models.process_element import ProcessElement, ProcessElementOrganization
 from app.models.process_flow_version import ProcessFlowVersion
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
@@ -141,6 +141,7 @@ __all__ = [
     "SurveyResponse",
     "ProcessDiagram",
     "ProcessElement",
+    "ProcessElementOrganization",
     "ProcessAssessment",
     "ProcessFlowVersion",
     "SsoInvitation",

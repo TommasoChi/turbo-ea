@@ -1037,6 +1037,10 @@ export interface ProcessElement {
   data_object_name?: string;
   it_component_id?: string;
   it_component_name?: string;
+  // M:N — a step can involve more than one organizational actor, unlike
+  // the three scalar FKs above (1:1 per element). See
+  // process_element_organizations on the backend.
+  organizations?: { id: string; name: string }[];
   custom_fields?: Record<string, unknown>;
 }
 

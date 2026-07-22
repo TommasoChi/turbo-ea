@@ -221,6 +221,7 @@ class TestSyncElementRelations:
             "application_id": "relProcessToApp",
             "data_object_id": "relProcessToDataObj",
             "it_component_id": "relProcessToITC",
+            "organization_id": "relProcessToOrg",
         }
 
     async def test_additive_only_does_not_delete(self, db):

@@ -16,6 +16,7 @@ from app.core.encryption import encrypt_value
 from app.models.app_settings import AppSettings
 from app.models.card import Card
 from app.models.comment import Comment
+from app.models.process_element import ProcessElement, ProcessElementOrganization
 from app.models.relation import Relation
 from app.models.risk import Risk, RiskCard
 from app.services.workspace_io import (
@@ -307,6 +308,55 @@ async def test_module_entities_roundtrip_and_recreate(db):
     assert (
         await db.execute(select(Comment).where(Comment.id == comment.id))
     ).scalar_one().content == "hello"
+
+
+async def test_process_element_organizations_roundtrip(db):
+    """ProcessElementOrganizations (M:N, a step can involve more than one
+    organizational actor): element_id is an intra-module FK to ProcessElement
+    (PK preserved verbatim, no remap needed — same as RiskCard's risk_id);
+    organization_id is a real card FK, resolved by ref like RiskCard.card_id."""
+    user = await create_user(db, email="owner2@test.com", role="admin")
+    await create_card_type(db, key="BusinessProcess", label="Business Process")
+    await create_card_type(db, key="Organization", label="Organization")
+    process = await create_card(db, card_type="BusinessProcess", name="Order Flow", user_id=user.id)
+    org = await create_card(db, card_type="Organization", name="Sales", user_id=user.id)
+
+    element = ProcessElement(
+        process_id=process.id,
+        bpmn_element_id="Task_1",
+        element_type="task",
+        name="Approve Order",
+        sequence_order=0,
+    )
+    db.add(element)
+    await db.flush()
+    db.add(ProcessElementOrganization(element_id=element.id, organization_id=org.id))
+    await db.flush()
+    element_id = element.id
+
+    raw = await build_bundle(db)
+
+    # Delete the module rows, then re-apply: the element comes back with the
+    # same id (module PKs preserved), and the org link re-resolves by ref.
+    await db.execute(delete(ProcessElementOrganization))
+    await db.execute(delete(ProcessElement).where(ProcessElement.id == element_id))
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    restored = (
+        await db.execute(select(ProcessElement).where(ProcessElement.id == element_id))
+    ).scalar_one()
+    assert restored.name == "Approve Order"
+    link = (
+        await db.execute(
+            select(ProcessElementOrganization).where(
+                ProcessElementOrganization.element_id == element_id
+            )
+        )
+    ).scalar_one()
+    assert link.organization_id == org.id  # card FK resolved by ref
 
 
 async def test_large_json_blob_survives_export_import(db):
