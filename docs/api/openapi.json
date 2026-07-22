@@ -17489,7 +17489,7 @@
     },
     "/api/v1/bpm/processes/{process_id}/elements/{element_id}/organizations": {
       "post": {
-        "description": "Link one Organization card to a BPMN element (additive \u2014 a step can\ninvolve more than one organizational actor, unlike application/data\nobject/IT component which are 1:1 per element).",
+        "description": "Link one Organization card to a BPMN element (additive \u2014 a step can\ninvolve more than one organizational actor, unlike application/data\nobject/IT component which are 1:1 per element).\n\nDeliberately does NOT sync into relProcessToOrg (\"is owned by\") \u2014 that\nrelation carries process-level governance/ownership meaning, distinct\nfrom \"this org participates in one step\" (see element_relation_sync.py).",
         "operationId": "link_element_organization_api_v1_bpm_processes__process_id__elements__element_id__organizations_post",
         "parameters": [
           {
@@ -17549,7 +17549,7 @@
     },
     "/api/v1/bpm/processes/{process_id}/elements/{element_id}/organizations/{organization_id}": {
       "delete": {
-        "description": "Unlink one Organization card from a BPMN element.\n\nThe process-level relProcessToOrg relation is intentionally NOT removed\nhere \u2014 same additive-only sync policy as application/data object/IT\ncomponent (see element_relation_sync.py): it may have been created\nindependently, or may still apply via another element of the same\nprocess, so removing it automatically isn't safe.",
+        "description": "Unlink one Organization card from a BPMN element.\n\nNo relProcessToOrg interaction here at all \u2014 the link endpoint never\nsyncs into it either, see element_relation_sync.py.",
         "operationId": "unlink_element_organization_api_v1_bpm_processes__process_id__elements__element_id__organizations__organization_id__delete",
         "parameters": [
           {

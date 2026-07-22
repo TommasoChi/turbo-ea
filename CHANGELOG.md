@@ -5,10 +5,15 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.24.1] - 2026-07-22
+
+### Fixed
+- **Linking an Organization to a process step no longer auto-creates a process-level "is owned by" relation.** `relProcessToOrg` represents process-level ownership/governance — a different concept from "this organization participates in one step" — so, unlike Application/Data Object/IT Component (neutral "uses/references" relations, still synced), Organization element-links are never synced up to the process level.
+
 ## [2.24.0] - 2026-07-22
 
 ### Added
-- **Individual BPMN process steps can now be linked to Organization cards** (Process Flow → Process Steps & Elements). Unlike Application/Data Object/IT Component (one value per step), a single step can involve more than one organizational actor, so Organization is a many-to-many link — the new "Organization" column shows a compact chip summary per step and opens a popover to add/remove links, matching the interaction Inventory already uses for its relation columns. Linking a step also ensures the corresponding process-level "is owned by" relation exists (additive only, matching how Application/Data Object/IT Component links already sync into their process-level relations).
+- **Individual BPMN process steps can now be linked to Organization cards** (Process Flow → Process Steps & Elements). Unlike Application/Data Object/IT Component (one value per step), a single step can involve more than one organizational actor, so Organization is a many-to-many link — the new "Organization" column shows a compact chip summary per step and opens a popover to add/remove links, matching the interaction Inventory already uses for its relation columns.
 
 ## [2.23.1] - 2026-07-17
 

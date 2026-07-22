@@ -217,11 +217,14 @@ class TestSyncElementRelations:
 
     async def test_element_link_relation_map_correct(self):
         """Verify the mapping dict has expected entries."""
+        # Organization is deliberately absent — relProcessToOrg ("is owned
+        # by") carries process-level ownership meaning, distinct from
+        # "this org participates in one step" (process_element_organizations,
+        # never auto-synced to the ownership relation). See module docstring.
         assert ELEMENT_LINK_RELATION_MAP == {
             "application_id": "relProcessToApp",
             "data_object_id": "relProcessToDataObj",
             "it_component_id": "relProcessToITC",
-            "organization_id": "relProcessToOrg",
         }
 
     async def test_additive_only_does_not_delete(self, db):

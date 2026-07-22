@@ -489,7 +489,12 @@ async def link_element_organization(
 ):
     """Link one Organization card to a BPMN element (additive — a step can
     involve more than one organizational actor, unlike application/data
-    object/IT component which are 1:1 per element)."""
+    object/IT component which are 1:1 per element).
+
+    Deliberately does NOT sync into relProcessToOrg ("is owned by") — that
+    relation carries process-level governance/ownership meaning, distinct
+    from "this org participates in one step" (see element_relation_sync.py).
+    """
     await PermissionService.require_permission(db, current_user, "bpm.edit")
     pid = uuid.UUID(process_id)
     await _get_process_or_404(db, pid)
@@ -506,9 +511,6 @@ async def link_element_organization(
     if existing.scalar_one_or_none() is None:
         db.add(ProcessElementOrganization(element_id=eid, organization_id=org_id))
 
-    # Sync into relProcessToOrg (additive only — see element_relation_sync.py)
-    await sync_element_relations(db, pid, {"organization_id": {org_id}})
-
     await db.commit()
     return {"status": "linked"}
 
@@ -523,11 +525,8 @@ async def unlink_element_organization(
 ):
     """Unlink one Organization card from a BPMN element.
 
-    The process-level relProcessToOrg relation is intentionally NOT removed
-    here — same additive-only sync policy as application/data object/IT
-    component (see element_relation_sync.py): it may have been created
-    independently, or may still apply via another element of the same
-    process, so removing it automatically isn't safe.
+    No relProcessToOrg interaction here at all — the link endpoint never
+    syncs into it either, see element_relation_sync.py.
     """
     await PermissionService.require_permission(db, current_user, "bpm.edit")
     pid = uuid.UUID(process_id)

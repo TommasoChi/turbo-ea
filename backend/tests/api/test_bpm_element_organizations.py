@@ -149,9 +149,13 @@ class TestLinkElementOrganization:
         )
         assert len(result.scalars().all()) == 1
 
-    async def test_link_syncs_process_level_relation(self, client, db, org_env):
-        """Linking an org to a step ensures relProcessToOrg exists at the
-        process-card level too (element_relation_sync, additive)."""
+    async def test_link_does_not_sync_process_level_relation(self, client, db, org_env):
+        """Linking an org to a step must NOT create/touch relProcessToOrg —
+        that relation means process-level ownership/governance, a different
+        concept from "this org participates in one step". Unlike
+        application_id/data_object_id/it_component_id, Organization
+        element-links are never synced up to a process-level relation (see
+        element_relation_sync.py's module docstring)."""
         admin, process, element, org1 = (
             org_env["admin"],
             org_env["process"],
@@ -172,7 +176,7 @@ class TestLinkElementOrganization:
                 Relation.target_id == org1.id,
             )
         )
-        assert result.scalar_one_or_none() is not None
+        assert result.scalar_one_or_none() is None
 
     async def test_viewer_cannot_link(self, client, db, org_env):
         viewer, process, element, org1 = (
@@ -227,10 +231,10 @@ class TestUnlinkElementOrganization:
         )
         assert result.scalar_one_or_none() is None
 
-    async def test_unlink_does_not_delete_process_level_relation(self, client, db, org_env):
-        """Additive-only sync policy: unlinking a step's org does NOT remove
-        the process-level relProcessToOrg relation — it may have been
-        created independently, or still apply via another element (see
+    async def test_link_and_unlink_never_touch_process_level_relation(self, client, db, org_env):
+        """Neither linking nor unlinking a step's org creates/removes
+        relProcessToOrg — that relation is process-level ownership, a
+        separate, deliberately-untouched concept (see
         element_relation_sync.py docstring)."""
         admin, process, element, org1 = (
             org_env["admin"],
@@ -258,7 +262,7 @@ class TestUnlinkElementOrganization:
                 Relation.target_id == org1.id,
             )
         )
-        assert result.scalar_one_or_none() is not None
+        assert result.scalar_one_or_none() is None
 
     async def test_unlink_nonexistent_link_is_idempotent(self, client, db, org_env):
         admin, process, element, org1 = (
