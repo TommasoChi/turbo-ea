@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - **Columns no longer drift out of alignment between groups on the Element-Application/IT Component/Data Object Map reports.** Each group rendered its own table, and MUI's default `table-layout: auto` sized every table's columns independently from its own content — so "Type"/"Process"/"Lane" landed in different horizontal positions from one group to the next. Fixed column widths (`table-layout: fixed`) now keep all groups aligned.
+- **SSO login with Okta (and other strict OIDC providers) no longer fails with `invalid_request`** (#860). The login flow now sends the OAuth `state` parameter on the authorize request — Okta mandates it — and the callback validates the echoed value against the one stored before redirecting, adding standard CSRF protection to sign-in. Providers that already worked (Microsoft Entra ID, Google, Authentik, Keycloak, …) are unaffected: echoing `state` is mandatory OAuth 2.0 behavior.
 
 ## [2.24.1] - 2026-07-22
 
@@ -22,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **Individual BPMN process steps can now be linked to Organization cards** (Process Flow → Process Steps & Elements). Unlike Application/Data Object/IT Component (one value per step), a single step can involve more than one organizational actor, so Organization is a many-to-many link — the new "Organization" column shows a compact chip summary per step and opens a popover to add/remove links, matching the interaction Inventory already uses for its relation columns.
+
+## [2.23.3] - 2026-07-22
+
+### Fixed
+- **Renaming a select-field option now takes effect in the admin's current language** (#857 follow-up). The metamodel field editor's option label input is locale-aware: it shows the current locale's translation and writes edits to both the base label and that translation — previously a rename only changed the base label, so seeded options (which ship with a full translations map) kept showing their old translated name in non-English locales. Other locales' translations are preserved and remain editable via the type's Translations dialog.
+- **BPM views now reflect customized Process Type labels, translations, and colors** (#857). The BPM Process Navigator (rows, legend, card colors, detail chips), the Process Map report (chips + legend), and the BPM dashboard pie chart resolve the Business Process → Process Type options from the metamodel instead of hardcoded copies — renaming an option (e.g. Management → Strategic) or changing its color now shows up everywhere. Admin-added process types get their own navigator row, and cards whose process type option was deleted stay visible in a neutral row instead of being silently filed under Core. Default installs now show the metamodel's seeded option colors consistently across all BPM views.
+
+## [2.23.2] - 2026-07-20
+
+### Documentation
+- **New "Operations & Upgrades" admin guide** (discussion #855). Documents how to run Turbo EA in production: GHCR images and version pinning, a managed-PostgreSQL recommendation for corporate deployments (Azure Database for PostgreSQL, Amazon RDS/Aurora, Google Cloud SQL — with provider backups and point-in-time recovery folded into the backup and rollback guidance), the automatic Alembic migration model (sequential, cumulative, forward-only), the upgrade procedure, backup and restore of `postgres_data` / `backend_data`, the rollback strategy (restore backup + previous tag together), recommended environments (staging seeded via Workspace Transfer or database restore), release governance, and common pitfalls. Available in all 10 documentation languages.
 
 ## [2.23.1] - 2026-07-17
 
