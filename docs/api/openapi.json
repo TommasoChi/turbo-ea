@@ -28087,6 +28087,46 @@
         ]
       }
     },
+    "/api/v1/reports/bpm/element-data-object-map": {
+      "get": {
+        "description": "Which BPMN elements use which data objects \u2014 grouped by data object.",
+        "operationId": "element_data_object_map_api_v1_reports_bpm_element_data_object_map_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Element Data Object Map",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/bpm/element-it-component-map": {
+      "get": {
+        "description": "Which BPMN elements use which IT components \u2014 grouped by IT component.",
+        "operationId": "element_it_component_map_api_v1_reports_bpm_element_it_component_map_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Element It Component Map",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/api/v1/reports/bpm/process-application-matrix": {
       "get": {
         "description": "Process \u00d7 Application cross-reference grid (process-level + element-level links).",

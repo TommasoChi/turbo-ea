@@ -82,3 +82,13 @@ Three specialized reports are available from the BPM Dashboard:
 - **Maturity Report** — Distribution of processes by maturity level, trends over time
 - **Risk Report** — Risk assessment overview, highlighting processes that need attention
 - **Automation Report** — Analysis of automation levels across the process landscape
+
+### Element maps
+
+The **Reports** tab also cross-references individual BPMN steps with the EA landscape:
+
+- **Element-Application Map** — Which BPMN elements use which applications, grouped by application
+- **Element-IT Component Map** — Which BPMN elements use which IT components, grouped by IT component
+- **Element-Data Object Map** — Which BPMN elements use which data objects, grouped by data object
+
+Each row links back to its process and shows the element type and lane, so you can see exactly where an application, IT component, or data object is used inside a flow.

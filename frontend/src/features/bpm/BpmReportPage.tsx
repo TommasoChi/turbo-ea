@@ -1,6 +1,7 @@
 /**
  * BpmReportsContent — Sub-tabbed BPM report views embedded in BpmDashboard.
- * Tabs: Process Map, Capability×Process, Process×App, Dependencies, Element-App Map
+ * Tabs: Process Map, Capability×Process, Process×App, Dependencies,
+ * Element-App Map, Element-IT Component Map, Element-Data Object Map
  */
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -43,6 +44,8 @@ export default function BpmReportsContent() {
         <Tab label={t("reports.processApplication")} />
         <Tab label={t("reports.processDependencies")} />
         <Tab label={t("reports.elementApplicationMap")} />
+        <Tab label={t("reports.elementItComponentMap")} />
+        <Tab label={t("reports.elementDataObjectMap")} />
       </Tabs>
 
       {tab === 0 && <ProcessMapReport />}
@@ -50,6 +53,8 @@ export default function BpmReportsContent() {
       {tab === 2 && <ProcessAppMatrix onOpenCard={setSidePanelCardId} />}
       {tab === 3 && <ProcessDependencies onOpenCard={setSidePanelCardId} />}
       {tab === 4 && <ElementAppMap onOpenCard={setSidePanelCardId} />}
+      {tab === 5 && <ElementItComponentMap onOpenCard={setSidePanelCardId} />}
+      {tab === 6 && <ElementDataObjectMap onOpenCard={setSidePanelCardId} />}
       <CardDetailSidePanel
         cardId={sidePanelCardId}
         open={!!sidePanelCardId}
@@ -284,13 +289,145 @@ function ElementAppMap({ onOpenCard }: { onOpenCard: (id: string) => void }) {
               {group.application_name} ({t("reports.elementsCount", { count: group.elements.length })})
             </Typography>
             <TableContainer component={Paper} variant="outlined">
-              <Table size="small">
+              <Table size="small" sx={{ tableLayout: "fixed" }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>{t("reports.element")}</TableCell>
-                    <TableCell>{t("common:labels.type")}</TableCell>
-                    <TableCell>{t("reports.process")}</TableCell>
-                    <TableCell>{t("reports.lane")}</TableCell>
+                    <TableCell sx={{ width: "45%" }}>{t("reports.element")}</TableCell>
+                    <TableCell sx={{ width: "12%" }}>{t("common:labels.type")}</TableCell>
+                    <TableCell sx={{ width: "25%" }}>{t("reports.process")}</TableCell>
+                    <TableCell sx={{ width: "18%" }}>{t("reports.lane")}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {group.elements.map((el: any) => (
+                    <TableRow key={el.element_id} hover>
+                      <TableCell>{el.element_name || t("viewer.unnamed")}</TableCell>
+                      <TableCell>{el.element_type}</TableCell>
+                      <TableCell
+                        sx={{ cursor: "pointer", color: "primary.main" }}
+                        onClick={() => onOpenCard(el.process_id)}
+                      >
+                        {el.process_name}
+                      </TableCell>
+                      <TableCell>{el.lane_name || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ================================================================== */
+/*  Element-IT Component Map                                           */
+/* ================================================================== */
+
+function ElementItComponentMap({ onOpenCard }: { onOpenCard: (id: string) => void }) {
+  const { t } = useTranslation(["bpm", "common"]);
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<any[]>("/reports/bpm/element-it-component-map")
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <LinearProgress />;
+  if (!data.length) return <Typography color="text.secondary">{t("reports.noElementsLinkedItComponents")}</Typography>;
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="subtitle2" gutterBottom>{t("reports.elementItComponentMapTitle")}</Typography>
+        {data.map((group: any) => (
+          <Box key={group.it_component_id} sx={{ mb: 3 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ cursor: "pointer", color: "primary.main", mb: 1 }}
+              onClick={() => onOpenCard(group.it_component_id)}
+            >
+              {group.it_component_name} ({t("reports.elementsCount", { count: group.elements.length })})
+            </Typography>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small" sx={{ tableLayout: "fixed" }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ width: "45%" }}>{t("reports.element")}</TableCell>
+                    <TableCell sx={{ width: "12%" }}>{t("common:labels.type")}</TableCell>
+                    <TableCell sx={{ width: "25%" }}>{t("reports.process")}</TableCell>
+                    <TableCell sx={{ width: "18%" }}>{t("reports.lane")}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {group.elements.map((el: any) => (
+                    <TableRow key={el.element_id} hover>
+                      <TableCell>{el.element_name || t("viewer.unnamed")}</TableCell>
+                      <TableCell>{el.element_type}</TableCell>
+                      <TableCell
+                        sx={{ cursor: "pointer", color: "primary.main" }}
+                        onClick={() => onOpenCard(el.process_id)}
+                      >
+                        {el.process_name}
+                      </TableCell>
+                      <TableCell>{el.lane_name || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ================================================================== */
+/*  Element-Data Object Map                                            */
+/* ================================================================== */
+
+function ElementDataObjectMap({ onOpenCard }: { onOpenCard: (id: string) => void }) {
+  const { t } = useTranslation(["bpm", "common"]);
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<any[]>("/reports/bpm/element-data-object-map")
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <LinearProgress />;
+  if (!data.length) return <Typography color="text.secondary">{t("reports.noElementsLinkedDataObjects")}</Typography>;
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="subtitle2" gutterBottom>{t("reports.elementDataObjectMapTitle")}</Typography>
+        {data.map((group: any) => (
+          <Box key={group.data_object_id} sx={{ mb: 3 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ cursor: "pointer", color: "primary.main", mb: 1 }}
+              onClick={() => onOpenCard(group.data_object_id)}
+            >
+              {group.data_object_name} ({t("reports.elementsCount", { count: group.elements.length })})
+            </Typography>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small" sx={{ tableLayout: "fixed" }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ width: "45%" }}>{t("reports.element")}</TableCell>
+                    <TableCell sx={{ width: "12%" }}>{t("common:labels.type")}</TableCell>
+                    <TableCell sx={{ width: "25%" }}>{t("reports.process")}</TableCell>
+                    <TableCell sx={{ width: "18%" }}>{t("reports.lane")}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>

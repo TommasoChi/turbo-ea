@@ -1,8 +1,9 @@
 """Integration tests for BPM report endpoints.
 
-Covers all 8 endpoints in bpm_reports.py: dashboard, capability-process-matrix,
+Covers all 10 endpoints in bpm_reports.py: dashboard, capability-process-matrix,
 process-application-matrix, process-dependencies, capability-heatmap,
-element-application-map, process-map, and value-stream-matrix.
+element-application-map, element-it-component-map, element-data-object-map,
+process-map, and value-stream-matrix.
 
 Integration tests requiring a PostgreSQL test database.
 """
@@ -41,6 +42,7 @@ async def bpm_env(db):
         db, key="BusinessCapability", label="Business Capability", has_hierarchy=True
     )
     await create_card_type(db, key="DataObject", label="Data Object")
+    await create_card_type(db, key="ITComponent", label="IT Component")
     await create_card_type(db, key="Organization", label="Organization")
     await create_card_type(db, key="BusinessContext", label="Business Context")
 
@@ -500,6 +502,218 @@ class TestElementApplicationMap:
         data = resp.json()
         assert len(data) == 1
         assert len(data[0]["elements"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# Element-IT Component Map
+# ---------------------------------------------------------------------------
+
+
+class TestElementItComponentMap:
+    async def test_empty_map(self, client, bpm_env):
+        resp = await client.get(
+            "/api/v1/reports/bpm/element-it-component-map",
+            headers=auth_headers(bpm_env["admin"]),
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_map_with_linked_elements(self, client, db, bpm_env):
+        from app.models.process_element import ProcessElement
+
+        admin = bpm_env["admin"]
+        proc = await create_card(db, card_type="BusinessProcess", name="Flow", user_id=admin.id)
+        comp = await create_card(db, card_type="ITComponent", name="Mainframe", user_id=admin.id)
+        db.add(
+            ProcessElement(
+                process_id=proc.id,
+                bpmn_element_id="task_1",
+                element_type="serviceTask",
+                name="Post to Ledger",
+                it_component_id=comp.id,
+                sequence_order=0,
+            )
+        )
+        await db.flush()
+
+        resp = await client.get(
+            "/api/v1/reports/bpm/element-it-component-map",
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["it_component_name"] == "Mainframe"
+        assert len(data[0]["elements"]) == 1
+        assert data[0]["elements"][0]["element_name"] == "Post to Ledger"
+        assert data[0]["elements"][0]["process_name"] == "Flow"
+
+    async def test_map_groups_by_it_component(self, client, db, bpm_env):
+        """Multiple elements linked to the same IT component are grouped."""
+        from app.models.process_element import ProcessElement
+
+        admin = bpm_env["admin"]
+        proc = await create_card(db, card_type="BusinessProcess", name="Flow", user_id=admin.id)
+        comp = await create_card(db, card_type="ITComponent", name="ERP Server", user_id=admin.id)
+        for i, name in enumerate(["Create Order", "Send Invoice"]):
+            db.add(
+                ProcessElement(
+                    process_id=proc.id,
+                    bpmn_element_id=f"task_{i}",
+                    element_type="task",
+                    name=name,
+                    it_component_id=comp.id,
+                    sequence_order=i,
+                )
+            )
+        await db.flush()
+
+        resp = await client.get(
+            "/api/v1/reports/bpm/element-it-component-map",
+            headers=auth_headers(admin),
+        )
+        data = resp.json()
+        assert len(data) == 1
+        assert len(data[0]["elements"]) == 2
+
+    async def test_ignores_elements_linked_only_to_applications(self, client, db, bpm_env):
+        """An element with an application but no IT component must not appear."""
+        from app.models.process_element import ProcessElement
+
+        admin = bpm_env["admin"]
+        proc = await create_card(db, card_type="BusinessProcess", name="Flow", user_id=admin.id)
+        app = await create_card(db, card_type="Application", name="CRM", user_id=admin.id)
+        db.add(
+            ProcessElement(
+                process_id=proc.id,
+                bpmn_element_id="task_1",
+                element_type="task",
+                name="App only",
+                application_id=app.id,
+                sequence_order=0,
+            )
+        )
+        await db.flush()
+
+        resp = await client.get(
+            "/api/v1/reports/bpm/element-it-component-map",
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_requires_permission(self, client, bpm_env):
+        resp = await client.get(
+            "/api/v1/reports/bpm/element-it-component-map",
+            headers=auth_headers(bpm_env["viewer"]),
+        )
+        assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Element-Data Object Map
+# ---------------------------------------------------------------------------
+
+
+class TestElementDataObjectMap:
+    async def test_empty_map(self, client, bpm_env):
+        resp = await client.get(
+            "/api/v1/reports/bpm/element-data-object-map",
+            headers=auth_headers(bpm_env["admin"]),
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_map_with_linked_elements(self, client, db, bpm_env):
+        from app.models.process_element import ProcessElement
+
+        admin = bpm_env["admin"]
+        proc = await create_card(db, card_type="BusinessProcess", name="Flow", user_id=admin.id)
+        obj = await create_card(db, card_type="DataObject", name="Customer", user_id=admin.id)
+        db.add(
+            ProcessElement(
+                process_id=proc.id,
+                bpmn_element_id="task_1",
+                element_type="userTask",
+                name="Update Customer",
+                data_object_id=obj.id,
+                sequence_order=0,
+            )
+        )
+        await db.flush()
+
+        resp = await client.get(
+            "/api/v1/reports/bpm/element-data-object-map",
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["data_object_name"] == "Customer"
+        assert len(data[0]["elements"]) == 1
+        assert data[0]["elements"][0]["element_name"] == "Update Customer"
+        assert data[0]["elements"][0]["process_name"] == "Flow"
+
+    async def test_map_groups_by_data_object(self, client, db, bpm_env):
+        """Multiple elements linked to the same data object are grouped."""
+        from app.models.process_element import ProcessElement
+
+        admin = bpm_env["admin"]
+        proc = await create_card(db, card_type="BusinessProcess", name="Flow", user_id=admin.id)
+        obj = await create_card(db, card_type="DataObject", name="Order", user_id=admin.id)
+        for i, name in enumerate(["Create Order", "Send Invoice"]):
+            db.add(
+                ProcessElement(
+                    process_id=proc.id,
+                    bpmn_element_id=f"task_{i}",
+                    element_type="task",
+                    name=name,
+                    data_object_id=obj.id,
+                    sequence_order=i,
+                )
+            )
+        await db.flush()
+
+        resp = await client.get(
+            "/api/v1/reports/bpm/element-data-object-map",
+            headers=auth_headers(admin),
+        )
+        data = resp.json()
+        assert len(data) == 1
+        assert len(data[0]["elements"]) == 2
+
+    async def test_ignores_elements_linked_only_to_applications(self, client, db, bpm_env):
+        """An element with an application but no data object must not appear."""
+        from app.models.process_element import ProcessElement
+
+        admin = bpm_env["admin"]
+        proc = await create_card(db, card_type="BusinessProcess", name="Flow", user_id=admin.id)
+        app = await create_card(db, card_type="Application", name="CRM", user_id=admin.id)
+        db.add(
+            ProcessElement(
+                process_id=proc.id,
+                bpmn_element_id="task_1",
+                element_type="task",
+                name="App only",
+                application_id=app.id,
+                sequence_order=0,
+            )
+        )
+        await db.flush()
+
+        resp = await client.get(
+            "/api/v1/reports/bpm/element-data-object-map",
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_requires_permission(self, client, bpm_env):
+        resp = await client.get(
+            "/api/v1/reports/bpm/element-data-object-map",
+            headers=auth_headers(bpm_env["viewer"]),
+        )
+        assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------

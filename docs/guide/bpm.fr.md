@@ -82,3 +82,13 @@ Trois rapports spécialisés sont disponibles depuis le tableau de bord BPM :
 - **Rapport de maturité** -- Répartition des processus par niveau de maturité, tendances dans le temps
 - **Rapport de risque** -- Vue d'ensemble de l'évaluation des risques, mettant en évidence les processus qui nécessitent une attention
 - **Rapport d'automatisation** -- Analyse des niveaux d'automatisation dans le paysage des processus
+
+### Cartes des éléments
+
+L'onglet **Rapports** croise également les étapes BPMN individuelles avec le paysage EA :
+
+- **Carte Élément-Application** — Quels éléments BPMN utilisent quelles applications, regroupés par application
+- **Carte Élément-Composant IT** — Quels éléments BPMN utilisent quels composants IT, regroupés par composant IT
+- **Carte Élément-Objet de données** — Quels éléments BPMN utilisent quels objets de données, regroupés par objet de données
+
+Chaque ligne renvoie à son processus et affiche le type d'élément et le couloir, ce qui montre précisément où une application, un composant IT ou un objet de données est utilisé dans un flux.

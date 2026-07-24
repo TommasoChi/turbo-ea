@@ -82,3 +82,13 @@ Três relatórios especializados estão disponíveis a partir do Painel BPM:
 - **Relatório de Maturidade** — Distribuição de processos por nível de maturidade, tendências ao longo do tempo
 - **Relatório de Risco** — Visão geral da avaliação de risco, destacando processos que precisam de atenção
 - **Relatório de Automação** — Análise dos níveis de automação em todo o cenário de processos
+
+### Mapas de elementos
+
+O separador **Relatórios** também cruza os passos BPMN individuais com o panorama EA:
+
+- **Mapa Elemento-Aplicação** — Que elementos BPMN usam que aplicações, agrupados por aplicação
+- **Mapa Elemento-Componente de TI** — Que elementos BPMN usam que componentes de TI, agrupados por componente de TI
+- **Mapa Elemento-Objeto de Dados** — Que elementos BPMN usam que objetos de dados, agrupados por objeto de dados
+
+Cada linha remete para o seu processo e mostra o tipo de elemento e a raia, permitindo ver exatamente onde uma aplicação, um componente de TI ou objeto de dados é usado dentro de um fluxo.

@@ -340,6 +340,112 @@ async def element_application_map(
     return result_list
 
 
+@router.get("/element-it-component-map")
+async def element_it_component_map(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Which BPMN elements use which IT components — grouped by IT component."""
+    await PermissionService.require_permission(db, user, "reports.bpm_dashboard")
+    result = await db.execute(
+        select(ProcessElement)
+        .where(ProcessElement.it_component_id.isnot(None))
+        .order_by(ProcessElement.it_component_id)
+    )
+    elements = result.scalars().all()
+
+    # Group by IT component
+    grouped: dict[str, list[dict]] = {}
+    process_ids = set()
+    for e in elements:
+        comp_id = str(e.it_component_id)
+        process_ids.add(e.process_id)
+        grouped.setdefault(comp_id, []).append(
+            {
+                "element_id": str(e.id),
+                "element_name": e.name,
+                "element_type": e.element_type,
+                "lane_name": e.lane_name,
+                "process_id": str(e.process_id),
+            }
+        )
+
+    # Resolve names
+    all_ids = {uuid.UUID(cid) for cid in grouped} | process_ids
+    if not all_ids:
+        return []
+
+    card_result = await db.execute(select(Card).where(Card.id.in_(all_ids)))
+    card_map = {str(card.id): card.name for card in card_result.scalars().all()}
+
+    result_list = []
+    for comp_id, elems in grouped.items():
+        for elem in elems:
+            elem["process_name"] = card_map.get(elem["process_id"], "")
+        result_list.append(
+            {
+                "it_component_id": comp_id,
+                "it_component_name": card_map.get(comp_id, ""),
+                "elements": elems,
+            }
+        )
+
+    return result_list
+
+
+@router.get("/element-data-object-map")
+async def element_data_object_map(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Which BPMN elements use which data objects — grouped by data object."""
+    await PermissionService.require_permission(db, user, "reports.bpm_dashboard")
+    result = await db.execute(
+        select(ProcessElement)
+        .where(ProcessElement.data_object_id.isnot(None))
+        .order_by(ProcessElement.data_object_id)
+    )
+    elements = result.scalars().all()
+
+    # Group by data object
+    grouped: dict[str, list[dict]] = {}
+    process_ids = set()
+    for e in elements:
+        obj_id = str(e.data_object_id)
+        process_ids.add(e.process_id)
+        grouped.setdefault(obj_id, []).append(
+            {
+                "element_id": str(e.id),
+                "element_name": e.name,
+                "element_type": e.element_type,
+                "lane_name": e.lane_name,
+                "process_id": str(e.process_id),
+            }
+        )
+
+    # Resolve names
+    all_ids = {uuid.UUID(oid) for oid in grouped} | process_ids
+    if not all_ids:
+        return []
+
+    card_result = await db.execute(select(Card).where(Card.id.in_(all_ids)))
+    card_map = {str(card.id): card.name for card in card_result.scalars().all()}
+
+    result_list = []
+    for obj_id, elems in grouped.items():
+        for elem in elems:
+            elem["process_name"] = card_map.get(elem["process_id"], "")
+        result_list.append(
+            {
+                "data_object_id": obj_id,
+                "data_object_name": card_map.get(obj_id, ""),
+                "elements": elems,
+            }
+        )
+
+    return result_list
+
+
 @router.get("/process-map")
 async def process_map(
     db: AsyncSession = Depends(get_db),

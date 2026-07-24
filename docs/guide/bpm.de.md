@@ -82,3 +82,13 @@ Drei spezialisierte Berichte sind über das BPM-Dashboard verfügbar:
 - **Reifegradbericht** — Verteilung der Prozesse nach Reifegrad, Trends über die Zeit
 - **Risikobericht** — Risikobewertungsübersicht, Hervorhebung von Prozessen, die Aufmerksamkeit erfordern
 - **Automatisierungsbericht** — Analyse der Automatisierungsgrade in der Prozesslandschaft
+
+### Element-Zuordnungen
+
+Die Registerkarte **Berichte** verknüpft außerdem einzelne BPMN-Schritte mit der EA-Landschaft:
+
+- **Element-Anwendungs-Zuordnung** — Welche BPMN-Elemente welche Anwendungen nutzen, gruppiert nach Anwendung
+- **Element-IT-Komponenten-Zuordnung** — Welche BPMN-Elemente welche IT-Komponenten nutzen, gruppiert nach IT-Komponente
+- **Element-Datenobjekt-Zuordnung** — Welche BPMN-Elemente welche Datenobjekte nutzen, gruppiert nach Datenobjekt
+
+Jede Zeile verweist zurück auf ihren Prozess und zeigt Elementtyp und Lane, sodass ersichtlich ist, wo genau eine Anwendung, eine IT-Komponente oder ein Datenobjekt innerhalb eines Ablaufs verwendet wird.

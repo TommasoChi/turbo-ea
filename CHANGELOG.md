@@ -5,6 +5,14 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.23.4] - 2026-07-23
+
+### Added
+- **New "Element-IT Component Map" and "Element-Data Object Map" reports** (BPM → Reports). Mirroring the existing Element-Application Map, they show which BPMN steps use which IT components / data objects, grouped by IT component / data object, with the element type, its process, and its lane — so you can see exactly where an IT component or data object is touched across the process landscape. All three element maps are now documented in the BPM guide.
+
+### Fixed
+- **Columns no longer drift out of alignment between groups on the Element-Application/IT Component/Data Object Map reports.** Each group rendered its own table, and MUI's default `table-layout: auto` sized every table's columns independently from its own content — so "Type"/"Process"/"Lane" landed in different horizontal positions from one group to the next. Fixed column widths (`table-layout: fixed`) now keep all groups aligned.
+
 ## [2.24.1] - 2026-07-22
 
 ### Fixed

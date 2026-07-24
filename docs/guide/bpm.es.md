@@ -82,3 +82,13 @@ Tres informes especializados están disponibles desde el Panel de Control BPM:
 - **Informe de Madurez** — Distribución de procesos por nivel de madurez, tendencias a lo largo del tiempo
 - **Informe de Riesgos** — Vista general de la evaluación de riesgos, destacando los procesos que necesitan atención
 - **Informe de Automatización** — Análisis de los niveles de automatización en todo el panorama de procesos
+
+### Mapas de elementos
+
+La pestaña **Informes** también cruza los pasos BPMN individuales con el panorama EA:
+
+- **Mapa Elemento-Aplicación** — Qué elementos BPMN usan qué aplicaciones, agrupados por aplicación
+- **Mapa Elemento-Componente TI** — Qué elementos BPMN usan qué componentes TI, agrupados por componente TI
+- **Mapa Elemento-Objeto de datos** — Qué elementos BPMN usan qué objetos de datos, agrupados por objeto de datos
+
+Cada fila enlaza con su proceso y muestra el tipo de elemento y el carril, de modo que se ve exactamente dónde se usa una aplicación, un componente TI o un objeto de datos dentro de un flujo.

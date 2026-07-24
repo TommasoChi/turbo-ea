@@ -82,3 +82,13 @@ Tre report specializzati sono disponibili dalla Dashboard BPM:
 - **Report Maturità** — Distribuzione dei processi per livello di maturità, tendenze nel tempo
 - **Report Rischio** — Panoramica della valutazione del rischio, evidenziando i processi che necessitano attenzione
 - **Report Automazione** — Analisi dei livelli di automazione nel panorama dei processi
+
+### Mappe degli elementi
+
+La scheda **Report** incrocia anche i singoli step BPMN con il panorama EA:
+
+- **Mappa Elemento-Applicazione** — Quali elementi BPMN usano quali applicazioni, raggruppati per applicazione
+- **Mappa Elemento-Componente IT** — Quali elementi BPMN usano quali componenti IT, raggruppati per componente IT
+- **Mappa Elemento-Oggetto Dati** — Quali elementi BPMN usano quali oggetti dati, raggruppati per oggetto dati
+
+Ogni riga rimanda al proprio processo e mostra tipo di elemento e corsia, così si vede esattamente dove un'applicazione, un componente IT o un oggetto dati viene usato dentro un flusso.

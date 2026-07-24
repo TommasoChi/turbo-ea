@@ -47,6 +47,26 @@ const mockElementMap = [
   },
 ];
 
+const mockItComponentMap = [
+  {
+    it_component_id: "ic1",
+    it_component_name: "Mainframe",
+    elements: [
+      { element_id: "el1", element_name: "Post to Ledger", element_type: "serviceTask", process_id: "p1", process_name: "Order Process", lane_name: "Finance" },
+    ],
+  },
+];
+
+const mockDataObjectMap = [
+  {
+    data_object_id: "d1",
+    data_object_name: "Customer Record",
+    elements: [
+      { element_id: "el1", element_name: "Update Customer", element_type: "userTask", process_id: "p1", process_name: "Order Process", lane_name: "Back Office" },
+    ],
+  },
+];
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -61,13 +81,15 @@ beforeEach(() => {
 });
 
 describe("BpmReportsContent", () => {
-  it("shows five sub-tabs", () => {
+  it("shows seven sub-tabs", () => {
     renderPage();
     expect(screen.getByText("Process Map")).toBeInTheDocument();
     expect(screen.getByText("Capability × Process")).toBeInTheDocument();
     expect(screen.getByText("Process × Application")).toBeInTheDocument();
     expect(screen.getByText("Process Dependencies")).toBeInTheDocument();
     expect(screen.getByText("Element-Application Map")).toBeInTheDocument();
+    expect(screen.getByText("Element-IT Component Map")).toBeInTheDocument();
+    expect(screen.getByText("Element-Data Object Map")).toBeInTheDocument();
   });
 
   it("shows ProcessMapReport by default", () => {
@@ -167,6 +189,100 @@ describe("BpmReportsContent", () => {
 
       await waitFor(() => {
         expect(screen.getByText(/No BPMN elements linked/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("Element-IT Component Map tab", () => {
+    it("shows element groups", async () => {
+      vi.mocked(api.get).mockResolvedValue(mockItComponentMap);
+      renderPage();
+      await userEvent.click(screen.getByRole("tab", { name: /Element-IT Component Map/ }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Mainframe (1 element)")).toBeInTheDocument();
+        expect(screen.getByText("Post to Ledger")).toBeInTheDocument();
+        expect(screen.getByText("Finance")).toBeInTheDocument();
+      });
+    });
+
+    it("calls the IT component endpoint, not the application one", async () => {
+      vi.mocked(api.get).mockResolvedValue(mockItComponentMap);
+      renderPage();
+      await userEvent.click(screen.getByRole("tab", { name: /Element-IT Component Map/ }));
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledWith("/reports/bpm/element-it-component-map");
+      });
+    });
+
+    it("shows empty state when no data", async () => {
+      vi.mocked(api.get).mockResolvedValue([]);
+      renderPage();
+      await userEvent.click(screen.getByRole("tab", { name: /Element-IT Component Map/ }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/No BPMN elements linked to IT components/)).toBeInTheDocument();
+      });
+    });
+
+    it("opens side panel when clicking the IT component name", async () => {
+      vi.mocked(api.get).mockResolvedValue(mockItComponentMap);
+      renderPage();
+      await userEvent.click(screen.getByRole("tab", { name: /Element-IT Component Map/ }));
+
+      await waitFor(() => expect(screen.getByText("Mainframe (1 element)")).toBeInTheDocument());
+      await userEvent.click(screen.getByText("Mainframe (1 element)"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("card-side-panel")).toHaveAttribute("data-card-id", "ic1");
+      });
+    });
+  });
+
+  describe("Element-Data Object Map tab", () => {
+    it("shows element groups", async () => {
+      vi.mocked(api.get).mockResolvedValue(mockDataObjectMap);
+      renderPage();
+      await userEvent.click(screen.getByRole("tab", { name: /Element-Data Object Map/ }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Customer Record (1 element)")).toBeInTheDocument();
+        expect(screen.getByText("Update Customer")).toBeInTheDocument();
+        expect(screen.getByText("Back Office")).toBeInTheDocument();
+      });
+    });
+
+    it("calls the data-object endpoint, not the application one", async () => {
+      vi.mocked(api.get).mockResolvedValue(mockDataObjectMap);
+      renderPage();
+      await userEvent.click(screen.getByRole("tab", { name: /Element-Data Object Map/ }));
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledWith("/reports/bpm/element-data-object-map");
+      });
+    });
+
+    it("shows empty state when no data", async () => {
+      vi.mocked(api.get).mockResolvedValue([]);
+      renderPage();
+      await userEvent.click(screen.getByRole("tab", { name: /Element-Data Object Map/ }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/No BPMN elements linked to data objects/)).toBeInTheDocument();
+      });
+    });
+
+    it("opens side panel when clicking the data object name", async () => {
+      vi.mocked(api.get).mockResolvedValue(mockDataObjectMap);
+      renderPage();
+      await userEvent.click(screen.getByRole("tab", { name: /Element-Data Object Map/ }));
+
+      await waitFor(() => expect(screen.getByText("Customer Record (1 element)")).toBeInTheDocument());
+      await userEvent.click(screen.getByText("Customer Record (1 element)"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("card-side-panel")).toHaveAttribute("data-card-id", "d1");
       });
     });
   });

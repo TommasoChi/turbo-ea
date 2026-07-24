@@ -82,3 +82,13 @@ Tre specialiserede rapporter er tilgængelige fra BPM-dashboardet:
 - **Modenhedsrapport** — Fordeling af processer efter modenhedsniveau, tendenser over tid
 - **Risikorapport** — Risikovurderings­overblik, der fremhæver processer, der kræver opmærksomhed
 - **Automatiseringsrapport** — Analyse af automatiseringsniveauer på tværs af proceslandskabet
+
+### Elementkort
+
+Fanen **Rapporter** krydsrefererer også de enkelte BPMN-trin med EA-landskabet:
+
+- **Element-applikationskort** — Hvilke BPMN-elementer der bruger hvilke applikationer, grupperet efter applikation
+- **Element-IT-komponent-kort** — Hvilke BPMN-elementer der bruger hvilke IT-komponenter, grupperet efter IT-komponent
+- **Element-dataobjekt-kort** — Hvilke BPMN-elementer der bruger hvilke dataobjekter, grupperet efter dataobjekt
+
+Hver række linker tilbage til sin proces og viser elementtype og bane, så det er tydeligt, præcis hvor en applikation, en IT-komponent eller et dataobjekt bruges i et forløb.
