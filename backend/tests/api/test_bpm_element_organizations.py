@@ -1,17 +1,15 @@
-"""Integration tests for per-element Organization linking.
+"""Integration tests for the M:N step ↔ Organization links on process flows.
 
-Unlike application_id/data_object_id/it_component_id (1:1 FK columns on
-ProcessElement), Organization is a proper M:N junction table
-(process_element_organizations) — a single BPMN step can involve more than
-one organizational actor. See:
-- POST/DELETE /bpm/processes/{process_id}/elements/{element_id}/organizations
-- backend/app/models/process_element.py (ProcessElementOrganization)
-- backend/app/services/element_relation_sync.py (relProcessToOrg sync)
+Covers:
+- PUT /bpm/processes/{id}/elements/{element_id} with organization_ids
+  (set, extend, clear, validation)
+- GET /bpm/processes/{id}/elements serialization of `organizations`
+- Draft pre-linking (draft-elements PUT/GET) and publish applying the links
+- Step ↔ Organization links are informative only: no relProcessToOrg
+  card-to-card relation is ever created from them
 """
 
 from __future__ import annotations
-
-import uuid
 
 import pytest
 from sqlalchemy import select
@@ -27,21 +25,31 @@ from tests.conftest import (
     create_user,
 )
 
+SIMPLE_BPMN = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             id="definitions_1">
+  <process id="Process_1" isExecutable="false">
+    <task id="task_quote" name="Create Quote" />
+    <task id="task_invoice" name="Send Invoice" />
+  </process>
+</definitions>
+"""
+
 
 @pytest.fixture
 async def org_env(db):
-    """Prerequisite data: BusinessProcess + Organization card types, the
-    relProcessToOrg relation type, an admin/viewer user, one process card,
-    one process element on it, and two Organization cards."""
+    """Roles, types, users, a BusinessProcess with two extracted elements."""
     await create_role(db, key="admin", label="Admin", permissions={"*": True})
     await create_role(
         db,
         key="viewer",
         label="Viewer",
-        permissions={"inventory.view": True, "bpm.view": True},
+        permissions={"bpm.view": True, "bpm.edit": False},
     )
     await create_card_type(db, key="BusinessProcess", label="Business Process")
     await create_card_type(db, key="Organization", label="Organization")
+    await create_card_type(db, key="Application", label="Application")
     await create_relation_type(
         db,
         key="relProcessToOrg",
@@ -52,280 +60,205 @@ async def org_env(db):
 
     admin = await create_user(db, email="admin@test.com", role="admin")
     viewer = await create_user(db, email="viewer@test.com", role="viewer")
-    process = await create_card(
-        db, card_type="BusinessProcess", name="Order Fulfillment", user_id=admin.id
-    )
-    org1 = await create_card(db, card_type="Organization", name="Sales", user_id=admin.id)
-    org2 = await create_card(db, card_type="Organization", name="Finance", user_id=admin.id)
 
-    element = ProcessElement(
+    process = await create_card(
+        db, card_type="BusinessProcess", name="Order to Cash", user_id=admin.id
+    )
+    org_sales = await create_card(db, card_type="Organization", name="Sales", user_id=admin.id)
+    org_finance = await create_card(db, card_type="Organization", name="Finance", user_id=admin.id)
+    app = await create_card(db, card_type="Application", name="CRM", user_id=admin.id)
+
+    elem = ProcessElement(
         process_id=process.id,
-        bpmn_element_id="Task_1",
+        bpmn_element_id="task_quote",
         element_type="task",
-        name="Approve Order",
+        name="Create Quote",
+        lane_name="Sales",
         sequence_order=0,
     )
-    db.add(element)
-    await db.commit()
-    await db.refresh(element)
+    db.add(elem)
+    await db.flush()
 
     return {
         "admin": admin,
         "viewer": viewer,
         "process": process,
-        "element": element,
-        "org1": org1,
-        "org2": org2,
+        "org_sales": org_sales,
+        "org_finance": org_finance,
+        "app": app,
+        "elem": elem,
     }
 
 
-class TestLinkElementOrganization:
-    async def test_link_creates_junction_row(self, client, db, org_env):
-        admin, process, element, org1 = (
-            org_env["admin"],
-            org_env["process"],
-            org_env["element"],
-            org_env["org1"],
+async def _junction_org_ids(db, element_id):
+    rows = await db.execute(
+        select(ProcessElementOrganization.organization_id).where(
+            ProcessElementOrganization.element_id == element_id
         )
-        resp = await client.post(
-            f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations",
-            json={"organization_id": str(org1.id)},
-            headers=auth_headers(admin),
+    )
+    return {row[0] for row in rows.all()}
+
+
+class TestElementOrganizationLinks:
+    async def test_link_multiple_orgs_to_one_step(self, client, db, org_env):
+        process, elem = org_env["process"], org_env["elem"]
+        sales, finance = org_env["org_sales"], org_env["org_finance"]
+        process_id, elem_id = process.id, elem.id
+        sales_id, finance_id = sales.id, finance.id
+        headers = auth_headers(org_env["admin"])
+
+        resp = await client.put(
+            f"/api/v1/bpm/processes/{process_id}/elements/{elem_id}",
+            json={"organization_ids": [str(sales_id), str(finance_id)]},
+            headers=headers,
         )
         assert resp.status_code == 200
+        assert await _junction_org_ids(db, elem_id) == {sales_id, finance_id}
 
-        result = await db.execute(
-            select(ProcessElementOrganization).where(
-                ProcessElementOrganization.element_id == element.id,
-                ProcessElementOrganization.organization_id == org1.id,
-            )
-        )
-        assert result.scalar_one_or_none() is not None
+        # Expire the shared test session so the GET's selectinload repopulates
+        # the (noload) organizations relationship on the identity-mapped row.
+        db.expire_all()
+        elems = (
+            await client.get(f"/api/v1/bpm/processes/{process_id}/elements", headers=headers)
+        ).json()
+        quote = next(e for e in elems if e["bpmn_element_id"] == "task_quote")
+        assert {o["name"] for o in quote["organizations"]} == {"Sales", "Finance"}
 
-    async def test_link_two_organizations_to_same_step(self, client, db, org_env):
-        """A single step can involve more than one organizational actor."""
-        admin, process, element, org1, org2 = (
-            org_env["admin"],
-            org_env["process"],
-            org_env["element"],
-            org_env["org1"],
-            org_env["org2"],
-        )
-        for org in (org1, org2):
-            resp = await client.post(
-                f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations",
-                json={"organization_id": str(org.id)},
-                headers=auth_headers(admin),
-            )
-            assert resp.status_code == 200
-
-        result = await db.execute(
-            select(ProcessElementOrganization).where(
-                ProcessElementOrganization.element_id == element.id
-            )
-        )
-        linked_ids = {row.organization_id for row in result.scalars().all()}
-        assert linked_ids == {org1.id, org2.id}
-
-    async def test_link_is_idempotent(self, client, db, org_env):
-        admin, process, element, org1 = (
-            org_env["admin"],
-            org_env["process"],
-            org_env["element"],
-            org_env["org1"],
-        )
-        for _ in range(2):
-            resp = await client.post(
-                f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations",
-                json={"organization_id": str(org1.id)},
-                headers=auth_headers(admin),
-            )
-            assert resp.status_code == 200
-
-        result = await db.execute(
-            select(ProcessElementOrganization).where(
-                ProcessElementOrganization.element_id == element.id
-            )
-        )
-        assert len(result.scalars().all()) == 1
-
-    async def test_link_does_not_sync_process_level_relation(self, client, db, org_env):
-        """Linking an org to a step must NOT create/touch relProcessToOrg —
-        that relation means process-level ownership/governance, a different
-        concept from "this org participates in one step". Unlike
-        application_id/data_object_id/it_component_id, Organization
-        element-links are never synced up to a process-level relation (see
-        element_relation_sync.py's module docstring)."""
-        admin, process, element, org1 = (
-            org_env["admin"],
-            org_env["process"],
-            org_env["element"],
-            org_env["org1"],
-        )
-        resp = await client.post(
-            f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations",
-            json={"organization_id": str(org1.id)},
-            headers=auth_headers(admin),
-        )
-        assert resp.status_code == 200
-
-        result = await db.execute(
+        # Informative only: linking a step never creates a card-to-card
+        # relation (process <-> Organization relations live on the card).
+        rels = await db.execute(
             select(Relation).where(
                 Relation.type == "relProcessToOrg",
-                Relation.source_id == process.id,
-                Relation.target_id == org1.id,
+                Relation.source_id == process_id,
             )
         )
-        assert result.scalar_one_or_none() is None
+        assert rels.scalars().all() == []
 
-    async def test_viewer_cannot_link(self, client, db, org_env):
-        viewer, process, element, org1 = (
-            org_env["viewer"],
-            org_env["process"],
-            org_env["element"],
-            org_env["org1"],
-        )
-        resp = await client.post(
-            f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations",
-            json={"organization_id": str(org1.id)},
-            headers=auth_headers(viewer),
-        )
-        assert resp.status_code == 403
+    async def test_replace_and_clear_org_links(self, client, db, org_env):
+        process, elem = org_env["process"], org_env["elem"]
+        sales, finance = org_env["org_sales"], org_env["org_finance"]
+        headers = auth_headers(org_env["admin"])
 
-    async def test_link_unknown_element_404s(self, client, db, org_env):
-        admin, process, org1 = org_env["admin"], org_env["process"], org_env["org1"]
-        resp = await client.post(
-            f"/api/v1/bpm/processes/{process.id}/elements/{uuid.uuid4()}/organizations",
-            json={"organization_id": str(org1.id)},
-            headers=auth_headers(admin),
+        await client.put(
+            f"/api/v1/bpm/processes/{process.id}/elements/{elem.id}",
+            json={"organization_ids": [str(sales.id), str(finance.id)]},
+            headers=headers,
+        )
+        # Remove one (chip delete sends the remaining list).
+        resp = await client.put(
+            f"/api/v1/bpm/processes/{process.id}/elements/{elem.id}",
+            json={"organization_ids": [str(finance.id)]},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        assert await _junction_org_ids(db, elem.id) == {finance.id}
+
+        # Clear all.
+        resp = await client.put(
+            f"/api/v1/bpm/processes/{process.id}/elements/{elem.id}",
+            json={"organization_ids": []},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        assert await _junction_org_ids(db, elem.id) == set()
+
+    async def test_non_organization_card_404(self, client, db, org_env):
+        resp = await client.put(
+            f"/api/v1/bpm/processes/{org_env['process'].id}/elements/{org_env['elem'].id}",
+            json={"organization_ids": [str(org_env["app"].id)]},
+            headers=auth_headers(org_env["admin"]),
         )
         assert resp.status_code == 404
+        assert await _junction_org_ids(db, org_env["elem"].id) == set()
 
-
-class TestUnlinkElementOrganization:
-    async def test_unlink_removes_junction_row(self, client, db, org_env):
-        admin, process, element, org1 = (
-            org_env["admin"],
-            org_env["process"],
-            org_env["element"],
-            org_env["org1"],
-        )
-        link_resp = await client.post(
-            f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations",
-            json={"organization_id": str(org1.id)},
-            headers=auth_headers(admin),
-        )
-        assert link_resp.status_code == 200
-
-        resp = await client.delete(
-            f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations/{org1.id}",
-            headers=auth_headers(admin),
-        )
-        assert resp.status_code == 200
-
-        result = await db.execute(
-            select(ProcessElementOrganization).where(
-                ProcessElementOrganization.element_id == element.id,
-                ProcessElementOrganization.organization_id == org1.id,
-            )
-        )
-        assert result.scalar_one_or_none() is None
-
-    async def test_link_and_unlink_never_touch_process_level_relation(self, client, db, org_env):
-        """Neither linking nor unlinking a step's org creates/removes
-        relProcessToOrg — that relation is process-level ownership, a
-        separate, deliberately-untouched concept (see
-        element_relation_sync.py docstring)."""
-        admin, process, element, org1 = (
-            org_env["admin"],
-            org_env["process"],
-            org_env["element"],
-            org_env["org1"],
-        )
-        link_resp = await client.post(
-            f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations",
-            json={"organization_id": str(org1.id)},
-            headers=auth_headers(admin),
-        )
-        assert link_resp.status_code == 200
-
-        unlink_resp = await client.delete(
-            f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations/{org1.id}",
-            headers=auth_headers(admin),
-        )
-        assert unlink_resp.status_code == 200
-
-        result = await db.execute(
-            select(Relation).where(
-                Relation.type == "relProcessToOrg",
-                Relation.source_id == process.id,
-                Relation.target_id == org1.id,
-            )
-        )
-        assert result.scalar_one_or_none() is None
-
-    async def test_unlink_nonexistent_link_is_idempotent(self, client, db, org_env):
-        admin, process, element, org1 = (
-            org_env["admin"],
-            org_env["process"],
-            org_env["element"],
-            org_env["org1"],
-        )
-        resp = await client.delete(
-            f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations/{org1.id}",
-            headers=auth_headers(admin),
-        )
-        assert resp.status_code == 200
-
-    async def test_viewer_cannot_unlink(self, client, db, org_env):
-        viewer, process, element, org1 = (
-            org_env["viewer"],
-            org_env["process"],
-            org_env["element"],
-            org_env["org1"],
-        )
-        resp = await client.delete(
-            f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations/{org1.id}",
-            headers=auth_headers(viewer),
+    async def test_viewer_cannot_edit(self, client, org_env):
+        resp = await client.put(
+            f"/api/v1/bpm/processes/{org_env['process'].id}/elements/{org_env['elem'].id}",
+            json={"organization_ids": [str(org_env["org_sales"].id)]},
+            headers=auth_headers(org_env["viewer"]),
         )
         assert resp.status_code == 403
 
-
-class TestListElementsIncludesOrganizations:
-    async def test_get_elements_includes_organizations(self, client, db, org_env):
-        admin, process, element, org1, org2 = (
-            org_env["admin"],
-            org_env["process"],
-            org_env["element"],
-            org_env["org1"],
-            org_env["org2"],
+    async def test_omitting_field_keeps_links(self, client, db, org_env):
+        """A PUT that doesn't mention organization_ids leaves the links alone."""
+        process, elem, sales = org_env["process"], org_env["elem"], org_env["org_sales"]
+        headers = auth_headers(org_env["admin"])
+        await client.put(
+            f"/api/v1/bpm/processes/{process.id}/elements/{elem.id}",
+            json={"organization_ids": [str(sales.id)]},
+            headers=headers,
         )
-        # Link via the API (not the `db` fixture directly) so this exercises
-        # the same read-after-write path a real client would.
-        for org in (org1, org2):
-            link_resp = await client.post(
-                f"/api/v1/bpm/processes/{process.id}/elements/{element.id}/organizations",
-                json={"organization_id": str(org.id)},
-                headers=auth_headers(admin),
+        resp = await client.put(
+            f"/api/v1/bpm/processes/{process.id}/elements/{elem.id}",
+            json={"custom_fields": {"tcode": "SE16"}},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        assert await _junction_org_ids(db, elem.id) == {sales.id}
+
+
+class TestDraftOrganizationPreLinking:
+    async def test_draft_prelink_and_publish(self, client, db, org_env):
+        """Pre-link organizations on a draft, publish, and the junction rows +
+        relations land on the extracted elements."""
+        process = org_env["process"]
+        sales, finance = org_env["org_sales"], org_env["org_finance"]
+        process_id = process.id
+        sales_id, finance_id = sales.id, finance.id
+        headers = auth_headers(org_env["admin"])
+
+        draft = (
+            await client.post(
+                f"/api/v1/bpm/processes/{process_id}/flow/drafts",
+                json={"bpmn_xml": SIMPLE_BPMN},
+                headers=headers,
             )
-            assert link_resp.status_code == 200
+        ).json()
+        draft_id = draft["id"]
 
-        resp = await client.get(
-            f"/api/v1/bpm/processes/{process.id}/elements",
-            headers=auth_headers(admin),
+        resp = await client.put(
+            f"/api/v1/bpm/processes/{process_id}/flow/versions/{draft_id}"
+            "/draft-elements/task_quote",
+            json={"organization_ids": [str(sales_id), str(finance_id)]},
+            headers=headers,
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert len(data) == 1
-        orgs = {o["id"] for o in data[0]["organizations"]}
-        assert orgs == {str(org1.id), str(org2.id)}
 
-    async def test_get_elements_empty_organizations_when_none_linked(self, client, db, org_env):
-        admin, process = org_env["admin"], org_env["process"]
-        resp = await client.get(
-            f"/api/v1/bpm/processes/{process.id}/elements",
-            headers=auth_headers(admin),
+        # The draft merge view resolves the linked org names.
+        draft_elems = (
+            await client.get(
+                f"/api/v1/bpm/processes/{process_id}/flow/versions/{draft_id}/draft-elements",
+                headers=headers,
+            )
+        ).json()
+        quote = next(e for e in draft_elems if e["bpmn_element_id"] == "task_quote")
+        assert {o["name"] for o in quote["organizations"]} == {"Sales", "Finance"}
+
+        # Submit + approve → published; links applied to the elements table.
+        resp = await client.post(
+            f"/api/v1/bpm/processes/{process_id}/flow/versions/{draft_id}/submit",
+            headers=headers,
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data[0]["organizations"] == []
+        resp = await client.post(
+            f"/api/v1/bpm/processes/{process_id}/flow/versions/{draft_id}/approve",
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+        db.expire_all()
+        elems = (
+            await client.get(f"/api/v1/bpm/processes/{process_id}/elements", headers=headers)
+        ).json()
+        quote = next(e for e in elems if e["bpmn_element_id"] == "task_quote")
+        assert {o["name"] for o in quote["organizations"]} == {"Sales", "Finance"}
+
+        # Publishing applies the informative step links but never creates
+        # card-to-card relations for organizations.
+        rels = await db.execute(
+            select(Relation).where(
+                Relation.type == "relProcessToOrg",
+                Relation.source_id == process_id,
+            )
+        )
+        assert rels.scalars().all() == []

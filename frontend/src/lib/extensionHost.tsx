@@ -36,7 +36,34 @@
  * axis ticks, tooltip styling) core reports use, so extension charts match
  * core's look without hand-rolling it. Since SDK 1.11 `useThumbnailCapture`
  * captures a chart container as the PNG preview shown on saved-report cards
- * (html-to-image loads lazily on first capture).
+ * (html-to-image loads lazily on first capture). Since SDK 1.14
+ * `loadHtmlToImage` exposes that same lazy html-to-image loader directly
+ * (not wrapped in a hook) for callers that need to capture an arbitrary DOM
+ * node chosen imperatively at call time. Also since SDK 1.14
+ * `loadDocxTemplater` async-loads `docxtemplater` + `pizzip` from core's
+ * code-split chunk — for POPULATING an extension's own .docx TEMPLATE file
+ * (a bundled asset the extension fetches itself via GET /ext-assets/...)
+ * with data client-side; distinct from core's own `docx` dependency, which
+ * BUILDS a document from scratch (used by the SoAW/ADR exporters) — same
+ * "reuse the host's copy of a heavy library" rule as `loadRecharts`.
+ * `loadDocxTemplater` also resolves `ImageModule` (from `docxtemplater-image`,
+ * the MIT-licensed maintained fork of docxtemplater's free image module —
+ * deliberately NOT `docxtemplater-image-module-free` itself, whose pinned
+ * `xmldom` dependency carries a critical XML-injection advisory; the fork
+ * depends on the maintained `@xmldom/xmldom` instead) so an extension can
+ * fill a `{%%tag}`/`{%tag}` block/inline image placeholder in its template
+ * without adding its own copy of either module. Also
+ * since SDK 1.14, `sdk.ProcessDetailSidePanel` ({processId, open, onClose})
+ * is a self-contained BPM process-detail drawer — Overview/Steps/Flow/Apps/
+ * Data tabs, same visual language as ProcessNavigator's own drawer on /bpm —
+ * for extensions rendering BusinessProcess boxes that want the BPM-flavored
+ * panel instead of the generic CardDetailSidePanel. Lazy-wrapped like
+ * CardDetailSidePanel (see components/ProcessDetailSidePanel.tsx). Also
+ * since SDK 1.14, `sdk.ProcessFlowPreview` ({processId, open, onClose}) is
+ * the FULLSCREEN BPMN flow dialog /bpm opens from its "schema" view-flow
+ * icon — a distinct, narrower component (only fetches the card itself, not
+ * the whole process tree) for a dedicated "view flow" action, as opposed to
+ * ProcessDetailSidePanel's general "open this process" drawer.
  *
  * Since SDK 1.12 the preferred way to add a plug point is the GENERIC SLOT
  * registry, not a new named extension point. An extension declares
@@ -78,14 +105,16 @@ import { useSavedReport as useCoreSavedReport } from "@/hooks/useSavedReport";
 import * as tokens from "@/theme/tokens";
 import type { ArchitectureDecision, Card } from "@/types";
 
-export const UI_SDK_VERSION = "1.13";
+export const UI_SDK_VERSION = "1.14";
 
 /**
  * Core nav groups an extension route may request placement into (instead of the
  * default top-level nav entry). Whitelisted on purpose so an extension can only
  * land in sanctioned menus (never admin/arbitrary ones); extend deliberately.
+ * "strategy_process" is the Strategy & Process dropdown (BPM + extensions like
+ * Value Chain that live alongside it) — see AppLayout.tsx's NAV_ITEM_DEFS.
  */
-export const EXTENSION_NAV_GROUPS = ["reports"] as const;
+export const EXTENSION_NAV_GROUPS = ["reports", "strategy_process"] as const;
 export type ExtensionNavGroup = (typeof EXTENSION_NAV_GROUPS)[number];
 
 export interface ExtensionRouteContribution {
@@ -528,6 +557,15 @@ export function useExtensionFieldVisibilityProviders(): RegisteredFieldVisibilit
  */
 const LazyCardDetailSidePanel = React.lazy(() => import("@/components/CardDetailSidePanel"));
 const LazyReportShell = React.lazy(() => import("@/features/reports/ReportShell"));
+// SDK 1.14 — same lazy-wrapper treatment as CardDetailSidePanel: this panel
+// pulls DrawerSteps/DrawerFlow from features/bpm/ProcessNavigator.tsx (a
+// large, code-split BPM feature file), so a static import here would drag
+// it into the eager main bundle.
+const LazyProcessDetailSidePanel = React.lazy(() => import("@/components/ProcessDetailSidePanel"));
+// SDK 1.14 — same lazy-wrapper treatment; pulls in FlowPreviewDialog (and
+// transitively the code-split BpmnViewer it renders) from
+// features/bpm/ProcessNavigator.tsx.
+const LazyProcessFlowPreview = React.lazy(() => import("@/components/ProcessFlowPreview"));
 
 export function ExtensionCardDetailSidePanel(props: {
   cardId: string | null;
@@ -537,6 +575,30 @@ export function ExtensionCardDetailSidePanel(props: {
   return (
     <React.Suspense fallback={null}>
       <LazyCardDetailSidePanel {...props} />
+    </React.Suspense>
+  );
+}
+
+export function ExtensionProcessDetailSidePanel(props: {
+  processId: string | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <React.Suspense fallback={null}>
+      <LazyProcessDetailSidePanel {...props} />
+    </React.Suspense>
+  );
+}
+
+export function ExtensionProcessFlowPreview(props: {
+  processId: string | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <React.Suspense fallback={null}>
+      <LazyProcessFlowPreview {...props} />
     </React.Suspense>
   );
 }
@@ -791,6 +853,18 @@ export function initExtensionHost(): void {
       ReportShell: ExtensionReportShell,
       FilterSelect,
       CardDetailSidePanel: ExtensionCardDetailSidePanel,
+      // SDK 1.14 — the BPM process-detail drawer (Overview/Steps/Flow/Apps/
+      // Data tabs, same visual language as ProcessNavigator's own drawer on
+      // /bpm), for extensions that render BusinessProcess boxes and want the
+      // BPM-flavored panel instead of the generic CardDetailSidePanel.
+      ProcessDetailSidePanel: ExtensionProcessDetailSidePanel,
+      // SDK 1.14 — the FULLSCREEN BPMN flow preview (same dialog /bpm opens
+      // from its "schema" view-flow icon — AppBar + BpmnViewer + "View Flow"
+      // button into the full editor), distinct from ProcessDetailSidePanel
+      // above (a side drawer with Overview/Steps/Apps/Data tabs). Use this
+      // for a dedicated "view flow" icon/action; use ProcessDetailSidePanel
+      // for a general "open this process" click.
+      ProcessFlowPreview: ExtensionProcessFlowPreview,
       // SDK 1.8 — dashboard-building additions: currency formatting, KPI tile,
       // legend, the shared multi-user picker, and a lazy Recharts loader so
       // extension charts reuse core's code-split chunk instead of bundling
@@ -806,6 +880,46 @@ export function initExtensionHost(): void {
       // core's look in either light or dark mode.
       useChartTheme,
       useThumbnailCapture,
+      // SDK 1.14 — same rationale as loadRecharts, for html-to-image (already
+      // a core dependency via useThumbnailCapture). Exposed as a plain loader
+      // rather than only the `useThumbnailCapture` hook because a caller that
+      // needs to capture ONE OF SEVERAL dynamic DOM nodes chosen at click time
+      // (e.g. per-root sections in a loop) can't satisfy the Rules of Hooks
+      // with a hook keyed to a single ref — `toPng(node, opts)` can be called
+      // imperatively from any event handler instead.
+      loadHtmlToImage: () => import("html-to-image"),
+      // SDK 1.14 — lazy loader for docxtemplater + pizzip, so an extension
+      // can fill a real .docx TEMPLATE (its own, shipped as a bundled
+      // asset and fetched via GET /ext-assets/...) with data, entirely
+      // client-side — same "reuse core's code-split chunk, never bundle
+      // your own copy" rule as loadRecharts. Deliberately NOT the same
+      // thing as core's own `docx` dependency (which BUILDS a document
+      // from scratch, used by the SoAW/ADR exporters) — docxtemplater
+      // POPULATES an existing, admin-designed template file, a different
+      // use case with a different library. Note the template's OWN tag
+      // syntax is single-brace (`{tag}`, `{#loop}...{/loop}`, `{%tag}`/
+      // `{%%tag}` for images) — docxtemplater's default delimiters, NOT
+      // Mustache-style `{{tag}}` (confirmed the hard way: `{{tag}}` parses
+      // as a nested/duplicate open tag and throws a "Multi error" listing
+      // one or two bogus errors per tag). Returns the classes ready to use:
+      // `new PizZip(templateArrayBuffer)`, then — for a template with an
+      // image placeholder — `new Docxtemplater(zip, { paragraphLoop: true,
+      // linebreaks: true, modules: [new ImageModule(imageOpts)] })`. Pass
+      // `modules` in the CONSTRUCTOR, not via a later `.attachModule()`
+      // call — this installed version uses docxtemplater's v4 constructor,
+      // which throws ("should not be called manually") if `.attachModule()`
+      // is called after construction; verified against the actual installed
+      // version, not assumed from docs. Omit `modules` entirely for a
+      // text-only template.
+      loadDocxTemplater: async () => {
+        const [{ default: Docxtemplater }, { default: PizZip }, { default: ImageModule }] =
+          await Promise.all([
+            import("docxtemplater"),
+            import("pizzip"),
+            import("docxtemplater-image"),
+          ]);
+        return { Docxtemplater, PizZip, ImageModule };
+      },
     },
     register: registerExtension,
   };

@@ -66,6 +66,30 @@ describe("extensionHost", () => {
     // SDK 1.9 — theme-aware chart chrome
     expect(typeof sdk.useChartTheme).toBe("function");
     expect(typeof sdk.useThumbnailCapture).toBe("function");
+    // SDK 1.14 — docx template-population loader
+    expect(typeof sdk.loadDocxTemplater).toBe("function");
+    // SDK 1.14 — imperative html-to-image loader
+    expect(typeof sdk.loadHtmlToImage).toBe("function");
+    // SDK 1.14 — BPM process-detail drawer
+    expect(sdk.ProcessDetailSidePanel).toBeDefined();
+    // SDK 1.14 — fullscreen BPMN flow preview
+    expect(sdk.ProcessFlowPreview).toBeDefined();
+  });
+
+  it("loadDocxTemplater resolves all three classes from core's code-split chunk", async () => {
+    initExtensionHost();
+    const sdk = window.TurboEA?.sdk as { loadDocxTemplater: () => Promise<Record<string, unknown>> };
+    const { Docxtemplater, PizZip, ImageModule } = await sdk.loadDocxTemplater();
+    expect(typeof Docxtemplater).toBe("function");
+    expect(typeof PizZip).toBe("function");
+    expect(typeof ImageModule).toBe("function");
+  });
+
+  it("loadHtmlToImage resolves toPng from core's code-split chunk", async () => {
+    initExtensionHost();
+    const sdk = window.TurboEA?.sdk as { loadHtmlToImage: () => Promise<Record<string, unknown>> };
+    const { toPng } = await sdk.loadHtmlToImage();
+    expect(typeof toPng).toBe("function");
   });
 
   it("registers a plugin and lists its routes", () => {
@@ -328,7 +352,7 @@ describe("extensionHost", () => {
   });
 
   it("pins the current UI SDK version", () => {
-    expect(UI_SDK_VERSION).toBe("1.13");
+    expect(UI_SDK_VERSION).toBe("1.14");
   });
 
   it("aggregates generic slots (component + data), sorts by order, drops invalid ones", () => {

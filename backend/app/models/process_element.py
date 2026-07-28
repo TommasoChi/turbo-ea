@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -53,18 +53,15 @@ class ProcessElement(Base, UUIDMixin, TimestampMixin):
     application = relationship("Card", foreign_keys=[application_id], lazy="noload")
     data_object = relationship("Card", foreign_keys=[data_object_id], lazy="noload")
     it_component = relationship("Card", foreign_keys=[it_component_id], lazy="noload")
-    # M:N (unlike the three FKs above) — a single step can involve more than
-    # one organizational actor. See ProcessElementOrganization below.
     organizations = relationship("Card", secondary="process_element_organizations", lazy="noload")
 
 
 class ProcessElementOrganization(Base):
-    """M:N junction between :class:`ProcessElement` and :class:`Card` (Organization).
+    """M:N junction between :class:`ProcessElement` and Organization cards.
 
-    A single BPMN step can involve more than one organizational actor,
-    unlike application_id/data_object_id/it_component_id above (1:1 per
-    element). Same shape as RiskCard: composite PK, cascade-deleted in both
-    directions so orphan links never linger.
+    Unlike the single application/data-object/IT-component FKs, a step can be
+    performed by / involve several Organizations. Composite PK on
+    (element_id, organization_id); cascade-deleted in both directions.
     """
 
     __tablename__ = "process_element_organizations"
@@ -72,15 +69,11 @@ class ProcessElementOrganization(Base):
     element_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("process_elements.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     organization_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("cards.id", ondelete="CASCADE"),
-    )
-
-    __table_args__ = (
-        PrimaryKeyConstraint(
-            "element_id", "organization_id", name="pk_process_element_organizations"
-        ),
-        Index("ix_process_element_organizations_organization_id", "organization_id"),
+        primary_key=True,
+        index=True,
     )

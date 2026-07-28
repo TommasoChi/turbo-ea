@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,7 +15,7 @@ from app.models.card import Card
 from app.models.process_diagram import ProcessDiagram
 from app.models.process_element import ProcessElement, ProcessElementOrganization
 from app.models.user import User
-from app.schemas.bpm import DiagramSave, ElementOrganizationLink, ElementUpdate
+from app.schemas.bpm import DiagramSave, ElementUpdate
 from app.services.bpmn_parser import parse_bpmn_xml
 from app.services.element_relation_sync import sync_element_relations
 from app.services.event_bus import event_bus
@@ -383,14 +383,6 @@ async def list_elements(
         )
         .where(ProcessElement.process_id == pid)
         .order_by(ProcessElement.sequence_order)
-        # populate_existing: force a fresh load of every relationship even
-        # if this ProcessElement is already in the session's identity map
-        # with an unpopulated `organizations` collection (e.g. touched
-        # earlier in the same request/session via a plain, non-eager
-        # select — lazy="noload" stamps an empty collection on first touch,
-        # and eager loaders don't overwrite an already-populated attribute
-        # on a pre-existing identity-mapped instance without this).
-        .execution_options(populate_existing=True)
     )
     elements = result.scalars().all()
     return [
@@ -410,10 +402,7 @@ async def list_elements(
             "data_object_name": e.data_object.name if e.data_object else None,
             "it_component_id": str(e.it_component_id) if e.it_component_id else None,
             "it_component_name": e.it_component.name if e.it_component else None,
-            # M:N — a step can involve more than one organizational actor
-            # (see process_element_organizations), unlike the three scalar
-            # FKs above.
-            "organizations": [{"id": str(org.id), "name": org.name} for org in e.organizations],
+            "organizations": [{"id": str(o.id), "name": o.name} for o in e.organizations],
             "custom_fields": e.custom_fields,
         }
         for e in elements
@@ -447,6 +436,28 @@ async def update_element(
         elem.data_object_id = uuid.UUID(body.data_object_id) if body.data_object_id else None
     if body.it_component_id is not None:
         elem.it_component_id = uuid.UUID(body.it_component_id) if body.it_component_id else None
+    if body.organization_ids is not None:
+        # Full replacement of the step's M:N Organization links. Informative
+        # only — unlike the FK links below, this never creates a card-to-card
+        # relation (process ↔ Organization relations are managed on the card).
+        org_ids = {uuid.UUID(o) for o in body.organization_ids if o}
+        if org_ids:
+            found = await db.execute(
+                select(Card.id).where(
+                    Card.id.in_(org_ids),
+                    Card.type == "Organization",
+                    Card.status == "ACTIVE",
+                )
+            )
+            if {row[0] for row in found.all()} != org_ids:
+                raise HTTPException(404, "Organization card not found")
+        await db.execute(
+            delete(ProcessElementOrganization).where(
+                ProcessElementOrganization.element_id == elem.id
+            )
+        )
+        for oid in org_ids:
+            db.add(ProcessElementOrganization(element_id=elem.id, organization_id=oid))
     if body.custom_fields is not None:
         elem.custom_fields = body.custom_fields
 
@@ -467,85 +478,6 @@ async def update_element(
     await db.commit()
     await db.refresh(elem)
     return {"id": str(elem.id), "status": "updated"}
-
-
-async def _get_element_or_404(db: AsyncSession, pid: uuid.UUID, eid: uuid.UUID) -> ProcessElement:
-    result = await db.execute(
-        select(ProcessElement).where(ProcessElement.id == eid, ProcessElement.process_id == pid)
-    )
-    elem = result.scalar_one_or_none()
-    if not elem:
-        raise HTTPException(404, "Element not found")
-    return elem
-
-
-@router.post("/processes/{process_id}/elements/{element_id}/organizations")
-async def link_element_organization(
-    process_id: str,
-    element_id: str,
-    body: ElementOrganizationLink,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Link one Organization card to a BPMN element (additive — a step can
-    involve more than one organizational actor, unlike application/data
-    object/IT component which are 1:1 per element).
-
-    Deliberately does NOT sync into relProcessToOrg ("is owned by") — that
-    relation carries process-level governance/ownership meaning, distinct
-    from "this org participates in one step" (see element_relation_sync.py).
-    """
-    await PermissionService.require_permission(db, current_user, "bpm.edit")
-    pid = uuid.UUID(process_id)
-    await _get_process_or_404(db, pid)
-    eid = uuid.UUID(element_id)
-    await _get_element_or_404(db, pid, eid)
-    org_id = uuid.UUID(body.organization_id)
-
-    existing = await db.execute(
-        select(ProcessElementOrganization).where(
-            ProcessElementOrganization.element_id == eid,
-            ProcessElementOrganization.organization_id == org_id,
-        )
-    )
-    if existing.scalar_one_or_none() is None:
-        db.add(ProcessElementOrganization(element_id=eid, organization_id=org_id))
-
-    await db.commit()
-    return {"status": "linked"}
-
-
-@router.delete("/processes/{process_id}/elements/{element_id}/organizations/{organization_id}")
-async def unlink_element_organization(
-    process_id: str,
-    element_id: str,
-    organization_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Unlink one Organization card from a BPMN element.
-
-    No relProcessToOrg interaction here at all — the link endpoint never
-    syncs into it either, see element_relation_sync.py.
-    """
-    await PermissionService.require_permission(db, current_user, "bpm.edit")
-    pid = uuid.UUID(process_id)
-    await _get_process_or_404(db, pid)
-    eid = uuid.UUID(element_id)
-    await _get_element_or_404(db, pid, eid)
-    org_id = uuid.UUID(organization_id)
-
-    existing = await db.execute(
-        select(ProcessElementOrganization).where(
-            ProcessElementOrganization.element_id == eid,
-            ProcessElementOrganization.organization_id == org_id,
-        )
-    )
-    link_row = existing.scalar_one_or_none()
-    if link_row is not None:
-        await db.delete(link_row)
-        await db.commit()
-    return {"status": "unlinked"}
 
 
 # ── Template endpoints ───────────────────────────────────────────────────

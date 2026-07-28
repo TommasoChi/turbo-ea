@@ -19,15 +19,9 @@ class ElementUpdate(BaseModel):
     application_id: str | None = None
     data_object_id: str | None = None
     it_component_id: str | None = None
+    # Full replacement set for the step's M:N Organization links.
+    organization_ids: list[str] | None = None
     custom_fields: dict | None = None
-
-
-class ElementOrganizationLink(BaseModel):
-    """Link one Organization card to an extracted BPMN element (M:N — a step
-    can involve more than one organizational actor, see
-    process_element_organizations)."""
-
-    organization_id: str
 
 
 class ProcessAssessmentCreate(BaseModel):

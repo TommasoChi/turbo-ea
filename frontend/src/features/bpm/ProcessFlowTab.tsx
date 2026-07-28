@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import DOMPurify from "dompurify";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -44,7 +44,6 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import CardPicker from "@/components/CardPicker";
 import BpmnViewer from "./BpmnViewer";
 import BpmnTemplateChooser from "./BpmnTemplateChooser";
-import ElementOrganizationsCell from "./ElementOrganizationsCell";
 import { api } from "@/api/client";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import type { ProcessFlowVersion, ProcessFlowPermissions, ProcessElement } from "@/types";
@@ -195,14 +194,6 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
       setSnack(t("flowTab.elementUpdateFailed"));
     }
     setEditingCell(null);
-  };
-
-  // Refetch after an Organization add/remove (ElementOrganizationsCell —
-  // multi-value, so it manages its own add/remove calls and just asks for a
-  // refresh, unlike the single-value PUT in handleElementUpdate above).
-  const refetchElements = async () => {
-    const elemData = await api.get<ProcessElement[]>(`/bpm/processes/${processId}/elements`).catch(() => [] as ProcessElement[]);
-    setElements(elemData);
   };
 
   // ── Actions ──────────────────────────────────────────────────────────
@@ -503,6 +494,67 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
     );
   };
 
+  const renderOrgCell = (
+    element: ProcessElement,
+    onUpdate: (id: string, updates: Record<string, unknown>) => void,
+    elementId: string,
+  ) => {
+    const orgs = element.organizations || [];
+    const isEditing = editingCell?.elementId === elementId && editingCell?.field === "organization";
+
+    if (isEditing) {
+      // Picking a card adds it to the step's organizations (M:N).
+      return (
+        <CardPicker
+          types="Organization"
+          value={null}
+          excludeIds={orgs.map((o) => o.id)}
+          onChange={(val) => {
+            if (val) {
+              onUpdate(elementId, { organization_ids: [...orgs.map((o) => o.id), val.id] });
+            } else {
+              setEditingCell(null);
+            }
+          }}
+          onBlur={() => setEditingCell(null)}
+          enabled={isEditing}
+          autoFocus
+          sx={{ minWidth: 160 }}
+          placeholder={t("flowTab.searchCardType", { type: "Organization" })}
+        />
+      );
+    }
+
+    return (
+      <Box
+        onClick={() => setEditingCell({ elementId, field: "organization" })}
+        sx={{ ...linkCellSx, height: "auto", flexWrap: "wrap", gap: 0.5, py: 0.25 }}
+      >
+        {orgs.length > 0 ? (
+          orgs.map((org) => (
+            <Chip
+              key={org.id}
+              label={org.name}
+              size="small"
+              color="info"
+              onDelete={() =>
+                onUpdate(elementId, {
+                  organization_ids: orgs.filter((o) => o.id !== org.id).map((o) => o.id),
+                })
+              }
+              sx={{ maxWidth: 160 }}
+            />
+          ))
+        ) : (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <MaterialSymbol icon="add_link" size={14} color="#bbb" />
+            <Typography variant="caption" color="text.disabled">{t("flowTab.linkCardType", { type: "Organization" })}</Typography>
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
   const renderTCodeCell = (
     element: ProcessElement,
     onUpdate: (id: string, updates: Record<string, unknown>) => void,
@@ -562,12 +614,6 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
     const namedElements = elems.filter((e) => e.name);
     if (namedElements.length === 0) return null;
 
-    // Organization linking (process_element_organizations, M:N) needs a
-    // real, persisted ProcessElement.id to attach to \u2014 draft pre-linking
-    // rows (idField === "bpmn_element_id") aren't backed by such a row yet,
-    // so the column is only shown for the published/live elements table.
-    const showOrganizations = idField === "id";
-
     return (
       <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle2" fontWeight={600} gutterBottom>
@@ -576,8 +622,15 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
           {subtitle}
         </Typography>
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
+        <Alert
+          severity="info"
+          icon={<MaterialSymbol icon="info" size={18} />}
+          sx={{ mb: 1, py: 0, "& .MuiAlert-message": { py: 0.75 } }}
+        >
+          {t("flowTab.organizationLinkNote")}
+        </Alert>
+        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600 }}>
+          <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>#</TableCell>
@@ -593,7 +646,14 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
                 <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.application")}</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.dataObject")}</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.itComponent")}</TableCell>
-                {showOrganizations && <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.organization")}</TableCell>}
+                <TableCell sx={{ fontWeight: 600 }}>
+                  <Tooltip title={t("flowTab.organizationTooltip")}>
+                    <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+                      {t("flowTab.organization")}
+                      <MaterialSymbol icon="info" size={14} color="#999" />
+                    </Box>
+                  </Tooltip>
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -618,16 +678,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
                     <TableCell>{renderEditableCell(e, "application", "Application", onUpdate, elemKey)}</TableCell>
                     <TableCell>{renderEditableCell(e, "data_object", "DataObject", onUpdate, elemKey)}</TableCell>
                     <TableCell>{renderEditableCell(e, "it_component", "ITComponent", onUpdate, elemKey)}</TableCell>
-                    {showOrganizations && (
-                      <TableCell>
-                        <ElementOrganizationsCell
-                          processId={processId}
-                          elementId={elemKey}
-                          organizations={e.organizations || []}
-                          onChanged={refetchElements}
-                        />
-                      </TableCell>
-                    )}
+                    <TableCell>{renderOrgCell(e, onUpdate, elemKey)}</TableCell>
                   </TableRow>
                 );
               })}

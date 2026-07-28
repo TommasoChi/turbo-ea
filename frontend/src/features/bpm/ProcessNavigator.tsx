@@ -79,7 +79,8 @@ interface DataObjRef {
   name: string;
 }
 
-interface ProcItem {
+// Exported: reused by the standalone ProcessDetailSidePanel.
+export interface ProcItem {
   id: string;
   name: string;
   subtype?: string;
@@ -101,7 +102,8 @@ interface RefItem {
   name: string;
 }
 
-interface ProcNode extends ProcItem {
+// Exported: reused by the standalone ProcessDetailSidePanel.
+export interface ProcNode extends ProcItem {
   children: ProcNode[];
   level: number;
   deepAppCount: number;
@@ -197,7 +199,11 @@ const ELEMENT_TYPE_ICONS: Record<string, { icon: string; color: string }> = {
 /*  Tree builder                                                       */
 /* ================================================================== */
 
-function buildTree(items: ProcItem[]): ProcNode[] {
+// Exported: reused by the standalone ProcessDetailSidePanel to build the
+// SAME deep-aggregated ProcNode tree (recursive apps/data_objects union
+// across descendants) the Process Navigator itself uses, instead of
+// re-deriving a shallower approximation.
+export function buildTree(items: ProcItem[]): ProcNode[] {
   const nodeMap = new Map<string, ProcNode>();
   for (const item of items) {
     nodeMap.set(item.id, {
@@ -272,7 +278,8 @@ function getMaxLevel(nodes: ProcNode[]): number {
   return mx;
 }
 
-function findNode(nodes: ProcNode[], id: string): ProcNode | null {
+// Exported: reused by the standalone ProcessDetailSidePanel.
+export function findNode(nodes: ProcNode[], id: string): ProcNode | null {
   for (const n of nodes) {
     if (n.id === id) return n;
     const found = findNode(n.children, id);
@@ -787,7 +794,10 @@ function HouseCard({
 /*  Drawer Tab: Overview                                               */
 /* ================================================================== */
 
-function DrawerOverview({
+// Exported: reused by the standalone ProcessDetailSidePanel — needs a real
+// ProcNode (from buildTree/findNode), which the panel builds by fetching
+// the same /reports/bpm/process-map the Process Navigator itself loads.
+export function DrawerOverview({
   node,
   overlay,
   onNavigate,
@@ -1047,7 +1057,9 @@ function DrawerOverview({
 /*  Drawer Tab: Steps                                                  */
 /* ================================================================== */
 
-function DrawerSteps({
+// Exported: self-contained (only needs processId + onNavigate, no ProcNode
+// dependency) — reused as-is by the standalone ProcessDetailSidePanel.
+export function DrawerSteps({
   processId,
   onNavigate,
 }: {
@@ -1241,7 +1253,9 @@ function DrawerSteps({
 /*  Drawer Tab: Flow (BPMN thumbnail)                                  */
 /* ================================================================== */
 
-function DrawerFlow({
+// Exported: self-contained (only needs processId + onNavigate, no ProcNode
+// dependency) — reused as-is by the standalone ProcessDetailSidePanel.
+export function DrawerFlow({
   processId,
   onNavigate,
 }: {
@@ -1382,12 +1396,17 @@ function DrawerFlow({
 /*  Fullscreen Flow Preview Dialog                                     */
 /* ================================================================== */
 
-function FlowPreviewDialog({
+// Exported: only ever reads node.id/node.name (verified — no other ProcNode
+// field is referenced in this component), so the prop is typed narrowly
+// rather than requiring a full ProcNode — lets the standalone
+// ProcessFlowPreview reuse it with just a fetched card, no buildTree/
+// findNode over the whole process-map needed.
+export function FlowPreviewDialog({
   node,
   onClose,
   onNavigate,
 }: {
-  node: ProcNode;
+  node: Pick<ProcNode, "id" | "name">;
   onClose: () => void;
   onNavigate: (path: string) => void;
 }) {
@@ -1490,7 +1509,8 @@ function FlowPreviewDialog({
 /*  Drawer Tab: Apps                                                   */
 /* ================================================================== */
 
-function DrawerApps({
+// Exported: reused by the standalone ProcessDetailSidePanel.
+export function DrawerApps({
   node,
   onNavigate,
 }: {
@@ -1560,7 +1580,8 @@ function DrawerApps({
 /*  Drawer Tab: Data Objects                                           */
 /* ================================================================== */
 
-function DrawerData({
+// Exported: reused by the standalone ProcessDetailSidePanel.
+export function DrawerData({
   node,
   onNavigate,
 }: {

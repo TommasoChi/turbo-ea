@@ -105,12 +105,10 @@ ENTITY_SECTIONS: tuple[EntitySection, ...] = (
         ProcessElement,
         card_fk_columns=("process_id", "application_id", "data_object_id", "it_component_id"),
     ),
-    # M:N (a step can involve more than one organizational actor) — element_id
-    # is an intra-module FK to ProcessElement (PK preserved verbatim, resolves
-    # with no remap, same as RiskCard's card_id-only declaration below);
-    # organization_id is a real card FK and needs CardResolver translation.
+    # After ProcessElements so the junction's element_id (an intra-module FK,
+    # preserved verbatim) resolves; organization_id is remapped by card ref.
     EntitySection(
-        "ProcessElementOrganizations",
+        "ProcessElementOrgs",
         ProcessElementOrganization,
         card_fk_columns=("organization_id",),
     ),

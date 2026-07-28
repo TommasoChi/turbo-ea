@@ -83,7 +83,15 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
       { labelKey: "reports.saved", icon: "bookmarks", path: "/reports/saved" },
     ],
   },
-  { labelKey: "bpm", icon: "route", path: "/bpm", permission: "bpm.view" },
+  {
+    labelKey: "strategyProcess",
+    icon: "route",
+    // No group-level permission gate: bpm.view and (extension) permissions
+    // like ext.value-chain.view are independent, so a user could have
+    // either without the other. The group is hidden entirely if permission
+    // filtering leaves it with zero children — see navItems below.
+    children: [{ labelKey: "bpm", icon: "route", path: "/bpm", permission: "bpm.view" }],
+  },
   { labelKey: "ppm", icon: "view_timeline", path: "/ppm", permission: "ppm.view" },
   { labelKey: "diagrams", icon: "schema", path: "/diagrams", permission: "diagrams.view" },
   { labelKey: "grc", icon: "policy", path: "/grc", permission: "grc.view" },
@@ -182,7 +190,15 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   // Resolve nav item labels via i18n and filter based on BPM/PPM/TurboLens/permissions
   const navItems = useMemo(() => {
     let items = NAV_ITEM_DEFS as NavItemDef[];
-    if (!bpmEnabled) items = items.filter((item) => item.labelKey !== "bpm");
+    // "bpm" lives as a child of the "strategyProcess" dropdown, not a
+    // top-level item — filter it out of that group's children instead.
+    if (!bpmEnabled) {
+      items = items.map((item) =>
+        item.labelKey === "strategyProcess"
+          ? { ...item, children: (item.children || []).filter((c) => c.labelKey !== "bpm") }
+          : item,
+      );
+    }
     if (!ppmEnabled) items = items.filter((item) => item.labelKey !== "ppm");
     if (!grcEnabled) items = items.filter((item) => item.labelKey !== "grc");
 
@@ -242,6 +258,22 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       });
     }
 
+    // Same idea for the Strategy & Process dropdown (BPM + extensions like
+    // Value Chain that plug in alongside it).
+    const strategyProcessExtChildren = getExtensionRoutesForGroup("strategy_process").map(({ route }) => ({
+      labelKey: route.label,
+      icon: route.icon,
+      path: route.path,
+      permission: route.permission,
+    }));
+    if (strategyProcessExtChildren.length) {
+      items = items.map((item) =>
+        item.labelKey === "strategyProcess"
+          ? { ...item, children: [...(item.children || []), ...strategyProcessExtChildren] }
+          : item,
+      );
+    }
+
     // Append pages contributed by installed UI extensions as top-level entries.
     // Routes that requested a core nav group (e.g. Reports, handled above) are
     // skipped here; a route with an unrecognised navGroup surfaces nowhere in
@@ -270,7 +302,15 @@ export default function AppLayout({ children, user, onLogout }: Props) {
         .map((c) => ({ ...c, label: t(c.labelKey) })),
     });
 
-    return items.filter((item) => hasPerm(item.permission)).map(resolve);
+    return items
+      .filter((item) => hasPerm(item.permission))
+      .map(resolve)
+      // A dropdown group (e.g. Strategy & Process) whose children all got
+      // permission-filtered out (or whose only core child is BPM and BPM is
+      // disabled) has nothing to show — drop the group itself rather than
+      // rendering an empty menu trigger. Leaf items (children === undefined)
+      // are untouched.
+      .filter((item) => item.children === undefined || item.children.length > 0);
   }, [bpmEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, t]);
 
   // Resolve admin item labels via i18n and filter based on permissions
@@ -286,7 +326,13 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   const showAdmin = adminItems.length > 0;
 
   const [userMenu, setUserMenu] = useState<HTMLElement | null>(null);
-  const [reportsMenu, setReportsMenu] = useState<HTMLElement | null>(null);
+  // Which dropdown group's desktop Menu is open, if any — tracks both the
+  // anchor element and the item itself (not just an id) so the Menu can
+  // render the RIGHT group's children. Now that there's more than one
+  // dropdown group (Reports, Strategy & Process), a single anchor-only
+  // state + "find the first item with children" would always render
+  // whichever group happens to be first, regardless of which was clicked.
+  const [openNavMenu, setOpenNavMenu] = useState<{ anchorEl: HTMLElement; item: NavItem } | null>(null);
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [impersonateDialogOpen, setImpersonateDialogOpen] = useState(false);
   const [stopImpersonatingBusy, setStopImpersonatingBusy] = useState(false);
@@ -308,7 +354,11 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   // from any route without navigating to /inventory first.
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerReportsOpen, setDrawerReportsOpen] = useState(false);
+  // Per-group collapse state, keyed by item.label (same key already used for
+  // React's own `key` prop on these items) — was a single shared boolean,
+  // which would expand/collapse every dropdown group in lockstep now that
+  // there's more than one (Reports, Strategy & Process).
+  const [drawerOpenGroups, setDrawerOpenGroups] = useState<Record<string, boolean>>({});
   const [drawerAdminOpen, setDrawerAdminOpen] = useState(false);
   const [notifPrefsOpen, setNotifPrefsOpen] = useState(false);
   const [sponsorshipOpen, setSponsorshipOpen] = useState(false);
@@ -485,7 +535,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
           item.children ? (
             <Box key={item.label}>
               <ListItemButton
-                onClick={() => setDrawerReportsOpen((p) => !p)}
+                onClick={() => setDrawerOpenGroups((prev) => ({ ...prev, [item.label]: !prev[item.label] }))}
                 sx={{
                   borderRadius: 1,
                   color: isGroupActive(item.children) ? nav.fg : nav.fgMuted,
@@ -497,12 +547,12 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                 </ListItemIcon>
                 <ListItemText primary={item.label} />
                 <MaterialSymbol
-                  icon={drawerReportsOpen ? "expand_less" : "expand_more"}
+                  icon={drawerOpenGroups[item.label] ? "expand_less" : "expand_more"}
                   size={18}
                   color="inherit"
                 />
               </ListItemButton>
-              <Collapse in={drawerReportsOpen}>
+              <Collapse in={!!drawerOpenGroups[item.label]}>
                 <List disablePadding sx={{ pl: 2 }}>
                   {item.children.map((child) => (
                     <ListItemButton
@@ -673,7 +723,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                       <IconButton
                         size="small"
                         sx={{ color: isGroupActive(item.children) ? nav.fg : nav.fgMuted }}
-                        onClick={(e) => setReportsMenu(e.currentTarget)}
+                        onClick={(e) => setOpenNavMenu({ anchorEl: e.currentTarget, item })}
                       >
                         <MaterialSymbol icon={item.icon} size={20} />
                       </IconButton>
@@ -685,7 +735,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                       startIcon={<MaterialSymbol icon={item.icon} size={18} />}
                       endIcon={<MaterialSymbol icon="expand_more" size={16} />}
                       sx={navBtnSx(isGroupActive(item.children))}
-                      onClick={(e) => setReportsMenu(e.currentTarget)}
+                      onClick={(e) => setOpenNavMenu({ anchorEl: e.currentTarget, item })}
                     >
                       {item.label}
                     </Button>
@@ -727,13 +777,16 @@ export default function AppLayout({ children, user, onLogout }: Props) {
             </Box>
           )}
 
-          {/* Reports dropdown menu */}
+          {/* Dropdown menu shared by every nav group (Reports, Strategy &
+              Process, …) — only one can be open at a time, so a single Menu
+              rendering whichever item's children are in openNavMenu is
+              simpler than one Menu per group. */}
           <Menu
-            anchorEl={reportsMenu}
-            open={!!reportsMenu}
-            onClose={() => setReportsMenu(null)}
+            anchorEl={openNavMenu?.anchorEl ?? null}
+            open={!!openNavMenu}
+            onClose={() => setOpenNavMenu(null)}
           >
-            {navItems.find((n) => n.children)?.children?.map((child, idx) => {
+            {openNavMenu?.item.children?.map((child, idx) => {
               const needsDivider =
                 child.path === "/reports/saved" || child.path === "/turbolens";
               return (
@@ -743,7 +796,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                     component={RouterLink}
                     to={child.path}
                     selected={isActive(child.path)}
-                    onClick={() => setReportsMenu(null)}
+                    onClick={() => setOpenNavMenu(null)}
                   >
                     <ListItemIcon>
                       <MaterialSymbol icon={child.icon} size={18} />
