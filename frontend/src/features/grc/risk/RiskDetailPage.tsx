@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import Alert from "@mui/material/Alert";
 import Autocomplete from "@mui/material/Autocomplete";
 import Box from "@mui/material/Box";
@@ -32,8 +32,10 @@ import StepButton from "@mui/material/StepButton";
 import Stepper from "@mui/material/Stepper";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import CardPicker from "@/components/CardPicker";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import StakeholderHoverCard from "@/components/StakeholderHoverCard";
+import { DateField } from "@/components/DateField";
 import { api, ApiError } from "@/api/client";
 import type {
   Risk,
@@ -43,6 +45,7 @@ import type {
   RiskStatus,
 } from "@/types";
 import { ExtensionSlot } from "@/lib/extensionHost";
+import AffectedCardsList from "./AffectedCardsList";
 import RiskMatrix from "./RiskMatrix";
 import MitigationTasksPanel, {
   type TaskSummary,
@@ -80,12 +83,6 @@ const ALLOWED_TRANSITIONS: Record<RiskStatus, Set<RiskStatus>> = {
   accepted: new Set(["in_progress", "closed"]),
   closed: new Set(["in_progress"]),
 };
-
-interface CardOption {
-  id: string;
-  name: string;
-  type: string;
-}
 
 interface UserOption {
   id: string;
@@ -209,8 +206,6 @@ export default function RiskDetailPage() {
   const [acceptOpen, setAcceptOpen] = useState(false);
   const [acceptRationale, setAcceptRationale] = useState("");
 
-  const [cardQuery, setCardQuery] = useState("");
-  const [cardOptions, setCardOptions] = useState<CardOption[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [taskSummary, setTaskSummary] = useState<TaskSummary | null>(null);
@@ -243,26 +238,6 @@ export default function RiskDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  // Minimal card search — hits the cards search endpoint and filters by type.
-  useEffect(() => {
-    if (cardQuery.length < 1) {
-      setCardOptions([]);
-      return;
-    }
-    const run = async () => {
-      try {
-        const res = await api.get<{ items: CardOption[] }>(
-          `/cards?search=${encodeURIComponent(cardQuery)}&page_size=15`,
-        );
-        setCardOptions(res.items ?? []);
-      } catch {
-        setCardOptions([]);
-      }
-    };
-    const id2 = setTimeout(run, 250);
-    return () => clearTimeout(id2);
-  }, [cardQuery]);
 
   const patch = useCallback(
     async (body: Record<string, unknown>) => {
@@ -386,6 +361,9 @@ export default function RiskDetailPage() {
   // premature closure.
   const isClosed = risk.status === "closed";
   const lockInput = saving || isClosed;
+  // Already-linked cards are dropped from the picker so the list only ever
+  // offers something that would actually change the risk.
+  const linkedCardIds = risk.cards.map((c) => c.card_id);
 
   return (
     <Box>
@@ -523,16 +501,14 @@ export default function RiskDetailPage() {
                   ))}
                 </Select>
               </FormControl>
-              <TextField
+              <DateField
                 label={t("risks.field.targetDate")}
-                type="date"
                 size="small"
                 value={risk.target_resolution_date ?? ""}
-                onChange={(e) =>
-                  patch({ target_resolution_date: e.target.value || null })
+                onChange={(v) =>
+                  patch({ target_resolution_date: v || null })
                 }
                 disabled={lockInput}
-                InputLabelProps={{ shrink: true }}
                 sx={{ flex: 1 }}
               />
             </Stack>
@@ -589,41 +565,21 @@ export default function RiskDetailPage() {
                   {t("risks.cards.none")}
                 </Typography>
               ) : (
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  flexWrap="wrap"
-                  useFlexGap
-                  sx={{ mb: 1 }}
-                >
-                  {risk.cards.map((c) => (
-                    <Chip
-                      key={c.card_id}
-                      clickable
-                      onClick={() => navigate(`/cards/${c.card_id}`)}
-                      label={`${c.card_name} · ${c.card_type}`}
-                      onDelete={isClosed ? undefined : () => unlinkCard(c.card_id)}
-                    />
-                  ))}
-                </Stack>
+                <AffectedCardsList
+                  cards={risk.cards}
+                  onUnlink={isClosed ? undefined : unlinkCard}
+                />
               )}
-              <Autocomplete
-                size="small"
-                options={cardOptions}
-                getOptionLabel={(o) => `${o.name} (${o.type})`}
-                filterOptions={(x) => x}
-                inputValue={cardQuery}
-                onInputChange={(_, v) => setCardQuery(v)}
-                disabled={lockInput}
-                onChange={(_, value) => {
-                  if (value && "id" in value) {
-                    linkCard(value.id);
-                    setCardQuery("");
-                  }
+              {/* Shared CardPicker: browses on open, pages in more on scroll,
+                  and hides cards that are already linked. */}
+              <CardPicker
+                value={null}
+                onChange={(value) => {
+                  if (value) linkCard(value.id);
                 }}
-                renderInput={(params) => (
-                  <TextField {...params} placeholder={t("risks.cards.linkPlaceholder")} />
-                )}
+                excludeIds={linkedCardIds}
+                disabled={lockInput}
+                placeholder={t("risks.cards.linkPlaceholder")}
                 sx={{ maxWidth: 420 }}
               />
             </Box>

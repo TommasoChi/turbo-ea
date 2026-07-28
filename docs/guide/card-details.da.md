@@ -85,6 +85,11 @@ Viser alle forbindelser til andre kort, grupperet efter relations­type. For hve
 - **Tilføj relation** — Klik på **+** for at oprette en ny relation; vælgeren viser matchende kort, så snart den åbnes (sorteret efter navn, flere indlæses, når du ruller), og indtastning filtrerer listen
 - **Fjern relation** — Klik på slet-ikonet for at fjerne en relation
 - **Gruppér efter undertype** — Når en relationssektion har mange relaterede kort, grupperes de automatisk i sammenklappelige undertype-grupper (hver med et antal), med en afsluttende **Ingen undertype**-gruppe til uklassificerede kort. Brug gruppe/liste-knappen i sektionsoverskriften for at skifte mellem den grupperede og den flade visning.
+- **Kort forbundet til underelementer** — Når et kort har underelementer, viser hver relationsgruppe en **+N i underelementer**-chip, der tæller de kort, som er forbundet længere nede i hierarkiet — for eksempel de applikationer, der er knyttet til en kapabilitets underkapabiliteter. Et klik åbner en skrivebeskyttet liste, hvor hver række angiver det underelement, der indeholder forbindelsen (et kort, der nås via flere underelementer, vises én gang med dem alle angivet). Tællingen omfatter kun kort, der ikke allerede står i gruppen ovenfor. Åbn det underelement, der ejer forbindelsen, for at ændre den. Listen er inddelt i sammenklappelige undertype-afsnit, så undertypen nævnes én gang pr. afsnit i stedet for på hver række. Inden for et afsnit vises kort, hvis livscyklusfase kræver opmærksomhed, først (slutning på levetid, derefter udfasning), og hvert korts fase vises som en farvet prik ved siden af navnet — hold musen over den for at se fasens navn.
+
+![Relationsgrupper med chippen for underelementer](../assets/img/en/59_card_subitem_chip.png)
+
+![Kort forbundet via underelementer, grupperet efter undertype](../assets/img/en/60_card_subitem_relations.png)
 
 ### Tags-sektion
 
@@ -94,7 +99,6 @@ Anvend tags fra de konfigurerede [tag-grupper](../admin/tags.md). Afhængigt af 
 
 **Resources**-fanen konsoliderer al understøttende materiale for et kort:
 
-- **Architecture Decisions** — ADR'er linket til dette kort, vist som farvede piller, der matcher deres korttype-farver (f.eks. blå for Application, lilla for Data Object). Du kan linke eksisterende ADR'er eller oprette en ny ADR direkte fra Resources-fanen — den nye ADR linkes automatisk til kortet.
 - **Filvedhæftninger** — Upload og administrer filer (PDF, DOCX, XLSX, billeder, op til 10 MB). Når du uploader, skal du vælge en **dokumentkategori** fra: Architecture, Security, Compliance, Operations, Meeting Notes, Design eller Other. Kategorien vises som en chip ved siden af hver fil.
 - **Dokumentlinks** — URL-baserede dokumentreferencer. Når du tilføjer et link, skal du vælge en **linktype** fra: Documentation, Security, Compliance, Architecture, Operations, Support eller Other. Linktypen vises som en chip ved siden af hvert link, og ikonet skifter baseret på den valgte type.
 - **Diagrams** — Link eksisterende [diagrammer](diagrams.md) til dette kort. Linkede diagrammer vises som miniature-forhåndsvisninger, som du kan klikke på for at åbne i diagramredaktøren. Brug knappen **Link Diagram** til at søge efter og vedhæfte et eksisterende diagram, eller klik på afkoblingsikonet for at fjerne tilknytningen.
@@ -150,6 +154,12 @@ Invitations-stien kræver tilladelsen **`users.invite`**, en delegeret form af `
 ![Kortets ændringshistorik](../assets/img/en/08_card_history.png)
 
 Viser det **komplette audit-spor** over ændringer foretaget på kortet: **hvem** der foretog ændringen, **hvornår** den blev foretaget, og **hvad** der blev ændret (tidligere værdi vs. ny værdi). Dette giver fuld sporbarhed over alle ændringer over tid.
+
+## ADRs-fane
+
+Hvert kort har en **ADRs**-fane, der viser de [arkitekturbeslutninger](delivery.md), som er tilknyttet kortet, med reference, titel, status, alle tilknyttede kort og tidspunktet for seneste ændring. Klik på en række for at åbne beslutningen.
+
+Hvis du må administrere ADR-tilknytninger, tilbyder fanen desuden **Tilknyt ADR** til at vedhæfte en eksisterende beslutning og **Opret ADR** til at oprette en ny, der på forhånd er tilknyttet dette kort, samt en frakoblingshandling på hver række. På kort uden tilknyttede beslutninger er fanen skjult, medmindre du har den tilladelse, så brugere med skrivebeskyttet adgang aldrig ser en tom fane.
 
 ## Risks-fane (GRC aktiveret, når til stede)
 

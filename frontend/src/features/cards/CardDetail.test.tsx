@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router";
 import CardDetail from "./CardDetail";
 
 // ---------------------------------------------------------------------------
@@ -46,6 +46,7 @@ vi.mock("@/features/cards/sections", () => ({
   TodosTab: () => <div data-testid="todos-tab" />,
   StakeholdersTab: () => <div data-testid="stakeholders-tab" />,
   ResourcesTab: () => <div data-testid="resources-tab" />,
+  AdrsTab: () => <div data-testid="adrs-tab" />,
   HistoryTab: () => <div data-testid="history-tab" />,
   RisksTab: () => <div data-testid="risks-tab" />,
   ComplianceTab: () => <div data-testid="compliance-tab" />,

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import LifecycleReport from "./LifecycleReport";
 
 // ---------------------------------------------------------------------------
@@ -8,8 +8,8 @@ import LifecycleReport from "./LifecycleReport";
 // ---------------------------------------------------------------------------
 
 const mockNavigate = vi.fn();
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual("react-router-dom");
+vi.mock("react-router", async () => {
+  const actual = await vi.importActual("react-router");
   return { ...actual, useNavigate: () => mockNavigate, useSearchParams: () => [new URLSearchParams(), vi.fn()] };
 });
 
@@ -190,7 +190,10 @@ describe("LifecycleReport", () => {
     renderLifecycle();
 
     await waitFor(() => {
-      expect(api.get).toHaveBeenCalledWith("/reports/roadmap");
+      expect(api.get).toHaveBeenCalledWith(
+        "/reports/roadmap",
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
     });
   });
 
@@ -247,7 +250,10 @@ describe("LifecycleReport", () => {
 
     // Initially fetches without type
     await waitFor(() => {
-      expect(api.get).toHaveBeenCalledWith("/reports/roadmap");
+      expect(api.get).toHaveBeenCalledWith(
+        "/reports/roadmap",
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
     });
   });
 });

@@ -34,7 +34,7 @@ L'onglet **Colonnes** dans le panneau latéral vous permet de choisir les colonn
 - **Plusieurs types sélectionnés** — Seuls les champs **communs à tous les types sélectionnés** sont disponibles
 - **Aucun type sélectionné** — Un message d'indication vous invite à sélectionner d'abord un type de carte
 
-Les colonnes sont regroupées en quatre catégories :
+Les colonnes sont regroupées en cinq catégories :
 
 | Catégorie | Description |
 |-----------|-------------|
@@ -42,6 +42,9 @@ Les colonnes sont regroupées en quatre catégories :
 | **Métadonnées** | Créé, Modifié, Créé par, Modifié par |
 | **Attributs** | Champs personnalisés définis dans le métamodèle (texte, nombre, coût, date, sélection, etc.) |
 | **Relations** | Types de cartes liés (par ex., Applications liées à une Capacité Métier) |
+| **Parties prenantes** | Une colonne par rôle de partie prenante défini pour le type sélectionné (par ex. *Parties prenantes : Responsible*), affichant les utilisateurs assignés sous forme de puces. En mode édition de grille, double-cliquez sur une cellule pour assigner ou retirer des utilisateurs pour ce rôle directement depuis la grille (nécessite la permission de gestion des parties prenantes). |
+
+La colonne **Parent** n'affiche que la carte située directement au-dessus, alors que **Chemin** affiche toute la chaîne. En mode d'édition de la grille, double-cliquez sur une cellule Parent pour déplacer la carte, ou videz le champ pour la remonter au niveau supérieur. La colonne n'est modifiable que si la grille est filtrée sur un seul type de carte prenant en charge la hiérarchie. Si un déplacement est refusé — parce qu'il créerait une boucle, entrerait en conflit avec une carte du même nom sous la cible, ou dépasserait la profondeur maximale —, le motif s'affiche en bas de l'écran et la cellule revient à son état précédent.
 
 La colonne **Chemin** affiche le fil d'Ariane hiérarchique (par ex. « Amérique du Nord / Ventes / Ventes internes ») sans le nom de la fiche elle-même, ce qui vous permet d'afficher Nom et Chemin en même temps.
 
@@ -94,6 +97,33 @@ L'inventaire utilise un tableau de données **AG Grid** avec des fonctionnalité
 3. Optionnellement, cliquez sur **Suggérer avec l'IA** pour générer automatiquement une description (voir [Suggestions de description par IA](#suggestions-de-description-par-ia) ci-dessous)
 4. Cliquez sur **CREER**
 
+## Édition en masse { #mass-edit }
+
+Cochez deux lignes ou plus à l'aide des cases de la colonne de gauche, puis cliquez sur **Édition en masse** dans la barre de sélection. La boîte de dialogue applique une seule modification à chaque carte sélectionnée.
+
+La liste déroulante **Champ** regroupe les éléments modifiables :
+
+- **Général** — statut d'approbation, sous-type, étiquettes et parent
+- **Attributs** — tout champ modifiable défini pour le type de carte sélectionné
+- **Relations** — une entrée par type de relation et par direction (par exemple *s'exécute sur → Composant informatique*)
+
+Les étiquettes, les relations et le parent proposent chacun un bouton **ajouter / retirer**, afin d'étendre ou de réduire les valeurs existantes plutôt que de les remplacer.
+
+### Restructurer la hiérarchie { #mass-edit-parent }
+
+Le champ **Parent** apparaît dès que la grille est filtrée sur un seul type de carte prenant en charge la hiérarchie. Une carte n'a qu'un seul parent : ce champ unique couvre donc les deux sens d'une restructuration.
+
+- **Définir le parent** — choisissez une carte du même type ; toutes les cartes sélectionnées sont placées en dessous. C'est ainsi que l'on rattache plusieurs cartes à un même parent.
+- **Supprimer le parent** — toutes les cartes sélectionnées remontent au niveau supérieur.
+
+Les cartes sont déplacées une par une : un déplacement refusé ne bloque donc que la carte concernée. La boîte de dialogue reste ouverte et indique quelles cartes ont été bloquées et pourquoi. Les motifs habituels sont :
+
+- Une carte du même nom se trouve déjà sous le parent cible.
+- Le parent choisi est un descendant de l'une des cartes déplacées, ce qui créerait une boucle.
+- Le déplacement porterait une capacité métier au-delà du maximum de cinq niveaux.
+
+Une carte emporte ses propres enfants lors du déplacement, et les cartes approuvées repassent à **Rompu** afin que la modification soit réexaminée.
+
 ## Suggestions de description par IA { #ai-description-suggestions }
 
 Turbo EA peut utiliser l'**IA pour générer une description** pour n'importe quelle fiche. Cela fonctionne aussi bien dans la boîte de dialogue de création de fiche que sur les pages de détail des fiches existantes.
@@ -145,7 +175,7 @@ Les exports et imports d'inventaire utilisent un **classeur Excel multi-feuilles
 
 ### Structure du classeur
 
-- **Une feuille par type de fiche** (Application, Business Capability, IT Component, …) avec ses colonnes principales, ses `attr_<champ>`, ses colonnes de cycle de vie, et ses colonnes `rel:<type_de_relation>`.
+- **Une feuille par type de fiche** (Application, Business Capability, IT Component, …) avec ses colonnes principales, ses `attr_<champ>`, ses colonnes de cycle de vie, ses colonnes `rel:<type_de_relation>`, et ses colonnes de parties prenantes `stakeholder:<clé_de_rôle>`.
 - **Une feuille `Relations`** pour les types de relation qui portent des attributs (coût, description, …). Les relations simples restent en ligne sur la feuille de la fiche source.
 - **Une feuille `_Meta`** contenant la version du format du classeur.
 
@@ -160,6 +190,10 @@ Parce que les fiches sont identifiées par nom + chemin, **deux fiches du même 
 ### Cellules de relation en ligne
 
 Chaque colonne `rel:<type_de_relation>` exprime les relations sortantes sous forme de cibles **séparées par des points-virgules** (par exemple `NexaCore ERP; BillingApp`). Point-virgule plutôt que virgule, car les noms de fiches contiennent souvent des virgules (`Acme, Inc.`). À l'intérieur d'un nom, `/` et `\` sont échappés en `\/` et `\\` — l'exporteur s'en charge automatiquement (par ex. `SAP S/4HANA` → `SAP S\/4HANA`). Les cellules sont **déclaratives** : leur contenu remplace l'ensemble des relations sortantes de ce type depuis la source. Retirer une cible supprime la relation correspondante ; vider la cellule les supprime toutes. Pour rétrocompatibilité, les cellules séparées par des virgules (ancien format) restent acceptées.
+
+### Cellules de parties prenantes
+
+Sur chaque feuille de fiches, les colonnes `stakeholder:<clé_de_rôle>` portent les utilisateurs assignés à chaque rôle de partie prenante, sous forme d'**adresses email séparées par des points-virgules** (la même convention que les colonnes `subscriptions:<RoleType>` de LeanIX), par ex. `ada@corp.com; bob@corp.com`. L'**adresse email est la seule référence utilisateur acceptée** — les noms affichés peuvent entrer en collision et ne servent jamais à la résolution ; une entrée `Nom <email>` est tolérée (l'email entre chevrons est utilisé), un nom seul produit un avertissement et est ignoré. Comme les cellules de relations, les cellules de parties prenantes sont **déclaratives par rôle** : les utilisateurs listés deviennent l'ensemble complet des assignations de ce rôle après l'import. Retirer un utilisateur le désassigne ; vider la cellule vide le rôle ; omettre la colonne laisse les assignations intactes. Les entrées sans utilisateur correspondant produisent un avertissement et sont ignorées — elles ne bloquent jamais l'import.
 
 ### Feuille `Relations`
 
@@ -178,4 +212,4 @@ Quelques précisions sur l'import :
 
 Cliquez sur **Exporter**. Le filtre courant détermine le contenu : avec un filtre mono-type, une seule feuille de cartes ; sans filtre, une feuille par type présent. Dans tous les cas, le classeur inclut `Relations` et `_Meta` et peut être réimporté sans perdre les attributs spécifiques au type.
 
-Vous pouvez aussi choisir **Exporter la vue actuelle** dans le menu Exporter — un instantané plat sur une seule feuille qui reflète ce qui est affiché (uniquement les colonnes visibles, dans leur ordre actuel, pour les lignes filtrées). Il est destiné au partage et **ne convient pas à la réimportation**.
+Vous pouvez aussi choisir **Exporter la vue actuelle** dans le menu Exporter — un instantané plat sur une seule feuille qui reflète ce qui est affiché (uniquement les colonnes visibles, dans leur ordre actuel, pour les lignes filtrées). Il est destiné au partage et **ne convient pas à la réimportation**. Si les colonnes de relations sont encore en cours de chargement, l'export les attend : elles ne peuvent donc jamais être vides.

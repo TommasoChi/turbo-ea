@@ -34,7 +34,7 @@ Et **aktivt-filter-tæller**-badge viser, hvor mange filtre der aktuelt er anven
 - **Flere typer valgt** — Kun felter, der er **fælles på tværs af alle valgte typer**, er tilgængelige
 - **Ingen type valgt** — En antydningsbesked beder dig vælge en korttype først
 
-Kolonner er grupperet i fire kategorier:
+Kolonner er grupperet i fem kategorier:
 
 | Kategori | Beskrivelse |
 |----------|-------------|
@@ -42,6 +42,9 @@ Kolonner er grupperet i fire kategorier:
 | **Metadata** | Created, Modified, Created by, Modified by |
 | **Attributes** | Brugerdefinerede felter defineret i metamodellen (text, number, cost, date, select, osv.) |
 | **Relationer** | Relaterede korttyper (f.eks. applikationer linket til en Business Capability) |
+| **Interessenter** | Én kolonne pr. interessentrolle defineret for den valgte korttype (f.eks. *Interessenter: Responsible*), der viser de tildelte brugere som chips. I gitter-redigeringstilstand kan du dobbeltklikke på en celle for at tildele eller fjerne brugere for rollen direkte fra gitteret (kræver tilladelsen til at administrere interessenter). |
+
+Kolonnen **Overordnet** viser kun kortet lige ovenover, mens **Path** viser hele kæden. I gitterredigeringstilstand kan du dobbeltklikke på en Overordnet-celle for at flytte kortet eller rydde feltet for at flytte det til øverste niveau. Kolonnen kan kun redigeres, når gitteret er filtreret til én korttype, der understøtter hierarki. Hvis en flytning afvises — fordi den ville skabe en løkke, kollidere med et kort med samme navn under målet eller overskride den maksimale dybde — vises årsagen nederst på skærmen, og cellen føres tilbage.
 
 Kolonnen **Path** viser kortets hierarki-brødkrumme (f.eks. `North America / Sales / Inside Sales`) uden at inkludere kortets eget navn, så du kan beholde både Name og Path på skærmen samtidig.
 
@@ -96,6 +99,33 @@ Lageret bruger en **AG Grid**-datatabel med kraftfulde funktioner:
 3. Klik eventuelt på **Suggest with AI** for at generere en beskrivelse automatisk (se [AI-beskrivelsesforslag](#ai-description-suggestions) nedenfor)
 4. Klik på **CREATE**
 
+## Masseredigering { #mass-edit }
+
+Markér to eller flere rækker med afkrydsningsfelterne i venstre kolonne, og klik derefter på **Masseredigering** i markeringsværktøjslinjen. Dialogen anvender én ændring på hvert markeret kort.
+
+Rullelisten **Felt** grupperer det, du kan ændre:
+
+- **Generelt** — godkendelsesstatus, undertype, tags og overordnet
+- **Attributter** — ethvert redigerbart felt, der er defineret for den valgte korttype
+- **Relationer** — én post pr. relationstype og retning (for eksempel *kører på → It-komponent*)
+
+Tags, relationer og overordnet har hver en **tilføj / fjern**-knap, så du udvider eller beskærer eksisterende værdier i stedet for at erstatte dem.
+
+### Omstrukturering af hierarkiet { #mass-edit-parent }
+
+Feltet **Overordnet** vises, når du har filtreret tabellen til én korttype, der understøtter hierarki. Et kort har præcis ét overordnet kort, så dette ene felt dækker begge retninger af en omstrukturering:
+
+- **Angiv overordnet** — vælg et kort af samme type; alle markerede kort flyttes ind under det. Sådan gør du mange kort til underordnede af ét overordnet kort.
+- **Fjern overordnet** — alle markerede kort flyttes tilbage til øverste niveau.
+
+Kortene flyttes ét ad gangen, så en flytning, der ikke er tilladt, blokerer kun det pågældende kort. Dialogen forbliver åben og viser, hvilke kort der blev blokeret og hvorfor. De almindelige årsager er:
+
+- Der findes allerede et kort med samme navn under det valgte overordnede kort.
+- Det valgte overordnede kort er en efterkommer af et af de kort, der flyttes, hvilket ville skabe en løkke.
+- Flytningen ville føre en forretningsevne ud over grænsen på fem niveauer.
+
+Et kort tager sine egne underordnede kort med sig, når det flyttes, og godkendte kort falder tilbage til **Brudt**, så ændringen bliver gennemgået igen.
+
 ## AI-beskrivelsesforslag { #ai-description-suggestions }
 
 Turbo EA kan bruge **AI til at generere en beskrivelse** for ethvert kort. Dette virker på både Opret kort-dialogen og eksisterende kortdetaljesider.
@@ -149,7 +179,7 @@ Lager-eksporter og -importer bruger en **Excel-projektmappe med flere ark**, der
 
 En enkelt eksport producerer:
 
-- **Ét ark pr. korttype** til stede i eksporten (Application, Business Capability, IT Component, …). Hvert ark bærer typens kerne-kolonner, dets brugerdefinerede `attr_<field_key>`-kolonner, dets livscyklus-kolonner og dets `rel:<relation_type_key>`-relations-kolonner.
+- **Ét ark pr. korttype** til stede i eksporten (Application, Business Capability, IT Component, …). Hvert ark bærer typens kerne-kolonner, dets brugerdefinerede `attr_<field_key>`-kolonner, dets livscyklus-kolonner dets `rel:<relation_type_key>`-relations-kolonner og dets `stakeholder:<role_key>`-interessent-kolonner.
 - **Et `Relations`-ark** for relations­typer, der bærer egenskaber (f.eks. omkostning, beskrivelse). Simple relationer lever inline på kort-arket; egenskabs-bærende relationer lever her.
 - **Et `_Meta`-ark**, der bærer projektmappens format-version. Importøren læser det for at detektere ældre formater og udskrive et banner.
 
@@ -177,6 +207,10 @@ Semikoloner (ikke kommaer) separerer mål, fordi kortnavne almindeligvis indehol
 Celler er **deklarative**: sættet af mål i cellen bliver det komplette sæt af udgående relationer af den type fra den kilde efter import. **At fjerne et mål fra listen dropper den relation**; at tømme cellen dropper dem alle. At udelade kolonnen helt (ingen `rel:supports`-kolonne overhovedet) efterlader eksisterende relationer urørt.
 
 For bagudkompatibilitet accepterer importøren også komma-separerede celler (projektmapper eksporteret før denne konvention). En celle, der indeholder et `;`, behandles altid som semikolon-separeret.
+
+### Interessent-celler
+
+På hvert kort-ark bærer `stakeholder:<role_key>`-kolonner de brugere, der er tildelt hver interessentrolle, som **semikolon-separerede e-mailadresser** (samme konvention som LeanIX' `subscriptions:<RoleType>`-kolonner), f.eks. `ada@corp.com; bob@corp.com`. **E-mailadressen er den eneste accepterede brugerreference** — visningsnavne kan kollidere og bruges aldrig til opslag; en post på formen `Navn <email>` tolereres (e-mailen i vinkelparenteser bruges), et navn alene giver en advarsel og springes over. Ligesom relations-celler er interessent-celler **deklarative pr. rolle**: De anførte brugere bliver det komplette sæt af tildelinger for rollen efter importen. Fjernes en bruger fra listen, fjernes tildelingen; en tom celle rydder rollen; udelades kolonnen helt, forbliver tildelingerne urørte. Poster uden matchende bruger giver en advarsel og springes over — de blokerer aldrig importen.
 
 ### Relations-ark
 
@@ -206,7 +240,7 @@ Klik på **Export** i værktøjslinjen. Det aktuelle gitter-filter bestemmer ind
 - **Single-type-filter aktivt** → ét kort-ark for den type, plus Relations-arket for eventuelle egenskabs-bærende relationer, plus `_Meta`.
 - **Intet filter eller multi-type-filter** → ét ark pr. type til stede, plus Relations-arket, plus `_Meta`. Projektmappen er fuldt redigerbar og kan re-importeres uden at miste pr.-type-egenskaber.
 
-Du kan også vælge **Eksportér aktuel visning** i Export-menuen — et fladt enkelt-ark-øjebliksbillede, der afspejler det viste (kun de synlige kolonner, i deres aktuelle rækkefølge, for de filtrerede rækker). Det er beregnet til deling og er **ikke egnet til genimport**.
+Du kan også vælge **Eksportér aktuel visning** i Export-menuen — et fladt enkelt-ark-øjebliksbillede, der afspejler det viste (kun de synlige kolonner, i deres aktuelle rækkefølge, for de filtrerede rækker). Det er beregnet til deling og er **ikke egnet til genimport**. Hvis relationskolonnerne stadig indlæses, venter eksporten på dem, så de aldrig kan ende med at være tomme.
 
 ### Round-trip-tips
 

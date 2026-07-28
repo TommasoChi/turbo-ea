@@ -85,6 +85,11 @@ Shows all connections to other cards, grouped by relation type. For each relatio
 - **Add relation** — Click **+** to create a new relation; the picker lists matching cards as soon as it opens (sorted by name, more load as you scroll), and typing filters the list
 - **Remove relation** — Click the delete icon to remove a relation
 - **Group by subtype** — When a relation section has many related cards, they are automatically grouped into collapsible subtype buckets (each with a count), with a trailing **No subtype** bucket for unclassified cards. Use the group/list toggle in the section header to switch between the grouped and flat views.
+- **Cards linked to sub-items** — When a card has sub-items, each relation group shows a **+N in sub-items** chip counting the cards linked further down the hierarchy — for example, the applications attached to a capability's sub-capabilities. Click it to open a read-only list where each row names the sub-item holding the link (a card reached through several sub-items appears once, with each one listed). The count only includes cards that are not already listed in the group above it. To change a link, open the sub-item that owns it. The list is grouped into collapsible subtype sections, so the subtype is named once per section instead of on every row. Within a section, cards whose lifecycle phase needs attention come first (end of life, then phasing out), and each card's phase is shown as a coloured dot next to its name — hover it for the phase name.
+
+![Relation groups showing the sub-items roll-up chip](../assets/img/en/59_card_subitem_chip.png)
+
+![Cards linked through sub-items, grouped by subtype](../assets/img/en/60_card_subitem_relations.png)
 
 ### Tags Section
 
@@ -94,7 +99,6 @@ Apply tags from the configured [tag groups](../admin/tags.md). Depending on the 
 
 The **Resources** tab consolidates all supporting materials for a card:
 
-- **Architecture Decisions** — ADRs linked to this card, displayed as colored pills matching their card type colors (e.g., blue for Application, purple for Data Object). You can link existing ADRs or create a new ADR directly from the Resources tab — the new ADR is automatically linked to the card.
 - **File Attachments** — Upload and manage files (PDF, DOCX, XLSX, images, up to 10 MB). When uploading, select a **document category** from: Architecture, Security, Compliance, Operations, Meeting Notes, Design, or Other. The category appears as a chip next to each file.
 - **Document Links** — URL-based document references. When adding a link, select a **link type** from: Documentation, Security, Compliance, Architecture, Operations, Support, or Other. The link type appears as a chip next to each link, and the icon changes based on the selected type.
 - **Diagrams** — Link existing [diagrams](diagrams.md) to this card. Linked diagrams appear as thumbnail previews that you can click to open in the diagram editor. Use the **Link Diagram** button to search for and attach an existing diagram, or click the unlink icon to remove the association.
@@ -150,6 +154,12 @@ The invite path requires the **`users.invite`** permission, a delegated form of 
 ![Card Change History](../assets/img/en/08_card_history.png)
 
 Shows the **complete audit trail** of changes made to the card: **who** made the change, **when** it was made, and **what** was modified (previous value vs. new value). This enables full traceability of all modifications over time.
+
+## ADRs Tab
+
+Every card carries an **ADRs** tab listing the [Architecture Decision Records](delivery.md) linked to it, showing each decision's reference, title, status, all of its linked cards, and when it was last modified. Click a row to open the decision.
+
+If you are allowed to manage ADR links, the tab also offers **Link ADR** to attach an existing decision and **Create ADR** to start a new one that is pre-linked to this card, plus an unlink action on every row. On cards with no linked decisions the tab is hidden unless you hold that permission, so read-only users never see an empty tab.
 
 ## Risks Tab (GRC enabled, when present)
 

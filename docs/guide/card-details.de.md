@@ -85,6 +85,11 @@ Zeigt alle Verbindungen zu anderen Karten, gruppiert nach Beziehungstyp. Für je
 - **Beziehung hinzufügen** — Klicken Sie auf **+**, um eine neue Beziehung zu erstellen; die Auswahlliste zeigt passende Karten bereits beim Öffnen an (nach Name sortiert, weitere werden beim Scrollen geladen), und durch Tippen wird die Liste gefiltert
 - **Beziehung entfernen** — Klicken Sie auf das Löschsymbol, um eine Beziehung zu entfernen
 - **Nach Untertyp gruppieren** — Enthält ein Beziehungsabschnitt viele verwandte Karten, werden sie automatisch in aufklappbare Untertyp-Gruppen (jeweils mit Anzahl) gruppiert, mit einer abschließenden Gruppe **Kein Untertyp** für nicht klassifizierte Karten. Über den Umschalter in der Abschnittsüberschrift wechseln Sie zwischen gruppierter und flacher Ansicht.
+- **Mit Unterelementen verknüpfte Karten** — Hat eine Karte Unterelemente, zeigt jede Beziehungsgruppe einen Chip **+N in Unterelementen** mit der Anzahl der weiter unten in der Hierarchie verknüpften Karten — etwa die Anwendungen an den Unterfähigkeiten einer Fähigkeit. Ein Klick öffnet eine schreibgeschützte Liste, in der jede Zeile das Unterelement nennt, das die Verknüpfung hält (eine über mehrere Unterelemente erreichte Karte erscheint einmal, mit allen Herkünften). Gezählt werden nur Karten, die nicht bereits in der Gruppe darüber stehen. Zum Ändern einer Verknüpfung öffnen Sie das zugehörige Unterelement. Die Liste ist in aufklappbare Untertyp-Abschnitte gegliedert, sodass der Untertyp einmal pro Abschnitt statt in jeder Zeile genannt wird. Innerhalb eines Abschnitts stehen Karten, deren Lebenszyklusphase Aufmerksamkeit erfordert, zuerst (Ende der Lebensdauer, dann Auslaufphase); die Phase jeder Karte erscheint als farbiger Punkt neben ihrem Namen — der Name der Phase wird beim Überfahren mit der Maus angezeigt.
+
+![Beziehungsgruppen mit dem Chip für Unterelemente](../assets/img/de/59_karte_unterelemente_chip.png)
+
+![Über Unterelemente verknüpfte Karten, nach Untertyp gruppiert](../assets/img/de/60_karte_unterelemente_beziehungen.png)
 
 ### Tags-Abschnitt
 
@@ -94,7 +99,6 @@ Wenden Sie Tags aus den konfigurierten [Tag-Gruppen](../admin/tags.md) an. Je na
 
 Die **Ressourcen**-Registerkarte bündelt alle unterstützenden Materialien einer Karte:
 
-- **Architekturentscheidungen** — mit dieser Karte verknüpfte ADRs, dargestellt als farbige Pillen, die den Kartentypfarben entsprechen (z.B. Blau für Anwendung, Lila für Datenobjekt). Sie können bestehende ADRs verknüpfen oder ein neues ADR direkt über die Ressourcen-Registerkarte erstellen — das neue ADR wird automatisch mit der Karte verknüpft.
 - **Dateianhänge** — Dateien hochladen und verwalten (PDF, DOCX, XLSX, Bilder, bis zu 10 MB). Beim Hochladen wählen Sie eine **Dokumentenkategorie** aus: Architektur, Sicherheit, Compliance, Betrieb, Besprechungsnotizen, Design oder Sonstiges. Die Kategorie wird als Chip neben jeder Datei angezeigt.
 - **Dokumentenlinks** — URL-basierte Dokumentenverweise. Beim Hinzufügen eines Links wählen Sie einen **Linktyp** aus: Dokumentation, Sicherheit, Compliance, Architektur, Betrieb, Support oder Sonstiges. Der Linktyp wird als Chip neben jedem Link angezeigt, und das Symbol ändert sich je nach ausgewähltem Typ.
 - **Diagramme** — Verknüpfen Sie bestehende [Diagramme](diagrams.de.md) mit dieser Karte. Verknüpfte Diagramme werden als Miniaturvorschauen angezeigt, die Sie anklicken können, um sie im Diagramm-Editor zu öffnen. Verwenden Sie die Schaltfläche **Diagramm verknüpfen**, um ein vorhandenes Diagramm zu suchen und anzuhängen, oder klicken Sie auf das Entknüpfungssymbol, um die Zuordnung zu entfernen.
@@ -150,6 +154,12 @@ Der Einladungspfad erfordert die **`users.invite`**-Berechtigung, eine delegiert
 ![Kartenänderungsverlauf](../assets/img/de/08_karten_historie.png)
 
 Zeigt die **vollständige Historie** der an der Karte vorgenommenen Änderungen: **Wer** hat die Änderung vorgenommen, **wann** wurde sie durchgeführt und **was** wurde geändert (vorheriger Wert vs. neuer Wert). Dies ermöglicht die vollständige Nachverfolgbarkeit aller Änderungen über die Zeit.
+
+## ADRs-Tab
+
+Jede Karte besitzt einen **ADRs**-Tab, der die mit ihr verknüpften [Architekturentscheidungen](delivery.md) auflistet — mit Referenz, Titel, Status, allen verknüpften Karten und dem Zeitpunkt der letzten Änderung. Klicken Sie auf eine Zeile, um die Entscheidung zu öffnen.
+
+Wenn Sie ADR-Verknüpfungen verwalten dürfen, bietet der Tab zusätzlich **ADR verknüpfen**, um eine bestehende Entscheidung anzuhängen, und **ADR erstellen**, um eine neue anzulegen, die bereits mit dieser Karte verknüpft ist — sowie eine Aktion zum Aufheben der Verknüpfung in jeder Zeile. Auf Karten ohne verknüpfte Entscheidungen ist der Tab ausgeblendet, sofern Sie diese Berechtigung nicht besitzen; Benutzer mit reinem Lesezugriff sehen also nie einen leeren Tab.
 
 ## Risiken-Tab (GRC aktiviert, falls vorhanden)
 

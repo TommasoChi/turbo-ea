@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { api } from "@/api/client";
 import i18n from "@/i18n";
 import { typeLabel } from "@/hooks/useResolveLabel";
-import type { Card, CardType, Relation, RelationType } from "@/types";
+import type { Card, CardType, Relation, RelationType, StakeholderRoleOption } from "@/types";
 
 /**
  * Excel export — LeanIX-style multi-sheet workbook.
@@ -19,6 +19,13 @@ import type { Card, CardType, Relation, RelationType } from "@/types";
  *   - `rel:<relation_type_key>` columns for relation types whose source is
  *     this card type and whose `attributes_schema` is empty (the simple
  *     case that fits in a comma-separated cell)
+ *   - `stakeholder:<role_key>` columns — one per stakeholder role of the
+ *     sheet's type, cells of semicolon-separated email addresses
+ *     (`ada@corp.com; bob@corp.com`), mirroring LeanIX's
+ *     `subscriptions:<RoleType>` convention. Emails are the only user
+ *     reference (display names collide); `serializeStakeholderCell` /
+ *     `parseStakeholderEntry` in excelImport.ts are the two halves of the
+ *     round-trip.
  *
  * The `Relations` sheet captures relation rows for relation types that
  * carry attributes (cost, description, etc.) — these need a column per
@@ -33,6 +40,9 @@ import type { Card, CardType, Relation, RelationType } from "@/types";
 const FORMAT_VERSION = "2";
 const LIFECYCLE_PHASES = ["plan", "phaseIn", "active", "phaseOut", "endOfLife"] as const;
 const MAX_PATH_DEPTH = 8;
+// Card ids per `GET /relations?card_ids=` / `GET /cards?ids=` request. Keeps
+// URLs reasonable and stays under the endpoint's 500-id cap.
+const RELATION_ID_CHUNK = 200;
 const META_SHEET_NAME = "_Meta";
 const RELATIONS_SHEET_NAME = "Relations";
 
@@ -76,6 +86,24 @@ function buildCardRef(
   const parentPath = buildParentPath(card, byId);
   if (!parentPath) return safeName;
   return `${parentPath} / ${safeName}`;
+}
+
+/**
+ * Serialize one role's stakeholders to a cell: plain email addresses joined
+ * with `; ` — the same convention as LeanIX's `subscriptions:<RoleType>`
+ * export columns. Emails are the only stable, unambiguous user reference
+ * (display names collide); a stakeholder without an email (shouldn't happen
+ * — users always have one) degrades to the display name so the data is at
+ * least visible in the sheet.
+ */
+export function serializeStakeholderCell(
+  card: Card,
+  roleKey: string,
+): string {
+  return (card.stakeholders || [])
+    .filter((s) => s.role === roleKey)
+    .map((s) => s.user_email?.trim() || s.user_display_name?.trim() || s.user_id)
+    .join("; ");
 }
 
 function exportTimestamp(now: Date = new Date()): string {
@@ -128,16 +156,36 @@ function sheetNameForType(type: CardType, taken: Set<string>): string {
 }
 
 /**
- * Fetch every active relation in one round-trip and filter client-side to
- * outgoing edges from the export's source set. Replaces an earlier per-card
- * loop that was both O(N) HTTP calls and silently swallowed any single
- * failure into an empty list — making the workbook ship with empty `rel:`
- * columns when the network blipped on any one request.
+ * Fetch the relations touching the export's source set and filter to the
+ * outgoing edges.
+ *
+ * Scoped server-side via `GET /relations?card_ids=`, chunked like
+ * `enrichMissingTargets` below — this used to pull *every* relation in the
+ * instance and filter client-side, which grew linearly with the landscape no
+ * matter how small the export. (An earlier version before that did one request
+ * per card, which was O(N) HTTP calls and silently swallowed any single
+ * failure into an empty list.)
+ *
+ * `card_ids` matches source **or** target, so a relation whose two endpoints
+ * land in different chunks comes back twice — dedup by relation id before
+ * filtering.
+ *
+ * A failing chunk is deliberately NOT swallowed: half the relations is worse
+ * than none, because the workbook would look complete while quietly missing
+ * edges. Letting it throw aborts the download, exactly as the single-request
+ * version did. (Contrast `enrichMissingTargets`, which does skip failed
+ * chunks — it degrades a ref to a bare name, it never drops a row.)
  */
 async function fetchOutgoingRelations(sourceIds: Set<string>): Promise<Relation[]> {
   if (sourceIds.size === 0) return [];
-  const rels = await api.get<Relation[]>("/relations");
-  return rels.filter((r) => sourceIds.has(r.source_id));
+  const ids = [...sourceIds];
+  const byId = new Map<string, Relation>();
+  for (let i = 0; i < ids.length; i += RELATION_ID_CHUNK) {
+    const chunk = ids.slice(i, i + RELATION_ID_CHUNK);
+    const rels = await api.get<Relation[]>(`/relations?card_ids=${chunk.join(",")}`);
+    for (const rel of rels) byId.set(rel.id, rel);
+  }
+  return [...byId.values()].filter((r) => sourceIds.has(r.source_id));
 }
 
 /**
@@ -224,6 +272,7 @@ function buildCardRowForType(
   attrFieldKeys: string[],
   attrIsCost: Map<string, boolean>,
   canViewCosts: boolean,
+  stakeholderRoleKeys: string[] = [],
 ): Record<string, unknown> {
   const row: Record<string, unknown> = {
     id: card.id,
@@ -261,6 +310,10 @@ function buildCardRowForType(
     row[`rel:${rt.key}`] = targets
       .map((t) => buildTargetRef(t, byId, nameAmbiguity))
       .join("; ");
+  }
+
+  for (const roleKey of stakeholderRoleKeys) {
+    row[`stakeholder:${roleKey}`] = serializeStakeholderCell(card, roleKey);
   }
 
   // Type is the same across the sheet; keep the column for clarity but
@@ -402,6 +455,20 @@ export async function buildExportWorkbook(
     // types and attribute-bearing types are excluded.
     const inlineForType = inlineRelTypes.filter((rt) => rt.source_type_key === type.key);
 
+    // Stakeholder roles for this type — one `stakeholder:<role>` column each.
+    // Fetched from /stakeholder-roles (the authoritative source; the JSONB
+    // copy on CardType can lag behind the role-definition table). A fetch
+    // failure degrades to a workbook without stakeholder columns.
+    let stakeholderRoleKeys: string[] = [];
+    try {
+      const roles = await api.get<StakeholderRoleOption[]>(
+        `/stakeholder-roles?type_key=${encodeURIComponent(type.key)}`,
+      );
+      stakeholderRoleKeys = roles.map((r) => r.key);
+    } catch {
+      stakeholderRoleKeys = [];
+    }
+
     const rows: Record<string, unknown>[] = [];
     for (const card of cardsOfType) {
       const outgoing =
@@ -417,6 +484,7 @@ export async function buildExportWorkbook(
           attrFieldKeys.filter((k) => !attrIsCost.get(k) || canViewCosts),
           attrIsCost,
           canViewCosts,
+          stakeholderRoleKeys,
         ),
       );
     }
@@ -448,6 +516,7 @@ export async function buildExportWorkbook(
             attrFieldKeys,
             attrIsCost,
             canViewCosts,
+            stakeholderRoleKeys,
           ),
         ];
     const ws = XLSX.utils.json_to_sheet(headerSeed);

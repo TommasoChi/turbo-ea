@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router-dom";
+import { DateField } from "@/components/DateField";
+import { useNavigate, useParams } from "react-router";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -28,6 +29,8 @@ import Tooltip from "@mui/material/Tooltip";
 import Divider from "@mui/material/Divider";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
+import { useAbortableEffect } from "@/hooks/useLatestRequest";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ExtensionBoundary, useExtensionFieldTypes } from "@/lib/extensionHost";
 import { FieldHelp } from "@/features/cards/sections/cardDetailUtils";
 import type { SurveyRespondForm, SurveyField } from "@/types";
@@ -106,25 +109,33 @@ function RelationFieldEditor({
   // Load candidates as soon as the dropdown opens (empty query returns the
   // first cards of the related type) and refine as the user types — users
   // can't be expected to know linkable card names by heart.
-  useEffect(() => {
-    if (!relatedTypeKey || !open) {
-      return;
-    }
-    setLoading(true);
-    const timer = setTimeout(async () => {
+  // `setLoading(true)` used to run outside the timer while `setLoading(false)`
+  // ran inside it, so a cancelled timer left the spinner on forever. The
+  // debounce window is now part of the loading state, and a superseded
+  // response can no longer replace newer options (#882).
+  const [debouncedSearch, searchPending] = useDebouncedValue(search, 250);
+  useAbortableEffect(
+    async ({ signal, isCurrent }) => {
+      if (!relatedTypeKey || !open) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
       try {
         const res = await api.get<{ items: RelationRef[] }>(
-          `/cards?type=${encodeURIComponent(relatedTypeKey)}&search=${encodeURIComponent(search)}&page_size=20`,
+          `/cards?type=${encodeURIComponent(relatedTypeKey)}&search=${encodeURIComponent(debouncedSearch)}&page_size=20`,
+          { signal },
         );
+        if (!isCurrent()) return;
         setOptions(res.items.map((c) => ({ id: c.id, name: c.name })));
       } catch {
         // ignore — empty option list
       } finally {
-        setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [search, relatedTypeKey, open]);
+    },
+    [debouncedSearch, relatedTypeKey, open],
+  );
 
   const merged = useMemo(() => {
     const ids = new Set(options.map((o) => o.id));
@@ -138,7 +149,7 @@ function RelationFieldEditor({
       open={open}
       onOpen={() => setOpen(true)}
       onClose={() => setOpen(false)}
-      loading={loading}
+      loading={loading || searchPending}
       options={merged}
       getOptionLabel={(o) => o.name}
       isOptionEqualToValue={(opt, val) => opt.id === val.id}
@@ -168,7 +179,7 @@ function RelationFieldEditor({
               ...params.InputProps,
               endAdornment: (
                 <>
-                  {loading ? <CircularProgress color="inherit" size={16} /> : null}
+                  {loading || searchPending ? <CircularProgress color="inherit" size={16} /> : null}
                   {params.InputProps.endAdornment}
                 </>
               ),
@@ -409,13 +420,11 @@ export default function SurveyRespond() {
 
     if (field.type === "date") {
       return (
-        <TextField
-          type="date"
+        <DateField
           size="small"
           fullWidth
-          value={value || ""}
-          onChange={(e) => setNewValue(field.key, e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          value={typeof value === "string" ? value : ""}
+          onChange={(v) => setNewValue(field.key, v)}
         />
       );
     }

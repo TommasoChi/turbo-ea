@@ -60,6 +60,10 @@ from app.schemas.card import (
     CardRestoreResponse,
     CardTypeCount,
     CardUpdate,
+    DescendantRelationRow,
+    DescendantRelationsResponse,
+    DescendantRelationSummaryEntry,
+    DescendantRelationVia,
     RestoreImpactPassenger,
     RestoreImpactResponse,
     StakeholderRef,
@@ -74,6 +78,7 @@ from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.data_quality import calc_data_quality
 from app.services.event_bus import event_bus
 from app.services.hierarchy import HIERARCHY_LEVEL_KEY
+from app.services.lifecycle import lifecycle_rank
 from app.services.permission_service import PermissionService
 
 # Fields that PPM budget/cost lines manage — calculations must not overwrite these.
@@ -229,6 +234,42 @@ async def _walk_ancestor_chain(
     ):
         root_is_macro = True
     return depth, root_is_macro
+
+
+async def _check_parent_not_descendant(
+    db: AsyncSession, card_ids: set[uuid.UUID], new_parent_id: uuid.UUID | None
+) -> None:
+    """Raise HTTPException if re-parenting ``card_ids`` under ``new_parent_id`` cycles.
+
+    Walks up the ancestor chain from the proposed parent: meeting any of the
+    cards being moved means that parent sits inside that card's own subtree,
+    so the move would detach the whole branch into an unreachable loop.
+
+    Note that nothing else in the card API guards this — ``_walk_ancestor_chain``
+    and friends merely cycle-*guard* their own traversal with a ``seen`` set and
+    never raise. Mass re-parenting makes the mistake easy to hit, and the
+    client cannot practically exclude the descendants of N cards up front.
+    """
+    if new_parent_id is None:
+        return  # detaching to root can never cycle
+    if new_parent_id in card_ids:
+        raise HTTPException(400, "Cannot set a card as its own parent")
+
+    current: uuid.UUID | None = new_parent_id
+    seen: set[uuid.UUID] = set()
+    while current and current not in seen:
+        seen.add(current)
+        res = await db.execute(select(Card.parent_id).where(Card.id == current))
+        row = res.first()
+        if row is None:
+            return
+        current = row[0]
+        if current is not None and current in card_ids:
+            raise HTTPException(
+                400,
+                "Cannot set parent: the chosen parent is a descendant of a card "
+                "being moved, which would create a hierarchy cycle",
+            )
 
 
 async def _check_hierarchy_depth(
@@ -1376,6 +1417,223 @@ async def relation_summary(
     return CardRelationSummaryResponse(by_type=entries, hierarchy=hierarchy)
 
 
+# ── Descendant relation roll-up (discussion #863) ─────────────────────
+#
+# "Show me the applications hanging off this capability's sub-capabilities
+# without maintaining the link twice." Deliberately a *read-only view*: the
+# rolled-up rows are never editable from the parent, so `relations` stays the
+# single source of truth for every edge. Scoped to card detail — these rows do
+# not leak into the inventory grid, the matrix report or exports, where they
+# would double counts.
+
+# Belt-and-braces cap on the relation fan-out. `collect_descendants` already
+# caps the subtree at 10k nodes; this bounds the edge count on a subtree that
+# is small but densely connected.
+_MAX_DESCENDANT_RELATIONS = 20_000
+
+
+async def _descendant_relation_map(
+    db: AsyncSession,
+    root: Card,
+    *,
+    relation_type: str | None = None,
+) -> dict[str, dict[uuid.UUID, list[Card]]]:
+    """Map ``relation_type_key -> {peer_card_id: [descendants linking it]}``.
+
+    Rules (all three agreed on discussion #863):
+
+    - **Full descendant subtree**, not just direct children — an L1 capability
+      rolling up only L2 would miss the applications, which sit at L3+.
+    - **Peers already directly linked to the root are excluded**, per relation
+      type, so the "+N" chip only ever advertises rows the user cannot already
+      see in the list above it.
+    - **Peers inside the subtree are excluded** — a relation between two
+      descendants is internal to the tree, not an additional related card.
+
+    Archived cards and cards of hidden types are filtered on both ends, so the
+    roll-up matches what ``GET /relations`` would show the same user.
+    """
+    try:
+        descendant_ids = await card_lifecycle.collect_descendants(db, root.id)
+    except HTTPException:
+        # subtree_too_large — degrade to "no roll-up" rather than breaking the
+        # whole Relations section on a pathological tree.
+        return {}
+    if not descendant_ids:
+        return {}
+
+    # ACTIVE descendants only, mirroring the hierarchy section + relation-summary.
+    desc_rows = await db.execute(
+        select(Card).where(Card.id.in_(descendant_ids), Card.status == "ACTIVE")
+    )
+    descendants = {c.id: c for c in desc_rows.scalars().all()}
+    if not descendants:
+        return {}
+
+    # Same hidden-type / archived exclusion as relation_summary, so a peer the
+    # user could not open never shows up in the count.
+    hidden_types_sq = select(CardType.key).where(CardType.is_hidden == True)  # noqa: E712
+    excluded_card_sq = select(Card.id).where(
+        or_(Card.type.in_(hidden_types_sq), Card.status == "ARCHIVED")
+    )
+
+    desc_id_list = list(descendants.keys())
+    rel_q = select(Relation).where(
+        or_(Relation.source_id.in_(desc_id_list), Relation.target_id.in_(desc_id_list)),
+        Relation.source_id.not_in(excluded_card_sq),
+        Relation.target_id.not_in(excluded_card_sq),
+    )
+    if relation_type:
+        rel_q = rel_q.where(Relation.type == relation_type)
+    rel_rows = await db.execute(rel_q.limit(_MAX_DESCENDANT_RELATIONS))
+    relations = list(rel_rows.scalars().all())
+    if not relations:
+        return {}
+
+    # Edges the root already owns — (relation_type, peer_id) pairs to suppress.
+    direct_q = select(Relation).where(
+        or_(Relation.source_id == root.id, Relation.target_id == root.id)
+    )
+    if relation_type:
+        direct_q = direct_q.where(Relation.type == relation_type)
+    direct_rows = await db.execute(direct_q)
+    already_linked: set[tuple[str, uuid.UUID]] = set()
+    for r in direct_rows.scalars().all():
+        peer_id = r.target_id if r.source_id == root.id else r.source_id
+        already_linked.add((r.type, peer_id))
+
+    inside_tree = set(descendants.keys()) | {root.id}
+    out: dict[str, dict[uuid.UUID, list[Card]]] = {}
+    for r in relations:
+        # Resolve which end is the descendant and which is the peer. A relation
+        # with both ends inside the subtree is skipped by the `inside_tree`
+        # check below regardless of which end we pick here.
+        if r.source_id in descendants:
+            owner_id, peer_id = r.source_id, r.target_id
+        else:
+            owner_id, peer_id = r.target_id, r.source_id
+        if peer_id in inside_tree:
+            continue
+        if (r.type, peer_id) in already_linked:
+            continue
+        owner = descendants.get(owner_id)
+        if owner is None:
+            continue
+        by_peer = out.setdefault(r.type, {})
+        vias = by_peer.setdefault(peer_id, [])
+        # Dedup provenance: one descendant may link the same peer more than
+        # once if the metamodel ever allows parallel edges.
+        if not any(v.id == owner.id for v in vias):
+            vias.append(owner)
+    return out
+
+
+@router.get("/{card_id}/descendant-relations/summary")
+async def descendant_relation_summary(
+    card_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[DescendantRelationSummaryEntry]:
+    """Per-relation-type count of cards reachable only through descendants.
+
+    Powers the "+N in sub-items" chip on the Relations section. Returns an
+    empty list for leaf cards and for non-hierarchical types.
+    """
+    uid = uuid.UUID(card_id)
+    await PermissionService.require_permission(
+        db, user, "inventory.view", card_id=uid, card_permission="card.view"
+    )
+    card = await db.get(Card, uid)
+    if not card:
+        raise HTTPException(404, "Card not found")
+
+    by_type = await _descendant_relation_map(db, card)
+    entries = [
+        DescendantRelationSummaryEntry(relation_type_key=rt_key, count=len(peers))
+        for rt_key, peers in by_type.items()
+        if peers
+    ]
+    entries.sort(key=lambda e: e.relation_type_key)
+    return entries
+
+
+@router.get("/{card_id}/descendant-relations", response_model=DescendantRelationsResponse)
+async def descendant_relations(
+    card_id: str,
+    relation_type: str = Query(..., description="Relation type key to roll up"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """The rolled-up peer cards for one relation type, with provenance.
+
+    Each row is a distinct peer card plus the descendants that link it, so a
+    card reachable through two sub-capabilities appears once with two `via`
+    entries. Read-only by design — there is no matching write route.
+    """
+    uid = uuid.UUID(card_id)
+    await PermissionService.require_permission(
+        db, user, "inventory.view", card_id=uid, card_permission="card.view"
+    )
+    card = await db.get(Card, uid)
+    if not card:
+        raise HTTPException(404, "Card not found")
+
+    by_type = await _descendant_relation_map(db, card, relation_type=relation_type)
+    peers = by_type.get(relation_type, {})
+    if not peers:
+        return DescendantRelationsResponse(rows=[], total=0, via_total=0)
+
+    peer_rows = await db.execute(select(Card).where(Card.id.in_(list(peers.keys()))))
+    peer_cards = list(peer_rows.scalars().all())
+
+    # Order: subtype (metamodel order) → lifecycle urgency → name. Sorting
+    # server-side keeps subtype buckets contiguous across pages — grouping only
+    # the current page would split a bucket in half at the page boundary.
+    subtype_order: dict[str, int] = {}
+    if peer_cards:
+        peer_type = await db.scalar(
+            select(CardType).where(CardType.key == peer_cards[0].type).limit(1)
+        )
+        for idx, sub in enumerate(peer_type.subtypes or [] if peer_type else []):
+            if isinstance(sub, dict) and sub.get("key"):
+                subtype_order[sub["key"]] = idx
+
+    def _sort_key(c: Card) -> tuple[int, int, str]:
+        # Unknown / missing subtype sorts last, mirroring the trailing
+        # "No subtype" bucket in the relations list.
+        sub_idx = (
+            subtype_order.get(c.subtype, len(subtype_order)) if c.subtype else len(subtype_order)
+        )
+        return (sub_idx, lifecycle_rank(c.lifecycle), c.name.lower())
+
+    peer_cards.sort(key=_sort_key)
+
+    total = len(peer_cards)
+    # Counted across every peer, not just the current page — the header states
+    # how concentrated the roll-up is over the whole result set.
+    via_total = len({d.id for owners in peers.values() for d in owners})
+    start = (page - 1) * page_size
+    window = peer_cards[start : start + page_size]
+
+    rows = [
+        DescendantRelationRow(
+            id=str(p.id),
+            name=p.name,
+            type=p.type,
+            subtype=p.subtype,
+            lifecycle=p.lifecycle or {},
+            via=[
+                DescendantRelationVia(id=str(d.id), name=d.name, type=d.type)
+                for d in sorted(peers.get(p.id, []), key=lambda d: d.name.lower())
+            ],
+        )
+        for p in window
+    ]
+    return DescendantRelationsResponse(rows=rows, total=total, via_total=via_total)
+
+
 @router.patch("/bulk")
 async def bulk_update(
     body: CardBulkUpdate,
@@ -1411,9 +1669,58 @@ async def bulk_update(
         if "attributes" in updates and updates["attributes"]
         else {}
     )
+
+    # Guard: a bulk re-parent has to clear the same bar as the per-card PATCH.
+    # Without this the endpoint happily builds cycles, blows past the capability
+    # depth limit and leaves hierarchyLevel/capabilityLevel stale — and it is
+    # reachable from the MCP `update_cards_bulk` tool, not just the UI.
+    moved: list[Card] = []
+    if "parent_id" in updates:
+        new_pid = uuid.UUID(updates["parent_id"]) if updates["parent_id"] else None
+        moved = [c for c in sheets if c.parent_id != new_pid]
+        await _check_parent_not_descendant(db, {c.id for c in moved}, new_pid)
+
+        # The payload may rename in the same call, so check the name the card
+        # will actually land with, not the one it has now.
+        def _target_name(card: Card) -> str:
+            return updates["name"] if "name" in updates else card.name
+
+        # Collisions against cards already in the DB.
+        for card in moved:
+            await _check_hierarchy_depth(db, card, new_pid)
+            await check_sibling_name_unique(
+                db,
+                type_key=card.type,
+                parent_id=new_pid,
+                name=_target_name(card),
+                exclude_card_id=card.id,
+            )
+        # Collisions *within* the batch — two selected cards of the same type
+        # and name landing under one parent. `check_sibling_name_unique` reads
+        # committed rows, so it cannot see the siblings we are about to move.
+        batch_slots: set[tuple[str, str]] = set()
+        for card in moved:
+            name = _target_name(card)
+            slot = (card.type, (name or "").strip().lower())
+            if not slot[1]:
+                continue
+            if slot in batch_slots:
+                raise HTTPException(
+                    409,
+                    f'Cannot set parent: two selected cards are both named "{name}" '
+                    "and would become siblings under the same parent",
+                )
+            batch_slots.add(slot)
+
     # Capture per-card before/after diff so the MCP dry-run preview can
     # surface field-level changes the agent will commit. Also lets
     # `rollback_batch` reverse the update by replaying the snapshots.
+    #
+    # A preview computes the diff but never writes: leaving the session clean
+    # is what makes the dry run genuinely side-effect free. The previous
+    # mutate-then-`db.rollback()` shape discarded the *caller's* entire
+    # transaction, and a savepoint rollback still left expired ORM objects
+    # behind for the next statement to trip over.
     diffs: list[dict] = []
     for card in sheets:
         before: dict = {}
@@ -1433,15 +1740,14 @@ async def bulk_update(
             if old_val != value:
                 before[field] = str(old_val) if field == "parent_id" and old_val else old_val
                 after[field] = str(value) if field == "parent_id" and value else value
-            setattr(card, field, value)
+            if not body.dry_run:
+                setattr(card, field, value)
         if before:
             diffs.append({"id": str(card.id), "before": before, "after": after})
-        card.updated_by = user.id
+        if not body.dry_run:
+            card.updated_by = user.id
 
     if body.dry_run:
-        # Roll back so the preview never persists; return the diffs the
-        # agent can show the user before committing.
-        await db.rollback()
         return {
             "dry_run": True,
             "results": [
@@ -1452,6 +1758,31 @@ async def bulk_update(
             "would_update": len(diffs),
         }
 
+    # A parent change moves the whole subtree, so hierarchyLevel /
+    # capabilityLevel have to be recomputed for the moved card and every
+    # descendant — same cascade update_card runs. Do this before the
+    # data-quality pass so scores see the fresh level attributes.
+    changed_levels_by_card: list[tuple[Card, list[Card]]] = []
+    for card in moved:
+        changed_levels_by_card.append((card, await _sync_hierarchy_levels(db, card)))
+
+    # Mirror update_card: substantive edits break an approved card.
+    status_breaking = {
+        "name",
+        "description",
+        "lifecycle",
+        "attributes",
+        "subtype",
+        "alias",
+        "parent_id",
+    }
+    for diff in diffs:
+        if not (status_breaking & set(diff["after"].keys())):
+            continue
+        card = next((c for c in sheets if str(c.id) == diff["id"]), None)
+        if card is not None and card.approval_status == "APPROVED":
+            card.approval_status = "BROKEN"
+
     # Recompute completeness score and calculated fields per card, mirroring
     # create_card / bulk_create_cards / update_card. Without this a bulk edit
     # persists the new values but leaves data_quality and calculated fields
@@ -1460,6 +1791,29 @@ async def bulk_update(
         card.data_quality = await calc_data_quality(db, card)
         ppm_excl = await _get_ppm_exclusions(db, card)
         await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
+
+    # Re-run calcs for descendants whose level moved, after each card's own run.
+    for card, changed_levels in changed_levels_by_card:
+        await _recalc_changed_descendants(db, changed_levels, card.id)
+
+    # Emit an event per changed card. Without this a bulk edit is invisible in
+    # the card History tab and in the mutation-batch audit ledger — the batch
+    # id / origin stamping in event_bus.publish is what lets an admin
+    # reconstruct (or roll back) an MCP-driven bulk write.
+    for diff in diffs:
+        await event_bus.publish(
+            "card.updated",
+            {
+                "id": diff["id"],
+                "changes": {
+                    field: {"old": diff["before"].get(field), "new": diff["after"].get(field)}
+                    for field in diff["after"]
+                },
+            },
+            db=db,
+            card_id=uuid.UUID(diff["id"]),
+            user_id=user.id,
+        )
 
     await db.commit()
     result = await db.execute(
@@ -1945,10 +2299,11 @@ async def update_card(
                     new_attrs[key] = old_attrs[key]
             updates["attributes"] = new_attrs
 
-    # Guard: hierarchy depth limit before applying parent change
+    # Guard: cycle + hierarchy depth limit before applying parent change
     if "parent_id" in updates:
         new_pid = uuid.UUID(updates["parent_id"]) if updates["parent_id"] else None
         if new_pid != card.parent_id:
+            await _check_parent_not_descendant(db, {card.id}, new_pid)
             await _check_hierarchy_depth(db, card, new_pid)
 
     # Guard: sibling-name uniqueness when name or parent changes. Only
@@ -2859,16 +3214,43 @@ async def export_csv(
     type: str | None = Query(None),
 ):
     await PermissionService.require_permission(db, user, "inventory.export")
-    q = select(Card).where(Card.status == "ACTIVE")
+    q = (
+        select(Card)
+        .where(Card.status == "ACTIVE")
+        .options(selectinload(Card.stakeholders).selectinload(Stakeholder.user))
+    )
     if type:
         q = q.where(Card.type == type)
     result = await db.execute(q)
     sheets = list(result.scalars().all())
     redact = await _cost_redaction_map(db, user, sheets)
 
+    # Role-key → label map for the stakeholders column, one query for all
+    # (type, role) pairs present in the export.
+    role_rows = await db.execute(
+        select(
+            StakeholderRoleDefinition.card_type_key,
+            StakeholderRoleDefinition.key,
+            StakeholderRoleDefinition.label,
+        ).where(StakeholderRoleDefinition.is_archived == False)  # noqa: E712
+    )
+    role_labels = {(row[0], row[1]): row[2] for row in role_rows.all()}
+
+    def _stakeholders_cell(card: Card) -> str:
+        # Emails, not display names — the only unambiguous user reference
+        # (mirrors the Excel exporter and LeanIX's subscriptions columns).
+        parts = []
+        for s in sorted(card.stakeholders or [], key=lambda s: s.role):
+            who = s.user.email if s.user else str(s.user_id)
+            label = role_labels.get((card.type, s.role), s.role)
+            parts.append(f"{label}: {who}")
+        return "; ".join(parts)
+
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["id", "type", "name", "description", "status", "lifecycle", "attributes"])
+    writer.writerow(
+        ["id", "type", "name", "description", "status", "lifecycle", "attributes", "stakeholders"]
+    )
     for card in sheets:
         attrs = card.attributes or {}
         strip = redact.get(card.id)
@@ -2883,6 +3265,7 @@ async def export_csv(
                 card.status,
                 str(card.lifecycle),
                 str(attrs),
+                _stakeholders_cell(card),
             ]
         )
     output.seek(0)

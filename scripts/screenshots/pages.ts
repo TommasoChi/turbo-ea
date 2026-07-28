@@ -62,6 +62,11 @@ export const CARD_LOOKUPS = {
   sampleApp: { name: "SAP S/4HANA", type: "Application" },
   sampleInitiative: { name: "SAP S/4HANA Migration", type: "Initiative" },
   sampleProcess: { name: "Order to Cash", type: "BusinessProcess" },
+  // An L1 capability whose sub-capabilities carry the relations — used for the
+  // "+N in sub-items" roll-up shots. Chosen because its descendants span two
+  // application subtypes, so the drawer shows real grouping rather than one
+  // undifferentiated list.
+  sampleParentCapability: { name: "Service & After-Sales", type: "BusinessCapability" },
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -894,7 +899,9 @@ export const DOC_PAGES: PageDef[] = [
     id: "35_report_matrix",
     route: "/reports/matrix",
     waitFor: ".MuiPaper-root",
-    actions: [{ type: "wait", ms: 800 }],
+    // Longer than most: the filter bar and the gap tiles settle after the
+    // metamodel and the matrix payload have both landed.
+    actions: [{ type: "wait", ms: 1200 }],
     filenames: {
       en: "35_report_matrix",
       de: "35_bericht_matrix",
@@ -906,7 +913,6 @@ export const DOC_PAGES: PageDef[] = [
       ru: "35_otchet_matritsa",
     },
   },
-
   // ── Saved Reports ───────────────────────────────────────────────────────
   {
     id: "36_saved_reports",
@@ -1414,6 +1420,91 @@ export const DOC_PAGES: PageDef[] = [
     ],
     filenames: {
       en: "58_workspace_transfer",
+    },
+  },
+
+  // ── Card Detail: relations rolled up from sub-items ─────────────────────
+  // Both shots use locale-independent selectors: the Relations accordion is
+  // found by its Material Symbols ligature ("hub" is the icon's text content),
+  // and the roll-up chip by its `info` colour class — the only info-coloured
+  // chip in the section. Label text would need all 8 locales.
+  {
+    id: "59_card_subitem_chip",
+    route: "/cards/{{cardId:sampleParentCapability}}",
+    waitFor: "[data-testid='card-detail'], [class*='CardDetail'], h5, h4",
+    actions: [
+      { type: "wait", ms: 600 },
+      {
+        type: "click",
+        selector:
+          ".MuiAccordionSummary-root:has(span.material-symbols-outlined:text-is('hub'))",
+      },
+      { type: "wait", ms: 800 },
+      {
+        type: "scroll",
+        target: ".MuiAccordionSummary-root:has(span.material-symbols-outlined:text-is('hub'))",
+      },
+      { type: "wait", ms: 400 },
+    ],
+    filenames: {
+      en: "59_card_subitem_chip",
+      de: "59_karte_unterelemente_chip",
+      fr: "59_fiche_sous_elements_puce",
+      es: "59_ficha_subelementos_etiqueta",
+      it: "59_scheda_sottoelementi_chip",
+      pt: "59_ficha_subelementos_chip",
+      zh: "59_card_subitem_chip",
+      ru: "59_kartochka_podelementy_chip",
+    },
+  },
+  {
+    id: "60_card_subitem_relations",
+    route: "/cards/{{cardId:sampleParentCapability}}",
+    waitFor: "[data-testid='card-detail'], [class*='CardDetail'], h5, h4",
+    actions: [
+      { type: "wait", ms: 600 },
+      {
+        type: "click",
+        selector:
+          ".MuiAccordionSummary-root:has(span.material-symbols-outlined:text-is('hub'))",
+      },
+      { type: "wait", ms: 800 },
+      // Info-coloured chips are the roll-ups, one per relation group, in group
+      // order: Objective, Initiative, Application, … — index 2 is the
+      // Applications roll-up, the richest one on this demo card.
+      { type: "click", selector: ".MuiChip-outlinedInfo", nth: 2 },
+      { type: "wait", ms: 900 },
+    ],
+    filenames: {
+      en: "60_card_subitem_relations",
+      de: "60_karte_unterelemente_beziehungen",
+      fr: "60_fiche_sous_elements_relations",
+      es: "60_ficha_subelementos_relaciones",
+      it: "60_scheda_sottoelementi_relazioni",
+      pt: "60_ficha_subelementos_relacoes",
+      zh: "60_card_subitem_relations",
+      ru: "60_kartochka_podelementy_svyazi",
+    },
+  },
+
+  // ── Admin Settings: Resources (repository-wide file & link management) ──
+  // Wait for the AG Grid root rather than a Paper: the grid mounts after the
+  // /resources + /resources/stats round-trips, and the stat tiles above it
+  // are Papers that would satisfy a `.MuiPaper-root` wait too early.
+  {
+    id: "61_admin_settings_resources",
+    route: "/admin/settings?tab=resources",
+    waitFor: ".ag-root",
+    actions: [{ type: "wait", ms: 900 }],
+    filenames: {
+      en: "61_admin_settings_resources",
+      de: "61_admin_einstellungen_ressourcen",
+      fr: "61_admin_parametres_ressources",
+      es: "61_admin_config_recursos",
+      it: "61_admin_impostazioni_risorse",
+      pt: "61_admin_config_recursos",
+      zh: "61_admin_settings_resources",
+      ru: "61_admin_nastroyki_resursy",
     },
   },
 

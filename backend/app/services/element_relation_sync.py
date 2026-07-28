@@ -3,20 +3,10 @@
 When a user links an Application, DataObject, or ITComponent to a process
 element, the corresponding EA relation should also exist in the `relations`
 table so it shows up in the Relations tab, reports, and dependency graphs.
-These three are neutral "uses/references" relations, so auto-syncing an
-element-level link up to the process level is harmless and expected.
 
 This module provides a single helper that ensures relations exist (additive
 only — never auto-deletes, since the relation may have been created
 independently).
-
-Deliberately NOT included: Organization. `relProcessToOrg` ("is owned by")
-carries a *governance/ownership* meaning at the process level — who is
-accountable for the process as a whole — which is a different concept from
-"this organization participates in one specific step"
-(process_element_organizations). Auto-creating an ownership relation just
-because someone linked an org to a single step would misrepresent
-accountability, so Organization element-links are NOT synced here.
 """
 
 from __future__ import annotations
@@ -28,9 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.relation import Relation
 
-# Mapping from ProcessElement FK field → relation type key.
+# Mapping from ProcessElement FK field → relation type key
 # All three have source = BusinessProcess, target = the linked type.
-# Organization is intentionally absent — see the module docstring.
+# The M:N step ↔ Organization links are deliberately NOT in this map:
+# they are informative only and never create card-to-card relations
+# (process ↔ Organization relations are managed on the card itself).
 ELEMENT_LINK_RELATION_MAP: dict[str, str] = {
     "application_id": "relProcessToApp",
     "data_object_id": "relProcessToDataObj",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import uuid
@@ -8,9 +9,9 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app.api.deps import get_current_user
 from app.database import get_db
@@ -32,6 +33,7 @@ from app.services.kpi_snapshot_service import (
     compute_trend_block,
     get_comparison_snapshot,
 )
+from app.services.lifecycle import current_lifecycle_phase
 from app.services.permission_service import PermissionService
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -40,29 +42,13 @@ log = logging.getLogger(__name__)
 
 
 def _current_lifecycle_phase(lifecycle: dict | None) -> str | None:
-    """Determine which lifecycle phase a card is currently in based on dates."""
-    if not lifecycle:
-        return None
-    phases = ["endOfLife", "phaseOut", "active", "phaseIn", "plan"]
-    today = datetime.now(timezone.utc).date()
-    for phase in phases:
-        date_str = lifecycle.get(phase)
-        if date_str:
-            try:
-                d = (
-                    datetime.fromisoformat(date_str).date()
-                    if "T" in str(date_str)
-                    else datetime.strptime(str(date_str), "%Y-%m-%d").date()
-                )
-                if d <= today:
-                    return phase
-            except (ValueError, TypeError):
-                continue
-    # If all dates are in the future, return the earliest set phase
-    for phase in ["plan", "phaseIn", "active", "phaseOut", "endOfLife"]:
-        if lifecycle.get(phase):
-            return phase
-    return None
+    """Determine which lifecycle phase a card is currently in based on dates.
+
+    Thin alias kept for the call sites in this module — the implementation
+    moved to `services/lifecycle.py` when the descendant relation roll-up
+    needed the same phase precedence to sort by.
+    """
+    return current_lifecycle_phase(lifecycle)
 
 
 @router.get("/dashboard")
@@ -1159,50 +1145,244 @@ async def app_portfolio(
     }
 
 
+#: Hard ceiling on the number of relation edges the matrix will serialise. A
+#: grid past this point is unreadable anyway; the response flags the cut so the
+#: UI can tell the user to narrow the filter rather than quietly lying.
+MATRIX_MAX_EDGES = 200_000
+
+#: Sentinel meaning "this attribute has no value", mirroring EMPTY_FILTER_KEY in
+#: ``frontend/src/components/FilterSelect.tsx``.
+MATRIX_EMPTY_FILTER = "__empty__"
+
+
+def _parse_matrix_attr_filters(
+    raw: list[str], pair_schemas: dict[str, list[dict]]
+) -> dict[tuple[str, str], tuple[str, set[str]]]:
+    """Parse ``attr=<relationTypeKey>.<fieldKey>:<value>`` filters.
+
+    Returns ``{(relation_type_key, field_key): (field_type, {values})}``. Values
+    sharing a key OR together; different keys AND together (applied by the
+    caller). The relation-type prefix is required because the same field key
+    legitimately appears on several relation types with different option sets.
+
+    Nothing here knows any attribute by name — the field and its type are looked
+    up in the relation type's own ``attributes_schema``. A filter naming an
+    unknown relation type or field is an error, never a silent no-op: a typo
+    that quietly widens the result set is worse than a 400.
+    """
+    parsed: dict[tuple[str, str], tuple[str, set[str]]] = {}
+    for item in raw:
+        spec, sep, value = item.partition(":")
+        rt_key, dot, field_key = spec.partition(".")
+        if not sep or not dot or not rt_key or not field_key:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid attribute filter {item!r}; expected relationType.field:value",
+            )
+        schema = pair_schemas.get(rt_key)
+        if schema is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Attribute filter {item!r} names a relation type not valid for these axes",
+            )
+        field = next((f for f in schema if f.get("key") == field_key), None)
+        if field is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Attribute filter {item!r} names a field not declared on {rt_key}",
+            )
+        entry = parsed.setdefault((rt_key, field_key), (field.get("type") or "text", set()))
+        entry[1].add(value)
+    return parsed
+
+
+def _matrix_attr_clause(field_key: str, field_type: str, value: str):
+    """One JSONB predicate for a single attribute filter value."""
+    if value == MATRIX_EMPTY_FILTER:
+        return or_(
+            Relation.attributes.is_(None),
+            not_(Relation.attributes.has_key(field_key)),  # noqa: W601 — JSONB ? operator
+            Relation.attributes[field_key].astext.is_(None),
+        )
+    if field_type == "boolean":
+        return Relation.attributes.contains({field_key: value == "true"})
+    if field_type == "number":
+        try:
+            return Relation.attributes.contains({field_key: float(value)})
+        except ValueError:
+            return Relation.attributes[field_key].astext == value
+    return Relation.attributes.contains({field_key: value})
+
+
 @router.get("/matrix")
 async def matrix(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     row_type: str = Query("Application"),
     col_type: str = Query("BusinessCapability"),
+    relation_types: str | None = Query(
+        None, description="Comma-separated relation-type keys to restrict the grid to"
+    ),
+    attr: list[str] = Query(
+        default_factory=list,
+        description="Attribute filter, `relationTypeKey.fieldKey:value`. Repeatable.",
+    ),
+    direction: str = Query("any", pattern="^(any|forward|reverse)$"),
 ):
-    """Matrix report: cross-reference grid."""
+    """Matrix report: cross-reference grid between two card types.
+
+    Each intersection carries the relations behind it — their relation type,
+    their orientation relative to the row axis, and their attribute values — so
+    the grid can show what the link *means*, not merely that one exists.
+
+    ``direction`` is structural: ``forward`` keeps relations whose source is the
+    row card, ``reverse`` those whose target is. Semantic notions of direction
+    that a metamodel may express as a relation attribute are just attribute
+    values, filtered through ``attr`` like any other.
+
+    Only the *edges* are filtered server-side; the row and column card lists are
+    always complete. Pruning cards here would break their ``parent_id`` chains
+    and silently flatten the hierarchy the client rebuilds — the client already
+    hides cards with no surviving edge, and can do so without a refetch.
+    """
     await PermissionService.require_permission(db, user, "reports.ea_dashboard")
-    rows_result = await db.execute(
-        select(Card).where(Card.type == row_type, Card.status == "ACTIVE").order_by(Card.name)
-    )
-    rows = rows_result.scalars().all()
 
-    cols_result = await db.execute(
-        select(Card).where(Card.type == col_type, Card.status == "ACTIVE").order_by(Card.name)
+    known_types = set(
+        (
+            await db.execute(select(CardType.key).where(CardType.key.in_([row_type, col_type])))
+        ).scalars()
     )
-    cols = cols_result.scalars().all()
+    for key in (row_type, col_type):
+        if key not in known_types:
+            raise HTTPException(status_code=400, detail=f"Unknown card type {key!r}")
 
-    # Get all relations between these types
-    row_ids = [card.id for card in rows]
-    col_ids = [card.id for card in cols]
-    rels_result = await db.execute(
-        select(Relation).where(
-            ((Relation.source_id.in_(row_ids)) & (Relation.target_id.in_(col_ids)))
-            | ((Relation.source_id.in_(col_ids)) & (Relation.target_id.in_(row_ids)))
+    # The whole relation-type table: small, and needed twice over. `declared`
+    # is the subset the metamodel says connects these two axes — at most two,
+    # one per orientation — which is what the attribute filters are validated
+    # against. `all_schemas` interprets the attributes of whatever type a
+    # relation actually carries, which is not always a declared one.
+    rt_rows = (
+        await db.execute(
+            select(
+                RelationType.key,
+                RelationType.attributes_schema,
+                RelationType.source_type_key,
+                RelationType.target_type_key,
+            ).order_by(RelationType.sort_order, RelationType.key)
         )
+    ).all()
+    all_schemas = {key: (schema or []) for key, schema, _, _ in rt_rows}
+    declared_keys = [
+        key
+        for key, _, src, tgt in rt_rows
+        if (src == row_type and tgt == col_type) or (src == col_type and tgt == row_type)
+    ]
+    pair_schemas = {key: all_schemas[key] for key in declared_keys}
+
+    # An explicit filter is checked against the real relation-type keys rather
+    # than against the ones declared for this pair: a relation whose type was
+    # declared elsewhere, renamed, or imported still connects these two cards
+    # and still belongs in the grid. Only a key that exists nowhere is a typo.
+    requested_types: set[str] | None = None
+    if relation_types is not None:
+        requested_types = {k.strip() for k in relation_types.split(",") if k.strip()}
+        unknown = requested_types - set(all_schemas)
+        if unknown:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown relation type(s): {sorted(unknown)}"
+            )
+
+    attr_filters = _parse_matrix_attr_filters(attr, pair_schemas)
+
+    # Column-level selects: only id / name / parent_id are ever used, so there
+    # is no reason to hydrate whole Card rows for both axes.
+    card_cols = select(Card.id, Card.name, Card.parent_id).where(Card.status == "ACTIVE")
+    rows = (await db.execute(card_cols.where(Card.type == row_type).order_by(Card.name))).all()
+    cols = (
+        rows
+        if col_type == row_type
+        else (await db.execute(card_cols.where(Card.type == col_type).order_by(Card.name))).all()
     )
-    rels = rels_result.scalars().all()
 
-    # Build intersection set – normalise to (row_id, col_id) direction
-    row_id_set = {str(card.id) for card in rows}
-    intersections = set()
-    for r in rels:
-        sid, tid = str(r.source_id), str(r.target_id)
-        if sid in row_id_set:
-            intersections.add((sid, tid))
-        else:
-            intersections.add((tid, sid))
+    edges: list[tuple[str, str, str, str, dict]] = []
+    if rows and cols:
+        # Matched on the endpoint card types, not on the relation type: what
+        # makes a relation belong in this grid is that it connects one card of
+        # each axis. Restricting to the types the metamodel declares for the
+        # pair would silently drop relations left behind by a renamed type, or
+        # brought in by an import, and would empty the grid entirely for a pair
+        # the metamodel says nothing about.
+        src_card, tgt_card = aliased(Card), aliased(Card)
+        stmt = (
+            select(Relation.type, Relation.source_id, Relation.target_id, Relation.attributes)
+            .join(src_card, Relation.source_id == src_card.id)
+            .join(tgt_card, Relation.target_id == tgt_card.id)
+            .where(
+                src_card.status == "ACTIVE",
+                tgt_card.status == "ACTIVE",
+                or_(
+                    and_(src_card.type == row_type, tgt_card.type == col_type),
+                    and_(src_card.type == col_type, tgt_card.type == row_type),
+                ),
+            )
+        )
+        if requested_types is not None:
+            stmt = stmt.where(Relation.type.in_(sorted(requested_types)))
+        for (rt_key, field_key), (field_type, values) in attr_filters.items():
+            clauses = [_matrix_attr_clause(field_key, field_type, v) for v in sorted(values)]
+            # Scoped to its own relation type so a filter on one type never
+            # silently discards relations of the other type on these axes.
+            stmt = stmt.where(or_(Relation.type != rt_key, or_(*clauses)))
 
-    # When same type on both axes, add self-relations on the diagonal
+        row_id_set = {str(row.id) for row in rows}
+        for rel_type, source_id, target_id, attributes in (await db.execute(stmt)).all():
+            sid, tid = str(source_id), str(target_id)
+            if sid in row_id_set:
+                row_id, col_id, orientation = sid, tid, "f"
+            else:
+                row_id, col_id, orientation = tid, sid, "r"
+            if direction == "forward" and orientation != "f":
+                continue
+            if direction == "reverse" and orientation != "r":
+                continue
+            # Attributes are read through the relation's own schema, whichever
+            # type it is; a type the metamodel no longer knows contributes none.
+            declared = {f.get("key") for f in all_schemas.get(rel_type, [])}
+            kept = {k: v for k, v in (attributes or {}).items() if k in declared and v is not None}
+            edges.append((row_id, col_id, rel_type, orientation, kept))
+
+    truncated = len(edges) > MATRIX_MAX_EDGES
+    if truncated:
+        edges = edges[:MATRIX_MAX_EDGES]
+
+    # Intern the distinct attribute bags: a CRUD-style relation has at most a
+    # handful of combinations across thousands of edges, so referencing them by
+    # index keeps the payload proportional to the *variety*, not the volume.
+    attr_sets: list[dict] = [{}]
+    attr_index: dict[str, int] = {"{}": 0}
+
+    # Index space for the edges: the types the metamodel declares for this pair,
+    # then any other type the data actually turned up, so every edge can name
+    # its type even when the metamodel has moved on.
+    rt_keys = declared_keys + sorted(
+        {rel_type for _, _, rel_type, _, _ in edges} - set(declared_keys)
+    )
+    rt_index = {key: i for i, key in enumerate(rt_keys)}
+
+    cells: dict[tuple[str, str], list[list]] = {}
     if row_type == col_type:
-        for card in rows:
-            intersections.add((str(card.id), str(card.id)))
+        # Self-matrix: the diagonal is structural, not a relationship, so it is
+        # present but carries no edges.
+        for row in rows:
+            cells[(str(row.id), str(row.id))] = []
+    for row_id, col_id, rel_type, orientation, kept in edges:
+        serialised = json.dumps(kept, sort_keys=True, default=str)
+        idx = attr_index.get(serialised)
+        if idx is None:
+            idx = len(attr_sets)
+            attr_index[serialised] = idx
+            attr_sets.append(kept)
+        cells.setdefault((row_id, col_id), []).append([rt_index[rel_type], orientation, idx])
 
     return {
         "rows": [
@@ -1221,7 +1401,12 @@ async def matrix(
             }
             for c in cols
         ],
-        "intersections": [{"row_id": r, "col_id": c} for r, c in intersections],
+        "relation_types": rt_keys,
+        "attr_sets": attr_sets,
+        "intersections": [
+            {"row_id": row_id, "col_id": col_id, "e": e} for (row_id, col_id), e in cells.items()
+        ],
+        "truncated": truncated,
     }
 
 

@@ -143,6 +143,7 @@ __all__ = [
     "ProcessElement",
     "ProcessElementOrganization",
     "ProcessAssessment",
+    "ProcessElementOrganization",
     "ProcessFlowVersion",
     "SsoInvitation",
     "WebPortal",

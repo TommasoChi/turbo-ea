@@ -3865,6 +3865,125 @@
         "title": "DateFormatPayload",
         "type": "object"
       },
+      "DescendantRelationRow": {
+        "description": "One rolled-up peer card, deduped across every descendant that links it.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lifecycle": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Lifecycle",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtype"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "via": {
+            "items": {
+              "$ref": "#/components/schemas/DescendantRelationVia"
+            },
+            "title": "Via",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "via"
+        ],
+        "title": "DescendantRelationRow",
+        "type": "object"
+      },
+      "DescendantRelationSummaryEntry": {
+        "description": "One row of the descendant-relation summary \u2014 how many *additional*\ndistinct cards are reachable through this card's descendants for a given\nrelation type.\n\nPowers the \"+N in sub-items\" chip on the Relations section. The count\nexcludes peers the card is already directly related to, so the chip only\never advertises rows the user cannot already see in the list above it.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "relation_type_key": {
+            "title": "Relation Type Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "relation_type_key",
+          "count"
+        ],
+        "title": "DescendantRelationSummaryEntry",
+        "type": "object"
+      },
+      "DescendantRelationVia": {
+        "description": "The descendant that actually owns the relation \u2014 the provenance chip.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type"
+        ],
+        "title": "DescendantRelationVia",
+        "type": "object"
+      },
+      "DescendantRelationsResponse": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DescendantRelationRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "via_total": {
+            "default": 0,
+            "title": "Via Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total"
+        ],
+        "title": "DescendantRelationsResponse",
+        "type": "object"
+      },
       "DiagramCreate": {
         "properties": {
           "card_ids": {
@@ -4193,6 +4312,20 @@
               }
             ],
             "title": "It Component Id"
+          },
+          "organization_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Ids"
           }
         },
         "title": "ElementUpdate",
@@ -9699,6 +9832,410 @@
         "title": "ResetPasswordRequest",
         "type": "object"
       },
+      "ResourceBucket": {
+        "description": "Count (and, for files, byte total) grouped by a single key.\n\n``key`` is ``None`` for resources with no category / link type set.",
+        "properties": {
+          "bytes": {
+            "default": 0,
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "count": {
+            "default": 0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          }
+        },
+        "title": "ResourceBucket",
+        "type": "object"
+      },
+      "ResourceBulkDelete": {
+        "properties": {
+          "refs": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceRef"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "refs"
+        ],
+        "title": "ResourceBulkDelete",
+        "type": "object"
+      },
+      "ResourceBulkDeleteResult": {
+        "description": "Mirrors ``POST /users/bulk-delete``: rows the caller may not touch\nare reported back rather than failing the whole request.",
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "skipped": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceSkipped"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "ResourceBulkDeleteResult",
+        "type": "object"
+      },
+      "ResourceCardTypeBucket": {
+        "description": "Per-card-type rollup \u2014 files and links counted separately.",
+        "properties": {
+          "bytes": {
+            "default": 0,
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "file_count": {
+            "default": 0,
+            "title": "File Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "link_count": {
+            "default": 0,
+            "title": "Link Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "ResourceCardTypeBucket",
+        "type": "object"
+      },
+      "ResourceLargestFile": {
+        "properties": {
+          "card_id": {
+            "format": "uuid",
+            "title": "Card Id",
+            "type": "string"
+          },
+          "card_name": {
+            "title": "Card Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "size",
+          "card_id",
+          "card_name"
+        ],
+        "title": "ResourceLargestFile",
+        "type": "object"
+      },
+      "ResourceListPage": {
+        "description": "Paginated response for ``GET /resources``. Mirrors the\n``{items, total, page, page_size}`` envelope used by ``GET /cards``\nand the rest of the paginated read endpoints.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "ResourceListPage",
+        "type": "object"
+      },
+      "ResourceOut": {
+        "description": "One resource row in the unified list.\n\n``mime_type`` / ``size`` are always ``None`` for links, ``url`` is\nalways ``None`` for files. The binary payload of a file attachment is\nnever included \u2014 download it from\n``GET /file-attachments/{id}/download``.",
+        "properties": {
+          "card_archived": {
+            "title": "Card Archived",
+            "type": "boolean"
+          },
+          "card_id": {
+            "format": "uuid",
+            "title": "Card Id",
+            "type": "string"
+          },
+          "card_name": {
+            "title": "Card Name",
+            "type": "string"
+          },
+          "card_type": {
+            "title": "Card Type",
+            "type": "string"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "creator_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "file",
+              "link"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime Type"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "card_id",
+          "card_name",
+          "card_type",
+          "card_archived",
+          "name"
+        ],
+        "title": "ResourceOut",
+        "type": "object"
+      },
+      "ResourceRef": {
+        "description": "Addresses one resource. The kind is required because file and\nlink ids live in different tables and could theoretically collide.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "file",
+              "link"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "ResourceRef",
+        "type": "object"
+      },
+      "ResourceSkipped": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "file",
+              "link"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "reason"
+        ],
+        "title": "ResourceSkipped",
+        "type": "object"
+      },
+      "ResourceStats": {
+        "description": "Storage + usage rollup for ``GET /resources/stats``.\n\nHonours the same filters as ``GET /resources`` so the figures always\ndescribe what the caller is currently looking at.",
+        "properties": {
+          "by_card_type": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceCardTypeBucket"
+            },
+            "title": "By Card Type",
+            "type": "array"
+          },
+          "by_category": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceBucket"
+            },
+            "title": "By Category",
+            "type": "array"
+          },
+          "by_link_type": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceBucket"
+            },
+            "title": "By Link Type",
+            "type": "array"
+          },
+          "card_count": {
+            "default": 0,
+            "title": "Card Count",
+            "type": "integer"
+          },
+          "file_count": {
+            "default": 0,
+            "title": "File Count",
+            "type": "integer"
+          },
+          "largest_files": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceLargestFile"
+            },
+            "title": "Largest Files",
+            "type": "array"
+          },
+          "link_count": {
+            "default": 0,
+            "title": "Link Count",
+            "type": "integer"
+          },
+          "total_bytes": {
+            "default": 0,
+            "title": "Total Bytes",
+            "type": "integer"
+          }
+        },
+        "title": "ResourceStats",
+        "type": "object"
+      },
       "ResourceTypeCreate": {
         "properties": {
           "description": {
@@ -11767,6 +12304,167 @@
           }
         },
         "title": "SsoSettingsPayload",
+        "type": "object"
+      },
+      "StakeholderBulkOperation": {
+        "description": "One add/remove of a (card, user, role) stakeholder assignment.\n\nThe user may be referenced by ``user_id`` or by ``user_email`` (resolved\ncase-insensitively server-side) \u2014 the spreadsheet importer round-trips\nemails, the grid editor already holds ids.",
+        "properties": {
+          "action": {
+            "default": "add",
+            "enum": [
+              "add",
+              "remove"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "card_id": {
+            "title": "Card Id",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "row_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Index"
+          },
+          "user_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Email"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "card_id",
+          "role"
+        ],
+        "title": "StakeholderBulkOperation",
+        "type": "object"
+      },
+      "StakeholderBulkRequest": {
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/StakeholderBulkOperation"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Operations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "title": "StakeholderBulkRequest",
+        "type": "object"
+      },
+      "StakeholderBulkResponse": {
+        "properties": {
+          "added": {
+            "title": "Added",
+            "type": "integer"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/StakeholderBulkResult"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results",
+          "added",
+          "removed",
+          "failed",
+          "dry_run"
+        ],
+        "title": "StakeholderBulkResponse",
+        "type": "object"
+      },
+      "StakeholderBulkResult": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "row_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Index"
+          },
+          "status": {
+            "enum": [
+              "added",
+              "removed",
+              "noop",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "StakeholderBulkResult",
         "type": "object"
       },
       "StakeholderCreate": {
@@ -20063,6 +20761,130 @@
         ]
       }
     },
+    "/api/v1/cards/{card_id}/descendant-relations": {
+      "get": {
+        "description": "The rolled-up peer cards for one relation type, with provenance.\n\nEach row is a distinct peer card plus the descendants that link it, so a\ncard reachable through two sub-capabilities appears once with two `via`\nentries. Read-only by design \u2014 there is no matching write route.",
+        "operationId": "descendant_relations_api_v1_cards__card_id__descendant_relations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Relation type key to roll up",
+            "in": "query",
+            "name": "relation_type",
+            "required": true,
+            "schema": {
+              "description": "Relation type key to roll up",
+              "title": "Relation Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DescendantRelationsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Descendant Relations",
+        "tags": [
+          "cards"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/descendant-relations/summary": {
+      "get": {
+        "description": "Per-relation-type count of cards reachable only through descendants.\n\nPowers the \"+N in sub-items\" chip on the Relations section. Returns an\nempty list for leaf cards and for non-hierarchical types.",
+        "operationId": "descendant_relation_summary_api_v1_cards__card_id__descendant_relations_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DescendantRelationSummaryEntry"
+                  },
+                  "title": "Response Descendant Relation Summary Api V1 Cards  Card Id  Descendant Relations Summary Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Descendant Relation Summary",
+        "tags": [
+          "cards"
+        ]
+      }
+    },
     "/api/v1/cards/{card_id}/documents": {
       "get": {
         "operationId": "list_documents_api_v1_cards__card_id__documents_get",
@@ -27721,6 +28543,60 @@
               ],
               "title": "Type"
             }
+          },
+          {
+            "description": "Card-type key. Keeps relations whose source **or** target card is of this type \u2014 what the inventory grid needs to populate the relation columns of the selected type in one round trip.",
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Card-type key. Keeps relations whose source **or** target card is of this type \u2014 what the inventory grid needs to populate the relation columns of the selected type in one round trip.",
+              "title": "Card Type"
+            }
+          },
+          {
+            "description": "Comma-separated relation-type keys. Superset of `type`, which stays for backwards compatibility.",
+            "in": "query",
+            "name": "types",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated relation-type keys. Superset of `type`, which stays for backwards compatibility.",
+              "title": "Types"
+            }
+          },
+          {
+            "description": "Comma-separated card UUIDs. Keeps relations whose source **or** target is one of them. At most 500 ids per request \u2014 chunk larger sets client-side.",
+            "in": "query",
+            "name": "card_ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated card UUIDs. Keeps relations whose source **or** target is one of them. At most 500 ids per request \u2014 chunk larger sets client-side.",
+              "title": "Card Ids"
+            }
           }
         ],
         "responses": {
@@ -28187,6 +29063,26 @@
         ]
       }
     },
+    "/api/v1/reports/bpm/process-organization-matrix": {
+      "get": {
+        "description": "Process \u00d7 Organization execution grid, built from the informative\nstep \u2194 Organization links (never from card relations).\n\nOne cell per (process, organization) pair with the executed steps\nembedded, so the frontend can render both the matrix and the per-process\ndrill-down from a single call.",
+        "operationId": "process_organization_matrix_api_v1_reports_bpm_process_organization_matrix_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Process Organization Matrix",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/api/v1/reports/bpm/value-stream-matrix": {
       "get": {
         "description": "Value-stream \u00d7 Organization matrix with processes at intersections.\n\nOnly shows BusinessContext items with subtype 'valueStream' as columns.\nIncludes related apps and parent_id for nested process display.",
@@ -28584,7 +29480,7 @@
     },
     "/api/v1/reports/matrix": {
       "get": {
-        "description": "Matrix report: cross-reference grid.",
+        "description": "Matrix report: cross-reference grid between two card types.\n\nEach intersection carries the relations behind it \u2014 their relation type,\ntheir orientation relative to the row axis, and their attribute values \u2014 so\nthe grid can show what the link *means*, not merely that one exists.\n\n``direction`` is structural: ``forward`` keeps relations whose source is the\nrow card, ``reverse`` those whose target is. Semantic notions of direction\nthat a metamodel may express as a relation attribute are just attribute\nvalues, filtered through ``attr`` like any other.\n\nOnly the *edges* are filtered server-side; the row and column card lists are\nalways complete. Pruning cards here would break their ``parent_id`` chains\nand silently flatten the hierarchy the client rebuilds \u2014 the client already\nhides cards with no surviving edge, and can do so without a refetch.",
         "operationId": "matrix_api_v1_reports_matrix_get",
         "parameters": [
           {
@@ -28604,6 +29500,49 @@
             "schema": {
               "default": "BusinessCapability",
               "title": "Col Type",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated relation-type keys to restrict the grid to",
+            "in": "query",
+            "name": "relation_types",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated relation-type keys to restrict the grid to",
+              "title": "Relation Types"
+            }
+          },
+          {
+            "description": "Attribute filter, `relationTypeKey.fieldKey:value`. Repeatable.",
+            "in": "query",
+            "name": "attr",
+            "required": false,
+            "schema": {
+              "description": "Attribute filter, `relationTypeKey.fieldKey:value`. Repeatable.",
+              "items": {
+                "type": "string"
+              },
+              "title": "Attr",
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "direction",
+            "required": false,
+            "schema": {
+              "default": "any",
+              "pattern": "^(any|forward|reverse)$",
+              "title": "Direction",
               "type": "string"
             }
           }
@@ -28904,9 +29843,515 @@
         ]
       }
     },
+    "/api/v1/resources": {
+      "get": {
+        "description": "Every file attachment and document link in the repository, paginated.\n\nReturns the ``{items, total, page, page_size}`` envelope used by the\nother paginated read endpoints. Binary payloads are never included \u2014\nfetch a file from ``GET /file-attachments/{id}/download``.",
+        "operationId": "list_resources_api_v1_resources_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Repeatable: \"file\" and/or \"link\"",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeatable: \"file\" and/or \"link\"",
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Id"
+            }
+          },
+          {
+            "description": "Repeatable card-type keys",
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeatable card-type keys",
+              "title": "Card Type"
+            }
+          },
+          {
+            "description": "Repeatable file-category / link-type keys",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeatable file-category / link-type keys",
+              "title": "Category"
+            }
+          },
+          {
+            "description": "Repeatable, files only",
+            "in": "query",
+            "name": "mime_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeatable, files only",
+              "title": "Mime Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "archived",
+            "required": false,
+            "schema": {
+              "default": "any",
+              "pattern": "^(any|active|archived)$",
+              "title": "Archived",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_by",
+            "required": false,
+            "schema": {
+              "default": "created_at",
+              "title": "Sort By",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_dir",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "pattern": "^(asc|desc)$",
+              "title": "Sort Dir",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceListPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Resources",
+        "tags": [
+          "resources"
+        ]
+      }
+    },
+    "/api/v1/resources/bulk-delete": {
+      "post": {
+        "description": "Delete a mixed selection of file attachments and document links.\n\nEach row is checked with the *same* gate the single-row DELETE\nendpoints use (``documents.manage`` or the card-level\n``card.manage_documents``), so this endpoint can never do what the\ncaller could not already do one row at a time. Rows the caller may\nnot touch are reported in ``skipped`` rather than failing the whole\nrequest \u2014 the contract ``POST /users/bulk-delete`` already uses.",
+        "operationId": "bulk_delete_resources_api_v1_resources_bulk_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceBulkDelete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceBulkDeleteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bulk Delete Resources",
+        "tags": [
+          "resources"
+        ]
+      }
+    },
+    "/api/v1/resources/stats": {
+      "get": {
+        "description": "Storage and usage rollup over the *same* filter set as the list, so\nthe KPI tiles always describe what the admin is looking at (the\npattern ``GET /risks/metrics`` uses for the Risk Register).",
+        "operationId": "resource_stats_api_v1_resources_stats_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mime_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mime Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "archived",
+            "required": false,
+            "schema": {
+              "default": "any",
+              "pattern": "^(any|active|archived)$",
+              "title": "Archived",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resource Stats",
+        "tags": [
+          "resources"
+        ]
+      }
+    },
     "/api/v1/risks": {
       "get": {
-        "description": "Paginated, filterable risk list. ``status`` / ``category`` /\n``level`` / ``source_type`` are repeatable query params (e.g.\n``?status=identified&status=analysed``).",
+        "description": "Paginated, filterable risk list. ``status`` / ``category`` /\n``level`` / ``source_type`` / ``card_id`` / ``card_type`` are repeatable\nquery params (e.g. ``?status=identified&status=analysed``). Repeated\nvalues OR within a dimension and AND across dimensions, so\n``?card_id=a&card_id=b&card_type=Application`` reads as \"risks affecting\ncard a or b, that also touch at least one Application\".",
         "operationId": "list_risks_api_v1_risks_get",
         "parameters": [
           {
@@ -28989,13 +30434,35 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
               "title": "Card Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
             }
           },
           {
@@ -29281,13 +30748,35 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
               "title": "Card Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
             }
           },
           {
@@ -29449,13 +30938,35 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
               "title": "Card Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
             }
           },
           {
@@ -33447,6 +34958,48 @@
         "summary": "Card Permissions Schema",
         "tags": [
           "stakeholder-roles"
+        ]
+      }
+    },
+    "/api/v1/stakeholders/bulk": {
+      "post": {
+        "description": "Batched add/remove of stakeholder role assignments.\n\nUsed by the spreadsheet importer to apply `stakeholder:<role>` columns in\none round-trip instead of two calls per row. Mirrors `POST /relations/bulk`:\neach operation independently succeeds or fails, `dry_run=true` validates\neverything inside a savepoint that is rolled back.\n\nPermission: `stakeholders.manage` (or the card-level\n`card.manage_stakeholders` grant), checked per referenced card.",
+        "operationId": "bulk_stakeholders_api_v1_stakeholders_bulk_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StakeholderBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StakeholderBulkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bulk Stakeholders",
+        "tags": [
+          "stakeholders"
         ]
       }
     },

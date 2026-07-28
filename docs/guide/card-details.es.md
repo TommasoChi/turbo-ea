@@ -85,6 +85,11 @@ Muestra todas las conexiones con otras fichas, agrupadas por tipo de relación. 
 - **Agregar relación** — Haga clic en **+** para crear una nueva relación; el selector muestra las fichas coincidentes en cuanto se abre (ordenadas por nombre, se cargan más al desplazarse) y al escribir se filtra la lista
 - **Eliminar relación** — Haga clic en el icono de eliminar para quitar una relación
 - **Agrupar por subtipo** — Cuando una sección de relaciones tiene muchas fichas relacionadas, se agrupan automáticamente en grupos de subtipo plegables (cada uno con un recuento), con un grupo final **Sin subtipo** para las fichas sin clasificar. Utilice el botón de alternancia en el encabezado de la sección para cambiar entre la vista agrupada y la vista de lista.
+- **Fichas vinculadas a subelementos** — Cuando una ficha tiene subelementos, cada grupo de relaciones muestra una etiqueta **+N en subelementos** que cuenta las fichas vinculadas más abajo en la jerarquía — por ejemplo, las aplicaciones asociadas a las subcapacidades de una capacidad. Al hacer clic se abre una lista de solo lectura en la que cada fila nombra el subelemento que contiene el vínculo (una ficha alcanzada a través de varios subelementos aparece una sola vez, con todos ellos indicados). El recuento solo incluye fichas que no figuran ya en el grupo superior. Para cambiar un vínculo, abra el subelemento que lo contiene. La lista se organiza en secciones de subtipo plegables, de modo que el subtipo se indica una vez por sección en lugar de en cada fila. Dentro de una sección aparecen primero las fichas cuya fase de ciclo de vida requiere atención (fin de vida, luego retirada progresiva), y la fase de cada ficha se muestra como un punto de color junto a su nombre; pase el ratón por encima para ver el nombre de la fase.
+
+![Grupos de relaciones con la etiqueta de subelementos](../assets/img/es/59_ficha_subelementos_etiqueta.png)
+
+![Fichas vinculadas a través de subelementos, agrupadas por subtipo](../assets/img/es/60_ficha_subelementos_relaciones.png)
 
 ### Sección de Etiquetas
 
@@ -94,7 +99,6 @@ Aplique etiquetas de los [grupos de etiquetas](../admin/tags.es.md) configurados
 
 La pestaña de **Recursos** consolida todos los materiales de apoyo de una ficha:
 
-- **Decisiones de Arquitectura** — ADR vinculados a esta ficha, mostrados como píldoras de color que coinciden con los colores del tipo de tarjeta (ej., azul para Aplicación, morado para Objeto de Datos). Puede vincular ADR existentes o crear uno nuevo directamente desde la pestaña de Recursos — el nuevo ADR se vincula automáticamente a la ficha.
 - **Archivos Adjuntos** — Cargue y gestione archivos (PDF, DOCX, XLSX, imágenes, hasta 10 MB). Al cargar, seleccione una **categoría de documento** entre: Arquitectura, Seguridad, Compliance, Operaciones, Notas de Reunión, Diseño u Otro. La categoría aparece como un chip junto a cada archivo.
 - **Enlaces de Documentos** — Referencias de documentos basadas en URL. Al agregar un enlace, seleccione un **tipo de enlace** entre: Documentación, Seguridad, Compliance, Arquitectura, Operaciones, Soporte u Otro. El tipo de enlace aparece como un chip junto a cada enlace, y el icono cambia según el tipo seleccionado.
 - **Diagramas** — Vincule [diagramas](diagrams.es.md) existentes a esta ficha. Los diagramas vinculados se muestran como vistas previas en miniatura que puede hacer clic para abrir en el editor de diagramas. Use el botón **Vincular Diagrama** para buscar y adjuntar un diagrama existente, o haga clic en el icono de desvincular para eliminar la asociación.
@@ -150,6 +154,12 @@ La ruta de invitación requiere el permiso **`users.invite`**, una forma delegad
 ![Historial de Cambios de una Ficha](../assets/img/es/08_ficha_historial.png)
 
 Muestra el **registro completo de auditoría** de los cambios realizados en la ficha: **quién** hizo el cambio, **cuándo** se realizó y **qué** se modificó (valor anterior vs. valor nuevo). Esto permite la trazabilidad completa de todas las modificaciones a lo largo del tiempo.
+
+## Pestaña de ADR
+
+Cada ficha cuenta con una pestaña **ADR** que enumera las [decisiones de arquitectura](delivery.md) vinculadas a ella, mostrando la referencia, el título, el estado, todas sus fichas vinculadas y la fecha de la última modificación. Haga clic en una fila para abrir la decisión.
+
+Si tiene permiso para gestionar vínculos de ADR, la pestaña también ofrece **Vincular ADR** para adjuntar una decisión existente y **Crear ADR** para crear una nueva ya vinculada a esta ficha, además de una acción de desvinculación en cada fila. En las fichas sin decisiones vinculadas la pestaña permanece oculta salvo que tenga ese permiso, de modo que los usuarios de solo lectura nunca ven una pestaña vacía.
 
 ## Pestaña de Riesgos (GRC activado, cuando aplique)
 

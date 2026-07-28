@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router";
 import Box from "@mui/material/Box";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
@@ -198,6 +198,7 @@ export default function PpmProjectDetail() {
       {tab === 5 && <PpmGanttTab initiativeId={id!} card={card ?? undefined} />}
       {tab === 6 && (
         <CardDetailContent
+          key={card.id}
           card={card}
           perms={perms}
           onCardUpdate={(updated) => setCard(updated)}

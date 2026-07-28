@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import ReportShell from "./ReportShell";
 
 // ---------------------------------------------------------------------------
@@ -9,8 +9,8 @@ import ReportShell from "./ReportShell";
 // ---------------------------------------------------------------------------
 
 const mockNavigate = vi.fn();
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual("react-router-dom");
+vi.mock("react-router", async () => {
+  const actual = await vi.importActual("react-router");
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
@@ -168,6 +168,40 @@ describe("ReportShell", () => {
     await user.click(screen.getByText("View all saved reports"));
 
     expect(mockNavigate).toHaveBeenCalledWith("/reports/saved");
+  });
+
+  it("offers Excel export for a chart-only report that supplies buildExportData", async () => {
+    // A report that hands over real tabular data isn't relying on the DOM
+    // scrape, so the chart/table toggle is irrelevant to whether XLSX applies.
+    // Without this the Matrix report — which has no table view — could never
+    // export its data.
+    const user = userEvent.setup();
+    renderShell({
+      chartRef: { current: document.createElement("div") },
+      hasTableToggle: false,
+      buildExportData: () => ({ title: "Test Report", sheets: [] }),
+    });
+
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Export to Excel (.xlsx)")).toBeInTheDocument();
+    });
+  });
+
+  it("hides Excel export for a chart-only report with no buildExportData", async () => {
+    const user = userEvent.setup();
+    renderShell({
+      chartRef: { current: document.createElement("div") },
+      hasTableToggle: false,
+    });
+
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Export to PowerPoint (.pptx)")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Export to Excel (.xlsx)")).not.toBeInTheDocument();
   });
 
   it("renders print params when provided", () => {

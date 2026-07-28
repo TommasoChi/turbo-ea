@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import MuiCard from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -30,6 +30,7 @@ import {
   TodosTab,
   StakeholdersTab,
   ResourcesTab,
+  AdrsTab,
   HistoryTab,
   RisksTab,
   ComplianceTab,
@@ -45,7 +46,12 @@ import {
   useExtensionFieldVisibilityProviders,
 } from "@/lib/extensionHost";
 import SoAWTab from "@/features/cards/sections/SoAWTab";
+import {
+  makeSectionConfigReader,
+  sectionDefaultExpanded,
+} from "@/features/cards/sectionConfig";
 import type {
+  ArchitectureDecision,
   Card,
   CardEffectivePermissions,
   Risk,
@@ -154,6 +160,36 @@ export default function CardDetailContent({
   const showComplianceTab =
     grcEnabled && canViewCompliance && (complianceCount === null || complianceCount > 0);
 
+  // Card-scoped ADR count. Same `null = loading` convention as above, but ADRs
+  // are not GRC-gated so this lives in its own effect. Unlike Risks the tab
+  // also stays visible on an empty card for users who may link/create ADRs —
+  // otherwise there'd be no way to attach the first decision to a card.
+  const [adrCount, setAdrCount] = useState<number | null>(null);
+  const canViewAdr = can("adr.view");
+
+  useEffect(() => {
+    if (!canViewAdr) {
+      setAdrCount(0);
+      return;
+    }
+    let cancelled = false;
+    setAdrCount(null);
+    api
+      .get<ArchitectureDecision[]>(`/adr/by-card/${card.id}`)
+      .then((rows) => {
+        if (!cancelled) setAdrCount(rows.length);
+      })
+      .catch(() => {
+        if (!cancelled) setAdrCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [card.id, canViewAdr]);
+
+  const showAdrsTab =
+    canViewAdr && (adrCount === null || adrCount > 0 || perms.can_manage_adr_links);
+
   const [tab, setTab] = useState(initialTab);
   const [relRefresh, setRelRefresh] = useState(0);
 
@@ -179,12 +215,6 @@ export default function CardDetailContent({
   if (autoFieldKeys.length > 0) {
     calcFieldKeys = [...new Set([...calcFieldKeys, ...autoFieldKeys])];
   }
-
-  // Section config
-  const sc = typeConfig?.section_config || {};
-  const secExpanded = (key: string, fallback = true) =>
-    sc[key]?.defaultExpanded !== false ? fallback : false;
-  const secHidden = (key: string) => !!sc[key]?.hidden;
 
   // Extensions may hide specific card fields at render time (display-only,
   // ungated, never deletes stored values). Each registered provider renders as
@@ -229,6 +259,14 @@ export default function CardDetailContent({
   const descExtraFields = (descExtraSection?.fields || []).filter(
     (f) => !hiddenFieldKeys.has(f.key),
   );
+
+  // Section config — see `sectionConfig.ts` for the explicit-boolean and
+  // legacy-key semantics this reader encapsulates.
+  const sc = typeConfig?.section_config || {};
+  const sectionCfg = makeSectionConfigReader(sc, customSections);
+  const secRaw = sectionCfg.raw;
+  const secExpanded = sectionCfg.expanded;
+  const secHidden = sectionCfg.hidden;
 
   // Build section order from config or default
   const sectionOrder = (() => {
@@ -311,7 +349,7 @@ export default function CardDetailContent({
 
   const renderSection = (key: string) => {
     if (secHidden(key)) return null;
-    const exp = secExpanded(key, key === "relations" ? false : true);
+    const exp = secExpanded(key, sectionDefaultExpanded(key));
 
     if (key === "description") {
       return (
@@ -335,10 +373,12 @@ export default function CardDetailContent({
     if (key === "eol") {
       return (
         <ErrorBoundary key={key} label="End of Life" inline>
+          {/* `undefined` keeps EolLinkSection's own default (expand only when a
+              product is linked); an explicit setting overrides it. */}
           <EolLinkSection
             card={card}
             onSave={handleUpdate}
-            initialExpanded={exp ? undefined : false}
+            initialExpanded={secRaw("eol")}
           />
         </ErrorBoundary>
       );
@@ -451,11 +491,16 @@ export default function CardDetailContent({
   const todosIdx = 2 + extraOffset;
   const stakeholdersIdx = 3 + extraOffset;
   const resourcesIdx = 4 + extraOffset;
+  const adrsTabOffset = showAdrsTab ? 1 : 0;
+  const adrsIdx = showAdrsTab ? 5 + extraOffset : -1;
   const risksTabOffset = showRisksTab ? 1 : 0;
-  const risksIdx = showRisksTab ? 5 + extraOffset : -1;
+  const risksIdx = showRisksTab ? 5 + extraOffset + adrsTabOffset : -1;
   const complianceTabOffset = showComplianceTab ? 1 : 0;
-  const complianceIdx = showComplianceTab ? 5 + extraOffset + risksTabOffset : -1;
-  const historyIdx = 5 + extraOffset + risksTabOffset + complianceTabOffset;
+  const complianceIdx = showComplianceTab
+    ? 5 + extraOffset + adrsTabOffset + risksTabOffset
+    : -1;
+  const historyIdx =
+    5 + extraOffset + adrsTabOffset + risksTabOffset + complianceTabOffset;
   const ppmTabIdx = isPpm ? historyIdx + 1 : -1;
   // SoAW tab index = 1 when Initiative (no BPM); slots in right after Card.
   const soawTabIdx = isSoaw ? 1 + bpmOffset : -1;
@@ -482,6 +527,7 @@ export default function CardDetailContent({
     if (idx === todosIdx) return "todos";
     if (idx === stakeholdersIdx) return "stakeholders";
     if (idx === resourcesIdx) return "resources";
+    if (showAdrsTab && idx === adrsIdx) return "adrs";
     if (showRisksTab && idx === risksIdx) return "risks";
     if (showComplianceTab && idx === complianceIdx) return "compliance";
     if (idx === historyIdx) return "history";
@@ -500,7 +546,7 @@ export default function CardDetailContent({
     // tabKeyForIndex captures index offsets; re-running when any of them shift
     // keeps the active key in sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, card.id, isBpm, isSoaw, showRisksTab, showComplianceTab, noteVisit]);
+  }, [tab, card.id, isBpm, isSoaw, showAdrsTab, showRisksTab, showComplianceTab, noteVisit]);
 
   const renderTabLabel = (key: string, label: string) => {
     if (!hasUpdates(key)) return label;
@@ -559,6 +605,7 @@ export default function CardDetailContent({
         <Tab label={renderTabLabel("todos", t("tabs.todos"))} />
         <Tab label={renderTabLabel("stakeholders", t("tabs.stakeholders"))} />
         <Tab label={renderTabLabel("resources", t("tabs.resources"))} />
+        {showAdrsTab && <Tab label={renderTabLabel("adrs", t("tabs.adrs"))} />}
         {showRisksTab && <Tab label={renderTabLabel("risks", t("tabs.risks"))} />}
         {showComplianceTab && (
           <Tab label={renderTabLabel("compliance", t("tabs.compliance"))} />
@@ -654,11 +701,22 @@ export default function CardDetailContent({
             <CardContent>
               <ResourcesTab
                 fsId={card.id}
+                canManageDocuments={perms.can_manage_documents}
+                canManageDiagramLinks={perms.can_manage_diagram_links}
+              />
+            </CardContent>
+          </MuiCard>
+        </ErrorBoundary>
+      )}
+      {showAdrsTab && tab === adrsIdx && (
+        <ErrorBoundary label="ADRs">
+          <MuiCard>
+            <CardContent>
+              <AdrsTab
+                cardId={card.id}
                 cardName={card.name}
                 cardType={card.type}
-                canManageDocuments={perms.can_manage_documents}
                 canManageAdrLinks={perms.can_manage_adr_links}
-                canManageDiagramLinks={perms.can_manage_diagram_links}
               />
             </CardContent>
           </MuiCard>

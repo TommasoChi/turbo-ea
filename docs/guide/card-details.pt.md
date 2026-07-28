@@ -85,6 +85,11 @@ Mostra todas as conexões com outros cards, agrupadas por tipo de relacionamento
 - **Adicionar relacionamento** — Clique em **+** para criar um novo relacionamento; o seletor lista os cards correspondentes assim que é aberto (ordenados por nome, mais são carregados ao rolar) e digitar filtra a lista
 - **Remover relacionamento** — Clique no ícone de exclusão para remover um relacionamento
 - **Agrupar por subtipo** — Quando uma seção de relacionamentos tem muitos cards relacionados, eles são agrupados automaticamente em grupos de subtipo recolhíveis (cada um com uma contagem), com um grupo final **Sem subtipo** para os cards não classificados. Use o botão de alternância no cabeçalho da seção para alternar entre a visualização agrupada e a lista simples.
+- **Cards ligados a subelementos** — Quando um card tem subelementos, cada grupo de relacionamentos exibe um chip **+N em subelementos** que conta os cards ligados mais abaixo na hierarquia — por exemplo, as aplicações associadas às subcapacidades de uma capacidade. Ao clicar, abre-se uma lista somente leitura em que cada linha indica o subelemento que detém a ligação (um card alcançado por vários subelementos aparece uma única vez, com todos listados). A contagem inclui apenas cards que ainda não constam do grupo acima. Para alterar uma ligação, abra o subelemento que a detém. A lista está organizada em secções de subtipo recolhíveis, pelo que o subtipo é indicado uma vez por secção em vez de em cada linha. Dentro de uma secção surgem primeiro os cards cuja fase do ciclo de vida exige atenção (fim de vida, depois descontinuação), e a fase de cada card é apresentada como um ponto colorido junto ao nome — passe o rato por cima para ver o nome da fase.
+
+![Grupos de relacionamentos com o chip de subelementos](../assets/img/pt/59_ficha_subelementos_chip.png)
+
+![Cards ligados através de subelementos, agrupados por subtipo](../assets/img/pt/60_ficha_subelementos_relacoes.png)
 
 ### Seção de Tags
 
@@ -94,7 +99,6 @@ Aplique tags dos [grupos de tags](../admin/tags.md) configurados. Dependendo do 
 
 A aba de **Recursos** consolida todos os materiais de apoio de um card:
 
-- **Decisões de Arquitetura** — ADR vinculados a este card, exibidos como pílulas coloridas correspondentes às cores do tipo de card (ex.: azul para Aplicação, roxo para Objeto de Dados). Você pode vincular ADRs existentes ou criar um novo diretamente a partir da aba Recursos — o novo ADR é vinculado automaticamente ao card.
 - **Anexos de Arquivos** — Carregue e gerencie arquivos (PDF, DOCX, XLSX, imagens, até 10 MB). Ao carregar, selecione uma **categoria de documento** entre: Arquitetura, Segurança, Conformidade, Operações, Notas de Reunião, Design ou Outro. A categoria aparece como um chip ao lado de cada arquivo.
 - **Links de Documentos** — Referências de documentos baseadas em URL. Ao adicionar um link, selecione um **tipo de link** entre: Documentação, Segurança, Conformidade, Arquitetura, Operações, Suporte ou Outro. O tipo de link aparece como um chip ao lado de cada link, e o ícone muda de acordo com o tipo selecionado.
 - **Diagramas** — Vincule [diagramas](diagrams.pt.md) existentes a este card. Os diagramas vinculados são exibidos como pré-visualizações em miniatura que você pode clicar para abrir no editor de diagramas. Use o botão **Vincular Diagrama** para pesquisar e anexar um diagrama existente, ou clique no ícone de desvincular para remover a associação.
@@ -150,6 +154,12 @@ O caminho de convite requer a permissão **`users.invite`**, uma forma delegada 
 ![Histórico de Alterações do Card](../assets/img/pt/08_ficha_historico.png)
 
 Mostra a **trilha de auditoria completa** das alterações feitas no card: **quem** fez a alteração, **quando** foi feita e **o que** foi modificado (valor anterior vs. novo valor). Isso permite total rastreabilidade de todas as modificações ao longo do tempo.
+
+## Aba de ADR
+
+Cada card possui uma aba **ADR** que lista as [decisões de arquitetura](delivery.md) vinculadas a ele, exibindo a referência, o título, o status, todos os cards vinculados e a data da última modificação. Clique em uma linha para abrir a decisão.
+
+Se você tiver permissão para gerenciar vínculos de ADR, a aba também oferece **Vincular ADR** para anexar uma decisão existente e **Criar ADR** para criar uma nova já vinculada a este card, além de uma ação de desvinculação em cada linha. Em cards sem decisões vinculadas a aba fica oculta, a menos que você tenha essa permissão, de modo que usuários somente leitura nunca veem uma aba vazia.
 
 ## Aba de Riscos (GRC habilitado, quando presente)
 

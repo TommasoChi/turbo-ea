@@ -10,7 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { AgGridReact } from "ag-grid-react";
 import type {
   ColDef,
@@ -46,9 +46,13 @@ import Tooltip from "@mui/material/Tooltip";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { useIsRtl } from "@/hooks/useIsRtl";
+import { useMetamodel } from "@/hooks/useMetamodel";
+import { typeLabel } from "@/hooks/useResolveLabel";
+import { cardChipSx, groupCardsByType } from "./affectedCards";
 import CreateRiskDialog from "./CreateRiskDialog";
 import RiskImportDialog from "./RiskImportDialog";
 import RiskFilterSidebar, {
+  CardFilterOption,
   EMPTY_RISK_FILTERS,
   OwnerOption,
   RiskFilters,
@@ -160,7 +164,8 @@ function saveRiskPrefs(p: RiskPrefs) {
 // ---------------------------------------------------------------------------
 
 export default function RiskRegisterPage() {
-  const { t } = useTranslation("grc");
+  const { t, i18n } = useTranslation("grc");
+  const { types: metamodelTypes } = useMetamodel();
   const navigate = useNavigate();
   const { mode } = useThemeMode();
   const isRtl = useIsRtl();
@@ -239,6 +244,47 @@ export default function RiskRegisterPage() {
       .catch(() => setAvailableOwners([]));
   }, []);
 
+  // ── Filter options for the sidebar's Card type / Affected cards
+  //    sections, derived from the loaded rows exactly the way the
+  //    Decisions panel derives its lists (DecisionsPanel.tsx). Rows are
+  //    fetched with the active filters applied, so current selections are
+  //    unioned in — an active filter must never hide its own checkbox. ──
+  const availableCardTypes = useMemo(() => {
+    const keys = new Set<string>();
+    for (const r of rows) for (const c of r.cards ?? []) keys.add(c.card_type);
+    for (const k of filters.cardTypes) keys.add(k);
+    return [...keys]
+      .map((key) => {
+        const mt = metamodelTypes.find((x) => x.key === key);
+        return {
+          key,
+          label: mt ? typeLabel(mt, i18n.language) : key,
+          color: mt?.color ?? "#666",
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, i18n.language));
+  }, [rows, filters.cardTypes, metamodelTypes, i18n.language]);
+
+  const availableCards = useMemo(() => {
+    const seen = new Map<string, CardFilterOption>();
+    const add = (id: string, name: string, type: string) => {
+      if (seen.has(id)) return;
+      const mt = metamodelTypes.find((x) => x.key === type);
+      seen.set(id, { id, name, type, color: mt?.color ?? "#666" });
+    };
+    for (const r of rows) {
+      for (const c of r.cards ?? []) {
+        // Selected card types narrow the card list, per the ADR sidebar.
+        if (filters.cardTypes.length > 0 && !filters.cardTypes.includes(c.card_type)) {
+          continue;
+        }
+        add(c.card_id, c.card_name, c.card_type);
+      }
+    }
+    for (const sel of filters.cards) add(sel.id, sel.name, sel.type);
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, i18n.language));
+  }, [rows, filters.cards, filters.cardTypes, metamodelTypes, i18n.language]);
+
   // ── Shared URLSearchParams builder. Multi-valued filters ride as
   //    repeat keys (``?status=identified&status=analysed``) — both the
   //    list and metrics endpoints accept them. ─────────────────────
@@ -251,6 +297,10 @@ export default function RiskRegisterPage() {
       filters.levels.forEach((l) => params.append("level", l));
       filters.sources.forEach((s) => params.append("source_type", s));
       filters.owners.forEach((o) => params.append("owner_id", o));
+      // Affected cards: any-of within each of the two dimensions, AND
+      // between them (the backend ANDs the two subquery predicates).
+      filters.cards.forEach((c) => params.append("card_id", c.id));
+      filters.cardTypes.forEach((k) => params.append("card_type", k));
       if (filters.overdueOnly) params.set("overdue", "true");
       return params;
     },
@@ -464,8 +514,9 @@ export default function RiskRegisterPage() {
       {
         headerName: t("risks.col.cards"),
         colId: "cards",
-        width: 260,
-        minWidth: 200,
+        width: 320,
+        minWidth: 220,
+        autoHeight: true,
         filter: "agTextColumnFilter",
         // String value so the built-in text filter matches card names.
         valueGetter: (p) =>
@@ -668,6 +719,8 @@ export default function RiskRegisterPage() {
           width={sidebarWidth}
           onWidthChange={setSidebarWidth}
           availableOwners={availableOwners}
+          availableCardTypes={availableCardTypes}
+          availableCards={availableCards}
           visibleColumns={visibleColumns}
           onVisibleColumnsChange={setVisibleColumns}
           onResetColumns={resetVisibleColumns}
@@ -793,49 +846,74 @@ function topLevel(byLevel: Record<string, number> | undefined): string | null {
   return null;
 }
 
-/** Renders the M:N affected cards as a compact stack of chips —
- *  first 2 names inline, an ``+N`` overflow chip with the full list in a
- *  tooltip when there are more. Keeps the column width tight and the
- *  information scent high.
+/** Renders the M:N affected cards exactly like the Decisions grid's Cards
+ *  column (`AdrGrid.tsx`): solid chips filled with each card type's colour,
+ *  the card name as label, wrapping inside an auto-height cell. Cards are
+ *  ordered by card type then alphabetically (discussion #876); the tooltip
+ *  spells the full set out grouped under type headings and only appears
+ *  when there are more than two cards, matching AdrGrid's threshold.
  */
 function StackedCards({ cards }: { cards: RiskCardLink[] }) {
-  const VISIBLE = 2;
-  const visible = cards.slice(0, VISIBLE);
-  const overflow = cards.slice(VISIBLE);
+  const { i18n } = useTranslation("grc");
+  const { types } = useMetamodel();
+
+  const groups = useMemo(
+    () => groupCardsByType(cards, types, i18n.language),
+    [cards, types, i18n.language],
+  );
+
   return (
-    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ overflow: "hidden" }}>
-      {visible.map((c) => (
-        <Tooltip key={c.card_id} title={`${c.card_name} · ${c.card_type}`}>
-          <Chip
-            size="small"
-            variant="outlined"
-            label={c.card_name}
-            sx={{
-              maxWidth: 110,
-              "& .MuiChip-label": {
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              },
-            }}
-          />
-        </Tooltip>
-      ))}
-      {overflow.length > 0 && (
-        <Tooltip
-          title={
-            <Box component="ul" sx={{ m: 0, pl: 2 }}>
-              {overflow.map((c) => (
-                <li key={c.card_id}>
-                  {c.card_name} · {c.card_type}
-                </li>
-              ))}
+    <Tooltip
+      enterDelay={400}
+      disableHoverListener={cards.length <= 2}
+      title={
+        <Box sx={{ m: 0 }}>
+          {groups.map((group) => (
+            <Box key={group.typeKey} sx={{ mb: 0.5 }}>
+              <Typography variant="caption" fontWeight={700} component="div">
+                {group.label}
+              </Typography>
+              <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                {group.cards.map((c) => (
+                  <li key={c.card_id}>{c.card_name}</li>
+                ))}
+              </Box>
             </Box>
-          }
-        >
-          <Chip size="small" color="primary" label={`+${overflow.length}`} />
-        </Tooltip>
-      )}
-    </Stack>
+          ))}
+        </Box>
+      }
+    >
+      <Box
+        sx={{
+          display: "flex",
+          gap: 0.5,
+          alignItems: "center",
+          flexWrap: "wrap",
+          overflow: "hidden",
+          py: 0.5,
+        }}
+      >
+        {groups.flatMap((group) =>
+          group.cards.map((c) => (
+            <Chip
+              key={c.card_id}
+              label={c.card_name}
+              size="small"
+              sx={{
+                ...cardChipSx(group.color),
+                fontSize: 11,
+                height: 20,
+                maxWidth: 120,
+                "& .MuiChip-label": {
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  px: 0.75,
+                },
+              }}
+            />
+          )),
+        )}
+      </Box>
+    </Tooltip>
   );
 }

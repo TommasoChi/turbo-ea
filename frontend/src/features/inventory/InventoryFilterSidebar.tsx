@@ -39,6 +39,7 @@ import type {
   ColumnLayoutItem,
   FieldDef,
   RelationType,
+  StakeholderRoleOption,
   TagGroup,
   User,
 } from "@/types";
@@ -74,6 +75,9 @@ interface Props {
   width: number;
   onWidthChange: (w: number) => void;
   relevantRelTypes?: RelationType[];
+  // Stakeholder roles of the single selected type — one togglable
+  // "Stakeholders: <role>" column each.
+  stakeholderRoles?: StakeholderRoleOption[];
   relationsMap?: Map<string, Map<string, string[]>>;
   tagGroups?: TagGroup[];
   canArchive?: boolean;
@@ -214,6 +218,7 @@ export default function InventoryFilterSidebar({
   width,
   onWidthChange,
   relevantRelTypes = [],
+  stakeholderRoles = [],
   relationsMap,
   tagGroups = [],
   canArchive = false,
@@ -1361,6 +1366,7 @@ export default function InventoryFilterSidebar({
               selectedColumns={selectedColumns}
               onSelectedColumnsChange={onSelectedColumnsChange}
               relevantRelTypes={relevantRelTypes}
+              stakeholderRoles={stakeholderRoles}
               onResetColumns={onResetColumns}
               columnsChanged={columnsChanged}
               t={t}
@@ -1843,6 +1849,7 @@ export const CORE_COLUMNS = [
   { key: "core_type", icon: "category", tKey: "common:labels.type" as const },
   { key: "core_name", icon: "label", tKey: "common:labels.name" as const },
   { key: "core_reference", icon: "tag", tKey: "columns.id" as const },
+  { key: "core_parent", icon: "account_tree", tKey: "columns.parent" as const },
   { key: "core_path", icon: "account_tree", tKey: "columns.path" as const },
   { key: "core_description", icon: "description", tKey: "common:labels.description" as const },
   { key: "core_subtype", icon: "subdirectory_arrow_right", tKey: "common:labels.subtype" as const },
@@ -1868,6 +1875,7 @@ function ColumnsTab({
   selectedColumns,
   onSelectedColumnsChange,
   relevantRelTypes,
+  stakeholderRoles,
   onResetColumns,
   columnsChanged,
   t,
@@ -1877,6 +1885,7 @@ function ColumnsTab({
   selectedColumns: Set<string>;
   onSelectedColumnsChange: (cols: Set<string>) => void;
   relevantRelTypes: RelationType[];
+  stakeholderRoles: StakeholderRoleOption[];
   onResetColumns?: () => void;
   columnsChanged?: boolean;
   t: (key: string, opts?: Record<string, unknown>) => string;
@@ -1889,6 +1898,7 @@ function ColumnsTab({
     metadata: true,
     attributes: true,
     relations: true,
+    stakeholders: true,
   });
 
   const toggleSection = (key: string) =>
@@ -1996,12 +2006,20 @@ function ColumnsTab({
     return `rel_${isSource ? rt.target_type_key : rt.source_type_key}`;
   });
 
+  const filteredStakeholderRoles = stakeholderRoles.filter(
+    (r) => !searchQuery || typeLabel(r).toLowerCase().includes(lowerSearch),
+  );
+  const stakeholderKeys = filteredStakeholderRoles.map((r) => `stakeholder_${r.key}`);
+
   const allMetaChecked = metaKeys.length > 0 && metaKeys.every((k) => selectedColumns.has(k));
   const someMetaChecked = metaKeys.some((k) => selectedColumns.has(k));
   const allAttrChecked = attrKeys.length > 0 && attrKeys.every((k) => selectedColumns.has(k));
   const someAttrChecked = attrKeys.some((k) => selectedColumns.has(k));
   const allRelChecked = relKeys.length > 0 && relKeys.every((k) => selectedColumns.has(k));
   const someRelChecked = relKeys.some((k) => selectedColumns.has(k));
+  const allStakeholdersChecked =
+    stakeholderKeys.length > 0 && stakeholderKeys.every((k) => selectedColumns.has(k));
+  const someStakeholdersChecked = stakeholderKeys.some((k) => selectedColumns.has(k));
 
   const totalSelected = selectedColumns.size;
 
@@ -2331,6 +2349,68 @@ function ColumnsTab({
                       primary={
                         <Typography variant="body2" fontSize={13}>
                           {label}
+                        </Typography>
+                      }
+                    />
+                  </ListItemButton>
+                );
+              })}
+            </List>
+          </Collapse>
+        </>
+      )}
+
+      {/* Stakeholder columns section — one per role of the selected type */}
+      {filteredStakeholderRoles.length > 0 && (
+        <>
+          <SectionHeader
+            label={t("columns.stakeholders")}
+            icon="group"
+            expanded={expandedSections.stakeholders}
+            onToggle={() => toggleSection("stakeholders")}
+            count={stakeholderKeys.filter((k) => selectedColumns.has(k)).length}
+          />
+          <Collapse in={expandedSections.stakeholders}>
+            <List dense disablePadding sx={{ mb: 1 }}>
+              {/* Select all stakeholder roles */}
+              <ListItemButton
+                sx={{ py: 0.25, px: 0.5, borderRadius: 1 }}
+                onClick={() => toggleAll(stakeholderKeys, !allStakeholdersChecked)}
+              >
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <Checkbox
+                    size="small"
+                    checked={allStakeholdersChecked}
+                    indeterminate={someStakeholdersChecked && !allStakeholdersChecked}
+                    sx={{ p: 0 }}
+                  />
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography variant="body2" fontSize={13} fontWeight={500} fontStyle="italic">
+                      {t("columns.selectAll")}
+                    </Typography>
+                  }
+                />
+              </ListItemButton>
+              {filteredStakeholderRoles.map((role) => {
+                const colKey = `stakeholder_${role.key}`;
+                return (
+                  <ListItemButton
+                    key={colKey}
+                    sx={{ py: 0.25, px: 0.5, borderRadius: 1 }}
+                    onClick={() => toggleColumn(colKey)}
+                  >
+                    <ListItemIcon sx={{ minWidth: 28 }}>
+                      <Checkbox size="small" checked={selectedColumns.has(colKey)} sx={{ p: 0 }} />
+                    </ListItemIcon>
+                    <ListItemIcon sx={{ minWidth: 24 }}>
+                      <MaterialSymbol icon="person" size={16} />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Typography variant="body2" fontSize={13}>
+                          {typeLabel(role)}
                         </Typography>
                       }
                     />

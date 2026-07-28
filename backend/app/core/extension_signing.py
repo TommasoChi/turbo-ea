@@ -50,17 +50,6 @@ DEFAULT_VENDOR_PUBLIC_KEYS: dict[str, str] = {
     # Secondary license-signing key, kept separate from vendor-1; never signs
     # bundles. Rotates with a core release.
     "store-1": "rfjoGjveWUvMnmwo72N2nufua1iEkpPcH/xd1gg/ZDQ=",
-    # Local dev/test key for this fork — trusts bundles signed while
-    # developing extensions against this instance (see
-    # ../turbo-ea-ext-value-chain/). Not in KEY_ROLES, so permissive by
-    # default (may sign bundle + license). Private half is NOT in this repo.
-    "my-key": "Q32e1zLz7O3kVl17hz5LXCzbaYcHTcGtU23JtfsKqSc=",
-    # Second local dev/test key, generated 2026-07-20 for the same
-    # value-chain extension project. Private half lives (gitignored) at
-    # ../turbo-ea-ext-value-chain/.dev-keys/dev-private.b64 — added because
-    # the private half of "my-key" above was lost (never committed/stashed
-    # anywhere recoverable). Not in KEY_ROLES, so permissive by default.
-    "value-chain-dev": "LodtbHz+wQuQy3JVFL1h4ZfHpMeQLng5U2pkQtRC4t8=",
 }
 
 # Key id assumed for signed envelopes that carry no ``key_id`` of their own.

@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -54,6 +54,7 @@ vi.mock("@/features/cards/sections", async () => {
     TodosTab: stub,
     StakeholdersTab: stub,
     ResourcesTab: stub,
+    AdrsTab: stub,
     HistoryTab: stub,
     RisksTab: stub,
     ComplianceTab: stub,

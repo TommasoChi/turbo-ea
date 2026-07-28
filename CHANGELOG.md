@@ -5,6 +5,158 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.33.1] - 2026-07-28
+
+### Fixed
+- **Relations attached to a card that has children were missing from the Matrix report.** A card with sub-cards was only a heading spanning them, with no row or column of its own, so anything linked to the card itself had nowhere to appear — the card showed on the axis, the intersection stayed blank, and the relation was still counted in the totals. In the demo dataset that hid 17 of the 25 Organization–Application relations. Such a card now gets its own line labelled «(itself)» under its heading, and a collapsed group counts its own relations along with its children's.
+- **«Hide unrelated cards» could hide a card that was related.** A card whose own relations were its only ones — none on its sub-cards — was dropped by the very toggle meant to keep it.
+- **The Matrix report stopped showing relations whose type is not the one the metamodel declares for those two card types.** Relations left behind by a renamed relation type, brought in by an import, or declared for another pair were silently dropped, and a pair the metamodel says nothing about showed an empty grid. What belongs in the grid is decided by the cards a relation connects, as it was before 2.33.0.
+
+## [2.33.0] - 2026-07-28
+
+### Added
+- **The Matrix report can show what a relation means, not just that one exists.** Two new cell displays put the relation's own values in the grid: compact colour-coded letters in the dense view, or the value names in full in a widened one, both with a legend. What appears comes from the attributes your relation types declare, in your language — CRUD flags read C R U D, an ownership relation shows Owner and User, and a value you add in the metamodel appears with no further setup.
+- **The Matrix report can be filtered by relation.** A filter bar narrows the grid to a relation type, a direction (whether the row card is the source or the target), or particular attribute values — including relations where a value was never set. Cards that no longer match empty out, so the existing hide-toggle leaves only the ones that do.
+- **The Matrix report points at coverage gaps.** Two tiles count the cards on each axis with no relation at all, and a Show-only-gaps view reduces the grid to exactly those — the capabilities nobody supports, the data objects nobody maintains.
+- **Matrix report usability.** Find-row and find-column search, a button to swap the two axes, relation details in the cell popover, and tooltips on the column headers.
+- **The Matrix report exports to Excel.** Two sheets: the grid as it appears on screen, and one row per relation with its values spread across columns.
+
+### Fixed
+- **Boolean attributes on a relation could never be set.** The relation attribute editor only rendered dropdown values, so any flag a relation type declared — the built-in Create / Read / Update / Delete pairs among them — was invisible and unusable. Flags now render as checkboxes and appear as badges on the relation.
+- **The Matrix report under-reported its relation count.** Several relations between the same two cards were counted as one, so a cell could never show more than a single link and the totals were low. The count on a same-type matrix also included each card's own diagonal.
+- **Three Matrix report labels showed a raw translation key** instead of the translated text.
+
+## [2.32.1] - 2026-07-27
+
+### Fixed
+- **Changing an inventory filter while a slower request was still running could leave the grid showing the wrong cards.** Clearing the type filter fetches the whole repository; picking a specific type straight afterwards came back first, and then the slow response landed and overwrote the grid — so the grid listed every card while the sidebar said «Application». Filter-driven requests are now cancelled when a newer one starts, and a superseded response is discarded instead of applied.
+- **The Matrix report could draw one pair of card types under the labels of another.** It never cleared the previous data, so after switching an axis the old grid stayed on screen beneath the new row and column headings, with nothing to indicate the two disagreed. Switching axes now shows the loading indicator until the matching data arrives.
+- **Typing in the inventory search box fired a full repository request per keystroke.** The search term now settles for a moment before it is sent, and the grid keeps its loading indicator from the very first keystroke, so it never looks finished while it is still showing results for what you typed before. Type, approval and archived toggles stay instant.
+- **The same stale-result problem affected the Cost, Dependency, Capability Map and Lifecycle reports, the Todos list and the PPM portfolio.** Every view whose data reloads when you change a picker now discards results for a selection you have moved on from.
+- **The portfolio reports could sit on a loading spinner forever.** Switching card type cleared the chart before the new data arrived, and a request that failed left nothing to bring it back. A failure now shows an error message instead.
+- **Card pickers could get stuck showing results for a search you had already replaced.** Changing the type filter or search term while a request was in flight dropped the new request outright and never retried it. This affected relation, parent and vendor pickers throughout the app, and the search fields in the survey builder, calculation tester, survey response form and End-of-Life linking.
+
+## [2.32.0] - 2026-07-27
+
+### Added
+- **An ADRs tab on every card.** Architecture Decision Records linked to a card now have their own tab, next to Resources, listing each decision's reference, title, status, all of its linked cards and when it was last modified. Click a row to open the decision. Previously ADRs were an accordion buried inside the Resources tab, sharing space with files, links and diagrams — the same visibility Risks already had for the risk register.
+- **Link, create and unlink decisions from the card.** The tab offers **Link ADR** to attach an existing decision and **Create ADR** to start a new one pre-linked to the card, plus an unlink action on each row. The tab stays visible on a card with no decisions when you are allowed to manage ADR links, so the first decision is always one click away; users who can only read never see an empty tab.
+- **The Link ADR picker lists decisions in reference order with their status.** Click anywhere on a row to link it, then confirm — the prompt names both the decision and the card, so a stray click never attaches anything. The search box gained a clear button, the list scrolls inside the dialog instead of stretching it, and a search that matches nothing now says so rather than claiming there is nothing left to link.
+- **ADR links now appear in the card's History tab.** Linking or unlinking a decision is recorded against the affected card, and the ADRs tab carries the same "new activity" dot as Comments, Stakeholders and Risks.
+
+### Changed
+- **Architecture Decisions moved out of the Resources tab.** Resources now covers file attachments, document links, diagrams and ServiceNow links only.
+
+### Fixed
+- **Long decision titles ran underneath the button in the Link ADR picker, and short references like «ADR-009» wrapped onto two lines.** The row is now laid out so every element stays in flow and the reference can never wrap; the dialog is also wider so full titles fit.
+- **The Link ADR picker briefly claimed there were no decisions to link** while it was still loading them.
+- **The ADR editor showed raw translation keys** where it should have said "No cards linked to this decision" and "Already linked" — both strings were being looked up in the wrong namespace.
+- **`GET /adr/by-card/{id}` returned a server error for a malformed card id** instead of a 400.
+
+## [2.31.0] - 2026-07-27
+
+### Added
+- **Repository-wide resource management.** A new **Resources** tab under Admin → Settings lists every file attachment and document link in the workspace in one AG Grid, instead of making you open cards one at a time. Search by file name, card name or URL; filter by kind, card type, category or link type, file type, card, uploader, archived state and date; sort any column across the whole repository. Files download in a click and links open in a new tab.
+- **Storage and usage statistics for resources.** The Resources tab reports how many files and links exist, how much database storage the attachments consume, and how many cards carry resources — with breakdowns by category, by card type, and a list of the ten largest files. The figures follow the active filters, so they always describe what you are looking at.
+- **Bulk clean-up of resources.** Select any mix of files and links and delete them in one action, with a confirmation showing the count and the storage it frees. Each row is permission-checked individually: resources on cards you may not manage are skipped and listed back to you rather than failing the whole operation, and every deletion is recorded on the affected card's History tab.
+- **`GET /resources`, `GET /resources/stats` and `POST /resources/bulk-delete`.** Paginated, filterable, sortable access to the same data. Reading requires `documents.view`; deleting requires `documents.manage` or the card-level `card.manage_documents` — exactly the permissions the per-card endpoints already use, so no new authority is introduced.
+
+- **Demo data now includes file attachments.** `SEED_DEMO=true` seeds eight files across the NexaTech applications, IT components and initiatives, so the Resources tab and its storage statistics have something to show on a demo install. Demo document links also carry a real link type instead of a raw `link` value that rendered as its own key.
+
+### Changed
+- **The Settings tab table in the user manual now lists every tab.** Migration and Audit log were missing from it alongside the new Resources entry.
+- **Grid filter sidebars are now specified in the design system.** `frontend/UI_GUIDELINES.md` § 3.11 documents the anatomy every AG Grid filter panel must follow — section glyphs and count chips, option rows that carry the entity's own icon and colour, coloured chips for mutually-exclusive states, and the column picker's per-column glyphs, Select all row and locked-column tooltips.
+
+## [2.30.0] - 2026-07-27
+
+### Added
+- **A Parent column in the inventory grid, editable inline.** It shows the card directly above in the hierarchy, where the existing Path column shows the whole chain. In Grid Edit mode, double-click a Parent cell to move a single card, or clear it to move the card to the top level — no need to open Mass Edit or the card detail page. Available from the Columns tab; on by default for new column selections.
+- **Mass Edit can now restructure the hierarchy.** A new **Parent** field re-parents every selected card in one action, or clears the parent to move them back to the top level. Because a card has exactly one parent, this also covers the other direction — to make fifty applications the children of one card, select the fifty and set their parent. The field appears once the grid is filtered to a single card type that supports hierarchy. Re-parenting no longer requires an Excel import or the API.
+- **Mass Edit reports hierarchy problems per card instead of failing the whole batch.** A card whose name collides under the target parent, or a move that would create a loop or exceed the capability depth limit, is listed by name in the dialog while every other card still moves.
+
+### Changed
+- **The relation target picker in Mass Edit now browses the inventory instead of demanding a search term.** It opens with a list ready to scroll and pages in more cards as you go, rather than showing nothing until you typed and then capping the results at 20 — matching every other card picker in the app.
+
+### Fixed
+- **The Parent column's inline edit silently did nothing.** The cell value was resolved from a memo keyed on the row array while the setter mutated the row in place, so the grid read back the old parent and re-applied the value the card already had. The column now keeps the raw parent id as its cell value.
+- **The action buttons in the inventory selection bar lost contrast on hover.** Mass Edit, Archive, Restore and Delete permanently used a translucent hover colour, so the blue bar showed through and the button's own coloured text became unreadable — Mass Edit turned blue-on-blue. The hover shade is now opaque and derived from the surface colour, in light and dark mode alike.
+- **Bulk-updating a card's parent skipped every hierarchy safeguard.** `PATCH /cards/bulk` accepted a `parent_id` but applied it without checking depth limits or sibling-name uniqueness, and left `hierarchyLevel` / `capabilityLevel` stale on the moved cards and their descendants. It now runs the same validation and level cascade as a single-card edit. This also affected the `update_cards_bulk` MCP tool.
+- **A card could be moved underneath its own descendant**, silently detaching the whole branch into an unreachable loop. Both the single-card and bulk paths now reject the move.
+- **Bulk card edits emitted no events**, leaving them invisible in a card's History tab and in the mutation-batch audit ledger used to review and roll back MCP-driven writes.
+- **Bulk edits did not reset an approved card to Broken**, so a card could keep its approval after its contents changed.
+- **A bulk-edit dry run no longer discards the caller's transaction.** The preview computes its diff without writing, instead of applying the change and rolling back.
+
+## [2.29.0] - 2026-07-26
+
+### Added
+- **Filter the Risk Register by the cards a risk affects.** A new **Affected cards** section in the filter sidebar answers the questions the Cards column filter could not: pick specific cards to see every risk affecting any of them ("all risks affecting Applications A, B and C"), or tick whole card types to see every risk touching an Application, an IT Component, and so on. Each list matches any of its own selections and the two combine with "and". Like every other filter, it narrows the KPI tiles, the 4×4 matrix, the grid and both sheets of the `.xlsx` export at once.
+- **`GET /risks` and `GET /risks/metrics` accept repeatable `card_id` values and a new `card_type` filter** (also on `GET /risks/mitigation-tasks/export` and the `list_risks` MCP tool). The existing single-value `?card_id=` form is unchanged.
+
+### Changed
+- **A risk's affected cards are now grouped by card type**, sorted alphabetically within each group and colour-coded with the card type's colour, instead of a flat row of identical grey chips. The register grid's Cards column follows the same ordering and colours, and its `+N` tooltip lists the remaining cards under type headings.
+- **The Affected cards picker on a risk browses the inventory instead of demanding a search term.** It opens with a list ready to scroll, pages in more cards as you go, and hides cards that are already linked — matching every other card picker in the app.
+
+### Fixed
+- **Affected-card chips on a risk showed the card type's internal key** (`BusinessCapability`) rather than its display name, and ignored any translation configured for the type.
+- **A risk carrying an out-of-vocabulary source value no longer empties the whole Risk Register.** Risks created via the short-lived (pre-release) PPM promotion carried a `ppm` source that the API rejected after the feature's removal, failing the entire list response — the register looked empty although every risk was intact. A migration renormalises those rows to `manual`, and the API now degrades a single unexpected value gracefully instead of failing the list.
+
+## [2.28.1] - 2026-07-26
+
+### Added
+- **The Tags section can now be configured in the Card Layout editor**, like every other built-in section — reorder it, collapse it by default, or hide it from card detail.
+
+### Fixed
+- **A card section's "collapsed by default" setting is now respected.** The Relations section stayed collapsed no matter what the metamodel said, and on a freshly loaded page every other section ignored the setting in the opposite direction — opening expanded even when configured to start collapsed. Description, Lifecycle, End of Life, Hierarchy, Lineage, Tags, Relations and custom sections all now open in the state the Card Layout editor specifies, on first paint and after a refresh.
+- **Card sections in the inventory side panel and the PPM initiative Details tab now reset when you switch cards**, instead of carrying the previously viewed card's expanded/collapsed sections over.
+- **The Card Layout editor's "collapsed by default" switch now shows the Relations section's real state.** Relations starts collapsed, but with nothing configured the switch read as "not collapsed" — so it took two clicks to change it, and the first click appeared to do nothing. The switch now matches what the card does, and one click flips it.
+- **Custom sections configured before the current layout format are readable again** — a collapse or hide setting saved against the section's name (rather than its position) was shown in the Card Layout editor but ignored on the card itself.
+
+## [2.28.0] - 2026-07-25
+
+### Added
+- **See the cards linked to a card's sub-items without maintaining the link twice.** Relation groups on a card with sub-items now show a "+N in sub-items" chip; clicking it opens a drawer listing every card linked further down the hierarchy — an application attached to a sub-capability now shows on the parent capability. Each row names the sub-item that holds the link, and a card reached through several sub-items appears once. The list is grouped into collapsible subtype sections — naming the subtype once per section instead of on every row — with the cards needing attention first (end of life, then phasing out) and each card's lifecycle phase shown as a coloured dot beside its name. The list is read-only (links are still edited on the sub-item that owns them) and counts cards you cannot already see in the group above it.
+
+## [2.27.0] - 2026-07-24
+
+### Changed
+- **Relation columns in the inventory load in one request instead of one per relation type.** Selecting a card type used to fire a separate request for every relation type touching it (10+ for Application), each returning every relation of that type in the whole landscape — of which the grid kept only a fraction. It is now a single request scoped server-side to the selected type, and it no longer re-runs every time the card list reloads (searching, filtering or editing a cell used to trigger a full reload of every relation in the instance).
+- **Relation cells now show a loading indicator while they load**, so a cell that is still loading is no longer indistinguishable from a card that genuinely has no relations.
+- **`GET /relations` gained `card_type`, `types` and `card_ids` filters** so callers can fetch only the edges they need. The endpoint is also substantially faster in its own right: it no longer scans the card table to hide archived and hidden-type rows, and it no longer loads complete card records (custom attributes, lifecycle, description) just to return each endpoint's name.
+
+### Fixed
+- **«Export current view» no longer produces empty relation columns** when started before relation data has finished loading. The export now waits for the in-flight request, so the spreadsheet can never silently contain blank relation cells that look like real "no relations" data.
+
+## [2.26.0] - 2026-07-24
+
+### Added
+- **Stakeholder columns in the inventory** — the grid now offers one dynamic column per stakeholder role of the selected card type («Stakeholders: Responsible», «Stakeholders: Observer», …), showing the assigned users as chips. The columns are toggled from a new *Stakeholders* section in the sidebar column picker, participate in saved views / persisted layouts like every other column, and are editable in grid edit mode via a user picker (RBAC-enforced: `stakeholders.manage` plus the per-card `card.manage_stakeholders` grant).
+- **Stakeholders round-trip through Excel import/export** — full-workbook exports carry one `stakeholder:<role_key>` column per role with semicolon-separated **email addresses** (the same convention as LeanIX's `subscriptions:` columns; emails are the only accepted user reference since display names can collide). The importer previews per-role changes and applies them declaratively (the cell content becomes the role's complete assignment set; absent columns leave assignments untouched). The current-view export and the CSV export include stakeholders too.
+- **`POST /stakeholders/bulk`** — batched add/remove of stakeholder role assignments with per-operation results and dry-run support, mirroring `/relations/bulk`. Used by the spreadsheet importer and the grid editor; permission checks (`stakeholders.manage` / `card.manage_stakeholders`) are enforced per referenced card.
+
+## [2.25.1] - 2026-07-24
+
+### Security
+- Raised the frontend build-tooling floors for js-yaml (≥ 5.2.2) and postcss (≥ 8.5.18) to clear two high-severity development-scoped advisories (js-yaml flow-collection DoS; PostCSS source-map path traversal). Build tooling only — the shipped application bundle contains neither package.
+
+## [2.25.0] - 2026-07-24
+
+### Changed
+- Upgraded the frontend to React 19 and React Router 8. This is a dependency migration with no functional changes — every page, editor, and report behaves exactly as before.
+
+### Security
+- Fixed GHSA-qwww-vcr4-c8h2 (high severity) in react-router by moving to the patched 8.x line. `npm audit --omit=dev` now reports zero vulnerabilities.
+
+## [2.24.1] - 2026-07-24
+
+### Fixed
+- **Date fields can now be typed with the keyboard again** (#865). On the GRC Risk detail page the "Target resolution date" saved on every keystroke and fed the server response straight back into the input, which reset the control mid-edit and made it impossible to type the year (the calendar picker still worked). All native date inputs across the app now share a common `DateField` component that keeps your in-progress edit while focused and commits once when you leave the field, so this class of bug cannot recur.
+
+## [2.24.0] - 2026-07-22
+
+### Added
+- **Process × Organization matrix report** — a new tab in BPM Reports answering «which organizations execute steps in which processes». Built exclusively from the informative step ↔ organization links (card relations are not included): rows are processes, columns are executing organizations, cells show the step count with a tooltip, each row expands to the actual steps per organization, and the matrix is filtered via organization and process multi-select dropdowns plus a step-name text filter (which narrows counts, rows, and columns to matching steps).
+- **Organizations can now be linked to process-flow steps** — a new *Organization* column in the flow's step table, right next to the existing Application / Data Object / IT Component linking. Unlike those single-value links, a step can be linked to several organizations (m:n). Step links are informative only: they document which organizations are involved in a step without creating any relation between the Business Process and Organization cards (card relations are managed separately on the Relations tab). The Process Navigator and diagram viewer show the linked organizations as chips, lane names remain plain free text from the diagram, draft flows support organization pre-linking applied on publish, and the step ↔ organization links transfer with workspace export/import.
+
 ## [2.23.4] - 2026-07-23
 
 ### Added

@@ -85,6 +85,11 @@ Affiche toutes les connexions avec d'autres fiches, groupées par type de relati
 - **Ajouter une relation** -- Cliquez sur **+** pour créer une nouvelle relation ; le sélecteur affiche les fiches correspondantes dès son ouverture (triées par nom, d'autres se chargent au défilement), et la saisie filtre la liste
 - **Supprimer une relation** -- Cliquez sur l'icône de suppression pour retirer une relation
 - **Grouper par sous-type** — Lorsqu'une section de relations contient de nombreuses fiches liées, elles sont automatiquement regroupées en groupes de sous-types repliables (chacun avec un décompte), avec un groupe final **Aucun sous-type** pour les fiches non classées. Utilisez le bouton de bascule dans l'en-tête de la section pour passer de la vue groupée à la vue en liste.
+- **Fiches liées aux sous-éléments** — Lorsqu'une fiche possède des sous-éléments, chaque groupe de relations affiche une puce **+N dans les sous-éléments** comptant les fiches liées plus bas dans la hiérarchie — par exemple les applications rattachées aux sous-capacités d'une capacité. Un clic ouvre une liste en lecture seule où chaque ligne nomme le sous-élément qui porte le lien (une fiche atteinte via plusieurs sous-éléments apparaît une seule fois, avec chacun d'eux listé). Le décompte n'inclut que les fiches absentes du groupe ci-dessus. Pour modifier un lien, ouvrez le sous-élément qui le détient. La liste est organisée en sections de sous-types repliables : le sous-type est ainsi indiqué une fois par section plutôt que sur chaque ligne. Au sein d'une section, les fiches dont la phase de cycle de vie demande une attention particulière apparaissent en premier (fin de vie, puis retrait progressif), et la phase de chaque fiche est signalée par une pastille de couleur à côté de son nom — survolez-la pour afficher le nom de la phase.
+
+![Groupes de relations affichant la puce des sous-éléments](../assets/img/fr/59_fiche_sous_elements_puce.png)
+
+![Fiches liées via les sous-éléments, regroupées par sous-type](../assets/img/fr/60_fiche_sous_elements_relations.png)
 
 ### Section Tags
 
@@ -94,7 +99,6 @@ Appliquez des tags à partir des [groupes de tags](../admin/tags.md) configurés
 
 L'onglet **Ressources** regroupe tous les documents de support d'une fiche :
 
-- **Décisions d'architecture** -- ADR liés à cette fiche, affichés sous forme de pilules colorées correspondant aux couleurs du type de carte (par ex. bleu pour Application, violet pour Objet de données). Vous pouvez lier des ADR existants ou en créer un nouveau directement depuis l'onglet Ressources -- le nouvel ADR est automatiquement lié à la fiche.
 - **Pièces jointes** -- Téléchargez et gérez des fichiers (PDF, DOCX, XLSX, images, jusqu'à 10 Mo). Lors du téléchargement, sélectionnez une **catégorie de document** parmi : Architecture, Sécurité, Conformité, Opérations, Notes de réunion, Design ou Autre. La catégorie s'affiche sous forme de puce à côté de chaque fichier.
 - **Liens de documents** -- Références de documents basées sur des URL. Lors de l'ajout d'un lien, sélectionnez un **type de lien** parmi : Documentation, Sécurité, Conformité, Architecture, Opérations, Support ou Autre. Le type de lien s'affiche sous forme de puce à côté de chaque lien, et l'icône change en fonction du type sélectionné.
 - **Diagrammes** -- Liez des [diagrammes](diagrams.fr.md) existants à cette fiche. Les diagrammes liés s'affichent sous forme de miniatures que vous pouvez cliquer pour ouvrir dans l'éditeur de diagrammes. Utilisez le bouton **Lier un diagramme** pour rechercher et attacher un diagramme existant, ou cliquez sur l'icône de déliaison pour supprimer l'association.
@@ -150,6 +154,12 @@ Le chemin d'invitation nécessite la permission **`users.invite`**, une forme d�
 ![Historique des modifications de la fiche](../assets/img/fr/08_fiche_historique.png)
 
 Affiche la **piste d'audit complète** des modifications apportées à la fiche : **qui** a effectué la modification, **quand** elle a été effectuée, et **ce qui** a été modifié (valeur précédente vs nouvelle valeur). Cela permet une traçabilité complète de toutes les modifications au fil du temps.
+
+## Onglet ADR
+
+Chaque fiche dispose d'un onglet **ADR** qui répertorie les [décisions d'architecture](delivery.md) qui lui sont liées, avec la référence, le titre, le statut, toutes les fiches liées et la date de dernière modification. Cliquez sur une ligne pour ouvrir la décision.
+
+Si vous êtes autorisé à gérer les liens ADR, l'onglet propose également **Lier une ADR** pour rattacher une décision existante et **Créer une ADR** pour en créer une déjà liée à cette fiche, ainsi qu'une action de dissociation sur chaque ligne. Sur les fiches sans décision liée, l'onglet est masqué sauf si vous disposez de cette permission : les utilisateurs en lecture seule ne voient donc jamais d'onglet vide.
 
 ## Onglet Risques (GRC activé, le cas échéant)
 

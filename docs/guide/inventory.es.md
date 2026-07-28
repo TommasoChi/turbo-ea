@@ -34,7 +34,7 @@ La pestaña **Columnas** en el panel lateral le permite elegir qué columnas adi
 - **Varios tipos seleccionados** — Solo los campos que son **comunes a todos los tipos seleccionados** están disponibles
 - **Ningún tipo seleccionado** — Un mensaje de ayuda le solicita seleccionar primero un tipo de tarjeta
 
-Las columnas se agrupan en cuatro categorías:
+Las columnas se agrupan en cinco categorías:
 
 | Categoría | Descripción |
 |-----------|-------------|
@@ -42,6 +42,9 @@ Las columnas se agrupan en cuatro categorías:
 | **Metadatos** | Creado, Modificado, Creado por, Modificado por |
 | **Atributos** | Campos personalizados definidos en el metamodelo (texto, número, coste, fecha, selección, etc.) |
 | **Relaciones** | Tipos de tarjetas relacionados (p. ej., Aplicaciones vinculadas a una Capacidad de Negocio) |
+| **Partes interesadas** | Una columna por cada rol de parte interesada definido para el tipo seleccionado (p. ej. *Partes interesadas: Responsible*), mostrando los usuarios asignados como chips. En el modo de edición de cuadrícula, haga doble clic en una celda para asignar o quitar usuarios de ese rol directamente desde la cuadrícula (requiere el permiso de gestión de partes interesadas). |
+
+La columna **Padre** muestra solo la tarjeta situada directamente encima, mientras que **Ruta** muestra la cadena completa. En el modo de edición de la cuadrícula, haga doble clic en una celda Padre para mover la tarjeta, o vacíe el campo para llevarla al nivel superior. La columna solo es editable cuando la cuadrícula está filtrada a un único tipo de tarjeta que admite jerarquía. Si un movimiento se rechaza — porque crearía un bucle, chocaría con una tarjeta del mismo nombre bajo el destino o superaría la profundidad máxima —, el motivo aparece en la parte inferior de la pantalla y la celda se revierte.
 
 La columna **Ruta** muestra la jerarquía de la ficha (p. ej. «América del Norte / Ventas / Ventas internas») sin incluir el nombre de la propia ficha, para que pueda ver Nombre y Ruta a la vez.
 
@@ -94,6 +97,33 @@ El inventario utiliza una tabla de datos **AG Grid** con funciones avanzadas:
 3. Opcionalmente, haga clic en **Sugerir con IA** para generar una descripción automáticamente (consulte [Sugerencias de Descripción con IA](#sugerencias-de-descripcion-con-ia) a continuación)
 4. Haga clic en **CREAR**
 
+## Edición masiva { #mass-edit }
+
+Marque dos o más filas con las casillas de la columna izquierda y haga clic en **Edición masiva** en la barra de selección. El cuadro de diálogo aplica un único cambio a todas las tarjetas seleccionadas.
+
+La lista desplegable **Campo** agrupa lo que se puede modificar:
+
+- **General** — estado de aprobación, subtipo, etiquetas y padre
+- **Atributos** — cualquier campo editable definido para el tipo de tarjeta seleccionado
+- **Relaciones** — una entrada por tipo de relación y dirección (por ejemplo *se ejecuta en → Componente de TI*)
+
+Las etiquetas, las relaciones y el padre ofrecen un conmutador **añadir / quitar**, de modo que amplíe o reduzca los valores existentes en lugar de sustituirlos.
+
+### Reestructurar la jerarquía { #mass-edit-parent }
+
+El campo **Padre** aparece cuando ha filtrado la cuadrícula a un único tipo de tarjeta que admite jerarquía. Una tarjeta tiene exactamente un padre, así que este único campo cubre ambos sentidos de una reestructuración:
+
+- **Establecer padre** — elija una tarjeta del mismo tipo; todas las tarjetas seleccionadas se mueven debajo de ella. Así se convierten muchas tarjetas en hijas de un mismo padre.
+- **Quitar padre** — todas las tarjetas seleccionadas vuelven al nivel superior.
+
+Las tarjetas se mueven de una en una, por lo que un movimiento no permitido solo bloquea esa tarjeta. El cuadro de diálogo permanece abierto e indica qué tarjetas se bloquearon y por qué. Los motivos habituales son:
+
+- Ya existe una tarjeta con el mismo nombre bajo el padre de destino.
+- El padre elegido es descendiente de una de las tarjetas que se mueven, lo que crearía un bucle.
+- El movimiento llevaría una capacidad de negocio más allá del máximo de cinco niveles.
+
+Una tarjeta arrastra consigo a sus hijas al moverse, y las tarjetas aprobadas vuelven a **Roto** para que el cambio se revise de nuevo.
+
 ## Sugerencias de Descripción con IA { #ai-description-suggestions }
 
 Turbo EA puede usar **IA para generar una descripción** para cualquier ficha. Esto funciona tanto en el diálogo de creación de fichas como en las páginas de detalle de fichas existentes.
@@ -145,7 +175,7 @@ Las importaciones y exportaciones del inventario usan un **libro Excel multi-hoj
 
 ### Estructura del libro
 
-- **Una hoja por tipo de ficha** (Application, Business Capability, IT Component, …) con sus columnas principales, sus columnas `attr_<campo>`, las columnas de ciclo de vida y las columnas de relaciones `rel:<tipo_de_relación>`.
+- **Una hoja por tipo de ficha** (Application, Business Capability, IT Component, …) con sus columnas principales, sus columnas `attr_<campo>`, las columnas de ciclo de vida las columnas de relaciones `rel:<tipo_de_relación>` y las columnas de partes interesadas `stakeholder:<clave_de_rol>`.
 - **Una hoja `Relations`** para los tipos de relación que llevan atributos (coste, descripción…). Las relaciones simples permanecen en línea en la hoja de la ficha origen.
 - **Una hoja `_Meta`** con la versión del formato del libro.
 
@@ -160,6 +190,10 @@ Como las fichas se identifican por nombre + ruta, **dos fichas del mismo tipo no
 ### Celdas de relación en línea
 
 Cada columna `rel:<tipo_de_relación>` expresa las relaciones salientes como una lista **separada por punto y coma** (por ejemplo `NexaCore ERP; BillingApp`). Punto y coma en lugar de coma, porque los nombres de las fichas suelen contener comas (`Acme, Inc.`). Dentro de un nombre, `/` y `\` se escapan como `\/` y `\\` — el exportador lo hace automáticamente (p. ej. `SAP S/4HANA` → `SAP S\/4HANA`). Las celdas son **declarativas**: su contenido reemplaza el conjunto de relaciones salientes de ese tipo desde el origen. Eliminar un destino elimina la relación correspondiente; vaciar la celda elimina todas. Por compatibilidad, las celdas separadas por comas (formato antiguo) también se aceptan.
+
+### Celdas de partes interesadas
+
+En cada hoja de fichas, las columnas `stakeholder:<clave_de_rol>` llevan los usuarios asignados a cada rol de parte interesada, como **direcciones de correo separadas por punto y coma** (la misma convención que las columnas `subscriptions:<RoleType>` de LeanIX), p. ej. `ada@corp.com; bob@corp.com`. La **dirección de correo es la única referencia de usuario aceptada** — los nombres pueden coincidir entre personas y nunca se usan para la resolución; una entrada `Nombre <email>` se tolera (se usa el correo entre corchetes angulares), un nombre solo produce una advertencia y se omite. Como las celdas de relaciones, las celdas de partes interesadas son **declarativas por rol**: los usuarios listados se convierten en el conjunto completo de asignaciones de ese rol tras la importación. Quitar un usuario lo desasigna; vaciar la celda vacía el rol; omitir la columna deja las asignaciones intactas. Las entradas sin usuario coincidente producen una advertencia y se omiten — nunca bloquean la importación.
 
 ### Hoja `Relations`
 
@@ -178,4 +212,4 @@ Algunas aclaraciones sobre la importación:
 
 Haga clic en **Exportar**. El filtro activo determina el contenido: con un filtro de tipo único, una hoja para ese tipo; sin filtro, una hoja por tipo presente. En todos los casos el libro incluye `Relations` y `_Meta` y puede reimportarse sin perder atributos específicos del tipo.
 
-También puede elegir **Exportar vista actual** en el menú Exportar: una instantánea plana de una sola hoja que refleja lo que está en pantalla (solo las columnas visibles, en su orden actual, para las filas filtradas). Está pensada para compartir y **no es apta para reimportar**.
+También puede elegir **Exportar vista actual** en el menú Exportar: una instantánea plana de una sola hoja que refleja lo que está en pantalla (solo las columnas visibles, en su orden actual, para las filas filtradas). Está pensada para compartir y **no es apta para reimportar**. Si las columnas de relaciones aún se están cargando, la exportación espera a que terminen, por lo que nunca pueden salir vacías.

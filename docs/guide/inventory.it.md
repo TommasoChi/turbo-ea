@@ -34,7 +34,7 @@ La scheda **Colonne** nel pannello laterale consente di scegliere quali colonne 
 - **Più tipi selezionati** — Sono disponibili solo i campi **comuni a tutti i tipi selezionati**
 - **Nessun tipo selezionato** — Un messaggio suggerisce di selezionare prima un tipo di scheda
 
-Le colonne sono raggruppate in quattro categorie:
+Le colonne sono raggruppate in cinque categorie:
 
 | Categoria | Descrizione |
 |-----------|-------------|
@@ -42,6 +42,9 @@ Le colonne sono raggruppate in quattro categorie:
 | **Metadati** | Creato, Modificato, Creato da, Modificato da |
 | **Attributi** | Campi personalizzati definiti nel metamodello (testo, numero, costo, data, selezione, ecc.) |
 | **Relazioni** | Tipi di schede correlati (ad es., Applicazioni collegate a una Capacità Aziendale) |
+| **Stakeholder** | Una colonna per ogni ruolo stakeholder definito per il tipo selezionato (ad es. *Stakeholder: Responsible*), che mostra gli utenti assegnati come chip. In modalità modifica griglia, fai doppio clic su una cella per assegnare o rimuovere utenti per quel ruolo direttamente dalla griglia (richiede il permesso di gestione degli stakeholder). |
+
+La colonna **Padre** mostra solo la scheda immediatamente superiore, mentre **Percorso** mostra l'intera catena. In modalità di modifica della griglia, fate doppio clic su una cella Padre per spostare la scheda, oppure svuotate il campo per portarla al livello principale. La colonna è modificabile solo quando la griglia è filtrata su un unico tipo di scheda che supporta la gerarchia. Se uno spostamento viene rifiutato — perché creerebbe un ciclo, entrerebbe in conflitto con una scheda omonima sotto la destinazione o supererebbe la profondità massima —, il motivo compare in fondo allo schermo e la cella torna allo stato precedente.
 
 La colonna **Percorso** mostra la gerarchia della scheda (per es. «Nord America / Vendite / Vendite interne») senza il nome della scheda stessa, così puoi tenere Nome e Percorso visibili contemporaneamente.
 
@@ -94,6 +97,33 @@ L'inventario utilizza una tabella dati **AG Grid** con funzionalità avanzate:
 3. Opzionalmente, cliccate su **Suggerisci con AI** per generare automaticamente una descrizione (vedi [Suggerimenti di descrizione AI](#suggerimenti-di-descrizione-ai) di seguito)
 4. Cliccate su **CREA**
 
+## Modifica di massa { #mass-edit }
+
+Selezionate due o più righe con le caselle nella colonna di sinistra, quindi fate clic su **Modifica di massa** nella barra di selezione. La finestra applica una singola modifica a ogni scheda selezionata.
+
+Il menu a discesa **Campo** raggruppa ciò che è possibile modificare:
+
+- **Generale** — stato di approvazione, sottotipo, tag e padre
+- **Attributi** — qualsiasi campo modificabile definito per il tipo di scheda selezionato
+- **Relazioni** — una voce per ogni tipo di relazione e direzione (ad esempio *è eseguito su → Componente IT*)
+
+Tag, relazioni e padre offrono ciascuno un interruttore **aggiungi / rimuovi**, così da estendere o ridurre i valori esistenti invece di sostituirli.
+
+### Ristrutturare la gerarchia { #mass-edit-parent }
+
+Il campo **Padre** compare quando la griglia è filtrata su un unico tipo di scheda che supporta la gerarchia. Una scheda ha esattamente un padre, quindi questo singolo campo copre entrambe le direzioni di una ristrutturazione:
+
+- **Imposta padre** — scegliete una scheda dello stesso tipo; tutte le schede selezionate vengono spostate sotto di essa. È così che si rendono molte schede figlie di un unico padre.
+- **Rimuovi padre** — tutte le schede selezionate tornano al livello principale.
+
+Le schede vengono spostate una alla volta, quindi uno spostamento non consentito blocca solo quella scheda. La finestra resta aperta ed elenca quali schede sono state bloccate e perché. I motivi più comuni sono:
+
+- Sotto il padre di destinazione esiste già una scheda con lo stesso nome.
+- Il padre scelto è un discendente di una delle schede spostate, il che creerebbe un ciclo.
+- Lo spostamento porterebbe una capacità di business oltre il massimo di cinque livelli.
+
+Una scheda porta con sé le proprie schede figlie e le schede approvate tornano a **Non valido**, in modo che la modifica venga riesaminata.
+
 ## Suggerimenti di descrizione AI { #ai-description-suggestions }
 
 Turbo EA può utilizzare l'**AI per generare una descrizione** per qualsiasi card. Questo funziona sia nella finestra di creazione card che nelle pagine di dettaglio delle card esistenti.
@@ -145,7 +175,7 @@ Le importazioni ed esportazioni dell'inventario usano una **cartella di lavoro E
 
 ### Struttura della cartella di lavoro
 
-- **Un foglio per ogni tipo di scheda** (Application, Business Capability, IT Component, …) con le colonne principali, le colonne `attr_<campo>`, le colonne di ciclo di vita e le colonne di relazione `rel:<tipo_di_relazione>`.
+- **Un foglio per ogni tipo di scheda** (Application, Business Capability, IT Component, …) con le colonne principali, le colonne `attr_<campo>`, le colonne di ciclo di vita le colonne di relazione `rel:<tipo_di_relazione>` e le colonne stakeholder `stakeholder:<chiave_ruolo>`.
 - **Un foglio `Relations`** per i tipi di relazione che portano attributi (costo, descrizione, …). Le relazioni semplici restano in linea sul foglio della scheda di origine.
 - **Un foglio `_Meta`** con la versione del formato della cartella di lavoro.
 
@@ -160,6 +190,10 @@ Poiché le schede sono identificate per nome + percorso, **due schede dello stes
 ### Celle di relazione in linea
 
 Ogni colonna `rel:<tipo_di_relazione>` esprime le relazioni in uscita come elenco **separato da punti e virgola** (per esempio `NexaCore ERP; BillingApp`). Punto e virgola invece di virgola perché i nomi delle schede contengono spesso virgole (`Acme, Inc.`). All'interno di un nome, `/` e `\` vengono fatti precedere dall'escape `\/` e `\\` — l'esportatore lo gestisce automaticamente (es. `SAP S/4HANA` → `SAP S\/4HANA`). Le celle sono **dichiarative**: il loro contenuto sostituisce l'insieme delle relazioni in uscita di quel tipo dalla sorgente. Rimuovere un target elimina la relazione corrispondente; svuotare la cella le elimina tutte. Per retrocompatibilità, anche le celle separate da virgole (formato precedente) vengono accettate.
+
+### Celle stakeholder
+
+Su ogni foglio di schede, le colonne `stakeholder:<chiave_ruolo>` contengono gli utenti assegnati a ciascun ruolo stakeholder, come **indirizzi email separati da punto e virgola** (la stessa convenzione delle colonne `subscriptions:<RoleType>` di LeanIX), ad es. `ada@corp.com; bob@corp.com`. L'**indirizzo email è l'unico riferimento utente accettato** — i nomi visualizzati possono coincidere e non vengono mai usati per la risoluzione; una voce `Nome <email>` è tollerata (viene usata l'email tra parentesi angolari), un nome da solo produce un avviso e viene ignorato. Come le celle di relazione, le celle stakeholder sono **dichiarative per ruolo**: gli utenti elencati diventano l'insieme completo delle assegnazioni di quel ruolo dopo l'importazione. Rimuovere un utente lo disassegna; svuotare la cella svuota il ruolo; omettere la colonna lascia intatte le assegnazioni. Le voci senza utente corrispondente producono un avviso e vengono ignorate — non bloccano mai l'importazione.
 
 ### Foglio `Relations`
 
@@ -178,4 +212,4 @@ Alcune precisazioni sull'importazione:
 
 Cliccate su **Esporta**. Il filtro corrente determina il contenuto: con un filtro per tipo singolo, un foglio per quel tipo; senza filtro, un foglio per ogni tipo presente. In ogni caso la cartella di lavoro include `Relations` e `_Meta` e può essere reimportata senza perdere gli attributi specifici del tipo.
 
-Potete anche scegliere **Esporta vista corrente** dal menu Esporta: un'istantanea piatta su un unico foglio che rispecchia ciò che è a schermo (solo le colonne visibili, nel loro ordine corrente, per le righe filtrate). È pensata per la condivisione e **non è adatta al reimport**.
+Potete anche scegliere **Esporta vista corrente** dal menu Esporta: un'istantanea piatta su un unico foglio che rispecchia ciò che è a schermo (solo le colonne visibili, nel loro ordine corrente, per le righe filtrate). È pensata per la condivisione e **non è adatta al reimport**. Se le colonne delle relazioni sono ancora in caricamento, l'esportazione le attende, quindi non possono mai risultare vuote.
