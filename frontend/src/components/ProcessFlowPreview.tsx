@@ -15,7 +15,7 @@
  * `ExtensionProcessFlowPreview` / `sdk.ProcessFlowPreview`).
  */
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { api } from "@/api/client";
 import { FlowPreviewDialog } from "@/features/bpm/ProcessNavigator";
 
