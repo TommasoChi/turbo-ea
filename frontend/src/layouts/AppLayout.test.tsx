@@ -128,25 +128,26 @@ describe("AppLayout", () => {
     renderLayout();
 
     // Nav items render as <a> (RouterLink) so Ctrl+Click opens a new tab —
-    // ARIA role is `link`, not `button`. Reports and Strategy & Process are
-    // dropdown triggers so they stay buttons; BPM lives inside the latter
-    // (see the "opens BPM from the Strategy & Process dropdown" test below).
+    // ARIA role is `link`, not `button`. Reports and Organization & Process
+    // (renamed from Strategy & Process) are dropdown triggers so they stay
+    // buttons; BPM lives inside the latter (see the "opens BPM from the
+    // Organization & Process dropdown" test below).
     expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /inventory/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reports/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /strategy & process/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /organization & process/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /diagrams/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /todos/i })).toBeInTheDocument();
   });
 
-  it("opens BPM from the Strategy & Process dropdown", async () => {
+  it("opens BPM from the Organization & Process dropdown", async () => {
     const user = userEvent.setup();
     renderLayout();
 
     // Not a top-level nav item — lives inside the dropdown.
     expect(screen.queryByRole("link", { name: /^bpm$/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /strategy & process/i }));
+    await user.click(screen.getByRole("button", { name: /organization & process/i }));
     // Not anchored: MaterialSymbol renders its icon *name* as literal text
     // in jsdom (the icon font/ligature doesn't load), so the menuitem's
     // accessible name is "route BPM" (icon text + label), not just "BPM" —
@@ -155,13 +156,13 @@ describe("AppLayout", () => {
     expect(item).toHaveAttribute("href", "/bpm");
   });
 
-  it("hides the Strategy & Process dropdown entirely when BPM is disabled and no extension fills it", () => {
+  it("hides the Organization & Process dropdown entirely when BPM is disabled and no extension fills it", () => {
     vi.mocked(useBpmEnabled).mockReturnValue({ bpmEnabled: false, loading: false });
     renderLayout();
 
     // BPM was the group's only child — with it gone and nothing from an
     // extension to take its place, the whole dropdown has nothing to show.
-    expect(screen.queryByRole("button", { name: /strategy & process/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /organization & process/i })).not.toBeInTheDocument();
   });
 
   it("hides nav items based on permissions", () => {
@@ -291,7 +292,7 @@ describe("AppLayout — extension nav placement", () => {
     expect(item).toHaveAttribute("href", "/ext/digital-autonomy/quadrant");
   });
 
-  it("places a strategy_process-group extension route under the Strategy & Process menu, alongside BPM", async () => {
+  it("places a strategy_process-group extension route under the Organization & Process menu, alongside BPM", async () => {
     registerExtension("value-chain", {
       key: "value-chain",
       sdkVersion: UI_SDK_VERSION,
@@ -312,13 +313,47 @@ describe("AppLayout — extension nav placement", () => {
     // Not a top-level nav item.
     expect(screen.queryByRole("link", { name: /^value chain$/i })).not.toBeInTheDocument();
 
-    // Appears inside the Strategy & Process dropdown, alongside BPM. Not
+    // Appears inside the Organization & Process dropdown, alongside BPM. Not
     // anchored — MaterialSymbol renders its icon name as literal text in
     // jsdom, so each menuitem's accessible name also carries its icon text.
-    await user.click(screen.getByRole("button", { name: /strategy & process/i }));
+    await user.click(screen.getByRole("button", { name: /organization & process/i }));
     expect(await screen.findByRole("menuitem", { name: /bpm/i })).toBeInTheDocument();
     const item = screen.getByRole("menuitem", { name: /value chain/i });
     expect(item).toHaveAttribute("href", "/ext/value-chain/chain");
+  });
+
+  it("renders an extension-defined navigation group as a dropdown", async () => {
+    registerExtension("swot-analysis", {
+      key: "swot-analysis",
+      sdkVersion: UI_SDK_VERSION,
+      navGroups: [
+        {
+          id: "swot_analysis",
+          label: "SWOT Analysis",
+          icon: "grid_view",
+          permission: "ext.swot-analysis.view",
+        },
+      ],
+      routes: [
+        {
+          id: "product-swot",
+          path: "/ext/swot-analysis/product",
+          label: "Product SWOT",
+          icon: "assessment",
+          permission: "ext.swot-analysis.view",
+          navGroup: "swot_analysis" as ExtensionNavGroup,
+          component: () => null,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderLayout();
+
+    expect(screen.queryByRole("link", { name: /Product SWOT/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /SWOT Analysis/i }));
+    const item = await screen.findByRole("menuitem", { name: /Product SWOT/i });
+    expect(item).toHaveAttribute("href", "/ext/swot-analysis/product");
   });
 
   it("keeps a route without navGroup as a top-level nav item", () => {
