@@ -40,7 +40,11 @@ import { useNavbarStyle } from "@/hooks/useNavbarStyle";
 import { SUPPORTED_LOCALES, LOCALE_LABELS, type SupportedLocale } from "@/i18n";
 import { useEnabledLocales } from "@/hooks/useEnabledLocales";
 import SearchDialog from "@/components/SearchDialog";
-import { getExtensionRoutesForGroup, useExtensionUI } from "@/lib/extensionHost";
+import {
+  getExtensionNavGroups,
+  getExtensionRoutesForGroup,
+  useExtensionUI,
+} from "@/lib/extensionHost";
 import CreateCardDialog from "@/components/CreateCardDialog";
 import type { BadgeCounts, Card } from "@/types";
 
@@ -274,6 +278,26 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       );
     }
 
+    // Extension-defined top-level dropdowns. Each group only receives routes
+    // declared by the same extension; permission filtering and empty-group
+    // removal are handled by the existing resolve/filter pipeline below.
+    for (const { group, routes } of getExtensionNavGroups()) {
+      items = [
+        ...items,
+        {
+          labelKey: group.label,
+          icon: group.icon,
+          permission: group.permission,
+          children: routes.map((route) => ({
+            labelKey: route.label,
+            icon: route.icon,
+            path: route.path,
+            permission: route.permission,
+          })),
+        },
+      ];
+    }
+
     // Append pages contributed by installed UI extensions as top-level entries.
     // Routes that requested a core nav group (e.g. Reports, handled above) are
     // skipped here; a route with an unrecognised navGroup surfaces nowhere in
@@ -464,6 +488,20 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   const isGroupActive = (children?: { path: string }[]) =>
     !!children?.some((c) => location.pathname === c.path);
 
+  // A nav label may carry a literal "\n" (e.g. "Organization &\nProcess" —
+  // a long group label that wraps to two lines in the top-bar dropdown
+  // trigger) — a raw "\n" in a text node is collapsed by the browser
+  // regardless of `white-space`, so it must be split and rendered with an
+  // explicit <br/>, which nowrap still honors (nowrap only suppresses
+  // automatic wrapping at whitespace, not forced breaks).
+  const renderMultilineLabel = (label: string) =>
+    label.split("\n").map((part, i, arr) => (
+      <span key={i}>
+        {part}
+        {i < arr.length - 1 && <br />}
+      </span>
+    ));
+
   const navBtnSx = (active: boolean) => ({
     color: active ? nav.fg : nav.fgMuted,
     textTransform: "none" as const,
@@ -545,7 +583,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                 <ListItemIcon sx={{ minWidth: 36, color: "inherit" }}>
                   <MaterialSymbol icon={item.icon} size={20} color="inherit" />
                 </ListItemIcon>
-                <ListItemText primary={item.label} />
+                <ListItemText primary={renderMultilineLabel(item.label)} />
                 <MaterialSymbol
                   icon={drawerOpenGroups[item.label] ? "expand_less" : "expand_more"}
                   size={18}
@@ -737,7 +775,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                       sx={navBtnSx(isGroupActive(item.children))}
                       onClick={(e) => setOpenNavMenu({ anchorEl: e.currentTarget, item })}
                     >
-                      {item.label}
+                      {renderMultilineLabel(item.label)}
                     </Button>
                   )
                 ) : isCompact ? (
