@@ -41,7 +41,10 @@ TEAX_SCHEMA = "turboea-extension/1"
 MANIFEST_NAME = "manifest.json"
 SIGNATURE_NAME = "manifest.sig"
 
-VALID_CAPABILITIES = frozenset({"content", "backend", "frontend", "metamodel"})
+VALID_CAPABILITIES = frozenset({"content", "backend", "frontend", "metamodel", "mcp"})
+
+_VALID_MCP_METHODS = frozenset({"GET", "POST", "PATCH", "DELETE"})
+_VALID_MCP_ANNOTATION_KEYS = frozenset({"readOnlyHint", "destructiveHint", "idempotentHint"})
 
 # fields_schema field types an extension may contribute: the built-in set, or
 # a custom type namespaced under the extension's own key (ext.{key}.*).
@@ -170,6 +173,12 @@ def _validate_manifest(manifest: dict[str, Any], core_version: str) -> None:
         raise BundleError(
             "Bundle carries a metamodel block but does not declare the metamodel capability"
         )
+    if "mcp" in capabilities:
+        _validate_mcp_block(manifest, key)
+    elif manifest.get("mcp_tools") or manifest.get("mcp_sdk_version"):
+        raise BundleError(
+            "Bundle carries mcp_tools/mcp_sdk_version but does not declare the mcp capability"
+        )
 
     files = manifest.get("files")
     if not isinstance(files, dict):
@@ -226,6 +235,68 @@ def _validate_metamodel_block(manifest: dict[str, Any], ext_key: str) -> None:
                     f"{fw}: type {ftype!r} must be a built-in field type or "
                     f"namespaced ext.{ext_key}.*"
                 )
+
+
+def _validate_mcp_block(manifest: dict[str, Any], ext_key: str) -> None:
+    """Shape-check ``manifest["mcp_tools"]`` + ``manifest["mcp_sdk_version"]``.
+
+    Every tool name must be namespaced under THIS extension's key
+    (``ext_{key}_*``) — mirrors the ``ext.{key}.*`` permission-namespace
+    rule so one extension can never squat on another's MCP tool name.
+    """
+    sdk_version = manifest.get("mcp_sdk_version")
+    if not isinstance(sdk_version, str) or not sdk_version.strip():
+        raise BundleError("mcp capability requires a non-empty mcp_sdk_version string")
+
+    tools = manifest.get("mcp_tools")
+    if not isinstance(tools, list) or not tools:
+        raise BundleError("mcp capability requires a non-empty mcp_tools list")
+
+    name_pattern = re.compile(rf"^ext_{re.escape(ext_key)}_[a-z0-9_]+$")
+    seen_names: set[str] = set()
+    for i, tool in enumerate(tools):
+        where = f"mcp_tools[{i}]"
+        if not isinstance(tool, dict):
+            raise BundleError(f"{where} must be an object")
+
+        name = tool.get("name")
+        if not isinstance(name, str) or not name_pattern.match(name):
+            raise BundleError(f"{where}.name must match ^ext_{ext_key}_[a-z0-9_]+$")
+        if name in seen_names:
+            raise BundleError(f"{where}.name {name!r} is declared more than once")
+        seen_names.add(name)
+
+        if not isinstance(tool.get("description"), str) or not tool["description"].strip():
+            raise BundleError(f"{where} is missing description")
+
+        method = tool.get("method")
+        if not isinstance(method, str) or method.upper() not in _VALID_MCP_METHODS:
+            raise BundleError(f"{where}.method must be one of {sorted(_VALID_MCP_METHODS)}")
+
+        path = tool.get("path")
+        if not isinstance(path, str) or not path or path.startswith("/") or ".." in path:
+            raise BundleError(f"{where}.path must be a relative path with no '..' segments")
+
+        input_schema = tool.get("input_schema")
+        if not isinstance(input_schema, dict) or input_schema.get("type") != "object":
+            raise BundleError(f"{where}.input_schema must be a JSON Schema object")
+
+        annotations = tool.get("annotations")
+        if not isinstance(annotations, dict) or not annotations:
+            raise BundleError(f"{where}.annotations must be a non-empty object")
+        unknown = set(annotations) - _VALID_MCP_ANNOTATION_KEYS
+        if unknown:
+            raise BundleError(f"{where}.annotations has unknown keys: {sorted(unknown)}")
+
+        if not isinstance(tool.get("required_permission"), str) or not tool["required_permission"].strip():
+            raise BundleError(f"{where} is missing required_permission")
+
+        is_read_only = annotations.get("readOnlyHint") is True
+        if not is_read_only and tool.get("dry_run_supported") is not True:
+            raise BundleError(
+                f"{where} is a write tool (readOnlyHint is not true) but does not "
+                "declare dry_run_supported: true"
+            )
 
 
 def _verify_zip(zf: zipfile.ZipFile, *, core_version: str) -> dict[str, Any]:
