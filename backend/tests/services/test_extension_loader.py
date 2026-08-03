@@ -194,11 +194,11 @@ class TestLoadExtensions:
         assert "SDK" in report.failed[0].error
 
     def test_sdk_newer_minor_is_quarantined(self, tmp_path, vendor):
-        install_ext_dir(tmp_path, vendor, sdk_version="1.5")
+        install_ext_dir(tmp_path, vendor, sdk_version="1.6")
         report = load_extensions(tmp_path)
         assert report.loaded == []
+        assert "SDK 1.6" in report.failed[0].error
         assert "SDK 1.5" in report.failed[0].error
-        assert "SDK 1.4" in report.failed[0].error
 
     def test_missing_signature_is_quarantined(self, tmp_path, vendor):
         ext_dir = install_ext_dir(tmp_path, vendor)
@@ -218,7 +218,8 @@ class TestLoadExtensions:
         assert sdk_compatible("1.2") is True
         assert sdk_compatible("1.3") is True
         assert sdk_compatible("1.4") is True
-        assert sdk_compatible("1.5") is False
+        assert sdk_compatible("1.5") is True
+        assert sdk_compatible("1.6") is False
         assert sdk_compatible("2.0") is False
         assert sdk_compatible("garbage") is False
 
