@@ -14,6 +14,7 @@ from app.models.document import Document
 from app.models.event import Event
 from app.models.file_attachment import FileAttachment
 from app.models.notification import Notification
+from app.models.process_element import ProcessElement, ProcessElementOrganization
 from app.models.stakeholder import Stakeholder
 from app.services.extensions import sdk
 from app.services.extensions.bridges import build_request_context
@@ -1197,3 +1198,168 @@ async def test_list_descendant_ids_excludes_invisible_branch_without_discovering
     # grandchild is only reachable via child_a — never discovered once child_a is hidden.
     assert env["grandchild"].id not in descendants
     assert set(descendants) == {env["child_b"].id}
+
+
+async def _organization_links_context(db):
+    await create_role(db, key="admin", permissions={"*": True})
+    actor = await create_user(db, role="admin")
+    for key in ("Organization", "BusinessProcess", "Application", "DataObject"):
+        await create_card_type(db, key=key, label=key)
+    await create_relation_type(
+        db, key="relProcessToOrg", source_type_key="BusinessProcess", target_type_key="Organization"
+    )
+    await create_relation_type(
+        db, key="relOrgToApp", source_type_key="Organization", target_type_key="Application"
+    )
+    await create_relation_type(
+        db, key="relOrgToDataObj", source_type_key="Organization", target_type_key="DataObject"
+    )
+
+    org = await create_card(db, card_type="Organization", name="Team Alpha", user_id=actor.id)
+    other_org = await create_card(db, card_type="Organization", name="Team Beta", user_id=actor.id)
+    process = await create_card(
+        db, card_type="BusinessProcess", name="Order Fulfillment", user_id=actor.id
+    )
+    app = await create_card(db, card_type="Application", name="Procurement Suite", user_id=actor.id)
+    data_obj = await create_card(db, card_type="DataObject", name="Customer Record", user_id=actor.id)
+    inactive_app = await create_card(
+        db, card_type="Application", name="Retired App", user_id=actor.id, status="ARCHIVED"
+    )
+
+    # Organization is the TARGET here (relProcessToOrg: BusinessProcess -> Organization).
+    await create_relation(db, type_key="relProcessToOrg", source_id=process.id, target_id=org.id)
+    # Organization is the SOURCE here (relOrgToApp: Organization -> Application).
+    await create_relation(
+        db,
+        type_key="relOrgToApp",
+        source_id=org.id,
+        target_id=app.id,
+        attributes={"usageType": "owner"},
+    )
+    await create_relation(db, type_key="relOrgToDataObj", source_id=org.id, target_id=data_obj.id)
+    # Points at an inactive card — must never surface.
+    await create_relation(db, type_key="relOrgToApp", source_id=org.id, target_id=inactive_app.id)
+
+    process_element = ProcessElement(
+        process_id=process.id,
+        bpmn_element_id="task_1",
+        element_type="task",
+        name="Review order",
+        sequence_order=0,
+    )
+    db.add(process_element)
+    await db.flush()
+    db.add(ProcessElementOrganization(element_id=process_element.id, organization_id=org.id))
+    await db.flush()
+
+    return {
+        "actor": actor,
+        "org": org,
+        "other_org": other_org,
+        "process": process,
+        "app": app,
+        "data_obj": data_obj,
+        "inactive_app": inactive_app,
+        "process_element": process_element,
+    }
+
+
+async def test_read_organization_links_returns_empty_for_empty_input(db):
+    env = await _organization_links_context(db)
+    context = build_request_context("organization", db, env["actor"])
+
+    result = await context.core_query.read_organization_links([])
+
+    assert result == sdk.OrganizationLinks(links=(), step_links=(), partial=False)
+
+
+async def test_read_organization_links_returns_direct_relations_both_directions(db):
+    env = await _organization_links_context(db)
+    context = build_request_context("organization", db, env["actor"])
+
+    result = await context.core_query.read_organization_links([env["org"].id])
+
+    by_type = {link.relation_type: link for link in result.links}
+    assert set(by_type) == {"relProcessToOrg", "relOrgToApp", "relOrgToDataObj"}
+    assert by_type["relProcessToOrg"].card.id == env["process"].id
+    assert by_type["relOrgToApp"].card.id == env["app"].id
+    assert by_type["relOrgToApp"].attributes == {"usageType": "owner"}
+    assert by_type["relOrgToDataObj"].card.id == env["data_obj"].id
+    assert all(link.organization_id == env["org"].id for link in result.links)
+    assert all(link.card.attributes == {} for link in result.links)
+    assert env["inactive_app"].id not in {link.card.id for link in result.links}
+    # The relation to inactive_app is intentionally in the fixture — it's
+    # filtered out (inactive card), which is exactly what marks this partial.
+    assert result.partial is True
+
+    step = result.step_links[0]
+    assert step.organization_id == env["org"].id
+    assert step.process_id == env["process"].id
+    assert step.element_id == env["process_element"].id
+    assert step.element_name == "Review order"
+    assert step.element_type == "task"
+
+    assert list(result.links) == sorted(
+        result.links,
+        key=lambda link: (str(link.organization_id), link.card.type, link.card.name.casefold(), str(link.card.id)),
+    )
+
+
+async def test_read_organization_links_ignores_unrelated_organization(db):
+    env = await _organization_links_context(db)
+    context = build_request_context("organization", db, env["actor"])
+
+    result = await context.core_query.read_organization_links([env["other_org"].id])
+
+    assert result.links == ()
+    assert result.step_links == ()
+    assert result.partial is False
+
+
+async def test_read_organization_links_marks_partial_when_an_org_id_is_invisible(db):
+    env = await _organization_links_context(db)
+    context = build_request_context("organization", db, env["actor"])
+
+    async def hide_org(_db, _user, _app, card_id, _card_permission):
+        return card_id != env["org"].id
+
+    with patch(
+        "app.services.extensions.bridges.PermissionService.check_permission",
+        side_effect=hide_org,
+    ):
+        result = await context.core_query.read_organization_links([env["org"].id])
+
+    assert result.links == ()
+    assert result.step_links == ()
+    assert result.partial is True
+
+
+async def test_read_organization_links_marks_partial_when_a_linked_card_is_invisible(db):
+    env = await _organization_links_context(db)
+    context = build_request_context("organization", db, env["actor"])
+
+    async def hide_app(_db, _user, _app, card_id, _card_permission):
+        return card_id != env["app"].id
+
+    with patch(
+        "app.services.extensions.bridges.PermissionService.check_permission",
+        side_effect=hide_app,
+    ):
+        result = await context.core_query.read_organization_links([env["org"].id])
+
+    assert env["app"].id not in {link.card.id for link in result.links}
+    assert result.partial is True
+
+
+async def test_read_organization_links_step_links_require_bpm_view(db):
+    env = await _organization_links_context(db)
+    context = build_request_context("organization", db, env["actor"])
+
+    with patch(
+        "app.services.extensions.bridges.PermissionService.require_permission",
+        new=AsyncMock(side_effect=HTTPException(status_code=403)),
+    ):
+        with pytest.raises(ExtensionBridgeError) as raised:
+            await context.core_query.read_organization_links([env["org"].id])
+
+    assert raised.value.code == "permission_denied"

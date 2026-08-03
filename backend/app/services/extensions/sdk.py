@@ -181,6 +181,40 @@ class NotificationReceipt:
     user_id: UUID
 
 
+@dataclass(frozen=True)
+class OrganizationLink:
+    """One direct Organization-centric relation (relProcessToOrg/relOrgToApp/
+    relOrgToDataObj), in whichever direction the metamodel declares it."""
+
+    organization_id: UUID
+    relation_type: str
+    card: ResolvedCard
+    attributes: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class OrganizationStepLink:
+    """One BPMN process step (element) linked to an Organization via
+    process_element_organizations — the per-step granularity relations
+    alone cannot express."""
+
+    organization_id: UUID
+    process_id: UUID
+    process_name: str
+    element_id: UUID
+    element_name: str
+    element_type: str
+
+
+@dataclass(frozen=True)
+class OrganizationLinks:
+    """Deterministic read-only Organization impact data returned by the core."""
+
+    links: tuple[OrganizationLink, ...]
+    step_links: tuple[OrganizationStepLink, ...]
+    partial: bool
+
+
 @runtime_checkable
 class CoreQueryGateway(Protocol):
     async def resolve_cards(
@@ -222,6 +256,11 @@ class CoreQueryGateway(Protocol):
         *,
         expected_type: str,
     ) -> Sequence[UUID]: ...
+
+    async def read_organization_links(
+        self,
+        org_ids: Sequence[UUID],
+    ) -> OrganizationLinks: ...
 
 
 @dataclass(frozen=True)

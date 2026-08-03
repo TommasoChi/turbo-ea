@@ -15,6 +15,7 @@ from app.models.card import Card
 from app.models.document import Document
 from app.models.event import Event
 from app.models.file_attachment import FileAttachment
+from app.models.process_element import ProcessElement, ProcessElementOrganization
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.stakeholder import Stakeholder
@@ -32,6 +33,9 @@ from app.services.extensions.sdk import (
     ExtensionBridgeError,
     ExtensionRequestContext,
     NotificationReceipt,
+    OrganizationLink,
+    OrganizationLinks,
+    OrganizationStepLink,
     ResolvedCard,
     ResourceFile,
     ResourceItem,
@@ -678,6 +682,211 @@ class _CoreQueryBridge:
                 frontier.append(child)
 
         return sorted(descendants, key=str)
+
+    async def read_organization_links(
+        self,
+        org_ids: Sequence[UUID],
+    ) -> OrganizationLinks:
+        requested_ids = list(dict.fromkeys(org_ids))
+        if not requested_ids:
+            return OrganizationLinks(links=(), step_links=(), partial=False)
+
+        org_rows = (
+            (
+                await self._db.execute(
+                    select(Card).where(
+                        Card.id.in_(requested_ids),
+                        Card.type == "Organization",
+                        Card.status == "ACTIVE",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        partial = len(org_rows) != len(requested_ids)
+
+        visible_org_ids: set[UUID] = set()
+        for org in org_rows:
+            if await PermissionService.check_permission(
+                self._db,
+                self._user,
+                "inventory.view",
+                org.id,
+                "card.view",
+            ):
+                visible_org_ids.add(org.id)
+            else:
+                partial = True
+
+        if not visible_org_ids:
+            return OrganizationLinks(links=(), step_links=(), partial=partial)
+
+        links_result = await self._read_organization_relation_links(visible_org_ids)
+        if links_result.partial:
+            partial = True
+
+        step_links, step_partial = await self._read_organization_step_links(visible_org_ids)
+        if step_partial:
+            partial = True
+
+        return OrganizationLinks(
+            links=links_result.links,
+            step_links=step_links,
+            partial=partial,
+        )
+
+    async def _read_organization_relation_links(
+        self,
+        visible_org_ids: set[UUID],
+    ) -> OrganizationLinks:
+        rows = (
+            (
+                await self._db.execute(
+                    select(Relation).where(
+                        Relation.type.in_(_ORGANIZATION_RELATION_TYPES),
+                        or_(
+                            Relation.source_id.in_(visible_org_ids),
+                            Relation.target_id.in_(visible_org_ids),
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        partial = False
+        other_ids: set[UUID] = set()
+        pending: list[tuple[Relation, UUID, UUID]] = []
+        for relation in rows:
+            if relation.source_id in visible_org_ids:
+                org_id, other_id = relation.source_id, relation.target_id
+            elif relation.target_id in visible_org_ids:
+                org_id, other_id = relation.target_id, relation.source_id
+            else:
+                continue
+            pending.append((relation, org_id, other_id))
+            other_ids.add(other_id)
+
+        other_cards: dict[UUID, Card] = {}
+        if other_ids:
+            other_rows = (
+                (
+                    await self._db.execute(
+                        select(Card).where(
+                            Card.id.in_(other_ids),
+                            Card.status == "ACTIVE",
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            other_cards = {card.id: card for card in other_rows}
+
+        links: list[OrganizationLink] = []
+        for relation, org_id, other_id in pending:
+            other = other_cards.get(other_id)
+            if other is None:
+                partial = True
+                continue
+            if not await PermissionService.check_permission(
+                self._db,
+                self._user,
+                "inventory.view",
+                other.id,
+                "card.view",
+            ):
+                partial = True
+                continue
+            links.append(
+                OrganizationLink(
+                    organization_id=org_id,
+                    relation_type=relation.type,
+                    card=self._summary(other),
+                    attributes=dict(relation.attributes or {}),
+                )
+            )
+
+        links.sort(
+            key=lambda link: (
+                str(link.organization_id),
+                link.card.type,
+                link.card.name.casefold(),
+                str(link.card.id),
+            )
+        )
+        return OrganizationLinks(links=tuple(links), step_links=(), partial=partial)
+
+    async def _read_organization_step_links(
+        self,
+        visible_org_ids: set[UUID],
+    ) -> tuple[tuple[OrganizationStepLink, ...], bool]:
+        rows = (
+            await self._db.execute(
+                select(ProcessElement, ProcessElementOrganization.organization_id)
+                .join(
+                    ProcessElementOrganization,
+                    ProcessElementOrganization.element_id == ProcessElement.id,
+                )
+                .where(ProcessElementOrganization.organization_id.in_(visible_org_ids))
+                .order_by(ProcessElement.process_id, ProcessElement.sequence_order)
+            )
+        ).all()
+        if not rows:
+            return (), False
+
+        try:
+            await PermissionService.require_permission(self._db, self._user, "bpm.view")
+        except HTTPException as exc:
+            raise ExtensionBridgeError(
+                "permission_denied",
+                "The current actor cannot read per-step BPM organization links",
+            ) from exc
+
+        process_ids = {element.process_id for element, _org_id in rows}
+        process_rows = (
+            (
+                await self._db.execute(
+                    select(Card).where(
+                        Card.id.in_(process_ids),
+                        Card.status == "ACTIVE",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        processes_by_id = {process.id: process for process in process_rows}
+        partial = len(processes_by_id) != len(process_ids)
+
+        visible_process_ids: set[UUID] = set()
+        for process in process_rows:
+            if await PermissionService.check_permission(
+                self._db,
+                self._user,
+                "inventory.view",
+                process.id,
+                "card.view",
+            ):
+                visible_process_ids.add(process.id)
+            else:
+                partial = True
+
+        step_links = tuple(
+            OrganizationStepLink(
+                organization_id=org_id,
+                process_id=element.process_id,
+                process_name=processes_by_id[element.process_id].name,
+                element_id=element.id,
+                element_name=element.name or "",
+                element_type=element.element_type,
+            )
+            for element, org_id in rows
+            if element.process_id in visible_process_ids
+        )
+        return step_links, partial
 
 
 class _PermissionBridge:
