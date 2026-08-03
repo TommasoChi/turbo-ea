@@ -80,6 +80,9 @@ _DEPENDENCY_RELATION_ATTRIBUTE_KEYS = frozenset(
     {"flowDirection", "usageType", "supportType"}
 )
 
+_HIERARCHY_CARD_TYPES = frozenset({"Organization"})
+_ORGANIZATION_RELATION_TYPES = frozenset({"relProcessToOrg", "relOrgToApp", "relOrgToDataObj"})
+
 
 class _CoreQueryBridge:
     def __init__(self, db: AsyncSession, user: Any) -> None:
@@ -629,6 +632,52 @@ class _CoreQueryBridge:
             )
         ).scalar_one_or_none()
         return assignment is not None
+
+    async def list_descendant_ids(
+        self,
+        root_id: UUID,
+        *,
+        expected_type: str,
+    ) -> list[UUID]:
+        if expected_type not in _HIERARCHY_CARD_TYPES:
+            raise ExtensionBridgeError(
+                "validation_failed",
+                "The requested card type is not exposed by the hierarchy gateway",
+                details={"expected_type": expected_type},
+            )
+        root = await self._require_card(root_id, expected_type=expected_type)
+
+        descendants: set[UUID] = set()
+        frontier: deque[Card] = deque([root])
+        while frontier:
+            current = frontier.popleft()
+            rows = (
+                (
+                    await self._db.execute(
+                        select(Card).where(
+                            Card.parent_id == current.id,
+                            Card.status == "ACTIVE",
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for child in rows:
+                if child.id in descendants:
+                    continue
+                if not await PermissionService.check_permission(
+                    self._db,
+                    self._user,
+                    "inventory.view",
+                    child.id,
+                    "card.view",
+                ):
+                    continue
+                descendants.add(child.id)
+                frontier.append(child)
+
+        return sorted(descendants, key=str)
 
 
 class _PermissionBridge:

@@ -1097,3 +1097,103 @@ async def test_audit_bridge_fails_closed_when_permission_is_denied():
 
     assert exc_info.value.code == "permission_denied"
     db.execute.assert_not_awaited()
+
+
+async def _hierarchy_context(db):
+    await create_role(db, key="admin", permissions={"*": True})
+    actor = await create_user(db, role="admin")
+    await create_card_type(db, key="Organization", label="Organization")
+    await create_card_type(db, key="Application", label="Application")
+
+    root = await create_card(db, card_type="Organization", name="Group", user_id=actor.id)
+    child_a = await create_card(
+        db, card_type="Organization", name="Division A", user_id=actor.id, parent_id=root.id
+    )
+    child_b = await create_card(
+        db, card_type="Organization", name="Division B", user_id=actor.id, parent_id=root.id
+    )
+    grandchild = await create_card(
+        db, card_type="Organization", name="Team", user_id=actor.id, parent_id=child_a.id
+    )
+    inactive_child = await create_card(
+        db,
+        card_type="Organization",
+        name="Retired Team",
+        user_id=actor.id,
+        parent_id=root.id,
+        status="ARCHIVED",
+    )
+    unrelated = await create_card(db, card_type="Application", name="Unrelated App", user_id=actor.id)
+
+    return {
+        "actor": actor,
+        "root": root,
+        "child_a": child_a,
+        "child_b": child_b,
+        "grandchild": grandchild,
+        "inactive_child": inactive_child,
+        "unrelated": unrelated,
+    }
+
+
+async def test_list_descendant_ids_walks_full_subtree_excluding_root(db):
+    env = await _hierarchy_context(db)
+    context = build_request_context("organization", db, env["actor"])
+
+    descendants = await context.core_query.list_descendant_ids(
+        env["root"].id, expected_type="Organization"
+    )
+
+    assert set(descendants) == {env["child_a"].id, env["child_b"].id, env["grandchild"].id}
+    assert env["root"].id not in descendants
+    assert env["inactive_child"].id not in descendants
+    assert list(descendants) == sorted(descendants, key=str)
+
+
+async def test_list_descendant_ids_rejects_type_outside_allowlist(db):
+    env = await _hierarchy_context(db)
+    context = build_request_context("organization", db, env["actor"])
+
+    with pytest.raises(ExtensionBridgeError) as raised:
+        await context.core_query.list_descendant_ids(
+            env["unrelated"].id, expected_type="Application"
+        )
+
+    assert raised.value.code == "validation_failed"
+
+
+async def test_list_descendant_ids_rejects_invisible_root(db):
+    env = await _hierarchy_context(db)
+    context = build_request_context("organization", db, env["actor"])
+
+    with patch(
+        "app.services.extensions.bridges.PermissionService.check_permission",
+        new=AsyncMock(return_value=False),
+    ):
+        with pytest.raises(ExtensionBridgeError) as raised:
+            await context.core_query.list_descendant_ids(
+                env["root"].id, expected_type="Organization"
+            )
+
+    assert raised.value.code == "permission_denied"
+
+
+async def test_list_descendant_ids_excludes_invisible_branch_without_discovering_its_children(db):
+    env = await _hierarchy_context(db)
+    context = build_request_context("organization", db, env["actor"])
+
+    async def hide_child_a(_db, _user, _app, card_id, _card_permission):
+        return card_id != env["child_a"].id
+
+    with patch(
+        "app.services.extensions.bridges.PermissionService.check_permission",
+        side_effect=hide_child_a,
+    ):
+        descendants = await context.core_query.list_descendant_ids(
+            env["root"].id, expected_type="Organization"
+        )
+
+    assert env["child_a"].id not in descendants
+    # grandchild is only reachable via child_a — never discovered once child_a is hidden.
+    assert env["grandchild"].id not in descendants
+    assert set(descendants) == {env["child_b"].id}

@@ -216,6 +216,13 @@ class CoreQueryGateway(Protocol):
         role_key: str,
     ) -> bool: ...
 
+    async def list_descendant_ids(
+        self,
+        root_id: UUID,
+        *,
+        expected_type: str,
+    ) -> Sequence[UUID]: ...
+
 
 @dataclass(frozen=True)
 class AuditEvent:
