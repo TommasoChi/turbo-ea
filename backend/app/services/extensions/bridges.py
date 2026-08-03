@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections import deque
+from typing import Any, Sequence
 from uuid import UUID
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -24,6 +25,9 @@ from app.services.extensions.sdk import (
     ApplicationCandidate,
     AuditEvent,
     CardRef,
+    DependencyEdge,
+    DependencyNode,
+    DependencySubgraph,
     ExtensionActor,
     ExtensionBridgeError,
     ExtensionRequestContext,
@@ -40,10 +44,41 @@ _ALLOWED_CARD_TYPES: dict[str, frozenset[str] | None] = {
     "BusinessContext": frozenset({"businessProduct"}),
     "Platform": frozenset({"digital"}),
     "Application": None,
+    "ITComponent": None,
+    "TechCategory": None,
+    "Provider": None,
     "BusinessProcess": None,
     "BusinessCapability": None,
     "Objective": frozenset({"businessGoal", "valueGate"}),
 }
+
+
+_DEPENDENCY_CARD_TYPES = frozenset(
+    {"BusinessContext", "Platform", "Application", "ITComponent"}
+)
+_DEPENDENCY_RELATION_TYPES = frozenset(
+    {
+        "relAppToBizCtx",
+        "relPlatformToBusinessProduct",
+        "relPlatformToApp",
+        "relAppToITC",
+        "relPlatformToITC",
+    }
+)
+_DEPENDENCY_CARD_ATTRIBUTE_KEYS = frozenset(
+    {
+        "product",
+        "technology",
+        "version",
+        "provider",
+        "deploymentModel",
+        "endOfLife",
+        "description",
+    }
+)
+_DEPENDENCY_RELATION_ATTRIBUTE_KEYS = frozenset(
+    {"flowDirection", "usageType", "supportType"}
+)
 
 
 class _CoreQueryBridge:
@@ -141,6 +176,270 @@ class _CoreQueryBridge:
             )
             resolved.append(self._summary(card, ref.attribute_keys))
         return resolved
+
+    @staticmethod
+    def _validate_dependency_subset(
+        values: Sequence[str],
+        *,
+        allowed: frozenset[str],
+        field: str,
+        allow_empty: bool = False,
+    ) -> tuple[str, ...]:
+        if isinstance(values, (str, bytes)):
+            requested: tuple[str, ...] = ()
+        else:
+            try:
+                requested = tuple(values)
+            except TypeError:
+                requested = ()
+
+        normalized = tuple(
+            dict.fromkeys(
+                value.strip()
+                for value in requested
+                if isinstance(value, str) and value.strip()
+            )
+        )
+        if (
+            (not normalized and not allow_empty)
+            or len(normalized) != len(requested)
+            or not set(normalized).issubset(allowed)
+        ):
+            raise ExtensionBridgeError(
+                "invalid_dependency_query",
+                "The dependency query is outside the public SDK allowlists",
+                details={"field": field},
+            )
+        return normalized
+
+    @staticmethod
+    def _dependency_node(
+        card: Card,
+        attribute_keys: tuple[str, ...],
+    ) -> DependencyNode:
+        source_attributes = dict(card.attributes or {})
+        attributes = {
+            key: source_attributes[key]
+            for key in attribute_keys
+            if key != "description" and key in source_attributes
+        }
+        if "description" in attribute_keys and card.description is not None:
+            attributes["description"] = card.description
+        return DependencyNode(
+            id=card.id,
+            name=card.name,
+            type=card.type,
+            subtype=card.subtype,
+            reference=card.reference,
+            lifecycle=dict(card.lifecycle or {}),
+            attributes=attributes,
+            parent_id=card.parent_id,
+        )
+
+    @staticmethod
+    def _dependency_subtype_is_allowed(card: Card) -> bool:
+        allowed_subtypes = _ALLOWED_CARD_TYPES.get(card.type)
+        return allowed_subtypes is None or card.subtype in allowed_subtypes
+
+    async def read_dependency_subgraph(
+        self,
+        root_card_id: UUID,
+        *,
+        allowed_card_types: Sequence[str],
+        allowed_relation_types: Sequence[str],
+        max_depth: int = 3,
+        card_attribute_keys: Sequence[str] = (),
+        relation_attribute_keys: Sequence[str] = (),
+    ) -> DependencySubgraph:
+        card_types = self._validate_dependency_subset(
+            allowed_card_types,
+            allowed=_DEPENDENCY_CARD_TYPES,
+            field="allowed_card_types",
+        )
+        relation_types = self._validate_dependency_subset(
+            allowed_relation_types,
+            allowed=_DEPENDENCY_RELATION_TYPES,
+            field="allowed_relation_types",
+        )
+        card_attributes = self._validate_dependency_subset(
+            card_attribute_keys,
+            allowed=_DEPENDENCY_CARD_ATTRIBUTE_KEYS,
+            field="card_attribute_keys",
+            allow_empty=True,
+        )
+        relation_attributes = self._validate_dependency_subset(
+            relation_attribute_keys,
+            allowed=_DEPENDENCY_RELATION_ATTRIBUTE_KEYS,
+            field="relation_attribute_keys",
+            allow_empty=True,
+        )
+        if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not 1 <= max_depth <= 3:
+            raise ExtensionBridgeError(
+                "invalid_dependency_query",
+                "Dependency query depth must be between 1 and 3",
+                details={"field": "max_depth"},
+            )
+
+        root = (
+            await self._db.execute(
+                select(Card).where(
+                    Card.id == root_card_id,
+                    Card.status == "ACTIVE",
+                )
+            )
+        ).scalar_one_or_none()
+        if root is None:
+            raise ExtensionBridgeError(
+                "reference_not_found",
+                "The referenced card does not exist or is not active",
+                details={"card_id": str(root_card_id)},
+            )
+        if not await PermissionService.check_permission(
+            self._db,
+            self._user,
+            "inventory.view",
+            root.id,
+            "card.view",
+        ):
+            raise ExtensionBridgeError(
+                "permission_denied",
+                "The current actor cannot view the referenced card",
+                details={"card_id": str(root_card_id)},
+            )
+        if root.type not in card_types:
+            raise ExtensionBridgeError(
+                "reference_type_mismatch",
+                "The dependency root has an unexpected type",
+                details={
+                    "card_id": str(root_card_id),
+                    "expected_types": sorted(card_types),
+                    "actual_type": root.type,
+                },
+            )
+        if not self._dependency_subtype_is_allowed(root):
+            allowed_subtypes = _ALLOWED_CARD_TYPES[root.type]
+            raise ExtensionBridgeError(
+                "reference_subtype_mismatch",
+                "The dependency root has an unexpected subtype",
+                details={
+                    "card_id": str(root_card_id),
+                    "expected_subtypes": sorted(allowed_subtypes or ()),
+                    "actual_subtype": root.subtype,
+                },
+            )
+
+        visible_cards: dict[UUID, Card] = {root.id: root}
+        filtered_ids: set[UUID] = set()
+        nodes: dict[UUID, DependencyNode] = {
+            root.id: self._dependency_node(root, card_attributes)
+        }
+        edges: dict[tuple[str, UUID, UUID], DependencyEdge] = {}
+        visited: set[UUID] = {root.id}
+        frontier: deque[tuple[Card, int]] = deque([(root, 0)])
+        partial = False
+
+        while frontier:
+            current, depth = frontier.popleft()
+            if depth >= max_depth:
+                continue
+
+            rows = (
+                await self._db.execute(
+                    select(Relation, RelationType)
+                    .join(RelationType, RelationType.key == Relation.type)
+                    .where(
+                        Relation.type.in_(relation_types),
+                        or_(
+                            Relation.source_id == current.id,
+                            Relation.target_id == current.id,
+                        ),
+                    )
+                )
+            ).all()
+
+            for relation, relation_type in rows:
+                other_id = (
+                    relation.target_id
+                    if relation.source_id == current.id
+                    else relation.source_id
+                )
+                if other_id in filtered_ids:
+                    partial = True
+                    continue
+
+                other = visible_cards.get(other_id)
+                if other is None:
+                    other = (
+                        await self._db.execute(
+                            select(Card).where(
+                                Card.id == other_id,
+                                Card.status == "ACTIVE",
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if (
+                        other is None
+                        or other.type not in card_types
+                        or not self._dependency_subtype_is_allowed(other)
+                    ):
+                        filtered_ids.add(other_id)
+                        partial = True
+                        continue
+                    if not await PermissionService.check_permission(
+                        self._db,
+                        self._user,
+                        "inventory.view",
+                        other.id,
+                        "card.view",
+                    ):
+                        filtered_ids.add(other_id)
+                        partial = True
+                        continue
+                    visible_cards[other.id] = other
+                    nodes[other.id] = self._dependency_node(other, card_attributes)
+
+                edge_key = (relation.type, relation.source_id, relation.target_id)
+                if edge_key not in edges:
+                    source_attributes = dict(relation.attributes or {})
+                    edges[edge_key] = DependencyEdge(
+                        source_id=relation.source_id,
+                        target_id=relation.target_id,
+                        type=relation.type,
+                        label=relation_type.label,
+                        reverse_label=relation_type.reverse_label,
+                        description=relation.description,
+                        attributes={
+                            key: source_attributes[key]
+                            for key in relation_attributes
+                            if key in source_attributes
+                        },
+                    )
+
+                if other.id not in visited:
+                    visited.add(other.id)
+                    frontier.append((other, depth + 1))
+
+        return DependencySubgraph(
+            root_id=root.id,
+            nodes=tuple(
+                sorted(
+                    nodes.values(),
+                    key=lambda node: (node.type, node.name.casefold(), str(node.id)),
+                )
+            ),
+            edges=tuple(
+                sorted(
+                    edges.values(),
+                    key=lambda edge: (
+                        edge.type,
+                        str(edge.source_id),
+                        str(edge.target_id),
+                    ),
+                )
+            ),
+            partial=partial,
+        )
+
 
     async def list_product_platforms(self, product_id: UUID) -> list[ResolvedCard]:
         await self._require_card(

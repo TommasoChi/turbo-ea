@@ -66,7 +66,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 from app.api.deps import get_current_user, require_permission  # noqa: F401
 from app.database import get_db  # noqa: F401
 
-SDK_VERSION = "1.4"
+SDK_VERSION = "1.5"
 
 
 class ExtensionBridgeError(RuntimeError):
@@ -105,6 +105,43 @@ class ResolvedCard:
     reference: str | None
     lifecycle: dict[str, Any]
     attributes: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class DependencyNode:
+    """One immutable, permission-shaped Card in a dependency projection."""
+
+    id: UUID
+    name: str
+    type: str
+    subtype: str | None
+    reference: str | None
+    lifecycle: dict[str, Any]
+    attributes: dict[str, Any]
+    parent_id: UUID | None = None
+
+
+@dataclass(frozen=True)
+class DependencyEdge:
+    """One immutable relation retaining its stored semantic direction."""
+
+    source_id: UUID
+    target_id: UUID
+    type: str
+    label: str
+    reverse_label: str | None
+    description: str | None
+    attributes: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class DependencySubgraph:
+    """Deterministic read-only dependency graph returned by the core."""
+
+    root_id: UUID
+    nodes: tuple[DependencyNode, ...]
+    edges: tuple[DependencyEdge, ...]
+    partial: bool
 
 
 @dataclass(frozen=True)
@@ -150,6 +187,17 @@ class CoreQueryGateway(Protocol):
         self,
         refs: Sequence[CardRef],
     ) -> Sequence[ResolvedCard]: ...
+
+    async def read_dependency_subgraph(
+        self,
+        root_card_id: UUID,
+        *,
+        allowed_card_types: Sequence[str],
+        allowed_relation_types: Sequence[str],
+        max_depth: int = 3,
+        card_attribute_keys: Sequence[str] = (),
+        relation_attribute_keys: Sequence[str] = (),
+    ) -> DependencySubgraph: ...
 
     async def list_product_platforms(
         self,

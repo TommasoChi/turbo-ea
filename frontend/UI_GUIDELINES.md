@@ -248,6 +248,19 @@ The **Layered Dependency View (LDV)** is Turbo EA's house notation for showing d
 - The **TurboLens Architect** target architecture (existing + proposed cards)
 
 It is implemented by `LayeredDependencyView` and `layeredDependencyLayout` (card-detail wrapper: `LayeredDependencySection`). The one remaining `c4` identifier is the toggle-button / saved-report `chartMode` value `"c4"`, kept so existing saved reports keep resolving — leave it alone, and don't reintroduce `C4*` names elsewhere.
+**Extension SDK contract (UI SDK 1.19+)**
+
+Extensions must render dependency graphs through `window.TurboEA.sdk.DependencyGraph`
+instead of importing internal report components or calling
+`/reports/dependencies`. The wrapper is data-only: the extension supplies its
+own permission-shaped `nodes` and `edges`, and the core supplies the current
+metamodel presentation.
+
+AS-IS nodes omit `changeKind`. TO-BE nodes may use only `added`, `modified`,
+`removed`, or `potentialImpact`. Keep `canCreateDiagram={false}` whenever
+the graph contains hypothetical, changed, or removed nodes; diagram creation is
+only safe when every rendered node is a real inventory Card.
+
 
 **Grouping — the four EA layers, fixed order**
 
@@ -269,6 +282,12 @@ Layer order is invariant. Layer color = `LAYER_COLORS[layer]` from `theme/tokens
 | Label | Card name (top, semibold) + card-type label (bottom, italic) |
 | Border — existing | 1.5 px solid, type color |
 | Border — proposed | 2 px dashed, type color, plus a green **NEW** badge top-right |
+| Border - added | 2 px dashed, type color, plus a localized **NEW** badge |
+| Border - modified | 3 px solid, type color, plus a localized **MODIFIED** badge |
+| Border - removed | 1.5 px solid, type color, 0.62 opacity, struck-through name, localized **REMOVED** badge |
+| Border - potential impact | 2 px dotted, type color, plus a localized **POTENTIAL IMPACT** badge |
+
+Legacy `proposed: true` input is normalized to `changeKind: "added"` for compatibility; its badge and border use the Card-type accent, not a standalone green fill.
 | Hover | Connected nodes stay full opacity; unconnected nodes dim to 0.35 |
 
 **Edges**

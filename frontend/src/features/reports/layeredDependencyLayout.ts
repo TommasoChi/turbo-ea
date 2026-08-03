@@ -19,6 +19,12 @@ import type { CardType, RelationType, FieldOption } from "@/types";
 /*  Input types (same as DependencyReport)                             */
 /* ------------------------------------------------------------------ */
 
+export type DependencyChangeKind =
+  | "added"
+  | "modified"
+  | "removed"
+  | "potentialImpact";
+
 export interface GNode {
   id: string;
   name: string;
@@ -28,6 +34,7 @@ export interface GNode {
   parent_id?: string | null;
   path?: string[];
   proposed?: boolean;
+  changeKind?: DependencyChangeKind;
   /** Whether this card has any child card in the full dataset (set by the
    *  consumer, which holds the whole graph). Drives the "has hidden children"
    *  hierarchy marker — the view only sees the visible slice, so it can't
@@ -78,7 +85,11 @@ export function filterEndOfLifeNodes(
   centerId?: string,
 ): { nodes: GNode[]; edges: GEdge[] } {
   const visible = nodes.filter(
-    (n) => n.id === centerId || n.proposed || getCurrentPhase(n.lifecycle) !== "endOfLife",
+    (n) =>
+      n.id === centerId ||
+      n.changeKind !== undefined ||
+      n.proposed ||
+      getCurrentPhase(n.lifecycle) !== "endOfLife",
   );
   const ids = new Set(visible.map((n) => n.id));
   return {
@@ -104,6 +115,7 @@ export interface LdvNodeData {
   dimmed?: boolean;
   usedHandles?: string[];
   proposed?: boolean;
+  changeKind?: DependencyChangeKind;
   [key: string]: unknown;
 }
 
@@ -423,6 +435,7 @@ export function buildLdvFlow(
           typeIcon: typeIcon(nd.type, types),
           category: gl.cat,
           proposed: nd.proposed,
+          changeKind: nd.changeKind ?? (nd.proposed ? "added" : undefined),
         } satisfies LdvNodeData,
         style: { width: LDV_NODE_W, height: LDV_NODE_H },
         draggable: false,

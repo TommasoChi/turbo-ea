@@ -109,14 +109,16 @@ import MetricCard from "@/features/reports/MetricCard";
 import ReportLegend from "@/features/reports/ReportLegend";
 import SaveReportDialog from "@/features/reports/SaveReportDialog";
 import type { ReportShellProps } from "@/features/reports/ReportShell";
+import type { GEdge, GNode } from "@/features/reports/layeredDependencyLayout";
 import { useChartTheme } from "@/hooks/useChartTheme";
 import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
 import { useCurrency } from "@/hooks/useCurrency";
+import { useMetamodel } from "@/hooks/useMetamodel";
 import { useSavedReport as useCoreSavedReport } from "@/hooks/useSavedReport";
 import * as tokens from "@/theme/tokens";
 import type { ArchitectureDecision, Card } from "@/types";
 
-export const UI_SDK_VERSION = "1.18";
+export const UI_SDK_VERSION = "1.19";
 
 /**
  * Core nav groups an extension route may request placement into (instead of the
@@ -587,6 +589,7 @@ export function useExtensionFieldVisibilityProviders(): RegisteredFieldVisibilit
  */
 const LazyCardDetailSidePanel = React.lazy(() => import("@/components/CardDetailSidePanel"));
 const LazyReportShell = React.lazy(() => import("@/features/reports/ReportShell"));
+const LazyDependencyGraph = React.lazy(() => import("@/features/reports/LayeredDependencyView"));
 // SDK 1.14 — same lazy-wrapper treatment as CardDetailSidePanel: this panel
 // pulls DrawerSteps/DrawerFlow from features/bpm/ProcessNavigator.tsx (a
 // large, code-split BPM feature file), so a static import here would drag
@@ -637,6 +640,54 @@ export function ExtensionReportShell(props: ReportShellProps) {
   return (
     <React.Suspense fallback={null}>
       <LazyReportShell {...props} />
+    </React.Suspense>
+  );
+}
+
+export interface DependencyGraphProps {
+  nodes: GNode[];
+  edges: GEdge[];
+  centerId?: string;
+  centerName?: string;
+  onNodeClick?: (cardId: string) => void;
+  onNodeShiftClick?: (cardId: string) => void;
+  onNodeExpand?: (cardId: string) => void;
+  onNodeReveal?: (cardId: string, kind: "parents" | "children") => void;
+  onReset?: () => void;
+  onHome?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
+  onPrev?: () => void;
+  onNext?: () => void;
+  canCreateDiagram?: boolean;
+}
+
+const extensionDependencyGraphNoop = () => undefined;
+
+export function ExtensionDependencyGraph(props: DependencyGraphProps) {
+  const { types } = useMetamodel();
+
+  return (
+    <React.Suspense fallback={null}>
+      <LazyDependencyGraph
+        nodes={props.nodes}
+        edges={props.edges}
+        types={types}
+        centerId={props.centerId}
+        centerName={props.centerName}
+        onNodeClick={props.onNodeClick ?? extensionDependencyGraphNoop}
+        onNodeShiftClick={props.onNodeShiftClick}
+        onNodeExpand={props.onNodeExpand}
+        onExpandReset={props.onReset}
+        onNodeReveal={props.onNodeReveal}
+        onReset={props.onReset}
+        onHome={props.onHome ?? extensionDependencyGraphNoop}
+        hasPrev={props.hasPrev}
+        hasNext={props.hasNext}
+        onPrev={props.onPrev}
+        onNext={props.onNext}
+        canCreateDiagram={props.canCreateDiagram ?? false}
+      />
     </React.Suspense>
   );
 }
@@ -891,6 +942,8 @@ export function initExtensionHost(): void {
       // SDK 1.7 — report-building kit (ReportShell/CardDetailSidePanel are
       // lazy wrappers; see the doc block above ExtensionCardDetailSidePanel).
       ReportShell: ExtensionReportShell,
+      // SDK 1.19 ? native permission-shaped Layered Dependency View wrapper.
+      DependencyGraph: ExtensionDependencyGraph,
       FilterSelect,
       // FORK-LOCAL ADDITION (2026-07-28, SDK 1.15, not yet proposed
       // upstream — see the import comment above for the merge-time flag).

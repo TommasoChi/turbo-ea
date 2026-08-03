@@ -136,6 +136,461 @@ async def _product_context(db):
     }
 
 
+async def _dependency_context(db):
+    await create_role(db, key="admin", permissions={"*": True})
+    actor = await create_user(db, role="admin")
+    for key in (
+        "BusinessContext",
+        "Platform",
+        "Application",
+        "ITComponent",
+        "TechCategory",
+    ):
+        await create_card_type(db, key=key, label=key)
+
+    product_1 = await create_card(
+        db,
+        card_type="BusinessContext",
+        subtype="businessProduct",
+        name="Cloud Backup",
+        user_id=actor.id,
+        attributes={"technology": "Backup", "secret": "product-secret"},
+    )
+    product_2 = await create_card(
+        db,
+        card_type="BusinessContext",
+        subtype="businessProduct",
+        name="Archive Service",
+        user_id=actor.id,
+    )
+    platform = await create_card(
+        db,
+        card_type="Platform",
+        subtype="digital",
+        name="Cloud Platform",
+        user_id=actor.id,
+    )
+    physical_platform = await create_card(
+        db,
+        card_type="Platform",
+        subtype="physical",
+        name="Physical Platform",
+        user_id=actor.id,
+    )
+    app_1 = await create_card(
+        db,
+        card_type="Application",
+        name="Backup API",
+        user_id=actor.id,
+    )
+    app_2 = await create_card(
+        db,
+        card_type="Application",
+        name="Archive API",
+        user_id=actor.id,
+    )
+    hidden_app = await create_card(
+        db,
+        card_type="Application",
+        name="Restricted Connector",
+        user_id=actor.id,
+    )
+    inactive_app = await create_card(
+        db,
+        card_type="Application",
+        name="Retired Connector",
+        user_id=actor.id,
+        status="ARCHIVED",
+    )
+    itc = await create_card(
+        db,
+        card_type="ITComponent",
+        name="PostgreSQL",
+        user_id=actor.id,
+        lifecycle={"phase": "End of Life"},
+        attributes={
+            "technology": "PostgreSQL",
+            "version": "14",
+            "secret": "component-secret",
+        },
+    )
+    tech_category = await create_card(
+        db,
+        card_type="TechCategory",
+        name="Database",
+        user_id=actor.id,
+    )
+
+    relation_types = (
+        ("relAppToBizCtx", "Application", "BusinessContext"),
+        ("relPlatformToBusinessProduct", "Platform", "BusinessContext"),
+        ("relPlatformToApp", "Platform", "Application"),
+        ("relAppToITC", "Application", "ITComponent"),
+        ("relPlatformToITC", "Platform", "ITComponent"),
+        ("relITCToTechCategory", "ITComponent", "TechCategory"),
+    )
+    for key, source_type, target_type in relation_types:
+        await create_relation_type(
+            db,
+            key=key,
+            label=f"{source_type} to {target_type}",
+            source_type_key=source_type,
+            target_type_key=target_type,
+        )
+
+    relations = []
+    for type_key, source, target in (
+        ("relAppToBizCtx", app_1, product_1),
+        ("relAppToITC", app_1, itc),
+        ("relAppToITC", app_2, itc),
+        ("relAppToBizCtx", app_2, product_2),
+        ("relPlatformToBusinessProduct", platform, product_1),
+        ("relPlatformToITC", platform, itc),
+        ("relPlatformToApp", platform, app_1),
+        ("relAppToITC", hidden_app, itc),
+    ):
+        relations.append(
+            await create_relation(
+                db,
+                type_key=type_key,
+                source_id=source.id,
+                target_id=target.id,
+                attributes={"usageType": "runtime", "secret": "relation-secret"},
+            )
+        )
+    await create_relation(
+        db,
+        type_key="relITCToTechCategory",
+        source_id=itc.id,
+        target_id=tech_category.id,
+    )
+
+    return {
+        "actor": actor,
+        "product_1": product_1,
+        "product_2": product_2,
+        "platform": platform,
+        "physical_platform": physical_platform,
+        "app_1": app_1,
+        "app_2": app_2,
+        "hidden_app": hidden_app,
+        "inactive_app": inactive_app,
+        "itc": itc,
+        "tech_category": tech_category,
+        "relations": relations,
+    }
+
+
+async def _read_dependency_graph(context, root_id, **overrides):
+    arguments = {
+        "allowed_card_types": (
+            "BusinessContext",
+            "Platform",
+            "Application",
+            "ITComponent",
+        ),
+        "allowed_relation_types": (
+            "relAppToBizCtx",
+            "relPlatformToBusinessProduct",
+            "relPlatformToApp",
+            "relAppToITC",
+            "relPlatformToITC",
+        ),
+        "max_depth": 3,
+        "card_attribute_keys": ("technology", "version"),
+        "relation_attribute_keys": ("usageType",),
+    }
+    arguments.update(overrides)
+    return await context.core_query.read_dependency_subgraph(root_id, **arguments)
+
+
+def _bridge_actor():
+    return SimpleNamespace(
+        id=uuid.uuid4(),
+        email="architect@example.com",
+        display_name="Architect",
+        role="admin",
+    )
+
+
+def _card(*, card_type, name, subtype=None, lifecycle=None, attributes=None):
+    return SimpleNamespace(
+        id=uuid.uuid4(),
+        type=card_type,
+        subtype=subtype,
+        name=name,
+        reference=None,
+        lifecycle=lifecycle or {},
+        attributes=attributes or {},
+        parent_id=None,
+        description=None,
+    )
+
+
+def _query_result(*, scalar=None, rows=()):
+    return SimpleNamespace(
+        scalar_one_or_none=lambda: scalar,
+        all=lambda: list(rows),
+    )
+
+
+async def test_dependency_subgraph_projects_visible_bfs_without_database_fixture():
+    root = _card(
+        card_type="ITComponent",
+        name="PostgreSQL",
+        lifecycle={"phase": "End of Life"},
+        attributes={"technology": "PostgreSQL", "version": "14", "secret": "hidden"},
+    )
+    application = _card(card_type="Application", name="Backup API")
+    product = _card(
+        card_type="BusinessContext",
+        subtype="businessProduct",
+        name="Cloud Backup",
+    )
+    app_to_itc = SimpleNamespace(
+        type="relAppToITC",
+        source_id=application.id,
+        target_id=root.id,
+        attributes={"usageType": "runtime", "secret": "hidden"},
+        description=None,
+    )
+    app_to_product = SimpleNamespace(
+        type="relAppToBizCtx",
+        source_id=application.id,
+        target_id=product.id,
+        attributes={"usageType": "support"},
+        description=None,
+    )
+    app_to_itc_type = SimpleNamespace(
+        label="Application to IT Component",
+        reverse_label="Used by Application",
+    )
+    app_to_product_type = SimpleNamespace(
+        label="Application to Business Product",
+        reverse_label="Supported by Application",
+    )
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _query_result(scalar=root),
+                _query_result(rows=[(app_to_itc, app_to_itc_type)]),
+                _query_result(scalar=application),
+                _query_result(
+                    rows=[
+                        (app_to_itc, app_to_itc_type),
+                        (app_to_product, app_to_product_type),
+                    ]
+                ),
+                _query_result(scalar=product),
+                _query_result(rows=[(app_to_product, app_to_product_type)]),
+            ]
+        )
+    )
+    context = build_request_context("technology-what-if", db, _bridge_actor())
+
+    with patch(
+        "app.services.extensions.bridges.PermissionService.check_permission",
+        new=AsyncMock(return_value=True),
+    ):
+        graph = await _read_dependency_graph(context, root.id)
+
+    assert graph.partial is False
+    assert {node.id for node in graph.nodes} == {root.id, application.id, product.id}
+    assert [(edge.source_id, edge.target_id) for edge in graph.edges] == [
+        (application.id, product.id),
+        (application.id, root.id),
+    ]
+    root_node = next(node for node in graph.nodes if node.id == root.id)
+    assert root_node.lifecycle == {"phase": "End of Life"}
+    assert root_node.attributes == {"technology": "PostgreSQL", "version": "14"}
+    assert graph.edges[1].attributes == {"usageType": "runtime"}
+    assert db.execute.await_count == 6
+
+
+async def test_dependency_subgraph_marks_permission_filtered_neighbor_partial_without_db():
+    root = _card(card_type="ITComponent", name="PostgreSQL")
+    hidden = _card(card_type="Application", name="Restricted Connector")
+    relation = SimpleNamespace(
+        type="relAppToITC",
+        source_id=hidden.id,
+        target_id=root.id,
+        attributes={},
+        description=None,
+    )
+    relation_type = SimpleNamespace(
+        label="Application to IT Component",
+        reverse_label="Used by Application",
+    )
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _query_result(scalar=root),
+                _query_result(rows=[(relation, relation_type)]),
+                _query_result(scalar=hidden),
+            ]
+        )
+    )
+    context = build_request_context("technology-what-if", db, _bridge_actor())
+
+    with patch(
+        "app.services.extensions.bridges.PermissionService.check_permission",
+        new=AsyncMock(side_effect=[True, False]),
+    ):
+        graph = await _read_dependency_graph(context, root.id)
+
+    assert graph.partial is True
+    assert [node.id for node in graph.nodes] == [root.id]
+    assert graph.edges == ()
+
+
+async def test_dependency_subgraph_validates_before_database_access():
+    db = SimpleNamespace(execute=AsyncMock())
+    context = build_request_context(
+        "technology-what-if",
+        db,
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            email="architect@example.com",
+            display_name="Architect",
+            role="admin",
+        ),
+    )
+
+    with pytest.raises(ExtensionBridgeError) as raised:
+        await _read_dependency_graph(
+            context,
+            uuid.uuid4(),
+            allowed_card_types=("Unknown",),
+        )
+
+    assert raised.value.code == "invalid_dependency_query"
+    db.execute.assert_not_awaited()
+
+
+async def test_dependency_subgraph_traverses_many_to_many_graph_deterministically(db):
+    env = await _dependency_context(db)
+    context = build_request_context("technology-what-if", db, env["actor"])
+
+    graph = await _read_dependency_graph(context, env["itc"].id)
+
+    expected_ids = {
+        env[key].id
+        for key in (
+            "product_1",
+            "product_2",
+            "platform",
+            "app_1",
+            "app_2",
+            "hidden_app",
+            "itc",
+        )
+    }
+    assert graph.root_id == env["itc"].id
+    assert graph.partial is False
+    assert {node.id for node in graph.nodes} == expected_ids
+    assert len(graph.nodes) == len({node.id for node in graph.nodes})
+    assert len(graph.edges) == len(
+        {(edge.type, edge.source_id, edge.target_id) for edge in graph.edges}
+    )
+    assert env["tech_category"].id not in {node.id for node in graph.nodes}
+
+    root = next(node for node in graph.nodes if node.id == env["itc"].id)
+    assert root.lifecycle == {"phase": "End of Life"}
+    assert root.attributes == {"technology": "PostgreSQL", "version": "14"}
+    assert all("secret" not in node.attributes for node in graph.nodes)
+    assert all(edge.attributes == {"usageType": "runtime"} for edge in graph.edges)
+    assert all("secret" not in edge.attributes for edge in graph.edges)
+
+    app_to_itc = next(
+        edge
+        for edge in graph.edges
+        if edge.type == "relAppToITC" and edge.source_id == env["app_1"].id
+    )
+    assert app_to_itc.target_id == env["itc"].id
+    assert list(graph.nodes) == sorted(
+        graph.nodes,
+        key=lambda node: (node.type, node.name.casefold(), str(node.id)),
+    )
+    assert list(graph.edges) == sorted(
+        graph.edges,
+        key=lambda edge: (edge.type, str(edge.source_id), str(edge.target_id)),
+    )
+
+
+async def test_dependency_subgraph_omits_invisible_neighbor_and_marks_partial(db):
+    env = await _dependency_context(db)
+    context = build_request_context("technology-what-if", db, env["actor"])
+
+    async def visible_except_hidden(_db, _user, _app, card_id, _card_permission):
+        return card_id != env["hidden_app"].id
+
+    with patch(
+        "app.services.extensions.bridges.PermissionService.check_permission",
+        side_effect=visible_except_hidden,
+    ):
+        graph = await _read_dependency_graph(context, env["itc"].id)
+
+    assert graph.partial is True
+    assert env["hidden_app"].id not in {node.id for node in graph.nodes}
+    assert all(
+        env["hidden_app"].id not in (edge.source_id, edge.target_id)
+        for edge in graph.edges
+    )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"allowed_card_types": ("Unknown",)},
+        {"allowed_relation_types": ("unknownRelation",)},
+        {"card_attribute_keys": ("secret",)},
+        {"relation_attribute_keys": ("secret",)},
+        {"max_depth": 0},
+        {"max_depth": 4},
+    ],
+)
+async def test_dependency_subgraph_rejects_queries_outside_server_allowlists(db, overrides):
+    env = await _dependency_context(db)
+    context = build_request_context("technology-what-if", db, env["actor"])
+
+    with pytest.raises(ExtensionBridgeError) as raised:
+        await _read_dependency_graph(context, env["itc"].id, **overrides)
+
+    assert raised.value.code == "invalid_dependency_query"
+
+
+@pytest.mark.parametrize(
+    ("root_key", "error_code"),
+    [
+        ("inactive_app", "reference_not_found"),
+        ("tech_category", "reference_type_mismatch"),
+        ("physical_platform", "reference_subtype_mismatch"),
+    ],
+)
+async def test_dependency_subgraph_rejects_invalid_roots(db, root_key, error_code):
+    env = await _dependency_context(db)
+    context = build_request_context("technology-what-if", db, env["actor"])
+
+    with pytest.raises(ExtensionBridgeError) as raised:
+        await _read_dependency_graph(context, env[root_key].id)
+
+    assert raised.value.code == error_code
+
+
+async def test_dependency_subgraph_rejects_invisible_root(db):
+    env = await _dependency_context(db)
+    context = build_request_context("technology-what-if", db, env["actor"])
+
+    with patch(
+        "app.services.extensions.bridges.PermissionService.check_permission",
+        new=AsyncMock(return_value=False),
+    ):
+        with pytest.raises(ExtensionBridgeError) as raised:
+            await _read_dependency_graph(context, env["itc"].id)
+
+    assert raised.value.code == "permission_denied"
+
+
 async def test_product_context_query_merges_applications_with_provenance(db):
     env = await _product_context(db)
     context = build_request_context("swot-analysis", db, env["actor"])

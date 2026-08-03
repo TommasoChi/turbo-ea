@@ -73,6 +73,27 @@ describe("buildLdvFlow", () => {
     expect(result.edges).toHaveLength(0);
   });
 
+  it.each(["added", "modified", "removed", "potentialImpact"] as const)(
+    "forwards %s to LDV node data",
+    (changeKind) => {
+      const flow = buildLdvFlow(
+        [{ id: "n1", name: "Node", type: "Application", changeKind }],
+        [],
+        TYPES,
+      );
+      expect(flow.nodes.find((n) => n.id === "n1")?.data.changeKind).toBe(changeKind);
+    },
+  );
+
+  it("normalizes legacy proposed to added", () => {
+    const flow = buildLdvFlow(
+      [{ id: "n1", name: "Node", type: "Application", proposed: true }],
+      [],
+      TYPES,
+    );
+    expect(flow.nodes.find((n) => n.id === "n1")?.data.changeKind).toBe("added");
+  });
+
   it("creates group nodes for each category", () => {
     const nodes: GNode[] = [
       { id: "a1", name: "App 1", type: "Application" },
@@ -437,6 +458,22 @@ describe("filterEndOfLifeNodes", () => {
 
     expect(result.nodes.map((n) => n.id).sort()).toEqual(["a1", "center"]);
     expect(result.edges).toHaveLength(1);
+  });
+
+  it("keeps changed end-of-life nodes visible", () => {
+    const result = filterEndOfLifeNodes(
+      [
+        {
+          id: "n1",
+          name: "Node",
+          type: "ITComponent",
+          lifecycle: { endOfLife: PAST },
+          changeKind: "removed",
+        },
+      ],
+      [],
+    );
+    expect(result.nodes).toHaveLength(1);
   });
 
   it("keeps an end-of-life node when it is proposed (NEW)", () => {

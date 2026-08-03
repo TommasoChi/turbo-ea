@@ -77,6 +77,7 @@ import {
   LDV_NODE_W,
   LDV_NODE_H,
   type GNode,
+  type DependencyChangeKind,
   type GEdge,
   type LdvNodeData,
   type LdvGroupData,
@@ -188,7 +189,59 @@ const LP_CIRCUMFERENCE = 2 * Math.PI * 15; // ~94.25
 // luminance-gating rationale. Re-exported for existing importers.
 export { readableTypeColor };
 
-const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
+export interface ChangeKindPresentation {
+  badgeKey: string | null;
+  borderStyle: "solid" | "dashed" | "dotted";
+  opacity: number;
+  borderWidth?: number;
+  borderColor?: string;
+  strikeThrough?: boolean;
+}
+
+export function changeKindPresentation(
+  kind: DependencyChangeKind | undefined,
+  accent: string,
+): ChangeKindPresentation {
+  switch (kind) {
+    case "added":
+      return {
+        badgeKey: "dependency.addedBadge",
+        borderStyle: "dashed",
+        borderWidth: 2,
+        borderColor: accent,
+        opacity: 1,
+      };
+    case "modified":
+      return {
+        badgeKey: "dependency.modifiedBadge",
+        borderStyle: "solid",
+        borderWidth: 3,
+        borderColor: accent,
+        opacity: 1,
+      };
+    case "removed":
+      return {
+        badgeKey: "dependency.removedBadge",
+        borderStyle: "solid",
+        borderWidth: 1.5,
+        borderColor: accent,
+        opacity: 0.62,
+        strikeThrough: true,
+      };
+    case "potentialImpact":
+      return {
+        badgeKey: "dependency.potentialImpactBadge",
+        borderStyle: "dotted",
+        borderWidth: 2,
+        borderColor: accent,
+        opacity: 1,
+      };
+    default:
+      return { badgeKey: null, borderStyle: "solid", opacity: 1 };
+  }
+}
+
+export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
   const typeLabel = useTypeLabel();
   const { t } = useTranslation("reports");
   const theme = useTheme();
@@ -200,6 +253,8 @@ const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
   // card-type colors (BusinessCapability navy, DataObject purple, etc.)
   // readable against the dark-theme paper.
   const accent = readableTypeColor(color, isDark);
+  const changeKind = data.changeKind ?? (data.proposed ? "added" : undefined);
+  const changePresentation = changeKindPresentation(changeKind, accent);
 
   // Light tint for background
   const r = parseInt(color.slice(1, 3), 16);
@@ -320,6 +375,7 @@ const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
       role="button"
       tabIndex={0}
       aria-label={detailText}
+      data-change-kind={changeKind}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         // Keyboard equivalent of a tap: Enter/Space activates the card.
@@ -337,8 +393,11 @@ const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
         width: LDV_NODE_W,
         height: LDV_NODE_H,
         borderRadius: "8px",
-        border: data.proposed ? `2px dashed ${accent}` : `1.5px solid ${accent}`,
-        bgcolor: data.proposed ? (isDark ? `rgba(${r},${g},${b},0.06)` : `rgba(${r},${g},${b},0.06)`) : bg,
+        border: `${changePresentation.borderWidth ?? 1.5}px ${changePresentation.borderStyle} ${changePresentation.borderColor ?? accent}`,
+        bgcolor:
+          changeKind === "added"
+            ? `rgba(${r},${g},${b},0.06)`
+            : bg,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -350,6 +409,7 @@ const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
         "&:active": { cursor: "grabbing" },
         position: "relative",
         transition: "box-shadow 0.15s, opacity 0.15s",
+        opacity: changePresentation.opacity,
         touchAction: "none",
         "&:hover": { boxShadow: 4 },
       }}
@@ -432,16 +492,26 @@ const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
           <LdvChevron dir="down" color={accent} />
         </Box>
       )}
-      {/* Proposed "NEW" badge */}
-      {data.proposed && (
-        <Box sx={{
-          position: "absolute", top: -8, left: 8,
-          bgcolor: "#4caf50", color: "#fff",
-          fontSize: 9, fontWeight: 700, lineHeight: 1,
-          px: 0.7, py: 0.25, borderRadius: "4px",
-          textTransform: "uppercase", letterSpacing: 0.5,
-        }}>
-          {t("dependency.proposedBadge")}
+      {/* TO-BE change badge */}
+      {changePresentation.badgeKey && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: -8,
+            left: 8,
+            bgcolor: accent,
+            color: theme.palette.getContrastText(accent),
+            fontSize: 9,
+            fontWeight: 700,
+            lineHeight: 1,
+            px: 0.7,
+            py: 0.25,
+            borderRadius: "4px",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          {t(changePresentation.badgeKey)}
         </Box>
       )}
       {/* Long-press radial progress ring */}
@@ -513,6 +583,7 @@ const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
           width: "100%",
+          textDecoration: changePresentation.strikeThrough ? "line-through" : undefined,
         }}
       >
         {name}
@@ -1201,7 +1272,7 @@ function LayeredDependencyInner({
       for (const n of live) {
         if (n.type === "ldvNode") {
           const d = n.data as LdvNodeData;
-          if (d.proposed) continue; // proposed cards have no inventory id
+          if (d.proposed || d.changeKind) continue; // TO-BE nodes may not have inventory ids
           const p = absOf(n);
           cards.push({
             cardId: n.id,

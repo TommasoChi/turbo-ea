@@ -5,11 +5,32 @@ vi.mock("@/api/client", () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(), upload: vi.fn() },
 }));
 
+vi.mock("@/hooks/useMetamodel", () => ({
+  useMetamodel: () => ({
+    types: [],
+    relationTypes: [],
+    loading: false,
+    getType: () => undefined,
+    getRelationsForType: () => [],
+    invalidateCache: vi.fn(),
+  }),
+}));
+
+vi.mock("@/features/reports/LayeredDependencyView", () => ({
+  default: ({ canCreateDiagram }: { canCreateDiagram?: boolean }) => (
+    <div
+      data-testid="extension-dependency-graph"
+      data-can-create-diagram={String(canCreateDiagram)}
+    />
+  ),
+}));
+
 import { api } from "@/api/client";
 import { AuthProvider } from "@/hooks/AuthContext";
 import type { User } from "@/types";
 import {
   ExtensionBoundary,
+  ExtensionDependencyGraph,
   ExtensionSlot,
   getExtensionAdrExportSections,
   getExtensionAdrGridColumns,
@@ -46,6 +67,37 @@ describe("extensionHost", () => {
     expect(window.TurboEA?.sdk.React).toBeDefined();
     expect(window.TurboEA?.sdk.api).toBeDefined();
     expect(typeof window.TurboEA?.register).toBe("function");
+  });
+
+  it("exposes DependencyGraph through UI SDK 1.19", () => {
+    initExtensionHost();
+
+    expect(UI_SDK_VERSION).toBe("1.19");
+    expect(window.TurboEA?.sdk.uiSdkVersion).toBe("1.19");
+    expect(window.TurboEA?.sdk.DependencyGraph).toBe(ExtensionDependencyGraph);
+  });
+
+  it("defaults DependencyGraph diagram creation to false and forwards explicit true", async () => {
+    const { rerender } = render(
+      <ExtensionDependencyGraph nodes={[]} edges={[]} />,
+    );
+
+    expect(
+      await screen.findByTestId("extension-dependency-graph"),
+    ).toHaveAttribute("data-can-create-diagram", "false");
+
+    rerender(
+      <ExtensionDependencyGraph
+        nodes={[]}
+        edges={[]}
+        canCreateDiagram
+      />,
+    );
+
+    expect(screen.getByTestId("extension-dependency-graph")).toHaveAttribute(
+      "data-can-create-diagram",
+      "true",
+    );
   });
 
   it("exposes the SDK 1.6–1.8 report/dashboard surface", () => {
@@ -402,7 +454,7 @@ describe("extensionHost", () => {
   });
 
   it("pins the current UI SDK version", () => {
-    expect(UI_SDK_VERSION).toBe("1.18");
+    expect(UI_SDK_VERSION).toBe("1.19");
   });
 
   it("aggregates generic slots (component + data), sorts by order, drops invalid ones", () => {
