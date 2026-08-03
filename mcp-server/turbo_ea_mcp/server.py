@@ -22,6 +22,7 @@ from starlette.routing import Route
 from turbo_ea_mcp import oauth
 from turbo_ea_mcp.api_client import TurboEAClient
 from turbo_ea_mcp.batches import mutation_batch
+from turbo_ea_mcp.mcp_extensions import register_extension_tools
 from turbo_ea_mcp.config import (
     APP_VERSION,
     MCP_ALLOW_RELATION_DELETE,
@@ -2854,6 +2855,15 @@ async def _get_current_token() -> str | None:
     if not auth.lower().startswith("bearer "):
         return None
     return await oauth.resolve_token(auth[7:])
+
+
+# Resolved once, at process import time — see mcp_extensions.py. A
+# discovery failure never blocks boot; it just means 0 extension tools
+# are registered for this process lifetime (restart to retry).
+_extension_tools_registered = register_extension_tools(
+    mcp, _get_current_token, _writes_disabled_message
+)
+logger.info("Registered %d extension-provided MCP tool(s)", _extension_tools_registered)
 
 
 # ── ASGI application ───────────────────────────────────────────────────────
