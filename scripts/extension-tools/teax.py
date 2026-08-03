@@ -64,7 +64,9 @@ LICENSE_SCHEMA = "turboea-license/1"
 MANIFEST_NAME = "manifest.json"
 SIGNATURE_NAME = "manifest.sig"
 SOURCE_MANIFEST = "extension.json"
-VALID_CAPABILITIES = {"content", "backend", "frontend", "metamodel"}
+VALID_CAPABILITIES = {"content", "backend", "frontend", "metamodel", "mcp"}
+VALID_MCP_METHODS = {"GET", "POST", "PATCH", "DELETE"}
+VALID_MCP_ANNOTATION_KEYS = {"readOnlyHint", "destructiveHint", "idempotentHint"}
 BUILTIN_FIELD_TYPES = {
     "text",
     "multiline_text",
@@ -290,6 +292,58 @@ def _lint_source(src: Path) -> tuple[dict, dict[str, Path], list[str], list[str]
                     problems.append(f"{fw}: type {ftype!r} must be built-in or ext.{key}.*")
     elif manifest.get("metamodel"):
         problems.append("manifest has a metamodel block but no metamodel capability declared")
+
+    if "mcp" in capabilities:
+        sdk_version = manifest.get("mcp_sdk_version")
+        if not isinstance(sdk_version, str) or not sdk_version.strip():
+            problems.append("mcp capability requires a non-empty mcp_sdk_version string")
+
+        tools = manifest.get("mcp_tools")
+        if not isinstance(tools, list) or not tools:
+            problems.append("mcp capability requires a non-empty mcp_tools list")
+        else:
+            name_pattern = re.compile(rf"^ext_{re.escape(key)}_[a-z0-9_]+$")
+            seen_names: set[str] = set()
+            for i, tool in enumerate(tools):
+                where = f"mcp_tools[{i}]"
+                if not isinstance(tool, dict):
+                    problems.append(f"{where} must be an object")
+                    continue
+                name = tool.get("name")
+                if not isinstance(name, str) or not name_pattern.match(name):
+                    problems.append(f"{where}.name must match ^ext_{key}_[a-z0-9_]+$")
+                elif name in seen_names:
+                    problems.append(f"{where}.name {name!r} is declared more than once")
+                else:
+                    seen_names.add(name)
+                if not isinstance(tool.get("description"), str) or not tool["description"].strip():
+                    problems.append(f"{where} is missing description")
+                method = tool.get("method")
+                if not isinstance(method, str) or method.upper() not in VALID_MCP_METHODS:
+                    problems.append(f"{where}.method must be one of {sorted(VALID_MCP_METHODS)}")
+                path = tool.get("path")
+                if not isinstance(path, str) or not path or path.startswith("/") or ".." in path:
+                    problems.append(f"{where}.path must be a relative path with no '..' segments")
+                input_schema = tool.get("input_schema")
+                if not isinstance(input_schema, dict) or input_schema.get("type") != "object":
+                    problems.append(f"{where}.input_schema must be a JSON Schema object")
+                annotations = tool.get("annotations")
+                if not isinstance(annotations, dict) or not annotations:
+                    problems.append(f"{where}.annotations must be a non-empty object")
+                    annotations = {}
+                unknown = set(annotations) - VALID_MCP_ANNOTATION_KEYS
+                if unknown:
+                    problems.append(f"{where}.annotations has unknown keys: {sorted(unknown)}")
+                if not isinstance(tool.get("required_permission"), str) or not tool["required_permission"].strip():
+                    problems.append(f"{where} is missing required_permission")
+                is_read_only = annotations.get("readOnlyHint") is True
+                if not is_read_only and tool.get("dry_run_supported") is not True:
+                    problems.append(
+                        f"{where} is a write tool (readOnlyHint is not true) but does not "
+                        "declare dry_run_supported: true"
+                    )
+    elif manifest.get("mcp_tools") or manifest.get("mcp_sdk_version"):
+        problems.append("manifest carries mcp_tools/mcp_sdk_version but no mcp capability declared")
 
     permissions = manifest.get("permissions") or {}
     for perm in permissions:
