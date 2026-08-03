@@ -104,6 +104,11 @@ const NAV_ITEM_DEFS: NavItemDef[] = [
     // filtering leaves it with zero children — see navItems below.
     children: [{ labelKey: "bpm", icon: "route", path: "/bpm", permission: "bpm.view" }],
   },
+  {
+    labelKey: "appData",
+    icon: "apps",
+    children: [],
+  },
   { labelKey: "ppm", icon: "view_timeline", path: "/ppm", permission: "ppm.view" },
   { labelKey: "diagrams", icon: "schema", path: "/diagrams", permission: "diagrams.view" },
   { labelKey: "grc", icon: "policy", path: "/grc", permission: "grc.view" },
@@ -285,6 +290,22 @@ export default function AppLayout({ children, user, onLogout }: Props) {
           : item,
       );
     }
+    // Shared Application & Data extension dropdown. Independently shipped
+    // extensions can appear together; the empty-child filter hides the group.
+    const appDataExtChildren = getExtensionRoutesForGroup("app_data").map(({ route }) => ({
+      labelKey: route.label,
+      icon: route.icon,
+      path: route.path,
+      permission: route.permission,
+    }));
+    if (appDataExtChildren.length) {
+      items = items.map((item) =>
+        item.labelKey === "appData"
+          ? { ...item, children: appDataExtChildren }
+          : item,
+      );
+    }
+
 
     // Extension-defined top-level dropdowns. Each group only receives routes
     // declared by the same extension; permission filtering and empty-group

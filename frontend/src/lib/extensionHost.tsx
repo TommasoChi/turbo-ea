@@ -127,7 +127,7 @@ export const UI_SDK_VERSION = "1.19";
  * "strategy_process" is the Strategy & Process dropdown (BPM + extensions like
  * Value Chain that live alongside it) — see AppLayout.tsx's NAV_ITEM_DEFS.
  */
-export const EXTENSION_NAV_GROUPS = ["reports", "strategy_process"] as const;
+export const EXTENSION_NAV_GROUPS = ["reports", "strategy_process", "app_data"] as const;
 export type ExtensionNavGroup = (typeof EXTENSION_NAV_GROUPS)[number];
 
 /**

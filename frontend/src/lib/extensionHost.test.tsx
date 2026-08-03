@@ -30,6 +30,7 @@ import { AuthProvider } from "@/hooks/AuthContext";
 import type { User } from "@/types";
 import {
   ExtensionBoundary,
+  EXTENSION_NAV_GROUPS,
   ExtensionDependencyGraph,
   ExtensionSlot,
   getExtensionAdrExportSections,
@@ -268,6 +269,11 @@ describe("extensionHost", () => {
     // All three routes are still registered/renderable via the wildcard outlet.
     expect(getExtensionRoutes()).toHaveLength(3);
   });
+  it("keeps UI SDK 1.19 and exposes the shared app_data group", () => {
+    expect(UI_SDK_VERSION).toBe("1.19");
+    expect(EXTENSION_NAV_GROUPS).toContain("app_data");
+  });
+
 
   it("aggregates custom navigation groups with routes from the declaring extension only", () => {
     registerExtension("swot-analysis", {
