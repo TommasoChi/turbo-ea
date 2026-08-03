@@ -63,7 +63,13 @@
  * the FULLSCREEN BPMN flow dialog /bpm opens from its "schema" view-flow
  * icon — a distinct, narrower component (only fetches the card itself, not
  * the whole process tree) for a dedicated "view flow" action, as opposed to
- * ProcessDetailSidePanel's general "open this process" drawer.
+ * ProcessDetailSidePanel's general "open this process" drawer. FORK-LOCAL,
+ * not yet proposed upstream (2026-07-28): since SDK 1.15, `sdk.CardPicker`
+ * re-exports the core's own single-select card picker (browse-on-open,
+ * filter-as-you-type, infinite scroll) so an extension can offer the exact
+ * same "pick an existing card" experience every core field uses, instead of
+ * hand-rolling a narrower one. Statically imported (see the import comment
+ * above CardPicker.tsx's import) — no code-split graph to lazy-wrap.
  *
  * Since SDK 1.12 the preferred way to add a plug point is the GENERIC SLOT
  * registry, not a new named extension point. An extension declares
@@ -89,6 +95,11 @@ import ReactDOM from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
+// FORK-LOCAL ADDITION (2026-07-28, not yet proposed upstream) — flag at the
+// next `git fetch upstream && git merge upstream/main`: check whether
+// upstream has since added its own CardPicker exposure (or a different name
+// for the same idea) before assuming this import/sdk entry merges cleanly.
+import CardPicker from "@/components/CardPicker";
 import FilterSelect from "@/components/FilterSelect";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { hasPermission } from "@/components/RequirePermission";
@@ -105,7 +116,7 @@ import { useSavedReport as useCoreSavedReport } from "@/hooks/useSavedReport";
 import * as tokens from "@/theme/tokens";
 import type { ArchitectureDecision, Card } from "@/types";
 
-export const UI_SDK_VERSION = "1.14";
+export const UI_SDK_VERSION = "1.18";
 
 /**
  * Core nav groups an extension route may request placement into (instead of the
@@ -116,6 +127,18 @@ export const UI_SDK_VERSION = "1.14";
  */
 export const EXTENSION_NAV_GROUPS = ["reports", "strategy_process"] as const;
 export type ExtensionNavGroup = (typeof EXTENSION_NAV_GROUPS)[number];
+
+/**
+ * A top-level dropdown declared by an extension. The id is scoped to the
+ * declaring extension: only that extension's routes can target it.
+ */
+export interface ExtensionNavGroupContribution {
+  id: string;
+  label: string;
+  icon: string;
+  permission?: string;
+  order?: number;
+}
 
 export interface ExtensionRouteContribution {
   id: string;
@@ -128,7 +151,7 @@ export interface ExtensionRouteContribution {
   // group (e.g. "reports") rather than as a top-level item. The route path and
   // rendering are unchanged — only where the menu entry appears. Omit for the
   // current top-level behaviour. An unrecognised value shows nowhere in the nav.
-  navGroup?: ExtensionNavGroup;
+  navGroup?: string;
 }
 
 export interface ExtensionCardTabContribution {
@@ -312,6 +335,7 @@ export interface ExtensionSlotContribution {
 export interface TurboExtensionUI {
   key: string;
   sdkVersion: string;
+  navGroups?: ExtensionNavGroupContribution[];
   routes?: ExtensionRouteContribution[];
   cardTabs?: ExtensionCardTabContribution[];
   adminPanels?: ExtensionAdminPanelContribution[];
@@ -367,6 +391,12 @@ export interface RegisteredFieldVisibility {
 export interface RegisteredExtension {
   key: string;
   plugin: TurboExtensionUI;
+}
+
+export interface RegisteredExtensionNavGroup {
+  extKey: string;
+  group: ExtensionNavGroupContribution;
+  routes: ExtensionRouteContribution[];
 }
 
 interface UiManifestEntry {
@@ -833,6 +863,16 @@ declare global {
   }
 }
 
+export function useExtensionAuth() {
+  const { user } = useAuthContext();
+  const permissions = user?.permissions ?? {};
+  return {
+    actor: user ? { id: user.id, display_name: user.display_name, email: user.email } : null,
+    permissions,
+    hasPermission: (permission: string) => hasPermission(permissions, permission),
+  };
+}
+
 export function initExtensionHost(): void {
   if (typeof window === "undefined" || window.TurboEA) return;
   window.TurboEA = {
@@ -852,6 +892,17 @@ export function initExtensionHost(): void {
       // lazy wrappers; see the doc block above ExtensionCardDetailSidePanel).
       ReportShell: ExtensionReportShell,
       FilterSelect,
+      // FORK-LOCAL ADDITION (2026-07-28, SDK 1.15, not yet proposed
+      // upstream — see the import comment above for the merge-time flag).
+      // The core's own single-select card picker (CardPicker.tsx, built on
+      // useCardSearch — browse-on-open, filter-as-you-type, infinite
+      // scroll), for an extension that needs to let the user pick an
+      // existing card the same way every core "link a card" field does.
+      // No lazy-wrap needed: CardPicker only imports MUI + useCardSearch
+      // (a thin api.get wrapper), no large code-split feature graph like
+      // CardDetailSidePanel/ProcessDetailSidePanel below — same static-
+      // import treatment as FilterSelect just above.
+      CardPicker,
       CardDetailSidePanel: ExtensionCardDetailSidePanel,
       // SDK 1.14 — the BPM process-detail drawer (Overview/Steps/Flow/Apps/
       // Data tabs, same visual language as ProcessNavigator's own drawer on
@@ -874,6 +925,7 @@ export function initExtensionHost(): void {
       MetricCard,
       ReportLegend,
       UserMultiSelect,
+      useExtensionAuth,
       loadRecharts: () => import("recharts"),
       // SDK 1.9 — theme-aware Recharts chrome (grid/axis/tooltip), the same
       // conventions core reports use, so extension charts cannot drift from
@@ -888,6 +940,16 @@ export function initExtensionHost(): void {
       // with a hook keyed to a single ref — `toPng(node, opts)` can be called
       // imperatively from any event handler instead.
       loadHtmlToImage: () => import("html-to-image"),
+      // SDK 1.17 — lazy loader for bpmn-js's read-only NavigatedViewer,
+      // reusing core's already-existing bpmn-js dependency (BpmnViewer.tsx
+      // already dynamic-imports this exact module) — same "reuse the
+      // host's copy of a heavy library" rule as loadRecharts/loadHtmlToImage.
+      // Added for turbo-ea-ext-organization's DOCX export: rendering an
+      // off-screen diagram from a draft version's bpmn_xml (a string the
+      // extension has, not a persisted core view) to an SVG via
+      // `viewer.saveSVG()`, then rasterized with loadHtmlToImage for
+      // embedding in a docxtemplater-image tag.
+      loadBpmnViewer: () => import("bpmn-js/lib/NavigatedViewer").then((m) => ({ NavigatedViewer: m.default })),
       // SDK 1.14 — lazy loader for docxtemplater + pizzip, so an extension
       // can fill a real .docx TEMPLATE (its own, shipped as a bundled
       // asset and fetched via GET /ext-assets/...) with data, entirely
@@ -983,6 +1045,38 @@ export function getExtensionRoutesForGroup(
       .filter((r) => r.navGroup === group)
       .map((route) => ({ extKey: key, route })),
   );
+}
+
+/**
+ * Valid custom navigation groups and their child routes. Group ids are scoped
+ * to the extension that declared them, so another extension cannot inject a
+ * route into that dropdown. Core group ids remain reserved.
+ */
+export function getExtensionNavGroups(): RegisteredExtensionNavGroup[] {
+  const out: RegisteredExtensionNavGroup[] = [];
+  for (const { key, plugin } of _registered) {
+    const seen = new Set<string>();
+    for (const group of plugin.navGroups ?? []) {
+      const id = group?.id?.trim();
+      if (
+        !id ||
+        !group.label?.trim() ||
+        !group.icon?.trim() ||
+        (EXTENSION_NAV_GROUPS as readonly string[]).includes(id) ||
+        seen.has(id)
+      ) {
+        console.warn(`[extension:${key}] invalid or duplicate navigation group "${id}" — ignored`);
+        continue;
+      }
+      seen.add(id);
+      out.push({
+        extKey: key,
+        group: { ...group, id },
+        routes: (plugin.routes ?? []).filter((route) => route.navGroup === id),
+      });
+    }
+  }
+  return out.sort((a, b) => (a.group.order ?? 0) - (b.group.order ?? 0));
 }
 
 // ---------------------------------------------------------------------------

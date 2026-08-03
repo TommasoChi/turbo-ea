@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
+from app.models.event import Event
 from tests.conftest import auth_headers, create_user
 
 
@@ -170,3 +173,43 @@ async def test_events_stamped_with_batch_id_via_header(client, admin_user, app_c
     assert history.status_code == 200, history.text
     events = history.json()["events"]
     assert any(e["event_type"].startswith("card.") for e in events), events
+
+
+@pytest.mark.asyncio
+async def test_batch_history_exposes_extension_entity_reference(
+    client,
+    admin_user,
+    db,
+):
+    open_resp = await client.post(
+        "/api/v1/mutation-batches?row_count=1",
+        json={"tool_name": "extension_swot_update", "dry_run": False},
+        headers=auth_headers(admin_user),
+    )
+    batch_id = uuid.UUID(open_resp.json()["id"])
+    entity_id = uuid.uuid4()
+    db.add(
+        Event(
+            batch_id=batch_id,
+            user_id=admin_user.id,
+            event_type="ext.swot-analysis.analysis.updated",
+            entity_type="ext.swot-analysis.analysis",
+            entity_id=entity_id,
+            data={"changed": ["summary"]},
+        )
+    )
+    await db.flush()
+
+    history = await client.get(
+        f"/api/v1/mutation-batches/{batch_id}/events",
+        headers=auth_headers(admin_user),
+    )
+
+    assert history.status_code == 200
+    event = next(
+        item
+        for item in history.json()["events"]
+        if item["event_type"] == "ext.swot-analysis.analysis.updated"
+    )
+    assert event["entity_type"] == "ext.swot-analysis.analysis"
+    assert event["entity_id"] == str(entity_id)

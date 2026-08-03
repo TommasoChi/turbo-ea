@@ -17,6 +17,7 @@ import {
   getExtensionFieldTypes,
   getExtensionFieldVisibilityProviders,
   getExtensionLoadErrors,
+  getExtensionNavGroups,
   getExtensionRoutes,
   getExtensionRoutesForGroup,
   getExtensionSlots,
@@ -56,12 +57,15 @@ describe("extensionHost", () => {
     // SDK 1.7 — report-building kit
     expect(sdk.ReportShell).toBeDefined();
     expect(sdk.FilterSelect).toBeDefined();
+    // SDK 1.15 — core's single-select card picker (fork-local)
+    expect(sdk.CardPicker).toBeDefined();
     expect(sdk.CardDetailSidePanel).toBeDefined();
     // SDK 1.8 — dashboard-building additions
     expect(typeof sdk.useCurrency).toBe("function");
     expect(sdk.MetricCard).toBeDefined();
     expect(sdk.ReportLegend).toBeDefined();
     expect(sdk.UserMultiSelect).toBeDefined();
+    expect(typeof sdk.useExtensionAuth).toBe("function");
     expect(typeof sdk.loadRecharts).toBe("function");
     // SDK 1.9 — theme-aware chart chrome
     expect(typeof sdk.useChartTheme).toBe("function");
@@ -213,6 +217,52 @@ describe("extensionHost", () => {
     expect(getExtensionRoutes()).toHaveLength(3);
   });
 
+  it("aggregates custom navigation groups with routes from the declaring extension only", () => {
+    registerExtension("swot-analysis", {
+      key: "swot-analysis",
+      sdkVersion: UI_SDK_VERSION,
+      navGroups: [
+        {
+          id: "swot_analysis",
+          label: "SWOT Analysis",
+          icon: "grid_view",
+          permission: "ext.swot-analysis.view",
+          order: 20,
+        },
+      ],
+      routes: [
+        {
+          id: "product-swot",
+          path: "/ext/swot-analysis/product",
+          label: "Product SWOT",
+          icon: "assessment",
+          navGroup: "swot_analysis",
+          component: () => null,
+        },
+      ],
+    });
+    registerExtension("other", {
+      key: "other",
+      sdkVersion: UI_SDK_VERSION,
+      routes: [
+        {
+          id: "foreign",
+          path: "/ext/other/foreign",
+          label: "Foreign",
+          icon: "warning",
+          navGroup: "swot_analysis",
+          component: () => null,
+        },
+      ],
+    });
+
+    const groups = getExtensionNavGroups();
+    expect(groups).toHaveLength(1);
+    expect(groups[0].extKey).toBe("swot-analysis");
+    expect(groups[0].group.label).toBe("SWOT Analysis");
+    expect(groups[0].routes.map((route) => route.id)).toEqual(["product-swot"]);
+  });
+
   it("aggregates survey templates in order and drops invalid ones", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
     registerExtension("daaf", {
@@ -352,7 +402,7 @@ describe("extensionHost", () => {
   });
 
   it("pins the current UI SDK version", () => {
-    expect(UI_SDK_VERSION).toBe("1.14");
+    expect(UI_SDK_VERSION).toBe("1.18");
   });
 
   it("aggregates generic slots (component + data), sorts by order, drops invalid ones", () => {

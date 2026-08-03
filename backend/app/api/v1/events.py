@@ -171,6 +171,8 @@ async def list_events(
         {
             "id": str(e.id),
             "card_id": str(e.card_id) if e.card_id else None,
+            "entity_type": e.entity_type,
+            "entity_id": str(e.entity_id) if e.entity_id else None,
             "event_type": e.event_type,
             "data": e.data,
             "user_id": str(e.user_id) if e.user_id else None,

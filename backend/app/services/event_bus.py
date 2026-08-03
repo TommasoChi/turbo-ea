@@ -75,6 +75,8 @@ class EventBus:
         card_id: uuid.UUID | None = None,
         user_id: uuid.UUID | None = None,
         batch_id: uuid.UUID | None = None,
+        entity_type: str | None = None,
+        entity_id: uuid.UUID | None = None,
     ) -> None:
         origin = request_origin.get()
         if origin and "origin" not in data:
@@ -138,6 +140,8 @@ class EventBus:
                 card_id=card_id,
                 user_id=user_id,
                 event_type=event_type,
+                entity_type=entity_type,
+                entity_id=entity_id,
                 data=data,
                 batch_id=effective_batch_id,
             )
@@ -148,6 +152,8 @@ class EventBus:
             "event": event_type,
             "data": data,
             "card_id": str(card_id) if card_id else None,
+            "entity_type": entity_type,
+            "entity_id": str(entity_id) if entity_id else None,
             "batch_id": str(effective_batch_id) if effective_batch_id else None,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }

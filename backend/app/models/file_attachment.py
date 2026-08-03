@@ -3,7 +3,15 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,12 +22,23 @@ class FileAttachment(Base, UUIDMixin):
     """Binary file attachment stored in the database, linked to a card."""
 
     __tablename__ = "file_attachments"
+    __table_args__ = (
+        CheckConstraint(
+            "(card_id IS NOT NULL AND entity_type IS NULL AND entity_id IS NULL) OR "
+            "(card_id IS NULL AND entity_type IS NOT NULL AND entity_id IS NOT NULL)",
+            name="ck_file_attachments_exactly_one_owner",
+        ),
+    )
 
-    card_id: Mapped[uuid.UUID] = mapped_column(
+    card_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("cards.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
+    )
+    entity_type: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    entity_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
     )
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(200), nullable=False)

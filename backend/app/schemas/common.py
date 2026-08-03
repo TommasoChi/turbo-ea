@@ -257,6 +257,8 @@ class BookmarkResponse(BaseModel):
 class EventResponse(BaseModel):
     id: str
     card_id: str | None = None
+    entity_type: str | None = None
+    entity_id: str | None = None
     user_id: str | None = None
     user_display_name: str | None = None
     event_type: str

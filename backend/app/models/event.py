@@ -20,6 +20,10 @@ class Event(Base, UUIDMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    entity_type: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    entity_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     data: Mapped[dict | None] = mapped_column(JSONB, default=dict)
     batch_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

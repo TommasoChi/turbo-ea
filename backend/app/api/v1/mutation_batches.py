@@ -265,6 +265,8 @@ async def get_batch_history(
                 event_type=e.event_type,
                 data=e.data,
                 card_id=e.card_id,
+                entity_type=e.entity_type,
+                entity_id=e.entity_id,
                 user_id=e.user_id,
                 user_display_name=e.user.display_name if e.user else None,
                 created_at=e.created_at,

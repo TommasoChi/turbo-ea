@@ -94,7 +94,7 @@ def install_ext_dir(
 
     Lays out a real wheel under ``wheels/`` (with its true sha256 in the signed
     files map); ``lib/`` is left for the loader to (re)extract from that wheel,
-    exactly as the runtime does — so on-disk integrity checks are exercised.
+    exactly as the runtime does â€” so on-disk integrity checks are exercised.
     """
     pkg = f"turbo_ext_{uuid.uuid4().hex[:10]}"
     module_source = (
@@ -193,6 +193,13 @@ class TestLoadExtensions:
         assert report.loaded == []
         assert "SDK" in report.failed[0].error
 
+    def test_sdk_newer_minor_is_quarantined(self, tmp_path, vendor):
+        install_ext_dir(tmp_path, vendor, sdk_version="1.5")
+        report = load_extensions(tmp_path)
+        assert report.loaded == []
+        assert "SDK 1.5" in report.failed[0].error
+        assert "SDK 1.4" in report.failed[0].error
+
     def test_missing_signature_is_quarantined(self, tmp_path, vendor):
         ext_dir = install_ext_dir(tmp_path, vendor)
         (ext_dir / "manifest.sig").unlink()
@@ -207,7 +214,11 @@ class TestLoadExtensions:
 
     def test_sdk_compatible_matrix(self):
         assert sdk_compatible("1.0") is True
-        assert sdk_compatible("1.9") is True
+        assert sdk_compatible("1.1") is True
+        assert sdk_compatible("1.2") is True
+        assert sdk_compatible("1.3") is True
+        assert sdk_compatible("1.4") is True
+        assert sdk_compatible("1.5") is False
         assert sdk_compatible("2.0") is False
         assert sdk_compatible("garbage") is False
 
@@ -274,9 +285,9 @@ class TestMountedRouterGate:
     async def test_route_403_when_unlicensed_and_404_when_not_installed(self, tmp_path, vendor):
         client = await self._client(tmp_path, vendor)
         async with client:
-            # Registry empty → not installed → 404
+            # Registry empty â†’ not installed â†’ 404
             assert (await client.get("/api/v1/ext/sample-ext/items")).status_code == 404
-            # Installed but no license → 403
+            # Installed but no license â†’ 403
             extension_registry.load_installed(
                 [
                     ExtensionInfo(
@@ -289,7 +300,7 @@ class TestMountedRouterGate:
                 ]
             )
             assert (await client.get("/api/v1/ext/sample-ext/items")).status_code == 403
-            # Disabled → 403 even when licensed
+            # Disabled â†’ 403 even when licensed
             extension_registry.set_license(self._license())
             extension_registry.load_installed(
                 [
@@ -323,7 +334,7 @@ class TestMigrationRunner:
             errors = await mig_mod.run_extension_migrations(report, should_run={key: True})
             assert errors == {}
             errors = await mig_mod.run_extension_migrations(report, should_run={key: True})
-            assert errors == {}  # idempotent — version 1 already recorded
+            assert errors == {}  # idempotent â€” version 1 already recorded
 
             async with test_engine.connect() as conn:
                 versions = (

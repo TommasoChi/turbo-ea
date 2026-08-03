@@ -5,6 +5,8 @@ These tests require a PostgreSQL test database and an HTTP test client.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
 from app.core.permissions import VIEWER_PERMISSIONS
@@ -50,12 +52,16 @@ async def _insert_event(
     event_type="card.updated",
     card_id=None,
     user_id=None,
+    entity_type=None,
+    entity_id=None,
 ):
     """Insert an event directly into the DB."""
     ev = Event(
         event_type=event_type,
         card_id=card_id,
         user_id=user_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
         data={"detail": "test event"},
     )
     db.add(ev)
@@ -125,6 +131,32 @@ class TestListEvents:
         data = resp.json()
         assert len(data) >= 1
         assert data[0]["user_id"] == str(admin.id)
+
+    async def test_extension_event_includes_generic_entity_reference(self, client, db, events_env):
+        admin = events_env["admin"]
+        entity_id = uuid.uuid4()
+        await _insert_event(
+            db,
+            event_type="ext.swot-analysis.analysis.updated",
+            entity_type="ext.swot-analysis.analysis",
+            entity_id=entity_id,
+            user_id=admin.id,
+        )
+
+        resp = await client.get(
+            "/api/v1/events",
+            headers=auth_headers(admin),
+        )
+
+        assert resp.status_code == 200
+        event = next(
+            item
+            for item in resp.json()
+            if item["event_type"] == "ext.swot-analysis.analysis.updated"
+        )
+        assert event["card_id"] is None
+        assert event["entity_type"] == "ext.swot-analysis.analysis"
+        assert event["entity_id"] == str(entity_id)
 
     async def test_unauthenticated_returns_401(self, client, db, events_env):
         resp = await client.get("/api/v1/events")

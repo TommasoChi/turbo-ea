@@ -41,6 +41,8 @@ class MutationBatchEvent(BaseModel):
     event_type: str
     data: dict[str, Any] | None
     card_id: UUID | None
+    entity_type: str | None = None
+    entity_id: UUID | None = None
     user_id: UUID | None
     user_display_name: str | None = None
     created_at: datetime

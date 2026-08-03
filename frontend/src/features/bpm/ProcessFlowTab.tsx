@@ -46,6 +46,7 @@ import BpmnViewer from "./BpmnViewer";
 import BpmnTemplateChooser from "./BpmnTemplateChooser";
 import { api } from "@/api/client";
 import { useDateFormat } from "@/hooks/useDateFormat";
+import { ExtensionSlot } from "@/lib/extensionHost";
 import type { ProcessFlowVersion, ProcessFlowPermissions, ProcessElement } from "@/types";
 
 interface Props {
@@ -786,6 +787,13 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
           >
             {t("flowTab.printPdf")}
           </Button>
+          {/* Generic slot (UI SDK 1.12+) — lets an extension add an action
+              button next to Print/PDF for the published version, e.g. a
+              "Genera DOCX" export, without a new named SDK point. */}
+          <ExtensionSlot
+            name="process.flow.actions"
+            context={{ processId, processName, versionId: published.id }}
+          />
           <Chip
             label={t("flowTab.revisionLabel", { revision: published.revision })}
             size="small"

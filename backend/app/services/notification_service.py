@@ -33,6 +33,7 @@ async def create_notification(
     data: dict[str, Any] | None = None,
     card_id: uuid.UUID | None = None,
     actor_id: uuid.UUID | None = None,
+    send_email: bool = True,
 ) -> Notification | None:
     """Create a notification for a user if their preferences allow it.
 
@@ -90,7 +91,7 @@ async def create_notification(
     )
 
     # Send email notification if user opted in
-    if _user_wants_notification(user, notif_type, "email"):
+    if send_email and _user_wants_notification(user, notif_type, "email"):
         from app.services.email_service import send_notification_email
 
         try:

@@ -10,26 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.database import get_db
-from app.models.app_settings import AppSettings
 from app.models.file_attachment import FileAttachment
 from app.models.user import User
 from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
+from app.services.resource_service import (
+    ResourcePolicyError,
+    validate_file_upload,
+)
 
 router = APIRouter(tags=["file-attachments"])
-
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-
-ALLOWED_MIME_TYPES = {
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "image/png",
-    "image/jpeg",
-    "image/svg+xml",
-    "text/plain",
-}
 
 
 @router.get("/cards/{card_id}/file-attachments")
@@ -84,27 +74,12 @@ async def upload_file_attachment(
     ):
         raise HTTPException(403, "Not enough permissions")
 
-    settings_result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
-    settings_row = settings_result.scalar_one_or_none()
-    general = (settings_row.general_settings if settings_row else None) or {}
-    if not general.get("fileUploadsEnabled", True):
-        raise HTTPException(403, "File uploads are disabled by the administrator")
-
-    # Validate MIME type
     content_type = file.content_type or ""
-    if content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(
-            400,
-            f"File type '{content_type}' is not allowed. "
-            f"Accepted: PDF, DOCX, XLSX, PPTX, PNG, JPG, SVG, TXT.",
-        )
-
-    # Read file content with size limit
     data = await file.read()
-    if len(data) > MAX_FILE_SIZE:
-        raise HTTPException(
-            400, f"File exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB"
-        )
+    try:
+        await validate_file_upload(db, mime_type=content_type, data=data)
+    except ResourcePolicyError as exc:
+        raise HTTPException(exc.status_code, exc.detail) from exc
 
     attachment = FileAttachment(
         card_id=card_uuid,

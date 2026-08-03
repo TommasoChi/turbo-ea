@@ -15,8 +15,8 @@ from app.database import get_db as core_get_db
 from app.services.extensions import sdk
 
 
-def test_sdk_version_is_1_1():
-    assert sdk.SDK_VERSION == "1.1"
+def test_sdk_version_is_1_4():
+    assert sdk.SDK_VERSION == "1.4"
 
 
 def test_sdk_reexports_route_dependencies_verbatim():
@@ -27,8 +27,25 @@ def test_sdk_reexports_route_dependencies_verbatim():
     assert sdk.get_db is core_get_db
 
 
-def test_sdk_compatibility_is_major_only():
-    # An extension built for 1.0 keeps loading on a 1.1 core (additive minor).
+def test_sdk_compatibility_requires_supported_major_and_minor():
+    # Older additive minors keep loading, but an extension requiring a
+    # capability introduced after this core must fail closed.
     assert sdk.sdk_compatible("1.0")
     assert sdk.sdk_compatible("1.1")
+    assert sdk.sdk_compatible("1.2")
+    assert sdk.sdk_compatible("1.3")
+    assert sdk.sdk_compatible("1.4")
+    assert not sdk.sdk_compatible("1.5")
     assert not sdk.sdk_compatible("2.0")
+    assert not sdk.sdk_compatible("1")
+    assert not sdk.sdk_compatible("1.x")
+
+
+def test_sdk_1_3_exposes_read_only_stakeholder_role_predicate():
+    assert callable(getattr(sdk.CoreQueryGateway, "has_stakeholder_role", None))
+
+
+def test_sdk_1_4_exposes_read_only_audit_and_request_permission_queries():
+    assert callable(getattr(sdk.AuditGateway, "list", None))
+    assert callable(getattr(sdk.PermissionGateway, "has", None))
+    assert "permissions" in sdk.ExtensionRequestContext.__dataclass_fields__
