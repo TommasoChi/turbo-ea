@@ -1,4 +1,12 @@
-import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  Fragment,
+  type ReactNode,
+} from "react";
 import { useNavigate, useLocation, Link as RouterLink } from "react-router";
 import Box from "@mui/material/Box";
 import AppBar from "@mui/material/AppBar";
@@ -493,13 +501,20 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   // trigger) — a raw "\n" in a text node is collapsed by the browser
   // regardless of `white-space`, so it must be split and rendered with an
   // explicit <br/>, which nowrap still honors (nowrap only suppresses
-  // automatic wrapping at whitespace, not forced breaks).
+  // automatic wrapping at whitespace, not forced breaks). Must use a
+  // Fragment, not a <span>, per line: the desktop nav Button is
+  // display:inline-flex, and wrapping each line in its own <span> turns
+  // every line into a separate flex item laid out side-by-side in a row
+  // (flex items ignore <br/>'s normal inline line-break behavior) — the
+  // label rendered as "Organization &Process" on one line, no space, no
+  // break. Bare text + <br/> siblings collapse into a single anonymous
+  // flex item per the CSS flexbox spec, so <br/> behaves normally again.
   const renderMultilineLabel = (label: string) =>
     label.split("\n").map((part, i, arr) => (
-      <span key={i}>
+      <Fragment key={i}>
         {part}
         {i < arr.length - 1 && <br />}
-      </span>
+      </Fragment>
     ));
 
   const navBtnSx = (active: boolean) => ({
