@@ -17609,6 +17609,47 @@
         ]
       }
     },
+    "/api/v1/bpm/organizations/{organization_id}/processes": {
+      "get": {
+        "description": "Reverse lookup of list_elements above: every BusinessProcess with at\nleast one BPMN element (step) linked to this Organization via\nprocess_element_organizations, plus which specific elements. Only the\nforward direction (process -> elements -> organizations) existed before\n\u2014 added for turbo-ea-ext-organization's per-step impact aggregation.",
+        "operationId": "list_processes_by_organization_api_v1_bpm_organizations__organization_id__processes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization_id",
+            "required": true,
+            "schema": {
+              "title": "Organization Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Processes By Organization",
+        "tags": [
+          "bpm"
+        ]
+      }
+    },
     "/api/v1/bpm/processes/{process_id}/assessments": {
       "get": {
         "operationId": "list_assessments_api_v1_bpm_processes__process_id__assessments_get",

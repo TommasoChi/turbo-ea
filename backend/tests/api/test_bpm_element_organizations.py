@@ -262,3 +262,71 @@ class TestDraftOrganizationPreLinking:
             )
         )
         assert rels.scalars().all() == []
+
+
+class TestProcessesByOrganization:
+    """GET /bpm/organizations/{organization_id}/processes — the reverse of
+    list_elements' `organizations` field: given an Organization, which
+    processes/elements point back at it. Added for
+    turbo-ea-ext-organization's per-step impact aggregation."""
+
+    async def test_finds_process_and_element_linked_to_org(self, client, db, org_env):
+        process, elem, sales = org_env["process"], org_env["elem"], org_env["org_sales"]
+        headers = auth_headers(org_env["admin"])
+        await client.put(
+            f"/api/v1/bpm/processes/{process.id}/elements/{elem.id}",
+            json={"organization_ids": [str(sales.id)]},
+            headers=headers,
+        )
+
+        resp = await client.get(f"/api/v1/bpm/organizations/{sales.id}/processes", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 1
+        assert body[0]["process_id"] == str(process.id)
+        assert body[0]["process_name"] == "Order to Cash"
+        assert [e["bpmn_element_id"] for e in body[0]["elements"]] == ["task_quote"]
+
+    async def test_org_with_no_linked_elements_returns_empty_list(self, client, org_env):
+        resp = await client.get(
+            f"/api/v1/bpm/organizations/{org_env['org_finance'].id}/processes",
+            headers=auth_headers(org_env["admin"]),
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_groups_multiple_elements_of_the_same_process_together(self, client, db, org_env):
+        process, sales = org_env["process"], org_env["org_sales"]
+        headers = auth_headers(org_env["admin"])
+        second_elem = ProcessElement(
+            process_id=process.id,
+            bpmn_element_id="task_invoice",
+            element_type="task",
+            name="Send Invoice",
+            sequence_order=1,
+        )
+        db.add(second_elem)
+        await db.flush()
+
+        await client.put(
+            f"/api/v1/bpm/processes/{process.id}/elements/{org_env['elem'].id}",
+            json={"organization_ids": [str(sales.id)]},
+            headers=headers,
+        )
+        await client.put(
+            f"/api/v1/bpm/processes/{process.id}/elements/{second_elem.id}",
+            json={"organization_ids": [str(sales.id)]},
+            headers=headers,
+        )
+
+        resp = await client.get(f"/api/v1/bpm/organizations/{sales.id}/processes", headers=headers)
+        body = resp.json()
+        assert len(body) == 1  # one process entry, not two
+        assert {e["bpmn_element_id"] for e in body[0]["elements"]} == {"task_quote", "task_invoice"}
+
+    async def test_non_organization_card_404(self, client, org_env):
+        resp = await client.get(
+            f"/api/v1/bpm/organizations/{org_env['app'].id}/processes",
+            headers=auth_headers(org_env["admin"]),
+        )
+        assert resp.status_code == 404

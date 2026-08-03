@@ -409,6 +409,73 @@ async def list_elements(
     ]
 
 
+@router.get("/organizations/{organization_id}/processes")
+async def list_processes_by_organization(
+    organization_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Reverse lookup of list_elements above: every BusinessProcess with at
+    least one BPMN element (step) linked to this Organization via
+    process_element_organizations, plus which specific elements. Only the
+    forward direction (process -> elements -> organizations) existed before
+    — added for turbo-ea-ext-organization's per-step impact aggregation.
+    """
+    await PermissionService.require_permission(db, user, "bpm.view")
+    org_id = uuid.UUID(organization_id)
+
+    org_result = await db.execute(
+        select(Card).where(
+            Card.id == org_id,
+            Card.type == "Organization",
+            Card.status == "ACTIVE",
+        )
+    )
+    if not org_result.scalar_one_or_none():
+        raise HTTPException(404, "Organization not found")
+
+    elements_result = await db.execute(
+        select(ProcessElement)
+        .join(
+            ProcessElementOrganization,
+            ProcessElementOrganization.element_id == ProcessElement.id,
+        )
+        .where(ProcessElementOrganization.organization_id == org_id)
+        .order_by(ProcessElement.process_id, ProcessElement.sequence_order)
+    )
+    elements = elements_result.scalars().all()
+    if not elements:
+        return []
+
+    process_ids = {e.process_id for e in elements}
+    processes_result = await db.execute(
+        select(Card).where(Card.id.in_(process_ids), Card.status == "ACTIVE")
+    )
+    processes_by_id = {p.id: p for p in processes_result.scalars().all()}
+
+    grouped: dict[uuid.UUID, list[ProcessElement]] = {}
+    for e in elements:
+        grouped.setdefault(e.process_id, []).append(e)
+
+    return [
+        {
+            "process_id": str(pid),
+            "process_name": processes_by_id[pid].name,
+            "elements": [
+                {
+                    "id": str(e.id),
+                    "bpmn_element_id": e.bpmn_element_id,
+                    "name": e.name,
+                    "element_type": e.element_type,
+                }
+                for e in els
+            ],
+        }
+        for pid, els in grouped.items()
+        if pid in processes_by_id  # skip elements whose process card is archived/missing
+    ]
+
+
 @router.put("/processes/{process_id}/elements/{element_id}")
 async def update_element(
     process_id: str,
