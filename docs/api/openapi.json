@@ -4743,6 +4743,37 @@
         "title": "ExtensionInstallOut",
         "type": "object"
       },
+      "ExtensionMcpManifestOut": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "mcp_sdk_version": {
+            "title": "Mcp Sdk Version",
+            "type": "string"
+          },
+          "mcp_tools": {
+            "items": {
+              "$ref": "#/components/schemas/McpToolOut"
+            },
+            "title": "Mcp Tools",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "version",
+          "mcp_sdk_version",
+          "mcp_tools"
+        ],
+        "title": "ExtensionMcpManifestOut",
+        "type": "object"
+      },
       "ExtensionOut": {
         "properties": {
           "capabilities": {
@@ -5775,6 +5806,56 @@
           }
         },
         "title": "McpSettingsPayload",
+        "type": "object"
+      },
+      "McpToolOut": {
+        "properties": {
+          "annotations": {
+            "additionalProperties": true,
+            "title": "Annotations",
+            "type": "object"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "dry_run_supported": {
+            "default": false,
+            "title": "Dry Run Supported",
+            "type": "boolean"
+          },
+          "input_schema": {
+            "additionalProperties": true,
+            "title": "Input Schema",
+            "type": "object"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "required_permission": {
+            "title": "Required Permission",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "method",
+          "path",
+          "input_schema",
+          "annotations",
+          "required_permission"
+        ],
+        "title": "McpToolOut",
         "type": "object"
       },
       "MigrationOut": {
@@ -23453,6 +23534,32 @@
           }
         },
         "summary": "Get Extension Asset",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/extensions/mcp-manifest": {
+      "get": {
+        "description": "Public, unauthenticated \u2014 consumed by the mcp-server process at its\nown startup, before any MCP client has authenticated, so it cannot go\nthrough the get_current_user-gated /extensions/status. Mirrors the\npublic GET /settings/mcp/status pattern. No secrets are exposed: tool\nschemas are the same data already shipped inside the (signature-\nverified) bundle. Visibility follows the same enabled+usable rule as\nevery other extension surface \u2014 disabled or unlicensed extensions\nsimply don't appear.",
+        "operationId": "extensions_mcp_manifest_api_v1_extensions_mcp_manifest_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExtensionMcpManifestOut"
+                  },
+                  "title": "Response Extensions Mcp Manifest Api V1 Extensions Mcp Manifest Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Extensions Mcp Manifest",
         "tags": [
           "Extensions"
         ]

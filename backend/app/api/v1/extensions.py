@@ -871,6 +871,59 @@ async def ui_manifest(
     return out
 
 
+class McpToolOut(BaseModel):
+    name: str
+    description: str
+    method: str
+    path: str
+    input_schema: dict
+    annotations: dict
+    required_permission: str
+    dry_run_supported: bool = False
+
+
+class ExtensionMcpManifestOut(BaseModel):
+    key: str
+    version: str
+    mcp_sdk_version: str
+    mcp_tools: list[McpToolOut]
+
+
+@status_router.get("/mcp-manifest", response_model=list[ExtensionMcpManifestOut])
+async def extensions_mcp_manifest(
+    db: AsyncSession = Depends(get_db),
+) -> list[ExtensionMcpManifestOut]:
+    """Public, unauthenticated — consumed by the mcp-server process at its
+    own startup, before any MCP client has authenticated, so it cannot go
+    through the get_current_user-gated /extensions/status. Mirrors the
+    public GET /settings/mcp/status pattern. No secrets are exposed: tool
+    schemas are the same data already shipped inside the (signature-
+    verified) bundle. Visibility follows the same enabled+usable rule as
+    every other extension surface — disabled or unlicensed extensions
+    simply don't appear.
+    """
+    await extension_registry.refresh_from_db(db)
+    out: list[ExtensionMcpManifestOut] = []
+    for info in extension_registry.all():
+        if "mcp" not in info.capabilities:
+            continue
+        if not info.enabled or info.status in ("removed", "failed", "needs_restart"):
+            continue
+        if not extension_registry.entitlement(info.key).usable:
+            continue
+        manifest = info.manifest or {}
+        tools = manifest.get("mcp_tools") or []
+        out.append(
+            ExtensionMcpManifestOut(
+                key=info.key,
+                version=info.version,
+                mcp_sdk_version=str(manifest.get("mcp_sdk_version", "")),
+                mcp_tools=[McpToolOut(**t) for t in tools],
+            )
+        )
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Static UI assets (unauthenticated by design)
 # ---------------------------------------------------------------------------
