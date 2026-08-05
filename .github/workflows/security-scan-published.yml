@@ -35,7 +35,7 @@ jobs:
       matrix:
         image: [db, backend, frontend, nginx, mcp-server]
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # OCI image references must be all-lowercase. github.repository preserves
       # the owner's actual casing (e.g. "TommasoChi/turbo-ea" on a fork), which
@@ -61,7 +61,7 @@ jobs:
 
       - name: Upload Trivy SARIF to Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@53e96ec3b35fce51c141c0d6f0e31028a448722d # v3
+        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4.37.4
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: daily-trivy-${{ matrix.image }}
@@ -86,7 +86,7 @@ jobs:
         if: always() && env.DOCKERHUB_PAT != ''
         env:
           DOCKERHUB_PAT: ${{ secrets.DOCKERHUB_PAT }}
-        uses: docker/scout-action@v1
+        uses: docker/scout-action@2688993af7bafd6ba8c6a74ec652442be91dd82b # v1.23.1
         with:
           command: cves
           image: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}:latest
@@ -99,7 +99,7 @@ jobs:
 
       - name: Upload Docker Scout SARIF to Security tab
         if: always() && hashFiles(format('scout-{0}.sarif', matrix.image)) != ''
-        uses: github/codeql-action/upload-sarif@53e96ec3b35fce51c141c0d6f0e31028a448722d # v3
+        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4.37.4
         with:
           sarif_file: scout-${{ matrix.image }}.sarif
           category: daily-scout-${{ matrix.image }}

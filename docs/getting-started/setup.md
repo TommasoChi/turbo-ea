@@ -72,6 +72,12 @@ Then `docker compose up -d` (if you've already started, see "Reset and re-seed" 
 
 `SEED_DEMO=true` already includes BPM and PPM data — you do not need to set the subset flags separately.
 
+!!! note "Demo data is seeded once"
+    Each seeder runs **once per install** and records that it has. Deleting demo
+    content — an example diagram, a demo survey — is permanent: it will not come
+    back on the next restart, even with `SEED_DEMO=true` still set. To get the
+    demo dataset back, reset the database (see *Reset and re-seed* below).
+
 ### Demo admin account
 
 When demo data is loaded, a default admin account is created:
@@ -167,6 +173,18 @@ Place `cert.pem` and `key.pem` in `./certs/` (the directory is mounted read-only
 
 For setups behind an existing reverse proxy (Caddy, Traefik, Cloudflare Tunnel), leave `TURBO_EA_TLS_ENABLED=false` and let the proxy handle TLS.
 
+## Allowing diagram embedding (optional)
+
+A [published diagram](../guide/diagrams.md#sharing-a-diagram-outside-turbo-ea) can be embedded in another site — a Confluence page, an intranet portal — but only if you name that site first. By default no external site may place Turbo EA in a frame at all.
+
+```dotenv
+TURBO_EA_EMBED_ALLOWED_ORIGINS=https://yourcompany.atlassian.net
+```
+
+Comma-separate several origins. Restart the stack for the change to take effect.
+
+This applies **only** to the published-diagram pages. The application itself — including the diagram editor — stays un-framable regardless, and published links keep working when opened directly even with this unset.
+
 ## Pinning a version
 
 `docker compose pull` defaults to `:latest`. To pin to a specific release in production, set `TURBO_EA_TAG`:
@@ -199,6 +217,32 @@ POSTGRES_PASSWORD=your-password
 ```
 
 Then start as usual: `docker compose up -d`. The bundled `db` service is still defined in `docker-compose.yml`; you can either let it run idle or stop it explicitly.
+
+### Connection budget
+
+The backend runs as a single process and opens **up to `DB_POOL_SIZE + DB_MAX_OVERFLOW` connections — 30 by default**. The bundled `db` service allows 100, so the defaults never cause trouble there. A managed instance on a low-cost plan often caps the database well below 30, and Postgres then answers:
+
+```
+too many connections for database "turboea"
+```
+
+Check your limits before switching:
+
+```sql
+SELECT datname, datconnlimit FROM pg_database WHERE datname = 'turboea';
+SELECT rolname, rolconnlimit FROM pg_roles    WHERE rolname = 'turboea';
+SHOW max_connections;
+```
+
+A `datconnlimit` or `rolconnlimit` of `-1` means "no specific limit"; anything lower than 30 needs either a raised cap or a smaller pool:
+
+```dotenv
+DB_POOL_SIZE=8
+DB_MAX_OVERFLOW=2
+DB_POOL_TIMEOUT=30
+```
+
+A smaller pool means fewer requests are served concurrently, not lost requests: once the pool is full, a request waits up to `DB_POOL_TIMEOUT` seconds for a free connection. Leave a few connections spare for backups and your own `psql` sessions.
 
 ## Verifying images
 

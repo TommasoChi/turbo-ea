@@ -34,9 +34,27 @@ COPY --from=backend-build /app/alembic ./alembic
 COPY --from=backend-build /app/alembic.ini ./alembic.ini
 COPY --from=backend-build /app/bpmn_templates ./bpmn_templates
 
-# Upgrade the bundled pip past CVE-2025-8869 / CVE-2026-1703 / CVE-2026-6357.
-# pip is never executed at runtime — this only silences Trivy noise on the image.
-RUN pip install --no-cache-dir --upgrade 'pip>=26.1'
+# Remove pip from the runtime image entirely. The backend never shells out to
+# pip (its packages arrive via the `COPY --from=backend-build /install` above,
+# and the extension loader imports modules from disk rather than installing
+# them), so pip is dead weight here — and it is not inert weight: pip ships a
+# CycloneDX SBOM of its own VENDORED dependency tree at
+# `pip/_vendor/bom.cdx.json`, which Trivy reads. Every CVE in pip's vendored
+# setuptools / msgpack / requests therefore surfaced as a finding on an image
+# that never executes pip. Upgrading pip does NOT fix that — pip 26.2 still
+# vendors setuptools 70.3.0 (CVE-2025-47273, CVE-2026-59890) and msgpack 1.1.2
+# (GHSA-6v7p-g79w-8964) — which is why the previous `--upgrade 'pip>=26.1'`
+# line is gone: deleting pip removes the whole surface instead of re-triaging
+# it on every pip re-vendor. `python -m ensurepip` restores pip if a debugging
+# session needs it.
+# The trailing `import pip` check is deliberate: no CI job builds these images,
+# so a base-image layout change that silently stopped matching would otherwise
+# ship pip back into the runtime image unnoticed. Fail the build instead.
+RUN { python -m pip uninstall -y pip 2>/dev/null || true; } && \
+    find /usr/local/lib -maxdepth 3 \( -name 'pip' -o -name 'pip-*.dist-info' \) \
+        -prune -exec rm -rf {} + && \
+    rm -f /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.* && \
+    ! python -c 'import pip' 2>/dev/null
 
 # /app/data is the mountpoint of the backend_data named volume (uploads,
 # installed extensions, workspace transfers). It MUST exist in the image
@@ -194,6 +212,18 @@ case "$resolver_addr" in
 esac
 resolver_directive="resolver ${resolver_addr} valid=30s ipv6=off;"
 
+# Cross-origin embedding of published diagrams. OFF unless an operator names the
+# sites allowed to frame them: the default value is exactly what every other
+# route already sends, so an install that does not set this is unchanged.
+# Comma-separated origins, e.g. "https://acme.atlassian.net https://wiki.acme.com".
+embed_origins="${TURBO_EA_EMBED_ALLOWED_ORIGINS:-}"
+if [ -n "$embed_origins" ]; then
+    embed_ancestors="'self' $(printf '%s' "$embed_origins" | tr ',' ' ' | tr -s ' ')"
+else
+    embed_ancestors="'self'"
+fi
+export NGINX_EMBED_FRAME_ANCESTORS="$embed_ancestors"
+
 export NGINX_SERVER_NAME="${NGINX_SERVER_NAME:-$public_host}"
 export NGINX_FORWARDED_PROTO="${NGINX_FORWARDED_PROTO:-$public_scheme}"
 
@@ -345,6 +375,54 @@ ${nginx_https_ipv6_line}
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 300s;
+    }
+
+    # ---- Published-diagram embedding -------------------------------------
+    # These three paths are the ONLY ones that may be framed by another site.
+    # `add_header` in a location replaces the inherited set, so each re-declares
+    # the full header block minus X-Frame-Options (which has no allowlist form)
+    # and carries frame-ancestors instead.
+
+    # The public embed page itself.
+    location ^~ /embed/ {
+        proxy_pass \$frontend_upstream\$request_uri;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto ${NGINX_FORWARDED_PROTO};
+        add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
+        add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
+        add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors ${NGINX_EMBED_FRAME_ANCESTORS}\" always;
+    }
+
+    # The public read endpoint it fetches. Longer prefix than 'location /api/',
+    # so nginx picks this one.
+    location ^~ /api/v1/diagrams/public/ {
+        proxy_pass \$backend_upstream\$request_uri;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto ${NGINX_FORWARDED_PROTO};
+        add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
+        add_header Content-Security-Policy \"frame-ancestors ${NGINX_EMBED_FRAME_ANCESTORS}\" always;
+    }
+
+    # The DrawIO viewer bundle, served from a second path so that /drawio/ can
+    # stay locked to 'self'. CSP frame-ancestors is checked against EVERY
+    # ancestor, so the nested viewer needs its own allowance — and giving it
+    # here rather than on /drawio/ keeps the authenticated editor un-framable.
+    location ~ ^/drawio-embed/(?<drawio_embed_path>.*)\$ {
+        proxy_pass \$frontend_upstream/drawio/\$drawio_embed_path\$is_args\$args;
+        proxy_set_header Host \$host;
+        add_header X-Robots-Tag \"noindex, nofollow\" always;
+        add_header Cache-Control \"no-store, no-transform\" always;
+        add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
+        add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors ${NGINX_EMBED_FRAME_ANCESTORS}\" always;
     }
 
     location = /drawio/index.html {
@@ -507,6 +585,54 @@ ${nginx_http_ipv6_line}
         proxy_read_timeout 300s;
     }
 
+    # ---- Published-diagram embedding -------------------------------------
+    # These three paths are the ONLY ones that may be framed by another site.
+    # `add_header` in a location replaces the inherited set, so each re-declares
+    # the full header block minus X-Frame-Options (which has no allowlist form)
+    # and carries frame-ancestors instead.
+
+    # The public embed page itself.
+    location ^~ /embed/ {
+        proxy_pass \$frontend_upstream\$request_uri;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto ${NGINX_FORWARDED_PROTO};
+        add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
+        add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
+        add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors ${NGINX_EMBED_FRAME_ANCESTORS}\" always;
+    }
+
+    # The public read endpoint it fetches. Longer prefix than 'location /api/',
+    # so nginx picks this one.
+    location ^~ /api/v1/diagrams/public/ {
+        proxy_pass \$backend_upstream\$request_uri;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto ${NGINX_FORWARDED_PROTO};
+        add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
+        add_header Content-Security-Policy \"frame-ancestors ${NGINX_EMBED_FRAME_ANCESTORS}\" always;
+    }
+
+    # The DrawIO viewer bundle, served from a second path so that /drawio/ can
+    # stay locked to 'self'. CSP frame-ancestors is checked against EVERY
+    # ancestor, so the nested viewer needs its own allowance — and giving it
+    # here rather than on /drawio/ keeps the authenticated editor un-framable.
+    location ~ ^/drawio-embed/(?<drawio_embed_path>.*)\$ {
+        proxy_pass \$frontend_upstream/drawio/\$drawio_embed_path\$is_args\$args;
+        proxy_set_header Host \$host;
+        add_header X-Robots-Tag \"noindex, nofollow\" always;
+        add_header Cache-Control \"no-store, no-transform\" always;
+        add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
+        add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors ${NGINX_EMBED_FRAME_ANCESTORS}\" always;
+    }
+
     location = /drawio/index.html {
         proxy_pass \$frontend_upstream\$request_uri;
         proxy_set_header Host \$host;
@@ -589,13 +715,22 @@ WORKDIR /app
 
 COPY VERSION ./VERSION
 COPY mcp-server/ ./
-# Upgrade the bundled pip past CVE-2025-8869 / CVE-2026-1703 / CVE-2026-6357,
-# and pin transitive setuptools/msgpack (pulled in by mcp-server's own deps,
-# not declared directly) past CVE-2025-47273 / CVE-2026-59890 / GHSA-6v7p-g79w-8964
-# before installing the app. None of pip/setuptools/msgpack are executed at
-# runtime here — this only silences Trivy noise on the published image.
-RUN pip install --no-cache-dir --upgrade 'pip>=26.1' 'setuptools>=83.0' 'msgpack>=1.2.1' && \
-    pip install --no-cache-dir .
+# Install the app, then remove pip from the image. Unlike the backend stage
+# this stage does use pip at build time, so the uninstall happens in the same
+# layer immediately afterwards. Rationale is identical to the backend stage:
+# pip ships a CycloneDX SBOM of its vendored dependency tree
+# (`pip/_vendor/bom.cdx.json`) that Trivy reads, so pip's vendored setuptools /
+# msgpack CVEs surfaced on an image that never executes pip. Upgrading pip
+# cannot fix it (pip 26.2 still vendors setuptools 70.3.0 / msgpack 1.1.2), so
+# the former `--upgrade 'pip>=26.1'` step is gone. `python -m ensurepip`
+# restores pip for debugging.
+# Same self-verifying `import pip` check as the backend stage — see there.
+RUN pip install --no-cache-dir . && \
+    { python -m pip uninstall -y pip 2>/dev/null || true; } && \
+    find /usr/local/lib -maxdepth 3 \( -name 'pip' -o -name 'pip-*.dist-info' \) \
+        -prune -exec rm -rf {} + && \
+    rm -f /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.* && \
+    ! python -c 'import pip' 2>/dev/null
 
 RUN addgroup -g ${APP_GID} -S appgroup && adduser -S -D -u ${APP_UID} -G appgroup appuser && \
     chown -R ${APP_UID}:${APP_GID} /app

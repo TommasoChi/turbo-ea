@@ -72,6 +72,11 @@ SEED_DEMO=true
 
 `SEED_DEMO=true` 已经包含 BPM 和 PPM 数据 — 您不需要单独设置子集标志。
 
+!!! note "演示数据只加载一次"
+    每个加载器**每次安装只运行一次**并记录该状态。删除演示内容（示例图表、演示问卷）
+    是永久性的：即使仍然设置了 `SEED_DEMO=true`，下次重启也不会恢复。若要重新获取
+    演示数据集，请重置数据库（参见下文的「重置并重新加载」）。
+
 ### 演示管理员账户
 
 加载演示数据时，会创建一个默认管理员账户：
@@ -167,6 +172,18 @@ TLS_HOST_PORT=443
 
 对于位于现有反向代理（Caddy、Traefik、Cloudflare Tunnel）后的设置，保持 `TURBO_EA_TLS_ENABLED=false`，让代理处理 TLS。
 
+## 允许嵌入图表（可选）
+
+[已发布的图表](../guide/diagrams.md)可以嵌入到其他站点，例如 Confluence 页面或内网门户，但前提是你先指定该站点。默认情况下，任何外部站点都不能将 Turbo EA 放入框架中。
+
+```dotenv
+TURBO_EA_EMBED_ALLOWED_ORIGINS=https://yourcompany.atlassian.net
+```
+
+多个来源用逗号分隔。重启服务后更改才会生效。
+
+该设置**仅**适用于已发布图表的页面。应用本身（包括图表编辑器）在任何情况下都不可被嵌入；即使不设置该项，已发布链接直接打开时依然可用。
+
 ## 锁定版本
 
 `docker compose pull` 默认拉取 `:latest`。要在生产中锁定特定版本，请设置 `TURBO_EA_TAG`：
@@ -199,6 +216,32 @@ POSTGRES_PASSWORD=your-password
 ```
 
 然后照常启动：`docker compose up -d`。捆绑的 `db` 服务仍在 `docker-compose.yml` 中定义；您可以让它空闲运行，也可以显式停止它。
+
+### 连接预算
+
+后端以单个进程运行，最多打开 **`DB_POOL_SIZE + DB_MAX_OVERFLOW` 个连接（默认为 30）**。捆绑的 `db` 服务允许 100 个连接，因此默认值在那里从不会造成问题。低价套餐的托管实例通常会将数据库限制在远低于 30，此时 PostgreSQL 会返回：
+
+```
+too many connections for database "turboea"
+```
+
+切换前请检查您的限制：
+
+```sql
+SELECT datname, datconnlimit FROM pg_database WHERE datname = 'turboea';
+SELECT rolname, rolconnlimit FROM pg_roles    WHERE rolname = 'turboea';
+SHOW max_connections;
+```
+
+`datconnlimit` 或 `rolconnlimit` 为 `-1` 表示「无特定限制」；任何低于 30 的值都需要提高上限或缩小连接池：
+
+```dotenv
+DB_POOL_SIZE=8
+DB_MAX_OVERFLOW=2
+DB_POOL_TIMEOUT=30
+```
+
+连接池变小意味着并发处理的请求变少，而不是请求丢失：连接池占满后，请求最多等待 `DB_POOL_TIMEOUT` 秒以获得空闲连接。请为备份和您自己的 `psql` 会话留出几个连接。
 
 ## 验证镜像
 

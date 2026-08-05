@@ -72,6 +72,13 @@ Kør derefter `docker compose up -d` (hvis du allerede er startet, se "Nulstil o
 
 `SEED_DEMO=true` inkluderer allerede BPM- og PPM-data — du behøver ikke angive delmængde-flagene separat.
 
+!!! note "Demodata indlæses kun én gang"
+    Hver seeder kører **én gang pr. installation** og registrerer det. Sletter du
+    demoindhold — et eksempeldiagram, en demoundersøgelse — er det permanent: det
+    kommer ikke tilbage ved næste genstart, heller ikke selvom `SEED_DEMO=true`
+    stadig er sat. Nulstil databasen for at få demodatasættet tilbage (se
+    *Nulstil og genindlæs* nedenfor).
+
 ### Demoadministratorkonto
 
 Når demodata indlæses, oprettes en standardadministratorkonto:
@@ -167,6 +174,18 @@ Placér `cert.pem` og `key.pem` i `./certs/` (mappen monteres skrivebeskyttet i 
 
 For opsætninger bag en eksisterende reverse proxy (Caddy, Traefik, Cloudflare Tunnel), lad `TURBO_EA_TLS_ENABLED=false` stå, og lad proxyen håndtere TLS.
 
+## Tillad indlejring af diagrammer (valgfrit)
+
+Et [udgivet diagram](../guide/diagrams.md) kan indlejres på et andet websted — en Confluence-side, en intranetportal — men kun hvis du navngiver det websted først. Som standard må intet eksternt websted overhovedet placere Turbo EA i en ramme.
+
+```dotenv
+TURBO_EA_EMBED_ALLOWED_ORIGINS=https://dinvirksomhed.atlassian.net
+```
+
+Adskil flere oprindelser med komma. Genstart stakken, for at ændringen træder i kraft.
+
+Dette gælder **kun** siderne med udgivne diagrammer. Selve applikationen — inklusive diagrameditoren — kan under alle omstændigheder ikke indlejres, og udgivne links virker fortsat, når de åbnes direkte, også uden denne indstilling.
+
 ## Fastlås en version
 
 `docker compose pull` defaulter til `:latest`. For at fastlåse til en specifik udgivelse i produktion skal du angive `TURBO_EA_TAG`:
@@ -199,6 +218,32 @@ POSTGRES_PASSWORD=your-password
 ```
 
 Start derefter som sædvanligt: `docker compose up -d`. Den medfølgende `db`-tjeneste er stadig defineret i `docker-compose.yml`; du kan enten lade den køre tomt eller stoppe den eksplicit.
+
+### Forbindelsesbudget
+
+Backend'en kører som én enkelt proces og åbner **op til `DB_POOL_SIZE + DB_MAX_OVERFLOW` forbindelser — 30 som standard**. Den medfølgende `db`-tjeneste tillader 100, så standardværdierne giver aldrig problemer der. En hostet instans på et billigt abonnement begrænser ofte databasen til langt under 30, og PostgreSQL svarer så:
+
+```
+too many connections for database "turboea"
+```
+
+Kontrollér dine grænser, før du skifter:
+
+```sql
+SELECT datname, datconnlimit FROM pg_database WHERE datname = 'turboea';
+SELECT rolname, rolconnlimit FROM pg_roles    WHERE rolname = 'turboea';
+SHOW max_connections;
+```
+
+`-1` i `datconnlimit` eller `rolconnlimit` betyder «ingen specifik grænse»; alt under 30 kræver enten en hævet grænse eller en mindre pool:
+
+```dotenv
+DB_POOL_SIZE=8
+DB_MAX_OVERFLOW=2
+DB_POOL_TIMEOUT=30
+```
+
+En mindre pool betyder færre samtidigt betjente forespørgsler, ikke tabte forespørgsler: når poolen er fuld, venter en forespørgsel op til `DB_POOL_TIMEOUT` sekunder på en ledig forbindelse. Efterlad et par forbindelser til backup og dine egne `psql`-sessioner.
 
 ## Verificering af images
 

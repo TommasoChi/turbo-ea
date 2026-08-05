@@ -51,7 +51,7 @@ jobs:
         # backend / mcp-server images ever accumulate the same drift.
         image: [db, frontend, nginx]
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # OCI image references must be all-lowercase. github.repository preserves
       # the owner's actual casing (e.g. "TommasoChi/turbo-ea" on a fork), which
@@ -90,7 +90,7 @@ jobs:
 
       - name: Upload SARIF to Security tab (same category reconciles stale alerts)
         if: ${{ inputs.upload_sarif }}
-        uses: github/codeql-action/upload-sarif@53e96ec3b35fce51c141c0d6f0e31028a448722d # v3
+        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4.37.4
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: trivy-${{ matrix.image }}

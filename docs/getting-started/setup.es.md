@@ -72,6 +72,14 @@ Luego `docker compose up -d` (si ya ha arrancado, consulte «Restablecer y volve
 
 `SEED_DEMO=true` ya incluye datos BPM y PPM — no es necesario establecer los flags de subconjunto por separado.
 
+!!! note "Los datos de demostración se cargan una sola vez"
+    Cada cargador se ejecuta **una vez por instalación** y lo registra. Eliminar
+    contenido de demostración — un diagrama de ejemplo, una encuesta de
+    demostración — es definitivo: no volverá en el siguiente reinicio, aunque
+    `SEED_DEMO=true` siga definido. Para recuperar el conjunto de datos de
+    demostración, restablece la base de datos (consulta *Restablecer y recargar*
+    más abajo).
+
 ### Cuenta de administrador de demostración
 
 Cuando se cargan los datos de demostración, se crea una cuenta de administrador predeterminada:
@@ -167,6 +175,18 @@ Coloque `cert.pem` y `key.pem` en `./certs/` (el directorio se monta en modo sol
 
 Para configuraciones detrás de un proxy inverso existente (Caddy, Traefik, Cloudflare Tunnel), deje `TURBO_EA_TLS_ENABLED=false` y deje que el proxy gestione TLS.
 
+## Permitir la inserción de diagramas (opcional)
+
+Un [diagrama publicado](../guide/diagrams.md) puede insertarse en otro sitio — una página de Confluence, un portal de intranet — pero solo si indicas antes ese sitio. De forma predeterminada, ningún sitio externo puede colocar Turbo EA en un marco.
+
+```dotenv
+TURBO_EA_EMBED_ALLOWED_ORIGINS=https://tuempresa.atlassian.net
+```
+
+Separa varios orígenes con comas. Reinicia la pila para que el cambio surta efecto.
+
+Esto se aplica **solo** a las páginas de diagramas publicados. La aplicación en sí — incluido el editor de diagramas — no puede insertarse en ningún caso, y los enlaces publicados siguen funcionando al abrirlos directamente aunque no configures esto.
+
 ## Anclar una versión
 
 `docker compose pull` toma `:latest` por defecto. Para anclar a una versión específica en producción, establezca `TURBO_EA_TAG`:
@@ -199,6 +219,32 @@ POSTGRES_PASSWORD=your-password
 ```
 
 Luego inicie como de costumbre: `docker compose up -d`. El servicio `db` integrado sigue definido en `docker-compose.yml`; puede dejarlo en reposo o detenerlo explícitamente.
+
+### Presupuesto de conexiones
+
+El backend se ejecuta como un único proceso y abre **hasta `DB_POOL_SIZE + DB_MAX_OVERFLOW` conexiones (30 de forma predeterminada)**. El servicio `db` incluido permite 100, por lo que los valores predeterminados nunca causan problemas ahí. Una instancia gestionada en un plan económico suele limitar la base de datos muy por debajo de 30, y PostgreSQL responde entonces:
+
+```
+too many connections for database "turboea"
+```
+
+Compruebe sus límites antes de cambiar:
+
+```sql
+SELECT datname, datconnlimit FROM pg_database WHERE datname = 'turboea';
+SELECT rolname, rolconnlimit FROM pg_roles    WHERE rolname = 'turboea';
+SHOW max_connections;
+```
+
+`-1` en `datconnlimit` o `rolconnlimit` significa «sin límite específico»; cualquier valor inferior a 30 exige subir el tope o reducir el pool:
+
+```dotenv
+DB_POOL_SIZE=8
+DB_MAX_OVERFLOW=2
+DB_POOL_TIMEOUT=30
+```
+
+Un pool más pequeño significa menos solicitudes atendidas simultáneamente, no solicitudes perdidas: cuando el pool está lleno, una solicitud espera hasta `DB_POOL_TIMEOUT` segundos a que se libere una conexión. Deje algunas conexiones libres para las copias de seguridad y sus propias sesiones de `psql`.
 
 ## Verificar imágenes
 

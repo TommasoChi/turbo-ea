@@ -5,6 +5,114 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.40.0] - 2026-08-05
+
+### Added
+- **BPMN elements can be coloured.** Select one or more shapes in the process flow editor and pick a colour from the paint bucket button on the context pad — the same six-swatch palette as bpmn.io ([#910](https://github.com/vincentmakes/turbo-ea/discussions/910)). Colours are written into the BPMN file itself, so they survive a reload, follow the diagram into the read-only viewer, and appear in exports, thumbnails and printouts. Colouring works in both Simple and Full modelling modes.
+
+### Fixed
+- **The read-only process flow viewer no longer paints over a colour you chose.** Automated tasks are tinted green to mark them as automated, which overrode any colour set by hand on the same shape. A deliberate colour now wins; automated tasks left uncoloured are tinted as before.
+
+## [2.39.1] - 2026-08-05
+
+### Fixed
+- **A relation looks the same on a diagram however it got there.** The same relationship rendered two different ways depending on how it reached the canvas: drawn by hand it was a grey line carrying its verb, while pulled in with the **+** / Expand menu it took the colour of the card at the other end and carried no label at all ([#905](https://github.com/vincentmakes/turbo-ea/discussions/905)). Every relation edge is now drawn the same way — one neutral dark-grey line, dashed until it has been pushed to the inventory — and every path that draws one shares a single renderer, so they cannot drift apart again.
+- **Relation edges show their direction.** An arrowhead now marks the relation's target, so which way a relationship runs is readable at a glance without reading the verb. Pulling in a relation that points *at* the card you expanded puts the arrowhead on the other end, and edges retrieved from the inventory finally carry a verb at all.
+- **A diagram now shows which application provides an interface and which consumes it.** Every Application–Interface link read *provides / consumes*, so on a diagram there was no way to tell the provider from the consumers without opening each link in turn ([#905](https://github.com/vincentmakes/turbo-ea/discussions/905)). Where a link's flow direction is set, the arrowhead now follows it — pointing at the interface for a provider, back at the application for a consumer, and at both ends when it is bidirectional — matching what the Layered Dependency View already drew. Links whose flow direction was never set are unchanged.
+- **A link reads the same whichever card you expanded from.** Expanding an Organization showed its applications as *uses*, but expanding one of those applications showed the organisations coming back as *is used by* — one relationship, two different labels, decided by where you happened to start. Because the arrowhead always marks the relationship's target, the label now always completes the sentence in the arrow's direction, so both readings agree and match the Layered Dependency View and the delete-confirmation dialog.
+- **A relation drawn in its reverse direction is no longer saved backwards.** Picking a relation type in the reverse direction — for example drawing from an IT Component to an Application and choosing the Application-to-IT-Component type — created the relationship the wrong way round in the inventory. It is now created with the source and target the right way round, and the arrowhead points at the relationship's target rather than following the stroke of your mouse.
+
+## [2.39.0] - 2026-08-04
+
+### Added
+- **Diagrams can be published as a read-only link and embedded in a wiki page.** A new **Share / embed…** action on a diagram publishes a link that opens without signing in, so an architecture diagram can live inside a Confluence page instead of being pasted there as a screenshot that goes stale. Choose between *anyone with the link* and *only people who sign in* (authenticated against your identity provider, optionally limited to named email domains, and creating no Turbo EA account). The published page is pannable and zoomable but shows the picture only — there is no click-through to card details, and the card identifiers behind the shapes are stripped before the diagram leaves the server. Unpublishing takes effect immediately, and re-publishing restores the same link so URLs already pasted into a wiki keep working.
+- **Relation labels can be hidden on a diagram.** Every relation edge carries its verb — *provides*, *consumes*, *supports* — which on a dense landscape becomes more noise than information. **Hide relation labels** in the diagram editor's overflow menu turns them off; the relations themselves are untouched, so it is free to undo. The setting is saved with the diagram, so the read-only viewer, a published diagram and PNG/SVG exports all match what you arranged, and edges drawn afterwards follow it. Annotation edges you labelled yourself are left alone.
+- **Publishing is its own permission.** *Publish diagrams* is granted separately from *Create, edit, and delete diagrams* — being allowed to draw a diagram no longer implies being allowed to expose one outside the instance. No role receives it by default except Admin.
+- **Embedding is off until an administrator allows it.** For security, no other website may place Turbo EA in a frame unless `TURBO_EA_EMBED_ALLOWED_ORIGINS` names it. Published links still work when opened directly. The relaxation applies only to the published-diagram pages; the rest of the application, including the diagram editor, remains un-framable.
+
+### Fixed
+- **Demo content no longer comes back after you delete it.** With `SEED_DEMO=true` still set in `.env`, an instance that had imported its own landscape and removed the NexaTech demo cards re-created the three example diagrams — plus the demo saved reports, surveys and bookmarks — on **every restart**, accumulating another copy each time ([#905](https://github.com/vincentmakes/turbo-ea/discussions/905)). Each seeder now records that it has run and never runs again, so `SEED_DEMO` means "populate this instance on first startup" rather than "restore the demo data on every boot". Copies already accumulated are not removed automatically — delete them once and they will stay deleted. A full reset (`RESET_DB=true`) still re-seeds as before.
+- **Drawing a link on a diagram between two cards that were already related no longer creates a duplicate relation.** The diagram looked correct while the inventory quietly gained a second, identical relationship. The link now reuses the existing relation — matching how the Excel importer has always behaved — and any attributes set in the relation dialog are applied to it. Duplicates already in the database are merged on upgrade, keeping the oldest relation and folding in any attributes or description the duplicates carried.
+- **Card colours set by hand on a diagram survive Save.** Changing a card's fill and clicking **Save** reverted it to the card-type colour, while **Save & Exit** kept it — because saving silently re-applied the active view over the whole canvas. Manual formatting is now left alone, and switching a view off restores exactly the colours each card had before the view was applied.
+- **Collapsing an expanded group no longer discards your layout without warning.** The `−` button removed every expanded card, along with any positioning and formatting applied to them, with no confirmation. Turbo EA now asks first when the cards have been moved or restyled, and expanding again puts them back where you left them instead of re-running the default layout.
+
+## [2.38.1] - 2026-08-03
+
+### Fixed
+- **Long-running background work no longer holds a database connection for its whole duration.** AI analyses (vendor categorisation and resolution, duplicate detection, modernization assessment) kept one connection open — inside an uncommitted transaction — for every AI round-trip from the start of the run to the end, and workspace imports and platform migrations kept one open while they read and parsed the entire uploaded file. On a large landscape that is minutes at a time. Because those transactions write, they also stopped the database from reclaiming space for as long as they ran. Each of these now releases its connection before the slow part and takes a fresh one for the writes, which the 2.38.0 fix to the live-update stream did for browser tabs.
+- **Vendor analysis no longer discards everything it categorised if it fails part-way.** Results were written only at the very end, so a failure on the last batch lost the whole run. Each batch is now saved as it completes; re-running is unchanged and still updates every vendor.
+- **Admin → Settings opens quickly again.** Your logo and favicon are stored alongside every other setting, and each setting the page read fetched both images from the database along with it — so opening the General tab, which made fifteen separate requests, downloaded them fifteen times over before showing anything. On an instance with a large logo that was ten seconds or more of spinner. The images are now read only where they are actually displayed, and the tab asks for its settings in a single request instead of fifteen. The AI tab and every other page that reads a setting get the same benefit.
+
+## [2.38.0] - 2026-08-03
+
+### Fixed
+- **Every open Turbo EA browser tab was holding a PostgreSQL connection open for as long as it stayed open.** The live-update stream behind the notification bell resolved the signed-in user and their permissions on a database session that the server only releases when the response finishes — and that response finishes when the tab closes. The connection sat idle in an open transaction for the tab's whole lifetime, so a few dozen tabs across a team consumed the backend's entire connection allowance and unrelated requests then stalled for 30 seconds before failing. Instances pointed at a managed PostgreSQL whose plan caps connections saw it sooner, as `too many connections for database «turboea»` ([#901](https://github.com/vincentmakes/turbo-ea/discussions/901)). The stream now releases the connection before it starts streaming, so an open tab costs none. Present since 1.65.4.
+
+### Added
+- **The database connection pool can now be sized from the environment.** `DB_POOL_SIZE` (20), `DB_MAX_OVERFLOW` (10) and `DB_POOL_TIMEOUT` (30) were fixed in code, so an instance running against a managed PostgreSQL that allows fewer connections than the backend asks for had no way to fit under its limit. Defaults are unchanged — the bundled database allows well over what the backend requests.
+
+### Changed
+- **The connection budget is now documented.** *Use an existing PostgreSQL* and *Managed PostgreSQL* explain how many connections the backend needs, how to check the limit your provider applies, and how to shrink the pool to fit it.
+
+## [2.37.3] - 2026-08-01
+
+### Security
+- **Published images can no longer pick up a breaking dependency release on a rebuild.** The backend and MCP server installed their Python dependencies with no upper version bound, so a weekly image rebuild could pull in a new major release of a core library — with no code change and no test run against it — and ship it. Four such libraries are now bounded to the major version the product is tested against. No dependency versions change today; this only prevents an untested future one from arriving unannounced.
+
+## [2.37.2] - 2026-08-01
+
+### Fixed
+- **The MCP server no longer fails to start after a fresh build.** Its dependency on the MCP SDK had no upper bound, so new builds picked up the SDK's 2.0 release, which removed the module the server is built on — leaving the container unable to start. The dependency is now capped below 2.0.
+
+## [2.37.1] - 2026-07-30
+
+### Changed
+- General maintenance and internal clean-up. No user-facing changes.
+
+## [2.37.0] - 2026-07-30
+
+### Security
+- **The published `backend` and `mcp-server` images no longer ship pip.** Neither container ever ran pip — the backend receives its packages at build time and the extension loader imports from disk — but pip carries an inventory of its own bundled dependencies that vulnerability scanners read, so security advisories against those bundled copies were being reported against Turbo EA images that could not execute the affected code. Removing pip retires that entire class of false report. Nothing in the product changes; `python -m ensurepip` restores pip inside a container if it is ever needed for debugging.
+
+## [2.36.0] - 2026-07-29
+
+### Added
+- **Any column can now be frozen in place while you scroll sideways.** Hover a column header and click the pin: the column moves to the leading edge and stays there, so a wide table no longer leaves you guessing which row you are reading ([#890](https://github.com/vincentmakes/turbo-ea/discussions/890)). Click the pin again to release it, or use the pin that now sits beside every column in the **Columns** tab of the filter panel. The row-selection checkboxes stay at the far left of the table, ahead of whatever you freeze. Frozen columns are remembered per table in your browser, and on the Inventory grid they also travel with a saved view, like column order and width already do. The control is on every data table in Turbo EA: Inventory, Risk Register, Decisions, Compliance findings, Users, Resources and the Audit log.
+
+### Changed
+- **The Card column on Compliance findings and the Name column on Users can now be unfrozen.** Both were permanently pinned; they stay frozen by default and are now releasable like any other column.
+
+## [2.35.0] - 2026-07-29
+
+### Added
+- **A manual calculation run now says which cards failed, and why.** Running a calculation from the list used to report only «Processed 22 cards: 1 succeeded, 21 failed», leaving the failures to be found by testing the formula against every card by hand. The result banner now offers **View details**: a breakdown per calculation of how many cards computed and how many failed, and under each one the distinct errors with the number of cards they were raised on and links to those cards. Identical errors are grouped, since one wrong formula is one fix rather than twenty-one; up to ten cards are listed per error with the remainder shown as a count. **Copy report** puts the whole breakdown on the clipboard.
+
+### Fixed
+- **The status of a calculation was decided by whichever card happened to be processed last.** A bulk run that failed on twenty-one cards and succeeded on the twenty-second cleared the error and left a green **OK** chip in the calculations list. The chip now reflects the run as a whole: the most common failure when any card failed, and OK only when every card computed.
+
+## [2.34.0] - 2026-07-29
+
+### Added
+- **Calculations can read PPM budget and cost data.** A new `ppm` root exposes an Initiative's capex, opex and total figures for budget, planned and actual spend, both as overall totals and broken down per fiscal year (`ppm.byYear`, a list so the existing `FILTER` and `PLUCK` functions work on it). Cost lines are assigned to a fiscal year using the Fiscal Year Start setting, with a year named after the calendar year it ends in. Related Initiatives expose the same data, so a card can sum the capex of every initiative linked to it. Editing a PPM budget or cost line now re-runs the initiative's calculations, so derived fields no longer wait for the card to be saved by hand.
+- **A calculation can treat blank numbers as zero.** An opt-in switch per calculation, off by default: empty numeric fields then evaluate as `0` in arithmetic and in `<`/`>` comparisons, while `==`, `!=` and `is None` keep their normal meaning. Intended for cost roll-ups where some inputs are simply not filled in yet.
+
+### Fixed
+- **A formula that referenced a field that does not exist used to fail on every card with a bare «Evaluation error».** Saving such a formula is now refused outright, with a message naming the key and suggesting the nearest real one — the most common cause being the field's *label* used where its *key* was needed.
+- **Formula errors now say what went wrong.** Undefined names and functions are named, an empty field used in arithmetic is identified by key with a pointer to `COALESCE`, and reading `parent` on a root card suggests the `IF(parent, …)` guard. The Test dialog no longer replaces all of this with «Calculation failed».
+- **Reading a related card's field without the `attributes.` prefix now warns.** `SUM(PLUCK(relations.relInitiativeToApp, "CAPEX"))` matches nothing and quietly returns 0 forever; no error is possible on that path, so the calculations list and the formula editor now flag it and suggest the correct key.
+- **Formulas are re-evaluated once per card instead of once per calculation.** Relations, children, the parent and the hierarchy level were rebuilt for every calculation on a card, so a type with six calculations issued six copies of the same queries on every save and on every bulk recalculation.
+- **The Calculations documentation described a formula language that does not exist.** It referenced card fields as bare `fieldKey` instead of `data.fieldKey`, an array variable `related_{type_key}` that the engine never provided (the real one is `relations.<relationTypeKey>`), `lifecycle_endOfLife` instead of `data.lifecycle.endOfLife`, and `PLUCK` examples missing the `attributes.` prefix needed to reach a related card's own fields — so a formula copied from the page either errored or silently returned `0`. The page now documents the real context variables, explains the shape of a related-card entry, covers `LN`, and adds sections on guarding empty values with `COALESCE`, on what Validate and Test each actually run against, on when calculations are re-evaluated, and on reading PPM budget and cost totals from an Initiative card.
+
+### Security
+- **Listing calculations required only a login, not a permission.** Any authenticated user could read every formula and its last error; both now require `admin.metamodel`, in line with the rest of the metamodel configuration. The `calculated-fields` endpoint that non-admin pages depend on stays open.
+
+## [2.33.2] - 2026-07-29
+
+### Fixed
+- **«Export current view» wrote internal values instead of what the grid shows.** Parent carried a long record identifier — or nothing at all for a card with no parent — and card type, subtype, lifecycle, approval status, tags and any dropdown or multiple-choice field came out as the codes Turbo EA stores rather than the names on screen. Data quality exported a raw number instead of a percentage. Every column now exports its displayed text, in your language. «Export all fields» was never affected and is unchanged.
+- **Grid Edit dropdowns listed internal codes.** Picking a subtype or a single-choice field offered values like `business_app`; they now read as the names shown everywhere else.
+- **A card whose only lifecycle date is in the future counted as having no lifecycle.** It showed a «Plan» badge in the grid but the Lifecycle filter listed it as empty, and it sorted and exported as blank. The badge, the filter, the column and the export now agree.
+
 ## [2.33.1] - 2026-07-28
 
 ### Fixed

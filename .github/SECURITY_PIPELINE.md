@@ -53,12 +53,19 @@ Two scanners covering the same layer is deliberate — different vuln DBs have d
 >    publishes `:latest`, a release could otherwise ship `:latest` with a stale
 >    apk layer. The build step therefore also sets
 >    `no-cache-filters: backend,db,frontend,nginx,mcp-server` (plural — the
->    singular form is silently ignored), which forces just the runtime stages
->    (the ones running `apk upgrade --no-cache`) to rebuild against the live
->    alpine repos on **every** build, cached ones included, while the expensive
->    `frontend-build` / `backend-build` stages stay cached. This closes the curl
->    8.19.0-r0 → 8.20.0-r0 gap seen in July 2026, where `:latest` kept shipping a
->    cached, unpatched curl.
+>    singular form is silently ignored) **on `push` events only**, which forces
+>    just the runtime stages (the ones running `apk upgrade --no-cache`) to
+>    rebuild against the live alpine repos on every cached build, while the
+>    expensive `frontend-build` / `backend-build` stages stay cached. This
+>    closes the curl 8.19.0-r0 → 8.20.0-r0 gap seen in July 2026, where
+>    `:latest` kept shipping a cached, unpatched curl.
+>
+>    The `push`-only condition is **not** cosmetic: buildx hard-rejects
+>    `--no-cache` and `--no-cache-filter` in the same invocation (*"cannot
+>    currently be used together"*). Emitting both killed every `schedule` and
+>    `workflow_dispatch` run for three weeks in 2026-07. Scheduled and manual
+>    runs don't need the filters anyway — their full `--no-cache` already
+>    rebuilds every stage.
 >
 > To force a fresh `:latest` on demand (e.g. right after an alpine CVE fix lands
 > in the repo), run `docker-publish.yml` via **`workflow_dispatch` from `main`**
@@ -124,12 +131,13 @@ you republish the image.
    the **installed** version is still the old one, the image itself is stale —
    go to step 2. If it already shows the fixed version, the alert is just stale
    in the tab — skip to step 3.
-2. **Republish so `:latest` carries the fix.** Since the build step sets
-   `no-cache-filter` on the runtime stages, any publish (a merge to `main`, or a
-   `workflow_dispatch` run of `docker-publish.yml`) now rebuilds `apk upgrade`
-   against the live alpine repos, so `:latest` picks up the fix and stays patched
-   across subsequent pushes. (Before that filter existed, a cached push would
-   overwrite the patched `:latest` right back to the stale layer.)
+2. **Republish so `:latest` carries the fix.** Any publish rebuilds `apk
+   upgrade` against the live alpine repos, so `:latest` picks up the fix and
+   stays patched across subsequent pushes — a cached push via the
+   `no-cache-filters` on the runtime stages, a `workflow_dispatch` run of
+   `docker-publish.yml` via its full `no-cache`. (Before those filters existed,
+   a cached push would overwrite the patched `:latest` right back to the stale
+   layer.)
 3. **Close stale `<=medium` alerts.** The routine observe scans are
    `HIGH,CRITICAL` only, so a MEDIUM alert created by an earlier all-severity
    scan never auto-closes on rebuild. Run `trivy-reconcile.yml` with
@@ -138,6 +146,38 @@ you republish the image.
    rebuilt image. HIGH/CRITICAL alerts self-heal via the next publish/daily
    observe once the image is patched, but the reconcile closes them immediately
    too.
+
+### A Python finding names a package we don't depend on
+
+Symptom: a Trivy alert on the `backend` or `mcp-server` image, location
+`Python:1`, for a package that appears nowhere in `backend/pyproject.toml` or
+`mcp-server/pyproject.toml` — `setuptools`, `msgpack`, `requests`, `urllib3`,
+`certifi`, `distlib`, `rich`…
+
+Those are **pip's vendored dependencies**. pip ships a CycloneDX SBOM of its
+`_vendor/` tree at `pip/_vendor/bom.cdx.json`, and Trivy reads it, so pip's
+vendored package versions are reported as if they were installed packages.
+Confirm with `pip install --target /tmp/p 'pip>=26.1' && cat
+/tmp/p/pip/_vendor/vendor.txt` — the reported version will match a pin there.
+
+**Do not "fix" this by upgrading pip.** That was the original approach and it
+does not work: pip 26.2 still vendors `setuptools 70.3.0` and `msgpack 1.1.2`,
+both below their patched versions. Worse, upgrading pip is what introduced the
+findings in the first place — newer pip carries the SBOM that Trivy reads.
+
+**The runtime images therefore ship no pip at all.** The `backend` and
+`mcp-server` stages of the root `Dockerfile` delete it (`python -m pip
+uninstall -y pip` + `rm -rf …/site-packages/pip*`) after the app is installed.
+Neither image executes pip at runtime — the backend receives its packages via
+`COPY --from=backend-build /install /usr/local`, and the extension loader
+imports modules from disk rather than installing them. `python -m ensurepip`
+restores pip inside a container if a debugging session needs it.
+
+**Keep it that way.** If a future pip CVE tempts you to add an
+`--upgrade 'pip>=X'` line back into either runtime stage, don't — that
+reintroduces the vendored-SBOM surface. See the 2026-07-30 block in
+[`.github/trivy-allowlist`](trivy-allowlist) for the worked example
+(CVE-2025-47273, CVE-2026-59890, GHSA-6v7p-g79w-8964).
 
 ### The Trivy allowlist file
 

@@ -7,7 +7,7 @@
 
 ## Procesnavigator
 
-![Forretningsprocesnavigator](../assets/img/en/14_bpm_navigator.png)
+![Forretningsprocesnavigator](../assets/img/da/14_bpm_navigator.png)
 
 **Procesnavigatoren** organiserer processer i tre hovedkategorier:
 
@@ -21,7 +21,7 @@ Kort med et publiceret BPMN-diagram viser et **flow-ikon** — klik på det for 
 
 ## BPM-dashboard
 
-![BPM-dashboard med statistik](../assets/img/en/15_bpm_dashboard.png)
+![BPM-dashboard med statistik](../assets/img/da/15_bpm_dashboard.png)
 
 **BPM-dashboardet** giver et ledelsesoverblik over processtatus:
 
@@ -36,13 +36,14 @@ Diagrammer viser fordeling efter procestype, modenhedsniveau og automatiseringsn
 
 ## Procesflow-editor
 
-![BPM Procesflow-editor](../assets/img/en/47_bpm_process_flow.png)
+![BPM Procesflow-editor](../assets/img/da/47_bpm_process_flow.png)
 
 Hvert forretningsproceskort kan have et **BPMN 2.0-procesflowdiagram**. Editoren bruger [bpmn-js](https://bpmn.io/) og tilbyder:
 
 - **Visuel modellering** — Træk og slip BPMN-elementer: opgaver, hændelser, gateways, baner og underprocesser
 - **Skabeloner** — Vælg blandt 6 forudbyggede BPMN-skabeloner til almindelige procesmønstre (eller start fra et blankt lærred)
 - **Element­udtrækning** — Når du gemmer et diagram, udtrækker systemet automatisk alle opgaver, hændelser, gateways og baner til analyse
+- **Elementfarver** — Markér et eller flere elementer, og brug malerbøtte-knappen i kontekstpanelet for at give dem en farve. Farverne gemmes i selve BPMN-filen, så de vises også i den skrivebeskyttede fremviser, i eksporter og på udskrifter
 
 ### Element-linking
 

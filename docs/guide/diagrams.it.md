@@ -55,6 +55,8 @@ Ogni scheda sincronizzata porta un piccolo chevron. Un clic apre un menu con tre
 
 Le righe con contatore = 0 sono in grigio, e i vicini / figli già presenti sulla tela sono saltati automaticamente.
 
+Una scheda espansa mostra un'icona `−` per comprimerla di nuovo. La compressione rimuove le schede espanse dalla tela, quindi Turbo EA chiede conferma se ne hai spostata o riformattata qualcuna; espandendo di nuovo tornano esattamente dove le avevi lasciate.
+
 ### La gerarchia sulla tela
 
 I contenitori corrispondono al `parent_id` di una scheda:
@@ -85,6 +87,33 @@ Il menu a tendina **Vista** nella barra strumenti ricolora ogni scheda sulla tel
 
 Una legenda fluttuante in basso a sinistra mostra la mappatura attiva. La vista scelta viene salvata col diagramma.
 
+### Come vengono disegnati gli archi di relazione
+
+Ogni relazione di Turbo EA appare uguale sulla tela, comunque vi sia arrivata — disegnata a mano con il selettore di relazioni oppure richiamata dall'inventario con **+** / il menu di espansione:
+
+- **Un'unica linea grigio scuro neutra**, non il colore della scheda all'altro capo. Un arco *è* una relazione; colorarlo per tipo di scheda ripete soltanto ciò che il nodo già dice.
+- **Una punta di freccia sull'estremità di destinazione**, così la direzione si legge a colpo d'occhio senza leggere il verbo. Se richiami una relazione che punta *verso* la scheda espansa, la punta si sposta sull'altra estremità.
+- **Il verbo si legge nel senso della freccia.** Poiché la punta indica la destinazione della relazione, l'etichetta completa sempre la frase *partenza → verbo → arrivo*. Un collegamento si legge quindi allo stesso modo da qualunque scheda tu sia partito: espandi un'Organizzazione e vedi *usa*; espandi una delle sue Applicazioni e le organizzazioni che compaiono mostrano ancora *usa*, con la freccia rivolta dall'altra parte.
+- **Una linea tratteggiata** finché la relazione è ancora in sospeso; diventa continua una volta inviata all'inventario.
+
+#### Fornitore e consumatore
+
+Alcune relazioni portano una **direzione di flusso** — in primo luogo il collegamento tra un'Applicazione e un'Interfaccia, dove un'applicazione *fornisce* l'interfaccia e altre la *consumano*. Impostala nella finestra di dialogo della relazione mentre disegni il collegamento (o in seguito dalla sezione Relazioni della scheda), e la punta di freccia seguirà i dati anziché la relazione:
+
+| Direzione di flusso | Punta di freccia |
+|---|---|
+| **Fornitore** (sorgente → destinazione) | punta all'Interfaccia |
+| **Consumatore** (destinazione → sorgente) | punta all'Applicazione |
+| **Bidirezionale** | punte a entrambe le estremità |
+
+Corrisponde a ciò che la [Layered Dependency View](reports.md) disegna già, così diagramma e report delle dipendenze concordano. I collegamenti senza direzione di flusso impostata mantengono la freccia di direzione della relazione: l'informazione deve esistere nel modello prima che un diagramma possa mostrarla.
+
+### Nascondere le etichette delle relazioni
+
+Ogni arco di relazione porta il proprio verbo — *fornisce*, *consuma*, *supporta*. In un panorama denso diventa presto più rumore che informazione, perciò il menu **⋮** offre **Nascondi le etichette delle relazioni** (e **Mostra** per riportarle).
+
+Riguarda solo la visualizzazione: la relazione in sé non viene toccata, quindi nascondere è reversibile. L'impostazione viene salvata con il diagramma, così il visualizzatore in sola lettura, qualsiasi diagramma pubblicato e le esportazioni PNG/SVG corrispondono a ciò che hai preparato. Gli archi disegnati in seguito seguono l'impostazione corrente. Gli archi di annotazione che hai etichettato tu restano intatti: sono interessati solo quelli di relazione di Turbo EA.
+
 ### Pannello Sync
 
 Il pulsante **Sync** della barra strumenti apre il pannello laterale con tutto ciò che è in coda per la prossima sincronizzazione:
@@ -100,3 +129,33 @@ Il pulsante Sync della barra strumenti mostra una pillola pulsante «N non sincr
 ### Collegare diagrammi alle schede
 
 I diagrammi possono essere collegati a **qualsiasi scheda** dalla scheda **Risorse** della scheda stessa (vedi [Dettaglio scheda](card-details.it.md#scheda-risorse)). Quando un diagramma è collegato a una scheda **Iniziativa**, appare anche nel modulo [EA Delivery](delivery.md) accanto ai documenti SoAW.
+
+## Condividere un diagramma fuori da Turbo EA
+
+Un diagramma può essere pubblicato come **collegamento in sola lettura che si apre senza accedere**, così da poter essere incorporato in una pagina wiki come Confluence.
+
+Apri il menu **⋮** del diagramma nella galleria e scegli **Condividi / incorpora…**. La pubblicazione richiede il permesso *Pubblicare diagrammi*, distinto da quello per modificarli: un amministratore lo concede deliberatamente.
+
+La finestra offre due scelte e due stringhe da copiare:
+
+- **Chiunque abbia il collegamento** — nessun accesso richiesto. Tratta il collegamento come una password: chiunque lo riceva può vedere il diagramma.
+- **Solo chi effettua l'accesso** — i visitatori si autenticano con il tuo provider di identità, eventualmente limitato a domini email specifici. Non viene creato alcun account Turbo EA per loro.
+
+La pagina pubblicata mostra solo l'immagine. È possibile spostarla e ingrandirla, ma non si accede ai dettagli delle schede, e gli identificatori delle schede dietro le forme vengono rimossi prima che il diagramma lasci il server. Annullare la pubblicazione ha effetto immediato, anche per chi lo sta guardando. Ripubblicandolo in seguito si ottiene lo stesso collegamento, quindi gli URL già incollati continuano a funzionare.
+
+!!! warning "L'incorporamento richiede un passaggio dell'amministratore"
+    Per sicurezza, nessun altro sito web può inserire Turbo EA in un frame senza l'autorizzazione di un amministratore. Imposta `TURBO_EA_EMBED_ALLOWED_ORIGINS` in `.env` con i siti autorizzati a incorporare i diagrammi e riavvia lo stack:
+
+    ```dotenv
+    TURBO_EA_EMBED_ALLOWED_ORIGINS=https://tuaazienda.atlassian.net
+    ```
+
+    Fino ad allora i collegamenti pubblicati funzionano comunque se aperti direttamente: semplicemente non possono essere incorporati da un altro sito.
+
+### Incorporare in Confluence
+
+1. Pubblica il diagramma e copia il **codice di incorporamento** dalla finestra di condivisione.
+2. Chiedi a un amministratore di aggiungere l'URL di base del tuo Confluence a `TURBO_EA_EMBED_ALLOWED_ORIGINS`.
+3. In Confluence inserisci una macro **HTML** (oppure *Iframe* / *HTML include*, a seconda di ciò che la tua istanza consente) e incolla il codice.
+
+Se il tuo Confluence non consente le macro HTML, incolla invece il **collegamento** semplice: apre la stessa vista in una nuova scheda.

@@ -39,6 +39,7 @@ import {
   expandCardGroup,
   expandCardGroupAt,
   collapseCardGroup,
+  captureGroupChildLayout,
   getGroupChildCardIds,
   refreshCardOverlays,
   insertPendingCard,
@@ -74,6 +75,7 @@ import {
   getNestedCardIds,
   applyViewToGraph,
   resetViewColors,
+  setRelationLabelsHidden,
   applyCardTypeIcons,
 } from "./drawio-shapes";
 import type {
@@ -83,7 +85,9 @@ import type {
   ResolvedRelationMeta,
 } from "./drawio-shapes";
 import type {
+  ChildLayout,
   ExpandChildData,
+  RelationFlowDirection,
   RemovedRelationTombstone,
 } from "./drawio-shapes";
 import ExpandMenu from "./ExpandMenu";
@@ -99,6 +103,25 @@ import { useMetamodel } from "@/hooks/useMetamodel";
 import { relationLabel, useTypeLabel } from "@/hooks/useResolveLabel";
 import { useAuthContext } from "@/hooks/AuthContext";
 import type { Card, CardType, Relation, RelationType } from "@/types";
+import {
+  flowDirectionBadge,
+  type RelationAttributes,
+} from "@/features/cards/sections/RelationAttributesEditor";
+
+/**
+ * A relation's flow direction, but only when its relation type actually
+ * declares the `flowDirection` attribute — the same gate the Card Detail
+ * badge uses, so the canvas and the card can never disagree about whether an
+ * Application provides or consumes an Interface. Returns undefined when the
+ * type has no such attribute or the value was never set, which is exactly the
+ * "fall back to the relation's own direction" case.
+ */
+function relationFlowFor(
+  rt: RelationType | undefined,
+  attributes?: RelationAttributes,
+): RelationFlowDirection | undefined {
+  return flowDirectionBadge(rt, attributes)?.value;
+}
 
 /* ------------------------------------------------------------------ */
 /*  DrawIO configuration                                               */
@@ -148,7 +171,15 @@ interface DiagramData {
   id: string;
   name: string;
   type: string;
-  data: { xml?: string; thumbnail?: string; view?: ViewSource };
+  data: {
+    xml?: string;
+    thumbnail?: string;
+    view?: ViewSource;
+    /** Relation verbs hidden on this diagram (display-only, see
+     *  setRelationLabelsHidden). Rides with the diagram so the viewer
+     *  and any published embed match what the author arranged. */
+    hideRelationLabels?: boolean;
+  };
 }
 
 
@@ -560,6 +591,19 @@ export default function DiagramEditor() {
   // deleted children don't reappear.
   const expandCacheRef = useRef<Map<string, ExpandChildData[]>>(new Map());
   const deletedChildrenRef = useRef<Map<string, Set<string>>>(new Map());
+  // Layout each group's children had immediately after we expanded them.
+  // Compared against the live layout at collapse time to tell "the user
+  // arranged this" apart from "nothing has been touched", so the confirmation
+  // only interrupts when there is actually work to lose.
+  const pristineChildLayoutRef = useRef<Map<string, Map<string, ChildLayout>>>(
+    new Map(),
+  );
+  // Pending collapse awaiting the user's answer.
+  const [collapseConfirm, setCollapseConfirm] = useState<{
+    cellId: string;
+    cardId: string;
+    count: number;
+  } | null>(null);
 
   // Set of cellIds we deliberately inserted ourselves. Drives the
   // copy/paste dedup: anything in the model with a cardId attribute but a
@@ -663,6 +707,13 @@ export default function DiagramEditor() {
   const [view, setView] = useState<ViewSource>({ kind: "card_type" });
   const [viewLegendEntries, setViewLegendEntries] = useState<ColorEntry[]>([]);
   const [viewAppliedCount, setViewAppliedCount] = useState(0);
+  // Relation verbs ("provides", "consumes", …) hidden on this diagram. Saved
+  // with the diagram, so the read-only viewer and any published embed show
+  // exactly what the author arranged. A ref mirrors it because the edge-style
+  // builders run from callbacks that would otherwise close over a stale value.
+  const [hideRelationLabels, setHideRelationLabels] = useState(false);
+  const hideRelationLabelsRef = useRef(false);
+  hideRelationLabelsRef.current = hideRelationLabels;
   const [activeTypeKeys, setActiveTypeKeys] = useState<string[]>([]);
 
   // Local autosave restore prompt
@@ -681,6 +732,7 @@ export default function DiagramEditor() {
       .then((d) => {
         setDiagram(d);
         if (d.data?.view) setView(d.data.view);
+        setHideRelationLabels(Boolean(d.data?.hideRelationLabels));
         // Check for a newer locally-autosaved draft once per mount.
         if (!restoreCheckedRef.current) {
           restoreCheckedRef.current = true;
@@ -723,6 +775,7 @@ export default function DiagramEditor() {
             xml,
             ...(thumbnail ? { thumbnail } : {}),
             view,
+            hideRelationLabels,
           },
         };
         await api.patch(`/diagrams/${diagram.id}`, payload);
@@ -735,6 +788,7 @@ export default function DiagramEditor() {
                   xml,
                   ...(thumbnail ? { thumbnail } : {}),
                   view,
+                  hideRelationLabels,
                 },
               }
             : prev,
@@ -753,7 +807,7 @@ export default function DiagramEditor() {
         setSaving(false);
       }
     },
-    [diagram, view],
+    [diagram, view, hideRelationLabels],
   );
 
   /* ---------- Expand / collapse ---------- */
@@ -771,9 +825,16 @@ export default function DiagramEditor() {
         return;
       }
 
-      const inserted = expandCardGroup(frame, cellId, visible);
+      const inserted = expandCardGroup(
+        frame, cellId, visible, hideRelationLabelsRef.current,
+      );
+      // Baseline for the "has the user arranged these?" check on collapse.
+      pristineChildLayoutRef.current.set(
+        cellId,
+        captureGroupChildLayout(frame, cellId),
+      );
       addExpandOverlay(frame, cellId, true, () =>
-        handleCollapseGroup(cellId, cardId),
+        requestCollapseGroup(cellId, cardId),
       );
       // If some children were locally removed, show resync icon
       if (deleted?.size) {
@@ -793,7 +854,13 @@ export default function DiagramEditor() {
     [],
   );
 
-  /** Collapse an expanded card group; called from the minus overlay. */
+  /** Collapse an expanded card group; called from the minus overlay.
+   *
+   *  Collapse REMOVES the child cells, so anything the user did to them by hand
+   *  is on the line. Two protections (discussion #905): the child geometry +
+   *  style is snapshotted into the expand cache so re-expanding restores their
+   *  arrangement, and `requestCollapseGroup` asks first when there is arranged
+   *  work to lose. */
   const handleCollapseGroup = useCallback(
     (cellId: string, cardId: string) => {
       const frame = iframeRef.current;
@@ -808,6 +875,18 @@ export default function DiagramEditor() {
           const existing = deletedChildrenRef.current.get(cellId) ?? new Set<string>();
           nowDeleted.forEach((id) => existing.add(id));
           deletedChildrenRef.current.set(cellId, existing);
+        }
+
+        // Snapshot where the user put each child (and how they styled it) so
+        // the next expand puts it back rather than re-running the auto-layout.
+        const layouts = captureGroupChildLayout(frame, cellId);
+        if (layouts.size > 0) {
+          expandCacheRef.current.set(
+            cellId,
+            cached.map((c) =>
+              layouts.has(c.id) ? { ...c, layout: layouts.get(c.id) } : c,
+            ),
+          );
         }
       }
 
@@ -833,13 +912,81 @@ export default function DiagramEditor() {
     [],
   );
 
+  /** Collapse entry point for the `−` overlay.
+   *
+   *  Clicking `−` is one pixel away from every other overlay and wipes the whole
+   *  expansion, so ask first — but only when the user has actually invested in
+   *  the children (moved, resized or restyled one). An untouched auto-layout
+   *  expansion collapses immediately, as before. */
+  const requestCollapseGroup = useCallback(
+    (cellId: string, cardId: string) => {
+      const frame = iframeRef.current;
+      if (!frame) return;
+
+      const live = captureGroupChildLayout(frame, cellId);
+      const pristine = pristineChildLayoutRef.current.get(cellId);
+      const arranged =
+        live.size > 0 &&
+        (pristine == null ||
+          Array.from(live.entries()).some(([id, layout]) => {
+            const before = pristine.get(id);
+            if (!before) return true;
+            return (
+              before.x !== layout.x ||
+              before.y !== layout.y ||
+              before.width !== layout.width ||
+              before.height !== layout.height ||
+              before.style !== layout.style
+            );
+          }));
+
+      if (arranged) {
+        setCollapseConfirm({ cellId, cardId, count: live.size });
+        return;
+      }
+      handleCollapseGroup(cellId, cardId);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  /** Verb + direction for an edge inserted by an expansion.
+   *
+   *  The verb is **always the forward label**, never the reverse one. An edge
+   *  on a canvas has no "card you started from" — a reader sees a line with an
+   *  arrowhead and reads it in the arrow's direction. Since the arrowhead
+   *  always marks the relation's *target* (that is the whole job of
+   *  `incoming`: expansion inserts the edge parent → child, and `incoming`
+   *  puts the arrowhead on the semantic target regardless), the sentence along
+   *  the arrow is always source-verb-target. Resolving the verb from the
+   *  expanded card instead made one relation read two different ways depending
+   *  on which end you expanded from — "uses" from the Organization, "is used
+   *  by" from the Application. `layeredDependencyLayout.ts` is forward-only for
+   *  the same reason; this keeps the two surfaces agreeing.
+   *
+   *  `incoming` still decides which end carries the arrowhead, and when the
+   *  relation carries a `flowDirection` attribute that takes over, so an
+   *  Application that *consumes* an Interface is distinguishable from one that
+   *  *provides* it without opening the link (discussion #905). */
+  const relationEdgeMeta = useCallback(
+    (relationTypeKey: string, incoming: boolean, attributes?: RelationAttributes) => {
+      const rt = relTypesRef.current.find((x) => x.key === relationTypeKey);
+      return {
+        incoming,
+        flow: relationFlowFor(rt, attributes),
+        relationLabel: rt ? relationLabel(rt, i18n.language) : "",
+      };
+    },
+    [i18n.language],
+  );
+
   /** Backwards-compatible signature still passed around as `handleToggleGroup`
    *  so callers that ask "expand from a fresh state" keep working. New code
    *  should use the chevron overlay route which opens the ExpandMenu. */
   const handleToggleGroup = useCallback(
     (cellId: string, cardId: string, currentlyExpanded: boolean) => {
       if (currentlyExpanded) {
-        handleCollapseGroup(cellId, cardId);
+        requestCollapseGroup(cellId, cardId);
         return;
       }
       // Default expand falls back to "all relations" — used by the
@@ -871,6 +1018,7 @@ export default function DiagramEditor() {
               icon: ct?.icon,
               relationType: r.type,
               relationId: r.id,
+              ...relationEdgeMeta(r.type, r.target_id === cardId, r.attributes),
             });
           }
           if (children.length === 0) {
@@ -889,7 +1037,7 @@ export default function DiagramEditor() {
         .catch(() => setSnackMsg(t("editor.errors.loadRelationsFailed")));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [doExpand, handleCollapseGroup],
+    [doExpand, requestCollapseGroup],
   );
 
   /** Open the per-relation-type ExpandMenu for a card. Snapshots the
@@ -985,6 +1133,7 @@ export default function DiagramEditor() {
                 icon: iconForType(other.type),
                 relationType: r.type,
                 relationId: r.id,
+                ...relationEdgeMeta(r.type, !isOutgoing, r.attributes),
               });
             }
           }
@@ -997,9 +1146,15 @@ export default function DiagramEditor() {
             return;
           }
           children.sort((a, b) => a.name.localeCompare(b.name));
-          const inserted = expandCardGroupAt(frame, target.cellId, children, "right");
+          const inserted = expandCardGroupAt(
+            frame, target.cellId, children, "right", hideRelationLabelsRef.current,
+          );
+          pristineChildLayoutRef.current.set(
+            target.cellId,
+            captureGroupChildLayout(frame, target.cellId),
+          );
           addExpandOverlay(frame, target.cellId, true, () =>
-            handleCollapseGroup(target.cellId, target.cardId),
+            requestCollapseGroup(target.cellId, target.cardId),
           );
           // Seed the side-table immediately — DrawIO sometimes drops the
           // edge's user-object attributes after the open transaction
@@ -1190,7 +1345,7 @@ export default function DiagramEditor() {
         }
       }
     },
-    [t, handleCollapseGroup, colorForType, registerCellId],
+    [t, requestCollapseGroup, colorForType, registerCellId],
   );
 
   /** Clear local caches and re-fetch relations from inventory. */
@@ -1232,6 +1387,7 @@ export default function DiagramEditor() {
               icon: ct?.icon,
               relationType: r.type,
               relationId: r.id,
+              ...relationEdgeMeta(r.type, r.target_id === cardId, r.attributes),
             });
           }
           if (children.length === 0) {
@@ -1936,9 +2092,19 @@ export default function DiagramEditor() {
       const ep = pendingEdgeRef.current;
       if (!frame || !ep) return;
 
-      const color = direction === "as-is" ? ep.sourceColor : ep.targetColor;
+      // "reversed" means the relation runs target -> source while the edge was
+      // drawn source -> target, so the arrowhead belongs on the start and sync
+      // must swap source_id/target_id before POSTing (#905). It does NOT change
+      // the verb: the arrowhead still lands on the relation's target, so the
+      // sentence along the arrow is source-verb-target either way.
+      const reversed = direction === "reversed";
+      const verb = relationLabel(relType, i18n.language);
 
-      stampEdgeAsRelation(frame, ep.edgeCellId, relType.key, relType.label, color, true);
+      stampEdgeAsRelation(
+        frame, ep.edgeCellId, relType.key, verb, reversed, true,
+        hideRelationLabelsRef.current,
+        relationFlowFor(relType, attributes),
+      );
 
       if (attributes && Object.keys(attributes).length > 0) {
         pendingEdgeAttributesRef.current.set(ep.edgeCellId, attributes);
@@ -1948,10 +2114,11 @@ export default function DiagramEditor() {
 
       setRelPickerOpen(false);
       pendingEdgeRef.current = null;
-      setSnackMsg(t("editor.relationAddedPending", { label: relType.label }));
+      setSnackMsg(t("editor.relationAddedPending", { label: verb }));
       refreshSyncPanel();
     },
-    [refreshSyncPanel],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [refreshSyncPanel, i18n.language],
   );
 
   const handleRelationCancelled = useCallback(() => {
@@ -2031,8 +2198,10 @@ export default function DiagramEditor() {
         const stashedAttrs = pendingEdgeAttributesRef.current.get(edgeCellId);
         const payload: Record<string, unknown> = {
           type: rel.relationType,
-          source_id: rel.sourceCardId,
-          target_id: rel.targetCardId,
+          // A relation picked in its reverse direction runs target -> source
+          // even though the edge points the other way.
+          source_id: rel.reversed ? rel.targetCardId : rel.sourceCardId,
+          target_id: rel.reversed ? rel.sourceCardId : rel.targetCardId,
         };
         if (stashedAttrs && Object.keys(stashedAttrs).length > 0) {
           payload.attributes = stashedAttrs;
@@ -2040,7 +2209,7 @@ export default function DiagramEditor() {
         const created = await api.post<Relation>("/relations", payload);
         pendingEdgeAttributesRef.current.delete(edgeCellId);
 
-        markEdgeSynced(frame, edgeCellId, "#666", created.id);
+        markEdgeSynced(frame, edgeCellId, rel.reversed, created.id, hideRelationLabelsRef.current);
         // Mirror the new relation into the side-table so a later canvas
         // delete still reaches the confirm dialog. The endpoint cellIds,
         // live style and visible label come from the cell so the
@@ -2103,10 +2272,12 @@ export default function DiagramEditor() {
         try {
           const created = await api.post<Relation>("/relations", {
             type: r.relationType,
-            source_id: r.sourceCardId,
-            target_id: r.targetCardId,
+            source_id: r.reversed ? r.targetCardId : r.sourceCardId,
+            target_id: r.reversed ? r.sourceCardId : r.targetCardId,
           });
-          markEdgeSynced(frame, r.edgeCellId, "#666", created.id);
+          markEdgeSynced(
+            frame, r.edgeCellId, r.reversed, created.id, hideRelationLabelsRef.current,
+          );
           const endpoints = describeEdgeEndpoints(frame, r.edgeCellId);
           registerEdgeRelation(r.edgeCellId, {
             relationId: created.id,
@@ -2314,10 +2485,17 @@ export default function DiagramEditor() {
                 if (iframeRef.current) {
                   refreshCardOverlays(
                     iframeRef.current,
-                    handleCollapseGroup,
+                    requestCollapseGroup,
                     handleChevron,
                   );
                   attachLifecycleListenersOnce(iframeRef.current);
+                  // Self-heal: the setting normally rides in the saved cell
+                  // styles, but re-asserting it here keeps the stored flag and
+                  // the canvas in step if they ever diverge. A no-op when they
+                  // already agree — the helper skips cells in the right state.
+                  if (hideRelationLabelsRef.current) {
+                    setRelationLabelsHidden(iframeRef.current, true);
+                  }
                 }
               }, 200);
             } else if (attempt < 50) {
@@ -2600,6 +2778,23 @@ export default function DiagramEditor() {
   // warrant a permanent toolbar button.
   const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
 
+  /** Show / hide the relation verb on every relation edge. Display-only — the
+   *  label value stays on the cell, so this is reversible and costs no data.
+   *  The new state is persisted with the diagram on the next save. */
+  const handleToggleRelationLabels = useCallback(() => {
+    setMoreMenuAnchor(null);
+    const frame = iframeRef.current;
+    if (!frame) return;
+    const next = !hideRelationLabelsRef.current;
+    const touched = setRelationLabelsHidden(frame, next);
+    setHideRelationLabels(next);
+    setSnackMsg(
+      next
+        ? t("editor.toolbar.relationLabelsHidden", { count: touched })
+        : t("editor.toolbar.relationLabelsShown", { count: touched }),
+    );
+  }, [t]);
+
   /** Upgrade cards already on the canvas with their card-type icon. Lets users
    *  add icons to diagrams created before the icon feature existed. */
   const handleApplyIcons = useCallback(() => {
@@ -2619,13 +2814,18 @@ export default function DiagramEditor() {
     );
   }, [t]);
 
-  // Re-apply the view whenever the user picks a new perspective or the
-  // diagram object changes (xml loaded / saved). Synced-cell additions
-  // also trigger re-application via syncOpen / refreshSyncPanel hooks.
+  // Re-apply the view when the diagram is first loaded or the user picks a new
+  // perspective. Deliberately keyed on the diagram *id*, not the diagram object:
+  // `saveDiagram` calls `setDiagram`, so depending on the object re-ran the whole
+  // view pass — including its `/cards?ids=` round-trip — after every single save
+  // (discussion #905). Synced-cell additions still re-apply via the
+  // syncOpen / refreshSyncPanel hooks.
+  const diagramId = diagram?.id;
   useEffect(() => {
-    if (!diagram) return;
+    if (!diagramId) return;
     void applyView();
-  }, [diagram, view, applyView]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diagramId, view]);
 
   /* ---------- Restore banner: replace the XML with the locally-saved draft ---------- */
   const acceptRestore = useCallback(() => {
@@ -2691,7 +2891,7 @@ export default function DiagramEditor() {
         // replaces the canvas, so the overlays we hung off the previous
         // cells are gone — without this re-attach the user has no way
         // to expand any card in the restored diagram.
-        refreshCardOverlays(f, handleCollapseGroup, handleChevron);
+        refreshCardOverlays(f, requestCollapseGroup, handleChevron);
       }
       restoreInProgressRef.current = false;
     }, 400);
@@ -2779,6 +2979,19 @@ export default function DiagramEditor() {
               <MaterialSymbol icon="emoji_symbols" size={20} />
             </ListItemIcon>
             <ListItemText>{t("editor.toolbar.applyIcons")}</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={handleToggleRelationLabels}>
+            <ListItemIcon>
+              <MaterialSymbol
+                icon={hideRelationLabels ? "label" : "label_off"}
+                size={20}
+              />
+            </ListItemIcon>
+            <ListItemText>
+              {hideRelationLabels
+                ? t("editor.toolbar.showRelationLabels")
+                : t("editor.toolbar.hideRelationLabels")}
+            </ListItemText>
           </MenuItem>
         </Menu>
 
@@ -3040,6 +3253,40 @@ export default function DiagramEditor() {
             autoFocus
           >
             {t("editor.deleteRelation.yes")}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={collapseConfirm !== null}
+        onClose={() => setCollapseConfirm(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{t("editor.collapseGroup.title")}</DialogTitle>
+        <DialogContent>
+          {collapseConfirm !== null && (
+            <DialogContentText>
+              {t("editor.collapseGroup.body", { count: collapseConfirm.count })}
+            </DialogContentText>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCollapseConfirm(null)}>
+            {t("editor.collapseGroup.cancel")}
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => {
+              if (collapseConfirm) {
+                handleCollapseGroup(collapseConfirm.cellId, collapseConfirm.cardId);
+              }
+              setCollapseConfirm(null);
+            }}
+            autoFocus
+          >
+            {t("editor.collapseGroup.confirm")}
           </Button>
         </DialogActions>
       </Dialog>

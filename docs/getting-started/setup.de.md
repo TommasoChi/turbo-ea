@@ -72,6 +72,13 @@ Dann `docker compose up -d` (falls Sie bereits gestartet haben, siehe „Zurück
 
 `SEED_DEMO=true` enthält bereits BPM- und PPM-Daten — die Teilmengen-Flags müssen nicht zusätzlich gesetzt werden.
 
+!!! note "Demodaten werden einmalig eingespielt"
+    Jeder Seeder läuft **einmal pro Installation** und vermerkt dies. Das Löschen
+    von Demoinhalten — eines Beispieldiagramms, einer Demoumfrage — ist endgültig:
+    Sie kehren beim nächsten Neustart nicht zurück, auch wenn `SEED_DEMO=true`
+    weiterhin gesetzt ist. Um den Demodatensatz zurückzuholen, setzen Sie die
+    Datenbank zurück (siehe *Zurücksetzen und neu einspielen* weiter unten).
+
 ### Demo-Administratorkonto
 
 Beim Laden der Demodaten wird ein Standard-Adminkonto erstellt:
@@ -167,6 +174,18 @@ Legen Sie `cert.pem` und `key.pem` in `./certs/` ab (das Verzeichnis wird schrei
 
 Für Setups hinter einem bestehenden Reverse-Proxy (Caddy, Traefik, Cloudflare Tunnel) lassen Sie `TURBO_EA_TLS_ENABLED=false` und überlassen die TLS-Terminierung dem Proxy.
 
+## Einbetten von Diagrammen erlauben (optional)
+
+Ein [veröffentlichtes Diagramm](../guide/diagrams.md) kann in eine andere Website eingebettet werden — eine Confluence-Seite, ein Intranet-Portal —, aber nur, wenn Sie diese Website zuvor benennen. Standardmäßig darf keine externe Website Turbo EA überhaupt in einen Frame einbetten.
+
+```dotenv
+TURBO_EA_EMBED_ALLOWED_ORIGINS=https://ihrunternehmen.atlassian.net
+```
+
+Mehrere Ursprünge durch Kommas trennen. Starten Sie den Stack neu, damit die Änderung wirksam wird.
+
+Dies gilt **nur** für die Seiten veröffentlichter Diagramme. Die Anwendung selbst — einschließlich des Diagramm-Editors — bleibt in jedem Fall nicht einbettbar, und veröffentlichte Links funktionieren auch ohne diese Einstellung weiterhin beim direkten Aufruf.
+
 ## Eine Version anpinnen
 
 `docker compose pull` zieht standardmäßig `:latest`. Um auf einen bestimmten Release in der Produktion zu pinnen, setzen Sie `TURBO_EA_TAG`:
@@ -199,6 +218,32 @@ POSTGRES_PASSWORD=your-password
 ```
 
 Dann wie gewohnt starten: `docker compose up -d`. Der gebundelte `db`-Dienst ist weiterhin in der `docker-compose.yml` definiert; Sie können ihn entweder leerlaufen lassen oder explizit stoppen.
+
+### Verbindungsbudget
+
+Das Backend läuft als einzelner Prozess und öffnet **bis zu `DB_POOL_SIZE + DB_MAX_OVERFLOW` Verbindungen — standardmäßig 30**. Der mitgelieferte `db`-Dienst erlaubt 100, die Standardwerte bereiten dort also nie Probleme. Eine verwaltete Instanz in einem günstigen Tarif begrenzt die Datenbank oft deutlich unter 30, und PostgreSQL antwortet dann:
+
+```
+too many connections for database "turboea"
+```
+
+Prüfen Sie Ihre Limits, bevor Sie umstellen:
+
+```sql
+SELECT datname, datconnlimit FROM pg_database WHERE datname = 'turboea';
+SELECT rolname, rolconnlimit FROM pg_roles    WHERE rolname = 'turboea';
+SHOW max_connections;
+```
+
+`-1` bei `datconnlimit` oder `rolconnlimit` bedeutet «keine spezifische Begrenzung»; alles unter 30 erfordert entweder ein höheres Limit oder einen kleineren Pool:
+
+```dotenv
+DB_POOL_SIZE=8
+DB_MAX_OVERFLOW=2
+DB_POOL_TIMEOUT=30
+```
+
+Ein kleinerer Pool bedeutet weniger gleichzeitig bediente Anfragen, keine verlorenen Anfragen: Ist der Pool voll, wartet eine Anfrage bis zu `DB_POOL_TIMEOUT` Sekunden auf eine freie Verbindung. Lassen Sie einige Verbindungen für Backups und eigene `psql`-Sitzungen frei.
 
 ## Images verifizieren
 
