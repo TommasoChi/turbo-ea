@@ -23,6 +23,9 @@ vi.mock("./BpmnTemplateChooser", () => ({
 vi.mock("dompurify", () => ({
   default: { sanitize: (html: string) => html },
 }));
+vi.mock("@/hooks/AuthContext", () => ({
+  useAuthContext: () => ({ user: { id: "u1", permissions: { "*": true } } }),
+}));
 
 const mockNavigate = vi.fn();
 vi.mock("react-router", async () => {
