@@ -559,9 +559,11 @@ async def bulk_delete_resources(
     manage_all = await PermissionService.has_app_permission(db, user, "documents.manage")
     card_ok: dict[uuid.UUID, bool] = {}
 
-    async def _may_delete(card_id: uuid.UUID) -> bool:
+    async def _may_delete(card_id: uuid.UUID | None) -> bool:
         if manage_all:
             return True
+        if card_id is None:
+            return False
         if card_id not in card_ok:
             card_ok[card_id] = await PermissionService.has_card_permission(
                 db, user, card_id, "card.manage_documents"

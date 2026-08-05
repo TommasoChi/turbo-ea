@@ -161,7 +161,7 @@ class _CoreQueryBridge:
             },
         )
 
-    async def resolve_cards(self, refs: list[CardRef]) -> list[ResolvedCard]:
+    async def resolve_cards(self, refs: Sequence[CardRef]) -> list[ResolvedCard]:
         resolved: list[ResolvedCard] = []
         for ref in refs:
             allowed_subtypes = _ALLOWED_CARD_TYPES.get(ref.expected_type)
@@ -490,7 +490,7 @@ class _CoreQueryBridge:
     async def list_product_applications(
         self,
         product_id: UUID,
-        platform_ids: list[UUID],
+        platform_ids: Sequence[UUID],
     ) -> list[ApplicationCandidate]:
         await self._require_card(
             product_id,
@@ -533,8 +533,9 @@ class _CoreQueryBridge:
 
         via_rows: list[tuple[Card, UUID]] = []
         if selected_platforms:
-            via_rows = list(
-                (
+            via_rows = [
+                (row[0], row[1])
+                for row in (
                     await self._db.execute(
                         select(Card, Relation.source_id)
                         .join(Relation, Relation.target_id == Card.id)
@@ -548,7 +549,7 @@ class _CoreQueryBridge:
                         )
                     )
                 ).all()
-            )
+            ]
 
         direct_ids = {card.id for card in direct_cards}
         cards_by_id = {card.id: card for card in direct_cards}
@@ -982,18 +983,22 @@ class _AuditBridge:
             .scalars()
             .all()
         )
-        return [
-            AuditEvent(
-                id=row.id,
-                event_type=row.event_type,
-                entity_type=row.entity_type,
-                entity_id=row.entity_id,
-                data=dict(row.data or {}),
-                actor_id=row.user_id,
-                created_at=row.created_at,
+        events: list[AuditEvent] = []
+        for row in rows:
+            assert row.entity_type is not None
+            assert row.entity_id is not None
+            events.append(
+                AuditEvent(
+                    id=row.id,
+                    event_type=row.event_type,
+                    entity_type=row.entity_type,
+                    entity_id=row.entity_id,
+                    data=dict(row.data or {}),
+                    actor_id=row.user_id,
+                    created_at=row.created_at,
+                )
             )
-            for row in rows
-        ]
+        return events
 
 
 class _ResourceBridge:
@@ -1243,8 +1248,12 @@ class _ResourceBridge:
             entity_type=entity_type,
             required_permission=required_permission,
         )
-        model = {"link": Document, "file": FileAttachment}.get(kind)
-        if model is None:
+        model: type[Document] | type[FileAttachment]
+        if kind == "link":
+            model = Document
+        elif kind == "file":
+            model = FileAttachment
+        else:
             raise ExtensionBridgeError(
                 "validation_failed",
                 "Resource kind must be 'link' or 'file'",
@@ -1290,7 +1299,7 @@ class _NotificationBridge:
         message: str,
         link: str | None,
         data: dict[str, Any] | None,
-        explicit_recipient_ids: list[UUID],
+        explicit_recipient_ids: Sequence[UUID],
         required_permission: str | None,
         related_card_id: UUID | None = None,
         channel: str = "in_app",
