@@ -1124,7 +1124,9 @@ async def _hierarchy_context(db):
         parent_id=root.id,
         status="ARCHIVED",
     )
-    unrelated = await create_card(db, card_type="Application", name="Unrelated App", user_id=actor.id)
+    unrelated = await create_card(
+        db, card_type="Application", name="Unrelated App", user_id=actor.id
+    )
 
     return {
         "actor": actor,
@@ -1220,8 +1222,12 @@ async def _organization_links_context(db):
     process = await create_card(
         db, card_type="BusinessProcess", name="Order Fulfillment", user_id=actor.id
     )
-    app = await create_card(db, card_type="Application", name="Procurement Suite", user_id=actor.id)
-    data_obj = await create_card(db, card_type="DataObject", name="Customer Record", user_id=actor.id)
+    app = await create_card(
+        db, card_type="Application", name="Procurement Suite", user_id=actor.id
+    )
+    data_obj = await create_card(
+        db, card_type="DataObject", name="Customer Record", user_id=actor.id
+    )
     inactive_app = await create_card(
         db, card_type="Application", name="Retired App", user_id=actor.id, status="ARCHIVED"
     )
@@ -1301,7 +1307,12 @@ async def test_read_organization_links_returns_direct_relations_both_directions(
 
     assert list(result.links) == sorted(
         result.links,
-        key=lambda link: (str(link.organization_id), link.card.type, link.card.name.casefold(), str(link.card.id)),
+        key=lambda link: (
+            str(link.organization_id),
+            link.card.type,
+            link.card.name.casefold(),
+            str(link.card.id),
+        ),
     )
 
 

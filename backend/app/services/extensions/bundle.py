@@ -288,7 +288,8 @@ def _validate_mcp_block(manifest: dict[str, Any], ext_key: str) -> None:
         if unknown:
             raise BundleError(f"{where}.annotations has unknown keys: {sorted(unknown)}")
 
-        if not isinstance(tool.get("required_permission"), str) or not tool["required_permission"].strip():
+        required_permission = tool.get("required_permission")
+        if not isinstance(required_permission, str) or not required_permission.strip():
             raise BundleError(f"{where} is missing required_permission")
 
         is_read_only = annotations.get("readOnlyHint") is True
