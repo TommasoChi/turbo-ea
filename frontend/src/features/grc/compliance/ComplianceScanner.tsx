@@ -9,8 +9,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import FormGroup from "@mui/material/FormGroup";
 import Grid from "@mui/material/Grid";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
@@ -21,12 +25,14 @@ import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import MetricCard from "@/features/reports/MetricCard";
 import { api, ApiError } from "@/api/client";
 import { useComplianceRegulations } from "@/hooks/useComplianceRegulations";
+import { useTurboLensReady } from "@/hooks/useTurboLensReady";
 import type {
   ComplianceDecision,
   ComplianceRegulation,
   ComplianceStatus,
   RegulationKey,
   ActiveComplianceRuns,
+  ComplianceScanRun,
   TurboLensComplianceBundle,
   TurboLensComplianceFinding,
   ComplianceOverview,
@@ -40,7 +46,9 @@ import {
   RiskDialogSeed,
   seedFromCompliance,
 } from "@/features/grc/risk/riskDefaults";
-import { useNavigate } from "react-router";
+import { Link as RouterLink, useNavigate } from "react-router";
+import { useAuthContext } from "@/hooks/AuthContext";
+import ComplianceScanCard from "./ComplianceScanCard";
 import { useAnalysisPolling } from "@/features/turbolens/useAnalysisPolling";
 
 /**
@@ -136,6 +144,15 @@ export default function ComplianceScanner() {
   const { t } = useTranslation("admin");
   const { t: tCards } = useTranslation("cards");
   const navigate = useNavigate();
+  const { user } = useAuthContext();
+  const phaseLabel = useCallback(
+    (phase: string) => {
+      const key = `compliance_phase_${phase}`;
+      const translated = t(key);
+      return translated === key ? phase.replace(/_/g, " ") : translated;
+    },
+    [t],
+  );
 
   // ── View state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState(0);
@@ -221,9 +238,37 @@ export default function ComplianceScanner() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // ── Admin-managed regulations ──────────────────────────────────────
+  // ── Admin-managed regulations + AI status ─────────────────────────
   const { enabled: enabledRegulations, byKey: regulationsByKey } =
     useComplianceRegulations();
+  const { turboLensAiConfigured } = useTurboLensReady();
+
+  // ── Compliance regulation picker ──────────────────────────────────
+  // Initially empty; the effect below populates it from the enabled
+  // regulations once the singleton hook resolves. Admins can untick
+  // individual rows to narrow the next scan.
+  const [selectedRegs, setSelectedRegs] = useState<Set<RegulationKey>>(
+    new Set(),
+  );
+
+  // Keep `selectedRegs` in sync with newly-enabled regulations and drop
+  // keys that have since been disabled, while preserving the admin's
+  // manual unticks within the still-enabled set.
+  useEffect(() => {
+    setSelectedRegs((prev) => {
+      const enabledKeys = new Set(enabledRegulations.map((r) => r.key));
+      if (prev.size === 0) return enabledKeys;
+      const next = new Set<RegulationKey>();
+      for (const k of prev) if (enabledKeys.has(k)) next.add(k);
+      // Auto-select newly added regulations on first appearance.
+      for (const k of enabledKeys) {
+        if (!Array.from(prev).some((existing) => existing === k)) {
+          next.add(k);
+        }
+      }
+      return next;
+    });
+  }, [enabledRegulations]);
 
   // ── Loaders ────────────────────────────────────────────────────────
   const loadOverview = useCallback(async () => {
@@ -301,6 +346,27 @@ export default function ComplianceScanner() {
     // startCompliancePoll is stable between renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleComplianceScan = async () => {
+    setError(null);
+    setInfo(null);
+    if (selectedRegs.size === 0) {
+      setError(t("compliance_pick_regulation"));
+      return;
+    }
+    try {
+      const res = await api.post<{ run_id: string }>(
+        "/compliance/compliance-scan",
+        { regulations: Array.from(selectedRegs) },
+      );
+      setInfo(t("compliance_scan_started"));
+      startCompliancePoll(res.run_id);
+      loadOverview();
+    } catch (e) {
+      if (e instanceof ApiError) setError(e.message);
+      else setError(String(e));
+    }
+  };
 
   // Poll the overview while a scan is running so the progress bar advances
   // without needing extra WebSocket / SSE plumbing.
@@ -454,6 +520,17 @@ export default function ComplianceScanner() {
         </Box>
       );
     }
+    const complianceRun: ComplianceScanRun = overview?.compliance_run ?? {
+      run_id: null,
+      status: null,
+      started_at: null,
+      completed_at: null,
+      error: null,
+      progress: null,
+      summary: null,
+    };
+
+    const hasEver = Boolean(complianceRun.run_id);
     const complianceScoresVals = Object.values(overview?.compliance_scores || {});
     const avgCompliance =
       complianceScoresVals.length === 0
@@ -465,6 +542,82 @@ export default function ComplianceScanner() {
 
     return (
       <Stack spacing={3}>
+        {turboLensAiConfigured ? (
+          <ComplianceScanCard
+            title={t("compliance_scan_title")}
+            description={t("compliance_scan_description")}
+            icon="verified"
+            run={complianceRun}
+            running={compliancePolling}
+            onRun={handleComplianceScan}
+            buttonLabel={t("compliance_run_compliance_scan")}
+            runningLabel={t("compliance_scanning")}
+            neverScannedLabel={t("compliance_never_scanned")}
+            phaseLabel={phaseLabel}
+            summaryLabel={(s) =>
+              t("compliance_summary_label", {
+                count: (s.compliance_findings as number) ?? 0,
+                regs: Array.isArray(s.regulations) ? s.regulations.length : 0,
+              })
+            }
+            disabled={selectedRegs.size === 0 || enabledRegulations.length === 0}
+          >
+            {enabledRegulations.length === 0 ? (
+              <Alert severity="info" sx={{ mt: 1 }}>
+                {t("compliance_no_regulations_enabled")}
+              </Alert>
+            ) : (
+              <FormGroup row sx={{ gap: 1 }}>
+                {enabledRegulations.map((reg) => (
+                  <FormControlLabel
+                    key={reg.key}
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={selectedRegs.has(reg.key)}
+                        onChange={(e) => {
+                          const next = new Set(selectedRegs);
+                          if (e.target.checked) next.add(reg.key);
+                          else next.delete(reg.key);
+                          setSelectedRegs(next);
+                        }}
+                      />
+                    }
+                    label={resolveRegulationLabel(
+                      reg.key,
+                      regulationsByKey,
+                      t,
+                      reg.label,
+                    )}
+                  />
+                ))}
+              </FormGroup>
+            )}
+          </ComplianceScanCard>
+        ) : (
+          <Alert
+            severity="info"
+            action={
+              user?.permissions?.["*"] || user?.permissions?.["admin.settings"] ? (
+                <Button
+                  size="small"
+                  component={RouterLink}
+                  to="/admin/settings?tab=ai"
+                  color="inherit"
+                >
+                  {t("grc:compliance.aiRequired.configureCta")}
+                </Button>
+              ) : null
+            }
+          >
+            {t("compliance_ai_not_configured_register_still_available")}
+          </Alert>
+        )}
+
+        {!hasEver && turboLensAiConfigured && (
+          <Alert severity="info">{t("compliance_never_scanned")}</Alert>
+        )}
+
         {overview && renderKpisAndCharts(overview, avgCompliance)}
       </Stack>
     );
