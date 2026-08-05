@@ -13,7 +13,14 @@ default stays off so existing calculations keep their current behaviour and
 nobody's stored values change on upgrade.
 
 Revision ID: 128
-Revises: 127
+Revises: 128b
+
+Note: rebased onto the fork-local "128b" (extension_sdk_1_2_bridges) instead
+of "127" directly — both this migration and 128b independently branched off
+"127" when the fork merged upstream v2.40.0, producing two revisions both
+named "128". This one keeps its original upstream id; the fork-local one was
+renamed to "128b" and this migration's down_revision was moved to chain
+after it, restoring a single linear head.
 """
 
 from typing import Union
@@ -23,7 +30,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "128"
-down_revision: Union[str, None] = "127"
+down_revision: Union[str, None] = "128b"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 

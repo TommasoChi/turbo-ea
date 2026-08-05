@@ -5,8 +5,18 @@ is a native Card.  Documents and file attachments retain their existing Card
 ownership contract while gaining the mutually-exclusive generic owner used by
 extension evidence.
 
-Revision ID: 128
+Revision ID: 128b
 Revises: 127
+
+Note: this fork-local migration collided with upstream's own new revision
+"128" (128_add_calculation_blanks_as_zero.py, merged from upstream v2.40.0)
+— both independently branched off "127". Renumbered to "128b" and kept
+chained after "127" (its actual applied position on existing fork
+databases); upstream's "128" was rebased to chain after this one instead
+of also branching off "127", restoring a single linear head. Filename is
+intentionally left as `128_...` so the existing contract test
+(`tests/services/test_alembic_128_extension_sdk_bridges.py`) that imports
+this file by path keeps working; only the revision id changed.
 """
 
 from typing import Union
@@ -16,7 +26,7 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "128"
+revision: str = "128b"
 down_revision: Union[str, None] = "127"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
