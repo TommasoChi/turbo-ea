@@ -589,10 +589,12 @@ WORKDIR /app
 
 COPY VERSION ./VERSION
 COPY mcp-server/ ./
-# Upgrade the bundled pip past CVE-2025-8869 / CVE-2026-1703 / CVE-2026-6357
-# before installing the app. pip is never executed at runtime — this only
-# silences Trivy noise on the published image.
-RUN pip install --no-cache-dir --upgrade 'pip>=26.1' && \
+# Upgrade the bundled pip past CVE-2025-8869 / CVE-2026-1703 / CVE-2026-6357,
+# and pin transitive setuptools/msgpack (pulled in by mcp-server's own deps,
+# not declared directly) past CVE-2025-47273 / CVE-2026-59890 / GHSA-6v7p-g79w-8964
+# before installing the app. None of pip/setuptools/msgpack are executed at
+# runtime here — this only silences Trivy noise on the published image.
+RUN pip install --no-cache-dir --upgrade 'pip>=26.1' 'setuptools>=83.0' 'msgpack>=1.2.1' && \
     pip install --no-cache-dir .
 
 RUN addgroup -g ${APP_GID} -S appgroup && adduser -S -D -u ${APP_UID} -G appgroup appuser && \
