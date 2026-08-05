@@ -57,9 +57,7 @@ _ALLOWED_CARD_TYPES: dict[str, frozenset[str] | None] = {
 }
 
 
-_DEPENDENCY_CARD_TYPES = frozenset(
-    {"BusinessContext", "Platform", "Application", "ITComponent"}
-)
+_DEPENDENCY_CARD_TYPES = frozenset({"BusinessContext", "Platform", "Application", "ITComponent"})
 _DEPENDENCY_RELATION_TYPES = frozenset(
     {
         "relAppToBizCtx",
@@ -80,9 +78,7 @@ _DEPENDENCY_CARD_ATTRIBUTE_KEYS = frozenset(
         "description",
     }
 )
-_DEPENDENCY_RELATION_ATTRIBUTE_KEYS = frozenset(
-    {"flowDirection", "usageType", "supportType"}
-)
+_DEPENDENCY_RELATION_ATTRIBUTE_KEYS = frozenset({"flowDirection", "usageType", "supportType"})
 
 _HIERARCHY_CARD_TYPES = frozenset({"Organization"})
 _ORGANIZATION_RELATION_TYPES = frozenset({"relProcessToOrg", "relOrgToApp", "relOrgToDataObj"})
@@ -202,9 +198,7 @@ class _CoreQueryBridge:
 
         normalized = tuple(
             dict.fromkeys(
-                value.strip()
-                for value in requested
-                if isinstance(value, str) and value.strip()
+                value.strip() for value in requested if isinstance(value, str) and value.strip()
             )
         )
         if (
@@ -337,9 +331,7 @@ class _CoreQueryBridge:
 
         visible_cards: dict[UUID, Card] = {root.id: root}
         filtered_ids: set[UUID] = set()
-        nodes: dict[UUID, DependencyNode] = {
-            root.id: self._dependency_node(root, card_attributes)
-        }
+        nodes: dict[UUID, DependencyNode] = {root.id: self._dependency_node(root, card_attributes)}
         edges: dict[tuple[str, UUID, UUID], DependencyEdge] = {}
         visited: set[UUID] = {root.id}
         frontier: deque[tuple[Card, int]] = deque([(root, 0)])
@@ -366,9 +358,7 @@ class _CoreQueryBridge:
 
             for relation, relation_type in rows:
                 other_id = (
-                    relation.target_id
-                    if relation.source_id == current.id
-                    else relation.source_id
+                    relation.target_id if relation.source_id == current.id else relation.source_id
                 )
                 if other_id in filtered_ids:
                     partial = True
@@ -446,7 +436,6 @@ class _CoreQueryBridge:
             ),
             partial=partial,
         )
-
 
     async def list_product_platforms(self, product_id: UUID) -> list[ResolvedCard]:
         await self._require_card(

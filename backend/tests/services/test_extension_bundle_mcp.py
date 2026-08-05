@@ -134,9 +134,7 @@ class TestMcpCapabilityValidation:
             mcp_tools=[VALID_READ_TOOL],
             mcp_sdk_version="1.0",
         )
-        raw = build_teax(
-            keypair, manifest=manifest, files={"content/pack.json": content_bytes}
-        )
+        raw = build_teax(keypair, manifest=manifest, files={"content/pack.json": content_bytes})
         path = tmp_path / "bundle.teax"
         path.write_bytes(raw)
         with pytest.raises(BundleError, match="mcp capability"):

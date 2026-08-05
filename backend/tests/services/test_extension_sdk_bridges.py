@@ -533,10 +533,7 @@ async def test_dependency_subgraph_omits_invisible_neighbor_and_marks_partial(db
 
     assert graph.partial is True
     assert env["hidden_app"].id not in {node.id for node in graph.nodes}
-    assert all(
-        env["hidden_app"].id not in (edge.source_id, edge.target_id)
-        for edge in graph.edges
-    )
+    assert all(env["hidden_app"].id not in (edge.source_id, edge.target_id) for edge in graph.edges)
 
 
 @pytest.mark.parametrize(
@@ -1222,9 +1219,7 @@ async def _organization_links_context(db):
     process = await create_card(
         db, card_type="BusinessProcess", name="Order Fulfillment", user_id=actor.id
     )
-    app = await create_card(
-        db, card_type="Application", name="Procurement Suite", user_id=actor.id
-    )
+    app = await create_card(db, card_type="Application", name="Procurement Suite", user_id=actor.id)
     data_obj = await create_card(
         db, card_type="DataObject", name="Customer Record", user_id=actor.id
     )
