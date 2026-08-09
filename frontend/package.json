@@ -41,7 +41,7 @@
     "docx": "^9.5.1",
     "docxtemplater": "^3.69.3",
     "docxtemplater-image": "^0.1.2",
-    "dompurify": "^3.4.11",
+    "dompurify": "^3.4.13",
     "file-saver": "^2.0.5",
     "html-to-image": "^1.11.13",
     "i18next": "^25.8.13",
