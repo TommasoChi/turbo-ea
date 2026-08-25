@@ -5,28 +5,20 @@ import Typography from "@mui/material/Typography";
 import Accordion from "@mui/material/Accordion";
 import AccordionSummary from "@mui/material/AccordionSummary";
 import AccordionDetails from "@mui/material/AccordionDetails";
-import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
-import Select from "@mui/material/Select";
+import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
-import FormControl from "@mui/material/FormControl";
-import InputLabel from "@mui/material/InputLabel";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import Alert from "@mui/material/Alert";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
 import Tooltip from "@mui/material/Tooltip";
 import Popover from "@mui/material/Popover";
 import Collapse from "@mui/material/Collapse";
 import { useTranslation } from "react-i18next";
 import MaterialSymbol from "@/components/MaterialSymbol";
-import CardPicker from "@/components/CardPicker";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
 import {
@@ -42,6 +34,7 @@ import type {
   RelationType,
   SubtypeDef,
 } from "@/types";
+import AddRelationsDialog from "./AddRelationsDialog";
 import DescendantRelationsDrawer from "./DescendantRelationsDrawer";
 import RelationAttributesEditor, {
   flowDirectionBadge,
@@ -53,6 +46,7 @@ import { readableTextColor } from "@/lib/color";
 import {
   bucketRelationsBySubtype,
   shouldGroupBySubtype,
+  sortRelationsByName,
   type SubtypeBucket,
 } from "./cardDetailUtils";
 
@@ -149,133 +143,6 @@ function RelationAttrsPopover({
   );
 }
 
-/* ── Inline Add Row ─────────────────────────────────────────── */
-function InlineAddRow({
-  rt,
-  isSource,
-  fsId,
-  onAdded,
-  onClose,
-}: {
-  rt: RelationType;
-  isSource: boolean;
-  fsId: string;
-  onAdded: () => void;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation(["cards", "common"]);
-  const typeLabel = useTypeLabel();
-  const { getType } = useMetamodel();
-  const targetTypeKey = isSource ? rt.target_type_key : rt.source_type_key;
-  const targetTypeConfig = getType(targetTypeKey);
-
-  const [search, setSearch] = useState("");
-  const [error, setError] = useState("");
-  const [createMode, setCreateMode] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createLoading, setCreateLoading] = useState(false);
-
-  const handleSelect = async (card: { id: string; name: string; type: string } | null) => {
-    if (!card) return;
-    setError("");
-    try {
-      await api.post("/relations", {
-        type: rt.key,
-        source_id: isSource ? fsId : card.id,
-        target_id: isSource ? card.id : fsId,
-      });
-      onAdded();
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("relations.errors.create"));
-    }
-  };
-
-  const handleQuickCreate = async () => {
-    if (!createName.trim()) return;
-    setCreateLoading(true);
-    setError("");
-    try {
-      const created = await api.post<{ id: string; name: string; type: string }>("/cards", {
-        type: targetTypeKey,
-        name: createName.trim(),
-      });
-      await api.post("/relations", {
-        type: rt.key,
-        source_id: isSource ? fsId : created.id,
-        target_id: isSource ? created.id : fsId,
-      });
-      onAdded();
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("relations.errors.createCard"));
-    } finally {
-      setCreateLoading(false);
-    }
-  };
-
-  const targetLabel = typeLabel(targetTypeConfig) || targetTypeKey;
-
-  if (createMode) {
-    return (
-      <Box sx={{ mt: 1, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1, bgcolor: "action.hover" }}>
-        {error && <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError("")}>{error}</Alert>}
-        <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: "block" }}>
-          {t("relations.createNew", { type: targetLabel })}
-        </Typography>
-        <TextField
-          fullWidth
-          size="small"
-          label={t("common:labels.name")}
-          value={createName}
-          onChange={(e) => setCreateName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleQuickCreate()}
-          autoFocus
-          sx={{ mb: 1 }}
-        />
-        <Box sx={{ display: "flex", gap: 1 }}>
-          <Button size="small" variant="contained" onClick={handleQuickCreate} disabled={!createName.trim() || createLoading}>
-            {t("relations.createAndAdd")}
-          </Button>
-          <Button size="small" onClick={() => setCreateMode(false)}>
-            {t("relations.backToSearch")}
-          </Button>
-          <Box sx={{ flex: 1 }} />
-          <Button size="small" color="inherit" onClick={onClose}>
-            {t("common:actions.cancel")}
-          </Button>
-        </Box>
-      </Box>
-    );
-  }
-
-  return (
-    <Box sx={{ mt: 1 }}>
-      {error && <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError("")}>{error}</Alert>}
-      <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
-        <CardPicker
-          sx={{ flex: 1 }}
-          types={targetTypeKey}
-          value={null}
-          onChange={handleSelect}
-          onInputChange={setSearch}
-          excludeIds={[fsId]}
-          placeholder={t("relations.search", { type: targetLabel })}
-          autoFocus
-        />
-        <Tooltip title={t("relations.createNew", { type: targetLabel })}>
-          <IconButton size="small" onClick={() => { setCreateMode(true); setCreateName(search); }}>
-            <MaterialSymbol icon="add" size={18} />
-          </IconButton>
-        </Tooltip>
-        <IconButton size="small" onClick={onClose}>
-          <MaterialSymbol icon="close" size={18} />
-        </IconButton>
-      </Box>
-    </Box>
-  );
-}
-
 /* ── Relation Group ─────────────────────────────────────────── */
 function RelationGroup({
   rt,
@@ -285,6 +152,7 @@ function RelationGroup({
   fsId,
   canManageRelations,
   onReload,
+  onRequestAdd,
   onRelationUpdated,
   rollupCount = 0,
 }: {
@@ -295,18 +163,19 @@ function RelationGroup({
   fsId: string;
   canManageRelations: boolean;
   onReload: () => void;
+  /** Opens the section's add dialog with this relation type pre-selected. */
+  onRequestAdd: () => void;
   onRelationUpdated: (updated: Relation) => void;
   /** Cards reachable only through descendants (#863). 0 hides the chip. */
   rollupCount?: number;
 }) {
-  const { t } = useTranslation(["cards", "common"]);
+  const { t, i18n } = useTranslation(["cards", "common"]);
   const rl = useResolveLabel();
   const typeLabel = useTypeLabel();
   const relLabel = useRelationLabel();
   const subtypeLabel = useSubtypeLabel();
   const { getType } = useMetamodel();
   const navigate = useNavigate();
-  const [inlineAddOpen, setInlineAddOpen] = useState(false);
   const [attrsAnchor, setAttrsAnchor] = useState<HTMLElement | null>(null);
   const [attrsRelation, setAttrsRelation] = useState<Relation | null>(null);
   const [rollupOpen, setRollupOpen] = useState(false);
@@ -328,8 +197,9 @@ function RelationGroup({
         rels,
         fsId,
         subtypeDefs.map((s) => s.key),
+        i18n.language,
       ),
-    [rels, fsId, subtypeDefs],
+    [rels, fsId, subtypeDefs, i18n.language],
   );
   const canGroupBySubtype = shouldGroupBySubtype(subtypeBuckets, rels.length);
   // The manual toggle is offered whenever the type has subtypes and at least
@@ -604,7 +474,7 @@ function RelationGroup({
           px: 1.5,
           py: 1,
           bgcolor: "action.hover",
-          borderBottom: rels.length > 0 || inlineAddOpen ? "1px solid" : "none",
+          borderBottom: rels.length > 0 ? "1px solid" : "none",
           borderColor: "divider",
         }}
       >
@@ -670,15 +540,11 @@ function RelationGroup({
             </IconButton>
           </Tooltip>
         )}
-        {canManageRelations && !inlineAddOpen && (
+        {canManageRelations && (
           <Tooltip title={t("relations.addSpecific", {
             type: typeLabel(otherType) || otherTypeKey,
           })}>
-            <IconButton
-              size="small"
-              onClick={() => setInlineAddOpen(true)}
-              color="primary"
-            >
+            <IconButton size="small" onClick={onRequestAdd} color="primary">
               <MaterialSymbol icon="add" size={18} />
             </IconButton>
           </Tooltip>
@@ -741,24 +607,11 @@ function RelationGroup({
       )}
 
       {/* Empty state for mandatory/visible relations */}
-      {rels.length === 0 && !inlineAddOpen && (
+      {rels.length === 0 && (
         <Box sx={{ px: 1.5, py: 1 }}>
           <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
             {mandatory ? t("relations.emptyMandatory") : t("relations.emptyVisible")}
           </Typography>
-        </Box>
-      )}
-
-      {/* Inline add */}
-      {inlineAddOpen && (
-        <Box sx={{ px: 1.5, pb: 1 }}>
-          <InlineAddRow
-            rt={rt}
-            isSource={isSource}
-            fsId={fsId}
-            onAdded={onReload}
-            onClose={() => setInlineAddOpen(false)}
-          />
         </Box>
       )}
     </Box>
@@ -772,40 +625,52 @@ function RelationsSection({
   refreshKey = 0,
   canManageRelations = true,
   initialExpanded = false,
+  onCardUpdate,
 }: {
   fsId: string;
   cardTypeKey: string;
   refreshKey?: number;
   canManageRelations?: boolean;
   initialExpanded?: boolean;
+  /** Re-fetch the card itself. A mandatory relation is a data-quality slot,
+   *  so adding or removing one moves the score in the header pill — which the
+   *  section's own relation reload cannot refresh. */
+  onCardUpdate?: () => void;
 }) {
-  const { t } = useTranslation(["cards", "common"]);
+  const { t, i18n } = useTranslation(["cards", "common"]);
   const typeLabel = useTypeLabel();
   const relLabel = useRelationLabel();
-  const [relations, setRelations] = useState<Relation[]>([]);
+  const [rawRelations, setRawRelations] = useState<Relation[]>([]);
   const { types: allTypes, relationTypes, getType } = useMetamodel();
   const visibleTypeKeys = useMemo(() => new Set(allTypes.map((t) => t.key)), [allTypes]);
 
-  // Add relation dialog state (for non-displayed relation types)
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [addRelType, setAddRelType] = useState("");
-  const [targetSearch, setTargetSearch] = useState("");
-  const [selectedTarget, setSelectedTarget] = useState<{ id: string; name: string; type: string } | null>(null);
-  const [addError, setAddError] = useState("");
-
-  // Inline create state (inside dialog)
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createLoading, setCreateLoading] = useState(false);
-
-  // Optional attributes captured in the dialog (when relation type declares a schema)
-  const [dialogAttributes, setDialogAttributes] = useState<RelationAttributes>({});
+  // The single add surface: a dialog, opened either from a group's `+` (with
+  // that relation type pre-selected) or from the section's Add button.
+  const [addOpen, setAddOpen] = useState(false);
+  const [addRt, setAddRt] = useState<RelationType | null>(null);
+  // Relation types with no group of their own are reached through a menu on
+  // the section button — the dialog itself carries no type selector.
+  const [addMenuAnchor, setAddMenuAnchor] = useState<HTMLElement | null>(null);
 
   const load = useCallback(() => {
-    api.get<Relation[]>(`/relations?card_id=${fsId}`).then(setRelations).catch(() => {});
+    api.get<Relation[]>(`/relations?card_id=${fsId}`).then(setRawRelations).catch(() => {});
   }, [fsId]);
 
+  /** Reload the relation list *and* the card, after a relation mutation. */
+  const reloadAll = useCallback(() => {
+    load();
+    onCardUpdate?.();
+  }, [load, onCardUpdate]);
+
   useEffect(load, [load, refreshKey]);
+
+  // Sort once, here, rather than at each of the three render paths (flat list,
+  // subtype buckets, flowDirection buckets) — `Array.prototype.filter` keeps
+  // order, so every downstream grouping inherits it (discussion #918).
+  const relations = useMemo(
+    () => sortRelationsByName(rawRelations, fsId, i18n.language),
+    [rawRelations, fsId, i18n.language],
+  );
 
   // Descendant relation roll-up (#863). Only hierarchical types can have
   // descendants at all, and the fetch is deferred until the section is
@@ -838,13 +703,30 @@ function RelationsSection({
     };
   }, [expanded, isHierarchical, fsId, refreshKey]);
 
+  // Optimistic append. `POST /relations` returns the row with its `source` /
+  // `target` refs eagerly loaded, so it renders identically to a refetched one
+  // — 19 rapid-fire adds cost 19 POSTs and one reconcile GET instead of 19
+  // full relation refetches (#918).
+  //
+  // The id guard is required, not defensive: `POST /relations` is idempotent
+  // on (type, source, target) and returns the *existing* row (#905), so a
+  // stale exclusion would otherwise produce a duplicate React key.
+  const handleRelationAdded = useCallback((created: Relation) => {
+    setRawRelations((prev) => (prev.some((r) => r.id === created.id) ? prev : [...prev, created]));
+  }, []);
+
+  /** Undoing an add from its chip — drop the row without a full refetch. */
+  const handleRelationRemoved = useCallback((relId: string) => {
+    setRawRelations((prev) => prev.filter((r) => r.id !== relId));
+  }, []);
+
   const handleRelationUpdated = useCallback((updated: Relation) => {
     // Only overlay the mutable fields the PATCH response actually updates.
     // Spreading `updated` wholesale risks clobbering the eagerly-loaded
     // `source`/`target` card refs if the PATCH response ever returns them
     // shallower than the GET (we've seen rows render as "Unknown" after
     // editing direction). The id-keyed merge here keeps the existing refs.
-    setRelations((prev) =>
+    setRawRelations((prev) =>
       prev.map((r) =>
         r.id === updated.id
           ? { ...r, attributes: updated.attributes, description: updated.description }
@@ -888,54 +770,17 @@ function RelationsSection({
     });
   }, [relevantRTs, cardTypeKey]);
 
-  // Dialog state
-  const selectedRT = relationTypes.find((rt) => rt.key === addRelType);
-  const dialogIsSource = selectedRT ? selectedRT.source_type_key === cardTypeKey : true;
-  const dialogTargetTypeKey = selectedRT
-    ? dialogIsSource ? selectedRT.target_type_key : selectedRT.source_type_key
-    : "";
-  const dialogTargetConfig = getType(dialogTargetTypeKey);
-
-  const handleAddRelation = async () => {
-    if (!selectedRT || !selectedTarget) return;
-    setAddError("");
-    try {
-      const payload: Record<string, unknown> = {
-        type: selectedRT.key,
-        source_id: dialogIsSource ? fsId : selectedTarget.id,
-        target_id: dialogIsSource ? selectedTarget.id : fsId,
-      };
-      if (Object.keys(dialogAttributes).length > 0) {
-        payload.attributes = dialogAttributes;
-      }
-      await api.post("/relations", payload);
-      load();
-      setAddDialogOpen(false);
-      setAddRelType("");
-      setSelectedTarget(null);
-      setTargetSearch("");
-      setDialogAttributes({});
-    } catch (e) {
-      setAddError(e instanceof Error ? e.message : t("relations.errors.create"));
-    }
+  const openAddDialog = (rt: RelationType) => {
+    setAddRt(rt);
+    setAddMenuAnchor(null);
+    setAddOpen(true);
   };
 
-  const handleQuickCreate = async () => {
-    if (!createName.trim() || !dialogTargetTypeKey) return;
-    setCreateLoading(true);
-    try {
-      const created = await api.post<{ id: string; name: string; type: string }>("/cards", {
-        type: dialogTargetTypeKey,
-        name: createName.trim(),
-      });
-      setSelectedTarget({ id: created.id, name: created.name, type: created.type });
-      setCreateOpen(false);
-      setCreateName("");
-    } catch (e) {
-      setAddError(e instanceof Error ? e.message : t("relations.errors.createCard"));
-    } finally {
-      setCreateLoading(false);
-    }
+  const handleAddClosed = (addedCount: number) => {
+    setAddOpen(false);
+    // One reconcile per batch rather than per add: picks up what the client
+    // can't see (calculated fields, relation-attribute defaults).
+    if (addedCount > 0) reloadAll();
   };
 
   const totalRelations = relations.length;
@@ -964,7 +809,8 @@ function RelationsSection({
             rels={rels}
             fsId={fsId}
             canManageRelations={canManageRelations}
-            onReload={load}
+            onReload={reloadAll}
+            onRequestAdd={() => openAddDialog(rt)}
             onRelationUpdated={handleRelationUpdated}
             rollupCount={rollup[rt.key] ?? 0}
           />
@@ -989,7 +835,8 @@ function RelationsSection({
                 rels={rels}
                 fsId={fsId}
                 canManageRelations={canManageRelations}
-                onReload={load}
+                onReload={reloadAll}
+                onRequestAdd={() => openAddDialog(rt)}
                 onRelationUpdated={handleRelationUpdated}
               />
             );
@@ -1002,140 +849,51 @@ function RelationsSection({
           </Typography>
         )}
 
-        {/* Generic Add Relation button — always visible for non-displayed types or as fallback */}
+        {/* Relation types with no group of their own have no `+` to click, so
+            they are reached from here: pick the type, then the same dialog. */}
         {canManageRelations && hiddenRTs.length > 0 && (
           <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
             <Button
               size="small"
               variant="outlined"
               startIcon={<MaterialSymbol icon="add_link" size={16} />}
-              onClick={() => setAddDialogOpen(true)}
+              onClick={(e) => setAddMenuAnchor(e.currentTarget)}
             >
               {t("relations.add")}
             </Button>
+            <Menu
+              anchorEl={addMenuAnchor}
+              open={Boolean(addMenuAnchor)}
+              onClose={() => setAddMenuAnchor(null)}
+            >
+              {hiddenRTs.map((rt) => {
+                const asSource = rt.source_type_key === cardTypeKey;
+                const otherKey = asSource ? rt.target_type_key : rt.source_type_key;
+                return (
+                  <MenuItem key={rt.key} onClick={() => openAddDialog(rt)}>
+                    {typeLabel(getType(otherKey)) || otherKey} —{" "}
+                    {asSource ? relLabel(rt) : relLabel(rt, true)}
+                  </MenuItem>
+                );
+              })}
+            </Menu>
           </Box>
         )}
       </AccordionDetails>
 
-      {/* ── Add Relation Dialog (non-displayed types) ── */}
-      <Dialog
-        open={addDialogOpen}
-        onClose={() => { setAddDialogOpen(false); setCreateOpen(false); }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{t("relations.add")}</DialogTitle>
-        <DialogContent>
-          {addError && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setAddError("")}>{addError}</Alert>}
-          <FormControl fullWidth size="small" sx={{ mt: 1, mb: 2 }}>
-            <InputLabel>{t("relations.relationType")}</InputLabel>
-            <Select
-              value={addRelType}
-              label={t("relations.relationType")}
-              onChange={(e) => {
-                setAddRelType(e.target.value);
-                setSelectedTarget(null);
-                setTargetSearch("");
-                setCreateOpen(false);
-                setDialogAttributes({});
-              }}
-            >
-              {hiddenRTs.map((rt) => {
-                const rtIsSource = rt.source_type_key === cardTypeKey;
-                const verb = rtIsSource ? relLabel(rt) : relLabel(rt, true);
-                const otherKey = rtIsSource ? rt.target_type_key : rt.source_type_key;
-                const other = getType(otherKey);
-                return (
-                  <MenuItem key={rt.key} value={rt.key}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <Typography variant="body2" fontWeight={500}>{verb}</Typography>
-                      <MaterialSymbol icon="arrow_forward" size={14} />
-                      {other && (
-                        <>
-                          <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: other.color }} />
-                          <Typography variant="body2">{typeLabel(other)}</Typography>
-                        </>
-                      )}
-                      <Chip size="small" label={rt.cardinality} variant="outlined" sx={{ height: 18, fontSize: "0.65rem" }} />
-                    </Box>
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          </FormControl>
-          {addRelType && !createOpen && (
-            <>
-              <CardPicker
-                types={dialogTargetTypeKey}
-                value={selectedTarget}
-                onChange={setSelectedTarget}
-                onInputChange={setTargetSearch}
-                excludeIds={[fsId]}
-                fullWidth
-                label={t("relations.search", {
-                  type: typeLabel(dialogTargetConfig) || dialogTargetTypeKey,
-                })}
-              />
-              <Button
-                size="small"
-                sx={{ mt: 1 }}
-                startIcon={<MaterialSymbol icon="add" size={16} />}
-                onClick={() => { setCreateOpen(true); setCreateName(targetSearch); }}
-              >
-                {t("relations.createNew", {
-                  type: typeLabel(dialogTargetConfig) || dialogTargetTypeKey,
-                })}
-              </Button>
-              {selectedRT && hasEditableRelationAttributes(selectedRT) && (
-                <Box sx={{ mt: 2, p: 1.5, border: "1px dashed", borderColor: "divider", borderRadius: 1 }}>
-                  <Typography variant="caption" fontWeight={600} sx={{ display: "block", mb: 1 }}>
-                    {t("relations.optionalDetails")}
-                  </Typography>
-                  <RelationAttributesEditor
-                    relationType={selectedRT}
-                    value={dialogAttributes}
-                    onChange={setDialogAttributes}
-                    compact
-                  />
-                </Box>
-              )}
-            </>
-          )}
-          {addRelType && createOpen && (
-            <Box sx={{ mt: 1, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1, bgcolor: "action.hover" }}>
-              <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                {t("relations.createNew", {
-                  type: typeLabel(dialogTargetConfig) || dialogTargetTypeKey,
-                })}
-              </Typography>
-              <TextField
-                fullWidth
-                size="small"
-                label={t("common:labels.name")}
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleQuickCreate()}
-                autoFocus
-                sx={{ mb: 1 }}
-              />
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <Button size="small" variant="contained" onClick={handleQuickCreate} disabled={!createName.trim() || createLoading}>
-                  {t("relations.createAndSelect")}
-                </Button>
-                <Button size="small" onClick={() => setCreateOpen(false)}>
-                  {t("relations.backToSearch")}
-                </Button>
-              </Box>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setAddDialogOpen(false); setCreateOpen(false); }}>{t("common:actions.cancel")}</Button>
-          <Button variant="contained" onClick={handleAddRelation} disabled={!selectedRT || !selectedTarget}>
-            {t("common:actions.add")}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {canManageRelations && (
+        <AddRelationsDialog
+          open={addOpen}
+          onClose={handleAddClosed}
+          fsId={fsId}
+          cardTypeKey={cardTypeKey}
+          relationType={addRt}
+          relations={relations}
+          onAdded={handleRelationAdded}
+          onRemoved={handleRelationRemoved}
+          onUpdated={handleRelationUpdated}
+        />
+      )}
     </Accordion>
   );
 }

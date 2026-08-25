@@ -79,13 +79,23 @@ Remover uma aresta que carrega uma relação real abre «Eliminar a relação en
 
 ### Perspetivas de visualização
 
-O menu pendente **Vista** na barra de ferramentas recoloria cada cartão da tela por um atributo:
+O menu pendente **Colorir por** na barra de ferramentas recoloria os cartões da tela:
 
 - **Cores dos cartões** (predefinição) -- cada cartão usa a cor do seu tipo.
 - **Estado de aprovação** -- recoloria por `aprovado` / `pendente` / `quebrado`.
-- **Valores de campo** -- escolha qualquer campo de seleção única nos tipos de cartão presentes na tela (ex.: *Ciclo de vida*, *Estado*). Células sem valor caem num cinzento neutro.
+- **Valores de campo** -- assinale um campo de seleção única sob qualquer tipo de cartão presente na tela. **Vários tipos de cartão podem ter uma regra cada um ao mesmo tempo**: Aplicações por criticidade *e* Componentes de TI por modelo de alojamento. Um tipo sem regra mantém a cor que já tinha, incluindo um preenchimento definido à mão; só fica cinzento um cartão cuja própria regra não encontra valor. Um segundo campo dentro do mesmo tipo substitui o primeiro, porque um cartão tem um preenchimento.
 
-Uma legenda flutuante no canto inferior esquerdo mostra o mapeamento ativo. A vista escolhida é guardada com o diagrama.
+Uma legenda flutuante no canto inferior esquerdo mostra uma escala por regra ativa. As regras de campo e o **Estado de aprovação** são alternativas, não camadas: escolher uma limpa a outra. Ao desmarcar todas as regras, a tela volta às cores dos cartões. A escolha é guardada com o diagrama.
+
+#### Mostrar no cartão
+
+Um segundo botão da barra de ferramentas, **Mostrar no cartão**, decide **o que cada forma diz**. Assinale o **tipo de cartão**, o **subtipo** ou qualquer atributo dos tipos de cartão presentes na tela, e cada forma ganha pequenas linhas de detalhe sob o seu nome. Os campos são listados sob o tipo de cartão a que pertencem; um campo partilhado por vários desses tipos é agrupado sob **Comuns**. É um botão separado de **Colorir por**, para que nenhuma das duas listas obrigue a percorrer a outra. **Limpar tudo** desmarca todas as caixas de uma só vez.
+
+As duas primeiras seleções são desenhadas na forma: um cartão tem um tamanho limitado e o texto que não cabe transbordaria da sua borda. Tudo o que assinalar é memorizado, pelo que alargar a seleção mais tarde muda quais as duas que aparecem sem ter de escolher de novo.
+
+Estas linhas são guardadas com o diagrama, pelo que todos os leitores — incluindo quem abra uma ligação publicada — veem as mesmas formas. Os cartões filhos expandidos mantêm apenas o nome: são demasiado pequenos para mais.
+
+O botão **Criar diagrama** do [relatório de dependências](reports.md) transporta as suas próprias definições de exibição, pelo que um diagrama gerado a partir de um relatório mostra exatamente as linhas que o relatório mostrava.
 
 ### Como as arestas de relação são desenhadas
 
@@ -122,7 +132,13 @@ O botão **Sync** da barra de ferramentas abre o painel lateral com tudo o que e
 - **Novas relações** -- arestas desenhadas entre cartões, prontas a serem criadas no inventário.
 - **Relações removidas** -- arestas de relação eliminadas da tela, em fila para `DELETE /relations/{id}`. *Manter no inventário* reinsere a aresta.
 - **Alterações hierárquicas** -- movimentos arrastar-para-dentro / arrastar-para-fora de contentores confirmados, em fila como atualizações de `parent_id`.
-- **Inventário alterado** -- cartões atualizados no inventário desde a abertura do diagrama, prontos a serem trazidos de volta para a tela.
+- **Inventário alterado** -- alterações feitas no inventário desde que o diagrama foi guardado, prontas a serem trazidas de volta para a tela. Cada linha oferece a ação correspondente, e **Aceitar tudo** resolve todas as linhas de uma vez:
+    - um cartão **renomeado** -- *Aceitar atualização* reescreve o rótulo da célula;
+    - um cartão **excluído** ou **arquivado** -- *Remover do diagrama* retira a célula (e as suas arestas) da tela;
+    - uma **relação excluída** -- *Remover a aresta do diagrama* retira a aresta obsoleta da tela;
+    - uma relação cuja **direção do fluxo** mudou -- *Aceitar atualização* alinha a seta com o inventário.
+
+O Turbo EA **verifica automaticamente as alterações do inventário sempre que abre um diagrama** -- um distintivo azul no botão Sync da barra de ferramentas conta as alterações a rever. Nada é aplicado sem a sua confirmação; o distintivo apenas o convida a abrir o painel. O botão **Verificar atualizações** do painel executa novamente a mesma verificação quando quiser.
 
 O botão Sync da barra mostra uma pílula pulsante «N por sincronizar» sempre que haja trabalho pendente. Sair do separador com alterações por sincronizar dispara um aviso do navegador, e a tela é guardada automaticamente no armazenamento local a cada cinco segundos para poder ser restaurada após uma atualização acidental.
 

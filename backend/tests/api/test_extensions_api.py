@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -72,14 +73,26 @@ async def _noop_job(*args, **kwargs):
 
 
 def make_license_text(
-    private, *, extension_key="sample-ext", expires_at=EXPIRES, renewal_key="", instance_id=""
+    private,
+    *,
+    extension_key="sample-ext",
+    expires_at=EXPIRES,
+    renewal_key="",
+    instance_id="",
+    auto_renew=None,
+    entitlements=None,
 ) -> str:
+    if entitlements is None:
+        entitlement = {"extension_key": extension_key, "expires_at": expires_at}
+        if auto_renew is not None:
+            entitlement["auto_renew"] = auto_renew
+        entitlements = [entitlement]
     payload = {
         "licensee": "ACME Corp",
         "customer_id": "cus_1",
         "issued_at": "2026-01-01T00:00:00Z",
         "grace_days": 30,
-        "entitlements": [{"extension_key": extension_key, "expires_at": expires_at}],
+        "entitlements": entitlements,
     }
     if renewal_key:
         payload["renewal_key"] = renewal_key
@@ -143,15 +156,88 @@ class TestLicenseRoutes:
 
     async def test_reupload_supersedes(self, client, db, vendor):
         admin = await make_admin(db)
-        for licensee_key in ("sample-ext", "other-ext"):
-            res = await client.put(
-                "/api/v1/admin/extensions/license",
-                json={"text": make_license_text(vendor, extension_key=licensee_key)},
-                headers=auth_headers(admin),
-            )
-            assert res.status_code == 200
+        res = await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, extension_key="sample-ext")},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 200
+        # Replacing an active entitlement with a license that drops it is a
+        # downgrade — confirmed applies, and the new license supersedes.
+        res = await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, extension_key="other-ext"), "confirm": True},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 200
         res = await client.get("/api/v1/admin/extensions/license", headers=auth_headers(admin))
         assert res.json()["entitlements"][0]["extension_key"] == "other-ext"
+
+    async def test_downgrade_paste_refused_without_confirm(self, client, db, vendor):
+        admin = await make_admin(db)
+        res = await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, extension_key="sample-ext")},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 200
+        res = await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, extension_key="other-ext")},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 409, res.text
+        detail = res.json()["detail"]
+        assert detail["code"] == "entitlement_downgrade"
+        assert detail["dropped"] == ["sample-ext"]
+        # The refused paste changed nothing — the original license stays active.
+        res = await client.get("/api/v1/admin/extensions/license", headers=auth_headers(admin))
+        assert res.json()["entitlements"][0]["extension_key"] == "sample-ext"
+
+    async def test_superset_paste_needs_no_confirm(self, client, db, vendor):
+        admin = await make_admin(db)
+        res = await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, extension_key="sample-ext")},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 200
+        composite = make_license_text(
+            vendor,
+            entitlements=[
+                {"extension_key": "sample-ext", "expires_at": EXPIRES},
+                {"extension_key": "other-ext", "expires_at": EXPIRES},
+            ],
+        )
+        res = await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": composite},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 200, res.text
+        res = await client.get("/api/v1/admin/extensions/license", headers=auth_headers(admin))
+        keys = {e["extension_key"] for e in res.json()["entitlements"]}
+        assert keys == {"sample-ext", "other-ext"}
+
+    async def test_dropping_expired_entitlement_needs_no_confirm(self, client, db, vendor):
+        admin = await make_admin(db)
+        # Expired beyond the 30-day grace window — dropping it is not a downgrade.
+        res = await client.put(
+            "/api/v1/admin/extensions/license",
+            json={
+                "text": make_license_text(
+                    vendor, extension_key="sample-ext", expires_at="2020-01-01T00:00:00Z"
+                )
+            },
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 200
+        res = await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, extension_key="other-ext")},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 200, res.text
 
     async def test_tampered_license_rejected(self, client, db, vendor):
         admin = await make_admin(db)
@@ -527,6 +613,166 @@ class TestEnableDisableUninstall:
         assert res.status_code == 404
 
 
+class TestDisabledUpdate:
+    """Updating a deliberately disabled extension must keep it disabled —
+    content stays hidden (including anything new in the update) and nothing
+    re-enables until the admin flips the switch."""
+
+    async def _install_v1(self, client, db, admin, vendor):
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor)},
+            headers=auth_headers(admin),
+        )
+        install = await upload_and_preview(client, db, admin, vendor)
+        await ext_api.run_apply(db, install, admin)
+
+    async def test_update_of_disabled_extension_stays_disabled(self, client, db, vendor):
+        admin = await make_admin(db)
+        await self._install_v1(client, db, admin, vendor)
+        res = await client.put(
+            "/api/v1/admin/extensions/sample-ext/enabled",
+            json={"enabled": False},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 200
+
+        install = await upload_and_preview(client, db, admin, vendor, version="2.0.0")
+        assert install.status == "previewed"
+        assert "downgrade" not in (install.diff or {})  # upgrades never flag
+        await ext_api.run_apply(db, install, admin)
+        assert install.status == "installed"
+
+        row = (
+            await db.execute(select(Extension).where(Extension.key == "sample-ext"))
+        ).scalar_one()
+        await db.refresh(row)
+        assert row.version == "2.0.0"
+        assert row.enabled is False
+        assert row.status == "disabled"
+        # the pack's card type stays hidden through the update
+        ct = (await db.execute(select(CardType).where(CardType.key == "EsgMetric"))).scalar_one()
+        await db.refresh(ct)
+        assert ct.is_hidden is True
+
+        # enabling later restores visibility from the UPDATED manifest
+        res = await client.put(
+            "/api/v1/admin/extensions/sample-ext/enabled",
+            json={"enabled": True},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 200
+        assert res.json()["status"] == "installed"
+        await db.refresh(ct)
+        assert ct.is_hidden is False
+
+    async def test_update_of_disabled_backend_extension_keeps_restart_gate(
+        self, client, db, vendor
+    ):
+        """A disabled backend extension carries status needs_restart with
+        enabled=False — the update must preserve BOTH (the restart signal
+        survives so a later enable never runs stale code)."""
+        from tests.teax_helpers import build_wheel
+
+        admin = await make_admin(db)
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor)},
+            headers=auth_headers(admin),
+        )
+        wheel_rel = "wheels/turbo_ext_sample_ext-1.0.0-py3-none-any.whl"
+        backend_kwargs = dict(
+            files={wheel_rel: build_wheel("turbo_ext_sample_ext", "extension = None\n")},
+            capabilities=["backend"],
+            backend={"entrypoint": "turbo_ext_sample_ext:extension", "wheels": [wheel_rel]},
+        )
+        install = await upload_and_preview(client, db, admin, vendor, **backend_kwargs)
+        await ext_api.run_apply(db, install, admin)
+        res = await client.put(
+            "/api/v1/admin/extensions/sample-ext/enabled",
+            json={"enabled": False},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 200
+
+        install2 = await upload_and_preview(
+            client, db, admin, vendor, version="2.0.0", **backend_kwargs
+        )
+        await ext_api.run_apply(db, install2, admin)
+        row = (
+            await db.execute(select(Extension).where(Extension.key == "sample-ext"))
+        ).scalar_one()
+        await db.refresh(row)
+        assert row.version == "2.0.0"
+        assert row.enabled is False
+        assert row.status == "needs_restart"
+
+
+class TestDowngradeGuard:
+    """Installing an OLDER bundle over a newer installed version requires an
+    explicit confirmation — the preview stamps it, apply gates on it."""
+
+    async def _install_v2(self, client, db, admin, vendor):
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor)},
+            headers=auth_headers(admin),
+        )
+        install = await upload_and_preview(client, db, admin, vendor, version="2.0.0")
+        await ext_api.run_apply(db, install, admin)
+
+    async def test_preview_stamps_downgrade(self, client, db, vendor):
+        admin = await make_admin(db)
+        await self._install_v2(client, db, admin, vendor)
+        install = await upload_and_preview(client, db, admin, vendor, version="1.0.0")
+        assert install.status == "previewed"
+        assert install.diff["downgrade"] == {"from": "2.0.0", "to": "1.0.0"}
+
+    async def test_apply_refuses_downgrade_without_confirm(self, client, db, vendor):
+        admin = await make_admin(db)
+        await self._install_v2(client, db, admin, vendor)
+        install = await upload_and_preview(client, db, admin, vendor, version="1.0.0")
+        res = await client.post(
+            f"/api/v1/admin/extensions/install/{install.id}/apply",
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 409, res.text
+        detail = res.json()["detail"]
+        assert detail["code"] == "version_downgrade"
+        assert detail["installed"] == "2.0.0"
+        assert detail["bundle"] == "1.0.0"
+        await db.refresh(install)
+        assert install.status == "previewed"  # untouched — still reviewable
+
+    async def test_apply_with_confirm_downgrades(self, client, db, vendor):
+        admin = await make_admin(db)
+        await self._install_v2(client, db, admin, vendor)
+        install = await upload_and_preview(client, db, admin, vendor, version="1.0.0")
+        res = await client.post(
+            f"/api/v1/admin/extensions/install/{install.id}/apply",
+            json={"confirm_downgrade": True},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 202, res.text
+        await ext_api.run_apply(db, install, admin)
+        row = (
+            await db.execute(select(Extension).where(Extension.key == "sample-ext"))
+        ).scalar_one()
+        await db.refresh(row)
+        assert row.version == "1.0.0"
+
+    async def test_same_or_newer_version_never_flags(self, client, db, vendor):
+        admin = await make_admin(db)
+        await self._install_v2(client, db, admin, vendor)
+        same = await upload_and_preview(client, db, admin, vendor, version="2.0.0")
+        assert "downgrade" not in (same.diff or {})
+        res = await client.post(
+            f"/api/v1/admin/extensions/install/{same.id}/apply",
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 202, res.text
+
+
 class TestStatusEndpoint:
     async def test_status_lists_enabled_extensions_for_members(self, client, db, vendor):
         admin = await make_admin(db)
@@ -563,12 +809,17 @@ def mock_store(
     bundles: dict[str, bytes] | None = None,
     claim: dict | None = None,
     renew: dict | None = None,
+    portal: dict | None = None,
+    catalog_status: int = 200,
 ):
     """Point EXTENSION_STORE_URL at a MockTransport-backed fake static host.
 
     ``catalog=None`` simulates an unreachable host (connection error).
-    ``claim`` / ``renew`` are the JSON bodies of /account/claim and
-    /account/renew.
+    ``catalog_status`` simulates a host that answers and refuses — bot
+    protection or a WAF in front of the store (#958), which is a different
+    diagnosis from being offline.
+    ``claim`` / ``renew`` / ``portal`` are the JSON bodies of /account/claim,
+    /account/renew and /account/portal.
     """
     monkeypatch.setattr(settings, "EXTENSION_STORE_URL", STORE_URL)
 
@@ -576,6 +827,8 @@ def mock_store(
         if catalog is None:
             raise httpx.ConnectError("boom", request=request)
         if request.url.path == "/catalog.json":
+            if catalog_status != 200:
+                return httpx.Response(catalog_status, text="Forbidden")
             return httpx.Response(200, json=catalog)
         if request.url.path == "/account/claim":
             return httpx.Response(200, json=claim or {"status": "pending"})
@@ -583,6 +836,10 @@ def mock_store(
             if renew is None:
                 return httpx.Response(403, json={"error": "invalid renewal credential"})
             return httpx.Response(200, json=renew)
+        if request.url.path == "/account/portal":
+            if portal is None:
+                return httpx.Response(404, json={"error": "no active subscriptions"})
+            return httpx.Response(200, json=portal)
         data = (bundles or {}).get(request.url.path)
         if data is not None:
             return httpx.Response(200, content=data)
@@ -623,6 +880,8 @@ class TestStoreCatalog:
         assert res.json() == {
             "configured": False,
             "reachable": False,
+            "reason": "",
+            "status_code": None,
             "store_url": "",
             "items": [],
         }
@@ -636,6 +895,34 @@ class TestStoreCatalog:
         assert res.status_code == 200
         body = res.json()
         assert body["configured"] is True and body["reachable"] is False
+
+    async def test_unreachable_store_is_reported_as_offline(self, client, db, vendor, monkeypatch):
+        """A transport failure is the only thing that may read as air-gapped."""
+        admin = await make_admin(db)
+        mock_store(monkeypatch, catalog=None)
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        body = res.json()
+        assert body["reason"] == "offline"
+        assert body["status_code"] is None
+
+    async def test_refused_store_is_reported_as_blocked(self, client, db, vendor, monkeypatch):
+        """A store that answers 403 is blocked, not air-gapped.
+
+        Collapsing the two is what sent #958's reporter auditing security groups
+        and NAT for a problem that was never on his side.
+        """
+        admin = await make_admin(db)
+        mock_store(monkeypatch, catalog=catalog_payload(), catalog_status=403)
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["configured"] is True and body["reachable"] is False
+        assert body["reason"] == "blocked"
+        assert body["status_code"] == 403
 
     async def test_catalog_annotated_with_license_and_install_state(
         self, client, db, vendor, monkeypatch
@@ -651,7 +938,10 @@ class TestStoreCatalog:
         await ext_api.run_apply(db, install, admin)
         mock_store(
             monkeypatch,
-            catalog=catalog_payload(demo_url="https://youtu.be/demo"),
+            catalog=catalog_payload(
+                demo_url="https://youtu.be/demo",
+                trial_link="https://buy.stripe.test/pl_trial_1",
+            ),
         )
 
         res = await client.get(
@@ -664,6 +954,10 @@ class TestStoreCatalog:
         assert item["key"] == "sample-ext"
         assert item["price"] == "990 EUR / year"
         assert item["payment_link"] == "https://buy.stripe.test/pl_1"
+        # Trial checkout link passes through; absent from the catalogue → "".
+        assert item["trial_link"] == "https://buy.stripe.test/pl_trial_1"
+        # A paid (non-trial) entitlement is not flagged as a trial.
+        assert item["entitlement_trial"] is False
         assert item["demo_url"] == "https://youtu.be/demo"
         assert item["installed_version"] == "0.9.0"
         assert item["update_available"] is True
@@ -674,6 +968,70 @@ class TestStoreCatalog:
         assert item["license"] == ""
         assert item["license_url"] == ""
         assert item["screenshots"] == []
+
+    async def test_catalog_flags_trial_entitlements(self, client, db, vendor, monkeypatch):
+        """A trial entitlement (active here; same for expired) surfaces as
+        entitlement_trial=True so the UI can keep the Buy button visible for
+        in-product conversion even though the state is not "unlicensed"."""
+        admin = await make_admin(db)
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={
+                "text": make_license_text(
+                    vendor,
+                    entitlements=[
+                        {
+                            "extension_key": "sample-ext",
+                            "expires_at": EXPIRES,
+                            "auto_renew": False,
+                            "trial": True,
+                        }
+                    ],
+                )
+            },
+            headers=auth_headers(admin),
+        )
+        mock_store(monkeypatch, catalog=catalog_payload())
+
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        assert res.status_code == 200
+        (item,) = res.json()["items"]
+        assert item["entitlement_state"] == "active"
+        assert item["entitlement_trial"] is True
+        # the card's chip needs the dates without cross-referencing installed rows
+        assert item["entitlement_expires_at"] is not None
+        assert item["entitlement_auto_renew"] is False
+
+    async def test_catalog_ignores_a_catalogue_version_with_no_digits(
+        self, client, db, vendor, monkeypatch
+    ):
+        """A rolling tag must not read as an upgrade over a real version.
+
+        The old comparator returned an empty tuple for anything unparseable,
+        which made this comparison silently false for the *right* reason but
+        also hid genuine upgrades whose version carried a pre-release suffix.
+        The shared ``store_update_available`` refuses to compare either side
+        without a digit instead.
+        """
+        admin = await make_admin(db)
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor)},
+            headers=auth_headers(admin),
+        )
+        install = await upload_and_preview(client, db, admin, vendor, version="0.9.0")
+        await ext_api.run_apply(db, install, admin)
+        mock_store(monkeypatch, catalog=catalog_payload(version="nightly"))
+
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        assert res.status_code == 200
+        (item,) = res.json()["items"]
+        assert item["installed_version"] == "0.9.0"
+        assert item["update_available"] is False
 
     async def test_catalog_surfaces_details_metadata(self, client, db, vendor, monkeypatch):
         admin = await make_admin(db)
@@ -708,6 +1066,52 @@ class TestStoreCatalog:
             f"{STORE_URL}/screenshots/sample-ext/a.png",
             f"{STORE_URL}/screenshots/sample-ext/b.png",
         ]
+
+    async def test_catalog_surfaces_sanitized_tags(self, client, db, vendor, monkeypatch):
+        """Category tags pass through as slugs only, deduped and capped — the
+        catalogue is external data, so anything markup-ish is dropped."""
+        admin = await make_admin(db)
+        mock_store(
+            monkeypatch,
+            catalog=catalog_payload(
+                tags=[
+                    "commercial",
+                    "integration",
+                    "integration",  # duplicate → dropped
+                    "<script>",  # not a slug → dropped
+                    "Way Too Loud",  # spaces/uppercase → dropped (slugs only)
+                    123,  # not a string → dropped
+                    "x" * 40,  # over the length cap → dropped
+                ]
+            ),
+        )
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        assert res.status_code == 200
+        (item,) = res.json()["items"]
+        assert item["tags"] == ["commercial", "integration"]
+
+    async def test_catalog_caps_tag_count(self, client, db, vendor, monkeypatch):
+        admin = await make_admin(db)
+        mock_store(
+            monkeypatch,
+            catalog=catalog_payload(tags=[f"tag-{i}" for i in range(40)]),
+        )
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        (item,) = res.json()["items"]
+        assert len(item["tags"]) == 16
+
+    async def test_catalog_without_tags_defaults_empty(self, client, db, vendor, monkeypatch):
+        admin = await make_admin(db)
+        mock_store(monkeypatch, catalog=catalog_payload())
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        (item,) = res.json()["items"]
+        assert item["tags"] == []
 
     async def test_unlicensed_uninstalled_item(self, client, db, vendor, monkeypatch):
         admin = await make_admin(db)
@@ -928,6 +1332,37 @@ class TestStoreClaimAndRefresh:
         res = await client.get("/api/v1/admin/extensions/license", headers=auth_headers(admin))
         assert res.json()["entitlements"][0]["expires_at"].startswith(far[:10])
 
+    async def test_refresh_refused_by_the_store_warns(
+        self, client, db, vendor, monkeypatch, caplog
+    ):
+        """A refused renewal must be audible.
+
+        Renewal failures used to log at debug and return False, so a blocked
+        instance lost its extensions when the grace period ended with nothing in
+        the logs at default level — the expensive half of #958.
+        """
+        admin = await make_admin(db)
+        near = (datetime.now(timezone.utc) + timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={
+                "text": make_license_text(
+                    vendor, expires_at=near, renewal_key="rk_0123456789abcdef"
+                )
+            },
+            headers=auth_headers(admin),
+        )
+        # renew=None -> the fake store answers 403.
+        mock_store(monkeypatch, catalog=catalog_payload())
+
+        with caplog.at_level(logging.WARNING, logger="app.services.extensions.license_refresh"):
+            res = await client.post(
+                "/api/v1/admin/extensions/store/refresh-license", headers=auth_headers(admin)
+            )
+        assert res.status_code == 200
+        assert res.json() == {"refreshed": False}
+        assert any("403" in r.getMessage() for r in caplog.records), caplog.text
+
     async def test_refresh_noop_for_manual_license(self, client, db, vendor, monkeypatch):
         admin = await make_admin(db)
         await client.put(
@@ -941,6 +1376,154 @@ class TestStoreClaimAndRefresh:
         )
         assert res.status_code == 200
         assert res.json() == {"refreshed": False}
+
+    async def test_refresh_applies_auto_renew_flip_at_same_coverage(
+        self, client, db, vendor, monkeypatch
+    ):
+        """A billing-portal cancellation reaches the instance: identical
+        coverage, only auto_renew flipped — the refresh must apply it."""
+        admin = await make_admin(db)
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={
+                "text": make_license_text(
+                    vendor, renewal_key="rk_0123456789abcdef", auto_renew=True
+                )
+            },
+            headers=auth_headers(admin),
+        )
+        cancelled = make_license_text(vendor, renewal_key="rk_0123456789abcdef", auto_renew=False)
+        mock_store(monkeypatch, catalog=catalog_payload(), renew={"license": cancelled})
+
+        res = await client.post(
+            "/api/v1/admin/extensions/store/refresh-license", headers=auth_headers(admin)
+        )
+        assert res.status_code == 200
+        assert res.json() == {"refreshed": True}
+        res = await client.get("/api/v1/admin/extensions/license", headers=auth_headers(admin))
+        assert res.json()["entitlements"][0]["auto_renew"] is False
+
+
+class TestAutoRenewAndBillingPortal:
+    async def test_auto_renew_surfaced_on_license_and_extension(
+        self, client, db, vendor, monkeypatch
+    ):
+        admin = await make_admin(db)
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, auto_renew=False)},
+            headers=auth_headers(admin),
+        )
+        res = await client.get("/api/v1/admin/extensions/license", headers=auth_headers(admin))
+        assert res.json()["entitlements"][0]["auto_renew"] is False
+
+        # The per-extension entitlement carries the flag too.
+        install = await upload_and_preview(client, db, admin, vendor)
+        await ext_api.run_apply(db, install, admin)
+        res = await client.get("/api/v1/admin/extensions", headers=auth_headers(admin))
+        rows = {r["key"]: r for r in res.json()}
+        assert rows["sample-ext"]["entitlement"]["auto_renew"] is False
+
+    async def test_auto_renew_unknown_on_pre_field_license(self, client, db, vendor):
+        admin = await make_admin(db)
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor)},  # no auto_renew key
+            headers=auth_headers(admin),
+        )
+        res = await client.get("/api/v1/admin/extensions/license", headers=auth_headers(admin))
+        assert res.json()["entitlements"][0].get("auto_renew") is None
+
+    async def test_store_managed_reflects_renewal_credential(self, client, db, vendor):
+        admin = await make_admin(db)
+        # Manual license → not store-managed.
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor)},
+            headers=auth_headers(admin),
+        )
+        res = await client.get("/api/v1/admin/extensions/license", headers=auth_headers(admin))
+        assert res.json()["store_managed"] is False
+        # Store license → store-managed.
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, renewal_key="rk_0123456789abcdef")},
+            headers=auth_headers(admin),
+        )
+        res = await client.get("/api/v1/admin/extensions/license", headers=auth_headers(admin))
+        assert res.json()["store_managed"] is True
+
+    async def test_renewal_credential_never_serialized(self, client, db, vendor):
+        """The credential authenticates against the store — its VALUE must
+        never reach the browser, only the store_managed boolean."""
+        admin = await make_admin(db)
+        secret = "rk_super_secret_credential_0001"
+        put = await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, renewal_key=secret)},
+            headers=auth_headers(admin),
+        )
+        assert secret not in put.text
+        for path in ("/api/v1/admin/extensions/license", "/api/v1/admin/extensions"):
+            res = await client.get(path, headers=auth_headers(admin))
+            assert secret not in res.text, path
+
+    async def test_billing_portal_returns_store_url(self, client, db, vendor, monkeypatch):
+        admin = await make_admin(db)
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, renewal_key="rk_0123456789abcdef")},
+            headers=auth_headers(admin),
+        )
+        mock_store(
+            monkeypatch,
+            catalog=catalog_payload(),
+            portal={"url": "https://billing.stripe.test/p/session_1"},
+        )
+        res = await client.post(
+            "/api/v1/admin/extensions/store/billing-portal", headers=auth_headers(admin)
+        )
+        assert res.status_code == 200, res.text
+        assert res.json() == {"url": "https://billing.stripe.test/p/session_1"}
+
+    async def test_billing_portal_404_without_store_license(self, client, db, vendor, monkeypatch):
+        admin = await make_admin(db)
+        mock_store(monkeypatch, catalog=catalog_payload())
+        # No license at all.
+        res = await client.post(
+            "/api/v1/admin/extensions/store/billing-portal", headers=auth_headers(admin)
+        )
+        assert res.status_code == 404
+        # Manual license (no renewal credential) — nothing to manage either.
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor)},
+            headers=auth_headers(admin),
+        )
+        res = await client.post(
+            "/api/v1/admin/extensions/store/billing-portal", headers=auth_headers(admin)
+        )
+        assert res.status_code == 404
+
+    async def test_billing_portal_502_when_store_unreachable(self, client, db, vendor, monkeypatch):
+        admin = await make_admin(db)
+        await client.put(
+            "/api/v1/admin/extensions/license",
+            json={"text": make_license_text(vendor, renewal_key="rk_0123456789abcdef")},
+            headers=auth_headers(admin),
+        )
+        mock_store(monkeypatch, catalog=None)  # connection error
+        res = await client.post(
+            "/api/v1/admin/extensions/store/billing-portal", headers=auth_headers(admin)
+        )
+        assert res.status_code == 502
+
+    async def test_member_cannot_open_billing_portal(self, client, db, vendor):
+        member = await make_member(db)
+        res = await client.post(
+            "/api/v1/admin/extensions/store/billing-portal", headers=auth_headers(member)
+        )
+        assert res.status_code == 403
 
 
 # ---------------------------------------------------------------------------

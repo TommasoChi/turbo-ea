@@ -4,6 +4,7 @@ import {
   relationValueSuffix,
   filterEndOfLifeNodes,
   resolveRevealIds,
+  stripEdgeLabels,
   type GNode,
   type GEdge,
 } from "./layeredDependencyLayout";
@@ -107,6 +108,81 @@ describe("buildLdvFlow", () => {
     const groupLabels = groups.map((g) => (g.data as { label: string }).label);
     expect(groupLabels).toContain("Application & Data");
     expect(groupLabels).toContain("Technical Architecture");
+  });
+
+  it("marks edges with a retired endpoint as severed, in either direction", () => {
+    const nodes: GNode[] = [
+      { id: "gone", name: "Gone", type: "Application", changeState: "retired" },
+      { id: "stays", name: "Stays", type: "Application" },
+      { id: "other", name: "Other", type: "Application" },
+    ];
+    const edges: GEdge[] = [
+      { source: "gone", target: "stays", type: "uses" },
+      { source: "stays", target: "other", type: "uses" },
+    ];
+    const result = buildLdvFlow(nodes, edges, TYPES);
+    const severedFlags = result.edges.map((e) => (e.data as { severed?: boolean }).severed);
+    expect(severedFlags).toContain(true);
+    expect(severedFlags).toContain(false);
+  });
+
+  it("clears the verb the edge component actually renders", () => {
+    // `data.relLabel` is what LdvEdgeComponent draws — NOT React Flow's own
+    // `label` prop, which type-checks and does nothing. The hide-labels option
+    // shipped inert on exactly that mistake, so this names the field.
+    const nodes: GNode[] = [
+      { id: "a", name: "A", type: "Application" },
+      { id: "b", name: "B", type: "Application" },
+    ];
+    const built = buildLdvFlow(nodes, [{ source: "a", target: "b", type: "uses", label: "uses" }], TYPES);
+    expect((built.edges[0].data as { relLabel: string }).relLabel).not.toBe("");
+
+    const stripped = stripEdgeLabels(built.edges);
+    expect((stripped[0].data as { relLabel: string }).relLabel).toBe("");
+    // Everything else about the edge survives — routing, handles, direction —
+    // so hiding the verbs cannot move an edge.
+    expect({ ...stripped[0], data: null }).toEqual({ ...built.edges[0], data: null });
+    const before = built.edges[0].data as Record<string, unknown>;
+    const after = stripped[0].data as Record<string, unknown>;
+    for (const k of Object.keys(before)) {
+      if (k !== "relLabel") expect(after[k]).toEqual(before[k]);
+    }
+  });
+
+  it("forwards the connection-change marks onto node data", () => {
+    const nodes: GNode[] = [
+      { id: "loses", name: "Loses", type: "Application", lostLink: true },
+      { id: "gains", name: "Gains", type: "Application", gainedLink: true },
+      { id: "fine", name: "Fine", type: "Application" },
+    ];
+    const result = buildLdvFlow(nodes, [], TYPES);
+    const byId = new Map(
+      result.nodes
+        .filter((n) => n.type === "ldvNode")
+        .map((n) => [n.id, n.data as { gainedLink?: boolean; lostLink?: boolean }]),
+    );
+    expect(byId.get("loses")?.lostLink).toBe(true);
+    expect(byId.get("gains")?.gainedLink).toBe(true);
+    expect(byId.get("fine")?.lostLink).toBeUndefined();
+    expect(byId.get("fine")?.gainedLink).toBeUndefined();
+  });
+
+  it("forwards changeState and proposed onto node data", () => {
+    const nodes: GNode[] = [
+      { id: "new", name: "Arriving", type: "Application", changeState: "arriving" },
+      { id: "old", name: "Retiring", type: "Application", changeState: "retired" },
+      { id: "same", name: "Unchanged", type: "Application" },
+    ];
+    const result = buildLdvFlow(nodes, [], TYPES);
+    const byId = new Map(
+      result.nodes
+        .filter((n) => n.type === "ldvNode")
+        .map((n) => [n.id, n.data as { changeState?: string }]),
+    );
+
+    expect(byId.get("new")?.changeState).toBe("arriving");
+    expect(byId.get("old")?.changeState).toBe("retired");
+    expect(byId.get("same")?.changeState).toBeUndefined();
   });
 
   it("creates ldvNode nodes as children of groups", () => {
@@ -499,6 +575,47 @@ describe("filterEndOfLifeNodes", () => {
     // a2's endOfLife date is in the future, so it is not yet end-of-life.
     expect(result.nodes.map((n) => n.id).sort()).toEqual(["a1", "a2", "a3"]);
     expect(result.edges).toHaveLength(2);
+  });
+
+  it("judges end of life against asOfMs when time-travelling", () => {
+    const nodes: GNode[] = [
+      { id: "later", name: "Retires later", type: "Application", lifecycle: { endOfLife: FUTURE } },
+    ];
+    // Viewed from beyond its end-of-life date it is gone...
+    const beyond = new Date(FUTURE).getTime() + 86_400_000;
+    expect(filterEndOfLifeNodes(nodes, [], undefined, beyond).nodes).toHaveLength(0);
+    // ...but from today it is still very much alive.
+    expect(filterEndOfLifeNodes(nodes, [], undefined, Date.now()).nodes).toHaveLength(1);
+  });
+
+  it("keeps a node the consumer marked as retired at the date it is showing", () => {
+    // A card retiring inside a time-travel window IS end-of-life at the viewed
+    // date — dropping it would delete exactly what the view exists to show.
+    const nodes: GNode[] = [
+      {
+        id: "going",
+        name: "On its way out",
+        type: "Application",
+        lifecycle: { active: "2000-01-01", endOfLife: PAST },
+        changeState: "retired",
+      },
+    ];
+    expect(filterEndOfLifeNodes(nodes, []).nodes.map((n) => n.id)).toEqual(["going"]);
+    const beyond = new Date(PAST).getTime() + 86_400_000;
+    expect(filterEndOfLifeNodes(nodes, [], undefined, beyond).nodes.map((n) => n.id)).toEqual([
+      "going",
+    ]);
+  });
+
+  it("keeps a node that is end-of-life today but was alive at a past date", () => {
+    const nodes: GNode[] = [
+      { id: "gone", name: "Retired", type: "Application", lifecycle: { active: "2000-01-01", endOfLife: PAST } },
+    ];
+    expect(filterEndOfLifeNodes(nodes, []).nodes).toHaveLength(0);
+    const before = new Date(PAST).getTime() - 86_400_000;
+    expect(filterEndOfLifeNodes(nodes, [], undefined, before).nodes.map((n) => n.id)).toEqual([
+      "gone",
+    ]);
   });
 });
 

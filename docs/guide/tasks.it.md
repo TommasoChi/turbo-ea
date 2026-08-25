@@ -8,18 +8,36 @@ La pagina **Attività** centralizza tutti gli elementi di lavoro in sospeso in u
 
 I todo sono attività assegnate a voi o da voi create. Possono essere collegati a card specifiche o autonomi.
 
-### Filtri
+### Filtri, ricerca e ordinamento
 
-Utilizzate le schede di stato per filtrare:
+**Chip di origine** — Ogni todo porta un'origine: da dove proviene. Quando la lista mescola todo di più origini, sopra di essa compaiono chip di filtro — cliccate su un chip per mostrare solo i todo di quell'origine (cliccate su più chip per combinarli); ogni chip mostra un conteggio in tempo reale. Le origini sono:
+
+- **Attività di progetto** — Sincronizzata dalla board delle attività di un'iniziativa PPM
+- **Rischio** — Assegnazioni come responsabile del rischio e cicli ricorrenti di attività di mitigazione dal Registro dei rischi GRC
+- **ADR** / **SoAW** — Richieste di firma su decisioni di architettura e Statements of Architecture Work
+- **Approvazione processo** — Revisioni dei flussi di processo in attesa della vostra verifica (BPM)
+- **Estensione** — Creata da un'estensione installata
+- **Manuale** — Creata a mano, su una card o autonoma
+
+Ogni riga porta inoltre un'icona di origine e una striscia di accento codificate per colore, così le liste miste si leggono a colpo d'occhio. Un'attività che un'estensione connettore ha replicato in un tracker esterno (Jira, GitLab, …) mantiene la sua origine reale e mostra il riferimento esterno (ad es. *KAN-6*) come piccolo link — la replica è solo di riferimento e l'attività si completa sempre in Turbo EA.
+
+**Vista raggruppata** — Per impostazione predefinita la lista è suddivisa in una sezione richiudibile per ciascuna origine, in un ordine fisso. Ogni intestazione di sezione mostra l'icona dell'origine, il numero di attività e — quando alcune sono scadute — un contatore rosso, così una sezione richiusa continua a segnalare l'urgenza. Fate clic su un'intestazione per richiuderla o espanderla; le sezioni richiuse vengono ricordate. L'interruttore **Raggruppa per origine** / **Elenco semplice** accanto al controllo di ordinamento passa a un unico elenco piatto (utile per smistare per data di scadenza tra tutte le origini); anche questa scelta viene ricordata. Un elenco in cui tutte le attività condividono la stessa origine viene mostrato piatto automaticamente.
+
+**Stato** — Utilizzate il selettore di stato per filtrare:
 
 - **Aperti** — Attività ancora in sospeso o in corso
 - **In arrivo** — Occorrenze future pianificate di todo ricorrenti non ancora in scadenza
 - **Completati** — Attività completate
 - **Tutti** — Tutto
 
+**Ordinamento** — Ordinate per data di scadenza (i più urgenti per primi), i più recenti per primi, o per origine. La vostra scelta viene ricordata.
+
+**Ricerca** — La casella di ricerca filtra istantaneamente il testo del todo, la card collegata e i nomi di chi ha assegnato e dell'assegnatario.
+
 ### Gestione dei todo
 
 - **Toggle rapido** — Cliccate sulla casella di controllo per segnare un todo come completato (o riaprirlo)
+- **Chi lo ha assegnato** — Nella scheda *Assegnati a me* ogni todo mostra un chip **Da:** con il nome della persona che lo ha assegnato; in *Creati da me* il chip indica invece l'assegnatario
 - **Link alla card** — Se un todo è collegato a una card, cliccate sul nome della card per navigare alla sua pagina di dettaglio
 - **Todo di sistema** — Alcuni todo sono generati automaticamente dal sistema (es. "Rispondi al sondaggio per Card X"). Questi includono un link diretto all'azione pertinente
 

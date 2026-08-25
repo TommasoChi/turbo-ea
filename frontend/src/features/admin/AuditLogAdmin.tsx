@@ -15,8 +15,7 @@ import type {
   ICellRendererParams,
   RowClickedEvent,
 } from "ag-grid-community";
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
+import { gridThemeDark, gridThemeLight } from "@/lib/agGridSetup";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -32,6 +31,13 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useColumnFreeze } from "@/components/grid/useColumnFreeze";
+import { useColumnOrder } from "@/components/grid/useColumnOrder";
+import { colIdOf, isOrderableColumn } from "@/components/grid/columnOrder";
+import type { ColumnOrderItem } from "@/components/grid/ColumnOrderSection";
+import { useCellContextMenu } from "@/components/grid/useCellContextMenu";
+import { useFacetColumnSync } from "@/components/grid/useFacetColumnSync";
+import { arrayFacetBinding } from "@/components/grid/facetColumnSync";
+import { dateColumnFilterDef } from "@/lib/dateColumnFilter";
 import { api } from "@/api/client";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { useThemeMode } from "@/hooks/useThemeMode";
@@ -63,6 +69,8 @@ interface AuditPrefs {
   visibleColumns: string[];
   /** colIds frozen to the leading edge via the header pin. */
   frozenColumns: string[];
+  /** colId order, owned by `useColumnOrder` (header drag + Columns tab). */
+  columnOrder: string[];
   pageSize: number;
 }
 
@@ -72,6 +80,7 @@ function loadAuditPrefs(): AuditPrefs {
     sidebarWidth: 280,
     visibleColumns: ALL_AUDIT_COLUMN_IDS,
     frozenColumns: [],
+    columnOrder: [],
     pageSize: DEFAULT_PAGE_SIZE,
   };
   try {
@@ -96,6 +105,12 @@ function loadAuditPrefs(): AuditPrefs {
           : ALL_AUDIT_COLUMN_IDS,
       frozenColumns: Array.isArray(parsed.frozenColumns)
         ? parsed.frozenColumns.filter(
+            (id): id is string =>
+              typeof id === "string" && ALL_AUDIT_COLUMN_IDS.includes(id),
+          )
+        : [],
+      columnOrder: Array.isArray(parsed.columnOrder)
+        ? parsed.columnOrder.filter(
             (id): id is string =>
               typeof id === "string" && ALL_AUDIT_COLUMN_IDS.includes(id),
           )
@@ -148,11 +163,25 @@ export default function AuditLogAdmin() {
   const [frozenColumns, setFrozenColumns] = useState<string[]>(
     initialPrefs.frozenColumns,
   );
+  const [columnOrderIds, setColumnOrderIds] = useState<string[]>(
+    initialPrefs.columnOrder,
+  );
   // Per-column freeze toggles in the header, persisted with the other prefs.
   const columnFreeze = useColumnFreeze<AuditBatch>(gridRef, {
     frozen: frozenColumns,
     onFrozenChange: setFrozenColumns,
   });
+  // Column order — from the Columns tab's drag handles and from dragging a
+  // column header, which both land here.
+  const columnOrder = useColumnOrder<AuditBatch>(gridRef, {
+    order: columnOrderIds,
+    onOrderChange: setColumnOrderIds,
+  });
+  // One drag can move a column *and* pin it; capture both at drag end.
+  const handleDragStopped = useCallback(() => {
+    columnOrder.syncFromGrid();
+    columnFreeze.syncFrozenFromGrid();
+  }, [columnOrder, columnFreeze]);
 
   // Server-side pagination. AG Grid Community lacks the enterprise
   // server-side row model, so we drive page changes ourselves and let
@@ -169,9 +198,17 @@ export default function AuditLogAdmin() {
       sidebarWidth,
       visibleColumns: Array.from(visibleColumns),
       frozenColumns,
+      columnOrder: columnOrderIds,
       pageSize,
     });
-  }, [sidebarCollapsed, sidebarWidth, visibleColumns, frozenColumns, pageSize]);
+  }, [
+    sidebarCollapsed,
+    sidebarWidth,
+    visibleColumns,
+    frozenColumns,
+    columnOrderIds,
+    pageSize,
+  ]);
 
   const resetVisibleColumns = useCallback(() => {
     setVisibleColumns(new Set(ALL_AUDIT_COLUMN_IDS));
@@ -259,6 +296,43 @@ export default function AuditLogAdmin() {
     [columnFreeze.headerComponentParams],
   );
 
+  // "Show matching" also selects the value in the filter sidebar.
+  //
+  // Origin mirrors into both: the facet becomes a server query param, so it
+  // narrows the whole dataset rather than just the loaded page. Status is
+  // facet-only (`columnFilter: false`) because its column renders the
+  // *translated* label — an equals filter on that text would be stranded by a
+  // locale switch, while the facet keys on the raw status.
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const facetBindings = useMemo(
+    () => ({
+      origin: arrayFacetBinding<AuditBatch>({
+        get: () => filtersRef.current.origins,
+        set: (v) => setFilters((p) => ({ ...p, origins: v as AuditLogFilters["origins"] })),
+      }),
+      status_derived: arrayFacetBinding<AuditBatch>({
+        toFacetValue: (ctx) => (ctx.data ? statusOf(ctx.data).key : null),
+        get: () => filtersRef.current.statuses,
+        set: (v) => setFilters((p) => ({ ...p, statuses: v as AuditLogFilters["statuses"] })),
+        columnFilter: false,
+      }),
+    }),
+    [],
+  );
+  const facetSync = useFacetColumnSync<AuditBatch>(gridRef, {
+    bindings: facetBindings,
+    facetState: filters,
+  });
+
+  // Right-click / long-press cell menu. Column filters on this grid narrow
+  // the loaded page only (the list is server-paginated) — the pre-existing
+  // semantic of its filter popups, unchanged here.
+  const cellMenu = useCellContextMenu<AuditBatch>(gridRef, {
+    excludeColumns: (colId) => colId === "actions",
+    facetSync: facetSync.cellMenu,
+  });
+
   const columnDefs: ColDef<AuditBatch>[] = useMemo(
     () => [
       {
@@ -267,7 +341,8 @@ export default function AuditLogAdmin() {
         headerName: t("auditLog.columns.when"),
         width: 180,
         sort: "desc",
-        filter: "agDateColumnFilter",
+        // Custom comparator — the stock one can't parse ISO-string cells.
+        ...dateColumnFilterDef,
         valueFormatter: (p) => (p.value ? formatDateTime(p.value as string) : ""),
       },
       {
@@ -401,14 +476,28 @@ export default function AuditLogAdmin() {
 
   const visibleColumnDefs = useMemo<ColDef<AuditBatch>[]>(
     () =>
-      columnFreeze.applyFrozen(
-        columnDefs.map((c) => {
-          const id = c.colId ?? c.field ?? "";
-          return { ...c, hide: id ? !visibleColumns.has(id) : false };
-        }),
+      columnOrder.applyOrder(
+        columnFreeze.applyFrozen(
+          columnDefs.map((c) => {
+            const id = c.colId ?? c.field ?? "";
+            return { ...c, hide: id ? !visibleColumns.has(id) : false };
+          }),
+        ),
       ),
-    [columnDefs, visibleColumns, columnFreeze],
+    [columnDefs, visibleColumns, columnFreeze, columnOrder],
   );
+
+  // Feeds the Columns tab's "Column order" section: only the columns actually
+  // on screen, built from the grid's own defs so the ids can never drift.
+  const columnOrderItems = useMemo<ColumnOrderItem[]>(() => {
+    const labels = new Map(AUDIT_GRID_COLUMNS.map((c) => [c.id, t(c.labelKey)]));
+    return visibleColumnDefs
+      .filter((c) => !c.hide && isOrderableColumn(c))
+      .map((c) => {
+        const id = colIdOf(c);
+        return { colId: id, label: labels.get(id) ?? id };
+      });
+  }, [visibleColumnDefs, t]);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -454,6 +543,10 @@ export default function AuditLogAdmin() {
           onToggleFrozen={columnFreeze.toggleFrozen}
           onVisibleColumnsChange={setVisibleColumns}
           onResetColumns={resetVisibleColumns}
+          columnOrderItems={columnOrderItems}
+          columnOrder={columnOrder.orderedIds}
+          onColumnOrderChange={setColumnOrderIds}
+          onResetColumnOrder={columnOrder.resetOrder}
         />
 
         <Box
@@ -516,10 +609,11 @@ export default function AuditLogAdmin() {
 
           <Box
             ref={columnFreeze.containerRef}
-            className={mode === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}
-            sx={{ flex: 1, width: "100%", minHeight: 0, ...columnFreeze.sx }}
+            {...cellMenu.containerProps}
+            sx={{ flex: 1, width: "100%", minHeight: 0, ...columnFreeze.sx, ...cellMenu.sx }}
           >
             <AgGridReact<AuditBatch>
+              theme={mode === "dark" ? gridThemeDark : gridThemeLight}
               key={isRtl ? "rtl" : "ltr"}
               enableRtl={isRtl}
               ref={gridRef}
@@ -529,11 +623,14 @@ export default function AuditLogAdmin() {
               loading={loading}
               animateRows
               getRowId={(p) => p.data.id}
+              onDragStopped={handleDragStopped}
               onRowClicked={(e: RowClickedEvent<AuditBatch>) => {
                 if (e.data) setDrawerBatch(e.data);
               }}
+              {...cellMenu.gridProps}
             />
           </Box>
+          {cellMenu.menu}
 
           {total > pageSize && (
             <Stack

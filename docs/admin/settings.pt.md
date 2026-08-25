@@ -9,7 +9,7 @@ A página de **Configurações** em **Admin → Configurações** (`/admin/setti
 | **IA** | `/admin/settings?tab=ai` | Provedor LLM, modelo, backend de busca web, alternâncias de sugestão IA por tipo de card | [Capacidades de IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Vinculação em massa de produtos a entradas de endoflife.date | [Fim de vida (EOL)](eol.md) |
 | **Portais web** | `/admin/settings?tab=web-portals` | Slugs de portais públicos somente leitura, filtros de visibilidade | [Portais web](web-portals.md) |
-| **ServiceNow** | `/admin/settings?tab=servicenow` | Conexão ServiceNow, configuração de sincronização, mapeamento de identidade | [Integração com ServiceNow](servicenow.md) |
+| **Integrações** | `/admin/settings?tab=integrations` | Sincronização ServiceNow e integrações adicionadas por extensões | [Integração com ServiceNow](servicenow.md) |
 | **TurboLens** | `/admin/settings?tab=turbolens` | Alternâncias específicas de TurboLens, regulamentações habilitadas, polling de análises | Veja a seção [Configurações do TurboLens](#configuracoes-do-turbolens) abaixo |
 | **Migração** | `/admin/settings?tab=migration` | Importações de outras plataformas EA e transferência completa do espaço de trabalho entre instâncias do Turbo EA | [Migração de plataforma](migration.md) |
 | **Registro de auditoria** | `/admin/settings?tab=audit-log` | Registro de alterações — quem mudou o quê e se veio da interface web, da API ou de uma ferramenta de IA | — |
@@ -140,6 +140,12 @@ Alterne o módulo de **Business Process Management** ligado ou desligado. Quando
 
 Isso é útil para organizações que não usam BPM e desejam uma experiência de navegação mais limpa.
 
+### Exigir um aprovador distinto
+
+Desativado por predefinição. Quando ativado, quem submete uma revisão de um fluxo de processo não pode ser quem a aprova — segregação de funções, tal como esperam sistemas de qualidade como BPx e ISO 9001.
+
+Deixe-o desativado numa equipa pequena onde a mesma pessoa redige e aprova. Ativá-lo não altera o que fica registado: submissões, aprovações, rejeições e retiradas ficam no separador **Histórico** do cartão em qualquer caso.
+
 ## Módulo PPM
 
 Alterne o módulo de **Gestão de Portfólio de Projetos** (PPM) ligado ou desligado. Quando desabilitado:
@@ -159,6 +165,34 @@ Alterne o módulo de **Governança, Risco e Conformidade** (GRC) ligado ou desli
 - Os riscos e os achados de conformidade permanecem no banco de dados — as permissões subjacentes `risks.*` e `compliance.*` continuam inalteradas, de modo que os dados são preservados e reaparecem sem alterações se o módulo for reativado
 
 Consulte o [guia do GRC](../guide/grc.md) para a referência completa de funcionalidades.
+
+## Notificações de atualização
+
+O Turbo EA verifica uma vez por dia se foi publicada uma versão mais recente e, quando existe, coloca uma notificação no sino de cada utilizador cujo perfil conceda `admin.settings`. Ao clicar, as notas de lançamento — o changelog dessa versão — abrem numa caixa de diálogo dentro do Turbo EA. Cada notificação continua a mostrar a versão que anunciou, por mais tempo que já esteja no sino: as notas são lidas do changelog incluído na imagem, pelo que não implicam qualquer pedido de saída e funcionam de igual modo numa instalação isolada. Apenas uma versão que ainda não tenha instalado vem da cache da verificação diária, porque um changelog escrito no momento da construção não a consegue descrever; para essas, um botão **Ver no GitHub** abre a página da versão num novo separador.
+
+As notificações levam o nome configurado para esta instância, para que uma instalação renomeada não se anuncie com outro nome de produto.
+
+A verificação **apenas avisa**: nada é descarregado e nada é alterado no anfitrião. A atualização continua a ser o procedimento deliberado e com cópia de segurança descrito em [Operações](operations.md#the-upgrade-procedure). Um administrador que prefira não ser avisado pode silenciar a linha **Atualização disponível** nas suas próprias preferências de notificação.
+
+Desativar o interruptor elimina por completo o pedido diário ao github.com, que é o que uma instalação isolada ou com saída restringida necessita. Em qualquer dos casos a instância funciona normalmente: se o feed de versões estiver inacessível, a falha é registada discretamente e nada é apresentado.
+
+### Depois de a atualização ficar concluída
+
+Um segundo interruptor, **Anunciar as atualizações aos utilizadores**, cobre a outra metade. Quando a instância reinicia numa versão mais recente, **todos** os utilizadores — não apenas os administradores — recebem uma notificação a indicar que a aplicação foi atualizada, e um clique mostra o changelog de todas as versões atravessadas. Uma instância que salta de 2.57.0 para 2.60.0 mostra as quatro versões, não apenas a última. Cada um destes avisos permanece ligado à sua própria atualização: abrir um de há um ano continua a mostrar as versões que *essa* atualização percorreu.
+
+O anúncio é enviado **uma vez por versão**: reiniciar dez vezes na mesma versão produz uma única notificação e uma reversão não produz nenhuma. Uma instalação nova não anuncia nada, porque não há qualquer atualização a descrever. Estas notas vêm do changelog incluído na imagem, pelo que esta metade não necessita de rede alguma.
+
+Esta é **apenas na aplicação** e nunca é enviada por e-mail: chega a todos os utilizadores ativos em cada atualização, e um canal de e-mail transformaria cada versão de correção num envio em massa. Cada utilizador pode silenciá-la em **Notificações de atualização** nas suas próprias preferências, onde o interruptor de e-mail surge desativado.
+
+### Notificações da loja de extensões
+
+Um terceiro interruptor, **Notificações da loja de extensões**, faz o mesmo para a [loja de extensões](extensions.md). Uma vez por dia a instância lê o catálogo público da loja e, quando algo mudou, avisa todos os utilizadores cujo perfil concede `admin.manage_extensions` — a mesma permissão que abre a página Extensões. São anunciadas duas coisas: uma extensão publicada na loja que não tem instalada e uma versão mais recente de alguma que tem.
+
+Os dias de lançamento mais intensos continuam legíveis: por muitas extensões que mudem, cada administrador recebe **uma** notificação por tipo («3 atualizações de extensões disponíveis»), não uma por extensão. Cada mudança é anunciada **uma só vez** — um catálogo que fica um mês sem alterações produz uma notificação, não trinta — e um clique abre o separador Loja dentro do Turbo EA.
+
+A primeira leitura bem-sucedida do catálogo não anuncia **nenhuma** extensão nova: uma instância que vê a loja pela primeira vez comunicaria todo o seu conteúdo. As atualizações de extensões já instaladas são comunicadas de imediato, porque são sempre poucas e diretamente acionáveis.
+
+Tal como a verificação de versões, isto é **apenas informativo** — nada é descarregado nem instalado, e instalar continua a ser uma ação deliberada na página Extensões. Desativar o interruptor elimina por completo o pedido diário à loja. Cada administrador pode silenciar separadamente as linhas **Nova extensão disponível** e **Atualização de extensão disponível** nas suas próprias preferências de notificação.
 
 ## Botão Apoiar
 

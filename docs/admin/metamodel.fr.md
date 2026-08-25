@@ -53,9 +53,11 @@ Les champs définissent les attributs personnalisés disponibles sur les fiches 
 | **Libellé** | Nom d'affichage |
 | **Type** | text, multiline_text, number, cost, boolean, date, url, single_select ou multiple_select |
 | **Options** | Pour les champs de sélection : les choix disponibles avec libellés et couleurs optionnelles |
-| **Obligatoire** | Si le champ doit être rempli pour le calcul du score de qualité des données |
+| **Obligatoire** | Si le champ est obligatoire — voir les règles d'application ci-dessous |
 | **Qualité des données** | La contribution de chaque champ au score est gérée dans le panneau **Qualité des données** (voir ci-dessous) |
 | **Lecture seule** | Empêche la modification manuelle (utile pour les champs calculés) |
+
+**Application des champs obligatoires.** La création d'une carte n'exige jamais ces champs — les cartes peuvent être créées rapidement et complétées plus tard. Tant qu'un champ obligatoire reste vide, le score de qualité des données de la carte reste à **0** et la page de détail affiche un bandeau d'avertissement listant les champs à remplir. Lors de la modification d'une section de carte, celle-ci ne peut pas être enregistrée tant que ses champs obligatoires ne sont pas remplis, et l'API refuse de vider un champ obligatoire déjà renseigné. Les champs booléens et en lecture seule (calculés) sont exemptés.
 
 Cliquez sur **+ Ajouter un champ** pour créer un nouveau champ, ou cliquez sur un champ existant pour le modifier dans le **Dialogue de l'éditeur de champs**.
 
@@ -85,6 +87,8 @@ Les ID sont **uniques globalement, en lecture seule, jamais réutilisés ni modi
 
 Le score de **qualité des données** d'une fiche mesure de manière pondérée son niveau de complétude. Chaque facteur contributeur – chaque champ ainsi que cinq facteurs intégrés – est géré au même endroit : l'onglet **Qualité des données** de l'éditeur de type de fiche. (L'éditeur est organisé en onglets – Principal, Relations, Rôles des parties prenantes et Qualité des données – les traductions sont accessibles via l'icône de l'en-tête.)
 
+**Les champs obligatoires priment sur le score.** Tant qu'un champ obligatoire d'une fiche reste vide, son score reste à **0** quelles que soient les pondérations — le calcul pondéré ne s'applique qu'une fois tous les champs obligatoires remplis (les champs booléens et en lecture seule sont exemptés ; voir le réglage **Obligatoire** ci-dessus).
+
 L'importance de chaque facteur se règle avec un simple curseur à quatre niveaux, qui affiche aussi le nombre sous-jacent :
 
 - **Ignorer (0)** – entièrement exclu du score.
@@ -92,7 +96,7 @@ L'importance de chaque facteur se règle avec un simple curseur à quatre niveau
 - **Important (2)** – compte deux fois plus.
 - **Critique (3)** – compte trois fois plus.
 
-Le panneau liste les cinq **facteurs intégrés** – **Description**, **Cycle de vie** (selon qu'une date de cycle de vie est renseignée), **Relations obligatoires**, **Étiquettes obligatoires** et **Rôles des parties prenantes** (chaque rôle défini pour le type est satisfait dès qu'une partie prenante y est affectée) – suivis de chaque champ regroupé par section, avec le même curseur. Par exemple, réglez le **Cycle de vie** sur *Ignorer* pour un type dont les fiches ne portent légitimement jamais de dates, afin qu'elles ne soient pas pénalisées.
+Le panneau liste les cinq **facteurs intégrés** – **Description**, **Cycle de vie** (selon qu'une date de cycle de vie est renseignée), **Relations obligatoires**, **Étiquettes obligatoires** et **Rôles des parties prenantes** (un seul emplacement, satisfait dès qu'une personne est affectée à la fiche dans un rôle qui compte pour la qualité des données) – suivis de chaque champ regroupé par section, avec le même curseur. Par exemple, réglez le **Cycle de vie** sur *Ignorer* pour un type dont les fiches ne portent légitimement jamais de dates, afin qu'elles ne soient pas pénalisées.
 
 Une barre de **composition du score** en haut du panneau montre la part de chaque facteur dans le score maximal possible, pour voir d'un coup d'œil quels facteurs dominent. Dans la mise en page de la fiche de l'onglet **Principal**, chaque champ – ainsi que les sections intégrées Description, Cycle de vie et Relations – affiche un petit badge avec son niveau actuel, pour voir la pondération sans quitter cet onglet.
 
@@ -116,6 +120,17 @@ Lorsqu'aucun sous-type n'est sélectionné sur une fiche (ou que le type n'a pas
 #### Rôles de parties prenantes
 
 Définissez des rôles personnalisés pour ce type (par ex. « Responsable Applicatif », « Responsable Technique »). Chaque rôle porte des **permissions au niveau de la fiche** qui sont combinées avec le rôle au niveau de l'application de l'utilisateur lors de l'accès à une fiche. Voir [Utilisateurs et rôles](users.md) pour plus de détails sur le modèle de permissions.
+
+Chaque rôle possède une **clé** (l'identifiant stocké sur les fiches, utilisé par les colonnes d'import/export `stakeholder:<clé_du_rôle>`) et un **libellé** (ce que voient les utilisateurs). La clé suit la même convention que toute autre clé du métamodèle — uniquement des lettres et des chiffres, commençant par une lettre, 3 à 50 caractères, par convention en camelCase comme `businessArchitect`. Elle est renseignée automatiquement à partir du libellé, vous avez donc rarement besoin d'en saisir une.
+
+Chaque rôle porte également un interrupteur **Compte pour la qualité des données**. Le score de qualité comporte un seul emplacement « parties prenantes », satisfait dès qu'une personne est affectée à la fiche dans un rôle où cet interrupteur est actif. Désactivez-le pour les rôles purement passifs — l'**Observateur** intégré est livré désactivé, afin qu'observer une fiche ne vaille jamais responsabilité. Un type dont tous les rôles sont désactivés ne contribue à aucun emplacement. Basculer l'interrupteur recalcule immédiatement le score de toutes les fiches du type.
+
+Les rôles peuvent être retirés de deux façons :
+
+- **Archiver** — le rôle demeure sur les fiches qui l'utilisent déjà mais ne peut plus être attribué, et il cesse d'accorder ses permissions au niveau de la fiche. Les rôles archivés apparaissent derrière le commutateur **Afficher les archivés** et peuvent être restaurés à tout moment. C'est le bon choix pour un rôle réellement utilisé.
+- **Supprimer** — définitif, et proposé uniquement tant que le rôle n'est pas utilisé. Turbo EA refuse de supprimer un rôle détenu par quelqu'un sur une fiche de ce type, ciblé par une enquête, ou qui est le dernier rôle actif du type ; la boîte de dialogue de confirmation précise le motif et propose de l'archiver à la place. C'est ainsi que l'on nettoie un rôle créé par erreur.
+
+La clé d'un rôle peut être corrigée tant que **personne ne détient le rôle** — les enquêtes qui le ciblent suivent le renommage automatiquement, et renommer l'unique rôle d'un type ne pose pas de problème puisque le rôle lui survit. Dès que quelqu'un détient le rôle, la clé est verrouillée et le champ en explique la raison. Les rôles créés avant cette convention conservent leur clé existante et continuent de fonctionner ; seule une clé nouvelle ou modifiée est vérifiée.
 
 #### Traductions
 
@@ -148,6 +163,10 @@ Les types de relations définissent les connexions autorisées entre les types d
 | **Cardinalité** | n:m (plusieurs-à-plusieurs) ou 1:n (un-à-plusieurs) |
 
 Cliquez sur **+ Nouveau type de relation** pour créer une relation, ou cliquez sur un type existant pour modifier ses libellés et attributs.
+
+Les champs **Libellé** et **Libellé inverse** sont saisis dans la langue que vous utilisez actuellement — l'intitulé du champ indique laquelle (par exemple *Libellé (Français)*). Renommer une relation met à jour cette langue partout où le verbe apparaît : la section **Relations** d'une fiche, les colonnes de relation de l'inventaire, les rapports, les portails et les diagrammes. Les autres langues conservent leur propre formulation jusqu'à ce que vous les traduisiez.
+
+Utilisez **Gérer les traductions** en haut de l'onglet Types de relation pour traduire les verbes de toutes les relations dans chaque langue activée en une seule fois. Choisissez un onglet de langue, saisissez la formulation à côté de la source anglaise et enregistrez — le compteur de chaque onglet indique combien de verbes manquent encore dans cette langue. L'anglais n'y figure pas : c'est la formulation portée par la relation elle-même, et un verbe non traduit y revient.
 
 ### Attributs de relation
 

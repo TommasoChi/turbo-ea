@@ -114,6 +114,10 @@ export const NOTIFICATION_TYPE_COLORS = {
   soaw_sign_requested: RAG_COLORS.red, // #d32f2f
   soaw_signed: RAG_COLORS.green, // #2e7d32
   survey_request: "#0288d1", // light blue 700
+  app_update_available: "#00796b", // teal 700
+  app_updated: "#5e35b1", // deep purple 600
+  extension_available: "#00838f", // cyan 800
+  extension_update_available: "#ef6c00", // orange 800
 } as const;
 
 // ── Data quality buckets (Dashboard chart) ───────────────────────────────
@@ -200,6 +204,18 @@ export const TIMELINE_COLORS = {
   past: "#e68a00",
   future: "#7c4dff",
   reset: "#ef6c00",
+  /** Go-live accent — a card becoming active on the timeline. Deliberately
+   *  more saturated than `brand.primary`: transition marks are 3px wide, and
+   *  at that size the darker brand blue reads as grey next to the red
+   *  retirement mark. Also used for the matching highlight pulse, so the mark
+   *  and the card it points at are unmistakably the same colour. */
+  goLive: "#0177FF",
+  /** A transition mark where cards both arrive and retire — blue and red at
+   *  once. As vibrant as `goLive` and `STATUS_COLORS.error`, since it sits in
+   *  the same 3px-wide company. Deliberately a DIFFERENT purple from `future`:
+   *  on the canvas that violet means "arriving later", and reusing it on the
+   *  track would give one colour two meanings inside the same feature. */
+  mixed: "#9c27b0",
 } as const;
 
 // ── Categorical series ──────────────────────────────────────────────────

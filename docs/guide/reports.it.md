@@ -21,6 +21,18 @@ Questo è ideale per l'analisi del portfolio — ad esempio, posizionare le appl
 
 Quando l'IA è configurata e le analisi del portafoglio sono abilitate da un amministratore, il report del portafoglio mostra un pulsante **Analisi IA**. Cliccandolo viene inviato un riepilogo della vista corrente al provider IA, che restituisce analisi strategiche su rischi di concentrazione, opportunità di modernizzazione, problematiche del ciclo di vita e bilanciamento del portafoglio. Il pannello delle analisi è comprimibile e può essere rigenerato dopo aver modificato filtri o raggruppamenti.
 
+### Dal report all'inventario
+
+Facendo clic su un gruppo si apre un pannello con le schede di quel gruppo. Il suo pulsante **Visualizza nell'inventario** apre l'inventario esattamente su quella porzione. Quando il report è raggruppato per un campo proprio del tipo di scheda, l'inventario arriva raggruppato per lo stesso campo: il gruppo cliccato è espanso e tutti gli altri sono compressi (i conteggi restano visibili), e vengono trasferiti la ricerca e i filtri di attributi, relazioni e tag del report — pronto per «seleziona tutto» e la [modifica di massa](inventory.md#mass-edit). Raggruppando per un tipo di scheda correlato (ad esempio Organizzazione), l'inventario arriva invece filtrato su quella scheda correlata. Il pulsante è nascosto quando i *gruppi annidati* sono attivi: un sottoalbero aggregato non corrisponde a un singolo filtro dell'inventario.
+
+### Comprimere i filtri
+
+La riga **Filtri** si può richiudere: un clic sulla sua intestazione nasconde i controlli di filtro e restituisce al grafico lo spazio verticale. L'impostazione viene memorizzata insieme al resto della configurazione del report, così un report si riapre come lo si è lasciato. Anche da chiusa, l'intestazione continua a indicare quanti filtri sono attivi e **Cancella tutto** resta raggiungibile: una sezione richiusa non nasconde mai il fatto che i dati sono filtrati.
+
+### Viaggio nel tempo
+
+Il cursore della linea temporale offre gli stessi strumenti di transizione del [Report Dipendenze](#report-dipendenze): segni su ogni data in cui un'applicazione entra in produzione (blu) o viene dismessa (rosso), pastiglie che nominano le applicazioni che cambiano finché il cursore resta su un segno, pulsanti freccia per passare da un cambiamento all'altro e chip che riassumono la trasformazione quando si guarda al futuro («+4 in arrivo · −7 in uscita» — inclusi anche nelle intestazioni di stampa ed esportazione). Un clic su un segno o su una pastiglia mette in evidenza le applicazioni che cambiano in quel punto: il resto della vista si attenua mentre pulsano, e un'applicazione già dismessa alla data selezionata viene mostrata solo per la durata della pulsazione, poi nascosta di nuovo.
+
 ## Portfolio flessibile
 
 ![Portfolio flessibile — portfolio di Oggetti dati raggruppato per Applicazione e colorato per Sensibilità dei dati](../assets/img/it/57_report_portfolio_flessibile.png)
@@ -39,7 +51,14 @@ Quando le relazioni di una scheda portano un valore di «tipo» — ad esempio i
 
 Quando si raggruppa per un tipo di scheda correlato che supporta la gerarchia (come Business Capability o Organizzazione), accanto al selettore *Raggruppa per* compare un interruttore **Gruppi annidati**. Attivandolo, i gruppi vengono visualizzati come riquadri annidati secondo la gerarchia padre/figlio del tipo correlato — come nella Mappa delle Capability. Il selettore **Profondità di visualizzazione** controlla quanti livelli vengono espansi: ogni scheda compare sotto il suo gruppo visibile più profondo e i gruppi oltre il limite di profondità riportano le proprie schede all’antenato visibile più vicino. I rami senza schede vengono nascosti.
 
+### Scegliere il numero di colonne
+
+La griglia di schede dei report **Portfolio**, **Portfolio flessibile**, **Mappa delle capability** e **Mappa dei processi** dispone di un **selettore di colonne** nella barra degli strumenti: tre pulsanti per una, due o tre colonne. Scegliete meno colonne quando le schede sono dense e devono restare abbastanza larghe da leggersi; scegliete tre per vedere più panorama in una sola volta. La scelta viene ricordata per report, accompagna un [report salvato](saved-reports.md) ed è usata in stampa e in esportazione. Gli schermi stretti continuano a ridursi da soli a una o due colonne. La scelta si propaga verso il basso: ogni livello sotto il primo riceve una colonna in meno. Con una colonna il livello 2 si dispone su tre e il livello 3 su due; con tre colonne tutto ciò che sta sotto resta impilato a piena larghezza. Un livello continua a ridursi da solo quando una scheda è davvero troppo stretta.
+
 ## Mappa delle Capability
+
+Un clic su una capability apre un pannello laterale con tutte le applicazioni del suo sottoalbero. Al livello più basso il pannello offre **Vedi nell'inventario**, che porta alle applicazioni collegate.
+
 
 ![Mappa delle Business Capability](../assets/img/it/11_mappa_capacita.png)
 
@@ -48,6 +67,12 @@ La **Mappa delle Capability** mostra una **mappa di calore** gerarchica delle bu
 - **Gerarchia** — Le capability principali contengono le loro sotto-capability
 - **Colorazione a mappa di calore** — I blocchi sono colorati in base a una metrica selezionata (es. numero di applicazioni di supporto, qualità media dei dati o livello di rischio)
 - **Cliccate per esplorare** — Cliccate su qualsiasi capability per approfondire i dettagli e le applicazioni di supporto
+
+**Limitare a capacità specifiche** — Per impostazione predefinita la mappa disegna tutte le capacità. Usa il chip delle capacità nella barra degli strumenti per aprire un selettore e scegliere una o più capacità; la mappa mostrerà allora solo quelle e tutto ciò che si trova sotto di esse. Le sotto-capacità sono incluse automaticamente, quindi scegliendo una capacità di primo livello ottieni l'intero ramo. La **Profondità di visualizzazione** si conta a partire dalle capacità selezionate, perciò *Livello 2* significa sempre due livelli sotto ciò che stai guardando. L'ambito viene salvato con il report, così un report salvato si riapre sullo stesso ramo.
+
+**Viaggio nel tempo** — Il cursore della linea temporale offre gli stessi strumenti di transizione del [Report Dipendenze](#report-dipendenze): segni su ogni data in cui un'applicazione entra in produzione (blu) o viene dismessa (rosso), pastiglie che nominano le applicazioni che cambiano finché il cursore resta su un segno, pulsanti freccia per passare da un cambiamento all'altro e chip che riassumono la trasformazione quando si guarda al futuro (inclusi anche nelle intestazioni di stampa ed esportazione). Un clic su un segno o su una pastiglia mette in evidenza il cambiamento: con **Mostra applicazioni** attivo, i chip delle applicazioni che cambiano pulsano mentre il resto si attenua, e un'applicazione già dismessa alla data selezionata viene mostrata solo per la durata della pulsazione; con l'opzione disattivata, l'evidenziazione ricade sui blocchi delle capacità che contengono le applicazioni che cambiano — blu dove queste soltanto arrivano, rosso dove vengono soltanto dismesse, viola dove accadono entrambe le cose.
+
+**Comprimere i filtri** — La riga **Filtri applicazioni** si può richiudere; un clic sulla sua intestazione recupera lo spazio. Lo stato viene salvato con il report, il numero di filtri attivi resta visibile sull'intestazione richiusa e **Cancella tutto** rimane raggiungibile senza doverla riaprire.
 
 ## Report Ciclo di vita
 
@@ -61,6 +86,8 @@ Il **Report Ciclo di vita** mostra una **visualizzazione temporale** di quando i
 
 I componenti sono visualizzati come barre orizzontali che attraversano le fasi del ciclo di vita: Plan, Phase In, Active, Phase Out e End of Life.
 
+**Limitare a schede specifiche** — Una volta scelto un tipo di scheda, il chip accanto apre un selettore: scegli una o più schede e la cronologia mostrerà solo quelle e tutto ciò che si trova sotto di esse. Le schede figlie sono incluse automaticamente. Il chip resta disattivato finché il selettore è su *Tutti i tipi*, perché un ambito richiede una sola gerarchia.
+
 ## Report Dipendenze
 
 ![Report Dipendenze](../assets/img/it/13_dipendenze.png)
@@ -71,6 +98,9 @@ Il **Report Dipendenze** visualizza le **connessioni tra componenti** come un gr
 - **Filtro per tipo** — Mostrate solo specifici tipi di card e tipi di relazione
 - **Esplorazione interattiva** — Cliccate su qualsiasi nodo per ricentrare il grafo su quella card
 - **Analisi dell'impatto** — Comprendete il raggio d'azione delle modifiche a un componente specifico
+- **Viaggio nel tempo** — Una volta centrata una scheda (o passati alla vista tabella), trascinate il cursore della linea temporale per vedere il panorama così com'è a una data qualsiasi. Le schede non ancora in esercizio vengono nascoste: una scheda entra nel panorama alla sua data **Attivo**, quindi se quella data è ancora futura, o manca del tutto, la scheda resta fuori dalla vista predefinita. Le schede che **arrivano** tra oggi e una data futura fanno semplicemente parte del panorama a quella data: hanno un contorno viola e nessuna etichetta, perché il viaggio nel tempo mostra lo stato come sarà. Le schede **dismesse** restano sul diagramma — attenuate e con l'etichetta *DISMESSA* — a qualsiasi data successiva alla dismissione: una trasformazione mostra così sia ciò che rimuove sia ciò che lascia. L'interruttore **Mantieni le schede dismesse**, nella barra degli strumenti, le nasconde per mostrare solo le schede attive alla data selezionata. Il suo speculare, **Anteprima delle schede pianificate**, mostra le schede non ancora avviate — attenuate e con l'etichetta *IN ARRIVO* — a qualsiasi data precedente al loro avvio: anche una vista presente o passata mostra così cosa arriverà. La linea temporale è segnata con ogni data in cui le schede del diagramma visualizzato entrano in produzione (blu) o vengono dismesse (rosso); cliccate su un segno per portare il cursore direttamente su quel cambiamento, oppure passate da un cambiamento all'altro con le frecce accanto al cursore. Finché il cursore resta su un segno, le schede che esso conta vengono elencate come pastiglie sotto i segni, raggruppate dietro un **+** quelle che entrano in produzione e un **−** quelle dismesse — ogni pastiglia porta il colore del proprio tipo di scheda e un clic evidenzia solo quella scheda. Ogni segno è blu quando vi entrano solo schede in produzione, rosso quando vengono solo dismesse e viola quando accadono entrambe le cose. Quando i cambiamenti sono ravvicinati, la linea temporale li unisce in un unico segno, disegnato più largo ed etichettato con l'intervallo che copre; una scheda che entra in produzione e viene dismessa in quell'intervallo è elencata su entrambi i lati. Le frecce trattano un segno unito come un'unica tappa: una pressione lo supera per intero invece di percorrere una a una le date che copre. Quando il cursore si trova su un segno unito, il panorama è quello della **fine** del suo intervallo — tutto ciò che copre è avvenuto — e la data accanto al cursore indica quell'intervallo anziché un singolo giorno. Il clic — come il salto con le frecce — evidenzia anche le schede coinvolte: la tela si attenua per un istante mentre pulsano nel colore del segno, e una scheda dismessa nascosta da **Mantieni le schede dismesse** viene mostrata solo per la durata della pulsazione. Guardando al futuro, dei chip sopra il cursore riassumono la trasformazione (+4 in arrivo · −7 in uscita). Le relazioni verso schede dismesse sono rese con tratteggio rosso — le dipendenze che la trasformazione recide — e finché il cursore si trova su un segno, le schede dismesse in quel punto restano sul diagramma — attenuate e con l'etichetta *DISMESSA* — anche con **Mantieni schede dismesse** disattivato. Le schede che restano sono contrassegnate dove cambiano le loro connessioni: un'icona rossa di collegamento spezzato dove una vicina viene dismessa, una blu dove una vicina entra in esercizio, ed entrambe quando accadono entrambe le cose. È il segno a portarle: allontanandosene spariscono, così una dismissione non contrassegna più le sue vicine a ogni data successiva. Il cursore si applica a tutte le viste e la data viene salvata con il report.
+
+La scheda che mettete al centro determina quanto vedete: per questo il selettore elenca per primi, in ogni tipo, le schede meglio collegate. Una capability è di solito la scelta più rivelatrice, perché è l'unico tipo di scheda che raggiunge in un solo passo gli obiettivi sopra e le applicazioni sotto.
 
 ### Layered Dependency View (vista delle dipendenze a livelli)
 
@@ -91,15 +121,16 @@ Passate alla **Layered Dependency View** usando i pulsanti di modalità di visua
 - **Cliccate per ispezionare** — Cliccate su qualsiasi nodo per aprire il pannello laterale di dettaglio della scheda.
 - **Ricentrare** — Maiusc+clic o pressione prolungata su una scheda per centrare il diagramma su di essa; i pulsanti **Torna al selettore di schede**, **Scheda precedente** e **Scheda successiva** della barra degli strumenti percorrono la cronologia di navigazione.
 - **Modalità evidenziazione** — Passate il mouse su una scheda per evidenziare le sue connessioni; sui dispositivi touch, attivate la **Modalità evidenziazione** nel pannello dei controlli per evidenziare con il tocco.
-- **Modalità espansione** — Attivate la **Modalità espansione** nel pannello dei controlli, quindi cliccate su una scheda per mostrare tutte le sue relazioni su richiesta.
+- **Modalità espansione** — Attivate la **Modalità espansione** nel pannello dei controlli, quindi cliccate su una scheda per mostrare tutte le sue relazioni su richiesta. La scheda su cui il diagramma è centrato ha un doppio bordo nel colore del suo tipo, e ogni scheda che espandete ne ha uno più sottile: i vostri riferimenti restano visibili man mano che il diagramma cresce.
 - **Mostra genitore / Mostra figli** — Due alternative mirate alla modalità espansione. Attivate **Mostra genitore** (freccia in su) o **Mostra figli** (freccia in giù) nel pannello dei controlli, quindi cliccate su una scheda per aggiungere al diagramma solo il suo elemento padre della gerarchia o i suoi figli diretti. Le schede mostrate rimangono nel diagramma — così potete combinare genitori e figli — e vengono rimosse quando ricentrate o reimpostate la vista.
 - **Nessuna scheda centrale richiesta** — Nel report Dipendenze la Layered Dependency View mostra tutte le schede che corrispondono al filtro di tipo corrente, quindi non dovete scegliere prima una scheda di partenza.
 
 **Personalizzare la vista** (dalla barra degli strumenti)
 
-- **Menu di visualizzazione scheda** — Attivate l'etichetta del **tipo** e un **punto di stato del ciclo di vita**, abilitate gli **indicatori di gerarchia** (un piccolo chevron su ogni scheda che ha un genitore sopra o figli sotto non presenti nel diagramma — un suggerimento per usare gli strumenti Mostra) e scegliete **campi attributo aggiuntivi** da mostrare su ogni scheda — i primi due appaiono sulla scheda e l'insieme completo compare nel tooltip al passaggio del mouse. Le scelte vengono ricordate tra le visite.
-- **Mostra schede a fine vita** — Le schede correlate il cui ciclo di vita ha raggiunto la fine vita vengono nascoste per impostazione predefinita per mantenere il grafico focalizzato; attivate questa opzione (nel menu **Visualizzazione schede**) per farle ricomparire. La scheda su cui siete centrati viene sempre mostrata, anche se è essa stessa a fine vita.
-- **Mostra i valori delle relazioni** — Molte relazioni possono essere qualificate con un valore (ad es. un'applicazione *supporta* una capacità come *Principale*, *Secondario* o *Nessun supporto*). Quando è attivo (impostazione predefinita), questi valori appaiono tra parentesi quadre accanto all'etichetta della relazione (*supporta [Principale]*) e sono inclusi nelle esportazioni di immagini. Disattivatelo nel menu **Visualizzazione schede** per una vista più pulita; le relazioni senza valore restano invariate in entrambi i casi.
+- **Mostra sulla scheda** — Un pulsante dedicato della barra degli strumenti (l'icona a forma di occhio) elenca come **caselle di spunta** tutto ciò che una scheda può mostrare: l'etichetta del **tipo**, il **sottotipo**, un **indicatore di stato del ciclo di vita** e ogni **campo attributo** disponibile, raccolto sotto il tipo di scheda a cui appartiene. Le prime due righe compaiono sulla scheda stessa e l'insieme completo nel suggerimento. Un contrassegno sul pulsante conta ciò che è attualmente mostrato. Le scelte vengono ricordate tra una visita e l'altra e seguono **Crea diagramma**: un diagramma DrawIO generato da questo report si apre con le stesse righe, scelte dallo stesso menu. Su un telefono l'elenco si apre a schermo intero. **Cancella tutto** toglie tutte le spunte in una volta.
+- **Mostra schede a fine vita** — Le schede correlate che hanno raggiunto il fine vita **alla data scelta sulla linea temporale** vengono nascoste per impostazione predefinita per mantenere il grafico focalizzato; attivate questa opzione (nel menu **Opzioni di visualizzazione**) per farle ricomparire. La scheda su cui siete centrati viene sempre mostrata, anche se è essa stessa a fine vita.
+- **Mostra le etichette delle relazioni** — Il verbo di ogni relazione (*supporta*, *usa*, …) è disegnato sulla sua linea. Attivo per impostazione predefinita; disattivatelo nel menu **Opzioni di visualizzazione** per una tela più pulita in un panorama denso. Le linee e le loro punte di freccia continuano a mostrare cosa è collegato a cosa, e in che direzione.
+- **Mostra i valori delle relazioni** — Molte relazioni possono essere qualificate con un valore (ad es. un'applicazione *supporta* una capacità come *Principale*, *Secondario* o *Nessun supporto*). Quando è attivo (impostazione predefinita), questi valori appaiono tra parentesi quadre accanto all'etichetta della relazione (*supporta [Principale]*) e sono inclusi nelle esportazioni di immagini. Disattivatelo nel menu **Opzioni di visualizzazione** per una vista più pulita; le relazioni senza valore restano invariate in entrambi i casi.
 - **Riorganizzare** — Trascinate una scheda per spostarla all'interno del suo livello, oppure trascinate un intero **riquadro di livello** per spostarlo con tutte le sue schede. **Reimposta vista** (nella barra degli strumenti a sinistra) ripristina la disposizione automatica e cancella ogni esplorazione.
 - **Sfondo** — Alternate lo sfondo del canvas tra griglia, punti e nessuno.
 - **Esportazione e schermo intero** — Esportate il diagramma in **PNG** o **SVG**, oppure apritelo a **schermo intero**.
@@ -144,6 +175,8 @@ Quando almeno un'Origine costi è attiva, i rettangoli del treemap diventano **c
 - **Più Origini costi attive** — il drill-down mostra **un treemap per origine affiancati** (1 colonna su schermi stretti, 2 su quelli ampi). Ogni pannello ha la propria intestazione, il proprio totale e la propria `% del totale` nel tooltip — così i diversi tipi di card mantengono la propria scala invece di essere compressi in un unico grafico.
 
 Lo slider della linea temporale, la selezione dell'Origine costi e gli altri filtri vengono mantenuti durante il drill-down, e il livello di drill-down fa parte della configurazione del report salvato: salvando un report mentre si è in drill-down lo si riapre direttamente a quel livello. Senza un'Origine costi attiva, un clic su un rettangolo apre invece il pannello laterale della card (non c'è nulla da scomporre).
+
+**Limitare a schede specifiche** — Il chip accanto al selettore del tipo apre un selettore: scegli una o più schede e la treemap, i totali e la tabella si limiteranno a quelle e a tutto ciò che si trova sotto di esse. Il chip è nascosto mentre sei all'interno di un rettangolo, poiché quel dettaglio ti ha già portato a un altro tipo di scheda; esci e l'ambito è ancora lì.
 
 ## Report Matrice
 
@@ -198,6 +231,8 @@ Due riquadri contano le card di ciascun asse che non hanno alcuna relazione. **M
 
 L'esportazione in Excel produce due fogli: la griglia così come appare a schermo e una riga per relazione con i suoi valori distribuiti in colonne, il foglio su cui costruire una tabella pivot. L'esportazione in PowerPoint cattura l'immagine.
 
+**Limitare ciascun asse** — Ogni asse ha il proprio chip accanto al selettore del tipo, così puoi chiedere *queste capacità × queste applicazioni*. Gli indicatori sopra la griglia seguono l'ambito, quindi i numeri descrivono sempre ciò che stai guardando. Cambiare il tipo di un asse cancella il suo ambito; la trasposizione scambia i due ambiti insieme agli assi.
+
 ## Report Qualità dei Dati
 
 ![Report Qualità dei Dati](../assets/img/it/33_report_qualita_dati.png)
@@ -207,6 +242,19 @@ Il **Report Qualità dei Dati** è una **dashboard di completezza** che mostra q
 - **Punteggio complessivo** — Qualità media dei dati su tutte le card
 - **Per tipo** — Dettaglio che mostra quali tipi di card hanno la migliore/peggiore completezza
 - **Card individuali** — Elenco delle card con la qualità dei dati più bassa, prioritizzate per il miglioramento
+
+Le card con un **campo obbligatorio** vuoto ottengono sempre **0%** — il calcolo ponderato riprende solo quando tutti i campi obbligatori sono compilati — così l'elenco dei punteggi più bassi evidenzia esattamente le card a cui mancano ancora dati obbligatori.
+
+### Approfondire un numero
+
+Ogni valore del report è un punto di accesso, non solo un dato da leggere:
+
+- **Fai clic su un segmento di barra** in *Completezza per tipo*: si apre un pannello a destra con le card di quel tipo in quella fascia (Completo, Parziale o Minimo).
+- **Fai clic su una barra** in *Completezza media per tipo*, o su una riga nella vista tabella, per elencare tutte le card di quel tipo.
+- **Fai clic sul riquadro Orfani od Obsoleti** per elencare le card dietro quel conteggio.
+
+Dal pannello, fai clic su una card per aprirne il pannello di dettaglio, oppure premi **Vedi nell'inventario** per proseguire nell'[Inventario](inventory.md), che si apre raggruppato per qualità dei dati con la fascia selezionata espansa e le altre richiuse accanto, così puoi iniziare subito a correggere i record. I pannelli Orfani e Obsoleti rimandano al filtro corrispondente dell'inventario, su tutti i tipi di scheda.
+
 
 ## Report End of Life (EOL)
 
@@ -236,3 +284,5 @@ Filtri e raggruppamenti attivi al momento dell'esportazione sono registrati sull
 ## Mappa dei processi
 
 La **Mappa dei processi** visualizza il panorama dei processi aziendali dell'organizzazione come una mappa strutturata, mostrando le categorie di processo (Gestione, Core, Supporto) e le loro relazioni gerarchiche.
+
+**Limitare a processi specifici** — Il chip accanto a *Profondità di visualizzazione* apre un selettore: scegli uno o più processi e la mappa mostrerà solo quelli e tutto ciò che si trova sotto di essi. I sotto-processi sono inclusi automaticamente e la **Profondità di visualizzazione** si conta dalla tua selezione. Lo zoom con un clic funziona ancora, ora all'interno dell'ambito. È un controllo diverso dalla riga **Ambito** sottostante, che filtra per Organizzazione o Contesto di business collegato.

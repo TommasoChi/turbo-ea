@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+import zlib
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +28,28 @@ def _id(ref: str) -> uuid.UUID:
     if ref not in _refs:
         _refs[ref] = uuid.uuid4()
     return _refs[ref]
+
+
+def _in_months(months: int) -> str:
+    """ISO date roughly N months from today.
+
+    The PLM Modernisation transformation story (PTC Windchill → Teamcenter)
+    exists to demo the Dependencies report's time travel, so its dates must
+    stay in the future relative to whenever the demo is seeded — hard literals
+    would make the story historical within months of a release. Mirrors the
+    relative-date pattern the risk seeder already uses.
+    """
+    return (date.today() + timedelta(days=months * 30)).isoformat()
+
+
+def _in_years(years: int, month: int = 1, day: int = 1) -> str:
+    """ISO date on a clean month/day boundary N years from the current year.
+
+    The multi-year skeleton of the Sales Growth story. Same evergreen reason as
+    `_in_months`, but landing on real year boundaries so the dates read like a
+    roadmap ("2024-01-01") rather than an arbitrary offset from the seed date.
+    """
+    return date(date.today().year + years, month, day).isoformat()
 
 
 def _fs(
@@ -858,6 +881,121 @@ BUSINESS_CAPABILITIES = [
         parent="bc_prod_execution",
         attrs={"capabilityLevel": "L3"},
     ),
+    _fs(
+        "bc_collaboration",
+        "BusinessCapability",
+        "Workplace & Collaboration",
+        parent="bc_corporate",
+        desc="Messaging, document collaboration and the knowledge base the whole company works in.",
+        attrs={"capabilityLevel": "L2", "maturity": "managed"},
+    ),
+    # ── Go-to-market maturity story ──────────────────────────────
+    # The sales organisation growing up, one era at a time: spreadsheets, then
+    # a first CRM, then account planning and demand generation, then
+    # omni-channel, then AI. Each capability switches on in its own era, so
+    # travelling the Dependencies timeline over a sales capability shows the
+    # function being built rather than a static org chart.
+    _fs(
+        "bc_account_planning",
+        "BusinessCapability",
+        "Account Planning",
+        parent="bc_crm",
+        desc="Whitespace analysis, relationship mapping and joint account plans for key customers.",
+        attrs={"capabilityLevel": "L2", "strategicImportance": "high", "maturity": "defined"},
+        lifecycle={"plan": _in_years(-8), "active": _in_years(-6)},
+    ),
+    _fs(
+        "bc_campaign_mgmt",
+        "BusinessCapability",
+        "Campaign Management",
+        parent="bc_crm",
+        desc="Segmented multi-touch campaigns, nurture tracks and demand generation.",
+        attrs={"capabilityLevel": "L2", "strategicImportance": "medium", "maturity": "managed"},
+        lifecycle={"plan": _in_years(-6), "active": _in_years(-4)},
+    ),
+    _fs(
+        "bc_omnichannel",
+        "BusinessCapability",
+        "Omni-channel Engagement",
+        parent="bc_crm",
+        desc="One conversation across web, portal, email, phone and partner channels.",
+        attrs={"capabilityLevel": "L2", "strategicImportance": "critical", "maturity": "initial"},
+        lifecycle={
+            "plan": _in_years(-1),
+            "phaseIn": _in_years(0, 6, 1),
+            "active": _in_years(1, 2, 1),
+        },
+    ),
+    _fs(
+        "bc_marketing_automation",
+        "BusinessCapability",
+        "Marketing Automation",
+        parent="bc_crm",
+        desc="Behaviour-triggered journeys and generated content, run without a campaign manager.",
+        attrs={"capabilityLevel": "L2", "strategicImportance": "high", "maturity": "initial"},
+        lifecycle={
+            "plan": _in_years(0, 10, 1),
+            "phaseIn": _in_years(1),
+            "active": _in_years(1, 7, 1),
+        },
+    ),
+    _fs(
+        "bc_conversational_ai",
+        "BusinessCapability",
+        "Conversational AI Assistance",
+        parent="bc_crm",
+        desc="Agents that answer, qualify and follow up without a human in the loop.",
+        attrs={"capabilityLevel": "L2", "strategicImportance": "high", "maturity": "initial"},
+        lifecycle={"plan": _in_years(1), "phaseIn": _in_years(2), "active": _in_years(2, 7, 1)},
+    ),
+    # ── Sales Growth transformation story ────────────────────────
+    # Capabilities the "Increase Sales by 25%" objective switches on, each
+    # arriving in a different year so the Dependencies timeline shows the
+    # capability map filling in rather than sitting still.
+    _fs(
+        "bc_digital_commerce",
+        "BusinessCapability",
+        "Digital Commerce",
+        parent="bc_sales",
+        desc="Self-service B2B ordering, product catalogue and online quoting.",
+        attrs={
+            "capabilityLevel": "L2",
+            "isCoreCapability": True,
+            "strategicImportance": "high",
+            "maturity": "defined",
+        },
+        lifecycle={"plan": _in_years(-2), "phaseIn": _in_years(-1), "active": _in_years(0)},
+    ),
+    _fs(
+        "bc_revenue_forecast",
+        "BusinessCapability",
+        "Revenue Forecasting",
+        parent="bc_sales",
+        desc="Pipeline scoring, win-probability modelling and rolling revenue forecasts.",
+        attrs={
+            "capabilityLevel": "L2",
+            "strategicImportance": "high",
+            "maturity": "initial",
+        },
+        lifecycle={
+            "plan": _in_years(0, 7, 1),
+            "phaseIn": _in_years(1),
+            "active": _in_years(1, 7, 1),
+        },
+    ),
+    _fs(
+        "bc_subscription",
+        "BusinessCapability",
+        "Subscription & Recurring Revenue",
+        parent="bc_sales",
+        desc="Usage-based billing, renewals and recurring-revenue reporting for connected products.",
+        attrs={
+            "capabilityLevel": "L2",
+            "strategicImportance": "critical",
+            "maturity": "initial",
+        },
+        lifecycle={"plan": _in_years(1), "phaseIn": _in_years(2), "active": _in_years(2, 7, 1)},
+    ),
 ]
 
 
@@ -1469,7 +1607,13 @@ APPLICATIONS = [
             "productName": "Marketing Hub",
             "commercialApplication": True,
         },
-        lifecycle={"active": "2020-01-01"},
+        # Phased out by the Sales Growth story: already flagged `tolerate`, and
+        # its customer-communication capability moves to the commerce portal.
+        lifecycle={
+            "active": "2020-01-01",
+            "phaseOut": _in_years(1),
+            "endOfLife": _in_years(2, 6, 30),
+        },
     ),
     # --- Operations & IT ---
     _fs(
@@ -1852,7 +1996,9 @@ APPLICATIONS = [
             "productName": "Windchill 12",
             "commercialApplication": True,
         },
-        lifecycle={"active": "2012-01-01", "phaseOut": "2026-06-01", "endOfLife": "2027-01-01"},
+        # Evergreen: retires ~5 months after seeding, so the time-travel demo
+        # always has a retirement ahead of it (see _in_months).
+        lifecycle={"active": "2012-01-01", "phaseOut": _in_months(-2), "endOfLife": _in_months(5)},
     ),
     _fs(
         "app_anomaly_ai",
@@ -1891,6 +2037,269 @@ APPLICATIONS = [
             "commercialApplication": False,
         },
         lifecycle={"phaseIn": "2025-06-01", "active": "2026-01-01"},
+    ),
+    # ── PLM Modernisation transformation story ────────────────────
+    _fs(
+        "app_plm_analytics",
+        "Application",
+        "PLM Analytics Workbench",
+        subtype="businessApplication",
+        desc="Engineering analytics on Teamcenter data — design-cycle KPIs, BOM change "
+        "impact and part-reuse dashboards. Replaces the reporting half of PTC Windchill "
+        "as part of the Legacy PLM Retirement initiative.",
+        attrs={
+            "businessCriticality": "businessOperational",
+            "functionalSuitability": "appropriate",
+            "technicalSuitability": "fullyAppropriate",
+            "timeModel": "invest",
+            "hostingType": "cloudSaaS",
+            "costTotalAnnual": 60000,
+            "numberOfUsers": 35,
+            "productName": "Teamcenter Reporting & Analytics",
+            "commercialApplication": True,
+        },
+        # Planned next month, live in ~9 — exercises UPCOMING, the arrival mark
+        # and the go-live mark whenever the demo is seeded.
+        lifecycle={"plan": _in_months(1), "phaseIn": _in_months(4), "active": _in_months(9)},
+    ),
+    # ── Go-to-market maturity story ──────────────────────────────
+    _fs(
+        "app_sales_workbook",
+        "Application",
+        "Sales Contact Workbook",
+        subtype="businessApplication",
+        desc="Shared Access database and spreadsheets the sales team ran on before there was a CRM.",
+        attrs={
+            "businessCriticality": "administrativeService",
+            "functionalSuitability": "unreasonable",
+            "technicalSuitability": "inappropriate",
+            "timeModel": "eliminate",
+            "hostingType": "onPremise",
+            "costTotalAnnual": 4000,
+            "numberOfUsers": 25,
+            "commercialApplication": False,
+        },
+        lifecycle={
+            "active": _in_years(-14),
+            "phaseOut": _in_years(-10),
+            "endOfLife": _in_years(-9),
+        },
+    ),
+    _fs(
+        "app_account_planner",
+        "Application",
+        "Altify Account Planning",
+        subtype="businessApplication",
+        desc="Whitespace maps and joint account plans layered on the CRM.",
+        attrs={
+            "businessCriticality": "businessOperational",
+            "functionalSuitability": "appropriate",
+            "technicalSuitability": "adequate",
+            "timeModel": "tolerate",
+            "hostingType": "cloudSaaS",
+            "costTotalAnnual": 68000,
+            "numberOfUsers": 45,
+            "productName": "Altify",
+            "commercialApplication": True,
+        },
+        lifecycle={"phaseIn": _in_years(-7), "active": _in_years(-6)},
+    ),
+    _fs(
+        "app_outreach",
+        "Application",
+        "Outreach Sales Engagement",
+        subtype="businessApplication",
+        desc="Sequenced prospecting: cadences, call logging and reply tracking for the SDR team.",
+        attrs={
+            "businessCriticality": "businessOperational",
+            "functionalSuitability": "appropriate",
+            "technicalSuitability": "fullyAppropriate",
+            "timeModel": "invest",
+            "hostingType": "cloudSaaS",
+            "costTotalAnnual": 92000,
+            "numberOfUsers": 70,
+            "productName": "Outreach",
+            "commercialApplication": True,
+        },
+        lifecycle={"phaseIn": _in_years(-5), "active": _in_years(-4)},
+    ),
+    _fs(
+        "app_cdp",
+        "Application",
+        "Customer Data Platform",
+        subtype="businessApplication",
+        desc="Single customer profile stitched from web, portal, CRM and connected-device activity.",
+        attrs={
+            "businessCriticality": "businessCritical",
+            "functionalSuitability": "appropriate",
+            "technicalSuitability": "fullyAppropriate",
+            "timeModel": "invest",
+            "hostingType": "cloudSaaS",
+            "costTotalAnnual": 210000,
+            "numberOfUsers": 85,
+            "productName": "Segment",
+            "commercialApplication": True,
+        },
+        lifecycle={"phaseIn": _in_years(-1), "active": _in_months(-6)},
+    ),
+    _fs(
+        "app_engagement_hub",
+        "Application",
+        "Omni-channel Engagement Hub",
+        subtype="businessApplication",
+        desc="One inbox and one conversation history across web chat, email, phone and the portal.",
+        attrs={
+            "businessCriticality": "businessCritical",
+            "functionalSuitability": "appropriate",
+            "technicalSuitability": "fullyAppropriate",
+            "timeModel": "invest",
+            "hostingType": "cloudSaaS",
+            "costTotalAnnual": 260000,
+            "numberOfUsers": 190,
+            "productName": "Service Cloud Digital Engagement",
+            "commercialApplication": True,
+        },
+        lifecycle={
+            "plan": _in_years(-1),
+            "phaseIn": _in_years(0, 6, 1),
+            "active": _in_years(1, 2, 1),
+        },
+    ),
+    _fs(
+        "app_marketing_ai",
+        "Application",
+        "Marketing AI Content Studio",
+        subtype="aiAgent",
+        desc="Generates and localises campaign copy, then schedules the journeys that use it.",
+        attrs={
+            "businessCriticality": "businessOperational",
+            "functionalSuitability": "appropriate",
+            "technicalSuitability": "fullyAppropriate",
+            "timeModel": "invest",
+            "hostingType": "cloudSaaS",
+            "hasAiFeatures": True,
+            "costTotalAnnual": 140000,
+            "numberOfUsers": 30,
+            "commercialApplication": True,
+        },
+        lifecycle={
+            "plan": _in_years(0, 10, 1),
+            "phaseIn": _in_years(1),
+            "active": _in_years(1, 7, 1),
+        },
+    ),
+    _fs(
+        "app_ai_sdr",
+        "Application",
+        "AI Sales Development Agent",
+        subtype="aiAgent",
+        desc="Qualifies inbound leads, books meetings and hands over a briefed opportunity.",
+        attrs={
+            "businessCriticality": "businessOperational",
+            "functionalSuitability": "appropriate",
+            "technicalSuitability": "fullyAppropriate",
+            "timeModel": "invest",
+            "hostingType": "cloudSaaS",
+            "hasAiFeatures": True,
+            "costTotalAnnual": 165000,
+            "numberOfUsers": 40,
+            "commercialApplication": True,
+        },
+        lifecycle={"plan": _in_years(1), "phaseIn": _in_years(2), "active": _in_years(2, 7, 1)},
+    ),
+    # ── Sales Growth transformation story ────────────────────────
+    # Four applications spanning the objective's arc: the CRM the company
+    # outgrew (gone two years ago), the commerce portal landing in a couple of
+    # months, the partner extranet it displaces a year later, and the AI agent
+    # that arrives last.
+    _fs(
+        "app_salestrack",
+        "Application",
+        "SalesTrack CRM",
+        subtype="businessApplication",
+        desc="Home-grown on-premise CRM: accounts, contacts and pipeline. Replaced by Salesforce.",
+        attrs={
+            "businessCriticality": "businessOperational",
+            "functionalSuitability": "insufficient",
+            "technicalSuitability": "inappropriate",
+            "timeModel": "eliminate",
+            "hostingType": "onPremise",
+            "costTotalAnnual": 95000,
+            "numberOfUsers": 120,
+            "commercialApplication": False,
+        },
+        lifecycle={
+            "active": _in_years(-9),
+            "phaseOut": _in_years(-3),
+            "endOfLife": _in_years(-2, 6, 30),
+        },
+    ),
+    _fs(
+        "app_commerce_portal",
+        "Application",
+        "NexaTech Commerce Portal",
+        subtype="businessApplication",
+        desc="B2B self-service storefront: catalogue browsing, configured quotes and order tracking.",
+        attrs={
+            "businessCriticality": "businessCritical",
+            "functionalSuitability": "appropriate",
+            "technicalSuitability": "fullyAppropriate",
+            "timeModel": "invest",
+            "hostingType": "cloudPaaS",
+            "costTotalAnnual": 410000,
+            "numberOfUsers": 2400,
+            "productName": "NexaCommerce",
+            "commercialApplication": False,
+        },
+        # Live in ~2 months: the story's near mark, so a freshly seeded demo
+        # always has a go-live just ahead of today.
+        lifecycle={"plan": _in_years(-1), "phaseIn": _in_months(-4), "active": _in_months(2)},
+    ),
+    _fs(
+        "app_partner_extranet",
+        "Application",
+        "Partner Extranet",
+        subtype="businessApplication",
+        desc="Reseller portal for price lists, deal registration and co-marketing assets.",
+        attrs={
+            "businessCriticality": "businessOperational",
+            "functionalSuitability": "insufficient",
+            "technicalSuitability": "unreasonable",
+            "timeModel": "eliminate",
+            "hostingType": "onPremise",
+            "costTotalAnnual": 72000,
+            "numberOfUsers": 310,
+            "commercialApplication": False,
+        },
+        lifecycle={
+            "active": _in_years(-6),
+            "phaseOut": _in_months(3),
+            "endOfLife": _in_years(1),
+        },
+    ),
+    _fs(
+        "app_revenue_ai",
+        "Application",
+        "Revenue Intelligence Agent",
+        subtype="aiAgent",
+        desc="Scores open pipeline, flags at-risk deals and drafts next-best actions for sellers.",
+        attrs={
+            "businessCriticality": "businessOperational",
+            "functionalSuitability": "appropriate",
+            "technicalSuitability": "fullyAppropriate",
+            "timeModel": "invest",
+            "hostingType": "cloudSaaS",
+            "hasAiFeatures": True,
+            "costTotalAnnual": 180000,
+            "numberOfUsers": 210,
+            "productName": "Einstein Revenue Intelligence",
+            "commercialApplication": True,
+        },
+        lifecycle={
+            "plan": _in_years(0, 10, 1),
+            "phaseIn": _in_years(1),
+            "active": _in_years(1, 7, 1),
+        },
     ),
 ]
 # ── IT Components ─────────────────────────────────────────────────
@@ -2238,22 +2647,163 @@ IT_COMPONENTS = [
             "licenseType": "Pay-as-you-go",
         },
     ),
+    # ── PLM Modernisation transformation story ────────────────────
+    _fs(
+        "itc_windchill_vault",
+        "ITComponent",
+        "Windchill File Vault Server",
+        subtype="hardware",
+        desc="On-premise CAD file vault backing PTC Windchill; decommissioned with it.",
+        attrs={
+            "technicalSuitability": "inappropriate",
+            "resourceClassification": "tolerated",
+            "version": "Dell R740 / WS2016",
+            "costTotalAnnual": 18000,
+        },
+        # Evergreen: decommissioned one month after Windchill itself.
+        lifecycle={"active": "2013-01-01", "endOfLife": _in_months(6)},
+    ),
+    # ── Go-to-market maturity story ──────────────────────────────
+    _fs(
+        "itc_sales_fileserver",
+        "ITComponent",
+        "Sales File Server",
+        subtype="hardware",
+        desc="The Windows share the sales workbooks lived on before the first CRM.",
+        attrs={
+            "technicalSuitability": "inappropriate",
+            "resourceClassification": "declined",
+            "version": "Windows Server 2008 R2",
+            "costTotalAnnual": 9000,
+        },
+        lifecycle={"active": _in_years(-14), "endOfLife": _in_years(-9)},
+    ),
+    _fs(
+        "itc_cdp_stream",
+        "ITComponent",
+        "Customer Event Stream",
+        subtype="paas",
+        desc="Managed event pipeline collecting web, portal and device activity for the CDP.",
+        attrs={
+            "technicalSuitability": "fullyAppropriate",
+            "resourceClassification": "standard",
+            "version": "Kinesis",
+            "costTotalAnnual": 38000,
+        },
+        lifecycle={"phaseIn": _in_years(-1), "active": _in_months(-6)},
+    ),
+    _fs(
+        "itc_llm_gateway",
+        "ITComponent",
+        "LLM Gateway",
+        subtype="service",
+        desc="Shared, rate-limited and audited entry point for every AI feature in the landscape.",
+        attrs={
+            "technicalSuitability": "fullyAppropriate",
+            "resourceClassification": "phaseIn",
+            "version": "v1",
+            "hasAiFeatures": True,
+            "costTotalAnnual": 96000,
+        },
+        lifecycle={"phaseIn": _in_years(0, 10, 1), "active": _in_years(1)},
+    ),
+    _fs(
+        "itc_vector_store",
+        "ITComponent",
+        "Customer Knowledge Vector Store",
+        subtype="paas",
+        desc="Embeddings of product, pricing and account history that the sales agents retrieve from.",
+        attrs={
+            "technicalSuitability": "fullyAppropriate",
+            "resourceClassification": "phaseIn",
+            "version": "pgvector 0.7",
+            "hasAiFeatures": True,
+            "costTotalAnnual": 44000,
+        },
+        lifecycle={"phaseIn": _in_years(1), "active": _in_years(1, 7, 1)},
+    ),
+    # ── Sales Growth transformation story ────────────────────────
+    _fs(
+        "itc_salestrack_db",
+        "ITComponent",
+        "SalesTrack Oracle Database",
+        subtype="software",
+        desc="Oracle 11g instance behind the legacy SalesTrack CRM; decommissioned with it.",
+        attrs={
+            "technicalSuitability": "inappropriate",
+            "resourceClassification": "declined",
+            "version": "11.2.0.4",
+            "costTotalAnnual": 46000,
+            "licenseType": "Oracle Standard Edition",
+        },
+        lifecycle={"active": _in_years(-9), "endOfLife": _in_years(-2, 6, 30)},
+    ),
+    _fs(
+        "itc_commerce_search",
+        "ITComponent",
+        "Commerce Search Service",
+        subtype="software",
+        desc="Product-catalogue search and faceting engine behind the commerce portal.",
+        attrs={
+            "technicalSuitability": "fullyAppropriate",
+            "resourceClassification": "phaseIn",
+            "version": "OpenSearch 2.13",
+            "costTotalAnnual": 34000,
+            "licenseType": "Apache-2.0",
+        },
+        lifecycle={"phaseIn": _in_months(-4), "active": _in_months(2)},
+    ),
+    _fs(
+        "itc_revenue_model",
+        "ITComponent",
+        "Revenue Propensity Model",
+        subtype="aiModel",
+        desc="Gradient-boosted win-probability model scoring the open pipeline nightly.",
+        attrs={
+            "technicalSuitability": "fullyAppropriate",
+            "resourceClassification": "phaseIn",
+            "version": "v1",
+            "hasAiFeatures": True,
+            "costTotalAnnual": 52000,
+        },
+        lifecycle={"phaseIn": _in_years(1), "active": _in_years(1, 7, 1)},
+    ),
 ]
 
 # Default lifecycle for IT Components — every component has been in production
-# for several years, is currently active, and has a vendor-style end-of-life
+# for a few years, is currently active, and has a vendor-style end-of-life
 # planned several years out. Per-card overrides remain possible via _fs().
 # Drives the Technology Lifecycle report (`/reports/lifecycle?type=ITComponent`)
 # and gives the demo a populated timeline out of the box.
-_ITC_DEFAULT_LIFECYCLE = {
-    "phaseIn": "2022-06-01",
-    "active": "2023-01-01",
-    "phaseOut": "2028-06-01",
-    "eol": "2030-12-31",
-}
+#
+# Every date is derived per component, never shared. The literals that used to
+# live here put 28 components on ONE go-live date and 25 on one end date, which
+# the Dependencies timeline draws as a single mark — and a mark standing for 28
+# cards swallows any individual arrival beside it, so a date set by hand on a
+# neighbouring card looks as though it were never marked at all. Keyed off the
+# component name so a component keeps its dates across reseeds; the month comes
+# off a SEPARATE hash, since deriving it from the year bucket would only
+# correlate the two and spread nothing.
+#
+# The end key is "endOfLife", not "eol": the lifecycle phase keys are plan /
+# phaseIn / active / phaseOut / endOfLife everywhere (seed.py, lifecycle.py,
+# LifecycleBadge). "eol" is a card-detail SECTION key — an unrecognised
+# lifecycle key meant no IT Component ever reached end of life, in the
+# Lifecycle report or in the Dependencies report's time travel.
 for _c in IT_COMPONENTS:
     if not _c.get("lifecycle"):
-        _c["lifecycle"] = dict(_ITC_DEFAULT_LIFECYCLE)
+        _bucket = zlib.crc32(_c["name"].encode()) % 7
+        _month = 1 + zlib.crc32(f"{_c['name']}:month".encode()) % 12
+        # In production between two and five years ago, phased in over the year
+        # before that — a whole year apart, so the two can never cross.
+        _live_year = -(2 + zlib.crc32(f"{_c['name']}:live".encode()) % 4)
+        _c["lifecycle"] = {
+            "phaseIn": _in_years(_live_year - 1, _month, 1),
+            "active": _in_years(_live_year, _month, 1),
+            "phaseOut": _in_years(_bucket, _month, 1),
+            "endOfLife": _in_years(1 + _bucket, _month, 28),
+        }
+
 
 # ── Interfaces ────────────────────────────────────────────────────
 INTERFACES = [
@@ -2400,6 +2950,8 @@ INTERFACES = [
         subtype="api",
         desc="Marketing-qualified leads pushed from HubSpot to Salesforce.",
         attrs={"frequency": "realTime", "dataFormat": "JSON", "protocol": "REST"},
+        # Retires with HubSpot: the lead sync has nothing left to sync.
+        lifecycle={"active": "2020-01-01", "endOfLife": _in_years(2, 6, 30)},
     ),
     _fs(
         "if_docu_sf",
@@ -2416,6 +2968,130 @@ INTERFACES = [
         subtype="logicalInterface",
         desc="Approved expense reports and invoices posted to ERP.",
         attrs={"frequency": "daily", "dataFormat": "XML", "protocol": "cXML / REST"},
+    ),
+    # ── PLM Modernisation transformation story ────────────────────
+    _fs(
+        "if_wc_tc_migration",
+        "Interface",
+        "Windchill → Teamcenter Migration Feed",
+        subtype="logicalInterface",
+        desc="One-way bulk transfer of legacy CAD models and BOMs into Teamcenter; "
+        "switched off when Windchill is retired.",
+        attrs={"frequency": "daily", "dataFormat": "PLM XML", "protocol": "SFTP"},
+        # Evergreen: dies with Windchill — its loss is what puts Teamcenter
+        # at risk in the Dependencies report when retired cards are hidden.
+        lifecycle={"active": _in_months(-3), "endOfLife": _in_months(5)},
+    ),
+    # ── Go-to-market maturity story ──────────────────────────────
+    _fs(
+        "if_workbook_erp",
+        "Interface",
+        "Sales Workbook → ERP Order Entry",
+        subtype="logicalInterface",
+        desc="Manual CSV upload of won deals into the ERP; retired with the workbooks.",
+        attrs={"frequency": "weekly", "dataFormat": "CSV", "protocol": "Manual upload"},
+        lifecycle={"active": _in_years(-14), "endOfLife": _in_years(-9)},
+    ),
+    _fs(
+        "if_cdp_crm",
+        "Interface",
+        "CDP → Salesforce Profile Sync",
+        subtype="api",
+        desc="Unified customer profiles and engagement scores pushed onto the CRM record.",
+        attrs={"frequency": "realTime", "dataFormat": "JSON", "protocol": "REST"},
+        lifecycle={"phaseIn": _in_years(-1), "active": _in_months(-6)},
+    ),
+    _fs(
+        "if_outreach_sf",
+        "Interface",
+        "Outreach ↔ Salesforce Activity Sync",
+        subtype="api",
+        desc="Cadence steps, calls and replies written back onto the CRM opportunity.",
+        attrs={"frequency": "realTime", "dataFormat": "JSON", "protocol": "REST"},
+        lifecycle={"active": _in_years(-4)},
+    ),
+    _fs(
+        "if_altify_sf",
+        "Interface",
+        "Altify ↔ Salesforce Account Sync",
+        subtype="api",
+        desc="Account plans and whitespace maps read and written against the CRM account.",
+        attrs={"frequency": "daily", "dataFormat": "JSON", "protocol": "REST"},
+        lifecycle={"active": _in_years(-6)},
+    ),
+    _fs(
+        "if_portal_cdp",
+        "Interface",
+        "Commerce Portal → Customer Event Stream",
+        subtype="api",
+        desc="Browse, quote and order events streamed to the CDP to build the profile.",
+        attrs={"frequency": "realTime", "dataFormat": "JSON", "protocol": "HTTPS / Kinesis"},
+        lifecycle={"phaseIn": _in_months(-4), "active": _in_months(2)},
+    ),
+    _fs(
+        "if_hub_cdp",
+        "Interface",
+        "Engagement Hub ↔ CDP Profile",
+        subtype="api",
+        desc="The unified profile an agent sees, and the conversation history written back to it.",
+        attrs={"frequency": "realTime", "dataFormat": "JSON", "protocol": "REST"},
+        lifecycle={"phaseIn": _in_months(-3), "active": _in_months(6)},
+    ),
+    _fs(
+        "if_ai_sdr_hub",
+        "Interface",
+        "AI SDR → Engagement Hub Handover",
+        subtype="api",
+        desc="A qualified conversation, its transcript and the booked meeting handed to a human.",
+        attrs={"frequency": "realTime", "dataFormat": "JSON", "protocol": "REST"},
+        lifecycle={"phaseIn": _in_years(2), "active": _in_years(2, 7, 1)},
+    ),
+    _fs(
+        "if_marketing_ai_cdp",
+        "Interface",
+        "Marketing AI → CDP Segments",
+        subtype="api",
+        desc="Audience segments pulled from the CDP to target generated journeys.",
+        attrs={"frequency": "daily", "dataFormat": "JSON", "protocol": "REST"},
+        lifecycle={"phaseIn": _in_years(1), "active": _in_years(1, 7, 1)},
+    ),
+    _fs(
+        "if_ai_gateway",
+        "Interface",
+        "Sales AI → LLM Gateway",
+        subtype="api",
+        desc="Every sales-side AI feature calls the model estate through the shared gateway.",
+        attrs={"frequency": "realTime", "dataFormat": "JSON", "protocol": "HTTPS"},
+        lifecycle={"phaseIn": _in_years(0, 10, 1), "active": _in_years(1)},
+    ),
+    # ── Sales Growth transformation story ────────────────────────
+    _fs(
+        "if_salestrack_sap",
+        "Interface",
+        "SalesTrack → SAP Nightly Order Feed",
+        subtype="logicalInterface",
+        desc="Batch hand-off of won opportunities into ERP; retired with SalesTrack.",
+        attrs={"frequency": "daily", "dataFormat": "CSV", "protocol": "SFTP"},
+        lifecycle={"active": _in_years(-9), "endOfLife": _in_years(-2, 6, 30)},
+    ),
+    _fs(
+        "if_commerce_sap_orders",
+        "Interface",
+        "Commerce Portal → SAP Order API",
+        subtype="api",
+        desc="Self-service orders posted straight into ERP, no re-keying.",
+        attrs={"frequency": "realTime", "dataFormat": "JSON", "protocol": "OData / REST"},
+        lifecycle={"phaseIn": _in_months(-4), "active": _in_months(2)},
+    ),
+    _fs(
+        "if_partner_edi",
+        "Interface",
+        "Partner Extranet EDI Feed",
+        subtype="logicalInterface",
+        desc="EDI price lists and deal registrations exchanged with resellers; "
+        "replaced by the commerce portal's partner APIs.",
+        attrs={"frequency": "weekly", "dataFormat": "EDIFACT", "protocol": "AS2"},
+        lifecycle={"active": _in_years(-6), "endOfLife": _in_years(1)},
     ),
 ]
 # ── Data Objects ──────────────────────────────────────────────────
@@ -2829,6 +3505,22 @@ OBJECTIVES = [
         desc="Launch 3 new IoT product families and grow connected device base to 500K units.",
         attrs={"objectiveType": "strategic", "targetDate": "2028-12-31", "progress": 20},
     ),
+    # ── Sales Growth transformation story ────────────────────────
+    # The anchor of the story: centre the Dependencies report here and travel
+    # the slider to watch the capabilities, applications and initiatives that
+    # enable it arrive and retire across roughly eight years.
+    _fs(
+        "obj_sales_growth",
+        "Objective",
+        "Increase Sales by 25%",
+        desc="Grow group revenue 25% by shifting volume to self-service digital channels, "
+        "expanding the reseller network and moving connected products to subscription.",
+        attrs={
+            "objectiveType": "strategic",
+            "targetDate": _in_years(4, 12, 31),
+            "progress": 35,
+        },
+    ),
 ]
 
 
@@ -3027,7 +3719,7 @@ INITIATIVES = [
             "startDate": "2025-06-01",
             "endDate": "2026-09-30",
         },
-        lifecycle={"phaseIn": "2025-06-01"},
+        lifecycle={"phaseIn": "2025-03-01", "active": "2025-06-01"},
     ),
     _fs(
         "init_zero_trust",
@@ -3044,7 +3736,167 @@ INITIATIVES = [
             "startDate": "2025-09-01",
             "endDate": "2027-06-30",
         },
-        lifecycle={"plan": "2025-06-01"},
+        lifecycle={"plan": "2025-06-01", "active": "2025-09-01"},
+    ),
+    # ── Go-to-market maturity story ──────────────────────────────
+    # One programme per era, so the delivery side of the canvas moves with the
+    # capabilities rather than sitting still.
+    _fs(
+        "init_crm_foundation",
+        "Initiative",
+        "CRM Foundation Programme",
+        subtype="program",
+        desc="Retire the sales workbooks and stand up a real CRM: accounts, contacts, pipeline.",
+        attrs={
+            "initiativeStatus": "completed",
+            "businessValue": "high",
+            "effort": "high",
+            "costBudget": 1200000,
+            "costActual": 1310000,
+            "startDate": _in_years(-10),
+            "endDate": _in_years(-9, 6, 30),
+        },
+        lifecycle={"active": _in_years(-10), "endOfLife": _in_years(-9, 6, 30)},
+    ),
+    _fs(
+        "init_gtm_modern",
+        "Initiative",
+        "Go-to-Market Modernisation",
+        subtype="program",
+        desc="Account planning, sales engagement and campaign management on top of the new CRM.",
+        attrs={
+            "initiativeStatus": "completed",
+            "businessValue": "high",
+            "effort": "medium",
+            "costBudget": 1800000,
+            "costActual": 1740000,
+            "startDate": _in_years(-7),
+            "endDate": _in_years(-3, 12, 31),
+        },
+        lifecycle={"active": _in_years(-7), "endOfLife": _in_years(-3, 12, 31)},
+    ),
+    _fs(
+        "init_omnichannel",
+        "Initiative",
+        "Omni-channel Engagement",
+        subtype="project",
+        parent="init_revenue_growth",
+        desc="One customer conversation across web, portal, email and phone, on a single profile.",
+        attrs={
+            "initiativeStatus": "onTrack",
+            "businessValue": "high",
+            "effort": "high",
+            "costBudget": 1600000,
+            "costActual": 720000,
+            "startDate": _in_years(-1),
+            "endDate": _in_years(1, 6, 30),
+        },
+        lifecycle={"active": _in_years(-1), "endOfLife": _in_years(1, 6, 30)},
+    ),
+    _fs(
+        "init_ai_gtm",
+        "Initiative",
+        "AI Go-to-Market",
+        subtype="program",
+        parent="init_revenue_growth",
+        desc="Marketing automation, an AI SDR and the shared model estate the two of them run on.",
+        attrs={
+            "initiativeStatus": "onTrack",
+            "businessValue": "high",
+            "effort": "high",
+            "costBudget": 2400000,
+            "costActual": 180000,
+            "startDate": _in_years(1),
+            "endDate": _in_years(3, 6, 30),
+        },
+        lifecycle={
+            "plan": _in_years(0, 10, 1),
+            "phaseIn": _in_years(1),
+            "active": _in_years(1, 4, 1),
+            "endOfLife": _in_years(3, 6, 30),
+        },
+    ),
+    # ── Sales Growth transformation story ────────────────────────
+    # One programme and three projects, staggered so the objective's delivery
+    # side of the canvas changes as the slider moves too, not just its
+    # applications.
+    _fs(
+        "init_revenue_growth",
+        "Initiative",
+        "Revenue Growth Program",
+        subtype="program",
+        desc="Umbrella programme for the 25% sales growth objective: digital channel, "
+        "revenue intelligence and partner expansion.",
+        attrs={
+            "initiativeStatus": "onTrack",
+            "businessValue": "high",
+            "effort": "high",
+            "costBudget": 6200000,
+            "costActual": 1450000,
+            "startDate": _in_years(-1),
+            "endDate": _in_years(4, 12, 31),
+        },
+        lifecycle={"active": _in_years(-1)},
+    ),
+    _fs(
+        "init_digital_sales",
+        "Initiative",
+        "Digital Sales Channel",
+        subtype="project",
+        parent="init_revenue_growth",
+        desc="Build and launch the B2B commerce portal, retire the partner extranet "
+        "and fold marketing automation into the new stack.",
+        attrs={
+            "initiativeStatus": "onTrack",
+            "businessValue": "high",
+            "effort": "high",
+            "costBudget": 2100000,
+            "costActual": 1250000,
+            "startDate": _in_years(-1, 7, 1),
+            "endDate": _in_years(1, 6, 30),
+        },
+        lifecycle={"active": _in_years(-1, 7, 1)},
+    ),
+    _fs(
+        "init_revenue_intel",
+        "Initiative",
+        "Revenue Intelligence",
+        subtype="project",
+        parent="init_revenue_growth",
+        desc="Pipeline scoring and rolling forecasts on top of Salesforce, "
+        "delivered as an AI agent for the sales floor.",
+        attrs={
+            "initiativeStatus": "onTrack",
+            "businessValue": "high",
+            "effort": "medium",
+            "costBudget": 1400000,
+            "costActual": 90000,
+            "startDate": _in_years(1),
+            "endDate": _in_years(2, 12, 31),
+        },
+        lifecycle={
+            "plan": _in_years(0, 9, 1),
+            "phaseIn": _in_years(1),
+            "active": _in_years(1, 5, 1),
+        },
+    ),
+    _fs(
+        "init_partner_channel",
+        "Initiative",
+        "Partner Channel Expansion",
+        subtype="project",
+        parent="init_revenue_growth",
+        desc="Double the reseller network and move deal registration onto the commerce portal.",
+        attrs={
+            "initiativeStatus": "atRisk",
+            "businessValue": "medium",
+            "effort": "medium",
+            "costBudget": 950000,
+            "costActual": 210000,
+            "startDate": _in_years(0, 7, 1),
+            "endDate": _in_years(2, 6, 30),
+        },
+        lifecycle={"active": _in_years(0, 7, 1)},
     ),
 ]
 
@@ -3853,7 +4705,609 @@ RELATIONS = [
     _rel("relBizCtxToBC", "bctx_design_review", "bc_elec_design"),
     _rel("relBizCtxToBC", "bctx_regulatory_sub", "bc_regulatory"),
     _rel("relBizCtxToBC", "bctx_regulatory_sub", "bc_certification"),
+    # ── PLM Modernisation transformation story ────────────────────
+    # Windchill's dependency surface: what the retirement severs.
+    _rel("relAppSuccessor", "app_teamcenter", "app_ptc_windchill"),
+    _rel("relOrgToApp", "org_engineering", "app_ptc_windchill", {"usageType": "user"}),
+    _rel("relAppToITC", "app_ptc_windchill", "itc_windchill_vault"),
+    _rel(
+        "relAppToDataObj",
+        "app_ptc_windchill",
+        "do_bom",
+        {"crudCreate": False, "crudRead": True, "crudUpdate": False, "crudDelete": False},
+    ),
+    _rel(
+        "relAppToInterface",
+        "app_ptc_windchill",
+        "if_wc_tc_migration",
+        {"flowDirection": "forward"},
+    ),
+    _rel(
+        "relAppToInterface",
+        "app_teamcenter",
+        "if_wc_tc_migration",
+        {"flowDirection": "reverse"},
+    ),
+    _rel("relInitiativeToITC", "init_plm_retire", "itc_windchill_vault"),
+    _rel("relInitiativeToInterface", "init_plm_retire", "if_wc_tc_migration"),
+    # The arriving replacement: what the transformation adds.
+    _rel("relAppToBC", "app_plm_analytics", "bc_mech_design", {"supportType": "supporting"}),
+    _rel("relOrgToApp", "org_engineering", "app_plm_analytics", {"usageType": "owner"}),
+    _rel("relProviderToApp", "prov_siemens", "app_plm_analytics"),
+    _rel(
+        "relAppToDataObj",
+        "app_plm_analytics",
+        "do_bom",
+        {"crudCreate": False, "crudRead": True, "crudUpdate": False, "crudDelete": False},
+    ),
+    _rel("relInitiativeToApp", "init_plm_retire", "app_plm_analytics"),
+    # ── Sales Growth transformation story ─────────────────────────
+    # Everything below hangs off obj_sales_growth. Centre the Dependencies
+    # report there and the canvas spans all four EA layers at every date; what
+    # changes as the slider moves is which cards are on it.
+    #
+    # Strategy layer: who owns the objective and what delivers it.
+    _rel("relOrgToObjective", "org_sales", "obj_sales_growth"),
+    _rel("relOrgToObjective", "org_marketing", "obj_sales_growth"),
+    _rel("relPlatformToObjective", "plat_integration", "obj_sales_growth"),
+    _rel("relInitiativeToObjective", "init_revenue_growth", "obj_sales_growth"),
+    _rel("relInitiativeToObjective", "init_digital_sales", "obj_sales_growth"),
+    _rel("relInitiativeToObjective", "init_revenue_intel", "obj_sales_growth"),
+    _rel("relInitiativeToObjective", "init_partner_channel", "obj_sales_growth"),
+    # The Salesforce rollout already in the demo served this objective too.
+    _rel("relInitiativeToObjective", "init_sf_impl", "obj_sales_growth"),
+    _rel("relOrgToInitiative", "org_sales", "init_revenue_growth"),
+    _rel("relProviderToInitiative", "prov_salesforce", "init_revenue_intel"),
+    # Business layer: the capabilities the objective switches on, old and new.
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_sales"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_digital_commerce"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_revenue_forecast"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_subscription"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_channel_mgmt"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_pricing"),
+    _rel("relInitiativeToBC", "init_digital_sales", "bc_digital_commerce"),
+    _rel("relInitiativeToBC", "init_revenue_intel", "bc_revenue_forecast"),
+    _rel("relInitiativeToBC", "init_partner_channel", "bc_channel_mgmt"),
+    _rel("relBizCtxToBC", "bctx_otc", "bc_digital_commerce"),
+    # Wave 1 — the CRM the company outgrew, gone two years ago.
+    _rel("relAppSuccessor", "app_sf_sales", "app_salestrack"),
+    # The CRM capability itself, led by whichever CRM is current. Without these
+    # bc_crm had no application at all, so the clamp below had nothing to bite
+    # on and the derived pass handed it a random future start — a company
+    # running a CRM since 2017 acquiring the *capability* in 2029.
+    _rel("relAppToBC", "app_salestrack", "bc_crm", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_sf_sales", "bc_crm", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_salestrack", "bc_lead_mgmt", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_salestrack", "bc_opp_mgmt", {"supportType": "supporting"}),
+    _rel("relOrgToApp", "org_sales", "app_salestrack", {"usageType": "owner"}),
+    _rel("relAppToITC", "app_salestrack", "itc_salestrack_db"),
+    _rel("relAppToInterface", "app_salestrack", "if_salestrack_sap", {"flowDirection": "forward"}),
+    _rel("relInterfaceToDataObj", "if_salestrack_sap", "do_sales_order"),
+    _rel(
+        "relAppToDataObj",
+        "app_salestrack",
+        "do_customer",
+        {"crudCreate": True, "crudRead": True, "crudUpdate": True, "crudDelete": False},
+    ),
+    _rel("relITCToTechCat", "itc_salestrack_db", "tc_rdbms"),
+    # Wave 4 — the commerce portal, live in a couple of months.
+    _rel("relAppToBC", "app_commerce_portal", "bc_digital_commerce", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_commerce_portal", "bc_order_mgmt", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_commerce_portal", "bc_channel_mgmt", {"supportType": "leading"}),
+    # Picks up what HubSpot leaves behind when it retires.
+    _rel("relAppToBC", "app_commerce_portal", "bc_cust_comm", {"supportType": "supporting"}),
+    _rel("relAppToBizCtx", "app_commerce_portal", "bctx_otc"),
+    _rel("relOrgToApp", "org_sales", "app_commerce_portal", {"usageType": "owner"}),
+    _rel("relOrgToApp", "org_marketing", "app_commerce_portal", {"usageType": "user"}),
+    _rel("relProviderToApp", "prov_aws", "app_commerce_portal"),
+    _rel("relPlatformToApp", "plat_integration", "app_commerce_portal"),
+    _rel("relAppToITC", "app_commerce_portal", "itc_commerce_search"),
+    _rel("relITCToTechCat", "itc_commerce_search", "tc_middleware"),
+    _rel(
+        "relAppToInterface",
+        "app_commerce_portal",
+        "if_commerce_sap_orders",
+        {"flowDirection": "forward"},
+    ),
+    _rel("relAppToInterface", "app_sap_s4", "if_commerce_sap_orders", {"flowDirection": "reverse"}),
+    _rel("relInterfaceToDataObj", "if_commerce_sap_orders", "do_sales_order"),
+    _rel(
+        "relAppToDataObj",
+        "app_commerce_portal",
+        "do_product",
+        {"crudCreate": False, "crudRead": True, "crudUpdate": False, "crudDelete": False},
+    ),
+    _rel(
+        "relAppToDataObj",
+        "app_commerce_portal",
+        "do_customer",
+        {"crudCreate": True, "crudRead": True, "crudUpdate": True, "crudDelete": False},
+    ),
+    _rel("relInitiativeToApp", "init_digital_sales", "app_commerce_portal"),
+    _rel("relInitiativeToInterface", "init_digital_sales", "if_commerce_sap_orders"),
+    # Wave 5a — the partner extranet the portal displaces a year out.
+    _rel("relAppSuccessor", "app_commerce_portal", "app_partner_extranet"),
+    _rel("relAppToBC", "app_partner_extranet", "bc_channel_mgmt", {"supportType": "leading"}),
+    _rel("relOrgToApp", "org_sales", "app_partner_extranet", {"usageType": "owner"}),
+    _rel(
+        "relAppToInterface",
+        "app_partner_extranet",
+        "if_partner_edi",
+        {"flowDirection": "bidirectional"},
+    ),
+    _rel("relInterfaceToDataObj", "if_partner_edi", "do_sales_order"),
+    _rel("relInitiativeToApp", "init_partner_channel", "app_partner_extranet"),
+    _rel("relInitiativeToApp", "init_digital_sales", "app_hubspot"),
+    # Wave 5b — the AI agent that arrives last.
+    _rel("relAppToBC", "app_revenue_ai", "bc_revenue_forecast", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_revenue_ai", "bc_opp_mgmt", {"supportType": "supporting"}),
+    _rel("relOrgToApp", "org_sales", "app_revenue_ai", {"usageType": "user"}),
+    _rel("relProviderToApp", "prov_salesforce", "app_revenue_ai"),
+    _rel("relAppToITC", "app_revenue_ai", "itc_revenue_model"),
+    _rel("relITCToTechCat", "itc_revenue_model", "tc_cloud"),
+    _rel(
+        "relAppToDataObj",
+        "app_revenue_ai",
+        "do_sales_order",
+        {"crudCreate": False, "crudRead": True, "crudUpdate": False, "crudDelete": False},
+    ),
+    _rel("relInitiativeToApp", "init_revenue_intel", "app_revenue_ai"),
+    _rel("relInitiativeToITC", "init_revenue_intel", "itc_revenue_model"),
+    # ── The capability layer as the objective ↔ application hinge ──
+    # A capability is the only card type that reaches strategy in one direction
+    # and applications in the other (the metamodel has no Objective→Application
+    # relation), which makes it the card worth centring the Dependencies report
+    # on. That only works if the wiring exists: every objective used to name
+    # exactly two capabilities, so 57 of 78 capabilities reached no objective at
+    # all and only 11 were hinges. Each objective now names the capabilities it
+    # actually drives.
+    _rel("relObjectiveToBC", "obj_digital_tx", "bc_itsm"),
+    _rel("relObjectiveToBC", "obj_digital_tx", "bc_order_mgmt"),
+    _rel("relObjectiveToBC", "obj_digital_tx", "bc_cust_comm"),
+    _rel("relObjectiveToBC", "obj_digital_tx", "bc_prod_planning"),
+    _rel("relObjectiveToBC", "obj_digital_tx", "bc_collaboration"),
+    _rel("relObjectiveToBC", "obj_ttm", "bc_mech_design"),
+    _rel("relObjectiveToBC", "obj_ttm", "bc_elec_design"),
+    _rel("relObjectiveToBC", "obj_ttm", "bc_simulation"),
+    _rel("relObjectiveToBC", "obj_ttm", "bc_prod_req"),
+    _rel("relObjectiveToBC", "obj_ttm", "bc_prod_strategy"),
+    _rel("relObjectiveToBC", "obj_ttm", "bc_cad_modeling"),
+    _rel("relObjectiveToBC", "obj_industry40", "bc_assembly"),
+    _rel("relObjectiveToBC", "obj_industry40", "bc_test_cal"),
+    _rel("relObjectiveToBC", "obj_industry40", "bc_smt"),
+    _rel("relObjectiveToBC", "obj_industry40", "bc_prod_planning"),
+    _rel("relObjectiveToBC", "obj_industry40", "bc_qms"),
+    _rel("relObjectiveToBC", "obj_cx", "bc_account_mgmt"),
+    _rel("relObjectiveToBC", "obj_cx", "bc_cust_comm"),
+    _rel("relObjectiveToBC", "obj_cx", "bc_tech_support"),
+    _rel("relObjectiveToBC", "obj_cx", "bc_warranty"),
+    _rel("relObjectiveToBC", "obj_cx", "bc_field_service"),
+    _rel("relObjectiveToBC", "obj_cybersec", "bc_itsm"),
+    _rel("relObjectiveToBC", "obj_cybersec", "bc_it"),
+    _rel("relObjectiveToBC", "obj_it_cost", "bc_vendor_mgmt"),
+    _rel("relObjectiveToBC", "obj_it_cost", "bc_procurement"),
+    _rel("relObjectiveToBC", "obj_it_cost", "bc_itsm"),
+    _rel("relObjectiveToBC", "obj_it_cost", "bc_collaboration"),
+    _rel("relObjectiveToBC", "obj_data_driven", "bc_fp_a"),
+    _rel("relObjectiveToBC", "obj_data_driven", "bc_demand_forecast"),
+    _rel("relObjectiveToBC", "obj_data_driven", "bc_accounting"),
+    _rel("relObjectiveToBC", "obj_data_driven", "bc_qms"),
+    _rel("relObjectiveToBC", "obj_iot_portfolio", "bc_fw_dev"),
+    _rel("relObjectiveToBC", "obj_iot_portfolio", "bc_comm_protocols"),
+    _rel("relObjectiveToBC", "obj_iot_portfolio", "bc_prod_portfolio"),
+    _rel("relObjectiveToBC", "obj_iot_portfolio", "bc_sw_dev"),
+    _rel("relObjectiveToBC", "obj_iot_portfolio", "bc_ota"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_lead_mgmt"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_opp_mgmt"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_order_mgmt"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_account_mgmt"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_cust_analytics"),
+    # The other half of the hinge: nine applications supported no capability at
+    # all, so they hung off the landscape with nothing above them.
+    _rel("relAppToBC", "app_m365", "bc_collaboration", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_teams", "bc_collaboration", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_sharepoint", "bc_collaboration", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_confluence", "bc_collaboration", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_jenkins", "bc_sw_dev", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_github_actions", "bc_sw_dev", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_sonarqube", "bc_sw_dev", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_kafka", "bc_data_mgmt", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_timescale", "bc_data_mgmt", {"supportType": "supporting"}),
+    # A capability also wants the delivery side on its canvas: which initiative
+    # is changing it, and which value stream runs through it. Only 17 of 79
+    # capabilities named an initiative, so centring on one showed the
+    # applications underneath but nothing about the change in flight — and
+    # initiatives are now the type most likely to carry a future date.
+    _rel("relInitiativeToBC", "init_digital_program", "bc_itsm"),
+    _rel("relInitiativeToBC", "init_digital_program", "bc_collaboration"),
+    _rel("relInitiativeToBC", "init_digital_program", "bc_order_mgmt"),
+    _rel("relInitiativeToBC", "init_sap_migration", "bc_procurement"),
+    _rel("relInitiativeToBC", "init_sap_migration", "bc_inventory"),
+    _rel("relInitiativeToBC", "init_sap_migration", "bc_accounting"),
+    _rel("relInitiativeToBC", "init_sap_migration", "bc_fp_a"),
+    _rel("relInitiativeToBC", "init_mfg_excellence", "bc_prod_planning"),
+    _rel("relInitiativeToBC", "init_mfg_excellence", "bc_assembly"),
+    _rel("relInitiativeToBC", "init_mfg_excellence", "bc_test_cal"),
+    _rel("relInitiativeToBC", "init_mfg_excellence", "bc_qms"),
+    _rel("relInitiativeToBC", "init_iot_modern", "bc_fw_dev"),
+    _rel("relInitiativeToBC", "init_iot_modern", "bc_comm_protocols"),
+    _rel("relInitiativeToBC", "init_iot_modern", "bc_ota"),
+    _rel("relInitiativeToBC", "init_devops", "bc_sw_dev"),
+    _rel("relInitiativeToBC", "init_devops", "bc_cloud_app_dev"),
+    _rel("relInitiativeToBC", "init_devops", "bc_api_dev"),
+    _rel("relInitiativeToBC", "init_cybersec_enhance", "bc_it"),
+    _rel("relInitiativeToBC", "init_zero_trust", "bc_network"),
+    _rel("relInitiativeToBC", "init_zero_trust", "bc_cybersecurity"),
+    _rel("relInitiativeToBC", "init_portal_redesign", "bc_cust_comm"),
+    _rel("relInitiativeToBC", "init_portal_redesign", "bc_tech_support"),
+    _rel("relInitiativeToBC", "init_sf_impl", "bc_lead_mgmt"),
+    _rel("relInitiativeToBC", "init_sf_impl", "bc_opp_mgmt"),
+    _rel("relInitiativeToBC", "init_sf_impl", "bc_account_mgmt"),
+    _rel("relInitiativeToBC", "init_ai_pred_maint", "bc_remote_monitor"),
+    _rel("relInitiativeToBC", "init_dw_consolidation", "bc_cust_analytics"),
+    _rel("relInitiativeToBC", "init_dw_consolidation", "bc_fp_a"),
+    _rel("relInitiativeToBC", "init_plm_retire", "bc_prod_req"),
+    _rel("relInitiativeToBC", "init_plm_retire", "bc_prod_portfolio"),
+    _rel("relBizCtxToBC", "bctx_otc", "bc_lead_mgmt"),
+    _rel("relBizCtxToBC", "bctx_otc", "bc_opp_mgmt"),
+    _rel("relBizCtxToBC", "bctx_otc", "bc_pricing"),
+    _rel("relBizCtxToBC", "bctx_i2p", "bc_tech_support"),
+    _rel("relBizCtxToBC", "bctx_i2p", "bc_field_service"),
+    _rel("relBizCtxToBC", "bctx_npi", "bc_prod_req"),
+    _rel("relBizCtxToBC", "bctx_npi", "bc_mech_design"),
+    _rel("relBizCtxToBC", "bctx_npi", "bc_elec_design"),
+    _rel("relBizCtxToBC", "bctx_npi", "bc_simulation"),
+    _rel("relBizCtxToBC", "bctx_ib2s", "bc_remote_monitor"),
+    _rel("relBizCtxToBC", "bctx_ib2s", "bc_spare_parts"),
+    # ── Go-to-market maturity story ───────────────────────────────
+    # Each era wired end to end: the capability it switches on, the apps that
+    # deliver it, the infrastructure underneath and the programme that paid for
+    # it. Centre the Dependencies report on a sales capability and travel the
+    # slider to watch the function get built.
+    #
+    # Era 1 — spreadsheets. Order Management ran out of the ERP; nothing else
+    # was a capability yet.
+    _rel("relAppToBC", "app_sales_workbook", "bc_order_mgmt", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_sales_workbook", "bc_account_mgmt", {"supportType": "supporting"}),
+    _rel("relOrgToApp", "org_sales", "app_sales_workbook", {"usageType": "owner"}),
+    _rel("relAppToITC", "app_sales_workbook", "itc_sales_fileserver"),
+    _rel(
+        "relAppToInterface",
+        "app_sales_workbook",
+        "if_workbook_erp",
+        {"flowDirection": "forward"},
+    ),
+    _rel("relInterfaceToDataObj", "if_workbook_erp", "do_sales_order"),
+    # Era 2 — the first CRM. SalesTrack replaces the workbooks and lead,
+    # opportunity and account management become real capabilities.
+    _rel("relAppSuccessor", "app_salestrack", "app_sales_workbook"),
+    _rel("relInitiativeToApp", "init_crm_foundation", "app_salestrack"),
+    _rel("relInitiativeToApp", "init_crm_foundation", "app_sales_workbook"),
+    _rel("relInitiativeToBC", "init_crm_foundation", "bc_lead_mgmt"),
+    _rel("relInitiativeToBC", "init_crm_foundation", "bc_opp_mgmt"),
+    _rel("relInitiativeToBC", "init_crm_foundation", "bc_account_mgmt"),
+    _rel("relInitiativeToObjective", "init_crm_foundation", "obj_sales_growth"),
+    _rel("relOrgToInitiative", "org_sales", "init_crm_foundation"),
+    # Era 3 — go-to-market tooling on top of the CRM.
+    _rel("relAppToBC", "app_account_planner", "bc_account_planning", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_account_planner", "bc_account_mgmt", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_outreach", "bc_lead_mgmt", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_outreach", "bc_campaign_mgmt", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_hubspot", "bc_campaign_mgmt", {"supportType": "leading"}),
+    _rel("relOrgToApp", "org_sales", "app_account_planner", {"usageType": "owner"}),
+    _rel("relOrgToApp", "org_sales", "app_outreach", {"usageType": "owner"}),
+    _rel("relOrgToApp", "org_marketing", "app_outreach", {"usageType": "user"}),
+    _rel("relProviderToApp", "prov_salesforce", "app_account_planner"),
+    _rel(
+        "relAppToDataObj",
+        "app_outreach",
+        "do_customer",
+        {"crudCreate": False, "crudRead": True, "crudUpdate": True, "crudDelete": False},
+    ),
+    _rel("relInitiativeToApp", "init_gtm_modern", "app_account_planner"),
+    _rel("relInitiativeToApp", "init_gtm_modern", "app_outreach"),
+    _rel("relInitiativeToApp", "init_gtm_modern", "app_hubspot"),
+    _rel("relInitiativeToBC", "init_gtm_modern", "bc_account_planning"),
+    _rel("relInitiativeToBC", "init_gtm_modern", "bc_campaign_mgmt"),
+    _rel("relInitiativeToObjective", "init_gtm_modern", "obj_sales_growth"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_account_planning"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_campaign_mgmt"),
+    _rel("relObjectiveToBC", "obj_cx", "bc_omnichannel"),
+    # Era 4 — one customer, every channel. The CDP is the new centre of gravity.
+    _rel("relAppToBC", "app_cdp", "bc_cust_analytics", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_cdp", "bc_omnichannel", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_engagement_hub", "bc_omnichannel", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_engagement_hub", "bc_cust_comm", {"supportType": "leading"}),
+    _rel("relAppToITC", "app_cdp", "itc_cdp_stream"),
+    _rel("relITCToTechCat", "itc_cdp_stream", "tc_msg_broker"),
+    _rel("relAppToInterface", "app_cdp", "if_cdp_crm", {"flowDirection": "forward"}),
+    _rel("relAppToInterface", "app_sf_sales", "if_cdp_crm", {"flowDirection": "reverse"}),
+    _rel("relInterfaceToDataObj", "if_cdp_crm", "do_customer"),
+    _rel(
+        "relAppToDataObj",
+        "app_cdp",
+        "do_customer",
+        {"crudCreate": True, "crudRead": True, "crudUpdate": True, "crudDelete": False},
+    ),
+    _rel("relOrgToApp", "org_marketing", "app_cdp", {"usageType": "owner"}),
+    _rel("relOrgToApp", "org_sales", "app_engagement_hub", {"usageType": "user"}),
+    _rel("relProviderToApp", "prov_salesforce", "app_engagement_hub"),
+    _rel("relPlatformToApp", "plat_integration", "app_cdp"),
+    _rel("relInitiativeToApp", "init_omnichannel", "app_cdp"),
+    _rel("relInitiativeToApp", "init_omnichannel", "app_engagement_hub"),
+    _rel("relInitiativeToApp", "init_omnichannel", "app_commerce_portal"),
+    _rel("relInitiativeToBC", "init_omnichannel", "bc_omnichannel"),
+    _rel("relInitiativeToITC", "init_omnichannel", "itc_cdp_stream"),
+    _rel("relInitiativeToObjective", "init_omnichannel", "obj_sales_growth"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_omnichannel"),
+    # Era 5 — the AI era: agents on a shared, governed model estate.
+    _rel("relAppToBC", "app_marketing_ai", "bc_marketing_automation", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_marketing_ai", "bc_campaign_mgmt", {"supportType": "supporting"}),
+    _rel("relAppToBC", "app_ai_sdr", "bc_conversational_ai", {"supportType": "leading"}),
+    _rel("relAppToBC", "app_ai_sdr", "bc_lead_mgmt", {"supportType": "supporting"}),
+    _rel("relAppToITC", "app_marketing_ai", "itc_llm_gateway"),
+    _rel("relAppToITC", "app_ai_sdr", "itc_llm_gateway"),
+    _rel("relAppToITC", "app_ai_sdr", "itc_vector_store"),
+    _rel("relAppToITC", "app_revenue_ai", "itc_llm_gateway"),
+    _rel("relITCToTechCat", "itc_llm_gateway", "tc_api_gw"),
+    _rel("relITCToTechCat", "itc_vector_store", "tc_databases"),
+    _rel("relAppToInterface", "app_ai_sdr", "if_ai_gateway", {"flowDirection": "forward"}),
+    _rel("relAppToInterface", "app_marketing_ai", "if_ai_gateway", {"flowDirection": "forward"}),
+    _rel("relInterfaceToITC", "if_ai_gateway", "itc_llm_gateway"),
+    _rel(
+        "relAppToDataObj",
+        "app_ai_sdr",
+        "do_customer",
+        {"crudCreate": False, "crudRead": True, "crudUpdate": True, "crudDelete": False},
+    ),
+    _rel("relOrgToApp", "org_marketing", "app_marketing_ai", {"usageType": "owner"}),
+    _rel("relOrgToApp", "org_sales", "app_ai_sdr", {"usageType": "owner"}),
+    _rel("relProviderToApp", "prov_salesforce", "app_ai_sdr"),
+    _rel("relProviderToITC", "prov_aws", "itc_llm_gateway"),
+    _rel("relInitiativeToApp", "init_ai_gtm", "app_marketing_ai"),
+    _rel("relInitiativeToApp", "init_ai_gtm", "app_ai_sdr"),
+    _rel("relInitiativeToITC", "init_ai_gtm", "itc_llm_gateway"),
+    _rel("relInitiativeToITC", "init_ai_gtm", "itc_vector_store"),
+    _rel("relInitiativeToBC", "init_ai_gtm", "bc_marketing_automation"),
+    _rel("relInitiativeToBC", "init_ai_gtm", "bc_conversational_ai"),
+    _rel("relInitiativeToObjective", "init_ai_gtm", "obj_sales_growth"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_marketing_automation"),
+    _rel("relObjectiveToBC", "obj_sales_growth", "bc_conversational_ai"),
+    _rel("relOrgToInitiative", "org_marketing", "init_ai_gtm"),
+    # Integrations, era by era: every tool in this story exchanges data with the
+    # CRM or the customer profile, and those are the edges the timeline severs
+    # when one end retires.
+    _rel("relAppToInterface", "app_outreach", "if_outreach_sf", {"flowDirection": "bidirectional"}),
+    _rel("relAppToInterface", "app_sf_sales", "if_outreach_sf", {"flowDirection": "bidirectional"}),
+    _rel("relInterfaceToDataObj", "if_outreach_sf", "do_customer"),
+    _rel(
+        "relAppToInterface",
+        "app_account_planner",
+        "if_altify_sf",
+        {"flowDirection": "bidirectional"},
+    ),
+    _rel("relAppToInterface", "app_sf_sales", "if_altify_sf", {"flowDirection": "bidirectional"}),
+    _rel(
+        "relAppToInterface",
+        "app_commerce_portal",
+        "if_portal_cdp",
+        {"flowDirection": "forward"},
+    ),
+    _rel("relAppToInterface", "app_cdp", "if_portal_cdp", {"flowDirection": "reverse"}),
+    _rel("relInterfaceToITC", "if_portal_cdp", "itc_cdp_stream"),
+    _rel(
+        "relAppToInterface",
+        "app_engagement_hub",
+        "if_hub_cdp",
+        {"flowDirection": "bidirectional"},
+    ),
+    _rel("relAppToInterface", "app_cdp", "if_hub_cdp", {"flowDirection": "bidirectional"}),
+    _rel("relInterfaceToDataObj", "if_hub_cdp", "do_customer"),
+    _rel("relAppToInterface", "app_ai_sdr", "if_ai_sdr_hub", {"flowDirection": "forward"}),
+    _rel("relAppToInterface", "app_engagement_hub", "if_ai_sdr_hub", {"flowDirection": "reverse"}),
+    _rel(
+        "relAppToInterface",
+        "app_marketing_ai",
+        "if_marketing_ai_cdp",
+        {"flowDirection": "reverse"},
+    ),
+    _rel("relAppToInterface", "app_cdp", "if_marketing_ai_cdp", {"flowDirection": "forward"}),
+    _rel("relInitiativeToInterface", "init_omnichannel", "if_portal_cdp"),
+    _rel("relInitiativeToInterface", "init_omnichannel", "if_hub_cdp"),
+    _rel("relInitiativeToInterface", "init_ai_gtm", "if_ai_gateway"),
+    _rel("relInitiativeToInterface", "init_ai_gtm", "if_ai_sdr_hub"),
+    _rel("relInitiativeToInterface", "init_gtm_modern", "if_outreach_sf"),
+    _rel("relInitiativeToInterface", "init_crm_foundation", "if_salestrack_sap"),
 ]
+
+
+# ===================================================================
+# DERIVED LIFECYCLES
+# ===================================================================
+# Two thirds of the demo carried no lifecycle at all, so the Dependencies
+# report's time travel did nothing from almost any centre: only Applications
+# and IT Components had dates, only 34 cards could ever retire, and 24 of those
+# retired on the same hard-coded day.
+#
+# Rather than hand-write a lifecycle onto 150 cards, derive one from the data
+# the demo already carries — an interface lives as long as the applications it
+# connects, an initiative ends on its own end date, an application flagged
+# `eliminate` in the portfolio actually retires. The timeline then AGREES with
+# the Portfolio and Roadmap reports instead of contradicting them.
+#
+# Only empty lifecycles are filled, so every hand-written story above survives.
+
+
+def _spread(ref: str, buckets: int) -> int:
+    """Stable bucket for a card ref.
+
+    `hash()` is salted per process, so it would reshuffle the whole demo on
+    every boot; crc32 is stable across runs and machines.
+    """
+    return zlib.crc32(ref.encode()) % buckets
+
+
+def _apply_derived_lifecycles() -> None:
+    u2r = {uid: ref for ref, uid in _refs.items()}
+    by_id = {c["id"]: c for c in _ALL_CARDS}
+
+    def lifecycle_of(card: dict) -> dict:
+        return card.get("lifecycle") or {}
+
+    # --- Applications: the portfolio already says which ones are on the way out
+    for app in APPLICATIONS:
+        lc = lifecycle_of(app)
+        if lc.get("endOfLife") or not lc.get("active"):
+            continue
+        time_model = (app.get("attributes") or {}).get("timeModel")
+        if time_model not in ("eliminate", "migrate", "tolerate"):
+            continue
+        ref = u2r[app["id"]]
+        # Eliminate/migrate go in the next few years, tolerated ones later.
+        base = 1 if time_model in ("eliminate", "migrate") else 4
+        # Spread across the calendar, not onto two month-ends: a dozen cards
+        # sharing one date collapse into a single timeline mark, and an arrival
+        # the user is looking for disappears into it.
+        end = _in_years(base + _spread(ref, 3), 1 + _spread(ref + ":m", 12), 28)
+        if end <= lc["active"]:
+            continue
+        app["lifecycle"] = {
+            **lc,
+            "phaseOut": _in_years(base - 1 + _spread(ref, 2)),
+            "endOfLife": end,
+        }
+
+    # --- Interfaces: an integration lives as long as both ends do
+    app_of_interface: dict[str, list[dict]] = {}
+    for rel in RELATIONS:
+        if rel["type"] != "relAppToInterface":
+            continue
+        src, tgt = by_id.get(rel["source_id"]), by_id.get(rel["target_id"])
+        if src and tgt:
+            app_of_interface.setdefault(tgt["id"], []).append(src)
+    for iface in INTERFACES:
+        if any(lifecycle_of(iface).values()):
+            continue
+        apps = app_of_interface.get(iface["id"], [])
+        actives = [lifecycle_of(a).get("active") for a in apps]
+        actives = [a for a in actives if a]
+        ends = [lifecycle_of(a).get("endOfLife") for a in apps]
+        ends = [e for e in ends if e]
+        if not actives:
+            continue
+        lc = {"active": max(actives)}
+        # The first end of either side switches the integration off.
+        if ends and min(ends) > lc["active"]:
+            lc["endOfLife"] = min(ends)
+        iface["lifecycle"] = lc
+
+    # --- Initiatives: a delivery that finished is no longer running
+    #
+    # The start comes first, and an end is never stamped without one. This used
+    # to fall back to `phaseIn` / `plan` for the start, so an initiative that
+    # carried only a plan date got an endOfLife and no `active` at all — the
+    # timeline retired a card that had never gone live, and the retirement mark
+    # had no arrival mark to answer it. An initiative already publishes the date
+    # it started; that is the honest source for the missing phase.
+    for init in INITIATIVES:
+        lc = lifecycle_of(init)
+        attrs = init.get("attributes") or {}
+        start_date = attrs.get("startDate")
+        if not lc.get("active") and start_date:
+            # Earlier phases move with it: a plan or phase-in left after the
+            # derived start would read backwards on the card's own timeline.
+            lc = {
+                **{k: min(v, start_date) for k, v in lc.items() if k in ("plan", "phaseIn")},
+                **{k: v for k, v in lc.items() if k not in ("plan", "phaseIn")},
+                "active": start_date,
+            }
+            init["lifecycle"] = lc
+        if lc.get("endOfLife"):
+            continue
+        end = attrs.get("endDate")
+        start = lc.get("active")
+        if end and start and end > start:
+            init["lifecycle"] = {**lc, "endOfLife": end}
+
+    # --- Business capabilities: a portfolio built up over time, not all at once
+    today = date.today().isoformat()
+    # Earliest already-live application that LEADS each capability. Leading
+    # means the app implements the capability, so the capability cannot start
+    # after it; a merely supporting app is free to predate the capability it
+    # was later folded into.
+    live_app_of_cap: dict = {}
+    for rel in RELATIONS:
+        if rel["type"] != "relAppToBC":
+            continue
+        if (rel.get("attributes") or {}).get("supportType") != "leading":
+            continue
+        app, cap = by_id.get(rel["source_id"]), by_id.get(rel["target_id"])
+        if not app or not cap:
+            continue
+        active = lifecycle_of(app).get("active")
+        if active and active <= today:
+            live_app_of_cap[cap["id"]] = min(live_app_of_cap.get(cap["id"], active), active)
+
+    # Clamp hand-written capability dates too: the canvas shows a capability
+    # and the app leading it side by side, so the capability arriving second
+    # reads as a data error.
+    for cap in BUSINESS_CAPABILITIES:
+        lc = lifecycle_of(cap)
+        first_led = live_app_of_cap.get(cap["id"])
+        if lc.get("active") and first_led and lc["active"] > first_led:
+            cap["lifecycle"] = {
+                **{k: v for k, v in lc.items() if k not in ("plan", "phaseIn")},
+                **{k: min(v, first_led) for k, v in lc.items() if k in ("plan", "phaseIn")},
+                "active": first_led,
+            }
+
+    for cap in BUSINESS_CAPABILITIES:
+        if any(lifecycle_of(cap).values()):
+            continue
+        ref = u2r[cap["id"]]
+        bucket = _spread(ref, 10)
+        if bucket < 5:
+            # Half stay dateless: a long-standing capability has no "start".
+            continue
+        first_app = live_app_of_cap.get(cap["id"])
+        # Every derived capability used to land on 1 January or 1 July, piling a
+        # dozen of them onto one timeline mark. The month is spread off the same
+        # ref so a capability keeps its date across reseeds.
+        month = 1 + _spread(ref + ":m", 12)
+        if bucket == 9 and not first_app:
+            # A few arrive during the plan horizon — but only where no
+            # application already implements them. A capability that switches on
+            # years after the apps supporting it is nonsense, and the
+            # Dependencies canvas shows the two side by side.
+            live_year = 1 + _spread(ref, 3)
+            cap["lifecycle"] = {
+                # A year of planning ahead of it, so plan can never overtake
+                # active however the buckets fall.
+                "plan": _in_years(live_year - 1, month, 1),
+                "active": _in_years(live_year, month, 1),
+            }
+        else:
+            started = _in_years(-(4 + _spread(ref, 8)), month, 1)
+            # Never later than the first application that implements it.
+            cap["lifecycle"] = {"active": min(started, first_app) if first_app else started}
+
+
+_ALL_CARDS = (
+    ORGANIZATIONS
+    + BUSINESS_CAPABILITIES
+    + BUSINESS_CONTEXTS
+    + APPLICATIONS
+    + IT_COMPONENTS
+    + INTERFACES
+    + DATA_OBJECTS
+    + TECH_CATEGORIES
+    + PROVIDERS
+    + OBJECTIVES
+    + INITIATIVES
+    + PLATFORMS
+)
+
+_apply_derived_lifecycles()
 
 
 # ===================================================================

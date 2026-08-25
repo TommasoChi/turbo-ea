@@ -82,7 +82,8 @@ Shows all connections to other cards, grouped by relation type. For each relatio
 
 - **Related card name** — Click to navigate to the related card
 - **Relation type** — The nature of the connection (e.g., "uses", "runs on", "depends on")
-- **Add relation** — Click **+** to create a new relation; the picker lists matching cards as soon as it opens (sorted by name, more load as you scroll), and typing filters the list
+- **Add relation** — Click **+** to open the add dialog for that relation. It lists matching cards as you type (best matches first, more load as you scroll) and hides the ones already linked, with a caption showing how many. Clicking a card links it straight away and it appears as a chip at the top — click a chip's **×** to undo that one. The dialog stays open so you can add as many as you like, and on a phone it opens full-screen. Relations that have no section of their own are reached from the **Add Relation** button at the bottom of the section
+- **Ordering** — Related cards are listed alphabetically by name
 - **Remove relation** — Click the delete icon to remove a relation
 - **Group by subtype** — When a relation section has many related cards, they are automatically grouped into collapsible subtype buckets (each with a count), with a trailing **No subtype** bucket for unclassified cards. Use the group/list toggle in the section header to switch between the grouped and flat views.
 - **Cards linked to sub-items** — When a card has sub-items, each relation group shows a **+N in sub-items** chip counting the cards linked further down the hierarchy — for example, the applications attached to a capability's sub-capabilities. Click it to open a read-only list where each row names the sub-item holding the link (a card reached through several sub-items appears once, with each one listed). The count only includes cards that are not already listed in the group above it. To change a link, open the sub-item that owns it. The list is grouped into collapsible subtype sections, so the subtype is named once per section instead of on every row. Within a section, cards whose lifecycle phase needs attention come first (end of life, then phasing out), and each card's phase is shown as a coloured dot next to its name — hover it for the phase name.
@@ -90,6 +91,12 @@ Shows all connections to other cards, grouped by relation type. For each relatio
 ![Relation groups showing the sub-items roll-up chip](../assets/img/en/59_card_subitem_chip.png)
 
 ![Cards linked through sub-items, grouped by subtype](../assets/img/en/60_card_subitem_relations.png)
+
+### Dependencies Section
+
+A [Layered Dependency View](reports.md) of the card and everything one hop away, grouped into the four architecture layers. Shift-click a card to re-centre on it and walk the landscape without leaving the page.
+
+The **open in new tab** icon in the view's toolbar opens the full [Dependencies report](reports.md) in a new tab, centred on whatever the view is centred on at that moment — so a card you navigated to, not necessarily the one you started from. Use it when you need what the report adds around the same picture: time travel, the transition marks, the table view, and saving the view as a report.
 
 ### Tags Section
 

@@ -82,7 +82,8 @@ Viser alle forbindelser til andre kort, grupperet efter relations­type. For hve
 
 - **Relateret kortnavn** — Klik for at navigere til det relaterede kort
 - **Relations­type** — Forbindelsens karakter (f.eks. "uses", "runs on", "depends on")
-- **Tilføj relation** — Klik på **+** for at oprette en ny relation; vælgeren viser matchende kort, så snart den åbnes (sorteret efter navn, flere indlæses, når du ruller), og indtastning filtrerer listen
+- **Tilføj relation** — Klik på **+** for at åbne dialogen for den relation. Den viser matchende kort, mens du skriver (de bedste match først, flere hentes, når du ruller), og skjuler dem, der allerede er tilknyttet, med en billedtekst der viser hvor mange. Et klik på et kort tilknytter det med det samme, og det vises som en chip øverst — klik på chippens **×** for at fortryde den tilføjelse. Dialogen forbliver åben, så du kan tilføje så mange du vil, og på telefon åbner den i fuld skærm. Relationer uden deres eget afsnit nås fra knappen **Tilføj relation** nederst i afsnittet
+- **Sortering** — Relaterede kort vises alfabetisk efter navn
 - **Fjern relation** — Klik på slet-ikonet for at fjerne en relation
 - **Gruppér efter undertype** — Når en relationssektion har mange relaterede kort, grupperes de automatisk i sammenklappelige undertype-grupper (hver med et antal), med en afsluttende **Ingen undertype**-gruppe til uklassificerede kort. Brug gruppe/liste-knappen i sektionsoverskriften for at skifte mellem den grupperede og den flade visning.
 - **Kort forbundet til underelementer** — Når et kort har underelementer, viser hver relationsgruppe en **+N i underelementer**-chip, der tæller de kort, som er forbundet længere nede i hierarkiet — for eksempel de applikationer, der er knyttet til en kapabilitets underkapabiliteter. Et klik åbner en skrivebeskyttet liste, hvor hver række angiver det underelement, der indeholder forbindelsen (et kort, der nås via flere underelementer, vises én gang med dem alle angivet). Tællingen omfatter kun kort, der ikke allerede står i gruppen ovenfor. Åbn det underelement, der ejer forbindelsen, for at ændre den. Listen er inddelt i sammenklappelige undertype-afsnit, så undertypen nævnes én gang pr. afsnit i stedet for på hver række. Inden for et afsnit vises kort, hvis livscyklusfase kræver opmærksomhed, først (slutning på levetid, derefter udfasning), og hvert korts fase vises som en farvet prik ved siden af navnet — hold musen over den for at se fasens navn.
@@ -90,6 +91,12 @@ Viser alle forbindelser til andre kort, grupperet efter relations­type. For hve
 ![Relationsgrupper med chippen for underelementer](../assets/img/da/59_card_subitem_chip.png)
 
 ![Kort forbundet via underelementer, grupperet efter undertype](../assets/img/da/60_card_subitem_relations.png)
+
+### Afhængighedssektion
+
+En [Layered Dependency View](reports.md) af kortet og alt, hvad der ligger ét hop væk, grupperet i de fire arkitekturlag. Shift-klik på et kort for at centrere visningen på ny og gennemgå landskabet uden at forlade siden.
+
+Ikonet **åbn i ny fane** i værktøjslinjen åbner den fulde [afhængighedsrapport](reports.md) i en ny fane, centreret om det kort, visningen er centreret om i det øjeblik — altså det kort, du har navigeret til, ikke nødvendigvis det, du startede fra. Brug det, når du har brug for det, rapporten tilføjer omkring det samme billede: tidsrejse, overgangsmarkeringerne, tabelvisningen og at gemme visningen som en rapport.
 
 ### Tags-sektion
 

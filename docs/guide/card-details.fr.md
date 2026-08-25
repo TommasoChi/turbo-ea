@@ -82,7 +82,8 @@ Affiche toutes les connexions avec d'autres fiches, groupées par type de relati
 
 - **Nom de la fiche liée** -- Cliquer pour naviguer vers la fiche liée
 - **Type de relation** -- La nature de la connexion (par ex. « utilise », « s'exécute sur », « dépend de »)
-- **Ajouter une relation** -- Cliquez sur **+** pour créer une nouvelle relation ; le sélecteur affiche les fiches correspondantes dès son ouverture (triées par nom, d'autres se chargent au défilement), et la saisie filtre la liste
+- **Ajouter une relation** -- Cliquez sur **+** pour ouvrir la boîte de dialogue de cette relation. Elle liste les fiches correspondantes au fil de la saisie (les meilleures correspondances d'abord, d'autres se chargent au défilement) et masque celles déjà liées, avec une légende indiquant leur nombre. Cliquer sur une fiche la lie aussitôt et elle apparaît sous forme de puce en haut -- cliquez sur le **×** d'une puce pour annuler cet ajout. La boîte de dialogue reste ouverte pour en ajouter autant que vous voulez, et sur téléphone elle s'ouvre en plein écran. Les relations sans section propre sont accessibles via le bouton **Ajouter une relation** en bas de la section
+- **Tri** -- Les cartes liées sont listées par ordre alphabétique
 - **Supprimer une relation** -- Cliquez sur l'icône de suppression pour retirer une relation
 - **Grouper par sous-type** — Lorsqu'une section de relations contient de nombreuses fiches liées, elles sont automatiquement regroupées en groupes de sous-types repliables (chacun avec un décompte), avec un groupe final **Aucun sous-type** pour les fiches non classées. Utilisez le bouton de bascule dans l'en-tête de la section pour passer de la vue groupée à la vue en liste.
 - **Fiches liées aux sous-éléments** — Lorsqu'une fiche possède des sous-éléments, chaque groupe de relations affiche une puce **+N dans les sous-éléments** comptant les fiches liées plus bas dans la hiérarchie — par exemple les applications rattachées aux sous-capacités d'une capacité. Un clic ouvre une liste en lecture seule où chaque ligne nomme le sous-élément qui porte le lien (une fiche atteinte via plusieurs sous-éléments apparaît une seule fois, avec chacun d'eux listé). Le décompte n'inclut que les fiches absentes du groupe ci-dessus. Pour modifier un lien, ouvrez le sous-élément qui le détient. La liste est organisée en sections de sous-types repliables : le sous-type est ainsi indiqué une fois par section plutôt que sur chaque ligne. Au sein d'une section, les fiches dont la phase de cycle de vie demande une attention particulière apparaissent en premier (fin de vie, puis retrait progressif), et la phase de chaque fiche est signalée par une pastille de couleur à côté de son nom — survolez-la pour afficher le nom de la phase.
@@ -90,6 +91,12 @@ Affiche toutes les connexions avec d'autres fiches, groupées par type de relati
 ![Groupes de relations affichant la puce des sous-éléments](../assets/img/fr/59_fiche_sous_elements_puce.png)
 
 ![Fiches liées via les sous-éléments, regroupées par sous-type](../assets/img/fr/60_fiche_sous_elements_relations.png)
+
+### Section Dépendances
+
+Une [Layered Dependency View](reports.md) de la fiche et de tout ce qui se trouve à un lien de distance, regroupé selon les quatre couches d'architecture. Maj-cliquez sur une fiche pour recentrer la vue et parcourir le paysage sans quitter la page.
+
+L'icône **ouvrir dans un nouvel onglet** de la barre d'outils ouvre le [rapport Dépendances](reports.md) complet dans un nouvel onglet, centré sur la fiche sur laquelle la vue est centrée à cet instant — donc la fiche vers laquelle vous avez navigué, pas nécessairement celle de départ. Utile lorsque vous avez besoin de ce que le rapport ajoute autour de la même image : le voyage dans le temps, les repères de transition, la vue tableau et l'enregistrement de la vue comme rapport.
 
 ### Section Tags
 

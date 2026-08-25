@@ -10,8 +10,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import { useTranslation } from "react-i18next";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
-import { useMetamodel } from "@/hooks/useMetamodel";
-import { useResolveLabel } from "@/hooks/useResolveLabel";
+import { useCardSubtypeLabel } from "@/hooks/useCardSubtypeLabel";
 import PpmOverviewTab from "./PpmOverviewTab";
 import PpmReportsTab from "./PpmReportsTab";
 import PpmCostTab from "./PpmCostTab";
@@ -29,8 +28,7 @@ export default function PpmProjectDetail() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useTranslation("ppm");
 
-  const { getType } = useMetamodel();
-  const rl = useResolveLabel();
+  const subtypeLabel = useCardSubtypeLabel();
   const initialTab = TAB_KEYS.indexOf(searchParams.get("tab") || "overview");
   const [tab, setTab] = useState(initialTab >= 0 ? initialTab : 0);
 
@@ -120,30 +118,30 @@ export default function PpmProjectDetail() {
   const latestReport = reports[0] || null;
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1400, mx: "auto" }}>
+    <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1400, mx: "auto" }}>
       {/* Header */}
       <Box display="flex" alignItems="center" gap={1} mb={2}>
-        <IconButton onClick={() => navigate("/ppm")}>
+        <IconButton sx={{ flexShrink: 0 }} onClick={() => navigate("/ppm")}>
           <MaterialSymbol icon="arrow_back" size={20} />
         </IconButton>
-        <Typography variant="h5" fontWeight={700}>
-          {card.name}
-        </Typography>
-        {card.subtype && (() => {
-          const typeConfig = getType(card.type);
-          const st = typeConfig?.subtypes?.find(
-            (s: { key: string }) => s.key === card.subtype,
-          );
-          const label = st ? rl(st.label, st.translations) : card.subtype;
-          return (
-            <Chip
-              label={label}
-              size="small"
-              variant="outlined"
-              sx={{ ml: 1 }}
-            />
-          );
-        })()}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            variant="h5"
+            fontWeight={700}
+            noWrap
+            sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}
+          >
+            {card.name}
+          </Typography>
+        </Box>
+        {card.subtype && (
+          <Chip
+            label={subtypeLabel(card.type, card.subtype)}
+            size="small"
+            variant="outlined"
+            sx={{ marginInlineStart: 1, flexShrink: 0 }}
+          />
+        )}
       </Box>
 
       {/* Tabs */}

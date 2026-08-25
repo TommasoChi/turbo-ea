@@ -8,18 +8,36 @@
 
 Opgaver er arbejdsemner tildelt dig eller oprettet af dig. De kan være knyttet til specifikke kort eller stå alene.
 
-### Filtrering
+### Filtrering, søgning og sortering
 
-Brug statusfanerne til at filtrere:
+**Oprindelseschips** — Hver todo bærer en oprindelse: hvor den kom fra. Når din liste blander opgaver fra mere end én oprindelse, vises filterchips ovenover — klik på en chip for kun at vise todos med den oprindelse (klik på flere for at kombinere dem); hver chip viser et live-antal. Oprindelserne er:
+
+- **Projektopgave** — Synkroniseret fra et PPM-initiativs opgavetavle
+- **Risiko** — Tildelinger som risikoejer og tilbagevendende afbødningscyklusser fra GRC-risikoregisteret
+- **ADR** / **SoAW** — Underskriftsanmodninger på arkitekturbeslutninger og Statements of Architecture Work
+- **Procesgodkendelse** — Procesflow-revisioner, der afventer din gennemgang (BPM)
+- **Udvidelse** — Oprettet af en installeret udvidelse
+- **Manuel** — Oprettet i hånden, på et kort eller selvstændigt
+
+Hver række bærer desuden et farvekodet oprindelsesikon og en accentstribe, så blandede lister kan aflæses med et enkelt blik. En opgave, som en konnektor-udvidelse har spejlet til et eksternt sporingssystem (Jira, GitLab, …), beholder sin reelle oprindelse og viser den eksterne reference (f.eks. *KAN-6*) som et lille link — spejlingen er kun til reference, og opgaven fuldføres altid i Turbo EA.
+
+**Grupperet visning** — Som standard er listen opdelt i én sammenklappelig sektion pr. oprindelse, i en fast rækkefølge. Hver sektionsoverskrift viser oprindelsesikonet, antallet af opgaver og — når nogle er forfaldne — en rød tæller, så en sammenklappet sektion stadig signalerer, at det haster. Klik på en overskrift for at klappe sektionen sammen eller folde den ud; sammenklappede sektioner huskes. Skifteren **Gruppér efter oprindelse** / **Flad liste** ved siden af sorteringskontrollen skifter til én samlet flad liste (nyttigt til at prioritere efter forfaldsdato på tværs af alle oprindelser); dette valg huskes også. En liste, hvor alle opgaver har samme oprindelse, vises automatisk fladt.
+
+**Status** — Brug statusvælgeren til at filtrere:
 
 - **Åbne** — Opgaver, der stadig er afventende eller i gang
 - **Kommende** — Planlagte fremtidige forekomster af tilbagevendende opgaver, der endnu ikke er forfaldne
 - **Færdige** — Fuldførte opgaver
 - **Alle** — Alt
 
+**Sortering** — Sortér efter forfaldsdato (de mest presserende først), nyeste først eller oprindelse. Dit valg huskes.
+
+**Søgning** — Søgefeltet filtrerer øjeblikkeligt på todo-teksten, det tilknyttede kort samt navnene på den, der har tildelt, og modtageren.
+
 ### Håndtering af opgaver
 
 - **Hurtig skifter** — Klik på afkrydsningsfeltet for at markere en opgave som færdig (eller genåbne den)
+- **Hvem har tildelt den** — På fanen *Tildelt mig* viser hver todo en **Fra:**-chip med navnet på den person, der tildelte den; på *Oprettet af mig* viser chippen i stedet modtageren
 - **Kortlink** — Hvis en opgave er knyttet til et kort, klik på kortnavnet for at navigere til dets detaljeside
 - **Systemopgaver** — Nogle opgaver genereres automatisk af systemet (f.eks. "Besvar undersøgelse for kort X"). Disse inkluderer et direkte link til den relevante handling
 

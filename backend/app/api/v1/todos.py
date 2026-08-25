@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -13,9 +12,9 @@ from app.database import get_db
 from app.models.todo import Todo
 from app.models.user import User
 from app.schemas.common import TodoCreate, TodoUpdate
-from app.services import notification_service, todo_recurrence_service
+from app.services import todo_service
 from app.services.permission_service import PermissionService
-from app.services.recurrence import default_lead_time_days
+from app.services.todo_service import TodoActor, TodoError
 
 router = APIRouter(tags=["todos"])
 
@@ -33,12 +32,21 @@ def _todo_to_dict(t: Todo) -> dict:
         "assigned_to": str(t.assigned_to) if t.assigned_to else None,
         "assignee_name": t.assignee.display_name if t.assignee else None,
         "created_by": str(t.created_by) if t.created_by else None,
+        "creator_name": t.creator.display_name if t.creator else None,
+        # Computed provenance (ppm/risk/adr/soaw/bpm/extension/manual) —
+        # drives the origin filter chips on the My Tasks page.
+        "origin": todo_service.derive_origin(t),
         "due_date": str(t.due_date) if t.due_date else None,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "series_id": str(t.series_id) if t.series_id else None,
         "recurrence_unit": t.recurrence_unit,
         "recurrence_interval": t.recurrence_interval,
         "lead_time_days": t.lead_time_days,
+        # Read-only external-tracker mirror fields; written only by the SDK
+        # todos bridge, never by the REST API.
+        "external_ref": t.external_ref,
+        "external_url": t.external_url,
+        "external_source": t.external_source,
     }
 
 
@@ -74,7 +82,7 @@ async def list_all_todos(
         # Default: todos assigned to OR created by the caller.
         q = q.where((Todo.assigned_to == user.id) | (Todo.created_by == user.id))
 
-    q = q.options(selectinload(Todo.card), selectinload(Todo.assignee))
+    q = q.options(selectinload(Todo.card), selectinload(Todo.assignee), selectinload(Todo.creator))
     result = await db.execute(q)
     return [_todo_to_dict(t) for t in result.scalars().all()]
 
@@ -89,69 +97,47 @@ async def list_card_todos(
     q = (
         select(Todo)
         .where(Todo.card_id == card_uuid)
-        .options(selectinload(Todo.card), selectinload(Todo.assignee))
+        .options(selectinload(Todo.card), selectinload(Todo.assignee), selectinload(Todo.creator))
         .order_by(Todo.created_at.desc())
     )
     result = await db.execute(q)
     return [_todo_to_dict(t) for t in result.scalars().all()]
 
 
-def _validated_link(link: str | None) -> str | None:
-    """Todos may deep-link only within the app — relative paths, never an
-    external URL (a todo assigned to someone else must not become a
-    click-through to an arbitrary site)."""
-    if link is None or link == "":
-        return None
-    if not link.startswith("/") or link.startswith("//"):
-        raise HTTPException(400, "link must be a relative in-app path starting with /")
-    return link
+def _actor(user: User) -> TodoActor:
+    return TodoActor(user_id=user.id, display_name=user.display_name)
 
 
 async def _create_todo(
     db: AsyncSession, user: User, body: TodoCreate, card_id: uuid.UUID | None
 ) -> dict:
-    recurring = body.recurrence_unit != "none"
-    # First occurrence always opens immediately — the user just created the
-    # todo intending to act on it. Lead-time gating only applies to the
-    # rolled-forward occurrences spawned on completion.
-    lead_time_days = (
-        body.lead_time_days
-        if body.lead_time_days is not None
-        else default_lead_time_days(body.recurrence_unit, body.recurrence_interval)
-    )
-    todo = Todo(
-        card_id=card_id,
-        description=body.description,
-        link=_validated_link(body.link),
-        assigned_to=uuid.UUID(body.assigned_to) if body.assigned_to else None,
-        created_by=user.id,
-        due_date=date.fromisoformat(body.due_date) if body.due_date else None,
-        series_id=uuid.uuid4() if recurring else None,
-        recurrence_unit=body.recurrence_unit,
-        recurrence_interval=body.recurrence_interval,
-        lead_time_days=lead_time_days if recurring else 0,
-    )
-    db.add(todo)
-    await db.flush()
-
-    # Notify the assignee (even if self-assigned)
-    if todo.assigned_to:
-        await notification_service.create_notification(
+    try:
+        todo = await todo_service.create_todo(
             db,
-            user_id=todo.assigned_to,
-            notif_type="todo_assigned",
-            title="Todo Assigned",
-            message=f'{user.display_name} assigned you a todo: "{body.description[:80]}"',
-            link="/todos",
-            data={"todo_id": str(todo.id), "card_id": str(card_id) if card_id else None},
+            _actor(user),
+            description=body.description,
             card_id=card_id,
+            assigned_to=body.assigned_to,
+            due_date=body.due_date,
+            link=body.link,
+            recurrence_unit=body.recurrence_unit,
+            recurrence_interval=body.recurrence_interval,
+            lead_time_days=body.lead_time_days,
         )
+    except TodoError as e:
+        raise HTTPException(e.status_code, e.message) from e
 
     await db.commit()
     result = await db.execute(
         select(Todo)
         .where(Todo.id == todo.id)
-        .options(selectinload(Todo.card), selectinload(Todo.assignee))
+        .options(selectinload(Todo.card), selectinload(Todo.assignee), selectinload(Todo.creator))
+        # The route's first, option-less SELECT left this instance in the
+        # identity map with its noload relationships initialised to None;
+        # expire_on_commit=False means commit() does not expire it, so a
+        # plain re-select would keep those Nones. Force a refresh so the
+        # response carries the card/assignee/creator names.
+        .execution_options(populate_existing=True)
     )
     return _todo_to_dict(result.scalar_one())
 
@@ -195,57 +181,22 @@ async def update_todo(
         if not await PermissionService.has_app_permission(db, user, "admin.todos"):
             raise HTTPException(403, "Not enough permissions")
 
-    # System-generated todos (e.g. sign requests) cannot be manually toggled
-    update_data = body.model_dump(exclude_unset=True)
-    if todo.is_system and "status" in update_data:
-        raise HTTPException(
-            403,
-            "This action must be completed from its linked page",
-        )
-
-    # A scheduled (dormant) recurring occurrence isn't actionable yet — it
-    # must be promoted to open first (via the daily loop or POST .../promote).
-    if todo.status == "scheduled" and update_data.get("status") == "done":
-        raise HTTPException(409, "Activate the scheduled todo before completing it")
-
-    was_open_recurring = (
-        update_data.get("status") == "done"
-        and todo.status != "done"
-        and todo_recurrence_service.is_recurring(todo)
-    )
-
-    old_assignee = todo.assigned_to
-    for field, value in update_data.items():
-        if field == "assigned_to" and value is not None:
-            value = uuid.UUID(value)
-        if field == "due_date" and value is not None:
-            value = date.fromisoformat(value)
-        setattr(todo, field, value)
-    await db.flush()
-
-    # Completing a recurring todo spawns the next occurrence in the series.
-    if was_open_recurring:
-        await todo_recurrence_service.roll_forward(db, todo=todo, actor_id=user.id)
-
-    # Notify new assignee if assignment changed (even if self-assigned)
-    new_assignee = todo.assigned_to
-    if new_assignee and new_assignee != old_assignee:
-        await notification_service.create_notification(
-            db,
-            user_id=new_assignee,
-            notif_type="todo_assigned",
-            title="Todo Assigned",
-            message=f'{user.display_name} assigned you a todo: "{todo.description[:80]}"',
-            link="/todos",
-            data={"todo_id": todo_id},
-            card_id=todo.card_id,
-        )
+    try:
+        await todo_service.update_todo(db, _actor(user), todo, body.model_dump(exclude_unset=True))
+    except TodoError as e:
+        raise HTTPException(e.status_code, e.message) from e
 
     await db.commit()
     result = await db.execute(
         select(Todo)
         .where(Todo.id == todo.id)
-        .options(selectinload(Todo.card), selectinload(Todo.assignee))
+        .options(selectinload(Todo.card), selectinload(Todo.assignee), selectinload(Todo.creator))
+        # The route's first, option-less SELECT left this instance in the
+        # identity map with its noload relationships initialised to None;
+        # expire_on_commit=False means commit() does not expire it, so a
+        # plain re-select would keep those Nones. Force a refresh so the
+        # response carries the card/assignee/creator names.
+        .execution_options(populate_existing=True)
     )
     todo = result.scalar_one()
     return _todo_to_dict(todo)
@@ -271,32 +222,22 @@ async def promote_todo(
         if not await PermissionService.has_app_permission(db, user, "admin.todos"):
             raise HTTPException(403, "Not enough permissions")
 
-    if todo.status == "open":
-        # Already actionable — nothing to do.
-        pass
-    elif todo.status != "scheduled":
-        raise HTTPException(409, "Only scheduled todos can be promoted")
-    else:
-        todo.status = "open"
-        await db.flush()
-        if todo.assigned_to:
-            await notification_service.create_notification(
-                db,
-                user_id=todo.assigned_to,
-                notif_type="todo_assigned",
-                title="Recurring Todo Due",
-                message=f'A recurring todo is due: "{todo.description[:80]}"',
-                link="/todos",
-                data={"todo_id": str(todo.id)},
-                card_id=todo.card_id,
-                actor_id=user.id,
-            )
+    try:
+        await todo_service.promote_todo(db, _actor(user), todo)
+    except TodoError as e:
+        raise HTTPException(e.status_code, e.message) from e
 
     await db.commit()
     result = await db.execute(
         select(Todo)
         .where(Todo.id == todo.id)
-        .options(selectinload(Todo.card), selectinload(Todo.assignee))
+        .options(selectinload(Todo.card), selectinload(Todo.assignee), selectinload(Todo.creator))
+        # The route's first, option-less SELECT left this instance in the
+        # identity map with its noload relationships initialised to None;
+        # expire_on_commit=False means commit() does not expire it, so a
+        # plain re-select would keep those Nones. Force a refresh so the
+        # response carries the card/assignee/creator names.
+        .execution_options(populate_existing=True)
     )
     todo = result.scalar_one()
     return _todo_to_dict(todo)
@@ -318,5 +259,5 @@ async def delete_todo(
         if not await PermissionService.has_app_permission(db, user, "admin.todos"):
             raise HTTPException(403, "Not enough permissions")
 
-    await db.delete(todo)
+    await todo_service.delete_todo(db, _actor(user), todo)
     await db.commit()

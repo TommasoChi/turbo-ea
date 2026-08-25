@@ -79,13 +79,23 @@ At fjerne en kant, der bærer en rigtig relation, åbner *"Delete the relation b
 
 ### Visningsperspektiver
 
-Dropdownen **View** i værktøjslinjen omfarver hvert kort på lærredet efter en egenskab:
+Dropdownen **Farvelæg efter** i værktøjslinjen omfarver kortene på lærredet:
 
 - **Card colors** (standard) — hvert kort bruger sin korttype-farve.
 - **Approval status** — omfarver efter `approved` / `pending` / `broken`.
-- **Field values** — vælg et hvilket som helst single-select-felt på de korttyper, der aktuelt er på lærredet (f.eks. *Lifecycle*, *Status*). Celler uden værdi falder tilbage til en neutral grå.
+- **Field values** — sæt flueben ved et single-select-felt under en hvilken som helst korttype på lærredet. **Flere korttyper kan hver bære én regel samtidig** — Applications efter kritikalitet *og* IT Components efter hosting-model. En korttype uden regel beholder den farve, den allerede har, også en udfyldning du selv har sat; kun et kort, hvis egen regel ikke finder nogen værdi, bliver gråt. Et andet felt inden for samme korttype erstatter det første, for et kort har én udfyldning.
 
-En flydende forklaring nederst til venstre på lærredet viser den aktive tilknytning. Den valgte visning gemmes med diagrammet.
+En flydende forklaring nederst til venstre viser én skala pr. aktiv regel. Feltregler og **Approval status** er alternativer, ikke lag: vælger du det ene, ryddes det andet. Fjerner du alle regler, vender lærredet tilbage til kortfarverne. Valget gemmes med diagrammet.
+
+#### Vis på kortet
+
+En anden knap i værktøjslinjen, **Vis på kortet**, afgør, **hvad hver figur siger**. Sæt flueben ved **korttypen**, **undertypen** eller en vilkårlig egenskab fra de korttyper, der aktuelt er på lærredet, og hver figur får små detaljelinjer under sit navn. Felterne står under den korttype, de hører til; et felt, som flere af de typer deler, samles under **Fælles**. Det er en separat knap fra **Farvelæg efter**, så ingen af de to lister skal scrolles forbi for at nå den anden. **Ryd alle** fjerner alle flueben på én gang.
+
+De to første valg tegnes på figuren: et kort har en begrænset størrelse, og tekst der ikke passer, ville flyde ud over kanten. Alt du sætter flueben ved, huskes, så en senere udvidelse af udvalget ændrer hvilke to der vises, uden at du skal vælge forfra.
+
+Linjerne gemmes med diagrammet, så alle læsere — også den, der åbner et publiceret link — ser de samme figurer. Udfoldede underkort beholder kun deres navn: de er for små til mere.
+
+Knappen **Create diagram** i [afhængighedsrapporten](reports.md) tager sine egne kortvisningsindstillinger med, så et diagram genereret fra en rapport åbner med præcis de linjer, rapporten viste.
 
 ### Hvordan relationskanter tegnes
 
@@ -122,7 +132,13 @@ Knappen **Sync** i værktøjslinjen åbner sideskuffen med alt, der er kø-still
 - **New Relations** — kanter tegnet mellem kort, klar til at blive oprettet i lageret.
 - **Removed Relations** — relationskanter slettet fra lærredet, kø-stillet til `DELETE /relations/{id}`. *Keep in inventory* genindsætter kanten.
 - **Hierarchy Changes** — bekræftede træk-ind / træk-ud container-flytninger, kø-stillet som `parent_id`-opdateringer.
-- **Inventory Changed** — kort opdateret i lageret, siden diagrammet blev åbnet, klar til at blive trukket tilbage på lærredet.
+- **Inventory Changed** — ændringer foretaget i lageret, siden diagrammet blev gemt, klar til at blive trukket tilbage på lærredet. Hver række tilbyder den tilhørende handling, og **Acceptér alle** løser alle rækker på én gang:
+    - et **omdøbt** kort — *Acceptér opdatering* omskriver cellens etiket;
+    - et **slettet** eller **arkiveret** kort — *Fjern fra diagrammet* fjerner cellen (og dens kanter) fra lærredet;
+    - en **slettet relation** — *Fjern kanten fra diagrammet* fjerner den forældede kant fra lærredet;
+    - en relation med ændret **flowretning** — *Acceptér opdatering* retter pilespidsen ind efter lageret.
+
+Turbo EA **tjekker automatisk for lagerændringer, hver gang du åbner et diagram** — et blåt badge på værktøjslinjens Sync-knap tæller de ændringer, der afventer gennemgang. Intet anvendes uden din bekræftelse; badget inviterer dig blot ind i panelet. Knappen **Tjek opdateringer** i panelet kører det samme tjek igen efter behov.
 
 Synkroniseringsknappen i værktøjslinjen viser en pulserende "N usynkroniseret"-pille, når der findes afventende arbejde. At forlade fanen med usynkroniserede ændringer udløser en browseradvarsel, og lærredet gemmes automatisk i lokalt lager hvert femte sekund, så en utilsigtet opdatering kan gendannes ved genåbning.
 

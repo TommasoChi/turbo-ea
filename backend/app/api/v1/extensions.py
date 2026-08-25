@@ -61,9 +61,17 @@ from app.services.extensions.field_contributions import (
 )
 from app.services.extensions.installer import install_bundle, uninstall
 from app.services.extensions.instance_id import get_instance_id, license_binding_problem
-from app.services.extensions.license import LicenseError, parse_and_verify
+from app.services.extensions.license import LicenseError, entitlement_state, parse_and_verify
 from app.services.extensions.license_refresh import persist_license, refresh_license_if_due
 from app.services.extensions.registry import extension_registry
+from app.services.extensions.store_catalog import (
+    STORE_CATALOG_TIMEOUT,
+    classify_store_error,
+    fetch_store_catalog,
+    parsed_version,
+    store_client,
+    store_update_available,
+)
 from app.services.permission_service import PermissionService
 
 logger = logging.getLogger(__name__)
@@ -83,6 +91,11 @@ class EntitlementOut(BaseModel):
     state: str  # active | grace | expired | unlicensed
     expires_at: datetime | None = None
     grace_until: datetime | None = None
+    # Whether the backing store subscription renews at period end; None on
+    # manual/offline licenses and licenses issued before the flag existed.
+    auto_renew: bool | None = None
+    # Store-issued trial entitlement (no grace window; labelled in the UI).
+    trial: bool | None = None
 
 
 class ExtensionOut(BaseModel):
@@ -109,6 +122,11 @@ class LicenseOut(BaseModel):
     # Why the stored license is not in effect (bound to another instance,
     # failed verification) — None when everything is fine.
     problem: str | None = None
+    # True when the license carries a store renewal credential — i.e. the
+    # subscription can be managed via the store billing portal. Computed from
+    # the credential's PRESENCE only; the credential itself never leaves the
+    # backend.
+    store_managed: bool = False
 
 
 class InstanceOut(BaseModel):
@@ -117,6 +135,13 @@ class InstanceOut(BaseModel):
 
 class LicenseIn(BaseModel):
     text: str
+    # Acknowledge an entitlement downgrade. Core keeps ONE active license per
+    # instance, so applying a license REPLACES the previous one. When the new
+    # license omits entitlement keys the current license still covers (active
+    # or in grace), the apply is refused with 409 until the admin confirms —
+    # otherwise pasting a narrower (e.g. single-extension) license silently
+    # lapses everything it does not carry.
+    confirm: bool = False
 
 
 class ExtensionInstallOut(BaseModel):
@@ -158,6 +183,8 @@ def _extension_out(row: Extension) -> ExtensionOut:
             state=ent.state,
             expires_at=ent.expires_at,
             grace_until=ent.grace_until,
+            auto_renew=ent.auto_renew,
+            trial=ent.trial,
         ),
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -245,15 +272,36 @@ async def get_license(
         entitlements=list(row.entitlements or []),
         uploaded_at=row.created_at,
         problem=extension_registry.license_problem,
+        store_managed=_license_store_managed(),
     )
 
 
-async def _apply_license_text(db: AsyncSession, text: str, user_id: uuid.UUID) -> LicenseOut:
+def _license_store_managed() -> bool:
+    """Whether the active license carries a store renewal credential.
+
+    Read from the registry's parsed document — the credential lives only
+    inside the signed ``raw_text``, is never denormalised to a column, and is
+    never serialized to the browser; only this boolean is.
+    """
+    doc = extension_registry.license
+    return bool(doc and doc.renewal_key)
+
+
+async def _apply_license_text(
+    db: AsyncSession, text: str, user_id: uuid.UUID, *, confirm: bool = False
+) -> LicenseOut:
     """Verify a license and make it the active one (supersede + registry refresh).
 
     A license may be pasted directly or read from an uploaded file; either
     way it goes through the same signature verification here. The persist
     step is shared with the automatic store renewal (license_refresh.py).
+
+    Because one active license per instance means REPLACE, a license that
+    drops entitlement keys the current license still covers (active or in
+    grace) is refused with 409 until ``confirm`` is set — the trap is a
+    manually issued single-extension license lapsing everything else. The
+    auto-renew path never comes through here and is already shrink-proof
+    (``_should_apply`` in license_refresh.py).
     """
     try:
         doc = parse_and_verify(text)
@@ -267,6 +315,32 @@ async def _apply_license_text(db: AsyncSession, text: str, user_id: uuid.UUID) -
     if binding:
         raise HTTPException(status_code=400, detail=binding)
 
+    # Downgrade gate. ``extension_registry.license`` is None when no license
+    # is installed or the stored one is not in effect (binding/verify
+    # problem) — nothing usable can be dropped in those cases. Long-expired
+    # entitlements are noise, so only active/grace keys count.
+    current = extension_registry.license
+    if current is not None and not confirm:
+        usable = {
+            ent.extension_key
+            for ent in current.entitlements
+            if entitlement_state(ent, current.grace_days) in ("active", "grace")
+        }
+        dropped = sorted(usable - {ent.extension_key for ent in doc.entitlements})
+        if dropped:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "entitlement_downgrade",
+                    "message": (
+                        "This license does not include entitlements the current "
+                        f"license still covers: {', '.join(dropped)}. Applying it "
+                        "will disable those extensions (no data is deleted)."
+                    ),
+                    "dropped": dropped,
+                },
+            )
+
     row = await persist_license(db, doc, created_by=user_id)
     logger.info("Extension license updated: licensee=%s", doc.licensee)
     return LicenseOut(
@@ -277,6 +351,7 @@ async def _apply_license_text(db: AsyncSession, text: str, user_id: uuid.UUID) -
         grace_days=row.grace_days,
         entitlements=list(row.entitlements or []),
         uploaded_at=row.created_at,
+        store_managed=bool(doc.renewal_key),
     )
 
 
@@ -287,7 +362,7 @@ async def put_license(
     user: User = Depends(get_current_user),
 ) -> LicenseOut:
     await PermissionService.require_permission(db, user, "admin.manage_extensions")
-    return await _apply_license_text(db, payload.text, user.id)
+    return await _apply_license_text(db, payload.text, user.id, confirm=payload.confirm)
 
 
 @router.delete("/license", status_code=204)
@@ -413,10 +488,17 @@ async def get_install(
     return _install_out(await _load_install(db, install_id))
 
 
+class ApplyInstallIn(BaseModel):
+    """Optional apply-time flags. The body may be omitted entirely."""
+
+    confirm_downgrade: bool = False
+
+
 @router.post("/install/{install_id}/apply", response_model=ExtensionInstallOut, status_code=202)
 async def apply_install(
     install_id: uuid.UUID,
     background_tasks: BackgroundTasks,
+    payload: ApplyInstallIn | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> ExtensionInstallOut:
@@ -425,6 +507,19 @@ async def apply_install(
     if install.status not in {"previewed", "failed"}:
         raise HTTPException(
             status_code=400, detail=f"Cannot apply an upload in status {install.status!r}"
+        )
+    # Installing an OLDER version over a newer one is a silent rollback —
+    # require an explicit confirmation. Recomputed server-side (never trust
+    # the stamped preview) so the manual-upload and store paths both gate.
+    downgrade = await _detect_downgrade(db, install.extension_key, install.extension_version)
+    if downgrade is not None and not (payload and payload.confirm_downgrade):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "version_downgrade",
+                "installed": downgrade["from"],
+                "bundle": downgrade["to"],
+            },
         )
     # Second gate: installing an extension requires a usable entitlement for
     # its key (a valid signature alone is provenance, not activation) — UNLESS
@@ -487,7 +582,6 @@ async def delete_install(
 # friendly offline hint and file-based installs are unaffected.
 # ---------------------------------------------------------------------------
 
-_STORE_CATALOG_TIMEOUT = 6.0
 _STORE_BUNDLE_TIMEOUT = 120.0
 _STORE_BUNDLE_MAX_BYTES = 200 * 1024 * 1024  # generous; signature is the real gate
 
@@ -499,12 +593,28 @@ class StoreItemOut(BaseModel):
     long_description: str = ""
     price: str = ""
     payment_link: str = ""
+    # Optional checkout link for a no-card trial of this extension. Same
+    # treatment as payment_link: opened in a new tab, license claimed through
+    # the ordinary claim-token flow.
+    trial_link: str = ""
     demo_url: str = ""
     homepage: str = ""
     license: str = ""
     license_url: str = ""
     screenshots: list[str] = []
+    tags: list[str] = []
     version: str = ""
+    # True while this instance's entitlement for the item is a trial (active
+    # OR already expired) — the UI keeps the Buy button visible so a trialing
+    # customer can convert in-product, even though the state isn't
+    # "unlicensed".
+    entitlement_trial: bool = False
+    # Expiry/renewal info so the store card can show "Trial until …" /
+    # "Renews on …" without cross-referencing the installed-extensions list
+    # (a licensed-but-not-installed item has no row there).
+    entitlement_expires_at: datetime | None = None
+    entitlement_grace_until: datetime | None = None
+    entitlement_auto_renew: bool | None = None
     installed_version: str | None = None
     update_available: bool = False
     entitlement_state: str = "unlicensed"
@@ -514,19 +624,19 @@ class StoreItemOut(BaseModel):
 class StoreCatalogOut(BaseModel):
     configured: bool
     reachable: bool = False
+    # Why the catalogue could not be read: "blocked" when the store answered and
+    # refused us (bot protection, WAF, corporate proxy), "offline" when there was
+    # no route to it at all. Empty when the read succeeded. The Store tab used to
+    # call every failure air-gapped, which is a misdiagnosis an operator can only
+    # disprove by auditing their own egress (#958).
+    reason: str = ""
+    status_code: int | None = None
     store_url: str = ""
     items: list[StoreItemOut] = []
 
 
 class StoreInstallIn(BaseModel):
     key: str
-
-
-def _version_tuple(value: str) -> tuple[int, ...]:
-    try:
-        return tuple(int(p) for p in value.strip().split("."))
-    except (ValueError, AttributeError):
-        return ()
 
 
 def _resolve_screenshots(base_url: str, raw: object) -> list[str]:
@@ -555,17 +665,23 @@ def _resolve_screenshots(base_url: str, raw: object) -> list[str]:
     return out
 
 
-async def _fetch_store_catalog(base_url: str) -> list[dict]:
-    """GET {base_url}/catalog.json and return its ``extensions`` list."""
-    url = base_url.rstrip("/") + "/catalog.json"
-    async with httpx.AsyncClient(timeout=_STORE_CATALOG_TIMEOUT) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        data = resp.json()
-    items = data.get("extensions") if isinstance(data, dict) else None
-    if not isinstance(items, list):
-        raise ValueError("catalog.json has no 'extensions' list")
-    return [item for item in items if isinstance(item, dict) and item.get("key")]
+# Category tags are external catalogue data: keep only short kebab-case slugs
+# and cap the list so a tampered catalogue can't inject markup-ish strings or
+# unbounded payloads into the Store tab's filter pills.
+_STORE_TAG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
+_STORE_TAG_MAX = 16
+
+
+def _sanitize_tags(raw: object) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for entry in raw:
+        if isinstance(entry, str) and _STORE_TAG_RE.match(entry) and entry not in out:
+            out.append(entry)
+        if len(out) >= _STORE_TAG_MAX:
+            break
+    return out
 
 
 @router.get("/store/catalog", response_model=StoreCatalogOut)
@@ -579,10 +695,22 @@ async def store_catalog(
         return StoreCatalogOut(configured=False)
 
     try:
-        raw_items = await _fetch_store_catalog(base_url)
+        raw_items = await fetch_store_catalog(base_url)
     except (httpx.HTTPError, ValueError) as exc:
-        logger.warning("Extension store catalogue unreachable (%s): %s", base_url, exc)
-        return StoreCatalogOut(configured=True, reachable=False, store_url=base_url)
+        reason, status = classify_store_error(exc)
+        logger.warning(
+            "Extension store catalogue %s (%s): %s",
+            "refused the request" if reason == "blocked" else "unreachable",
+            base_url,
+            exc,
+        )
+        return StoreCatalogOut(
+            configured=True,
+            reachable=False,
+            reason=reason,
+            status_code=status,
+            store_url=base_url,
+        )
 
     installed = {
         row.key: row.version
@@ -597,6 +725,7 @@ async def store_catalog(
         key = str(item["key"])
         catalog_version = str(item.get("version") or "")
         installed_version = installed.get(key)
+        entitlement = extension_registry.entitlement(key)
         items.append(
             StoreItemOut(
                 key=key,
@@ -605,19 +734,21 @@ async def store_catalog(
                 long_description=str(item.get("long_description") or ""),
                 price=str(item.get("price") or ""),
                 payment_link=str(item.get("payment_link") or ""),
+                trial_link=str(item.get("trial_link") or ""),
                 demo_url=str(item.get("demo_url") or ""),
                 homepage=str(item.get("homepage") or ""),
                 license=str(item.get("license") or ""),
                 license_url=str(item.get("license_url") or ""),
                 screenshots=_resolve_screenshots(base_url, item.get("screenshots")),
+                tags=_sanitize_tags(item.get("tags")),
                 version=catalog_version,
                 installed_version=installed_version,
-                update_available=bool(
-                    installed_version
-                    and catalog_version
-                    and _version_tuple(catalog_version) > _version_tuple(installed_version)
-                ),
-                entitlement_state=extension_registry.entitlement(key).state,
+                update_available=store_update_available(catalog_version, installed_version),
+                entitlement_state=entitlement.state,
+                entitlement_trial=entitlement.trial is True,
+                entitlement_expires_at=entitlement.expires_at,
+                entitlement_grace_until=entitlement.grace_until,
+                entitlement_auto_renew=entitlement.auto_renew,
                 free=item.get("free") is True,
             )
         )
@@ -660,7 +791,7 @@ async def claim_store_purchase(
 
     url = base_url.rstrip("/") + "/account/claim"
     try:
-        async with httpx.AsyncClient(timeout=_STORE_CATALOG_TIMEOUT) as client:
+        async with store_client(STORE_CATALOG_TIMEOUT) as client:
             resp = await client.get(url, params={"token": payload.token})
             resp.raise_for_status()
             data = resp.json()
@@ -672,6 +803,60 @@ async def claim_store_purchase(
 
     license_out = await _apply_license_text(db, str(data["license"]), user.id)
     return StoreClaimOut(status="applied", license=license_out)
+
+
+class StorePortalOut(BaseModel):
+    url: str
+
+
+_STORE_PORTAL_TIMEOUT = 10.0
+
+
+@router.post("/store/billing-portal", response_model=StorePortalOut)
+async def open_billing_portal(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> StorePortalOut:
+    """Mint a store billing-portal session for this instance's subscription.
+
+    Backs the "Manage subscription" button: the customer sees the renewal
+    date, cancels or restores auto-renew, updates the payment method, and
+    downloads invoices — all on the store's hosted portal. The renewal
+    credential authenticating the request lives inside the active license's
+    signed payload and is forwarded server-side only; it never reaches the
+    browser. Only store-issued licenses carry one — for manual/offline
+    licenses this returns 404 and the UI shows no button.
+    """
+    await PermissionService.require_permission(db, user, "admin.manage_extensions")
+    base_url = settings.EXTENSION_STORE_URL.strip()
+    if not base_url:
+        raise HTTPException(status_code=400, detail="No extension store is configured")
+
+    doc = extension_registry.license
+    if doc is None or not doc.renewal_key:
+        raise HTTPException(status_code=404, detail="No store-managed license installed")
+
+    # Same body shape as the renewal call: credential in the body (never the
+    # query string), instance for instance-keyed accounts, customer for
+    # legacy customer-keyed licenses.
+    body = {"customer": doc.customer_id, "key": doc.renewal_key}
+    instance = get_instance_id()
+    if instance:
+        body["instance"] = instance
+
+    url = base_url.rstrip("/") + "/account/portal"
+    try:
+        async with store_client(_STORE_PORTAL_TIMEOUT) as client:
+            resp = await client.post(url, json=body)
+            resp.raise_for_status()
+            data = resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"Extension store unreachable: {exc}") from exc
+
+    portal_url = data.get("url") if isinstance(data, dict) else None
+    if not isinstance(portal_url, str) or not portal_url.startswith("https://"):
+        raise HTTPException(status_code=502, detail="Extension store returned no portal URL")
+    return StorePortalOut(url=portal_url)
 
 
 class StoreRefreshOut(BaseModel):
@@ -714,7 +899,7 @@ async def install_from_store(
         raise HTTPException(status_code=400, detail="No extension store is configured")
 
     try:
-        raw_items = await _fetch_store_catalog(base_url)
+        raw_items = await fetch_store_catalog(base_url)
     except (httpx.HTTPError, ValueError) as exc:
         raise HTTPException(status_code=502, detail=f"Extension store unreachable: {exc}") from exc
 
@@ -734,7 +919,7 @@ async def install_from_store(
         )
 
     try:
-        async with httpx.AsyncClient(timeout=_STORE_BUNDLE_TIMEOUT) as client:
+        async with store_client(_STORE_BUNDLE_TIMEOUT) as client:
             resp = await client.get(bundle_url)
             resp.raise_for_status()
             raw = resp.content
@@ -1005,6 +1190,26 @@ async def _load_install(db: AsyncSession, install_id: uuid.UUID) -> ExtensionIns
     return install
 
 
+async def _detect_downgrade(db: AsyncSession, key: str | None, version: str | None) -> dict | None:
+    """``{"from": installed, "to": bundle}`` when the bundle's version is
+    strictly OLDER than the installed one (same comparator as the store's
+    update detection); ``None`` otherwise. Unparseable versions never flag."""
+    if not key or not version:
+        return None
+    installed_row = (
+        await db.execute(
+            select(Extension).where(Extension.key == key, Extension.status != "removed")
+        )
+    ).scalar_one_or_none()
+    if installed_row is None:
+        return None
+    bundle_v = parsed_version(version)
+    installed_v = parsed_version(installed_row.version)
+    if bundle_v is None or installed_v is None or bundle_v >= installed_v:
+        return None
+    return {"from": installed_row.version, "to": version}
+
+
 async def run_verify_and_preview(db: AsyncSession, install: ExtensionInstall, user: User) -> None:
     """Verify a bundle upload and dry-run its content pack.
 
@@ -1028,6 +1233,9 @@ async def run_verify_and_preview(db: AsyncSession, install: ExtensionInstall, us
             install.diff = result.as_dict()
         else:
             install.diff = {}
+        downgrade = await _detect_downgrade(db, bundle.key, bundle.version)
+        if downgrade is not None:
+            install.diff = {**(install.diff or {}), "downgrade": downgrade}
         install.status = "previewed"
         install.previewed_at = datetime.now(timezone.utc)
         await db.commit()
@@ -1077,14 +1285,23 @@ async def run_apply(db: AsyncSession, install: ExtensionInstall, user: User) -> 
                 await extension_registry.refresh_from_db(db)
                 return
 
-        # Reinstalling after an uninstall/disable must bring the pack's
-        # soft-hidden card/relation types back.
-        await set_content_visibility(
-            db, ext_installer.EXTENSIONS_DIR / extension.key, bundle.manifest, False
-        )
-        # Merge manifest field contributions into their target card types
-        # (idempotent; updates re-sync the extension-owned sections).
-        await apply_field_contributions(db, extension.key, bundle.manifest)
+        if extension.enabled:
+            # Reinstalling after an uninstall must bring the pack's
+            # soft-hidden card/relation types back.
+            await set_content_visibility(
+                db, ext_installer.EXTENSIONS_DIR / extension.key, bundle.manifest, False
+            )
+            # Merge manifest field contributions into their target card types
+            # (idempotent; updates re-sync the extension-owned sections).
+            await apply_field_contributions(db, extension.key, bundle.manifest)
+        else:
+            # Updating a DISABLED extension: content stays hidden — including
+            # card/relation types NEW in this version — and field
+            # contributions stay stripped. The enable path restores both from
+            # the row's (now updated) manifest.
+            await set_content_visibility(
+                db, ext_installer.EXTENSIONS_DIR / extension.key, bundle.manifest, True
+            )
         install.status = "installed"
         install.applied_at = datetime.now(timezone.utc)
         await db.commit()

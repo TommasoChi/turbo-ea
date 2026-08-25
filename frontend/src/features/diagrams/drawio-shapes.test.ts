@@ -15,6 +15,20 @@ import {
   relationEdgeStyle,
   RELATION_EDGE_COLOR,
   readFlowDirection,
+  scanDiagramItems,
+  scanSyncedRelationEdges,
+  applyEdgeFlowDirection,
+  composeCardLabel,
+  readCardName,
+  readCardDetail,
+  setCardLabel,
+  firstLineText,
+  applyCardLabels,
+  normaliseEditedCardLabel,
+  dedupClonedCell,
+  unlinkCell,
+  MAX_CARD_DETAIL_LINES,
+  type CardDetailLine,
   type DiagramCardInput,
   type DiagramRelInput,
   type DiagramLayerInput,
@@ -531,8 +545,12 @@ function stylePart(style: string, key: string): string | undefined {
     ?.slice(key.length + 1);
 }
 
-describe("applyViewToGraph / resetViewColors — manual fills survive", () => {
-  const TYPE_COLORS = new Map([["Application", "#0f7eb5"]]);
+describe("applyViewToGraph — colours only what a rule covers", () => {
+  const TYPE_COLORS = new Map([
+    ["Application", "#0f7eb5"],
+    ["Provider", "#ffa31f"],
+  ]);
+  const RESTORE = { colorByType: TYPE_COLORS, fallback: "#999" };
 
   it("stamps the pre-view fill so the view can be undone", () => {
     const cell = viewCell(
@@ -541,7 +559,7 @@ describe("applyViewToGraph / resetViewColors — manual fills survive", () => {
     );
     const frame = viewFrame({ a: cell });
 
-    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), "#cbd5e1");
+    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), RESTORE);
 
     expect(stylePart(cell._style, "fillColor")).toBe("#ff0000");
     expect(stylePart(cell._style, "turboBaseFill")).toBe("#0f7eb5");
@@ -555,74 +573,158 @@ describe("applyViewToGraph / resetViewColors — manual fills survive", () => {
     );
     const frame = viewFrame({ a: cell });
 
-    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), "#cbd5e1");
-    applyViewToGraph(frame, new Map([["c1", "#00ff00"]]), "#cbd5e1");
+    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), RESTORE);
+    applyViewToGraph(frame, new Map([["c1", "#00ff00"]]), RESTORE);
 
     // Still the ORIGINAL colour, not the first view's colour.
     expect(stylePart(cell._style, "turboBaseFill")).toBe("#abcdef");
     expect(stylePart(cell._style, "fillColor")).toBe("#00ff00");
   });
 
-  it("restores the stamped colour and clears the stamp on reset", () => {
+  it("REGRESSION #986: leaves a card no rule covers completely untouched", () => {
+    // A Provider on a canvas where only Applications carry a rule. It used to
+    // be painted with a single grey fallback, which greyed out most of the
+    // diagram the moment one type was coloured by a field.
+    const covered = viewCell({ cardId: "c1", cardType: "Application" }, "fillColor=#0f7eb5");
+    const untouched = viewCell(
+      { cardId: "c2", cardType: "Provider" },
+      "rounded=1;fillColor=#ffa31f;strokeColor=#cc8219",
+    );
+    const frame = viewFrame({ a: covered, b: untouched });
+
+    const { painted, restored } = applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), RESTORE);
+
+    expect({ painted, restored }).toEqual({ painted: 1, restored: 0 });
+    expect(untouched._style).toBe("rounded=1;fillColor=#ffa31f;strokeColor=#cc8219");
+    expect(stylePart(untouched._style, "turboBaseFill")).toBeUndefined();
+  });
+
+  it("hands a card back when it drops out of the rule set", () => {
     const cell = viewCell(
       { cardId: "c1", cardType: "Application" },
       "fillColor=#0f7eb5;strokeColor=#0b5f88",
     );
     const frame = viewFrame({ a: cell });
 
-    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), "#cbd5e1");
-    const touched = resetViewColors(frame, TYPE_COLORS, "#999");
+    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), RESTORE);
+    const { restored } = applyViewToGraph(frame, new Map(), RESTORE);
 
-    expect(touched).toBe(1);
+    expect(restored).toBe(1);
     expect(stylePart(cell._style, "fillColor")).toBe("#0f7eb5");
     expect(stylePart(cell._style, "strokeColor")).toBe("#0b5f88");
     expect(stylePart(cell._style, "turboBaseFill")).toBeUndefined();
     expect(stylePart(cell._style, "turboBaseStroke")).toBeUndefined();
   });
 
-  it("REGRESSION #905: leaves a hand-picked fill alone on reset", () => {
-    // The user set this card to pink by hand. No view ever claimed it, so it
-    // carries no stamp — reset (which runs on every save) must not touch it.
+  it("REGRESSION #905: a hand-picked fill survives a rule-set A → B → A cycle", () => {
+    // The user set this card to pink by hand, then coloured by a field, then
+    // switched the rule to a different card type, then switched back.
     const cell = viewCell(
       { cardId: "c1", cardType: "Application" },
       "rounded=1;fillColor=#ff69b4;strokeColor=#c71585",
     );
     const frame = viewFrame({ a: cell });
 
-    const touched = resetViewColors(frame, TYPE_COLORS, "#999");
+    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), RESTORE); // rules A
+    applyViewToGraph(frame, new Map(), RESTORE); // rules B — Applications drop out
+    expect(stylePart(cell._style, "fillColor")).toBe("#ff69b4");
+    expect(stylePart(cell._style, "turboBaseFill")).toBeUndefined();
 
-    expect(touched).toBe(0);
-    expect(cell._style).toBe("rounded=1;fillColor=#ff69b4;strokeColor=#c71585");
+    applyViewToGraph(frame, new Map([["c1", "#00ff00"]]), RESTORE); // back to A
+    // Re-stamped from the PINK it was handed back to, not from rule A's colour.
+    expect(stylePart(cell._style, "turboBaseFill")).toBe("#ff69b4");
   });
 
-  it("restores a manual fill applied BEFORE a view was switched on", () => {
-    const cell = viewCell({ cardId: "c1", cardType: "Application" }, "fillColor=#ff69b4");
+  it("never touches a hand-picked fill no view ever claimed", () => {
+    const cell = viewCell(
+      { cardId: "c1", cardType: "Application" },
+      "rounded=1;fillColor=#ff69b4;strokeColor=#c71585",
+    );
     const frame = viewFrame({ a: cell });
 
-    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), "#cbd5e1");
-    resetViewColors(frame, TYPE_COLORS, "#999");
+    const { painted, restored } = applyViewToGraph(frame, new Map(), RESTORE);
 
-    expect(stylePart(cell._style, "fillColor")).toBe("#ff69b4");
+    expect({ painted, restored }).toEqual({ painted: 0, restored: 0 });
+    expect(cell._style).toBe("rounded=1;fillColor=#ff69b4;strokeColor=#c71585");
   });
 
   it("falls back to the card-type colour when the cell had no explicit fill", () => {
     const cell = viewCell({ cardId: "c1", cardType: "Application" }, "rounded=1");
     const frame = viewFrame({ a: cell });
 
-    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), "#cbd5e1");
-    resetViewColors(frame, TYPE_COLORS, "#999");
+    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), RESTORE);
+    applyViewToGraph(frame, new Map(), RESTORE);
 
     expect(stylePart(cell._style, "fillColor")).toBe("#0f7eb5");
   });
 
-  it("ignores edges and pending cells", () => {
+  it("ignores edges and pending cells on both branches", () => {
     const edge = viewCell({ cardId: "c1" }, "strokeColor=#000", { edge: true });
     const pending = viewCell({ cardId: "pending-xyz" }, "fillColor=#eee");
     const frame = viewFrame({ e: edge, p: pending });
 
-    expect(applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), "#cbd5e1")).toBe(0);
+    expect(applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), RESTORE)).toEqual({
+      painted: 0,
+      restored: 0,
+    });
     expect(edge._style).toBe("strokeColor=#000");
     expect(pending._style).toBe("fillColor=#eee");
+  });
+
+  it("writes one undo step per call, not one per branch", () => {
+    // Two passes would cost the reader two Ctrl+Z presses per view change.
+    const covered = viewCell({ cardId: "c1", cardType: "Application" }, "fillColor=#0f7eb5");
+    const dropping = viewCell(
+      { cardId: "c2", cardType: "Provider" },
+      "fillColor=#111;turboBaseFill=#ffa31f;turboBaseStroke=#cc8219",
+    );
+    const frame = viewFrame({ a: covered, b: dropping });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const model = (frame.contentWindow as any).__turboGraph.getModel();
+    let begins = 0;
+    const realBegin = model.beginUpdate;
+    model.beginUpdate = () => {
+      begins += 1;
+      realBegin?.call(model);
+    };
+
+    const { painted, restored } = applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), RESTORE);
+
+    expect(begins).toBe(1);
+    expect({ painted, restored }).toEqual({ painted: 1, restored: 1 });
+  });
+});
+
+describe("resetViewColors — still the card-colours path", () => {
+  const TYPE_COLORS = new Map([["Application", "#0f7eb5"]]);
+
+  it("restores the stamped colour and clears the stamp", () => {
+    const cell = viewCell(
+      { cardId: "c1", cardType: "Application" },
+      "fillColor=#0f7eb5;strokeColor=#0b5f88",
+    );
+    const frame = viewFrame({ a: cell });
+
+    applyViewToGraph(frame, new Map([["c1", "#ff0000"]]), {
+      colorByType: TYPE_COLORS,
+      fallback: "#999",
+    });
+    const touched = resetViewColors(frame, TYPE_COLORS, "#999");
+
+    expect(touched).toBe(1);
+    expect(stylePart(cell._style, "fillColor")).toBe("#0f7eb5");
+    expect(stylePart(cell._style, "turboBaseFill")).toBeUndefined();
+  });
+
+  it("REGRESSION #905: leaves a hand-picked fill alone", () => {
+    const cell = viewCell(
+      { cardId: "c1", cardType: "Application" },
+      "rounded=1;fillColor=#ff69b4;strokeColor=#c71585",
+    );
+    const frame = viewFrame({ a: cell });
+
+    expect(resetViewColors(frame, TYPE_COLORS, "#999")).toBe(0);
+    expect(cell._style).toBe("rounded=1;fillColor=#ff69b4;strokeColor=#c71585");
   });
 });
 
@@ -1089,5 +1191,568 @@ describe("expandCardGroup edges", () => {
 
     const edge = Object.values(f.cells).find((c) => c.edge);
     expect(edge.style.split(";")).toContain("noLabel=1");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  scanDiagramItems / scanSyncedRelationEdges                         */
+/* ------------------------------------------------------------------ */
+
+/** Fake frame for the scan helpers: attribute-bag cells + getTerminal. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function scanFrame(cells: Record<string, any>) {
+  const model = {
+    cells,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getTerminal: (cell: any, isSource: boolean) =>
+      isSource ? (cell.source ?? null) : (cell.target ?? null),
+  };
+  const graph = { getModel: () => model };
+  return { contentWindow: { __turboGraph: graph } } as unknown as HTMLIFrameElement;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function scanVertex(id: string, attrs: Record<string, string>): any {
+  return { id, value: attrBag(attrs) };
+}
+
+describe("scanDiagramItems — synced children", () => {
+  it("splits synced cells into top-level and expanded-group children", () => {
+    const frame = scanFrame({
+      top: scanVertex("top", {
+        cardId: "id-top",
+        cardType: "Application",
+        label: "Top",
+      }),
+      child: scanVertex("child", {
+        cardId: "id-child",
+        cardType: "Application",
+        label: "Child",
+        parentGroupCell: "top",
+      }),
+      pending: scanVertex("pending", {
+        cardId: "pending-x",
+        cardType: "Application",
+        label: "Draft",
+        pending: "1",
+      }),
+    });
+    const scan = scanDiagramItems(frame);
+    expect(scan.syncedFS).toEqual([
+      { cellId: "top", cardId: "id-top", name: "Top", type: "Application" },
+    ]);
+    expect(scan.syncedChildren).toEqual([
+      { cellId: "child", cardId: "id-child", name: "Child", type: "Application" },
+    ]);
+    expect(scan.pendingCards).toHaveLength(1);
+  });
+});
+
+describe("scanSyncedRelationEdges", () => {
+  it("returns synced edges with endpoint card ids and labels", () => {
+    const src = scanVertex("s", { cardId: "id-s", label: "Source" });
+    const tgt = scanVertex("t", { cardId: "id-t", label: "Target" });
+    const frame = scanFrame({
+      s: src,
+      t: tgt,
+      e1: {
+        id: "e1",
+        edge: true,
+        source: src,
+        target: tgt,
+        value: attrBag({
+          relationId: "rel-1",
+          relationType: "relOrgToApp",
+          label: "uses",
+        }),
+      },
+      // A pending edge has no relationId yet — must be skipped.
+      e2: {
+        id: "e2",
+        edge: true,
+        source: src,
+        target: tgt,
+        value: attrBag({ relationType: "relOrgToApp", pending: "1" }),
+      },
+    });
+    expect(scanSyncedRelationEdges(frame)).toEqual([
+      {
+        edgeCellId: "e1",
+        relationId: "rel-1",
+        relationType: "relOrgToApp",
+        edgeLabel: "uses",
+        sourceCardId: "id-s",
+        targetCardId: "id-t",
+        sourceName: "Source",
+        targetName: "Target",
+      },
+    ]);
+  });
+
+  it("tolerates dangling edges with missing terminals", () => {
+    const frame = scanFrame({
+      e1: {
+        id: "e1",
+        edge: true,
+        value: attrBag({ relationId: "rel-1", relationType: "relOrgToApp" }),
+      },
+    });
+    const [edge] = scanSyncedRelationEdges(frame);
+    expect(edge.sourceCardId).toBe("");
+    expect(edge.targetCardId).toBe("");
+  });
+
+  it("reads the stamped flowDirection and drops invalid values", () => {
+    const frame = scanFrame({
+      e1: {
+        id: "e1",
+        edge: true,
+        value: attrBag({ relationId: "rel-1", flowDirection: "reverse" }),
+      },
+      e2: {
+        id: "e2",
+        edge: true,
+        value: attrBag({ relationId: "rel-2", flowDirection: "sideways" }),
+      },
+    });
+    const [withFlow, withJunk] = scanSyncedRelationEdges(frame);
+    expect(withFlow.flowDirection).toBe("reverse");
+    expect(withJunk.flowDirection).toBeUndefined();
+  });
+});
+
+describe("applyEdgeFlowDirection", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function flowFrame(edgeValue: any) {
+    const edge = { id: "e1", edge: true, value: edgeValue, _style: "" };
+    const model = {
+      cells: { e1: edge },
+      getCell: (id: string) => (id === "e1" ? edge : null),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setStyle: (c: any, s: string) => {
+        c._style = s;
+      },
+      beginUpdate() {},
+      endUpdate() {},
+    };
+    const graph = { getModel: () => model };
+    const iframe = {
+      contentWindow: { __turboGraph: graph },
+    } as unknown as HTMLIFrameElement;
+    return { iframe, edge };
+  }
+
+  it("re-stamps the attribute and moves the arrowhead to the new flow", () => {
+    const { iframe, edge } = flowFrame(attrBag({ flowDirection: "forward" }));
+    expect(applyEdgeFlowDirection(iframe, "e1", "reverse", false)).toBe(true);
+    expect(edge.value.getAttribute("flowDirection")).toBe("reverse");
+    // reverse flow on a forward-drawn edge → arrowhead at the start.
+    const parts = edge._style.split(";");
+    expect(parts).toContain("startArrow=block");
+    expect(parts).toContain("endArrow=none");
+  });
+
+  it("clears the attribute and falls back to the drawn direction", () => {
+    const { iframe, edge } = flowFrame(attrBag({ flowDirection: "forward" }));
+    applyEdgeFlowDirection(iframe, "e1", undefined, false);
+    expect(edge.value.getAttribute("flowDirection")).toBeNull();
+    const parts = edge._style.split(";");
+    expect(parts).toContain("endArrow=block");
+    expect(parts).toContain("startArrow=none");
+  });
+
+  it("XORs the flow with an incoming-drawn edge, matching relationEdgeStyle", () => {
+    // Edge drawn child → parent (incoming): a "forward" flow points at the
+    // relation's target, which sits at the drawn edge's START.
+    const { iframe, edge } = flowFrame(attrBag({}));
+    applyEdgeFlowDirection(iframe, "e1", "forward", true);
+    expect(edge._style).toBe(
+      relationEdgeStyle({ incoming: true, flow: "forward" }),
+    );
+  });
+
+  it("returns false for an unknown edge cell", () => {
+    const { iframe } = flowFrame(attrBag({}));
+    expect(applyEdgeFlowDirection(iframe, "nope", "forward", false)).toBe(false);
+  });
+});
+
+
+/* ------------------------------------------------------------------ */
+/*  Card labels — one renderer, one reader                             */
+/* ------------------------------------------------------------------ */
+
+describe("composeCardLabel", () => {
+  it("returns the bare name when there are no detail lines", () => {
+    // The backwards-compatibility guarantee: an untouched diagram is untouched.
+    expect(composeCardLabel("NexaCore ERP")).toBe("NexaCore ERP");
+    expect(composeCardLabel("NexaCore ERP", [])).toBe("NexaCore ERP");
+  });
+
+  it("HTML-escapes the name in both the bare and the composed form", () => {
+    expect(composeCardLabel('R&D <x> "q"')).toBe("R&amp;D &lt;x&gt; &quot;q&quot;");
+    const composed = composeCardLabel('R&D <x>', [{ label: "Type", value: "App" }]);
+    expect(composed).toContain("<b>R&amp;D &lt;x&gt;</b>");
+    // The only raw markup is ours.
+    expect(composed).not.toContain("<x>");
+  });
+
+  it("escapes field labels and values so an attribute cannot inject markup", () => {
+    const composed = composeCardLabel("App", [
+      { label: "Owner", value: '<img src=x onerror=alert(1)>' },
+    ]);
+    expect(composed).not.toContain("<img");
+    expect(composed).toContain("&lt;img src=x onerror=alert(1)&gt;");
+  });
+
+  it("renders detail rows unbolded — the card style bolds the whole label", () => {
+    const composed = composeCardLabel("App", [{ label: "Type", value: "Application" }]);
+    expect(composed).toContain("font-weight:normal");
+    expect(composed).toContain("Type: Application");
+  });
+
+  it("never renders more rows than the cell can hold", () => {
+    const lines: CardDetailLine[] = [
+      { label: "A", value: "1" },
+      { label: "B", value: "2" },
+      { label: "C", value: "3" },
+      { label: "D", value: "4" },
+    ];
+    const composed = composeCardLabel("App", lines);
+    expect(composed.match(/<div/g)).toHaveLength(MAX_CARD_DETAIL_LINES);
+    expect(composed).not.toContain("C: 3");
+  });
+});
+
+describe("readCardName", () => {
+  it("prefers cardName over a composed label", () => {
+    const v = attrBag({
+      cardName: "NexaCore ERP",
+      label: composeCardLabel("NexaCore ERP", [{ label: "Type", value: "Application" }]),
+    });
+    expect(readCardName(v)).toBe("NexaCore ERP");
+  });
+
+  it("falls back to label for a cell created before cardName existed", () => {
+    expect(readCardName(attrBag({ label: "Legacy Card" }))).toBe("Legacy Card");
+  });
+
+  it("handles plain string values and empty cells", () => {
+    expect(readCardName("Plain Shape")).toBe("Plain Shape");
+    expect(readCardName(null)).toBe("");
+    expect(readCardName(attrBag({}))).toBe("");
+  });
+});
+
+describe("detail rows are carried as data, not as markup", () => {
+  it("stamps the rows alongside the rendered label, and reads them back", () => {
+    const bag = attrBag({});
+    const lines = [{ label: "Type", value: "Application" }];
+    setCardLabel(bag, "NexaCore ERP", lines);
+    expect(readCardName(bag)).toBe("NexaCore ERP");
+    expect(readCardDetail(bag)).toEqual(lines);
+  });
+
+  it("clears the rows when a card is composed without any", () => {
+    const bag = attrBag({});
+    setCardLabel(bag, "App", [{ label: "Type", value: "Application" }]);
+    setCardLabel(bag, "App", []);
+    expect(readCardDetail(bag)).toEqual([]);
+    expect(bag.getAttribute("label")).toBe("App");
+  });
+
+  it("never re-emits markup from a hand-edited label", () => {
+    // A label is hand-editable, so anything spliced out of one and into
+    // another is user input. Recomposition goes through the stored rows.
+    const bag = attrBag({
+      cardName: "App",
+      cardDetail: JSON.stringify([{ label: "Owner", value: "Alice" }]),
+      label: '<b>App</b><div onmouseover="steal()">Owner: Alice</div>',
+    });
+    setCardLabel(bag, "Renamed", readCardDetail(bag));
+    expect(bag.getAttribute("label")).not.toContain("onmouseover");
+    expect(bag.getAttribute("label")).toContain("Owner: Alice");
+  });
+
+  it("ignores a cardDetail attribute that was tampered with by hand", () => {
+    expect(readCardDetail(attrBag({ cardDetail: "not json" }))).toEqual([]);
+    expect(readCardDetail(attrBag({ cardDetail: '{"not":"an array"}' }))).toEqual([]);
+    expect(readCardDetail(attrBag({ cardDetail: '[{"label":1,"value":2}]' }))).toEqual([]);
+  });
+});
+
+describe("firstLineText", () => {
+  it("recovers the typed name from a hand-edited label, dropping the rows", () => {
+    const edited = '<b>Payment GW</b><div style="font-size:9px">Type: Application</div>';
+    expect(firstLineText(edited)).toBe("Payment GW");
+    expect(firstLineText("R&amp;D")).toBe("R&D");
+    expect(firstLineText("Plain")).toBe("Plain");
+  });
+
+  it("joins a multi-line hand-typed name", () => {
+    expect(firstLineText("Line one<br>Line two")).toBe("Line one Line two");
+  });
+
+  it("is not fooled by markup a strip-tags regex would let through", () => {
+    // `<[^>]*>` — the pattern this replaced — stops at the first `>`, so it
+    // leaks `">Payment` out of the attribute, and cannot skip a comment.
+    expect(firstLineText('<b title="a>b">Payment</b>')).toBe("Payment");
+    expect(firstLineText("<!-- <b> -->Payment")).toBe("Payment");
+  });
+});
+
+/** Fake frame for the label-apply passes: cells carry an attribute bag and the
+ *  model supports the lookups `applyCardLabels` performs. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function labelFrame(cells: Record<string, any>) {
+  const model = {
+    cells,
+    beginUpdate() {},
+    endUpdate() {},
+    getCell: (id: string) => cells[id] ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getStyle: (c: any) => c._style ?? "",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setStyle: (c: any, style: string) => {
+      c._style = style;
+    },
+  };
+  const graph = { getModel: () => model, refresh() {}, removeCellOverlays() {} };
+  return { contentWindow: { __turboGraph: graph } } as unknown as HTMLIFrameElement;
+}
+
+describe("applyCardLabels", () => {
+  const lines = new Map<string, CardDetailLine[]>([
+    ["id-top", [{ label: "Type", value: "Application" }]],
+  ]);
+
+  function canvas() {
+    return {
+      top: scanVertex("top", { cardId: "id-top", cardType: "Application", label: "Top", cardName: "Top" }),
+      child: scanVertex("child", {
+        cardId: "id-child",
+        cardType: "Application",
+        label: "Child",
+        cardName: "Child",
+        parentGroupCell: "top",
+      }),
+      pending: scanVertex("pending", {
+        cardId: "pending-x",
+        cardType: "Application",
+        label: "Draft",
+        cardName: "Draft",
+      }),
+      plain: scanVertex("plain", { label: "Just a box" }),
+    };
+  }
+
+  it("composes only top-level synced card cells", () => {
+    const cells = canvas();
+    const touched = applyCardLabels(labelFrame(cells), lines);
+    expect(touched).toBe(1);
+    expect(cells.top.value.getAttribute("label")).toContain("Type: Application");
+    // A pending cell's name is POSTed verbatim on sync — never compose it.
+    expect(cells.pending.value.getAttribute("label")).toBe("Draft");
+    // Expanded-group children are too small to hold rows.
+    expect(cells.child.value.getAttribute("label")).toBe("Child");
+    expect(cells.plain.value.getAttribute("label")).toBe("Just a box");
+  });
+
+  it("is idempotent — a second identical pass touches nothing", () => {
+    const frame = labelFrame(canvas());
+    expect(applyCardLabels(frame, lines)).toBe(1);
+    expect(applyCardLabels(frame, lines)).toBe(0);
+  });
+
+  it("adopts a legacy cell that predates cardName, recovering the plain name", () => {
+    const cells = {
+      old: scanVertex("old", {
+        cardId: "id-top",
+        cardType: "Application",
+        // No `cardName`, and the user had hand-bolded the label in DrawIO.
+        label: "<b>Top</b>",
+      }),
+    };
+    applyCardLabels(labelFrame(cells), lines);
+    expect(cells.old.value.getAttribute("cardName")).toBe("Top");
+    expect(cells.old.value.getAttribute("label")).toContain("Type: Application");
+  });
+
+  it("resets a card to its bare name when its fields are turned off", () => {
+    const cells = canvas();
+    const frame = labelFrame(cells);
+    applyCardLabels(frame, lines);
+    expect(applyCardLabels(frame, new Map())).toBe(1);
+    expect(cells.top.value.getAttribute("label")).toBe("Top");
+    expect(cells.top.value.getAttribute("cardName")).toBe("Top");
+  });
+});
+
+describe("normaliseEditedCardLabel", () => {
+  it("re-syncs cardName after a hand-typed (F2) rename", () => {
+    const cells = {
+      top: scanVertex("top", {
+        cardId: "id-top",
+        cardType: "Application",
+        cardName: "Old Name",
+        cardDetail: JSON.stringify([{ label: "Type", value: "Application" }]),
+        // What DrawIO leaves behind after an in-place edit: only `label` moved.
+        label: "<b>Hand Typed</b><div style=\"font-size:9px\">Type: Application</div>",
+      }),
+    };
+    const name = normaliseEditedCardLabel(labelFrame(cells), "top");
+    expect(name).toBe("Hand Typed");
+    expect(cells.top.value.getAttribute("cardName")).toBe("Hand Typed");
+    // The rows are re-rendered from the stored data, not lifted out of the
+    // markup the user just edited.
+    expect(cells.top.value.getAttribute("label")).toContain("Type: Application");
+  });
+
+  it("keeps the typed name on a cell that carries no stored rows", () => {
+    // A cell composed before the rows became data. The name is what matters;
+    // the rows come back on the next display pass, which renders from the
+    // card record rather than from the cell.
+    const cells = {
+      top: scanVertex("top", {
+        cardId: "id-top",
+        cardType: "Application",
+        cardName: "Old Name",
+        label: "<b>Hand Typed</b><div>Type: Application</div>",
+      }),
+    };
+    expect(normaliseEditedCardLabel(labelFrame(cells), "top")).toBe("Hand Typed");
+    expect(cells.top.value.getAttribute("label")).toBe("Hand Typed");
+  });
+
+  it("ignores cells that are not card cells", () => {
+    const cells = { plain: scanVertex("plain", { label: "Just a box" }) };
+    expect(normaliseEditedCardLabel(labelFrame(cells), "plain")).toBeNull();
+  });
+});
+
+describe("scanDiagramItems — composed labels", () => {
+  it("reports the plain name, never the composed HTML", () => {
+    const frame = scanFrame({
+      top: scanVertex("top", {
+        cardId: "id-top",
+        cardType: "Application",
+        cardName: "NexaCore ERP",
+        label: composeCardLabel("NexaCore ERP", [{ label: "Type", value: "Application" }]),
+      }),
+    });
+    // This is what staleCheck diffs against the inventory — HTML here would
+    // flag every card on every diagram as renamed.
+    expect(scanDiagramItems(frame).syncedFS[0].name).toBe("NexaCore ERP");
+  });
+
+  it("keeps a pending card's name safe to POST verbatim", () => {
+    const frame = scanFrame({
+      p: scanVertex("p", {
+        cardId: "pending-x",
+        cardType: "Application",
+        cardName: "Draft App",
+        label: "Draft App",
+        pending: "1",
+      }),
+    });
+    expect(scanDiagramItems(frame).pendingCards[0].name).toBe("Draft App");
+  });
+});
+
+describe("unlinking collapses the detail rows", () => {
+  function linkedCell() {
+    return scanVertex("c1", {
+      cardId: "id-1",
+      cardType: "Application",
+      cardName: "NexaCore ERP",
+      label: composeCardLabel("NexaCore ERP", [{ label: "Owner", value: "Alice" }]),
+    });
+  }
+
+  it("unlinkCell drops the rows a stub no longer has data for", () => {
+    const cells = { c1: linkedCell() };
+    const frame = labelFrame(cells);
+    expect(unlinkCell(frame, "c1")).toBe("id-1");
+    expect(cells.c1.value.getAttribute("label")).toBe("NexaCore ERP");
+    expect(cells.c1.value.getAttribute("cardId")).toBeNull();
+  });
+
+  it("dedupClonedCell does the same for a pasted copy", () => {
+    const cells = { c1: linkedCell() };
+    const frame = labelFrame(cells);
+    expect(dedupClonedCell(frame, "c1", false)).toEqual({ mode: "unlinked" });
+    expect(cells.c1.value.getAttribute("label")).toBe("NexaCore ERP");
+  });
+});
+
+describe("buildLdvDiagramXml — detail lines carried from the report", () => {
+  const layers: DiagramLayerInput[] = [];
+  const rels: DiagramRelInput[] = [];
+
+  it("emits the composed label plus a cardName stamp", () => {
+    const xml = buildLdvDiagramXml(
+      [
+        {
+          cardId: "11111111-1111-1111-1111-111111111111",
+          cardType: "Application",
+          name: "NexaCore ERP",
+          color: "#0f7eb5",
+          detailLines: [{ label: "Type", value: "Application" }],
+          x: 0,
+          y: 0,
+          w: 200,
+          h: 72,
+        },
+      ],
+      rels,
+      layers,
+    );
+    expect(xml).toContain('cardName="NexaCore ERP"');
+    // HTML-escaped by composeCardLabel, then XML-escaped for the attribute.
+    expect(xml).toContain("&lt;b&gt;NexaCore ERP&lt;/b&gt;");
+    expect(xml).toContain("Type: Application");
+  });
+
+  it("double-escapes an ampersand exactly once each way", () => {
+    const xml = buildLdvDiagramXml(
+      [
+        {
+          cardId: "22222222-2222-2222-2222-222222222222",
+          cardType: "Application",
+          name: "R&D Portal",
+          color: "#0f7eb5",
+          detailLines: [{ label: "Owner", value: "A & B" }],
+          x: 0,
+          y: 0,
+          w: 200,
+          h: 72,
+        },
+      ],
+      rels,
+      layers,
+    );
+    // Parsing the attribute yields `&amp;`, which renders under html=1 as `&`.
+    expect(xml).toContain("&amp;amp;D Portal");
+    expect(xml).toContain('cardName="R&amp;D Portal"');
+  });
+
+  it("keeps emitting a bare name when the report showed no extra rows", () => {
+    const xml = buildLdvDiagramXml(
+      [
+        {
+          cardId: "33333333-3333-3333-3333-333333333333",
+          cardType: "Application",
+          name: "Plain App",
+          color: "#0f7eb5",
+          x: 0,
+          y: 0,
+          w: 200,
+          h: 72,
+        },
+      ],
+      rels,
+      layers,
+    );
+    expect(xml).toContain('label="Plain App"');
   });
 });

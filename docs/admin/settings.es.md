@@ -9,7 +9,7 @@ La página de **Configuración** en **Administrador → Configuración** (`/admi
 | **IA** | `/admin/settings?tab=ai` | Proveedor LLM, modelo, backend de búsqueda web, interruptores de sugerencia IA por tipo de tarjeta | [Capacidades de IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Vinculación masiva de productos a entradas de endoflife.date | [Fin de vida (EOL)](eol.md) |
 | **Portales web** | `/admin/settings?tab=web-portals` | Slugs de portal público de solo lectura, filtros de visibilidad | [Portales web](web-portals.md) |
-| **ServiceNow** | `/admin/settings?tab=servicenow` | Conexión ServiceNow, configuración de sincronización, mapeo de identidad | [Integración con ServiceNow](servicenow.md) |
+| **Integraciones** | `/admin/settings?tab=integrations` | Sincronización ServiceNow e integraciones añadidas por extensiones | [Integración con ServiceNow](servicenow.md) |
 | **TurboLens** | `/admin/settings?tab=turbolens` | Interruptores específicos de TurboLens, regulaciones habilitadas, sondeo de análisis | Ver la sección [Configuración de TurboLens](#configuracion-de-turbolens) más abajo |
 | **Migración** | `/admin/settings?tab=migration` | Importaciones desde otras plataformas EA y transferencia completa del espacio de trabajo entre instancias de Turbo EA | [Migración de plataforma](migration.md) |
 | **Registro de auditoría** | `/admin/settings?tab=audit-log` | Registro de cambios — quién cambió qué y si provino de la interfaz web, la API o una herramienta de IA | — |
@@ -140,6 +140,12 @@ Active o desactive el módulo de **Gestión de Procesos de Negocio** (BPM). Cuan
 
 Esto es útil para organizaciones que no utilizan BPM y desean una experiencia de navegación más limpia.
 
+### Exigir un aprobador distinto
+
+Desactivado de forma predeterminada. Cuando se activa, quien envía una revisión de un flujo de proceso no puede ser quien la aprueba: segregación de funciones, tal como esperan sistemas de calidad como GxP e ISO 9001.
+
+Déjelo desactivado en equipos pequeños donde la misma persona redacta y aprueba. Activarlo no cambia lo que se registra: los envíos, las aprobaciones, los rechazos y los retiros quedan en la pestaña **Historial** de la tarjeta en cualquier caso.
+
 ## Módulo PPM
 
 Active o desactive el módulo de **Gestión de Portafolio de Proyectos** (PPM). Cuando está desactivado:
@@ -159,6 +165,34 @@ Active o desactive el módulo de **Gobernanza, Riesgo y Cumplimiento** (GRC). Cu
 - Los riesgos y los hallazgos de cumplimiento permanecen en la base de datos — los permisos subyacentes `risks.*` y `compliance.*` no cambian, de modo que los datos se preservan y vuelven a aparecer sin cambios si el módulo se reactiva
 
 Consulte la [guía de GRC](../guide/grc.md) para la referencia completa de funciones.
+
+## Notificaciones de actualización
+
+Turbo EA comprueba una vez al día si se ha publicado una versión más reciente y, cuando la hay, deja una notificación en la campana de cada usuario cuyo rol conceda `admin.settings`. Al hacer clic se abren las notas de la versión —el changelog de esa versión— en un diálogo dentro de Turbo EA. Cada notificación sigue mostrando la versión que anunció, por mucho tiempo que lleve en la campana: las notas se leen del changelog incluido en la imagen, así que no suponen ninguna petición saliente y funcionan igual en una instalación aislada. Solo una versión que aún no hayas instalado procede de la caché de la comprobación diaria, porque un changelog escrito en tiempo de compilación no puede describirla; para esas, un botón **Ver en GitHub** abre la página de la versión en una pestaña nueva.
+
+Las notificaciones llevan el nombre configurado para esta instancia, de modo que un despliegue renombrado no se anuncia con otro nombre de producto.
+
+La comprobación **solo notifica**: no se descarga nada ni se modifica nada en el host. La actualización sigue siendo el procedimiento deliberado y respaldado por copia de seguridad que se describe en [Operaciones](operations.md#the-upgrade-procedure). Un administrador que prefiera no recibir avisos puede silenciar la fila **Actualización disponible** en sus propias preferencias de notificación.
+
+Desactivar el interruptor elimina por completo la petición diaria a github.com, que es lo que necesita una instalación aislada o con salida restringida. En cualquier caso la instancia funciona con normalidad: si no se puede acceder al feed de versiones, el fallo se registra discretamente y no se muestra nada.
+
+### Cuando la actualización se completa
+
+Un segundo interruptor, **Anunciar las actualizaciones a los usuarios**, cubre la otra mitad. Cuando la instancia se reinicia con una versión más reciente, **todos** los usuarios —no solo los administradores— reciben una notificación que indica que la aplicación se ha actualizado, y al hacer clic se muestra el changelog de todas las versiones que se saltaron. Una instancia que pasa de 2.57.0 a 2.60.0 muestra las cuatro versiones, no solo la última. Cada uno de estos avisos permanece ligado a su propia actualización: abrir uno de hace un año sigue mostrando las versiones que recorrió *esa* actualización.
+
+El anuncio se envía **una vez por versión**: reiniciar diez veces con la misma versión produce una sola notificación, y una reversión no produce ninguna. Una instalación recién creada no anuncia nada, porque no hay ninguna actualización que describir. Estas notas proceden del changelog incluido en la imagen, así que esta mitad no necesita red en absoluto.
+
+Esta notificación es **solo en la aplicación** y nunca se envía por correo: llega a todos los usuarios activos en cada actualización, y un canal de correo convertiría cada versión de parche en un envío masivo. Cada usuario puede silenciarla en **Notificaciones de actualización** dentro de sus propias preferencias, donde el interruptor de correo aparece desactivado.
+
+### Notificaciones de la tienda de extensiones
+
+Un tercer interruptor, **Notificaciones de la tienda de extensiones**, hace lo mismo para la [tienda de extensiones](extensions.md). Una vez al día la instancia lee el catálogo público de la tienda y, cuando algo ha cambiado, avisa a todos los usuarios cuyo rol conceda `admin.manage_extensions`, el mismo permiso que abre la página Extensiones. Se anuncian dos cosas: una extensión publicada en la tienda que no tenga instalada, y una versión más reciente de alguna que sí tenga.
+
+Los días de lanzamiento intensos siguen siendo legibles: por muchas extensiones que cambien, cada administrador recibe **una** notificación por tipo («3 actualizaciones de extensiones disponibles»), no una por extensión. Cada cambio se anuncia **una sola vez** —un catálogo que no cambia en un mes produce una notificación, no treinta— y al hacer clic se abre la pestaña Tienda dentro de Turbo EA.
+
+La primera lectura correcta del catálogo no anuncia **ninguna** extensión nueva: una instancia que ve la tienda por primera vez informaría de todo su contenido. Las actualizaciones de extensiones ya instaladas sí se informan de inmediato, porque siempre son unas pocas y se pueden aplicar directamente.
+
+Igual que la comprobación de versiones, esto es **solo informativo**: no se descarga ni se instala nada, e instalar sigue siendo una acción deliberada en la página Extensiones. Desactivar el interruptor elimina por completo la petición diaria a la tienda. Cada administrador puede silenciar por separado las filas **Nueva extensión disponible** y **Actualización de extensión disponible** en sus propias preferencias de notificación.
 
 ## Botón Patrocinar
 

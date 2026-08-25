@@ -9,6 +9,8 @@ it ever hits the database.
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from app.services.seed import RELATIONS as META_RELATIONS
@@ -82,6 +84,22 @@ for _t in META_TYPES:
                 _select_options_by_field[compound] = {o["key"] for o in f["options"]}
 
 _rel_type_by_key: dict[str, dict] = {r["key"]: r for r in META_RELATIONS}
+
+# Every demo card, in one list — the same set the seeder inserts.
+_ALL_DEMO_CARDS: list[dict] = (
+    ORGANIZATIONS
+    + BUSINESS_CAPABILITIES
+    + BUSINESS_CONTEXTS
+    + APPLICATIONS
+    + IT_COMPONENTS
+    + INTERFACES
+    + DATA_OBJECTS
+    + TECH_CATEGORIES
+    + PROVIDERS
+    + OBJECTIVES
+    + INITIATIVES
+    + PLATFORMS
+)
 
 _rel_attr_options: dict[str, dict[str, set[str]]] = {}
 for _r in META_RELATIONS:
@@ -788,3 +806,225 @@ class TestExtrasDemoData:
                     f"{sorted(extra)} that the {rt} component doesn't read"
                 )
         assert not errors, "\n".join(errors)
+
+
+class TestSalesGrowthStory:
+    """The demo's time-travel story stays a story.
+
+    The Dependencies report's time travel only demonstrates anything if the
+    landscape around a card actually changes as the slider moves. The sales
+    growth objective is the dataset's showcase for that, so pin the property
+    the demo depends on — cards leaving *behind* today and arriving *ahead* of
+    it — rather than the individual cards, which are free to be rewritten.
+    """
+
+    @staticmethod
+    def _neighbourhood() -> set[str]:
+        """Refs one hop from the objective, plus a second hop through them."""
+        target = _id("obj_sales_growth")
+        by_id = {c["id"]: c for c in _ALL_DEMO_CARDS}
+        first = set()
+        for r in DEMO_RELATIONS:
+            if r["source_id"] == target:
+                first.add(r["target_id"])
+            elif r["target_id"] == target:
+                first.add(r["source_id"])
+        second = set(first)
+        for r in DEMO_RELATIONS:
+            if r["source_id"] in first:
+                second.add(r["target_id"])
+            elif r["target_id"] in first:
+                second.add(r["source_id"])
+        return {i for i in second if i in by_id}
+
+    def test_objective_exists(self):
+        names = {o["name"] for o in OBJECTIVES}
+        assert "Increase Sales by 25%" in names
+
+    def test_objective_pulls_in_initiatives_and_capabilities(self):
+        by_id = {c["id"]: c for c in _ALL_DEMO_CARDS}
+        types = {by_id[i]["type"] for i in self._neighbourhood()}
+        # Every layer the story claims to span must actually be reachable.
+        for expected in ("Initiative", "BusinessCapability", "Application", "Organization"):
+            assert expected in types, f"{expected} missing from the sales objective's neighbourhood"
+
+    def test_landscape_changes_in_both_directions(self):
+        today = date.today().isoformat()
+        by_id = {c["id"]: c for c in _ALL_DEMO_CARDS}
+        retired_before_today = []
+        live_after_today = []
+        for ref_id in self._neighbourhood():
+            lc = by_id[ref_id].get("lifecycle") or {}
+            eol = lc.get("endOfLife")
+            active = lc.get("active")
+            if eol and eol < today:
+                retired_before_today.append(by_id[ref_id]["name"])
+            if active and active > today:
+                live_after_today.append(by_id[ref_id]["name"])
+        assert retired_before_today, (
+            "No card around the sales objective retires in the past — "
+            "travelling backwards shows nothing"
+        )
+        assert live_after_today, (
+            "No card around the sales objective goes live in the future — "
+            "travelling forwards shows nothing"
+        )
+
+
+class TestCapabilityHinge:
+    """The capability layer is what makes a Dependencies centre worth opening.
+
+    A capability is the only card type that reaches strategy in one direction
+    and applications in the other — the metamodel has no Objective→Application
+    relation — so it is the card a user centres on to see a transformation whole.
+    That only works if the wiring is there; it once was not (11 of 78
+    capabilities reached both an objective and an application), which made most
+    of the demo a dead end.
+    """
+
+    @staticmethod
+    def _neighbour_types() -> dict:
+        by_id = {c["id"]: c for c in _ALL_DEMO_CARDS}
+        adj: dict = {}
+        for r in DEMO_RELATIONS:
+            adj.setdefault(r["source_id"], set()).add(r["target_id"])
+            adj.setdefault(r["target_id"], set()).add(r["source_id"])
+        return {
+            c["id"]: {by_id[n]["type"] for n in adj.get(c["id"], ()) if n in by_id}
+            for c in _ALL_DEMO_CARDS
+        }
+
+    def test_capabilities_bridge_objectives_and_applications(self):
+        types_by_id = self._neighbour_types()
+        caps = [c for c in _ALL_DEMO_CARDS if c["type"] == "BusinessCapability"]
+        hinges = [c for c in caps if {"Objective", "Application"} <= types_by_id[c["id"]]]
+        assert len(hinges) >= 30, (
+            f"only {len(hinges)} of {len(caps)} capabilities reach both an objective "
+            "and an application — centring on one shows a dead end"
+        )
+
+    def test_no_capability_arrives_after_the_application_leading_it(self):
+        """The canvas shows a capability and the app that implements it side by
+        side, so the capability arriving second reads as a data error. Nothing
+        catches the emptier version of this — a capability with no application
+        at all, which is how "Customer Relationship Management" ended up going
+        live in 2029 at a company that has run a CRM since 2017 — so the CRM
+        applications now lead it and this pins the ordering.
+        """
+        by_id = {c["id"]: c for c in _ALL_DEMO_CARDS}
+        today = date.today().isoformat()
+        late = []
+        for r in DEMO_RELATIONS:
+            if r["type"] != "relAppToBC":
+                continue
+            if (r.get("attributes") or {}).get("supportType") != "leading":
+                continue
+            app, cap = by_id.get(r["source_id"]), by_id.get(r["target_id"])
+            if not app or not cap:
+                continue
+            app_live = (app.get("lifecycle") or {}).get("active")
+            cap_live = (cap.get("lifecycle") or {}).get("active")
+            # Only against an app that is ALREADY live: a capability may well
+            # predate a future application built to lead it.
+            if app_live and cap_live and app_live <= today and cap_live > app_live:
+                late.append(f"{cap['name']} ({cap_live}) after {app['name']} ({app_live})")
+        assert not late, f"capabilities arriving after the app leading them: {late}"
+
+    def test_every_application_supports_a_capability(self):
+        cap_ids = {c["id"] for c in _ALL_DEMO_CARDS if c["type"] == "BusinessCapability"}
+        supported = {r["source_id"] for r in DEMO_RELATIONS if r["target_id"] in cap_ids}
+        orphans = [a["name"] for a in APPLICATIONS if a["id"] not in supported]
+        assert not orphans, f"applications supporting no capability: {orphans}"
+
+
+class TestDemoLifecycles:
+    """Lifecycle dates are what the Dependencies timeline actually reads."""
+
+    def test_no_card_dies_before_it_lives(self):
+        """A card retired at or before its own start draws a mark on a day
+        nothing happened — the invariant `cardsChangingBetween` encodes on the
+        client. Several lifecycles here are derived, so pin it on the data too.
+        """
+        broken = [
+            (c["name"], c["lifecycle"])
+            for c in _ALL_DEMO_CARDS
+            if (c.get("lifecycle") or {}).get("endOfLife")
+            and (c.get("lifecycle") or {}).get("active")
+            and c["lifecycle"]["endOfLife"] <= c["lifecycle"]["active"]
+        ]
+        assert not broken, f"cards retiring at or before their start: {broken}"
+
+    def test_nothing_ends_without_having_been_active(self):
+        """A card with an end and no start retires on the timeline having never
+        gone live: the retirement mark has no arrival mark to answer it, and the
+        card's own lifecycle bar starts nowhere. Four initiatives carried only a
+        plan date and were stamped with an endOfLife derived from their end
+        date, which is exactly this.
+        """
+        broken = [
+            (c["type"], c["name"], c["lifecycle"])
+            for c in _ALL_DEMO_CARDS
+            for lc in [c.get("lifecycle") or {}]
+            if (lc.get("endOfLife") or lc.get("phaseOut")) and not lc.get("active")
+        ]
+        assert not broken, f"cards that end without ever being active: {broken}"
+
+    def test_lifecycle_phases_run_forwards(self):
+        """plan -> phaseIn -> active -> phaseOut -> endOfLife, non-decreasing.
+
+        Catches the class of bug where a lifecycle mixes the two date helpers:
+        `_in_months(6)` overtakes `_in_years(1)` every second half of the year,
+        so the data was correct in spring and backwards in autumn depending
+        only on the day the demo happened to be seeded.
+        """
+        phases = ["plan", "phaseIn", "active", "phaseOut", "endOfLife"]
+        broken = []
+        for c in _ALL_DEMO_CARDS:
+            lc = {k: v for k, v in (c.get("lifecycle") or {}).items() if v}
+            dated = [(p, lc[p]) for p in phases if p in lc]
+            for (p1, v1), (p2, v2) in zip(dated, dated[1:]):
+                if v2 < v1:
+                    broken.append(f"{c['name']}: {p1}={v1} after {p2}={v2}")
+        assert not broken, f"lifecycles running backwards: {broken}"
+
+    def test_it_components_do_not_all_retire_on_one_day(self):
+        """They used to share a single hard-coded end date, which drew one
+        enormous mark on the timeline — and a literal that would go stale."""
+        ends = [
+            (c.get("lifecycle") or {}).get("endOfLife")
+            for c in IT_COMPONENTS
+            if (c.get("lifecycle") or {}).get("endOfLife")
+        ]
+        assert len(set(ends)) >= 5, f"IT component end dates cluster on {set(ends)}"
+
+    def test_it_components_do_not_all_go_live_on_one_day(self):
+        """The mirror of the retirement spread. 28 components shared a single
+        hard-coded go-live date, which the timeline draws as ONE mark — and a
+        mark standing for 28 cards swallows any arrival merged into it, so a
+        date set by hand on a nearby card looks as though it were never marked.
+        """
+        actives = [
+            (c.get("lifecycle") or {}).get("active")
+            for c in IT_COMPONENTS
+            if (c.get("lifecycle") or {}).get("active")
+        ]
+        assert len(set(actives)) >= 5, f"IT component go-live dates cluster on {set(actives)}"
+
+    def test_enough_of_the_landscape_can_retire(self):
+        """Time travel needs something to remove. Two thirds of the demo used
+        to carry no lifecycle at all."""
+        retiring = [c for c in _ALL_DEMO_CARDS if (c.get("lifecycle") or {}).get("endOfLife")]
+        dated = [c for c in _ALL_DEMO_CARDS if any((c.get("lifecycle") or {}).values())]
+        assert len(retiring) >= 50, f"only {len(retiring)} cards ever retire"
+        assert len(dated) >= 140, f"only {len(dated)} cards carry any lifecycle date"
+
+    def test_every_relation_points_at_a_real_card(self):
+        """A mistyped ref mints a fresh UUID silently and only FK-fails at
+        insert time, long after the tests have passed."""
+        known = {c["id"] for c in _ALL_DEMO_CARDS}
+        dangling = [
+            r["type"]
+            for r in DEMO_RELATIONS
+            if r["source_id"] not in known or r["target_id"] not in known
+        ]
+        assert not dangling, f"relations pointing at no card: {sorted(set(dangling))}"

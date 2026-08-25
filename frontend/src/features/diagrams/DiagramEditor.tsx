@@ -9,6 +9,7 @@ import MenuItem from "@mui/material/MenuItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Snackbar from "@mui/material/Snackbar";
+import Badge from "@mui/material/Badge";
 import Button from "@mui/material/Button";
 import Tooltip from "@mui/material/Tooltip";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -27,8 +28,9 @@ import DiagramSyncPanel from "./DiagramSyncPanel";
 import type {
   PendingCard,
   PendingRelation,
-  StaleItem,
 } from "./DiagramSyncPanel";
+import { diffStaleItems, fetchInventoryState } from "./staleCheck";
+import type { StaleItem } from "./staleCheck";
 import {
   buildCardCellData,
   insertCardIntoGraph,
@@ -47,8 +49,10 @@ import {
   markCellSynced,
   markEdgeSynced,
   updateCellLabel,
+  applyEdgeFlowDirection,
   removeDiagramCell,
   scanDiagramItems,
+  scanSyncedRelationEdges,
   attachCellLifecycleListeners,
   attachParentChangeListener,
   scanForDuplicateCells,
@@ -74,9 +78,11 @@ import {
   findExistingCardCellId,
   getNestedCardIds,
   applyViewToGraph,
-  resetViewColors,
   setRelationLabelsHidden,
   applyCardTypeIcons,
+  applyCardLabels,
+  attachCardLabelEditListener,
+  readCardName,
 } from "./drawio-shapes";
 import type {
   HierarchyChild,
@@ -85,6 +91,7 @@ import type {
   ResolvedRelationMeta,
 } from "./drawio-shapes";
 import type {
+  CardDetailLine,
   ChildLayout,
   ExpandChildData,
   RelationFlowDirection,
@@ -95,12 +102,33 @@ import type {
   ExpandMenuPick,
   ExpandMenuTarget,
 } from "./ExpandMenu";
-import ViewSelector, { buildColorMap, extractCardValue } from "./ViewSelector";
-import type { ColorEntry, ViewSource } from "./ViewSelector";
+import ColorBySelector from "./ColorBySelector";
+import ShowOnCardSelector from "@/components/cardDisplay/ShowOnCardSelector";
+import {
+  buildColorMap,
+  colorKeyForCard,
+  describeView,
+  normaliseViewSource,
+  NO_VALUE,
+  type ViewResolvers,
+  type ViewSource,
+} from "./viewSource";
+import type { LegendSection } from "./DiagramViewLegend";
 import DiagramViewLegend from "./DiagramViewLegend";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import { useMetamodel } from "@/hooks/useMetamodel";
-import { relationLabel, useTypeLabel } from "@/hooks/useResolveLabel";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { relationLabel, useFieldLabel, useOptionLabel, useTypeLabel } from "@/hooks/useResolveLabel";
+import {
+  buildFieldCatalog,
+  DEFAULT_CARD_LABELS,
+  EMPTY_VALUE,
+  formatFieldValue,
+  hasCardLabelLines,
+  MAX_CARD_LINES,
+  type CardLabelSettings,
+} from "@/lib/cardDisplayFields";
+import { useCardSubtypeLabel } from "@/hooks/useCardSubtypeLabel";
 import { useAuthContext } from "@/hooks/AuthContext";
 import type { Card, CardType, Relation, RelationType } from "@/types";
 import {
@@ -175,6 +203,9 @@ interface DiagramData {
     xml?: string;
     thumbnail?: string;
     view?: ViewSource;
+    /** Attributes rendered as detail lines under each card name. Rides with
+     *  the diagram like `view` does, so every reader sees the same shapes. */
+    cardLabels?: CardLabelSettings;
     /** Relation verbs hidden on this diagram (display-only, see
      *  setRelationLabelsHidden). Rides with the diagram so the viewer
      *  and any published embed match what the author arranged. */
@@ -523,8 +554,8 @@ function bootstrapDrawIO(iframe: HTMLIFrameElement) {
                 targetCardId: tgtFsId,
                 sourceType: srcType,
                 targetType: tgtType,
-                sourceName: src.value.getAttribute("label") || "",
-                targetName: tgt.value.getAttribute("label") || "",
+                sourceName: readCardName(src.value),
+                targetName: readCardName(tgt.value),
                 sourceColor: pick(srcStyle),
                 targetColor: pick(tgtStyle),
               }),
@@ -566,6 +597,10 @@ export default function DiagramEditor() {
   }, [user?.permissions]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [diagram, setDiagram] = useState<DiagramData | null>(null);
+  // Effects that must run once per diagram open key on the id, never the
+  // diagram object — `saveDiagram` calls `setDiagram`, so an object dep
+  // re-fires after every save (discussion #905).
+  const diagramId = diagram?.id;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [snackMsg, setSnackMsg] = useState("");
@@ -574,6 +609,18 @@ export default function DiagramEditor() {
   // Metamodel
   const { types: fsTypes, relationTypes } = useMetamodel();
   const typeLabel = useTypeLabel();
+  const fieldLabel = useFieldLabel();
+  const optionLabel = useOptionLabel();
+  const subtypeLabel = useCardSubtypeLabel();
+  /** Label resolvers the pure colour helpers need. */
+  const viewResolvers = useMemo<ViewResolvers>(
+    () => ({ typeLabel, fieldLabel, optionLabel, t }),
+    [typeLabel, fieldLabel, optionLabel, t],
+  );
+  /** Serialises overlapping colour passes. Without it the loser's restore can
+   *  land after the winner's paint and strip its stamps — ticking several rules
+   *  quickly is enough to hit it (#882 pattern). */
+  const viewReq = useLatestRequest();
   const fsTypesRef = useRef(fsTypes);
   fsTypesRef.current = fsTypes;
   const relTypesRef = useRef(relationTypes);
@@ -667,6 +714,16 @@ export default function DiagramEditor() {
   const [staleItems, setStaleItems] = useState<StaleItem[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
+  // True once the DrawIO iframe has bootstrapped and the graph model is
+  // populated — the gate for the automatic inventory-freshness check.
+  const [drawioReady, setDrawioReady] = useState(false);
+  // Edge cellIds we are about to remove ourselves because their relation
+  // was deleted from the inventory. Both canvas-removal detection paths
+  // (the live CELLS_REMOVED listener and the periodic side-table diff)
+  // funnel into handleTombstones, which consumes entries from this set
+  // instead of raising the "delete this relation?" dialog — the relation
+  // is already gone server-side, there is nothing left to delete.
+  const suppressedEdgeRemovalsRef = useRef<Set<string>>(new Set());
 
   // Relation-deletion tombstones — populated when the user removes a
   // synced relation edge on the canvas. Sync All issues DELETE /relations/{id}
@@ -705,7 +762,15 @@ export default function DiagramEditor() {
 
   // Phase 5 — view perspectives (color cells by attribute)
   const [view, setView] = useState<ViewSource>({ kind: "card_type" });
-  const [viewLegendEntries, setViewLegendEntries] = useState<ColorEntry[]>([]);
+  // Which attributes render as detail lines under each card name. Orthogonal
+  // to `view` — one is what colours a shape, the other is what it says.
+  const [cardLabels, setCardLabels] = useState<CardLabelSettings>(DEFAULT_CARD_LABELS);
+  // Always-current line builder. A ref for the same reason
+  // `hideRelationLabelsRef` is one: the insert callback is declared far above
+  // the builder and doesn't re-create when the settings change, so a plain
+  // closure capture would go stale.
+  const detailLinesForCardRef = useRef<(card: Card) => CardDetailLine[]>(() => []);
+  const [viewLegendSections, setViewLegendSections] = useState<LegendSection[]>([]);
   const [viewAppliedCount, setViewAppliedCount] = useState(0);
   // Relation verbs ("provides", "consumes", …) hidden on this diagram. Saved
   // with the diagram, so the read-only viewer and any published embed show
@@ -731,7 +796,10 @@ export default function DiagramEditor() {
       .get<DiagramData>(`/diagrams/${id}`)
       .then((d) => {
         setDiagram(d);
-        if (d.data?.view) setView(d.data.view);
+        // Untrusted: this blob can predate the current shape, and a
+        // workspace-transfer bundle carries it verbatim between instances.
+        if (d.data?.view) setView(normaliseViewSource(d.data.view));
+        if (d.data?.cardLabels) setCardLabels(d.data.cardLabels);
         setHideRelationLabels(Boolean(d.data?.hideRelationLabels));
         // Check for a newer locally-autosaved draft once per mount.
         if (!restoreCheckedRef.current) {
@@ -775,6 +843,7 @@ export default function DiagramEditor() {
             xml,
             ...(thumbnail ? { thumbnail } : {}),
             view,
+            cardLabels,
             hideRelationLabels,
           },
         };
@@ -788,6 +857,7 @@ export default function DiagramEditor() {
                   xml,
                   ...(thumbnail ? { thumbnail } : {}),
                   view,
+                  cardLabels,
                   hideRelationLabels,
                 },
               }
@@ -807,7 +877,7 @@ export default function DiagramEditor() {
         setSaving(false);
       }
     },
-    [diagram, view, hideRelationLabels],
+    [diagram, view, cardLabels, hideRelationLabels],
   );
 
   /* ---------- Expand / collapse ---------- */
@@ -1471,6 +1541,12 @@ export default function DiagramEditor() {
       // CELLS_REMOVED for every previously-loaded edge. Those aren't
       // user-initiated deletes — swallow them.
       if (restoreInProgressRef.current) return;
+      // Edges we removed ourselves because their relation no longer
+      // exists in the inventory — nothing to confirm or delete.
+      tombstones = tombstones.filter(
+        (tb) => !suppressedEdgeRemovalsRef.current.delete(tb.edgeCellId),
+      );
+      if (tombstones.length === 0) return;
       // Relations get the explicit confirmation step. The dialog lets
       // the user abort (re-insert the edge) before the relation is
       // touched in inventory.
@@ -1694,6 +1770,9 @@ export default function DiagramEditor() {
       // drag-out-of-container gestures and routes them through the
       // hierarchy confirm dialog + Sync drawer.
       attachParentChangeListener(frame, handleParentChanged);
+      // Keep `cardName` in step with a hand-typed (F2) label, so the inventory
+      // rename diff keeps comparing what is actually on the shape.
+      attachCardLabelEditListener(frame);
       // Safety-net periodic scan. Does two things:
       //   (1) Detect cells inserted via DrawIO clipboard paths that don't
       //       surface through CELLS_ADDED to our listener.
@@ -1844,6 +1923,9 @@ export default function DiagramEditor() {
           name: c.name,
           color: ct.color,
           icon: ct.icon,
+          // Compose here rather than waiting for the next view pass, so a
+          // freshly inserted card doesn't sit blank next to its neighbours.
+          detailLines: detailLinesForCardRef.current(c),
           x,
           y,
         });
@@ -1981,7 +2063,11 @@ export default function DiagramEditor() {
     const frame = iframeRef.current;
     if (!frame) return;
 
-    const { pendingCards: pfs, pendingRels: prels, syncedFS: _ } = scanDiagramItems(frame);
+    const { pendingCards: pfs, pendingRels: prels, syncedFS } = scanDiagramItems(frame);
+
+    // Free: this scan already knows what is on the canvas, and it runs on every
+    // change, so the card-display dropdown stays current as cards come and go.
+    setActiveTypeKeys(Array.from(new Set(syncedFS.map((c) => c.type))));
 
     setPendingFS(
       pfs.map((p) => {
@@ -2408,51 +2494,151 @@ export default function DiagramEditor() {
   );
 
 
-  const handleCheckUpdates = useCallback(async () => {
-    const frame = iframeRef.current;
-    if (!frame) return;
-    setCheckingUpdates(true);
+  /* ---------- Inventory-freshness check ---------- */
+  const staleReq = useLatestRequest();
 
-    try {
-      const { syncedFS } = scanDiagramItems(frame);
-      const stale: StaleItem[] = [];
-
-      for (const item of syncedFS) {
-        try {
-          const card = await api.get<Card>(`/cards/${item.cardId}`);
-          if (card.name !== item.name) {
-            const typeInfo = fsTypesRef.current.find((t) => t.key === item.type);
-            stale.push({
-              cellId: item.cellId,
-              cardId: item.cardId,
-              diagramName: item.name,
-              inventoryName: card.name,
-              typeColor: typeInfo?.color || "#999",
-            });
+  /** Compare the canvas against the inventory: renamed, deleted, and
+   *  archived cards plus relations deleted while still drawn. Runs
+   *  automatically once per diagram open and from the sync drawer's
+   *  Check-updates button (`announce` adds the "all up to date" snack).
+   *  One batched round-trip per 200 cards instead of the old
+   *  request-per-card loop, which also silently skipped deleted cards. */
+  const runStaleCheck = useCallback(
+    async (opts?: { announce?: boolean }) => {
+      const frame = iframeRef.current;
+      if (!frame) return;
+      setCheckingUpdates(true);
+      try {
+        await staleReq.run(async ({ signal, isCurrent }) => {
+          const { syncedFS, syncedChildren } = scanDiagramItems(frame);
+          const cards = [...syncedFS, ...syncedChildren];
+          const edges = scanSyncedRelationEdges(frame);
+          const inventory = await fetchInventoryState(
+            cards.map((c) => c.cardId),
+            signal,
+          );
+          if (!isCurrent()) return;
+          const items = diffStaleItems(
+            cards,
+            edges,
+            inventory,
+            (typeKey) =>
+              fsTypesRef.current.find((tp) => tp.key === typeKey)?.color ||
+              "#999",
+            (edge) => humanRelationLabel(edge.relationType) || edge.edgeLabel,
+            (relationTypeKey, attributes) =>
+              relationFlowFor(
+                relTypesRef.current.find((x) => x.key === relationTypeKey),
+                attributes as RelationAttributes | undefined,
+              ),
+          );
+          setStaleItems(items);
+          setCheckingUpdates(false);
+          if (opts?.announce && items.length === 0) {
+            setSnackMsg(t("editor.allUpToDate"));
           }
-        } catch {
-          // Card may have been deleted — skip
-        }
+        });
+      } catch {
+        // Only the current run rethrows (aborted / superseded runs are
+        // swallowed by staleReq), so this is ours to clean up.
+        setCheckingUpdates(false);
       }
+    },
+    [staleReq, humanRelationLabel, t],
+  );
 
-      setStaleItems(stale);
-      if (stale.length === 0) setSnackMsg(t("editor.allUpToDate"));
-    } finally {
-      setCheckingUpdates(false);
-    }
-  }, []);
+  const handleCheckUpdates = useCallback(() => {
+    void runStaleCheck({ announce: true });
+  }, [runStaleCheck]);
+
+  // Auto-check once the DrawIO canvas is ready. Keyed on the diagram *id*
+  // (never the diagram object) so a save's `setDiagram` can't re-trigger
+  // the check — the #905 pattern the view effect below follows too. The
+  // short delay lets the +200 ms bootstrap overlay pass finish so the
+  // scan reads a fully populated model.
+  useEffect(() => {
+    if (!drawioReady || !diagramId) return;
+    const timer = window.setTimeout(() => void runStaleCheck(), 600);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawioReady, diagramId]);
 
   const handleAcceptStale = useCallback(
     (cellId: string) => {
       const frame = iframeRef.current;
       const item = staleItems.find((s) => s.cellId === cellId);
-      if (!frame || !item) return;
+      if (!frame || !item || item.kind !== "renamed") return;
       updateCellLabel(frame, cellId, item.inventoryName);
       setStaleItems((prev) => prev.filter((s) => s.cellId !== cellId));
       setSnackMsg(t("editor.updatedTo", { name: item.inventoryName }));
     },
     [staleItems],
   );
+
+  /** Remove a card cell whose card was deleted / archived in the
+   *  inventory. Connected edges are removed in the same mxGraph batch,
+   *  which the CELLS_REMOVED listener treats as incidental — no
+   *  tombstones, no confirm dialogs. Tolerates the cell having been
+   *  hand-deleted since the check ran. */
+  const handleRemoveStaleCard = useCallback(
+    (cellId: string) => {
+      const frame = iframeRef.current;
+      if (!frame) return;
+      removeDiagramCell(frame, cellId);
+      setStaleItems((prev) => prev.filter((s) => s.cellId !== cellId));
+      refreshSyncPanel();
+    },
+    [refreshSyncPanel],
+  );
+
+  /** Remove an edge whose relation was deleted from the inventory.
+   *  Ordering is load-bearing: the side-table entry goes first (defuses
+   *  the periodic edge-deletion diff), then the suppression set (defuses
+   *  the live CELLS_REMOVED listener, which reads relationId straight
+   *  off the edge user-object), then the actual removal. */
+  const handleRemoveStaleEdge = useCallback((cellId: string) => {
+    const frame = iframeRef.current;
+    if (!frame) return;
+    edgeRelationMapRef.current.delete(cellId);
+    suppressedEdgeRemovalsRef.current.add(cellId);
+    removeEdgeCellsByIds(frame, [cellId]);
+    setStaleItems((prev) => prev.filter((s) => s.cellId !== cellId));
+  }, []);
+
+  /** Move an edge's arrowhead to match a `flowDirection` that changed in
+   *  the inventory, re-stamping the attribute so the next check agrees. */
+  const handleAcceptStaleFlow = useCallback(
+    (cellId: string) => {
+      const frame = iframeRef.current;
+      const item = staleItems.find((s) => s.cellId === cellId);
+      if (!frame || !item || item.kind !== "relationFlowChanged") return;
+      applyEdgeFlowDirection(
+        frame,
+        cellId,
+        item.newFlow,
+        item.incoming,
+        hideRelationLabelsRef.current,
+      );
+      setStaleItems((prev) => prev.filter((s) => s.cellId !== cellId));
+    },
+    [staleItems],
+  );
+
+  /** Resolve every stale item at once with its kind's default action. */
+  const handleAcceptAllStale = useCallback(() => {
+    for (const item of staleItems) {
+      if (item.kind === "renamed") handleAcceptStale(item.cellId);
+      else if (item.kind === "relationDeleted") handleRemoveStaleEdge(item.cellId);
+      else if (item.kind === "relationFlowChanged") handleAcceptStaleFlow(item.cellId);
+      else handleRemoveStaleCard(item.cellId);
+    }
+  }, [
+    staleItems,
+    handleAcceptStale,
+    handleRemoveStaleEdge,
+    handleAcceptStaleFlow,
+    handleRemoveStaleCard,
+  ]);
 
   /* ---------- PostMessage handler ---------- */
   useEffect(() => {
@@ -2496,6 +2682,7 @@ export default function DiagramEditor() {
                   if (hideRelationLabelsRef.current) {
                     setRelationLabelsHidden(iframeRef.current, true);
                   }
+                  setDrawioReady(true);
                 }
               }, 200);
             } else if (attempt < 50) {
@@ -2720,9 +2907,94 @@ export default function DiagramEditor() {
     };
   }, []);
 
+  /** Attribute catalogue for whatever card types are on the canvas — the same
+   *  builder the Layered Dependency View's picker uses. */
+  const labelFieldCatalog = useMemo(
+    () => buildFieldCatalog(fsTypes, new Set(activeTypeKeys)),
+    [fsTypes, activeTypeKeys],
+  );
+  const labelFieldMetaByKey = useMemo(
+    () => new Map(labelFieldCatalog.map((f) => [f.key, f] as const)),
+    [labelFieldCatalog],
+  );
+
+  /** Turn one card into the detail rows its shape should show, honouring the
+   *  diagram's `cardLabels` settings. Shared shape with the Layered Dependency
+   *  View: same catalogue, same formatter, same `MAX_CARD_LINES` budget. */
+  const buildDetailLines = useCallback(
+    (card: Card, catalog: Map<string, ReturnType<typeof buildFieldCatalog>[number]>) => {
+      const lines: CardDetailLine[] = [];
+      if (cardLabels.showType) {
+        const tp = fsTypesRef.current.find((t2) => t2.key === card.type);
+        lines.push({
+          label: t("common:cardDisplay.cardTypeLine"),
+          value: tp ? typeLabel(tp) : card.type,
+        });
+      }
+      if (cardLabels.showSubtype && card.subtype) {
+        lines.push({
+          label: t("common:cardDisplay.subtypeLine"),
+          value: subtypeLabel(card.type, card.subtype),
+        });
+      }
+      for (const key of cardLabels.fields) {
+        if (lines.length >= MAX_CARD_LINES) break;
+        const meta = catalog.get(key);
+        const value = formatFieldValue(card.attributes?.[key], meta, {
+          optionLabel,
+          yes: t("common:labels.yes"),
+          no: t("common:labels.no"),
+        });
+        if (value === EMPTY_VALUE) continue;
+        lines.push({ label: meta ? fieldLabel(meta) : key, value });
+      }
+      return lines.slice(0, MAX_CARD_LINES);
+    },
+    [cardLabels, t, typeLabel, subtypeLabel, optionLabel, fieldLabel],
+  );
+
+  detailLinesForCardRef.current = (card: Card) =>
+    hasCardLabelLines(cardLabels) ? buildDetailLines(card, labelFieldMetaByKey) : [];
+
+  const buildLinesByCardId = useCallback(
+    (cards: Card[]) => {
+      const out = new Map<string, CardDetailLine[]>();
+      if (!hasCardLabelLines(cardLabels)) return out;
+      for (const c of cards) out.set(c.id, buildDetailLines(c, labelFieldMetaByKey));
+      return out;
+    },
+    [cardLabels, buildDetailLines, labelFieldMetaByKey],
+  );
+
+  /** Fetch the canvas cards and re-render their labels only — used by the
+   *  card-type (no colour perspective) branch, which has no fetch of its own. */
+  const refreshCardLabels = useCallback(
+    async (frame: HTMLIFrameElement, ids: string[]) => {
+      const params = new URLSearchParams({ ids: ids.join(",") });
+      const resp = await api.get<{ items: Card[] }>(`/cards?${params.toString()}`);
+      applyCardLabels(frame, buildLinesByCardId(resp.items));
+    },
+    [buildLinesByCardId],
+  );
+
+  /** Refresh the set of card types on the canvas — the list both halves of the
+   *  card-display dropdown are built from.
+   *
+   *  Deliberately its own callback rather than a by-product of `applyView`:
+   *  that effect runs when the diagram id lands, which is *before* DrawIO has a
+   *  graph, so its early return left the type list empty and the dropdown's
+   *  attribute rows blank until something happened to re-run it — in practice,
+   *  picking a colour. That made two independent settings feel ordered. */
+  const refreshActiveTypeKeys = useCallback(() => {
+    const snapshot = collectCanvasCards();
+    if (!snapshot) return;
+    setActiveTypeKeys(Array.from(snapshot.types));
+  }, [collectCanvasCards]);
+
   /** Recompute and apply the active view to the canvas. Pulls a batch
    *  card payload via /cards?ids=... so a single round-trip recolors
-   *  every cell. */
+   *  every cell AND re-renders its detail lines — deliberately one fetch,
+   *  not two, since both need the same full card records. */
   const applyView = useCallback(async () => {
     const frame = iframeRef.current;
     if (!frame) return;
@@ -2730,49 +3002,100 @@ export default function DiagramEditor() {
     if (!snapshot) return;
     setActiveTypeKeys(Array.from(snapshot.types));
 
+    const colorByType = new Map(
+      fsTypesRef.current.map((tp) => [tp.key, tp.color] as const),
+    );
+    const restore = { colorByType, fallback: "#999" };
+
     if (view.kind === "card_type") {
-      // Reset to per-type colours, then drop the legend.
-      const colorByType = new Map(
-        fsTypesRef.current.map((tp) => [tp.key, tp.color] as const),
-      );
-      const touched = resetViewColors(frame, colorByType, "#999");
-      setViewLegendEntries([]);
-      setViewAppliedCount(touched);
+      // Nothing to fetch: hand every view-managed cell back to its base colour.
+      const { restored } = applyViewToGraph(frame, new Map(), restore);
+      setViewLegendSections([]);
+      setViewAppliedCount(restored);
+      if (snapshot.ids.length > 0 && hasCardLabelLines(cardLabels)) {
+        await refreshCardLabels(frame, snapshot.ids);
+      } else {
+        applyCardLabels(frame, new Map());
+      }
       return;
     }
 
+    const colorMap = buildColorMap(view, fsTypesRef.current, viewResolvers);
+    const described = describeView(view, fsTypesRef.current, viewResolvers);
+
     if (snapshot.ids.length === 0) {
-      setViewLegendEntries(Array.from(buildColorMap(view, fsTypesRef.current).values()));
+      setViewLegendSections(
+        described.sections.map((sec) => ({
+          key: sec.key,
+          title: sec.title,
+          entries: [],
+        })),
+      );
       setViewAppliedCount(0);
       return;
     }
 
     try {
-      const params = new URLSearchParams({ ids: snapshot.ids.join(",") });
-      const resp = await api.get<{ items: Card[] }>(`/cards?${params.toString()}`);
-      const cardById = new Map(resp.items.map((c) => [c.id, c] as const));
-      const colorMap = buildColorMap(view, fsTypesRef.current);
-      const colorByCardId = new Map<string, string>();
-      let coverable = 0;
-      for (const id of snapshot.ids) {
-        const c = cardById.get(id);
-        if (!c) continue;
-        const value = extractCardValue(view, c);
-        if (value == null) continue;
-        const entry = colorMap.get(value);
-        if (!entry) continue;
-        colorByCardId.set(id, entry.color);
-        coverable += 1;
-      }
-      const touched = applyViewToGraph(frame, colorByCardId, "#cbd5e1");
-      setViewLegendEntries(Array.from(colorMap.values()));
-      // Show how many cells the user can see colored vs total — helps debug
-      // when a field isn't populated on most cards.
-      setViewAppliedCount(coverable > 0 ? coverable : touched);
+      await viewReq.run(async ({ signal, isCurrent }) => {
+        const params = new URLSearchParams({ ids: snapshot.ids.join(",") });
+        const resp = await api.get<{ items: Card[] }>(`/cards?${params.toString()}`, { signal });
+        // Nothing above this line touched the graph. A rejected fetch must not
+        // leave the canvas half-reset while the toolbar advertises new rules —
+        // and the 5s autosave would snapshot exactly that.
+        if (!isCurrent()) return;
+
+        const cardById = new Map(resp.items.map((c) => [c.id, c] as const));
+        const colorByCardId = new Map<string, string>();
+        const seenKeys = new Set<string>();
+        let coloured = 0;
+        for (const id of snapshot.ids) {
+          const c = cardById.get(id);
+          if (!c) continue;
+          const key = colorKeyForCard(view, c);
+          if (key == null) continue; // no rule covers this card — leave it alone
+          const entry = colorMap.get(key);
+          if (!entry) continue;
+          colorByCardId.set(id, entry.color);
+          seenKeys.add(key);
+          if (entry.value !== NO_VALUE) coloured += 1;
+        }
+
+        if (!isCurrent()) return;
+        const { painted } = applyViewToGraph(frame, colorByCardId, restore);
+        applyCardLabels(frame, buildLinesByCardId(resp.items));
+
+        // One legend section per rule. The "no value" swatch only appears where
+        // a card on this canvas actually has no value — a permanent grey swatch
+        // in every section would be noise.
+        setViewLegendSections(
+          described.sections.map((sec) => ({
+            key: sec.key,
+            title: sec.title,
+            entries: Array.from(colorMap.values()).filter(
+              (e) =>
+                e.typeKey === sec.typeKey &&
+                e.fieldKey === sec.fieldKey &&
+                (e.value !== NO_VALUE || seenKeys.has(e.key)),
+            ),
+          })),
+        );
+        // Cells a rule actually coloured — not "cells touched", which used to
+        // report the number greyed out whenever nothing matched.
+        setViewAppliedCount(coloured > 0 ? coloured : painted);
+      });
     } catch {
       setSnackMsg(t("editor.errors.applyViewFailed"));
     }
-  }, [view, collectCanvasCards, t]);
+  }, [
+    view,
+    cardLabels,
+    collectCanvasCards,
+    buildLinesByCardId,
+    refreshCardLabels,
+    viewResolvers,
+    viewReq,
+    t,
+  ]);
 
   // Overflow ("More") menu for occasional / migration actions that don't
   // warrant a permanent toolbar button.
@@ -2820,12 +3143,11 @@ export default function DiagramEditor() {
   // view pass — including its `/cards?ids=` round-trip — after every single save
   // (discussion #905). Synced-cell additions still re-apply via the
   // syncOpen / refreshSyncPanel hooks.
-  const diagramId = diagram?.id;
   useEffect(() => {
     if (!diagramId) return;
     void applyView();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diagramId, view]);
+  }, [diagramId, view, cardLabels]);
 
   /* ---------- Restore banner: replace the XML with the locally-saved draft ---------- */
   const acceptRestore = useCallback(() => {
@@ -2996,11 +3318,22 @@ export default function DiagramEditor() {
         </Menu>
 
         {/* View perspective dropdown (Phase 5) */}
-        <ViewSelector
+        {/* Two settings, two buttons. Per-type colour rules make that list one
+            row per field per card type, so sharing a menu meant scrolling past
+            every colour option to reach the display fields. */}
+        <ColorBySelector
+          onOpen={refreshActiveTypeKeys}
           activeTypeKeys={activeTypeKeys}
           types={fsTypes}
           current={view}
           onChange={setView}
+        />
+        <ShowOnCardSelector
+          onOpen={refreshActiveTypeKeys}
+          activeTypeKeys={activeTypeKeys}
+          types={fsTypes}
+          labels={cardLabels}
+          onChange={setCardLabels}
         />
 
         {/* Sync button — louder when there are unsynced changes so users
@@ -3009,39 +3342,52 @@ export default function DiagramEditor() {
           title={
             totalPending > 0
               ? t("editor.toolbar.syncTooltipPending", { count: totalPending })
-              : t("editor.toolbar.syncTooltip")
+              : staleItems.length > 0
+                ? t("editor.toolbar.syncTooltipStale", {
+                    count: staleItems.length,
+                  })
+                : t("editor.toolbar.syncTooltip")
           }
         >
-          <Button
-            size="small"
-            variant={totalPending > 0 ? "contained" : "outlined"}
-            color={totalPending > 0 ? "warning" : "inherit"}
-            startIcon={
-              <MaterialSymbol
-                icon={totalPending > 0 ? "warning" : "sync"}
-                size={18}
-              />
-            }
-            onClick={() => setSyncOpen(true)}
-            sx={{
-              textTransform: "none",
-              minWidth: 0,
-              px: 1.5,
-              py: 0.25,
-              fontSize: "0.8rem",
-              fontWeight: totalPending > 0 ? 700 : 500,
-              animation:
-                totalPending > 0 ? "turboea-pulse 1.6s ease-in-out infinite" : "none",
-              "@keyframes turboea-pulse": {
-                "0%,100%": { boxShadow: "0 0 0 0 rgba(237,108,2,0.5)" },
-                "50%": { boxShadow: "0 0 0 6px rgba(237,108,2,0)" },
-              },
-            }}
+          {/* Info badge = pull-side inventory changes awaiting review;
+              deliberately NOT folded into totalPending, which drives the
+              push-side warning styling and the beforeunload guard. */}
+          <Badge
+            badgeContent={staleItems.length}
+            color="info"
+            overlap="rectangular"
           >
-            {totalPending > 0
-              ? t("editor.toolbar.unsyncedCount", { count: totalPending })
-              : t("editor.toolbar.sync")}
-          </Button>
+            <Button
+              size="small"
+              variant={totalPending > 0 ? "contained" : "outlined"}
+              color={totalPending > 0 ? "warning" : "inherit"}
+              startIcon={
+                <MaterialSymbol
+                  icon={totalPending > 0 ? "warning" : "sync"}
+                  size={18}
+                />
+              }
+              onClick={() => setSyncOpen(true)}
+              sx={{
+                textTransform: "none",
+                minWidth: 0,
+                px: 1.5,
+                py: 0.25,
+                fontSize: "0.8rem",
+                fontWeight: totalPending > 0 ? 700 : 500,
+                animation:
+                  totalPending > 0 ? "turboea-pulse 1.6s ease-in-out infinite" : "none",
+                "@keyframes turboea-pulse": {
+                  "0%,100%": { boxShadow: "0 0 0 0 rgba(237,108,2,0.5)" },
+                  "50%": { boxShadow: "0 0 0 6px rgba(237,108,2,0)" },
+                },
+              }}
+            >
+              {totalPending > 0
+                ? t("editor.toolbar.unsyncedCount", { count: totalPending })
+                : t("editor.toolbar.sync")}
+            </Button>
+          </Badge>
         </Tooltip>
       </Box>
 
@@ -3083,20 +3429,9 @@ export default function DiagramEditor() {
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
             title={t("editor.title")}
           />
-          {view.kind !== "card_type" && (
+          {viewLegendSections.length > 0 && (
             <DiagramViewLegend
-              title={
-                view.kind === "approval_status"
-                  ? t("viewSelector.approvalStatus")
-                  : (() => {
-                      const tp = fsTypes.find((x) => x.key === view.type_key);
-                      const f = (tp?.fields_schema ?? [])
-                        .flatMap((s) => s.fields ?? [])
-                        .find((x) => x.key === view.field_key);
-                      return tp && f ? `${tp.label} · ${f.label}` : t("viewSelector.cardType");
-                    })()
-              }
-              entries={viewLegendEntries}
+              sections={viewLegendSections}
               appliedCount={viewAppliedCount}
               onReset={() => setView({ kind: "card_type" })}
             />
@@ -3158,6 +3493,10 @@ export default function DiagramEditor() {
         onSyncParentChange={handleSyncParentChange}
         onDiscardParentChange={handleDiscardParentChange}
         onAcceptStale={handleAcceptStale}
+        onRemoveStaleCard={handleRemoveStaleCard}
+        onRemoveStaleEdge={handleRemoveStaleEdge}
+        onAcceptStaleFlow={handleAcceptStaleFlow}
+        onAcceptAllStale={handleAcceptAllStale}
         onCheckUpdates={handleCheckUpdates}
         checkingUpdates={checkingUpdates}
       />

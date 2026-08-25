@@ -8,18 +8,36 @@ A página de **Tarefas** centraliza todos os itens de trabalho pendentes em um �
 
 Tarefas são itens atribuídos a você ou criados por você. Elas podem estar vinculadas a cards específicos ou serem independentes.
 
-### Filtragem
+### Filtragem, busca e ordenação
 
-Use as abas de status para filtrar:
+**Chips de origem** — Cada tarefa carrega uma origem: de onde ela veio. Quando sua lista mistura tarefas de mais de uma origem, chips de filtro aparecem acima dela — clique em um chip para mostrar apenas as tarefas daquela origem (clique em vários para combiná-los); cada chip exibe uma contagem em tempo real. As origens são:
+
+- **Tarefa de projeto** — Sincronizada do quadro de tarefas de uma iniciativa PPM
+- **Risco** — Atribuições como responsável por risco e ciclos recorrentes de tarefas de mitigação do Registro de Riscos do GRC
+- **ADR** / **SoAW** — Solicitações de assinatura em decisões de arquitetura e Statements of Architecture Work
+- **Aprovação de processo** — Revisões de fluxo de processo aguardando sua análise (BPM)
+- **Extensão** — Criada por uma extensão instalada
+- **Manual** — Criada à mão, em um card ou de forma independente
+
+Cada linha também carrega um ícone de origem e uma faixa de destaque codificados por cor, de modo que listas mistas se leem num relance. Uma tarefa que uma extensão conectora espelhou em um rastreador externo (Jira, GitLab, …) mantém sua origem real e mostra a referência externa (por exemplo, *KAN-6*) como um pequeno link — o espelhamento é apenas para referência, e a tarefa é sempre concluída no Turbo EA.
+
+**Visão agrupada** — Por padrão, a lista é segmentada em uma seção recolhível por origem, em uma ordem fixa. Cada cabeçalho de seção mostra o ícone da origem, o número de tarefas e — quando algumas estão atrasadas — um contador vermelho, de modo que uma seção recolhida continua sinalizando urgência. Clique em um cabeçalho para recolhê-la ou expandi-la; as seções recolhidas são lembradas. O alternador **Agrupar por origem** / **Lista simples** ao lado do controle de ordenação muda para uma única lista plana (útil para triar por data de vencimento em todas as origens); essa escolha também é lembrada. Uma lista em que todas as tarefas compartilham a mesma origem é exibida plana automaticamente.
+
+**Status** — Use o seletor de status para filtrar:
 
 - **Abertas** — Tarefas ainda pendentes ou em andamento
 - **Em breve** — Ocorrências futuras agendadas de tarefas recorrentes ainda não vencidas
 - **Concluídas** — Tarefas completadas
 - **Todas** — Tudo
 
+**Ordenação** — Ordene por data de vencimento (as mais urgentes primeiro), as mais recentes primeiro, ou por origem. Sua escolha é lembrada.
+
+**Busca** — A caixa de busca filtra instantaneamente pelo texto da tarefa, pelo card vinculado e pelos nomes de quem atribuiu e do responsável.
+
 ### Gerenciando Tarefas
 
 - **Alternância rápida** — Clique na caixa de seleção para marcar uma tarefa como concluída (ou reabri-la)
+- **Quem atribuiu** — Na aba *Atribuídas a mim*, cada tarefa mostra um chip **De:** com o nome da pessoa que a atribuiu; em *Criadas por mim* o chip nomeia o responsável em vez disso
 - **Link do card** — Se uma tarefa está vinculada a um card, clique no nome do card para navegar até sua página de detalhe
 - **Tarefas do sistema** — Algumas tarefas são geradas automaticamente pelo sistema (ex.: "Responder pesquisa para Card X"). Estas incluem um link direto para a ação relevante
 

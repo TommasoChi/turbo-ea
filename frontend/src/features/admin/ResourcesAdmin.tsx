@@ -17,8 +17,7 @@ import { Link as RouterLink } from "react-router";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, GridApi, ICellRendererParams, SortChangedEvent } from "ag-grid-community";
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
+import { gridThemeDark, gridThemeLight } from "@/lib/agGridSetup";
 import Alert from "@mui/material/Alert";
 import AlertTitle from "@mui/material/AlertTitle";
 import Box from "@mui/material/Box";
@@ -43,6 +42,12 @@ import { api } from "@/api/client";
 import BulkSelectionBar, { BulkSelectionAction } from "@/components/BulkSelectionBar";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useColumnFreeze } from "@/components/grid/useColumnFreeze";
+import { useColumnOrder } from "@/components/grid/useColumnOrder";
+import { colIdOf, isOrderableColumn } from "@/components/grid/columnOrder";
+import type { ColumnOrderItem } from "@/components/grid/ColumnOrderSection";
+import { useCellContextMenu } from "@/components/grid/useCellContextMenu";
+import { useFacetColumnSync } from "@/components/grid/useFacetColumnSync";
+import { arrayFacetBinding, type FacetBinding } from "@/components/grid/facetColumnSync";
 import { hasPermission } from "@/components/RequirePermission";
 import { useAuthContext } from "@/hooks/AuthContext";
 import { useDateFormat } from "@/hooks/useDateFormat";
@@ -85,6 +90,8 @@ interface ResourcePrefs {
   visibleColumns: string[];
   /** colIds frozen to the leading edge via the header pin. */
   frozenColumns: string[];
+  /** colId order, owned by `useColumnOrder` (header drag + Columns tab). */
+  columnOrder: string[];
   pageSize: number;
   statsExpanded: boolean;
 }
@@ -95,6 +102,7 @@ function loadPrefs(): ResourcePrefs {
     sidebarWidth: 280,
     visibleColumns: ALL_COLUMN_IDS,
     frozenColumns: [],
+    columnOrder: [],
     pageSize: DEFAULT_PAGE_SIZE,
     statsExpanded: false,
   };
@@ -121,6 +129,11 @@ function loadPrefs(): ResourcePrefs {
             (id): id is string => typeof id === "string" && ALL_COLUMN_IDS.includes(id),
           )
         : [],
+      columnOrder: Array.isArray(parsed.columnOrder)
+        ? parsed.columnOrder.filter(
+            (id): id is string => typeof id === "string" && ALL_COLUMN_IDS.includes(id),
+          )
+        : [],
       pageSize:
         typeof parsed.pageSize === "number" &&
         (PAGE_SIZE_OPTIONS as readonly number[]).includes(parsed.pageSize)
@@ -143,6 +156,82 @@ function savePrefs(p: ResourcePrefs) {
 
 /** Rows come from two tables, so the id alone is not unique. */
 const rowKey = (r: { kind: string; id: string }) => `${r.kind}:${r.id}`;
+
+/**
+ * Cell-menu "Show matching" bindings onto the sidebar's server-side facets
+ * (see components/grid/useFacetColumnSync). This grid has no client column
+ * filters, so every binding is facet-only — the filter is applied by
+ * re-querying, which is what makes it correct beyond the loaded page.
+ *
+ * Unbound: `size` / `created_at` (no facet), `url` (no facet), `actions`.
+ * Exported for tests.
+ */
+export function buildResourceFacetBindings(
+  filtersRef: { current: ResourceFilters },
+  setFilters: (updater: (prev: ResourceFilters) => ResourceFilters) => void,
+): Record<string, FacetBinding<RepositoryResource>> {
+  /** A multi-select facet holding raw cell values. */
+  const many = (
+    read: (f: ResourceFilters) => string[],
+    write: (f: ResourceFilters, values: string[]) => ResourceFilters,
+  ): FacetBinding<RepositoryResource> =>
+    arrayFacetBinding<RepositoryResource>({
+      get: () => read(filtersRef.current),
+      set: (values) => setFilters((prev) => write(prev, values)),
+      columnFilter: false,
+    });
+
+  return {
+    kind: many(
+      (f) => f.kinds,
+      (f, v) => ({ ...f, kinds: v as ResourceKind[] }),
+    ),
+    card_type: many(
+      (f) => f.cardTypes,
+      (f, v) => ({ ...f, cardTypes: v }),
+    ),
+    category: many(
+      (f) => f.categories,
+      (f, v) => ({ ...f, categories: v }),
+    ),
+    mime_type: many(
+      (f) => f.mimeTypes,
+      (f, v) => ({ ...f, mimeTypes: v }),
+    ),
+    // The remaining three facets are single-valued, so they take the first
+    // (only) value the menu ever sets and clear on an empty list.
+    creator_name: {
+      // The facet keys on the uploader's id; the cell shows their name.
+      toFacetValue: (ctx) => ctx.data?.created_by ?? null,
+      getValues: () => (filtersRef.current.createdBy ? [filtersRef.current.createdBy] : []),
+      setValues: (values) => setFilters((prev) => ({ ...prev, createdBy: values[0] ?? "" })),
+      columnFilter: false,
+    },
+    name: {
+      toFacetValue: (ctx) => ctx.data?.name || null,
+      getValues: () => (filtersRef.current.search ? [filtersRef.current.search] : []),
+      setValues: (values) => setFilters((prev) => ({ ...prev, search: values[0] ?? "" })),
+      columnFilter: false,
+    },
+    card_name: {
+      toFacetValue: (ctx) => ctx.data?.card_id ?? null,
+      getValues: () => (filtersRef.current.card ? [filtersRef.current.card.id] : []),
+      // The facet stores a whole CardOption, so build it from the clicked row.
+      setValues: (values, ctx) =>
+        setFilters((prev) => ({
+          ...prev,
+          card: values[0]
+            ? {
+                id: values[0],
+                name: ctx.data?.card_name ?? "",
+                type: ctx.data?.card_type ?? "",
+              }
+            : null,
+        })),
+      columnFilter: false,
+    },
+  };
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // Component
@@ -186,6 +275,18 @@ export default function ResourcesAdmin() {
     frozen: frozenColumns,
     onFrozenChange: setFrozenColumns,
   });
+  const [columnOrderIds, setColumnOrderIds] = useState<string[]>(initialPrefs.columnOrder);
+  // Column order — from the Columns tab's drag handles and from dragging a
+  // column header, which both land here.
+  const columnOrder = useColumnOrder<RepositoryResource>(gridApiRef, {
+    order: columnOrderIds,
+    onOrderChange: setColumnOrderIds,
+  });
+  // One drag can move a column *and* pin it; capture both at drag end.
+  const handleDragStopped = useCallback(() => {
+    columnOrder.syncFromGrid();
+    columnFreeze.syncFrozenFromGrid();
+  }, [columnOrder, columnFreeze]);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(initialPrefs.pageSize);
@@ -205,6 +306,7 @@ export default function ResourcesAdmin() {
       sidebarWidth,
       visibleColumns: Array.from(visibleColumns),
       frozenColumns,
+      columnOrder: columnOrderIds,
       pageSize,
       statsExpanded,
     });
@@ -213,6 +315,7 @@ export default function ResourcesAdmin() {
     sidebarWidth,
     visibleColumns,
     frozenColumns,
+    columnOrderIds,
     pageSize,
     statsExpanded,
   ]);
@@ -415,6 +518,28 @@ export default function ResourcesAdmin() {
     [columnFreeze.headerComponentParams],
   );
 
+  // Cell menu, Copy only: this grid's filtering is server-side (sidebar
+  // facets + pagination), so a client column filter would silently no-op —
+  // filter items are disabled rather than offered and broken.
+  // …but "Show matching" still works, by driving the sidebar's own
+  // server-side facets instead: every binding is `columnFilter: false`, so
+  // the filter is applied by re-querying (correct across all pages) and is
+  // visible — and clearable — in the panel. "Filter out" stays unavailable:
+  // neither the sidebar nor `GET /resources` can express negation.
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const facetBindings = useMemo(() => buildResourceFacetBindings(filtersRef, setFilters), []);
+  const facetSync = useFacetColumnSync<RepositoryResource>(gridApiRef, {
+    bindings: facetBindings,
+    facetState: filters,
+  });
+
+  const cellMenu = useCellContextMenu<RepositoryResource>(gridApiRef, {
+    enableFilterItems: false,
+    excludeColumns: (colId) => colId === "actions",
+    facetSync: facetSync.cellMenu,
+  });
+
   const columnDefs: ColDef<RepositoryResource>[] = useMemo(
     () => [
       {
@@ -600,14 +725,29 @@ export default function ResourcesAdmin() {
 
   const visibleColumnDefs = useMemo(
     () =>
-      columnFreeze.applyFrozen(
-        columnDefs.map((c) => ({
-          ...c,
-          hide: !visibleColumns.has((c.colId ?? c.field) as string),
-        })),
+      columnOrder.applyOrder(
+        columnFreeze.applyFrozen(
+          columnDefs.map((c) => ({
+            ...c,
+            hide: !visibleColumns.has((c.colId ?? c.field) as string),
+          })),
+        ),
       ),
-    [columnDefs, visibleColumns, columnFreeze],
+    [columnDefs, visibleColumns, columnFreeze, columnOrder],
   );
+
+  // Feeds the Columns tab's "Column order" section: only the columns actually
+  // on screen, built from the grid's own defs so the ids can never drift.
+  const columnOrderItems = useMemo<ColumnOrderItem[]>(() => {
+    const meta = new Map(RESOURCE_GRID_COLUMNS.map((c) => [c.id, c]));
+    return visibleColumnDefs
+      .filter((c) => !c.hide && isOrderableColumn(c))
+      .map((c) => {
+        const id = colIdOf(c);
+        const col = meta.get(id);
+        return { colId: id, label: col ? t(col.labelKey) : id, icon: col?.icon };
+      });
+  }, [visibleColumnDefs, t]);
 
   const rowSelection = useMemo(
     () =>
@@ -709,6 +849,10 @@ export default function ResourcesAdmin() {
           onToggleFrozen={columnFreeze.toggleFrozen}
           onVisibleColumnsChange={setVisibleColumns}
           onResetColumns={resetVisibleColumns}
+          columnOrderItems={columnOrderItems}
+          columnOrder={columnOrder.orderedIds}
+          onColumnOrderChange={setColumnOrderIds}
+          onResetColumnOrder={columnOrder.resetOrder}
           cardTypeOptions={cardTypeOptions}
           categoryOptions={categoryOptions}
           creatorOptions={creators}
@@ -767,10 +911,11 @@ export default function ResourcesAdmin() {
 
           <Box
             ref={columnFreeze.containerRef}
-            className={mode === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}
-            sx={{ flex: 1, width: "100%", minHeight: 0, ...columnFreeze.sx }}
+            {...cellMenu.containerProps}
+            sx={{ flex: 1, width: "100%", minHeight: 0, ...columnFreeze.sx, ...cellMenu.sx }}
           >
             <AgGridReact<RepositoryResource>
+              theme={mode === "dark" ? gridThemeDark : gridThemeLight}
               key={isRtl ? "rtl" : "ltr"}
               enableRtl={isRtl}
               rowData={rows}
@@ -788,8 +933,11 @@ export default function ResourcesAdmin() {
               }}
               onSelectionChanged={(e) => setSelected(e.api.getSelectedRows())}
               onSortChanged={handleSortChanged}
+              onDragStopped={handleDragStopped}
+              {...cellMenu.gridProps}
             />
           </Box>
+          {cellMenu.menu}
 
           {total > pageSize && (
             <Stack direction="row" justifyContent="center" sx={{ mt: 1.5 }}>

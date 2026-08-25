@@ -40,14 +40,27 @@ import CreateCardDialog from "@/components/CreateCardDialog";
 import CardPicker, { type CardOption } from "@/components/CardPicker";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import InventoryFilterSidebar, {
+  APPROVAL_STATUS_OPTIONS,
   CORE_COLUMN_KEYS,
+  LIFECYCLE_PHASES,
   LOCKED_COLUMN_KEYS,
   EMPTY_VALUE,
+  normalizeRelationFilterKeys,
+  normalizeSelectAttributeFilters,
   valueIsEmpty,
   tagsToFilterText,
   type Filters,
 } from "./InventoryFilterSidebar";
+import { type GroupAxis, type GroupedRow } from "@/components/grid/rowGrouping";
+import { GroupByMenuButton, useRowGrouping } from "@/components/grid/useRowGrouping";
 import ImportDialog from "./ImportDialog";
+import {
+  bandColor,
+  bandOf,
+  DATA_QUALITY_BANDS,
+  isDataQualityBand,
+  normalizeDataQualityFilter,
+} from "@/lib/dataQualityBands";
 import { exportToExcel, exportCurrentViewToExcel } from "./excelExport";
 import { dateColumnFilterDef } from "@/lib/dateColumnFilter";
 import RelationCellPopover from "./RelationCellPopover";
@@ -59,18 +72,39 @@ import { useAuth } from "@/hooks/useAuth";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import { useIsRtl } from "@/hooks/useIsRtl";
 import { useDateFormat } from "@/hooks/useDateFormat";
+import { useCurrency } from "@/hooks/useCurrency";
+import { FieldEditor } from "@/features/cards/sections/cardDetailUtils";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { api, ApiError, isAbortError } from "@/api/client";
 import { APPROVAL_STATUS_COLORS } from "@/theme/tokens";
 import TagPicker from "@/components/TagPicker";
 import { useColumnFreeze } from "@/components/grid/useColumnFreeze";
+import { useColumnOrder } from "@/components/grid/useColumnOrder";
+import { colIdOf, isOrderableColumn } from "@/components/grid/columnOrder";
+import type { ColumnOrderItem } from "@/components/grid/ColumnOrderSection";
+import {
+  useCellContextMenu,
+  MAX_SPLIT_VALUES,
+  type CellMenuContext,
+  type CellPickTarget,
+  type CellSplitValue,
+} from "@/components/grid/useCellContextMenu";
+import { useFacetColumnSync } from "@/components/grid/useFacetColumnSync";
+import type { FacetBinding } from "@/components/grid/facetColumnSync";
+import { useDragFill } from "@/components/grid/useDragFill";
+import type {
+  FillFailure,
+  FillOutcome,
+  FillRequest,
+} from "@/components/grid/useDragFill";
+import { cloneFillValue, runWithConcurrency } from "@/components/grid/dragFill";
 import TagsCellEditor from "@/features/inventory/TagsCellEditor";
+import MultiSelectCellEditor from "@/features/inventory/MultiSelectCellEditor";
 import ParentCellEditor from "@/features/inventory/ParentCellEditor";
 import StakeholdersCellEditor from "@/features/inventory/StakeholdersCellEditor";
-import type { Card, CardListResponse, ColumnLayoutItem, FieldDef, Relation, RelationType, StakeholderRef, StakeholderRoleOption, TagGroup, TagRef } from "@/types";
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
+import type { Card, CardListResponse, CardType, ColumnLayoutItem, FieldDef, FieldOption, RelatedCardRef, Relation, RelationType, StakeholderRef, StakeholderRoleOption, TagGroup, TagRef } from "@/types";
+import { gridThemeDark, gridThemeLight } from "@/lib/agGridSetup";
 
 const DEFAULT_SIDEBAR_WIDTH = 300;
 
@@ -227,30 +261,394 @@ function buildDescendantIndex(items: Card[]): Map<string, string[]> {
 }
 
 /**
- * Build a lookup: for each relation type, map cardId → array of related names.
- * When the selected type is the source, we index by source_id and show target names.
- * When the selected type is the target, we index by target_id and show source names.
+ * Build a lookup: for each relation type, map cardId → array of related cards.
+ * When the selected type is the source, we index by source_id and show targets.
+ * When the selected type is the target, we index by target_id and show sources.
+ *
+ * The far end's **id** is kept, not just its name: the cell text needs the
+ * name, but the context menu's Preview action needs to open the card, and
+ * resolving a name back to an id is ambiguous the moment two cards share one.
  */
 function buildRelationIndex(
   relations: Relation[],
   relationType: RelationType,
   selectedType: string
-): Map<string, string[]> {
-  const index = new Map<string, string[]>();
+): Map<string, RelatedCardRef[]> {
+  const index = new Map<string, RelatedCardRef[]>();
   const isSource = relationType.source_type_key === selectedType;
 
   for (const rel of relations) {
     const myId = isSource ? rel.source_id : rel.target_id;
-    const otherName = isSource ? rel.target?.name : rel.source?.name;
-    if (!otherName) continue;
+    const other = isSource ? rel.target : rel.source;
+    if (!other?.name || !other.id) continue;
+    const ref: RelatedCardRef = { id: other.id, name: other.name, type: other.type };
     const existing = index.get(myId);
     if (existing) {
-      existing.push(otherName);
+      existing.push(ref);
     } else {
-      index.set(myId, [otherName]);
+      index.set(myId, [ref]);
     }
   }
   return index;
+}
+
+/** An inventory grid row: a card, or a member clone marked as group header. */
+type InventoryRow = GroupedRow<Card>;
+
+/** True when the URL carries filter state (a deep-link) — it then wins over
+ * the persisted prefs for both the sidebar filters and the group-by axis. */
+function urlHasFilterParams(searchParams: URLSearchParams): boolean {
+  return (
+    searchParams.has("type") ||
+    searchParams.has("search") ||
+    searchParams.has("approval_status") ||
+    searchParams.has("show_archived") ||
+    searchParams.has("mine") ||
+    searchParams.has("tag") ||
+    searchParams.has("dq") ||
+    searchParams.has("orphaned") ||
+    searchParams.has("stale") ||
+    Array.from(searchParams.keys()).some((k) => k.startsWith("attr_") || k.startsWith("rel_"))
+  );
+}
+
+/** How many chips a multi-valued cell shows before collapsing into "+N". */
+const CHIP_CELL_MAX = 3;
+
+/**
+ * The cards a right-clicked cell names, offered as the context menu's Preview
+ * action:
+ *
+ *   core_name    → the row's own card
+ *   core_parent  → its immediate parent
+ *   rel_<type>   → every related card behind the cell
+ *
+ * Every other column names none: `core_path` is a joined ancestor chain rather
+ * than one card, and the stakeholder columns name *users*.
+ *
+ * Related cards come back in the same order and with the same cap the cell
+ * text and the menu's per-value filter stage use, so the three can't disagree
+ * about which cards a cell holds. Deduplication is by **id**, so two related
+ * cards that happen to share a name yield two identically labelled items —
+ * they are two different cards, and dropping one would preview an arbitrary
+ * pick. Exported for tests.
+ */
+export function inventoryPreviewTargets(
+  ctx: CellMenuContext<InventoryRow>,
+  deps: {
+    relatedRefsOf: (cardId: string | undefined, otherTypeKey: string) => RelatedCardRef[];
+    /** Metamodel lookup — a row wears its card type's icon and colour. */
+    typeGlyph: (typeKey: string) => { icon?: string; color?: string };
+    locale: string;
+  },
+): CellPickTarget[] {
+  const card = ctx.data;
+  if (!card?.id) return [];
+  const target = (key: string, label: string, typeKey: string): CellPickTarget => ({
+    key,
+    label,
+    ...deps.typeGlyph(typeKey),
+  });
+
+  if (ctx.colId === "core_name") {
+    return [target(card.id, card.name, card.type)];
+  }
+  if (ctx.colId === "core_parent") {
+    // The column's valueFormatter already resolved the parent to a name, so
+    // displayValue is the label. A parent outside the loaded page resolves to
+    // "" — offer nothing rather than a nameless item. A hierarchy parent is
+    // always the same card type as its child.
+    if (!card.parent_id || !ctx.displayValue) return [];
+    return [target(card.parent_id, ctx.displayValue, card.type)];
+  }
+  if (ctx.colId.startsWith("rel_")) {
+    const otherTypeKey = ctx.colId.slice("rel_".length);
+    const seen = new Set<string>();
+    const unique: RelatedCardRef[] = [];
+    for (const ref of deps.relatedRefsOf(card.id, otherTypeKey)) {
+      if (seen.has(ref.id)) continue;
+      seen.add(ref.id);
+      unique.push(ref);
+    }
+    return unique
+      .sort((a, b) => a.name.localeCompare(b.name, deps.locale, { sensitivity: "base" }))
+      .slice(0, MAX_SPLIT_VALUES)
+      .map((ref) => target(ref.id, ref.name, ref.type || otherTypeKey));
+  }
+  return [];
+}
+
+/**
+ * A multi-valued grid cell, rendered as compact chips with a "+N" overflow.
+ *
+ * Grid rows are one line tall, so a cell cannot use the full-size chips a form
+ * uses — they clip, and a card with six values pushes the row's content out of
+ * view. The tags column solved that; multi-select attribute columns rendered
+ * their own full-size chips and looked like a different product next to it.
+ * One renderer now serves both so they cannot drift again.
+ *
+ * The cap is visual only: the column's `valueFormatter` still emits every
+ * value, so export, the column filter and the cell context menu all see the
+ * full list, and the native tooltip surfaces what the "+N" hides.
+ */
+function ChipListCell({ items }: { items: { key: string; label: string; color?: string }[] }) {
+  if (items.length === 0) return null;
+  const visible = items.slice(0, CHIP_CELL_MAX);
+  const overflow = items.length - visible.length;
+  const chipSx = { height: 16, fontSize: 11, "& .MuiChip-label": { px: 0.75 } };
+  return (
+    <Box
+      title={items.map((it) => it.label).join(", ")}
+      sx={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 0.25,
+        rowGap: "2px",
+        alignItems: "center",
+        lineHeight: 1,
+      }}
+    >
+      {visible.map((it) => (
+        <Chip
+          key={it.key}
+          label={it.label}
+          size="small"
+          sx={{ ...chipSx, ...(it.color ? { bgcolor: it.color, color: "#fff" } : {}) }}
+        />
+      ))}
+      {overflow > 0 && <Chip label={`+${overflow}`} size="small" variant="outlined" sx={chipSx} />}
+    </Box>
+  );
+}
+
+/**
+ * A multi-select attribute cell's stored value → chip items.
+ *
+ * Values are option keys; a key the metamodel no longer declares still renders
+ * as its raw text rather than vanishing, so a stale or hand-written value stays
+ * visible and fixable.
+ */
+function optionChipItems(
+  options: FieldOption[] | undefined,
+  value: unknown,
+  optLabel: (opt: FieldOption) => string,
+): { key: string; label: string; color?: string }[] {
+  const arr = Array.isArray(value) ? value : [];
+  return arr.map((v) => {
+    const opt = options?.find((o) => o.key === v);
+    return { key: String(v), label: opt ? optLabel(opt) : String(v), color: opt?.color };
+  });
+}
+
+/**
+ * The value an attribute write should persist: an empty *shape* clears the
+ * field, but `false` and `0` are real values a user deliberately chose.
+ *
+ * The mass-edit path used to write `massEditValue || null`, which wiped a
+ * boolean set to false and a number set to 0, and stored an emptied
+ * multi-select as `[]` — which the backend's mandatory-field gate reads as
+ * empty while its scorer read as filled (#940). Exported for tests.
+ */
+export function normalizeAttrValue(value: unknown): unknown {
+  return valueIsEmpty(value) ? null : value;
+}
+
+/**
+ * How many fill writes run at once. The browser's own per-host connection cap
+ * is around six; going wider just queues in the socket pool while making the
+ * progress bar lie about how far along the fill really is.
+ */
+const FILL_CONCURRENCY = 6;
+
+/**
+ * Which columns offer a drag-fill handle in grid-edit mode. Exported for tests.
+ *
+ * Everything else is gated by AG Grid's own `editable`, which the hook already
+ * consults — so the readonly attributes, the Parent column outside a single
+ * hierarchical type, and the stakeholder columns without the manage permission
+ * need no special case here. Two exclusions are ours:
+ *
+ *  - **Name** is the card's identity. Copying one name down a column produces
+ *    duplicates that the backend rejects on sibling-name uniqueness for every
+ *    hierarchical type, so the affordance would be an invitation to fail.
+ *  - **Relation columns** are driven by a popover, not an AG Grid editor;
+ *    they carry no `editable` and no `field` to write through.
+ */
+export function isInventoryFillable(colId: string, colDef: { field?: string }): boolean {
+  if (colId === "core_name") return false;
+  if (colId.startsWith("rel_")) return false;
+  // AG Grid's own selection / controls column, and anything with no field to
+  // persist through (Path, Data Quality, …).
+  if (colId.startsWith("ag-Grid-")) return false;
+  return Boolean(colDef.field);
+}
+
+/**
+ * The value `persistCellValue` should treat as a target row's *current* value
+ * during a fill.
+ *
+ * Tags and stakeholders persist as a diff, and the fill semantic is "make this
+ * row's set equal the source's set" — which only comes out right when the diff
+ * runs against each target's own set rather than the source's.
+ */
+export function currentFieldValue(card: Card, field: string): unknown {
+  if (field === "tags") return card.tags ?? [];
+  if (field.startsWith("stakeholder_")) {
+    const role = field.slice("stakeholder_".length);
+    return (card.stakeholders ?? []).filter((s) => s.role === role);
+  }
+  if (field.startsWith("attr_")) return (card.attributes ?? {})[field.slice("attr_".length)];
+  if (field === "parent_id") return card.parent_id ?? null;
+  return (card as unknown as Record<string, unknown>)[field];
+}
+
+/**
+ * Split a multi-valued cell into its values for the context menu's per-value
+ * filter stage. Separators follow what each column's valueGetter/formatter
+ * joins with: tags and multi-select attributes use ", ", relation and
+ * stakeholder columns use "; ". Multi-select attribute cells display option
+ * labels but filter on raw keys, so labels come from the display text and
+ * filters from the raw array value. Exported for tests.
+ */
+export function splitInventoryCellValues(
+  ctx: CellMenuContext<InventoryRow>,
+): CellSplitValue[] | null {
+  if (ctx.colId.startsWith("attr_")) {
+    if (!Array.isArray(ctx.filterValue)) return null;
+    const labels = ctx.displayValue ? ctx.displayValue.split(", ") : [];
+    return ctx.filterValue.map((key, i) => ({
+      label: labels[i] ?? String(key),
+      filter: String(key),
+    }));
+  }
+  const sep =
+    ctx.colId === "core_tags"
+      ? ", "
+      : ctx.colId.startsWith("rel_") || ctx.colId.startsWith("stakeholder_")
+        ? "; "
+        : null;
+  if (!sep || !ctx.displayValue) return null;
+  return ctx.displayValue
+    .split(sep)
+    .filter(Boolean)
+    .map((v) => ({ label: v, filter: v }));
+}
+
+/**
+ * Facet bindings for the cell menu's "Show matching" (see
+ * components/grid/useFacetColumnSync). Only columns whose sidebar facet has
+ * the SAME semantics as an equals filter are bound:
+ *
+ *  - not bound: name/reference/path/parent/description/status/metadata (no
+ *    facet), tags / relations / stakeholders / multi-select attributes
+ *    (multi-valued), and text / number / cost / date attributes — the sidebar
+ *    matches those with *contains* / *minimum*, so mirroring an equals cell
+ *    into them would silently change what the filter means.
+ *
+ *  - data quality is bound but `columnFilter: false`: the cell is a score and
+ *    the facet is the band containing it, so the facet can mirror the cell
+ *    while an equals filter on "85" could not.
+ *
+ * Exported for tests.
+ */
+export function buildInventoryFacetBindings(
+  filtersRef: { current: Filters },
+  setFilters: (updater: (prev: Filters) => Filters) => void,
+  typeConfig: CardType | undefined,
+): Record<string, FacetBinding<InventoryRow>> {
+  const asArray = (v: string | string[] | undefined): string[] =>
+    Array.isArray(v) ? v : v ? [v] : [];
+  /** A raw cell value → facet value, treating blanks as the sidebar's "(empty)". */
+  const orEmpty = (ctx: CellMenuContext<InventoryRow>): string =>
+    ctx.filterValue === null || ctx.filterValue === undefined || ctx.filterValue === ""
+      ? EMPTY_VALUE
+      : String(ctx.filterValue);
+  const nonBlank = (ctx: CellMenuContext<InventoryRow>): string | null =>
+    ctx.filterValue === null || ctx.filterValue === undefined || ctx.filterValue === ""
+      ? null
+      : String(ctx.filterValue);
+
+  const bindings: Record<string, FacetBinding<InventoryRow>> = {
+    core_type: {
+      // Facet-only. The type facet is a *server-side* query param, so the
+      // fetched rows are already just that type and an equals column filter
+      // adds nothing; and selecting a type rebuilds the whole column set
+      // (attribute/relation columns are per-type), which re-runs the model
+      // restore and would strand the mirrored entry.
+      columnFilter: false,
+      toFacetValue: nonBlank,
+      getValues: () => filtersRef.current.types,
+      setValues: (values) =>
+        setFilters((prev) => {
+          const next = values[0] ?? null;
+          if (prev.types.length === (next ? 1 : 0) && (!next || prev.types[0] === next)) {
+            return prev;
+          }
+          // Selecting a type hides the subtype/attribute/relation facets of
+          // the previous one — leaving them set would keep filtering by an
+          // invisible criterion (issue #686), so reset them exactly as
+          // `filtersAfterTypeToggle` does.
+          return { ...prev, types: next ? [next] : [], subtypes: [], attributes: {}, relations: {} };
+        }),
+    },
+    core_subtype: {
+      toFacetValue: orEmpty,
+      getValues: () => filtersRef.current.subtypes,
+      setValues: (values) => setFilters((prev) => ({ ...prev, subtypes: values })),
+    },
+    core_lifecycle: {
+      toFacetValue: orEmpty,
+      getValues: () => filtersRef.current.lifecyclePhases,
+      setValues: (values) => setFilters((prev) => ({ ...prev, lifecyclePhases: values })),
+    },
+    core_approval_status: {
+      // The Approval Status facet has no "(empty)" option — a blank cell
+      // falls back to a plain blank column filter.
+      toFacetValue: nonBlank,
+      getValues: () => filtersRef.current.approvalStatuses,
+      setValues: (values) => setFilters((prev) => ({ ...prev, approvalStatuses: values })),
+    },
+    core_data_quality: {
+      // Facet-only. `filterKind` for this column resolves to "text", so a
+      // mirrored equals filter would narrow the grid to the one exact score
+      // while the facet header says "Complete (≥80%)".
+      columnFilter: false,
+      toFacetValue: (ctx) => {
+        const score = Number(ctx.filterValue);
+        return Number.isNaN(score) ? null : bandOf(score);
+      },
+      getValues: () => filtersRef.current.dataQualityBands,
+      setValues: (values) =>
+        setFilters((prev) => ({
+          ...prev,
+          dataQualityBands: values.filter(isDataQualityBand),
+        })),
+    },
+  };
+
+  // Attribute columns exist only while a single type is selected — exactly
+  // when the sidebar shows that type's Attributes section.
+  for (const section of typeConfig?.fields_schema ?? []) {
+    for (const field of section.fields) {
+      if (field.type !== "single_select" && field.type !== "boolean") continue;
+      const colId = `attr_${field.key}`;
+      const isBoolean = field.type === "boolean";
+      bindings[colId] = {
+        toFacetValue: isBoolean ? nonBlank : orEmpty,
+        getValues: () => asArray(filtersRef.current.attributes[field.key]),
+        setValues: (values) =>
+          setFilters((prev) => {
+            const attributes = { ...prev.attributes };
+            if (values.length === 0) delete attributes[field.key];
+            // Boolean facets are scalar ("true"/"false"); selects are arrays.
+            else attributes[field.key] = isBoolean ? values[0] : values;
+            return { ...prev, attributes };
+          }),
+      };
+    }
+  }
+
+  return bindings;
 }
 
 /* ---- localStorage persistence helpers ---- */
@@ -259,9 +657,15 @@ const LS_KEY = "turboea_inventory";
 interface InventoryPrefs {
   filters?: Filters;
   columns?: string[];
-  // AG Grid column layout (order/width/pinning), captured via getColumnState().
-  // Visibility still flows from `columns` → `selectedColumns` → colDef `hide`.
+  // AG Grid column layout, captured via getColumnState(). It owns **width and
+  // sort only** — visibility flows from `columns` → `selectedColumns`, freezing
+  // from `frozenColumns` and order from `columnOrder`, all via colDefs.
   columnState?: ColumnLayoutItem[];
+  // colId order. Owned separately from `columnState` for the same reason
+  // `frozenColumns` is: the layout's restore stops re-applying the moment the
+  // user first rearranges a column, which is not a window an order can depend
+  // on. A colDef carries its position from the first render it appears in.
+  columnOrder?: string[];
   // Frozen colIds. Owned separately from `columnState` because the layout's
   // restore only runs until the user first rearranges a column, which is not
   // a window a freeze can depend on.
@@ -275,6 +679,9 @@ interface InventoryPrefs {
   // flag, existing users would suddenly stop seeing the Tags column once
   // it became togglable.
   coreTagsMerged?: boolean;
+  // Active group-by axis in wire format ("subtype" | "lifecycle" |
+  // "approval_status" | "attr_<fieldKey>"), or null for no grouping.
+  groupBy?: string | null;
 }
 
 function loadPrefs(): InventoryPrefs | null {
@@ -295,7 +702,7 @@ function savePrefs(prefs: InventoryPrefs) {
 }
 
 export default function InventoryPage() {
-  const { t } = useTranslation(["inventory", "common"]);
+  const { t, i18n } = useTranslation(["inventory", "common"]);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { formatDate, formatDateTime } = useDateFormat();
@@ -314,6 +721,7 @@ export default function InventoryPage() {
   const canOdataBookmarks = !!(user?.permissions?.["*"] || user?.permissions?.["bookmarks.odata"]);
   const canViewCostsGlobally = !!(user?.permissions?.["*"] || user?.permissions?.["costs.view"]);
   const canManageStakeholders = !!(user?.permissions?.["*"] || user?.permissions?.["stakeholders.manage"]);
+  const { symbol: currencySymbol } = useCurrency();
   const gridRef = useRef<AgGridReact>(null);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -339,30 +747,36 @@ export default function InventoryPage() {
 
   const [filters, setFilters] = useState<Filters>(() => {
     // URL params take precedence over localStorage
-    const hasUrlParams = searchParams.has("type") || searchParams.has("search") ||
-      searchParams.has("approval_status") || searchParams.has("show_archived") ||
-      searchParams.has("mine") ||
-      Array.from(searchParams.keys()).some((k) => k.startsWith("attr_"));
-
-    if (hasUrlParams) {
-      const attributes: Record<string, string> = {};
-      searchParams.forEach((value, key) => {
+    if (urlHasFilterParams(searchParams)) {
+      // attr_/rel_ params may repeat (a report carrying multi-value filters):
+      // one value stays scalar for attr_ (the select-normalization effect
+      // below promotes it once the field types are known), several land as
+      // an array. rel_<relTypeKey>=<related card name> is name-based to
+      // match the sidebar's relation filter values.
+      const attributes: Record<string, string | string[]> = {};
+      const relations: Record<string, string[]> = {};
+      for (const key of new Set(searchParams.keys())) {
         if (key.startsWith("attr_")) {
-          attributes[key.slice(5)] = value;
+          const values = searchParams.getAll(key);
+          attributes[key.slice(5)] = values.length > 1 ? values : values[0];
+        } else if (key.startsWith("rel_")) {
+          relations[key.slice(4)] = searchParams.getAll(key);
         }
-      });
+      }
       return {
         types: searchParams.get("type") ? [searchParams.get("type")!] : [],
         search: searchParams.get("search") || "",
         subtypes: [],
         lifecyclePhases: [],
-        dataQualityMin: null,
+        dataQualityBands: searchParams.getAll("dq").filter(isDataQualityBand),
         approvalStatuses: searchParams.get("approval_status") ? [searchParams.get("approval_status")!] : [],
         showArchived: searchParams.get("show_archived") === "true",
         attributes,
-        relations: {},
-        tagIds: [],
+        relations,
+        tagIds: searchParams.getAll("tag"),
         mineScope: searchParams.get("mine") === "stakeholder" ? "stakeholder" : null,
+        orphanedOnly: searchParams.get("orphaned") === "true",
+        staleOnly: searchParams.get("stale") === "true",
       };
     }
 
@@ -374,13 +788,16 @@ export default function InventoryPage() {
         search: saved.filters.search || "",
         subtypes: saved.filters.subtypes || [],
         lifecyclePhases: saved.filters.lifecyclePhases || [],
-        dataQualityMin: saved.filters.dataQualityMin ?? null,
+        // Prefs written before bands existed carry a `dataQualityMin`.
+        dataQualityBands: normalizeDataQualityFilter(saved.filters),
         approvalStatuses: saved.filters.approvalStatuses || [],
         showArchived: saved.filters.showArchived || false,
         attributes: saved.filters.attributes || {},
         relations: saved.filters.relations || {},
         tagIds: saved.filters.tagIds || [],
         mineScope: saved.filters.mineScope ?? null,
+        orphanedOnly: saved.filters.orphanedOnly || false,
+        staleOnly: saved.filters.staleOnly || false,
       };
     }
 
@@ -389,19 +806,44 @@ export default function InventoryPage() {
       search: "",
       subtypes: [],
       lifecyclePhases: [],
-      dataQualityMin: null,
+      dataQualityBands: [],
       approvalStatuses: [],
       showArchived: false,
       attributes: {},
       relations: {},
       tagIds: [],
       mineScope: null,
+      orphanedOnly: false,
+      staleOnly: false,
     };
   });
+  // Current filters, readable from the facet bindings' stable callbacks
+  // without rebuilding them on every filter change.
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
 
   // Sort model for AG Grid persistence
   const [sortModel, setSortModel] = useState<{ colId: string; sort: string }[]>(
     () => savedPrefsRef.current?.sortModel || [],
+  );
+
+  // --- Group-by (collapsible group headers, discussion #933) -----------------
+  // Axis key string (see the groupAxes memo). URL wins so deep-links land
+  // grouped; ?group_by= alone deliberately does NOT count as "URL params
+  // present" for the filters above — sharing a grouped link must not wipe the
+  // recipient's saved filters. But when the URL DOES carry filter params (a
+  // "View in inventory" deep-link), the saved group-by must not apply either:
+  // landing on the "Invest" slice still grouped by a stale axis reads as two
+  // filters fighting each other (#933 follow-up).
+  const [groupBy, setGroupBy] = useState<string | null>(() => {
+    const fromUrl = searchParams.get("group_by");
+    if (fromUrl) return fromUrl;
+    return urlHasFilterParams(searchParams) ? null : (savedPrefsRef.current?.groupBy ?? null);
+  });
+  // ?expand_group=<key> — the report group the user clicked. Consumed once by
+  // the grouping hook: that group lands expanded, all others collapsed.
+  const initialFocusGroupRef = useRef(
+    searchParams.get("group_by") ? searchParams.get("expand_group") : null,
   );
 
   const [data, setData] = useState<Card[]>([]);
@@ -414,8 +856,8 @@ export default function InventoryPage() {
   // Card-detail side panel: opened from the eye icon in the Name column.
   const [previewCardId, setPreviewCardId] = useState<string | null>(null);
 
-  // Relations data: relTypeKey → Map<cardId, relatedNames[]>
-  const [relationsMap, setRelationsMap] = useState<Map<string, Map<string, string[]>>>(new Map());
+  // Relations data: relTypeKey → Map<cardId, relatedCards[]>
+  const [relationsMap, setRelationsMap] = useState<Map<string, Map<string, RelatedCardRef[]>>>(new Map());
 
   // Tag groups (for filter + column rendering)
   const [tagGroups, setTagGroups] = useState<TagGroup[]>([]);
@@ -493,6 +935,15 @@ export default function InventoryPage() {
         .filter((c) => c.pinned === "left" && c.colId)
         .map((c) => c.colId),
   );
+  // colId order. Seeded from the order of a layout saved before ordering had
+  // its own pref, so an existing user's arrangement carries over.
+  const [columnOrder, setColumnOrder] = useState<string[]>(
+    () =>
+      savedPrefsRef.current?.columnOrder ??
+      (savedPrefsRef.current?.columnState ?? [])
+        .map((c) => c.colId)
+        .filter((id): id is string => !!id),
+  );
   // Mirror of the latest columnState for the apply effect (which keys on
   // columnDefs, not columnState, to avoid re-applying on every capture).
   const columnStateRef = useRef(columnState);
@@ -520,6 +971,9 @@ export default function InventoryPage() {
     setFrozenColumns(
       (layout ?? []).filter((c) => c.pinned === "left" && c.colId).map((c) => c.colId),
     );
+    // A view's order rides in its layout's array positions; hand it to
+    // `columnOrder`, which is what actually drives the grid.
+    setColumnOrder((layout ?? []).map((c) => c.colId).filter((id): id is string => !!id));
     setLayoutNonce((n) => n + 1);
   }, []);
 
@@ -534,6 +988,16 @@ export default function InventoryPage() {
   const columnFreeze = useColumnFreeze(gridRef, {
     frozen: frozenColumns,
     onFrozenChange: setFrozenColumns,
+  });
+
+  // --- Column order ---------------------------------------------------------
+  // Same ownership story as `frozenColumns` above: a list of colIds stamped
+  // onto the column defs, not a slice of the layout snapshot. This is also why
+  // `maintainColumnOrder` is deliberately absent from the grid below — it makes
+  // AG Grid ignore a colDefs order, which would make the pref invisible.
+  const gridColumnOrder = useColumnOrder(gridRef, {
+    order: columnOrder,
+    onOrderChange: setColumnOrder,
   });
 
   // --- Column filters (AG Grid filter model) --------------------------------
@@ -552,11 +1016,19 @@ export default function InventoryPage() {
   const applyingFilterRef = useRef(false);
   const [filterNonce, setFilterNonce] = useState(0);
 
+  // Set below, once useFacetColumnSync exists — applyColumnFilters is defined
+  // before it and only needs to *call* the reset.
+  const resetFacetRegistryRef = useRef<() => void>(() => {});
+
   // Apply a filter model (or clear with null). Used by the toolbar Clear button,
   // the sidebar "Clear all", and applying a saved view. Updates state/ref and
   // bumps the nonce; the restore effect performs the actual setFilterModel.
   const applyColumnFilters = useCallback((model: Record<string, unknown> | null) => {
     const next = model ?? {};
+    // Every model here is authored wholesale (view apply / clear-all), so no
+    // menu-created mirror survives it. Dropping the provenance first stops the
+    // facet-prune from racing the apply and deleting the incoming model.
+    resetFacetRegistryRef.current();
     columnFilterModelRef.current = next;
     setColumnFilterModel(next);
     setFilterNonce((n) => n + 1);
@@ -625,6 +1097,76 @@ export default function InventoryPage() {
   // Derive the single selected type for column rendering (only when exactly one type selected)
   const selectedType = filters.types.length === 1 ? filters.types[0] : "";
   const typeConfig = types.find((t) => t.key === selectedType);
+
+  // URL deep-links seed attribute filters as scalar strings (the URL block
+  // above runs before the metamodel loads, so it can't know which fields are
+  // selects). Once the type's schema is known, promote scalars on select
+  // fields to arrays so the sidebar highlights the filtered value and the
+  // matcher compares option keys exactly (#933 follow-up).
+  useEffect(() => {
+    if (!typeConfig) return;
+    const fields = typeConfig.fields_schema.flatMap((s) => s.fields);
+    setFilters((prev) => {
+      const attributes = normalizeSelectAttributeFilters(prev.attributes, fields);
+      return attributes === prev.attributes ? prev : { ...prev, attributes };
+    });
+  }, [typeConfig]);
+
+  // Axes offered by the Group-by picker (consumed by useRowGrouping, which
+  // resolves an unknown/stale axis key to "no grouping"). Lifecycle and
+  // approval status work for any type mix; subtype and single-select
+  // attributes follow the same single-selected-type rule as their columns.
+  const groupAxes = useMemo<GroupAxis<Card>[]>(() => {
+    const axes: GroupAxis<Card>[] = [];
+    if (typeConfig?.subtypes?.length) {
+      axes.push({
+        key: "subtype",
+        label: t("common:labels.subtype"),
+        groupKeyOf: (c) => c.subtype,
+        vocab: typeConfig.subtypes.map((st) => ({ key: st.key, label: stLabel(st) })),
+      });
+    }
+    axes.push({
+      key: "lifecycle",
+      label: t("columns.lifecycle"),
+      groupKeyOf: (c) => getLifecyclePhase(c),
+      vocab: LIFECYCLE_PHASES.map((p) => ({ key: p.key, label: t(p.tKey), color: p.color })),
+    });
+    axes.push({
+      key: "approval_status",
+      label: t("columns.approvalStatus"),
+      groupKeyOf: (c) => c.approval_status,
+      vocab: APPROVAL_STATUS_OPTIONS.map((o) => ({ key: o.key, label: t(o.tKey), color: o.color })),
+    });
+    // Every card has a score, so this axis works for any type mix — and it is
+    // what the Data Quality report's "View in inventory" deep-link lands on.
+    axes.push({
+      key: "data_quality",
+      label: t("columns.dataQuality"),
+      groupKeyOf: (c) => bandOf(c.data_quality),
+      vocab: DATA_QUALITY_BANDS.map((b) => ({ key: b.key, label: t(b.tKey), color: b.color })),
+    });
+    if (typeConfig) {
+      for (const section of typeConfig.fields_schema) {
+        for (const f of section.fields) {
+          if (f.type === "single_select" && f.options?.length) {
+            axes.push({
+              key: `attr_${f.key}`,
+              label: fieldLabel(f),
+              groupKeyOf: (c) => {
+                const value = (c.attributes || {})[f.key];
+                if (valueIsEmpty(value)) return null;
+                // single_select stores a scalar; tolerate a stray array value.
+                return Array.isArray(value) ? String(value[0]) : String(value);
+              },
+              vocab: f.options.map((o) => ({ key: o.key, label: optLabel(o), color: o.color })),
+            });
+          }
+        }
+      }
+    }
+    return axes;
+  }, [typeConfig, stLabel, optLabel, fieldLabel, t]);
 
   // Load the selected type's stakeholder roles (per-role columns follow the
   // same single-type rule as attribute/relation columns).
@@ -716,6 +1258,20 @@ export default function InventoryPage() {
     return map;
   }, [selectedType, relationTypes, visibleTypeKeys]);
 
+  // Deep links seed relation filters keyed by the RELATED CARD TYPE
+  // (`rel_Provider=Altium`) because the report thinks in related types, but
+  // the inventory's relation filters are keyed by relation-type key
+  // everywhere. Translate once the metamodel is known — an untranslated key
+  // matches nothing and silently empties the grid (#933 follow-up).
+  useEffect(() => {
+    if (!selectedType || relationTypes.length === 0) return;
+    const relTypeKeys = new Set(relationTypes.map((rt) => rt.key));
+    setFilters((prev) => {
+      const relations = normalizeRelationFilterKeys(prev.relations, relTypeKeys, relTypeGroupMap);
+      return relations === prev.relations ? prev : { ...prev, relations };
+    });
+  }, [selectedType, relationTypes, relTypeGroupMap]);
+
   // Compute the "default" set of columns: all core columns + all attribute +
   // all relation columns checked. The core keys (type, name, path, etc.) used
   // to be unconditionally rendered; they're now togglable, so include them in
@@ -761,12 +1317,23 @@ export default function InventoryPage() {
       filters,
       columns: Array.from(selectedColumns),
       columnState,
+      columnOrder,
       frozenColumns,
       columnFilterModel,
       sortModel,
       coreTagsMerged: true,
+      groupBy,
     });
-  }, [filters, selectedColumns, sortModel, columnState, frozenColumns, columnFilterModel]);
+  }, [
+    filters,
+    selectedColumns,
+    sortModel,
+    columnState,
+    columnOrder,
+    frozenColumns,
+    columnFilterModel,
+    groupBy,
+  ]);
 
   // Free-text search is debounced; every other filter stays instant. Typing
   // "SAP ERP" used to fire seven whole-repository requests, one per keystroke.
@@ -795,6 +1362,14 @@ export default function InventoryPage() {
         if (filters.mineScope) {
           params.set("mine", filters.mineScope);
         }
+        // Server-evaluated, unlike the other facets: "orphaned" needs the
+        // whole relation graph, which the client never holds.
+        if (filters.orphanedOnly) {
+          params.set("orphaned", "true");
+        }
+        if (filters.staleOnly) {
+          params.set("stale", "true");
+        }
         params.set("page_size", "10000");
         const res = await api.get<CardListResponse>(`/cards?${params}`, { signal });
         if (!isCurrent()) return; // superseded — the newer request owns the grid
@@ -817,6 +1392,8 @@ export default function InventoryPage() {
     filters.approvalStatuses,
     filters.showArchived,
     filters.mineScope,
+    filters.orphanedOnly,
+    filters.staleOnly,
   ]);
 
   useEffect(() => {
@@ -831,6 +1408,28 @@ export default function InventoryPage() {
     }
     return keys;
   }, [relTypeGroupMap]);
+
+  /**
+   * Every card behind one relation cell, merged across the relation types
+   * that connect the selected type to `otherTypeKey` (a relation column is
+   * keyed by the *other end's type*, so several relation types can feed it).
+   *
+   * The cell's valueGetter and the context menu's Preview list both go
+   * through here: they used to be two separate merges, which is exactly how a
+   * cell's text and its menu drift apart.
+   */
+  const relatedRefsOf = useCallback(
+    (cardId: string | undefined, otherTypeKey: string): RelatedCardRef[] => {
+      if (!cardId) return [];
+      const out: RelatedCardRef[] = [];
+      for (const rk of relTypeGroupMap.get(otherTypeKey) ?? []) {
+        const refs = relationsMap.get(rk)?.get(cardId);
+        if (refs) out.push(...refs);
+      }
+      return out;
+    },
+    [relTypeGroupMap, relationsMap],
+  );
 
   // True while the relation request is in flight. Relation cells render a
   // placeholder instead of looking empty — an empty cell is indistinguishable
@@ -883,7 +1482,7 @@ export default function InventoryPage() {
         if (bucket) bucket.push(rel);
         else byType.set(rel.type, [rel]);
       }
-      const newMap = new Map<string, Map<string, string[]>>();
+      const newMap = new Map<string, Map<string, RelatedCardRef[]>>();
       for (const key of allRelTypeKeys) {
         const rt = relationTypes.find((r) => r.key === key);
         if (!rt) continue;
@@ -938,15 +1537,10 @@ export default function InventoryPage() {
       result = result.filter((card) => filters.lifecyclePhases.includes(getLifecyclePhase(card) || EMPTY_VALUE));
     }
 
-    // Data quality filter
-    if (filters.dataQualityMin !== null) {
-      const min = filters.dataQualityMin;
-      if (min === 0) {
-        // "Poor" = below 50
-        result = result.filter((card) => (card.data_quality ?? 0) < 50);
-      } else {
-        result = result.filter((card) => (card.data_quality ?? 0) >= min);
-      }
+    // Data quality filter — disjoint bands, OR'd (see dataQualityBands.ts)
+    if (filters.dataQualityBands.length > 0) {
+      const bands = filters.dataQualityBands;
+      result = result.filter((card) => bands.includes(bandOf(card.data_quality)));
     }
 
     // Attribute filters (client-side) — supports different field types
@@ -964,6 +1558,9 @@ export default function InventoryPage() {
             if (Array.isArray(actual)) return actual.some((a) => val.includes(a as string));
             return val.includes(actual as string);
           }
+          // "(empty)" as a scalar — URL deep-links seed scalar values, and the
+          // report's "Not set" group links land here as attr_<key>=__empty__.
+          if (val === EMPTY_VALUE) return valueIsEmpty(actual);
           // number/cost: filter as minimum value
           if (!isNaN(Number(val)) && val !== "" && typeof actual === "number") {
             return actual >= Number(val);
@@ -989,11 +1586,13 @@ export default function InventoryPage() {
         return relEntries.every(([relTypeKey, selectedNames]) => {
           if (!Array.isArray(selectedNames) || selectedNames.length === 0) return true;
           const index = relationsMap.get(relTypeKey);
-          const names = index?.get(card.id);
+          const refs = index?.get(card.id);
           const wantEmpty = selectedNames.includes(EMPTY_VALUE);
           // No related cards of this type → only matches when "(empty)" is selected.
-          if (!names || names.length === 0) return wantEmpty;
-          return selectedNames.some((n) => n !== EMPTY_VALUE && names.includes(n));
+          if (!refs || refs.length === 0) return wantEmpty;
+          return selectedNames.some(
+            (n) => n !== EMPTY_VALUE && refs.some((r) => r.name === n),
+          );
         });
       });
     }
@@ -1051,72 +1650,233 @@ export default function InventoryPage() {
     }
 
     return result;
-  }, [data, filters.types, filters.subtypes, filters.lifecyclePhases, filters.dataQualityMin, filters.attributes, filters.relations, filters.tagIds, relationsMap, tagGroups]);
+  }, [data, filters.types, filters.subtypes, filters.lifecyclePhases, filters.dataQualityBands, filters.attributes, filters.relations, filters.tagIds, relationsMap, tagGroups]);
+
+  // --- Grouped row data (shared hook — see components/grid/useRowGrouping) ---
+  const grouping = useRowGrouping<Card>(gridRef, {
+    rows: filteredData,
+    axes: groupAxes,
+    groupBy,
+    initialFocusGroup: initialFocusGroupRef.current,
+  });
+
+  // Sidebar-facet mirroring: "Show matching" on a facet-backed column also
+  // selects the value in the filter panel, so the sidebar, the grid's column
+  // filter, and a saved view built from both can never disagree.
+  const facetBindings = useMemo(
+    () => buildInventoryFacetBindings(filtersRef, setFilters, typeConfig),
+    [typeConfig],
+  );
+  const facetSync = useFacetColumnSync<InventoryRow>(gridRef, {
+    bindings: facetBindings,
+    facetState: filters,
+  });
+  resetFacetRegistryRef.current = facetSync.resetRegistry;
+
+  // Right-click / long-press cell menu (Show matching, Filter out, …).
+  // Suppressed in grid-edit mode so it never fights the cell editors; filters
+  // land in the grid's column filter model, which handleFilterChanged already
+  // persists to localStorage and saved views.
+  //
+  // Preview: on any cell that names a card, open it in the side panel without
+  // leaving the grid. A cell naming several cards lists them in a pick stage,
+  // exactly as Show matching does for a multi-valued cell.
+  const previewTargets = useCallback(
+    (ctx: CellMenuContext<InventoryRow>): CellPickTarget[] =>
+      inventoryPreviewTargets(ctx, {
+        relatedRefsOf,
+        typeGlyph: (typeKey) => {
+          const ct = types.find((ty) => ty.key === typeKey);
+          return { icon: ct?.icon, color: ct?.color };
+        },
+        locale: i18n.language,
+      }),
+    [relatedRefsOf, types, i18n.language],
+  );
+
+  const cellMenu = useCellContextMenu<InventoryRow>(gridRef, {
+    disabled: () => gridEditMode,
+    suppressForRow: (data) => !!data?.__group,
+    splitValues: splitInventoryCellValues,
+    facetSync: facetSync.cellMenu,
+    pickAction: {
+      icon: "visibility",
+      label: t("actions.previewCard"),
+      targets: previewTargets,
+      onPick: (target) => setPreviewCardId(target.key),
+    },
+  });
+
+  /**
+   * Persist one cell's new value.
+   *
+   * Throws on failure and never reloads — surfacing the error and deciding
+   * whether to re-read is the caller's job, because the two callers want
+   * different things: the inline editor reverts one optimistic cell right
+   * away, while a drag-fill collects every failure and reloads once at the end.
+   *
+   * Returns whether the write needs a reload to be reflected correctly (a
+   * re-parent cascades levels and the Path column down the whole subtree).
+   */
+  const persistCellValue = useCallback(
+    async (
+      card: Card,
+      field: string,
+      newValue: unknown,
+      oldValue: unknown,
+    ): Promise<{ needsReload: boolean }> => {
+      if (field === "name" || field === "description") {
+        await api.patch(`/cards/${card.id}`, { [field]: newValue });
+      } else if (field === "subtype") {
+        await api.patch(`/cards/${card.id}`, { subtype: (newValue as string) || null });
+      } else if (field.startsWith("attr_")) {
+        const key = field.replace("attr_", "");
+        const fieldDef = typeConfig?.fields_schema
+          .flatMap((s) => s.fields)
+          .find((f) => f.key === key);
+        if (fieldDef?.readonly) return { needsReload: false };
+        // Merge onto the card's own attributes. Never PATCH /cards/bulk with an
+        // `attributes` payload — that endpoint replaces the whole JSONB blob
+        // per card and would wipe every other attribute.
+        const attrs = { ...card.attributes, [key]: normalizeAttrValue(newValue) };
+        await api.patch(`/cards/${card.id}`, { attributes: attrs });
+      } else if (field === "parent_id") {
+        await api.patch(`/cards/${card.id}`, { parent_id: (newValue as string | null) ?? null });
+        return { needsReload: true };
+      } else if (field === "tags") {
+        const oldIds = new Set<string>(((oldValue as TagRef[] | undefined) ?? []).map((v) => v.id));
+        const newIds = new Set<string>(((newValue as TagRef[] | undefined) ?? []).map((v) => v.id));
+        const toAdd = [...newIds].filter((id) => !oldIds.has(id));
+        const toRemove = [...oldIds].filter((id) => !newIds.has(id));
+        if (toAdd.length > 0) {
+          await api.post(`/cards/${card.id}/tags`, toAdd);
+        }
+        for (const id of toRemove) {
+          await api.delete(`/cards/${card.id}/tags/${id}`);
+        }
+      } else if (field.startsWith("stakeholder_")) {
+        const role = field.slice("stakeholder_".length);
+        const oldUserIds = new Set(
+          ((oldValue as StakeholderRef[] | undefined) ?? []).map((s) => s.user_id),
+        );
+        const newUserIds = new Set(
+          ((newValue as StakeholderRef[] | undefined) ?? []).map((s) => s.user_id),
+        );
+        const operations = [
+          ...[...newUserIds]
+            .filter((id) => !oldUserIds.has(id))
+            .map((id) => ({ action: "add", card_id: card.id, user_id: id, role })),
+          ...[...oldUserIds]
+            .filter((id) => !newUserIds.has(id))
+            .map((id) => ({ action: "remove", card_id: card.id, user_id: id, role })),
+        ];
+        if (operations.length > 0) {
+          const res = await api.post<{ failed: number }>("/stakeholders/bulk", { operations });
+          // Partial denial (a per-card permission) is reported as a count, not
+          // an error — reload so the row shows what actually stuck.
+          if (res.failed > 0) return { needsReload: true };
+        }
+      }
+      return { needsReload: false };
+    },
+    [typeConfig],
+  );
+
+  /** Fallback message when the server sends no reason of its own. */
+  const cellEditFallback = useCallback(
+    (field: string): string => {
+      if (field === "parent_id") return t("gridEdit.parentFailed");
+      if (field.startsWith("attr_")) return t("gridEdit.attrFailed");
+      return t("gridEdit.saveFailed");
+    },
+    [t],
+  );
 
   const handleCellEdit = async (event: CellValueChangedEvent) => {
     const card = event.data as Card;
     const field = event.colDef.field!;
-    if (field === "name" || field === "description") {
-      await api.patch(`/cards/${card.id}`, { [field]: event.newValue });
-    } else if (field.startsWith("attr_")) {
-      const key = field.replace("attr_", "");
-      const fieldDef = typeConfig?.fields_schema
-        .flatMap((s) => s.fields)
-        .find((f) => f.key === key);
-      if (fieldDef?.readonly) return;
-      const attrs = { ...card.attributes, [key]: event.newValue };
-      await api.patch(`/cards/${card.id}`, { attributes: attrs });
-    } else if (field === "parent_id") {
-      const newParentId = (event.newValue as string | null) ?? null;
-      try {
-        await api.patch(`/cards/${card.id}`, { parent_id: newParentId });
-      } catch (err) {
-        // The server owns the hierarchy rules — a cycle, a name collision under
-        // the new parent, or a capability depth limit all land here. Surface the
-        // reason rather than silently snapping the cell back.
-        setCellEditError(err instanceof Error ? err.message : t("gridEdit.parentFailed"));
-      }
-      // Reload either way: a success cascades levels (and the Path column) down
-      // the subtree, a failure has to revert the optimistic row state.
+    try {
+      const { needsReload } = await persistCellValue(card, field, event.newValue, event.oldValue);
+      if (needsReload) loadData();
+    } catch (err) {
+      // The server owns the rules — a cycle or name collision on a re-parent, a
+      // cleared required attribute, a per-card permission denial. Surface the
+      // reason and reload to revert the optimistic cell value.
+      setCellEditError(err instanceof Error ? err.message : cellEditFallback(field));
       loadData();
-    } else if (field === "tags") {
-      const oldIds = new Set<string>((event.oldValue as TagRef[] | undefined ?? []).map((t) => t.id));
-      const newIds = new Set<string>((event.newValue as TagRef[] | undefined ?? []).map((t) => t.id));
-      const toAdd = [...newIds].filter((id) => !oldIds.has(id));
-      const toRemove = [...oldIds].filter((id) => !newIds.has(id));
-      if (toAdd.length > 0) {
-        await api.post(`/cards/${card.id}/tags`, toAdd);
-      }
-      for (const id of toRemove) {
-        await api.delete(`/cards/${card.id}/tags/${id}`);
-      }
-    } else if (field.startsWith("stakeholder_")) {
-      const role = field.slice("stakeholder_".length);
-      const oldUserIds = new Set(
-        (event.oldValue as StakeholderRef[] | undefined ?? []).map((s) => s.user_id),
-      );
-      const newUserIds = new Set(
-        (event.newValue as StakeholderRef[] | undefined ?? []).map((s) => s.user_id),
-      );
-      const operations = [
-        ...[...newUserIds]
-          .filter((id) => !oldUserIds.has(id))
-          .map((id) => ({ action: "add", card_id: card.id, user_id: id, role })),
-        ...[...oldUserIds]
-          .filter((id) => !newUserIds.has(id))
-          .map((id) => ({ action: "remove", card_id: card.id, user_id: id, role })),
-      ];
-      if (operations.length > 0) {
-        try {
-          const res = await api.post<{ failed: number }>("/stakeholders/bulk", { operations });
-          if (res.failed > 0) loadData();
-        } catch {
-          // Revert the optimistic row state (e.g. a per-card permission denial).
-          loadData();
-        }
-      }
     }
   };
+
+  /**
+   * Apply a drag-fill: write the anchor's value into every covered row.
+   *
+   * Write-then-reload, deliberately: the rows are persisted first and the grid
+   * re-reads once at the end, rather than painting optimistically and rolling
+   * back per row. That keeps the fill clear of the in-place `valueSetter`
+   * mutation trap documented at the top of this file, and means no path here
+   * can fire `onCellValueChanged` — so a filled row is never written twice.
+   * The confirm dialog covers the grid for the whole window, so the brief
+   * staleness is invisible.
+   */
+  const handleGridFill = useCallback(
+    async (
+      request: FillRequest<InventoryRow>,
+      onProgress: (done: number, total: number) => void,
+    ): Promise<FillOutcome> => {
+      const field = request.field;
+      if (!field) return { succeeded: 0, failures: [] };
+      const targets = request.targets.filter((target) => !target.data.__group);
+
+      const results = await runWithConcurrency(
+        targets,
+        FILL_CONCURRENCY,
+        async (target) => {
+          const card = target.data as Card;
+          await persistCellValue(
+            card,
+            field,
+            // A fresh copy per row: the setters mutate in place, so a shared
+            // array would give every filled row the same identity.
+            cloneFillValue(request.value),
+            currentFieldValue(card, field),
+          );
+        },
+        onProgress,
+      );
+
+      const failures: FillFailure[] = [];
+      let succeeded = 0;
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          succeeded++;
+          return;
+        }
+        const card = targets[index].data as Card;
+        failures.push({
+          rowId: targets[index].rowId,
+          label: card.name || card.id,
+          href: `/cards/${card.id}`,
+          message:
+            result.reason instanceof Error ? result.reason.message : cellEditFallback(field),
+        });
+      });
+
+      loadData();
+      return { succeeded, failures };
+    },
+    [persistCellValue, cellEditFallback, loadData],
+  );
+
+  // Excel-style drag-fill, live only in grid-edit mode. Borrows the freeze
+  // hook's wrapper ref and adds no wrapper handlers of its own, so it cannot
+  // contend with the cell menu's long-press (which is disabled here anyway).
+  const dragFill = useDragFill<InventoryRow>(gridRef, {
+    containerRef: columnFreeze.containerRef,
+    enabled: () => gridEditMode,
+    suppressForRow: (data) => !!data?.__group,
+    isFillable: isInventoryFillable,
+    onFill: handleGridFill,
+  });
 
   const handleCreate = async (createData: {
     type: string;
@@ -1133,8 +1893,10 @@ export default function InventoryPage() {
   };
 
   const handleSelectionChanged = useCallback((event: SelectionChangedEvent) => {
-    const rows = event.api.getSelectedRows() as Card[];
-    setSelectedIds(rows.map((r) => r.id));
+    const rows = event.api.getSelectedRows() as InventoryRow[];
+    // Group header rows are unselectable (isRowSelectable), the filter is
+    // belt-and-braces so a header id can never reach the mass-edit endpoints.
+    setSelectedIds(rows.filter((r) => !r.__group).map((r) => r.id));
   }, []);
 
   const handleResetColumns = useCallback(() => {
@@ -1165,7 +1927,11 @@ export default function InventoryPage() {
     if (!api) return;
     restorePendingRef.current = false;
     setColumnState(api.getColumnState() as unknown as ColumnLayoutItem[]);
-  }, []);
+    // The same drag can have moved the column or pinned it; both own their
+    // own pref now, so read them back rather than leaving them to the layout.
+    gridColumnOrder.syncFromGrid();
+    columnFreeze.syncFrozenFromGrid();
+  }, [gridColumnOrder, columnFreeze]);
 
   const handleGridReady = useCallback((_event: GridReadyEvent) => {
     setGridReady(true);
@@ -1181,9 +1947,12 @@ export default function InventoryPage() {
     if (!api) return;
     const model = api.getFilterModel() ?? {};
     setHasColumnFilters(Object.keys(model).length > 0);
+    // Keep the group headers' representative members in sync with the active
+    // column filters (see useRowGrouping).
+    grouping.handleFilterChanged();
     if (applyingFilterRef.current) return;
     setColumnFilterModel(model);
-  }, []);
+  }, [grouping.handleFilterChanged]);
 
   // Keep the item-count pill in sync with the rows AG Grid actually shows.
   // onModelUpdated fires after row data is set and after every filter/sort, so
@@ -1191,8 +1960,23 @@ export default function InventoryPage() {
   const handleModelUpdated = useCallback(() => {
     const api = gridRef.current?.api;
     if (!api) return;
-    setDisplayedRowCount(api.getDisplayedRowCount());
-  }, []);
+    // Count cards, not group header rows. A collapsed group's members are not
+    // in the row model, so its header contributes its member count instead
+    // (collapse and column filters never overlap — see handleFilterChanged).
+    let count = 0;
+    api.forEachNodeAfterFilter((n) => {
+      const d = n.data as InventoryRow | undefined;
+      if (!d) return;
+      if (d.__group) {
+        if (d.__group.collapsed) count += d.__group.count;
+      } else {
+        count++;
+      }
+    });
+    setDisplayedRowCount(count);
+    // Finish an expand-then-select started by a collapsed group's checkbox.
+    grouping.handleModelUpdated();
+  }, [grouping.handleModelUpdated]);
 
   // Export only what's on screen: the displayed columns, in their current
   // left-to-right order, with their displayed headers, and only the rows left
@@ -1231,7 +2015,7 @@ export default function InventoryPage() {
     // not just the rows currently scrolled/paged into view. (Do not switch to
     // getRenderedNodes(), which is viewport-bound.)
     api.forEachNodeAfterFilterAndSort((node) => {
-      if (!node.data) return;
+      if (!node.data || (node.data as InventoryRow).__group) return;
       const row: Record<string, unknown> = {};
       for (const col of displayed) {
         row[col.getColId()] = api.getCellValue({
@@ -1263,9 +2047,21 @@ export default function InventoryPage() {
     [columnFreeze.headerComponentParams],
   );
   const rowSelection = useMemo(() => ({ mode: "multiRow" as const, enableClickSelection: false, headerCheckbox: true, selectAll: "filtered" as const }), []);
-  const getRowId = useCallback((p: { data: Card }) => p.data.id, []);
-  const getRowStyle = useCallback((p: { data?: Card }) => p.data?.status === "ARCHIVED" ? { opacity: 0.6 } : undefined, []);
+  // Header row ids are namespaced by the grouping hook so switching the
+  // group-by can never hand AG Grid a stale row under a reused id.
+  const getRowId = useCallback(
+    (p: { data: InventoryRow }) => grouping.groupRowId(p.data),
+    [grouping.groupRowId],
+  );
+  // Headers are member clones — without the guard an ARCHIVED representative
+  // would dim the whole header row.
+  const getRowStyle = useCallback((p: { data?: InventoryRow }) => {
+    if (p.data?.__group) return undefined;
+    return p.data?.status === "ARCHIVED" ? { opacity: 0.6 } : undefined;
+  }, []);
   const onRowClicked = useCallback((e: RowClickedEvent<Card>) => {
+    // Collapse/expand is handled by the header renderer's own click handler.
+    if ((e.data as InventoryRow | undefined)?.__group) return;
     if (gridEditMode || !e.data || e.event?.defaultPrevented) return;
     // Let the browser handle Ctrl/Cmd/Shift+Click and middle-click — they're
     // intended for "open in new tab/window" via the real anchor in the Name
@@ -1306,6 +2102,9 @@ export default function InventoryPage() {
       for (const section of typeConfig.fields_schema) {
         for (const field of section.fields) {
           if (field.readonly) continue;
+          // Same gate the grid columns and the export use: a user without
+          // costs.view must not be able to overwrite figures they cannot see.
+          if (field.type === "cost" && !canViewCostsGlobally) continue;
           fields.push({
             key: `attr_${field.key}`,
             label: fieldLabel(field),
@@ -1358,7 +2157,7 @@ export default function InventoryPage() {
       }
     }
     return fields;
-  }, [typeConfig, selectedType, relationTypes, visibleTypeKeys, types, t, fieldLabel, relLabel, typeLabel]);
+  }, [typeConfig, selectedType, relationTypes, visibleTypeKeys, types, t, fieldLabel, relLabel, typeLabel, canViewCostsGlobally]);
 
   const currentMassField = massEditableFields.find((f) => f.key === massEditField);
 
@@ -1681,7 +2480,7 @@ export default function InventoryPage() {
             const existing = data.find((d) => d.id === id);
             const attrs = {
               ...(existing?.attributes || {}),
-              [attrKey]: massEditValue || null,
+              [attrKey]: normalizeAttrValue(massEditValue),
             };
             return api.patch(`/cards/${id}`, { attributes: attrs });
           }),
@@ -2040,8 +2839,9 @@ export default function InventoryPage() {
         valueFormatter: (p: { value?: number }) => `${Math.round(p.value || 0)}%`,
         cellRenderer: (p: { value: number }) => {
           const v = Math.round(p.value || 0);
-          const color =
-            v >= 80 ? "#4caf50" : v >= 50 ? "#ff9800" : "#f44336";
+          // Band colour, so the bar agrees with the sidebar chip that filters
+          // it and with the Data Quality report's segments.
+          const color = bandColor(v);
           return (
             <Box
               sx={{
@@ -2091,46 +2891,15 @@ export default function InventoryPage() {
         filterValueGetter: (p: { data?: Card }) => tagsToFilterText(p.data?.tags),
         // Ditto for the export, which stringified the refs to "[object Object]".
         valueFormatter: (p: { value?: TagRef[] }) => tagsToFilterText(p.value),
-        cellRenderer: (p: { value: TagRef[] }) => {
-          const tags = p.value || [];
-          if (tags.length === 0) return "";
-          const visible = tags.slice(0, 3);
-          const overflow = tags.length - visible.length;
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 0.25,
-                rowGap: "2px",
-                alignItems: "center",
-                lineHeight: 1,
-              }}
-            >
-              {visible.map((tag) => (
-                <Chip
-                  key={tag.id}
-                  label={tag.name}
-                  size="small"
-                  sx={{
-                    height: 16,
-                    fontSize: 11,
-                    "& .MuiChip-label": { px: 0.75 },
-                    ...(tag.color ? { bgcolor: tag.color, color: "#fff" } : {}),
-                  }}
-                />
-              ))}
-              {overflow > 0 && (
-                <Chip
-                  label={`+${overflow}`}
-                  size="small"
-                  variant="outlined"
-                  sx={{ height: 16, fontSize: 11, "& .MuiChip-label": { px: 0.75 } }}
-                />
-              )}
-            </Box>
-          );
-        },
+        cellRenderer: (p: { value: TagRef[] }) => (
+          <ChipListCell
+            items={(p.value || []).map((tag) => ({
+              key: tag.id,
+              label: tag.name,
+              color: tag.color,
+            }))}
+          />
+        ),
       }
     );
 
@@ -2210,26 +2979,17 @@ export default function InventoryPage() {
               : {}),
             ...(field.type === "multiple_select" && field.options
               ? {
+                  // Without an editor, inline editing a multi-select cell fell
+                  // back to AG Grid's text input and wrote a raw string into a
+                  // field that holds option keys (#940).
+                  cellEditor: MultiSelectCellEditor,
+                  cellEditorPopup: true,
+                  cellEditorParams: { options: field.options },
                   valueFormatter: (p: { value?: unknown }) =>
                     optionsText(field.options, p.value),
-                  cellRenderer: (p: { value: unknown }) => {
-                    const arr = Array.isArray(p.value) ? p.value : [];
-                    return (
-                      <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                        {arr.map((v) => {
-                          const opt = field.options?.find((o) => o.key === v);
-                          return (
-                            <Chip
-                              key={String(v)}
-                              size="small"
-                              label={opt ? optLabel(opt) : String(v)}
-                              sx={opt?.color ? { bgcolor: opt.color, color: "#fff" } : {}}
-                            />
-                          );
-                        })}
-                      </Box>
-                    );
-                  },
+                  cellRenderer: (p: { value: unknown }) => (
+                    <ChipListCell items={optionChipItems(field.options, p.value, optLabel)} />
+                  ),
                 }
               : {}),
             ...(field.type === "multiline_text"
@@ -2277,24 +3037,9 @@ export default function InventoryPage() {
             ? {
                 valueFormatter: (p: { value?: unknown }) =>
                   optionsText(field.options, p.value),
-                cellRenderer: (p: { value: unknown }) => {
-                  const arr = Array.isArray(p.value) ? p.value : [];
-                  return (
-                    <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                      {arr.map((v) => {
-                        const opt = field.options?.find((o) => o.key === v);
-                        return (
-                          <Chip
-                            key={String(v)}
-                            size="small"
-                            label={opt ? optLabel(opt) : String(v)}
-                            sx={opt?.color ? { bgcolor: opt.color, color: "#fff" } : {}}
-                          />
-                        );
-                      })}
-                    </Box>
-                  );
-                },
+                cellRenderer: (p: { value: unknown }) => (
+                  <ChipListCell items={optionChipItems(field.options, p.value, optLabel)} />
+                ),
               }
             : {}),
           ...(field.type === "date" ? dateColumnFilterDef : {}),
@@ -2310,27 +3055,20 @@ export default function InventoryPage() {
       const headerName = otherType ? typeLabel(otherType) : otherTypeKey;
       const relTypeRef = rt;
       const colKey = `rel_${otherTypeKey}`;
-      // All relation type keys that connect selectedType ↔ otherTypeKey
-      const groupKeys = relTypeGroupMap.get(otherTypeKey) || [rt.key];
 
       cols.push({
         field: colKey,
         headerName,
         width: 180,
         hide: !selectedColumns.has(colKey),
-        valueGetter: (p: { data: Card }) => {
-          // Merge names from all relation types in the group
-          const allNames: string[] = [];
-          for (const rk of groupKeys) {
-            const index = relationsMap.get(rk);
-            if (index) {
-              const names = index.get(p.data?.id);
-              if (names) allNames.push(...names);
-            }
-          }
-          // Deduplicate
-          return [...new Set(allNames)].join("; ");
-        },
+        valueGetter: (p: { data: Card }) =>
+          // Deduplicate, then sort alphabetically (#918) so the cell reads
+          // consistently and AG Grid's own sort on this column is sane. Names,
+          // not ids: two related cards sharing a name read as one value here,
+          // exactly as they always have.
+          [...new Set(relatedRefsOf(p.data?.id, otherTypeKey).map((r) => r.name))]
+            .sort((a, b) => a.localeCompare(b, i18n.language, { sensitivity: "base" }))
+            .join("; "),
         cellRenderer: (p: { value: string; data: Card }) => {
           if (gridEditMode) {
             return (
@@ -2525,8 +3263,24 @@ export default function InventoryPage() {
       }
     );
 
-    return columnFreeze.applyFrozen(cols);
-  }, [columnFreeze, types, typeConfig, commonFields, gridEditMode, relevantRelTypes, relTypeGroupMap, relationsMap, relationsLoading, selectedType, parentPaths, cardsById, parentNameOf, descendantIndex, filters.showArchived, selectedColumns, userNameMap, t, formatDate, formatDateTime, canViewCostsGlobally, canManageStakeholders, tagGroups, stakeholderRoles, typeLabel]);
+    return gridColumnOrder.applyOrder(columnFreeze.applyFrozen(cols));
+  }, [columnFreeze, gridColumnOrder, types, typeConfig, commonFields, gridEditMode, relevantRelTypes, relatedRefsOf, relationsLoading, selectedType, parentPaths, cardsById, parentNameOf, descendantIndex, filters.showArchived, selectedColumns, userNameMap, t, i18n.language, formatDate, formatDateTime, canViewCostsGlobally, canManageStakeholders, tagGroups, stakeholderRoles, typeLabel]);
+
+  // Feeds the Columns tab's "Column order" section: only the columns actually
+  // on screen, built from the grid's own defs. On this page that matters twice
+  // over — the attribute, relation and stakeholder columns are metamodel-driven
+  // and `core_status` only exists while archived cards are shown, so no static
+  // catalogue could describe the live set.
+  const columnOrderItems = useMemo<ColumnOrderItem[]>(
+    () =>
+      columnDefs
+        .filter((c) => !c.hide && isOrderableColumn(c))
+        .map((c) => ({
+          colId: colIdOf(c),
+          label: c.headerName ?? colIdOf(c),
+        })),
+    [columnDefs],
+  );
 
   // Restore the saved column layout (order/width/pinning/sort) onto the grid.
   // Keyed on `columnDefs` so it re-applies each time the column *set* changes —
@@ -2541,13 +3295,15 @@ export default function InventoryPage() {
     if (!layout || layout.length === 0) return;
     const api = gridRef.current?.api;
     if (!api) return;
-    // `hide` and `pinned` are stripped: visibility flows from
-    // `selectedColumns` and freezing from `frozenColumns`, both via colDefs.
+    // `hide` and `pinned` are stripped, and `applyOrder` is off: visibility
+    // flows from `selectedColumns`, freezing from `frozenColumns` and order
+    // from `columnOrder`, all via colDefs. What is left for the snapshot to
+    // own is width and sort.
     const state: ColumnState[] = layout.map(
       ({ hide: _hide, pinned: _pinned, ...rest }) => rest,
     );
     applyingLayoutRef.current = true;
-    api.applyColumnState({ state, applyOrder: true });
+    api.applyColumnState({ state, applyOrder: false });
     applyingLayoutRef.current = false;
   }, [gridReady, columnDefs, layoutNonce]);
 
@@ -2768,46 +3524,32 @@ export default function InventoryPage() {
     const fd = currentMassField.fieldDef;
     if (!fd) return null;
 
-    if (fd.type === "single_select" && fd.options) {
-      return (
-        <FormControl fullWidth size="small">
-          <InputLabel>{t("massEdit.value")}</InputLabel>
-          <Select value={(massEditValue as string) || ""} label={t("massEdit.value")} onChange={(e) => setMassEditValue(e.target.value)}>
-            <MenuItem value=""><em>{t("massEdit.clear")}</em></MenuItem>
-            {fd.options.map((opt) => (
-              <MenuItem key={opt.key} value={opt.key}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  {opt.color && <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: opt.color }} />}
-                  {optLabel(opt)}
-                </Box>
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      );
-    }
-
-    if (fd.type === "number" || fd.type === "cost") {
-      return (
-        <TextField
-          fullWidth
-          size="small"
-          label={t("massEdit.value")}
-          type="number"
-          value={massEditValue ?? ""}
-          onChange={(e) => setMassEditValue(e.target.value ? Number(e.target.value) : "")}
-        />
-      );
-    }
-
+    // One editor for every field type — the same component Card Detail uses,
+    // so a multi-select gets its checkbox list, a boolean its switch, a date
+    // its picker, and an extension-contributed type its own editor. The dialog
+    // used to hand-roll this and covered only single_select/number/cost, so
+    // everything else fell through to a free-text box that wrote a raw string
+    // into a field that expects an array or a typed value (#940).
     return (
-      <TextField
-        fullWidth
-        size="small"
-        label={t("massEdit.value")}
-        value={(massEditValue as string) ?? ""}
-        onChange={(e) => setMassEditValue(e.target.value)}
-      />
+      <Box
+        // FieldEditor sizes its controls for the card-detail column layout
+        // (minWidth 200/300, never fullWidth). This descendant rule has higher
+        // specificity than its single-class sx, so the very same control fills
+        // the dialog without FieldEditor growing a layout prop. `> div >`
+        // targets FieldEditor's own root Box → its top-level control.
+        sx={{ "& > div > .MuiFormControl-root": { width: "100%", minWidth: 0 } }}
+      >
+        <FieldEditor
+          field={fd}
+          value={massEditValue}
+          onChange={setMassEditValue}
+          currencySymbol={currencySymbol}
+          canViewCosts={canViewCostsGlobally}
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: "block" }}>
+          {t("massEdit.attr.hint", { count: selectedIds.length })}
+        </Typography>
+      </Box>
     );
   };
 
@@ -2842,10 +3584,16 @@ export default function InventoryPage() {
             onResetColumns={handleResetColumns}
             frozenColumns={columnFreeze.frozenColumns}
             onToggleFrozen={columnFreeze.toggleFrozen}
+            columnOrderItems={columnOrderItems}
+            columnOrder={gridColumnOrder.orderedIds}
+            onColumnOrderChange={setColumnOrder}
+            onResetColumnOrder={gridColumnOrder.resetOrder}
             columnState={columnState}
             onApplyColumnState={applyColumnLayout}
             onApplyColumnFilters={applyColumnFilters}
             columnFilterModel={columnFilterModel}
+            groupBy={groupBy}
+            onGroupByChange={setGroupBy}
           />
         </Drawer>
       ) : (
@@ -2871,10 +3619,16 @@ export default function InventoryPage() {
           onResetColumns={handleResetColumns}
           frozenColumns={columnFreeze.frozenColumns}
           onToggleFrozen={columnFreeze.toggleFrozen}
+          columnOrderItems={columnOrderItems}
+          columnOrder={gridColumnOrder.orderedIds}
+          onColumnOrderChange={setColumnOrder}
+          onResetColumnOrder={gridColumnOrder.resetOrder}
           columnState={columnState}
           onApplyColumnState={applyColumnLayout}
           onApplyColumnFilters={applyColumnFilters}
           columnFilterModel={columnFilterModel}
+          groupBy={groupBy}
+          onGroupByChange={setGroupBy}
         />
       )}
 
@@ -2893,6 +3647,12 @@ export default function InventoryPage() {
             {t("page.title")}
           </Typography>
           <Chip label={t("common:items", { count: displayedRowCount ?? filteredData.length })} size="small" />
+          <GroupByMenuButton
+            axes={groupAxes}
+            groupBy={groupBy}
+            onChange={setGroupBy}
+            compact={isMobile}
+          />
           <Box sx={{ flex: 1 }} />
           {isMobile ? (
             <>
@@ -3143,14 +3903,23 @@ export default function InventoryPage() {
         {/* AG Grid */}
         <Box
           ref={columnFreeze.containerRef}
-          className={mode === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}
-          sx={{ flex: 1, width: "100%", minHeight: 0, ...columnFreeze.sx }}
+          {...cellMenu.containerProps}
+          sx={{
+            flex: 1,
+            width: "100%",
+            minHeight: 0,
+            ...columnFreeze.sx,
+            ...cellMenu.sx,
+            ...grouping.sx,
+            ...dragFill.sx,
+          }}
         >
           <AgGridReact
+            theme={mode === "dark" ? gridThemeDark : gridThemeLight}
             key={isRtl ? "rtl" : "ltr"}
             enableRtl={isRtl}
             ref={gridRef}
-            rowData={filteredData}
+            rowData={grouping.rowData}
             columnDefs={columnDefs}
             // `searchPending` covers the debounce window too, so the grid never
             // looks settled while it is still showing the previous query's rows.
@@ -3167,9 +3936,11 @@ export default function InventoryPage() {
             onModelUpdated={handleModelUpdated}
             onDragStopped={captureColumnState}
             onColumnPinned={captureColumnState}
-            maintainColumnOrder
             getRowId={getRowId}
             getRowStyle={getRowStyle}
+            {...grouping.gridProps}
+            {...cellMenu.gridProps}
+            {...dragFill.gridProps}
             animateRows
             defaultColDef={defaultColDef}
             initialState={
@@ -3185,8 +3956,13 @@ export default function InventoryPage() {
                 : undefined
             }
           />
+          {grouping.stickyHeader}
+          {dragFill.overlay}
         </Box>
       </Box>
+
+      {cellMenu.menu}
+      {dragFill.dialog}
 
       {/* Inline-edit failures (rejected re-parent, …) */}
       <Snackbar

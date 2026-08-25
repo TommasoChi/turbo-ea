@@ -10,12 +10,14 @@ The **Inventory** is the heart of Turbo EA. Here all **cards** (components) of t
 
 The left sidebar panel allows you to **filter** cards by different criteria:
 
-- **Search** — Free text search across card names
+- **Search** — Free text search across card names, from the very first letter. Best matches come first: exact names, then names starting with what you typed, then names where it starts a word, then the rest. Every search box in Turbo EA orders results this way — the global search (**Ctrl+K** / **⌘K**), each card picker, the Risk Register, Decisions and published portals — unless you have chosen a sort of your own, which always wins
 - **Types** — Filter by one or more card types: Objective, Platform, Initiative, Organization, Business Capability, Business Context, Business Process, Application, Interface, Data Object, IT Component, Tech Category, Provider, System
 - **Subtypes** — When a type is selected, filter further by subtype (e.g., Application → Business Application, Microservice, AI Agent, Deployment)
 - **Approval Status** — Draft, Approved, Broken, or Rejected
 - **Lifecycle** — Filter by lifecycle phase: Plan, Phase In, Active, Phase Out, End of Life
-- **Data Quality** — Threshold-based filtering: Good (80%+), Medium (50–79%), Poor (below 50%)
+- **Data Quality** — Band filtering (multi-select): Complete (≥80%), Partial (40–79%), Minimal (below 40%). Same bands the [Data Quality report](reports.md#data-quality-report) charts, so clicking a bar segment there lands here.
+- **Orphaned** — Only cards with no relation in either direction. Evaluated server-side, so it works with no card type selected.
+- **Stale** — Only cards not updated in the last 90 days. Both mirror the [Data Quality report](reports.md#data-quality-report)'s KPI tiles, so clicking a tile there lands here.
 - **Tags** — Filter by tags from any tag group
 - **Relations** — Filter by related cards across relation types
 - **Custom attributes** — Filter by values in custom fields (text search, select options)
@@ -25,6 +27,20 @@ The left sidebar panel allows you to **filter** cards by different criteria:
 > **Find cards with no value.** The Subtype, Lifecycle, Tags, Relations, and single/multi-select custom attribute filters each include an **(empty)** option. Select it to list only the cards that have *no* value for that field — for example, every card with no lifecycle set. It can be combined with normal values (matching either) and across filters (matching all).
 
 An **active filter count** badge shows how many filters are currently applied.
+
+### Cell Actions
+
+Right-click any cell in the grid (long-press on a touch device) to open a context menu of quick actions on whatever is under the cursor, similar to ServiceNow:
+
+- **Preview card** — open the card the cell names in the side panel, without leaving the grid
+- **Show matching** — keep only the rows whose value equals the clicked cell's
+- **Filter out** — hide the rows whose value equals the clicked cell's
+- **Copy value** — copy the cell text to the clipboard
+- **Clear column filter** — remove that column's filter (shown only while one is active)
+
+On a multi-valued cell (tags, relations, stakeholders, multi-select attributes) the menu first lists the individual values, so you can filter on one of them or on the entire cell. **Preview card** appears on every cell that names a card — the **Name** column (the row's own card), the **Parent** column, and the relation columns — and when the cell names several cards it lists them the same way, so you pick the one to open. These filters land in the grid's own column filters: they combine with the sidebar filters, count into the **Clear filters** toolbar button, and persist with your view. The same menu is available on every grid in Turbo EA — Decisions, Risk Register, Compliance, and the admin grids. On the Resources grid, where filtering happens on the server, **Show matching** drives the sidebar filters directly, so it narrows the whole result set rather than just the page you are looking at. When the column has a matching filter in the left panel — card type, subtype, lifecycle, approval status or a single-select attribute — **Show matching** selects that value in the panel too, and **Clear** clears both, so a saved view can never carry a panel filter and a column filter that disagree. Editing the filter in the panel afterwards simply takes over.
+
+![Inventory cell context menu](../assets/img/en/62_inventory_cell_menu.png)
 
 ### Columns Tab
 
@@ -69,17 +85,19 @@ The inventory uses an **AG Grid** data table with powerful features:
 | **Lifecycle** | Current lifecycle state |
 | **Approval Status** | Review status badge |
 | **Data Quality** | Completeness percentage with visual ring |
-| **Relations** | Relation counts with clickable popover showing related cards |
+| **Relations** | Related card names, listed alphabetically, with a clickable popover to add or remove relations — cards already linked are hidden from its picker |
 
 **Table features:**
 
 - **Sorting** — Click any column header to sort ascending/descending
 - **Inline editing** — In grid edit mode, edit field values directly in the table
+- **Fill down a column** — In grid edit mode, click a cell and drag the small square at its corner up or down to copy that value into every row you cover. Before anything is saved a confirmation tells you which column, which value and how many rows; if the server refuses a row, it is listed with the reason and a link, and the rows that did succeed stay saved. The gesture works with a finger as well as a mouse, and with the keyboard — focus the square, extend with the arrow keys, confirm with Enter. Only the rows currently on screen after your filters and sorting are filled, and the Name column is deliberately excluded so cards cannot end up sharing a name.
 - **Multi-select** — Select multiple rows for bulk operations
 - **Quick preview** — Use the eye icon next to any name to open the card detail in a side panel
 - **Open in new tab** — Ctrl/Cmd-click a name to open the card in a new browser tab; main-nav links also support this
 - **Column configuration** — Show, hide, and reorder columns (including the always-on default columns)
 - **Freeze a column** — Hover a column header and click the pin icon to freeze that column to the left edge, so it stays in view while you scroll sideways. Click the pin again to release it. Every column also carries a pin in the **Columns** tab of the filter panel, so you can freeze one without hunting for its header. Your frozen columns are remembered per table, and the same control is available on every data table in Turbo EA (Risk Register, Decisions, Compliance findings, Users, Resources, Audit log).
+- **Reorder columns** — Drag a column header to move it, or open the **Column order** section at the top of the **Columns** tab and drag a row by its handle. That list *is* the table's order, so the two always agree, and frozen columns are grouped first because they always render at the leading edge — release a column's pin there if you want to move it out of that group. The handle also works with the keyboard (Space to pick a column up, arrow keys to move it, Space to drop it) and by touch, so the order can be changed on a phone. Your column order is remembered per table, on every data table in Turbo EA.
 
 ### Toolbar
 
@@ -112,6 +130,8 @@ The **Field** dropdown groups what you can change:
 
 Tags, relations and parent each offer an **add / remove** toggle, so you extend or trim existing values instead of replacing them.
 
+The value control matches the field's type: a multi-select shows its options with checkboxes, a yes/no field a switch, a date field a date picker. Leaving the value empty clears the field on every selected card. Fields calculated by a formula, and cost fields you do not have permission to view, are not offered.
+
 ### Restructuring the hierarchy { #mass-edit-parent }
 
 The **Parent** field appears once you have filtered the grid to a single card type that supports hierarchy. A card has exactly one parent, so this single field covers both directions of a restructuring:
@@ -126,6 +146,16 @@ Cards are moved one at a time, so a move that is not allowed blocks only that ca
 - The move would push a Business Capability beyond the maximum of five levels.
 
 A card takes its own children with it when it moves, and approved cards drop back to **Broken** so the change is reviewed again.
+
+## Grouping the Inventory { #group-by }
+
+Click **Group by** in the toolbar (next to the item count) to organise the grid into collapsible groups. Lifecycle phase and approval status are always available; filtering the grid to a single card type also unlocks its subtype and every single-select attribute.
+
+- Cards without a value on the chosen field land in a **Not set** group at the top — the natural triage bucket for unclassified cards.
+- Click a group header to collapse or expand it. The header shows the group's card count.
+- Scroll into a long group and its header stays pinned just below the column headers, so you always know which group you are reading; the next group's header slides it aside as it arrives. It is the whole header, tick box included, so you can select a long group without scrolling back to its start.
+- The header checkbox selects every card in the group, so reclassifying a batch is: expand **Not set**, tick the header, then [Mass Edit](#mass-edit) the value. There is deliberately no drag and drop — select and set works the same on desktop, tablet, and phone.
+- Sorting applies within each group, and the grouping is remembered across reloads, stored in saved views, and shareable via the `group_by` URL parameter.
 
 ## AI Description Suggestions { #ai-description-suggestions }
 
@@ -192,7 +222,7 @@ The same precedence drives card-update matching: rows with a UUID in the `id` co
 
 #### Sibling-name uniqueness
 
-Because cards are identified by name + path, **two cards of the same type cannot share both a parent and a name**. New cards that would create such a collision are rejected at creation time (in the Create Card dialog, in the inline rename, and during spreadsheet import). Cards already in the database that share a name with a sibling — from earlier seed data or imports — are left untouched; you can edit any of their fields, but renaming one back into the collision (or creating a third) is blocked. The check is case- and whitespace-insensitive to match the importer's resolver.
+Because cards are identified by name + path, **two cards of the same type cannot share both a parent and a name**. New cards that would create such a collision are rejected at creation time (in the Create Card dialog, in the inline rename, and during spreadsheet import). Cards already in the database that share a name with a sibling — from earlier seed data or imports — are left untouched; you can edit any of their fields, but renaming one back into the collision (or creating a third) is blocked. The check is case- and whitespace-insensitive to match the importer's resolver. When the Create Card dialog rejects a duplicate, the warning names the existing card and includes a **View existing card** link that takes you straight to it.
 
 ### Inline relation cells
 
@@ -217,6 +247,10 @@ On every card sheet, `stakeholder:<role_key>` columns carry the users assigned t
 stakeholder:responsible  →  ada@corp.com; bob@corp.com
 stakeholder:observer     →  carol@corp.com
 ```
+
+!!! note "Sheets exported before role keys became camelCase"
+    Stakeholder role keys use the same camelCase convention as every other metamodel key. A sheet exported before that change carries headers such as `stakeholder:technical_application_owner`; those still import — the header is matched to its camelCase role when no role matches literally. Newly exported sheets use the camelCase form.
+
 
 The **email address is the only accepted user reference** — display names can collide, so they are never used for matching. A `Name <email>` entry is tolerated in hand-authored files (the bracketed email is used); a bare display name produces a warning and is skipped.
 

@@ -27,8 +27,6 @@ vi.mock("./InventoryFilterSidebar", async () => {
 vi.mock("@/components/CreateCardDialog", () => ({ default: () => null }));
 vi.mock("./ImportDialog", () => ({ default: () => null }));
 vi.mock("./RelationCellPopover", () => ({ default: () => null }));
-vi.mock("ag-grid-community/styles/ag-grid.css", () => ({}));
-vi.mock("ag-grid-community/styles/ag-theme-quartz.css", () => ({}));
 
 import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -109,7 +107,9 @@ function seedPrefs(extra: Record<string, unknown> = {}) {
         search: "",
         subtypes: [],
         lifecyclePhases: [],
-        dataQualityMin: null,
+        dataQualityBands: [],
+        orphanedOnly: false,
+        staleOnly: false,
         approvalStatuses: [],
         showArchived: false,
         attributes: {},

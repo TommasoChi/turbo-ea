@@ -489,6 +489,19 @@
         "title": "AiSuggestResponse",
         "type": "object"
       },
+      "AnnounceUpgradesEnabledPayload": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "AnnounceUpgradesEnabledPayload",
+        "type": "object"
+      },
       "AppTitlePayload": {
         "properties": {
           "app_title": {
@@ -515,6 +528,18 @@
           "response_ids"
         ],
         "title": "ApplyBody",
+        "type": "object"
+      },
+      "ApplyInstallIn": {
+        "description": "Optional apply-time flags. The body may be omitted entirely.",
+        "properties": {
+          "confirm_downgrade": {
+            "default": false,
+            "title": "Confirm Downgrade",
+            "type": "boolean"
+          }
+        },
+        "title": "ApplyInstallIn",
         "type": "object"
       },
       "ArchiveImpactCardRef": {
@@ -4505,6 +4530,17 @@
       },
       "EntitlementOut": {
         "properties": {
+          "auto_renew": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Renew"
+          },
           "expires_at": {
             "anyOf": [
               {
@@ -4532,6 +4568,17 @@
           "state": {
             "title": "State",
             "type": "string"
+          },
+          "trial": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial"
           }
         },
         "required": [
@@ -4843,6 +4890,19 @@
           "mcp_tools"
         ],
         "title": "ExtensionMcpManifestOut",
+        "type": "object"
+      },
+      "ExtensionNoticesEnabledPayload": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ExtensionNoticesEnabledPayload",
         "type": "object"
       },
       "ExtensionOut": {
@@ -5381,6 +5441,11 @@
       },
       "LicenseIn": {
         "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
           "text": {
             "title": "Text",
             "type": "string"
@@ -5442,6 +5507,11 @@
               }
             ],
             "title": "Problem"
+          },
+          "store_managed": {
+            "default": false,
+            "title": "Store Managed",
+            "type": "boolean"
           },
           "uploaded_at": {
             "anyOf": [
@@ -9470,6 +9540,22 @@
         "title": "ProcessFlowVersionUpdate",
         "type": "object"
       },
+      "ProcessFlowVersionWithdraw": {
+        "description": "Withdraw (unpublish) a published process flow.\n\nThe reason is mandatory and is stored verbatim on the version: a withdrawal\nwithout a recorded justification is not auditable. ``min_length`` only stops\nan empty submission \u2014 the endpoint additionally rejects whitespace-only\ninput, mirroring the risk-acceptance rationale check in ``risks.py``.",
+        "properties": {
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ProcessFlowVersionWithdraw",
+        "type": "object"
+      },
       "RecalcCalculationReport": {
         "properties": {
           "calculation_id": {
@@ -12179,6 +12265,19 @@
         "title": "SecurityScanRunOut",
         "type": "object"
       },
+      "SeparateApproverPayload": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "SeparateApproverPayload",
+        "type": "object"
+      },
       "SetPasswordRequest": {
         "properties": {
           "password": {
@@ -12817,6 +12916,11 @@
             "title": "Color",
             "type": "string"
           },
+          "counts_for_quality": {
+            "default": true,
+            "title": "Counts For Quality",
+            "type": "boolean"
+          },
           "description": {
             "anyOf": [
               {
@@ -12875,6 +12979,17 @@
             ],
             "title": "Color"
           },
+          "counts_for_quality": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts For Quality"
+          },
           "description": {
             "anyOf": [
               {
@@ -12885,6 +13000,19 @@
               }
             ],
             "title": "Description"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
           },
           "label": {
             "anyOf": [
@@ -12956,6 +13084,22 @@
             "default": false,
             "title": "Reachable",
             "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
           },
           "store_url": {
             "default": "",
@@ -13030,10 +13174,50 @@
             "title": "Description",
             "type": "string"
           },
+          "entitlement_auto_renew": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entitlement Auto Renew"
+          },
+          "entitlement_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entitlement Expires At"
+          },
+          "entitlement_grace_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entitlement Grace Until"
+          },
           "entitlement_state": {
             "default": "unlicensed",
             "title": "Entitlement State",
             "type": "string"
+          },
+          "entitlement_trial": {
+            "default": false,
+            "title": "Entitlement Trial",
+            "type": "boolean"
           },
           "free": {
             "default": false,
@@ -13097,6 +13281,19 @@
             "title": "Screenshots",
             "type": "array"
           },
+          "tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "trial_link": {
+            "default": "",
+            "title": "Trial Link",
+            "type": "string"
+          },
           "update_available": {
             "default": false,
             "title": "Update Available",
@@ -13113,6 +13310,19 @@
           "name"
         ],
         "title": "StoreItemOut",
+        "type": "object"
+      },
+      "StorePortalOut": {
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "StorePortalOut",
         "type": "object"
       },
       "StoreRefreshOut": {
@@ -14419,6 +14629,19 @@
         "title": "UiPreferencesUpdate",
         "type": "object"
       },
+      "UpdateCheckEnabledPayload": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "UpdateCheckEnabledPayload",
+        "type": "object"
+      },
       "UserBulkDelete": {
         "properties": {
           "ids": {
@@ -15703,6 +15926,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ApplyInstallIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
             "content": {
@@ -15821,6 +16061,28 @@
           }
         },
         "summary": "Put License",
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/admin/extensions/store/billing-portal": {
+      "post": {
+        "description": "Mint a store billing-portal session for this instance's subscription.\n\nBacks the \"Manage subscription\" button: the customer sees the renewal\ndate, cancels or restores auto-renew, updates the payment method, and\ndownloads invoices \u2014 all on the store's hosted portal. The renewal\ncredential authenticating the request lives inside the active license's\nsigned payload and is forwarded server-side only; it never reaches the\nbrowser. Only store-issued licenses carry one \u2014 for manual/offline\nlicenses this returns 404 and the UI shows no button.",
+        "operationId": "open_billing_portal_api_v1_admin_extensions_store_billing_portal_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorePortalOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Open Billing Portal",
         "tags": [
           "Extensions"
         ]
@@ -18508,7 +18770,7 @@
     },
     "/api/v1/bpm/processes/{process_id}/flow/archived": {
       "get": {
-        "description": "List archived process flow versions (most recent first).",
+        "description": "List superseded and withdrawn process flow versions (most recent first).\n\nWithdrawn versions live here too \u2014 they are history, and hiding them would\ndefeat the point of recording the withdrawal.",
         "operationId": "list_archived_api_v1_bpm_processes__process_id__flow_archived_get",
         "parameters": [
           {
@@ -19136,6 +19398,66 @@
           }
         },
         "summary": "Submit For Approval",
+        "tags": [
+          "bpm-workflow"
+        ]
+      }
+    },
+    "/api/v1/bpm/processes/{process_id}/flow/versions/{version_id}/withdraw": {
+      "post": {
+        "description": "Withdraw (unpublish) the published process flow \u2014 discussion #916.\n\nForward-only. The version moves ``published`` \u2192 ``withdrawn``; it is never\nrewound to ``draft`` and never deleted, and ``revision`` / ``bpmn_xml`` /\n``approved_by`` / ``approved_at`` are all left exactly as they were. What is\nadded is the withdrawal itself: who, when, and a mandatory written reason.\nThat is what keeps this compliant with 21 CFR 11.10(e) (\"record changes\nshall not obscure previously recorded information\") and what ISO 9001:2015\n\u00a77.5.3.2 asks for when documented information becomes obsolete.\n\nThe extracted ``process_elements``, their organization links, and the\nelement-derived card relations are deliberately **left untouched**, matching\nthe additive-only contract ``sync_element_relations`` already has. A\nwithdrawal must not become a covert delete. BPM reports already filter on\n``status == \"published\"``, so diagram-coverage figures self-correct.\n\nThe process is left with no *published* flow, but not empty-handed: the\nwithdrawn content is cloned into a fresh draft at the next revision so the\nowner can correct it and put it back through submit \u2192 approve. The withdrawn\nrow itself is untouched and stays in the Archived tab, which is what keeps\nthe approved artefact retrievable \u2014 mutating it into the draft instead would\nlet the very BPMN an approver signed off be edited away.\n\nPreviously-archived versions are still not auto-reinstated: re-publishing an\nolder revision is itself an approval and goes through the same cycle.\n\nGated on the ``bpm.withdraw_flows`` / ``card.bpm_withdraw`` permission\nalone. There is no instance-level switch for this: whether withdrawal is\n*offered* is a permission question, while the part the standards actually\ncare about \u2014 recording who withdrew what, when and why \u2014 happens\nunconditionally below.",
+        "operationId": "withdraw_version_api_v1_bpm_processes__process_id__flow_versions__version_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "process_id",
+            "required": true,
+            "schema": {
+              "title": "Process Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessFlowVersionWithdraw"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw Version",
         "tags": [
           "bpm-workflow"
         ]
@@ -19905,6 +20227,30 @@
             }
           },
           {
+            "description": "Keep only cards with no relation in either direction. Evaluated server-side because the client only ever holds the relations of the type it is currently displaying.",
+            "in": "query",
+            "name": "orphaned",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Keep only cards with no relation in either direction. Evaluated server-side because the client only ever holds the relations of the type it is currently displaying.",
+              "title": "Orphaned",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Keep only cards not updated in the last 90 days (`card_flags.STALE_AFTER_DAYS`).",
+            "in": "query",
+            "name": "stale",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Keep only cards not updated in the last 90 days (`card_flags.STALE_AFTER_DAYS`).",
+              "title": "Stale",
+              "type": "boolean"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -19928,23 +20274,39 @@
             }
           },
           {
+            "description": "Sort column. Defaults to `name` ascending. When omitted together with `sort_dir` and a `search` term is given, results are ordered by search relevance first (exact, then starts-with, then starts-a-word, then contains) and alphabetically within each tier.",
             "in": "query",
             "name": "sort_by",
             "required": false,
             "schema": {
-              "default": "name",
-              "title": "Sort By",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sort column. Defaults to `name` ascending. When omitted together with `sort_dir` and a `search` term is given, results are ordered by search relevance first (exact, then starts-with, then starts-a-word, then contains) and alphabetically within each tier.",
+              "title": "Sort By"
             }
           },
           {
+            "description": "`asc` (default) or `desc`.",
             "in": "query",
             "name": "sort_dir",
             "required": false,
             "schema": {
-              "default": "asc",
-              "title": "Sort Dir",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`asc` (default) or `desc`.",
+              "title": "Sort Dir"
             }
           }
         ],
@@ -25500,7 +25862,7 @@
     },
     "/api/v1/metamodel/types/{type_key}/stakeholder-roles": {
       "get": {
-        "description": "List stakeholder roles for a card type.",
+        "description": "List stakeholder roles for a card type, each with its assignment count.",
         "operationId": "list_stakeholder_roles_api_v1_metamodel_types__type_key__stakeholder_roles_get",
         "parameters": [
           {
@@ -25598,6 +25960,49 @@
       }
     },
     "/api/v1/metamodel/types/{type_key}/stakeholder-roles/{role_key}": {
+      "delete": {
+        "description": "Permanently delete an **unused** stakeholder role.\n\nRefused (409) while anyone holds the role on a card of this type, while a\nsurvey targets it, or when it is the type's last active role \u2014 archive is the\nanswer in those cases. Deleting an in-use role would silently strip the\ncard-level permissions it grants from real users, unrecoverably, and\n``stakeholders.role`` has no foreign key to make that visible.",
+        "operationId": "delete_stakeholder_role_api_v1_metamodel_types__type_key__stakeholder_roles__role_key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "type_key",
+            "required": true,
+            "schema": {
+              "title": "Type Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role_key",
+            "required": true,
+            "schema": {
+              "title": "Role Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Stakeholder Role",
+        "tags": [
+          "stakeholder-roles"
+        ]
+      },
       "get": {
         "description": "Get a single stakeholder role with permissions.",
         "operationId": "get_stakeholder_role_api_v1_metamodel_types__type_key__stakeholder_roles__role_key__get",
@@ -25797,6 +26202,56 @@
           }
         },
         "summary": "Restore Stakeholder Role",
+        "tags": [
+          "stakeholder-roles"
+        ]
+      }
+    },
+    "/api/v1/metamodel/types/{type_key}/stakeholder-roles/{role_key}/usage": {
+      "get": {
+        "description": "Report what would block deleting or re-keying this role.\n\nMirrors ``GET /metamodel/types/{key}/field-usage`` so the admin UI can show\nthe impact before offering a destructive action.",
+        "operationId": "stakeholder_role_usage_api_v1_metamodel_types__type_key__stakeholder_roles__role_key__usage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "type_key",
+            "required": true,
+            "schema": {
+              "title": "Type Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role_key",
+            "required": true,
+            "schema": {
+              "title": "Role Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stakeholder Role Usage",
         "tags": [
           "stakeholder-roles"
         ]
@@ -29783,6 +30238,104 @@
         ]
       }
     },
+    "/api/v1/reports/data-quality/cards": {
+      "get": {
+        "description": "The cards behind one slice of the data-quality dashboard.\n\nBacks the side panel opened by clicking a bar segment / KPI tile: same\npopulation as `/reports/data-quality` (ACTIVE cards only), narrowed to one\ntype, quality band and/or flag. `total` is the untruncated count so the\npanel can say \"showing N of M\".",
+        "operationId": "data_quality_cards_api_v1_reports_data_quality_cards_get",
+        "parameters": [
+          {
+            "description": "Card type key",
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Card type key",
+              "title": "Type"
+            }
+          },
+          {
+            "description": "complete | partial | minimal",
+            "in": "query",
+            "name": "band",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "complete | partial | minimal",
+              "title": "Band"
+            }
+          },
+          {
+            "description": "orphaned | stale",
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "orphaned | stale",
+              "title": "Scope"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Data Quality Cards",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/api/v1/reports/dependencies": {
       "get": {
         "description": "Dependency / interface map: nodes + edges for graph rendering.",
@@ -30991,9 +31544,15 @@
             "name": "sort_by",
             "required": false,
             "schema": {
-              "default": "updated_at",
-              "title": "Sort By",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort By"
             }
           },
           {
@@ -31001,9 +31560,15 @@
             "name": "sort_dir",
             "required": false,
             "schema": {
-              "default": "desc",
-              "title": "Sort Dir",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort Dir"
             }
           }
         ],
@@ -33441,6 +34006,46 @@
         ]
       }
     },
+    "/api/v1/settings/announce-upgrades-enabled": {
+      "patch": {
+        "description": "Admin endpoint \u2014 announce upgrades to all users, or keep them silent.\n\nSwitching it off does not suppress a *pending* announcement retroactively:\nthe version marker still advances on every boot, so re-enabling this later\nannounces the next upgrade rather than replaying an old one.",
+        "operationId": "update_announce_upgrades_enabled_api_v1_settings_announce_upgrades_enabled_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnounceUpgradesEnabledPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Announce Upgrades Enabled",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/v1/settings/app-title": {
       "get": {
         "description": "Public endpoint \u2014 returns the configured app title.\n\nPublic because the login page and browser tab title need it before the\nuser authenticates. Falls back to the default brand name when unset.",
@@ -33693,6 +34298,64 @@
         ]
       }
     },
+    "/api/v1/settings/bpm-separate-approver": {
+      "get": {
+        "description": "Public endpoint \u2014 whether a process flow needs a second person to approve it.\n\nOff by default so upgrading changes nothing for a team where one person both\nsubmits and approves; regulated instances turn it on deliberately.",
+        "operationId": "get_bpm_separate_approver_api_v1_settings_bpm_separate_approver_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Bpm Separate Approver",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Admin endpoint \u2014 require a separate approver for BPMN flow revisions.",
+        "operationId": "update_bpm_separate_approver_api_v1_settings_bpm_separate_approver_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeparateApproverPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Bpm Separate Approver",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/v1/settings/currency": {
       "get": {
         "description": "Public endpoint \u2014 returns the configured display currency.",
@@ -33938,6 +34601,46 @@
           }
         },
         "summary": "Update Enabled Locales",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/extension-notices-enabled": {
+      "patch": {
+        "description": "Admin endpoint \u2014 enable or disable the daily extension-store check.\n\nTurning it off stops the outbound request to the store entirely (the flag is\nread before the fetch), which is what an egress-restricted or air-gapped\ninstall wants. Gated on ``admin.settings`` like its two neighbours: who owns\nthe switch for outbound traffic is a separate question from who receives the\nresulting notifications (``admin.manage_extensions``).",
+        "operationId": "update_extension_notices_enabled_api_v1_settings_extension_notices_enabled_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtensionNoticesEnabledPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Extension Notices Enabled",
         "tags": [
           "settings"
         ]
@@ -34679,6 +35382,70 @@
         ]
       }
     },
+    "/api/v1/settings/release-notes": {
+      "get": {
+        "description": "Release notes for one specific version, as a notification announced it.\n\n``/whats-new`` answers \"what changed in the most recent upgrade?\" \u2014 right\nfor the newest notification and wrong for every older one still sitting in\nthe bell. This takes the versions off the notification itself, so a notice\nfrom six releases ago still opens its own notes.\n\nAuthenticated but **not** permission-gated, on the same reasoning as\n``/whats-new``: every user is told when the app is updated, so every user\nhas to be able to read the changelog, which is public information anyway.\nThe one privileged ingredient is narrower \u2014 the cached GitHub body for a\nrelease this instance has *not* installed is readable only by holders of\n``admin.settings``, matching ``/update-status``, since they are also the\nonly people who ever receive an update-available notification. None of that\nendpoint's operational state (``checked_at``, ``error``, ``enabled``) is\nexposed here.",
+        "operationId": "get_release_notes_api_v1_settings_release_notes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Release Notes",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/v1/settings/sponsor-button-enabled": {
       "get": {
         "description": "Public endpoint \u2014 returns whether the Sponsor button is shown in the user menu.\n\nDefaults to True so existing installations keep showing it; administrators can\nhide it from the avatar menu via the admin UI. It always remains reachable from\nAdmin \u2192 Settings regardless of this flag.",
@@ -34868,6 +35635,86 @@
           }
         },
         "summary": "Update Turbolens Enabled",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/update-check-enabled": {
+      "patch": {
+        "description": "Admin endpoint \u2014 enable or disable the daily \"newer release available\" check.\n\nTurning it off stops the outbound request to GitHub entirely (the flag is\nread before the fetch), which is what an egress-restricted or air-gapped\ninstall wants. The current value rides along on ``GET /settings/bootstrap``\nrather than getting its own endpoint \u2014 only the admin page reads it.",
+        "operationId": "update_update_check_enabled_api_v1_settings_update_check_enabled_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCheckEnabledPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Update Check Enabled",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/update-status": {
+      "get": {
+        "description": "Cached result of the last update check, for the release-notes dialog.\n\nGated on ``admin.settings`` \u2014 the same permission that decides who gets\nnotified in the first place, so the endpoint cannot tell a non-admin\nanything the notification would not have. Serves only what the daily check\nalready stored; it never reaches out to GitHub itself.",
+        "operationId": "get_update_status_api_v1_settings_update_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Update Status",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/whats-new": {
+      "get": {
+        "description": "Changelog for the versions this instance was last upgraded across.\n\nAuthenticated but **not** permission-gated, unlike ``/update-status``:\nevery active user is notified when the app is updated, so every one of them\nhas to be able to read what changed. A changelog is public information \u2014\nthe same text is on the project's releases page.\n\nServed from the changelog bundled in the image, so it needs no network and\nanswers identically on an air-gapped install.",
+        "operationId": "get_whats_new_api_v1_settings_whats_new_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Whats New",
         "tags": [
           "settings"
         ]

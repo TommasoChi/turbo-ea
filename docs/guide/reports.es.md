@@ -21,6 +21,18 @@ Esto es ideal para el análisis de portafolio — por ejemplo, representar aplic
 
 Cuando la IA está configurada y los análisis de portafolio están habilitados por un administrador, el informe de portafolio muestra un botón **Análisis IA**. Al hacer clic, se envía un resumen de la vista actual al proveedor de IA, que devuelve análisis estratégicos sobre riesgos de concentración, oportunidades de modernización, preocupaciones del ciclo de vida y equilibrio del portafolio. El panel de análisis es plegable y puede regenerarse después de cambiar filtros o agrupaciones.
 
+### Del informe al inventario
+
+Al hacer clic en un grupo se abre un panel con las tarjetas de ese grupo. Su botón **Ver en el inventario** abre el inventario exactamente en ese segmento. Cuando el informe está agrupado por un campo propio del tipo de tarjeta, el inventario llega agrupado por el mismo campo: el grupo pulsado aparece desplegado y el resto plegado (los recuentos siguen visibles), y se trasladan la búsqueda y los filtros de atributos, relaciones y etiquetas del informe — listo para «seleccionar todo» y la [edición masiva](inventory.md#mass-edit). Al agrupar por un tipo de tarjeta relacionado (por ejemplo, Organización), el inventario llega filtrado a esa tarjeta relacionada. El botón se oculta cuando los *grupos anidados* están activos: un subárbol agregado no se corresponde con ningún filtro único del inventario.
+
+### Plegar los filtros
+
+La fila **Filtros** se puede plegar: haga clic en su cabecera para ocultar los controles de filtrado y devolver al gráfico el espacio vertical. El ajuste se guarda junto con el resto de la configuración del informe, de modo que un informe se vuelve a abrir tal como lo dejó. Mientras está plegada, la cabecera sigue mostrando cuántos filtros hay activos y **Limpiar todo** sigue estando a mano — una sección plegada nunca oculta el hecho de que los datos están filtrados.
+
+### Viaje en el tiempo
+
+El control deslizante de la línea de tiempo lleva los mismos instrumentos de transformación que el [Informe de Dependencias](#informe-de-dependencias): marcas en cada fecha en la que una aplicación entra en producción (azul) o se retira (rojo), pastillas que nombran las aplicaciones que cambian mientras el control permanece sobre una marca, flechas que saltan de cambio en cambio, y chips que resumen la transformación al mirar hacia el futuro («+4 se incorporan · −7 se retiran» — incluidos también en las cabeceras de impresión y exportación). Al hacer clic en una marca o en una pastilla se destacan las aplicaciones que cambian en esa fecha: el resto de la vista se atenúa mientras parpadean, y una aplicación ya desaparecida en la fecha seleccionada se muestra solo durante el parpadeo y vuelve a ocultarse después.
+
 ## Portafolio flexible
 
 ![Portafolio flexible — portafolio de Objetos de Datos agrupado por Aplicación y coloreado por Sensibilidad de Datos](../assets/img/es/57_informe_portafolio_flexible.png)
@@ -39,7 +51,14 @@ Cuando las relaciones de una tarjeta llevan un valor de «tipo» —por ejemplo 
 
 Al agrupar por un tipo de tarjeta relacionado que admite jerarquía (como Capacidad de negocio u Organización), aparece un interruptor **Grupos anidados** junto al selector *Agrupar por*. Actívelo para mostrar los grupos como cajas anidadas siguiendo la jerarquía padre/hijo del tipo relacionado, como en el Mapa de Capacidades. El selector **Profundidad de visualización** controla cuántos niveles se expanden: cada tarjeta aparece bajo su grupo visible más profundo, y los grupos por debajo del límite de profundidad suben sus tarjetas al ancestro visible más cercano. Las ramas sin tarjetas se ocultan.
 
+### Elegir el número de columnas
+
+La cuadrícula de tarjetas de los informes **Cartera**, **Cartera flexible**, **Mapa de capacidades** y **Mapa de procesos** tiene un **selector de columnas** en la barra de herramientas: tres botones para una, dos o tres columnas. Elija menos columnas cuando las tarjetas contengan mucha información y deban ser lo bastante anchas para leerse; elija tres para ver más del panorama de una sola vez. La elección se recuerda por informe, viaja con un [informe guardado](saved-reports.md) y se utiliza al imprimir o exportar. Las pantallas estrechas siguen reduciéndose por sí solas a una o dos columnas. La elección se propaga hacia abajo: cada nivel por debajo del primero recibe una columna menos. Con una columna, el nivel 2 se muestra en tres y el nivel 3 en dos; con tres columnas, todo lo inferior permanece apilado a ancho completo. Un nivel sigue reduciéndose por sí solo cuando una tarjeta es realmente demasiado estrecha.
+
 ## Mapa de Capacidades
+
+Al hacer clic en una capacidad se abre un panel lateral con todas las aplicaciones de su subárbol. En el nivel más bajo, el panel ofrece **Ver en el inventario**, que lleva a las aplicaciones vinculadas a ella.
+
 
 ![Mapa de Capacidades de Negocio](../assets/img/es/11_mapa_capacidades.png)
 
@@ -48,6 +67,12 @@ El **Mapa de Capacidades** muestra un **mapa de calor** jerárquico de las capac
 - **Jerarquía** — Las capacidades principales contienen sus sub-capacidades
 - **Coloración por mapa de calor** — Los bloques se colorean según una métrica seleccionada (por ejemplo, número de aplicaciones que las soportan, calidad de datos promedio o nivel de riesgo)
 - **Clic para explorar** — Haga clic en cualquier capacidad para profundizar en sus detalles y aplicaciones de soporte
+
+**Limitar a capacidades concretas** — De forma predeterminada, el mapa dibuja todas las capacidades. Use el chip de capacidad de la barra de herramientas para abrir un selector y elegir una o varias capacidades; el mapa mostrará entonces solo esas y todo lo que hay debajo. Las subcapacidades se incluyen automáticamente, así que elegir una capacidad de primer nivel le da toda su rama. La **Profundidad de visualización** se cuenta desde las capacidades seleccionadas, por lo que *Nivel 2* siempre significa dos niveles por debajo de lo que está viendo. El alcance se guarda con el informe, de modo que un informe guardado se vuelve a abrir en la misma rama.
+
+**Viaje en el tiempo** — El control deslizante de la línea de tiempo lleva los mismos instrumentos de transformación que el [Informe de Dependencias](#informe-de-dependencias): marcas en cada fecha en la que una aplicación entra en producción (azul) o se retira (rojo), pastillas que nombran las aplicaciones que cambian mientras el control permanece sobre una marca, flechas que saltan de cambio en cambio, y chips que resumen la transformación al mirar hacia el futuro (incluidos también en las cabeceras de impresión y exportación). Al hacer clic en una marca o en una pastilla se destaca el cambio: con **Mostrar aplicaciones** activado, los chips de las aplicaciones que cambian parpadean mientras el resto se atenúa, y una aplicación ya desaparecida en la fecha seleccionada se muestra solo durante el parpadeo; con el interruptor desactivado, el foco recae sobre los bloques de capacidad que contienen las aplicaciones que cambian — azul donde solo se incorporan, rojo donde solo se retiran, morado donde ocurren ambas cosas.
+
+**Plegar los filtros** — La fila **Filtros de aplicaciones** se puede plegar; haga clic en su cabecera para recuperar el espacio. El estado se guarda con el informe, el recuento de filtros activos permanece visible en la cabecera plegada y **Limpiar todo** sigue accesible sin necesidad de desplegar primero.
 
 ## Informe de Ciclo de Vida
 
@@ -61,6 +86,8 @@ El **Informe de Ciclo de Vida** muestra una **visualización de línea temporal*
 
 Los componentes se muestran como barras horizontales que abarcan sus fases de ciclo de vida: Plan, Fase de Entrada, Activo, Fase de Salida y Fin de Vida.
 
+**Limitar a tarjetas concretas** — Una vez elegido un tipo de tarjeta, el chip contiguo abre un selector: elija una o varias tarjetas y la línea de tiempo mostrará solo esas y todo lo que hay debajo. Las tarjetas hijas se incluyen automáticamente. El chip permanece desactivado mientras el selector esté en *Todos los tipos*, porque un alcance necesita una única jerarquía.
+
 ## Informe de Dependencias
 
 ![Informe de Dependencias](../assets/img/es/13_dependencias.png)
@@ -71,6 +98,9 @@ El **Informe de Dependencias** visualiza las **conexiones entre componentes** co
 - **Filtrado por tipo** — Muestre solo tipos de fichas y tipos de relaciones específicos
 - **Exploración interactiva** — Haga clic en cualquier nodo para recentrar el grafo en esa ficha
 - **Análisis de impacto** — Comprenda el radio de impacto de los cambios en un componente específico
+- **Viaje en el tiempo** — Una vez centrado en una ficha (o en la vista de tabla), arrastre el control deslizante de la línea de tiempo para ver el panorama tal como está en cualquier fecha. Las fichas que aún no están en producción se ocultan: una ficha entra en el panorama en su fecha **Activo**, de modo que si esa fecha aún está por llegar, o falta por completo, la ficha queda fuera de la vista predeterminada. Las fichas que **se incorporan** entre hoy y una fecha futura son sencillamente parte del panorama en esa fecha: llevan un contorno morado y ninguna etiqueta, porque el viaje en el tiempo muestra el estado tal como será. Las fichas **retiradas** permanecen en el diagrama — atenuadas y con la etiqueta *RETIRADA* — en cualquier fecha posterior a su retirada, de modo que una transformación muestra tanto lo que elimina como lo que deja. El interruptor **Conservar tarjetas retiradas**, en la barra de herramientas, las oculta para mostrar solo las fichas activas en la fecha seleccionada. Su reflejo, **Previsualizar tarjetas planificadas**, muestra las fichas que aún no han comenzado — atenuadas y con la etiqueta *PRÓXIMA* — en cualquier fecha anterior a su inicio, de modo que incluso una vista presente o pasada permite ver lo que viene. La línea de tiempo está marcada con cada fecha en la que las fichas del diagrama mostrado entran en producción (azul) o se retiran (rojo); haga clic en una marca para llevar el control deslizante directamente a ese cambio, o pase de cambio en cambio con las flechas junto al control. Mientras el control deslizante permanece sobre una marca, las fichas que esta cuenta se enumeran como pastillas bajo las marcas, agrupadas tras un **+** las que entran en producción y tras un **−** las que se retiran — cada pastilla lleva el color de su tipo de ficha y, al hacer clic, se resalta solo esa ficha. Cada marca es azul cuando allí solo entran fichas en producción, roja cuando solo se retiran y morada cuando ocurren ambas cosas. Cuando los cambios quedan próximos entre sí, la línea de tiempo los fusiona en una sola marca, dibujada más ancha y etiquetada con el intervalo que abarca; una ficha que entra en producción y se retira dentro de ese intervalo aparece en ambos lados. Las flechas tratan una marca fusionada como una única parada: una pulsación la supera por completo en lugar de recorrer una a una las fechas que abarca. Cuando el control se sitúa sobre una marca fusionada, el panorama es el del **final** de su intervalo — todo lo que abarca ya ha ocurrido — y la fecha junto al control nombra ese intervalo en lugar de un solo día. Al hacer clic —o al saltar con las flechas— también se resaltan las fichas implicadas: el lienzo se atenúa un instante mientras parpadean en el color de la marca, y una ficha retirada oculta por **Conservar tarjetas retiradas** se muestra solo durante el parpadeo. Al mirar hacia el futuro, unas fichas sobre el control resumen la transformación (+4 se incorporan · −7 se retiran). Las relaciones hacia fichas retiradas se muestran con guiones rojos — las dependencias que la transformación rompe — y mientras el control se sitúa sobre una marca, las fichas que se retiran allí permanecen en el diagrama — atenuadas y con la etiqueta *RETIRADA* — incluso con **Conservar tarjetas retiradas** desactivado. Las fichas que permanecen se marcan allí donde cambian sus conexiones: un icono rojo de enlace roto donde una vecina se retira, uno azul donde una vecina entra en producción, y ambos cuando ocurren las dos cosas. La marca los sostiene: al salir de ella desaparecen, de modo que una retirada ya no marca a sus vecinas en todas las fechas posteriores. El control se aplica a todas las vistas y la fecha se guarda con el informe.
+
+La ficha que sitúe en el centro determina cuánto verá: por eso el selector enumera primero, en cada tipo, las fichas mejor conectadas. Una capacidad suele ser la elección más reveladora, porque es el único tipo de ficha que alcanza en un solo salto los objetivos por encima y las aplicaciones por debajo.
 
 ### Layered Dependency View (vista de dependencias por capas)
 
@@ -91,15 +121,16 @@ Cambie a la **Layered Dependency View** utilizando los botones de modo de vista 
 - **Clic para inspeccionar** — Haga clic en cualquier nodo para abrir el panel lateral de detalle de la ficha.
 - **Recentrar** — Mayús+clic o pulsación larga sobre una ficha para centrar el diagrama en ella; los botones **Volver al selector de tarjetas**, **Tarjeta anterior** y **Tarjeta siguiente** de la barra de herramientas recorren su historial de navegación.
 - **Modo resaltado** — Pase el cursor sobre una ficha para resaltar sus conexiones; en dispositivos táctiles, active el **Modo resaltado** en el panel de controles para resaltar al tocar.
-- **Modo expansión** — Active el **Modo expansión** en el panel de controles y luego haga clic en una ficha para revelar todas sus relaciones bajo demanda.
+- **Modo expansión** — Active el **Modo expansión** en el panel de controles y luego haga clic en una ficha para revelar todas sus relaciones bajo demanda. La ficha en la que está centrado el diagrama lleva un borde doble en el color de su tipo, y cada ficha que expande lleva uno más fino, de modo que sus referencias siguen visibles a medida que el diagrama crece.
 - **Mostrar padre / Mostrar hijos** — Dos alternativas específicas al modo expansión. Active **Mostrar padre** (flecha hacia arriba) o **Mostrar hijos** (flecha hacia abajo) en el panel de controles y luego haga clic en una ficha para añadir al diagrama solo su elemento padre de la jerarquía o sus hijos directos. Las fichas mostradas permanecen en el diagrama —para que pueda combinar padres e hijos— y se eliminan al recentrar o restablecer la vista.
 - **Sin ficha central requerida** — En el Informe de Dependencias, la Layered Dependency View muestra todas las fichas que coinciden con el filtro de tipo actual, por lo que no tiene que elegir una ficha de partida primero.
 
 **Personalizar la vista** (desde la barra de herramientas)
 
-- **Menú de visualización de ficha** — Active la etiqueta de **tipo** y un **punto de estado del ciclo de vida**, active los **marcadores de jerarquía** (un pequeño cheurón en cada ficha que tiene un padre arriba o hijos abajo no mostrados en el diagrama — una indicación para usar las herramientas de Mostrar) y elija **campos de atributo adicionales** para mostrar en cada ficha — los dos primeros se muestran en la ficha y el conjunto completo aparece en la información sobre herramientas al pasar el cursor. Las opciones se recuerdan entre visitas.
-- **Mostrar tarjetas al final de su vida útil** — Las fichas relacionadas cuyo ciclo de vida ha llegado al final de su vida útil se ocultan por defecto para mantener el gráfico enfocado; active esta opción (en el menú **Visualización de tarjetas**) para volver a mostrarlas. La ficha en la que está centrado siempre se muestra, incluso si ella misma está al final de su vida útil.
-- **Mostrar valores de relación** — Muchas relaciones pueden cualificarse con un valor (p. ej. una aplicación *soporta* una capacidad como *Principal*, *Secundario* o *Sin soporte*). Cuando está activado (por defecto), estos valores aparecen entre corchetes junto a la etiqueta de la relación (*soporta [Principal]*) y se incluyen en las exportaciones de imagen. Desactívelo en el menú **Visualización de tarjetas** para una vista más limpia; las relaciones sin valor no cambian en ningún caso.
+- **Mostrar en la tarjeta** — Un botón propio de la barra de herramientas (el icono de ojo) enumera como **casillas de verificación** todo lo que una ficha puede mostrar: la etiqueta de **tipo**, el **subtipo**, un **punto de estado del ciclo de vida** y cada **campo de atributo** disponible, agrupado bajo el tipo de ficha al que pertenece. Las dos primeras líneas se muestran en la propia ficha y el conjunto completo aparece en la información sobre herramientas. Una insignia en el botón cuenta lo que se muestra actualmente. Las opciones se recuerdan entre visitas y viajan con **Crear diagrama**: un diagrama DrawIO generado desde este informe se abre con las mismas líneas, elegidas desde el mismo menú. En un teléfono, la lista se abre a pantalla completa. **Borrar todo** desmarca todas las casillas de una vez.
+- **Mostrar tarjetas al final de su vida útil** — Las fichas relacionadas que han llegado al final de su vida útil **en la fecha elegida en la línea de tiempo** se ocultan por defecto para mantener el gráfico enfocado; active esta opción (en el menú **Opciones de vista**) para volver a mostrarlas. La ficha en la que está centrado siempre se muestra, incluso si ella misma está al final de su vida útil.
+- **Mostrar etiquetas de relación** — El verbo de cada relación (*admite*, *usa*, …) se dibuja sobre su línea. Activado de forma predeterminada; desactívelo en el menú **Opciones de vista** para un lienzo más limpio en un panorama denso. Las líneas y sus puntas de flecha siguen mostrando qué se conecta con qué, y en qué dirección.
+- **Mostrar valores de relación** — Muchas relaciones pueden cualificarse con un valor (p. ej. una aplicación *soporta* una capacidad como *Principal*, *Secundario* o *Sin soporte*). Cuando está activado (por defecto), estos valores aparecen entre corchetes junto a la etiqueta de la relación (*soporta [Principal]*) y se incluyen en las exportaciones de imagen. Desactívelo en el menú **Opciones de vista** para una vista más limpia; las relaciones sin valor no cambian en ningún caso.
 - **Reorganizar** — Arrastre una ficha para moverla dentro de su capa, o arrastre un **bloque de capa** completo para moverlo con todas sus fichas. **Restablecer vista** (en la barra de herramientas izquierda) restaura la disposición automática y borra cualquier exploración.
 - **Fondo** — Alterne el fondo del lienzo entre cuadrícula, puntos y ninguno.
 - **Exportar y pantalla completa** — Exporte el diagrama a **PNG** o **SVG**, o ábralo en **pantalla completa**.
@@ -144,6 +175,8 @@ Siempre que haya al menos un Origen de los costes activo, los rectángulos del m
 - **Varios Orígenes de costes activos** — el desglose muestra **un mapa de árbol por origen, en paralelo** (1 columna en pantallas estrechas, 2 en pantallas amplias). Cada panel tiene su propio encabezado, su propio total y su propio `% del total` en la información sobre herramientas, de modo que los distintos tipos de tarjeta conservan su escala en lugar de mezclarse en un único gráfico.
 
 El control deslizante de cronología, la selección de Origen de los costes y los demás filtros se conservan al profundizar, y el nivel de desglose forma parte de la configuración del informe guardado: guardar un informe mientras se está profundizando lo abre directamente en ese nivel. Sin un Origen de costes activo, hacer clic en un rectángulo abre en su lugar el panel lateral de la tarjeta (no hay nada que desglosar).
+
+**Limitar a tarjetas concretas** — El chip contiguo al selector de tipo abre un selector: elija una o varias tarjetas y el treemap, los totales y la tabla se limitarán a esas y a todo lo que hay debajo. El chip se oculta mientras esté dentro de un rectángulo, ya que ese detalle le ha llevado a otro tipo de tarjeta; salga de él y el alcance seguirá ahí.
 
 ## Informe de Matriz
 
@@ -198,6 +231,8 @@ Dos tarjetas cuentan las fichas de cada eje que no tienen ninguna relación. **M
 
 La exportación a Excel genera dos hojas: la cuadrícula tal como aparece en pantalla y una fila por relación con sus valores repartidos en columnas, la hoja sobre la que construir una tabla dinámica. La exportación a PowerPoint captura la imagen.
 
+**Limitar cada eje** — Cada eje tiene su propio chip junto a su selector de tipo, de modo que puede pedir *estas capacidades × estas aplicaciones*. Los indicadores sobre la cuadrícula siguen al alcance, así que las cifras siempre describen lo que está viendo. Cambiar el tipo de un eje borra su alcance; al transponer, los dos alcances se intercambian junto con los ejes.
+
 ## Informe de Calidad de Datos
 
 ![Informe de Calidad de Datos](../assets/img/es/33_informe_calidad_datos.png)
@@ -207,6 +242,19 @@ El **Informe de Calidad de Datos** es un **panel de completitud** que muestra qu
 - **Puntuación general** — Calidad de datos promedio en todas las fichas
 - **Por tipo** — Desglose que muestra qué tipos de fichas tienen la mejor/peor completitud
 - **Fichas individuales** — Lista de fichas con la calidad de datos más baja, priorizadas para mejora
+
+Las tarjetas con un **campo obligatorio** vacío siempre puntúan **0 %** — el cálculo ponderado solo se reanuda cuando todos los campos obligatorios están completos — de modo que la lista de puntuaciones más bajas muestra exactamente las tarjetas a las que aún les faltan datos obligatorios.
+
+### Profundizar en una cifra
+
+Cada cifra del informe es una vía de entrada, no solo un dato:
+
+- **Haga clic en un segmento de barra** en *Completitud por tipo*: se abre un panel a la derecha con las fichas de ese tipo en esa banda (Completo, Parcial o Mínimo).
+- **Haga clic en una barra** de *Completitud media por tipo*, o en una fila de la vista de tabla, para listar todas las fichas de ese tipo.
+- **Haga clic en el mosaico Huérfanos u Desactualizados** para listar las fichas tras ese recuento.
+
+Desde el panel, haga clic en una ficha para abrir su panel de detalle, o pulse **Ver en el inventario** para continuar en el [Inventario](inventory.md), que llega agrupado por calidad de datos con la banda seleccionada desplegada y las demás plegadas al lado, de modo que pueda empezar a corregir registros de inmediato. Los paneles de Huérfanos y Desactualizados enlazan con el filtro de inventario correspondiente, en todos los tipos de ficha.
+
 
 ## Informe de Fin de Vida (EOL)
 
@@ -236,3 +284,5 @@ Los filtros y agrupaciones activos en el momento de la exportación se registran
 ## Mapa de Procesos
 
 El **Mapa de Procesos** visualiza el panorama de procesos de negocio de la organización como un mapa estructurado, mostrando las categorías de procesos (Gestión, Principal, Soporte) y sus relaciones jerárquicas.
+
+**Limitar a procesos concretos** — El chip contiguo a *Profundidad de visualización* abre un selector: elija uno o varios procesos y el mapa mostrará solo esos y todo lo que hay debajo. Los subprocesos se incluyen automáticamente y la **Profundidad de visualización** se cuenta desde su selección. El zoom con un clic sigue funcionando, ahora dentro del alcance. Es un control distinto de la fila **Alcance** de abajo, que filtra por Organización o Contexto de negocio relacionado.

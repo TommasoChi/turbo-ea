@@ -19,6 +19,8 @@ The **Process Navigator** organizes processes into three main categories:
 
 Cards with a published BPMN diagram show a **flow icon** — click it to open the diagram full-screen without leaving the navigator (or jump from there to the full flow editor).
 
+**Column layout:** the toolbar carries a **column picker** — one, two or three columns — so you can widen the process cards or fit more of a row on screen. A row never stretches across more columns than it has processes, and the choice is remembered between visits. The choice cascades into the nested levels too, one column fewer per level, so drilling down no longer squeezes deep processes into slivers.
+
 ## BPM Dashboard
 
 ![BPM Dashboard with Statistics](../assets/img/en/15_bpm_dashboard.png)
@@ -42,7 +44,7 @@ Each Business Process card can have a **BPMN 2.0 process flow diagram**. The edi
 
 - **Visual modeling** — Drag and drop BPMN elements: tasks, events, gateways, lanes, and sub-processes
 - **Starter templates** — Choose from 6 pre-built BPMN templates for common process patterns (or start from a blank canvas)
-- **Element extraction** — When you save a diagram, the system automatically extracts all tasks, events, gateways, and lanes for analysis
+- **Element extraction** — When you save a diagram, the system automatically extracts all tasks, events, gateways, and lanes for analysis. Extracted elements are listed in **process-flow order** — following the sequence and message flows of the diagram, starting from the start event — rather than grouped by element type. Steps inside a loop are kept together, and a sub-process's contents are listed directly beneath it
 - **Element colors** — Select one or more elements and use the paint bucket button on the context pad to apply a color. Colors are stored in the BPMN file itself, so they also appear in the read-only viewer, exports, and printouts
 
 ### Element Linking
@@ -66,9 +68,34 @@ Process flow diagrams follow a version-controlled approval workflow:
 | **Draft** | Being edited, not yet submitted for review |
 | **Pending** | Submitted for approval, awaiting review |
 | **Published** | Approved and visible as the current version |
-| **Archived** | Previously published version, kept for history |
+| **Archived** | Previously published version, superseded by a newer approval |
+| **Withdrawn** | Previously published version, unpublished on purpose |
 
-Submitting a draft creates a version snapshot. Approvers can approve (publish) or reject (with comments) the submission.
+Submitting a draft creates a version snapshot. Approvers can approve (publish) or reject the submission.
+
+#### Who can approve
+
+Approving or rejecting a submitted revision needs the **Approve or reject submitted BPMN flow versions** permission, or the **Process Owner** stakeholder role on the process itself. Being able to edit drafts is not enough.
+
+!!! warning "Changed in 2.43.0"
+    Earlier releases accepted the general BPM edit permission here, so any member could approve any process flow — including a revision they had submitted themselves a moment earlier. If people in your instance approve flows today with only BPM edit rights, either grant them **Approve or reject submitted BPMN flow versions** in Admin → Roles, or assign them as **Process Owner** on the processes they sign off.
+
+#### Withdrawing a published version
+
+An approval given by mistake can be undone without deleting the process. Withdrawing requires the **Withdraw (unpublish) a published BPMN flow version** permission, which **no role holds by default** — an administrator grants it in Admin → Roles, or on the **Process Owner** stakeholder role in Admin → Metamodel.
+
+Once the permission is granted, the published version gains a **Withdraw** button. Withdrawing asks for a written reason, and then:
+
+- moves the revision to **Withdrawn** — it is never deleted, and never sent back to draft
+- keeps the original approval on record: the Archived tab shows the revision, who approved it and when, alongside who withdrew it and why
+- records the withdrawal, with its reason, in the card's **History** tab
+- **opens a copy as a new draft** at the next revision number, so you can correct the diagram and put it back through submit → approve
+- leaves the process with no *approved* flow until that draft is approved
+- leaves the extracted process steps and their card links untouched
+
+Keeping the withdrawn revision and editing a copy is deliberate: it means the exact diagram an approver signed off stays retrievable, which is what a quality system expects, while you still get a working copy immediately.
+
+Any archived or withdrawn version can be picked up again at any time with **Create new draft from this** on the Archived tab, which clones it to a fresh draft at the next revision.
 
 ## Process Assessments
 

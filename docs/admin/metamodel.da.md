@@ -53,9 +53,11 @@ Felter definerer de brugerdefinerede egenskaber, der er tilgængelige på kort a
 | **Etiket** | Visningsnavn |
 | **Type** | text, multiline_text, number, cost, boolean, date, url, single_select eller multiple_select |
 | **Indstillinger** | For udvælgelsesfelter: de tilgængelige valg med etiketter og valgfri farver |
-| **Påkrævet** | Hvorvidt feltet skal udfyldes for datakvalitetsscoring |
+| **Påkrævet** | Hvorvidt feltet er obligatorisk — se håndhævelsesreglerne nedenfor |
 | **Datakvalitet** | Hvert felts bidrag til scoren håndteres i panelet **Datakvalitet** (se nedenfor) |
 | **Skrivebeskyttet** | Forhindrer manuel redigering (nyttigt for beregnede felter) |
+
+**Sådan håndhæves påkrævede felter.** Oprettelse af et kort kræver aldrig disse felter — kort kan oprettes hurtigt og udfyldes senere. Så længe et påkrævet felt er tomt, forbliver kortets datakvalitetsscore på **0**, og kortets detaljeside viser et advarselsbanner med de felter, der skal udfyldes. Når en kortsektion redigeres, kan den ikke gemmes, før dens påkrævede felter er udfyldt, og API'et afviser at tømme et påkrævet felt, der allerede har en værdi. Boolske og skrivebeskyttede (beregnede) felter er undtaget.
 
 Klik på **+ Tilføj felt** for at oprette et nyt felt, eller klik på et eksisterende felt for at redigere det i **Feltredigeringsdialogen**.
 
@@ -85,6 +87,8 @@ ID'er er **globalt unikke, skrivebeskyttede og genbruges eller ændres aldrig**.
 
 Et korts **datakvalitetsscore** er et vægtet mål for, hvor komplet det er. Hver bidragende faktor – hvert felt samt fem indbyggede faktorer – håndteres ét sted: fanen **Datakvalitet** i korttypeeditoren. (Editoren er organiseret i faner – Generelt, Relationer, Interessentroller og Datakvalitet – oversættelser er tilgængelige via ikonet i headeren.)
 
+**Påkrævede felter tilsidesætter scoren.** Så længe et påkrævet felt på et kort er tomt, forbliver dets score på **0** uanset vægtene — den vægtede beregning gælder først, når alle påkrævede felter er udfyldt (boolske og skrivebeskyttede felter er undtaget; se indstillingen **Påkrævet** ovenfor).
+
 Hver faktors vigtighed angives med en enkel skyder over fire niveauer, der også viser det underliggende tal:
 
 - **Ignorér (0)** – udelukket helt fra scoren.
@@ -92,7 +96,7 @@ Hver faktors vigtighed angives med en enkel skyder over fire niveauer, der også
 - **Vigtig (2)** – tæller dobbelt.
 - **Kritisk (3)** – tæller tredobbelt.
 
-Panelet viser de fem **indbyggede faktorer** – **Beskrivelse**, **Livscyklus** (om der er angivet en livscyklusdato), **obligatoriske relationer**, **obligatoriske tags** og **Interessentroller** (hver rolle, der er defineret for typen, er opfyldt, når en interessent tildeles) – efterfulgt af hvert felt grupperet efter sin sektion, hver med den samme skyder. Sæt for eksempel **Livscyklus** til *Ignorér* for en type, hvis kort legitimt aldrig har datoer, så de ikke straffes.
+Panelet viser de fem **indbyggede faktorer** – **Beskrivelse**, **Livscyklus** (om der er angivet en livscyklusdato), **obligatoriske relationer**, **obligatoriske tags** og **Interessentroller** (én enkelt plads, som er opfyldt, så snart nogen er tildelt kortet i en rolle, der tæller med i datakvaliteten) – efterfulgt af hvert felt grupperet efter sin sektion, hver med den samme skyder. Sæt for eksempel **Livscyklus** til *Ignorér* for en type, hvis kort legitimt aldrig har datoer, så de ikke straffes.
 
 En **scorens sammensætning**-bjælke øverst i panelet viser hver faktors andel af den maksimalt mulige score, så du med et blik kan se, hvilke faktorer der dominerer. I kortlayoutet på fanen **Generelt** viser hvert felt – og de indbyggede sektioner Beskrivelse, Livscyklus og Relationer – et lille mærke med sit aktuelle niveaunummer, så du kan se vægtningen uden at forlade fanen.
 
@@ -116,6 +120,17 @@ Når der ikke er valgt nogen undertype på et kort (eller typen ikke har nogen u
 #### Interessentroller
 
 Definer brugerdefinerede roller for denne type (f.eks. "Application Owner", "Technical Owner"). Hver rolle bærer **tilladelser på kortniveau**, der kombineres med brugerens applikationsrolle, når der tilgås et kort. Se [Brugere og roller](users.md) for mere om tilladelsesmodellen.
+
+Hver rolle har en **nøgle** (den identifikator der gemmes på kort, og som bruges af `stakeholder:<rollenøgle>`-import/eksportkolonnerne) og en **etiket** (det brugerne ser). Nøglen følger samme konvention som enhver anden metamodelnøgle — kun bogstaver og cifre, begyndende med et bogstav, 3–50 tegn, efter konvention camelCase som `businessArchitect`. Den udfyldes automatisk ud fra etiketten, så du sjældent selv skal skrive en.
+
+Hver rolle har desuden en **Tæller med i datakvaliteten**-kontakt. Datakvalitetsscoren har én enkelt interessentplads, og den er opfyldt, så snart nogen er tildelt kortet i en rolle, hvor kontakten er slået til. Slå den fra for rent passive roller — den indbyggede **Observatør** leveres med den slået fra, så det at følge et kort aldrig træder i stedet for at eje det. En type, hvor alle roller har den slået fra, bidrager slet ikke med en interessentplads. Skift af kontakten genberegner straks scoren for alle kort af typen.
+
+Roller kan fjernes på to måder:
+
+- **Arkivér** — rollen bliver på de kort der allerede bruger den, men kan ikke længere tildeles, og den giver ikke længere sine rettigheder på kortniveau. Arkiverede roller vises bag **Vis arkiverede**-kontakten og kan gendannes når som helst. Det er det rigtige valg for en rolle der reelt har været brugt.
+- **Slet** — permanent, og tilbydes kun så længe rollen ikke er i brug. Turbo EA nægter at slette en rolle som nogen har på et kort af denne type, som en undersøgelse bruger, eller som er typens sidste aktive rolle; bekræftelsesdialogen oplyser hvilken af delene der gælder og tilbyder at arkivere den i stedet. Sådan rydder du op i en rolle der blev oprettet ved en fejl.
+
+En rolles nøgle kan rettes, så længe **ingen har rollen** — undersøgelser der bruger den følger automatisk med omdøbningen, og det er også i orden at omdøbe en types eneste rolle, da rollen overlever det. Så snart nogen har rollen, låses nøglen, og feltet forklarer hvorfor. Roller oprettet før denne konvention beholder den nøgle de allerede har og fungerer fortsat; kun en ny eller ændret nøgle kontrolleres.
 
 #### Oversættelser
 
@@ -148,6 +163,10 @@ Relationstyper definerer de tilladte forbindelser mellem korttyper. Hver relatio
 | **Kardinalitet** | n:m (mange-til-mange) eller 1:n (en-til-mange) |
 
 Klik på **+ Ny relationstype** for at oprette en relation, eller klik på en eksisterende for at redigere dens etiketter og egenskaber.
+
+Felterne **Etiket** og **Omvendt etiket** skrives på det sprog, du bruger lige nu — feltets betegnelse viser hvilket (for eksempel *Etiket (Dansk)*). Når du omdøber en relation, opdateres det sprog alle steder, hvor udsagnsordet optræder: afsnittet **Relationer** på et kort, inventarets relationskolonner, rapporter, portaler og diagrammer. Andre sprog beholder deres egen ordlyd, indtil du oversætter dem.
+
+Brug **Administrér oversættelser** øverst på fanen Relationstyper til at oversætte alle relationers udsagnsord til hvert aktiveret sprog på én gang. Vælg en sprogfane, udfyld ordlyden ved siden af den engelske kilde, og gem — tælleren på hver fane viser, hvor mange udsagnsord det sprog stadig mangler. Engelsk står ikke her, fordi det er ordlyden på selve relationen; et uoversat udsagnsord falder tilbage til den.
 
 ### Relationsegenskaber
 

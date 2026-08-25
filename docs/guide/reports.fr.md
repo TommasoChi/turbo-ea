@@ -21,6 +21,18 @@ C'est idéal pour l'analyse de portefeuille -- par exemple, positionner les appl
 
 Lorsque l'IA est configurée et que les analyses de portefeuille sont activées par un administrateur, le rapport de portefeuille affiche un bouton **Analyses IA**. Un clic envoie un résumé de la vue actuelle au fournisseur IA, qui renvoie des analyses stratégiques sur les risques de concentration, les opportunités de modernisation, les préoccupations de cycle de vie et l'équilibre du portefeuille. Le panneau d'analyses est repliable et peut être régénéré après modification des filtres ou du regroupement.
 
+### Du rapport à l'inventaire
+
+Cliquer sur un groupe ouvre un panneau listant les cartes de ce groupe. Son bouton **Voir dans l'inventaire** ouvre l'inventaire exactement sur cette tranche. Lorsque le rapport est regroupé par un champ propre au type de carte, l'inventaire arrive regroupé par le même champ : le groupe cliqué est déplié, tous les autres sont repliés (les compteurs restent visibles), et la recherche ainsi que les filtres d'attributs, de relations et d'étiquettes du rapport sont repris — prêt pour un « tout sélectionner » suivi de la [modification en masse](inventory.md#mass-edit). Lors d'un regroupement par un type de carte lié (par exemple Organisation), l'inventaire arrive filtré sur cette carte liée. Le bouton est masqué lorsque les *groupes imbriqués* sont actifs : un sous-arbre agrégé ne correspond à aucun filtre d'inventaire unique.
+
+### Replier les filtres
+
+La ligne **Filtres** se replie : cliquez sur son en-tête pour masquer les commandes de filtrage et rendre au graphique l'espace vertical. Le réglage est mémorisé avec le reste de la configuration du rapport, si bien qu'un rapport se rouvre tel que vous l'avez laissé. Une fois repliée, l'en-tête indique toujours combien de filtres sont actifs, et **Tout effacer** reste accessible — une section repliée ne masque jamais le fait que les données sont filtrées.
+
+### Voyage dans le temps
+
+Le curseur de la frise chronologique porte les mêmes instruments de transformation que le [Rapport Dépendances](#rapport-dependances) : des repères à chaque date où une application entre en service (bleu) ou est retirée (rouge), des pastilles nommant les applications qui changent tant que le curseur se trouve sur un repère, des flèches qui passent de changement en changement, et des pastilles qui résument la transformation quand vous regardez vers l'avenir (« +4 arrivent · −7 retirées » — reprises aussi dans les en-têtes d'impression et d'export). Cliquer sur un repère ou une pastille met en lumière les applications qui changent à cette date — le reste de la vue s'estompe pendant qu'elles pulsent, et une application déjà disparue à la date sélectionnée est révélée le temps de la pulsation, puis masquée à nouveau.
+
 ## Portefeuille flexible
 
 ![Portefeuille flexible — portefeuille d'Objets de données regroupé par Application et coloré par Sensibilité des données](../assets/img/fr/57_rapport_portefeuille_flexible.png)
@@ -39,7 +51,14 @@ Lorsque les relations d'une carte portent une valeur de « type » — par exemp
 
 Lorsque vous regroupez par un type de carte lié prenant en charge la hiérarchie (par exemple Capacité métier ou Organisation), un interrupteur **Groupes imbriqués** apparaît à côté du sélecteur *Regrouper par*. Activez-le pour afficher les groupes sous forme de boîtes imbriquées suivant la hiérarchie parent/enfant du type lié — comme dans la carte de capacités. Le sélecteur **Profondeur d’affichage** contrôle le nombre de niveaux développés : chaque carte apparaît sous son groupe visible le plus profond, et les groupes situés au-delà de la limite de profondeur remontent leurs cartes vers l’ancêtre visible le plus proche. Les branches sans cartes sont masquées.
 
+### Choisir le nombre de colonnes
+
+La grille de cartes des rapports **Portefeuille**, **Portefeuille flexible**, **Carte des capacités** et **Carte des processus** dispose d'un **sélecteur de colonnes** dans la barre d'outils — trois boutons pour une, deux ou trois colonnes. Choisissez moins de colonnes lorsque les cartes sont denses et doivent rester assez larges pour être lues ; choisissez trois pour voir davantage du paysage d'un seul coup d'œil. Le choix est mémorisé par rapport, accompagne un [rapport enregistré](saved-reports.md) et est utilisé à l'impression comme à l'export. Les écrans étroits repassent d'eux-mêmes à une ou deux colonnes. Le choix se propage vers le bas : chaque niveau sous le premier reçoit une colonne de moins. Avec une colonne, le niveau 2 s'affiche sur trois colonnes et le niveau 3 sur deux ; avec trois colonnes, tout ce qui suit reste empilé sur toute la largeur. Un niveau se réduit toujours de lui-même lorsqu'une carte est réellement trop étroite.
+
 ## Carte de capacités
+
+Un clic sur une capacité ouvre un panneau latéral listant toutes les applications de son sous-arbre. Au niveau le plus bas, le panneau propose **Voir dans l'inventaire**, qui mène aux applications qui lui sont liées.
+
 
 ![Carte de capacités métier](../assets/img/fr/11_carte_capacites.png)
 
@@ -48,6 +67,12 @@ La **Carte de capacités** affiche une **carte thermique hiérarchique** des cap
 - **Hiérarchie** -- Les capacités principales contiennent leurs sous-capacités
 - **Coloration thermique** -- Les blocs sont colorés en fonction d'une métrique sélectionnée (par ex. nombre d'applications de support, qualité moyenne des données, ou niveau de risque)
 - **Cliquer pour explorer** -- Cliquez sur n'importe quelle capacité pour approfondir ses détails et ses applications de support
+
+**Limiter à certaines capacités** — Par défaut, la carte affiche toutes les capacités. Utilisez la puce de capacité dans la barre d'outils pour ouvrir un sélecteur et choisir une ou plusieurs capacités ; la carte n'affiche alors que celles-ci et tout ce qui se trouve en dessous. Les sous-capacités sont incluses automatiquement : choisir une capacité de premier niveau vous donne donc toute sa branche. La **Profondeur d'affichage** se compte à partir des capacités sélectionnées, de sorte que *Niveau 2* signifie toujours deux niveaux sous ce que vous regardez. Le périmètre est enregistré avec le rapport, si bien qu'un rapport sauvegardé se rouvre sur la même branche.
+
+**Voyage dans le temps** — Le curseur de la frise chronologique porte les mêmes instruments de transformation que le [Rapport Dépendances](#rapport-dependances) : des repères à chaque date où une application entre en service (bleu) ou est retirée (rouge), des pastilles nommant les applications qui changent tant que le curseur se trouve sur un repère, des flèches qui passent de changement en changement, et des pastilles qui résument la transformation quand vous regardez vers l'avenir (reprises aussi dans les en-têtes d'impression et d'export). Cliquer sur un repère ou une pastille met le changement en lumière : avec **Afficher les applications** activé, les puces des applications qui changent pulsent pendant que le reste s'estompe, et une application déjà disparue à la date sélectionnée est révélée le temps de la pulsation ; avec l'option désactivée, la lumière tombe sur les blocs de capacité contenant les applications qui changent — bleu là où elles ne font qu'arriver, rouge là où elles ne font qu'être retirées, violet là où les deux se produisent.
+
+**Replier les filtres** — La ligne **Filtres d’application** se replie ; cliquez sur son en-tête pour récupérer l'espace. L'état est enregistré avec le rapport, le nombre de filtres actifs reste visible sur l'en-tête replié, et **Tout effacer** reste accessible sans avoir à déplier.
 
 ## Rapport Cycle de vie
 
@@ -61,6 +86,8 @@ Le **Rapport Cycle de vie** affiche une **visualisation chronologique** indiquan
 
 Les composants sont affichés sous forme de barres horizontales couvrant leurs phases de cycle de vie : Planification, Mise en service, Actif, Retrait progressif et Fin de vie.
 
+**Limiter à certaines cartes** — Une fois un type de carte choisi, la puce voisine ouvre un sélecteur : choisissez une ou plusieurs cartes et la chronologie n'affiche que celles-ci et tout ce qui se trouve en dessous. Les cartes filles sont incluses automatiquement. La puce reste désactivée tant que le sélecteur est sur *Tous les types*, car un périmètre a besoin d'une seule hiérarchie.
+
 ## Rapport Dépendances
 
 ![Rapport Dépendances](../assets/img/fr/13_dependances.png)
@@ -71,6 +98,9 @@ Le **Rapport Dépendances** visualise les **connexions entre composants** sous f
 - **Filtrage par type** -- Afficher uniquement des types de fiches et types de relations spécifiques
 - **Exploration interactive** -- Cliquer sur n'importe quel nœud pour recentrer le graphe sur cette fiche
 - **Analyse d'impact** -- Comprendre le rayon d'impact des modifications sur un composant spécifique
+- **Voyage dans le temps** -- Une fois une fiche centrée (ou la vue tableau activée), déplacez le curseur de la frise chronologique pour voir le paysage tel qu'il se présente à une date donnée. Les fiches qui ne sont pas encore en service sont masquées — une fiche entre dans le paysage à sa date **Actif** ; si cette date est encore à venir, ou si elle est absente, la fiche reste hors de la vue par défaut. Les fiches qui **arrivent** entre aujourd'hui et une date future font simplement partie du paysage à cette date : elles portent un contour violet et aucune étiquette, car le voyage dans le temps montre l'état tel qu'il sera. Les fiches **retirées** restent affichées — estompées et marquées *RETIRÉ* — à toute date postérieure à leur retrait : une transformation montre ainsi ce qu'elle supprime autant que ce qu'elle laisse. L'interrupteur **Conserver les fiches retirées**, dans la barre d'outils, les masque pour n'afficher que les fiches actives à la date sélectionnée. Son pendant, **Prévisualiser les fiches planifiées**, affiche les fiches qui n'ont pas encore démarré — estompées et marquées *À VENIR* — à toute date antérieure à leur démarrage : même une vue présente ou passée montre ainsi ce qui arrive. La frise est jalonnée de chaque date où des fiches du diagramme affiché entrent en service (bleu) ou sont retirées (rouge) ; cliquez sur un repère pour amener le curseur directement sur ce changement, ou passez de changement en changement avec les flèches à côté du curseur. Tant que le curseur se trouve sur un repère, les fiches qu'il dénombre sont nommées sous forme de pastilles sous les repères, regroupées derrière un **+** pour celles qui entrent en service et un **−** pour celles qui sont retirées — chaque pastille porte la couleur de son type de fiche, et un clic ne met en évidence que cette fiche. Chaque repère est bleu lorsque des fiches y entrent seulement en service, rouge lorsqu'elles en sortent seulement, et violet lorsqu'il fait les deux. Lorsque des changements sont rapprochés, la frise les fusionne en un seul repère, tracé plus large et étiqueté avec la période couverte ; une fiche qui entre en service et est retirée dans cet intervalle est nommée des deux côtés. Les flèches traitent un repère fusionné comme un seul arrêt : une pression le dépasse entièrement au lieu de parcourir une à une les dates qu'il recouvre. Lorsque le curseur se trouve sur un repère fusionné, le paysage est celui de la **fin** de sa période — tout ce qu'il recouvre s'est produit — et la date à côté du curseur nomme cette période plutôt qu'un jour unique. Un clic — comme un saut avec les flèches — met aussi en évidence les fiches concernées : le canevas s'estompe brièvement pendant qu'elles pulsent dans la couleur du repère, et une fiche retirée masquée par **Conserver les fiches retirées** est révélée le temps de la pulsation. En regardant vers l'avenir, des pastilles au-dessus du curseur résument la transformation (+4 arrivent · −7 retirées). Les relations vers des fiches retirées s'affichent en pointillés rouges — les dépendances que la transformation rompt — et tant que le curseur se trouve sur un repère, les fiches qui y sont retirées restent affichées — estompées et marquées *RETIRÉ* — même avec **Conserver les fiches retirées** désactivé. Les fiches qui restent sont marquées là où leurs connexions changent : une icône rouge de lien rompu là où une voisine est retirée, une bleue là où une voisine entre en service, et les deux quand les deux se produisent. Le repère les porte : quittez-le et elles disparaissent, si bien qu'un retrait ne marque plus ses voisines à toutes les dates ultérieures. Le curseur s'applique à toutes les vues et la date est enregistrée avec le rapport.
+
+La fiche que vous placez au centre détermine ce que vous voyez : le sélecteur liste donc, pour chaque type, les fiches les mieux connectées en premier. Une capacité est généralement le choix le plus parlant, car c'est le seul type de fiche qui atteint en un seul saut les objectifs au-dessus et les applications en dessous.
 
 ### Layered Dependency View (vue de dépendances par couches)
 
@@ -91,15 +121,16 @@ Basculez vers la **Layered Dependency View** à l'aide des boutons de mode d'aff
 - **Cliquer pour inspecter** — Cliquez sur n'importe quel nœud pour ouvrir le panneau latéral de détail de la fiche.
 - **Recentrer** — Maj+clic ou appui long sur une fiche pour centrer le diagramme dessus ; les boutons **Retour au sélecteur de cartes**, **Carte précédente** et **Carte suivante** de la barre d'outils parcourent votre historique de navigation.
 - **Mode surbrillance** — Survolez une fiche pour mettre en surbrillance ses connexions ; sur les appareils tactiles, activez le **Mode surbrillance** dans le panneau de contrôle pour mettre en surbrillance par toucher.
-- **Mode expansion** — Activez le **Mode expansion** dans le panneau de contrôle, puis cliquez sur une fiche pour révéler toutes ses relations à la demande.
+- **Mode expansion** — Activez le **Mode expansion** dans le panneau de contrôle, puis cliquez sur une fiche pour révéler toutes ses relations à la demande. La fiche sur laquelle le diagramme est centré porte un double contour dans la couleur de son type, et chaque fiche que vous développez en porte un plus fin : vos repères restent visibles à mesure que le diagramme s'étoffe.
 - **Afficher le parent / Afficher les enfants** — Deux alternatives ciblées au mode expansion. Activez **Afficher le parent** (flèche vers le haut) ou **Afficher les enfants** (flèche vers le bas) dans le panneau de contrôle, puis cliquez sur une fiche pour n'ajouter au diagramme que son parent hiérarchique ou ses enfants directs. Les fiches affichées restent sur le diagramme — vous pouvez ainsi superposer parents et enfants — et disparaissent lorsque vous recentrez ou réinitialisez la vue.
 - **Pas de fiche centrale requise** — Dans le Rapport Dépendances, la Layered Dependency View affiche toutes les fiches correspondant au filtre de type actuel, vous n'avez donc pas à choisir une fiche de départ au préalable.
 
 **Personnaliser la vue** (depuis la barre d'outils)
 
-- **Menu Affichage des fiches** — Activez l'étiquette de **type** et un **point de statut de cycle de vie**, activez les **repères de hiérarchie** (un petit chevron sur chaque fiche ayant un parent au-dessus ou des enfants en dessous non affichés — une indication pour utiliser les outils d'affichage) et choisissez des **champs d'attributs supplémentaires** à afficher sur chaque fiche — les deux premiers s'affichent sur la fiche et l'ensemble complet apparaît dans l'infobulle au survol. Les choix sont mémorisés d'une visite à l'autre.
-- **Afficher les fiches en fin de vie** — Les fiches liées dont le cycle de vie a atteint la fin de vie sont masquées par défaut pour garder le graphe lisible ; activez cette option (dans le menu **Affichage des fiches**) pour les réafficher. La fiche sur laquelle vous êtes centré est toujours affichée, même si elle est elle-même en fin de vie.
-- **Afficher les valeurs de relation** — De nombreuses relations peuvent être qualifiées par une valeur (par ex. une application *supporte* une capacité en tant que *Principal*, *Secondaire* ou *Aucun support*). Lorsque l'option est activée (par défaut), ces valeurs apparaissent entre crochets à côté de l'étiquette de la relation (*supporte [Principal]*) et sont incluses dans les exports d'image. Désactivez-la dans le menu **Affichage des fiches** pour une vue plus épurée ; les relations sans valeur restent inchangées dans tous les cas.
+- **Afficher sur la fiche** — Un bouton dédié de la barre d'outils (l'icône en forme d'œil) répertorie sous forme de **cases à cocher** tout ce qu'une fiche peut afficher : le libellé de **type**, le **sous-type**, une **pastille de cycle de vie** et chaque **champ d'attribut** disponible, classé sous le type de fiche auquel il appartient. Les deux premières lignes s'affichent sur la fiche elle-même et l'ensemble complet apparaît dans l'infobulle. Un badge sur le bouton compte ce qui est actuellement affiché. Les choix sont mémorisés d'une visite à l'autre et suivent **Créer un diagramme** : un diagramme DrawIO généré depuis ce rapport s'ouvre avec les mêmes lignes, choisies depuis le même menu. Sur un téléphone, la liste s'ouvre en plein écran. **Tout effacer** décoche l'ensemble en une fois.
+- **Afficher les fiches en fin de vie** — Les fiches liées ayant atteint la fin de vie **à la date choisie sur la frise chronologique** sont masquées par défaut pour garder le graphe lisible ; activez cette option (dans le menu **Options d'affichage**) pour les réafficher. La fiche sur laquelle vous êtes centré est toujours affichée, même si elle est elle-même en fin de vie.
+- **Afficher les libellés de relation** — Le verbe de chaque relation (*prend en charge*, *utilise*, …) est tracé sur son trait. Activé par défaut ; désactivez-le dans le menu **Options d'affichage** pour un canevas plus lisible sur un paysage dense. Les traits et leurs pointes de flèche montrent toujours ce qui est relié à quoi, et dans quel sens.
+- **Afficher les valeurs de relation** — De nombreuses relations peuvent être qualifiées par une valeur (par ex. une application *supporte* une capacité en tant que *Principal*, *Secondaire* ou *Aucun support*). Lorsque l'option est activée (par défaut), ces valeurs apparaissent entre crochets à côté de l'étiquette de la relation (*supporte [Principal]*) et sont incluses dans les exports d'image. Désactivez-la dans le menu **Options d'affichage** pour une vue plus épurée ; les relations sans valeur restent inchangées dans tous les cas.
 - **Réorganiser** — Faites glisser une fiche pour la déplacer au sein de sa couche, ou faites glisser un **bloc de couche** entier pour le déplacer avec toutes ses fiches. **Réinitialiser la vue** (dans la barre d'outils de gauche) restaure l'agencement automatique et efface toute exploration.
 - **Arrière-plan** — Faites défiler l'arrière-plan du canevas entre grille, points et aucun.
 - **Exporter et plein écran** — Exportez le diagramme en **PNG** ou **SVG**, ou ouvrez-le en **plein écran**.
@@ -144,6 +175,8 @@ Dès qu'au moins une Source de coût est active, les rectangles du treemap devie
 - **Plusieurs Sources de coût actives** — le forage affiche **un treemap par source côte à côte** (1 colonne sur écran étroit, 2 sur écran large). Chaque panneau possède son propre en-tête, son propre total et son propre `% du total` dans l'infobulle — ainsi les différents types de fiches conservent leur échelle au lieu d'être tassés dans un seul graphique.
 
 Le curseur de chronologie, la sélection de Source de coût et les autres filtres sont préservés pendant le forage, et le niveau de forage fait partie de la configuration du rapport sauvegardé — sauvegarder un rapport en cours de forage le rouvre directement à ce niveau. Sans Source de coût active, un clic sur un rectangle ouvre plutôt le panneau latéral de la fiche (il n'y a rien à décomposer).
+
+**Limiter à certaines cartes** — La puce voisine du sélecteur de type ouvre un sélecteur : choisissez une ou plusieurs cartes et la treemap, les totaux et le tableau se limitent à celles-ci et à tout ce qui se trouve en dessous. La puce disparaît lorsque vous avez zoomé dans un rectangle, puisqu'un tel zoom vous a déjà déplacé vers un autre type de carte ; quittez-le et le périmètre est toujours là.
 
 ## Rapport Matrice
 
@@ -198,6 +231,8 @@ Deux tuiles comptent les fiches de chaque axe qui n'ont aucune relation. **Affic
 
 L'export Excel produit deux feuilles : la grille telle qu'elle apparaît à l'écran, et une ligne par relation avec ses valeurs réparties en colonnes — la feuille sur laquelle construire un tableau croisé. L'export PowerPoint capture l'image.
 
+**Limiter chaque axe** — Chaque axe possède sa propre puce à côté de son sélecteur de type, ce qui permet de demander *ces capacités × ces applications*. Les indicateurs au-dessus de la grille suivent le périmètre, de sorte que les chiffres décrivent toujours ce que vous regardez. Changer le type d'un axe efface son périmètre ; la transposition échange les deux périmètres en même temps que les axes.
+
 ## Rapport Qualité des données
 
 ![Rapport Qualité des données](../assets/img/fr/33_rapport_qualite_donnees.png)
@@ -207,6 +242,19 @@ Le **Rapport Qualité des données** est un **tableau de bord de complétude** q
 - **Score global** -- Qualité moyenne des données sur toutes les fiches
 - **Par type** -- Ventilation montrant quels types de fiches ont la meilleure/pire complétude
 - **Fiches individuelles** -- Liste des fiches avec la qualité de données la plus faible, priorisées pour amélioration
+
+Les fiches dont un **champ obligatoire** est vide obtiennent toujours **0 %** — le calcul pondéré ne reprend qu'une fois tous les champs obligatoires remplis — la liste des scores les plus bas fait donc ressortir précisément les fiches dont les données obligatoires manquent encore.
+
+### Explorer un chiffre
+
+Chaque valeur du rapport est un point d'entrée, pas seulement un affichage :
+
+- **Cliquez sur un segment de barre** dans *Complétude par type* — un panneau s'ouvre à droite avec les fiches de ce type dans cette plage (Complet, Partiel ou Minimal).
+- **Cliquez sur une barre** dans *Complétude moyenne par type*, ou sur une ligne de la vue tableau, pour lister toutes les fiches de ce type.
+- **Cliquez sur la tuile Orphelins ou Obsolètes** pour lister les fiches derrière ce compteur.
+
+Depuis le panneau, cliquez sur une fiche pour ouvrir son panneau de détail, ou sur **Voir dans l'inventaire** pour poursuivre dans l'[Inventaire](inventory.md) — qui arrive groupé par qualité des données, la plage cliquée dépliée et les autres repliées à côté, afin de corriger les enregistrements immédiatement. Les panneaux Orphelins et Obsolètes mènent au filtre d'inventaire correspondant, tous types de fiches confondus.
+
 
 ## Rapport Fin de vie (EOL)
 
@@ -236,3 +284,5 @@ Les filtres et options de regroupement actifs au moment de l'export sont consign
 ## Carte de processus
 
 La **Carte de processus** visualise le paysage des processus métier de l'organisation sous forme de carte structurée, montrant les catégories de processus (Management, Cœur de métier, Support) et leurs relations hiérarchiques.
+
+**Limiter à certains processus** — La puce voisine de *Profondeur d'affichage* ouvre un sélecteur : choisissez un ou plusieurs processus et la carte n'affiche que ceux-ci et tout ce qui se trouve en dessous. Les sous-processus sont inclus automatiquement, et la **Profondeur d'affichage** se compte à partir de votre sélection. Le zoom par clic fonctionne toujours, désormais à l'intérieur du périmètre. Il s'agit d'un contrôle distinct de la ligne **Périmètre** située en dessous, qui filtre par Organisation ou Contexte métier lié.

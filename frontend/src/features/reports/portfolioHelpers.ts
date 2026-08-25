@@ -162,17 +162,49 @@ export function parseDate(s: string | undefined): number | null {
   return isNaN(d.getTime()) ? null : d.getTime();
 }
 
+/** A bare lifecycle map (`plan`/`phaseIn`/`active`/`phaseOut`/`endOfLife` → ISO date). */
+export type Lifecycle = Record<string, string> | undefined;
+
+/** The phases that say a card is MEANT to go live but has not done so yet. */
+const PLANNED_PHASES = ["plan", "phaseIn"];
+
+/**
+ * Whether the card is in the landscape at `dateMs` — i.e. its go-live date has
+ * arrived.
+ *
+ * A card enters on its `active` date and not before. The timeline's go-live
+ * marks sit on `active`, so taking the EARLIEST start phase as the birthday
+ * made a card with `plan 2027 / active 2029` appear in 2027 — two years before
+ * the mark that announces it, on a date carrying no mark at all.
+ *
+ * With no `active` date the card never went live:
+ *  - carrying a `plan`/`phaseIn` date makes it upcoming, so it shows only when
+ *    planned cards are previewed;
+ *  - carrying neither leaves it no birthday to miss, so it counts as started.
+ *    That fail-open branch is what keeps undated landscape furniture visible,
+ *    and what keeps a card holding only `phaseOut`/`endOfLife` (the shape the
+ *    endoflife.date mass-link writes) from being invisible its entire life —
+ *    it must already exist to be phasing out.
+ */
+export function hasStartedByDate(lifecycle: Lifecycle, dateMs: number): boolean {
+  const active = parseDate(lifecycle?.active);
+  if (active != null) return active <= dateMs;
+  return !PLANNED_PHASES.some((p) => parseDate(lifecycle?.[p]) != null);
+}
+
+/** Whether the card has reached end of life by `dateMs` (inclusive). */
+export function isRetiredByDate(lifecycle: Lifecycle, dateMs: number): boolean {
+  const eol = parseDate(lifecycle?.endOfLife);
+  return eol != null && eol <= dateMs;
+}
+
+/** Whether the card is part of the landscape at `dateMs`: born, not yet retired. */
+export function isAliveAtDate(lifecycle: Lifecycle, dateMs: number): boolean {
+  return hasStartedByDate(lifecycle, dateMs) && !isRetiredByDate(lifecycle, dateMs);
+}
+
 export function isAppAliveAtDate(app: AppData, dateMs: number): boolean {
-  const lc = app.lifecycle;
-  if (!lc) return true;
-  const dates = LIFECYCLE_PHASES.map((p) => parseDate(lc[p])).filter(
-    (d): d is number => d != null,
-  );
-  if (dates.length === 0) return true;
-  if (Math.min(...dates) > dateMs) return false;
-  const eol = parseDate(lc.endOfLife);
-  if (eol != null && eol <= dateMs) return false;
-  return true;
+  return isAliveAtDate(app.lifecycle, dateMs);
 }
 
 /* ------------------------------------------------------------------ */
@@ -360,6 +392,18 @@ export function relationMemberMatchesSubtypeFilters(
 
 export function matchesFilters(app: AppData, filters: FilterState): boolean {
   if (!isAppAliveAtDate(app, filters.timelineDate)) return false;
+  return matchesStaticFilters(app, filters);
+}
+
+/**
+ * Every filter EXCEPT the timeline date. Split out so the timeline milestone
+ * scope — which must stay stable while the slider is dragged — can be built
+ * from the statically-filtered set without re-running per date change.
+ */
+export function matchesStaticFilters(
+  app: AppData,
+  filters: Omit<FilterState, "timelineDate">,
+): boolean {
   // Attribute filters
   const attrs = app.attributes || {};
   for (const [key, vals] of Object.entries(filters.attributeFilters)) {

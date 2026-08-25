@@ -1,0 +1,308 @@
+import {
+  hasStartedByDate,
+  isAliveAtDate,
+  isRetiredByDate,
+  parseDate,
+} from "./portfolioHelpers";
+import type { Lifecycle } from "./portfolioHelpers";
+
+const ONE_YEAR_MS = 365.25 * 86_400_000;
+
+export interface TimelineRange {
+  dateRange: { min: number; max: number };
+  yearMarks: { value: number; label: string }[];
+  hasLifecycleData: boolean;
+}
+
+/**
+ * Slider bounds and year ticks for a report's "time travel" control, derived
+ * from the lifecycle dates actually present in the data.
+ *
+ * Shared by every timeline-bearing report (Portfolio, Capability Map,
+ * Dependencies) so they scale their sliders identically — the padding and the
+ * "no lifecycle data anywhere" fallback used to be copy-pasted per report.
+ *
+ * `hasLifecycleData` is false when nothing in the payload carries a date that
+ * can change the view — a go-live or an end of life. Callers hide the slider
+ * entirely in that case, and a landscape dated only with `plan` / `phaseIn` /
+ * `phaseOut` qualifies: nothing on the canvas reads those, so it genuinely
+ * looks the same at every point in time.
+ */
+export function computeTimelineRange(
+  lifecycles: Lifecycle[],
+  todayMs: number,
+): TimelineRange {
+  let minD = Infinity;
+  let maxD = -Infinity;
+  let hasLifecycleData = false;
+
+  for (const lc of lifecycles) {
+    if (!lc) continue;
+    // Only two dates can change what the timeline shows, and they are exactly
+    // the two that carry marks: `active` (the card appears — `hasStartedByDate`
+    // flips) and `endOfLife` (it goes — `isRetiredByDate` flips). Nothing here
+    // reads `plan`, `phaseIn` or `phaseOut`, so letting those bound the axis
+    // only stretched it into years where nothing happens — a lone phase-out
+    // date three years out bought three empty labelled years of dead track.
+    for (const d of [parseDate(lc.active), parseDate(lc.endOfLife)]) {
+      if (d == null) continue;
+      minD = Math.min(minD, d);
+      maxD = Math.max(maxD, d);
+      hasLifecycleData = true;
+    }
+  }
+
+  if (!hasLifecycleData)
+    return {
+      dateRange: { min: todayMs - 3 * ONE_YEAR_MS, max: todayMs + 3 * ONE_YEAR_MS },
+      yearMarks: [],
+      hasLifecycleData: false,
+    };
+
+  minD -= ONE_YEAR_MS;
+  maxD += ONE_YEAR_MS;
+
+  const yearMarks: { value: number; label: string }[] = [];
+  const startYear = new Date(minD).getFullYear();
+  const endYear = new Date(maxD).getFullYear();
+  for (let y = startYear; y <= endYear + 1; y++) {
+    const v = new Date(y, 0, 1).getTime();
+    if (v >= minD && v <= maxD) yearMarks.push({ value: v, label: String(y) });
+  }
+
+  return { dateRange: { min: minD, max: maxD }, yearMarks, hasLifecycleData: true };
+}
+
+/** How a card presents at the selected date, relative to the timeline. */
+export type TimelineChange = "arriving" | "retired" | "planned";
+
+/**
+ * Classify a card at a target date:
+ *  - "retired" — the card's end of life is at or before `dateMs`, whenever that
+ *    was. Retirement is a state, not a window: a card dead since 2015 is
+ *    retired at 2026 and at 2035 alike, so a persisted retired card stays
+ *    ghosted and badged at every later date.
+ *  - "planned" — the card has not started by `dateMs`: it will only appear
+ *    later on the timeline. The mirror of "retired", equally stateful — a card
+ *    starting in 2028 is planned at 2026 and at 2020 alike, so a previewed
+ *    planned card is ghosted and badged at every earlier date.
+ *  - "arriving" — live at a *future* `dateMs` but not in the landscape today:
+ *    the transformation's own additions. Window-based and forward-only.
+ */
+export function classifyTimelineChange(
+  lifecycle: Lifecycle,
+  todayMs: number,
+  dateMs: number,
+): TimelineChange | null {
+  if (isRetiredByDate(lifecycle, dateMs)) return "retired";
+  if (!hasStartedByDate(lifecycle, dateMs)) return "planned";
+  if (dateMs > todayMs && !isAliveAtDate(lifecycle, todayMs) && isAliveAtDate(lifecycle, dateMs))
+    return "arriving";
+  return null;
+}
+
+/**
+ * Whether a card carrying this change state is actually part of the landscape at
+ * the viewed date.
+ *
+ * Time travel shows the state as it will be, so a card that is simply there
+ * renders plainly — what arrives and leaves is carried by the timeline's marks,
+ * its pill row and the arriving/retiring chips, not by decorating the landscape
+ * itself. Only a card drawn DESPITE not being in that state earns a badge and a
+ * ghost: a retired card kept by `persistRetired`, or a not-yet-live one kept by
+ * `previewPlanned`. `arriving` is present — it went live on the way to the date
+ * you travelled to — so it is plain, carrying only the accent border that hints
+ * at what is new.
+ *
+ * Shared so the diagram and the tree/table cannot disagree about which cards
+ * count as being there.
+ */
+export function isPresentAtDate(state?: TimelineChange | null): boolean {
+  return state == null || state === "arriving";
+}
+
+export interface TimelineVisibility {
+  /** Keep retired cards on the diagram — ghosted and badged — at any date after
+   *  their retirement. On by default: what a transformation *removes* is half
+   *  of what the view is for. Off shows only the cards alive on the date. */
+  persistRetired: boolean;
+  /** Show cards that have not started yet — ghosted and badged — at any date
+   *  before their start, so a past or present view can preview what is coming.
+   *  Off by default: today's landscape stays today's landscape. */
+  previewPlanned: boolean;
+}
+
+/**
+ * Whether a card belongs on a graph drawn as of `dateMs`: alive at the date,
+ * or kept by one of the two toggles — retired cards persisting after their end,
+ * planned cards previewed before their start.
+ */
+export function isVisibleAtDate(
+  lifecycle: Lifecycle,
+  dateMs: number,
+  { persistRetired, previewPlanned }: TimelineVisibility,
+): boolean {
+  if (!hasStartedByDate(lifecycle, dateMs)) return previewPlanned;
+  return persistRetired || !isRetiredByDate(lifecycle, dateMs);
+}
+
+export interface TimelineMilestone {
+  /** Epoch ms at which the change takes effect. */
+  value: number;
+  /** How many cards reach their `active` date — go live — on it. */
+  activating: number;
+  /** How many reach their `endOfLife` — retire — on it. */
+  disappearing: number;
+}
+
+/**
+ * The dates a transformation actually turns on: when cards go live and when
+ * they retire. Two kinds, deliberately — plan and phase-in dates are milestones
+ * on paper, not changes to the landscape you are looking at, and marking them
+ * buried the two that matter.
+ *
+ * Both sides compare with `<=` on the same epoch values as the graph filter, so
+ * jumping the slider to a mark lands on the first day the change is *in
+ * effect* — the card that goes live is active, the one that retires is gone.
+ */
+export function computeTimelineMilestones(lifecycles: Lifecycle[]): TimelineMilestone[] {
+  const byDate = new Map<number, TimelineMilestone>();
+  const bump = (value: number, key: "activating" | "disappearing") => {
+    const entry = byDate.get(value) ?? { value, activating: 0, disappearing: 0 };
+    entry[key] += 1;
+    byDate.set(value, entry);
+  };
+
+  for (const lc of lifecycles) {
+    if (!lc) continue;
+    const active = parseDate(lc.active);
+    const eol = parseDate(lc.endOfLife);
+    // Never alive: retired at or before it went live. Marking either end would
+    // advertise a change on a day nothing happened.
+    if (active != null && eol != null && eol <= active) continue;
+
+    if (active != null) bump(active, "activating");
+    if (eol != null) bump(eol, "disappearing");
+  }
+
+  return [...byDate.values()].sort((a, b) => a.value - b.value);
+}
+
+/** A card whose presence changes at a transition mark. */
+export interface TimelineChangeCard {
+  id: string;
+  name: string;
+  /** `activating` reaches its `active` date in the span, `disappearing` its
+   *  `endOfLife`. Same two kinds the mark's two bars stand for. */
+  kind: "activating" | "disappearing";
+}
+
+/**
+ * Which cards change across a mark's span — what the mark above them counts,
+ * named.
+ *
+ * Deliberately mirrors `computeTimelineMilestones` rule for rule, including the
+ * never-alive skip: a pill must never name a card at a date that carries no
+ * mark, and the two drifting apart is exactly how this feature has broken
+ * before. `from`/`to` are inclusive so they agree with the graph filter's `<=`.
+ */
+export function cardsChangingBetween(
+  cards: { id: string; name: string; lifecycle?: Lifecycle }[],
+  from: number,
+  to: number,
+): TimelineChangeCard[] {
+  const out: TimelineChangeCard[] = [];
+  for (const card of cards) {
+    const active = parseDate(card.lifecycle?.active);
+    const eol = parseDate(card.lifecycle?.endOfLife);
+    if (active != null && eol != null && eol <= active) continue;
+
+    // A card can do both inside one merged cluster — arrive and then retire
+    // before the span is out — and it is listed TWICE, once per side. The mark
+    // above counts it twice too (`computeTimelineMilestones` bumps a separate
+    // date for each), so naming it once made the pills contradict the count
+    // they are supposed to spell out. Callers keying by card id must key by
+    // id AND kind.
+    if (active != null && active >= from && active <= to)
+      out.push({ id: card.id, name: card.name, kind: "activating" });
+    if (eol != null && eol >= from && eol <= to)
+      out.push({ id: card.id, name: card.name, kind: "disappearing" });
+  }
+  // Going live before retiring, matching the order of the mark's own two bars.
+  return out.sort((a, b) =>
+    a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "activating" ? -1 : 1,
+  );
+}
+
+/** Which way a card's connections change at a transition mark. */
+export interface ConnectionChanges {
+  /** Present cards that gain a connection because a neighbour arrives here. */
+  gained: Set<string>;
+  /** Present cards that lose a connection because a neighbour retires here. */
+  lost: Set<string>;
+}
+
+/**
+ * What happens to a card's CONNECTIONS at a transition mark: which cards gain
+ * one because a neighbour goes live here, and which lose one because a neighbour
+ * retires here.
+ *
+ * Scoped to the mark, not to the trip. This used to be scoped to today→viewed
+ * date and it only ever said "lost": because `isRetiredByDate` becomes more true
+ * as the date advances while today never moves, a card marked once stayed marked
+ * at every later position — a single retirement eventually marked its neighbours
+ * across the whole future. A mark is a moment: what changed here, and who felt
+ * it.
+ *
+ * The mark is read on BOTH sides. An arrival brings its relations with it, so the
+ * cards it attaches to gain a connection exactly as a retirement's neighbours
+ * lose one; only the losing half was ever shown, which told half the story.
+ *
+ * A card is marked only when it is present at `to` and is not itself arriving or
+ * retiring in the span — the change belongs to the neighbour that stays, not to
+ * the card that comes or goes, which says so itself by appearing or by being
+ * ghosted. That also keeps the marks off cards carrying a state badge of their
+ * own, so the two never compete for the same corner.
+ *
+ * Uses the same `∈ [from, to]` tests as `cardsChangingBetween`, so the marks and
+ * the mark's own pills can never disagree about what changed here. Past marks
+ * count: a retirement in 2015 is as real a change as one in 2030.
+ *
+ * Direction is deliberately ignored: the dependency graph is walked undirected
+ * everywhere else in the report. Structural parameter types (not GNode) so the
+ * layout module can depend on this one without a cycle.
+ */
+export function computeConnectionChanges(
+  nodes: { id: string; lifecycle?: Record<string, string> }[],
+  edges: { source: string; target: string }[],
+  /** Start of the mark's span, inclusive. */
+  from: number,
+  /** End of the mark's span, inclusive — the date the graph is drawn as of. */
+  to: number,
+): ConnectionChanges {
+  const gained = new Set<string>();
+  const lost = new Set<string>();
+  if (to < from) return { gained, lost };
+
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const inSpan = (d: number | null) => d != null && d >= from && d <= to;
+  const arrives = (id: string) => inSpan(parseDate(byId.get(id)?.lifecycle?.active));
+  const retires = (id: string) => inSpan(parseDate(byId.get(id)?.lifecycle?.endOfLife));
+  /** Eligible to be marked: here at the end of the span, and not itself moving. */
+  const bystander = (id: string): boolean => {
+    const n = byId.get(id);
+    return !!n && isAliveAtDate(n.lifecycle, to) && !arrives(id) && !retires(id);
+  };
+
+  for (const e of edges) {
+    for (const [moved, other] of [
+      [e.source, e.target],
+      [e.target, e.source],
+    ] as const) {
+      if (!bystander(other)) continue;
+      if (arrives(moved)) gained.add(other);
+      if (retires(moved)) lost.add(other);
+    }
+  }
+  return { gained, lost };
+}

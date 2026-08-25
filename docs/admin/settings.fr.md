@@ -9,7 +9,7 @@ La page **Paramètres** sous **Admin → Paramètres** (`/admin/settings`) est l
 | **IA** | `/admin/settings?tab=ai` | Fournisseur LLM, modèle, backend de recherche web, bascules de suggestion IA par type de fiche | [Capacités IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Liaison en masse des produits aux entrées endoflife.date | [Fin de vie (EOL)](eol.md) |
 | **Portails web** | `/admin/settings?tab=web-portals` | Slugs de portail en lecture seule, filtres de visibilité | [Portails web](web-portals.md) |
-| **ServiceNow** | `/admin/settings?tab=servicenow` | Connexion ServiceNow, configuration de synchronisation, mappage d'identité | [Intégration ServiceNow](servicenow.md) |
+| **Intégrations** | `/admin/settings?tab=integrations` | Synchronisation ServiceNow et intégrations ajoutées par des extensions | [Intégration ServiceNow](servicenow.md) |
 | **TurboLens** | `/admin/settings?tab=turbolens` | Bascules spécifiques à TurboLens, réglementations activées, sondage d'analyses | Voir la section [Paramètres TurboLens](#parametres-turbolens) ci-dessous |
 | **Migration** | `/admin/settings?tab=migration` | Imports depuis d'autres plateformes EA, et transfert complet d'espace de travail entre instances Turbo EA | [Migration de plateforme](migration.md) |
 | **Journal d'audit** | `/admin/settings?tab=audit-log` | Registre des modifications — qui a changé quoi, et si cela provient de l'interface web, de l'API ou d'un outil IA | — |
@@ -140,6 +140,12 @@ Activez ou désactivez le module **Gestion des processus métier**. Lorsqu'il es
 
 Ceci est utile pour les organisations qui n'utilisent pas le BPM et souhaitent une expérience de navigation plus épurée.
 
+### Exiger un approbateur distinct
+
+Désactivé par défaut. Lorsque l'option est active, la personne qui soumet une révision d'un flux de processus ne peut pas être celle qui l'approuve — séparation des tâches, telle que l'attendent les systèmes qualité comme les BPx et l'ISO 9001.
+
+Laissez-la désactivée pour une petite équipe où la même personne rédige et valide. L'activer ne change rien à ce qui est enregistré : soumission, approbation, rejet et retrait sont consignés dans l'onglet **Historique** de la fiche dans tous les cas.
+
 ## Module PPM
 
 Activez ou désactivez le module **Gestion de portefeuille de projets** (PPM). Lorsqu'il est désactivé :
@@ -159,6 +165,34 @@ Activez ou désactivez le module **Gouvernance, Risque et Conformité** (GRC). L
 - Les risques et les constats de conformité restent dans la base de données — les permissions sous-jacentes `risks.*` et `compliance.*` sont inchangées, de sorte que les données sont préservées et réapparaissent telles quelles si le module est réactivé
 
 Voir le [guide GRC](../guide/grc.md) pour la référence complète des fonctionnalités.
+
+## Notifications de mise à jour
+
+Turbo EA vérifie une fois par jour si une version plus récente a été publiée et, le cas échéant, dépose une notification dans la cloche de chaque utilisateur dont le rôle accorde `admin.settings`. Un clic ouvre les notes de version — le changelog de cette version — dans une boîte de dialogue au sein de Turbo EA. Chaque notification continue d'afficher la version qu'elle a annoncée, quel que soit le temps passé dans la cloche : les notes sont lues dans le changelog embarqué dans l'image, elles ne déclenchent donc aucune requête sortante et fonctionnent à l'identique sur une installation isolée. Seule une version que vous n'avez pas encore installée provient du cache de la vérification quotidienne, car un changelog écrit au moment de la construction ne peut pas la décrire ; pour celles-là, un bouton **Voir sur GitHub** ouvre la page de la version dans un nouvel onglet.
+
+Les notifications portent le nom configuré pour cette instance, afin qu'un déploiement renommé ne s'annonce pas sous un autre nom de produit.
+
+La vérification se limite à **prévenir** : rien n'est téléchargé et rien n'est modifié sur l'hôte. La mise à niveau reste la procédure délibérée et sauvegardée décrite dans [Exploitation](operations.md#the-upgrade-procedure). Un administrateur qui préfère ne pas être notifié peut désactiver la ligne **Mise à jour disponible** dans ses propres préférences de notification.
+
+Désactiver l'option supprime totalement la requête quotidienne vers github.com, ce que recherche une installation isolée ou à sortie réseau restreinte. Dans les deux cas l'instance fonctionne normalement : si le flux des versions est injoignable, l'échec est consigné discrètement et rien n'est affiché.
+
+### Une fois la mise à niveau effectuée
+
+Un second interrupteur, **Annoncer les mises à niveau aux utilisateurs**, couvre l'autre moitié. Lorsque l'instance redémarre sur une version plus récente, **tous** les utilisateurs — pas seulement les administrateurs — reçoivent une notification indiquant que l'application a été mise à jour, et un clic affiche le changelog de toutes les versions franchies. Une instance passant de 2.57.0 à 2.60.0 montre les quatre versions, pas seulement la dernière. Chacun de ces avis reste rattaché à sa propre mise à niveau : ouvrir un avis vieux d'un an affiche toujours les versions franchies par *cette* mise à niveau.
+
+L'annonce est envoyée **une fois par version** : dix redémarrages sur la même version ne produisent qu'une notification, et un retour arrière n'en produit aucune. Une installation toute neuve n'annonce rien, puisqu'il n'y a aucune mise à niveau à décrire. Ces notes proviennent du changelog embarqué dans l'image : cette moitié ne nécessite aucun réseau.
+
+Celle-ci est **uniquement dans l'application** et n'est jamais envoyée par e-mail — elle touche chaque utilisateur actif à chaque mise à niveau, et un canal e-mail transformerait chaque correctif en publipostage. Chaque utilisateur peut toutefois la désactiver sous **Notifications de mise à jour** dans ses propres préférences, où l'interrupteur e-mail apparaît désactivé.
+
+### Notifications de la boutique d'extensions
+
+Un troisième commutateur, **Notifications de la boutique d'extensions**, remplit le même rôle pour la [boutique d'extensions](extensions.md). Une fois par jour, l'instance lit le catalogue public de la boutique et, en cas de changement, prévient tous les utilisateurs dont le rôle accorde `admin.manage_extensions` — la permission qui ouvre la page Extensions. Deux choses sont annoncées : une extension publiée dans la boutique que vous n'avez pas installée, et une version plus récente d'une extension que vous avez.
+
+Les jours de sortie chargés restent lisibles : quel que soit le nombre d'extensions concernées, chaque administrateur reçoit **une** notification par catégorie (« 3 mises à jour d'extensions disponibles »), et non une par extension. Chaque changement est annoncé **une seule fois** — un catalogue inchangé pendant un mois produit une notification, pas trente — et un clic ouvre l'onglet Boutique dans Turbo EA.
+
+La toute première lecture réussie du catalogue n'annonce **aucune** nouvelle extension : une instance qui découvre la boutique signalerait sinon tout son contenu. Les mises à jour des extensions déjà installées sont signalées immédiatement, car elles sont toujours peu nombreuses et directement actionnables.
+
+Comme la vérification des versions, ceci relève **uniquement de l'information** — rien n'est téléchargé ni installé, et l'installation reste une action délibérée sur la page Extensions. Désactiver le commutateur supprime totalement la requête quotidienne vers la boutique. Chaque administrateur peut désactiver séparément les lignes **Nouvelle extension disponible** et **Mise à jour d'extension disponible** dans ses propres préférences de notification.
 
 ## Bouton Soutenir
 

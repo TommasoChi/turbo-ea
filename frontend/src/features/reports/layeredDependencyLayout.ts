@@ -14,6 +14,7 @@ import type { Node, Edge } from "@xyflow/react";
 import { getCurrentPhase } from "@/components/LifecycleBadge";
 import { LAYER_COLORS } from "@/theme/tokens";
 import type { CardType, RelationType, FieldOption } from "@/types";
+import type { TimelineChange } from "./timelineRange";
 
 /* ------------------------------------------------------------------ */
 /*  Input types (same as DependencyReport)                             */
@@ -29,12 +30,22 @@ export interface GNode {
   id: string;
   name: string;
   type: string;
+  /** Metamodel subtype key, when the card has one. */
+  subtype?: string;
   lifecycle?: Record<string, string>;
   attributes?: Record<string, unknown>;
   parent_id?: string | null;
   path?: string[];
   proposed?: boolean;
   changeKind?: DependencyChangeKind;
+  /** How this card's presence changes between today and the time-travelled date
+   *  the consumer is showing (set by the consumer — the view has no timeline of
+   *  its own). Drives the "arriving"/"retiring" badge. */
+  changeState?: TimelineChange;
+  /** Set by the consumer: a neighbour comes or goes at the mark being stood on
+   *  while this card stays put (linked to a card retired by then). */
+  gainedLink?: boolean;
+  lostLink?: boolean;
   /** Whether this card has any child card in the full dataset (set by the
    *  consumer, which holds the whole graph). Drives the "has hidden children"
    *  hierarchy marker — the view only sees the visible slice, so it can't
@@ -74,22 +85,31 @@ export function resolveRevealIds(
 }
 
 /**
- * Drop nodes whose current lifecycle phase is `endOfLife`, then drop any edge
- * that lost an endpoint. The centered card (`centerId`) and any proposed/NEW
- * card are always kept, so an end-of-life card can still be inspected when it
- * is the focus of the view.
+ * Drop nodes whose lifecycle phase is `endOfLife`, then drop any edge that lost
+ * an endpoint. Three kinds of node are always kept, because each is something
+ * the consumer put on the diagram on purpose and a generic filter has no
+ * business second-guessing: the centered card (`centerId`), a proposed/NEW card,
+ * and a card the consumer marked `changeState: "retired"` — which is
+ * end-of-life at the viewed date *by definition*, and is precisely what a
+ * time-travelled view is trying to show.
+ *
+ * `asOfMs` evaluates the phase at a time-travelled date instead of today. It is
+ * not optional for a consumer that time-travels: judging "end of life" against
+ * today would delete a card from a past-dated view that was very much alive then.
  */
 export function filterEndOfLifeNodes(
   nodes: GNode[],
   edges: GEdge[],
   centerId?: string,
+  asOfMs?: number,
 ): { nodes: GNode[]; edges: GEdge[] } {
   const visible = nodes.filter(
     (n) =>
       n.id === centerId ||
       n.changeKind !== undefined ||
       n.proposed ||
-      getCurrentPhase(n.lifecycle) !== "endOfLife",
+      n.changeState === "retired" ||
+      getCurrentPhase(n.lifecycle, asOfMs) !== "endOfLife",
   );
   const ids = new Set(visible.map((n) => n.id));
   return {
@@ -106,6 +126,8 @@ export interface LdvNodeData {
   name: string;
   typeKey: string;
   typeLabel: string;
+  /** Raw subtype key; the view resolves it to a label for display. */
+  subtypeKey?: string;
   typeColor: string;
   typeIcon: string;
   category: string;
@@ -116,6 +138,13 @@ export interface LdvNodeData {
   usedHandles?: string[];
   proposed?: boolean;
   changeKind?: DependencyChangeKind;
+  changeState?: TimelineChange;
+  gainedLink?: boolean;
+  lostLink?: boolean;
+  /** The card the graph is built around — injected by the view, not the layout. */
+  isCenter?: boolean;
+  /** A card the reader expanded, pulling its relations onto the canvas. */
+  isExpanded?: boolean;
   [key: string]: unknown;
 }
 
@@ -135,6 +164,9 @@ export interface LdvEdgeData {
    * exports. Vector shapes rasterise identically live and in export.
    */
   flowDirection?: "forward" | "reverse" | "bidirectional";
+  /** One endpoint is retired at the viewed date: this dependency is being
+   *  severed by the transformation. Rendered in the error colour. */
+  severed?: boolean;
   description?: string;
   connectedToHovered?: boolean;
   isHovered?: boolean;
@@ -146,6 +178,27 @@ export interface LdvEdgeData {
   onLeave?: () => void;
   [key: string]: unknown;
 }
+
+/**
+ * Clear the verb from every edge, for the "hide relationship labels" display
+ * option.
+ *
+ * Applied AFTER layout on purpose: the layout detects colliding labels and
+ * spreads them along their own paths, so building without labels would move
+ * the edges — and edges must not shift when the verbs are merely hidden.
+ *
+ * The label the edge component renders is `data.relLabel`, NOT React Flow's
+ * own `label` prop. Clearing the latter type-checks (RF's Edge declares it)
+ * and does exactly nothing, which is how the option shipped inert once —
+ * keeping the field name in one tested place is the point of this helper.
+ */
+export function stripEdgeLabels(edges: Edge[]): Edge[] {
+  return edges.map((e) => {
+    const d = e.data as LdvEdgeData | undefined;
+    return d?.relLabel ? { ...e, data: { ...d, relLabel: "" } } : e;
+  });
+}
+
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -333,6 +386,9 @@ export function buildLdvFlow(
 ): { nodes: Node[]; edges: Edge[] } {
   if (gNodes.length === 0) return { nodes: [], edges: [] };
 
+  // For severing edges whose endpoint is retired at the viewed date.
+  const changeStateById = new Map(gNodes.map((n) => [n.id, n.changeState]));
+
   // Build node ID set for edge validation
   const nodeIdSet = new Set(gNodes.map((n) => n.id));
 
@@ -431,11 +487,15 @@ export function buildLdvFlow(
           name: nd.name,
           typeKey: nd.type,
           typeLabel: typeLabel(nd.type, types),
+          subtypeKey: nd.subtype,
           typeColor: typeColor(nd.type, types),
           typeIcon: typeIcon(nd.type, types),
           category: gl.cat,
           proposed: nd.proposed,
           changeKind: nd.changeKind ?? (nd.proposed ? "added" : undefined),
+          changeState: nd.changeState,
+          gainedLink: nd.gainedLink,
+          lostLink: nd.lostLink,
         } satisfies LdvNodeData,
         style: { width: LDV_NODE_W, height: LDV_NODE_H },
         draggable: false,
@@ -951,7 +1011,9 @@ export function buildLdvFlow(
     //  - reverse: arrow at source end only — data flows target → source
     //  - bidirectional: arrows on both ends
     //  - unset: keep the historical default (markerEnd only)
-    const arrow = { type: "arrowclosed" as const, color: "#888" };
+    const severed =
+      changeStateById.get(e.source) === "retired" || changeStateById.get(e.target) === "retired";
+    const arrow = { type: "arrowclosed" as const, color: severed ? "#d32f2f" : "#888" };
     const markerStart =
       e.flowDirection === "reverse" || e.flowDirection === "bidirectional" ? arrow : undefined;
     const markerEnd =
@@ -968,6 +1030,7 @@ export function buildLdvFlow(
         relLabel: e.relLabel,
         flowDirection: e.flowDirection,
         description: e.description,
+        severed,
         pathOffset: pathOffsets[i],
         minOffset: edgeHandles[i].minOffset,
         labelT: labelTs[i],

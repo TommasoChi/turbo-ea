@@ -1,8 +1,35 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { ReactElement } from "react";
 import { render, screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import InventoryPage from "./InventoryPage";
+import InventoryPage, {
+  splitInventoryCellValues,
+  inventoryPreviewTargets,
+  buildInventoryFacetBindings,
+  normalizeAttrValue,
+} from "./InventoryPage";
+import { MAX_SPLIT_VALUES } from "@/components/grid/useCellContextMenu";
+import type { RelatedCardRef } from "@/types";
+import MultiSelectCellEditor from "./MultiSelectCellEditor";
+import { EMPTY_VALUE, type Filters } from "./InventoryFilterSidebar";
+
+/** Baseline sidebar filter state for the facet-binding tests. */
+const EMPTY_FILTERS: Filters = {
+  types: [],
+  search: "",
+  subtypes: [],
+  lifecyclePhases: [],
+  dataQualityBands: [],
+  orphanedOnly: false,
+  staleOnly: false,
+  approvalStatuses: [],
+  showArchived: false,
+  attributes: {},
+  relations: {},
+  tagIds: [],
+  mineScope: null,
+};
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -40,6 +67,8 @@ vi.mock("ag-grid-react", () => {
     const cols = (columnDefs ?? []).map((def) => ({
       def,
       getColId: () => def.colId ?? def.field,
+      // The cell context menu reads the colDef to pick a filter kind.
+      getColDef: () => def,
     }));
     const stubs: Record<string, any> = {
       getDisplayedRowCount: () => (rowData ?? []).length,
@@ -48,7 +77,13 @@ vi.mock("ag-grid-react", () => {
       forEachNodeAfterFilterAndSort: (fn: any) =>
         (rowData ?? []).forEach((data) => fn({ data })),
       getCellValue: ({ rowNode, colKey, useFormatter }: any) => {
-        const def = colKey.def;
+        // Real AG Grid takes either a Column or a colId string; the export
+        // path passes the column, the cell context menu passes the id.
+        const def =
+          typeof colKey === "string"
+            ? cols.find((c) => c.getColId() === colKey)?.def
+            : colKey.def;
+        if (!def) return undefined;
         const value = def.valueGetter
           ? def.valueGetter({ data: rowNode.data })
           : rowNode.data?.[def.field];
@@ -161,14 +196,19 @@ vi.mock("./RelationCellPopover", () => ({
   default: () => null,
 }));
 
+// The real panel drags in the whole card-detail graph; the tests only need to
+// see which card it was opened for.
+vi.mock("@/components/CardDetailSidePanel", () => ({
+  default: ({ cardId, open }: { cardId: string | null; open: boolean }) =>
+    open ? <div data-testid="card-preview" data-card-id={cardId} /> : null,
+}));
+
 vi.mock("./excelExport", () => ({
   exportToExcel: vi.fn(),
   exportCurrentViewToExcel: vi.fn(),
 }));
 
 // Stub CSS imports
-vi.mock("ag-grid-community/styles/ag-grid.css", () => ({}));
-vi.mock("ag-grid-community/styles/ag-theme-quartz.css", () => ({}));
 
 import { api } from "@/api/client";
 import { AgGridReact } from "ag-grid-react";
@@ -183,6 +223,8 @@ interface ColDefLike {
   field?: string;
   headerName?: string;
   editable?: boolean;
+  cellEditor?: unknown;
+  cellEditorPopup?: boolean;
   valueGetter?: (params: { data?: never }) => unknown;
   valueSetter?: (params: { data: never; newValue: never }) => boolean;
   valueFormatter?: (params: { value?: unknown }) => string;
@@ -402,6 +444,48 @@ describe("InventoryPage", () => {
 
     // Grid should still be rendered (with empty initial data)
     expect(screen.getByTestId("ag-grid")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Data-quality band filter
+//
+// The Data Quality report deep-links into a band, so `?dq=` has to survive the
+// URL branch — which used to hardcode the quality filter off entirely.
+// ---------------------------------------------------------------------------
+
+describe("InventoryPage data-quality bands", () => {
+  const rowCount = () => screen.getByTestId("ag-grid").getAttribute("data-row-count");
+
+  // MOCK_CARDS: "SAP ERP" scores 85 (complete), "Cloud Migration" 60 (partial).
+  it("filters to the band named in the URL", async () => {
+    renderInventory("/inventory?dq=partial");
+
+    await waitFor(() => expect(rowCount()).toBe("1"));
+  });
+
+  it("ORs several bands", async () => {
+    renderInventory("/inventory?dq=partial&dq=complete");
+
+    await waitFor(() => expect(rowCount()).toBe("2"));
+  });
+
+  it("ignores an unknown band rather than filtering everything out", async () => {
+    renderInventory("/inventory?dq=excellent");
+
+    await waitFor(() => expect(rowCount()).toBe("2"));
+  });
+
+  it("migrates a legacy dataQualityMin pref instead of dropping the filter", async () => {
+    // Prefs written before bands existed. 80 meant "80 and above" = complete.
+    localStorage.setItem(
+      "turboea_inventory",
+      JSON.stringify({ filters: { types: [], dataQualityMin: 80 } }),
+    );
+
+    renderInventory();
+
+    await waitFor(() => expect(rowCount()).toBe("1"));
   });
 });
 
@@ -767,13 +851,16 @@ describe("InventoryPage parent column", () => {
 
   it("renders the immediate parent's name, not the whole path", async () => {
     renderInventory();
-    await waitFor(() => expect(parentCol()).toBeDefined());
+    // The column def exists before the cards land, but the renderer resolves
+    // names from the LOADED rows (cardsById) — asserting right after the
+    // column appears races the fetch and flakes on slow CI runners. Wait for
+    // the resolution itself.
+    await waitFor(() => expect(parentCol()?.cellRenderer?.({ value: "p1" })).toBe("Finance Suite"));
 
     const child = HIER_CARDS.items[1];
     const root = HIER_CARDS.items[0];
     // The cell *value* is the raw parent id; the name is resolved at render.
     expect(parentCol()!.valueGetter!({ data: child })).toBe("p1");
-    expect(parentCol()!.cellRenderer!({ value: "p1" })).toBe("Finance Suite");
     // A root card has no parent — the cell stays empty rather than showing itself.
     expect(parentCol()!.valueGetter!({ data: root })).toBeNull();
     expect(parentCol()!.cellRenderer!({ value: null })).toBe("");
@@ -1191,5 +1278,775 @@ describe("InventoryPage current-view export", () => {
     for (const row of rows) {
       for (const c of columns) expect(c.colId in row).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cell context menu wiring
+// ---------------------------------------------------------------------------
+
+describe("InventoryPage cell context menu", () => {
+  it("hands the grid the context-menu props", async () => {
+    const { AgGridReact } = await import("ag-grid-react");
+    renderInventory();
+    await waitFor(() => expect(screen.getByTestId("ag-grid")).toBeInTheDocument());
+
+    const props = vi.mocked(AgGridReact).mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(typeof props.onCellContextMenu).toBe("function");
+    expect(props.preventDefaultOnContextMenu).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Preview from the cell context menu — the whole feature, end to end: the
+// grid's own onCellContextMenu, through the menu, to the opened side panel.
+// ---------------------------------------------------------------------------
+
+describe("InventoryPage cell context menu — Preview", () => {
+  const REDIS = { id: "itc-redis", type: "ITComponent", name: "Redis" };
+  const POSTGRES = { id: "itc-pg", type: "ITComponent", name: "PostgreSQL" };
+
+  beforeEach(() => {
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: [
+        ...MOCK_TYPES,
+        {
+          key: "ITComponent",
+          label: "IT Component",
+          icon: "memory",
+          color: "#d29270",
+          category: "Technical Architecture",
+          has_hierarchy: false,
+          subtypes: [],
+          fields_schema: [],
+          is_hidden: false,
+        },
+      ],
+      relationTypes: MOCK_REL_TYPES,
+      loading: false,
+      getType: (key: string) => MOCK_TYPES.find((t) => t.key === key),
+      getRelationsForType: () => MOCK_REL_TYPES,
+      invalidateCache: vi.fn(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.startsWith("/cards")) return Promise.resolve(MOCK_CARDS);
+      if (path.startsWith("/relations"))
+        return Promise.resolve([
+          // Deliberately reverse-alphabetical, so the menu's own sort shows.
+          { id: "r1", type: "app_to_itc", source_id: "c1", target_id: REDIS.id, target: REDIS },
+          {
+            id: "r2",
+            type: "app_to_itc",
+            source_id: "c1",
+            target_id: POSTGRES.id,
+            target: POSTGRES,
+          },
+        ]);
+      if (path.startsWith("/bookmarks")) return Promise.resolve([]);
+      return Promise.resolve({});
+    });
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function gridProps(): Promise<Record<string, any>> {
+    const { AgGridReact } = await import("ag-grid-react");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return vi.mocked(AgGridReact).mock.calls.at(-1)![0] as Record<string, any>;
+  }
+
+  /** What the first row's `colId` cell reads, straight out of the grid. */
+  async function cellText(colId: string): Promise<string> {
+    const props = await gridProps();
+    return props.ref.current.api.getCellValue({
+      rowNode: { data: MOCK_CARDS.items[0] },
+      colKey: colId,
+      useFormatter: true,
+    });
+  }
+
+  /** Right-click a cell of `colId` on the first row, via the grid's own prop. */
+  async function rightClick(colId: string) {
+    const props = await gridProps();
+    const api_ = props.ref.current.api;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const column = api_.getAllDisplayedColumns().find((c: any) => c.getColId() === colId);
+    expect(column, `column ${colId} is not displayed`).toBeDefined();
+    await act(async () => {
+      (props.onCellContextMenu as (e: unknown) => void)({
+        column,
+        node: { data: MOCK_CARDS.items[0] },
+        event: { clientX: 20, clientY: 30 },
+      });
+    });
+    return within(await screen.findByRole("menu"));
+  }
+
+  it("previews the related card a relation cell names", async () => {
+    renderInventory("/inventory?type=Application&col=rel_ITComponent");
+    await waitFor(() => expect(screen.getByTestId("ag-grid")).toBeInTheDocument());
+    // Wait for the relations to reach state — until they do the cell names
+    // nothing and there is legitimately no Preview to offer.
+    await waitFor(async () =>
+      expect(await cellText("rel_ITComponent")).toBe("PostgreSQL; Redis"),
+    );
+
+    const menu = await rightClick("rel_ITComponent");
+    await userEvent.click(menu.getByText("Preview card"));
+
+    // Two related cards, so a pick stage — listed alphabetically, matching
+    // the order the cell text joins them in.
+    const stage = within(await screen.findByRole("menu"));
+    await userEvent.click(stage.getByText("PostgreSQL"));
+
+    const panel = await screen.findByTestId("card-preview");
+    expect(panel).toHaveAttribute("data-card-id", POSTGRES.id);
+  });
+
+  it("previews the row's own card from the Name cell", async () => {
+    renderInventory("/inventory?type=Application");
+    await waitFor(() => expect(screen.getByTestId("ag-grid")).toBeInTheDocument());
+
+    const menu = await rightClick("core_name");
+    // One target, so it acts directly with no pick stage.
+    await userEvent.click(menu.getByText("Preview card"));
+
+    const panel = await screen.findByTestId("card-preview");
+    expect(panel).toHaveAttribute("data-card-id", MOCK_CARDS.items[0].id);
+  });
+
+  it("offers no Preview, and no stray divider, on a cell that names no card", async () => {
+    renderInventory("/inventory?type=Application");
+    await waitFor(() => expect(screen.getByTestId("ag-grid")).toBeInTheDocument());
+
+    const menu = await rightClick("core_type");
+    expect(menu.queryByText("Preview card")).toBeNull();
+    expect(menu.getByText("Show matching")).toBeInTheDocument();
+    expect(screen.getByRole("menu").querySelector("hr")).toBeNull();
+  });
+});
+
+describe("splitInventoryCellValues", () => {
+  const ctx = (over: Partial<Parameters<typeof splitInventoryCellValues>[0]>) =>
+    ({
+      colId: "core_name",
+      data: {} as never,
+      displayValue: "",
+      filterValue: null,
+      filterKind: "text" as const,
+      ...over,
+    });
+
+  it("zips multi-select attribute labels with their raw keys", () => {
+    expect(
+      splitInventoryCellValues(
+        ctx({
+          colId: "attr_hosting",
+          displayValue: "On premise, Cloud",
+          filterValue: ["onPrem", "cloud"],
+        }),
+      ),
+    ).toEqual([
+      { label: "On premise", filter: "onPrem" },
+      { label: "Cloud", filter: "cloud" },
+    ]);
+  });
+
+  it("treats scalar attributes as single-valued", () => {
+    expect(
+      splitInventoryCellValues(
+        ctx({ colId: "attr_vendor", displayValue: "SAP", filterValue: "SAP" }),
+      ),
+    ).toBeNull();
+  });
+
+  it("splits tags on ', ' and relation/stakeholder columns on '; '", () => {
+    expect(
+      splitInventoryCellValues(
+        ctx({ colId: "core_tags", displayValue: "Core, Legacy", filterValue: "Core, Legacy" }),
+      ),
+    ).toEqual([
+      { label: "Core", filter: "Core" },
+      { label: "Legacy", filter: "Legacy" },
+    ]);
+    expect(
+      splitInventoryCellValues(
+        ctx({ colId: "rel_ITComponent", displayValue: "PostgreSQL; Redis" }),
+      ),
+    ).toEqual([
+      { label: "PostgreSQL", filter: "PostgreSQL" },
+      { label: "Redis", filter: "Redis" },
+    ]);
+    expect(
+      splitInventoryCellValues(
+        ctx({
+          colId: "stakeholder_owner",
+          displayValue: "a@nexatech.com; b@nexatech.com",
+        }),
+      ),
+    ).toEqual([
+      { label: "a@nexatech.com", filter: "a@nexatech.com" },
+      { label: "b@nexatech.com", filter: "b@nexatech.com" },
+    ]);
+  });
+
+  it("leaves core single-value columns alone", () => {
+    expect(
+      splitInventoryCellValues(ctx({ colId: "core_name", displayValue: "NexaCore ERP" })),
+    ).toBeNull();
+  });
+});
+
+describe("inventoryPreviewTargets", () => {
+  const CARD = {
+    id: "card-1",
+    name: "NexaCore ERP",
+    type: "Application",
+    parent_id: "parent-1",
+  } as never;
+
+  const ctx = (over: Partial<Parameters<typeof inventoryPreviewTargets>[0]>) => ({
+    colId: "core_name",
+    data: CARD,
+    displayValue: "",
+    filterValue: null,
+    filterKind: "text" as const,
+    ...over,
+  });
+
+  /** Every type resolves to a distinguishable glyph so icon/colour is asserted. */
+  const typeGlyph = (typeKey: string) => ({ icon: `icon-${typeKey}`, color: "#123456" });
+
+  const deps = (refs: RelatedCardRef[] = []) => ({
+    relatedRefsOf: () => refs,
+    typeGlyph,
+    locale: "en",
+  });
+
+  it("names the row's own card on the Name column", () => {
+    expect(inventoryPreviewTargets(ctx({ colId: "core_name" }), deps())).toEqual([
+      { key: "card-1", label: "NexaCore ERP", icon: "icon-Application", color: "#123456" },
+    ]);
+  });
+
+  it("names the parent on the Parent column, labelled from the resolved cell text", () => {
+    expect(
+      inventoryPreviewTargets(
+        ctx({ colId: "core_parent", displayValue: "Finance Platform" }),
+        deps(),
+      ),
+    ).toEqual([
+      // A hierarchy parent shares its child's card type.
+      { key: "parent-1", label: "Finance Platform", icon: "icon-Application", color: "#123456" },
+    ]);
+  });
+
+  it("offers no parent when there is none, or when it is outside the loaded page", () => {
+    // No parent at all.
+    expect(
+      inventoryPreviewTargets(
+        ctx({ colId: "core_parent", data: { ...CARD, parent_id: undefined } as never }),
+        deps(),
+      ),
+    ).toEqual([]);
+    // Parent set, but unresolvable — offering a nameless item would be worse.
+    expect(
+      inventoryPreviewTargets(ctx({ colId: "core_parent", displayValue: "" }), deps()),
+    ).toEqual([]);
+  });
+
+  it("sorts related cards by name, matching the order the cell text lists them", () => {
+    const targets = inventoryPreviewTargets(
+      ctx({ colId: "rel_ITComponent", displayValue: "PostgreSQL; Redis" }),
+      deps([
+        { id: "c-redis", name: "Redis", type: "ITComponent" },
+        { id: "c-pg", name: "PostgreSQL", type: "ITComponent" },
+      ]),
+    );
+    expect(targets.map((t) => t.label)).toEqual(["PostgreSQL", "Redis"]);
+    expect(targets[0]).toMatchObject({ key: "c-pg", icon: "icon-ITComponent" });
+  });
+
+  it("dedupes by id across merged relation types, but keeps two same-named cards", () => {
+    const targets = inventoryPreviewTargets(
+      ctx({ colId: "rel_Application" }),
+      // The same card reached through two relation types, plus a genuinely
+      // different card that happens to share a name.
+      deps([
+        { id: "c-1", name: "Payments", type: "Application" },
+        { id: "c-1", name: "Payments", type: "Application" },
+        { id: "c-2", name: "Payments", type: "Application" },
+      ]),
+    );
+    expect(targets.map((t) => t.key)).toEqual(["c-1", "c-2"]);
+  });
+
+  it("caps the list at MAX_SPLIT_VALUES, keeping the alphabetically first", () => {
+    const refs = Array.from({ length: MAX_SPLIT_VALUES + 4 }, (_unused, i) => ({
+      id: `c-${i}`,
+      // Reverse-alphabetical input, so a missing sort would be obvious.
+      name: `Card ${String(MAX_SPLIT_VALUES + 4 - i).padStart(2, "0")}`,
+      type: "Application",
+    }));
+    const targets = inventoryPreviewTargets(ctx({ colId: "rel_Application" }), deps(refs));
+    expect(targets).toHaveLength(MAX_SPLIT_VALUES);
+    expect(targets[0].label).toBe("Card 01");
+  });
+
+  it.each(["core_path", "core_tags", "core_type", "attr_hosting", "stakeholder_owner"])(
+    "names no card on the %s column",
+    (colId) => {
+      expect(
+        inventoryPreviewTargets(ctx({ colId, displayValue: "something" }), deps()),
+      ).toEqual([]);
+    },
+  );
+});
+
+describe("buildInventoryFacetBindings", () => {
+  const TYPE_CONFIG = {
+    key: "Application",
+    fields_schema: [
+      {
+        section: "General",
+        fields: [
+          { key: "hosting", type: "single_select", options: [] },
+          { key: "critical", type: "boolean" },
+          { key: "vendorName", type: "text" },
+          { key: "cost", type: "cost" },
+        ],
+      },
+    ],
+  } as unknown as Parameters<typeof buildInventoryFacetBindings>[2];
+
+  function harness(initial?: Partial<Filters>) {
+    let filters = { ...EMPTY_FILTERS, ...initial } as Filters;
+    const ref = {
+      get current() {
+        return filters;
+      },
+    };
+    const setFilters = (fn: (prev: Filters) => Filters) => {
+      filters = fn(filters);
+    };
+    const bindings = buildInventoryFacetBindings(ref, setFilters, TYPE_CONFIG);
+    return { bindings, read: () => filters };
+  }
+
+  const ctx = (colId: string, filterValue: unknown) =>
+    ({ colId, filterValue, data: {}, displayValue: "", filterKind: "text" }) as never;
+
+  it("binds only the facet-backed columns", () => {
+    const { bindings } = harness();
+    expect(Object.keys(bindings).sort()).toEqual([
+      "attr_critical",
+      "attr_hosting",
+      "core_approval_status",
+      "core_data_quality",
+      "core_lifecycle",
+      "core_subtype",
+      "core_type",
+    ]);
+    // Text/cost attributes filter with contains/min in the sidebar — never mirrored.
+    expect(bindings.attr_vendorName).toBeUndefined();
+    expect(bindings.attr_cost).toBeUndefined();
+  });
+
+  it("maps approval status to its facet and back", () => {
+    const { bindings, read } = harness();
+    expect(bindings.core_approval_status.toFacetValue(ctx("core_approval_status", "BROKEN"))).toBe(
+      "BROKEN",
+    );
+    bindings.core_approval_status.setValues(["BROKEN"]);
+    expect(read().approvalStatuses).toEqual(["BROKEN"]);
+    expect(bindings.core_approval_status.getValues()).toEqual(["BROKEN"]);
+    bindings.core_approval_status.setValues([]);
+    expect(read().approvalStatuses).toEqual([]);
+  });
+
+  it("maps a data-quality score to the band that contains it", () => {
+    const { bindings, read } = harness();
+    const toBand = (v: unknown) => bindings.core_data_quality.toFacetValue(ctx("core_data_quality", v));
+    // The raw score, not the "85%" the formatter renders.
+    expect(toBand(85)).toBe("complete");
+    expect(toBand(80)).toBe("complete");
+    expect(toBand(79.9)).toBe("partial");
+    expect(toBand(39.9)).toBe("minimal");
+
+    bindings.core_data_quality.setValues(["partial"]);
+    expect(read().dataQualityBands).toEqual(["partial"]);
+    expect(bindings.core_data_quality.getValues()).toEqual(["partial"]);
+  });
+
+  it("never writes a column filter for data quality", () => {
+    // A band is a range; an equals filter on one score would AND-narrow the
+    // grid to that single value while the facet claims the whole band.
+    const { bindings } = harness();
+    expect(bindings.core_data_quality.columnFilter).toBe(false);
+  });
+
+  it("falls back to a plain filter when a quality cell is not a number", () => {
+    const { bindings } = harness();
+    expect(bindings.core_data_quality.toFacetValue(ctx("core_data_quality", "n/a"))).toBeNull();
+  });
+
+  it("maps blank cells to the (empty) option where the facet has one", () => {
+    const { bindings } = harness();
+    expect(bindings.core_subtype.toFacetValue(ctx("core_subtype", ""))).toBe(EMPTY_VALUE);
+    expect(bindings.core_lifecycle.toFacetValue(ctx("core_lifecycle", null))).toBe(EMPTY_VALUE);
+    // Approval status has no (empty) chip → falls back to a plain blank filter.
+    expect(bindings.core_approval_status.toFacetValue(ctx("core_approval_status", ""))).toBeNull();
+  });
+
+  it("resets dependent facets when the type changes (issue #686)", () => {
+    const { bindings, read } = harness({
+      types: ["ITComponent"],
+      subtypes: ["software"],
+      attributes: { hosting: ["cloud"] },
+      relations: { relOrgToApp: ["Acme"] },
+    });
+    bindings.core_type.setValues(["Application"]);
+    expect(read().types).toEqual(["Application"]);
+    expect(read().subtypes).toEqual([]);
+    expect(read().attributes).toEqual({});
+    expect(read().relations).toEqual({});
+  });
+
+  it("leaves state untouched when the type facet is set to what it already holds", () => {
+    const { bindings, read } = harness({ types: ["Application"], subtypes: ["saas"] });
+    const before = read();
+    bindings.core_type.setValues(["Application"]);
+    expect(read()).toBe(before);
+  });
+
+  it("stores select attributes as arrays and booleans as scalars", () => {
+    const { bindings, read } = harness();
+    bindings.attr_hosting.setValues(["cloud"]);
+    expect(read().attributes.hosting).toEqual(["cloud"]);
+    expect(bindings.attr_hosting.getValues()).toEqual(["cloud"]);
+
+    bindings.attr_critical.setValues(["true"]);
+    expect(read().attributes.critical).toBe("true");
+    expect(bindings.attr_critical.getValues()).toEqual(["true"]);
+
+    bindings.attr_hosting.setValues([]);
+    expect("hosting" in read().attributes).toBe(false);
+  });
+
+  it("builds no attribute bindings when no single type is selected", () => {
+    let filters = EMPTY_FILTERS as Filters;
+    const bindings = buildInventoryFacetBindings(
+      { get current() { return filters; } },
+      (fn) => { filters = fn(filters); },
+      undefined,
+    );
+    expect(Object.keys(bindings).some((k) => k.startsWith("attr_"))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mass edit — attribute fields (#940)
+// ---------------------------------------------------------------------------
+
+describe("normalizeAttrValue", () => {
+  it("treats every empty shape as a clear", () => {
+    expect(normalizeAttrValue("")).toBeNull();
+    expect(normalizeAttrValue(null)).toBeNull();
+    expect(normalizeAttrValue(undefined)).toBeNull();
+    // An emptied multi-select: `[]` must clear, not persist as an empty list.
+    expect(normalizeAttrValue([])).toBeNull();
+  });
+
+  it("keeps values a user deliberately chose", () => {
+    // The old `value || null` wiped both of these.
+    expect(normalizeAttrValue(false)).toBe(false);
+    expect(normalizeAttrValue(0)).toBe(0);
+    expect(normalizeAttrValue(["emea"])).toEqual(["emea"]);
+    expect(normalizeAttrValue("low")).toBe("low");
+  });
+});
+
+describe("InventoryPage mass edit attributes", () => {
+  const ATTR_TYPES = [
+    {
+      ...MOCK_TYPES[0],
+      fields_schema: [
+        {
+          section: "General",
+          fields: [
+            {
+              key: "regions",
+              label: "Regions",
+              type: "multiple_select",
+              options: [
+                { key: "emea", label: "EMEA" },
+                { key: "apac", label: "APAC" },
+              ],
+            },
+            { key: "critical", label: "Critical", type: "boolean" },
+            { key: "seats", label: "Seats", type: "number" },
+            { key: "licenseCost", label: "License Cost", type: "cost" },
+          ],
+        },
+      ],
+    },
+    MOCK_TYPES[1],
+  ];
+
+  /** Grant everything except costs.view when `costs` is false. */
+  function mockUser(costs = true) {
+    vi.mocked(useAuth).mockReturnValue({
+      user: {
+        id: "u1",
+        email: "admin@test.com",
+        display_name: "Admin",
+        role: "member",
+        permissions: costs
+          ? { "*": true }
+          : {
+              "inventory.view": true,
+              "inventory.edit": true,
+              "relations.manage": true,
+            },
+      },
+      loading: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+      ssoCallback: vi.fn(),
+      setPassword: vi.fn(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+  }
+
+  beforeEach(() => {
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: ATTR_TYPES,
+      relationTypes: [],
+      loading: false,
+      getType: (key: string) => ATTR_TYPES.find((t) => t.key === key),
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    vi.mocked(api.patch).mockResolvedValue({});
+  });
+
+  /** Filter to Application, select every row, open Mass Edit, pick a field. */
+  async function openField(name: RegExp) {
+    renderInventory();
+    await waitFor(() => expect(screen.getByTestId("ag-grid")).toBeInTheDocument());
+    await userEvent.click(screen.getByTestId("select-application"));
+    await userEvent.click(screen.getByTestId("select-all-rows"));
+    await userEvent.click(await screen.findByRole("button", { name: /mass edit/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getAllByRole("combobox")[0]);
+    await userEvent.click(await screen.findByRole("option", { name }));
+    return dialog;
+  }
+
+  async function apply() {
+    await userEvent.click(screen.getByRole("button", { name: /apply to/i }));
+  }
+
+  /** The attributes payload of the first PATCH sent to a card. */
+  function patchedAttrs() {
+    const call = vi
+      .mocked(api.patch)
+      .mock.calls.find(([path]) => (path as string).startsWith("/cards/"));
+    return (call?.[1] as { attributes: Record<string, unknown> }).attributes;
+  }
+
+  it("offers the option list for a multi-select, not a free-text box", async () => {
+    // The bug: this rendered a bare TextField, so users typed a value that was
+    // stored as a raw string in a field that holds option keys.
+    const dialog = await openField(/^regions$/i);
+
+    const valueControl = within(dialog).getAllByRole("combobox")[1];
+    await userEvent.click(valueControl);
+    const listbox = await screen.findByRole("listbox");
+    expect(within(listbox).getByRole("option", { name: /EMEA/ })).toBeInTheDocument();
+    expect(within(listbox).getByRole("option", { name: /APAC/ })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("textbox")).toBeNull();
+  });
+
+  it("writes the chosen options as an array of keys", async () => {
+    const dialog = await openField(/^regions$/i);
+    await userEvent.click(within(dialog).getAllByRole("combobox")[1]);
+    await userEvent.click(await screen.findByRole("option", { name: /EMEA/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /APAC/ }));
+    await userEvent.keyboard("{Escape}");
+    await apply();
+
+    await waitFor(() => expect(patchedAttrs()).toEqual({ regions: ["emea", "apac"] }));
+  });
+
+  it("clears the attribute when nothing is selected", async () => {
+    await openField(/^regions$/i);
+    await apply();
+    await waitFor(() => expect(patchedAttrs()).toEqual({ regions: null }));
+  });
+
+  it("writes false for a boolean rather than clearing it", async () => {
+    // `massEditValue || null` used to turn a deliberate "off" into a clear.
+    const dialog = await openField(/^critical$/i);
+    const toggle = within(dialog).getByRole("checkbox");
+    await userEvent.click(toggle); // on
+    await userEvent.click(toggle); // off — an explicit false
+    await apply();
+    await waitFor(() => expect(patchedAttrs()).toEqual({ critical: false }));
+  });
+
+  it("writes 0 for a number rather than clearing it", async () => {
+    const dialog = await openField(/^seats$/i);
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "0");
+    await apply();
+    await waitFor(() => expect(patchedAttrs()).toEqual({ seats: 0 }));
+  });
+
+  it("keeps the card's other attributes", async () => {
+    const dialog = await openField(/^seats$/i);
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "12");
+    await apply();
+    await waitFor(() => expect(patchedAttrs()).toMatchObject({ seats: 12 }));
+  });
+
+  it("hides cost fields from a user without costs.view", async () => {
+    mockUser(false);
+    renderInventory();
+    await waitFor(() => expect(screen.getByTestId("ag-grid")).toBeInTheDocument());
+    await userEvent.click(screen.getByTestId("select-application"));
+    await userEvent.click(screen.getByTestId("select-all-rows"));
+    await userEvent.click(await screen.findByRole("button", { name: /mass edit/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getAllByRole("combobox")[0]);
+    const listbox = await screen.findByRole("listbox");
+    expect(within(listbox).queryByRole("option", { name: /license cost/i })).toBeNull();
+    expect(within(listbox).getByRole("option", { name: /^seats$/i })).toBeInTheDocument();
+  });
+
+  it("gives the multi-select grid column a real cell editor", async () => {
+    renderInventory();
+    await userEvent.click(screen.getByTestId("select-application"));
+    await waitFor(() => expect(col("attr_regions")).toBeDefined());
+    expect(col("attr_regions")!.cellEditor).toBe(MultiSelectCellEditor);
+    expect(col("attr_regions")!.cellEditorPopup).toBe(true);
+  });
+
+  it("clears the attribute when a grid cell edit empties the selection", async () => {
+    renderInventory();
+    await userEvent.click(screen.getByTestId("select-application"));
+    await waitFor(() => expect(col("attr_regions")).toBeDefined());
+
+    const calls = vi.mocked(AgGridReact).mock.calls;
+    const onCellValueChanged = (
+      calls[calls.length - 1][0] as { onCellValueChanged: (e: unknown) => Promise<void> }
+    ).onCellValueChanged;
+
+    await onCellValueChanged({
+      data: { id: "c1", attributes: {} },
+      colDef: { field: "attr_regions" },
+      newValue: [],
+      oldValue: ["emea"],
+    });
+    expect(api.patch).toHaveBeenCalledWith("/cards/c1", { attributes: { regions: null } });
+
+    await onCellValueChanged({
+      data: { id: "c1", attributes: {} },
+      colDef: { field: "attr_regions" },
+      newValue: ["apac"],
+      oldValue: [],
+    });
+    expect(api.patch).toHaveBeenCalledWith("/cards/c1", { attributes: { regions: ["apac"] } });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-select attribute cells (rendered like the tags column)
+// ---------------------------------------------------------------------------
+
+describe("InventoryPage multi-select attribute cells", () => {
+  const REGION_OPTIONS = [
+    { key: "emea", label: "EMEA" },
+    { key: "apac", label: "APAC" },
+    { key: "amer", label: "Americas" },
+    { key: "latam", label: "LATAM" },
+    { key: "anz", label: "ANZ" },
+  ];
+  const CELL_TYPES = [
+    {
+      ...MOCK_TYPES[0],
+      fields_schema: [
+        {
+          section: "General",
+          fields: [
+            { key: "regions", label: "Regions", type: "multiple_select", options: REGION_OPTIONS },
+          ],
+        },
+      ],
+    },
+    MOCK_TYPES[1],
+  ];
+
+  beforeEach(() => {
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: CELL_TYPES,
+      relationTypes: [],
+      loading: false,
+      getType: (key: string) => CELL_TYPES.find((t) => t.key === key),
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+  });
+
+  /** Render the attribute column's cell renderer for a stored value. */
+  async function renderCell(value: unknown) {
+    renderInventory();
+    await userEvent.click(screen.getByTestId("select-application"));
+    await waitFor(() => expect(col("attr_regions")).toBeDefined());
+    const renderer = col("attr_regions")!.cellRenderer!;
+    return render(renderer({ value } as never) as ReactElement).container;
+  }
+
+  it("renders option labels as chips, not raw keys", async () => {
+    const cell = await renderCell(["emea", "apac"]);
+    expect(cell.textContent).toContain("EMEA");
+    expect(cell.textContent).toContain("APAC");
+    expect(cell.textContent).not.toContain("emea");
+  });
+
+  it("collapses a long list into a +N chip, like the tags column", async () => {
+    // A grid row is one line tall: six full-size chips used to wrap and push
+    // the row's content out of view.
+    const cell = await renderCell(["emea", "apac", "amer", "latam", "anz"]);
+    expect(cell.querySelectorAll(".MuiChip-root")).toHaveLength(4); // 3 + overflow
+    expect(cell.textContent).toContain("+2");
+    // Everything is still reachable — the cap is visual only.
+    expect(cell.querySelector("[title]")?.getAttribute("title")).toBe(
+      "EMEA, APAC, Americas, LATAM, ANZ",
+    );
+  });
+
+  it("keeps a value whose option no longer exists visible", async () => {
+    const cell = await renderCell(["emea", "retired-key"]);
+    expect(cell.textContent).toContain("retired-key");
+  });
+
+  it("renders nothing for an empty cell", async () => {
+    const cell = await renderCell([]);
+    expect(cell.querySelectorAll(".MuiChip-root")).toHaveLength(0);
+  });
+
+  it("exports every value regardless of the visual cap", async () => {
+    renderInventory();
+    await userEvent.click(screen.getByTestId("select-application"));
+    await waitFor(() => expect(col("attr_regions")).toBeDefined());
+    expect(col("attr_regions")!.valueFormatter!({ value: ["emea", "apac", "amer", "latam"] })).toBe(
+      "EMEA, APAC, Americas, LATAM",
+    );
   });
 });

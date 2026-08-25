@@ -45,10 +45,19 @@ export interface AdrGridPrefs {
    * column chooser lives in a sibling component of the grid.
    */
   frozenColumns?: string[];
-  /** AG Grid getColumnState() snapshot — order/width/pinning/sort. */
+  /**
+   * colId order, owned by `useColumnOrder` — the sidebar's Column order
+   * section and the header drag both write here. Kept out of `columnState`
+   * for the same reason `frozenColumns` is: that snapshot's restore stops
+   * re-applying once the user first rearranges a column.
+   */
+  columnOrder?: string[];
+  /** AG Grid getColumnState() snapshot — width and sort. */
   columnState?: ColumnState[];
   /** AG Grid getFilterModel() snapshot — active per-column filters. */
   columnFilterModel?: Record<string, unknown>;
+  /** Active group-by axis key (currently only "status"), or null. */
+  groupBy?: string | null;
 }
 
 export function loadAdrGridPrefs(): AdrGridPrefs | null {

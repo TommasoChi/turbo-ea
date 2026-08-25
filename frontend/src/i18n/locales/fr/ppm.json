@@ -7,6 +7,7 @@
   "totalInitiatives": "Total des initiatives",
   "totalBudget": "Budget total",
   "totalActual": "Réel total",
+  "budgetBarTotal": "Total",
   "health_schedule": "Calendrier",
   "health_cost": "Coût",
   "health_scope": "Périmètre",
@@ -170,5 +171,19 @@
   "workPackage": "Lot de travail",
   "confirmDeleteTask": "Supprimer cette tâche ? Cette action est irréversible.",
   "addTaskUnderWbs": "Ajouter une tâche",
-  "deleteConfirm": "Confirmer la suppression"
+  "deleteConfirm": "Confirmer la suppression",
+  "spendOverTime": "Dépenses dans le temps",
+  "cumulativeByCategory": "Dépenses cumulées par catégorie",
+  "cumulativeTotal": "Dépenses totales cumulées",
+  "projectCumulative": "Projet à ce jour",
+  "allFiscalYears": "Tous les exercices",
+  "cumulativeCapex": "CapEx cumulées",
+  "cumulativeOpex": "OpEx cumulées",
+  "cumulativeSpend": "Dépenses cumulées",
+  "capexBudgetLine": "Budget CapEx",
+  "opexBudgetLine": "Budget OpEx",
+  "totalBudgetLine": "Budget total",
+  "noChartData": "Aucune donnée de coût à représenter",
+  "undatedExcluded_one": "{{count}} poste de coût sans date n'apparaît pas dans les graphiques",
+  "undatedExcluded_other": "{{count}} postes de coût sans date n'apparaissent pas dans les graphiques"
 }

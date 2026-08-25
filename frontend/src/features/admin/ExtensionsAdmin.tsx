@@ -26,19 +26,41 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router";
 
 import { api, ApiError } from "@/api/client";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import { useDateFormat } from "@/hooks/useDateFormat";
 import { invalidateExtensionCapabilities } from "@/hooks/useExtensionCapabilities";
 import { invalidateCache as invalidateMetamodel } from "@/hooks/useMetamodel";
+
+// Tab state rides the URL (and localStorage) so a refresh on the Installed
+// tab does not bounce back to the Store — same pattern as GrcPage.
+const TAB_KEYS = ["store", "installed"] as const;
+type TabKey = (typeof TAB_KEYS)[number];
+const TAB_STORAGE_KEY = "turboea.extensions.tab";
+
+function readStoredTab(): TabKey | null {
+  try {
+    const v = localStorage.getItem(TAB_STORAGE_KEY);
+    return v && TAB_KEYS.includes(v as TabKey) ? (v as TabKey) : null;
+  } catch {
+    return null;
+  }
+}
 import { ExtensionBoundary, useExtensionUI } from "@/lib/extensionHost";
 
 interface EntitlementInfo {
   state: "active" | "grace" | "expired" | "unlicensed" | "free";
   expires_at?: string | null;
   grace_until?: string | null;
+  // Whether the backing store subscription renews at period end; null/absent
+  // on manual/offline licenses and licenses issued before the flag existed.
+  auto_renew?: boolean | null;
+  // Store-issued trial entitlement — no grace window, labelled "Trial".
+  trial?: boolean | null;
 }
 
 interface ExtensionInfo {
@@ -59,11 +81,15 @@ interface LicenseInfo {
   entitlements: {
     extension_key: string;
     expires_at?: string | null;
+    auto_renew?: boolean | null;
   }[];
   uploaded_at?: string | null;
   // Why the stored license is not in effect (bound to another instance,
   // failed verification) — null/absent when everything is fine.
   problem?: string | null;
+  // True when the subscription can be managed via the store billing portal
+  // (store-issued license). The credential itself never reaches the browser.
+  store_managed?: boolean;
 }
 
 interface InstallReport {
@@ -84,6 +110,7 @@ interface InstallReport {
     conflict: number;
     failed: number;
   };
+  downgrade?: { from: string; to: string };
 }
 
 interface ExtensionInstall {
@@ -104,21 +131,42 @@ interface StoreItem {
   long_description?: string;
   price: string;
   payment_link: string;
+  // Optional no-card trial checkout link; opened through the same
+  // claim-token flow as payment_link.
+  trial_link?: string;
   demo_url?: string;
   homepage?: string;
   license?: string;
   license_url?: string;
   screenshots?: string[];
+  // Category slugs; the first is the commercial-model tag ("free"/"commercial")
+  // the catalogue derives at publish time, the rest are topical.
+  tags?: string[];
   version: string;
   installed_version?: string | null;
   update_available: boolean;
   entitlement_state: EntitlementInfo["state"];
+  // Entitlement is a trial (active or expired) — Buy stays visible so a
+  // trialing customer can convert in-product.
+  entitlement_trial?: boolean;
+  // Expiry/renewal info for the card's entitlement chip ("Trial until …" /
+  // "Renews on …") — present even for licensed-but-not-installed items.
+  entitlement_expires_at?: string | null;
+  entitlement_grace_until?: string | null;
+  entitlement_auto_renew?: boolean | null;
   free?: boolean;
 }
+
+// The commercial-model tags always sort ahead of topical ones in the filter bar.
+const MODEL_TAGS = ["free", "commercial"];
 
 interface StoreCatalog {
   configured: boolean;
   reachable: boolean;
+  // "blocked" = the store answered and refused us (bot protection, WAF, proxy);
+  // "offline" = no route to it at all. Only the second one means air-gapped.
+  reason?: "" | "blocked" | "offline";
+  status_code?: number | null;
   store_url: string;
   items: StoreItem[];
 }
@@ -164,10 +212,62 @@ function makeClaimToken(): string {
 export default function ExtensionsAdmin() {
   const { t } = useTranslation("admin");
 
-  const [tab, setTab] = useState<"store" | "installed">("store");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramTab = searchParams.get("tab") as TabKey | null;
+  const validParam = paramTab && TAB_KEYS.includes(paramTab) ? paramTab : null;
+  // Priority: valid URL param > localStorage > default. localStorage is read
+  // only once (lazy initializer) so it never fights a subsequent tab click.
+  const [tab, setTab] = useState<TabKey>(() => validParam ?? readStoredTab() ?? "store");
+
+  useEffect(() => {
+    if (validParam && validParam !== tab) setTab(validParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validParam]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(TAB_STORAGE_KEY, tab);
+    } catch {
+      /* private mode etc. — the URL param still covers refreshes */
+    }
+  }, [tab]);
+
+  const handleTabChange = (_: React.SyntheticEvent, val: string) => {
+    const next = val as TabKey;
+    setTab(next);
+    const params = new URLSearchParams(searchParams);
+    if (next === "store") params.delete("tab");
+    else params.set("tab", next);
+    setSearchParams(params, { replace: true });
+  };
+  // Entitlement/license dates follow the app-wide configured date format
+  // (Admin → Settings), never the browser locale.
+  const { formatDate: fmtDate } = useDateFormat();
   const [extensions, setExtensions] = useState<ExtensionInfo[]>([]);
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [catalog, setCatalog] = useState<StoreCatalog | null>(null);
+  // Multi-select AND filter over the catalogue's category tags. Empty = All.
+  const [activeTags, setActiveTags] = useState<string[]>([]);
+  const allTags = useMemo(() => {
+    const union = new Set((catalog?.items ?? []).flatMap((item) => item.tags ?? []));
+    return [
+      ...MODEL_TAGS.filter((tag) => union.has(tag)),
+      ...[...union].filter((tag) => !MODEL_TAGS.includes(tag)).sort(),
+    ];
+  }, [catalog]);
+  const filteredItems = useMemo(() => {
+    const items = catalog?.items ?? [];
+    if (activeTags.length === 0) return items;
+    return items.filter((item) => activeTags.every((tag) => (item.tags ?? []).includes(tag)));
+  }, [catalog, activeTags]);
+  const toggleTag = (tag: string) =>
+    setActiveTags((current) =>
+      current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag],
+    );
+  const [downgradeConfirm, setDowngradeConfirm] = useState<{
+    id: string;
+    from: string;
+    to: string;
+  } | null>(null);
   const [instanceId, setInstanceId] = useState("");
   const [instanceCopied, setInstanceCopied] = useState(false);
   const [storeBusyKey, setStoreBusyKey] = useState<string | null>(null);
@@ -188,6 +288,10 @@ export default function ExtensionsAdmin() {
   const [licenseBusy, setLicenseBusy] = useState(false);
   const [licenseError, setLicenseError] = useState<string | null>(null);
   const licenseFileRef = useRef<HTMLInputElement>(null);
+  // Set when a paste was refused with 409 entitlement_downgrade: the new
+  // license drops entitlements the current one still covers, so the admin
+  // must confirm before the replace lapses them.
+  const [downgrade, setDowngrade] = useState<{ text: string; dropped: string[] } | null>(null);
 
   // Purchase claim polling (Buy → Stripe tab → poll until license lands).
   const [claiming, setClaiming] = useState<{ token: string; itemKey: string } | null>(null);
@@ -212,6 +316,7 @@ export default function ExtensionsAdmin() {
 
   const [uninstallKey, setUninstallKey] = useState<string | null>(null);
   const [renewBusy, setRenewBusy] = useState(false);
+  const [manageBusy, setManageBusy] = useState(false);
   const [removeLicenseOpen, setRemoveLicenseOpen] = useState(false);
   const [removeLicenseBusy, setRemoveLicenseBusy] = useState(false);
   // When a file-uploaded extension can't be applied for lack of a license,
@@ -268,13 +373,15 @@ export default function ExtensionsAdmin() {
   }, [loadAll]);
 
   const applyInstall = useCallback(
-    async (id: string) => {
+    async (id: string, opts?: { confirmDowngrade?: boolean }) => {
       setInstallBusy(true);
       setInstallError(null);
       try {
-        const updated = await api.post<ExtensionInstall>(
-          `/admin/extensions/install/${id}/apply`,
-        );
+        const updated = opts?.confirmDowngrade
+          ? await api.post<ExtensionInstall>(`/admin/extensions/install/${id}/apply`, {
+              confirm_downgrade: true,
+            })
+          : await api.post<ExtensionInstall>(`/admin/extensions/install/${id}/apply`);
         setInstall(updated);
         poll(updated.id);
       } catch (err) {
@@ -287,6 +394,22 @@ export default function ExtensionsAdmin() {
           setLicenseError(null);
           setApplyGate(true);
           setLicenseDialogOpen(true);
+        } else if (
+          err instanceof ApiError &&
+          err.status === 409 &&
+          typeof err.detail === "object" &&
+          err.detail !== null &&
+          (err.detail as { code?: string }).code === "version_downgrade"
+        ) {
+          // Belt-and-braces: the server recomputed a downgrade the client
+          // missed — surface the same confirmation dialog.
+          const detail = err.detail as { installed?: string; bundle?: string };
+          autoApplyRef.current = false;
+          setDowngradeConfirm({
+            id,
+            from: detail.installed ?? "?",
+            to: detail.bundle ?? "?",
+          });
         } else {
           setInstallError(err instanceof Error ? err.message : String(err));
         }
@@ -321,8 +444,12 @@ export default function ExtensionsAdmin() {
             void loadAll();
           } else if (next.status === "previewed" && autoApplyRef.current) {
             // One-click store install: apply automatically unless the
-            // dry-run flagged failures (then fall back to manual review).
-            if (next.diff?.totals?.failed) {
+            // dry-run flagged failures (then fall back to manual review) or
+            // this would be a version DOWNGRADE (then confirm explicitly).
+            if (next.diff?.downgrade) {
+              autoApplyRef.current = false;
+              setDowngradeConfirm({ id: next.id, ...next.diff.downgrade });
+            } else if (next.diff?.totals?.failed) {
               autoApplyRef.current = false;
             } else {
               void applyInstall(next.id);
@@ -365,16 +492,17 @@ export default function ExtensionsAdmin() {
     setGateItem(null);
     setLicenseText("");
     setLicenseError(null);
+    setDowngrade(null);
     pendingInstallRef.current = null;
     pendingApplyRef.current = null;
     setApplyGate(false);
   }, []);
 
-  const submitLicense = async (text: string) => {
+  const submitLicense = async (text: string, confirm = false) => {
     setLicenseBusy(true);
     setLicenseError(null);
     try {
-      await api.put("/admin/extensions/license", { text });
+      await api.put("/admin/extensions/license", { text, confirm });
       setLicenseText("");
       // A new license can activate capability grants — drop the cache.
       invalidateExtensionCapabilities();
@@ -391,7 +519,13 @@ export default function ExtensionsAdmin() {
       if (continueApplyId) void applyInstall(continueApplyId);
       else if (continueKey) void startStoreInstall(continueKey);
     } catch (e) {
-      setLicenseError(e instanceof Error ? e.message : String(e));
+      const detail =
+        e instanceof ApiError ? (e.detail as { code?: string; dropped?: string[] } | null) : null;
+      if (e instanceof ApiError && e.status === 409 && detail?.code === "entitlement_downgrade") {
+        setDowngrade({ text, dropped: detail.dropped ?? [] });
+      } else {
+        setLicenseError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setLicenseBusy(false);
     }
@@ -444,22 +578,49 @@ export default function ExtensionsAdmin() {
     [clearClaimPoll, loadAll, startStoreInstall, t],
   );
 
-  const handleBuy = (item: StoreItem) => {
-    if (!item.payment_link) return;
+  // Open a Stripe checkout link (paid subscription or no-card trial) and
+  // start polling the store's claim endpoint. The claim flow is mechanism-
+  // agnostic: a completed trial checkout resolves to a license exactly like
+  // a paid one.
+  const openCheckout = (link: string, itemKey: string, kind: "buy" | "trial") => {
     const token = makeClaimToken();
-    const sep = item.payment_link.includes("?") ? "&" : "?";
     // The instance ID rides along so the store can key the purchase to this
     // instance (composite licensing) — parsed off the end by the webhook
     // (fixed TEA-XXXX-XXXX-XXXX shape). Stripe allows [A-Za-z0-9_-] here.
     const ref = instanceId ? `${token}-${instanceId}` : token;
-    window.open(
-      `${item.payment_link}${sep}client_reference_id=${ref}`,
-      "_blank",
-      "noopener",
-    );
+    // Prefer the store's server-created checkout: no typed instance-ID field
+    // (the app passes it; the store stamps it onto the subscription and uses
+    // the same token-instance client_reference_id, so the claim poll below
+    // works identically). The static payment link stays as the fallback for
+    // an unknown instance id — and the store itself falls back to it too.
+    const storeBase = catalog?.store_url?.replace(/\/$/, "");
+    let target: string;
+    if (instanceId && storeBase) {
+      target =
+        `${storeBase}/checkout?item=${encodeURIComponent(itemKey)}` +
+        `&kind=${kind}&ref=${token}&instance=${instanceId}`;
+    } else {
+      const sep = link.includes("?") ? "&" : "?";
+      target = `${link}${sep}client_reference_id=${ref}`;
+    }
+    window.open(target, "_blank", "noopener");
     claimCountRef.current = 0;
-    setClaiming({ token, itemKey: item.key });
-    pollClaim(token, item.key);
+    // Poll with the FULL ref: the store looks the checkout session up by an
+    // EXACT client_reference_id match, so polling with the bare token while
+    // the session carries token-instance never resolves ("waiting for
+    // payment confirmation" forever, paid and trial alike).
+    setClaiming({ token: ref, itemKey });
+    pollClaim(ref, itemKey);
+  };
+
+  const handleBuy = (item: StoreItem) => {
+    if (!item.payment_link) return;
+    openCheckout(item.payment_link, item.key, "buy");
+  };
+
+  const handleTrial = (item: StoreItem) => {
+    if (!item.trial_link) return;
+    openCheckout(item.trial_link, item.key, "trial");
   };
 
   const handleInstallClick = (item: StoreItem) => {
@@ -500,6 +661,10 @@ export default function ExtensionsAdmin() {
 
   const handleApply = async () => {
     if (!install) return;
+    if (install.diff?.downgrade) {
+      setDowngradeConfirm({ id: install.id, ...install.diff.downgrade });
+      return;
+    }
     await applyInstall(install.id);
   };
 
@@ -585,6 +750,28 @@ export default function ExtensionsAdmin() {
     }
   };
 
+  // Open the store's billing portal (renewal date, cancel/restore
+  // auto-renew, payment method, invoices) in a new tab. The backend proxies
+  // the request so the license's renewal credential never reaches the
+  // browser. Air-gapped instances get a friendly hint instead — they manage
+  // via the link in their license emails.
+  const handleManageSubscription = async () => {
+    setManageBusy(true);
+    try {
+      const res = await api.post<{ url: string }>("/admin/extensions/store/billing-portal");
+      window.open(res.url, "_blank", "noopener");
+    } catch {
+      setError(
+        t(
+          "extensions.license.manageUnreachable",
+          "The extension store could not be reached. On an offline instance, use the Manage subscription link in your license email instead.",
+        ),
+      );
+    } finally {
+      setManageBusy(false);
+    }
+  };
+
   const needsRestart = extensions.some((x) => x.status === "needs_restart");
   const isWorking = install ? !TERMINAL.has(install.status) : false;
   // During a one-click store install the "previewed" state is transient
@@ -598,9 +785,58 @@ export default function ExtensionsAdmin() {
     (plugin.adminPanels ?? []).map((panel) => ({ extKey: key, panel })),
   );
 
-  const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString() : "");
 
   const entitlementChip = (ent: EntitlementInfo) => {
+    // Trials first: they have no grace window (expiry is a hard stop), so the
+    // chip says exactly that — and an ended trial points at the fix.
+    if (ent.trial === true && (ent.state === "active" || ent.state === "grace")) {
+      return (
+        <Chip
+          size="small"
+          color="info"
+          label={t("extensions.entitlement.trialUntil", "Trial until {{date}}", {
+            date: fmtDate(ent.expires_at),
+          })}
+        />
+      );
+    }
+    if (ent.trial === true && ent.state === "expired") {
+      return (
+        <Chip
+          size="small"
+          color="warning"
+          label={t(
+            "extensions.entitlement.trialEnded",
+            "Trial ended — subscribe to reactivate",
+          )}
+        />
+      );
+    }
+    // Active + a known auto-renew state: say what actually happens on the
+    // date — "renews" vs "will not renew" — instead of the ambiguous
+    // "active until". Unknown (manual/offline licenses) keeps today's label.
+    if (ent.state === "active" && ent.expires_at && ent.auto_renew === true) {
+      return (
+        <Chip
+          size="small"
+          color="success"
+          label={t("extensions.entitlement.renewsOn", "Renews on {{date}}", {
+            date: fmtDate(ent.expires_at),
+          })}
+        />
+      );
+    }
+    if (ent.state === "active" && ent.expires_at && ent.auto_renew === false) {
+      return (
+        <Chip
+          size="small"
+          color="warning"
+          label={t("extensions.entitlement.willNotRenew", "Expires {{date}} — will not renew", {
+            date: fmtDate(ent.expires_at),
+          })}
+        />
+      );
+    }
     const label =
       ent.state === "free"
         ? t("extensions.entitlement.free", "Free")
@@ -788,7 +1024,7 @@ export default function ExtensionsAdmin() {
 
       <Tabs
         value={tab}
-        onChange={(_, v) => setTab(v)}
+        onChange={handleTabChange}
         sx={{ borderBottom: 1, borderColor: "divider" }}
       >
         <Tab value="store" label={t("extensions.tabs.store", "Store")} />
@@ -808,10 +1044,16 @@ export default function ExtensionsAdmin() {
             </Alert>
           ) : !catalog.reachable ? (
             <Alert severity="warning">
-              {t(
-                "extensions.store.unreachable",
-                "The extension store could not be reached. Air-gapped or offline? Install from files on the Installed tab instead.",
-              )}
+              {catalog.reason === "blocked"
+                ? t("extensions.store.blocked", {
+                    status: catalog.status_code ?? "",
+                    defaultValue:
+                      "The extension store refused this instance's request (HTTP {{status}}). Something between this instance and the store — a proxy, a firewall or the store's own bot protection — is blocking it; outbound internet access is working. Install from files on the Installed tab meanwhile.",
+                  })
+                : t(
+                    "extensions.store.unreachable",
+                    "The extension store could not be reached. Air-gapped or offline? Install from files on the Installed tab instead.",
+                  )}
             </Alert>
           ) : catalog.items.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
@@ -819,6 +1061,35 @@ export default function ExtensionsAdmin() {
             </Typography>
           ) : (
             <>
+              {allTags.length > 0 && (
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <Chip
+                    size="small"
+                    label={t("extensions.store.allTags", "All")}
+                    color={activeTags.length === 0 ? "primary" : "default"}
+                    variant={activeTags.length === 0 ? "filled" : "outlined"}
+                    onClick={() => setActiveTags([])}
+                  />
+                  {allTags.map((tag) => (
+                    <Chip
+                      key={tag}
+                      size="small"
+                      label={tag}
+                      color={activeTags.includes(tag) ? "primary" : "default"}
+                      variant={activeTags.includes(tag) ? "filled" : "outlined"}
+                      onClick={() => toggleTag(tag)}
+                    />
+                  ))}
+                </Stack>
+              )}
+              {filteredItems.length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  {t(
+                    "extensions.store.noTagMatch",
+                    "No extensions match the selected categories.",
+                  )}
+                </Typography>
+              )}
               <Box
                 sx={{
                   display: "grid",
@@ -826,7 +1097,7 @@ export default function ExtensionsAdmin() {
                   gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
                 }}
               >
-                {catalog.items.map((item) => (
+                {filteredItems.map((item) => (
                   <Card variant="outlined" key={item.key}>
                     <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
                       <Stack
@@ -858,19 +1129,48 @@ export default function ExtensionsAdmin() {
                             label={t("extensions.entitlement.free", "Free")}
                           />
                         )}
-                        {!item.installed_version &&
-                          !item.free &&
-                          item.entitlement_state !== "unlicensed" && (
-                            <Chip
-                              size="small"
-                              color={ENTITLEMENT_COLOR[item.entitlement_state]}
-                              label={t("extensions.store.licensed", "Licensed")}
-                            />
-                          )}
+                        {/* Live entitlement chip — the same cascade as the
+                            Installed tab ("Trial until …", "Renews on …",
+                            "Expires … — will not renew"), shown even while
+                            installed so trial countdowns and renewal dates
+                            are visible where Buy/Start-trial live. */}
+                        {!item.free &&
+                          item.entitlement_state !== "unlicensed" &&
+                          entitlementChip({
+                            state: item.entitlement_state,
+                            expires_at: item.entitlement_expires_at,
+                            grace_until: item.entitlement_grace_until,
+                            auto_renew: item.entitlement_auto_renew,
+                            trial: item.entitlement_trial,
+                          })}
                       </Stack>
                       <Typography variant="body2" color="text.secondary" sx={{ flex: 1, mb: 1.5 }}>
                         {item.description}
                       </Typography>
+                      {/* topical tags only — the card already shows free vs
+                          paid via its Free chip, price and Buy button */}
+                      {(item.tags ?? []).some((tag) => !MODEL_TAGS.includes(tag)) && (
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          flexWrap="wrap"
+                          useFlexGap
+                          sx={{ mb: 1.5 }}
+                        >
+                          {item.tags
+                            ?.filter((tag) => !MODEL_TAGS.includes(tag))
+                            .map((tag) => (
+                              <Chip
+                                key={tag}
+                                size="small"
+                                label={tag}
+                                color={activeTags.includes(tag) ? "primary" : "default"}
+                                variant="outlined"
+                                onClick={() => toggleTag(tag)}
+                              />
+                            ))}
+                        </Stack>
+                      )}
                       {claiming?.itemKey === item.key && (
                         <Box sx={{ mb: 1.5 }}>
                           <Typography variant="caption" color="text.secondary">
@@ -913,8 +1213,25 @@ export default function ExtensionsAdmin() {
                           </Button>
                         )}
                         {!item.free &&
-                          item.payment_link &&
+                          item.trial_link &&
                           item.entitlement_state === "unlicensed" &&
+                          claiming?.itemKey !== item.key && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleTrial(item)}
+                              startIcon={<MaterialSymbol icon="hourglass_top" size={18} />}
+                            >
+                              {t("extensions.store.startTrial", "Start 30-day trial")}
+                            </Button>
+                          )}
+                        {!item.free &&
+                          item.payment_link &&
+                          // Unlicensed, or on a trial (active or expired) —
+                          // a trialing customer converts in-product; the
+                          // claim flow replaces the trial entitlement with
+                          // the paid one automatically.
+                          (item.entitlement_state === "unlicensed" || item.entitlement_trial) &&
                           claiming?.itemKey !== item.key && (
                             <Button
                               size="small"
@@ -1023,6 +1340,16 @@ export default function ExtensionsAdmin() {
                   date: fmtDate(license.uploaded_at),
                 })}
               </Typography>
+              {license.store_managed && (
+                <Button
+                  size="small"
+                  startIcon={<MaterialSymbol icon="manage_accounts" size={18} />}
+                  disabled={manageBusy}
+                  onClick={() => void handleManageSubscription()}
+                >
+                  {t("extensions.license.manage", "Manage subscription")}
+                </Button>
+              )}
               <Button
                 size="small"
                 onClick={() => {
@@ -1090,7 +1417,17 @@ export default function ExtensionsAdmin() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {extensions.map((ext) => (
+                    {extensions.map((ext) => {
+                      // The store catalog (already fetched by loadAll) knows
+                      // whether a newer version exists — surface it here too,
+                      // not only on the Store tab. Air-gapped instances have
+                      // no catalog, so the chip simply never renders.
+                      const updateItem = catalog?.reachable
+                        ? catalog.items.find(
+                            (item) => item.key === ext.key && item.update_available,
+                          )
+                        : undefined;
+                      return (
                       <TableRow key={ext.key}>
                         <TableCell>
                           <Typography variant="body2">{ext.name}</Typography>
@@ -1110,7 +1447,23 @@ export default function ExtensionsAdmin() {
                             </Tooltip>
                           )}
                         </TableCell>
-                        <TableCell>{ext.version}</TableCell>
+                        <TableCell>
+                          {ext.version}
+                          {updateItem && (
+                            <Chip
+                              size="small"
+                              color="info"
+                              variant="outlined"
+                              icon={<MaterialSymbol icon="upgrade" size={16} />}
+                              label={t("extensions.list.updateAvailable", "Update to {{version}}", {
+                                version: updateItem.version,
+                              })}
+                              onClick={() => handleInstallClick(updateItem)}
+                              disabled={storeBusyKey !== null || installBusy}
+                              sx={{ ml: 1 }}
+                            />
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Chip
                             size="small"
@@ -1158,7 +1511,8 @@ export default function ExtensionsAdmin() {
                           </Tooltip>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -1219,15 +1573,26 @@ export default function ExtensionsAdmin() {
                   <LinearProgress sx={{ mt: 0.5 }} />
                 </>
               ) : (
-                <Button
-                  variant="contained"
-                  onClick={() => handleBuy(gateItem)}
-                  startIcon={<MaterialSymbol icon="shopping_cart" size={18} />}
-                >
-                  {gateItem.price
-                    ? t("extensions.gate.buyFor", "Buy — {{price}}", { price: gateItem.price })
-                    : t("extensions.store.buy", "Buy")}
-                </Button>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="contained"
+                    onClick={() => handleBuy(gateItem)}
+                    startIcon={<MaterialSymbol icon="shopping_cart" size={18} />}
+                  >
+                    {gateItem.price
+                      ? t("extensions.gate.buyFor", "Buy — {{price}}", { price: gateItem.price })
+                      : t("extensions.store.buy", "Buy")}
+                  </Button>
+                  {gateItem.trial_link && gateItem.entitlement_state === "unlicensed" && (
+                    <Button
+                      variant="outlined"
+                      onClick={() => handleTrial(gateItem)}
+                      startIcon={<MaterialSymbol icon="hourglass_top" size={18} />}
+                    >
+                      {t("extensions.store.startTrial", "Start 30-day trial")}
+                    </Button>
+                  )}
+                </Stack>
               )}
             </Box>
           )}
@@ -1277,6 +1642,63 @@ export default function ExtensionsAdmin() {
             }
           >
             {t("extensions.license.apply", "Apply license")}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Entitlement-downgrade confirmation. Applying a license REPLACES the
+          active one, so entitlements the new license does not carry lapse —
+          the 409 from the backend routes here instead of applying silently. */}
+      <Dialog
+        open={downgrade !== null}
+        onClose={() => setDowngrade(null)}
+        fullWidth
+        maxWidth="sm"
+        disableRestoreFocus
+      >
+        <DialogTitle>
+          {t("extensions.license.downgradeTitle", "This license drops active entitlements")}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 1.5 }}>
+            {t(
+              "extensions.license.downgradeBody",
+              "Your instance holds one license at a time, and the license you are applying does not include the entitlements below. Applying it will disable these extensions until a license covering them is applied again — no data is deleted.",
+            )}
+          </DialogContentText>
+          <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+            {(downgrade?.dropped ?? []).map((key) => (
+              <Stack key={key} direction="row" spacing={1} alignItems="center">
+                <MaterialSymbol icon="extension_off" size={18} />
+                <Typography variant="body2">
+                  {extensions.find((x) => x.key === key)?.name ?? key}
+                </Typography>
+              </Stack>
+            ))}
+          </Stack>
+          <DialogContentText>
+            {t(
+              "extensions.license.downgradeHint",
+              "If you expected this license to cover everything you own, ask your vendor for one combined license instead of per-extension files.",
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDowngrade(null)}>
+            {t("extensions.uninstall.cancel", "Cancel")}
+          </Button>
+          <Button
+            color="warning"
+            variant="contained"
+            disabled={licenseBusy}
+            onClick={() => {
+              const text = downgrade?.text ?? "";
+              setDowngrade(null);
+              void submitLicense(text, true);
+            }}
+            startIcon={<MaterialSymbol icon="warning" size={18} />}
+          >
+            {t("extensions.license.downgradeConfirm", "Apply anyway")}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1437,6 +1859,38 @@ export default function ExtensionsAdmin() {
           </Button>
           <Button color="error" variant="contained" onClick={() => void handleUninstall()}>
             {t("extensions.uninstall.confirm", "Uninstall")}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={downgradeConfirm !== null} onClose={() => setDowngradeConfirm(null)}>
+        <DialogTitle>{t("extensions.downgrade.title", "Install an older version?")}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {t(
+              "extensions.downgrade.body",
+              "This will install version {{to}} over the currently installed {{from}} — a downgrade. Extension data is never deleted, but the older version may not understand data written by the newer one.",
+              {
+                from: downgradeConfirm?.from ?? "",
+                to: downgradeConfirm?.to ?? "",
+              },
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDowngradeConfirm(null)}>
+            {t("extensions.downgrade.cancel", "Cancel")}
+          </Button>
+          <Button
+            color="warning"
+            variant="contained"
+            onClick={() => {
+              const pending = downgradeConfirm;
+              setDowngradeConfirm(null);
+              if (pending) void applyInstall(pending.id, { confirmDowngrade: true });
+            }}
+          >
+            {t("extensions.downgrade.confirm", "Install older version")}
           </Button>
         </DialogActions>
       </Dialog>

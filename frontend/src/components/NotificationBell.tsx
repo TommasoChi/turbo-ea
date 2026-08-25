@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import Badge from "@mui/material/Badge";
@@ -21,6 +21,10 @@ import { formatDateWith, getCachedDateFormat } from "@/hooks/useDateFormat";
 import { NOTIFICATION_TYPE_COLORS } from "@/theme/tokens";
 import type { Notification, NotificationListResponse } from "@/types";
 
+import type { ReleaseNotesVariant } from "@/components/ReleaseNotesDialog";
+
+const ReleaseNotesDialog = lazy(() => import("@/components/ReleaseNotesDialog"));
+
 const NOTIFICATION_ICONS: Record<string, { icon: string; color: string }> = {
   todo_assigned: { icon: "assignment_ind", color: NOTIFICATION_TYPE_COLORS.todo_assigned },
   task_assigned: { icon: "task", color: NOTIFICATION_TYPE_COLORS.task_assigned },
@@ -33,7 +37,82 @@ const NOTIFICATION_ICONS: Record<string, { icon: string; color: string }> = {
   soaw_sign_requested: { icon: "draw", color: NOTIFICATION_TYPE_COLORS.soaw_sign_requested },
   soaw_signed: { icon: "task_alt", color: NOTIFICATION_TYPE_COLORS.soaw_signed },
   survey_request: { icon: "assignment", color: NOTIFICATION_TYPE_COLORS.survey_request },
+  app_update_available: {
+    icon: "system_update_alt",
+    color: NOTIFICATION_TYPE_COLORS.app_update_available,
+  },
+  app_updated: { icon: "auto_awesome", color: NOTIFICATION_TYPE_COLORS.app_updated },
+  // Both carry a relative link to the Store tab, so they follow the default
+  // navigate path — no DIALOG_TYPES entry, no external-link glyph.
+  extension_available: {
+    icon: "extension",
+    color: NOTIFICATION_TYPE_COLORS.extension_available,
+  },
+  extension_update_available: {
+    icon: "extension",
+    color: NOTIFICATION_TYPE_COLORS.extension_update_available,
+  },
 };
+
+/** Notification links are usually in-app routes, but some are absolute URLs.
+ *  Feeding one of those to react-router's `navigate` would treat it as a
+ *  relative path and land on a broken route, so they open in a new tab. */
+function isExternalLink(link: string): boolean {
+  return /^https?:\/\//i.test(link);
+}
+
+/** Types the bell handles itself instead of following `link`, and which
+ *  flavour of the release-notes dialog each one opens.
+ *
+ *  An update-available notice carries the GitHub release URL — that is what an
+ *  email copy of the notification needs — but in the app the notes open in a
+ *  dialog rather than sending an administrator off-site. The post-upgrade
+ *  notice has no link at all: its notes come from the changelog bundled in the
+ *  image. */
+const DIALOG_TYPES: Record<string, ReleaseNotesVariant> = {
+  app_update_available: "available",
+  app_updated: "installed",
+};
+
+function opensInApp(notif: Notification): boolean {
+  return notif.type in DIALOG_TYPES;
+}
+
+/** What the dialog needs to show *this* notification rather than the newest one. */
+type OpenReleaseNotes = {
+  variant: ReleaseNotesVariant;
+  version?: string;
+  fromVersion?: string;
+};
+
+/** `data` is JSONB coming back as `Record<string, unknown>`, so narrow it. */
+function readVersion(data: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = data?.[key];
+  return typeof value === "string" && value ? value : undefined;
+}
+
+/** The versions a notification is *about*.
+ *
+ *  Without these the dialog can only ask "what is newest?", which is right for
+ *  the notification that just arrived and wrong for every one it joins in the
+ *  bell — a notice about 2.55.0 would open 2.61.0's notes. Older rows predating
+ *  the `data` payload yield `undefined` and fall back to that old behaviour. */
+function releaseNotesTarget(notif: Notification): OpenReleaseNotes {
+  const variant = DIALOG_TYPES[notif.type];
+  return variant === "installed"
+    ? {
+        variant,
+        version: readVersion(notif.data, "to_version"),
+        fromVersion: readVersion(notif.data, "from_version"),
+      }
+    : { variant, version: readVersion(notif.data, "latest_version") };
+}
+
+/** Whether clicking this row leaves Turbo EA, which is what the trailing
+ *  open-in-new glyph announces. */
+function leavesTheApp(notif: Notification): boolean {
+  return !!notif.link && isExternalLink(notif.link) && !opensInApp(notif);
+}
 
 function timeAgo(dateStr: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -62,6 +141,7 @@ export default function NotificationBell({
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [releaseNotes, setReleaseNotes] = useState<OpenReleaseNotes | null>(null);
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
 
@@ -141,8 +221,16 @@ export default function NotificationBell({
       }
     }
     handleClose();
+    if (opensInApp(notif)) {
+      setReleaseNotes(releaseNotesTarget(notif));
+      return;
+    }
     if (notif.link) {
-      navigate(notif.link);
+      if (isExternalLink(notif.link)) {
+        window.open(notif.link, "_blank", "noopener,noreferrer");
+      } else {
+        navigate(notif.link);
+      }
     }
   };
 
@@ -231,6 +319,14 @@ export default function NotificationBell({
                 icon: "notifications",
                 color: "text.secondary",
               };
+              // Trailing marker for rows that do more than mark themselves
+              // read. `open_in_new` is reserved for rows that genuinely leave
+              // the app; one that opens a dialog gets the expand glyph.
+              const trailing = leavesTheApp(notif)
+                ? { icon: "open_in_new", label: t("opensExternally") }
+                : opensInApp(notif)
+                  ? { icon: "open_in_full", label: t("opensReleaseNotes") }
+                  : null;
               return (
                 <ListItemButton
                   key={notif.id}
@@ -273,6 +369,21 @@ export default function NotificationBell({
                           {notif.message.length > 100
                             ? notif.message.slice(0, 100) + "..."
                             : notif.message}
+                          {trailing && (
+                            <Box
+                              component="span"
+                              role="img"
+                              aria-label={trailing.label}
+                              title={trailing.label}
+                              sx={{
+                                display: "inline-flex",
+                                verticalAlign: "text-bottom",
+                                ml: 0.5,
+                              }}
+                            >
+                              <MaterialSymbol icon={trailing.icon} size={14} />
+                            </Box>
+                          )}
                         </Typography>
                         <Typography
                           variant="caption"
@@ -290,6 +401,20 @@ export default function NotificationBell({
           </List>
         )}
       </Popover>
+
+      {/* Lazy: the bell renders on every page, the dialog opens on a handful
+          of clicks a year. */}
+      {releaseNotes && (
+        <Suspense fallback={null}>
+          <ReleaseNotesDialog
+            open
+            variant={releaseNotes.variant}
+            version={releaseNotes.version}
+            fromVersion={releaseNotes.fromVersion}
+            onClose={() => setReleaseNotes(null)}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

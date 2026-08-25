@@ -82,7 +82,8 @@ Zeigt alle Verbindungen zu anderen Karten, gruppiert nach Beziehungstyp. Für je
 
 - **Name der verwandten Karte** — Klicken zum Navigieren zur verwandten Karte
 - **Beziehungstyp** — Die Art der Verbindung (z.B. «nutzt», «läuft auf», «hängt ab von»)
-- **Beziehung hinzufügen** — Klicken Sie auf **+**, um eine neue Beziehung zu erstellen; die Auswahlliste zeigt passende Karten bereits beim Öffnen an (nach Name sortiert, weitere werden beim Scrollen geladen), und durch Tippen wird die Liste gefiltert
+- **Beziehung hinzufügen** — Klicken Sie auf **+**, um den Dialog für diese Beziehung zu öffnen. Er listet passende Karten während der Eingabe auf (die besten Treffer zuerst, weitere werden beim Scrollen geladen) und blendet bereits verknüpfte Karten aus; eine Beschriftung nennt ihre Anzahl. Ein Klick auf eine Karte verknüpft sie sofort, und sie erscheint oben als Chip — ein Klick auf das **×** macht diese Zuordnung rückgängig. Der Dialog bleibt geöffnet, sodass Sie beliebig viele hinzufügen können; auf dem Smartphone öffnet er im Vollbild. Beziehungen ohne eigenen Abschnitt erreichen Sie über die Schaltfläche **Beziehung hinzufügen** am Ende des Abschnitts
+- **Sortierung** — Verwandte Karten werden alphabetisch nach Namen aufgelistet
 - **Beziehung entfernen** — Klicken Sie auf das Löschsymbol, um eine Beziehung zu entfernen
 - **Nach Untertyp gruppieren** — Enthält ein Beziehungsabschnitt viele verwandte Karten, werden sie automatisch in aufklappbare Untertyp-Gruppen (jeweils mit Anzahl) gruppiert, mit einer abschließenden Gruppe **Kein Untertyp** für nicht klassifizierte Karten. Über den Umschalter in der Abschnittsüberschrift wechseln Sie zwischen gruppierter und flacher Ansicht.
 - **Mit Unterelementen verknüpfte Karten** — Hat eine Karte Unterelemente, zeigt jede Beziehungsgruppe einen Chip **+N in Unterelementen** mit der Anzahl der weiter unten in der Hierarchie verknüpften Karten — etwa die Anwendungen an den Unterfähigkeiten einer Fähigkeit. Ein Klick öffnet eine schreibgeschützte Liste, in der jede Zeile das Unterelement nennt, das die Verknüpfung hält (eine über mehrere Unterelemente erreichte Karte erscheint einmal, mit allen Herkünften). Gezählt werden nur Karten, die nicht bereits in der Gruppe darüber stehen. Zum Ändern einer Verknüpfung öffnen Sie das zugehörige Unterelement. Die Liste ist in aufklappbare Untertyp-Abschnitte gegliedert, sodass der Untertyp einmal pro Abschnitt statt in jeder Zeile genannt wird. Innerhalb eines Abschnitts stehen Karten, deren Lebenszyklusphase Aufmerksamkeit erfordert, zuerst (Ende der Lebensdauer, dann Auslaufphase); die Phase jeder Karte erscheint als farbiger Punkt neben ihrem Namen — der Name der Phase wird beim Überfahren mit der Maus angezeigt.
@@ -90,6 +91,12 @@ Zeigt alle Verbindungen zu anderen Karten, gruppiert nach Beziehungstyp. Für je
 ![Beziehungsgruppen mit dem Chip für Unterelemente](../assets/img/de/59_karte_unterelemente_chip.png)
 
 ![Über Unterelemente verknüpfte Karten, nach Untertyp gruppiert](../assets/img/de/60_karte_unterelemente_beziehungen.png)
+
+### Abhängigkeiten-Abschnitt
+
+Eine [Layered Dependency View](reports.md) der Karte und aller Karten in einem Schritt Entfernung, gruppiert nach den vier Architekturebenen. Mit Umschalt-Klick auf eine Karte zentrieren Sie die Ansicht neu und durchlaufen die Landschaft, ohne die Seite zu verlassen.
+
+Das Symbol **in neuem Tab öffnen** in der Werkzeugleiste öffnet den vollständigen [Abhängigkeitsbericht](reports.md) in einem neuen Tab, zentriert auf die Karte, auf die die Ansicht gerade zentriert ist — also auf die Karte, zu der Sie navigiert sind, nicht zwingend auf die Ausgangskarte. Nützlich, wenn Sie das brauchen, was der Bericht rund um dasselbe Bild ergänzt: Zeitreise, die Übergangsmarkierungen, die Tabellenansicht und das Speichern der Ansicht als Bericht.
 
 ### Tags-Abschnitt
 

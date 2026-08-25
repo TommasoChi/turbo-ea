@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import CreateCardDialog from "./CreateCardDialog";
@@ -83,6 +83,20 @@ const MOCK_TYPES = [
         section: "Details",
         fields: [
           { key: "costTotalAnnual", label: "Total Annual Cost", type: "cost", required: true, translations: { en: "Total Annual Cost" } },
+          // Required multi-select rendered a plain text box instead of a
+          // dropdown, so the field could never be filled (issue #931).
+          {
+            key: "hostingModel",
+            label: "Hosting Model",
+            type: "multiple_select",
+            required: true,
+            translations: { en: "Hosting Model" },
+            options: [
+              { key: "cloud", label: "Cloud", color: "#0f7eb5" },
+              { key: "onprem", label: "On-premise" },
+              { key: "hybrid", label: "Hybrid" },
+            ],
+          },
         ],
       },
     ],
@@ -303,14 +317,78 @@ describe("CreateCardDialog", () => {
     });
   });
 
-  it("surfaces a 409 sibling-name collision on the Name field, not as a dialog toast", async () => {
-    // The backend's uniqueness check returns 409 with a human-readable
-    // detail. The dialog must route it to the Name TextField's helperText
-    // (so the user can correct in place) instead of the generic Alert.
+  it("surfaces a structured 409 collision as a localized message with a link to the existing card", async () => {
+    // The backend's uniqueness check returns 409 with a structured detail
+    // (#927). The dialog must route it to the Name TextField's helperText
+    // as a localized sentence (no raw UUID) plus a "View existing card"
+    // link pointing at the existing card.
+    const { ApiError } = await import("@/api/client");
+    const user = userEvent.setup();
+    const detail = {
+      code: "sibling_name_conflict",
+      message:
+        'A card of type Application named "ERP" already exists at this level (existing card: abc-123).',
+      existing_card_id: "abc-123",
+      existing_card_name: "ERP",
+      type_key: "Application",
+    };
+    onCreate.mockRejectedValueOnce(new ApiError(detail.message, 409, detail));
+
+    renderDialog({ initialType: "Objective" });
+
+    await user.type(screen.getByRole("textbox", { name: /name/i }), "ERP");
+    await user.click(screen.getByRole("button", { name: /^create$/i }));
+
+    // Localized sentence built from the structured fields — no raw UUID.
+    await waitFor(() => {
+      expect(
+        screen.getByText('A card of type Application named "ERP" already exists at this level.'),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/abc-123/)).not.toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "View existing card" });
+    expect(link).toHaveAttribute("href", "/cards/abc-123");
+
+    // And it must clear the moment the user edits the name.
+    await user.type(screen.getByRole("textbox", { name: /name/i }), "2");
+    expect(
+      screen.queryByText('A card of type Application named "ERP" already exists at this level.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View existing card" })).not.toBeInTheDocument();
+  });
+
+  it("navigates to the existing card and closes the dialog when the conflict link is clicked", async () => {
+    const { ApiError } = await import("@/api/client");
+    const user = userEvent.setup();
+    const detail = {
+      code: "sibling_name_conflict",
+      message:
+        'A card of type Application named "ERP" already exists at this level (existing card: abc-123).',
+      existing_card_id: "abc-123",
+      existing_card_name: "ERP",
+      type_key: "Application",
+    };
+    onCreate.mockRejectedValueOnce(new ApiError(detail.message, 409, detail));
+
+    renderDialog({ initialType: "Objective" });
+
+    await user.type(screen.getByRole("textbox", { name: /name/i }), "ERP");
+    await user.click(screen.getByRole("button", { name: /^create$/i }));
+
+    const link = await screen.findByRole("link", { name: "View existing card" });
+    await user.click(link);
+
+    expect(onClose).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith("/cards/abc-123");
+  });
+
+  it("falls back to the raw detail string on an unstructured 409", async () => {
+    // Legacy shape (plain-string detail): the prose must still appear on
+    // the Name field, without any link.
     const { ApiError } = await import("@/api/client");
     const user = userEvent.setup();
     const detail =
-      'A Application named "ERP" already exists at this level (existing card: abc-123).';
+      'A card of type Application named "ERP" already exists at this level (existing card: abc-123).';
     onCreate.mockRejectedValueOnce(new ApiError(detail, 409, detail));
 
     renderDialog({ initialType: "Objective" });
@@ -318,20 +396,63 @@ describe("CreateCardDialog", () => {
     await user.type(screen.getByRole("textbox", { name: /name/i }), "ERP");
     await user.click(screen.getByRole("button", { name: /^create$/i }));
 
-    // The detail must appear in the form (as helperText), once.
     await waitFor(() => {
       expect(screen.getByText(detail)).toBeInTheDocument();
     });
-    // And it must clear the moment the user edits the name.
-    await user.type(screen.getByRole("textbox", { name: /name/i }), "2");
-    expect(screen.queryByText(detail)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View existing card" })).not.toBeInTheDocument();
   });
 
   it("renders required fields from schema", () => {
     renderDialog({ initialType: "Application" });
 
     // Application has a required costTotalAnnual field
-    expect(screen.getByLabelText("Total Annual Cost")).toBeInTheDocument();
+    expect(screen.getByLabelText("Total Annual Cost", { exact: false })).toBeInTheDocument();
+  });
+
+  it("renders a required multi-select as a dropdown and submits the selection as an array (issue #931)", async () => {
+    const user = userEvent.setup();
+    onCreate.mockResolvedValueOnce("new-card-id-931");
+
+    renderDialog({ initialType: "Application" });
+
+    // The field must NOT be a free-text input…
+    expect(
+      screen.queryByRole("textbox", { name: /hosting model/i }),
+    ).not.toBeInTheDocument();
+
+    // …but a select that opens a listbox with the configured options.
+    // MUI Select doesn't expose accessible names — find it via its label.
+    const label = screen.getByText("Hosting Model", {
+      selector: "label",
+      exact: false,
+    });
+    const combobox = label
+      .closest(".MuiFormControl-root")!
+      .querySelector('[role="combobox"]') as HTMLElement;
+    await user.click(combobox);
+
+    const listbox = await screen.findByRole("listbox");
+    await user.click(within(listbox).getByText("Cloud"));
+    await user.click(within(listbox).getByText("Hybrid"));
+    // Multi-select keeps the menu open; close it before submitting.
+    await user.keyboard("{Escape}");
+
+    await user.type(screen.getByRole("textbox", { name: /name/i }), "My App");
+    await user.click(screen.getByRole("button", { name: /^create$/i }));
+
+    // The value must reach onCreate as a string array of option keys —
+    // never a free-text string (the pre-fix fallback behavior).
+    await waitFor(() => {
+      expect(onCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "Application",
+          name: "My App",
+          attributes: expect.objectContaining({
+            hostingModel: ["cloud", "hybrid"],
+          }),
+        }),
+      );
+    });
   });
 
   it("does not render when closed", () => {

@@ -53,9 +53,11 @@ Fields define the custom attributes available on cards of this type. Each field 
 | **Label** | Display name |
 | **Type** | text, multiline_text, number, cost, boolean, date, url, single_select, or multiple_select |
 | **Options** | For select fields: the available choices with labels and optional colors |
-| **Required** | Whether the field must be filled for data quality scoring |
+| **Required** | Whether the field is mandatory — see the enforcement rules below |
 | **Data quality** | Each field's contribution to the score is managed in the **Data quality** panel — see [Data quality scoring](#data-quality-scoring) below |
 | **Read-only** | Prevents manual editing (useful for calculated fields) |
+
+**How Required is enforced.** Creating a card never requires these fields — cards can be created quickly and completed later. While any required field is still empty, the card's data-quality score is pinned to **0** and the card detail page shows a warning banner listing what must be filled. When a card section is edited, it cannot be saved until the required fields in it are filled, and the API rejects clearing a required field that already has a value. Boolean and read-only (calculated) fields are exempt.
 
 Click **+ Add Field** to create a new field, or click an existing field to edit it in the **Field Editor Dialog**.
 
@@ -87,6 +89,8 @@ IDs are **globally unique, read-only, and never reused or changed** once assigne
 
 A card's **data quality** score is a weighted measure of how complete it is. Every contributing factor — each field plus five built-in factors — is managed in one place: the **Data quality** tab of the card-type editor. (The editor is organised into tabs — Main, Relations, Stakeholder roles, and Data quality — with translations available from the icon in the header.)
 
+**Mandatory fields override the score.** While any required field on a card is still empty, its score is pinned to **0** regardless of the weights — the weighted calculation only applies once every required field is filled (boolean and read-only fields are exempt; see the **Required** setting above).
+
 Each factor has an importance set with a simple slider across four tiers, which also shows the underlying number:
 
 - **Ignore (0)** — excluded from the score entirely.
@@ -94,7 +98,7 @@ Each factor has an importance set with a simple slider across four tiers, which 
 - **Important (2)** — counts twice as much.
 - **Critical (3)** — counts three times as much.
 
-The panel lists the five **built-in factors** — **Description**, **Lifecycle** (whether any lifecycle date is set), **mandatory Relations**, **mandatory Tags**, and **Stakeholder roles** (each role defined for the type is satisfied once a stakeholder is assigned to it) — followed by every field grouped by its section, each with the same slider. For example, set **Lifecycle** to *Ignore* for a type whose cards legitimately never carry dates, so they are not penalized.
+The panel lists the five **built-in factors** — **Description**, **Lifecycle** (whether any lifecycle date is set), **mandatory Relations**, **mandatory Tags**, and **Stakeholder roles** (a single slot, filled as soon as anyone is assigned to the card in a role that counts toward data quality) — followed by every field grouped by its section, each with the same slider. For example, set **Lifecycle** to *Ignore* for a type whose cards legitimately never carry dates, so they are not penalized.
 
 A **score composition** bar at the top of the tab shows each factor's share of the maximum possible score, so you can see at a glance which factors dominate. In the **Main** tab's card layout, each field — and the built-in Description, Lifecycle and Relations sections — shows a small badge with its current tier number, so you can see the weighting without leaving that tab.
 
@@ -118,6 +122,17 @@ When no subtype is selected on a card (or the type has no subtypes), all fields 
 #### Stakeholder Roles
 
 Define custom roles for this type (e.g., "Application Owner", "Technical Owner"). Each role carries **card-level permissions** that are combined with the user's app-level role when accessing a card. See [Users & Roles](users.md) for more on the permission model.
+
+Each role has a **key** (the identifier stored on cards, used by the `stakeholder:<role_key>` import/export columns) and a **label** (what users see). The key follows the same convention as every other metamodel key — letters and digits only, starting with a letter, 3–50 characters, conventionally camelCase such as `businessArchitect`. It is filled in automatically from the label, so you rarely need to type one.
+
+Each role also carries a **Counts toward data quality** switch. The data-quality score has a single stakeholders slot, and it is filled as soon as anyone is assigned to the card in a role where this is on. Turn it off for purely passive roles — the built-in **Observer** ships with it off, so watching a card never stands in for owning it. A type whose roles all have it off contributes no stakeholders slot at all. Flipping the switch re-scores every card of the type straight away.
+
+Roles can be removed in two ways:
+
+- **Archive** — the role stays on cards that already use it but can no longer be assigned, and it stops granting its card-level permissions. Archived roles are listed behind the **Show archived** toggle and can be restored at any time. This is the right choice for a role that has been genuinely used.
+- **Delete** — permanent, and only offered while the role is unused. Turbo EA refuses to delete a role that anyone holds on a card of this type, that a survey targets, or that is the type's last remaining active role; the confirmation dialog says which of these applies and offers to archive it instead. This is the way to clean up a role that was created by mistake.
+
+A role's key can be corrected as long as **nobody holds the role** — surveys that target it follow the rename automatically, and renaming the type's only role is fine since the role survives it. Once someone holds the role, the key is locked and the field explains why. Roles created before this convention keep the key they already have and go on working; only a new or changed key is checked.
 
 #### Translations
 
@@ -150,6 +165,10 @@ Relation types define the allowed connections between card types. Each relation 
 | **Cardinality** | n:m (many-to-many) or 1:n (one-to-many) |
 
 Click **+ New Relation Type** to create a relation, or click an existing one to edit its labels and attributes.
+
+The **Label** and **Reverse Label** fields are written in the language you are currently using — the field caption shows which one (for example *Label (English)*). Renaming a relation updates that language everywhere the verb appears: the **Relations** section on a card, the inventory relation columns, reports, portals and diagrams. Other languages keep their own wording until you translate them.
+
+Use **Manage Translations** at the top of the Relation Types tab to translate every relation's verbs into each enabled language in one pass. Pick a language tab, fill in the wording next to the English source, and save — the counter on each tab shows how many verbs that language still needs. English is not listed here because it is the wording on the relation itself; a verb left untranslated falls back to it.
 
 ### Relation attributes
 

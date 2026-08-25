@@ -32,6 +32,9 @@ import {
   FilterCheckboxList,
   FilterSectionHeader,
 } from "@/components/FilterSidebarSection";
+import ColumnOrderSection, {
+  type ColumnOrderItem,
+} from "@/components/grid/ColumnOrderSection";
 import { SEVERITY_COLORS } from "@/theme/tokens";
 import type {
   RiskCategory,
@@ -113,9 +116,15 @@ interface Props {
   frozenColumns: Set<string>;
   onToggleFrozen: (colId: string) => void;
   onResetColumns?: () => void;
+  /** Visible, movable columns in grid order — feeds the reorder section. */
+  columnOrderItems: ColumnOrderItem[];
+  /** The full stored colId order (may include hidden columns). */
+  columnOrder: string[];
+  onColumnOrderChange: (next: string[]) => void;
+  onResetColumnOrder?: () => void;
 }
 
-const STATUSES: RiskStatus[] = [
+export const STATUSES: RiskStatus[] = [
   "identified",
   "analysed",
   "mitigation_planned",
@@ -125,7 +134,7 @@ const STATUSES: RiskStatus[] = [
   "accepted",
   "closed",
 ];
-const CATEGORIES: RiskCategory[] = [
+export const CATEGORIES: RiskCategory[] = [
   "security",
   "compliance",
   "operational",
@@ -134,7 +143,7 @@ const CATEGORIES: RiskCategory[] = [
   "reputational",
   "strategic",
 ];
-const LEVELS: RiskLevel[] = ["critical", "high", "medium", "low"];
+export const LEVELS: RiskLevel[] = ["critical", "high", "medium", "low"];
 const SOURCES: RiskSourceType[] = ["manual", "compliance"];
 
 const MIN_WIDTH = 220;
@@ -159,6 +168,10 @@ export default function RiskFilterSidebar({
   frozenColumns,
   onToggleFrozen,
   onResetColumns,
+  columnOrderItems,
+  columnOrder,
+  onColumnOrderChange,
+  onResetColumnOrder,
 }: Props) {
   const { t } = useTranslation(["grc", "common"]);
 
@@ -663,6 +676,14 @@ export default function RiskFilterSidebar({
         ) : (
           /* ─────── Columns tab ─────── */
           <Box>
+            <ColumnOrderSection
+              items={columnOrderItems}
+              order={columnOrder}
+              frozen={frozenColumns}
+              onToggleFrozen={onToggleFrozen}
+              onReorder={onColumnOrderChange}
+              onReset={onResetColumnOrder}
+            />
             <Box
               sx={{
                 display: "flex",

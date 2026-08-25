@@ -2,6 +2,8 @@
   "title": "Уведомления",
   "markAllRead": "Отметить все как прочитанные",
   "noNotifications": "Нет уведомлений",
+  "opensExternally": "Откроется в новой вкладке",
+  "opensReleaseNotes": "Открывает заметки о выпуске",
   "preferences.title": "Настройки уведомлений",
   "preferences.description": "Выберите, какие уведомления вы хотите получать и каким способом.",
   "preferences.notification": "Уведомление",
@@ -17,5 +19,20 @@
   "preferences.approvalStatusChanged": "Изменён статус утверждения",
   "preferences.soawSignRequested": "Запрошена подпись SoAW",
   "preferences.soawSigned": "SoAW подписан",
-  "preferences.surveyRequest": "Запрос на опрос"
+  "preferences.surveyRequest": "Запрос на опрос",
+  "preferences.appUpdateAvailable": "Доступно обновление",
+  "preferences.appUpdated": "Приложение обновлено",
+  "preferences.extensionAvailable": "Доступно новое расширение",
+  "preferences.extensionUpdateAvailable": "Доступно обновление расширения",
+
+  "releaseNotes.title": "Доступна версия {{app}} {{version}}",
+  "releaseNotes.titleFallback": "Заметки о выпуске",
+  "releaseNotes.running": "У вас установлена версия {{version}}",
+  "releaseNotes.viewOnGithub": "Открыть на GitHub",
+  "releaseNotes.empty": "Для этой версии заметки о выпуске не публиковались.",
+  "releaseNotes.loadFailed": "Не удалось загрузить заметки о выпуске",
+  "releaseNotes.installedTitle": "Что нового в {{app}} {{version}}",
+  "releaseNotes.updatedFrom": "Обновлено с версии {{version}}",
+  "releaseNotes.alreadyInstalled": "Уже установлена",
+  "releaseNotes.unavailableForVersion": "Заметки о выпуске {{version}} недоступны в этом экземпляре."
 }

@@ -19,6 +19,8 @@ O **Navegador de Processos** organiza processos em três categorias principais:
 
 Os cartões com um diagrama BPMN publicado exibem um **ícone de fluxo** — clique nele para abrir o diagrama em tela cheia sem sair do navegador (ou para ir dali para o editor de fluxo completo).
 
+**Disposição em colunas:** a barra de ferramentas inclui um **seletor de colunas** — uma, duas ou três — para alargar os cartões de processo ou encaixar mais de uma linha no ecrã. Uma linha nunca é esticada por mais colunas do que os processos que contém, e a escolha é memorizada entre visitas. A escolha também se propaga aos níveis aninhados, menos uma coluna por nível, de modo que os processos mais profundos deixam de ser espremidos em faixas estreitas.
+
 ## Painel BPM
 
 ![Painel BPM com Estatísticas](../assets/img/pt/15_bpm_painel.png)
@@ -42,7 +44,7 @@ Cada card de Processo de Negócio pode ter um **diagrama de fluxo de processo BP
 
 - **Modelagem visual** — Arraste e solte elementos BPMN: tarefas, eventos, gateways, raias e sub-processos
 - **Templates iniciais** — Escolha entre 6 templates BPMN pré-construídos para padrões comuns de processo (ou comece de uma tela em branco)
-- **Extração de elementos** — Quando você salva um diagrama, o sistema extrai automaticamente todas as tarefas, eventos, gateways e raias para análise
+- **Extração de elementos** — Quando você salva um diagrama, o sistema extrai automaticamente todas as tarefas, eventos, gateways e raias para análise. Os elementos extraídos são listados na **ordem do fluxo do processo** — seguindo os fluxos de sequência e de mensagem do diagrama, a partir do evento de início — e não agrupados por tipo de elemento. As etapas de um laço permanecem juntas e o conteúdo de um subprocesso é listado logo abaixo dele
 - **Cores dos elementos** — Selecione um ou mais elementos e use o botão de balde de tinta no painel de contexto para aplicar uma cor. As cores são gravadas no próprio arquivo BPMN, portanto também aparecem no visualizador somente leitura, nas exportações e nas impressões
 
 ### Vinculação de Elementos
@@ -59,16 +61,41 @@ A coluna *Organização* da tabela de etapas vincula as etapas a cards de Organi
 
 ### Fluxo de Aprovação
 
-Diagramas de fluxo de processo seguem um fluxo de aprovação com controle de versão:
+Os diagramas de fluxo de processo seguem um fluxo de aprovação com controlo de versões:
 
-| Status | Descrição |
+| Estado | Descrição |
 |--------|-----------|
-| **Rascunho** | Sendo editado, ainda não submetido para revisão |
-| **Pendente** | Submetido para aprovação, aguardando revisão |
-| **Publicado** | Aprovado e visível como a versão atual |
-| **Arquivado** | Versão publicada anteriormente, mantida para histórico |
+| **Rascunho** | Em edição, ainda não submetido para revisão |
+| **Pendente** | Submetido para aprovação, a aguardar revisão |
+| **Publicado** | Aprovado e visível como versão atual |
+| **Arquivado** | Versão publicada anteriormente, substituída por uma aprovação mais recente |
+| **Retirado** | Versão publicada anteriormente, despublicada intencionalmente |
 
-Submeter um rascunho cria um snapshot de versão. Os aprovadores podem aprovar (publicar) ou rejeitar (com comentários) a submissão.
+Submeter um rascunho cria um instantâneo de versão. Os aprovadores podem aprovar (publicar) ou rejeitar a submissão.
+
+#### Quem pode aprovar
+
+Aprovar ou rejeitar uma revisão submetida exige a permissão **Aprovar ou rejeitar versões de fluxo BPMN submetidas**, ou o papel de parte interessada **Responsável do processo** no próprio processo. Poder editar rascunhos não é suficiente.
+
+!!! warning "Alterado na versão 2.43.0"
+    As versões anteriores aceitavam aqui a permissão geral de edição de BPM, pelo que qualquer membro podia aprovar qualquer fluxo de processo — incluindo uma revisão que ele próprio acabara de submeter. Se na sua instância existem pessoas que aprovam hoje apenas com direitos de edição de BPM, conceda-lhes a permissão **Aprovar ou rejeitar versões de fluxo BPMN submetidas** em Administração → Perfis, ou atribua-lhes o papel de **Responsável do processo** nos processos que validam.
+
+#### Retirar uma versão publicada
+
+Uma aprovação dada por engano pode ser anulada sem eliminar o processo. A retirada exige a permissão **Retirar (despublicar) uma versão de fluxo BPMN publicada**, que **nenhum perfil possui por predefinição** — um administrador concede-a em Administração → Perfis, ou no papel de parte interessada **Responsável do processo** em Administração → Metamodelo.
+
+Depois de concedida a permissão, a versão publicada passa a mostrar um botão **Retirar**. A retirada pede um motivo escrito e, em seguida:
+
+- passa a revisão a **Retirado** — nunca é eliminada nem devolvida a rascunho;
+- mantém a aprovação original registada: o separador *Arquivado* mostra a revisão, quem a aprovou e quando, a par de quem a retirou e porquê;
+- regista a retirada, com o seu motivo, no separador **Histórico** do cartão;
+- **abre uma cópia como novo rascunho** no número de revisão seguinte, para que possa corrigir o diagrama e voltar a passá-lo por submissão → aprovação;
+- deixa o processo sem fluxo *aprovado* até que esse rascunho seja aprovado;
+- deixa intactos os passos de processo extraídos e as suas ligações a cartões.
+
+Manter a revisão retirada e editar uma cópia é deliberado: o diagrama exato que um aprovador assinou continua recuperável, que é o que um sistema de qualidade espera, e mesmo assim obtém logo uma cópia de trabalho.
+
+Qualquer versão arquivada ou retirada pode ser retomada a qualquer momento com **Criar novo rascunho a partir deste** no separador *Arquivado*, que a clona como rascunho na revisão seguinte.
 
 ## Avaliações de Processo
 

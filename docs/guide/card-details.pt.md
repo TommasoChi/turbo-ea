@@ -82,7 +82,8 @@ Mostra todas as conexões com outros cards, agrupadas por tipo de relacionamento
 
 - **Nome do card relacionado** — Clique para navegar até o card relacionado
 - **Tipo de relacionamento** — A natureza da conexão (ex.: "utiliza", "roda em", "depende de")
-- **Adicionar relacionamento** — Clique em **+** para criar um novo relacionamento; o seletor lista os cards correspondentes assim que é aberto (ordenados por nome, mais são carregados ao rolar) e digitar filtra a lista
+- **Adicionar relacionamento** — Clique em **+** para abrir a caixa desse relacionamento. Ela lista os cartões correspondentes enquanto você digita (as melhores correspondências primeiro, e mais são carregados ao rolar) e oculta os já ligados, com uma legenda indicando quantos são. Clicar num cartão liga-o de imediato e ele aparece como etiqueta no topo — clique no **×** de uma etiqueta para desfazer essa adição. A caixa permanece aberta para adicionar quantos quiser e no telemóvel abre em ecrã inteiro. Os relacionamentos sem secção própria são alcançados pelo botão **Adicionar relacionamento** no fim da secção
+- **Ordenação** — Os cartões relacionados são listados em ordem alfabética por nome
 - **Remover relacionamento** — Clique no ícone de exclusão para remover um relacionamento
 - **Agrupar por subtipo** — Quando uma seção de relacionamentos tem muitos cards relacionados, eles são agrupados automaticamente em grupos de subtipo recolhíveis (cada um com uma contagem), com um grupo final **Sem subtipo** para os cards não classificados. Use o botão de alternância no cabeçalho da seção para alternar entre a visualização agrupada e a lista simples.
 - **Cards ligados a subelementos** — Quando um card tem subelementos, cada grupo de relacionamentos exibe um chip **+N em subelementos** que conta os cards ligados mais abaixo na hierarquia — por exemplo, as aplicações associadas às subcapacidades de uma capacidade. Ao clicar, abre-se uma lista somente leitura em que cada linha indica o subelemento que detém a ligação (um card alcançado por vários subelementos aparece uma única vez, com todos listados). A contagem inclui apenas cards que ainda não constam do grupo acima. Para alterar uma ligação, abra o subelemento que a detém. A lista está organizada em secções de subtipo recolhíveis, pelo que o subtipo é indicado uma vez por secção em vez de em cada linha. Dentro de uma secção surgem primeiro os cards cuja fase do ciclo de vida exige atenção (fim de vida, depois descontinuação), e a fase de cada card é apresentada como um ponto colorido junto ao nome — passe o rato por cima para ver o nome da fase.
@@ -90,6 +91,12 @@ Mostra todas as conexões com outros cards, agrupadas por tipo de relacionamento
 ![Grupos de relacionamentos com o chip de subelementos](../assets/img/pt/59_ficha_subelementos_chip.png)
 
 ![Cards ligados através de subelementos, agrupados por subtipo](../assets/img/pt/60_ficha_subelementos_relacoes.png)
+
+### Seção de Dependências
+
+Uma [Layered Dependency View](reports.md) do card e de tudo o que está a um salto de distância, agrupado nas quatro camadas de arquitetura. Shift-clique em um card para recentralizar a vista e percorrer o panorama sem sair da página.
+
+O ícone **abrir em nova aba** na barra de ferramentas abre o [relatório de dependências](reports.md) completo em uma nova aba, centralizado no card em que a vista estiver centralizada naquele momento — ou seja, o card para o qual você navegou, não necessariamente o de partida. Útil quando você precisa do que o relatório acrescenta em torno da mesma imagem: viagem no tempo, as marcas de transição, a vista de tabela e salvar a vista como relatório.
 
 ### Seção de Tags
 

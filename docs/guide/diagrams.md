@@ -79,13 +79,24 @@ Removing an edge that carries a real relation opens *"Delete the relation betwee
 
 ### View perspectives
 
-The **View** dropdown in the toolbar recolors every card on the canvas by an attribute:
+The **Color by** dropdown in the toolbar recolors the cards on the canvas:
 
 - **Card colors** (default) — each card uses its card-type color.
 - **Approval status** — recolors by `approved` / `pending` / `broken`.
-- **Field values** — pick any single-select field on the card types currently on the canvas (e.g., *Lifecycle*, *Status*). Cells with no value fall back to a neutral grey.
+- **Field values** — tick a single-select field under any card type on the canvas. **Several card types can each carry one rule at the same time** — Applications by criticality *and* IT Components by hosting model. A card type you give no rule keeps the colour it already has, including a fill you set by hand; only a card whose own rule finds no value turns grey. Ticking a second field within one card type replaces the first, because a card has one fill.
 
-A floating legend in the bottom-left of the canvas shows the active mapping. The chosen view is saved with the diagram.
+A floating legend in the bottom-left shows one scale per active rule. Field rules and **Approval status** are alternatives rather than layers: choosing one clears the other. Untick every rule and the canvas returns to card colors. The choice is saved with the diagram.
+
+#### Show on card
+
+A second toolbar button, **Show on card**, chooses **what each shape says**. Tick the **card type**, the **subtype**, or any attribute from the card types currently on the canvas, and each shape gains small detail lines under its name. Fields are listed under the card type they belong to, with any field several of those types share grouped under **Shared**. It is a separate button from **Color by** so that neither list has to be scrolled past to reach the other. **Clear all** empties every tick at once.
+
+The first two selections are drawn on the shape — a card is only so big, and text that doesn't fit would spill outside its border. Everything you tick is remembered, so widening the selection later changes which two show without you having to re-pick.
+
+These lines are saved with the diagram, so every reader — including anyone opening a published link — sees the same shapes. Expanded child cards keep just their name: they are too small to hold anything more.
+
+The **Create diagram** button on the [Dependencies report](reports.md#dependencies-report) carries its own card-display settings across, so a diagram generated from a report opens showing exactly the rows the report showed.
+
 
 ### How relation edges are drawn
 
@@ -122,7 +133,13 @@ The **Sync** button in the toolbar opens the side drawer with everything queued 
 - **New Relations** — edges drawn between cards, ready to be created in inventory.
 - **Removed Relations** — relation-edges deleted from the canvas, queued for `DELETE /relations/{id}`. *Keep in inventory* re-inserts the edge.
 - **Hierarchy Changes** — confirmed drag-into / drag-out container moves, queued as `parent_id` updates.
-- **Inventory Changed** — cards updated in inventory since the diagram was opened, ready to be pulled back into the canvas.
+- **Inventory Changed** — changes made in the inventory since the diagram was saved, ready to be pulled back into the canvas. Each row offers the matching action, and **Accept all** resolves every row at once:
+    - a **renamed** card — *Accept update* rewrites the cell label;
+    - a **deleted** or **archived** card — *Remove from diagram* takes the cell (and its edges) off the canvas;
+    - a **deleted relation** — *Remove edge from diagram* takes the stale edge off the canvas;
+    - a relation whose **flow direction** changed — *Accept update* moves the arrowhead to match the inventory.
+
+Turbo EA **checks for inventory changes automatically every time you open a diagram** — a blue badge on the toolbar Sync button counts the changes awaiting review. Nothing is applied without your confirmation; the badge only invites you into the drawer. The **Check updates** button in the drawer re-runs the same check on demand.
 
 The toolbar Sync button shows a pulsing "N unsynced" pill whenever pending work exists. Leaving the tab with unsynced changes triggers a browser warning, and the canvas autosaves to local storage every five seconds so an accidental refresh can be restored on reopen.
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
@@ -18,6 +19,7 @@ import ReportShell from "./ReportShell";
 import SaveReportDialog from "./SaveReportDialog";
 import MetricCard from "./MetricCard";
 import { useMetamodel } from "@/hooks/useMetamodel";
+import { useCardSubtypeLabel } from "@/hooks/useCardSubtypeLabel";
 import { useSavedReport } from "@/hooks/useSavedReport";
 import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
 import { useTypeLabel } from "@/hooks/useResolveLabel";
@@ -25,6 +27,15 @@ import { useDateFormat } from "@/hooks/useDateFormat";
 import { useIsRtl } from "@/hooks/useIsRtl";
 import { makeRtlAxisTick, rtlLegendItemStyle, mirrorChartMargin } from "@/lib/rechartsRtl";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
+import ReportCardListPanel, { type ReportCardListItem } from "./ReportCardListPanel";
+import { buildInventoryFlagUrl, buildInventorySliceUrl } from "./portfolioInventoryLink";
+import {
+  bandColor,
+  bandOf,
+  DATA_QUALITY_BANDS,
+  type DataQualityBand,
+} from "@/lib/dataQualityBands";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { api } from "@/api/client";
 
 interface TypeStat {
@@ -54,37 +65,91 @@ interface DQData {
   worst_items: WorstItem[];
 }
 
-const QUALITY_COLORS = {
-  complete: "#4caf50",
-  partial: "#ff9800",
-  minimal: "#f44336",
+interface DQCard {
+  id: string;
+  name: string;
+  type: string;
+  subtype: string | null;
+  data_quality: number;
+  updated_at: string | null;
+}
+
+interface DQCardsResponse {
+  total: number;
+  items: DQCard[];
+}
+
+/**
+ * The slice of the dashboard the side panel is showing. `band` is one segment
+ * of a stacked bar, `type` a whole bar, `flag` an orphaned/stale KPI tile.
+ */
+type DQScope =
+  | { kind: "band"; typeKey: string; band: DataQualityBand }
+  | { kind: "type"; typeKey: string }
+  | { kind: "flag"; flag: "orphaned" | "stale" };
+
+// Derived from the shared band definitions rather than restated, so the
+// report's segments cannot drift from the inventory's chips of the same name.
+const QUALITY_COLORS = Object.fromEntries(
+  DATA_QUALITY_BANDS.map((b) => [b.key, b.color]),
+) as Record<DataQualityBand, string>;
+
+const BAND_LABEL_KEY: Record<DataQualityBand, string> = {
+  complete: "dataQuality.complete",
+  partial: "dataQuality.partial",
+  minimal: "dataQuality.minimal",
 };
 
+function scopePath(scope: DQScope): string {
+  const params = new URLSearchParams();
+  if (scope.kind === "band") {
+    params.set("type", scope.typeKey);
+    params.set("band", scope.band);
+  } else if (scope.kind === "type") {
+    params.set("type", scope.typeKey);
+  } else {
+    params.set("scope", scope.flag);
+  }
+  return `/reports/data-quality/cards?${params.toString()}`;
+}
+
 function dataQualityColor(v: number): string {
-  if (v >= 80) return "#4caf50";
-  if (v >= 40) return "#ff9800";
-  return "#f44336";
+  return bandColor(v);
 }
 
 function dataQualityLabelKey(v: number): string {
-  if (v >= 80) return "dataQuality.complete";
-  if (v >= 40) return "dataQuality.partial";
-  return "dataQuality.minimal";
+  return BAND_LABEL_KEY[bandOf(v)];
 }
 
 export default function DataQualityReport() {
   const { t } = useTranslation(["reports", "common"]);
   const theme = useTheme();
   const isRtl = useIsRtl();
-  const rtlAxisTick = makeRtlAxisTick(theme.palette.text.secondary);
+  // The category axis reserves a fixed pixel gutter, so on a phone it has to
+  // shrink or the bars get squeezed into whatever is left over.
+  const isNarrow = useMediaQuery(theme.breakpoints.down("sm"));
+  const axisWidth = isNarrow ? 96 : 150;
+  const tickFontSize = isNarrow ? 11 : 12;
+  const axisTick = { fontSize: tickFontSize, fill: theme.palette.text.secondary };
+  const rtlAxisTick = makeRtlAxisTick(theme.palette.text.secondary, tickFontSize);
   const { formatDate } = useDateFormat();
   const { types } = useMetamodel();
   const typeLabel = useTypeLabel();
+  const subtypeLabel = useCardSubtypeLabel();
   const saved = useSavedReport("data-quality");
   const { chartRef, thumbnail, captureAndSave } = useThumbnailCapture(() => saved.setSaveDialogOpen(true));
   const [data, setData] = useState<DQData | null>(null);
   const [sidePanelCardId, setSidePanelCardId] = useState<string | null>(null);
   const [view, setView] = useState<"chart" | "table">("chart");
+  // Which slice the side panel is showing; null keeps `useApiQuery` idle.
+  const [scope, setScope] = useState<DQScope | null>(null);
+
+  // Keyed on user-controlled state, so it must go through the request hook —
+  // a bare api.get in an effect lets a stale segment's response land last and
+  // fill the panel with cards the header says you are not looking at (#882).
+  const { data: panelData, loading: panelLoading } = useApiQuery<DQCardsResponse>(
+    scope ? scopePath(scope) : null,
+  );
 
   // Load saved report config
   useEffect(() => {
@@ -111,6 +176,19 @@ export default function DataQualityReport() {
     api.get<DQData>("/reports/data-quality").then(setData);
   }, []);
 
+  // Same handoff the portfolio drawer makes: the aggregate panel steps aside
+  // for the single-card panel rather than stacking two drawers.
+  const handlePanelItemClick = useCallback((id: string) => {
+    setScope(null);
+    setSidePanelCardId(id);
+  }, []);
+
+  /** Guarded because Recharts' click payload is only as reliable as the datum
+   * it was built from — a click that cannot name its type opens nothing. */
+  const openBand = useCallback((typeKey: string | undefined, band: DataQualityBand) => {
+    if (typeKey) setScope({ kind: "band", typeKey, band });
+  }, []);
+
   if (data === null)
     return <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress /></Box>;
 
@@ -131,6 +209,46 @@ export default function DataQualityReport() {
     avg: bt.avg_data_quality,
     total: bt.total,
   }));
+
+  const labelForType = (key: string) => typeLabel(types.find((tp) => tp.key === key)) || key;
+
+  // ---- Side panel ----------------------------------------------------
+  const panelTitle = (() => {
+    if (!scope) return "";
+    if (scope.kind === "band") {
+      return `${labelForType(scope.typeKey)} · ${t(BAND_LABEL_KEY[scope.band])}`;
+    }
+    if (scope.kind === "type") return labelForType(scope.typeKey);
+    return scope.flag === "orphaned" ? t("dataQuality.orphaned") : t("dataQuality.stale");
+  })();
+
+  const panelItems: ReportCardListItem[] = (panelData?.items ?? []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    secondary: [
+      subtypeLabel(item.type, item.subtype) || labelForType(item.type),
+      `${Math.round(item.data_quality)}%`,
+    ].join(" · "),
+    dotColor: dataQualityColor(item.data_quality),
+  }));
+
+  // Band and type slices land grouped by quality with the clicked band
+  // expanded; the flag tiles land on their own inventory filter.
+  const panelInventoryHref = !scope
+    ? undefined
+    : scope.kind === "flag"
+      ? buildInventoryFlagUrl(scope.flag)
+      : buildInventorySliceUrl({
+          cardType: scope.typeKey,
+          mode: { kind: "quality" },
+          group:
+            scope.kind === "band"
+              ? { key: scope.band, label: t(BAND_LABEL_KEY[scope.band]) }
+              : null,
+        });
+
+  const panelTotal = panelData?.total ?? 0;
+  const shown = panelItems.length;
 
   // Alerts
   const alerts: { severity: "error" | "warning" | "info"; msg: string }[] = [];
@@ -207,6 +325,7 @@ export default function DataQualityReport() {
           subtitle={t("dataQuality.percentOfTotal", { pct: orphanedPct })}
           icon="link_off"
           iconColor={data.orphaned > 5 ? "#e65100" : theme.palette.text.secondary}
+          onClick={() => setScope({ kind: "flag", flag: "orphaned" })}
         />
         <MetricCard
           label={t("dataQuality.stale")}
@@ -214,6 +333,7 @@ export default function DataQualityReport() {
           subtitle={t("dataQuality.percentOfTotal", { pct: stalePct })}
           icon="update_disabled"
           iconColor={data.stale > 5 ? "#e65100" : theme.palette.text.secondary}
+          onClick={() => setScope({ kind: "flag", flag: "stale" })}
         />
       </Box>
 
@@ -225,15 +345,41 @@ export default function DataQualityReport() {
               {t("dataQuality.completenessByType")}
             </Typography>
             <ResponsiveContainer width="100%" height={Math.max(250, chartData.length * 50)}>
-              <BarChart data={chartData} layout="vertical" margin={mirrorChartMargin({ left: 120, right: 20, top: 5, bottom: 5 }, isRtl)}>
+              {/* No margin on the label side: Recharts draws the category axis
+                  in its own `width` band *after* the margin, so a margin there
+                  is dead space added on top of the axis gutter. */}
+              <BarChart data={chartData} layout="vertical" margin={mirrorChartMargin({ left: 0, right: 16, top: 5, bottom: 5 }, isRtl)}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme.palette.divider} />
-                <XAxis type="number" reversed={isRtl} tick={{ fontSize: 12, fill: theme.palette.text.secondary }} />
-                <YAxis type="category" dataKey="name" width={110} orientation={isRtl ? "right" : "left"} tick={isRtl ? rtlAxisTick : { fontSize: 12, fill: theme.palette.text.secondary }} />
+                <XAxis type="number" reversed={isRtl} tick={axisTick} />
+                <YAxis type="category" dataKey="name" width={axisWidth} orientation={isRtl ? "right" : "left"} tick={isRtl ? rtlAxisTick : axisTick} />
                 <RTooltip cursor={{ fill: theme.palette.action.hover }} content={<CustomTooltip />} />
                 <Legend formatter={(value: string) => <span style={rtlLegendItemStyle(isRtl, theme.palette.text.primary)}>{value}</span>} />
-                <Bar dataKey={completeLabel} stackId="a" fill={QUALITY_COLORS.complete} radius={[0, 0, 0, 0]} />
-                <Bar dataKey={partialLabel} stackId="a" fill={QUALITY_COLORS.partial} />
-                <Bar dataKey={minimalLabel} stackId="a" fill={QUALITY_COLORS.minimal} radius={isRtl ? [4, 0, 0, 4] : [0, 4, 4, 0]} />
+                {/* Recharts hands the clicked datum to the Bar's onClick, so
+                    each segment resolves its own type key; the band comes from
+                    which Bar was clicked. */}
+                <Bar
+                  dataKey={completeLabel}
+                  stackId="a"
+                  fill={QUALITY_COLORS.complete}
+                  radius={[0, 0, 0, 0]}
+                  cursor="pointer"
+                  onClick={(entry: { type?: string }) => openBand(entry?.type, "complete")}
+                />
+                <Bar
+                  dataKey={partialLabel}
+                  stackId="a"
+                  fill={QUALITY_COLORS.partial}
+                  cursor="pointer"
+                  onClick={(entry: { type?: string }) => openBand(entry?.type, "partial")}
+                />
+                <Bar
+                  dataKey={minimalLabel}
+                  stackId="a"
+                  fill={QUALITY_COLORS.minimal}
+                  radius={isRtl ? [4, 0, 0, 4] : [0, 4, 4, 0]}
+                  cursor="pointer"
+                  onClick={(entry: { type?: string }) => openBand(entry?.type, "minimal")}
+                />
               </BarChart>
             </ResponsiveContainer>
           </Paper>
@@ -248,7 +394,18 @@ export default function DataQualityReport() {
                 const found = types.find((tp) => tp.key === bt.type);
                 const label = typeLabel(found) || bt.type;
                 return (
-                  <Box key={bt.type} data-export-row>
+                  <Box
+                    key={bt.type}
+                    data-export-row
+                    onClick={() => setScope({ kind: "type", typeKey: bt.type })}
+                    sx={{
+                      cursor: "pointer",
+                      borderRadius: 1,
+                      p: 0.5,
+                      mx: -0.5,
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                  >
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
                       <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 13 }}>{label}</Typography>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -301,11 +458,25 @@ export default function DataQualityReport() {
               <TableBody>
                 {data.by_type.map((bt) => (
                   <TableRow key={bt.type} hover>
-                    <TableCell sx={{ fontWeight: 500 }}>{(() => { const tp = types.find((tp) => tp.key === bt.type); return typeLabel(tp) || bt.type; })()}</TableCell>
+                    {/* Same slices as the chart's bar and its segments, so the
+                        two views drill into identical panels. */}
+                    <TableCell
+                      sx={{ fontWeight: 500, cursor: "pointer" }}
+                      onClick={() => setScope({ kind: "type", typeKey: bt.type })}
+                    >
+                      {labelForType(bt.type)}
+                    </TableCell>
                     <TableCell align="right">{bt.total}</TableCell>
-                    <TableCell align="right" sx={{ color: QUALITY_COLORS.complete }}>{bt.complete}</TableCell>
-                    <TableCell align="right" sx={{ color: QUALITY_COLORS.partial }}>{bt.partial}</TableCell>
-                    <TableCell align="right" sx={{ color: QUALITY_COLORS.minimal }}>{bt.minimal}</TableCell>
+                    {DATA_QUALITY_BANDS.map((band) => (
+                      <TableCell
+                        key={band.key}
+                        align="right"
+                        sx={{ color: QUALITY_COLORS[band.key], cursor: "pointer" }}
+                        onClick={() => openBand(bt.type, band.key)}
+                      >
+                        {bt[band.key]}
+                      </TableCell>
+                    ))}
                     <TableCell align="right">
                       <Chip
                         size="small"
@@ -414,6 +585,20 @@ export default function DataQualityReport() {
           <Typography variant="caption" color="text.secondary">{t("dataQuality.minimalLegend")}</Typography>
         </Box>
       </Box>
+      <ReportCardListPanel
+        open={scope !== null}
+        title={panelTitle}
+        items={panelItems}
+        loading={panelLoading}
+        metrics={[{ value: panelTotal, label: t("common:labels.cards") }]}
+        emptyLabel={t("dataQuality.noCardsInSegment")}
+        truncatedLabel={
+          panelTotal > shown ? t("dataQuality.showingOf", { shown, total: panelTotal }) : undefined
+        }
+        inventoryHref={panelInventoryHref}
+        onItemClick={handlePanelItemClick}
+        onClose={() => setScope(null)}
+      />
       <CardDetailSidePanel
         cardId={sidePanelCardId}
         open={!!sidePanelCardId}

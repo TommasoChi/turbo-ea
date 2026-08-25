@@ -9,7 +9,7 @@ Die **Einstellungen**-Seite unter **Admin → Einstellungen** (`/admin/settings`
 | **KI** | `/admin/settings?tab=ai` | LLM-Provider, Modell, Websuch-Backend, Pro-Kartentyp-KI-Suggestionsschalter | [KI-Funktionen](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Massen-Verknüpfung von Produkten zu endoflife.date-Einträgen | [End-of-Life (EOL)](eol.md) |
 | **Webportale** | `/admin/settings?tab=web-portals` | Öffentliche schreibgeschützte Portal-Slugs, Sichtbarkeits-Filter | [Webportale](web-portals.md) |
-| **ServiceNow** | `/admin/settings?tab=servicenow` | ServiceNow-Verbindung, Sync-Konfiguration, Identitäts-Mapping | [ServiceNow-Integration](servicenow.md) |
+| **Integrationen** | `/admin/settings?tab=integrations` | ServiceNow-Sync und durch Erweiterungen hinzugefügte Integrationen | [ServiceNow-Integration](servicenow.md) |
 | **TurboLens** | `/admin/settings?tab=turbolens` | TurboLens-spezifische Schalter, aktivierte Regulierungen, Analyse-Polling | Siehe Abschnitt [TurboLens-Einstellungen](#turbolens-einstellungen) unten |
 | **Migration** | `/admin/settings?tab=migration` | Importe aus anderen EA-Plattformen sowie vollständiger Workspace-Transfer zwischen Turbo-EA-Instanzen | [Plattform-Migration](migration.md) |
 | **Audit-Log** | `/admin/settings?tab=audit-log` | Änderungsprotokoll — wer was geändert hat und ob es aus der Weboberfläche, der API oder einem KI-Werkzeug stammt | — |
@@ -140,6 +140,12 @@ Schalten Sie das **Business Process Management**-Modul ein oder aus. Wenn deakti
 
 Dies ist nützlich für Organisationen, die BPM nicht nutzen und eine übersichtlichere Navigation wünschen.
 
+### Getrennten Freigebenden verlangen
+
+Standardmäßig deaktiviert. Ist die Option aktiv, darf die Person, die eine Revision eines Prozessablaufs einreicht, diese nicht selbst freigeben — Funktionstrennung, wie sie Qualitätssysteme wie GxP und ISO 9001 erwarten.
+
+Für kleine Teams, in denen dieselbe Person erstellt und freigibt, bleibt die Option aus. Das Aktivieren ändert nichts an dem, was aufgezeichnet wird: Einreichung, Freigabe, Ablehnung und Zurückziehen landen in jedem Fall im Reiter **Verlauf** der Karte.
+
 ## PPM-Modul
 
 Schalten Sie das **Projektportfoliomanagement**-Modul (PPM) ein oder aus. Wenn deaktiviert:
@@ -159,6 +165,34 @@ Schalten Sie das **Governance, Risk and Compliance**-Modul (GRC) ein oder aus. W
 - Risiken und Compliance-Findings verbleiben in der Datenbank — die zugrunde liegenden Berechtigungen `risks.*` und `compliance.*` bleiben unverändert, sodass die Daten erhalten bleiben und unverändert wieder erscheinen, wenn das Modul erneut aktiviert wird
 
 Siehe den [GRC-Leitfaden](../guide/grc.md) für die vollständige Funktionsübersicht.
+
+## Update-Benachrichtigungen
+
+Turbo EA prüft einmal täglich, ob eine neuere Version veröffentlicht wurde, und legt in diesem Fall eine Benachrichtigung in die Glocke jedes Benutzers, dessen Rolle `admin.settings` gewährt. Ein Klick darauf öffnet die Release Notes — das Changelog dieser Version — in einem Dialog innerhalb von Turbo EA. Jede Benachrichtigung zeigt weiterhin genau die Version, die sie angekündigt hat, egal wie lange sie schon in der Glocke liegt: Die Notes werden aus dem im Image mitgelieferten Changelog gelesen, verursachen also keine ausgehende Anfrage und funktionieren auf einer Air-Gap-Installation unverändert. Nur ein noch nicht installiertes Release stammt stattdessen aus dem Cache der täglichen Prüfung, denn ein zur Build-Zeit geschriebenes Changelog kann es nicht beschreiben; dafür öffnet eine Schaltfläche **Auf GitHub ansehen** die Release-Seite in einem neuen Tab.
+
+Benachrichtigungen tragen den für diese Instanz konfigurierten Namen, sodass sich eine umbenannte Installation nicht unter einem anderen Produktnamen ankündigt.
+
+Die Prüfung ist **reine Benachrichtigung** — es wird nichts heruntergeladen und nichts auf dem Host verändert. Das Upgrade bleibt der bewusste, durch ein Backup abgesicherte Ablauf, der unter [Betrieb](operations.md#the-upgrade-procedure) beschrieben ist. Administratoren, die nicht erinnert werden möchten, können die Zeile **Update verfügbar** in ihren eigenen Benachrichtigungseinstellungen stummschalten.
+
+Wird der Schalter **deaktiviert**, entfällt die tägliche Anfrage an github.com vollständig — genau das, was eine Air-Gap- oder Egress-beschränkte Installation benötigt. In beiden Fällen verhält sich die Instanz normal: Ist der Release-Feed nicht erreichbar, wird der Fehler still protokolliert und nichts angezeigt.
+
+### Nach dem Upgrade
+
+Ein zweiter Schalter, **Upgrades an Benutzer ankündigen**, deckt die andere Hälfte ab. Startet die Instanz mit einer neueren Version, erhält **jeder** Benutzer — nicht nur Administratoren — eine Benachrichtigung, dass die Anwendung aktualisiert wurde; ein Klick zeigt das Changelog aller übersprungenen Versionen. Eine Instanz, die von 2.57.0 auf 2.60.0 springt, zeigt alle vier Releases, nicht nur das letzte. Jede dieser Meldungen bleibt an ihr eigenes Upgrade gebunden — wer eine ein Jahr alte Meldung öffnet, sieht weiterhin die Versionen, die *dieses* Upgrade übersprungen hat.
+
+Die Ankündigung erfolgt **einmal pro Version**: zehn Neustarts derselben Version ergeben eine Benachrichtigung, ein Rollback keine. Eine brandneue Installation kündigt nichts an, weil es kein Upgrade zu beschreiben gibt. Diese Notes stammen aus dem im Image mitgelieferten Changelog, dieser Teil benötigt also überhaupt kein Netzwerk.
+
+Diese Benachrichtigung erfolgt **nur in der App** und wird nie per E-Mail versendet — sie erreicht bei jedem Upgrade jeden aktiven Benutzer, und ein E-Mail-Kanal würde jedes Patch-Release zu einem Massenversand machen. Einzelne Benutzer können sie weiterhin unter **Update-Benachrichtigungen** in ihren eigenen Benachrichtigungseinstellungen stummschalten; der E-Mail-Schalter wird dort deaktiviert angezeigt.
+
+### Benachrichtigungen zum Erweiterungs-Store
+
+Ein dritter Schalter, **Benachrichtigungen zum Erweiterungs-Store**, erfüllt dieselbe Aufgabe für den [Erweiterungs-Store](extensions.md). Einmal täglich liest die Instanz den öffentlichen Katalog des Stores und benachrichtigt bei Änderungen alle Benutzer, deren Rolle `admin.manage_extensions` gewährt — dieselbe Berechtigung, die die Seite «Erweiterungen» öffnet. Angekündigt wird zweierlei: eine im Store veröffentlichte Erweiterung, die Sie nicht installiert haben, und eine neuere Version einer bereits installierten.
+
+Auch an ereignisreichen Tagen bleibt es übersichtlich: Egal wie viele Erweiterungen sich geändert haben, jeder Administrator erhält **eine** Benachrichtigung pro Art («3 Erweiterungs-Updates verfügbar»), nicht eine pro Erweiterung. Jede Änderung wird **einmal** angekündigt — ein Katalog, der einen Monat unverändert bleibt, erzeugt eine Benachrichtigung, nicht dreißig — und ein Klick öffnet den Store-Tab innerhalb von Turbo EA.
+
+Beim allerersten erfolgreichen Lesen des Katalogs werden **keine** neuen Erweiterungen angekündigt: Eine Instanz, die den Store zum ersten Mal sieht, würde sonst alles darin melden. Updates für bereits installierte Erweiterungen werden sofort gemeldet, da es davon immer nur wenige gibt und sie unmittelbar umsetzbar sind.
+
+Wie die Release-Prüfung dient dies **nur der Information** — es wird nichts heruntergeladen oder installiert, und die Installation bleibt eine bewusste Aktion auf der Seite «Erweiterungen». Wird der Schalter **deaktiviert**, entfällt die tägliche Anfrage an den Store vollständig. Einzelne Administratoren können die Zeilen **Neue Erweiterung verfügbar** und **Erweiterungs-Update verfügbar** in ihren eigenen Benachrichtigungseinstellungen getrennt stummschalten.
 
 ## Sponsor-Schaltfläche
 

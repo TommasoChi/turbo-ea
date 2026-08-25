@@ -7,6 +7,7 @@
   "totalInitiatives": "Total Initiatives",
   "totalBudget": "Total Budget",
   "totalActual": "Total Actual",
+  "budgetBarTotal": "Total",
   "health_schedule": "Schedule",
   "health_cost": "Cost",
   "health_scope": "Scope",
@@ -170,5 +171,19 @@
   "workPackage": "Work Package",
   "confirmDeleteTask": "Delete this task? This action cannot be undone.",
   "addTaskUnderWbs": "Add Task",
-  "deleteConfirm": "Confirm Delete"
+  "deleteConfirm": "Confirm Delete",
+  "spendOverTime": "Spend over time",
+  "cumulativeByCategory": "Cumulative spend by category",
+  "cumulativeTotal": "Cumulative total spend",
+  "projectCumulative": "Project to date",
+  "allFiscalYears": "All fiscal years",
+  "cumulativeCapex": "Cumulative CapEx",
+  "cumulativeOpex": "Cumulative OpEx",
+  "cumulativeSpend": "Cumulative spend",
+  "capexBudgetLine": "CapEx budget",
+  "opexBudgetLine": "OpEx budget",
+  "totalBudgetLine": "Total budget",
+  "noChartData": "No cost data to chart yet",
+  "undatedExcluded_one": "{{count}} undated cost item is not shown on the charts",
+  "undatedExcluded_other": "{{count}} undated cost items are not shown on the charts"
 }

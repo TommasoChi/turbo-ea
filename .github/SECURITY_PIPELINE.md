@@ -27,7 +27,7 @@ Two scanners covering the same layer is deliberate — different vuln DBs have d
 [`ci.yml`](workflows/ci.yml) (path-filtered — workflow-only PRs skip app jobs):
 - **Backend lint / unit tests / integration tests / type check**
 - **Backend Security Scan** — `pip-audit --strict` against generated `requirements.txt`. Fails on any open CVE in production dependencies.
-- **Frontend Security Scan** — `npm audit --omit=dev`. Fails on any open CVE in production dependencies.
+- **Frontend Security Scan** — `audit-ci` (config: [`.github/audit-ci.jsonc`](audit-ci.jsonc)). Fails on any open CVE in production dependencies, except advisory ids explicitly allowlisted in the config — the npm counterpart of the Trivy allowlist, same rules: documented rationale per entry, quarterly re-evaluation, entry removed the moment upstream ships a patch.
 - **Migration Rollback Test** — exercises Alembic up→down→up so a broken downgrade can't ship.
 - **CodeQL** — GitHub's default-setup, languages `actions / javascript / javascript-typescript / python / typescript`, query suite `default`, threat model `remote`. Findings land in the Security tab; CRITICAL/HIGH alerts require dismissal or a fix.
 
@@ -89,9 +89,12 @@ Why this exists: CVEs disclosed *after* the last image build would otherwise go 
 | `docker` | `/` | weekly | Same. Covers every `FROM` line in the root Dockerfile (nginx, python, postgres, node, alpine-git). Added after NGINX Rift to close the "moving tag" gap. |
 | `github-actions` | `/` | **monthly, version updates enabled, grouped** | All actions bundled into one PR (e.g. PR #603 = 8-action group). Pinning actions to current SHAs is itself a supply-chain security best practice. |
 
+### Monthly — UI-engine version bump
+[`dependency-bump.yml`](workflows/dependency-bump.yml) + [`scripts/bump-deps.sh`](../scripts/bump-deps.sh) — deliberately complements the security-only Dependabot posture above, which never opens *version*-update PRs for npm/docker. Covers the three embedded UI engines Dependabot can't or won't: **DrawIO** (a `git clone` tag inside the Dockerfile — invisible to every dependency bot; always bumped to the latest upstream release, incl. the doc mentions, with occurrence-count assertions against drift) and **AG Grid / bpmn-js / bpmn-js-color-picker** (npm; latest patch/minor within the installed major — newly available majors are only *listed* in the PR body, because AG Grid majors tend to break the Community re-implementations in `frontend/src/components/grid/`). The script also patch-bumps `/VERSION` + `CHANGELOG.md` so the bump PR passes `version-check.yml`. The PR is opened with the `DEPENDENCY_BUMP_TOKEN` fine-grained PAT (Contents + Pull requests read/write) — the default `GITHUB_TOKEN` would be auto-closed by `restrict-pr-authors.yml` and would not trigger CI. Each PR body carries the manual smoke-test checklist for the surfaces CI can't cover (DrawIO iframe, BPMN modeler, grid features).
+
 ### Monthly + on-demand
 - **GitHub Security tab** — review aggregated Trivy + Scout + CodeQL + Dependabot alerts. Dismiss with reason for known-not-applicable findings.
-- **Trivy allowlist quarterly review** — re-evaluate every entry in `.github/trivy-allowlist`. Remove anything an upstream patch now fixes.
+- **Allowlist quarterly review** — re-evaluate every entry in `.github/trivy-allowlist` **and** `.github/audit-ci.jsonc`. Remove anything an upstream patch now fixes.
 
 ## Operational runbook
 
@@ -115,7 +118,7 @@ have. To get the open alerts (CodeQL + Trivy + Scout) as a plain table:
 2. Decide which path applies:
    - **Upstream patch exists** → bump the base image (most CVEs in alpine packages are fixed by the next pinned `nginx:1.30.x-alpine` etc.). Open a PR with the bump.
    - **Patch exists but adoption needs a major bump** → file an issue, ship the major bump as a separate PR.
-   - **No patch, not exploitable in our usage path** → allowlist in `.github/trivy-allowlist`. **Required**: a comment block above the CVE explaining package, why it isn't exploitable for us, reviewer initials, date. Re-evaluate next quarter.
+   - **No patch, not exploitable in our usage path** → allowlist in `.github/trivy-allowlist` (image CVEs) or `.github/audit-ci.jsonc` (npm advisories). **Required**: a comment block above the CVE/GHSA id explaining package, why it isn't exploitable for us, reviewer initials, date. Re-evaluate next quarter.
    - **No patch, exploitable** → don't ship. Mitigate at the nginx / app layer if possible; otherwise the workflow stays red until upstream fixes.
 3. Re-run the workflow.
 

@@ -5,6 +5,583 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.83.0] - 2026-08-24
+
+### Changed
+
+- **Picking what a dependency card shows is its own toolbar button, with tickboxes.** In the Layered Dependency View the attribute picker was a chip-and-text field at the bottom of the settings menu — hard to find, and awkward on a tablet. It is now a **Show on card** button of its own in the toolbar, listing the type, the subtype, the lifecycle dot and every attribute in play as tickboxes filed under the card type that owns them, with a badge counting what is shown. It is the same menu the diagram editor uses, so a landscape is dressed the same way in a report and on the diagram exported from it.
+- **Show on card has a Clear all action**, so returning a card to just its name is one click instead of hunting down each ticked row. It clears the type, the subtype, the lifecycle line and every picked field in a single step, on both the report and the diagram.
+- **The card-display menus are usable on a touch screen.** Rows in the Dependencies and diagram menus are finger-sized on a tablet, and on a phone the list opens as a full-screen sheet instead of a cramped dropdown.
+- **The Dependencies report's `tune` menu is now View options**, keeping the hierarchy-marker, end-of-life and relationship-label settings; everything that changes the text printed on a card moved to **Show on card**.
+
+## [2.82.0] - 2026-08-24
+
+### Added
+
+- **A diagram can be coloured by several card types at once.** Under **Color by**, tick a field on each card type you care about — Applications by criticality *and* IT Components by hosting model — and each type takes its own scale, with one legend block per rule. Field rules and **Approval status** remain alternatives rather than layers, and unticking every rule returns the canvas to card colors.
+- **Colour and card contents are now two toolbar buttons.** Per-type rules make the colour list long, so **Color by** and **Show on card** each have their own button; neither list has to be scrolled past to reach the other.
+
+### Fixed
+
+- **Colouring by a field no longer greys out every other card type.** Picking, say, *Application · Criticality* painted every card that was not an Application a flat grey, which made the feature unusable on any landscape holding more than one card type. A card type you have given no rule now keeps the colour it already had — including a fill set by hand — and only a card whose own rule finds no value is greyed, with a **No value** swatch in the legend to say so.
+- **Two card types coloured by the same field no longer share one palette.** Rules on two types whose fields offer the same option value (`high`, `active`, …) collided, so one type rendered in the other's colours.
+- **Switching colour rules is a single undo step**, and the swatch count reports how many cards a rule actually coloured rather than how many were greyed.
+- **Rapidly changing the colour rules can no longer leave the canvas mis-painted.** The colour pass now cancels the request it supersedes, and touches the canvas only after the card data has arrived — so a failed or overtaken fetch cannot leave shapes half-reset.
+- **Approval-status swatches are translated** instead of showing a capitalised internal key.
+
+## [2.81.0] - 2026-08-24
+
+### Added
+
+- **Diagrams can show more than a card's name.** The **View** dropdown in the diagram toolbar now carries two independent settings: **Color by** picks the one attribute that recolours the shapes, and **Show on card** picks any number of fields to print on them — the card type, the subtype, or any attribute of the card types on the canvas. Fields are listed under the card type they belong to, with any field several of those types share grouped under **Shared**. The first two selections are drawn on the shape — a card is only so big — and the choice is saved with the diagram, so every reader, including anyone opening a published link, sees the same shapes. Expanded child cards keep just their name.
+- **A diagram generated from the Dependencies report keeps the report's detail.** The **Create diagram** button used to hand DrawIO nothing but names, so a landscape that read richly in the report went flat on the diagram made from it. The card-display settings and the resolved rows now travel across, and the new diagram opens with its own dropdown pre-set to match.
+- **Subtype can be shown on a dependency card.** The Dependencies report's **Card display** menu has a *Show subtype* switch, alongside the existing type and lifecycle toggles.
+- **The Dependencies report's Card display menu is grouped.** Its switches sit under **Cards** and **Relations** instead of running together, and the extra-fields picker lists each attribute under the card type that owns it.
+- **The colour and the fields on a diagram card are set independently.** Both live in the same **View** dropdown, and neither now depends on the other: the attribute rows are populated whenever the menu is opened rather than as a side effect of applying a colour, and picking a colour no longer dismisses the menu, so both can be set in one visit.
+- **A card's detail rows are stored as data rather than re-read from its own markup.** A diagram label is hand-editable, so lifting the rendered rows out of one label and splicing them into another re-emitted whatever markup that label happened to carry. The rows now travel as data on the cell and every re-render goes back through the escaper, and the name is recovered from a hand-edited label with a real HTML parse instead of a strip-tags pattern that a comment or a quoted `>` defeats.
+
+### Fixed
+
+- **The View button in the diagram toolbar no longer cuts off its own label.** With a longer view name selected the palette icon, the chevron and both ends of the text were clipped mid-word, with no ellipsis to show anything was missing. The label now truncates properly and the full text is available on hover.
+- **The diagram's colour legend and its View button agree in every language.** The legend printed the untranslated card-type and field names while the button printed the translated ones, so the two disagreed outside English — and an admin-created type showed its internal name in both the menu and the legend.
+
+## [2.80.0] - 2026-08-24
+
+### Added
+
+- **Choose how many columns a report lays its cards out in.** The Capability Map, Process Map, Portfolio, Flexible Portfolio and the BPM Process Navigator all placed their cards in a fixed three-across grid, whatever the screen or the content. Each now has a 1 / 2 / 3 column picker in its toolbar, next to the depth control — three buttons, no dropdown. Wider cards are easier to read at one or two across; a sparse landscape no longer wastes half the page. The choice sticks per report, travels with a saved report, and is used when you print. Narrow screens still reduce to one or two columns on their own, and the Process Navigator never stretches a row across more tracks than it has processes.
+
+### Fixed
+
+- **Card titles no longer vanish in a narrow card.** A card header lays its title and chips out in a row, and the title was allowed to shrink to nothing — so in a narrow card, such as a level-3 process in the Process Map, the name disappeared entirely and the chips beside it were cut off mid-word. The title now keeps a minimum width and ellipsises, and the chips wrap onto a second line instead of running past the card edge.
+
+### Changed
+
+- **The column choice now cascades through the nested levels.** Cards at level 3 were the hardest to read, because every level below the first sized its children off a fixed minimum width that ignored how much room the parent card actually had. The choice you make at the top now sets the levels beneath it, tapering one column per level: pick one column and level 2 sits three across and level 3 two across, pick three and everything below stays stacked and full width. Levels still fold down to fewer columns when a card is genuinely too narrow, and drilling into a card restarts the layout from what you are looking at.
+- Two layout rules these reports applied silently are gone, replaced by the picker: they switched to a narrower grid once you drilled past the top level, and widened to four columns on very large monitors.
+
+## [2.79.3] - 2026-08-24
+
+### Fixed
+
+- **Labels that printed their internal name instead of their text.** The Dependencies report showed «dependency.selectHint» under «Select a card to explore», where the subtitle belongs. Twenty-one further labels were broken the same way and in every language, because the name the screen asked for and the name the translation was filed under had drifted apart: in the Dependencies report, the expand hint on a card, the tooltip on a card that appears twice, both empty states under the search box, and the «Center on» line printed onto an exported image; in the Cost report, the «Cost» and «% of Total» table headings, the «None» entry in Group By, and the message shown when there is nothing to chart; the Category and Cardinality pickers on Admin → Metamodel; every error message on Admin → Roles together with its «Key» field label; and the two link errors when attaching a card to a decision record. Each now shows the text it was always meant to show.
+
+## [2.79.2] - 2026-08-23
+
+### Fixed
+
+- **The PPM Initiative page is usable on a phone.** Every tab was built desktop-first and several overflowed the screen. On **Overview**, the Total Budget / Total Actual / Variance figures ran off the right edge instead of wrapping — they now reflow to fit whatever width the card actually has, which also fixes the same clipping on a small laptop, where the card is only half the page wide. The budget bars underneath no longer print a contradictory unit: a 2.5M budget read «1.7M/2.5M kCHF» (million-thousand) and now reads «1.7/2.5 MCHF». «Total Budget» was also printed twice on that card, once as the figure and again on the bar below it; the bars now read Total / CapEx / OpEx.
+- **PPM tabs no longer overflow on narrow screens.** The **Risk** and **Status Reports** summary rows wrap instead of pushing content off-screen, and the report actions stay reachable. The wide tables on **Risk**, **Budget & Costs** and the task list scroll sideways within their own panel rather than dragging the whole page with them. Cost charts are shorter on a phone so three of them no longer fill the screen, and a long cost description is truncated with the full text on hover instead of forcing a very wide table.
+- **The PPM task board can be used on a phone.** The kanban squeezed all four status columns into the screen width, leaving each about 85px wide. Columns are now full-size and the board scrolls sideways between them; drag-and-drop, including long-press to drag on touch, still works.
+- **The PPM Gantt fits a phone screen.** Its task list showed five fixed columns totalling more than a phone's entire width, so the timeline was pushed off-screen entirely; on narrow screens it now shows just the name and completion. A first visit on a phone also starts at a quarterly zoom rather than weekly, where barely one column was visible. An explicitly chosen zoom level is still remembered.
+- **PPM dialogs open full-screen on a phone.** Creating or editing a task, work package, status report, risk, budget line or cost line now uses the whole screen instead of a cramped box, paired fields stack instead of being squeezed side by side, and the keyboard no longer springs open the moment a dialog appears.
+
+## [2.79.1] - 2026-08-23
+
+### Added
+
+- Dependencies report: while you stand on a transition marker, the cards that stay put are marked where their connections change — a red broken-link icon where a neighbour retires there, a blue one where a neighbour goes live there, and both when both happen. The card that is itself coming or going carries no icon; it says so by appearing, or by being ghosted. The arrival side is new: until now the timeline marked who lost a dependency but never who gained one.
+
+### Fixed
+
+- Dependencies report: a card retiring at the marker you are standing on now stays on the diagram — ghosted and badged *RETIRED* — even with **Persist retired cards** switched off. Previously the marker's card pills named a card that was nowhere to be seen, because the view is drawn as of the end of the marker's range and the card was already gone by then. It stays for as long as you stand on that marker, however you got there — a click, an arrow step, or a drag that snaps onto it.
+
+### Changed
+
+- Dependencies report: the *IMPACTED* badge is replaced by the connection-change icons above, and it is tied to a marker rather than to a travel window. It used to be scoped to the whole span between today and the date you travelled to, and because that span only ever grows, a badge earned at one retirement was earned again at every later date and never expired. Away from a marker no card is marked, however far forward you travel; at a marker the icons appear whether **Persist retired cards** is on or off, and at markers in the past too, where a retirement is just as real a change.
+
+## [2.79.0] - 2026-08-23
+
+### Added
+
+- Layered Dependency View: the card the diagram is centred on now carries a double border in its own card type's colour, and every card you pull in with the **Expand mode** tool carries a thinner one. Your bearings — what the diagram is built around, and what you dug into — stay visible as the diagram grows. The centre marking also appears on a card's Dependencies section.
+
+### Fixed
+
+- Time Travel slider: a merged marker now means its whole range. Where several transition dates are drawn as one wider marker, standing on it — by click, by arrow, or by a drag that snaps onto it — shows the landscape as of the **end** of that range, and the date beside the slider names the range rather than a single day. Previously it landed on the range's first date, so a card going live later in the same marker was drawn as not-yet-live right beside one that had already arrived, even though the pills below named both.
+
+### Changed
+
+- Time travel now draws a plain future state: a card that is part of the landscape at the date you travelled to renders as an ordinary card, carrying only a purple outline as a quiet cue that it is new. It no longer takes a *PLANNED* badge, a tint or a glow. Badges are reserved for cards shown **despite** not being there at that date — retired ones (*RETIRED*) and, with **Preview planned cards** on, not-yet-live ones (*UPCOMING*). What arrives and leaves is carried by the timeline's markers, its card pills and the arriving/retiring chips. Applies to the diagram, the tree and the table alike.
+
+## [2.78.3] - 2026-08-23
+
+### Fixed
+
+- Time Travel slider: the **Previous change** / **Next change** arrows now treat a merged mark as a single stop. Where transition dates fall close together the timeline draws them as one wider mark, but the arrows stepped through the individual dates behind it — so on a busy stretch two or three presses moved the handle without the highlighted mark, the spotlight or the card pills below ever changing, and the button looked broken. One press now moves clear of everything the mark covers, landing on its earliest date and spotlighting every card it merged, exactly as clicking the mark does.
+
+## [2.78.2] - 2026-08-23
+
+### Fixed
+
+- Time Travel slider: the year labels are now evenly spaced at every window width. The final year was labelled unconditionally, so on a timeline whose labels were thinned to every other year the last two sat one year apart instead of two and overlapped (2033 and 2034 in the reported case). Labels now fall on a single stride chosen from their real on-screen positions, so the spacing guarantee holds however the window is sized; a trailing year that would crowd its neighbour goes unlabelled, and every year still carries its own tick.
+- Time Travel slider: the timeline no longer runs years past the last thing that happens on it. Phase-out dates, which no view and no marker reads, used to stretch the axis — a single phase-out date three years out bought three empty labelled years of dead track. The axis is now bounded by the dates that actually change the landscape: go-live and end of life.
+- Time Travel slider: a saved report whose stored date falls outside the current timeline — after a lifecycle edit shortens it, say — keeps its handle on the track instead of rendering it past the end. The date shown above the slider is still the one that was saved.
+
+### Changed
+
+- Time travel: a card now enters the landscape on its **Active** date rather than on the earliest of its plan, phase-in and active dates. A card planned for 2027 and going live in 2029 used to appear in 2027 — two years before the go-live marker that announces it, on a date carrying no marker at all. A card with no Active date has not gone live at all, so it now shows only with **Preview planned cards** turned on, badged as upcoming. Cards with no lifecycle dates, and those carrying only phase-out or end-of-life dates, are unaffected and stay visible as before.
+
+## [2.78.1] - 2026-08-23
+
+### Fixed
+
+- Process Flow: the steps in the **Pre-link Elements** and **Elements** tables now read in process order — starting from the start event and following the diagram's sequence and message flows — instead of being grouped by BPMN element type, which listed every user task first and left the start event near the bottom. Steps that sit inside a loop stay together, a sub-process's contents are listed directly beneath it, and the two sides of a cross-pool conversation interleave where the message flows connect them. A diagram with no connections falls back to the order the elements appear in the file. Processes already published on an existing instance are re-ordered on upgrade — no need to re-save or re-approve them ([#978](https://github.com/vincentmakes/turbo-ea/issues/978)).
+
+## [2.78.0] - 2026-08-23
+
+### Added
+
+- Portfolio and Capability Map reports: the timeline instruments introduced on the Dependencies report now work here too. The time-travel slider is marked with every date on which the displayed applications go live (blue) or retire (red), with nearby dates merged into one wider bar; standing on a mark names the changing applications as pills below the track, and clicking a mark — or stepping between marks with the arrow buttons — spotlights the applications that change there, the rest of the view dimming while they pulse. An application already gone at the travelled date is revealed just for the pulse, then hidden again. On the Capability Map with **Show Applications** off, the spotlight falls on the capability boxes the changing applications sit in instead — blue where they only arrive, red where they only retire, purple where both happen. While looking forward, chips beside the date summarise the transformation ("+4 arriving · −7 retiring"), and the summary is included in print and export headers.
+- Portfolio, Flexible Portfolio and Capability Map reports: the **Filters** row now collapses. Click its header to fold the filter controls away and reclaim the vertical space they take from the chart; the setting is remembered with the rest of the report's configuration. A collapsed header keeps a count of the active filters beside its label, so a filtered report is never mistaken for an unfiltered one, and **Clear all** stays reachable without expanding first.
+
+## [2.77.0] - 2026-08-23
+
+### Added
+
+- Layered Dependency View: a **Show relationship labels** option in the Card display menu, on by default. Turn it off for a cleaner canvas on a dense landscape — the lines and their arrowheads still carry what connects to what and in which direction.
+
+### Fixed
+
+- Layered Dependency View: cards were translucent in dark mode, so the canvas grid and every edge passing beneath one showed through it. The card-type tint now sits on an opaque background, as it already did in light mode.
+- Dependencies report: stepping between transition marks with the arrows beside the time-travel slider now spotlights the cards that change there, the same as clicking the mark — the canvas dims while they pulse, and a retiring card hidden by **Persist retired cards** is revealed for the pulse. The arrows moved the date but animated nothing, so the two ways of reaching the same change behaved differently.
+- Dependencies report: transition marks now read at a glance — one bar per mark, blue where cards only arrive, red where they only retire, purple where it does both, drawn wider when it merges several nearby dates and labelled with the span it covers ("1 Apr 2027 – 1 Jul 2027"). A crowded mark used to look exactly like a single-date one, so a change absorbed into it appeared unmarked.
+- Dependencies report: a card that goes live and retires within the same mark is now named on both sides of the pill row — once under the **+**, once under the **−** — and each pill spotlights the change it names. It was listed once as a retirement, which contradicted the mark above it, since that counts both.
+- Grid drag-fill: a flaky test that assumed one animation frame was enough for the fill handle to appear. No product change — the handle itself is unchanged.
+- Demo dataset: lifecycle dates repaired — nothing retires that never went live, phases no longer run backwards, and dates are spread rather than piled onto a handful of days.
+
+## [2.76.0] - 2026-08-21
+
+### Added
+
+- Dependencies report: a **Time Travel** slider, like the Portfolio and Capability Map reports. Drag a date and the graph shows the landscape as it stands then — cards that have not started yet are hidden. Looking forward, cards that arrive in the meantime are outlined and badged **PLANNED** and retired cards are badged **RETIRED**, so a planned transformation reads straight off the diagram instead of having to be inferred by dragging back and forth. The slider applies to the Layered Dependency View, the tree view and the table, each card's lifecycle dot reflects the selected date, and the date is saved with the report.
+- Dependencies report: a **Persist retired cards** switch in the report toolbar, on by default, keeps retired cards on the diagram — faded and badged **RETIRED** — at any date after their retirement, so a transformation shows what it removes as well as what it leaves. Turn it off to show only the cards alive on the selected date.
+- Demo dataset: a PLM Modernisation transformation story built for the time-travel demo — PTC Windchill (now with a real dependency surface: Engineering, a file-vault server, BOM data and a migration feed into its successor Siemens Teamcenter, linked via the previously unused successor relation) retires ~5 months after seeding, its vault server a month later, while the new PLM Analytics Workbench is planned next month and goes live in ~9. The story's dates are relative to seeding time, so the demo always has a transformation ahead of it. Centre the Dependencies report on Siemens Teamcenter to watch it play out.
+- Dependencies report: a **Preview planned cards** switch — the mirror of Persist retired cards — shows cards that have not started yet, ghosted and badged **UPCOMING**, at any date before their start, so even a past or present view can preview what is coming. Off by default.
+- Dependencies report: the impact of a retirement is now visible on its dependents — relations into retired cards render as dashed red (the dependencies the transformation severs), and when retired cards are hidden, surviving cards that lose one are badged **IMPACTED**, so the severed dependency is never silently lost. Arriving cards are also easier to spot: a purple glow, tinted background, and the **PLANNED** badge on the card's top edge.
+- Dependencies report: while looking forward, chips beside the time-travel date summarise the transformation ("+4 arriving · −7 retiring"), arrow buttons on either side of the track step the slider from one change date to the next, and the summary is included in print and export headers.
+- Dependencies report: the timeline is marked with every date on which cards on the displayed diagram go live (blue) or retire (red) — the two moments a transformation actually turns on. Marks aggregate where they crowd together, and render in the same colours whether the change is behind you or ahead. Standing on a mark names the cards it counts as pills below the marks — grouped behind a "+" for the ones going live and a "−" for the ones retiring, each in its card type's colour — so "3 cards retire" becomes three names you can read — click one to spotlight just that card. Clicking a mark jumps the slider to that change and spotlights the cards involved — the canvas dims for a moment while they pulse in the mark's colour — in the tree and table views as well as the Layered Dependency View, which previously was the only one that animated, and a retiring card hidden by **Persist retired cards** is revealed just for the pulse, then hidden again without the toggle changing. The timeline appears once a card is centred (or on the table view), where there is a diagram for it to act on.
+- Demo dataset: an **Increase Sales by 25%** objective with the eight-year story of how it gets delivered — the home-grown CRM the company outgrew and retired, the Salesforce era, a B2B commerce portal going live within months of whenever you install, an AI revenue-intelligence agent arriving after it, and the partner extranet and HubSpot Marketing it displaces on the way. Three sales capabilities switch on in different years, and the supporting initiatives, interfaces, IT components, data objects, org and provider links come with them. Centre the Dependencies report on the objective and the canvas rebuilds itself as you move the slider; the dates are relative to install time, so the story never becomes historical.
+- A card's **Dependencies** section is no longer a dead end: an open-in-new-tab icon in its toolbar opens the full Dependencies report in a new tab, centred on whatever the view is centred on — the card you navigated to, not necessarily the one you started from. Everything the report adds around the same picture is then to hand: time travel, the transition marks, the table view and saving the view as a report. The report now accepts a `?center=` link generally, so it can be linked to from anywhere.
+- Demo dataset: the sales organisation now has an **eighteen-year go-to-market story** rather than a snapshot — spreadsheets on a file server, then a first CRM, then account planning, sales engagement and campaign management, then a customer data platform and omni-channel engagement, and finally marketing automation and AI agents on a shared model estate. Each era brings the capabilities it switches on, the applications and infrastructure that deliver them, the integrations between them and the programme that paid for it, so travelling the Dependencies timeline over a sales capability shows the function being built.
+- Demo dataset: **capabilities now work as the hinge between objectives and applications** — the card type the Dependencies report is worth centring on, since nothing else reaches strategy and applications in a single hop. Each objective names the capabilities it actually drives instead of two apiece, every application supports at least one capability, and initiatives and value streams reach the capabilities they change. Two thirds of the dataset also carried no lifecycle at all, so the timeline did nothing from most centres; interfaces now live and die with the applications they connect, initiatives end on their end date, applications flagged for elimination actually retire, and IT components no longer all retire on one hard-coded day.
+- Dependencies report: the centre picker lists each type's best-connected cards first, so the cards worth centring on are the ones you see. Name remains the tiebreak, and the search box still finds a card you can name.
+
+### Changed
+
+- Dependencies report: the graph now reflects lifecycle dates at all times, matching the Portfolio and Capability Map reports — cards whose lifecycle only starts in the future no longer appear at today's date.
+
+### Fixed
+
+- A card carrying only end-phase lifecycle dates (e.g. an IT component whose `endOfLife` was set by the End-of-Life mass-link, with no plan/active date) was treated as "born" at its own death — invisible for its entire life in the Portfolio, Capability Map and Dependencies reports. Start phases alone now determine when a card enters the landscape.
+- Dependencies report: the tree view fetched a type-filtered graph while the Layered Dependency View fetched everything, so switching views with a type filter active dropped every cross-type neighbour — a card whose relations are all cross-type rendered alone. Both views now share one unfiltered graph; the type filter scopes the card picker instead.
+- Dependencies report: the card picker's "All" filter chip showed the raw translation key instead of its label.
+- Demo dataset: IT Components carried their end-of-life date under an unrecognised `eol` key instead of `endOfLife`, so no IT Component ever reached end of life — neither in the Lifecycle report nor in the Dependencies report's time travel.
+
+## [2.75.0] - 2026-08-21
+
+### Added
+
+- PPM Budget & Costs: three cumulative spend charts above the budget and cost tables — cumulative CapEx/OpEx for a fiscal year against dotted per-category budget lines, the same year combined into a single total, and a project-to-date view across every month. The fiscal-year selector honours the configured fiscal year start month and offers any year with data plus All fiscal years; the year and expand/collapse choices persist between visits. Lines stop at the current month rather than running flat to year end, and undated cost items are excluded with a note reporting how many.
+
+## [2.74.0] - 2026-08-21
+
+### Added
+
+- My Tasks: the list is now segmented into collapsible per-origin groups (project tasks, risks, ADRs, …) — each header shows the origin icon, count, and a red overdue hint so a collapsed group still signals urgency. A group/flat toggle next to the sort control returns to the flat list for cross-origin due-date triage; the choice and collapsed groups persist.
+
+## [2.73.0] - 2026-08-21
+
+### Added
+
+- My Tasks: quick origin filters — every todo now carries where it came from (project task, risk, ADR, SoAW, process approval, extension, manual) and the list offers one-click filter chips with counts (shown when tasks come from more than one origin), a sort selector (due date, newest, origin), and a free-text search across description, card, assigner and assignee.
+- My Tasks: each todo shows who assigned it ("From: …") on the Assigned-to-me tab, and rows carry a colour-coded origin icon and accent stripe for at-a-glance scanning. A task mirrored to an external tracker (Jira, GitLab, …) keeps its real origin and shows the external reference as a small link — completion always happens in Turbo EA.
+
+### Changed
+
+- My Tasks: rows were decluttered for readability — the due date moved to a fixed right-hand column (red when overdue, replacing the separate "Overdue" chip), metadata collapsed into one quiet text line, and the generic "Action required" chip on system todos was replaced by the specific origin indicator.
+
+## [2.72.1] - 2026-08-21
+
+### Fixed
+
+- The app now recovers from a stale cached build on its own: on startup it compares its version with the backend and reloads once when a cache served an outdated page, and a page whose lazy-loaded chunks disappeared after a deploy reloads onto the new build instead of breaking — no more asking users to hard-refresh after an upgrade.
+
+## [2.72.0] - 2026-08-20
+
+### Added
+
+- Extension trials: the Store tab shows a "Start 30-day trial" button on extensions whose catalogue listing offers one, and the Installed tab labels trial entitlements ("Trial until …" / "Trial ended — subscribe to reactivate"). A trial entitlement has no grace window — expiry is a hard stop; data is never deleted and everything comes back on subscribing. The Buy button stays visible during and after a trial, so converting to a subscription is one click in-product. Store cards show the live entitlement — trial countdown and renewal/expiry dates — even while the extension is installed.
+
+### Changed
+
+- In-app Buy and Start-trial open the store's server-created checkout: no more typing the instance ID into the Stripe form — the app passes it along automatically (falling back to the classic payment link when the store or instance ID is unavailable).
+
+### Fixed
+
+- In-app store purchases now confirm automatically: the post-checkout poll sent only part of the checkout reference, so the "Waiting for payment confirmation" state never resolved and the license had to be pasted from the email.
+
+## [2.71.0] - 2026-08-20
+
+### Added
+- The extension Store tab now shows category pills (free/commercial plus topical tags like integration or value-creation) on each catalogue item and a click-to-filter bar above the grid — select several tags to narrow the list, «All» resets. Catalogues without tags render exactly as before.
+
+## [2.70.0] - 2026-08-20
+
+### Added
+- Admin → Extensions → Installed now shows an "Update to X" chip next to an extension's version whenever the store catalogue carries a newer release — one click starts the same guided install as the Store tab. Air-gapped instances are unaffected (no catalogue, no chip).
+- Installing an extension bundle **older** than the currently installed version now requires an explicit confirmation — the dry-run preview flags the downgrade and the apply endpoint refuses it without the confirm flag, on both the store install and manual upload paths.
+
+### Fixed
+- Updating a deliberately disabled extension no longer re-enables it: the new version installs with the extension kept disabled (content stays hidden, no field contributions applied) until an admin turns it back on. A disabled backend extension also keeps its restart requirement through the update.
+
+## [2.69.0] - 2026-08-19
+
+### Added
+- Monthly automated dependency-bump pull request for the embedded UI engines (DrawIO, AG Grid, bpmn-js): DrawIO always follows the latest upstream release, npm packages get patch/minor updates within their installed major, and newly available majors are flagged in the PR body for a deliberate upgrade. Requires the `DEPENDENCY_BUMP_TOKEN` repository secret (fine-grained PAT).
+
+### Changed
+- Upgraded the bundled DrawIO editor from v26.0.9 to v31.1.8 (improved auto-layout for large diagrams, five majors of upstream fixes). The Dockerfile now fails the build loudly if a future DrawIO release reformats `index.html` in a way that defeats the hardening patches.
+- Upgraded AG Grid from 32.3 to 35.3 and migrated all grids from the deprecated legacy CSS themes to the AG Grid Theming API — same Quartz design in light and dark mode.
+- Upgraded bpmn-js from 18.12 to 18.25.
+
+### Removed
+- Unused `bpmn-js-properties-panel` / `@bpmn-io/properties-panel` frontend packages and two dead DrawIO config CSS files.
+
+### Fixed
+- DrawIO assets are now served with `no-cache` (ETag revalidation) instead of a 30-day browser cache: DrawIO ships no content-hashed filenames, so the old policy kept serving the previous editor version for up to a month after an upgrade.
+- Grid popups (column filter menu) now explicitly stack above the sticky group headers on iPadOS/Safari, and the column freeze pins get larger touch targets on tablets.
+- Freezing a column no longer moves the row-selection checkboxes behind it: AG Grid 33+ auto-unpins columns when the pinned region crowds a narrow viewport and sacrificed the selection column first (easily triggered on tablets with the filter sidebar open) — the grids now veto that so the checkboxes always stay leftmost.
+- Duplicate sticky group headers can no longer appear during scroll direction changes: the sticky bars fully replace the real group header rows on screen (the rows still print), so a late compositor update shows one header, never two.
+- The app's `index.html` is now served with `no-cache` (ETag revalidation): it previously carried no cache header at all, so Safari cached it heuristically and devices could keep loading the previous app version for days after an upgrade.
+
+## [2.68.0] - 2026-08-19
+
+### Added
+- **All integrations are now configured in one place: Admin → Settings → Integrations.** The tab hosts the built-in ServiceNow sync as its first sub-tab, and an installed extension that connects Turbo EA to an external system can place its own configuration panel right next to it (UI extension SDK 1.16, `integrationPanels`) — same location, same look, instead of living on the separate Extensions page. Existing links and bookmarks to the ServiceNow tab keep working.
+
+### Changed
+- The ServiceNow settings tab is now the first sub-tab of the new Integrations tab; `/admin/settings?tab=servicenow` still resolves there.
+
+## [2.67.1] - 2026-08-18
+
+### Fixed
+- **Leaving every card type unchecked under Admin → Settings → AI now really does enable AI description suggestions everywhere, as the page says it does.** The setting has always been a restriction rather than a selection — an empty list means "no per-type restriction", which is exactly how the server treats it — but the card detail page and the card side panel read it as a literal list of permitted types, so an empty one matched nothing and the **Suggest with AI** button vanished from every card. Administrators who followed the on-screen wording were left with a feature that looked configured and did nothing, fixable only by ticking each type by hand. Both surfaces now agree with the server and with the Create card dialog, which was already correct. Reported in [#962](https://github.com/vincentmakes/turbo-ea/issues/962).
+
+### Changed
+- The AI administration guide now spells out that unchecking every card type means "no per-type restriction" rather than "off".
+
+## [2.67.0] - 2026-08-18
+
+### Added
+- **Extensions can now read your inventory — with your explicit, visible consent.** Backend extension SDK 1.5 adds a typed data bridge to cards, relations, and the metamodel. Like every core capability an extension touches, access is declared in the extension's signed manifest as a grant (`core.cards.read`) that is shown on the Admin → Extensions page, counts only while the extension is enabled and licensed, and revokes the moment either stops being true. Reads return safe copies, never live rows, and archived cards stay out of view unless asked for.
+- **Extensions can now write to the inventory — guarded, audited, and reversible.** The same bridge accepts card create/update/archive and relation upserts under a separate `core.cards.write` grant, running through exactly the validation and side effects the app's own editor uses (field validation, hierarchy guards, calculated fields, data-quality scoring). Every write lands in the Admin → Audit log as an `ext:<key>` batch with per-event diffs and one-click rollback; batches are size-capped and rate-limited; updates merge attributes rather than replacing them, so a partial write can never wipe fields it does not carry; and there is no hard delete — archiving, with its restore window, is the only removal. Operators hold a kill switch: `EXTENSION_WRITES_ENABLED=false` pauses all extension writes instantly without touching reads or requiring a restart.
+- **Extensions can react to inventory changes.** A new `core.events.card` grant delivers card and relation events to extension event handlers, with an extension's own writes filtered out by default so a sync loop cannot form.
+- **Extension background jobs can run on a cron schedule.** Alongside the existing fixed interval, a job may declare a standard 5-field cron expression (evaluated in UTC) — nightly syncs no longer need a self-gating minute tick.
+- **Applying a license that would drop active entitlements now asks for confirmation.** An instance holds one license at a time, so applying a new one replaces the previous one — and a manually issued license covering a single extension would silently lapse everything else the old license still covered. The Admin → Extensions page now shows exactly which entitlements the new license does not carry and asks before proceeding (no data is ever deleted either way). Store-issued licenses always contain every purchase for your instance, so this never triggers on a normal purchase or renewal.
+
+### Changed
+- Card create, update, and archive logic now lives in one shared service used by every write path (the editor, bulk operations, and the extension bridge), so validation and side effects can never drift between them. No behaviour change.
+
+## [2.66.1] - 2026-08-18
+
+### Fixed
+- **An instance that is being blocked from the Extension Store no longer reports itself as air-gapped.** The Store tab has only ever had one thing to say when it could not read the vendor's catalogue — that you might be offline — so an instance whose request was *refused* by something in the middle looked exactly like one with no internet at all. That is the wrong direction to send somebody: the reported case was a cloud-hosted instance with entirely open egress, whose request was turned away by bot protection sitting in front of the store, and the hint had the administrator auditing firewalls and routing for a problem that was never on their side. The tab now distinguishes the two and, when the store answers and refuses, says so and names the status code it got back, so the search starts at the proxy, the firewall or the store rather than at your own network.
+- **Turbo EA now identifies itself when it talks to the Extension Store.** Every outbound store request — reading the catalogue, downloading a bundle, claiming a purchase, opening the billing portal, renewing a license — went out with the default identity of the underlying HTTP library, which bot-protection products routinely reject on sight. All of them now carry a stable Turbo EA user agent, which is what lets a store operator or your own outbound proxy recognise and allow these requests instead of blocking them as anonymous automation. Nothing about your instance is disclosed by it, and the store's files remain signature-verified regardless of who serves them.
+- **A refused license renewal is no longer silent.** Automatic renewal deliberately says nothing when it cannot reach the store, because air-gapped installs take that path every single day and would otherwise fill the log with noise. But a store that *answers* and refuses is a different situation entirely — a subscription that is paid for is quietly heading toward expiry — and that case was being swallowed at the same debug level, so extensions could soft-disable at the end of the grace period with nothing in the log to explain why. That case is now a warning that says what happened and what it will cost.
+
+## [2.66.0] - 2026-08-17
+
+### Added
+- **You are now told when an extension is published or updated, instead of having to go and look.** Turbo EA already announced new releases of itself in the notification bell; the Extension Store had no equivalent, so the only hint that an installed extension had a newer version was a button label on a page somebody had to open first — a security fix could sit there unnoticed for weeks. The instance now reads the store's public catalogue once a day and notifies everyone who can act on it (anyone whose role grants `admin.manage_extensions`) about two things: an extension published to the store that you do not have, and a newer version of one you do. Each change is announced once rather than every day, and a busy release day arrives as one notification per kind — "3 extension updates are available" — not one per extension. Clicking it opens the Store tab inside Turbo EA. Nothing is ever downloaded or installed. The first successful reading of the catalogue deliberately announces no new extensions, so an instance meeting the store for the first time does not report everything in it; updates to extensions you already have are reported straight away. The two notification types can be muted separately in your own notification preferences, and the whole daily check can be switched off under Admin → Settings → Update notifications, which stops the outbound request entirely for air-gapped and egress-restricted installs.
+
+### Fixed
+- **The Store tab no longer misjudges versions that carry a suffix.** An extension whose published version read something like `1.2.0-rc1` was compared as though it were older than everything, so a genuine new release could silently fail to offer an **Update** button — and an installed pre-release could make the button appear when it should not. Both the button and the new notification now use one shared comparison that ignores any version string carrying no digits at all, so a rolling tag can neither announce itself as an upgrade nor mask a real one.
+
+## [2.65.0] - 2026-08-16
+
+### Added
+- **The Process Map, Matrix, Lifecycle and Cost reports can be scoped to the cards you care about too.** The same picker as the Capability Map, in each report's toolbar. On the Matrix each axis gets its own, so you can ask for *these capabilities × these applications*, and the KPI cards above the grid follow the scope rather than continuing to report whole-axis numbers. On the Process Map, Display Depth counts from what you selected and click-to-zoom now works within the scope. On Lifecycle the chip waits until you have picked a card type, and a scoped parent brings its children into view even when the parent itself carries no lifecycle dates. On Cost the chip steps aside while you are drilled into a rectangle and is still there when you come back out. Every scope is saved with its report and appears in print and Excel/PowerPoint exports.
+- **The Capability Map can now be scoped to the capabilities you care about.** Drawing a large landscape meant drawing every capability, with no way to look at one branch — the existing filters all narrow the applications inside the blocks, not the blocks themselves. The toolbar now carries a capability chip: open it, pick one or more capabilities, and the map shows only those and everything beneath them. Sub-capabilities come along automatically, so picking a top-level capability gives you its whole branch, and picking a capability that already sits inside another pick changes nothing. Display Depth counts from what you selected, so *Level 2* keeps meaning two tiers below what you are looking at wherever you scoped. The scope is saved with the report and appears in print and Excel/PowerPoint exports.
+
+### Fixed
+- **Card search boxes now filter as you type, best matches first.** In the Add-relations dialog and the diagram Insert-Cards dialog, typing left the list unchanged for a fraction of a second before anything happened — the filter was waiting on the same delay as the server request, even though the results were already loaded and could have been narrowed instantly. They now respond to the first character. The Insert-Cards dialog never narrowed its list at all until the server answered, and never ordered results by relevance; it now does both. Results are ranked the way the rest of the app ranks them: an exact match first, then names starting with what you typed, then names where it starts a word. In the capability scope picker, which shows a tree, a branch is ranked by the best match anywhere inside it, so the branch holding what you are looking for rises to the top even when the parent's own name doesn't match.
+
+## [2.64.0] - 2026-08-16
+
+### Added
+- **Drag a cell's corner to fill its value down a column.** Setting the same owner, lifecycle, subtype or cost on twenty rows used to mean twenty separate edits, or leaving the table for the Mass Edit dialog. In grid edit mode every editable cell now carries a small square at its corner: drag it up or down and the rows you cover are outlined with a running count. Nothing is written until you confirm — the confirmation names the column, the value and how many rows — and the fill then applies row by row with a progress bar. If the server refuses a row (a name collision or a depth limit on a re-parent, a cleared required field), that row is listed with the reason and a link to it while the rest stay saved. It works with a finger as well as a mouse, and with the keyboard.
+
+### Fixed
+- **Changing a card's subtype directly in the table now saves.** In grid edit mode the Subtype cell accepted a new value and showed it, but the change was never sent to the server and vanished on the next reload.
+- **A failed inline edit now tells you why.** Editing a name, description, tag or stakeholder directly in the table and having the server reject it left the cell showing the new value with no message and no revert; only re-parenting and attribute edits reported the reason. All of them now do, and the row reverts.
+
+## [2.63.0] - 2026-08-16
+
+### Added
+- **A grouped table now tells you which group you are in while you scroll.** Grouping the Inventory, the Risk Register or the Decisions table by a field put a header above each group, but once you had scrolled a few screens into a long one that header was gone and every row looked alike — the only way to check which group you were reading was to scroll back up. The group's header now stays pinned just below the column headers for as long as you are inside it, and the next group's header slides it aside as it arrives. It is the whole header, not a label: its tick box still selects the group — so you can select a long group and bulk-edit it without scrolling back to the top — and clicking it collapses that group and returns you to its start.
+
+### Changed
+- **Every group now shows its name as a coloured pill.** Grouping by a field that carries its own colours — lifecycle, approval status, data quality — always did this, but grouping by subtype, owner, risk status or risk category fell back to plain text. Those now take a stable colour too, so neighbouring groups are told apart at a glance whichever field you group by. A group keeps its colour across reloads and as you filter the table.
+
+## [2.62.0] - 2026-08-16
+
+### Added
+- **Columns can now be reordered from the Columns tab, on every table.** Moving a column used to mean dragging its header — undiscoverable, and impossible on a phone, where the drag fights the page scroll. Every table's **Columns** tab now opens with a **Column order** section listing the columns you can see, in the order the table draws them; drag one by its handle to move it. The list and the table are the same thing, so dragging a header updates the list and vice versa, and frozen columns are grouped first because that is where they always render — release a column's pin there to move it out of that group. The handle works with the keyboard (Space to pick a column up, arrow keys to move it, Space to drop it) and by touch, and announces each move to screen readers in your own language.
+
+### Fixed
+- **Column order is now remembered on the Risk Register, Compliance, Users, Resources and Audit log tables.** Dragging a column header on any of those five rearranged the table for as long as you stayed on the page and was silently lost on the next reload; the arrangement is now saved per table like column visibility, width and freezing already were.
+- **Dragging a column into the frozen area now sticks.** On the tables that store their own column preferences, freezing a column by dragging it (rather than by clicking its pin) was reverted the next time the table rebuilt its columns.
+
+## [2.61.2] - 2026-08-15
+
+### Fixed
+- **An old update notification now opens its own release notes, not the newest ones.** Every notice in the bell is a claim about a particular release, but clicking one always showed whatever had shipped most recently — so a "was updated to 2.55.0" notice from months ago read like it announced today's version. Each notification now resolves the versions it actually announced, read from the changelog bundled in the image, so it costs no outbound request and reads the same on an air-gapped install. A notice for a release this instance never installed says so plainly instead of borrowing another release's notes.
+
+### Changed
+- **Update notifications use the name configured for the instance.** A renamed deployment announced itself as "Turbo EA" in the notification bell even though the app title was set elsewhere; both the update-available and the post-upgrade notice now use the configured name, as emails already did.
+
+## [2.61.1] - 2026-08-15
+
+### Fixed
+- **The lifecycle timeline no longer floats over the card preview panel's header.** Scrolling a card in the side panel dragged the timeline's dots, phase names and dates across the card's name and its quality, lifecycle and approval badges instead of sliding underneath them. The panel's content now scrolls under its header, as every other section already did.
+- **Release notes no longer open under the previous release's heading.** Reopening the notes kept the last version's title on screen while the new ones were still loading, so the dialog briefly announced the wrong release.
+
+## [2.61.0] - 2026-08-15
+
+### Added
+- **Right-clicking a cell that names a card now offers to preview it.** The Inventory's cell menu already filtered on the value under the cursor; it now also opens that card in the side panel, so looking at a related application no longer costs you your filters, sort and scroll position. It appears on every cell that names a card — the **Name** column for the row's own card, the **Parent** column, and the relation columns — and when a cell names several cards the menu lists them to pick from, exactly the way **Show matching** already works on a multi-valued cell. Each entry carries its card type's icon and colour, and a long-press opens the same menu on touch.
+
+## [2.60.0] - 2026-08-15
+
+### Added
+- **Administrators are notified when a new Turbo EA release is available.** The instance checks once a day whether a newer version has been published and drops a notification into the bell for everyone whose role can act on it. Clicking it opens that version's release notes in a dialog without leaving Turbo EA — the notes are cached by the check, so reading them costs no outbound request. Nothing is downloaded or installed: upgrading stays the deliberate, backed-up procedure it always was. The check can be switched off under **Admin → Settings → General**, which also stops the outbound request for air-gapped installs, and individual administrators can mute the new **Update Available** row in their notification preferences.
+- **Everyone is told when the instance is upgraded.** The first time Turbo EA starts on a newer version, every user gets a notification saying the app was updated, and opening it shows the changelog for every version the upgrade crossed — so a jump from 2.57.0 to 2.60.0 lists all four releases, not just the last. The notes come from the changelog shipped inside the image, so this works with no network at all. It is announced once per version (a restart or a rollback announces nothing), it is in-app only and never emailed, and administrators can switch it off entirely under **Admin → Settings → General**.
+
+### Fixed
+- **Notifications that point at an external page now open it instead of landing on a blank screen.** Every notification link was treated as an in-app route, so an absolute URL resolved to a page that does not exist. External links now open in a new tab.
+
+## [2.59.1] - 2026-08-14
+
+### Fixed
+- **The Data Quality report's Completeness by Type chart no longer wastes half the width on an empty margin.** The chart reserved a fixed gap next to the type names *on top of* the space the names themselves already use, so the bars started far to the right. It was easy to miss on a wide screen but squeezed the bars into a narrow strip on a phone. Type names now get more room on desktop and less on mobile, and the bars get the rest.
+
+## [2.59.0] - 2026-08-14
+
+### Changed
+- **Stakeholders now count once toward data quality, not once per role.** The Data quality tab shows a single **Stakeholder roles** slider worth one factor, and its Score composition bar drew it as one slice — but the score demanded that *every* role defined for the card type be filled, so a type carrying Responsible and Observer quietly cost two factors and an Interface with an owner named but nobody watching was capped at 90%. A card now earns the full stakeholders factor as soon as anyone is assigned to it. Mandatory relations and mandatory tags are unchanged — each mandatory item genuinely has to be satisfied. **Scores across the whole instance are recalculated once on the first startup after upgrading**, so average completion on the Dashboard and the Data Quality report will move.
+- Each stakeholder role now carries a **Counts toward data quality** toggle, off by default for the built-in **Observer** — watching a card never stands in for owning it. Turning it on or off re-scores every card of that type immediately.
+
+### Fixed
+- **Data quality now updates when you add a stakeholder, a relation or a tag.** All three feed the completeness score, but only saving the card itself recalculated it, so assigning an owner or drawing a mandatory relation left the score showing the value from the last card edit until someone edited the card again. The score on the card page also refreshes in place after a relation change instead of waiting for a reload.
+- **Calculated fields are no longer scored one save behind.** Creating a card, bulk-creating cards, mass-editing and saving a card all computed the data quality score *before* running the card's calculated fields, so a weighted calculated field was always scored on its previous value.
+
+## [2.58.1] - 2026-08-14
+
+### Fixed
+- **Card subtypes now show their display name everywhere, not their internal key.** The detail panel of the Flexible Portfolio, Application Portfolio, Data Quality and Process Map reports listed a card's subtype as the raw metamodel key (`businessApplication` instead of "Business Application"), and so did the Portfolio table's Subtype column, the Initiative chips in EA Delivery, the BPM process navigator's application list, the TurboLens proposed-card lists and the card picker in Admin → Calculations. Subtypes an administrator created showed their key with no translation at all. Sorting the Portfolio table by Subtype now orders by the name on screen.
+
+## [2.58.0] - 2026-08-14
+
+### Added
+- **Orphaned and Stale are now inventory filters.** The Data Quality report could count cards with no relations, or untouched for 90+ days, but there was no way to go and work through them — its two KPI tiles now carry a **View in inventory** button like every other panel. Both filters are evaluated server-side, so they work with no card type selected.
+- **The Capability Map and Process Map detail panels now offer View in inventory too**, listing the applications linked to that capability or process. It appears on the lowest level of the tree, where the panel's list and the inventory filter cover exactly the same cards — a parent node rolls up its whole subtree, which a single relation filter cannot express.
+- The inventory grid's cell menu can now **Show matching** on a data-quality cell, selecting that score's band in the sidebar.
+
+### Changed
+- **Data quality is coloured the same way everywhere.** The report, the sidebar chips and the group-by axis used the bands (Complete ≥80%, Partial 40–79%, Minimal <40%) while the inventory grid, the card-detail pill and public web portals still cut at 50% — so a card scoring 45% showed orange in one place and red in another. Those three surfaces now use the bands too, which means scores between 40% and 49% turn from red to orange.
+- The Portfolio, Capability Map and Process Map detail drawers now share one component with the Data Quality panel, so they behave and look identical.
+
+### Fixed
+- Opening a group in the Portfolio report no longer reorders the underlying grouped data as a side effect of sorting the drawer's list.
+- The Capability Map and Process Map drawers no longer show an empty-state message *and* a populated list at the same time, which happened on a node whose own apps were filtered out but whose descendants still had some.
+
+## [2.57.0] - 2026-08-14
+
+### Added
+- **The Data Quality report is now clickable.** Clicking a segment of a *Completeness by Type* bar opens a side panel listing exactly the cards that segment counted, with a **View in inventory** button — the same drill-down the Flexible Portfolio report offers. The bars in *Average Completion by Type*, the count cells in the table view, and the **Orphaned** and **Stale** tiles all open the same panel; clicking a card in it opens that card's detail panel.
+- **View in inventory from a quality band** lands the inventory grouped by data quality, with the band you clicked expanded and the others collapsed beside it, so the rest of the picture stays in view while you fix records.
+- The inventory can now group by **Data Quality**, alongside Lifecycle and Approval Status.
+
+### Changed
+- **The inventory's Data Quality filter now matches the report's bands.** It was a *minimum threshold* — "Medium (50%+)" also matched everything scoring 80 and above, and "Partial" could not be expressed at all — while the report has always charted Complete (≥80%), Partial (40–79%) and Minimal (<40%). The filter now uses those three bands, and several can be selected at once. Saved views and stored preferences carrying the old threshold are migrated automatically.
+- The quality filter is now addressable from the URL (`?dq=partial`), which is what makes the report's deep-links possible.
+
+## [2.56.0] - 2026-08-14
+
+### Fixed
+- **Mass-editing a multi-select field now shows its options.** Picking a multi-select attribute in Inventory → Mass Edit rendered a plain text box, so anything typed was saved as a raw value the field could never resolve — the card still showed an unknown chip and its data quality never improved ([issue #940](https://github.com/vincentmakes/turbo-ea/issues/940)). The dialog now uses the same editor as the card detail page, so multi-selects get a checkbox list, booleans a switch, dates a date picker, and URLs and long text their proper inputs.
+- **Editing a multi-select cell in Grid Edit mode offers the options too** — it previously fell back to a free-text cell and corrupted the value the same way.
+- **A mass edit no longer clears a boolean set to "off" or a number set to 0** — both were treated as "no value" and wiped the field.
+- **Multi-select values in the inventory grid now look like tags.** They rendered as full-size chips in a one-line row, so a card with several values wrapped and pushed the row's content out of view. They now use the same compact chips as the tags column, collapsing to a "+N" chip past the third value with the full list on hover. Export, filtering and the cell menu still see every value.
+- **An emptied multi-select now counts as unanswered in the data-quality score.** An empty list scored as if the field were filled, which is what let a card look complete while the field was blank.
+- Cost fields are no longer offered in Mass Edit to users without permission to view costs, matching the grid columns and the export.
+
+### Changed
+- **The API now rejects values that are not declared options** for single- and multi-select fields, so no client can store free text in them. Clearing a field is unaffected, calculated fields are exempt, and cards that already carry a legacy value stay editable — only values that actually change are checked. Bulk ingestion paths (platform migration, ServiceNow sync, workspace transfer) are unchanged.
+
+## [2.55.0] - 2026-08-13
+
+### Added
+- **"View in inventory" now mirrors the report.** From a portfolio report grouped by one of the card type's own fields, the link opens the inventory grouped by the same field with the clicked group expanded and every other group collapsed (counts visible), and carries the report's search, attribute, relation, and tag filters along. Reports grouped by a related card type keep the previous behavior of filtering to that card ([discussion #933](https://github.com/vincentmakes/turbo-ea/discussions/933) follow-up).
+
+### Fixed
+- **Relation filters carried by "View in inventory" links now actually filter.** The link named relations by their related card type (e.g. Provider) while the inventory keys relation filters by relation type, so a carried Provider filter counted in the badge but matched nothing and showed an empty grid. The keys are now translated when the link lands, and a filter that cannot be resolved is dropped instead of silently emptying the result.
+- **"View in inventory" deep-links now highlight the filtered value in the sidebar.** Arriving from a portfolio report group, the attribute filter showed only a badge count — the select dropdown looked unset even though the filter was active. The seeded value now renders as a highlighted chip with its option checked, and is matched by exact option key instead of a loose text match. Deep-links also no longer apply a previously saved inventory grouping on arrival, so the slice you clicked is exactly what you see ([discussion #933](https://github.com/vincentmakes/turbo-ea/discussions/933) follow-up).
+
+## [2.54.0] - 2026-08-13
+
+### Added
+- **Filter any grid from a cell, ServiceNow-style.** Right-click a cell (long-press on touch devices) in the Inventory, Decisions, Risk Register, Compliance, Audit log, Resources, or Users grid to **Show matching**, **Filter out**, **Copy value**, or **Clear column filter**. Multi-valued cells (tags, relations, stakeholders, multi-select attributes) first list their individual values so you can filter on one of them or on the entire cell; the filters land in the grid's column filters, so on the Inventory and Decisions grids they persist and travel with saved views.
+- **Cell filters and the filter panel stay in sync.** When the clicked column has a matching filter in the sidebar — card type, subtype, lifecycle, approval status and single-select attributes on the Inventory; category, status and owner on the Risk Register; severity, status and decision on Compliance; origin and status on the Audit log; role, status and sign-in method on Users — **Show matching** also selects that value in the panel, and **Clear** clears both. Editing the filter in the panel afterwards takes over cleanly, so a saved view can never carry a sidebar filter and a column filter that disagree. On the Resources grid, where filtering happens on the server, **Show matching** drives the sidebar filters directly so it narrows the whole result set rather than the current page.
+
+### Fixed
+- Date-column filters on the Risk Register, Compliance, Audit log, and Users grids now compare dates correctly (they previously could not parse the stored ISO date strings).
+
+## [2.53.0] - 2026-08-13
+
+### Added
+- **Group the inventory by any single-select attribute, subtype, lifecycle phase, or approval status.** A new "Group by" picker on the Inventory page shows collapsible group headers with counts; cards without a value land in a "Not set" group at the top, and each header carries a checkbox that selects the whole group for mass edit — reclassifying a batch of cards is now expand, select all, bulk set. The grouping persists across reloads, is stored in saved views, and can be shared via a `?group_by=` URL ([discussion #933](https://github.com/vincentmakes/turbo-ea/discussions/933)).
+- **The Risk Register and the Decisions grid can be grouped too.** The same "Group by" control now appears on the Risk Register (group by status, category, initial/residual level, or owner) and on the decisions grid in EA Delivery and GRC → Governance (group by status). The grouping engine is shared across all three grids.
+- **Jump from a portfolio report group straight to the matching inventory rows.** The group drawer in the Portfolio and Flexible Portfolio reports has a "View in inventory" button that opens the inventory pre-filtered to that group — including the "not assigned" bucket — so you can spot a misclassification in the report and fix it in the inventory ([discussion #933](https://github.com/vincentmakes/turbo-ea/discussions/933)).
+
+## [2.52.0] - 2026-08-12
+
+### Added
+- **Mandatory fields are now enforced when editing a card.** A card section can no longer be saved while a required field in it is empty — each empty mandatory field shows an inline message, and the API rejects clearing a required field that already has a value (structured `required_field_empty` error). Creating cards stays as fast as before: mandatory fields may be left empty at creation and filled in later ([#931](https://github.com/vincentmakes/turbo-ea/issues/931) follow-up).
+- **Mandatory fields are clearly marked on the card detail page.** Required fields carry an asterisk in both read and edit mode, an empty mandatory field shows a warning chip instead of a blank value, and a banner above the card's sections lists exactly which mandatory fields still need to be entered.
+
+### Changed
+- **Data quality is held at 0 while mandatory fields are empty.** The regular weighted score only applies once every required field on the card is filled; toggling Required in the metamodel re-scores all cards of that type immediately, and a one-shot rescore on the first startup after upgrading backfills the stored score of every existing card. Boolean and read-only (calculated) fields are exempt.
+
+### Fixed
+- **Multi-select label no longer overlaps the placeholder.** On the card detail page, an empty multi-select field showed its label and the "Select one or more…" placeholder on top of each other (most visibly on mobile).
+- **Corrected the field editor's data-quality hint.** The metamodel field editor said data-quality importance is set "in the Data Quality panel below" — it now correctly points to the Data Quality tab.
+
+## [2.51.1] - 2026-08-12
+
+### Fixed
+- **Required multi-select fields can now be filled when creating a card.** A `multiple_select` field marked as Required rendered as a plain text box in the Create Card dialog, with no way to pick an option ([#931](https://github.com/vincentmakes/turbo-ea/issues/931)). It now renders the same checkbox dropdown with colored chips as the card detail page, and required fields in the dialog are marked with an asterisk.
+
+## [2.51.0] - 2026-08-12
+
+### Added
+- **Diagrams check for inventory changes automatically when opened.** Opening a diagram now compares the canvas against the inventory in one batched round-trip and flags cards renamed, deleted, or archived since the diagram was saved — plus relations that were deleted while their edge is still drawn, and relations whose flow direction changed so the drawn arrowhead no longer matches. A blue badge on the toolbar Sync button counts the pending changes; the Sync drawer's "Inventory Changed" section offers a matching action per row (accept the rename, remove the stale card or edge, update the arrowhead) and an "Accept all" shortcut. Nothing is applied without confirmation. The manual "Check updates" button now uses the same batched check, so deleted cards are surfaced instead of silently skipped.
+
+## [2.50.0] - 2026-08-11
+
+### Added
+- **The duplicate-name warning links to the existing card.** When creating a card whose name already exists at the same level, the Create Card dialog's warning is now shown in your language and includes a "View existing card" link that takes you straight to the existing card (middle-click / Ctrl-click opens it in a new tab), instead of only quoting the card's internal id ([#927](https://github.com/vincentmakes/turbo-ea/discussions/927)).
+
+## [2.49.0] - 2026-08-11
+
+### Added
+- **Extension SDK 1.4 adds batch settings.** `ctx.get_settings(names)` and `ctx.set_settings(values)` read or write many namespaced extension settings in a single database transaction, where the per-key calls each pay a full read-modify-write round trip — on instances whose database sits behind meaningful network latency, an extension saving a dozen settings went from seconds to a single transaction. `set_settings` refuses `secret.`-prefixed names, so credentials still flow through the encrypted `set_secret` path. Additive: existing 1.x extensions load and run unchanged.
+
+### Fixed
+- **The Extensions page keeps its tab across a refresh.** Reloading Admin → Extensions while on the Installed tab landed back on Store; the active tab is now reflected in the URL (`?tab=installed`) and remembered per browser, so refreshes and shared links open the tab you were on.
+
+## [2.48.0] - 2026-08-11
+
+### Added
+- **Extension subscriptions now show whether they auto-renew.** The license chip on Admin → Extensions says what actually happens on the date — "Renews on {date}" for an active subscription, "Expires {date} — will not renew" after a cancellation — instead of the ambiguous "Active until". The status rides inside the signed license file itself, so it is accurate on air-gapped instances too: paste the license from any subscription email and the chip is current.
+- **Manage subscription from inside the product.** Store-bought licenses get a "Manage subscription" button next to the licensee name that opens the store's billing portal in a new tab — see the renewal date, cancel or restore auto-renew, update the payment method, and download invoices, with no account needed. The store credential authenticating the request never reaches the browser. Air-gapped instances use the manage link included in every license email instead.
+
+### Changed
+- A cancellation or reactivation made in the billing portal now reaches connected instances within a day: the daily license refresh also picks up renewal-status changes, not just extensions, and can never shorten or drop an entitlement while doing so.
+
+## [2.47.0] - 2026-08-10
+
+### Added
+- **Connector extensions can now match assignees automatically.** Extension SDK 1.3 adds a read-only users bridge: an extension declaring the new `core.users.read` grant in its signed manifest can look up users — name, email and active flag only, the same least-privilege payload the app's own user pickers use — so a task-tracker connector maps assignees to accounts in the external tool without manual upkeep. No role, login or preference data is exposed, extensions can never change users, and access revokes immediately when the extension is disabled or its license lapses.
+- **A sign-off todo can now carry a link to its mirror in an external tracker.** System todos (risk ownership, decision sign requests, project tasks) accept exactly one kind of extension write: the external reference shown as a chip on the Todos page. Completing, editing, reassigning or deleting them through the SDK stays impossible — a sign-off can be referenced in an external tool, never performed from it.
+
+### Changed
+- **The `teax` authoring CLI knows the new grant.** `core.users.read` validates in lint/pack, packing defaults `sdk_version` to 1.3, and lint warns when users-bridge grants are declared with an older SDK version.
+
+## [2.46.1] - 2026-08-09
+
+### Security
+- **Removed the vulnerable `image-size` package from the dependency tree entirely.** Two denial-of-service advisories against it have no patched version upstream, but the code was never reachable in the first place: pptxgenjs (our PPTX report exporter) excludes `image-size` from browser builds by design, and Turbo EA's frontend ships browser-only. The package is now replaced by a local stub, so `npm audit` reports zero vulnerabilities, the Dependabot alert resolves on its own, and the CI audit allowlist introduced in 2.46.0 is empty again.
+
+## [2.46.0] - 2026-08-09
+
+### Added
+- **Extensions can now sync todos with external task trackers** ([#921](https://github.com/vincentmakes/turbo-ea/discussions/921)). Extension SDK 1.2 gives vendor-signed extensions a sanctioned, typed bridge to the todo list — list, create, update, complete and delete — so connectors for Jira, MS Planner, GitHub Projects and the like can mirror todos both ways instead of your team maintaining two lists. Access is opt-in and visible: an extension must declare the `core.todos.read` / `core.todos.write` grants in its signed manifest, disabling the extension or letting its license lapse cuts access immediately, and it can never touch system todos (sign-off requests) or another extension's rows.
+- **A todo mirrored from an external tracker shows where it lives.** Todos synced by an extension carry the tracker's reference (for example `PROJ-123`) as a chip on the Todos page and the card's Todos tab — click it to open the item in the external tool. These fields are read-only for the app and the API; only signed extensions can set them, so a todo can never be turned into a link to an arbitrary site.
+- **Extensions can react to changes as they happen.** SDK 1.2 adds an event subscription hook (`get_event_handlers`), gated by the `core.events.todo` grant, so a sync connector pushes a completed todo to the tracker seconds later instead of on the next polling cycle. An extension never receives the events its own writes caused, so sync loops are impossible by construction.
+- **Todo changes now appear in the audit log and card history.** Creating, editing, completing, promoting or deleting a todo is recorded like every other change — previously todos left no trace. Extension-driven writes are labelled with a new **Extension** origin in Admin → Audit log, filterable like MCP and Web.
+- **Extensions can store credentials encrypted.** SDK 1.2 adds `get_secret` / `set_secret` on the extension context: values are encrypted with the instance's secret key and are automatically excluded from workspace-transfer exports, so a connector's API token can never leave the instance in a bundle.
+
+### Changed
+- **The `teax` authoring CLI validates manifest grants.** An unknown grant string in `extension.json` is now a lint/pack error (previously it was silently inert), and packing defaults `sdk_version` to 1.2.
+
+### Security
+- **Updated two frontend dependencies past freshly published advisories**: DOMPurify to 3.4.13 (XSS via detached subtrees in `IN_PLACE` mode) and the document exporter's nanoid to 5.1.16 (infinite loop on negative sizes).
+- **The frontend dependency audit in CI now supports a documented allowlist** (audit-ci with `.github/audit-ci.jsonc`, mirroring the existing Trivy allowlist). First entries: two denial-of-service advisories in `image-size` — a library the PPTX report export uses on app-generated thumbnails only — which have no patched version upstream yet.
+
+## [2.45.0] - 2026-08-07
+
+### Changed
+- **Every search box now ranks results the same way, and answers on the first letter.** The relevance ordering added for card pickers in 2.44.0 — exact match, then names starting with what you typed, then names where it starts a word, then the rest — now applies to the global search (⌘K), the Risk Register, Decisions, published web portals and the TurboLens objective and capability pickers. Searches that previously ignored anything shorter than two characters no longer do: the global search, the ADR card picker and both survey card pickers all respond to a single letter, and the survey pickers list cards as soon as they open instead of waiting for you to type. A sort you have chosen yourself always wins over relevance.
+
+### Fixed
+- **A search term containing `%` or `_` is matched literally everywhere.** These are wildcards in the underlying query, so searching for `100%` in the Risk Register, Decisions, a web portal or a saved-view data feed matched every row. The card inventory was fixed in 2.44.0; this covers the rest.
+
+## [2.44.0] - 2026-08-07
+
+### Added
+- **Adding relations is now a dedicated dialog, and adds as many as you like in one go.** Linking one application to nineteen departments used to mean nineteen rounds of click **+**, search, select, because the picker closed after every single relation ([#918](https://github.com/vincentmakes/turbo-ea/discussions/918)). **+** now opens **Add relations**: the candidate list sits inside the dialog rather than in a dropdown, so it cannot jump above or below the field or be clipped by the section, and it opens full-screen on a phone. Clicking a card links it immediately and it appears as a chip at the top — the way tags are entered — so a batch stays visible and each one can be undone with its **×**. Relation details such as flow direction can be set once and apply to the whole batch — including the cards already added, so setting the value after picking them works as it looks like it should. Relations that have no section of their own are reached from the **Add Relation** button at the bottom.
+- **Cards you have already linked no longer appear when adding a relation.** Picking one did nothing at all — the relation already existed — with no hint as to why ([#918](https://github.com/vincentmakes/turbo-ea/discussions/918)). They are now hidden, with a caption saying how many, in the card's Add relations dialog and in the inventory grid's relation editor alike.
+- **Card search puts the best matches first.** Typing `w` used to return everything containing a `w` in name order, burying the names that actually start with it. Results are now ranked — exact name, then names starting with what you typed, then names where it starts a word, then the rest — alphabetically within each tier. This applies everywhere cards are searched: every picker, the inventory search box and the diagram card sidebar. No search syntax to learn.
+
+### Changed
+- **Relations are listed alphabetically.** A card's Relations section, the inventory grid's relation columns and its relation editor all showed related cards in an arbitrary order that could change between visits. They are now sorted by name.
+
+### Fixed
+- **A relation attribute select now announces its own label.** The label and the control were never associated, so screen readers read the field unnamed.
+- **Searching for a term containing `%` or `_` now matches literally.** These act as wildcards in the underlying query, so searching for `100%` also matched anything at all.
+- **Paging through cards with identical names no longer skips or repeats one.** Results had no stable tiebreaker, so two cards sharing a name could both land on the same page or fall between two.
+- **The inventory relation editor no longer resolves the wrong end of a self-referencing relation.** For a relation type whose two ends are the same card type, incoming relations were read as if they were outgoing, so the wrong card name was shown and the wrong card was excluded from the picker.
+
+## [2.43.0] - 2026-08-06
+
+### Added
+- **An accidentally approved process flow can now be withdrawn**, instead of deleting the whole business process to get rid of it ([#916](https://github.com/vincentmakes/turbo-ea/discussions/916)). Withdrawing asks for a written reason and only ever moves forwards: the revision becomes **Withdrawn**, it is never deleted and never sent back to draft, the original approval stays on record, and who withdrew it — when, and why — is kept in the version history and shown on the card's **History** tab. Withdrawing also **opens a copy as a new draft** at the next revision number, so you can correct the diagram straight away and put it back through submit → approve; the process has no *approved* flow until that draft is approved, and the extracted process steps and their card links are untouched. Keeping the withdrawn revision and editing a copy is deliberate — the exact diagram an approver signed off stays retrievable. Nobody can withdraw anything out of the box: it needs the new *Withdraw (unpublish) a published BPMN flow version* permission, which no role holds by default — grant it in Admin → Roles, or on the **Process Owner** stakeholder role in Admin → Metamodel.
+- **Any archived or withdrawn process flow version can be turned back into a draft.** *Create new draft from this* now appears on every row of the **Archived** tab, not just on the published version, so an older revision can be picked up and re-worked without rebuilding it by hand. The Archived tab also shows a withdrawn revision's original approver alongside the withdrawal, and a draft that came out of a withdrawal is marked as such in the **Drafts** tab.
+- **Process flow approvals can require a second person.** A new switch in Admin → Settings → General, inside the BPM module block, stops the person who submitted a revision from also approving it — segregation of duties, as quality systems such as GxP and ISO 9001 expect. Off by default, so nothing changes for a small team where one person drafts and signs off. It only governs *who may approve*: submissions, approvals, rejections and withdrawals are recorded on the card's **History** tab either way.
+- **The process-flow approval trail now appears on the card's History tab.** Submissions, approvals, rejections and withdrawals were recorded all along but rendered as raw internal event names, so a process's approval history was effectively unreadable without database access.
+
+### Changed
+- **Approving a process flow now requires approval rights, not just edit rights.** Approve and reject are gated on *Approve or reject submitted BPMN flow versions*, or the **Process Owner** stakeholder role on the process — which is what the error message and the shipped roles have always said. Until now the check accepted the general BPM edit permission, so **any member could approve any process flow, including a revision they had submitted themselves seconds earlier** — the most likely way a flow gets approved by accident in the first place. After upgrading, members and the *Responsible* stakeholder role can no longer approve. If people in your instance approve flows today with only BPM edit rights, grant them *Approve or reject submitted BPMN flow versions* in Admin → Roles, or assign them as **Process Owner** on the processes they sign off.
+
+## [2.42.0] - 2026-08-05
+
+### Added
+- **Relation verbs can now be translated.** *Manage Translations* at the top of Admin → Metamodel → **Relation Types** translates every relation's forward and reverse verb into each enabled language in one pass, with a per-language counter showing what is still missing. Relation verbs were the only metamodel labels with no translation editor, so a relation you renamed — or created yourself — could never be given wording in any other language. English is not listed there because it is the wording on the relation itself; a verb left untranslated falls back to it.
+
+### Fixed
+- **Translations and renames on built-in card types no longer revert when the backend restarts.** Every restart re-applied the shipped defaults over whatever was in the database, so a translation entered in the Translations dialog for a built-in type — and a rename, since translations decide what is displayed — silently went back to the original wording the next time the container came up. Your wording is now kept, and a shipped translation is only ever added for a language a type does not already have.
+- **Relation verbs finally arrive in languages added after your install.** Danish and Arabic verbs never reached instances that had been upgraded rather than installed fresh, because existing relations were skipped entirely when defaults were applied. They are filled in on upgrade, without touching any wording you have changed.
+- **Clearing every translation on a card type now saves instead of doing nothing.** The dialog sent a value the database rejects and then hid the error, so the Save button appeared to do nothing at all. Failures are now shown.
+- **Renaming a relation type now shows up on the cards.** Changing a relation's name or reverse name in **Admin → Metamodel → Relations** updated the metamodel graph and the layered dependency views but nothing else — a card's **Relations** section, the inventory relation columns, the matrix and portfolio reports, portals and diagram edges all kept showing the old wording ([#912](https://github.com/vincentmakes/turbo-ea/issues/912)). The rename now reaches every one of them. Relations you renamed before this release are repaired on upgrade, so there is nothing to re-save. The two fields now show which language you are editing — rename in French and only the French wording changes, leaving the English fallback intact.
+- **Editing a relation type you created yourself no longer risks failing to save.** Saving a relation type with no translations could send an empty value the database rejects.
+
+## [2.41.0] - 2026-08-05
+
+### Added
+- **A stakeholder role can now be deleted.** Admin → Metamodel → *Stakeholder roles* gains a delete action for a role that nobody holds — the case where you created one, mistyped its key, and were previously stuck with it forever ([#907](https://github.com/vincentmakes/turbo-ea/discussions/907)). Deletion is refused for a role that is actually in use: the confirmation dialog reports how many people hold it on how many cards and offers to archive it instead, so nobody silently loses the card-level permissions the role grants.
+- **A stakeholder role's key can now be changed.** As long as nobody holds the role, the key can be corrected in place instead of deleting and re-creating the role — including for a built-in role, a role a survey targets (the survey follows the rename), and a card type's only role.
+- **Creating a stakeholder role fills the key in for you.** Typing the label *Business Architect* now proposes the key `businessArchitect`; you can still overwrite it, and it stops following the label as soon as you do.
+
+### Changed
+- **Stakeholder role keys are now camelCase**, matching card types, fields, options, relation types and subtypes. The four built-in roles are renamed on upgrade — `process_owner` → `processOwner`, `technical_application_owner` → `technicalApplicationOwner`, `business_application_owner` → `businessApplicationOwner`, `it_project_manager` → `itProjectManager` — along with every stakeholder assignment, survey target and card-type entry that referenced them. Roles you created or renamed yourself are left alone: an existing key keeps working everywhere and is never re-checked — only a new or changed key has to satisfy the convention. Spreadsheets exported before the rename still import too: a legacy `stakeholder:technical_application_owner` column is matched to its camelCase role.
+
+### Fixed
+- **The stakeholder role key field no longer rejects what it told you to type.** The key box stripped underscores as you typed while the server demanded them and refused camelCase, so a valid-looking key failed to save with a raw regular expression as the explanation ([#907](https://github.com/vincentmakes/turbo-ea/discussions/907)). Both sides now use one grammar, and the length rule is enforced in the form rather than surfacing as a server error.
+- **The impact reported when archiving a stakeholder role is now correct.** The count included every card type that happens to define a role with the same key, so archiving *Responsible* on Application reported every *Responsible* assignment in the instance. It now counts only cards of the type you are editing.
+- **The "Show archived" toggle on the stakeholder roles panel now shows archived roles.** They were filtered out before they reached the browser, so the toggle never revealed anything.
+
 ## [2.40.0] - 2026-08-05
 
 ### Added

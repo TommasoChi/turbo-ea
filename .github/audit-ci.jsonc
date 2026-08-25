@@ -1,0 +1,22 @@
+{
+  // npm-audit gate configuration for the Frontend Security Scan CI job
+  // (audit-ci, run from frontend/ as `npx audit-ci --config ../.github/audit-ci.jsonc`).
+  //
+  // Same strictness as the bare `npm audit --omit=dev` it replaced: any
+  // advisory of any severity in production dependencies fails the job —
+  // UNLESS the advisory id is allowlisted below. This file is the npm
+  // counterpart of `.github/trivy-allowlist`, with the same rules: every
+  // entry needs a comment block (package, why it isn't exploitable for us,
+  // date), and every entry is re-evaluated at the quarterly review — remove
+  // it the moment upstream ships a patched version.
+  "$schema": "https://raw.githubusercontent.com/IBM/audit-ci/main/docs/schema.json",
+  "low": true,
+  "skip-dev": true,
+  // Currently empty. Previous entries (image-size GHSA-w3rx-r6r6-pgpr and
+  // GHSA-5p2g-fcmc-qvqq, both unpatched upstream) were retired by removing
+  // the package from the tree entirely: pptxgenjs's own `browser` field maps
+  // image-size to false (it never ships in browser builds), so
+  // frontend/package.json overrides it to the local stub in
+  // frontend/stubs/image-size. Drop that stub if upstream ever patches.
+  "allowlist": []
+}

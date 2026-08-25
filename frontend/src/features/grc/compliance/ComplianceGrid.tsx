@@ -36,8 +36,7 @@ import type {
   SelectionChangedEvent,
   SortChangedEvent,
 } from "ag-grid-community";
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
+import { gridThemeDark, gridThemeLight } from "@/lib/agGridSetup";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -57,6 +56,13 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useColumnFreeze } from "@/components/grid/useColumnFreeze";
+import { useColumnOrder } from "@/components/grid/useColumnOrder";
+import { colIdOf, isOrderableColumn } from "@/components/grid/columnOrder";
+import type { ColumnOrderItem } from "@/components/grid/ColumnOrderSection";
+import { useCellContextMenu } from "@/components/grid/useCellContextMenu";
+import { useFacetColumnSync } from "@/components/grid/useFacetColumnSync";
+import { arrayFacetBinding } from "@/components/grid/facetColumnSync";
+import { dateColumnFilterDef } from "@/lib/dateColumnFilter";
 import { RAG_COLORS } from "@/theme";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { useThemeMode } from "@/hooks/useThemeMode";
@@ -129,6 +135,8 @@ interface CompliancePrefs {
   visibleColumns: string[];
   /** colIds frozen to the leading edge via the header pin. */
   frozenColumns: string[];
+  /** colId order, owned by `useColumnOrder` (header drag + Columns tab). */
+  columnOrder: string[];
   sortModel: { colId: string; sort: "asc" | "desc" }[];
 }
 
@@ -142,6 +150,7 @@ function loadPrefs(): CompliancePrefs {
     filtersCollapsed: false,
     visibleColumns: ALL_COLUMN_IDS,
     frozenColumns: [...DEFAULT_FROZEN_COLUMNS],
+    columnOrder: [],
     sortModel: [],
   };
   try {
@@ -172,6 +181,12 @@ function loadPrefs(): CompliancePrefs {
               typeof id === "string" && ALL_COLUMN_IDS.includes(id),
           )
         : [...DEFAULT_FROZEN_COLUMNS],
+      columnOrder: Array.isArray(parsed.columnOrder)
+        ? parsed.columnOrder.filter(
+            (id): id is string =>
+              typeof id === "string" && ALL_COLUMN_IDS.includes(id),
+          )
+        : [],
       sortModel: Array.isArray(parsed.sortModel)
         ? parsed.sortModel.filter(
             (s): s is { colId: string; sort: "asc" | "desc" } =>
@@ -235,6 +250,9 @@ export default function ComplianceGrid({
   const [frozenColumns, setFrozenColumns] = useState<string[]>(
     initialPrefs.frozenColumns,
   );
+  const [columnOrderIds, setColumnOrderIds] = useState<string[]>(
+    initialPrefs.columnOrder,
+  );
   const [sortModel, setSortModel] = useState<
     { colId: string; sort: "asc" | "desc" }[]
   >(initialPrefs.sortModel);
@@ -291,6 +309,7 @@ export default function ComplianceGrid({
       filtersCollapsed,
       visibleColumns: Array.from(visibleColumns),
       frozenColumns,
+      columnOrder: columnOrderIds,
       sortModel,
       ...next,
     });
@@ -306,6 +325,28 @@ export default function ComplianceGrid({
       persist({ frozenColumns: next });
     },
   });
+
+  // Column order — from the Columns tab's drag handles and from dragging a
+  // column header, which both land here.
+  const columnOrder = useColumnOrder<TurboLensComplianceFinding>(gridRef, {
+    order: columnOrderIds,
+    onOrderChange: (next) => {
+      setColumnOrderIds(next);
+      persist({ columnOrder: next });
+    },
+  });
+
+  // One drag can move a column *and* pin it; capture both at drag end.
+  const handleDragStopped = () => {
+    columnOrder.syncFromGrid();
+    columnFreeze.syncFrozenFromGrid();
+  };
+
+  // The Columns tab's drag handles write straight through.
+  const handleColumnOrderChange = (next: string[]) => {
+    setColumnOrderIds(next);
+    persist({ columnOrder: next });
+  };
 
   const setGroupMode = (next: GroupMode) => {
     setGroupModeRaw(next);
@@ -534,14 +575,16 @@ export default function ComplianceGrid({
       headerName: tCards("compliance.grid.col.created"),
       field: "created_at",
       width: 130,
-      filter: "agDateColumnFilter",
+      // Custom comparator — the stock one can't parse ISO-string cells.
+      ...dateColumnFilterDef,
       valueFormatter: (p) => (p.value ? formatDate(p.value as string) : ""),
     },
     {
       headerName: tCards("compliance.grid.col.modified"),
       field: "updated_at",
       width: 130,
-      filter: "agDateColumnFilter",
+      // Custom comparator — the stock one can't parse ISO-string cells.
+      ...dateColumnFilterDef,
       valueFormatter: (p) => (p.value ? formatDate(p.value as string) : ""),
     },
     // Delete action — admin-grade (canManage gates rendering, the
@@ -584,14 +627,29 @@ export default function ComplianceGrid({
   // factory closure on every toggle.
   const visibleColumnDefs = useMemo<ColDef<TurboLensComplianceFinding>[]>(
     () =>
-      columnFreeze.applyFrozen(
-        columnDefs.map((c) => ({
-          ...c,
-          hide: c.field ? !visibleColumns.has(c.field) : false,
-        })),
+      columnOrder.applyOrder(
+        columnFreeze.applyFrozen(
+          columnDefs.map((c) => ({
+            ...c,
+            hide: c.field ? !visibleColumns.has(c.field) : false,
+          })),
+        ),
       ),
-    [columnDefs, visibleColumns, columnFreeze],
+    [columnDefs, visibleColumns, columnFreeze, columnOrder],
   );
+
+  // Feeds the Columns tab's "Column order" section: only the columns actually
+  // on screen, built from the grid's own defs so the ids can never drift.
+  const columnOrderItems = useMemo<ColumnOrderItem[]>(() => {
+    // The compliance column labels live in the `cards` namespace.
+    const labels = new Map(COMPLIANCE_GRID_COLUMNS.map((c) => [c.id, tCards(c.labelKey)]));
+    return visibleColumnDefs
+      .filter((c) => !c.hide && isOrderableColumn(c))
+      .map((c) => {
+        const id = colIdOf(c);
+        return { colId: id, label: labels.get(id) ?? id };
+      });
+  }, [visibleColumnDefs, tCards]);
 
   // Match the Inventory grid's defaults so the GRC table feels the same:
   // sortable + filterable + resizable on every column. Per-column filter
@@ -607,6 +665,52 @@ export default function ComplianceGrid({
     }),
     [columnFreeze.headerComponentParams],
   );
+
+  // Right-click / long-press cell menu (Show matching, Filter out, …). The
+  // delete-action column handles its own clicks and offers nothing to filter.
+  // "Show matching" also selects the value in the filter sidebar. The filter
+  // state is owned by the parent and Set-shaped, so the bindings adapt both
+  // ways through `onFiltersChange`.
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const facetBindings = useMemo(
+    () => ({
+      severity: arrayFacetBinding<TurboLensComplianceFinding>({
+        get: () => Array.from(filtersRef.current.severities),
+        set: (v) =>
+          onFiltersChange({
+            ...filtersRef.current,
+            severities: new Set(v as TurboLensComplianceFinding["severity"][]),
+          }),
+      }),
+      status: arrayFacetBinding<TurboLensComplianceFinding>({
+        get: () => Array.from(filtersRef.current.statuses),
+        set: (v) =>
+          onFiltersChange({
+            ...filtersRef.current,
+            statuses: new Set(v as ComplianceStatus[]),
+          }),
+      }),
+      decision: arrayFacetBinding<TurboLensComplianceFinding>({
+        get: () => Array.from(filtersRef.current.decisions),
+        set: (v) =>
+          onFiltersChange({
+            ...filtersRef.current,
+            decisions: new Set(v as ComplianceDecision[]),
+          }),
+      }),
+    }),
+    [onFiltersChange],
+  );
+  const facetSync = useFacetColumnSync<TurboLensComplianceFinding>(gridRef, {
+    bindings: facetBindings,
+    facetState: filters,
+  });
+
+  const cellMenu = useCellContextMenu<TurboLensComplianceFinding>(gridRef, {
+    excludeColumns: (colId) => colId === "delete_action",
+    facetSync: facetSync.cellMenu,
+  });
 
   const onSortChanged = (e: SortChangedEvent<TurboLensComplianceFinding>) => {
     const next = e.api
@@ -705,6 +809,10 @@ export default function ComplianceGrid({
         frozenColumns={columnFreeze.frozenColumns}
         onToggleFrozen={columnFreeze.toggleFrozen}
         onResetColumns={resetVisibleColumns}
+        columnOrderItems={columnOrderItems}
+        columnOrder={columnOrder.orderedIds}
+        onColumnOrderChange={handleColumnOrderChange}
+        onResetColumnOrder={columnOrder.resetOrder}
       />
 
       {/* Grid + toolbar */}
@@ -856,9 +964,10 @@ export default function ComplianceGrid({
 
         <Box
           ref={columnFreeze.containerRef}
-          className={mode === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}
+          {...cellMenu.containerProps}
           sx={{
             ...columnFreeze.sx,
+            ...cellMenu.sx,
             width: "100%",
             // Visual grouping: emphasise the first row of each card
             // cluster and put a clean divider above it. Continuation
@@ -878,6 +987,7 @@ export default function ComplianceGrid({
           }}
         >
           <AgGridReact<TurboLensComplianceFinding>
+            theme={mode === "dark" ? gridThemeDark : gridThemeLight}
             ref={gridRef}
             key={isRtl ? "rtl" : "ltr"}
             enableRtl={isRtl}
@@ -887,6 +997,7 @@ export default function ComplianceGrid({
             loading={loading}
             onCellClicked={onCellClicked}
             onSortChanged={onSortChanged}
+            onDragStopped={handleDragStopped}
             rowSelection={canManage ? rowSelection : undefined}
             // Keeps the checkbox column left of every frozen column.
             selectionColumnDef={columnFreeze.selectionColumnDef}
@@ -900,9 +1011,12 @@ export default function ComplianceGrid({
                 : undefined
             }
             domLayout="autoHeight"
+            {...cellMenu.gridProps}
           />
         </Box>
       </Box>
+
+      {cellMenu.menu}
 
       <FindingDetailDrawer
         finding={findingDrawer}

@@ -27,8 +27,7 @@ import Stack from "@mui/material/Stack";
 import Drawer from "@mui/material/Drawer";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
+import { gridThemeDark, gridThemeLight } from "@/lib/agGridSetup";
 import { api } from "@/api/client";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { useThemeMode } from "@/hooks/useThemeMode";
@@ -36,10 +35,18 @@ import { useIsRtl } from "@/hooks/useIsRtl";
 import type { User, SsoInvitation, AppRole } from "@/types";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useColumnFreeze } from "@/components/grid/useColumnFreeze";
+import { useColumnOrder } from "@/components/grid/useColumnOrder";
+import type { ColumnOrderItem } from "@/components/grid/ColumnOrderSection";
+import { useCellContextMenu } from "@/components/grid/useCellContextMenu";
+import { useFacetColumnSync } from "@/components/grid/useFacetColumnSync";
+import { arrayFacetBinding } from "@/components/grid/facetColumnSync";
+import { dateColumnFilterDef } from "@/lib/dateColumnFilter";
 import RolesAdmin from "@/features/admin/RolesAdmin";
 import UsersFilterSidebar, {
   EMPTY_USER_FILTERS,
   DEFAULT_USER_COLUMNS,
+  USER_COLUMNS,
+  LOCKED_USER_COLUMN_KEYS,
   type UserFilters,
 } from "./UsersFilterSidebar";
 import UserImportDialog from "./users/UserImportDialog";
@@ -80,6 +87,8 @@ interface UsersAdminPrefs {
   columns?: string[];
   /** colIds frozen to the leading edge via the header pin. */
   frozenColumns?: string[];
+  /** colId order, owned by `useColumnOrder` (header drag + Columns tab). */
+  columnOrder?: string[];
   sidebarWidth?: number;
   sidebarCollapsed?: boolean;
 }
@@ -181,6 +190,20 @@ export default function UsersAdmin() {
     frozen: frozenColumns,
     onFrozenChange: setFrozenColumns,
   });
+  const [columnOrderIds, setColumnOrderIds] = useState<string[]>(
+    () => savedPrefsRef.current?.columnOrder ?? [],
+  );
+  // Column order — from the Columns tab's drag handles and from dragging a
+  // column header, which both land here.
+  const columnOrder = useColumnOrder<User>(gridApiRef, {
+    order: columnOrderIds,
+    onOrderChange: setColumnOrderIds,
+  });
+  // One drag can move a column *and* pin it; capture both at drag end.
+  const handleDragStopped = useCallback(() => {
+    columnOrder.syncFromGrid();
+    columnFreeze.syncFrozenFromGrid();
+  }, [columnOrder, columnFreeze]);
 
   // Persist prefs whenever they change
   useEffect(() => {
@@ -188,10 +211,18 @@ export default function UsersAdmin() {
       filters,
       columns: Array.from(selectedColumns),
       frozenColumns,
+      columnOrder: columnOrderIds,
       sidebarWidth,
       sidebarCollapsed,
     });
-  }, [filters, selectedColumns, frozenColumns, sidebarWidth, sidebarCollapsed]);
+  }, [
+    filters,
+    selectedColumns,
+    frozenColumns,
+    columnOrderIds,
+    sidebarWidth,
+    sidebarCollapsed,
+  ]);
 
   const fetchRoles = useCallback(async () => {
     try {
@@ -849,6 +880,9 @@ export default function UsersAdmin() {
         width: 170,
         hide: !selectedColumns.has("last_login"),
         sortable: true,
+        // Date filter with the ISO-string comparator, instead of a text
+        // filter over raw ISO strings.
+        ...dateColumnFilterDef,
         valueFormatter: (p: { value?: string }) =>
           p.value ? formatDateTime(p.value) : "—",
       },
@@ -858,6 +892,7 @@ export default function UsersAdmin() {
         width: 140,
         hide: !selectedColumns.has("created_at"),
         sortable: true,
+        ...dateColumnFilterDef,
         valueFormatter: (p: { value?: string }) =>
           p.value ? formatDate(p.value) : "—",
       },
@@ -905,8 +940,19 @@ export default function UsersAdmin() {
   );
 
   const columnDefs = useMemo<ColDef<User>[]>(
-    () => columnFreeze.applyFrozen(rawColumnDefs),
-    [rawColumnDefs, columnFreeze],
+    () => columnOrder.applyOrder(columnFreeze.applyFrozen(rawColumnDefs)),
+    [rawColumnDefs, columnFreeze, columnOrder],
+  );
+
+  // Feeds the Columns tab's "Column order" section. NOTE the two id spaces:
+  // `key` is what the visibility prefs store, `colId` is what the grid (and
+  // therefore the order and the freeze) uses — never swap them.
+  const columnOrderItems = useMemo<ColumnOrderItem[]>(
+    () =>
+      USER_COLUMNS.filter(
+        (c) => selectedColumns.has(c.key) || LOCKED_USER_COLUMN_KEYS.has(c.key),
+      ).map((c) => ({ colId: c.colId, label: t(c.tKey), icon: c.icon })),
+    [selectedColumns, t],
   );
 
   const defaultColDef = useMemo<ColDef>(
@@ -918,6 +964,42 @@ export default function UsersAdmin() {
     }),
     [columnFreeze.headerComponentParams],
   );
+
+  // "Show matching" also selects the value in the filter sidebar.
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const facetBindings = useMemo(
+    () => ({
+      role: arrayFacetBinding<User>({
+        get: () => filtersRef.current.roles,
+        set: (v) => setFilters((p) => ({ ...p, roles: v })),
+      }),
+      is_active: arrayFacetBinding<User>({
+        // The column's valueGetter already yields the facet's own tokens
+        // ("active" / "invited" / "inactive").
+        get: () => filtersRef.current.statuses,
+        set: (v) => setFilters((p) => ({ ...p, statuses: v as UserFilters["statuses"] })),
+      }),
+      auth_provider: arrayFacetBinding<User>({
+        // The facet is a two-way split; every non-SSO provider is "local".
+        toFacetValue: (ctx) =>
+          ctx.filterValue ? (String(ctx.filterValue) === "sso" ? "sso" : "local") : null,
+        get: () => filtersRef.current.authMethods,
+        set: (v) => setFilters((p) => ({ ...p, authMethods: v as UserFilters["authMethods"] })),
+      }),
+    }),
+    [],
+  );
+  const facetSync = useFacetColumnSync<User>(gridApiRef, {
+    bindings: facetBindings,
+    facetState: filters,
+  });
+
+  // Right-click / long-press cell menu (Show matching, Filter out, …).
+  const cellMenu = useCellContextMenu<User>(gridApiRef, {
+    facetSync: facetSync.cellMenu,
+  });
+
   // AG Grid v32 multi-select API — the checkbox selection column is
   // auto-generated. ``selectAll: "filtered"`` makes the header checkbox respect
   // the active filters (matching the old headerCheckboxSelectionFilteredOnly).
@@ -959,6 +1041,10 @@ export default function UsersAdmin() {
       frozenColumns={columnFreeze.frozenColumns}
       onToggleFrozen={columnFreeze.toggleFrozen}
       onResetColumns={handleResetColumns}
+      columnOrderItems={columnOrderItems}
+      columnOrder={columnOrder.orderedIds}
+      onColumnOrderChange={setColumnOrderIds}
+      onResetColumnOrder={columnOrder.resetOrder}
     />
   );
 
@@ -1076,10 +1162,11 @@ export default function UsersAdmin() {
 
             <Box
               ref={columnFreeze.containerRef}
-              className={mode === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}
-              sx={{ flex: 1, minHeight: 0, ...columnFreeze.sx }}
+              {...cellMenu.containerProps}
+              sx={{ flex: 1, minHeight: 0, ...columnFreeze.sx, ...cellMenu.sx }}
             >
               <AgGridReact<User>
+                theme={mode === "dark" ? gridThemeDark : gridThemeLight}
                 key={isRtl ? "rtl" : "ltr"}
                 enableRtl={isRtl}
                 rowData={filteredUsers}
@@ -1096,13 +1183,16 @@ export default function UsersAdmin() {
                 onGridReady={(params) => {
                   gridApiRef.current = params.api;
                 }}
+                onDragStopped={handleDragStopped}
                 onSelectionChanged={(e: { api: GridApi<User> }) => {
                   const rows = e.api.getSelectedRows();
                   setSelectedIds(rows.map((r) => r.id));
                 }}
                 overlayNoRowsTemplate={`<span style="padding: 12px;">${t("users.noUsers")}</span>`}
+                {...cellMenu.gridProps}
               />
             </Box>
+            {cellMenu.menu}
           </Paper>
 
           {/* Bulk role-change dialog */}

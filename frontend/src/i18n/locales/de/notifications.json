@@ -2,6 +2,8 @@
   "title": "Benachrichtigungen",
   "markAllRead": "Alle als gelesen markieren",
   "noNotifications": "Keine Benachrichtigungen",
+  "opensExternally": "Wird in einem neuen Tab geöffnet",
+  "opensReleaseNotes": "Öffnet die Release Notes",
   "preferences.title": "Benachrichtigungseinstellungen",
   "preferences.description": "Wählen Sie, welche Benachrichtigungen Sie erhalten möchten und wie.",
   "preferences.notification": "Benachrichtigung",
@@ -17,5 +19,20 @@
   "preferences.approvalStatusChanged": "Genehmigungsstatus geändert",
   "preferences.soawSignRequested": "SoAW-Unterschrift angefordert",
   "preferences.soawSigned": "SoAW unterzeichnet",
-  "preferences.surveyRequest": "Umfrageanfrage"
+  "preferences.surveyRequest": "Umfrageanfrage",
+  "preferences.appUpdateAvailable": "Update verfügbar",
+  "preferences.appUpdated": "App aktualisiert",
+  "preferences.extensionAvailable": "Neue Erweiterung verfügbar",
+  "preferences.extensionUpdateAvailable": "Erweiterungs-Update verfügbar",
+
+  "releaseNotes.title": "{{app}} {{version}} ist verfügbar",
+  "releaseNotes.titleFallback": "Release Notes",
+  "releaseNotes.running": "Sie verwenden {{version}}",
+  "releaseNotes.viewOnGithub": "Auf GitHub ansehen",
+  "releaseNotes.empty": "Für diese Version wurden keine Release Notes veröffentlicht.",
+  "releaseNotes.loadFailed": "Release Notes konnten nicht geladen werden",
+  "releaseNotes.installedTitle": "Neu in {{app}} {{version}}",
+  "releaseNotes.updatedFrom": "Aktualisiert von {{version}}",
+  "releaseNotes.alreadyInstalled": "Bereits installiert",
+  "releaseNotes.unavailableForVersion": "Für {{version}} sind auf dieser Instanz keine Release Notes verfügbar."
 }

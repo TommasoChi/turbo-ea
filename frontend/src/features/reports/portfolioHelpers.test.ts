@@ -8,6 +8,10 @@ import {
   extractRelSubtypes,
   getAppColor,
   getAppColorLabel,
+  hasStartedByDate,
+  isAliveAtDate,
+  isAppAliveAtDate,
+  isRetiredByDate,
   matchesFilters,
   MULTIPLE_COLOR,
   REL_SUBTYPE_PREFIX,
@@ -284,5 +288,70 @@ describe("relationMemberMatchesSubtypeFilters (per group-member)", () => {
     const filters = { [usageSub.composite]: [EMPTY_FILTER_KEY] };
     expect(relationMemberMatchesSubtypeFilters(b, "orgC", filters, [usageSub])).toBe(true);
     expect(relationMemberMatchesSubtypeFilters(b, "orgA", filters, [usageSub])).toBe(false);
+  });
+});
+
+describe("lifecycle date helpers", () => {
+  const ms = (iso: string) => new Date(iso).getTime();
+  const at = ms("2026-06-15");
+
+  it("treats a card with no lifecycle as always present", () => {
+    expect(hasStartedByDate(undefined, at)).toBe(true);
+    expect(isRetiredByDate(undefined, at)).toBe(false);
+    expect(isAliveAtDate(undefined, at)).toBe(true);
+  });
+
+  it("treats a lifecycle with no usable dates as always present", () => {
+    expect(isAliveAtDate({}, at)).toBe(true);
+    expect(isAliveAtDate({ active: "not-a-date" }, at)).toBe(true);
+  });
+
+  it("uses the go-live date as the birthday, not an earlier plan", () => {
+    expect(hasStartedByDate({ plan: "2027-01-01" }, at)).toBe(false);
+    expect(hasStartedByDate({ plan: "2027-01-01", active: "2020-01-01" }, at)).toBe(true);
+    // The go-live mark sits on `active`, so a card must not appear years before
+    // it — taking the earliest start phase made this one visible from 2020.
+    expect(hasStartedByDate({ plan: "2020-01-01", active: "2029-01-01" }, at)).toBe(false);
+    expect(hasStartedByDate({ phaseIn: "2020-01-01", active: "2029-01-01" }, at)).toBe(false);
+    expect(hasStartedByDate({ plan: "2020-01-01", active: "2029-01-01" }, ms("2029-01-01"))).toBe(
+      true,
+    );
+  });
+
+  it("treats a card that never went live as upcoming, whatever its plan date", () => {
+    // No `active` at all: it has not entered the landscape, so it shows only
+    // where planned cards are previewed — even once its plan date has passed.
+    expect(hasStartedByDate({ plan: "2020-01-01" }, at)).toBe(false);
+    expect(hasStartedByDate({ phaseIn: "2020-01-01" }, at)).toBe(false);
+    expect(hasStartedByDate({ plan: "2020-01-01", phaseIn: "2021-01-01" }, at)).toBe(false);
+    expect(isAliveAtDate({ plan: "2020-01-01" }, at)).toBe(false);
+  });
+
+  it("treats end-phase-only lifecycles as already started", () => {
+    // A card carrying nothing but phaseOut/endOfLife dates (the endoflife.date
+    // mass-link shape) must exist to be phasing out — its end date is not its
+    // birthday, or it would be invisible its entire life.
+    expect(hasStartedByDate({ phaseOut: "2020-01-01" }, at)).toBe(true);
+    expect(hasStartedByDate({ endOfLife: "2030-01-01" }, at)).toBe(true);
+    expect(isAliveAtDate({ endOfLife: "2030-01-01" }, at)).toBe(true);
+    expect(isAliveAtDate({ endOfLife: "2030-01-01" }, ms("2031-01-01"))).toBe(false);
+  });
+
+  it("counts a card retired exactly on the date as retired", () => {
+    expect(isRetiredByDate({ endOfLife: "2026-06-15" }, at)).toBe(true);
+    expect(isRetiredByDate({ endOfLife: "2026-06-16" }, at)).toBe(false);
+  });
+
+  it("is alive only between its birthday and its end of life", () => {
+    const lc = { active: "2020-01-01", endOfLife: "2030-01-01" };
+    expect(isAliveAtDate(lc, ms("2019-01-01"))).toBe(false);
+    expect(isAliveAtDate(lc, ms("2025-01-01"))).toBe(true);
+    expect(isAliveAtDate(lc, ms("2031-01-01"))).toBe(false);
+  });
+
+  it("keeps isAppAliveAtDate delegating to the lifecycle-only helper", () => {
+    const app = { lifecycle: { active: "2020-01-01", endOfLife: "2024-01-01" } } as AppData;
+    expect(isAppAliveAtDate(app, ms("2022-01-01"))).toBe(true);
+    expect(isAppAliveAtDate(app, at)).toBe(false);
   });
 });

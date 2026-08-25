@@ -9,7 +9,7 @@ Siden **Indstillinger** under **Admin → Indstillinger** (`/admin/settings`) er
 | **AI** | `/admin/settings?tab=ai` | LLM-udbyder, model, websøgningsbackend, AI-forslagskontakter pr. korttype | [AI-funktioner](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Massetilknytning af produkter til endoflife.date-poster | [End-of-Life (EOL)](eol.md) |
 | **Webportaler** | `/admin/settings?tab=web-portals` | Offentlige skrivebeskyttede portal-slugs, synlighedsfiltre | [Webportaler](web-portals.md) |
-| **ServiceNow** | `/admin/settings?tab=servicenow` | ServiceNow-forbindelse, synkroniseringskonfiguration, identitetskortlægning | [ServiceNow-integration](servicenow.md) |
+| **Integrationer** | `/admin/settings?tab=integrations` | ServiceNow-synkronisering og integrationer tilføjet af udvidelser | [ServiceNow-integration](servicenow.md) |
 | **TurboLens** | `/admin/settings?tab=turbolens` | TurboLens-specifikke kontakter, aktiverede reguleringer, analysepolling | Se afsnittet [TurboLens-indstillinger](#turbolens-indstillinger) nedenfor |
 | **Migrering** | `/admin/settings?tab=migration` | Import fra andre EA-platforme og fuld overførsel af arbejdsområde mellem Turbo EA-instanser | [Platformsmigrering](migration.md) |
 | **Revisionslog** | `/admin/settings?tab=audit-log` | Ændringsregister — hvem der ændrede hvad, og om det kom fra webgrænsefladen, API'et eller et AI-værktøj | — |
@@ -140,6 +140,12 @@ Slå **Business Process Management**-modulet til eller fra. Når det er deaktive
 
 Dette er nyttigt for organisationer, der ikke bruger BPM og ønsker en renere navigationsoplevelse.
 
+### Kræv en separat godkender
+
+Slået fra som standard. Når den er slået til, kan den, der indsender en revision af et procesflow, ikke selv godkende den — funktionsadskillelse, sådan som kvalitetssystemer som GxP og ISO 9001 forventer.
+
+Lad den være slået fra i et lille team, hvor den samme person udarbejder og godkender. At slå den til ændrer ikke, hvad der registreres: indsendelse, godkendelse, afvisning og tilbagetrækning havner i kortets fane **Historik** under alle omstændigheder.
+
 ## PPM-modul
 
 Slå **Project Portfolio Management**-modulet til eller fra. Når det er deaktiveret:
@@ -159,6 +165,34 @@ Slå **Governance, Risk and Compliance**-modulet til eller fra. Når det er deak
 - Risici og compliance-fund forbliver i databasen — de underliggende `risks.*`- og `compliance.*`-tilladelser er uændrede, så dataene bevares og dukker uændret op igen, hvis modulet aktiveres på ny
 
 Se [GRC-vejledningen](../guide/grc.md) for den fulde funktionsreference.
+
+## Opdateringsnotifikationer
+
+Turbo EA tjekker én gang om dagen, om der er udgivet en nyere version, og lægger i så fald en notifikation i klokken hos hver bruger, hvis rolle giver `admin.settings`. Et klik åbner udgivelsesnoterne — changeloggen for den version — i en dialog inde i Turbo EA. Hver notifikation bliver ved med at vise netop den version, den annoncerede, uanset hvor længe den har ligget i klokken: noterne læses fra den changelog, der følger med imaget, så de koster ingen udgående forespørgsel og virker uændret på en air-gapped installation. Kun en udgivelse, du endnu ikke har installeret, kommer i stedet fra det daglige tjeks cache, for en changelog skrevet på byggetidspunktet kan ikke beskrive den; for dem åbner en **Se på GitHub**-knap udgivelsessiden i en ny fane.
+
+Notifikationer bærer det navn, der er konfigureret for denne instans, så en omdøbt installation ikke annoncerer sig under et andet produktnavn.
+
+Tjekket **giver kun besked**: der hentes intet, og intet ændres på værten. Opgradering er fortsat den bevidste, backup-sikrede procedure, der er beskrevet i [Drift](operations.md#the-upgrade-procedure). En administrator, der hellere vil være fri for påmindelsen, kan slå rækken **Opdatering tilgængelig** fra i sine egne notifikationsindstillinger.
+
+Slås kontakten **fra**, bortfalder den daglige forespørgsel til github.com helt, hvilket er præcis, hvad en air-gapped installation eller et miljø med begrænset udgående trafik har brug for. Uanset hvad kører instansen normalt: Kan udgivelsesfeedet ikke nås, registreres fejlen stilfærdigt, og der vises intet.
+
+### Når opgraderingen er gennemført
+
+En anden kontakt, **Annoncér opgraderinger til brugerne**, dækker den anden halvdel. Når instansen genstarter på en nyere version, får **alle** brugere — ikke kun administratorer — én notifikation om, at appen er opdateret, og et klik viser changeloggen for alle de versioner, opgraderingen krydsede. En instans, der springer fra 2.57.0 til 2.60.0, viser alle fire udgivelser, ikke kun den sidste. Hver af disse beskeder forbliver knyttet til sin egen opgradering, så en besked fra et år siden stadig viser de versioner, *den* opgradering krydsede.
+
+Annonceringen sendes **én gang pr. version**: ti genstarter på samme version giver én notifikation, og en tilbagerulning giver ingen. En helt ny installation annoncerer intet, for der er ingen opgradering at beskrive. Noterne kommer fra changeloggen i imaget, så denne halvdel kræver slet ikke netværk.
+
+Denne er **kun i appen** og sendes aldrig som e-mail — den når hver aktiv bruger ved hver opgradering, og en e-mailkanal ville gøre hver patch-udgivelse til en masseudsendelse. Den enkelte bruger kan stadig slå den fra under **Opdateringsnotifikationer** i sine egne notifikationsindstillinger, hvor e-mailkontakten vises deaktiveret.
+
+### Notifikationer fra udvidelsesbutikken
+
+En tredje kontakt, **Notifikationer fra udvidelsesbutikken**, gør det samme for [udvidelsesbutikken](extensions.md). En gang om dagen læser instansen butikkens offentlige katalog og giver ved ændringer besked til alle brugere, hvis rolle giver `admin.manage_extensions` — den samme tilladelse, der åbner siden Udvidelser. To ting annonceres: en udvidelse udgivet i butikken, som du ikke har installeret, og en nyere version af en, du har.
+
+Travle udgivelsesdage forbliver overskuelige: uanset hvor mange udvidelser der er ændret, får hver administrator **én** notifikation pr. type ("3 udvidelsesopdateringer tilgængelige") og ikke én pr. udvidelse. Hver ændring annonceres **én gang** — et katalog, der ligger uændret i en måned, giver én notifikation, ikke tredive — og et klik åbner fanen Butik inde i Turbo EA.
+
+Den allerførste vellykkede læsning af kataloget annoncerer **ingen** nye udvidelser: en instans, der møder butikken for første gang, ville ellers rapportere hele indholdet. Opdateringer til udvidelser, du allerede har, rapporteres derimod med det samme, fordi de altid er få og kan håndteres straks.
+
+Ligesom versionstjekket er dette **kun en notifikation** — intet hentes eller installeres, og installation er fortsat en bevidst handling på siden Udvidelser. Slås kontakten **fra**, forsvinder den daglige forespørgsel til butikken helt. Den enkelte administrator kan slå rækkerne **Ny udvidelse tilgængelig** og **Udvidelsesopdatering tilgængelig** fra hver for sig i sine egne notifikationsindstillinger.
 
 ## Støt-knap
 

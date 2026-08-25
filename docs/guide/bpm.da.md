@@ -19,6 +19,8 @@
 
 Kort med et publiceret BPMN-diagram viser et **flow-ikon** — klik på det for at åbne diagrammet i fuld skærm uden at forlade navigatoren (eller for at springe derfra til den fulde flow-editor).
 
+**Kolonnelayout:** værktøjslinjen har en **kolonnevælger** — én, to eller tre kolonner — så du kan gøre proceskortene bredere eller få mere af en række på skærmen. En række strækkes aldrig over flere kolonner, end den har processer, og valget huskes mellem besøg. Valget forplanter sig også til de indlejrede niveauer, én kolonne færre pr. niveau, så dybe processer ikke længere klemmes sammen til smalle striber.
+
 ## BPM-dashboard
 
 ![BPM-dashboard med statistik](../assets/img/da/15_bpm_dashboard.png)
@@ -42,7 +44,7 @@ Hvert forretningsproceskort kan have et **BPMN 2.0-procesflowdiagram**. Editoren
 
 - **Visuel modellering** — Træk og slip BPMN-elementer: opgaver, hændelser, gateways, baner og underprocesser
 - **Skabeloner** — Vælg blandt 6 forudbyggede BPMN-skabeloner til almindelige procesmønstre (eller start fra et blankt lærred)
-- **Element­udtrækning** — Når du gemmer et diagram, udtrækker systemet automatisk alle opgaver, hændelser, gateways og baner til analyse
+- **Element­udtrækning** — Når du gemmer et diagram, udtrækker systemet automatisk alle opgaver, hændelser, gateways og baner til analyse. De udtrukne elementer vises i **procesforløbets rækkefølge** — langs diagrammets sekvens- og beskedforløb med start i starthændelsen — og ikke grupperet efter elementtype. Trin i en løkke holdes samlet, og indholdet af en underproces vises lige under den
 - **Elementfarver** — Markér et eller flere elementer, og brug malerbøtte-knappen i kontekstpanelet for at give dem en farve. Farverne gemmes i selve BPMN-filen, så de vises også i den skrivebeskyttede fremviser, i eksporter og på udskrifter
 
 ### Element-linking
@@ -59,16 +61,41 @@ Kolonnen *Organisation* i trintabellen linker trin til organisationskort, lige v
 
 ### Godkendelses­arbejdsproces
 
-Procesflow-diagrammer følger en versionskontrolleret godkendelses­arbejdsproces:
+Procesflowdiagrammer følger en versionsstyret godkendelsesproces:
 
 | Status | Beskrivelse |
 |--------|-------------|
-| **Kladde** | Under redigering, endnu ikke indsendt til gennemgang |
+| **Kladde** | Under redigering, endnu ikke sendt til gennemgang |
 | **Afventer** | Indsendt til godkendelse, afventer gennemgang |
-| **Udgivet** | Godkendt og synlig som den aktuelle version |
-| **Arkiveret** | Tidligere udgivet version, gemt af historiske grunde |
+| **Publiceret** | Godkendt og synlig som den aktuelle version |
+| **Arkiveret** | Tidligere publiceret version, afløst af en nyere godkendelse |
+| **Tilbagetrukket** | Tidligere publiceret version, bevidst afpubliceret |
 
-Indsendelse af en kladde opretter et øjebliksbillede af versionen. Godkendere kan godkende (udgive) eller afvise (med kommentarer) indsendelsen.
+Når en kladde indsendes, oprettes et versionsøjebliksbillede. Godkendere kan godkende (publicere) eller afvise indsendelsen.
+
+#### Hvem kan godkende
+
+At godkende eller afvise en indsendt revision kræver tilladelsen **Godkend eller afvis indsendte BPMN-flowversioner** eller interessentrollen **Procesejer** på selve processen. Det er ikke nok at kunne redigere kladder.
+
+!!! warning "Ændret i 2.43.0"
+    Tidligere udgaver accepterede den generelle BPM-redigeringstilladelse her, så ethvert medlem kunne godkende ethvert procesflow — også en revision, de selv havde indsendt et øjeblik forinden. Hvis der i din installation i dag godkendes af personer, som kun har BPM-redigeringsrettigheder, så tildel dem enten **Godkend eller afvis indsendte BPMN-flowversioner** under Administration → Roller, eller udpeg dem som **Procesejer** på de processer, de godkender.
+
+#### Træk en publiceret version tilbage
+
+En godkendelse givet ved en fejl kan omgøres uden at slette processen. Tilbagetrækning kræver tilladelsen **Træk en publiceret BPMN-flowversion tilbage (afpublicer)**, som **ingen rolle har som standard** — en administrator tildeler den under Administration → Roller eller på interessentrollen **Procesejer** under Administration → Metamodel.
+
+Når tilladelsen er givet, får den publicerede version en **Træk tilbage**-knap. Tilbagetrækning kræver en skriftlig begrundelse og derefter:
+
+- flyttes revisionen til **Tilbagetrukket** — den slettes aldrig og sendes aldrig tilbage til kladde;
+- bevares den oprindelige godkendelse: fanen *Arkiveret* viser revisionen, hvem der godkendte den og hvornår, ved siden af hvem der trak den tilbage og hvorfor;
+- registreres tilbagetrækningen med sin begrundelse på kortets fane **Historik**;
+- **åbnes en kopi som en ny kladde** med det næste revisionsnummer, så du kan rette diagrammet og sende det gennem indsend → godkend igen;
+- står processen uden *godkendt* flow, indtil den kladde er godkendt;
+- forbliver de udtrukne procestrin og deres kortlinks urørte.
+
+At bevare den tilbagetrukne revision og redigere en kopi er bevidst: præcis det diagram, en godkender skrev under på, kan stadig hentes frem, hvilket er, hvad et kvalitetssystem forventer — og du får alligevel straks en arbejdskopi.
+
+Enhver arkiveret eller tilbagetrukket version kan tages op igen når som helst med **Opret ny kladde ud fra denne** på fanen *Arkiveret*, som kloner den til en kladde med det næste revisionsnummer.
 
 ## Procesvurderinger
 

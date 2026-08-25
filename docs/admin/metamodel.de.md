@@ -53,9 +53,11 @@ Felder definieren die benutzerdefinierten Attribute, die auf Karten dieses Typs 
 | **Bezeichnung** | Anzeigename |
 | **Typ** | text, multiline_text, number, cost, boolean, date, url, single_select oder multiple_select |
 | **Optionen** | Für Auswahlfelder: die verfügbaren Auswahlmöglichkeiten mit Bezeichnungen und optionalen Farben |
-| **Pflichtfeld** | Ob das Feld für die Datenqualitätsbewertung ausgefüllt sein muss |
+| **Pflichtfeld** | Ob das Feld verpflichtend ist — siehe die Durchsetzungsregeln unten |
 | **Datenqualität** | Der Beitrag jedes Felds zum Wert wird im Bereich **Datenqualität** verwaltet (siehe unten) |
 | **Nur lesen** | Verhindert manuelle Bearbeitung (nützlich für berechnete Felder) |
+
+**So werden Pflichtfelder durchgesetzt.** Beim Erstellen einer Karte sind diese Felder nie erforderlich — Karten können schnell angelegt und später vervollständigt werden. Solange ein Pflichtfeld leer ist, bleibt die Datenqualitätsbewertung der Karte bei **0**, und die Kartendetailseite zeigt ein Warnbanner mit den auszufüllenden Feldern. Beim Bearbeiten eines Kartenbereichs kann dieser erst gespeichert werden, wenn seine Pflichtfelder ausgefüllt sind, und die API lehnt das Leeren eines bereits gefüllten Pflichtfelds ab. Boolesche und schreibgeschützte (berechnete) Felder sind ausgenommen.
 
 Klicken Sie auf **+ Feld hinzufügen**, um ein neues Feld zu erstellen, oder klicken Sie auf ein bestehendes Feld, um es im **Feldeditor-Dialog** zu bearbeiten.
 
@@ -85,6 +87,8 @@ IDs sind **global eindeutig, schreibgeschützt und werden nie wiederverwendet od
 
 Der **Datenqualitätswert** einer Karte ist ein gewichtetes Maß für ihre Vollständigkeit. Jeder beitragende Faktor – jedes Feld sowie fünf integrierte Faktoren – wird an einer Stelle verwaltet: im **Datenqualität**-Tab des Kartentyp-Editors. (Der Editor ist in Registerkarten unterteilt – Allgemein, Beziehungen, Stakeholder-Rollen und Datenqualität – Übersetzungen sind über das Symbol in der Kopfzeile verfügbar.)
 
+**Pflichtfelder haben Vorrang vor der Bewertung.** Solange ein Pflichtfeld einer Karte leer ist, bleibt ihr Wert unabhängig von den Gewichtungen bei **0** — die gewichtete Berechnung greift erst, wenn alle Pflichtfelder ausgefüllt sind (boolesche und schreibgeschützte Felder sind ausgenommen; siehe die Einstellung **Pflichtfeld** oben).
+
 Die Wichtigkeit jedes Faktors wird mit einem einfachen Schieberegler über vier Stufen festgelegt, der auch die zugrunde liegende Zahl anzeigt:
 
 - **Ignorieren (0)** – vollständig aus dem Wert ausgeschlossen.
@@ -92,7 +96,7 @@ Die Wichtigkeit jedes Faktors wird mit einem einfachen Schieberegler über vier 
 - **Wichtig (2)** – zählt doppelt.
 - **Kritisch (3)** – zählt dreifach.
 
-Der Bereich listet die fünf **integrierten Faktoren** – **Beschreibung**, **Lebenszyklus** (ob ein Lebenszyklusdatum gesetzt ist), **Pflichtbeziehungen**, **Pflicht-Tags** und **Stakeholder-Rollen** (jede für den Typ definierte Rolle gilt als erfüllt, sobald ein Stakeholder zugewiesen ist) – gefolgt von jedem Feld, gruppiert nach seinem Abschnitt, jeweils mit demselben Schieberegler. Setzen Sie zum Beispiel den **Lebenszyklus** auf *Ignorieren* für einen Typ, dessen Karten berechtigterweise nie Datumsangaben tragen, damit sie nicht abgewertet werden.
+Der Bereich listet die fünf **integrierten Faktoren** – **Beschreibung**, **Lebenszyklus** (ob ein Lebenszyklusdatum gesetzt ist), **Pflichtbeziehungen**, **Pflicht-Tags** und **Stakeholder-Rollen** (ein einziger Slot, erfüllt, sobald der Karte jemand in einer Rolle zugewiesen ist, die zur Datenqualität zählt) – gefolgt von jedem Feld, gruppiert nach seinem Abschnitt, jeweils mit demselben Schieberegler. Setzen Sie zum Beispiel den **Lebenszyklus** auf *Ignorieren* für einen Typ, dessen Karten berechtigterweise nie Datumsangaben tragen, damit sie nicht abgewertet werden.
 
 Ein Balken zur **Wertzusammensetzung** oben im Bereich zeigt den Anteil jedes Faktors am maximal möglichen Wert, sodass Sie auf einen Blick sehen, welche Faktoren dominieren. Im Karten-Layout der Registerkarte **Allgemein** zeigt jedes Feld – sowie die integrierten Abschnitte Beschreibung, Lebenszyklus und Beziehungen – ein kleines Abzeichen mit seiner aktuellen Stufennummer, sodass Sie die Gewichtung sehen, ohne die Registerkarte zu verlassen.
 
@@ -116,6 +120,17 @@ Wenn bei einer Karte kein Subtyp ausgewählt ist (oder der Typ keine Subtypen ha
 #### Stakeholder-Rollen
 
 Definieren Sie benutzerdefinierte Rollen für diesen Typ (z.B. «Anwendungseigner», «Technischer Eigner»). Jede Rolle hat **kartenebene Berechtigungen**, die beim Zugriff auf eine Karte mit der anwendungsweiten Rolle des Benutzers kombiniert werden. Siehe [Benutzer & Rollen](users.md) für mehr zum Berechtigungsmodell.
+
+Jede Rolle hat einen **Schlüssel** (die auf Karten gespeicherte Kennung, die auch von den `stakeholder:<Rollenschlüssel>`-Import-/Exportspalten verwendet wird) und eine **Bezeichnung** (was Benutzer sehen). Der Schlüssel folgt derselben Konvention wie jeder andere Metamodell-Schlüssel — nur Buchstaben und Ziffern, beginnend mit einem Buchstaben, 3–50 Zeichen, üblicherweise camelCase wie `businessArchitect`. Er wird automatisch aus der Bezeichnung abgeleitet, sodass Sie ihn selten selbst eingeben müssen.
+
+Jede Rolle trägt außerdem einen Schalter **Zählt für die Datenqualität**. Die Datenqualität hat genau einen Stakeholder-Slot, und dieser gilt als erfüllt, sobald der Karte jemand in einer Rolle zugewiesen ist, bei der dieser Schalter aktiv ist. Deaktivieren Sie ihn für rein passive Rollen — der integrierte **Beobachter** wird bereits deaktiviert ausgeliefert, damit das Beobachten einer Karte nicht als Verantwortung zählt. Ein Typ, bei dem alle Rollen deaktiviert sind, trägt gar keinen Stakeholder-Slot bei. Das Umschalten bewertet sofort alle Karten dieses Typs neu.
+
+Rollen lassen sich auf zwei Arten entfernen:
+
+- **Archivieren** — die Rolle bleibt auf Karten erhalten, die sie bereits verwenden, kann aber nicht mehr zugewiesen werden und gewährt keine Berechtigungen auf Kartenebene mehr. Archivierte Rollen erscheinen über den Schalter **Archivierte anzeigen** und können jederzeit wiederhergestellt werden. Das ist die richtige Wahl für eine Rolle, die tatsächlich verwendet wurde.
+- **Löschen** — dauerhaft und nur möglich, solange die Rolle nicht verwendet wird. Turbo EA verweigert das Löschen einer Rolle, die jemand auf einer Karte dieses Typs innehat, die von einer Umfrage verwendet wird oder die letzte aktive Rolle des Typs ist; der Bestätigungsdialog nennt den Grund und bietet stattdessen das Archivieren an. So räumen Sie eine versehentlich angelegte Rolle auf.
+
+Der Schlüssel einer Rolle lässt sich korrigieren, solange **niemand die Rolle innehat** — Umfragen, die sie verwenden, folgen der Umbenennung automatisch, und auch die einzige Rolle eines Typs lässt sich umbenennen, da die Rolle dabei erhalten bleibt. Sobald jemand die Rolle innehat, ist der Schlüssel gesperrt und das Feld erklärt warum. Rollen, die vor dieser Konvention angelegt wurden, behalten ihren bestehenden Schlüssel und funktionieren weiterhin; geprüft wird nur ein neuer oder geänderter Schlüssel.
 
 #### Übersetzungen
 
@@ -148,6 +163,10 @@ Beziehungstypen definieren die zulässigen Verbindungen zwischen Kartentypen. Je
 | **Kardinalität** | n:m (viele-zu-viele) oder 1:n (eins-zu-viele) |
 
 Klicken Sie auf **+ Neuer Beziehungstyp**, um eine Beziehung zu erstellen, oder klicken Sie auf einen bestehenden, um dessen Bezeichnungen und Attribute zu bearbeiten.
+
+Die Felder **Bezeichnung** und **Umgekehrte Bezeichnung** werden in der Sprache erfasst, die Sie gerade verwenden — die Feldbeschriftung zeigt an, welche (zum Beispiel *Bezeichnung (Deutsch)*). Beim Umbenennen einer Beziehung wird diese Sprache überall aktualisiert, wo das Verb erscheint: im Abschnitt **Beziehungen** einer Karte, in den Beziehungsspalten des Inventars, in Berichten, Portalen und Diagrammen. Andere Sprachen behalten ihre eigene Formulierung, bis Sie sie übersetzen.
+
+Mit **Übersetzungen verwalten** oben im Reiter Beziehungstypen übersetzen Sie die Verben aller Beziehungen in einem Durchgang in jede aktivierte Sprache. Wählen Sie einen Sprachreiter, tragen Sie die Formulierung neben dem englischen Original ein und speichern Sie — der Zähler auf jedem Reiter zeigt, wie viele Verben in dieser Sprache noch fehlen. Englisch erscheint hier nicht, denn es ist die Formulierung an der Beziehung selbst; ein nicht übersetztes Verb fällt darauf zurück.
 
 ### Beziehungsattribute
 

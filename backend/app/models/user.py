@@ -18,6 +18,10 @@ DEFAULT_NOTIFICATION_PREFERENCES = {
         "soaw_sign_requested": True,
         "soaw_signed": True,
         "survey_request": True,
+        "app_update_available": True,
+        "app_updated": True,
+        "extension_available": True,
+        "extension_update_available": True,
     },
     "email": {
         "todo_assigned": True,
@@ -28,6 +32,13 @@ DEFAULT_NOTIFICATION_PREFERENCES = {
         "soaw_sign_requested": True,
         "soaw_signed": True,
         "survey_request": True,
+        "app_update_available": False,
+        # Off by default like the app-update notice: useful in the bell, not
+        # worth an inbox. Unlike ``app_updated`` these go only to the handful of
+        # ``admin.manage_extensions`` holders, so email stays a real opt-in
+        # rather than a mass mailing — hence no IN_APP_ONLY_TYPES entry.
+        "extension_available": False,
+        "extension_update_available": False,
     },
 }
 

@@ -19,6 +19,8 @@ Der **Prozessnavigator** organisiert Prozesse in drei Hauptkategorien:
 
 Karten mit einem veröffentlichten BPMN-Diagramm zeigen ein **Ablaufsymbol** — klicken Sie darauf, um das Diagramm im Vollbild zu öffnen, ohne den Navigator zu verlassen (oder von dort zum vollständigen Ablauf-Editor zu springen).
 
+**Spaltenlayout:** Die Werkzeugleiste enthält eine **Spaltenauswahl** — eine, zwei oder drei Spalten —, mit der Sie die Prozesskarten verbreitern oder mehr einer Zeile auf den Bildschirm bringen. Eine Zeile wird nie über mehr Spalten gestreckt, als sie Prozesse enthält, und die Auswahl bleibt zwischen Besuchen erhalten. Die Auswahl wirkt auch auf die verschachtelten Ebenen — jeweils eine Spalte weniger pro Ebene —, sodass tiefe Prozesse beim Aufklappen nicht mehr zu schmalen Streifen zusammengedrückt werden.
+
 ## BPM-Dashboard
 
 ![BPM-Dashboard mit Statistiken](../assets/img/de/15_bpm_dashboard.png)
@@ -42,7 +44,7 @@ Jede Geschäftsprozess-Karte kann ein **BPMN 2.0 Prozessflussdiagramm** haben. D
 
 - **Visuelle Modellierung** — BPMN-Elemente per Drag & Drop: Aufgaben, Ereignisse, Gateways, Bahnen und Teilprozesse
 - **Startervorlagen** — Wählen Sie aus 6 vorgefertigten BPMN-Vorlagen für gängige Prozessmuster (oder beginnen Sie mit einer leeren Zeichenfläche)
-- **Elementextraktion** — Wenn Sie ein Diagramm speichern, extrahiert das System automatisch alle Aufgaben, Ereignisse, Gateways und Bahnen zur Analyse
+- **Elementextraktion** — Wenn Sie ein Diagramm speichern, extrahiert das System automatisch alle Aufgaben, Ereignisse, Gateways und Bahnen zur Analyse. Die extrahierten Elemente werden in der **Reihenfolge des Prozessablaufs** aufgelistet — entlang der Sequenz- und Nachrichtenflüsse des Diagramms, beginnend beim Startereignis — und nicht nach Elementtyp gruppiert. Schritte innerhalb einer Schleife bleiben zusammen, und der Inhalt eines Teilprozesses wird direkt darunter aufgeführt
 - **Elementfarben** — Wählen Sie ein oder mehrere Elemente aus und verwenden Sie die Farbeimer-Schaltfläche im Kontextmenü, um eine Farbe zuzuweisen. Farben werden in der BPMN-Datei selbst gespeichert und erscheinen daher auch im schreibgeschützten Viewer, in Exporten und Ausdrucken
 
 ### Elementverknüpfung
@@ -59,16 +61,41 @@ Die Spalte *Organisation* in der Schritttabelle verknüpft Schritte mit Organisa
 
 ### Genehmigungsworkflow
 
-Prozessflussdiagramme folgen einem versionsgesteuerten Genehmigungsworkflow:
+Prozessablaufdiagramme folgen einem versionierten Genehmigungsworkflow:
 
 | Status | Beschreibung |
-|--------|-------------|
-| **Entwurf** | Wird bearbeitet, noch nicht zur Überprüfung eingereicht |
-| **Ausstehend** | Zur Genehmigung eingereicht, wartet auf Überprüfung |
-| **Veröffentlicht** | Genehmigt und als aktuelle Version sichtbar |
-| **Archiviert** | Zuvor veröffentlichte Version, für die Historie aufbewahrt |
+|--------|--------------|
+| **Entwurf** | In Bearbeitung, noch nicht zur Prüfung eingereicht |
+| **Ausstehend** | Zur Genehmigung eingereicht, Prüfung ausstehend |
+| **Veröffentlicht** | Freigegeben und als aktuelle Version sichtbar |
+| **Archiviert** | Zuvor veröffentlichte Version, durch eine neuere Freigabe ersetzt |
+| **Zurückgezogen** | Zuvor veröffentlichte Version, bewusst zurückgezogen |
 
-Das Einreichen eines Entwurfs erstellt einen Versions-Schnappschuss. Genehmiger können die Einreichung genehmigen (veröffentlichen) oder ablehnen (mit Kommentaren).
+Beim Einreichen eines Entwurfs wird ein Versionsstand erzeugt. Genehmigende können die Einreichung freigeben (veröffentlichen) oder ablehnen.
+
+#### Wer freigeben darf
+
+Das Freigeben oder Ablehnen einer eingereichten Revision erfordert die Berechtigung **Eingereichte BPMN-Ablaufversionen freigeben oder ablehnen** oder die Stakeholder-Rolle **Prozessverantwortlicher** auf dem Prozess selbst. Das Bearbeiten von Entwürfen genügt nicht.
+
+!!! warning "Geändert in 2.43.0"
+    Frühere Versionen akzeptierten hier die allgemeine BPM-Bearbeitungsberechtigung, sodass jedes Mitglied jeden Prozessablauf freigeben konnte — auch eine Revision, die es kurz zuvor selbst eingereicht hatte. Wenn in Ihrer Installation heute Personen mit reinen BPM-Bearbeitungsrechten freigeben, erteilen Sie ihnen entweder unter Administration → Rollen die Berechtigung **Eingereichte BPMN-Ablaufversionen freigeben oder ablehnen** oder weisen Sie sie den betreffenden Prozessen als **Prozessverantwortlicher** zu.
+
+#### Eine veröffentlichte Version zurückziehen
+
+Eine versehentlich erteilte Freigabe lässt sich rückgängig machen, ohne den Prozess zu löschen. Dafür ist die Berechtigung **Veröffentlichte BPMN-Ablaufversion zurückziehen** erforderlich, die **standardmäßig keine Rolle besitzt** — sie wird unter Administration → Rollen vergeben oder für die Stakeholder-Rolle **Prozessverantwortlicher** unter Administration → Metamodell.
+
+Sobald die Berechtigung erteilt ist, erhält die veröffentlichte Version eine Schaltfläche **Zurückziehen**. Das Zurückziehen verlangt eine schriftliche Begründung und bewirkt dann:
+
+- Die Revision wechselt zu **Zurückgezogen** — sie wird niemals gelöscht und nie in den Entwurfsstatus zurückgesetzt.
+- Die ursprüngliche Freigabe bleibt dokumentiert: der Reiter *Archiviert* zeigt die Revision, wer sie freigegeben hat und wann, zusammen mit dem Zurückziehenden und der Begründung.
+- Das Zurückziehen wird mit seiner Begründung im Reiter **Verlauf** der Karte festgehalten.
+- Eine Kopie wird **als neuer Entwurf** mit der nächsten Revisionsnummer geöffnet, damit Sie das Diagramm korrigieren und erneut über Einreichen → Freigeben laufen lassen können.
+- Der Prozess hat keinen *freigegebenen* Ablauf, bis dieser Entwurf freigegeben ist.
+- Die extrahierten Prozessschritte und ihre Kartenverknüpfungen bleiben unverändert.
+
+Dass die zurückgezogene Revision erhalten bleibt und nur eine Kopie bearbeitet wird, ist Absicht: So bleibt genau das Diagramm abrufbar, das eine freigebende Person unterzeichnet hat — was ein Qualitätssystem erwartet — und Sie erhalten trotzdem sofort eine Arbeitskopie.
+
+Jede archivierte oder zurückgezogene Version lässt sich jederzeit über **Neuen Entwurf hieraus erstellen** im Reiter *Archiviert* wieder aufgreifen; sie wird dann als neuer Entwurf mit der nächsten Revisionsnummer geklont.
 
 ## Prozessbeurteilungen
 

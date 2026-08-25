@@ -8,18 +8,36 @@ Die **Aufgaben**-Seite zentralisiert alle anstehenden Arbeitselemente an einem O
 
 Aufgaben sind Ihnen zugewiesene oder von Ihnen erstellte Tasks. Sie können mit bestimmten Karten verknüpft oder eigenständig sein.
 
-### Filtern
+### Filtern, Suchen und Sortieren
 
-Verwenden Sie die Status-Tabs zum Filtern:
+**Ursprungs-Chips** — Jedes Todo trägt einen Ursprung: woher es stammt. Mischt Ihre Liste Todos aus mehr als einem Ursprung, erscheinen darüber Filter-Chips — klicken Sie auf einen Chip, um nur Todos dieses Ursprungs anzuzeigen (mehrere Chips lassen sich kombinieren); jeder Chip zeigt eine Live-Anzahl. Die Ursprünge sind:
+
+- **Projektaufgabe** — Synchronisiert vom Task-Board einer PPM-Initiative
+- **Risiko** — Zuweisungen als Risikoverantwortlicher und wiederkehrende Mitigationszyklen aus dem GRC-Risikoregister
+- **ADR** / **SoAW** — Signaturanfragen zu Architekturentscheidungen und Statements of Architecture Work
+- **Prozessfreigabe** — Prozessfluss-Revisionen, die auf Ihre Prüfung warten (BPM)
+- **Erweiterung** — Von einer installierten Erweiterung erstellt
+- **Manuell** — Von Hand erstellt, auf einer Karte oder eigenständig
+
+Jede Zeile trägt zudem ein farbcodiertes Ursprungs-Symbol und einen Akzentstreifen, sodass gemischte Listen auf einen Blick erfassbar sind. Eine Aufgabe, die eine Konnektor-Erweiterung in einen externen Tracker (Jira, GitLab, …) gespiegelt hat, behält ihren echten Ursprung und zeigt die externe Referenz (z. B. *KAN-6*) als kleinen Link — die Spiegelung dient nur der Referenz, und die Aufgabe wird immer in Turbo EA abgeschlossen.
+
+**Gruppierte Ansicht** — Standardmäßig ist die Liste in je einen einklappbaren Abschnitt pro Ursprung unterteilt, in fester Reihenfolge. Jede Abschnittsüberschrift zeigt das Ursprungs-Symbol, die Anzahl der Aufgaben und — wenn einige überfällig sind — einen roten Zähler, sodass auch ein eingeklappter Abschnitt Dringlichkeit signalisiert. Klicken Sie auf eine Überschrift, um den Abschnitt ein- oder auszuklappen; eingeklappte Abschnitte werden gemerkt. Der Umschalter **Nach Herkunft gruppieren** / **Einfache Liste** neben der Sortiersteuerung wechselt zu einer einzelnen flachen Liste (nützlich, um über alle Ursprünge hinweg nach Fälligkeitsdatum zu priorisieren); auch diese Auswahl wird gemerkt. Eine Liste, in der alle Aufgaben denselben Ursprung haben, wird automatisch flach dargestellt.
+
+**Status** — Verwenden Sie den Status-Umschalter zum Filtern:
 
 - **Offen** — Noch ausstehende oder in Bearbeitung befindliche Aufgaben
 - **Anstehend** — Geplante künftige Vorkommen wiederkehrender Todos, die noch nicht fällig sind
 - **Erledigt** — Abgeschlossene Aufgaben
 - **Alle** — Alles
 
+**Sortieren** — Ordnen Sie nach Fälligkeitsdatum (dringendste zuerst), neueste zuerst oder Ursprung. Ihre Auswahl wird gemerkt.
+
+**Suchen** — Das Suchfeld filtert sofort über den Todo-Text, die verknüpfte Karte sowie die Namen von Zuweisendem und Beauftragtem.
+
 ### Aufgaben verwalten
 
 - **Schnelles Umschalten** — Klicken Sie auf die Checkbox, um eine Aufgabe als erledigt zu markieren (oder sie wieder zu öffnen)
+- **Wer sie zugewiesen hat** — Auf dem Tab *Mir zugewiesen* zeigt jedes Todo einen **Von:**-Chip mit der Person, die es zugewiesen hat; auf *Von mir erstellt* nennt der Chip stattdessen den Beauftragten
 - **Kartenverknüpfung** — Wenn eine Aufgabe mit einer Karte verknüpft ist, klicken Sie auf den Kartennamen, um zur Detailseite zu navigieren
 - **Systemaufgaben** — Einige Aufgaben werden vom System automatisch generiert (z.B. «Umfrage für Karte X beantworten»). Diese enthalten einen direkten Link zur relevanten Aktion
 

@@ -10,12 +10,14 @@ O **Inventário** é o coração do Turbo EA. Aqui todos os **cards** (component
 
 O painel lateral esquerdo permite **filtrar** cards por diferentes critérios:
 
-- **Pesquisa** — Busca de texto livre nos nomes dos cards
+- **Pesquisa** — Busca de texto livre nos nomes dos cards, desde a primeira letra. As melhores correspondências aparecem primeiro: nomes exatos, depois os que começam pelo que você digitou, depois aqueles em que inicia uma palavra e então os restantes. Todos os campos de busca do Turbo EA ordenam assim — a busca global (**Ctrl+K** / **⌘K**), cada seletor de cards, o registo de riscos, as decisões e os portais publicados — a não ser que você tenha escolhido uma ordenação própria, que prevalece sempre
 - **Tipos** — Filtrar por um ou mais tipos de card: Objetivo, Plataforma, Iniciativa, Organização, Capacidade de Negócio, Contexto de Negócio, Processo de Negócio, Aplicação, Interface, Objeto de Dados, Componente de TI, Categoria Tecnológica, Fornecedor, Sistema
 - **Subtipos** — Quando um tipo é selecionado, filtre ainda mais por subtipo (ex.: Aplicação -> Aplicação de Negócio, Microsserviço, Agente de IA, Implantação)
 - **Status de Aprovação** — Rascunho, Aprovado, Quebrado ou Rejeitado
 - **Ciclo de Vida** — Filtrar por fase do ciclo de vida: Planejamento, Implantação, Ativo, Desativação, Fim de Vida
-- **Qualidade dos Dados** — Filtragem por limite: Bom (80%+), Médio (50-79%), Ruim (abaixo de 50%)
+- **Qualidade dos Dados** — Filtragem por faixa (seleção múltipla): Completo (≥80%), Parcial (40-79%), Mínimo (abaixo de 40%). São as faixas do [relatório Qualidade dos dados](reports.md#data-quality-report): clicar num segmento de barra leva até aqui.
+- **Órfãs** — Apenas fichas sem qualquer relação, em ambos os sentidos. Avaliado no servidor, pelo que funciona sem um tipo selecionado.
+- **Desatualizadas** — Apenas fichas não atualizadas nos últimos 90 dias. Ambas espelham os blocos do [relatório Qualidade dos dados](reports.md#data-quality-report): clicar num bloco leva até aqui.
 - **Tags** — Filtrar por tags de qualquer grupo de tags
 - **Relacionamentos** — Filtrar por cards relacionados através de tipos de relacionamento
 - **Atributos personalizados** — Filtrar por valores em campos personalizados (busca de texto, opções de seleção)
@@ -25,6 +27,20 @@ O painel lateral esquerdo permite **filtrar** cards por diferentes critérios:
 > **Encontrar cartões sem valor.** Os filtros de Subtipo, Ciclo de vida, Etiquetas, Relações e atributos personalizados de seleção incluem, cada um, uma opção **(vazio)**. Selecione-a para listar apenas os cartões que *não* têm valor nesse campo — por exemplo, todos os cartões sem ciclo de vida definido. Pode ser combinada com valores normais (corresponde a qualquer um) e entre vários filtros (corresponde a todos).
 
 Um **contador de filtros ativos** mostra quantos filtros estão atualmente aplicados.
+
+### Ações de célula
+
+Clique com o botão direito em qualquer célula da grelha (toque longo em dispositivos táteis) para abrir um menu de contexto com ações rápidas sobre o que está sob o cursor, ao estilo do ServiceNow:
+
+- **Pré-visualizar ficha** — abrir a ficha que a célula indica no painel lateral, sem sair da grelha
+- **Mostrar correspondências** — manter apenas as linhas cujo valor é igual ao da célula clicada
+- **Excluir** — ocultar as linhas cujo valor é igual ao da célula clicada
+- **Copiar valor** — copiar o texto da célula para a área de transferência
+- **Limpar filtro da coluna** — remover o filtro dessa coluna (visível apenas enquanto houver um ativo)
+
+Numa célula com vários valores (etiquetas, relações, partes interessadas, atributos de seleção múltipla), o menu lista primeiro os valores individuais, para filtrar por um deles ou pela célula inteira. **Pré-visualizar ficha** aparece em todas as células que indicam uma ficha — a coluna **Nome** (a ficha da própria linha), a coluna **Pai** e as colunas de relações — e quando a célula indica várias, o menu lista-as da mesma forma, para escolher qual abrir. Estes filtros entram nos filtros de coluna da grelha: combinam-se com os filtros da barra lateral, contam para o botão **Limpar filtros** da barra de ferramentas e são preservados com a sua vista. O mesmo menu está disponível em todas as grelhas do Turbo EA — Decisões, Registo de riscos, Conformidade e as grelhas de administração. Quando a coluna tem um filtro correspondente no painel esquerdo — tipo de cartão, subtipo, ciclo de vida, estado de aprovação ou um atributo de seleção única —, **Mostrar correspondências** seleciona também esse valor no painel, e **Limpar** limpa ambos, pelo que uma vista guardada nunca pode conter um filtro do painel e um filtro de coluna contraditórios. Se o filtro for depois editado no painel, é esse que passa a mandar.
+
+![Menu de contexto de uma célula do inventário](../assets/img/pt/62_inventario_menu_contextual.png)
 
 ### Aba Colunas
 
@@ -68,16 +84,18 @@ O inventário usa uma tabela de dados **AG Grid** com recursos poderosos:
 | **Ciclo de Vida** | Estado atual do ciclo de vida |
 | **Status de Aprovação** | Badge de status de revisão |
 | **Qualidade dos Dados** | Porcentagem de completude com anel visual |
-| **Relacionamentos** | Contagem de relacionamentos com popover clicável mostrando cards relacionados |
+| **Relacionamentos** | Nomes dos cartões relacionados, em ordem alfabética, com um popover clicável para adicionar ou remover relacionamentos — os cartões já ligados ficam ocultos do seu seletor |
 
 **Recursos da tabela:**
 
 - **Ordenação** — Clique em qualquer cabeçalho de coluna para ordenar em ascendente/descendente
 - **Edição inline** — No modo de edição da grade, edite valores de campos diretamente na tabela
+- **Preencher uma coluna** — No modo de edição da grade, clique numa célula e arraste o pequeno quadrado do seu canto para cima ou para baixo para copiar esse valor para todas as linhas percorridas. Antes de guardar seja o que for, uma confirmação indica a coluna, o valor e quantas linhas; se o servidor recusar uma linha, esta é listada com o motivo e uma ligação, e as linhas bem-sucedidas continuam guardadas. O gesto funciona com o dedo tal como com o rato, e também com o teclado: coloque o foco no quadrado, estenda com as setas e confirme com Enter. Só são preenchidas as linhas visíveis após os seus filtros e ordenação, e a coluna Nome fica propositadamente excluída para que dois cards não partilhem o mesmo nome.
 - **Seleção múltipla** — Selecione múltiplas linhas para operações em massa
 - **Exibição de hierarquia** — Relacionamentos pai/filho mostrados como caminhos em breadcrumb
 - **Configuração de colunas** — Mostrar, ocultar e reordenar colunas
 - **Fixar uma coluna** — Passe o rato sobre o cabeçalho de uma coluna e clique no ícone de pino para fixar essa coluna na margem esquerda, para que continue visível enquanto desloca a tabela lateralmente. Clique novamente no pino para a libertar. Cada coluna tem também esse pino no separador **Colunas** do painel de filtros, pelo que pode fixar uma coluna sem procurar o respetivo cabeçalho. As colunas fixadas são memorizadas por tabela e o mesmo controlo está disponível em todas as tabelas de dados do Turbo EA (Registo de riscos, Decisões, Constatações de conformidade, Utilizadores, Recursos, Registo de auditoria).
+- **Reordenar colunas** — Arraste o cabeçalho de uma coluna para a mover, ou abra a secção **Ordem das colunas** no topo do separador **Colunas** e arraste uma linha pela respetiva pega. Essa lista *é* a ordem da tabela, pelo que as duas coincidem sempre, e as colunas fixadas são agrupadas à cabeça porque são sempre apresentadas no início — liberte aí o pino de uma coluna se quiser retirá-la desse grupo. A pega funciona também com o teclado (Espaço para agarrar uma coluna, setas para a mover, Espaço para a largar) e por toque, pelo que a ordem pode ser alterada num telemóvel. A sua ordem de colunas é memorizada por tabela, em todas as tabelas de dados do Turbo EA.
 
 ### Barra de Ferramentas
 
@@ -110,6 +128,8 @@ A lista **Campo** agrupa o que pode ser alterado:
 
 Etiquetas, relações e pai oferecem um botão **adicionar / remover**, para que amplie ou reduza os valores existentes em vez de os substituir.
 
+O controlo de valor adapta-se ao tipo de campo: um campo de seleção múltipla mostra as suas opções com caixas de verificação, um campo sim/não um interruptor e um campo de data um seletor de data. Deixar o valor vazio limpa o campo em todos os cartões selecionados. Os campos calculados por uma fórmula, e os campos de custo que não tem permissão para ver, não são disponibilizados.
+
 ### Reestruturar a hierarquia { #mass-edit-parent }
 
 O campo **Pai** aparece quando a grelha está filtrada por um único tipo de cartão com suporte a hierarquia. Um cartão tem exatamente um pai, por isso este único campo cobre os dois sentidos de uma reestruturação:
@@ -124,6 +144,16 @@ Os cartões são movidos um a um, pelo que um movimento não permitido bloqueia 
 - O movimento levaria uma capacidade de negócio para além do máximo de cinco níveis.
 
 Um cartão leva consigo os seus próprios filhos ao mover-se, e os cartões aprovados voltam a **Quebrado** para que a alteração seja revista.
+
+## Agrupar o inventário { #group-by }
+
+Clique em **Agrupar por** na barra de ferramentas (ao lado da contagem de itens) para organizar a grelha em grupos expansíveis. A fase do ciclo de vida e o estado de aprovação estão sempre disponíveis; ao filtrar a grelha para um único tipo de cartão, acrescentam-se o seu subtipo e todos os atributos de seleção única.
+
+- Os cartões sem valor no campo escolhido caem num grupo **Não definido**, no topo: o ponto de partida natural para classificar cartões pendentes.
+- Clique no cabeçalho de um grupo para o recolher ou expandir. O cabeçalho mostra o número de cartões do grupo.
+- Ao percorrer um grupo longo, o seu cabeçalho permanece fixo logo abaixo dos cabeçalhos de coluna, para que saiba sempre que grupo está a ler; o cabeçalho do grupo seguinte empurra-o ao chegar. É o cabeçalho completo, incluindo a caixa de seleção, pelo que pode selecionar um grupo longo sem voltar ao seu início.
+- A caixa de seleção do cabeçalho seleciona todos os cartões do grupo: para reclassificar um lote, expanda **Não definido**, marque o cabeçalho e defina o valor com a [Edição em massa](#mass-edit). Deliberadamente não há arrastar e largar: selecionar e definir funciona da mesma forma em computador, tablet e telemóvel.
+- A ordenação aplica-se dentro de cada grupo; o agrupamento é mantido após recarregar, guardado nas vistas guardadas e partilhável através do parâmetro de URL `group_by`.
 
 ## Sugestões de Descrição com IA { #ai-description-suggestions }
 
@@ -186,7 +216,7 @@ Os cards são identificados pelo **nome** quando este é único dentro do tipo, 
 
 #### Unicidade entre irmãos
 
-Como os cards são identificados por nome + caminho, **dois cards do mesmo tipo não podem partilhar simultaneamente o mesmo pai e o mesmo nome**. Novos cards que provocariam uma colisão são rejeitados na criação (na caixa Criar card, no renomear em linha e durante a importação de Excel). Duplicados já presentes na base de dados — herdados de seeds ou imports anteriores — permanecem intactos: pode editar qualquer campo, mas criar um terceiro duplicado ou renomear um card de volta à colisão é bloqueado. A verificação é insensível a maiúsculas/minúsculas e espaços, igual ao resolvedor do importador.
+Como os cards são identificados por nome + caminho, **dois cards do mesmo tipo não podem partilhar simultaneamente o mesmo pai e o mesmo nome**. Novos cards que provocariam uma colisão são rejeitados na criação (na caixa Criar card, no renomear em linha e durante a importação de Excel). Duplicados já presentes na base de dados — herdados de seeds ou imports anteriores — permanecem intactos: pode editar qualquer campo, mas criar um terceiro duplicado ou renomear um card de volta à colisão é bloqueado. A verificação é insensível a maiúsculas/minúsculas e espaços, igual ao resolvedor do importador. Quando a caixa Criar card rejeita um duplicado, o aviso indica o card existente e inclui uma ligação **Ver a ficha existente** que o leva diretamente até ele.
 
 ### Células de relação em linha
 
@@ -195,6 +225,10 @@ Cada coluna `rel:<tipo_de_relação>` expressa as relações de saída como uma 
 ### Células de partes interessadas
 
 Em cada planilha de fichas, as colunas `stakeholder:<chave_do_papel>` carregam os utilizadores atribuídos a cada papel de parte interessada, como **endereços de email separados por ponto e vírgula** (a mesma convenção das colunas `subscriptions:<RoleType>` do LeanIX), por ex. `ada@corp.com; bob@corp.com`. O **endereço de email é a única referência de utilizador aceite** — os nomes podem colidir e nunca são usados na resolução; uma entrada `Nome <email>` é tolerada (usa-se o email entre parênteses angulares), um nome sozinho produz um aviso e é ignorado. Como as células de relação, as células de partes interessadas são **declarativas por papel**: os utilizadores listados tornam-se o conjunto completo de atribuições desse papel após a importação. Remover um utilizador retira a atribuição; esvaziar a célula limpa o papel; omitir a coluna deixa as atribuições intactas. Entradas sem utilizador correspondente produzem um aviso e são ignoradas — nunca bloqueiam a importação.
+
+!!! note "Folhas exportadas antes de as chaves passarem a camelCase"
+    As chaves dos papéis de partes interessadas seguem a mesma convenção camelCase de qualquer outra chave do metamodelo. Uma folha exportada antes dessa mudança contém cabeçalhos como `stakeholder:technical_application_owner`; continuam a ser importados — o cabeçalho é associado ao papel em camelCase quando nenhum papel corresponde literalmente. As folhas novas usam a forma camelCase.
+
 
 ### Planilha `Relations`
 

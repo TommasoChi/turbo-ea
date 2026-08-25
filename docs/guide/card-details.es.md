@@ -82,7 +82,8 @@ Muestra todas las conexiones con otras fichas, agrupadas por tipo de relación. 
 
 - **Nombre de la ficha relacionada** — Haga clic para navegar a la ficha relacionada
 - **Tipo de relación** — La naturaleza de la conexión (por ejemplo, «utiliza», «se ejecuta en», «depende de»)
-- **Agregar relación** — Haga clic en **+** para crear una nueva relación; el selector muestra las fichas coincidentes en cuanto se abre (ordenadas por nombre, se cargan más al desplazarse) y al escribir se filtra la lista
+- **Agregar relación** — Haga clic en **+** para abrir el diálogo de esa relación. Lista las tarjetas coincidentes mientras escribe (las mejores coincidencias primero, y se cargan más al desplazarse) y oculta las ya vinculadas, con un texto que indica cuántas son. Al hacer clic en una tarjeta se vincula de inmediato y aparece como una etiqueta arriba: haga clic en la **×** de una etiqueta para deshacer esa adición. El diálogo permanece abierto para añadir tantas como quiera, y en el móvil se abre a pantalla completa. Las relaciones sin sección propia se alcanzan desde el botón **Agregar relación** al final de la sección
+- **Orden** — Las tarjetas relacionadas se listan alfabéticamente por nombre
 - **Eliminar relación** — Haga clic en el icono de eliminar para quitar una relación
 - **Agrupar por subtipo** — Cuando una sección de relaciones tiene muchas fichas relacionadas, se agrupan automáticamente en grupos de subtipo plegables (cada uno con un recuento), con un grupo final **Sin subtipo** para las fichas sin clasificar. Utilice el botón de alternancia en el encabezado de la sección para cambiar entre la vista agrupada y la vista de lista.
 - **Fichas vinculadas a subelementos** — Cuando una ficha tiene subelementos, cada grupo de relaciones muestra una etiqueta **+N en subelementos** que cuenta las fichas vinculadas más abajo en la jerarquía — por ejemplo, las aplicaciones asociadas a las subcapacidades de una capacidad. Al hacer clic se abre una lista de solo lectura en la que cada fila nombra el subelemento que contiene el vínculo (una ficha alcanzada a través de varios subelementos aparece una sola vez, con todos ellos indicados). El recuento solo incluye fichas que no figuran ya en el grupo superior. Para cambiar un vínculo, abra el subelemento que lo contiene. La lista se organiza en secciones de subtipo plegables, de modo que el subtipo se indica una vez por sección en lugar de en cada fila. Dentro de una sección aparecen primero las fichas cuya fase de ciclo de vida requiere atención (fin de vida, luego retirada progresiva), y la fase de cada ficha se muestra como un punto de color junto a su nombre; pase el ratón por encima para ver el nombre de la fase.
@@ -90,6 +91,12 @@ Muestra todas las conexiones con otras fichas, agrupadas por tipo de relación. 
 ![Grupos de relaciones con la etiqueta de subelementos](../assets/img/es/59_ficha_subelementos_etiqueta.png)
 
 ![Fichas vinculadas a través de subelementos, agrupadas por subtipo](../assets/img/es/60_ficha_subelementos_relaciones.png)
+
+### Sección de Dependencias
+
+Una [Layered Dependency View](reports.md) de la ficha y de todo lo que está a un salto de distancia, agrupado en las cuatro capas de arquitectura. Mayús-clic en una ficha para volver a centrar la vista y recorrer el panorama sin salir de la página.
+
+El icono **abrir en una pestaña nueva** de la barra de herramientas abre el [informe de dependencias](reports.md) completo en una pestaña nueva, centrado en la ficha en la que la vista esté centrada en ese momento — es decir, la ficha a la que ha navegado, no necesariamente la de partida. Útil cuando necesita lo que el informe añade alrededor de la misma imagen: el viaje en el tiempo, las marcas de transición, la vista de tabla y guardar la vista como informe.
 
 ### Sección de Etiquetas
 

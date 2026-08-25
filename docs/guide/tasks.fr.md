@@ -8,18 +8,36 @@ La page **Tâches** centralise tous les éléments de travail en attente en un s
 
 Les tâches sont des éléments qui vous sont assignés ou que vous avez créés. Elles peuvent être liées à des fiches spécifiques ou être autonomes.
 
-### Filtrage
+### Filtrage, recherche et tri
 
-Utilisez les onglets de statut pour filtrer :
+**Puces d'origine** -- Chaque tâche porte une origine : d'où elle provient. Lorsque votre liste mélange des tâches de plusieurs origines, des puces de filtrage apparaissent au-dessus -- cliquez sur une puce pour n'afficher que les tâches de cette origine (cliquez sur plusieurs puces pour les combiner) ; chaque puce affiche un compteur en direct. Les origines sont :
+
+- **Tâche projet** -- Synchronisée depuis le tableau des tâches d'une initiative PPM
+- **Risque** -- Affectations en tant que responsable de risque et cycles récurrents de tâches d'atténuation du registre des risques GRC
+- **ADR** / **SoAW** -- Demandes de signature sur des décisions d'architecture et des Statements of Architecture Work
+- **Approbation de processus** -- Révisions de flux de processus en attente de votre relecture (BPM)
+- **Extension** -- Créée par une extension installée
+- **Manuelle** -- Créée à la main, sur une fiche ou de façon autonome
+
+Chaque ligne porte également une icône d'origine et une bande d'accent codées par couleur, de sorte que les listes mixtes se lisent d'un coup d'œil. Une tâche qu'une extension connecteur a reflétée vers un outil de suivi externe (Jira, GitLab, …) conserve son origine réelle et affiche la référence externe (p. ex. *KAN-6*) sous la forme d'un petit lien -- le miroir n'est là qu'à titre de référence, et la tâche se termine toujours dans Turbo EA.
+
+**Vue groupée** -- Par défaut, la liste est segmentée en une section repliable par origine, dans un ordre fixe. Chaque en-tête de section affiche l'icône d'origine, le nombre de tâches et -- lorsque certaines sont en retard -- un compteur rouge, de sorte qu'une section repliée signale toujours l'urgence. Cliquez sur un en-tête pour replier ou déplier la section ; les sections repliées sont mémorisées. La bascule **Grouper par origine** / **Liste simple** à côté du contrôle de tri passe à une liste simple unique (utile pour trier par date d'échéance toutes origines confondues) ; ce choix est également mémorisé. Une liste dont toutes les tâches partagent la même origine s'affiche automatiquement à plat.
+
+**Statut** -- Utilisez le sélecteur de statut pour filtrer :
 
 - **Ouvert** -- Tâches encore en attente ou en cours
 - **À venir** -- Occurrences futures planifiées de tâches récurrentes pas encore dues
 - **Terminé** -- Tâches terminées
 - **Tout** -- Tout afficher
 
+**Tri** -- Triez par date d'échéance (les plus urgentes d'abord), les plus récentes d'abord, ou par origine. Votre choix est mémorisé.
+
+**Recherche** -- Le champ de recherche filtre instantanément sur le texte de la tâche, la fiche liée et les noms de l'assignateur et du responsable.
+
 ### Gestion des tâches
 
 - **Bascule rapide** -- Cliquez sur la case à cocher pour marquer une tâche comme terminée (ou la réouvrir)
+- **Qui l'a assignée** -- Sur l'onglet *Assignées à moi*, chaque tâche affiche une puce **De :** nommant la personne qui l'a assignée ; sur *Créées par moi*, la puce nomme à la place le responsable
 - **Lien vers la fiche** -- Si une tâche est liée à une fiche, cliquez sur le nom de la fiche pour naviguer vers sa page de détail
 - **Tâches système** -- Certaines tâches sont générées automatiquement par le système (par ex. « Répondre à l'enquête pour la fiche X »). Celles-ci incluent un lien direct vers l'action correspondante
 

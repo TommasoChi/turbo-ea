@@ -19,6 +19,8 @@ El **Navegador de Procesos** organiza los procesos en tres categorías principal
 
 Las tarjetas con un diagrama BPMN publicado muestran un **icono de flujo**: haga clic en él para abrir el diagrama en pantalla completa sin salir del navegador (o para saltar desde allí al editor de flujo completo).
 
+**Disposición en columnas:** la barra de herramientas incluye un **selector de columnas** —una, dos o tres— para ensanchar las tarjetas de proceso o encajar más de una fila en pantalla. Una fila nunca se estira sobre más columnas de las que tiene procesos, y la elección se recuerda entre visitas. La elección también se propaga a los niveles anidados, una columna menos por nivel, de modo que los procesos profundos ya no quedan reducidos a franjas estrechas.
+
 ## Panel de Control BPM
 
 ![Panel de Control BPM con Estadísticas](../assets/img/es/15_bpm_panel_control.png)
@@ -42,7 +44,7 @@ Cada ficha de Proceso de Negocio puede tener un **diagrama de flujo de proceso B
 
 - **Modelado visual** — Arrastre y suelte elementos BPMN: tareas, eventos, compuertas, carriles y subprocesos
 - **Plantillas de inicio** — Elija entre 6 plantillas BPMN predefinidas para patrones de proceso comunes (o comience desde un lienzo en blanco)
-- **Extracción de elementos** — Al guardar un diagrama, el sistema extrae automáticamente todas las tareas, eventos, compuertas y carriles para su análisis
+- **Extracción de elementos** — Al guardar un diagrama, el sistema extrae automáticamente todas las tareas, eventos, compuertas y carriles para su análisis. Los elementos extraídos se enumeran en **orden de flujo del proceso** —siguiendo los flujos de secuencia y de mensaje del diagrama, desde el evento de inicio— y no agrupados por tipo de elemento. Los pasos de un bucle se mantienen juntos y el contenido de un subproceso se enumera justo debajo de él
 - **Colores de los elementos** — Seleccione uno o varios elementos y use el botón del bote de pintura en el panel contextual para aplicar un color. Los colores se guardan en el propio archivo BPMN, por lo que también aparecen en el visor de solo lectura, en las exportaciones y en las impresiones
 
 ### Vinculación de Elementos
@@ -63,12 +65,37 @@ Los diagramas de flujo de proceso siguen un flujo de aprobación con control de 
 
 | Estado | Descripción |
 |--------|-------------|
-| **Borrador** | En edición, aún no enviado para revisión |
-| **Pendiente** | Enviado para aprobación, en espera de revisión |
-| **Publicado** | Aprobado y visible como la versión actual |
-| **Archivado** | Versión publicada anteriormente, conservada para el historial |
+| **Borrador** | En edición, aún no enviado a revisión |
+| **Pendiente** | Enviado para aprobación, a la espera de revisión |
+| **Publicado** | Aprobado y visible como versión actual |
+| **Archivado** | Versión publicada anteriormente, sustituida por una aprobación más reciente |
+| **Retirado** | Versión publicada anteriormente, despublicada de forma deliberada |
 
-Al enviar un borrador se crea una instantánea de versión. Los aprobadores pueden aprobar (publicar) o rechazar (con comentarios) el envío.
+Enviar un borrador crea una instantánea de versión. Los aprobadores pueden aprobar (publicar) o rechazar el envío.
+
+#### Quién puede aprobar
+
+Aprobar o rechazar una revisión enviada requiere el permiso **Aprobar o rechazar versiones de flujo BPMN enviadas**, o el rol de parte interesada **Propietario del proceso** en el propio proceso. Poder editar borradores no es suficiente.
+
+!!! warning "Cambiado en 2.43.0"
+    Las versiones anteriores aceptaban aquí el permiso general de edición de BPM, de modo que cualquier miembro podía aprobar cualquier flujo de proceso, incluida una revisión que acababa de enviar él mismo. Si en su instancia hay personas que aprueban hoy con solo derechos de edición de BPM, concédales el permiso **Aprobar o rechazar versiones de flujo BPMN enviadas** en Administración → Roles, o asígnelas como **Propietario del proceso** en los procesos que validan.
+
+#### Retirar una versión publicada
+
+Una aprobación dada por error puede deshacerse sin eliminar el proceso. El retiro requiere el permiso **Retirar (despublicar) una versión de flujo BPMN publicada**, que **ningún rol tiene de forma predeterminada**: un administrador lo concede en Administración → Roles, o en el rol de parte interesada **Propietario del proceso** en Administración → Metamodelo.
+
+Una vez concedido el permiso, la versión publicada muestra un botón **Retirar**. El retiro solicita un motivo por escrito y, a continuación:
+
+- pasa la revisión a **Retirado**: nunca se elimina ni se devuelve a borrador;
+- mantiene la aprobación original registrada: la pestaña *Archivado* muestra la revisión, quién la aprobó y cuándo, junto a quién la retiró y por qué;
+- registra el retiro, con su motivo, en la pestaña **Historial** de la tarjeta;
+- **abre una copia como nuevo borrador** en el siguiente número de revisión, para que pueda corregir el diagrama y volver a pasarlo por envío → aprobación;
+- deja el proceso sin flujo *aprobado* hasta que se apruebe ese borrador;
+- deja intactos los pasos de proceso extraídos y sus vínculos con tarjetas.
+
+Conservar la revisión retirada y editar una copia es deliberado: el diagrama exacto que aprobó un aprobador sigue siendo recuperable, que es lo que espera un sistema de calidad, y aun así obtiene una copia de trabajo de inmediato.
+
+Cualquier versión archivada o retirada puede retomarse en cualquier momento con **Crear nuevo borrador a partir de este** en la pestaña *Archivado*, que la clona como borrador en la siguiente revisión.
 
 ## Evaluaciones de Proceso
 

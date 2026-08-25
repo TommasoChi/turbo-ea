@@ -2632,12 +2632,15 @@ async def import_bpmn(
     # Dry-run shortcut: the flow endpoints don't have a dry_run flag and
     # we don't want to fake one. The card-create step above already
     # validated the card path; for the flow side, we surface the parsed
-    # element count via a parser-free regex count of <bpmn:*Task /
-    # *Event / *Gateway> so the agent can show the user something useful.
+    # element count via a parser-free regex count of *Task / *Event /
+    # *Gateway so the agent can show the user something useful. The
+    # namespace prefix is optional: plenty of exports declare BPMN as the
+    # default namespace (`<definitions xmlns="...">`), which the real
+    # parser handles and a prefix-only pattern would count as zero.
     if dry_run:
         preview_node_count = len(
             re.findall(
-                r"<\w+:(?:task|userTask|serviceTask|scriptTask|businessRuleTask|"
+                r"<(?:\w+:)?(?:task|userTask|serviceTask|scriptTask|businessRuleTask|"
                 r"sendTask|receiveTask|manualTask|callActivity|subProcess|"
                 r"exclusiveGateway|parallelGateway|inclusiveGateway|"
                 r"eventBasedGateway|startEvent|endEvent|"
@@ -2695,7 +2698,7 @@ async def import_bpmn(
         except Exception as exc:  # noqa: BLE001 — surface verbatim
             publish_warning = (
                 "Diagram submitted for approval but the user does not have "
-                "permission to publish it (requires the process_owner "
+                "permission to publish it (requires the processOwner "
                 "stakeholder role, admin, or bpm_admin). The pending "
                 f"draft is visible at /cards/{process_id} under "
                 f"Process Flow → Drafts. Approve from there to publish. "

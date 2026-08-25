@@ -23,7 +23,8 @@ import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { useMetamodel } from "@/hooks/useMetamodel";
-import { useResolveLabel, useResolveMetaLabel } from "@/hooks/useResolveLabel";
+import { useResolveMetaLabel } from "@/hooks/useResolveLabel";
+import { useCardSubtypeLabel } from "@/hooks/useCardSubtypeLabel";
 import type {
   PpmGanttItem,
   PpmGroupOption,
@@ -194,7 +195,7 @@ export default function PpmPortfolio() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { fmtShort, currency } = useCurrency();
   const { getType } = useMetamodel();
-  const rl = useResolveLabel();
+  const subtypeLabel = useCardSubtypeLabel();
   const rml = useResolveMetaLabel();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [loading, setLoading] = useState(true);
@@ -305,13 +306,8 @@ export default function PpmPortfolio() {
   );
 
 
-  const typeConfig = getType("Initiative");
-
-  const resolveSubtype = (key: string | null | undefined): string => {
-    if (!key || !typeConfig?.subtypes) return key || "\u2014";
-    const st = typeConfig.subtypes.find((s: { key: string }) => s.key === key);
-    return st ? rl(st.label, st.translations) : key;
-  };
+  const resolveSubtype = (key: string | null | undefined): string =>
+    subtypeLabel("Initiative", key) || "\u2014";
 
   const subtypes = useMemo(
     () => [...new Set(items.map((i) => i.subtype).filter(Boolean))],
@@ -423,7 +419,7 @@ export default function PpmPortfolio() {
   const renderRow = (item: PpmGanttItem) => {
     const rep = item.latest_report;
     const pm =
-      item.stakeholders.find((s) => s.role_key === "it_project_manager") ||
+      item.stakeholders.find((s) => s.role_key === "itProjectManager") ||
       item.stakeholders.find((s) => s.role_key === "responsible");
 
     const plan = `${fmtQuarter(item.start_date)} / ${fmtQuarter(item.end_date)}`;
@@ -545,7 +541,7 @@ export default function PpmPortfolio() {
   const renderMobileCard = (item: PpmGanttItem) => {
     const rep = item.latest_report;
     const pm =
-      item.stakeholders.find((s) => s.role_key === "it_project_manager") ||
+      item.stakeholders.find((s) => s.role_key === "itProjectManager") ||
       item.stakeholders.find((s) => s.role_key === "responsible");
     const plan = `${fmtQuarter(item.start_date)} \u2013 ${fmtQuarter(item.end_date)}`;
 
@@ -595,7 +591,14 @@ export default function PpmPortfolio() {
         </Box>
 
         {/* Row 3: RAG dots + Report date */}
-        <Box display="flex" alignItems="center" gap={1.5} mt={0.75}>
+        <Box
+              display="flex"
+              alignItems="center"
+              gap={1.5}
+              mt={0.75}
+              flexWrap="wrap"
+              sx={{ rowGap: 0.5 }}
+            >
           {(
             [
               ["schedule_health", "onTime"],

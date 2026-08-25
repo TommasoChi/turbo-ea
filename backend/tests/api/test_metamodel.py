@@ -6,8 +6,10 @@ These tests require a PostgreSQL test database and an HTTP test client.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 
 from app.core.permissions import VIEWER_PERMISSIONS
+from app.models.card_type import CardType
 from tests.conftest import (
     auth_headers,
     create_card,
@@ -134,6 +136,29 @@ class TestUpdateType:
         )
         assert response.status_code == 404
 
+    async def test_null_translations_normalised(self, client, db, metamodel_env):
+        """`translations` is NOT NULL — clearing every translation must not 500.
+
+        Asserted on the stored column: the response serializer masks a NULL with
+        ``or {}``, so asserting on the response would be vacuous.
+        """
+        admin = metamodel_env["admin"]
+        await create_card_type(
+            db, key="Application", label="Application", translations={"label": {"en": "App"}}
+        )
+
+        response = await client.patch(
+            "/api/v1/metamodel/types/Application",
+            json={"translations": None},
+            headers=auth_headers(admin),
+        )
+
+        assert response.status_code == 200
+        stored = await db.execute(
+            select(CardType.translations).where(CardType.key == "Application")
+        )
+        assert stored.scalar_one() == {}
+
 
 class TestTypeColor:
     async def test_recolor_builtin_type(self, client, db, metamodel_env):
@@ -249,6 +274,60 @@ class TestDeleteType:
             headers=auth_headers(admin),
         )
         assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Removing stakeholder roles via PATCH /types/{key}
+# ---------------------------------------------------------------------------
+
+
+class TestRemoveStakeholderRolesViaPatch:
+    """The whole-column overwrite of ``stakeholder_roles`` has an in-use guard."""
+
+    async def test_can_remove_unused_role(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await create_card_type(
+            db,
+            key="Custom",
+            label="Custom",
+            stakeholder_roles=[
+                {"key": "responsible", "label": "Responsible"},
+                {"key": "dataSteward", "label": "Data Steward"},
+            ],
+        )
+
+        response = await client.patch(
+            "/api/v1/metamodel/types/Custom",
+            json={"stakeholder_roles": [{"key": "responsible", "label": "Responsible"}]},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 200
+        assert [r["key"] for r in response.json()["stakeholder_roles"]] == ["responsible"]
+
+    async def test_cannot_remove_role_in_use(self, client, db, metamodel_env):
+        from app.models.stakeholder import Stakeholder
+
+        admin = metamodel_env["admin"]
+        await create_card_type(
+            db,
+            key="Custom",
+            label="Custom",
+            stakeholder_roles=[
+                {"key": "responsible", "label": "Responsible"},
+                {"key": "dataSteward", "label": "Data Steward"},
+            ],
+        )
+        card = await create_card(db, card_type="Custom", name="A Card", user_id=admin.id)
+        db.add(Stakeholder(card_id=card.id, user_id=admin.id, role="dataSteward"))
+        await db.flush()
+
+        response = await client.patch(
+            "/api/v1/metamodel/types/Custom",
+            json={"stakeholder_roles": [{"key": "responsible", "label": "Responsible"}]},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 400
+        assert "dataSteward" in response.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
@@ -528,6 +607,101 @@ class TestRelationTypeCRUD:
         )
         assert response.status_code == 200
         assert response.json()["label"] == "Runs On"
+
+    # ------------------------------------------------------------------
+    # #912 — `translations[property]["en"]` shadows the raw column everywhere
+    # the frontend resolves a relation verb, and every seeded relation type
+    # carries one. A rename that writes only the column changed nothing a user
+    # could see. The API keeps the English entry in step for callers that do
+    # not manage translations themselves.
+    # ------------------------------------------------------------------
+
+    async def _rel_with_translations(self, db, translations):
+        await create_card_type(db, key="Application", label="Application")
+        await create_card_type(db, key="ITComponent", label="IT Component")
+        await create_relation_type(
+            db,
+            key="app_to_itc",
+            label="uses",
+            reverse_label="is used by",
+            source_type_key="Application",
+            target_type_key="ITComponent",
+            translations=translations,
+        )
+
+    async def test_rename_syncs_english_translation(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await self._rel_with_translations(
+            db,
+            {
+                "label": {"en": "uses", "fr": "utilise"},
+                "reverse_label": {"en": "is used by", "fr": "est utilisé par"},
+            },
+        )
+
+        response = await client.patch(
+            "/api/v1/metamodel/relation-types/app_to_itc",
+            json={"label": "runs on", "reverse_label": "runs"},
+            headers=auth_headers(admin),
+        )
+
+        assert response.status_code == 200
+        trans = response.json()["translations"]
+        # English follows the column; every other locale is left alone.
+        assert trans["label"] == {"en": "runs on", "fr": "utilise"}
+        assert trans["reverse_label"] == {"en": "runs", "fr": "est utilisé par"}
+
+    async def test_rename_does_not_mint_english_translation(self, client, db, metamodel_env):
+        """A row with no English entry already resolves via the column fallback."""
+        admin = metamodel_env["admin"]
+        await self._rel_with_translations(db, {"label": {"fr": "utilise"}})
+
+        response = await client.patch(
+            "/api/v1/metamodel/relation-types/app_to_itc",
+            json={"label": "runs on"},
+            headers=auth_headers(admin),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["translations"]["label"] == {"fr": "utilise"}
+
+    async def test_client_supplied_translations_win(self, client, db, metamodel_env):
+        """The admin UI sends its own per-locale map — the sync must not fight it."""
+        admin = metamodel_env["admin"]
+        await self._rel_with_translations(db, {"label": {"en": "uses"}})
+
+        response = await client.patch(
+            "/api/v1/metamodel/relation-types/app_to_itc",
+            json={"label": "runs on", "translations": {"label": {"en": "hosts"}}},
+            headers=auth_headers(admin),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["translations"]["label"] == {"en": "hosts"}
+
+    async def test_null_translations_normalised(self, client, db, metamodel_env):
+        """`translations` is NOT NULL in the real schema — clearing it must not 500.
+
+        The response serializer masks a NULL with ``or {}``, so assert on the
+        persisted column: it is the stored NULL that violates the constraint on a
+        migrated database.
+        """
+        from app.models.relation_type import RelationType
+
+        admin = metamodel_env["admin"]
+        await self._rel_with_translations(db, {"label": {"en": "uses"}})
+
+        response = await client.patch(
+            "/api/v1/metamodel/relation-types/app_to_itc",
+            json={"translations": None},
+            headers=auth_headers(admin),
+        )
+
+        assert response.status_code == 200
+        stored = await db.execute(
+            select(RelationType.translations).where(RelationType.key == "app_to_itc")
+        )
+        assert stored.scalar_one() == {}
 
     async def test_cannot_change_endpoints_with_instances(self, client, db, metamodel_env):
         admin = metamodel_env["admin"]
@@ -1048,3 +1222,36 @@ class TestSuccessorRelationType:
         assert resp.status_code == 200
         rt = await self._fetch(client, admin, "relWidgetSuccessor")
         assert rt is not None
+
+
+class TestScoringSignatureRequiredFlag:
+    """Toggling `required` on a field must change the scoring signature so the
+    type save triggers `_recompute_data_quality_for_type` — the mandatory-field
+    gate pins incomplete cards to 0 and their stored scores must refresh
+    immediately, not on next edit."""
+
+    def test_required_toggle_changes_signature(self):
+        from app.api.v1.metamodel import _scoring_signature
+
+        base = [{"section": "S", "fields": [{"key": "a", "weight": 1}]}]
+        toggled = [{"section": "S", "fields": [{"key": "a", "weight": 1, "required": True}]}]
+        assert _scoring_signature(base, None) != _scoring_signature(toggled, None)
+
+    def test_readonly_toggle_changes_signature(self):
+        from app.api.v1.metamodel import _scoring_signature
+
+        base = [{"section": "S", "fields": [{"key": "a", "weight": 1, "required": True}]}]
+        toggled = [
+            {
+                "section": "S",
+                "fields": [{"key": "a", "weight": 1, "required": True, "readonly": True}],
+            }
+        ]
+        assert _scoring_signature(base, None) != _scoring_signature(toggled, None)
+
+    def test_label_edit_leaves_signature_unchanged(self):
+        from app.api.v1.metamodel import _scoring_signature
+
+        a = [{"section": "S", "fields": [{"key": "a", "weight": 1, "label": "Old"}]}]
+        b = [{"section": "S", "fields": [{"key": "a", "weight": 1, "label": "New"}]}]
+        assert _scoring_signature(a, None) == _scoring_signature(b, None)

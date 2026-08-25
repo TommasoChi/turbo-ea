@@ -193,12 +193,26 @@ class TestLoadExtensions:
         assert report.loaded == []
         assert "SDK" in report.failed[0].error
 
-    def test_sdk_newer_minor_is_quarantined(self, tmp_path, vendor):
-        install_ext_dir(tmp_path, vendor, sdk_version="1.6")
+    def test_sdk_newer_minor_loads_with_warning(self, tmp_path, vendor, caplog):
+        # Same major, newer minor than this core: loads (additive surfaces
+        # fail with clear AttributeErrors, not a refusal) but warns.
+        import logging
+
+        install_ext_dir(tmp_path, vendor, sdk_version="1.99")
+        with caplog.at_level(logging.WARNING):
+            report = load_extensions(tmp_path)
+        assert [f.error for f in report.failed] == []
+        assert len(report.loaded) == 1
+        assert any("targets SDK 1.99" in r.message for r in caplog.records)
+
+    def test_pre_1_2_extension_without_event_hook_loads(self, tmp_path, vendor):
+        # The 1.2 event hook is optional and duck-typed; sample_source has no
+        # get_event_handlers, so this is the backward-compat guard.
+        install_ext_dir(tmp_path, vendor, sdk_version="1.1")
         report = load_extensions(tmp_path)
-        assert report.loaded == []
-        assert "SDK 1.6" in report.failed[0].error
-        assert "SDK 1.5" in report.failed[0].error
+        assert [f.error for f in report.failed] == []
+        assert report.loaded[0].instance is not None
+        assert not hasattr(report.loaded[0].instance, "get_event_handlers")
 
     def test_missing_signature_is_quarantined(self, tmp_path, vendor):
         ext_dir = install_ext_dir(tmp_path, vendor)
@@ -214,12 +228,7 @@ class TestLoadExtensions:
 
     def test_sdk_compatible_matrix(self):
         assert sdk_compatible("1.0") is True
-        assert sdk_compatible("1.1") is True
-        assert sdk_compatible("1.2") is True
-        assert sdk_compatible("1.3") is True
-        assert sdk_compatible("1.4") is True
-        assert sdk_compatible("1.5") is True
-        assert sdk_compatible("1.6") is False
+        assert sdk_compatible("1.9") is True
         assert sdk_compatible("2.0") is False
         assert sdk_compatible("garbage") is False
 

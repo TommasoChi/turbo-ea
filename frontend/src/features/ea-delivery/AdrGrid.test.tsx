@@ -43,8 +43,6 @@ vi.mock("ag-grid-react", () => ({
 }));
 
 // Stub CSS imports
-vi.mock("ag-grid-community/styles/ag-grid.css", () => ({}));
-vi.mock("ag-grid-community/styles/ag-theme-quartz.css", () => ({}));
 
 import AdrGrid from "./AdrGrid";
 import { compareDateFilter } from "@/lib/dateColumnFilter";
@@ -311,5 +309,15 @@ describe("AdrGrid signed-by column", () => {
     renderGrid();
     const col = capturedColumnDefs.find((c) => c.colId === "signedBy");
     expect(col?.autoHeight).toBe(true);
+  });
+});
+
+describe("cell context menu wiring", () => {
+  it("hands the grid the shared context-menu props", async () => {
+    const { AgGridReact } = await import("ag-grid-react");
+    renderGrid();
+    const props = vi.mocked(AgGridReact).mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(typeof props.onCellContextMenu).toBe("function");
+    expect(props.preventDefaultOnContextMenu).toBe(true);
   });
 });

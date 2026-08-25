@@ -8,18 +8,36 @@ La página de **Tareas** centraliza todos los elementos de trabajo pendientes en
 
 Las tareas son actividades asignadas a usted o creadas por usted. Pueden estar vinculadas a fichas específicas o ser independientes.
 
-### Filtrado
+### Filtrado, búsqueda y ordenación
 
-Use las pestañas de estado para filtrar:
+**Chips de origen** — Cada tarea lleva un origen: de dónde proviene. Cuando su lista mezcla tareas de más de un origen, aparecen chips de filtrado encima — haga clic en un chip para mostrar solo las tareas de ese origen (haga clic en varios para combinarlos); cada chip muestra un contador en vivo. Los orígenes son:
+
+- **Tarea de proyecto** — Sincronizada desde el tablero de tareas de una iniciativa PPM
+- **Riesgo** — Asignaciones como propietario de riesgo y ciclos recurrentes de tareas de mitigación del Registro de Riesgos de GRC
+- **ADR** / **SoAW** — Solicitudes de firma sobre decisiones de arquitectura y Statements of Architecture Work
+- **Aprobación de proceso** — Revisiones de flujos de proceso en espera de su revisión (BPM)
+- **Extensión** — Creada por una extensión instalada
+- **Manual** — Creada a mano, en una ficha o de forma independiente
+
+Cada fila lleva además un icono de origen y una franja de acento codificados por color, de modo que las listas mixtas se leen de un vistazo. Una tarea que una extensión conectora ha reflejado en un sistema de seguimiento externo (Jira, GitLab, …) conserva su origen real y muestra la referencia externa (p. ej., *KAN-6*) como un pequeño enlace — el reflejo es solo de referencia, y la tarea siempre se completa en Turbo EA.
+
+**Vista agrupada** — De forma predeterminada, la lista se segmenta en una sección plegable por origen, en un orden fijo. Cada encabezado de sección muestra el icono del origen, el número de tareas y — cuando algunas están vencidas — un contador rojo, de modo que una sección plegada sigue señalando la urgencia. Haga clic en un encabezado para plegarla o desplegarla; las secciones plegadas se recuerdan. El conmutador **Agrupar por origen** / **Lista simple** junto al control de ordenación cambia a una única lista plana (útil para priorizar por fecha de vencimiento entre todos los orígenes); esta elección también se recuerda. Una lista en la que todas las tareas comparten un mismo origen se muestra plana automáticamente.
+
+**Estado** — Use el selector de estado para filtrar:
 
 - **Abiertas** — Tareas aún pendientes o en progreso
 - **Próximas** — Repeticiones futuras programadas de tareas recurrentes que aún no vencen
 - **Completadas** — Tareas finalizadas
 - **Todas** — Todo
 
+**Ordenar** — Ordene por fecha de vencimiento (las más urgentes primero), las más recientes primero, o por origen. Su elección se recuerda.
+
+**Buscar** — El cuadro de búsqueda filtra al instante por el texto de la tarea, la ficha vinculada y los nombres de quien asigna y del asignado.
+
 ### Gestión de Tareas
 
 - **Cambio rápido** — Haga clic en la casilla de verificación para marcar una tarea como completada (o reabrirla)
+- **Quién la asignó** — En la pestaña *Asignadas a mí*, cada tarea muestra un chip **De:** con el nombre de la persona que la asignó; en *Creadas por mí* el chip nombra en su lugar al asignado
 - **Enlace a ficha** — Si una tarea está vinculada a una ficha, haga clic en el nombre de la ficha para navegar a su página de detalle
 - **Tareas del sistema** — Algunas tareas son generadas automáticamente por el sistema (ej., «Responder a encuesta para Ficha X»). Estas incluyen un enlace directo a la acción relevante
 

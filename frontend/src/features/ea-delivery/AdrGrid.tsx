@@ -14,12 +14,15 @@ import Chip from "@mui/material/Chip";
 import TextField from "@mui/material/TextField";
 import InputAdornment from "@mui/material/InputAdornment";
 import Tooltip from "@mui/material/Tooltip";
-import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useColumnFreeze } from "@/components/grid/useColumnFreeze";
+import { useColumnOrder } from "@/components/grid/useColumnOrder";
+import { useCellContextMenu } from "@/components/grid/useCellContextMenu";
+import { type GroupAxis, type GroupedRow } from "@/components/grid/rowGrouping";
+import { GroupByMenuButton, useRowGrouping } from "@/components/grid/useRowGrouping";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { useIsRtl } from "@/hooks/useIsRtl";
@@ -30,8 +33,7 @@ import {
 import { dateColumnFilterDef } from "@/lib/dateColumnFilter";
 import { loadAdrGridPrefs, updateAdrGridPrefs } from "./adrGridPrefs";
 import type { ArchitectureDecision, CardType } from "@/types";
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
+import { gridThemeDark, gridThemeLight } from "@/lib/agGridSetup";
 
 /** Extract plain text from HTML using the browser's DOM parser */
 function stripHtml(html: string | null | undefined): string {
@@ -88,6 +90,9 @@ interface Props {
   hiddenColumns: Set<string>;
   /** colIds frozen to the leading edge — owned by the parent, like `hiddenColumns`. */
   frozenColumns?: string[];
+  /** Full stored colId order; owned by the panel, like `frozenColumns`. */
+  columnOrder?: string[];
+  onColumnOrderChange?: (next: string[]) => void;
   onFrozenColumnsChange?: (next: string[]) => void;
   /**
    * When true, the grid sizes itself to its rows instead of filling a fixed
@@ -122,6 +127,8 @@ export default function AdrGrid({
   onQuickFilterChange,
   hiddenColumns,
   frozenColumns,
+  columnOrder,
+  onColumnOrderChange,
   onFrozenColumnsChange,
   autoHeight = false,
 }: Props) {
@@ -136,16 +143,14 @@ export default function AdrGrid({
   // frozen set is owned by the parent (the chooser is a sibling component),
   // so `pinned` is stamped on from `applyFrozen` and stripped from the
   // restored column-state snapshot below — one owner, no tug of war.
+  const gridColumnOrder = useColumnOrder(gridRef, {
+    order: columnOrder ?? [],
+    onOrderChange: onColumnOrderChange,
+  });
   const columnFreeze = useColumnFreeze(gridRef, {
     frozen: frozenColumns ?? [],
     onFrozenChange: (next) => onFrozenColumnsChange?.(next),
   });
-
-  const [contextMenu, setContextMenu] = useState<{
-    mouseX: number;
-    mouseY: number;
-    adr: ArchitectureDecision;
-  } | null>(null);
 
   const [selectedAdrs, setSelectedAdrs] = useState<ArchitectureDecision[]>([]);
 
@@ -171,6 +176,37 @@ export default function AdrGrid({
   const [hasColumnFilters, setHasColumnFilters] = useState(
     () => Object.keys(columnFilterModelRef.current).length > 0,
   );
+
+  // ── Group-by (collapsible status groups — shared hook, discussion #933) ──
+  const [groupBy, setGroupByState] = useState<string | null>(
+    () => initialPrefs?.groupBy ?? null,
+  );
+  const setGroupBy = useCallback((next: string | null) => {
+    setGroupByState(next);
+    updateAdrGridPrefs({ groupBy: next });
+  }, []);
+
+  const groupAxes = useMemo<GroupAxis<ArchitectureDecision>[]>(
+    () => [
+      {
+        key: "status",
+        label: t("adr.grid.status"),
+        groupKeyOf: (a) => a.status,
+        vocab: Object.entries(STATUS_CHIP_PROPS).map(([key, cfg]) => ({
+          key,
+          label: t(cfg.label_key),
+          color: STATUS_DOT_COLOR[key],
+        })),
+      },
+    ],
+    [t],
+  );
+
+  const grouping = useRowGrouping<ArchitectureDecision>(gridRef, {
+    rows: adrs,
+    axes: groupAxes,
+    groupBy,
+  });
 
   const typeColorMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -468,8 +504,8 @@ export default function AdrGrid({
   );
 
   const frozenColumnDefs = useMemo(
-    () => columnFreeze.applyFrozen(columnDefs),
-    [columnDefs, columnFreeze],
+    () => gridColumnOrder.applyOrder(columnFreeze.applyFrozen(columnDefs)),
+    [columnDefs, columnFreeze, gridColumnOrder],
   );
 
   // Reflect the grid's column-filter model into `hasColumnFilters` (drives
@@ -482,10 +518,13 @@ export default function AdrGrid({
     if (!api) return;
     const model = api.getFilterModel() ?? {};
     setHasColumnFilters(Object.keys(model).length > 0);
+    // Keep the group headers' representative members in sync with the active
+    // column + quick filters (see useRowGrouping).
+    grouping.handleFilterChanged();
     if (applyingFilterRef.current) return;
     columnFilterModelRef.current = model;
     updateAdrGridPrefs({ columnFilterModel: model });
-  }, []);
+  }, [grouping.handleFilterChanged]);
 
   const clearColumnFilters = useCallback(() => {
     // handleFilterChanged persists the resulting empty model.
@@ -503,7 +542,11 @@ export default function AdrGrid({
     const state = api.getColumnState();
     columnStateRef.current = state;
     updateAdrGridPrefs({ columnState: state });
-  }, []);
+    // The same drag can have moved the column or pinned it; both own their
+    // own pref now, so read them back rather than leaving them to the layout.
+    gridColumnOrder.syncFromGrid();
+    columnFreeze.syncFrozenFromGrid();
+  }, [gridColumnOrder, columnFreeze]);
 
   // Sort lives inside getColumnState(); persist it too, but a sort-only
   // change doesn't end the restore window (matches the Inventory grid).
@@ -518,8 +561,10 @@ export default function AdrGrid({
 
   // Restore the saved column layout. Keyed on `columnDefs` so it re-applies
   // when the column set changes — extension columns register after the grid
-  // is ready. `hide` and `pinned` are stripped: visibility keeps flowing from
-  // `hiddenColumns` and freezing from `frozenColumns`.
+  // is ready. `hide` and `pinned` are stripped and `applyOrder` is off:
+  // visibility keeps flowing from `hiddenColumns`, freezing from
+  // `frozenColumns` and order from `columnOrder`, all via colDefs. What is
+  // left for the snapshot to own is width and sort.
   useEffect(() => {
     if (!gridReady || !restorePendingRef.current) return;
     const layout = columnStateRef.current;
@@ -528,7 +573,7 @@ export default function AdrGrid({
     if (!api) return;
     const state = layout.map(({ hide: _hide, pinned: _pinned, ...rest }) => rest);
     applyingLayoutRef.current = true;
-    api.applyColumnState({ state, applyOrder: true });
+    api.applyColumnState({ state, applyOrder: false });
     applyingLayoutRef.current = false;
   }, [gridReady, columnDefs]);
 
@@ -546,6 +591,8 @@ export default function AdrGrid({
 
   const onRowClicked = useCallback(
     (event: RowClickedEvent<ArchitectureDecision>) => {
+      // Collapse/expand is handled by the group header renderer's own click.
+      if (grouping.isGroupRow(event.data as GroupedRow<ArchitectureDecision>)) return;
       // Ignore clicks on the selection checkbox column
       if (event.event && (event.event as MouseEvent).target) {
         const target = (event.event as MouseEvent).target as HTMLElement;
@@ -555,7 +602,7 @@ export default function AdrGrid({
         navigate(`/ea-delivery/adr/${event.data.id}`);
       }
     },
-    [navigate],
+    [navigate, grouping.isGroupRow],
   );
 
   const onSelectionChanged = useCallback(
@@ -571,35 +618,58 @@ export default function AdrGrid({
     onExport(selectedAdrs);
   }, [onExport, selectedAdrs]);
 
-  const handleContextMenu = useCallback(
-    (event: React.MouseEvent) => {
-      event.preventDefault();
-      const target = event.target as HTMLElement;
-      const rowEl = target.closest<HTMLElement>("[row-index]");
-      if (!rowEl) return;
-      const rowIndex = Number(rowEl.getAttribute("row-index"));
-      const rowNode = gridRef.current?.api?.getDisplayedRowAtIndex(rowIndex);
-      if (!rowNode?.data) return;
-      setContextMenu({
-        mouseX: event.clientX,
-        mouseY: event.clientY,
-        adr: rowNode.data,
-      });
+  // Right-click / long-press cell menu (shared hook): the ADR row actions
+  // render as extraItems above the Show matching / Filter out / Copy items.
+  // Group header rows are member clones — offering Edit/Delete on one would
+  // act on an arbitrary ADR the user never picked, so they are suppressed.
+  const cellMenu = useCellContextMenu<GroupedRow<ArchitectureDecision>>(gridRef, {
+    suppressForRow: grouping.isGroupRow,
+    // Linked cards and signatories render as ", "-joined chip lists.
+    splitValues: (ctx) =>
+      (ctx.colId === "linkedCards" || ctx.colId === "signedBy") && ctx.displayValue
+        ? ctx.displayValue
+            .split(", ")
+            .filter(Boolean)
+            .map((v) => ({ label: v, filter: v }))
+        : null,
+    extraItems: (ctx, close) => {
+      const adr = ctx.data;
+      const act = (action: (adr: ArchitectureDecision) => void) => () => {
+        close();
+        action(adr);
+      };
+      return [
+        <MenuItem key="edit" onClick={act(onEdit)}>
+          <ListItemIcon>
+            <MaterialSymbol icon="edit" size={20} />
+          </ListItemIcon>
+          <ListItemText>{t("adr.edit")}</ListItemText>
+        </MenuItem>,
+        <MenuItem key="preview" onClick={act(onPreview)}>
+          <ListItemIcon>
+            <MaterialSymbol icon="visibility" size={20} />
+          </ListItemIcon>
+          <ListItemText>{t("adr.preview")}</ListItemText>
+        </MenuItem>,
+        <MenuItem key="duplicate" onClick={act(onDuplicate)}>
+          <ListItemIcon>
+            <MaterialSymbol icon="content_copy" size={20} />
+          </ListItemIcon>
+          <ListItemText>{t("adr.duplicate")}</ListItemText>
+        </MenuItem>,
+        ...(adr.status === "draft"
+          ? [
+              <MenuItem key="delete" onClick={act(onDelete)}>
+                <ListItemIcon>
+                  <MaterialSymbol icon="delete" size={20} color="error" />
+                </ListItemIcon>
+                <ListItemText sx={{ color: "error.main" }}>{t("adr.delete")}</ListItemText>
+              </MenuItem>,
+            ]
+          : []),
+      ];
     },
-    [],
-  );
-
-  const closeContextMenu = useCallback(() => setContextMenu(null), []);
-
-  const handleMenuAction = useCallback(
-    (action: (adr: ArchitectureDecision) => void) => {
-      if (contextMenu) {
-        action(contextMenu.adr);
-        setContextMenu(null);
-      }
-    },
-    [contextMenu],
-  );
+  });
 
   const isDark = mode === "dark";
 
@@ -641,6 +711,9 @@ export default function AdrGrid({
               },
             }}
           />
+          <Box sx={{ flexShrink: 0 }}>
+            <GroupByMenuButton axes={groupAxes} groupBy={groupBy} onChange={setGroupBy} />
+          </Box>
           {hasColumnFilters && (
             <Button
               variant="outlined"
@@ -668,9 +741,11 @@ export default function AdrGrid({
 
         <Box
           ref={columnFreeze.containerRef}
-          className={isDark ? "ag-theme-quartz-dark" : "ag-theme-quartz"}
+          {...cellMenu.containerProps}
           sx={{
             ...columnFreeze.sx,
+            ...cellMenu.sx,
+            ...grouping.sx,
             flex: autoHeight ? "none" : 1,
             minHeight: 0,
             // Rows are clickable (open ADR detail) — surface that affordance:
@@ -684,13 +759,13 @@ export default function AdrGrid({
               backgroundColor: "var(--ag-row-hover-color)",
             },
           }}
-          onContextMenu={handleContextMenu}
         >
           <AgGridReact<ArchitectureDecision>
+            theme={isDark ? gridThemeDark : gridThemeLight}
             key={isRtl ? "rtl" : "ltr"}
             enableRtl={isRtl}
             ref={gridRef}
-            rowData={adrs}
+            rowData={grouping.rowData}
             columnDefs={frozenColumnDefs}
             defaultColDef={defaultColDef}
             quickFilterText={quickFilterText}
@@ -703,6 +778,7 @@ export default function AdrGrid({
             onSelectionChanged={onSelectionChanged}
             onGridReady={() => setGridReady(true)}
             onFilterChanged={handleFilterChanged}
+            onModelUpdated={grouping.handleModelUpdated}
             onSortChanged={handleSortChanged}
             onDragStopped={captureColumnState}
             onColumnPinned={captureColumnState}
@@ -710,47 +786,18 @@ export default function AdrGrid({
             headerHeight={44}
             suppressCellFocus
             animateRows={false}
-            getRowId={(params) => params.data.id}
+            {...grouping.gridProps}
+            {...cellMenu.gridProps}
+            getRowId={(params) => grouping.groupRowId(params.data)}
             domLayout={autoHeight ? "autoHeight" : undefined}
           />
+          {/* No-ops under `autoHeight` — that grid scrolls with the page, so it
+              has no viewport of its own for the bar to track. */}
+          {grouping.stickyHeader}
         </Box>
       </Box>
 
-      <Menu
-        open={contextMenu !== null}
-        onClose={closeContextMenu}
-        anchorReference="anchorPosition"
-        anchorPosition={
-          contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : undefined
-        }
-      >
-        <MenuItem onClick={() => handleMenuAction(onEdit)}>
-          <ListItemIcon>
-            <MaterialSymbol icon="edit" size={20} />
-          </ListItemIcon>
-          <ListItemText>{t("adr.edit")}</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={() => handleMenuAction(onPreview)}>
-          <ListItemIcon>
-            <MaterialSymbol icon="visibility" size={20} />
-          </ListItemIcon>
-          <ListItemText>{t("adr.preview")}</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={() => handleMenuAction(onDuplicate)}>
-          <ListItemIcon>
-            <MaterialSymbol icon="content_copy" size={20} />
-          </ListItemIcon>
-          <ListItemText>{t("adr.duplicate")}</ListItemText>
-        </MenuItem>
-        {contextMenu?.adr.status === "draft" && (
-          <MenuItem onClick={() => handleMenuAction(onDelete)}>
-            <ListItemIcon>
-              <MaterialSymbol icon="delete" size={20} color="error" />
-            </ListItemIcon>
-            <ListItemText sx={{ color: "error.main" }}>{t("adr.delete")}</ListItemText>
-          </MenuItem>
-        )}
-      </Menu>
+      {cellMenu.menu}
     </>
   );
 }

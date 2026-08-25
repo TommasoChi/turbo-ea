@@ -21,6 +21,18 @@ This is ideal for portfolio analysis — plotting applications by business value
 
 When AI is configured and portfolio insights are enabled by an admin, the portfolio report shows an **AI Insights** button. Clicking it sends a summary of your current view to the AI provider, which returns strategic insights about concentration risks, modernisation opportunities, lifecycle concerns, and portfolio balance. The insights panel is collapsible and can be regenerated after changing filters or grouping.
 
+### From report to inventory
+
+Clicking a group opens a drawer listing that group's cards. Its **View in inventory** button opens the Inventory on that exact slice. When the report is grouped by one of the card type's own fields, the inventory arrives grouped by the same field with the clicked group expanded and every other group collapsed (counts stay visible), and the report's search, attribute, relation and tag filters are carried over — ready for a select-all and [mass edit](inventory.md#mass-edit). When grouping by a related card type (such as Organization), the inventory instead arrives filtered to that related card. The button is hidden while *Nested groups* is active: a rolled-up subtree has no single inventory filter.
+
+### Collapsing the filters
+
+The **Filters** row folds away: click its header to hide the filter controls and give the chart the vertical space back. The setting is remembered with the rest of the report's configuration, so a report reopens the way you left it. While collapsed the header still shows how many filters are active, and **Clear all** stays reachable — a folded section never hides the fact that the data is filtered.
+
+### Time travel
+
+The timeline slider carries the same transition instruments as the [Dependencies Report](#dependencies-report): marks on every date an application goes live (blue) or retires (red), pills naming the changing applications while the slider stands on a mark, arrow buttons that step from change to change, and chips summarising the transformation while you look forward ("+4 arriving · −7 retiring" — also included in print and export headers). Clicking a mark or a pill spotlights the applications that change there — the rest of the view dims while they pulse, and an application already gone at the selected date is revealed just for the pulse, then hidden again.
+
 ## Flexible Portfolio
 
 ![Flexible Portfolio — Data Object portfolio grouped by Application, coloured by Data Sensitivity](../assets/img/en/57_report_flexible_portfolio.png)
@@ -39,7 +51,14 @@ When a card's relations carry a "type" value — for example the **Usage Type** 
 
 When grouping by a related card type that supports hierarchy (such as Business Capability or Organization), a **Nested groups** toggle appears next to the *Group by* selector. Enable it to render the groups as boxes within boxes following the related type's parent/child hierarchy — like the Capability Map. A **Display Depth** selector controls how many levels are expanded: each card appears under its deepest visible group, and groups below the depth limit roll their cards up into the closest visible ancestor. Branches that contain no cards are hidden.
 
+### Choosing the column count
+
+The card grid in the **Portfolio**, **Flexible Portfolio**, **Capability Map** and **Process Map** reports has a **column picker** in the toolbar — three buttons for one, two or three columns. Pick fewer columns when the cards are dense and you want them wide enough to read; pick three to see more of the landscape at once. The choice is remembered per report, travels with a [saved report](saved-reports.md), and is used when you print or export. Narrow screens still fall back to one or two columns on their own. The choice cascades downward: each level below the first gets one column fewer, so picking one column puts level 2 three across and level 3 two across, while picking three keeps everything below it stacked full width. A level still folds down to fewer columns when a card is genuinely too narrow for them.
+
 ## Capability Map
+
+Clicking a capability opens a side panel listing every application in its subtree. On a bottom-level capability the panel offers **View in inventory**, which lands on the applications linked to it.
+
 
 ![Business Capability Map](../assets/img/en/11_capability_map.png)
 
@@ -48,6 +67,12 @@ The **Capability Map** shows a hierarchical **heatmap** of the organization's bu
 - **Hierarchy** — Main capabilities contain their sub-capabilities
 - **Heatmap coloring** — Blocks are colored based on a selected metric (e.g., number of supporting applications, average data quality, or risk level)
 - **Click to explore** — Click any capability to drill down into its details and supporting applications
+
+**Scoping to specific capabilities** — By default the map draws every capability. Use the capability chip in the toolbar to open a picker and select one or more capabilities; the map then shows only those and everything beneath them. Sub-capabilities are included automatically, so picking a top-level capability gives you its whole branch. **Display Depth** counts from the capabilities you selected, so *Level 2* always means two tiers below what you are looking at. The scope is stored with the report, so a saved report reopens on the same branch.
+
+**Time travel** — The timeline slider carries the same transition instruments as the [Dependencies Report](#dependencies-report): marks on every date an application goes live (blue) or retires (red), pills naming the changing applications while the slider stands on a mark, arrow buttons that step from change to change, and chips summarising the transformation while you look forward (also included in print and export headers). Clicking a mark or a pill spotlights the change: with **Show Applications** on, the changing application chips pulse while the rest dim, and an application already gone at the selected date is revealed just for the pulse; with it off, the spotlight falls on the capability boxes containing the changing applications — blue where they only arrive, red where they only retire, purple where both happen.
+
+**Collapsing the filters** — The **Application Filters** row folds away; click its header to reclaim the space. The state is saved with the report, the active-filter count stays visible on the collapsed header, and **Clear all** remains reachable without expanding first.
 
 ## Lifecycle Report
 
@@ -61,6 +86,8 @@ The **Lifecycle Report** shows a **timeline visualization** of when technology c
 
 Components are displayed as horizontal bars spanning their lifecycle phases: Plan, Phase In, Active, Phase Out, and End of Life.
 
+**Scoping to specific cards** — Once you have picked a card type, the chip beside it opens a picker: select one or more cards and the timeline shows only those and everything beneath them in the hierarchy. Sub-cards are included automatically. The chip stays disabled while the type selector is on *All types*, because a scope needs one hierarchy to work from.
+
 ## Dependencies Report
 
 ![Dependencies Report](../assets/img/en/13_dependencies.png)
@@ -71,6 +98,9 @@ The **Dependencies Report** visualizes **connections between components** as a n
 - **Type filtering** — Show only specific card types and relation types
 - **Interactive exploration** — Click any node to recenter the graph on that card
 - **Impact analysis** — Understand the blast radius of changes to a specific component
+- **Time travel** — Once you have centred on a card (or switched to the table view), drag the timeline slider to see the landscape as it stands on any date. Cards that have not gone live yet are hidden — a card enters the landscape on its **Active** date, so one whose Active date is still ahead, or that has none at all, stays out of the default view. Cards that **arrive** between today and a future date are simply part of the landscape there — they carry a purple outline and no badge, because time travel shows the state as it will be. **Retired** cards stay on the diagram — faded and badged *RETIRED* — at any date after their retirement, so a transformation shows what it removes as well as what it leaves. The **Persist retired cards** switch in the toolbar hides them to show only the cards alive on the selected date. Its mirror, **Preview planned cards**, shows cards that have not started yet — ghosted and badged *UPCOMING* — at any date before their start, so even a past or present view can preview what is coming. The timeline is marked with every date on which cards on the displayed diagram go live (blue) or retire (red); click a mark to jump the slider to that change and spotlight the cards involved — the canvas dims for a moment while they pulse in the mark's colour, and a retiring card hidden by **Persist retired cards** is revealed just for the pulse, then hidden again. You can also step from change to change with the arrows beside the slider — each step spotlights the cards at that change exactly as clicking its mark does. While the slider stands on a mark, the cards it counts are named as pills below the marks, grouped behind a **+** for the ones going live and a **−** for the ones retiring — each pill carries its card type's colour, and clicking one spotlights just that card. Each mark is blue where cards only go live, red where they only retire and purple where it does both. Where changes fall close together the timeline merges them into one mark, drawn wider and labelled with the range it covers; a card that goes live and retires inside that range is named on both sides. The arrows treat a merged mark as a single stop, so one press moves clear of everything it covers rather than stepping through the dates behind it. Standing on a merged mark shows the landscape as of the **end** of its range — everything it covers has happened — and the date beside the slider names that range rather than a single day. While looking forward, chips above the slider summarise the transformation (+4 arriving · −7 retiring). Relations into retired cards render as dashed red — the dependencies the transformation severs — and while you stand on a mark, the cards retiring there stay on the diagram — ghosted and badged *RETIRED* — even with **Persist retired cards** off. The cards that stay put are marked where their connections change: a red broken-link icon where a neighbour retires here, a blue one where a neighbour goes live here, and both when both happen. The mark carries them: step away and they clear, so a single retirement no longer marks its neighbours at every later date. The slider applies to every view, and the date is saved with the report.
+
+The card you centre on decides how much you see, so the picker lists each type's best-connected cards first. A capability is usually the most revealing choice: it is the only card type that reaches the objectives above it and the applications below it in a single hop.
 
 ### Layered Dependency View
 
@@ -91,15 +121,16 @@ Toggle to the **Layered Dependency View** using the view-mode buttons in the too
 - **Click to inspect** — Click any node to open the card detail side panel.
 - **Recenter** — Shift+click or long-press a card to center the diagram on it; the toolbar's **Back to card picker**, **Previous card**, and **Next card** buttons step through your navigation history.
 - **Highlight mode** — Hover a card to highlight its connections; on touch devices, turn on **Highlight mode** in the controls panel to tap-highlight instead.
-- **Expand mode** — Turn on **Expand mode** in the controls panel, then click a card to reveal all of its relations on demand.
+- **Expand mode** — Turn on **Expand mode** in the controls panel, then click a card to reveal all of its relations on demand. The card the diagram is centred on carries a double border in its card type's colour, and each card you expand carries a thinner one, so your bearings stay visible as the diagram grows.
 - **Reveal parent / Reveal children** — Two targeted alternatives to Expand mode. Turn on **Reveal parent** (up-arrow) or **Reveal children** (down-arrow) in the controls panel, then click a card to add just its hierarchy parent or its direct children to the diagram. Revealed cards stay on the diagram — so you can layer parents and children together — and clear when you re-center or reset the view.
 - **No center card required** — On the Dependencies report the Layered Dependency View shows all cards matching the current type filter, so you don't have to pick a starting card first.
 
 **Customising the view** (from the toolbar)
 
-- **Card display menu** — Toggle the **type** label and a **lifecycle-status dot**, turn on **hierarchy markers** (a small chevron on each card that has a parent above or children below not currently on the diagram — a hint to use the Reveal tools), and choose **extra attribute fields** to show on each card — the first two render on the card and the full set appears in the hover tooltip. Choices are remembered between visits.
-- **Show end-of-life cards** — Related cards whose lifecycle has reached End of Life are hidden by default to keep the graph focused; turn this toggle on (in the **Card display** menu) to bring them back. The card you are centered on is always shown, even if it is itself end-of-life.
-- **Show relationship values** — Many relations can be qualified with a value (e.g. an application *supports* a capability as *Leading*, *Supporting* or *No Support*). When on (the default), these values appear in brackets next to the relation label (*supports [Leading]*) and are included in image exports. Turn it off in the **Card display** menu for a cleaner view; relations without a value are unchanged either way.
+- **Show on card** — A dedicated toolbar button (the eye glyph) lists everything a card can say as **tickboxes**: the **type** label, the **subtype**, a **lifecycle-status dot**, and every **attribute field** in play, each filed under the card type it belongs to. The first two lines render on the card itself and the full set appears in the hover tooltip. A badge on the button counts what is currently shown. Choices are remembered between visits and travel with **Create diagram**: a DrawIO diagram generated from this report opens showing the same rows, picked from the same menu. On a phone the list opens as a full-screen sheet. **Clear all** empties every tick at once.
+- **Show end-of-life cards** — Related cards that have reached End of Life **by the date shown on the timeline** are hidden by default to keep the graph focused; turn this toggle on (in the **View options** menu) to bring them back. The card you are centered on is always shown, even if it is itself end-of-life.
+- **Show relationship labels** — Each relation's verb (*supports*, *uses*, …) is drawn on its line. On by default; turn it off in the **View options** menu for a cleaner canvas on a dense landscape. The lines and their arrowheads still show what connects to what, and in which direction.
+- **Show relationship values** — Many relations can be qualified with a value (e.g. an application *supports* a capability as *Leading*, *Supporting* or *No Support*). When on (the default), these values appear in brackets next to the relation label (*supports [Leading]*) and are included in image exports. Turn it off in the **View options** menu for a cleaner view; relations without a value are unchanged either way.
 - **Rearrange** — Drag a card to move it within its layer, or drag a whole **layer box** to move it with all its cards. **Reset view** (in the left toolbar) restores the automatic arrangement and clears any exploration.
 - **Background** — Cycle the canvas background between grid, dots, and none.
 - **Export and fullscreen** — Export the diagram to **PNG** or **SVG**, or open it in **fullscreen**.
@@ -144,6 +175,8 @@ Whenever at least one Cost Source is active, the treemap rectangles are **clicka
 - **Multiple Cost Sources active** — drill renders **one treemap per source side-by-side** (1 column on narrow viewports, 2 on wide ones). Each panel has its own header, its own total, and its own per-panel `% of total` in the tooltip — so different card types stay on their own scale instead of being squashed into a single chart.
 
 The timeline slider, Cost Source selection, and other filters are preserved as you drill, and the drilled level is part of the saved-report config — saving a report while drilled in re-opens directly at that level. With **no** Cost Source active, clicking a rectangle opens the card side panel instead (there's nothing to break down).
+
+**Scoping to specific cards** — The chip beside the card-type selector opens a picker: select one or more cards and the treemap, the totals and the table all narrow to those and everything beneath them. The chip is hidden while you are drilled into a rectangle, since a drill has already moved you to a different card type; leave the drill and the scope is still there.
 
 ## Matrix Report
 
@@ -198,6 +231,8 @@ Two tiles count the cards on each axis that have no relation at all. **Show only
 
 Excel export produces two sheets: the grid as it appears on screen, and one row per relation with its values spread across columns — the sheet to pivot on. PowerPoint export captures the picture.
 
+**Scoping each axis** — Each axis carries its own chip beside its type selector, so you can ask for *these capabilities × these applications*. Select one or more cards and that axis shows only those and everything beneath them. The KPI cards above the grid follow the scope, so the counts always describe what you are looking at. Changing an axis's card type clears that axis's scope; transposing the grid swaps the two scopes along with the axes.
+
 ## Data Quality Report
 
 ![Data Quality Report](../assets/img/en/33_report_data_quality.png)
@@ -207,6 +242,19 @@ The **Data Quality Report** is a **completeness dashboard** that shows how well 
 - **Overall score** — Average data quality across all cards
 - **By type** — Breakdown showing which card types have the best/worst completeness
 - **Individual cards** — List of cards with the lowest data quality, prioritized for improvement
+
+Cards with an empty **mandatory field** always score **0%** — the weighted calculation only resumes once every required field is filled — so the lowest-scoring list surfaces exactly the cards whose required data is still missing.
+
+### Drilling into a number
+
+Every figure on the report is a way in, not just a readout:
+
+- **Click a bar segment** in *Completeness by Type* — a panel opens on the right listing the cards of that type in that band (Complete, Partial or Minimal).
+- **Click a bar** in *Average Completion by Type*, or a row in the table view, to list every card of that type.
+- **Click the Orphaned or Stale tile** to list the cards behind that count.
+
+From the panel, click any card to open its detail side panel, or press **View in inventory** to continue in the [Inventory](inventory.md) — which arrives grouped by data quality with the band you clicked expanded and the others collapsed beside it, so you can start fixing records straight away. The Orphaned and Stale panels link into the inventory's matching filter, across every card type.
+
 
 ## End of Life (EOL) Report
 
@@ -236,3 +284,5 @@ Active filters and grouping options applied at the moment of export are recorded
 ## Process Map
 
 The **Process Map** visualizes the organization's business process landscape as a structured map, showing process categories (Management, Core, Support) and their hierarchical relationships.
+
+**Scoping to specific processes** — The chip beside *Display Depth* opens a picker: select one or more processes and the map shows only those and everything beneath them. Sub-processes are included automatically, and **Display Depth** counts from what you selected. Clicking into a process to zoom still works, and now works within the scope. Note this is a different control from the **Scope** row below, which filters by related Organization or Business Context.

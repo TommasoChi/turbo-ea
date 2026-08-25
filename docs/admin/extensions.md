@@ -32,7 +32,20 @@ The **Store** tab works out of the box and lists the vendor's published extensio
 - **Buy** opens the payment page in a new browser tab. Once the payment is confirmed, your license applies automatically (a copy also arrives by email).
 - **Install** (or **Update** when a newer version is published) checks your license first — if the extension isn't licensed yet, a dialog offers to buy it or paste a license, then continues automatically — and downloads the bundle through the exact same signature verification and dry-run preview as a manual upload. Extensions with a demo show a **See it in action** link, and a published newer version turns the button into **Update**.
 
-The Store tab is read-only and anonymous: no account, no token, and nothing about your instance is sent anywhere — it only reads the vendor's public catalogue. Air-gapped instances need no configuration — the tab simply shows a friendly hint — and use the file-based flow below; the vendor's storefront website offers the same purchases and downloads from any internet-connected browser.
+When the catalogue carries category tags, each item shows small pills (free or commercial, plus topics such as integration) and a filter bar appears above the list — click pills to narrow it (several pills combine), and **All** resets the view.
+
+The Store tab is read-only and anonymous: no account, no token, and nothing about your instance is sent anywhere — it only reads the vendor's public catalogue. Air-gapped instances need no configuration — the tab simply shows a friendly hint — and use the file-based flow below; the vendor's storefront website offers the same purchases and downloads from any internet-connected browser. If something between your instance and the store blocks the request — a proxy, a firewall, or bot protection in front of the store — the tab says so and names the HTTP status it got back, so a blocked instance is never mistaken for an air-gapped one.
+
+The instance also **checks the catalogue once a day** and tells you what changed, so a new extension — or a security fix to one you already run — does not wait until somebody happens to open this page. Administrators (anyone whose role grants `admin.manage_extensions`) get a notification in the bell when a new extension is published to the store, and another when an extension they have installed has a newer version. Each change is announced once, and a busy release day arrives as one notification per kind rather than one per extension. Nothing is downloaded or installed — the notification simply brings you here. The daily check can be switched off entirely under [Admin → Settings → Update notifications](settings.md#update-notifications).
+
+## Trials
+
+Some paid extensions offer a **free 30-day trial** — look for the **Start 30-day trial** button on the Store tab (or the trial option on the store website). Starting a trial works like a purchase without the payment: no credit card is needed, your license updates automatically (a copy also arrives by email for air-gapped installs), and the extension runs with full functionality for 30 days.
+
+- Each Turbo EA instance can trial a given extension **once**.
+- A trial ends exactly on its end date — there is no grace period. The extension then stops running until you subscribe; **your data is never deleted**, and everything comes back the moment a subscription license is applied.
+- The Installed tab shows trial entitlements as **Trial until …**.
+- Trials end by themselves — there is nothing to cancel and nothing is ever billed.
 
 ## Installing an extension
 
@@ -44,13 +57,30 @@ The Store tab is read-only and anonymous: no account, no token, and nothing abou
 
 Uploading the same bundle again is safe — the preview shows everything as "skipped" and applying changes nothing.
 
+## Updating an extension
+
+When the store publishes a newer version of an installed extension, the Installed tab shows an **Update to X** chip next to the extension's version (and the Store tab's button turns into **Update**). One click runs the same signature verification, dry-run preview, and apply as a fresh install. Two safeguards apply:
+
+- Updating an extension you have deliberately **disabled** keeps it disabled — the new version lands on disk, but its content stays hidden and nothing runs until you enable it again.
+- Installing a bundle **older** than the installed version asks for an explicit confirmation first: a downgrade may not understand data written by the newer version. Nothing is deleted either way.
+
 ## Licenses and renewal
 
 Apply a license via **Enter license…** on the Installed tab (paste the text or upload the file) — the button also appears on each extension row that needs one. The page then shows the licensee and one chip per entitlement with its expiry date.
 
+Your instance holds **one license at a time** — applying a new one replaces the previous one. Store-issued licenses always contain every purchase made for your instance, so replacing is safe. If you also hold manually issued licenses, ask your vendor for one combined license instead of installing per-extension files; should a license you apply drop entitlements the current one still covers, Turbo EA lists them and asks for confirmation first (no data is deleted either way).
+
 When an entitlement passes its expiry it enters a **grace window** (30 days by default): everything keeps working and administrators see a warning banner. After grace the extension is **soft-disabled** — its pages disappear, its API refuses requests, and its background jobs pause. **No data is ever deleted.** Applying a renewed license file restores everything instantly, without a restart.
 
 Licenses bought through the Store renew themselves on connected instances: after each successful payment, your instance fetches the extended license automatically — nothing to paste. Renewal on an air-gapped instance is: paste the updated license file from the renewal email (or request one from your vendor) — nothing else.
+
+### Auto-renew status and cancelling
+
+Each entitlement chip states what happens on its date: **Renews on {date}** for an active subscription, or **Expires {date} — will not renew** after a cancellation. This comes from the signed license itself, so it is accurate on air-gapped instances too — the license file emailed after any subscription change carries the updated status; paste it and the chip is current.
+
+To see the renewal date, cancel or restore auto-renew, change the payment method, or download invoices, use **Manage subscription** next to the licensee name (shown for store-bought licenses). It opens your billing portal in a new tab — no account needed. On an air-gapped instance the button cannot reach the store; use the **Manage subscription** link included in every license email instead (your browser only needs internet access, your Turbo EA instance does not).
+
+Cancelling never switches anything off immediately: the extension keeps working until the end of the paid period, then the normal grace + soft-disable flow applies. **Your data is never deleted**, and resubscribing restores everything.
 
 ## Enabling, disabling, and uninstalling
 
@@ -69,6 +99,21 @@ Some extensions unlock advanced ways to describe your data that the core does no
 - **Custom field types** — new kinds of field beyond the built-in set (for example a configurable rating from 1–5 or 0–10).
 
 These options appear in the metamodel field editor **only while the extension that provides them is installed and licensed**. If such an extension is later disabled or its license lapses, the values you already captured keep displaying as plain read-only text — nothing is blanked or deleted — and the authoring options simply disappear until the extension is active again.
+
+## Data access grants
+
+Most extensions only work with their own data. An extension that integrates with core data — for example a connector that syncs todos with an external task tracker such as Jira or MS Planner ([#921](https://github.com/vincentmakes/turbo-ea/discussions/921)) — must declare **grants** in its signed manifest:
+
+- `core.todos.read` / `core.todos.write` — read or change todos through the extension SDK. Write implies read. On system todos (such as sign-off requests) a sync extension can only set the external reference shown as a chip — it can never complete, edit, reassign or delete them, and it can never touch todos owned by another extension.
+- `core.events.todo` — receive todo change events, so a connector reacts to a completed todo immediately instead of on its next polling cycle.
+- `core.users.read` — look up users (name, email, active flag only) so a connector can match assignees with accounts in the external tool. No role, login or preference data is exposed, and extensions can never change users.
+- `core.cards.read` — read cards, relations and the metamodel, e.g. so a connector can match your applications against records in an external system. Archived cards stay out of view.
+- `core.cards.write` — create, update or archive cards and add relations, with exactly the validation the app's own editor applies. Updates merge field values rather than replacing them, so an extension can never wipe data it does not manage, and there is **no permanent delete** — archiving, with its restore window, is the only removal an extension can perform.
+- `core.events.card` — receive card and relation change events, so a connector reacts to inventory changes immediately instead of on its next polling cycle.
+
+Grants ride inside the vendor-signed bundle, so they are fixed at packaging time and visible before you install. They only apply while the extension is installed, enabled and licensed — disabling it or letting the license lapse revokes access immediately, no restart needed. Every change an extension makes is recorded in **Admin → Audit log** under the **Extension** origin as an `ext:<key>` batch with per-field diffs, and can be rolled back from there like any other batch. A todo mirrored from an external tracker shows a chip linking to the external item.
+
+Operators keep the last word on inventory writes: setting the environment variable `EXTENSION_WRITES_ENABLED=false` pauses every extension write instantly (reads keep working, no restart needed), and `EXTENSION_MAX_WRITES_PER_BATCH` / `EXTENSION_MAX_BATCHES_PER_MINUTE` cap how much a single extension can change per batch and per minute.
 
 ## Where extension pages appear
 

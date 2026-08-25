@@ -21,6 +21,18 @@ Dies ist ideal für Portfolioanalysen — zum Beispiel Anwendungen nach Geschäf
 
 Wenn KI konfiguriert und Portfolio-Erkenntnisse von einem Administrator aktiviert sind, zeigt der Portfoliobericht eine Schaltfläche **KI-Erkenntnisse**. Ein Klick sendet eine Zusammenfassung der aktuellen Ansicht an den KI-Anbieter, der strategische Erkenntnisse über Konzentrationsrisiken, Modernisierungsmöglichkeiten, Lebenszyklus-Bedenken und Portfolio-Ausgewogenheit liefert. Das Erkenntnispanel ist zusammenklappbar und kann nach Änderung von Filtern oder Gruppierung neu generiert werden.
 
+### Vom Bericht ins Inventar
+
+Ein Klick auf eine Gruppe öffnet eine Seitenleiste mit den Karten der Gruppe. Deren Schaltfläche **Im Inventar anzeigen** öffnet das Inventar genau auf diesem Ausschnitt. Ist der Bericht nach einem eigenen Feld des Kartentyps gruppiert, kommt das Inventar nach demselben Feld gruppiert an: die angeklickte Gruppe ist ausgeklappt, alle anderen sind eingeklappt (die Anzahlen bleiben sichtbar), und Suche, Attribut-, Beziehungs- und Tag-Filter des Berichts werden übernommen — bereit für „alle auswählen“ und die [Massenbearbeitung](inventory.md#mass-edit). Bei Gruppierung nach einem verknüpften Kartentyp (etwa Organisation) kommt das Inventar stattdessen auf diese verknüpfte Karte gefiltert an. Bei aktiven *verschachtelten Gruppen* ist die Schaltfläche ausgeblendet: Für einen aufsummierten Teilbaum gibt es keinen einzelnen Inventarfilter.
+
+### Filter einklappen
+
+Die Zeile **Filter** lässt sich einklappen: Ein Klick auf ihre Kopfzeile blendet die Filtersteuerelemente aus und gibt dem Diagramm den vertikalen Platz zurück. Die Einstellung wird zusammen mit der übrigen Konfiguration des Berichts gespeichert, sodass ein Bericht wieder so öffnet, wie Sie ihn verlassen haben. Auch im eingeklappten Zustand zeigt die Kopfzeile weiterhin an, wie viele Filter aktiv sind, und **Alle löschen** bleibt erreichbar — ein eingeklappter Bereich verbirgt niemals die Tatsache, dass die Daten gefiltert sind.
+
+### Zeitreise
+
+Der Zeitleistenregler trägt dieselben Transformationsinstrumente wie der [Abhängigkeitsbericht](#abhangigkeitsbericht): Markierungen an jedem Datum, an dem eine Anwendung live geht (blau) oder ausscheidet (rot), Chips, die die sich ändernden Anwendungen benennen, solange der Regler auf einer Markierung steht, Pfeiltasten, die von Änderung zu Änderung springen, und Chips, die beim Blick nach vorn die Transformation zusammenfassen („+4 kommen hinzu · −7 scheiden aus“ — auch in den Kopfzeilen von Druck und Export enthalten). Ein Klick auf eine Markierung oder einen Chip hebt die Anwendungen hervor, die sich dort ändern — der Rest der Ansicht wird abgeblendet, während sie pulsieren, und eine Anwendung, die zum gewählten Datum bereits verschwunden ist, wird nur für die Dauer des Pulsierens eingeblendet und danach wieder ausgeblendet.
+
 ## Flexibles Portfolio
 
 ![Flexibles Portfolio — Datenobjekt-Portfolio gruppiert nach Anwendung, gefärbt nach Datensensibilität](../assets/img/de/57_bericht_flexibles_portfolio.png)
@@ -39,7 +51,14 @@ Wenn die Beziehungen einer Karte einen «Typ»-Wert tragen — etwa den **Verwen
 
 Beim Gruppieren nach einem verknüpften Kartentyp mit Hierarchie (z. B. Geschäftsfähigkeit oder Organisation) erscheint neben der Auswahl *Gruppieren nach* ein Schalter **Verschachtelte Gruppen**. Aktivieren Sie ihn, um die Gruppen als ineinander verschachtelte Boxen entlang der Eltern-Kind-Hierarchie des verknüpften Typs darzustellen — wie in der Fähigkeitskarte. Die Auswahl **Anzeigetiefe** steuert, wie viele Ebenen aufgeklappt werden: Jede Karte erscheint unter ihrer tiefsten sichtbaren Gruppe, und Gruppen unterhalb der Tiefengrenze rollen ihre Karten in den nächsten sichtbaren Vorfahren hoch. Zweige ohne Karten werden ausgeblendet.
 
+### Spaltenanzahl wählen
+
+Das Kartenraster in den Berichten **Portfolio**, **Flexibles Portfolio**, **Fähigkeitskarte** und **Prozesslandkarte** hat eine **Spaltenauswahl** in der Werkzeugleiste — drei Schaltflächen für eine, zwei oder drei Spalten. Wählen Sie weniger Spalten, wenn die Karten viele Informationen enthalten und breit genug zum Lesen sein sollen; wählen Sie drei, um mehr von der Landschaft auf einmal zu sehen. Die Auswahl wird pro Bericht gespeichert, wird in einem [gespeicherten Bericht](saved-reports.md) mitgeführt und beim Drucken oder Exportieren verwendet. Schmale Bildschirme reduzieren weiterhin von selbst auf eine oder zwei Spalten. Die Auswahl wirkt sich nach unten aus: Jede Ebene unterhalb der ersten erhält eine Spalte weniger. Bei einer Spalte steht Ebene 2 dreispaltig und Ebene 3 zweispaltig, bei drei Spalten bleibt alles darunter gestapelt und in voller Breite. Eine Ebene reduziert sich weiterhin selbst, wenn eine Karte wirklich zu schmal dafür ist.
+
 ## Fähigkeitskarte
+
+Ein Klick auf eine Fähigkeit öffnet ein Seitenpanel mit allen Anwendungen ihres Teilbaums. Auf der untersten Ebene bietet das Panel **In Inventar anzeigen**, was zu den damit verknüpften Anwendungen führt.
+
 
 ![Geschäftsfähigkeitskarte](../assets/img/de/11_faehigkeiten_karte.png)
 
@@ -48,6 +67,12 @@ Die **Fähigkeitskarte** zeigt eine hierarchische **Heatmap** der Geschäftsfäh
 - **Hierarchie** — Hauptfähigkeiten enthalten ihre Unterfähigkeiten
 - **Heatmap-Einfärbung** — Blöcke werden basierend auf einer ausgewählten Metrik eingefärbt (z.B. Anzahl unterstützender Anwendungen, durchschnittliche Datenqualität oder Risikoniveau)
 - **Zum Erkunden klicken** — Klicken Sie auf eine beliebige Fähigkeit, um in deren Details und unterstützende Anwendungen einzutauchen
+
+**Auf bestimmte Fähigkeiten eingrenzen** — Standardmäßig zeigt die Karte alle Fähigkeiten. Über den Fähigkeits-Chip in der Symbolleiste öffnen Sie eine Auswahl und wählen eine oder mehrere Fähigkeiten aus; die Karte zeigt dann nur diese und alles darunter. Unterfähigkeiten werden automatisch einbezogen — die Auswahl einer obersten Fähigkeit liefert also ihren gesamten Zweig. Die **Anzeigetiefe** zählt ab den ausgewählten Fähigkeiten, *Ebene 2* bedeutet also stets zwei Stufen unterhalb dessen, was Sie gerade betrachten. Der Bereich wird mit dem Bericht gespeichert, sodass ein gespeicherter Bericht wieder im selben Zweig öffnet.
+
+**Zeitreise** — Der Zeitleistenregler trägt dieselben Transformationsinstrumente wie der [Abhängigkeitsbericht](#abhangigkeitsbericht): Markierungen an jedem Datum, an dem eine Anwendung live geht (blau) oder ausscheidet (rot), Chips, die die sich ändernden Anwendungen benennen, solange der Regler auf einer Markierung steht, Pfeiltasten, die von Änderung zu Änderung springen, und Chips, die beim Blick nach vorn die Transformation zusammenfassen (auch in den Kopfzeilen von Druck und Export enthalten). Ein Klick auf eine Markierung oder einen Chip hebt die Änderung hervor: Bei eingeschaltetem **Anwendungen anzeigen** pulsieren die Chips der sich ändernden Anwendungen, während der Rest abgeblendet wird, und eine Anwendung, die zum gewählten Datum bereits verschwunden ist, wird nur für die Dauer des Pulsierens eingeblendet; ist der Schalter aus, fällt das Schlaglicht auf die Fähigkeitsblöcke, die die sich ändernden Anwendungen enthalten — blau, wo Anwendungen nur hinzukommen, rot, wo sie nur ausscheiden, violett, wo beides geschieht.
+
+**Filter einklappen** — Die Zeile **Anwendungsfilter** lässt sich einklappen; ein Klick auf ihre Kopfzeile gibt den Platz wieder frei. Der Zustand wird mit dem Bericht gespeichert, die Anzahl der aktiven Filter bleibt auf der eingeklappten Kopfzeile sichtbar, und **Alle löschen** bleibt erreichbar, ohne vorher aufklappen zu müssen.
 
 ## Lebenszyklus-Bericht
 
@@ -61,6 +86,8 @@ Der **Lebenszyklus-Bericht** zeigt eine **Zeitleisten-Visualisierung** darüber,
 
 Komponenten werden als horizontale Balken dargestellt, die ihre Lebenszyklusphasen umspannen: Planung, Einführung, Aktiv, Auslauf und Lebensende.
 
+**Auf bestimmte Karten eingrenzen** — Sobald ein Kartentyp gewählt ist, öffnet der Chip daneben eine Auswahl: Wählen Sie eine oder mehrere Karten, und die Zeitachse zeigt nur diese und alles darunter. Unterkarten werden automatisch einbezogen. Solange *Alle Typen* eingestellt ist, bleibt der Chip deaktiviert, da eine Eingrenzung eine einzelne Hierarchie benötigt.
+
 ## Abhängigkeitsbericht
 
 ![Abhängigkeitsbericht](../assets/img/de/13_abhaengigkeiten.png)
@@ -71,6 +98,9 @@ Der **Abhängigkeitsbericht** visualisiert **Verbindungen zwischen Komponenten**
 - **Typfilterung** — Nur bestimmte Kartentypen und Beziehungstypen anzeigen
 - **Interaktive Erkundung** — Klicken Sie auf einen beliebigen Knoten, um den Graph auf diese Karte zu zentrieren
 - **Auswirkungsanalyse** — Den Wirkungsradius von Änderungen an einer bestimmten Komponente verstehen
+- **Zeitreise** — Sobald Sie eine Karte zentriert haben (oder zur Tabellenansicht gewechselt sind), ziehen Sie den Zeitleistenregler, um die Landschaft zu einem beliebigen Datum zu sehen. Karten, die noch nicht live sind, werden ausgeblendet — eine Karte tritt an ihrem **Aktiv**-Datum in die Landschaft ein; liegt dieses Datum noch in der Zukunft oder fehlt es ganz, bleibt die Karte in der Standardansicht verborgen. Karten, die zwischen heute und einem zukünftigen Datum **hinzukommen**, sind an diesem Datum schlicht Teil der Landschaft — sie tragen nur einen violetten Rahmen und keine Kennzeichnung, denn die Zeitreise zeigt den Zustand, wie er sein wird. **Ausgemusterte** Karten bleiben zu jedem Datum nach ihrer Ausmusterung abgeblendet und mit *AUSGEMUSTERT* gekennzeichnet im Diagramm — so zeigt eine Transformation, was sie entfernt und was sie belässt. Der Schalter **Ausgemusterte Karten beibehalten** in der Werkzeugleiste blendet sie aus, sodass nur die zum gewählten Datum aktiven Karten zu sehen sind. Sein Gegenstück **Geplante Karten einblenden** zeigt Karten, die noch nicht begonnen haben — abgeblendet und mit *KOMMEND* gekennzeichnet — zu jedem Datum vor ihrem Start, sodass auch die Gegenwarts- oder Vergangenheitsansicht zeigt, was kommt. Die Zeitleiste ist mit jedem Datum markiert, an dem Karten des angezeigten Diagramms live gehen (blau) oder ausscheiden (rot); ein Klick auf eine Markierung springt direkt zu dieser Änderung, und mit den Pfeilen neben dem Regler springen Sie von Änderung zu Änderung. Solange der Regler auf einer Markierung steht, werden die gezählten Karten als Chips unterhalb der Markierungen benannt, gruppiert hinter einem **+** für die Karten, die live gehen, und einem **−** für die ausscheidenden — jeder Chip trägt die Farbe seines Kartentyps, und ein Klick hebt genau diese eine Karte hervor. Jede Markierung ist blau, wenn dort nur Karten live gehen, rot, wenn nur ausgeschieden wird, und violett, wenn beides geschieht. Liegen Änderungen dicht beieinander, fasst die Zeitleiste sie zu einer Markierung zusammen — breiter gezeichnet und mit dem abgedeckten Zeitraum beschriftet; eine Karte, die darin live geht und wieder ausscheidet, wird auf beiden Seiten genannt. Die Pfeile behandeln eine zusammengefasste Markierung als einen einzigen Halt: Ein Druck springt über alles hinweg, was sie abdeckt, statt die dahinterliegenden Daten einzeln abzuschreiten. Steht der Regler auf einer zusammengefassten Markierung, zeigt die Landschaft den Stand am **Ende** ihres Zeitraums — alles, was sie abdeckt, ist eingetreten — und die Datumsangabe neben dem Regler nennt diesen Zeitraum statt eines einzelnen Tages. Ein Klick — und ebenso ein Sprung mit den Pfeilen — hebt zugleich die beteiligten Karten hervor: Die Zeichenfläche wird kurz abgeblendet, während sie in der Farbe der Markierung pulsieren; eine ausscheidende Karte, die durch **Ausgemusterte Karten beibehalten** ausgeblendet ist, wird nur für die Dauer des Pulsierens eingeblendet. Beim Blick nach vorn fassen Chips über dem Regler die Transformation zusammen (+4 kommen hinzu · −7 scheiden aus). Beziehungen zu ausgemusterten Karten werden rot gestrichelt dargestellt — die Abhängigkeiten, die die Transformation kappt — und solange der Regler auf einer Markierung steht, bleiben die dort ausgemusterten Karten im Diagramm — abgeblendet und mit *AUSGEMUSTERT* gekennzeichnet — selbst wenn **Ausgemusterte Karten beibehalten** aus ist. Die verbleibenden Karten werden dort gekennzeichnet, wo sich ihre Verbindungen ändern: ein rotes Symbol für eine gekappte Verbindung, wenn dort ein Nachbar ausgemustert wird, ein blaues, wenn dort einer live geht, und beide, wenn beides geschieht. Die Markierung trägt sie: Verlässt man sie, verschwinden sie, sodass eine einzelne Ausmusterung ihre Nachbarn nicht mehr zu jedem späteren Datum kennzeichnet. Der Regler wirkt auf alle Ansichten, und das Datum wird mit dem Bericht gespeichert.
+
+Welche Karte Sie ins Zentrum stellen, entscheidet, wie viel Sie sehen — die Auswahl listet deshalb je Typ die am besten vernetzten Karten zuerst. Eine Fähigkeit ist meist die aufschlussreichste Wahl: Sie ist der einzige Kartentyp, der in einem Schritt sowohl die darüberliegenden Ziele als auch die darunterliegenden Anwendungen erreicht.
 
 ### Layered Dependency View (geschichtete Abhängigkeitsansicht)
 
@@ -91,15 +121,16 @@ Wechseln Sie über die Ansichtsmodus-Schaltflächen in der Symbolleiste zur **La
 - **Klicken zum Inspizieren** — Klicken Sie auf einen beliebigen Knoten, um das Kartendetail-Seitenpanel zu öffnen.
 - **Neu zentrieren** — Mit Umschalt+Klick oder langem Drücken auf eine Karte zentrieren Sie das Diagramm auf sie; die Symbolleisten-Schaltflächen **Zurück zur Kartenauswahl**, **Vorherige Karte** und **Nächste Karte** durchlaufen Ihren Navigationsverlauf.
 - **Hervorhebungsmodus** — Fahren Sie mit der Maus über eine Karte, um ihre Verbindungen hervorzuheben; aktivieren Sie auf Touch-Geräten den **Hervorhebungsmodus** im Bedienfeld, um stattdessen per Tippen hervorzuheben.
-- **Erweiterungsmodus** — Aktivieren Sie den **Erweiterungsmodus** im Bedienfeld und klicken Sie dann auf eine Karte, um bei Bedarf alle ihre Beziehungen anzuzeigen.
+- **Erweiterungsmodus** — Aktivieren Sie den **Erweiterungsmodus** im Bedienfeld und klicken Sie dann auf eine Karte, um bei Bedarf alle ihre Beziehungen anzuzeigen. Die Karte, auf die das Diagramm zentriert ist, trägt einen doppelten Rahmen in der Farbe ihres Kartentyps, jede erweiterte Karte einen dünneren — so bleibt Ihr Bezugspunkt sichtbar, während das Diagramm wächst.
 - **Übergeordnetes anzeigen / Untergeordnete anzeigen** — Zwei gezielte Alternativen zum Erweiterungsmodus. Aktivieren Sie **Übergeordnetes anzeigen** (Pfeil nach oben) oder **Untergeordnete anzeigen** (Pfeil nach unten) im Bedienfeld und klicken Sie dann auf eine Karte, um nur ihr übergeordnetes Hierarchieelement oder ihre direkten untergeordneten Elemente zum Diagramm hinzuzufügen. Angezeigte Karten bleiben im Diagramm — so können Sie übergeordnete und untergeordnete Elemente kombinieren — und werden beim erneuten Zentrieren oder Zurücksetzen der Ansicht entfernt.
 - **Kein Zentralknoten erforderlich** — Im Abhängigkeitsbericht zeigt die Layered Dependency View alle Karten an, die dem aktuellen Typfilter entsprechen, sodass Sie nicht zuerst eine Startkarte auswählen müssen.
 
 **Die Ansicht anpassen** (über die Symbolleiste)
 
-- **Menü Kartenanzeige** — Aktivieren Sie das **Typ**-Label und einen **Lebenszyklus-Statuspunkt**, schalten Sie **Hierarchie-Markierungen** ein (ein kleiner Pfeil auf jeder Karte, die ein nicht angezeigtes übergeordnetes Element darüber oder untergeordnete Elemente darunter hat — ein Hinweis, die Anzeige-Werkzeuge zu verwenden) und wählen Sie **zusätzliche Attributfelder** für jede Karte — die ersten beiden erscheinen auf der Karte, der vollständige Satz im Tooltip beim Überfahren. Die Auswahl wird zwischen Besuchen gespeichert.
-- **End-of-Life-Karten anzeigen** — Verbundene Karten, deren Lebenszyklus das Ende der Lebensdauer erreicht hat, werden standardmäßig ausgeblendet, damit das Diagramm fokussiert bleibt; aktivieren Sie diese Umschaltung (im Menü **Kartenanzeige**), um sie wieder einzublenden. Die zentrierte Karte wird immer angezeigt, auch wenn sie selbst End of Life ist.
-- **Beziehungswerte anzeigen** — Viele Beziehungen lassen sich mit einem Wert qualifizieren (z. B. *unterstützt* eine Anwendung eine Fähigkeit als *Führend*, *Unterstützend* oder *Keine Unterstützung*). Ist die Option aktiv (Standard), erscheinen diese Werte in Klammern neben der Beziehungsbeschriftung (*unterstützt [Führend]*) und werden in Bildexporten mit ausgegeben. Schalten Sie sie im Menü **Kartenanzeige** aus, um die Ansicht aufzuräumen; Beziehungen ohne Wert bleiben so oder so unverändert.
+- **Auf Karte anzeigen** — Eine eigene Schaltfläche in der Symbolleiste (das Augensymbol) listet als **Kontrollkästchen** alles auf, was eine Karte anzeigen kann: das **Typ**-Label, den **Untertyp**, einen **Lebenszyklus-Statuspunkt** und jedes verfügbare **Attributfeld**, jeweils unter dem Kartentyp eingeordnet, zu dem es gehört. Die ersten beiden Zeilen erscheinen auf der Karte selbst, der vollständige Satz im Tooltip. Ein Abzeichen an der Schaltfläche zählt, was gerade angezeigt wird. Die Auswahl bleibt zwischen Besuchen erhalten und wird von **Diagramm erstellen** übernommen: Ein aus diesem Bericht erzeugtes DrawIO-Diagramm öffnet sich mit denselben Zeilen, ausgewählt über dasselbe Menü. Auf dem Smartphone öffnet sich die Liste im Vollbild. **Alle löschen** entfernt sämtliche Häkchen auf einmal.
+- **End-of-Life-Karten anzeigen** — Verbundene Karten, die **zum auf der Zeitleiste gewählten Datum** das Ende der Lebensdauer erreicht haben, werden standardmäßig ausgeblendet, damit das Diagramm fokussiert bleibt; aktivieren Sie diese Umschaltung (im Menü **Ansichtsoptionen**), um sie wieder einzublenden. Die zentrierte Karte wird immer angezeigt, auch wenn sie selbst End of Life ist.
+- **Beziehungsbeschriftungen anzeigen** — Das Verb jeder Beziehung (*unterstützt*, *nutzt*, …) wird auf ihrer Linie angezeigt. Standardmäßig aktiv; im Menü **Ansichtsoptionen** ausschalten, um dichte Landschaften aufgeräumter darzustellen. Linien und Pfeilspitzen zeigen weiterhin, was womit und in welcher Richtung verbunden ist.
+- **Beziehungswerte anzeigen** — Viele Beziehungen lassen sich mit einem Wert qualifizieren (z. B. *unterstützt* eine Anwendung eine Fähigkeit als *Führend*, *Unterstützend* oder *Keine Unterstützung*). Ist die Option aktiv (Standard), erscheinen diese Werte in Klammern neben der Beziehungsbeschriftung (*unterstützt [Führend]*) und werden in Bildexporten mit ausgegeben. Schalten Sie sie im Menü **Ansichtsoptionen** aus, um die Ansicht aufzuräumen; Beziehungen ohne Wert bleiben so oder so unverändert.
 - **Neu anordnen** — Ziehen Sie eine Karte, um sie innerhalb ihrer Ebene zu verschieben, oder ziehen Sie ein ganzes **Ebenen-Rechteck**, um es mit all seinen Karten zu verschieben. **Ansicht zurücksetzen** (in der linken Symbolleiste) stellt die automatische Anordnung wieder her und verwirft alle Erkundungen.
 - **Hintergrund** — Wechseln Sie den Leinwandhintergrund zwischen Raster, Punkten und ohne.
 - **Exportieren und Vollbild** — Exportieren Sie das Diagramm als **PNG** oder **SVG** oder öffnen Sie es im **Vollbild**.
@@ -144,6 +175,8 @@ Sobald mindestens eine Kostenquelle aktiv ist, sind die Treemap-Rechtecke **ankl
 - **Mehrere Kostenquellen aktiv** — der Drilldown zeigt **eine Treemap pro Quelle nebeneinander** (eine Spalte auf schmalen Anzeigen, zwei auf breiten). Jedes Panel hat seine eigene Überschrift, seinen eigenen Gesamtbetrag und seinen eigenen `% des Gesamtwerts` im Tooltip — so behalten unterschiedliche Kartentypen ihre eigene Skala, anstatt in ein einziges Diagramm gequetscht zu werden.
 
 Der Zeitleisten-Schieberegler, die Kostenquellen-Auswahl und andere Filter bleiben beim Drilldown erhalten, und die Drilldown-Ebene ist Teil der gespeicherten Berichtskonfiguration — wer einen Bericht im hineingezoomten Zustand speichert, öffnet ihn direkt auf dieser Ebene wieder. Wenn **keine** Kostenquelle aktiv ist, öffnet ein Klick auf ein Rechteck stattdessen das Karten-Seitenpanel (es gibt nichts aufzuschlüsseln).
+
+**Auf bestimmte Karten eingrenzen** — Der Chip neben der Kartentyp-Auswahl öffnet eine Auswahl: Wählen Sie eine oder mehrere Karten, und Treemap, Summen und Tabelle zeigen nur diese und alles darunter. Während Sie in ein Rechteck hineingezoomt haben, wird der Chip ausgeblendet, da eine Detailansicht bereits zu einem anderen Kartentyp gewechselt ist; verlassen Sie sie, ist die Eingrenzung weiterhin aktiv.
 
 ## Matrixbericht
 
@@ -198,6 +231,8 @@ Zwei Kacheln zählen die Karten je Achse, die überhaupt keine Beziehung haben. 
 
 Der Excel-Export erzeugt zwei Blätter: das Raster wie auf dem Bildschirm und eine Zeile je Beziehung mit ihren Werten in Spalten — das Blatt zum Pivotieren. Der PowerPoint-Export erfasst das Bild.
 
+**Beide Achsen eingrenzen** — Jede Achse hat ihren eigenen Chip neben ihrer Typ-Auswahl, sodass Sie *diese Fähigkeiten × diese Anwendungen* abfragen können. Die Kennzahlen über dem Raster folgen der Eingrenzung, sodass die Zahlen immer das Gezeigte beschreiben. Ein Wechsel des Kartentyps einer Achse löscht deren Eingrenzung; beim Transponieren tauschen die beiden Eingrenzungen mit den Achsen.
+
 ## Datenqualitätsbericht
 
 ![Datenqualitätsbericht](../assets/img/de/33_bericht_datenqualitaet.png)
@@ -207,6 +242,19 @@ Der **Datenqualitätsbericht** ist ein **Vollständigkeits-Dashboard**, das zeig
 - **Gesamtbewertung** — Durchschnittliche Datenqualität über alle Karten
 - **Nach Typ** — Aufschlüsselung, die zeigt, welche Kartentypen die beste/schlechteste Vollständigkeit haben
 - **Einzelne Karten** — Liste der Karten mit der niedrigsten Datenqualität, priorisiert zur Verbesserung
+
+Karten mit einem leeren **Pflichtfeld** erhalten immer **0 %** — die gewichtete Berechnung greift erst wieder, wenn alle Pflichtfelder ausgefüllt sind — die Liste der schlechtesten Werte zeigt also genau die Karten, deren Pflichtangaben noch fehlen.
+
+### In eine Zahl hineinnavigieren
+
+Jede Kennzahl im Bericht ist ein Einstiegspunkt, nicht nur eine Anzeige:
+
+- **Klicken Sie auf ein Balkensegment** in *Vollständigkeit nach Typ* — rechts öffnet sich ein Panel mit den Karten dieses Typs in diesem Band (Vollständig, Teilweise oder Minimal).
+- **Klicken Sie auf einen Balken** in *Durchschnittliche Vollständigkeit nach Typ* oder auf eine Zeile in der Tabellenansicht, um alle Karten dieses Typs aufzulisten.
+- **Klicken Sie auf die Kachel Verwaist oder Veraltet**, um die Karten hinter dieser Zahl aufzulisten.
+
+Klicken Sie im Panel auf eine Karte, um deren Detailbereich zu öffnen, oder auf **In Inventar anzeigen**, um im [Inventar](inventory.md) weiterzuarbeiten — dieses erscheint nach Datenqualität gruppiert, mit dem angeklickten Band aufgeklappt und den übrigen daneben eingeklappt, sodass Sie sofort mit der Korrektur beginnen können. Die Panels Verwaist und Veraltet führen in den passenden Inventarfilter — über alle Kartentypen hinweg.
+
 
 ## End-of-Life-Bericht (EOL)
 
@@ -236,3 +284,5 @@ Beim Export aktive Filter- und Gruppierungseinstellungen werden auf der Titelfol
 ## Prozesskarte
 
 Die **Prozesskarte** visualisiert die Geschäftsprozesslandschaft der Organisation als strukturierte Karte und zeigt Prozesskategorien (Management, Kern, Unterstützung) und ihre hierarchischen Beziehungen.
+
+**Auf bestimmte Prozesse eingrenzen** — Der Chip neben *Anzeigetiefe* öffnet eine Auswahl: Wählen Sie einen oder mehrere Prozesse, und die Karte zeigt nur diese und alles darunter. Teilprozesse werden automatisch einbezogen, und die **Anzeigetiefe** zählt ab Ihrer Auswahl. Das Hineinzoomen per Klick funktioniert weiterhin — nun innerhalb der Eingrenzung. Dies ist ein anderes Bedienelement als die Zeile **Bereich** darunter, die nach verknüpfter Organisation oder Geschäftskontext filtert.

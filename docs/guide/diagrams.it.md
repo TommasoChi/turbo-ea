@@ -79,13 +79,23 @@ Rimuovere un arco che porta una relazione reale apre «Eliminare la relazione tr
 
 ### Prospettive di visualizzazione
 
-Il menu a tendina **Vista** nella barra strumenti ricolora ogni scheda sulla tela in base a un attributo:
+Il menu a tendina **Colora per** nella barra strumenti ricolora le schede sulla tela:
 
 - **Colori delle schede** (predefinito) -- ogni scheda usa il colore del proprio tipo.
 - **Stato di approvazione** -- ricolora per `approvata` / `in attesa` / `rotta`.
-- **Valori di campo** -- scegliete qualsiasi campo a selezione singola sui tipi di scheda presenti sulla tela (es. *Ciclo di vita*, *Stato*). Le celle senza valore cadono su un grigio neutro.
+- **Valori di campo** -- spuntate un campo a selezione singola sotto qualsiasi tipo di scheda presente sulla tela. **Più tipi di scheda possono portare una regola ciascuno nello stesso momento**: le Applicazioni per criticità *e* i Componenti IT per modello di hosting. Un tipo senza regola mantiene il colore che ha già, compreso un riempimento impostato a mano; diventa grigia solo una scheda la cui regola non trova alcun valore. Un secondo campo all'interno di uno stesso tipo sostituisce il primo, perché una scheda ha un solo riempimento.
 
-Una legenda fluttuante in basso a sinistra mostra la mappatura attiva. La vista scelta viene salvata col diagramma.
+Una legenda fluttuante in basso a sinistra mostra una scala per ogni regola attiva. Le regole di campo e lo **Stato di approvazione** sono alternative, non livelli: sceglierne una cancella l'altra. Togliendo ogni regola la tela torna ai colori delle schede. La scelta viene salvata col diagramma.
+
+#### Mostra sulla scheda
+
+Un secondo pulsante nella barra strumenti, **Mostra sulla scheda**, decide **cosa dice ogni forma**. Spuntate il **tipo di scheda**, il **sottotipo** o qualsiasi attributo dei tipi di scheda presenti sulla tela: ogni forma acquisirà piccole righe di dettaglio sotto il proprio nome. I campi sono elencati sotto il tipo di scheda a cui appartengono; un campo condiviso da più di questi tipi è raggruppato sotto **Comuni**. È un pulsante distinto da **Colora per**, così nessuna delle due liste costringe a scorrere l'altra. **Cancella tutto** toglie tutte le spunte in una volta.
+
+Le prime due selezioni vengono disegnate sulla forma: una scheda ha una dimensione limitata e il testo che non entra sborderebbe dal bordo. Tutto ciò che spuntate viene ricordato, così ampliare la selezione in seguito cambia quali due appaiono senza doverle riscegliere.
+
+Queste righe vengono salvate col diagramma, così ogni lettore — anche chi apre un link pubblicato — vede le stesse forme. Le schede figlie espanse mantengono solo il nome: sono troppo piccole per altro.
+
+Il pulsante **Crea diagramma** del [rapporto sulle dipendenze](reports.md) trasferisce le proprie impostazioni di visualizzazione, così un diagramma generato da un rapporto mostra esattamente le righe che il rapporto mostrava.
 
 ### Come vengono disegnati gli archi di relazione
 
@@ -122,7 +132,13 @@ Il pulsante **Sync** della barra strumenti apre il pannello laterale con tutto c
 - **Nuove relazioni** -- archi disegnati tra schede, pronti per essere creati nell'inventario.
 - **Relazioni rimosse** -- archi di relazione cancellati dalla tela, in coda per `DELETE /relations/{id}`. *Mantieni in inventario* reinserisce l'arco.
 - **Modifiche gerarchiche** -- spostamenti di trascinamento dentro / fuori dai contenitori confermati, in coda come aggiornamenti di `parent_id`.
-- **Inventario modificato** -- schede aggiornate nell'inventario dall'apertura del diagramma, pronte per essere riportate sulla tela.
+- **Inventario modificato** -- modifiche apportate all'inventario dopo il salvataggio del diagramma, pronte per essere riportate sulla tela. Ogni riga offre l'azione corrispondente, e **Accetta tutto** risolve tutte le righe in una volta:
+    - una scheda **rinominata** -- *Accetta aggiornamento* riscrive l'etichetta della cella;
+    - una scheda **eliminata** o **archiviata** -- *Rimuovi dal diagramma* toglie la cella (e i suoi collegamenti) dalla tela;
+    - una **relazione eliminata** -- *Rimuovi il collegamento dal diagramma* toglie il collegamento obsoleto dalla tela;
+    - una relazione con **direzione del flusso** cambiata -- *Accetta aggiornamento* allinea la freccia all'inventario.
+
+Turbo EA **controlla automaticamente le modifiche dell'inventario a ogni apertura di un diagramma** -- un badge blu sul pulsante Sync della barra strumenti conta le modifiche da rivedere. Nulla viene applicato senza la vostra conferma; il badge vi invita solo ad aprire il pannello. Il pulsante **Verifica aggiornamenti** nel pannello riesegue lo stesso controllo su richiesta.
 
 Il pulsante Sync della barra strumenti mostra una pillola pulsante «N non sincronizzate» finché esiste lavoro in sospeso. Lasciare la scheda con modifiche non sincronizzate attiva un avviso del browser, e la tela viene salvata automaticamente nello storage locale ogni cinque secondi per poter essere ripristinata dopo un aggiornamento accidentale.
 

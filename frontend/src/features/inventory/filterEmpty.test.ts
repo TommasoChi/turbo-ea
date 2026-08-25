@@ -3,17 +3,22 @@ import type { Filters } from "./InventoryFilterSidebar";
 import {
   EMPTY_VALUE,
   filtersAfterTypeToggle,
+  normalizeRelationFilterKeys,
+  normalizeSelectAttributeFilters,
   tagEmptyToken,
   tagsToFilterText,
   valueIsEmpty,
 } from "./InventoryFilterSidebar";
+import type { FieldDef } from "@/types";
 
 const baseFilters: Filters = {
   types: ["Application"],
   search: "",
   subtypes: ["business_app"],
   lifecyclePhases: ["active"],
-  dataQualityMin: 50,
+  dataQualityBands: ["partial"],
+  orphanedOnly: false,
+  staleOnly: false,
   approvalStatuses: ["APPROVED"],
   showArchived: false,
   attributes: { vendor: ["SAP"] },
@@ -69,6 +74,95 @@ describe("tagsToFilterText", () => {
   });
 });
 
+describe("normalizeSelectAttributeFilters", () => {
+  const fields: FieldDef[] = [
+    {
+      key: "timeModel",
+      label: "TIME Model",
+      type: "single_select",
+      options: [{ key: "invest", label: "Invest" }],
+    },
+    {
+      key: "platforms",
+      label: "Platforms",
+      type: "multiple_select",
+      options: [{ key: "aws", label: "AWS" }],
+    },
+    { key: "vendor", label: "Vendor", type: "text" },
+    { key: "costTotalAnnual", label: "Annual Cost", type: "cost" },
+  ] as FieldDef[];
+
+  it("promotes URL-seeded scalar values on select fields to arrays (issue: sidebar highlight)", () => {
+    const next = normalizeSelectAttributeFilters(
+      { timeModel: "invest", platforms: "aws" },
+      fields,
+    );
+    expect(next).toEqual({ timeModel: ["invest"], platforms: ["aws"] });
+  });
+
+  it("promotes the (empty) sentinel too, so Not-set deep-links highlight", () => {
+    const next = normalizeSelectAttributeFilters({ timeModel: EMPTY_VALUE }, fields);
+    expect(next).toEqual({ timeModel: [EMPTY_VALUE] });
+  });
+
+  it("leaves non-select scalars and unknown keys untouched", () => {
+    const attributes = { vendor: "sap", costTotalAnnual: "1000", mystery: "x" };
+    expect(normalizeSelectAttributeFilters(attributes, fields)).toBe(attributes);
+  });
+
+  it("leaves already-normalized arrays untouched and returns the same reference when nothing changes", () => {
+    const attributes: Filters["attributes"] = { timeModel: ["invest"] };
+    expect(normalizeSelectAttributeFilters(attributes, fields)).toBe(attributes);
+    expect(normalizeSelectAttributeFilters({}, fields)).toEqual({});
+  });
+});
+
+describe("normalizeRelationFilterKeys", () => {
+  const relTypeKeys = new Set(["relAppToProvider", "relAppToItComponent"]);
+  const cardTypeToRelTypes = new Map([
+    ["Provider", ["relAppToProvider"]],
+    ["ITComponent", ["relAppToItComponent", "relItComponentToApp"]],
+  ]);
+
+  it("remaps a related-card-type key to its relation-type key (deep-link bug: rel_Provider matched nothing)", () => {
+    expect(
+      normalizeRelationFilterKeys({ Provider: ["Altium"] }, relTypeKeys, cardTypeToRelTypes),
+    ).toEqual({ relAppToProvider: ["Altium"] });
+  });
+
+  it("uses the FIRST mapped relation type, matching the relation columns' dedup rule", () => {
+    expect(
+      normalizeRelationFilterKeys({ ITComponent: ["PostgreSQL"] }, relTypeKeys, cardTypeToRelTypes),
+    ).toEqual({ relAppToItComponent: ["PostgreSQL"] });
+  });
+
+  it("keeps keys that already are relation-type keys, same reference when nothing changes", () => {
+    const relations = { relAppToProvider: ["Altium"] };
+    expect(normalizeRelationFilterKeys(relations, relTypeKeys, cardTypeToRelTypes)).toBe(relations);
+    expect(normalizeRelationFilterKeys({}, relTypeKeys, cardTypeToRelTypes)).toEqual({});
+  });
+
+  it("merges when both spellings of the same relation are present", () => {
+    expect(
+      normalizeRelationFilterKeys(
+        { relAppToProvider: ["Altium"], Provider: ["Siemens", "Altium"] },
+        relTypeKeys,
+        cardTypeToRelTypes,
+      ),
+    ).toEqual({ relAppToProvider: ["Altium", "Siemens"] });
+  });
+
+  it("drops unresolvable keys — a deep link may show more items, never a silent zero", () => {
+    expect(
+      normalizeRelationFilterKeys(
+        { Nonsense: ["x"], Provider: ["Altium"] },
+        relTypeKeys,
+        cardTypeToRelTypes,
+      ),
+    ).toEqual({ relAppToProvider: ["Altium"] });
+  });
+});
+
 describe("filtersAfterTypeToggle", () => {
   it("clears type-specific filters (subtypes, attributes, relations) when switching type (issue #686)", () => {
     // Switch from Application to Organization: deselect the old, select the new.
@@ -89,7 +183,7 @@ describe("filtersAfterTypeToggle", () => {
     expect(next.types).toEqual(["Application", "Objective"]);
     expect(next.search).toBe(baseFilters.search);
     expect(next.lifecyclePhases).toEqual(["active"]);
-    expect(next.dataQualityMin).toBe(50);
+    expect(next.dataQualityBands).toEqual(["partial"]);
     expect(next.approvalStatuses).toEqual(["APPROVED"]);
     expect(next.tagIds).toEqual(["t1"]);
   });

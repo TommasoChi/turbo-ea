@@ -17,8 +17,7 @@ import type {
   ICellRendererParams,
   RowClickedEvent,
 } from "ag-grid-community";
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
+import { gridThemeDark, gridThemeLight } from "@/lib/agGridSetup";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -32,6 +31,13 @@ import Typography from "@mui/material/Typography";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import StakeholderHoverCard from "@/components/StakeholderHoverCard";
 import { useColumnFreeze } from "@/components/grid/useColumnFreeze";
+import { useColumnOrder } from "@/components/grid/useColumnOrder";
+import { colIdOf, isOrderableColumn } from "@/components/grid/columnOrder";
+import type { ColumnOrderItem } from "@/components/grid/ColumnOrderSection";
+import { useCellContextMenu } from "@/components/grid/useCellContextMenu";
+import { useFacetColumnSync } from "@/components/grid/useFacetColumnSync";
+import { arrayFacetBinding } from "@/components/grid/facetColumnSync";
+import { dateColumnFilterDef } from "@/lib/dateColumnFilter";
 import MetricCard from "@/features/reports/MetricCard";
 import { api, ApiError } from "@/api/client";
 import type {
@@ -54,10 +60,16 @@ import CreateRiskDialog from "./CreateRiskDialog";
 import RiskImportDialog from "./RiskImportDialog";
 import RiskFilterSidebar, {
   CardFilterOption,
+  CATEGORIES,
   EMPTY_RISK_FILTERS,
+  LEVELS,
   OwnerOption,
   RiskFilters,
+  STATUSES,
 } from "./RiskFilterSidebar";
+import { type GroupAxis, type GroupedRow } from "@/components/grid/rowGrouping";
+import { GroupByMenuButton, useRowGrouping } from "@/components/grid/useRowGrouping";
+import { SEVERITY_COLORS } from "@/theme/tokens";
 import RiskMatrix, { RiskMatrixSelection } from "./RiskMatrix";
 import { emptySeed, RiskDialogSeed, riskLevelChipColor } from "./riskDefaults";
 
@@ -113,7 +125,11 @@ interface RiskPrefs {
   visibleColumns: string[];
   /** colIds frozen to the leading edge via the header pin. */
   frozenColumns: string[];
+  /** colId order, owned by `useColumnOrder` (header drag + Columns tab). */
+  columnOrder: string[];
   sortModel: { colId: string; sort: "asc" | "desc" }[];
+  /** Active group-by axis key (see the groupAxes memo), or null. */
+  groupBy: string | null;
 }
 
 function loadRiskPrefs(): RiskPrefs {
@@ -121,7 +137,9 @@ function loadRiskPrefs(): RiskPrefs {
     filtersCollapsed: false,
     visibleColumns: ALL_RISK_COLUMN_IDS,
     frozenColumns: [],
+    columnOrder: [],
     sortModel: [],
+    groupBy: null,
   };
   try {
     const raw = localStorage.getItem(RISK_PREFS_STORAGE_KEY);
@@ -147,6 +165,12 @@ function loadRiskPrefs(): RiskPrefs {
               typeof id === "string" && ALL_RISK_COLUMN_IDS.includes(id),
           )
         : [],
+      columnOrder: Array.isArray(parsed.columnOrder)
+        ? parsed.columnOrder.filter(
+            (id): id is string =>
+              typeof id === "string" && ALL_RISK_COLUMN_IDS.includes(id),
+          )
+        : [],
       sortModel: Array.isArray(parsed.sortModel)
         ? parsed.sortModel.filter(
             (s): s is { colId: string; sort: "asc" | "desc" } =>
@@ -155,6 +179,7 @@ function loadRiskPrefs(): RiskPrefs {
               (s.sort === "asc" || s.sort === "desc"),
           )
         : [],
+      groupBy: typeof parsed.groupBy === "string" ? parsed.groupBy : null,
     };
   } catch {
     return defaults;
@@ -188,6 +213,9 @@ export default function RiskRegisterPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<RiskFilters>({ ...EMPTY_RISK_FILTERS });
+  // Read by the facet bindings' stable callbacks (see useFacetColumnSync).
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
   const initialPrefs = useMemo(loadRiskPrefs, []);
   const [sidebarCollapsed, setSidebarCollapsedRaw] = useState(
     initialPrefs.filtersCollapsed,
@@ -202,6 +230,10 @@ export default function RiskRegisterPage() {
   const [frozenColumns, setFrozenColumns] = useState<string[]>(
     initialPrefs.frozenColumns,
   );
+  const [columnOrderIds, setColumnOrderIds] = useState<string[]>(
+    initialPrefs.columnOrder,
+  );
+  const [groupBy, setGroupByRaw] = useState<string | null>(initialPrefs.groupBy);
 
   const persistRiskPrefs = useCallback(
     (next: Partial<RiskPrefs>) => {
@@ -209,11 +241,21 @@ export default function RiskRegisterPage() {
         filtersCollapsed: sidebarCollapsed,
         visibleColumns: Array.from(visibleColumns),
         frozenColumns,
+        columnOrder: columnOrderIds,
         sortModel,
+        groupBy,
         ...next,
       });
     },
-    [sidebarCollapsed, visibleColumns, frozenColumns, sortModel],
+    [sidebarCollapsed, visibleColumns, frozenColumns, columnOrderIds, sortModel, groupBy],
+  );
+
+  const setGroupBy = useCallback(
+    (next: string | null) => {
+      setGroupByRaw(next);
+      persistRiskPrefs({ groupBy: next });
+    },
+    [persistRiskPrefs],
   );
 
   // Per-column freeze toggles in the header, persisted with the other grid
@@ -225,6 +267,32 @@ export default function RiskRegisterPage() {
       persistRiskPrefs({ frozenColumns: next });
     },
   });
+
+  // Column order — from the Columns tab's drag handles and from dragging a
+  // column header, which both land here (see `handleDragStopped`).
+  const columnOrder = useColumnOrder<Risk>(gridRef, {
+    order: columnOrderIds,
+    onOrderChange: (next) => {
+      setColumnOrderIds(next);
+      persistRiskPrefs({ columnOrder: next });
+    },
+  });
+
+  // One drag can move a column *and* pin it; capture both at drag end.
+  const handleDragStopped = useCallback(() => {
+    columnOrder.syncFromGrid();
+    columnFreeze.syncFrozenFromGrid();
+  }, [columnOrder, columnFreeze]);
+
+  // The Columns tab's drag handles write straight through — the hook only
+  // reconciles what the grid reports, it doesn't own the sidebar's edits.
+  const handleColumnOrderChange = useCallback(
+    (next: string[]) => {
+      setColumnOrderIds(next);
+      persistRiskPrefs({ columnOrder: next });
+    },
+    [persistRiskPrefs],
+  );
 
   const setSidebarCollapsed = useCallback(
     (updater: boolean | ((prev: boolean) => boolean)) => {
@@ -383,6 +451,115 @@ export default function RiskRegisterPage() {
     });
   }, [rows, matrixSelection, matrixView]);
 
+  // ── Group-by (collapsible group headers — shared hook, discussion #933).
+  //    Status / category / level axes use the sidebar's canonical lists;
+  //    the owner axis derives its vocabulary from the loaded rows. ──
+  const groupAxes = useMemo<GroupAxis<Risk>[]>(() => {
+    const owners = new Map<string, string>();
+    for (const r of rows) {
+      if (r.owner_id) owners.set(r.owner_id, r.owner_name ?? r.owner_id);
+    }
+    return [
+      {
+        key: "status",
+        label: t("risks.col.status"),
+        groupKeyOf: (r) => r.status,
+        vocab: STATUSES.map((s) => ({ key: s, label: t(`risks.status.${s}`) })),
+      },
+      {
+        key: "category",
+        label: t("risks.col.category"),
+        groupKeyOf: (r) => r.category,
+        vocab: CATEGORIES.map((c) => ({ key: c, label: t(`risks.category.${c}`) })),
+      },
+      {
+        key: "initial_level",
+        label: t("risks.col.initialLevel"),
+        groupKeyOf: (r) => r.initial_level,
+        vocab: LEVELS.map((l) => ({
+          key: l,
+          label: t(`risks.level.${l}`),
+          color: SEVERITY_COLORS[l],
+        })),
+      },
+      {
+        key: "residual_level",
+        label: t("risks.col.residualLevel"),
+        groupKeyOf: (r) => r.residual_level,
+        vocab: LEVELS.map((l) => ({
+          key: l,
+          label: t(`risks.level.${l}`),
+          color: SEVERITY_COLORS[l],
+        })),
+      },
+      {
+        key: "owner",
+        label: t("risks.col.owner"),
+        groupKeyOf: (r) => r.owner_id,
+        vocab: [...owners]
+          .map(([id, name]) => ({ key: id, label: name }))
+          .sort((a, b) => a.label.localeCompare(b.label, i18n.language)),
+      },
+    ];
+  }, [rows, t, i18n.language]);
+
+  // No row selection on this grid, so the header checkbox is hidden — here
+  // grouping is a reading aid (collapse the noise, see counts per bucket).
+  const grouping = useRowGrouping<Risk>(gridRef, {
+    rows: filteredRows,
+    axes: groupAxes,
+    groupBy,
+    selectable: false,
+  });
+
+  // "Show matching" also selects the value in the filter sidebar.
+  //
+  // The Initial/Residual level columns are deliberately NOT bound: the
+  // sidebar's Level facet filters a risk's *current* level (residual when
+  // set, else initial — see `risks.py`), a different predicate from either
+  // column, so mirroring one into it would silently widen the result set and
+  // make a saved view describe something the user never asked for. They keep
+  // plain column filters.
+  const facetBindings = useMemo(
+    () => ({
+      category: arrayFacetBinding<GroupedRow<Risk>>({
+        get: () => filtersRef.current.categories,
+        set: (v) =>
+          setFilters((p) => ({ ...p, categories: v as RiskFilters["categories"] })),
+      }),
+      status: arrayFacetBinding<GroupedRow<Risk>>({
+        get: () => filtersRef.current.statuses,
+        set: (v) => setFilters((p) => ({ ...p, statuses: v as RiskFilters["statuses"] })),
+      }),
+      owner_name: arrayFacetBinding<GroupedRow<Risk>>({
+        // The facet keys on the user id; the cell (and its column filter)
+        // carries the display name.
+        toFacetValue: (ctx) => ctx.data?.owner_id ?? null,
+        get: () => filtersRef.current.owners,
+        set: (v) => setFilters((p) => ({ ...p, owners: v })),
+      }),
+    }),
+    [],
+  );
+  const facetSync = useFacetColumnSync<GroupedRow<Risk>>(gridRef, {
+    bindings: facetBindings,
+    facetState: filters,
+  });
+
+  // Right-click / long-press cell menu (Show matching, Filter out, …).
+  const cellMenu = useCellContextMenu<GroupedRow<Risk>>(gridRef, {
+    suppressForRow: grouping.isGroupRow,
+    // The affected-cards column joins card names with "; ".
+    splitValues: (ctx) =>
+      ctx.colId === "cards" && ctx.displayValue
+        ? ctx.displayValue
+            .split("; ")
+            .filter(Boolean)
+            .map((v) => ({ label: v, filter: v }))
+        : null,
+    facetSync: facetSync.cellMenu,
+  });
+
   const matrixForView = metrics
     ? matrixView === "initial"
       ? metrics.initial_matrix
@@ -522,7 +699,8 @@ export default function RiskRegisterPage() {
         field: "target_resolution_date",
         headerName: t("risks.col.target"),
         width: 140,
-        filter: "agDateColumnFilter",
+        // Custom comparator — the stock one can't parse ISO-string cells.
+        ...dateColumnFilterDef,
         valueFormatter: (p) => (p.value ? formatDate(p.value as string) : "—"),
         cellStyle: (p) => {
           if (!p.data) return null;
@@ -562,7 +740,8 @@ export default function RiskRegisterPage() {
         field: "updated_at",
         headerName: t("risks.col.updatedAt"),
         width: 140,
-        filter: "agDateColumnFilter",
+        // Custom comparator — the stock one can't parse ISO-string cells.
+        ...dateColumnFilterDef,
         // Default-sort only when the user hasn't picked their own. The
         // grid's `initialState` (below) wins if there's a saved sort.
         sort: sortModel.length === 0 ? "desc" : undefined,
@@ -577,14 +756,29 @@ export default function RiskRegisterPage() {
   // or `colId`) to RISK_GRID_COLUMNS membership.
   const visibleColumnDefs = useMemo<ColDef<Risk>[]>(
     () =>
-      columnFreeze.applyFrozen(
-        columnDefs.map((c) => {
-          const id = c.field ?? c.colId ?? "";
-          return { ...c, hide: id ? !visibleColumns.has(id) : false };
-        }),
+      columnOrder.applyOrder(
+        columnFreeze.applyFrozen(
+          columnDefs.map((c) => {
+            const id = c.field ?? c.colId ?? "";
+            return { ...c, hide: id ? !visibleColumns.has(id) : false };
+          }),
+        ),
       ),
-    [columnDefs, visibleColumns, columnFreeze],
+    [columnDefs, visibleColumns, columnFreeze, columnOrder],
   );
+
+  // Feeds the Columns tab's "Column order" section: only the columns actually
+  // on screen, built from the grid's own defs so the ids can never drift from
+  // what AG Grid reports back.
+  const columnOrderItems = useMemo<ColumnOrderItem[]>(() => {
+    const labels = new Map(RISK_GRID_COLUMNS.map((c) => [c.id, t(c.labelKey)]));
+    return visibleColumnDefs
+      .filter((c) => !c.hide && isOrderableColumn(c))
+      .map((c) => {
+        const id = colIdOf(c);
+        return { colId: id, label: labels.get(id) ?? id };
+      });
+  }, [visibleColumnDefs, t]);
 
   const onSortChanged = useCallback(() => {
     const api = gridRef.current?.api;
@@ -753,6 +947,10 @@ export default function RiskRegisterPage() {
           frozenColumns={columnFreeze.frozenColumns}
           onToggleFrozen={columnFreeze.toggleFrozen}
           onResetColumns={resetVisibleColumns}
+          columnOrderItems={columnOrderItems}
+          columnOrder={columnOrder.orderedIds}
+          onColumnOrderChange={handleColumnOrderChange}
+          onResetColumnOrder={columnOrder.resetOrder}
         />
 
         <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -778,6 +976,7 @@ export default function RiskRegisterPage() {
                 })}
                 sx={{ bgcolor: "action.hover", fontWeight: 500 }}
               />
+              <GroupByMenuButton axes={groupAxes} groupBy={groupBy} onChange={setGroupBy} />
             </Stack>
             <Stack direction="row" spacing={1}>
               <Button
@@ -818,35 +1017,55 @@ export default function RiskRegisterPage() {
           </Stack>
           <Box
             ref={columnFreeze.containerRef}
-            className={mode === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}
-            sx={{ flex: 1, width: "100%", minHeight: 0, ...columnFreeze.sx }}
+            {...cellMenu.containerProps}
+            sx={{
+              flex: 1,
+              width: "100%",
+              minHeight: 0,
+              ...columnFreeze.sx,
+              ...cellMenu.sx,
+              ...grouping.sx,
+            }}
           >
             <AgGridReact<Risk>
+              theme={mode === "dark" ? gridThemeDark : gridThemeLight}
               key={isRtl ? "rtl" : "ltr"}
               enableRtl={isRtl}
               ref={gridRef}
-              rowData={filteredRows}
+              rowData={grouping.rowData}
               columnDefs={visibleColumnDefs}
               defaultColDef={defaultColDef}
               loading={loading}
               animateRows
-              getRowId={(p) => p.data.id}
-              getRowStyle={(p) =>
-                p.data?.status === "closed" || p.data?.status === "accepted"
+              {...grouping.gridProps}
+              getRowId={(p) => grouping.groupRowId(p.data)}
+              getRowStyle={(p) => {
+                // Headers are member clones — don't dim one whose
+                // representative happens to be closed/accepted.
+                if (grouping.isGroupRow(p.data as GroupedRow<Risk>)) return undefined;
+                return p.data?.status === "closed" || p.data?.status === "accepted"
                   ? { opacity: 0.65 }
-                  : undefined
-              }
+                  : undefined;
+              }}
               initialState={
                 sortModel.length > 0 ? { sort: { sortModel } } : undefined
               }
               onSortChanged={onSortChanged}
+              onDragStopped={handleDragStopped}
+              onFilterChanged={grouping.handleFilterChanged}
+              onModelUpdated={grouping.handleModelUpdated}
               onRowClicked={(e: RowClickedEvent<Risk>) => {
+                if (grouping.isGroupRow(e.data as GroupedRow<Risk>)) return;
                 if (e.data) navigate(`/grc/risks/${e.data.id}`);
               }}
+              {...cellMenu.gridProps}
             />
+            {grouping.stickyHeader}
           </Box>
         </Box>
       </Box>
+
+      {cellMenu.menu}
 
       <CreateRiskDialog
         open={Boolean(dialogSeed)}

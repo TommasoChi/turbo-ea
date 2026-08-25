@@ -194,6 +194,13 @@ Always include `startIcon={<MaterialSymbol icon="…" size={iconSize.sm} />}` ra
 - `size="small"` is reserved for **dense toolbars** and inline cell editors — not for dialog forms.
 - Stack fields with `<Stack spacing={2}>` or `<Box display="flex" flexDirection="column" gap={2}>`.
 
+**Mandatory (required) metamodel fields** follow one pattern everywhere (reference: card detail + Create Card dialog):
+
+- **Edit contexts** mark them with MUI's own asterisk via the `required` prop on the control (`TextField required`, `FormControl required`) — never a hand-rolled `*` string inside an input label.
+- **Read contexts** pair a `error.main`-colored asterisk next to the field label with a `Tooltip` carrying `common:labels.required` (state is never color alone — §5), and an *empty* mandatory value renders as an outlined `Chip color="warning"` labeled with the same key instead of the em-dash.
+- **Enforcement** is edit-time, not create-time: creation may leave mandatory fields empty; saving a section is blocked (`validation:requiredEmpty` as the field's `error`/`helperText`, Save disabled) while a visible mandatory field in it is empty. The backend independently rejects clearing a filled required field, so surface `err.message` from a failed write rather than duplicating the rule client-side.
+- Boolean and read-only (calculated) fields are exempt — use `isEnforcedRequiredField` / `isEmptyAttrValue` / `missingRequiredFields` from `cardDetailUtils.tsx`, never a local re-implementation, so all surfaces (and the backend's data-quality zero-gate) agree on what counts as empty.
+
 ### 3.6 Tables & Grids
 
 | Use | Component |
@@ -229,6 +236,87 @@ that is saved and never restored. Strip `pinned` from the restored snapshot so
 the two can't fight. A frozen column is a per-user preference and must survive
 a reload like column visibility and width do. The same `frozenColumns` / `toggleFrozen` feed the
 per-row pin in the page's Columns tab (§3.11).
+
+**Every AG Grid gets column reordering.** Order is a per-user preference too,
+and dragging a column header is not a discoverable or touch-usable way to set
+it. It lives in `useColumnOrder` (`src/components/grid/useColumnOrder.ts`) and
+flows through **colDef array order**, exactly the way `pinned` flows through
+`applyFrozen()`:
+
+```tsx
+const columnOrder = useColumnOrder(gridRef, { order, onOrderChange });
+const cols = useMemo(() => columnOrder.applyOrder(columnFreeze.applyFrozen(withHide)), [...]);
+<AgGridReact onDragStopped={() => { columnOrder.syncFromGrid(); columnFreeze.syncFrozenFromGrid(); }} />
+```
+
+`applyOrder()` is the **single owner** of order. Never set `maintainColumnOrder`
+— it makes AG Grid ignore a colDefs order, which masks the preference entirely.
+If the page also persists a `getColumnState()` snapshot, restore it with
+`applyOrder: false`: that snapshot owns width and sort only, the same way it
+already stopped owning `hide` and `pinned`. Persist the colIds as their own
+`columnOrder` pref beside `frozenColumns`, and seed it from the snapshot's
+positions so an existing user's arrangement carries over.
+
+A stored id is never pruned just because its column is off screen — a page
+whose columns arrive late (Inventory's attribute and relation columns land only
+once the metamodel resolves) would otherwise lose every position on mount.
+`suppressMovable` / `lockPosition` columns keep their natural index and never
+join the permutation: those flags stop the *user* dragging a column, not a
+colDefs reorder from moving it. Pair `syncFromGrid` with
+`columnFreeze.syncFrozenFromGrid` on one `onDragStopped` — the same drag can
+move a column *and* pin it, and `onDragStopped` also fires for resizes, so both
+syncs no-op when nothing changed.
+
+**Grid edit mode gets a drag-fill handle.** Setting the same value on twenty
+rows must not be twenty double-click-type-tab cycles. AG Grid ships the
+gesture as `enableFillHandle`, but that lives in the Enterprise Range Selection
+module, so it is re-implemented in `useDragFill`
+(`src/components/grid/useDragFill.tsx`) — the same posture as column freeze.
+Wiring is three lines plus two render slots:
+
+```tsx
+const dragFill = useDragFill(gridRef, {
+  containerRef: columnFreeze.containerRef,   // borrowed, never minted here
+  enabled: () => gridEditMode,
+  isFillable: pageIsFillable,
+  onFill: handleGridFill,
+});
+<Box ref={columnFreeze.containerRef} sx={{ …, ...dragFill.sx }}>
+  <AgGridReact … {...dragFill.gridProps} />
+  {dragFill.overlay}                          // inside the wrapper
+</Box>
+{dragFill.dialog}                             // after it
+```
+
+Unlike freeze and reorder this is **edit-mode**-scoped, not grid-scoped: a grid
+with no editable cells shows no handle, so today only Inventory wires it. Four
+rules the module exists to hold, each of which has a cheap way to get wrong:
+
+- **One wrapper ref, minted by `useColumnFreeze`.** `useCellContextMenu` adds
+  React pointer handlers to that same element; `useDragFill` adds *none* — every
+  handler lives on the handle it renders, and the handle's `pointerdown`
+  `stopPropagation()`s so the cell menu's long-press never even arms. Hooks stay
+  clear of each other by construction, not by spread order.
+- **A hook never claims a `gridProps` key another hook already owns.**
+  `useRowGrouping` returns `onModelUpdated`; a second hook returning it would
+  silently win in a later spread and break grouping. `useDragFill` returns
+  `onCellFocused` alone and subscribes to everything else through
+  `api.addEventListener`, which is additive.
+- **The fill is write-then-reload, never optimistic.** It persists each row and
+  re-reads once at the end — it must not call `node.setDataValue()`, which would
+  re-fire `onCellValueChanged` and write every row twice, and it never touches a
+  `valueSetter`, which is what keeps it clear of the in-place-mutation stale-value
+  trap.
+- **Position is measured and written to `.style`, never React state** —
+  repositioning runs on every scroll frame. Use plain `left`/`top` from
+  `getBoundingClientRect()` deltas: AG Grid's `enableRtl` already mirrors the
+  rects, so a logical inset would mirror a second time (same trap §3.11 records
+  for drag handles).
+
+The anchor is the **focused** cell, not a hovered one, so the affordance is
+reachable by tap on touch; the handle is `role="button"` with a translated
+`aria-label` and a keyboard path (Enter/arrows/Enter) per §5, and its hit area
+grows under `@media (pointer: coarse)` while the dot stays small.
 
 ### 3.7 Status Representation
 
@@ -380,6 +468,8 @@ These are presentation/interaction concerns layered in the component — they do
 
 ### 3.11 Grid Filter Sidebar
 
+> For the collapsible filter block in a *report toolbar* (rather than a grid sidebar), see §3.12 — it mirrors this section's header vocabulary.
+
 Every AG Grid page that filters server-side uses the same left-hand sidebar. The reference implementation is the **Inventory** sidebar (`features/inventory/InventoryFilterSidebar.tsx`); `AuditLogFilterSidebar`, `RiskFilterSidebar` and `ResourcesFilterSidebar` follow it. Reuse the shape — a sidebar that only *works* like the inventory but doesn't *look* like it is a bug.
 
 **Structure** — collapsed rail (44 px, chevron + active-filter count chip) · tabbed header (**Filters** / **Columns**, each with an 8 px primary dot when it has changes) · scrollable body of collapsible sections · 4 px drag resize handle (`MIN_WIDTH` 220 / `MAX_WIDTH` 480).
@@ -412,13 +502,15 @@ Take colours from `theme/tokens.ts` (`STATUS_COLORS`, `SEVERITY_COLORS`, `LAYER_
 
 **The Columns tab** mirrors the Filters tab, plus:
 
+- **A "Column order" section at the very top, collapsed by default** — `<ColumnOrderSection>` (`src/components/grid/ColumnOrderSection.tsx`), fed by the page's `columnOrder.orderedIds` / `applyOrder` (§3.6). It lists only the **visible** columns, and frozen ones first in their own `role="group"` block: pinning does not move a column in the grid's logical order, but AG Grid draws the whole pinned region ahead of everything unpinned, so a single flat list would disagree with the table and dragging a frozen row would produce no visible change at all. A drop across that boundary is a no-op — the freeze pin on each row is the way out, which is why the row is `[drag handle][label][ColumnFreezeToggle]` as flex siblings. Build the `items` from the **page's own column defs**, never from a static catalogue: that is what stops the id spaces drifting (Users stores visibility under `key` but the grid uses `colId`) and what covers columns no catalogue lists (Inventory's `core_status` exists only while archived cards are shown). The section deliberately does **not** participate in the tab's search box — reordering a filtered list by index is not sound.
+- The handle carries `{...attributes} {...listeners}` and **`touchAction: "none"`** — without it the browser claims a touch drag as a scroll and cancels it, so the feature is dead on a phone. Put the drag transform in an inline `style`, never `sx`: `stylis-plugin-rtl` flips X translations in emotion-processed CSS. Pass translated `accessibility.announcements` (dnd-kit's defaults are hardcoded English) and an `accessibility.container` inside the section, because the mobile filter Drawer is a MUI `Modal` and `aria-hidden`s the rest of `document.body` where dnd-kit would otherwise put its live region.
 - One `<MaterialSymbol>` per column in a second `<ListItemIcon>` (`minWidth: 24`) — the column picker is a list of glyph + label, not bare text.
 - An italic **Select all** row with an `indeterminate` checkbox.
 - A selected-count caption and a **Reset** button with a `restart_alt` icon.
 - Locked columns render checked + `disabled`, wrapped in a `<Tooltip placement="right">` explaining why, with `"&.Mui-disabled": { opacity: 0.7 }` so they stay readable.
 - **A freeze pin on every row** — `<ColumnFreezeToggle frozen onToggle/>` (`src/components/grid/ColumnFreezeToggle.tsx`), fed by the page's `columnFreeze.frozenColumns` / `toggleFrozen` (§3.6). It is the discoverable twin of the pin on the column header, and it must be a **sibling** of the `ListItemButton` inside a `Box sx={{ display: "flex" }}` — never a child, because a locked row disables its button and would swallow the pin's click, and a locked column is exactly the one worth freezing. Rows built with the shared `FilterCheckboxList` get it by passing `frozen` / `onToggleFrozen` on the item.
 
-**Filter/column state is persisted** under a `turboea.<page>.prefs` localStorage key through a defensive loader that validates every field and falls back to defaults — a malformed or stale entry must never break the page.
+**Filter/column state is persisted** under a `turboea.<page>.prefs` localStorage key through a defensive loader that validates every field and falls back to defaults — a malformed or stale entry must never break the page. Column visibility, `frozenColumns` and `columnOrder` each get their own field.
 
 ✅ Do
 - Give each new section a glyph and a count, even when the section holds a single control.
@@ -427,6 +519,44 @@ Take colours from `theme/tokens.ts` (`STATUS_COLORS`, `SEVERITY_COLORS`, `LAYER_
 ❌ Don't
 - Don't ship a section header without an icon, or an option row that is just a checkbox and text.
 - Don't filter client-side over the fetched page when the grid pages server-side — that narrows one page, not the result set.
+
+---
+
+### 3.12 Report Toolbar Filters
+
+A report's filter block is the tallest thing in its toolbar, so it collapses. Use
+`features/reports/ReportFilterSection.tsx` — never hand-roll the header again (Portfolio
+and Capability Map had duplicated it near-verbatim before it was extracted).
+
+✅ Do
+- Render it inside the report's existing `toolbar={<>…</>}` fragment, so the block stays
+  inside `.report-toolbar` — print CSS hides that class wholesale, which is what keeps
+  filter controls out of every PDF. Filter *information* reaches print through
+  `printParams`, not the DOM.
+- Keep it **expanded by default** and persist the collapse as `filtersCollapsed` in the
+  report's saved-report config (the five-edit convention: `useState(false)` → restore with
+  `if (cfg.filtersCollapsed != null)` → `getConfig()` → persist dep array → `handleReset`).
+  The `!= null` guard is what lets a stored `false` survive.
+- Pass `count` — the **same integer the report puts in its print params** (both reports
+  already compute `activeFilterCount`), so a collapsed section on screen and the printed
+  header can never disagree. It counts what the section *contains*; a search box that lives
+  in another toolbar row is not part of it.
+- Let the header be a real button. The component gives you `aria-expanded`, `aria-controls`,
+  a `role="region"` body and a focus ring for free — the vocabulary of §3.11's
+  `FilterSectionHeader` (chevron → glyph → label → primary count chip) with the button
+  semantics that one lacks.
+
+❌ Don't
+- Don't nest the clear-all chip inside the toggle button. It is a **sibling** — a deletable
+  chip inside a `<button>` is a second tab stop inside the first and needs `stopPropagation`
+  on click *and* keydown to avoid toggling the section. Same reasoning as the freeze pin in
+  §3.11's `FilterCheckboxList`.
+- Don't add `unmountOnExit`: MUI's `Collapse` already applies `visibility: hidden`, so hidden
+  controls leave the tab order, and `aria-controls` must keep resolving.
+- Don't drop `width: "100%"` from the wrapper — it is what keeps the block on its own line in
+  the wrapping flex toolbar, so collapsing never reflows the rows above it.
+- Don't force-expand when a conditionally-rendered block reappears. A stored collapse is the
+  user's preference; an effect there fights it on every toggle.
 
 ---
 

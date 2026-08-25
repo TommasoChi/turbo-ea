@@ -196,6 +196,149 @@ class TestListAllTodos:
 
 
 # ---------------------------------------------------------------
+# origin + creator_name (computed fields on every todo payload)
+# ---------------------------------------------------------------
+
+
+class TestTodoOriginAndCreator:
+    async def test_manual_todo_carries_origin_and_creator_name(self, client, db, todos_env):
+        admin = todos_env["admin"]
+        card = todos_env["card"]
+        resp = await client.post(
+            f"/api/v1/cards/{card.id}/todos",
+            json={"description": "Manual task", "assigned_to": str(admin.id)},
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["origin"] == "manual"
+        assert data["creator_name"] == admin.display_name
+
+        # Present on the list endpoints and preserved through PATCH.
+        listing = await client.get("/api/v1/todos", headers=auth_headers(admin))
+        row = next(t for t in listing.json() if t["id"] == data["id"])
+        assert row["origin"] == "manual"
+        assert row["creator_name"] == admin.display_name
+
+        card_listing = await client.get(
+            f"/api/v1/cards/{card.id}/todos", headers=auth_headers(admin)
+        )
+        row = next(t for t in card_listing.json() if t["id"] == data["id"])
+        assert row["origin"] == "manual"
+        assert row["creator_name"] == admin.display_name
+
+        patched = await client.patch(
+            f"/api/v1/todos/{data['id']}",
+            json={"status": "done"},
+            headers=auth_headers(admin),
+        )
+        assert patched.status_code == 200
+        assert patched.json()["origin"] == "manual"
+        assert patched.json()["creator_name"] == admin.display_name
+
+    async def test_system_todo_origins_derived_from_link(self, client, db, todos_env):
+        from app.models.todo import Todo
+
+        admin = todos_env["admin"]
+        # One row per producer link shape (see derive_origin in todo_service).
+        shapes = {
+            "ppm": f"/ppm/{uuid.uuid4()}?tab=tasks#task-{uuid.uuid4()}",
+            "risk-owner": f"/ea-delivery/risks/{uuid.uuid4()}",
+            "risk-occurrence": f"/ea-delivery/risks/{uuid.uuid4()}?task=x#occurrence-y",
+            "adr": f"/ea-delivery/adr/{uuid.uuid4()}",
+            "soaw": f"/ea-delivery/soaw/{uuid.uuid4()}",
+            "bpm": f"/cards/{uuid.uuid4()}?tab=process-flow&subtab=drafts",
+        }
+        expected = {
+            "ppm": "ppm",
+            "risk-owner": "risk",
+            "risk-occurrence": "risk",
+            "adr": "adr",
+            "soaw": "soaw",
+            "bpm": "bpm",
+        }
+        ids: dict[str, uuid.UUID] = {}
+        for key, link in shapes.items():
+            todo = Todo(
+                description=f"System todo {key}",
+                link=link,
+                is_system=True,
+                assigned_to=admin.id,
+                created_by=admin.id,
+            )
+            db.add(todo)
+            await db.flush()
+            ids[key] = todo.id
+        await db.commit()
+
+        listing = await client.get("/api/v1/todos", headers=auth_headers(admin))
+        by_id = {t["id"]: t for t in listing.json()}
+        for key, todo_id in ids.items():
+            assert by_id[str(todo_id)]["origin"] == expected[key], key
+            assert by_id[str(todo_id)]["creator_name"] == admin.display_name
+
+    async def test_mirrored_todos_keep_their_origin(self, client, db, todos_env):
+        """A connector extension stamping external_source onto a todo it
+        mirrors to Jira/GitLab must NOT change the todo's origin — the task
+        is still Turbo EA work (the is_system mirror carve-out). Only rows
+        the bridge *created* (no human creator) are origin "extension"."""
+        from app.models.todo import Todo
+
+        admin = todos_env["admin"]
+        # A risk todo mirrored to Jira: system link + external stamp + human
+        # creator. Origin must stay "risk".
+        mirrored_risk = Todo(
+            description="[Risk R-000006] Article 10",
+            link=f"/ea-delivery/risks/{uuid.uuid4()}",
+            is_system=True,
+            assigned_to=admin.id,
+            created_by=admin.id,
+            external_source="jira",
+            external_ref="KAN-6",
+        )
+        # A manual card todo mirrored to Jira keeps origin "manual".
+        mirrored_manual = Todo(
+            description="Test repeat",
+            is_system=False,
+            assigned_to=admin.id,
+            created_by=admin.id,
+            external_source="jira",
+            external_ref="KAN-9",
+        )
+        # A row the bridge itself created has no human creator — that one is
+        # genuinely origin "extension".
+        bridge_created = Todo(
+            description="Imported from tracker",
+            is_system=False,
+            assigned_to=admin.id,
+            created_by=None,
+            external_source="jira",
+            external_ref="PROJ-1",
+        )
+        # A non-system todo whose user-set link points at an ADR is still manual.
+        manual = Todo(
+            description="Look at that ADR",
+            link=f"/ea-delivery/adr/{uuid.uuid4()}",
+            is_system=False,
+            assigned_to=admin.id,
+            created_by=admin.id,
+        )
+        rows = [mirrored_risk, mirrored_manual, bridge_created, manual]
+        for row in rows:
+            db.add(row)
+        await db.flush()
+        ids = [row.id for row in rows]
+        await db.commit()
+
+        listing = await client.get("/api/v1/todos", headers=auth_headers(admin))
+        by_id = {t["id"]: t for t in listing.json()}
+        assert by_id[str(ids[0])]["origin"] == "risk"
+        assert by_id[str(ids[1])]["origin"] == "manual"
+        assert by_id[str(ids[2])]["origin"] == "extension"
+        assert by_id[str(ids[3])]["origin"] == "manual"
+
+
+# ---------------------------------------------------------------
 # PATCH /todos/{id}  (update)
 # ---------------------------------------------------------------
 
@@ -422,3 +565,52 @@ class TestDeleteTodo:
             headers=auth_headers(admin),
         )
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------
+# External-tracker mirror fields (extension todos bridge)
+# ---------------------------------------------------------------
+
+
+class TestExternalFieldsReadOnly:
+    async def test_external_fields_returned_null_by_default(self, client, db, todos_env):
+        admin = todos_env["admin"]
+        resp = await client.post(
+            "/api/v1/todos",
+            json={"description": "Plain todo"},
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["external_ref"] is None
+        assert data["external_url"] is None
+        assert data["external_source"] is None
+
+    async def test_external_fields_ignored_on_create_and_update(self, client, db, todos_env):
+        # The REST API must never accept external fields — they are written
+        # only by the SDK todos bridge (vendor-signed extensions with the
+        # core.todos.write grant). Pydantic drops the unknown keys.
+        admin = todos_env["admin"]
+        resp = await client.post(
+            "/api/v1/todos",
+            json={
+                "description": "Sneaky",
+                "external_ref": "PROJ-1",
+                "external_url": "https://evil.example/PROJ-1",
+                "external_source": "fake-ext",
+            },
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["external_ref"] is None
+        assert data["external_url"] is None
+        assert data["external_source"] is None
+
+        resp = await client.patch(
+            f"/api/v1/todos/{data['id']}",
+            json={"external_url": "https://evil.example"},
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["external_url"] is None

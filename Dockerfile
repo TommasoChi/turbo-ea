@@ -13,6 +13,11 @@ RUN mkdir -p app && touch app/__init__.py && \
     rm -rf app
 
 COPY VERSION ./VERSION
+# The changelog ships with the backend so the "what's new after an upgrade"
+# dialog reads the notes for the running version off disk — no network, so it
+# behaves identically on an air-gapped install. `.dockerignore` excludes `*.md`
+# and re-admits this one file.
+COPY CHANGELOG.md ./CHANGELOG.md
 COPY backend/ ./
 RUN pip install --no-cache-dir --no-deps --prefix=/install .
 
@@ -29,6 +34,7 @@ WORKDIR /app
 
 COPY --from=backend-build /install /usr/local
 COPY --from=backend-build /app/VERSION ./VERSION
+COPY --from=backend-build /app/CHANGELOG.md ./CHANGELOG.md
 COPY --from=backend-build /app/app ./app
 COPY --from=backend-build /app/alembic ./alembic
 COPY --from=backend-build /app/alembic.ini ./alembic.ini
@@ -107,7 +113,7 @@ RUN npm run build
 
 FROM alpine/git:v2.47.2 AS drawio
 
-RUN git clone --depth 1 --branch v26.0.9 https://github.com/jgraph/drawio.git /drawio
+RUN git clone --depth 1 --branch v31.1.8 https://github.com/jgraph/drawio.git /drawio
 
 
 FROM nginx:1.30.3-alpine AS frontend
@@ -130,11 +136,17 @@ COPY frontend/drawio-config/PostConfig.js /usr/share/nginx/drawio/js/PostConfig.
 # JARs so Trivy stops re-flagging upstream Java CVEs that we cannot reach.
 RUN rm -rf /usr/share/nginx/drawio/WEB-INF
 
+# The greps assert the patches actually landed — a DrawIO upgrade that
+# reformats index.html must fail the build here, not silently ship an
+# unpatched page (sed -e '/…/d' exits 0 even when nothing matches).
 RUN sed -i \
     -e '/<link rel="manifest"/d' \
     -e '/serviceWorker/d' \
     -e 's/<head>/<head><!--email_off-->/' \
-    /usr/share/nginx/drawio/index.html
+    /usr/share/nginx/drawio/index.html && \
+    ! grep -q 'rel="manifest"' /usr/share/nginx/drawio/index.html && \
+    ! grep -qi 'serviceWorker' /usr/share/nginx/drawio/index.html && \
+    grep -q '<!--email_off-->' /usr/share/nginx/drawio/index.html
 
 RUN mkdir -p /var/cache/nginx /var/run && \
     touch /var/run/nginx.pid && \
@@ -440,7 +452,7 @@ ${nginx_https_ipv6_line}
         proxy_pass \$frontend_upstream\$request_uri;
         proxy_set_header Host \$host;
         add_header X-Robots-Tag \"noindex, nofollow\" always;
-        add_header Cache-Control \"public, no-transform, max-age=2592000\" always;
+        add_header Cache-Control \"no-cache, no-transform\" always;
     }
 
     location / {
@@ -647,7 +659,7 @@ ${nginx_http_ipv6_line}
         proxy_pass \$frontend_upstream\$request_uri;
         proxy_set_header Host \$host;
         add_header X-Robots-Tag \"noindex, nofollow\" always;
-        add_header Cache-Control \"public, no-transform, max-age=2592000\" always;
+        add_header Cache-Control \"no-cache, no-transform\" always;
     }
 
     location / {

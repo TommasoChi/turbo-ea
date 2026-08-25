@@ -14,6 +14,7 @@ import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
+import Checkbox from "@mui/material/Checkbox";
 import IconButton from "@mui/material/IconButton";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -22,6 +23,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Chip from "@mui/material/Chip";
 import LinearProgress from "@mui/material/LinearProgress";
 import Tooltip from "@mui/material/Tooltip";
+import Link from "@mui/material/Link";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import AiSuggestPanel, { type AiApplyPayload } from "@/components/AiSuggestPanel";
 import { EolLinkDialog } from "@/components/EolLinkSection";
@@ -35,15 +37,17 @@ import {
   useOptionLabel,
   useSubtypeLabel,
 } from "@/hooks/useResolveLabel";
-import { useAiStatus } from "@/hooks/useAiStatus";
+import { useAiStatus, aiSuggestEnabledFor } from "@/hooks/useAiStatus";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { api, ApiError } from "@/api/client";
+import { readableTextColor } from "@/lib/color";
 import type {
   FieldDef,
   EolProductMatch,
   AiSuggestResponse,
   TagGroup,
+  SiblingNameConflictDetail,
 } from "@/types";
 
 const EOL_ELIGIBLE_TYPES = ["Application", "ITComponent"];
@@ -85,7 +89,14 @@ export default function CreateCardDialog({
   const [name, setName] = useState("");
   // Field-level error for the Name input — populated when the backend
   // returns 409 on a sibling-name collision. Cleared when the user types.
-  const [nameError, setNameError] = useState("");
+  // Structured details additionally carry the existing card's id so the
+  // helper text can link straight to it (#927).
+  const [nameConflict, setNameConflict] = useState<{
+    message: string;
+    existingCardId?: string;
+    existingCardName?: string;
+    typeKey?: string;
+  } | null>(null);
   const [description, setDescription] = useState("");
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(false);
@@ -120,6 +131,19 @@ export default function CreateCardDialog({
     () => types.find((t) => t.key === selectedType),
     [types, selectedType],
   );
+
+  // Localized duplicate-name message. When the 409 detail is structured we
+  // rebuild the sentence in the user's locale (entity-aware type label, no
+  // raw UUID); otherwise we fall back to the backend's English prose.
+  const conflictMessage = useMemo(() => {
+    if (!nameConflict) return "";
+    if (!nameConflict.existingCardName) return nameConflict.message;
+    const conflictType = types.find((tt) => tt.key === nameConflict.typeKey);
+    return t("create.duplicate.message", {
+      type: conflictType ? typeLabel(conflictType) : nameConflict.typeKey,
+      name: nameConflict.existingCardName,
+    });
+  }, [nameConflict, types, typeLabel, t]);
 
   const hasSubtypes = !!(typeConfig?.subtypes && typeConfig.subtypes.length > 0);
   const hasHierarchy = !!typeConfig?.has_hierarchy;
@@ -185,7 +209,7 @@ export default function CreateCardDialog({
       setSubtype("");
       setParentCard(null);
       setName("");
-      setNameError("");
+      setNameConflict(null);
       setDescription("");
       setAttributes({});
       setLoading(false);
@@ -244,11 +268,7 @@ export default function CreateCardDialog({
   };
 
   // Whether AI suggest button should be shown for the current type
-  const aiEnabled =
-    aiStatus.enabled &&
-    aiStatus.configured &&
-    selectedType &&
-    (aiStatus.enabled_types.length === 0 || aiStatus.enabled_types.includes(selectedType));
+  const aiEnabled = aiSuggestEnabledFor(aiStatus, selectedType);
 
   const handleAiSuggest = async () => {
     if (!selectedType || !name.trim()) return;
@@ -289,7 +309,7 @@ export default function CreateCardDialog({
     if (!selectedType || !name.trim()) return;
     setLoading(true);
     setError("");
-    setNameError("");
+    setNameConflict(null);
     try {
       const finalAttrs = { ...attributes };
       if (eolProduct && eolCycle) {
@@ -344,14 +364,21 @@ export default function CreateCardDialog({
     } catch (err: unknown) {
       // Surface the sibling-name collision (HTTP 409) on the Name field
       // directly — it's a validation error on a single input, not a
-      // dialog-wide failure. Detail comes verbatim from the backend
-      // (`A {type} named "X" already exists at this level…`).
+      // dialog-wide failure. Structured details carry the existing card's
+      // id/name so we can render a localized message plus a link to it;
+      // anything else falls back to the raw detail string.
       if (err instanceof ApiError && err.status === 409) {
-        const detail =
-          typeof err.detail === "string"
-            ? err.detail
-            : (err.detail as { detail?: string } | null)?.detail || err.message;
-        setNameError(detail);
+        const d = err.detail as Partial<SiblingNameConflictDetail> | string | null;
+        if (d && typeof d === "object" && d.code === "sibling_name_conflict") {
+          setNameConflict({
+            message: d.message ?? err.message,
+            existingCardId: d.existing_card_id,
+            existingCardName: d.existing_card_name,
+            typeKey: d.type_key,
+          });
+        } else {
+          setNameConflict({ message: typeof d === "string" ? d : err.message });
+        }
         return;
       }
       const message =
@@ -366,7 +393,7 @@ export default function CreateCardDialog({
     switch (field.type) {
       case "single_select":
         return (
-          <FormControl fullWidth key={field.key} sx={{ mb: 2 }}>
+          <FormControl fullWidth key={field.key} required={field.required} sx={{ mb: 2 }}>
             <InputLabel>{fieldLabel(field)}</InputLabel>
             <Select
               value={(attributes[field.key] as string) ?? ""}
@@ -398,12 +425,93 @@ export default function CreateCardDialog({
           </FormControl>
         );
 
+      case "multiple_select": {
+        const arrVal: string[] = Array.isArray(attributes[field.key])
+          ? (attributes[field.key] as unknown[]).filter(
+              (v): v is string => typeof v === "string",
+            )
+          : [];
+        const labelText = fieldLabel(field);
+        return (
+          <FormControl fullWidth key={field.key} required={field.required} sx={{ mb: 2 }}>
+            <InputLabel>{labelText}</InputLabel>
+            <Select
+              multiple
+              value={arrVal}
+              label={labelText}
+              onChange={(e) => {
+                const v = e.target.value;
+                const arr = typeof v === "string" ? v.split(",") : v;
+                setAttr(field.key, arr.length > 0 ? arr : undefined);
+              }}
+              renderValue={(selected) => (
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                  {(selected as string[]).map((key) => {
+                    const opt = field.options?.find((o) => o.key === key);
+                    return (
+                      <Chip
+                        key={key}
+                        size="small"
+                        label={opt ? optLabel(opt) : key}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onDelete={() => {
+                          const next = arrVal.filter((v) => v !== key);
+                          setAttr(field.key, next.length > 0 ? next : undefined);
+                        }}
+                        sx={{
+                          height: 22,
+                          ...(opt?.color
+                            ? {
+                                bgcolor: opt.color,
+                                color: readableTextColor(opt.color),
+                                "& .MuiChip-deleteIcon": {
+                                  color: readableTextColor(opt.color),
+                                  opacity: 0.85,
+                                },
+                              }
+                            : {}),
+                        }}
+                      />
+                    );
+                  })}
+                </Box>
+              )}
+            >
+              {field.options?.map((opt) => (
+                <MenuItem key={opt.key} value={opt.key}>
+                  <Checkbox
+                    size="small"
+                    checked={arrVal.includes(opt.key)}
+                    sx={{ p: 0.5, mr: 1 }}
+                  />
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    {opt.color && (
+                      <Box
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: "50%",
+                          bgcolor: opt.color,
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                    {optLabel(opt)}
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        );
+      }
+
       case "cost":
       case "number":
         return (
           <TextField
             key={field.key}
             fullWidth
+            required={field.required}
             label={fieldLabel(field)}
             type="number"
             value={attributes[field.key] ?? ""}
@@ -437,6 +545,7 @@ export default function CreateCardDialog({
           <DateField
             key={field.key}
             fullWidth
+            required={field.required}
             label={fieldLabel(field)}
             value={(attributes[field.key] as string) ?? ""}
             onChange={(v) => setAttr(field.key, v || undefined)}
@@ -450,6 +559,7 @@ export default function CreateCardDialog({
           <TextField
             key={field.key}
             fullWidth
+            required={field.required}
             label={fieldLabel(field)}
             value={(attributes[field.key] as string) ?? ""}
             onChange={(e) => setAttr(field.key, e.target.value || undefined)}
@@ -561,11 +671,33 @@ export default function CreateCardDialog({
           value={name}
           onChange={(e) => {
             setName(e.target.value);
-            if (nameError) setNameError("");
+            if (nameConflict) setNameConflict(null);
           }}
           required
-          error={!!nameError}
-          helperText={nameError || undefined}
+          error={!!nameConflict}
+          helperText={
+            nameConflict ? (
+              // helperText renders inside a <p>, so only inline elements
+              // are valid here — MUI Link renders an <a>, which is fine.
+              <>
+                {conflictMessage}{" "}
+                {nameConflict.existingCardId && (
+                  <Link
+                    href={`/cards/${nameConflict.existingCardId}`}
+                    onClick={(e) => {
+                      // Let modified clicks open a new tab via the href.
+                      if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+                      e.preventDefault();
+                      onClose();
+                      navigate(`/cards/${nameConflict.existingCardId}`);
+                    }}
+                  >
+                    {t("create.duplicate.view")}
+                  </Link>
+                )}
+              </>
+            ) : undefined
+          }
           sx={{ mb: 2 }}
         />
 

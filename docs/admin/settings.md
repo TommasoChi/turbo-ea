@@ -9,7 +9,7 @@ The **Settings** page at **Admin → Settings** (`/admin/settings`) is the centr
 | **AI** | `/admin/settings?tab=ai` | LLM provider, model, web search backend, per-card-type AI suggestion toggles | [AI Capabilities](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Mass-linking products to endoflife.date entries | [End-of-Life (EOL)](eol.md) |
 | **Web Portals** | `/admin/settings?tab=web-portals` | Public read-only portal slugs, visibility filters | [Web Portals](web-portals.md) |
-| **ServiceNow** | `/admin/settings?tab=servicenow` | ServiceNow connection, sync configuration, identity mapping | [ServiceNow Integration](servicenow.md) |
+| **Integrations** | `/admin/settings?tab=integrations` | ServiceNow sync and integrations added by extensions | [ServiceNow Integration](servicenow.md) |
 | **TurboLens** | `/admin/settings?tab=turbolens` | TurboLens-specific toggles, enabled regulations, analysis polling | See section [TurboLens settings](#turbolens-settings) below |
 | **Migration** | `/admin/settings?tab=migration` | Imports from other EA platforms, and full workspace transfer between Turbo EA instances | [Platform Migration](migration.md) |
 | **Audit log** | `/admin/settings?tab=audit-log` | Mutation-batch ledger — who changed what, and whether it came from the web UI, the API, or an AI tool | — |
@@ -140,6 +140,12 @@ Toggle the **Business Process Management** module on or off. When disabled:
 
 This is useful for organizations that do not use BPM and want a cleaner navigation experience.
 
+### Require a separate approver
+
+Off by default. When enabled, the person who submits a process flow revision cannot be the one who approves it — segregation of duties, as quality systems such as GxP and ISO 9001 expect.
+
+Leave it off for a small team where the same person drafts and signs off. Turning it on does not change what is recorded: every submission, approval, rejection and withdrawal is written to the card's **History** tab either way.
+
 ## PPM Module
 
 Toggle the **Project Portfolio Management** module on or off. When disabled:
@@ -159,6 +165,34 @@ Toggle the **Governance, Risk and Compliance** module on or off. When disabled:
 - Risks and compliance findings remain in the database — the underlying `risks.*` and `compliance.*` permissions are unchanged, so the data is preserved and re-appears unchanged if the module is re-enabled
 
 See the [GRC guide](../guide/grc.md) for the full feature reference.
+
+## Update notifications
+
+Turbo EA checks once a day whether a newer version has been published and, when there is one, drops a notification into the bell for every user whose role grants `admin.settings`. Clicking it opens the release notes — the changelog for that version — in a dialog inside Turbo EA. Every notification keeps showing the version it announced, however long it has sat in the bell: the notes are read from the changelog shipped inside the image, so they cost no outbound request and work unchanged on an air-gapped install. Only a release you have not installed yet comes from the daily check's cache instead, because a changelog written at build time cannot describe it; for those, a **View on GitHub** button opens the release page in a new tab.
+
+Notifications are titled with the name configured for this instance, so a renamed deployment does not announce itself under a different product name.
+
+The check is **notification-only** — nothing is downloaded and nothing on the host is changed. Upgrading remains the deliberate, backed-up procedure described in [Operations](operations.md#the-upgrade-procedure). An administrator who would rather not be reminded can mute the **Update Available** row in their own notification preferences.
+
+Turning the toggle **off** stops the daily request to github.com altogether, which is what an air-gapped or egress-restricted install wants. Either way the instance behaves normally: when the release feed cannot be reached, the failure is recorded quietly and nothing is shown.
+
+### After the upgrade lands
+
+A second switch, **Announce upgrades to users**, covers the other half of the story. When the instance restarts on a newer version, **every** user — not just administrators — gets one notification saying the app was updated, and clicking it shows the changelog for every version the upgrade crossed. An instance jumping from 2.57.0 to 2.60.0 shows all four releases, not just the last one. Each of these notices stays tied to its own upgrade, so opening one from a year ago still shows the versions *that* upgrade crossed.
+
+The announcement is sent **once per version**: restarting ten times on the same version produces one notification, and a rollback produces none. A brand-new install announces nothing, because there is no upgrade to describe. These notes come from the changelog bundled inside the image, so this half needs no network at all.
+
+This one is **in-app only** and is never emailed — it reaches every active user on every upgrade, and an email channel would turn each patch release into a mass mailing. Individual users can still mute it under **Update notifications** in their own notification preferences, where the email switch is shown disabled.
+
+### Extension store notifications
+
+A third switch, **Extension store notifications**, does the same job for the [Extension Store](extensions.md). Once a day the instance reads the store's public catalogue and, when something has changed, notifies every user whose role grants `admin.manage_extensions` — the same permission that opens the Extensions page. Two things are announced: an extension published to the store that you do not have installed, and a newer version of one you do.
+
+Busy release days stay readable: however many extensions changed, each administrator gets **one** notification per kind ("3 extension updates are available"), not one per extension. Each is announced **once** — a catalogue that sits unchanged for a month produces one notification, not thirty — and clicking it opens the Store tab inside Turbo EA.
+
+The very first successful reading of the catalogue announces **no** new extensions: an instance meeting the store for the first time would otherwise report everything in it. Updates to extensions you already have are reported straight away, because there are only ever a handful of them and they are immediately actionable.
+
+Like the release check, this is **notification-only** — nothing is downloaded or installed, and installing stays a deliberate action on the Extensions page. Turning the toggle **off** stops the daily request to the store altogether. Individual administrators can mute the **New Extension Available** and **Extension Update Available** rows separately in their own notification preferences.
 
 ## Sponsor Button
 

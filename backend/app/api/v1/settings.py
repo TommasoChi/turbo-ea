@@ -19,6 +19,7 @@ from app.models.relation_type import RelationType
 from app.models.resource_type import ResourceType
 from app.models.user import User
 from app.services.ai_service import DEFAULT_AZURE_API_VERSION
+from app.services.app_identity import DEFAULT_APP_TITLE
 from app.services.email_backends.base import (
     ALLOWED_METHODS as ALLOWED_EMAIL_METHODS,
 )
@@ -230,10 +231,14 @@ async def get_bootstrap(db: AsyncSession = Depends(get_db)):
         "navbar_bg": general.get("navbarBg", DEFAULT_NAVBAR_BG),
         "navbar_fg": general.get("navbarFg", DEFAULT_NAVBAR_FG),
         "bpm_enabled": general.get("bpmEnabled", True),
+        "bpm_require_separate_approver": general.get("bpmRequireSeparateApprover", False),
         "ppm_enabled": general.get("ppmEnabled", False),
         "turbolens_enabled": general.get("turboLensEnabled", True),
         "grc_enabled": general.get("grcEnabled", True),
         "sponsor_button_enabled": general.get("sponsorButtonEnabled", True),
+        "update_check_enabled": general.get("updateCheckEnabled", True),
+        "announce_upgrades_enabled": general.get("announceUpgradesEnabled", True),
+        "extension_notices_enabled": general.get("extensionNoticesEnabled", True),
         "file_uploads_enabled": general.get("fileUploadsEnabled", True),
         "enabled_locales": general.get("enabledLocales", SUPPORTED_LOCALES),
         "fiscal_year_start": general.get("fiscalYearStart", 1),
@@ -439,8 +444,6 @@ async def update_date_format(
 # ---------------------------------------------------------------------------
 # App title endpoint
 # ---------------------------------------------------------------------------
-
-DEFAULT_APP_TITLE = "Turbo EA"
 
 
 @router.get("/app-title")
@@ -768,6 +771,205 @@ async def update_sponsor_button_enabled(
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
     general["sponsorButtonEnabled"] = body.enabled
+    row.general_settings = general
+
+    await db.commit()
+    return {"ok": True}
+
+
+@router.get("/update-status")
+async def get_update_status(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Cached result of the last update check, for the release-notes dialog.
+
+    Gated on ``admin.settings`` — the same permission that decides who gets
+    notified in the first place, so the endpoint cannot tell a non-admin
+    anything the notification would not have. Serves only what the daily check
+    already stored; it never reaches out to GitHub itself.
+    """
+    await PermissionService.require_permission(db, user, "admin.settings")
+
+    from app.services.update_check import read_status
+
+    return await read_status(db)
+
+
+@router.get("/whats-new")
+async def get_whats_new(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Changelog for the versions this instance was last upgraded across.
+
+    Authenticated but **not** permission-gated, unlike ``/update-status``:
+    every active user is notified when the app is updated, so every one of them
+    has to be able to read what changed. A changelog is public information —
+    the same text is on the project's releases page.
+
+    Served from the changelog bundled in the image, so it needs no network and
+    answers identically on an air-gapped install.
+    """
+    from app.services.upgrade_announce import read_whats_new
+
+    return await read_whats_new(db)
+
+
+@router.get("/release-notes")
+async def get_release_notes(
+    version: str | None = None,
+    from_version: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Release notes for one specific version, as a notification announced it.
+
+    ``/whats-new`` answers "what changed in the most recent upgrade?" — right
+    for the newest notification and wrong for every older one still sitting in
+    the bell. This takes the versions off the notification itself, so a notice
+    from six releases ago still opens its own notes.
+
+    Authenticated but **not** permission-gated, on the same reasoning as
+    ``/whats-new``: every user is told when the app is updated, so every user
+    has to be able to read the changelog, which is public information anyway.
+    The one privileged ingredient is narrower — the cached GitHub body for a
+    release this instance has *not* installed is readable only by holders of
+    ``admin.settings``, matching ``/update-status``, since they are also the
+    only people who ever receive an update-available notification. None of that
+    endpoint's operational state (``checked_at``, ``error``, ``enabled``) is
+    exposed here.
+    """
+    from app.services.release_notes import resolve_release_notes, valid_version
+
+    # Reject junk before it reaches the lenient version parser.
+    for value in (version, from_version):
+        if value is not None and not valid_version(value):
+            raise HTTPException(status_code=422, detail="Invalid version")
+
+    allow_cached_github = await PermissionService.check_permission(db, user, "admin.settings")
+
+    return await resolve_release_notes(
+        db,
+        version=version,
+        from_version=from_version,
+        allow_cached_github=allow_cached_github,
+    )
+
+
+class AnnounceUpgradesEnabledPayload(BaseModel):
+    enabled: bool
+
+
+@router.patch("/announce-upgrades-enabled")
+async def update_announce_upgrades_enabled(
+    body: AnnounceUpgradesEnabledPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Admin endpoint — announce upgrades to all users, or keep them silent.
+
+    Switching it off does not suppress a *pending* announcement retroactively:
+    the version marker still advances on every boot, so re-enabling this later
+    announces the next upgrade rather than replaying an old one.
+    """
+    await PermissionService.require_permission(db, user, "admin.settings")
+
+    row = await _get_or_create_row(db)
+    general = dict(row.general_settings or {})
+    general["announceUpgradesEnabled"] = body.enabled
+    row.general_settings = general
+
+    await db.commit()
+    return {"ok": True}
+
+
+class UpdateCheckEnabledPayload(BaseModel):
+    enabled: bool
+
+
+@router.patch("/update-check-enabled")
+async def update_update_check_enabled(
+    body: UpdateCheckEnabledPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Admin endpoint — enable or disable the daily "newer release available" check.
+
+    Turning it off stops the outbound request to GitHub entirely (the flag is
+    read before the fetch), which is what an egress-restricted or air-gapped
+    install wants. The current value rides along on ``GET /settings/bootstrap``
+    rather than getting its own endpoint — only the admin page reads it.
+    """
+    await PermissionService.require_permission(db, user, "admin.settings")
+
+    row = await _get_or_create_row(db)
+    general = dict(row.general_settings or {})
+    general["updateCheckEnabled"] = body.enabled
+    row.general_settings = general
+
+    await db.commit()
+    return {"ok": True}
+
+
+class ExtensionNoticesEnabledPayload(BaseModel):
+    enabled: bool
+
+
+@router.patch("/extension-notices-enabled")
+async def update_extension_notices_enabled(
+    body: ExtensionNoticesEnabledPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Admin endpoint — enable or disable the daily extension-store check.
+
+    Turning it off stops the outbound request to the store entirely (the flag is
+    read before the fetch), which is what an egress-restricted or air-gapped
+    install wants. Gated on ``admin.settings`` like its two neighbours: who owns
+    the switch for outbound traffic is a separate question from who receives the
+    resulting notifications (``admin.manage_extensions``).
+    """
+    await PermissionService.require_permission(db, user, "admin.settings")
+
+    row = await _get_or_create_row(db)
+    general = dict(row.general_settings or {})
+    general["extensionNoticesEnabled"] = body.enabled
+    row.general_settings = general
+
+    await db.commit()
+    return {"ok": True}
+
+
+class SeparateApproverPayload(BaseModel):
+    enabled: bool
+
+
+@router.get("/bpm-separate-approver")
+async def get_bpm_separate_approver(db: AsyncSession = Depends(get_db)):
+    """Public endpoint — whether a process flow needs a second person to approve it.
+
+    Off by default so upgrading changes nothing for a team where one person both
+    submits and approves; regulated instances turn it on deliberately.
+    """
+    result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
+    row = result.scalar_one_or_none()
+    general = (row.general_settings if row else None) or {}
+    return {"enabled": general.get("bpmRequireSeparateApprover", False)}
+
+
+@router.patch("/bpm-separate-approver")
+async def update_bpm_separate_approver(
+    body: SeparateApproverPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Admin endpoint — require a separate approver for BPMN flow revisions."""
+    await PermissionService.require_permission(db, user, "admin.settings")
+
+    row = await _get_or_create_row(db)
+    general = dict(row.general_settings or {})
+    general["bpmRequireSeparateApprover"] = body.enabled
     row.general_settings = general
 
     await db.commit()

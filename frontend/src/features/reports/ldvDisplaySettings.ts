@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import type { CardLabelSettings } from "@/lib/cardDisplayFields";
+
 /**
  * Shared, persisted display settings for the Layered Dependency View.
  *
@@ -13,6 +15,8 @@ export type LdvBackgroundStyle = "lines" | "dots" | "none";
 
 export interface LdvDisplaySettings {
   showType: boolean;
+  /** Show the card's subtype ("Microservice", "SaaS", …) under its name. */
+  showSubtype: boolean;
   showLifecycle: boolean;
   /**
    * Show a minimalistic marker on each card indicating it has a hierarchical
@@ -23,19 +27,26 @@ export interface LdvDisplaySettings {
   showHierarchyMarkers: boolean;
   /** Show related cards whose current lifecycle phase is End of Life. The centered card is always shown. */
   showEndOfLife: boolean;
+  /** Show the verb on each relation edge ("supports", "uses", …). Off leaves
+   *  the line and its arrowhead, which still carry the direction. */
+  showRelationLabels: boolean;
   /** Append a relation's single-select attribute value to its label (e.g. "supports [Leading]"). */
   showRelationValues: boolean;
   extraFields: string[];
   background: LdvBackgroundStyle;
 }
 
+// Adding a *new* key needs no version bump: `read()` spreads the defaults over
+// whatever is stored, so an older blob simply picks up the default.
 const KEY = "tea.ldv.display.v3";
 
 export const LDV_DEFAULT_SETTINGS: LdvDisplaySettings = {
   showType: true,
+  showSubtype: false,
   showLifecycle: true,
   showHierarchyMarkers: true,
   showEndOfLife: false,
+  showRelationLabels: true,
   showRelationValues: true,
   extraFields: [],
   background: "dots",
@@ -87,4 +98,16 @@ export function useLdvSettings(): [LdvDisplaySettings, (patch: Partial<LdvDispla
     return subscribe(setS);
   }, []);
   return [s, setLdvSettings];
+}
+
+/**
+ * The subset of these settings that describes what a card *says*, in the shape
+ * the shared card-display vocabulary uses.
+ *
+ * Two callers need exactly this projection and must not disagree: the
+ * "Show on card" picker, and the Create-diagram export that seeds a new DrawIO
+ * diagram's `cardLabels` so it opens showing the rows that were on screen.
+ */
+export function toCardLabels(s: LdvDisplaySettings): CardLabelSettings {
+  return { showType: s.showType, showSubtype: s.showSubtype, fields: s.extraFields };
 }

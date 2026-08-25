@@ -10,12 +10,14 @@
 
 Det venstre sidepanel lader dig **filtrere** kort efter forskellige kriterier:
 
-- **Søg** — Friform tekstsøgning på tværs af kortnavne
+- **Søg** — Friform tekstsøgning på tværs af kortnavne, allerede fra første bogstav. De bedste match står øverst: eksakte navne, derefter navne der begynder med det, du skrev, så dem hvor det begynder et ord, og til sidst resten. Alle søgefelter i Turbo EA sorterer sådan — den globale søgning (**Ctrl+K** / **⌘K**), enhver kortvælger, risikoregistret, beslutninger og publicerede portaler — medmindre du selv har valgt en sortering, som altid vinder
 - **Typer** — Filtrer efter en eller flere korttyper: Objective, Platform, Initiative, Organization, Business Capability, Business Context, Business Process, Application, Interface, Data Object, IT Component, Tech Category, Provider, System
 - **Undertyper** — Når en type er valgt, kan du filtrere yderligere efter undertype (f.eks. Application → Business Application, Microservice, AI Agent, Deployment)
 - **Godkendelsesstatus** — Draft, Approved, Broken eller Rejected
 - **Livscyklus** — Filtrer efter livscyklus-fase: Plan, Phase In, Active, Phase Out, End of Life
-- **Datakvalitet** — Tærskel-baseret filtrering: Good (80%+), Medium (50–79%), Poor (under 50%)
+- **Datakvalitet** — Båndfiltrering (multivalg): Komplet (≥80%), Delvis (40–79%), Minimal (under 40%). Samme bånd som [Datakvalitetsrapporten](reports.md#data-quality-report), så et klik på et bjælkesegment der lander her.
+- **Forældreløse** — Kun kort uden relationer i nogen retning. Vurderes på serveren og virker derfor uden en valgt korttype.
+- **Forældede** — Kun kort, der ikke er opdateret de seneste 90 dage. Begge spejler felterne i [Datakvalitetsrapporten](reports.md#data-quality-report), så et klik på et felt lander her.
 - **Tags** — Filtrer efter tags fra en hvilken som helst tag-gruppe
 - **Relationer** — Filtrer efter relaterede kort på tværs af relations­typer
 - **Brugerdefinerede attributter** — Filtrer efter værdier i brugerdefinerede felter (tekstsøgning, select-muligheder)
@@ -25,6 +27,20 @@ Det venstre sidepanel lader dig **filtrere** kort efter forskellige kriterier:
 > **Find kort uden værdi.** Filtrene Undertype, Livscyklus, Tags, Relationer og brugerdefinerede valg-attributter har hver en **(tom)**-mulighed. Vælg den for kun at vise de kort, der *ikke* har en værdi for det felt — for eksempel alle kort uden en angivet livscyklus. Den kan kombineres med normale værdier (matcher en af dem) og på tværs af flere filtre (matcher alle).
 
 Et **aktivt-filter-tæller**-badge viser, hvor mange filtre der aktuelt er anvendt.
+
+### Cellehandlinger
+
+Højreklik på en vilkårlig celle i tabellen (langt tryk på berøringsenheder) for at åbne en kontekstmenu med hurtige handlinger på det, der er under markøren, i stil med ServiceNow:
+
+- **Forhåndsvis kort** — åbn det kort, cellen peger på, i sidepanelet uden at forlade tabellen
+- **Vis matchende** — behold kun de rækker, hvis værdi svarer til den valgte celles
+- **Filtrér fra** — skjul de rækker, hvis værdi svarer til den valgte celles
+- **Kopiér værdi** — kopiér cellens tekst til udklipsholderen
+- **Ryd kolonnefilter** — fjern kolonnens filter (vises kun, mens et filter er aktivt)
+
+På en celle med flere værdier (tags, relationer, interessenter, attributter med flere valg) viser menuen først de enkelte værdier, så du kan filtrere på én af dem eller på hele cellen. **Forhåndsvis kort** vises på enhver celle, der peger på et kort — kolonnen **Navn** (rækkens eget kort), kolonnen **Overordnet** og relationskolonnerne — og når cellen peger på flere kort, viser menuen dem på samme måde, så du kan vælge, hvilket der skal åbnes. Disse filtre lander i tabellens egne kolonnefiltre: de kombineres med sidepanelets filtre, tælles med i knappen **Ryd filtre** i værktøjslinjen og gemmes sammen med din visning. Den samme menu findes i alle tabeller i Turbo EA — Beslutninger, Risikoregister, Compliance og administrationstabellerne. Når kolonnen har et tilsvarende filter i venstre panel — korttype, undertype, livscyklus, godkendelsesstatus eller en attribut med enkeltvalg — vælger **Vis matchende** også den værdi i panelet, og **Ryd** rydder begge, så en gemt visning aldrig kan indeholde et panelfilter og et kolonnefilter, der modsiger hinanden. Redigeres filtret derefter i panelet, overtager panelet blot.
+
+![Kontekstmenu for en lagercelle](../assets/img/da/62_inventory_cell_menu.png)
 
 ### Kolonner-fane
 
@@ -69,17 +85,19 @@ Lageret bruger en **AG Grid**-datatabel med kraftfulde funktioner:
 | **Lifecycle** | Aktuel livscyklus-tilstand |
 | **Approval Status** | Gennemgangs-status-badge |
 | **Data Quality** | Fuldstændigheds-procent med visuel ring |
-| **Relations** | Relations-tællere med klikbar popover, der viser relaterede kort |
+| **Relations** | Navne på relaterede kort, sorteret alfabetisk, med en klikbar popover til at tilføje eller fjerne relationer — kort, der allerede er tilknyttet, skjules fra dens vælger |
 
 **Tabel-funktioner:**
 
 - **Sortering** — Klik på en kolonneoverskrift for at sortere stigende/faldende
 - **Inline-redigering** — I gitter-redigeringstilstand redigeres feltværdier direkte i tabellen
+- **Udfyld en kolonne nedad** — I gitter-redigeringstilstand klikker du på en celle og trækker den lille firkant i hjørnet op eller ned for at kopiere værdien til alle de rækker, du dækker. Før noget gemmes, oplyser en bekræftelse kolonne, værdi og antal rækker; afviser serveren en række, vises den med årsag og et link, og de rækker der lykkedes forbliver gemt. Bevægelsen virker med en finger såvel som med musen, og med tastaturet — sæt fokus på firkanten, udvid med piletasterne, bekræft med Enter. Kun de rækker, der aktuelt vises efter dine filtre og din sortering, udfyldes, og kolonnen Navn er bevidst udeladt, så to kort ikke kan ende med samme navn.
 - **Multi-valg** — Vælg flere rækker til masse­operationer
 - **Hurtig forhåndsvisning** — Brug øje-ikonet ved siden af et navn for at åbne kortdetaljen i et sidepanel
 - **Åbn i ny fane** — Ctrl/Cmd-klik på et navn for at åbne kortet i en ny browser-fane; hoved-nav-links understøtter dette også
 - **Kolonne-konfiguration** — Vis, skjul og omarrangér kolonner (inklusive de altid-aktive standardkolonner)
 - **Frys en kolonne** — Hold musen over en kolonneoverskrift og klik på nåle-ikonet for at fryse kolonnen til venstre kant, så den bliver stående, mens du ruller til siden. Klik på nålen igen for at frigive den. Hver kolonne har også den samme nål i fanen **Kolonner** i filterpanelet, så du kan fryse en kolonne uden at lede efter dens overskrift. Frosne kolonner huskes pr. tabel, og den samme funktion findes i alle datatabeller i Turbo EA (Risikoregister, Beslutninger, Compliance-fund, Brugere, Ressourcer, Auditlog).
+- **Skift kolonnerækkefølge** — Træk en kolonneoverskrift for at flytte kolonnen, eller åbn afsnittet **Kolonnerækkefølge** øverst i fanen **Kolonner** og træk en række i dens håndtag. Den liste *er* tabellens rækkefølge, så de to stemmer altid overens, og frosne kolonner er samlet forrest, fordi de altid vises først — frigiv en kolonnes nål dér, hvis du vil flytte den ud af gruppen. Håndtaget virker også med tastaturet (mellemrum for at tage en kolonne op, piletaster for at flytte den, mellemrum for at slippe den) og med berøring, så rækkefølgen kan ændres på en telefon. Din kolonnerækkefølge huskes pr. tabel i alle datatabeller i Turbo EA.
 
 ### Værktøjslinje
 
@@ -112,6 +130,8 @@ Rullelisten **Felt** grupperer det, du kan ændre:
 
 Tags, relationer og overordnet har hver en **tilføj / fjern**-knap, så du udvider eller beskærer eksisterende værdier i stedet for at erstatte dem.
 
+Værdifeltet retter sig efter felttypen: et multivalgsfelt viser sine valgmuligheder med afkrydsningsfelter, et ja/nej-felt en kontakt og et datofelt en datovælger. Lader du værdien stå tom, ryddes feltet på alle de valgte kort. Felter, der beregnes af en formel, og omkostningsfelter, du ikke har tilladelse til at se, tilbydes ikke.
+
 ### Omstrukturering af hierarkiet { #mass-edit-parent }
 
 Feltet **Overordnet** vises, når du har filtreret tabellen til én korttype, der understøtter hierarki. Et kort har præcis ét overordnet kort, så dette ene felt dækker begge retninger af en omstrukturering:
@@ -126,6 +146,16 @@ Kortene flyttes ét ad gangen, så en flytning, der ikke er tilladt, blokerer ku
 - Flytningen ville føre en forretningsevne ud over grænsen på fem niveauer.
 
 Et kort tager sine egne underordnede kort med sig, når det flyttes, og godkendte kort falder tilbage til **Brudt**, så ændringen bliver gennemgået igen.
+
+## Gruppér lageret { #group-by }
+
+Klik på **Gruppér efter** i værktøjslinjen (ved siden af antallet af elementer) for at organisere tabellen i sammenfoldelige grupper. Livscyklusfase og godkendelsesstatus er altid tilgængelige; når tabellen er filtreret til én korttype, kommer dens undertype og alle attributter med enkeltvalg til.
+
+- Kort uden værdi i det valgte felt havner i gruppen **Ikke angivet** øverst — det naturlige udgangspunkt for at klassificere uklassificerede kort.
+- Klik på en gruppeoverskrift for at folde gruppen sammen eller ud. Overskriften viser antallet af kort i gruppen.
+- Når du ruller gennem en lang gruppe, forbliver dens overskrift fastgjort lige under kolonneoverskrifterne, så du altid ved, hvilken gruppe du læser; den næste gruppes overskrift skubber den væk, når den når frem. Det er hele overskriften inklusive afkrydsningsfeltet, så du kan vælge en lang gruppe uden at rulle tilbage til dens begyndelse.
+- Afkrydsningsfeltet i overskriften vælger alle kort i gruppen: for at omklassificere en stak skal du folde **Ikke angivet** ud, markere overskriften og sætte værdien med [Masseredigering](#mass-edit). Der er bevidst ingen træk-og-slip — vælg og sæt fungerer ens på computer, tablet og telefon.
+- Sortering gælder inden for hver gruppe; grupperingen huskes efter genindlæsning, gemmes i gemte visninger og kan deles via URL-parameteren `group_by`.
 
 ## AI-beskrivelsesforslag { #ai-description-suggestions }
 
@@ -192,7 +222,7 @@ Det samme prioritetsforhold styrer kort-opdaterings-matchning: rækker med en UU
 
 #### Søskende-navne-entydighed
 
-Fordi kort identificeres efter navn + sti, **kan to kort af samme type ikke dele både en forælder og et navn**. Nye kort, der ville skabe en sådan kollision, afvises ved oprettelses­tidspunktet (i Opret kort-dialogen, i inline-omdøbningen og under regneark-import). Kort, der allerede er i databasen, og som deler et navn med en søskende — fra tidligere seed-data eller importer — efterlades urørt; du kan redigere et hvilket som helst af deres felter, men at omdøbe ét tilbage til kollisionen (eller oprette et tredje) blokeres. Kontrollen er case- og whitespace-uafhængig for at matche importørens resolver.
+Fordi kort identificeres efter navn + sti, **kan to kort af samme type ikke dele både en forælder og et navn**. Nye kort, der ville skabe en sådan kollision, afvises ved oprettelses­tidspunktet (i Opret kort-dialogen, i inline-omdøbningen og under regneark-import). Kort, der allerede er i databasen, og som deler et navn med en søskende — fra tidligere seed-data eller importer — efterlades urørt; du kan redigere et hvilket som helst af deres felter, men at omdøbe ét tilbage til kollisionen (eller oprette et tredje) blokeres. Kontrollen er case- og whitespace-uafhængig for at matche importørens resolver. Når Opret kort-dialogen afviser en dublet, nævner advarslen det eksisterende kort og indeholder et **Vis eksisterende kort**-link, der fører dig direkte derhen.
 
 ### Inline relations-celler
 
@@ -212,6 +242,10 @@ For bagudkompatibilitet accepterer importøren også komma-separerede celler (pr
 ### Interessent-celler
 
 På hvert kort-ark bærer `stakeholder:<role_key>`-kolonner de brugere, der er tildelt hver interessentrolle, som **semikolon-separerede e-mailadresser** (samme konvention som LeanIX' `subscriptions:<RoleType>`-kolonner), f.eks. `ada@corp.com; bob@corp.com`. **E-mailadressen er den eneste accepterede brugerreference** — visningsnavne kan kollidere og bruges aldrig til opslag; en post på formen `Navn <email>` tolereres (e-mailen i vinkelparenteser bruges), et navn alene giver en advarsel og springes over. Ligesom relations-celler er interessent-celler **deklarative pr. rolle**: De anførte brugere bliver det komplette sæt af tildelinger for rollen efter importen. Fjernes en bruger fra listen, fjernes tildelingen; en tom celle rydder rollen; udelades kolonnen helt, forbliver tildelingerne urørte. Poster uden matchende bruger giver en advarsel og springes over — de blokerer aldrig importen.
+
+!!! note "Ark eksporteret før rollenøgler blev camelCase"
+    Interessentrollenøgler følger samme camelCase-konvention som alle andre metamodelnøgler. Et ark eksporteret før den ændring har kolonneoverskrifter som `stakeholder:technical_application_owner`; de kan stadig importeres — overskriften matches til sin camelCase-rolle, når ingen rolle matcher bogstaveligt. Nyeksporterede ark bruger camelCase-formen.
+
 
 ### Relations-ark
 
