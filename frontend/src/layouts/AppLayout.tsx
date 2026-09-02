@@ -159,7 +159,16 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   // Resolve nav item labels via i18n and filter based on BPM/PPM/TurboLens/permissions
   const navItems = useMemo(() => {
     let items = NAV_ITEM_DEFS as NavItemDef[];
-    if (!bpmEnabled) items = items.filter((item) => item.labelKey !== "bpm");
+    // bpm lives as a static child of the strategy_process dropdown, not a
+    // top-level entry — strip it from there rather than filtering a
+    // top-level "bpm" labelKey that no longer exists.
+    if (!bpmEnabled) {
+      items = items.map((item) =>
+        item.labelKey === "strategy_process"
+          ? { ...item, children: (item.children ?? []).filter((c) => c.labelKey !== "bpm") }
+          : item,
+      );
+    }
     if (!ppmEnabled) items = items.filter((item) => item.labelKey !== "ppm");
     if (!grcEnabled) items = items.filter((item) => item.labelKey !== "grc");
 

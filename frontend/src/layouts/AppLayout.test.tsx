@@ -139,21 +139,33 @@ describe("AppLayout", () => {
     renderLayout();
 
     // Nav items render as <a> (RouterLink) so Ctrl+Click opens a new tab —
-    // ARIA role is `link`, not `button`. Reports is the only dropdown
-    // trigger among the core items, so it alone stays a button.
+    // ARIA role is `link`, not `button`. Reports and the fork-local
+    // Org&Process (BPM's host — see below) are dropdown triggers, so they
+    // stay buttons instead.
     expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /inventory/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reports/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /bpm/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /org&process/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /diagrams/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /todos/i })).toBeInTheDocument();
   });
 
-  it("hides BPM when the module is disabled", () => {
+  it("shows BPM under the Org&Process dropdown", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+
+    expect(screen.queryByRole("link", { name: /^bpm$/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /org&process/i }));
+    const item = await screen.findByRole("menuitem", { name: /bpm/i });
+    expect(item).toHaveAttribute("href", "/bpm");
+  });
+
+  it("hides BPM when the module is disabled, and hides Org&Process entirely with no extension installed", () => {
     vi.mocked(useBpmEnabled).mockReturnValue({ bpmEnabled: false, loading: false });
     renderLayout();
 
-    expect(screen.queryByRole("link", { name: /bpm/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /org&process/i })).not.toBeInTheDocument();
   });
 
   it("hides nav items based on permissions", () => {
@@ -335,11 +347,11 @@ describe("AppLayout — extension nav placement", () => {
     expect(item).toHaveAttribute("href", "/ext/product-technology-what-if/analysis");
   });
 
-  it("hides the Org&Process and App&Data menus when no extension targets them", () => {
+  it("hides App&Data when no extension targets it", () => {
     renderLayout();
-    expect(screen.queryByRole("button", { name: /org&process/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /app&data/i })).not.toBeInTheDocument();
   });
+
 
   it("renders an extension-defined navigation group as a dropdown", async () => {
     registerExtension("swot-analysis", {
