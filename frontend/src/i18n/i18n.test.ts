@@ -409,10 +409,10 @@ describe("SUPPORTED_LOCALES matches locale data", () => {
   it("keeps the compact shared navigation labels identical in every locale", () => {
     for (const locale of SUPPORTED_LOCALES) {
       const nav = getResource(locale, "nav");
-      expect(nav.strategyProcess, `strategyProcess differs for "${locale}"`).toBe(
+      expect(nav.strategy_process, `strategy_process differs for "${locale}"`).toBe(
         "Org&Process",
       );
-      expect(nav.appData, `appData differs for "${locale}"`).toBe("App&Data");
+      expect(nav.app_data, `app_data differs for "${locale}"`).toBe("App&Data");
     }
   });
   it("SUPPORTED_LOCALES contains exactly the expected locales", () => {

@@ -283,6 +283,64 @@ describe("AppLayout — extension nav placement", () => {
     expect(item).toHaveAttribute("href", "/ext/digital-autonomy/quadrant");
   });
 
+  it("groups a strategy_process-navGroup extension route under the Org&Process menu, not top-level", async () => {
+    registerExtension("organization", {
+      key: "organization",
+      sdkVersion: UI_SDK_VERSION,
+      routes: [
+        {
+          id: "org-explorer",
+          path: "/ext/organization/explorer",
+          label: "Organization Explorer",
+          icon: "account_tree",
+          navGroup: "strategy_process" as ExtensionNavGroup,
+          component: () => null,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderLayout();
+
+    expect(
+      screen.queryByRole("link", { name: /Organization Explorer/i }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /org&process/i }));
+    const item = await screen.findByRole("menuitem", { name: /Organization Explorer/i });
+    expect(item).toHaveAttribute("href", "/ext/organization/explorer");
+  });
+
+  it("groups an app_data-navGroup extension route under the App&Data menu, not top-level", async () => {
+    registerExtension("product-technology-what-if", {
+      key: "product-technology-what-if",
+      sdkVersion: UI_SDK_VERSION,
+      routes: [
+        {
+          id: "what-if",
+          path: "/ext/product-technology-what-if/analysis",
+          label: "What-If Analysis",
+          icon: "query_stats",
+          navGroup: "app_data" as ExtensionNavGroup,
+          component: () => null,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderLayout();
+
+    expect(screen.queryByRole("link", { name: /What-If Analysis/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /app&data/i }));
+    const item = await screen.findByRole("menuitem", { name: /What-If Analysis/i });
+    expect(item).toHaveAttribute("href", "/ext/product-technology-what-if/analysis");
+  });
+
+  it("hides the Org&Process and App&Data menus when no extension targets them", () => {
+    renderLayout();
+    expect(screen.queryByRole("button", { name: /org&process/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /app&data/i })).not.toBeInTheDocument();
+  });
+
   it("renders an extension-defined navigation group as a dropdown", async () => {
     registerExtension("swot-analysis", {
       key: "swot-analysis",

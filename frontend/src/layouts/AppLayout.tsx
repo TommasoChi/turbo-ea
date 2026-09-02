@@ -313,7 +313,14 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       };
     };
 
-    return items.filter((item) => hasNavPerm(item)).map(resolve);
+    // A pure extension-route host (strategyProcess/appData) that ends up
+    // with no children — no matching extension installed, or its routes were
+    // filtered by permission — and no path of its own is a dead button that
+    // does nothing on click. Drop it rather than render it.
+    return items
+      .filter((item) => hasNavPerm(item))
+      .map(resolve)
+      .filter((item) => item.path || item.children);
   }, [bpmEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, user.permissions, t]);
 
   // Resolve admin item labels via i18n and filter based on permissions

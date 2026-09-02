@@ -46,6 +46,18 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
       { labelKey: "reports.saved", icon: "bookmarks", path: "/reports/saved" },
     ],
   },
+  // Pure extension-route hosts, fork-local: no core page of their own, no
+  // static children. "strategy_process"/"app_data" are the two legacy
+  // EXTENSION_NAV_GROUPS an installed extension may target (see
+  // extensionHost.tsx) — these are what give their routes a grouped dropdown
+  // instead of scattering each one as its own top-level icon. The labelKey
+  // MUST equal the group string verbatim: the group-injection loop in
+  // AppLayout finds the host by `item.labelKey === group`. AppLayout's final
+  // resolve pass drops a host down to nothing when it ends up with no path
+  // AND no children (no matching extension installed), so these are safe to
+  // keep here unconditionally.
+  { labelKey: "strategy_process", icon: "route", children: [] },
+  { labelKey: "app_data", icon: "apps", children: [] },
   { labelKey: "bpm", icon: "route", path: "/bpm" },
   { labelKey: "ppm", icon: "view_timeline", path: "/ppm" },
   { labelKey: "diagrams", icon: "schema", path: "/diagrams" },
