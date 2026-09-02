@@ -17,8 +17,12 @@ from app.database import get_db as core_get_db
 from app.services.extensions import sdk
 
 
-def test_sdk_version_is_1_7():
-    assert sdk.SDK_VERSION == "1.7"
+def test_sdk_version_is_1_5():
+    # Fork note: SDK_VERSION is pinned at 1.5 (frozen — see CLAUDE.md's SDK
+    # surface section). Upstream has since moved this to 1.7; the new 1.6/1.7
+    # surface (notification channels, todos-bridge link) is present below
+    # without the constant following it.
+    assert sdk.SDK_VERSION == "1.5"
 
 
 def test_sdk_reexports_route_dependencies_verbatim():

@@ -573,7 +573,10 @@ describe("extensionHost", () => {
   });
 
   it("pins the current UI SDK version", () => {
-    expect(UI_SDK_VERSION).toBe("1.26");
+    // Fork note: UI_SDK_VERSION is pinned at 1.19 (frozen — see CLAUDE.md's
+    // SDK surface section). Upstream has since moved this to 1.26; the new
+    // surface merged in below is present without the constant following it.
+    expect(UI_SDK_VERSION).toBe("1.19");
   });
 
   it("whitelists the nav groups an extension route may request", () => {
