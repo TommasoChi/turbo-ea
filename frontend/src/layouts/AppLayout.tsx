@@ -157,15 +157,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   // Resolve nav item labels via i18n and filter based on BPM/PPM/TurboLens/permissions
   const navItems = useMemo(() => {
     let items = NAV_ITEM_DEFS as NavItemDef[];
-    // "bpm" lives as a child of the "strategyProcess" dropdown, not a
-    // top-level item — filter it out of that group's children instead.
-    if (!bpmEnabled) {
-      items = items.map((item) =>
-        item.labelKey === "strategyProcess"
-          ? { ...item, children: (item.children || []).filter((c) => c.labelKey !== "bpm") }
-          : item,
-      );
-    }
+    if (!bpmEnabled) items = items.filter((item) => item.labelKey !== "bpm");
     if (!ppmEnabled) items = items.filter((item) => item.labelKey !== "ppm");
     if (!grcEnabled) items = items.filter((item) => item.labelKey !== "grc");
 
@@ -257,38 +249,6 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       });
     }
     items = [...items, ...groupedFallbacks];
-
-    // Same idea for the Strategy & Process dropdown (BPM + extensions like
-    // Value Chain that plug in alongside it).
-    const strategyProcessExtChildren = getExtensionRoutesForGroup("strategy_process").map(({ route }) => ({
-      labelKey: route.label,
-      icon: route.icon,
-      path: route.path,
-      permission: route.permission,
-    }));
-    if (strategyProcessExtChildren.length) {
-      items = items.map((item) =>
-        item.labelKey === "strategyProcess"
-          ? { ...item, children: [...(item.children || []), ...strategyProcessExtChildren] }
-          : item,
-      );
-    }
-    // Shared Application & Data extension dropdown. Independently shipped
-    // extensions can appear together; the empty-child filter hides the group.
-    const appDataExtChildren = getExtensionRoutesForGroup("app_data").map(({ route }) => ({
-      labelKey: route.label,
-      icon: route.icon,
-      path: route.path,
-      permission: route.permission,
-    }));
-    if (appDataExtChildren.length) {
-      items = items.map((item) =>
-        item.labelKey === "appData"
-          ? { ...item, children: appDataExtChildren }
-          : item,
-      );
-    }
-
 
     // Extension-defined top-level dropdowns. Each group only receives routes
     // declared by the same extension; permission filtering and empty-group

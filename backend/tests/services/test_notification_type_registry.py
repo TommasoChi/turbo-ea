@@ -72,7 +72,7 @@ def _emitted() -> dict[str, list[str]]:
     found: dict[str, list[str]] = {}
     for path in sorted(APP.rglob("*.py")):
         rel = str(path.relative_to(APP))
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         consts = _module_constants(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or _notify_target(node) is None:

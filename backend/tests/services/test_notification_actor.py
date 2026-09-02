@@ -75,8 +75,8 @@ def _notify_target(node: ast.Call) -> str | None:
 
 def _call_sites():
     for path in sorted(APP.rglob("*.py")):
-        rel = str(path.relative_to(APP))
-        tree = ast.parse(path.read_text())
+        rel = path.relative_to(APP).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or _notify_target(node) is None:
                 continue
