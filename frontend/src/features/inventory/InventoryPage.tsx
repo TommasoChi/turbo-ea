@@ -64,6 +64,7 @@ import {
 import { exportToExcel, exportCurrentViewToExcel } from "./excelExport";
 import { dateColumnFilterDef } from "@/lib/dateColumnFilter";
 import RelationCellPopover from "./RelationCellPopover";
+import ExtFieldCell from "./ExtFieldCell";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useCardSearch } from "@/hooks/useCardSearch";
 import { useTypeLabel, useRelationLabel, useFieldLabel, useOptionLabel, useSubtypeLabel } from "@/hooks/useResolveLabel";
@@ -300,6 +301,7 @@ type InventoryRow = GroupedRow<Card>;
 function urlHasFilterParams(searchParams: URLSearchParams): boolean {
   return (
     searchParams.has("type") ||
+    searchParams.has("subtype") ||
     searchParams.has("search") ||
     searchParams.has("approval_status") ||
     searchParams.has("show_archived") ||
@@ -766,7 +768,9 @@ export default function InventoryPage() {
       return {
         types: searchParams.get("type") ? [searchParams.get("type")!] : [],
         search: searchParams.get("search") || "",
-        subtypes: [],
+        // Repeatable, like the sidebar's subtype filter (client-side over the
+        // fetched page — GET /cards has no subtype param).
+        subtypes: searchParams.getAll("subtype"),
         lifecyclePhases: [],
         dataQualityBands: searchParams.getAll("dq").filter(isDataQualityBand),
         approvalStatuses: searchParams.get("approval_status") ? [searchParams.get("approval_status")!] : [],
@@ -3000,6 +3004,18 @@ export default function InventoryPage() {
                 }
               : {}),
             ...(field.type === "date" ? dateColumnFilterDef : {}),
+            // Extension-typed columns render through the fieldTypes registry
+            // (same display component as card detail) and are never
+            // grid-editable — the spread order deliberately overrides the
+            // `editable` set above.
+            ...(field.type.startsWith("ext.")
+              ? {
+                  editable: false,
+                  cellRenderer: (p: { value: unknown }) => (
+                    <ExtFieldCell field={field} value={p.value} />
+                  ),
+                }
+              : {}),
           });
         }
       }
@@ -3043,6 +3059,13 @@ export default function InventoryPage() {
               }
             : {}),
           ...(field.type === "date" ? dateColumnFilterDef : {}),
+          ...(field.type.startsWith("ext.")
+            ? {
+                cellRenderer: (p: { value: unknown }) => (
+                  <ExtFieldCell field={field} value={p.value} />
+                ),
+              }
+            : {}),
         });
       }
     }

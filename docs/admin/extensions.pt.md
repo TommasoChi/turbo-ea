@@ -8,6 +8,10 @@ A página tem dois separadores: **Loja** percorre o catálogo de extensões do f
 
 **As extensões são criadas e assinadas pela Turbo EA** — não são de criação própria nem abertas a terceiros. Se precisar de uma funcionalidade adaptada à sua organização, podemos criá-la e licenciá-la para si. Consulte [a consultoria da Turbo EA](https://www.turbo-ea.org/consulting).
 
+## Guias de cada extensão
+
+Cada extensão publicada na loja tem o seu próprio guia: o que faz, como configurá-la e como utilizá-la no dia a dia. Ver [Extensões](../extensions/index.md).
+
 ## Como funciona a confiança
 
 Duas verificações independentes protegem a sua instância:
@@ -27,7 +31,7 @@ O ID viaja com uma transferência de workspace, pelo que mudar para um novo serv
 
 ## O separador Loja
 
-O separador **Loja** funciona sem qualquer configuração e lista as extensões publicadas pelo fornecedor com descrição e preço:
+O separador **Loja** funciona sem qualquer configuração e lista as extensões publicadas pelo fornecedor como uma grelha de mosaicos compactos — logótipo, nome, estado da licença e preço. Clique num mosaico para abrir um painel à direita com a descrição completa, as capturas de ecrã, as etiquetas de categoria e os créditos de origem e licença. As extensões sem imagem apresentam um mosaico gerado com as suas iniciais.
 
 - **Comprar** abre a página de pagamento num novo separador do navegador. Assim que o pagamento é confirmado, a sua licença é aplicada automaticamente (uma cópia também chega por e-mail).
 - **Instalar** (ou **Atualizar** quando é publicada uma versão mais recente) verifica primeiro a sua licença — se a extensão ainda não tiver licença, um diálogo propõe comprá-la ou colar uma licença e depois continua automaticamente — e descarrega o pacote com exatamente a mesma verificação de assinatura e pré-visualização de simulação de um carregamento manual. As extensões com demonstração mostram uma ligação **Ver em ação**, e uma versão mais recente publicada transforma o botão em **Atualizar**.
@@ -37,6 +41,8 @@ Quando o catálogo inclui categorias, cada item mostra pequenas pílulas (free o
 O separador Loja é só de leitura e anónimo: sem conta, sem token, e nada sobre a sua instância é enviado — apenas o catálogo público do fornecedor é lido. As instâncias isoladas não precisam de configuração — o separador mostra então simplesmente uma indicação amigável — e usam o fluxo baseado em ficheiros abaixo; o site da loja do fornecedor oferece as mesmas compras e transferências a partir de qualquer navegador com ligação à Internet. Se algo entre a sua instância e a loja bloquear o pedido — um proxy, uma firewall ou uma proteção anti-bots à frente da loja —, o separador indica-o e mostra o estado HTTP recebido, para que uma instância bloqueada nunca seja confundida com uma isolada.
 
 A instância também **verifica o catálogo uma vez por dia** e comunica as alterações, para que uma extensão nova — ou uma correção de segurança de alguma que já utiliza — não fique à espera de que alguém abra esta página por acaso. Os administradores (qualquer pessoa cujo perfil conceda `admin.manage_extensions`) recebem uma notificação no sino quando é publicada uma nova extensão na loja e outra quando uma extensão instalada tem uma versão mais recente. Cada alteração é anunciada uma só vez e um dia de lançamentos intenso chega como uma notificação por tipo em vez de uma por extensão. Nada é descarregado nem instalado — a notificação limita-se a trazê-lo até aqui. A verificação diária pode ser desativada por completo em [Admin → Definições → Notificações de atualização](settings.md#update-notifications).
+
+O separador mostra também quando a loja foi lida pela última vez e um botão **Verificar agora** que executa a verificação de imediato e comunica o que encontrou — pode assim confirmar que a verificação diária funciona sem esperar um dia. Se uma verificação falhou, o motivo é mostrado aqui em vez de ficar em silêncio.
 
 ## Avaliações
 
@@ -110,6 +116,7 @@ A maioria das extensões trabalha apenas com os seus próprios dados. Uma extens
 - `core.cards.read` — ler cartões, relações e o metamodelo, por exemplo para que um conector possa fazer corresponder as suas aplicações a registos de um sistema externo. Os cartões arquivados permanecem fora de vista.
 - `core.cards.write` — criar, atualizar ou arquivar cartões e adicionar relações, com exatamente a validação que o editor da aplicação aplica. As atualizações fundem os valores dos campos em vez de os substituir, pelo que uma extensão nunca pode apagar dados que não gere, e **não existe eliminação permanente** — arquivar, com a sua janela de restauro, é a única remoção possível para uma extensão.
 - `core.events.card` — receber eventos de alteração de cartões e relações, para que um conector reaja de imediato às mudanças do inventário em vez de esperar pelo próximo ciclo de consulta.
+- `core.notifications.channel` — entregar as notificações que ativar num canal próprio da extensão, por exemplo uma mensagem de chat. A extensão recebe o título, a mensagem e a ligação de uma notificação, além do seu identificador de utilizador; não recebe o seu endereço de e-mail a menos que declare também `core.users.read`, e nunca recebe um tipo que não tenha ativado para ela. As notificações que ficam apenas no sino nunca são enviadas para um canal de extensão.
 
 Os grants fazem parte do pacote assinado pelo fornecedor: ficam fixados no empacotamento e são visíveis antes da instalação. Só se aplicam enquanto a extensão está instalada, ativada e licenciada — desativá-la ou deixar a licença expirar revoga o acesso imediatamente, sem reinício. Cada alteração feita por uma extensão fica registada em **Admin → Registo de auditoria** sob a origem **Extensão**, e um todo espelhado de um gestor externo mostra um chip com ligação ao item externo.
 
@@ -117,4 +124,4 @@ Cada alteração feita por uma extensão aparece em **Admin → Registo de audit
 
 ## Onde as páginas de extensão aparecem
 
-As páginas de extensão aparecem na navegação assim que a extensão está instalada e licenciada — geralmente como seu próprio item de menu de nível superior, embora alguns relatórios sejam colocados no menu **Relatórios** ao lado dos integrados.
+As páginas de extensão aparecem na navegação assim que a extensão está instalada e licenciada — geralmente como seu próprio item de menu de nível superior, embora algumas sejam colocadas dentro de um menu do núcleo ao lado das entradas integradas: os relatórios no menu **Relatórios**, e as páginas de governação, risco ou conformidade no menu **GRC**. Uma página agrupada volta a ser um item de nível superior quando o seu menu não está disponível — o módulo está desativado, ou não tem a permissão correspondente — pelo que nunca desaparece da navegação.

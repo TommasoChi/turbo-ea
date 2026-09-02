@@ -129,6 +129,12 @@ import { useCurrency } from "@/hooks/useCurrency";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useSavedReport as useCoreSavedReport } from "@/hooks/useSavedReport";
 import * as tokens from "@/theme/tokens";
+// SDK 1.19 — choice-field pill rendering + metamodel label resolution, so an
+// extension renders a select value exactly like core. All leaf/pure modules:
+// no code-split graph, and no cycle back through cardDetailUtils.
+import { OptionChip, SELECT_CHIP_BASE, chipWidthForField } from "@/components/OptionChip";
+import { readableTextColor } from "@/lib/color";
+import { fieldLabel, optionLabel, useFieldLabel, useOptionLabel } from "@/hooks/useResolveLabel";
 import type { ArchitectureDecision, Card } from "@/types";
 
 export const UI_SDK_VERSION = "1.19";
@@ -137,10 +143,9 @@ export const UI_SDK_VERSION = "1.19";
  * Core nav groups an extension route may request placement into (instead of the
  * default top-level nav entry). Whitelisted on purpose so an extension can only
  * land in sanctioned menus (never admin/arbitrary ones); extend deliberately.
- * "strategy_process" is the Strategy & Process dropdown (BPM + extensions like
- * Value Chain that live alongside it) — see AppLayout.tsx's NAV_ITEM_DEFS.
+ * See `layouts/navItems.ts` for the current dropdown-capable nav items.
  */
-export const EXTENSION_NAV_GROUPS = ["reports", "strategy_process", "app_data"] as const;
+export const EXTENSION_NAV_GROUPS = ["reports", "grc"] as const;
 export type ExtensionNavGroup = (typeof EXTENSION_NAV_GROUPS)[number];
 
 /**
@@ -355,6 +360,18 @@ export interface ExtensionFieldVisibilityProps {
  * — never an access-denied page, unlike a full route); `appliesTo` optionally
  * filters on the context's `cardType`/`type`; `order` sorts within a slot
  * (default 0, ties keep registration order).
+ *
+ * Slot locations core exposes today:
+ *   - `card.detail.header`  (component) — CardDetailContent
+ *   - `risk.detail.panel`   (component) — RiskDetailPage
+ *   - `adr.header`, `adr.signature.footer` (component) — ADREditor/ADRPreview
+ *   - `notification.preferences.channels` (data) — one column per
+ *     extension-delivered notification channel. `build({channelKey})` returns
+ *     `{label, order?}`; the column only renders when the BACKEND also reports
+ *     the channel as live, so a UI-only bundle cannot conjure a column whose
+ *     PATCH the backend would ignore.
+ *   - `notification.preferences.footer` (component) — below the preferences
+ *     table, context `{userId}`; where a channel shows its per-user link state.
  */
 export interface ExtensionSlotContribution {
   slot: string;
@@ -639,6 +656,7 @@ const LazyProcessDetailSidePanel = React.lazy(() => import("@/components/Process
 // transitively the code-split BpmnViewer it renders) from
 // features/bpm/ProcessNavigator.tsx.
 const LazyProcessFlowPreview = React.lazy(() => import("@/components/ProcessFlowPreview"));
+const LazyCreateCardDialog = React.lazy(() => import("@/components/CreateCardDialog"));
 
 export function ExtensionCardDetailSidePanel(props: {
   cardId: string | null;
@@ -728,6 +746,36 @@ export function ExtensionDependencyGraph(props: DependencyGraphProps) {
         onNext={props.onNext}
         canCreateDiagram={props.canCreateDiagram ?? false}
       />
+    </React.Suspense>
+  );
+}
+
+/**
+ * SDK 1.17 — core's create-card dialog for extension pages. Lazy for the
+ * same reason as the side panel (AiSuggestPanel/CardPicker graph). The
+ * caller supplies `onCreate` (typically `api.post("/cards", data)` resolving
+ * to the new card id); `initialType`/`initialSubtype`/`initialAttributes`
+ * open it pre-configured. On success the dialog navigates to the new card.
+ */
+export function ExtensionCreateCardDialog(props: {
+  open: boolean;
+  onClose: () => void;
+  onCreate: (data: {
+    type: string;
+    subtype?: string;
+    name: string;
+    description?: string;
+    parent_id?: string;
+    attributes?: Record<string, unknown>;
+    lifecycle?: Record<string, string>;
+  }) => Promise<string>;
+  initialType?: string;
+  initialSubtype?: string;
+  initialAttributes?: Record<string, unknown>;
+}) {
+  return (
+    <React.Suspense fallback={null}>
+      <LazyCreateCardDialog {...props} />
     </React.Suspense>
   );
 }
@@ -1009,6 +1057,15 @@ export function initExtensionHost(): void {
       useTranslation,
       tokens,
       uiSdkVersion: UI_SDK_VERSION,
+      // SDK 1.19 — render a select option the way core does.
+      OptionChip,
+      SELECT_CHIP_BASE,
+      chipWidthForField,
+      readableTextColor,
+      useOptionLabel,
+      useFieldLabel,
+      optionLabel,
+      fieldLabel,
       // SDK 1.6 — saved-report participation (see useExtensionSavedReport).
       useSavedReport: useExtensionSavedReport,
       SaveReportDialog,
@@ -1120,6 +1177,32 @@ export function initExtensionHost(): void {
       CardScopeFilter,
       useCardScope,
       applyScope,
+      // SDK 1.17 — data-grid + card-creation reuse. `loadAgGrid` resolves
+      // core's code-split AG Grid chunk (module registration + the Theming
+      // API themes ride along via agGridSetup) so extension grids share
+      // core's grid look without bundling AG Grid; `CreateCardDialog` is
+      // core's create-card modal (lazy wrapper), openable pre-configured
+      // via initialType/initialSubtype/initialAttributes.
+      // Since SDK 1.18 the resolved module also carries the documented grid
+      // template hooks (UI_GUIDELINES §3.6) — `useColumnFreeze` and
+      // `useColumnOrder` — lazily, so they stay in the code-split grid chunk.
+      // Extension components call them off the loaded module; that is safe
+      // because the grid component only mounts once the module resolved, so
+      // hook call order stays stable.
+      loadAgGrid: () =>
+        Promise.all([
+          import("ag-grid-react"),
+          import("@/lib/agGridSetup"),
+          import("@/components/grid/useColumnFreeze"),
+          import("@/components/grid/useColumnOrder"),
+        ]).then(([agReact, setup, freeze, order]) => ({
+          AgGridReact: agReact.AgGridReact,
+          gridThemeLight: setup.gridThemeLight,
+          gridThemeDark: setup.gridThemeDark,
+          useColumnFreeze: freeze.useColumnFreeze,
+          useColumnOrder: order.useColumnOrder,
+        })),
+      CreateCardDialog: ExtensionCreateCardDialog,
     },
     register: registerExtension,
   };

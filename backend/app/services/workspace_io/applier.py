@@ -30,6 +30,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import (
+    migrate_legacy_app_permissions,
+    strip_legacy_card_permissions,
+)
 from app.models.app_settings import AppSettings
 from app.models.bookmark import Bookmark, bookmark_shares
 from app.models.card import Card
@@ -39,6 +43,7 @@ from app.models.diagram_group import DiagramGroup, diagram_group_members
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.role import Role
+from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
 from app.services import card_reference
@@ -465,6 +470,22 @@ def _make_config_applier(sec: schema.ConfigSection):
         }
         for row in bundle.rows(sec.sheet):
             data = _coerce(row, sec.columns, sec.json_columns)
+            # A bundle exported from an install that predates the permission
+            # renames carries keys the validators would reject. This path writes
+            # straight onto the model, bypassing Pydantic entirely, so without
+            # this an old bundle would silently re-poison a repaired instance
+            # and break its role editor — the very bug 140 exists to fix, only
+            # reintroduced through the back door and with no migration watching.
+            #
+            # The two tiers are normalised differently on purpose: dead
+            # card-level keys are dropped (they grant nothing), while app-level
+            # keys are renamed onto the permissions they still mean, so an
+            # import never silently revokes access a role actually had.
+            if "permissions" in data:
+                if sec.model is StakeholderRoleDefinition:
+                    data["permissions"] = strip_legacy_card_permissions(data["permissions"])
+                elif sec.model is Role:
+                    data["permissions"] = migrate_legacy_app_permissions(data["permissions"])
             nk = tuple(data.get(k) for k in sec.natural_key)
             if any(part is None for part in nk):
                 sr.failed += 1
@@ -689,18 +710,23 @@ async def _finalize_cards(db) -> None:
     from app.services.calculation_engine import run_calculations_for_card
     from app.services.card_write_service import _get_ppm_exclusions
     from app.services.data_quality import calc_data_quality
+    from app.services.derived_writes import derived_maintenance
 
     ids = list((await db.execute(select(Card.id).where(Card.status != "ARCHIVED"))).scalars().all())
-    for i in range(0, len(ids), 500):
-        chunk = ids[i : i + 500]
-        cards = (await db.execute(select(Card).where(Card.id.in_(chunk)))).scalars().all()
-        for card in cards:
-            ppm_excl = await _get_ppm_exclusions(db, card)
-            await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
-            score = await calc_data_quality(db, card)
-            if card.data_quality != score:
-                card.data_quality = score
-    await db.flush()
+    # Cards the bundle created carry their own `card.created` event; cards the
+    # target already had are only being rescored, so this pass must not re-date
+    # the whole inventory to the moment of the import.
+    with derived_maintenance(db):
+        for i in range(0, len(ids), 500):
+            chunk = ids[i : i + 500]
+            cards = (await db.execute(select(Card).where(Card.id.in_(chunk)))).scalars().all()
+            for card in cards:
+                ppm_excl = await _get_ppm_exclusions(db, card)
+                await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
+                score = await calc_data_quality(db, card)
+                if card.data_quality != score:
+                    card.data_quality = score
+        await db.flush()
 
 
 def _make_cards_applier(user: User):

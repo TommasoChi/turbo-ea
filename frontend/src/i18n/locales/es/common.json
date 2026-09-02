@@ -165,6 +165,8 @@
   "dashboard.activity.action.file.uploaded": "subió un archivo a",
   "dashboard.activity.action.file.deleted": "eliminó un archivo de",
   "dashboard.activity.action.comment.created": "comentó en",
+  "dashboard.activity.action.tag.added": "etiquetó",
+  "dashboard.activity.action.tag.removed": "quitó una etiqueta de",
   "dashboard.activity.action.process_diagram.saved": "guardó un diagrama de proceso para",
   "dashboard.activity.action.process_diagram.deleted": "eliminó un diagrama de proceso para",
   "dashboard.activity.action.process_flow.submitted": "envió un flujo de proceso para",
@@ -306,6 +308,7 @@
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "Acceso denegado",
   "accessDenied.body": "No tiene permiso para ver esta página. Contacte con su administrador si necesita acceso.",
+  "accessDenied.redirectedToDashboard": "No tiene acceso a esa página, por lo que le hemos llevado al panel.",
   "moduleDisabled.title": "{{module}} está desactivado",
   "moduleDisabled.body": "El módulo {{module}} está actualmente desactivado por un administrador. Actívelo en la configuración de administración para acceder a esta sección.",
   "moduleDisabled.backToDashboard": "Volver al panel",
@@ -463,5 +466,6 @@
   "cardDisplay.clearAll": "Borrar todo",
   "cardDisplay.subtypeLine": "Subtipo",
   "cardDisplay.linesHint": "Los primeros {{count}} aparecen en la tarjeta.",
+  "cardDisplay.linesHintAll": "Cada selección aparece en la tarjeta, que crece para ajustarse.",
   "cardDisplay.noFields": "No hay campos disponibles"
 }

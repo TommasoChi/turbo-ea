@@ -262,6 +262,50 @@ for group in APP_PERMISSIONS.values():
     ALL_APP_PERMISSION_KEYS.update(group["permissions"].keys())
 
 # ---------------------------------------------------------------------------
+# Legacy app-level permission keys
+# ---------------------------------------------------------------------------
+#
+# The pre-024 names that migration 033 renamed inside ``roles.permissions``.
+# 033 repairs the rows an install already had, so on any instance that ran it
+# the table is clean — this map exists for the maps that arrive *afterwards*,
+# which no migration is watching: a workspace bundle exported from an instance
+# that never ran 033 is written straight onto the model by the transfer
+# applier, bypassing the validators below.
+#
+# Unlike the card-level keys, these are RENAMED, not dropped. Each one maps to
+# a permission that still exists and still means the same thing, so the stored
+# ``true`` is a grant somebody deliberately made; dropping it would silently
+# revoke access, where renaming preserves exactly what the role had.
+LEGACY_APP_PERMISSION_RENAMES: dict[str, str] = {
+    "subscriptions.view": "stakeholders.view",
+    "subscriptions.manage": "stakeholders.manage",
+    "inventory.quality_seal": "inventory.approval_status",
+}
+
+
+def migrate_legacy_app_permissions(permissions: dict) -> dict:
+    """Rename pre-024 app permission keys to their modern equivalents.
+
+    Mirrors migration 033's semantics: the modern key wins when both are
+    present, so a deliberate newer value is never clobbered by a stale one.
+    Keys outside the map are untouched — an unknown key stays unknown, for the
+    caller to reject.
+    """
+    if not isinstance(permissions, dict):
+        return permissions
+    if not LEGACY_APP_PERMISSION_RENAMES.keys() & permissions.keys():
+        return permissions
+    migrated: dict = {}
+    for key, value in permissions.items():
+        new_key = LEGACY_APP_PERMISSION_RENAMES.get(key)
+        if new_key is None:
+            migrated[key] = value
+        elif new_key not in permissions:
+            migrated[new_key] = value
+    return migrated
+
+
+# ---------------------------------------------------------------------------
 # Card-level permissions (stored in stakeholder_role_definitions.permissions)
 # ---------------------------------------------------------------------------
 
@@ -285,6 +329,43 @@ CARD_PERMISSIONS: dict[str, str] = {
 }
 
 ALL_CARD_PERMISSION_KEYS: set[str] = set(CARD_PERMISSIONS.keys())
+
+# ---------------------------------------------------------------------------
+# Legacy card permission keys
+# ---------------------------------------------------------------------------
+#
+# Migration 024 renamed the ``fs.`` prefix to ``card.`` inside
+# ``stakeholder_role_definitions.permissions`` but never applied the *semantic*
+# half of the same rename, so ``fs.quality_seal`` became ``card.quality_seal``
+# rather than ``card.approval_status``. Migration 033 repaired the equivalent
+# app-level keys in ``roles.permissions`` and stopped there, leaving every
+# install upgraded through 024 carrying keys this catalogue does not contain.
+#
+# That made the stakeholder-role editor unusable: the admin UI renders only the
+# keys in ``CARD_PERMISSIONS`` yet round-trips the stored map verbatim, so every
+# save resent the stale keys and was rejected — taking the colour, label and
+# translations down with it.
+#
+# They are DROPPED, never remapped. ``get_effective_card_permissions`` only ever
+# reads the modern names, so these keys have granted nothing since 024; removing
+# them is behaviour-preserving, whereas remapping would silently *grant*
+# approve/reject and stakeholder-management rights to every holder of the role.
+LEGACY_CARD_PERMISSION_KEYS: frozenset[str] = frozenset(
+    {"card.quality_seal", "card.manage_subscriptions"}
+)
+
+
+def strip_legacy_card_permissions(permissions: dict) -> dict:
+    """Drop known-stale card permission keys from a permissions map.
+
+    Only forgives keys this codebase itself once wrote. Genuinely unknown keys
+    are left in place for the caller to reject, so this stays a targeted repair
+    rather than a hole in the validator.
+    """
+    if not isinstance(permissions, dict):
+        return permissions
+    return {k: v for k, v in permissions.items() if k not in LEGACY_CARD_PERMISSION_KEYS}
+
 
 # ---------------------------------------------------------------------------
 # Mapping: app-level permission → card-level equivalent

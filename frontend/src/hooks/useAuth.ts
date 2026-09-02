@@ -4,8 +4,23 @@ import { primeBootstrap, resetBootstrap } from "@/api/bootstrap";
 import { stopEventStream } from "@/hooks/useEventStream";
 import { invalidateExtensionCapabilities } from "@/hooks/useExtensionCapabilities";
 import { resetExtensionHost } from "@/lib/extensionHost";
+import { clearReturnPath } from "@/lib/returnPath";
 import i18n from "@/i18n";
 import type { User } from "@/types";
+
+/**
+ * Set on logout to stop the login page immediately re-authenticating through a
+ * trusted reverse proxy. Per-tab and deliberately not persistent: a new tab
+ * should sign in automatically again.
+ */
+export const PROXY_SIGNOUT_KEY = "turboea_proxy_signed_out";
+
+/**
+ * The login page caches the resolved /auth/sso/config payload here so a
+ * refresh renders the correct layout instantly. Logout reads it back for the
+ * proxy logout URL. One definition, shared with LoginPage.
+ */
+export const SSO_CACHE_KEY = "turboea_sso_config";
 
 const TOKEN_REFRESH_INTERVAL = 10 * 60 * 1000; // Refresh every 10 minutes
 
@@ -34,7 +49,7 @@ export function useAuth() {
     }
   }, []);
 
-  const loadUser = useCallback(async () => {
+  const loadUser = useCallback(async (): Promise<User | null> => {
     try {
       const u = await auth.me();
       setAuthenticated(true);
@@ -51,12 +66,18 @@ export function useAuth() {
       setUser(u as User);
       i18n.changeLanguage(u.locale || "en");
       startRefreshTimer();
+      return u as User;
     } catch {
       setAuthenticated(false);
+      return null;
     } finally {
       setLoading(false);
     }
   }, [startRefreshTimer]);
+
+  const refreshUser = useCallback(async (): Promise<void> => {
+    await loadUser();
+  }, [loadUser]);
 
   useEffect(() => {
     loadUser();
@@ -75,10 +96,21 @@ export function useAuth() {
     await loadUser();
   };
 
+  /**
+   * Sign in from the identity a reverse proxy already established (#1006).
+   * Throws when the instance has not opted in (the endpoint 404s) or the proxy
+   * asserted nothing usable; callers fall back to the normal login form.
+   */
+  const proxySession = async () => {
+    const { access_token } = await auth.proxySession();
+    setToken(access_token);
+    await loadUser();
+  };
+
   const ssoCallback = async (code: string, redirectUri: string) => {
     const { access_token } = await auth.ssoCallback(code, redirectUri);
     setToken(access_token);
-    await loadUser();
+    return await loadUser();
   };
 
   const setPassword = async (token: string, password: string) => {
@@ -93,6 +125,16 @@ export function useAuth() {
     } catch {
       // Best-effort — clear local state regardless
     }
+    // Behind an authenticating proxy the identity is still asserted on the very
+    // next request, so the login page would sign the user straight back in and
+    // logout would be impossible. This sentinel suppresses the automatic
+    // attempt for this tab; an explicit click still signs in.
+    try {
+      sessionStorage.setItem(PROXY_SIGNOUT_KEY, "1");
+    } catch {
+      // sessionStorage unavailable (private mode etc.) — non-fatal.
+    }
+    clearReturnPath();
     clearToken();
     stopEventStream();
     stopRefreshTimer();
@@ -104,6 +146,33 @@ export function useAuth() {
     resetExtensionHost();
     invalidateExtensionCapabilities();
     setUser(null);
+    // When the operator configured a proxy logout URL (/.auth/logout on Azure,
+    // /oauth2/sign_out on oauth2-proxy), send the browser there so the proxy
+    // session ends too — otherwise it outlives Turbo EA's and "sign out" only
+    // half happens. Local state is already cleared above, so if the navigation
+    // is blocked the user still lands signed out. Read the login page's cached
+    // config; when a cookie-restored tab has no cache, fetch it best-effort.
+    let proxyLogoutUrl: string | undefined;
+    let haveCachedConfig = false;
+    try {
+      const cached = sessionStorage.getItem(SSO_CACHE_KEY);
+      if (cached) {
+        haveCachedConfig = true;
+        proxyLogoutUrl = JSON.parse(cached).proxy_logout_url;
+      }
+    } catch {
+      // Cache unavailable or unparsable — treat as absent.
+    }
+    if (!haveCachedConfig) {
+      try {
+        proxyLogoutUrl = (await auth.ssoConfig()).proxy_logout_url;
+      } catch {
+        // Backend unreachable — the local logout above already happened.
+      }
+    }
+    if (proxyLogoutUrl) {
+      window.location.assign(proxyLogoutUrl);
+    }
   };
 
   return {
@@ -112,8 +181,11 @@ export function useAuth() {
     login,
     register,
     ssoCallback,
+    proxySession,
     setPassword,
     logout,
-    refreshUser: loadUser,
+    // Narrowed to void: consumers only re-read `user` from context, and
+    // `loadUser`'s return value exists for the SSO landing decision alone.
+    refreshUser: refreshUser,
   };
 }

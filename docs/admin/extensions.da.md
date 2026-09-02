@@ -8,6 +8,10 @@ Siden har to faner: **Butik** gennemser leverandørens udvidelseskatalog med ins
 
 **Udvidelser bygges og signeres af Turbo EA** — de er ikke selvbyggede eller åbne for tredjeparter. Hvis du har brug for en funktion, der er skræddersyet til din organisation, kan vi bygge og licensere den til dig. Se [Turbo EA-rådgivning](https://www.turbo-ea.org/consulting).
 
+## Vejledninger til hver udvidelse
+
+Hver udvidelse, der er offentliggjort i butikken, har sin egen brugervejledning — hvad den gør, hvordan den sættes op, og hvordan den bruges i det daglige. Se [Udvidelser](../extensions/index.md).
+
 ## Sådan fungerer tilliden
 
 To uafhængige kontroller beskytter din installation:
@@ -27,7 +31,7 @@ ID'et følger med en workspace-overførsel, så flytning til en ny vært holder 
 
 ## Fanen Butik
 
-Fanen **Butik** virker uden nogen konfiguration og viser leverandørens udgivne udvidelser med beskrivelse og pris:
+Fanen **Butik** virker uden nogen konfiguration og viser leverandørens udgivne udvidelser som et gitter af kompakte felter — logo, navn, licensstatus og pris. Klik på et felt for at åbne et panel til højre med den fulde beskrivelse, skærmbilleder, kategorimærkater og kilde- og licensangivelser. Udvidelser uden grafik får et genereret felt med deres initialer.
 
 - **Køb** åbner betalingssiden i en ny browserfane. Så snart betalingen er bekræftet, anvendes din licens automatisk (en kopi ankommer også pr. e-mail).
 - **Installer** (eller **Opdater**, når en nyere version er udgivet) tjekker først din licens — hvis udvidelsen endnu ikke er licenseret, tilbyder en dialog at købe eller indsætte en licens og fortsætter derefter automatisk — og downloader pakken gennem præcis den samme signaturkontrol og prøvekørselsforhåndsvisning som en manuel upload. Udvidelser med demo viser et **Se det i praksis**-link, og en udgivet nyere version gør knappen til **Opdater**.
@@ -37,6 +41,8 @@ Når kataloget indeholder kategorier, viser hvert element små piller (free elle
 Fanen Butik er skrivebeskyttet og anonym: ingen konto, intet token, og intet om din instans sendes nogen steder hen — kun leverandørens offentlige katalog læses. Isolerede instanser behøver ingen konfiguration — fanen viser i stedet blot et venligt hint — og bruger det filbaserede forløb nedenfor; leverandørens butikswebsted tilbyder de samme køb og downloads fra enhver browser med internetadgang. Hvis noget mellem din instans og butikken blokerer anmodningen — en proxy, en firewall eller botbeskyttelse foran butikken — siger fanen det og nævner den HTTP-status, den fik tilbage, så en blokeret instans aldrig forveksles med en isoleret.
 
 Instansen **tjekker desuden kataloget én gang om dagen** og fortæller, hvad der er ændret, så en ny udvidelse — eller en sikkerhedsrettelse til en, du allerede kører — ikke skal vente på, at nogen tilfældigvis åbner denne side. Administratorer (alle, hvis rolle giver `admin.manage_extensions`) får en notifikation i klokken, når en ny udvidelse udgives i butikken, og en anden, når en installeret udvidelse har en nyere version. Hver ændring annonceres én gang, og en travl udgivelsesdag ankommer som én notifikation pr. type frem for én pr. udvidelse. Intet hentes eller installeres — notifikationen bringer dig blot hertil. Det daglige tjek kan slås helt fra under [Admin → Indstillinger → Opdateringsnotifikationer](settings.md#update-notifications).
+
+Fanen viser også, hvornår butikken sidst blev læst, og en **Tjek nu**-knap, der kører tjekket med det samme og rapporterer, hvad det fandt — så du kan bekræfte, at det daglige tjek virker, uden at vente et døgn. Mislykkedes et tjek, vises årsagen her i stedet for at forblive tavs.
 
 ## Prøveperioder
 
@@ -110,6 +116,7 @@ De fleste udvidelser arbejder kun med deres egne data. En udvidelse, der integre
 - `core.cards.read` — læse kort, relationer og metamodellen, fx så en connector kan matche jeres applikationer med poster i et eksternt system. Arkiverede kort forbliver ude af syne.
 - `core.cards.write` — oprette, opdatere eller arkivere kort og tilføje relationer, med præcis den validering appens egen editor anvender. Opdateringer fletter feltværdier i stedet for at erstatte dem, så en udvidelse aldrig kan slette data, den ikke administrerer, og der findes **ingen permanent sletning** — arkivering, med sit gendannelsesvindue, er den eneste fjernelse en udvidelse kan udføre.
 - `core.events.card` — modtage ændringshændelser for kort og relationer, så en connector reagerer på ændringer i inventaret med det samme i stedet for ved næste afstemningscyklus.
+- `core.notifications.channel` — levere de notifikationer, du slår til, på en kanal, der tilhører udvidelsen selv, for eksempel en chatbesked. Udvidelsen modtager en notifikations titel, besked og link samt dit bruger-id; den modtager ikke din e-mailadresse, medmindre den også erklærer `core.users.read`, og den modtager aldrig en type, du ikke har slået til for den. Notifikationer, der kun bliver i klokken, sendes aldrig til en udvidelseskanal.
 
 Grants er en del af det leverandørsignerede bundle: de fastlægges ved pakningen og er synlige før installation. De gælder kun, mens udvidelsen er installeret, aktiveret og licenseret — deaktivering eller en udløbet licens tilbagekalder adgangen med det samme, uden genstart. Enhver ændring foretaget af en udvidelse registreres i **Admin → Auditlog** under oprindelsen **Udvidelse**, og en todo, der spejles fra et eksternt system, viser en chip med link til det eksterne element.
 
@@ -117,4 +124,4 @@ Hver ændring en udvidelse foretager, vises i **Admin → Auditlog** som en `ext
 
 ## Hvor udvidelsessider vises
 
-Udvidelsessider vises i navigationen, når udvidelsen er installeret og licenseret — normalt som deres eget menupunkt på øverste niveau, selvom nogle rapporter placeres under menuen **Rapporter** sammen med de indbyggede.
+Udvidelsessider vises i navigationen, når udvidelsen er installeret og licenseret — normalt som deres eget menupunkt på øverste niveau, selvom nogle placeres inde i en kernemenu sammen med de indbyggede punkter: rapporter under **Rapporter**, og sider om governance, risiko eller compliance under **GRC**. En grupperet side falder tilbage til et menupunkt på øverste niveau, når dens menu ikke er tilgængelig — modulet er slået fra, eller du mangler tilladelsen — så den forsvinder aldrig fra navigationen.

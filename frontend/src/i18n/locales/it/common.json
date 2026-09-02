@@ -165,6 +165,8 @@
   "dashboard.activity.action.file.uploaded": "ha caricato un file su",
   "dashboard.activity.action.file.deleted": "ha eliminato un file da",
   "dashboard.activity.action.comment.created": "ha commentato",
+  "dashboard.activity.action.tag.added": "ha etichettato",
+  "dashboard.activity.action.tag.removed": "ha rimosso un tag da",
   "dashboard.activity.action.process_diagram.saved": "ha salvato un diagramma di processo per",
   "dashboard.activity.action.process_diagram.deleted": "ha eliminato un diagramma di processo per",
   "dashboard.activity.action.process_flow.submitted": "ha inviato un flusso di processo per",
@@ -306,6 +308,7 @@
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "Accesso negato",
   "accessDenied.body": "Non hai i permessi per visualizzare questa pagina. Contatta il tuo amministratore se hai bisogno di accesso.",
+  "accessDenied.redirectedToDashboard": "Non hai accesso a quella pagina, quindi ti abbiamo portato alla dashboard.",
   "moduleDisabled.title": "{{module}} è disabilitato",
   "moduleDisabled.body": "Il modulo {{module}} è attualmente disabilitato da un amministratore. Abilitalo dalle impostazioni di amministrazione per accedere a questa sezione.",
   "moduleDisabled.backToDashboard": "Torna alla dashboard",
@@ -463,5 +466,6 @@
   "cardDisplay.clearAll": "Cancella tutto",
   "cardDisplay.subtypeLine": "Sottotipo",
   "cardDisplay.linesHint": "I primi {{count}} appaiono sulla scheda.",
+  "cardDisplay.linesHintAll": "Ogni scelta appare sulla scheda, che si ingrandisce di conseguenza.",
   "cardDisplay.noFields": "Nessun campo disponibile"
 }

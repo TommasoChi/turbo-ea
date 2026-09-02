@@ -165,6 +165,8 @@
   "dashboard.activity.action.file.uploaded": "Datei hochgeladen zu",
   "dashboard.activity.action.file.deleted": "Datei gelöscht von",
   "dashboard.activity.action.comment.created": "kommentierte",
+  "dashboard.activity.action.tag.added": "markierte",
+  "dashboard.activity.action.tag.removed": "entfernte ein Tag von",
   "dashboard.activity.action.process_diagram.saved": "Prozessdiagramm gespeichert für",
   "dashboard.activity.action.process_diagram.deleted": "Prozessdiagramm gelöscht für",
   "dashboard.activity.action.process_flow.submitted": "Prozessfluss eingereicht für",
@@ -306,6 +308,7 @@
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "Zugriff verweigert",
   "accessDenied.body": "Sie haben keine Berechtigung, diese Seite anzuzeigen. Wenden Sie sich an Ihren Administrator, falls Sie Zugriff benötigen.",
+  "accessDenied.redirectedToDashboard": "Sie haben keinen Zugriff auf diese Seite, deshalb haben wir Sie zum Dashboard gebracht.",
   "moduleDisabled.title": "{{module}} ist deaktiviert",
   "moduleDisabled.body": "Das Modul {{module}} ist derzeit von einem Administrator deaktiviert. Aktivieren Sie es in den Admin-Einstellungen, um diesen Bereich zu nutzen.",
   "moduleDisabled.backToDashboard": "Zurück zum Dashboard",
@@ -463,5 +466,6 @@
   "cardDisplay.clearAll": "Alle löschen",
   "cardDisplay.subtypeLine": "Untertyp",
   "cardDisplay.linesHint": "Die ersten {{count}} erscheinen auf der Karte.",
+  "cardDisplay.linesHintAll": "Jede Auswahl erscheint auf der Karte, die entsprechend wächst.",
   "cardDisplay.noFields": "Keine Felder verfügbar"
 }

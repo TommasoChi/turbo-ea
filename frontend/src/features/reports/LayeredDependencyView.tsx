@@ -46,6 +46,7 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import MenuSectionHeader from "@/components/MenuSectionHeader";
 import { getCurrentPhase } from "@/components/LifecycleBadge";
 import LdvShowOnCard from "./LdvShowOnCard";
+import LdvLineStyleSelect from "./LdvLineStyleSelect";
 import {
   ReactFlow,
   Background,
@@ -93,6 +94,10 @@ import {
   type LdvGroupData,
   type LdvEdgeData,
 } from "./layeredDependencyLayout";
+import { LDV_HANDLE_SPECS } from "./ldvHandles";
+import { ldvEdgeStroke } from "./ldvLineStyle";
+import { computeAbsPos, exportRoute } from "./ldvEdgeRouting";
+import { buildRoundedOrthPath } from "./ldvChannels";
 import { ldvFocusRing } from "./ldvFocusRing";
 import LinkChangeIcon from "./LinkChangeIcon";
 import { isPresentAtDate } from "./timelineRange";
@@ -149,6 +154,13 @@ function computeObstacles(nodeList: Node[]): ObstacleBounds[] {
 /* ------------------------------------------------------------------ */
 
 const LP_CIRCUMFERENCE = 2 * Math.PI * 15; // ~94.25
+
+const HANDLE_POSITIONS = {
+  top: Position.Top,
+  bottom: Position.Bottom,
+  left: Position.Left,
+  right: Position.Right,
+} as const;
 
 // Shared with every other card-type color consumer — see lib/color.ts for the
 // luminance-gating rationale. Re-exported for existing importers.
@@ -614,33 +626,22 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
         </Box>
       )}
       <style>{`@keyframes ldv-lp-ring{to{stroke-dashoffset:0}}`}</style>
-      {/* Top edge: target handles + source mirrors for flipped (upward) edges */}
-      <Handle type="target" position={Position.Top} id="t-1" style={hs("t-1", { left: "12%" })} />
-      <Handle type="target" position={Position.Top} id="t-2" style={hs("t-2", { left: "30%" })} />
-      <Handle type="target" position={Position.Top} id="t-3" style={hs("t-3", { left: "50%" })} />
-      <Handle type="target" position={Position.Top} id="t-4" style={hs("t-4", { left: "70%" })} />
-      <Handle type="target" position={Position.Top} id="t-5" style={hs("t-5", { left: "88%" })} />
-      <Handle type="source" position={Position.Top} id="ts-1" style={hs("ts-1", { left: "12%" })} />
-      <Handle type="source" position={Position.Top} id="ts-2" style={hs("ts-2", { left: "30%" })} />
-      <Handle type="source" position={Position.Top} id="ts-3" style={hs("ts-3", { left: "50%" })} />
-      <Handle type="source" position={Position.Top} id="ts-4" style={hs("ts-4", { left: "70%" })} />
-      <Handle type="source" position={Position.Top} id="ts-5" style={hs("ts-5", { left: "88%" })} />
-      {/* Bottom edge: source handles + target mirrors for flipped (upward) edges */}
-      <Handle type="source" position={Position.Bottom} id="b-1" style={hs("b-1", { left: "12%" })} />
-      <Handle type="source" position={Position.Bottom} id="b-2" style={hs("b-2", { left: "30%" })} />
-      <Handle type="source" position={Position.Bottom} id="b-3" style={hs("b-3", { left: "50%" })} />
-      <Handle type="source" position={Position.Bottom} id="b-4" style={hs("b-4", { left: "70%" })} />
-      <Handle type="source" position={Position.Bottom} id="b-5" style={hs("b-5", { left: "88%" })} />
-      <Handle type="target" position={Position.Bottom} id="bt-1" style={hs("bt-1", { left: "12%" })} />
-      <Handle type="target" position={Position.Bottom} id="bt-2" style={hs("bt-2", { left: "30%" })} />
-      <Handle type="target" position={Position.Bottom} id="bt-3" style={hs("bt-3", { left: "50%" })} />
-      <Handle type="target" position={Position.Bottom} id="bt-4" style={hs("bt-4", { left: "70%" })} />
-      <Handle type="target" position={Position.Bottom} id="bt-5" style={hs("bt-5", { left: "88%" })} />
-      {/* Side handles — both source and target on each side */}
-      <Handle type="target" position={Position.Left} id="left" style={hs("left")} />
-      <Handle type="source" position={Position.Left} id="left-src" style={hs("left-src")} />
-      <Handle type="source" position={Position.Right} id="right" style={hs("right")} />
-      <Handle type="target" position={Position.Right} id="right-tgt" style={hs("right-tgt")} />
+      {/* All 24 handles come from the shared geometry table (ldvHandles.ts) so
+          the rendered positions can never drift from the routing math. */}
+      {LDV_HANDLE_SPECS.map((spec) => (
+        <Handle
+          key={spec.id}
+          type={spec.kind}
+          position={HANDLE_POSITIONS[spec.side]}
+          id={spec.id}
+          style={hs(
+            spec.id,
+            spec.side === "top" || spec.side === "bottom"
+              ? { left: `${spec.frac * 100}%` }
+              : undefined,
+          )}
+        />
+      ))}
       <Typography
         variant="body2"
         sx={{
@@ -823,19 +824,84 @@ const LdvEdgeComponent = memo(
     const rawOffset = edgeData?.pathOffset ?? 20;
     const minOffset = edgeData?.minOffset ?? 0;
     const verticalGap = Math.abs(targetY - sourceY);
-    // If the edge must clear an obstruction, use at least minOffset; otherwise
-    // clamp to 48% of the vertical gap so the horizontal segment stays within
-    // the inter-group band. The layout engine already staggers offsets, so we
-    // use a generous fraction to preserve the staggering.
-    const offset = minOffset > 0
-      ? Math.max(rawOffset, minOffset)
-      : Math.min(rawOffset, Math.max(10, verticalGap * 0.48));
-    const [path, lx, ly] = getSmoothStepPath({
-      sourceX, sourceY, targetX, targetY,
-      sourcePosition, targetPosition,
-      borderRadius: 8,
-      offset,
-    });
+    // Channel-routed edges carry an orthogonal waypoint polyline that dodges
+    // the rows of cards between their endpoints. Honour it only while the
+    // live handle positions still match the layout-time anchors — a dragged
+    // endpoint invalidates the stored bends, and the edge then degrades to
+    // the default smoothstep shape instead of a broken polyline.
+    const waypoints = edgeData?.waypoints;
+    const anchors = edgeData?.anchors;
+    const waypointsFresh =
+      !!waypoints &&
+      waypoints.length > 0 &&
+      !!anchors &&
+      Math.abs(anchors.sx - sourceX) < 4 &&
+      Math.abs(anchors.sy - sourceY) < 4 &&
+      Math.abs(anchors.tx - targetX) < 4 &&
+      Math.abs(anchors.ty - targetY) < 4;
+    let path: string;
+    let lx: number;
+    let ly: number;
+    if (waypointsFresh) {
+      // Live endpoints with stored bends. Snap the first/last bend onto the
+      // live handle along the axis its segment runs on, so every segment is
+      // exactly orthogonal despite the few px of live-vs-layout measurement
+      // drift the anchor tolerance admits — that drift used to render as
+      // visibly tilted "verticals".
+      const wps = waypoints.map((p) => ({ ...p }));
+      const first = wps[0];
+      if (Math.abs(first.x - anchors.sx) < 1) first.x = sourceX;
+      else if (Math.abs(first.y - anchors.sy) < 1) first.y = sourceY;
+      const last = wps[wps.length - 1];
+      if (Math.abs(last.x - anchors.tx) < 1) last.x = targetX;
+      else if (Math.abs(last.y - anchors.ty) < 1) last.y = targetY;
+      const pts = [{ x: sourceX, y: sourceY }, ...wps, { x: targetX, y: targetY }];
+      path = buildRoundedOrthPath(pts, 8);
+      // Default label anchor: midpoint of the longest segment.
+      let bi = 0;
+      let bl = -1;
+      for (let k = 0; k + 1 < pts.length; k++) {
+        const l = Math.abs(pts[k + 1].x - pts[k].x) + Math.abs(pts[k + 1].y - pts[k].y);
+        if (l > bl) {
+          bl = l;
+          bi = k;
+        }
+      }
+      lx = (pts[bi].x + pts[bi + 1].x) / 2;
+      ly = (pts[bi].y + pts[bi + 1].y) / 2;
+    } else {
+      // The routing engine pins the horizontal run to an explicit centerY
+      // (staggered against other runs and kept clear of cards). Honour it
+      // only while it still lies between the live handle Ys — after a drag
+      // the stored value can go stale, and a centerY outside the span would
+      // make the path double back on itself.
+      const routedCenterY = edgeData?.centerY;
+      const centerY =
+        routedCenterY !== undefined &&
+        routedCenterY > Math.min(sourceY, targetY) + 8 &&
+        routedCenterY < Math.max(sourceY, targetY) - 8
+          ? routedCenterY
+          : undefined;
+      // If the edge must clear an obstruction, use at least minOffset (large
+      // offsets flip the smoothstep into its wrap-around shape, which is what
+      // routes around the card); otherwise keep the offset well inside the
+      // handle span so the bend stubs never fight the pinned centerY.
+      const offset = minOffset > 0
+        ? Math.max(rawOffset, minOffset)
+        : centerY !== undefined
+          ? Math.max(
+              4,
+              Math.min(rawOffset, Math.abs(centerY - sourceY) - 6, Math.abs(targetY - centerY) - 6),
+            )
+          : Math.min(rawOffset, Math.max(10, verticalGap * 0.48));
+      [path, lx, ly] = getSmoothStepPath({
+        sourceX, sourceY, targetX, targetY,
+        sourcePosition, targetPosition,
+        borderRadius: 8,
+        offset,
+        ...(centerY !== undefined ? { centerY } : {}),
+      });
+    }
 
     const label = edgeData?.relLabel || "";
     const labelT = edgeData?.labelT ?? 0.5;
@@ -935,7 +1001,7 @@ const LdvEdgeComponent = memo(
           style={{
             stroke: color,
             strokeWidth: active ? 2 : 1.2,
-            strokeDasharray: severed ? "3 3" : active ? "none" : "5 3",
+            ...ldvEdgeStroke(edgeData?.lineStyle, { active, severed }),
             transition: "stroke 0.15s, stroke-width 0.15s",
           }}
         />
@@ -1017,7 +1083,10 @@ interface Props {
    *  filter, and marked on the canvas with a ring. */
   centerId?: string;
   /** Cards the reader expanded with the expand tool, marked with a lighter ring
-   *  than the centre. Omit where there is no expand mode (the card-detail view). */
+   *  than the centre. Any consumer that wires `onNodeExpand` owes this too — the
+   *  report and the card-detail section both do. Omitting it while offering the
+   *  tool is what left the card page expanding cards with no ring to show for it:
+   *  the state existed, it just never reached the canvas. */
   expandedIds?: Set<string>;
   /** Render the graph as of this date (epoch ms) instead of today: the
    *  end-of-life filter and each card's lifecycle dot are evaluated against it.
@@ -1405,15 +1474,29 @@ function LayeredDependencyInner({
         }
       }
 
+      // Card centres in the same space the shapes are written in, so the
+      // view's own route can travel onto the diagram unchanged.
+      const centres = computeAbsPos(live);
       const rels: DiagramRelInput[] = [];
       for (const e of rfEdges) {
         if (!included.has(e.source) || !included.has(e.target)) continue;
         const d = e.data as LdvEdgeData | undefined;
+        const route = exportRoute({
+          sourceHandle: e.sourceHandle,
+          targetHandle: e.targetHandle,
+          sourceCentre: centres.get(e.source),
+          targetCentre: centres.get(e.target),
+          waypoints: d?.waypoints,
+          centerY: d?.centerY,
+          anchors: d?.anchors,
+        });
         rels.push({
           sourceCardId: e.source,
           targetCardId: e.target,
           relationType: relTypeByPair.get([e.source, e.target].sort().join("|")) ?? "",
           label: d?.relLabel ?? "",
+          flow: d?.flowDirection,
+          ...route,
         });
       }
 
@@ -1705,6 +1788,7 @@ function LayeredDependencyInner({
             : false,
           isHovered: e.id === hoveredEdge,
           highlightMode,
+          lineStyle: settings.edgeLineStyle,
           onHover: cbs.onHover,
           onLeave: cbs.onLeave,
         },
@@ -1720,7 +1804,15 @@ function LayeredDependencyInner({
       result = [...notConn, ...conn];
     }
     return result;
-  }, [rfEdges, hoveredEdge, hoveredNode, highlightMode, getEdgeHoverCbs, settings.showRelationLabels]);
+  }, [
+    rfEdges,
+    hoveredEdge,
+    hoveredNode,
+    highlightMode,
+    getEdgeHoverCbs,
+    settings.showRelationLabels,
+    settings.edgeLineStyle,
+  ]);
 
   // CSS-based dimming avoids recreating node objects (which causes flickering)
   const hoverStyle = useMemo(() => {
@@ -2243,6 +2335,13 @@ function LayeredDependencyInner({
           </Box>
           </Box>
         ))}
+        {/* Line style is a union, not a boolean, so it cannot join the switch
+            rows above. It sits last in the Relations group: it describes how a
+            relation is drawn, next to what a relation says. */}
+        <LdvLineStyleSelect
+          value={settings.edgeLineStyle}
+          onChange={(edgeLineStyle) => updateSettings({ edgeLineStyle })}
+        />
       </Popover>
     </Paper>
     </LdvObstaclesContext.Provider>

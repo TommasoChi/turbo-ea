@@ -52,6 +52,35 @@ const NOTIFICATION_ICONS: Record<string, { icon: string; color: string }> = {
     icon: "extension",
     color: NOTIFICATION_TYPE_COLORS.extension_update_available,
   },
+  soaw_sign_recalled: { icon: "undo", color: NOTIFICATION_TYPE_COLORS.soaw_sign_recalled },
+  soaw_rejected: { icon: "cancel", color: NOTIFICATION_TYPE_COLORS.soaw_rejected },
+  adr_sign_requested: { icon: "draw", color: NOTIFICATION_TYPE_COLORS.adr_sign_requested },
+  adr_signed: { icon: "task_alt", color: NOTIFICATION_TYPE_COLORS.adr_signed },
+  adr_sign_recalled: { icon: "undo", color: NOTIFICATION_TYPE_COLORS.adr_sign_recalled },
+  adr_rejected: { icon: "cancel", color: NOTIFICATION_TYPE_COLORS.adr_rejected },
+  process_flow_approval_requested: {
+    icon: "rule",
+    color: NOTIFICATION_TYPE_COLORS.process_flow_approval_requested,
+  },
+  process_flow_approved: {
+    icon: "published_with_changes",
+    color: NOTIFICATION_TYPE_COLORS.process_flow_approved,
+  },
+  process_flow_rejected: {
+    icon: "cancel",
+    color: NOTIFICATION_TYPE_COLORS.process_flow_rejected,
+  },
+  process_flow_withdrawn: {
+    icon: "undo",
+    color: NOTIFICATION_TYPE_COLORS.process_flow_withdrawn,
+  },
+  risk_assigned: { icon: "crisis_alert", color: NOTIFICATION_TYPE_COLORS.risk_assigned },
+  risk_status_changed: { icon: "swap_horiz", color: NOTIFICATION_TYPE_COLORS.risk_status_changed },
+  security_scan_complete: {
+    icon: "policy",
+    color: NOTIFICATION_TYPE_COLORS.security_scan_complete,
+  },
+  ops_rescue_access: { icon: "shield_lock", color: NOTIFICATION_TYPE_COLORS.ops_rescue_access },
 };
 
 /** Notification links are usually in-app routes, but some are absolute URLs.
@@ -144,6 +173,9 @@ export default function NotificationBell({
   const [releaseNotes, setReleaseNotes] = useState<OpenReleaseNotes | null>(null);
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
+  // Read inside the reconnect callback, which must not be re-created (and so
+  // re-subscribed) every time the popover opens or closes.
+  const openRef = useRef(false);
 
   const fetchUnreadCount = useCallback(async () => {
     try {
@@ -198,12 +230,23 @@ export default function NotificationBell({
         }
       },
       []
-    )
+    ),
+    // The stream dropped and came back, so anything published in the gap was
+    // missed — SSE has no replay. Re-read rather than leave the badge stale.
+    // An upgrade is the usual cause: the announcement is written while the
+    // backend is still starting, when no client is connected to receive it.
+    useCallback(() => {
+      fetchUnreadCount();
+      if (openRef.current) fetchNotifications();
+    }, [fetchUnreadCount, fetchNotifications])
   );
 
   const handleOpen = (e: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(e.currentTarget);
     fetchNotifications();
+    // Also re-read the count, so the badge can never disagree with the list
+    // the user is looking at.
+    fetchUnreadCount();
   };
 
   const handleClose = () => setAnchorEl(null);
@@ -245,6 +288,7 @@ export default function NotificationBell({
   };
 
   const open = Boolean(anchorEl);
+  openRef.current = open;
 
   return (
     <>

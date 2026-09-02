@@ -33,6 +33,29 @@ APP_VERSION = _read_version()
 EXTENSION_STORE_URL = "https://store.turbo-ea.org"
 
 
+def _parse_role_map(raw: str) -> list[tuple[str, str]]:
+    """Parse ``SOURCE:target,SOURCE:target`` into ordered (source, target) pairs.
+
+    A **list of pairs, not a dict**: the configured order is the tie-break when a
+    user carries several directory roles, so it has to survive parsing.
+
+    The source side is lower-cased here so matching is case-insensitive (an Entra
+    app-role value is operator-typed and will not always match the map's case);
+    the target is a Turbo EA role key and is kept verbatim. Malformed entries are
+    skipped rather than raising — a typo in one pair must not stop the app
+    booting, and the sign-in path falls back to the default role anyway.
+    """
+    pairs: list[tuple[str, str]] = []
+    for entry in raw.split(","):
+        source, sep, target = entry.partition(":")
+        if not sep:
+            continue
+        source, target = source.strip().lower(), target.strip()
+        if source and target:
+            pairs.append((source, target))
+    return pairs
+
+
 class Settings:
     PROJECT_NAME: str = "Turbo EA"
     API_V1_PREFIX: str = "/api/v1"
@@ -81,6 +104,109 @@ class Settings:
     ALLOWED_ORIGINS: list[str] = [
         o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:8920").split(",")
     ]
+
+    # ------------------------------------------------------------------
+    # Trusted reverse-proxy authentication (optional — #1006)
+    #
+    # Lets Turbo EA accept an identity an authenticating proxy has already
+    # established (Azure App Service EasyAuth, oauth2-proxy, Authelia,
+    # Cloudflare Access, AWS ALB, Traefik forwardAuth) instead of running its
+    # own OIDC flow. No OIDC client and no app registration are required.
+    #
+    # OFF by default: when PROXY_AUTH_ENABLED is false the endpoint answers
+    # 404, exactly like the ops API with OPS_PUBLIC_KEY unset. Identity
+    # headers are only as trustworthy as the guarantee that nothing can reach
+    # the backend except through the proxy, so this must be opted into.
+    # ------------------------------------------------------------------
+    PROXY_AUTH_ENABLED: bool = os.getenv("TURBO_EA_PROXY_AUTH_ENABLED", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    # "azure_easyauth" reads the App Service principal headers; "header" reads
+    # the generic header names configured below.
+    PROXY_AUTH_MODE: str = os.getenv("TURBO_EA_PROXY_AUTH_MODE", "azure_easyauth")
+
+    # The primary control. The proxy injects this value in PROXY_AUTH_SECRET_HEADER
+    # and the backend compares it with secrets.compare_digest before parsing any
+    # claim. It is an operator-generated value, NOT an IdP credential — nothing
+    # registers it. Required in "header" mode; see PROXY_AUTH_TRUST_PLATFORM_HEADERS
+    # for why Azure cannot use it.
+    PROXY_AUTH_SHARED_SECRET: str = os.getenv("TURBO_EA_PROXY_AUTH_SHARED_SECRET", "")
+    PROXY_AUTH_SECRET_HEADER: str = os.getenv(
+        "TURBO_EA_PROXY_AUTH_SECRET_HEADER", "X-Turbo-EA-Proxy-Secret"
+    )
+    # Azure App Service does not let you add a custom header, so azure_easyauth
+    # mode cannot use the shared secret and must instead rely on App Service
+    # sanitising inbound X-MS-CLIENT-PRINCIPAL* headers itself. That is an
+    # explicit, acknowledged risk rather than a silent default.
+    PROXY_AUTH_TRUST_PLATFORM_HEADERS: bool = os.getenv(
+        "TURBO_EA_PROXY_AUTH_TRUST_PLATFORM_HEADERS", ""
+    ).lower() in ("1", "true", "yes")
+
+    # Generic "header" mode header names.
+    PROXY_AUTH_EMAIL_HEADER: str = os.getenv(
+        "TURBO_EA_PROXY_AUTH_EMAIL_HEADER", "X-Forwarded-Email"
+    )
+    PROXY_AUTH_NAME_HEADER: str = os.getenv("TURBO_EA_PROXY_AUTH_NAME_HEADER", "X-Forwarded-User")
+    PROXY_AUTH_SUBJECT_HEADER: str = os.getenv(
+        "TURBO_EA_PROXY_AUTH_SUBJECT_HEADER", "X-Forwarded-Subject"
+    )
+
+    # Id-token verification. FAIL-CLOSED: when enabled and the proxy forwards no
+    # token, the request is refused rather than downgraded to the claims header
+    # (a downgrade would let an attacker simply omit the token). Verification
+    # cannot reuse the SSO settings — they are empty by definition here — so it
+    # takes its own issuer / audience / JWKS.
+    PROXY_AUTH_VERIFY_ID_TOKEN: bool = os.getenv(
+        "TURBO_EA_PROXY_AUTH_VERIFY_ID_TOKEN", ""
+    ).lower() in ("1", "true", "yes")
+    PROXY_AUTH_ISSUER: str = os.getenv("TURBO_EA_PROXY_AUTH_ISSUER", "")
+    PROXY_AUTH_AUDIENCE: str = os.getenv("TURBO_EA_PROXY_AUTH_AUDIENCE", "")
+    PROXY_AUTH_JWKS_URI: str = os.getenv("TURBO_EA_PROXY_AUTH_JWKS_URI", "")
+
+    # Mandatory unless PROXY_AUTH_ALLOW_ANY_DOMAIN is set: an Entra guest / B2B
+    # identity would otherwise mint an account on your instance.
+    PROXY_AUTH_ALLOWED_DOMAINS: list[str] = [
+        d.strip().lower().lstrip("@")
+        for d in os.getenv("TURBO_EA_PROXY_AUTH_ALLOWED_DOMAINS", "").split(",")
+        if d.strip()
+    ]
+    PROXY_AUTH_ALLOW_ANY_DOMAIN: bool = os.getenv(
+        "TURBO_EA_PROXY_AUTH_ALLOW_ANY_DOMAIN", ""
+    ).lower() in ("1", "true", "yes")
+
+    # A proxy-auth-only install has no other path to a first admin: only the
+    # first-user branch of /auth/register mints one, and that route is closed
+    # when proxy auth is on. This email is granted admin on first sign-in.
+    PROXY_AUTH_BOOTSTRAP_ADMIN_EMAIL: str = os.getenv(
+        "TURBO_EA_PROXY_AUTH_BOOTSTRAP_ADMIN_EMAIL", ""
+    )
+
+    # Directory-driven role assignment (#1006). Empty PROXY_AUTH_ROLE_MAP is the
+    # off switch and the default: without it every proxy sign-in behaves exactly
+    # as before, landing new users on the admin-configured default role.
+    #
+    # With it set, the directory becomes authoritative on EVERY sign-in, not just
+    # at account creation — a promotion made by hand in the Users admin does not
+    # survive the user's next sign-in. That is the point of it (removing someone's
+    # directory role must actually take effect), but it is a bigger behaviour
+    # change than the setting looks, hence the opt-in.
+    #
+    # PROXY_AUTH_BOOTSTRAP_ADMIN_EMAIL always wins over the map, so one mapping
+    # mistake can never lock an operator out of their own instance.
+    PROXY_AUTH_ROLE_CLAIM: str = os.getenv("TURBO_EA_PROXY_AUTH_ROLE_CLAIM", "roles")
+    PROXY_AUTH_ROLE_MAP: list[tuple[str, str]] = _parse_role_map(
+        os.getenv("TURBO_EA_PROXY_AUTH_ROLE_MAP", "")
+    )
+    # "header" mode equivalent of the claim above: a comma-separated header.
+    # X-Forwarded-Groups is what oauth2-proxy emits.
+    PROXY_AUTH_ROLE_HEADER: str = os.getenv("TURBO_EA_PROXY_AUTH_ROLE_HEADER", "X-Forwarded-Groups")
+
+    # Where to send the browser on logout so the proxy session ends too
+    # (/.auth/logout for EasyAuth, /oauth2/sign_out for oauth2-proxy). Without
+    # it, signing out of Turbo EA leaves the upstream session live.
+    PROXY_AUTH_LOGOUT_URL: str = os.getenv("TURBO_EA_PROXY_AUTH_LOGOUT_URL", "")
 
     # Email / SMTP (optional — if not configured, email notifications are skipped)
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")

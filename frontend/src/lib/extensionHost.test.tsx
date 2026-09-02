@@ -139,6 +139,21 @@ describe("extensionHost", () => {
     expect(sdk.CardScopeFilter).toBeDefined();
     expect(typeof sdk.useCardScope).toBe("function");
     expect(typeof sdk.applyScope).toBe("function");
+    // SDK 1.17 — data-grid loader + create-card dialog
+    expect(typeof sdk.loadAgGrid).toBe("function");
+    expect(sdk.CreateCardDialog).toBeDefined();
+  });
+
+  it("loadAgGrid resolves core's AG Grid module and themes", async () => {
+    initExtensionHost();
+    const sdk = window.TurboEA?.sdk as Record<string, unknown>;
+    const loaded = (await (sdk.loadAgGrid as () => Promise<Record<string, unknown>>)()) ?? {};
+    expect(loaded.AgGridReact).toBeDefined();
+    expect(loaded.gridThemeLight).toBeDefined();
+    expect(loaded.gridThemeDark).toBeDefined();
+    // SDK 1.18 — the documented grid-template hooks ride the same chunk.
+    expect(typeof loaded.useColumnFreeze).toBe("function");
+    expect(typeof loaded.useColumnOrder).toBe("function");
   });
 
   it("loadDocxTemplater resolves all three classes from core's code-split chunk", async () => {
@@ -501,6 +516,43 @@ describe("extensionHost", () => {
 
   it("pins the current UI SDK version", () => {
     expect(UI_SDK_VERSION).toBe("1.19");
+  });
+
+  it("whitelists the nav groups an extension route may request", () => {
+    // A route can only land in a sanctioned core menu — never admin or an
+    // arbitrary one. Extend deliberately; this pins the current set.
+    expect([...EXTENSION_NAV_GROUPS]).toEqual(["reports", "grc"]);
+  });
+
+  it("returns routes for the grc nav group independently of reports", () => {
+    registerExtension("gov", {
+      key: "gov",
+      sdkVersion: UI_SDK_VERSION,
+      routes: [
+        {
+          id: "register",
+          path: "/ext/gov/register",
+          label: "Register",
+          icon: "gavel",
+          navGroup: "grc",
+          component: () => null,
+        },
+        {
+          id: "report",
+          path: "/ext/gov/report",
+          label: "Report",
+          icon: "insights",
+          navGroup: "reports",
+          component: () => null,
+        },
+      ],
+    });
+    expect(getExtensionRoutesForGroup("grc").map((r) => r.route.path)).toEqual([
+      "/ext/gov/register",
+    ]);
+    expect(getExtensionRoutesForGroup("reports").map((r) => r.route.path)).toEqual([
+      "/ext/gov/report",
+    ]);
   });
 
   it("aggregates generic slots (component + data), sorts by order, drops invalid ones", () => {

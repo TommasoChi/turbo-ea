@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import type { EventEntry } from "@/types";
 import { STATUS_COLORS, SEVERITY_COLORS } from "@/theme/tokens";
 import { formatDateWith, getCachedDateFormat } from "@/hooks/useDateFormat";
+import { toIsoDate } from "@/lib/dates";
 
 export type ActivityCategory =
   | "create"
@@ -17,6 +18,7 @@ export type ActivityCategory =
   | "risk"
   | "document"
   | "comment"
+  | "tag"
   | "diagram"
   | "process"
   | "adr"
@@ -52,6 +54,7 @@ const CATEGORY_ICONS: Record<ActivityCategory, string> = {
   risk: "report",
   document: "attach_file",
   comment: "chat_bubble",
+  tag: "label",
   diagram: "schema",
   process: "account_tree",
   adr: "gavel",
@@ -74,6 +77,7 @@ const CATEGORY_COLORS: Record<ActivityCategory, string> = {
   risk: STATUS_COLORS.warning,
   document: "#0f7eb5",
   comment: "#0f7eb5",
+  tag: "#a6566d",
   diagram: "#02afa4",
   process: "#028f00",
   adr: "#c7527d",
@@ -103,6 +107,7 @@ function categorize(eventType: string): ActivityCategory {
   if (eventType.startsWith("risk.")) return "risk";
   if (eventType.startsWith("document.") || eventType.startsWith("file.")) return "document";
   if (eventType.startsWith("comment.")) return "comment";
+  if (eventType.startsWith("tag.")) return "tag";
   if (eventType.startsWith("process_diagram.")) return "diagram";
   if (eventType.startsWith("process_flow.")) return "process";
   if (eventType.startsWith("adr.")) return "adr";
@@ -120,7 +125,7 @@ export type ActivityFilter = "all" | "cards" | "approvals" | "relations" | "comm
 export function matchesFilter(category: ActivityCategory, filter: ActivityFilter): boolean {
   if (filter === "all") return true;
   if (filter === "cards") {
-    return ["create", "update", "archive", "restore", "delete"].includes(category);
+    return ["create", "update", "archive", "restore", "delete", "tag"].includes(category);
   }
   if (filter === "approvals") {
     return ["approve", "reject", "reset"].includes(category);
@@ -207,7 +212,7 @@ export function dayBucket(
   const target = new Date(d);
   target.setHours(0, 0, 0, 0);
   const dayDiff = Math.round((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24));
-  const key = target.toISOString().slice(0, 10);
+  const key = toIsoDate(target);
   let label: string;
   if (dayDiff === 0) label = t("dashboard.activity.day.today");
   else if (dayDiff === 1) label = t("dashboard.activity.day.yesterday");

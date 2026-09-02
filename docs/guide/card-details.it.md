@@ -148,6 +148,8 @@ Gli stakeholder sono persone con un **ruolo** specifico su questa card. I ruoli 
 
 Le assegnazioni degli stakeholder influenzano i **permessi**: i permessi effettivi di un utente su una card sono la combinazione del suo ruolo a livello di applicazione e di qualsiasi ruolo di stakeholder che detiene su quella card.
 
+Quando un ruolo ha un **colore** impostato nel metamodello, il suo gruppo ne viene contrassegnato, così da distinguere a colpo d'occhio un proprietario da un osservatore.
+
 ### Ricerca e invito
 
 Scegli uno stakeholder tramite l'**autocomplete ricercabile** — inizia a digitare e il menu a tendina filtra sia per nome che per e-mail (l'e-mail appare come riga secondaria, così due utenti con lo stesso nome possono essere distinti a colpo d'occhio).
@@ -161,6 +163,8 @@ Il percorso di invito richiede il permesso **`users.invite`**, una forma delegat
 ![Cronologia modifiche della card](../assets/img/it/08_scheda_cronologia.png)
 
 Mostra il **registro di audit completo** delle modifiche apportate alla card: **chi** ha effettuato la modifica, **quando** è stata fatta e **cosa** è stato modificato (valore precedente vs. nuovo valore). Questo consente la completa tracciabilità di tutte le modifiche nel tempo.
+
+Tutto ciò che sposta la data **Modificato** della card compare qui: una modifica manuale, un'importazione da foglio di calcolo, una migrazione di piattaforma o una sincronizzazione ServiceNow, un cambio di tag, una modifica di massa, o uno spostamento gerarchico che ha trascinato questa card. La manutenzione di sistema non cambia né l'una né l'altra: il ricalcolo dei punteggi di qualità dei dati, la riesecuzione dei campi calcolati e il popolamento dei livelli gerarchici o degli identificativi delle card lasciano intatti la cronologia e la data **Modificato**.
 
 ## Scheda ADR
 

@@ -241,6 +241,8 @@
   "dashboard.activity.action.file.uploaded": "uploadede en fil til",
   "dashboard.activity.action.file.deleted": "slettede en fil fra",
   "dashboard.activity.action.comment.created": "kommenterede på",
+  "dashboard.activity.action.tag.added": "tilføjede et tag til",
+  "dashboard.activity.action.tag.removed": "fjernede et tag fra",
   "dashboard.activity.action.process_diagram.saved": "gemte et procesdiagram for",
   "dashboard.activity.action.process_diagram.deleted": "slettede et procesdiagram for",
   "dashboard.activity.action.process_flow.submitted": "indsendte et procesflow for",
@@ -382,6 +384,7 @@
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "Adgang nægtet",
   "accessDenied.body": "Du har ikke tilladelse til at se denne side. Kontakt din administrator, hvis du har brug for adgang.",
+  "accessDenied.redirectedToDashboard": "Du har ikke adgang til den side, så vi har ført dig til dashboardet.",
   "moduleDisabled.title": "{{module}} er deaktiveret",
   "moduleDisabled.body": "{{module}}-modulet er aktuelt deaktiveret af en administrator. Aktivér det fra administrationsindstillingerne for at tilgå dette område.",
   "moduleDisabled.backToDashboard": "Tilbage til dashboardet",
@@ -463,5 +466,6 @@
   "cardDisplay.clearAll": "Ryd alle",
   "cardDisplay.subtypeLine": "Undertype",
   "cardDisplay.linesHint": "De første {{count}} vises på kortet.",
+  "cardDisplay.linesHintAll": "Hvert valg vises på kortet, som vokser, så der er plads.",
   "cardDisplay.noFields": "Ingen felter tilgængelige"
 }

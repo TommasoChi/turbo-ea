@@ -4,6 +4,8 @@ import {
   applyCardTypeIcons,
   buildLdvDiagramXml,
   rollUpInto,
+  drillDownInto,
+  convertShapeToContainer,
   expandCardGroup,
   childEscapedParentBounds,
   applyViewToGraph,
@@ -27,7 +29,7 @@ import {
   normaliseEditedCardLabel,
   dedupClonedCell,
   unlinkCell,
-  MAX_CARD_DETAIL_LINES,
+  CARD_DETAIL_LINE_H,
   type CardDetailLine,
   type DiagramCardInput,
   type DiagramRelInput,
@@ -276,6 +278,48 @@ describe("buildLdvDiagramXml", () => {
     expect(xml).not.toContain('edge="1"');
   });
 
+  it("carries a computed route as waypoints and fixed anchors", () => {
+    // The whole point of the export: a diagram made from a view opens looking
+    // like the view, instead of being re-routed from scratch.
+    const xml = buildLdvDiagramXml(
+      cards,
+      [
+        {
+          ...rels[0],
+          exit: { x: 0.5, y: 1 },
+          entry: { x: 0.12, y: 0 },
+          waypoints: [
+            { x: 300, y: 120 },
+            { x: 460, y: 120 },
+          ],
+        },
+      ],
+      layers,
+    );
+    expect(xml).toContain('<Array as="points">');
+    expect(xml).toContain('<mxPoint x="300" y="120"/>');
+    expect(xml).toContain('<mxPoint x="460" y="120"/>');
+    // Right-angled routing, since the default ER router ignores fixed anchors.
+    expect(xml).toContain("edgeStyle=orthogonalEdgeStyle");
+    expect(xml).toContain("exitX=0.5");
+    expect(xml).toContain("entryX=0.12");
+  });
+
+  it("leaves an unrouted edge for the diagram to route", () => {
+    const xml = buildLdvDiagramXml(cards, rels, layers);
+    expect(xml).not.toContain('<Array as="points">');
+    expect(xml).toContain('<mxGeometry relative="1" as="geometry"/>');
+    expect(xml).toContain("edgeStyle=entityRelationEdgeStyle");
+  });
+
+  it("puts the arrowhead where the view drew it for a reverse flow", () => {
+    // Without this the export silently dropped flowDirection, so a relation
+    // the report drew as "consumes" arrived pointing the other way.
+    const xml = buildLdvDiagramXml(cards, [{ ...rels[0], flow: "reverse" }], layers);
+    expect(xml).toContain("startArrow=block");
+    expect(xml).toContain("endArrow=none");
+  });
+
   it("omits the relationType attribute for synthetic (typeless) edges", () => {
     const hierRel: DiagramRelInput[] = [
       {
@@ -347,10 +391,21 @@ function rollUpFrame(initial: RUCell[]) {
       parent.children.push(child);
       return child;
     },
+    getStyle: (c: RUCell) => c.style ?? "",
+    setStyle: (c: RUCell, style: string) => {
+      c.style = style;
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setValue: (c: RUCell, value: any) => {
+      c.value = value;
+    },
+    getChildCount: (c: RUCell) => c.children.length,
+    getChildAt: (c: RUCell, i: number) => c.children[i] ?? null,
   };
   const graph = {
     getModel: () => model,
     getDefaultParent: () => root,
+    refresh() {},
     getCellGeometry: (c: RUCell) => c.geometry,
     resizeCell: (c: RUCell, r: Geo) => {
       c.geometry = { x: r.x, y: r.y, width: r.width, height: r.height };
@@ -454,6 +509,90 @@ describe("rollUpInto — re-parent existing vs insert new", () => {
     // count = 1 (current card only) → single column/row container.
     expect(container.geometry.width).toBe(204); // 1*180 + 0 + 2*12
     expect(container.geometry.height).toBe(102); // 28 + 12 + 50 + 12
+  });
+});
+
+describe("a card that becomes a container sizes its header for its rows", () => {
+  const rows = [
+    { label: "Owner", value: "Alice" },
+    { label: "Tier", value: "Gold" },
+    { label: "Hosting", value: "SaaS" },
+  ];
+
+  const startSizeOf = (style: string | undefined) =>
+    Number(/startSize=(\d+)/.exec(style ?? "")?.[1] ?? NaN);
+
+  /** A synced card already showing three detail rows. */
+  function labelledCard(id: string, geo: Geo, style?: string): RUCell {
+    const cell = ruCell(id, geo, {
+      cardId: `id-${id}`,
+      cardType: "Application",
+      cardName: "NexaCore ERP",
+      cardDetail: JSON.stringify(rows),
+      label: composeCardLabel("NexaCore ERP", rows),
+    });
+    cell.style = style ?? "rounded=1;fillColor=#0f7eb5";
+    return cell;
+  }
+
+  it("convertShapeToContainer keeps the rows instead of stripping them", () => {
+    // The strip used to be a fixed 28px, so the rows were dropped on the way
+    // in — and since the display pass puts them straight back, dropping them
+    // only ever bought an overflowing header one repaint later.
+    const card = labelledCard("c1", { x: 0, y: 0, width: 210, height: 74 });
+    const { iframe } = rollUpFrame([card]);
+
+    expect(convertShapeToContainer(iframe, "c1", "Fallback")).toBe(true);
+
+    expect(card.value!.getAttribute("label")).toContain("Owner: Alice");
+    expect(readCardDetail(card.value)).toHaveLength(3);
+    expect(startSizeOf(card.style)).toBe(28 + 3 * CARD_DETAIL_LINE_H);
+  });
+
+  it("convertShapeToContainer leaves a plain shape's header at its natural height", () => {
+    const shape = ruCell("s1", { x: 0, y: 0, width: 120, height: 60 });
+    shape.value = null;
+    const { iframe } = rollUpFrame([shape]);
+
+    expect(convertShapeToContainer(iframe, "s1", "Group")).toBe(true);
+    expect(startSizeOf(shape.style)).toBe(28);
+  });
+
+  it("drillDownInto clears the header it just sized for the parent's rows", () => {
+    const card = labelledCard("p1", { x: 0, y: 0, width: 210, height: 74 });
+    const { iframe, cells } = rollUpFrame([card]);
+
+    const inserted = drillDownInto(iframe, "p1", [
+      { id: "kid-1", name: "Child", type: "Application", color: "#0f7eb5" },
+    ]);
+
+    const header = 28 + 3 * CARD_DETAIL_LINE_H;
+    expect(startSizeOf(card.style)).toBe(header);
+    // The grid starts below the strip, not underneath it.
+    expect(cells[inserted[0].cellId].geometry.y).toBe(header + 12);
+  });
+
+  it("a re-drill lays the backfilled child against the live header", () => {
+    // The style is deliberately left alone on a re-drill, so the constant is
+    // the wrong thing to measure against once the header has grown. The stored
+    // row count is one, so a header recomputed from it would be 42, not 70 —
+    // only reading the live strip gets this right.
+    const card = ruCell("p1", { x: 0, y: 0, width: 320, height: 300 }, {
+      cardId: "id-p1",
+      cardType: "Application",
+      cardName: "NexaCore ERP",
+      cardDetail: JSON.stringify(rows.slice(0, 1)),
+      label: composeCardLabel("NexaCore ERP", rows.slice(0, 1)),
+    });
+    card.style = "shape=swimlane;startSize=70;fillColor=#0f7eb5";
+    const { iframe, cells } = rollUpFrame([card]);
+
+    const inserted = drillDownInto(iframe, "p1", [
+      { id: "kid-2", name: "Backfilled", type: "Application", color: "#0f7eb5" },
+    ]);
+
+    expect(startSizeOf(card.style)).toBe(70);
+    expect(cells[inserted[0].cellId].geometry.y).toBe(70 + 12);
   });
 });
 
@@ -754,6 +893,9 @@ describe("captureGroupChildLayout — collapse preserves arrangement", () => {
       width: 180,
       height: 50,
       style: "fillColor=#111",
+      // Snapshotted with the geometry: a height restored without the rows that
+      // earned it would be grown a second time by the next display pass.
+      detail: [],
     });
   });
 
@@ -1411,7 +1553,7 @@ describe("composeCardLabel", () => {
     expect(composed).toContain("Type: Application");
   });
 
-  it("never renders more rows than the cell can hold", () => {
+  it("renders every row it is given — the cell grows, the label is not clipped", () => {
     const lines: CardDetailLine[] = [
       { label: "A", value: "1" },
       { label: "B", value: "2" },
@@ -1419,8 +1561,9 @@ describe("composeCardLabel", () => {
       { label: "D", value: "4" },
     ];
     const composed = composeCardLabel("App", lines);
-    expect(composed.match(/<div/g)).toHaveLength(MAX_CARD_DETAIL_LINES);
-    expect(composed).not.toContain("C: 3");
+    expect(composed.match(/<div/g)).toHaveLength(4);
+    expect(composed).toContain("C: 3");
+    expect(composed).toContain("D: 4");
   });
 });
 
@@ -1501,8 +1644,8 @@ describe("firstLineText", () => {
   });
 });
 
-/** Fake frame for the label-apply passes: cells carry an attribute bag and the
- *  model supports the lookups `applyCardLabels` performs. */
+/** Fake frame for the label-apply passes: cells carry an attribute bag, a
+ *  geometry, and the model supports the lookups `applyCardLabels` performs. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function labelFrame(cells: Record<string, any>) {
   const model = {
@@ -1516,62 +1659,138 @@ function labelFrame(cells: Record<string, any>) {
     setStyle: (c: any, style: string) => {
       c._style = style;
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getChildCount: (c: any) => (c.children ?? []).length,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getChildAt: (c: any, i: number) => (c.children ?? [])[i] ?? null,
   };
-  const graph = { getModel: () => model, refresh() {}, removeCellOverlays() {} };
-  return { contentWindow: { __turboGraph: graph } } as unknown as HTMLIFrameElement;
+  const graph = {
+    getModel: () => model,
+    refresh() {},
+    removeCellOverlays() {},
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getCellGeometry: (c: any) => c.geometry ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resizeCell: (c: any, rect: Geo) => {
+      c.geometry = { ...rect };
+    },
+  };
+  const win = {
+    mxRectangle: class {
+      constructor(
+        public x: number,
+        public y: number,
+        public width: number,
+        public height: number,
+      ) {}
+    },
+    __turboGraph: graph,
+  };
+  return { contentWindow: win } as unknown as HTMLIFrameElement;
 }
+
+/** A card vertex with a geometry, for the label-apply passes. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function labelVertex(id: string, attrs: Record<string, string>, geo: Geo): any {
+  return { ...scanVertex(id, attrs), geometry: { ...geo } };
+}
+
+const TOP_GEO: Geo = { x: 0, y: 0, width: 210, height: 60 };
 
 describe("applyCardLabels", () => {
   const lines = new Map<string, CardDetailLine[]>([
     ["id-top", [{ label: "Type", value: "Application" }]],
+    ["id-child", [{ label: "Type", value: "Application" }]],
+    ["id-dd", [{ label: "Type", value: "Application" }]],
+    ["id-ru", [{ label: "Type", value: "Application" }]],
   ]);
 
   function canvas() {
     return {
-      top: scanVertex("top", { cardId: "id-top", cardType: "Application", label: "Top", cardName: "Top" }),
-      child: scanVertex("child", {
-        cardId: "id-child",
-        cardType: "Application",
-        label: "Child",
-        cardName: "Child",
-        parentGroupCell: "top",
-      }),
-      pending: scanVertex("pending", {
-        cardId: "pending-x",
-        cardType: "Application",
-        label: "Draft",
-        cardName: "Draft",
-      }),
-      plain: scanVertex("plain", { label: "Just a box" }),
+      top: labelVertex(
+        "top",
+        { cardId: "id-top", cardType: "Application", label: "Top", cardName: "Top" },
+        TOP_GEO,
+      ),
+      child: labelVertex(
+        "child",
+        {
+          cardId: "id-child",
+          cardType: "Application",
+          label: "Child",
+          cardName: "Child",
+          parentGroupCell: "top",
+        },
+        { x: 0, y: 0, width: 190, height: 40 },
+      ),
+      drilled: labelVertex(
+        "drilled",
+        {
+          cardId: "id-dd",
+          cardType: "Application",
+          label: "Drilled",
+          cardName: "Drilled",
+          drillDownChild: "1",
+        },
+        { x: 0, y: 0, width: 180, height: 50 },
+      ),
+      rolled: labelVertex(
+        "rolled",
+        {
+          cardId: "id-ru",
+          cardType: "Application",
+          label: "Rolled",
+          cardName: "Rolled",
+          rollUpChild: "1",
+        },
+        { x: 0, y: 0, width: 180, height: 50 },
+      ),
+      pending: labelVertex(
+        "pending",
+        {
+          cardId: "pending-x",
+          cardType: "Application",
+          label: "Draft",
+          cardName: "Draft",
+        },
+        TOP_GEO,
+      ),
+      plain: labelVertex("plain", { label: "Just a box" }, TOP_GEO),
     };
   }
 
-  it("composes only top-level synced card cells", () => {
+  it("composes every card-bound cell, nested ones included", () => {
     const cells = canvas();
     const touched = applyCardLabels(labelFrame(cells), lines);
-    expect(touched).toBe(1);
+    expect(touched).toBe(4);
     expect(cells.top.value.getAttribute("label")).toContain("Type: Application");
+    // The bug: a card pulled in with `+` used to keep a bare name.
+    expect(cells.child.value.getAttribute("label")).toContain("Type: Application");
+    expect(cells.drilled.value.getAttribute("label")).toContain("Type: Application");
+    expect(cells.rolled.value.getAttribute("label")).toContain("Type: Application");
     // A pending cell's name is POSTed verbatim on sync — never compose it.
     expect(cells.pending.value.getAttribute("label")).toBe("Draft");
-    // Expanded-group children are too small to hold rows.
-    expect(cells.child.value.getAttribute("label")).toBe("Child");
     expect(cells.plain.value.getAttribute("label")).toBe("Just a box");
   });
 
   it("is idempotent — a second identical pass touches nothing", () => {
     const frame = labelFrame(canvas());
-    expect(applyCardLabels(frame, lines)).toBe(1);
+    expect(applyCardLabels(frame, lines)).toBe(4);
     expect(applyCardLabels(frame, lines)).toBe(0);
   });
 
   it("adopts a legacy cell that predates cardName, recovering the plain name", () => {
     const cells = {
-      old: scanVertex("old", {
-        cardId: "id-top",
-        cardType: "Application",
-        // No `cardName`, and the user had hand-bolded the label in DrawIO.
-        label: "<b>Top</b>",
-      }),
+      old: labelVertex(
+        "old",
+        {
+          cardId: "id-top",
+          cardType: "Application",
+          // No `cardName`, and the user had hand-bolded the label in DrawIO.
+          label: "<b>Top</b>",
+        },
+        TOP_GEO,
+      ),
     };
     applyCardLabels(labelFrame(cells), lines);
     expect(cells.old.value.getAttribute("cardName")).toBe("Top");
@@ -1582,9 +1801,208 @@ describe("applyCardLabels", () => {
     const cells = canvas();
     const frame = labelFrame(cells);
     applyCardLabels(frame, lines);
-    expect(applyCardLabels(frame, new Map())).toBe(1);
+    expect(applyCardLabels(frame, new Map())).toBe(4);
     expect(cells.top.value.getAttribute("label")).toBe("Top");
     expect(cells.top.value.getAttribute("cardName")).toBe("Top");
+  });
+});
+
+describe("applyCardLabels — the cell grows to hold its rows", () => {
+  const rows = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ label: `L${i}`, value: `${i}` }));
+
+  function cardCanvas(geo: Geo = TOP_GEO, extra: Record<string, string> = {}) {
+    return {
+      top: labelVertex(
+        "top",
+        { cardId: "id-top", cardType: "Application", label: "Top", cardName: "Top", ...extra },
+        geo,
+      ),
+    };
+  }
+
+  it("leaves a full card at its own height for the two rows it was sized for", () => {
+    // 210x60 always held the name plus two small rows — that is what the old
+    // cap was measuring. Ticking two fields must not resize a single card on
+    // any diagram that already exists.
+    const cells = cardCanvas();
+    applyCardLabels(labelFrame(cells), new Map([["id-top", rows(2)]]));
+    expect(cells.top.geometry.height).toBe(60);
+  });
+
+  it("grows by one row-height per row past that, and shrinks all the way back", () => {
+    const cells = cardCanvas();
+    const frame = labelFrame(cells);
+    applyCardLabels(frame, new Map([["id-top", rows(5)]]));
+    expect(cells.top.geometry.height).toBe(60 + 3 * CARD_DETAIL_LINE_H);
+    applyCardLabels(frame, new Map());
+    expect(cells.top.geometry.height).toBe(60);
+  });
+
+  it("grows an expanded child from its own smaller base", () => {
+    const cells = {
+      child: labelVertex(
+        "child",
+        {
+          cardId: "id-child",
+          cardType: "Application",
+          label: "Child",
+          cardName: "Child",
+          parentGroupCell: "top",
+        },
+        { x: 0, y: 0, width: 190, height: 40 },
+      ),
+    };
+    applyCardLabels(labelFrame(cells), new Map([["id-child", rows(5)]]));
+    expect(cells.child.geometry.height).toBe(40 + 3 * CARD_DETAIL_LINE_H);
+  });
+
+  it("stops a container child at what fits, rather than pushing it out of its grid", () => {
+    // Drill-down / roll-up children are tiled into fixed slots inside a
+    // swimlane: a taller cell would overlap the row beneath it.
+    const cells = {
+      dd: labelVertex(
+        "dd",
+        {
+          cardId: "id-dd",
+          cardType: "Application",
+          label: "Drilled",
+          cardName: "Drilled",
+          drillDownChild: "1",
+        },
+        { x: 0, y: 0, width: 180, height: 50 },
+      ),
+    };
+    applyCardLabels(labelFrame(cells), new Map([["id-dd", rows(5)]]));
+    expect(cells.dd.geometry.height).toBe(50);
+    const label = cells.dd.value.getAttribute("label");
+    expect(label.match(/<div/g)).toHaveLength(2);
+  });
+
+  it("moves by the delta, so a height the user dragged is preserved", () => {
+    // The user made the card taller by hand while three rows were showing.
+    const cells = cardCanvas({ x: 0, y: 0, width: 210, height: 200 }, {
+      cardDetail: JSON.stringify(rows(3)),
+    });
+    applyCardLabels(labelFrame(cells), new Map([["id-top", rows(4)]]));
+    expect(cells.top.geometry.height).toBe(200 + CARD_DETAIL_LINE_H);
+  });
+
+  it("floors an undersized cell whose stored rows never fitted", () => {
+    // What a diagram generated by the Layered Dependency View before card
+    // cells could grow looks like: every row stored, a fixed 72px box.
+    const cells = cardCanvas({ x: 0, y: 0, width: 210, height: 72 }, {
+      cardDetail: JSON.stringify(rows(4)),
+    });
+    applyCardLabels(labelFrame(cells), new Map([["id-top", rows(5)]]));
+    expect(cells.top.geometry.height).toBe(60 + 3 * CARD_DETAIL_LINE_H);
+  });
+
+  it("leaves the geometry alone when the row count has not changed", () => {
+    const cells = cardCanvas();
+    const frame = labelFrame(cells);
+    applyCardLabels(frame, new Map([["id-top", rows(4)]]));
+    const grown = cells.top.geometry.height;
+    applyCardLabels(
+      frame,
+      new Map([["id-top", rows(4).map((r) => ({ ...r, value: "changed" }))]]),
+    );
+    expect(cells.top.geometry.height).toBe(grown);
+  });
+});
+
+describe("applyCardLabels — a container's header holds its rows", () => {
+  const rows = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ label: `L${i}`, value: `${i}` }));
+
+  const SWIMLANE = "shape=swimlane;startSize=28;fillColor=#0f7eb5";
+
+  /** A drilled-down card: a swimlane header over a 3-wide grid of children. */
+  function container(style = SWIMLANE, stored: number = 0) {
+    const child = labelVertex(
+      "kid",
+      {
+        cardId: "id-kid",
+        cardType: "Application",
+        label: "Kid",
+        cardName: "Kid",
+        drillDownChild: "1",
+      },
+      { x: 12, y: 40, width: 180, height: 50 },
+    );
+    const box = labelVertex(
+      "box",
+      {
+        cardId: "id-box",
+        cardType: "Application",
+        label: "Box",
+        cardName: "Box",
+        ...(stored ? { cardDetail: JSON.stringify(rows(stored)) } : {}),
+      },
+      { x: 0, y: 0, width: 320, height: 220 },
+    );
+    box._style = style;
+    box.children = [child];
+    return { box, kid: child };
+  }
+
+  const startSizeOf = (style: string) =>
+    Number(/startSize=(\d+)/.exec(style)?.[1] ?? NaN);
+
+  it("grows the strip, the box and the children together", () => {
+    const cells = container();
+    applyCardLabels(labelFrame(cells), new Map([["id-box", rows(3)]]));
+    // No free allowance on a strip drawn for the name alone.
+    expect(startSizeOf(cells.box._style)).toBe(28 + 3 * CARD_DETAIL_LINE_H);
+    expect(cells.box.geometry.height).toBe(220 + 3 * CARD_DETAIL_LINE_H);
+    // Without this the top grid row would sit under the header.
+    expect(cells.kid.geometry.y).toBe(40 + 3 * CARD_DETAIL_LINE_H);
+  });
+
+  it("puts all three back when the fields are turned off", () => {
+    const cells = container();
+    const frame = labelFrame(cells);
+    applyCardLabels(frame, new Map([["id-box", rows(3)]]));
+    applyCardLabels(frame, new Map());
+    expect(startSizeOf(cells.box._style)).toBe(28);
+    expect(cells.box.geometry.height).toBe(220);
+    expect(cells.kid.geometry.y).toBe(40);
+  });
+
+  it("leaves a container with no rows exactly as it found it", () => {
+    const cells = container();
+    applyCardLabels(labelFrame(cells), new Map());
+    expect(cells.box._style).toBe(SWIMLANE);
+    expect(cells.box.geometry.height).toBe(220);
+    expect(cells.kid.geometry.y).toBe(40);
+  });
+
+  it("grows a header the user dragged from their size, not from the default", () => {
+    const cells = container("shape=swimlane;startSize=44;fillColor=#0f7eb5");
+    applyCardLabels(labelFrame(cells), new Map([["id-box", rows(1)]]));
+    expect(startSizeOf(cells.box._style)).toBe(44 + CARD_DETAIL_LINE_H);
+  });
+
+  it("does not drift when the same pass runs again", () => {
+    const cells = container();
+    const frame = labelFrame(cells);
+    applyCardLabels(frame, new Map([["id-box", rows(3)]]));
+    const style = cells.box._style;
+    const { height } = cells.box.geometry;
+    const { y } = cells.kid.geometry;
+    expect(applyCardLabels(frame, new Map([["id-box", rows(3)]]))).toBe(0);
+    expect(cells.box._style).toBe(style);
+    expect(cells.box.geometry.height).toBe(height);
+    expect(cells.kid.geometry.y).toBe(y);
+  });
+
+  it("takes the room out of the header, never out of the body", () => {
+    // The card path would have grown the cell height and left the strip at 28,
+    // spilling the rows over the children.
+    const cells = container();
+    applyCardLabels(labelFrame(cells), new Map([["id-box", rows(4)]]));
+    const grown = startSizeOf(cells.box._style) - 28;
+    expect(cells.box.geometry.height - 220).toBe(grown);
   });
 });
 
@@ -1660,13 +2078,25 @@ describe("scanDiagramItems — composed labels", () => {
 });
 
 describe("unlinking collapses the detail rows", () => {
+  // Three rows: the first two ride free in a 210x60 card, the third grew it.
+  const rows = [
+    { label: "Owner", value: "Alice" },
+    { label: "Tier", value: "Gold" },
+    { label: "Hosting", value: "SaaS" },
+  ];
+
   function linkedCell() {
-    return scanVertex("c1", {
-      cardId: "id-1",
-      cardType: "Application",
-      cardName: "NexaCore ERP",
-      label: composeCardLabel("NexaCore ERP", [{ label: "Owner", value: "Alice" }]),
-    });
+    return labelVertex(
+      "c1",
+      {
+        cardId: "id-1",
+        cardType: "Application",
+        cardName: "NexaCore ERP",
+        cardDetail: JSON.stringify(rows),
+        label: composeCardLabel("NexaCore ERP", rows),
+      },
+      { x: 0, y: 0, width: 210, height: 60 + CARD_DETAIL_LINE_H },
+    );
   }
 
   it("unlinkCell drops the rows a stub no longer has data for", () => {
@@ -1675,6 +2105,9 @@ describe("unlinking collapses the detail rows", () => {
     expect(unlinkCell(frame, "c1")).toBe("id-1");
     expect(cells.c1.value.getAttribute("label")).toBe("NexaCore ERP");
     expect(cells.c1.value.getAttribute("cardId")).toBeNull();
+    // The label pass skips a cell with no cardId, so if unlink doesn't give the
+    // row's height back nothing ever will.
+    expect(cells.c1.geometry.height).toBe(60);
   });
 
   it("dedupClonedCell does the same for a pasted copy", () => {
@@ -1682,6 +2115,7 @@ describe("unlinking collapses the detail rows", () => {
     const frame = labelFrame(cells);
     expect(dedupClonedCell(frame, "c1", false)).toEqual({ mode: "unlinked" });
     expect(cells.c1.value.getAttribute("label")).toBe("NexaCore ERP");
+    expect(cells.c1.geometry.height).toBe(60);
   });
 });
 
@@ -1711,6 +2145,34 @@ describe("buildLdvDiagramXml — detail lines carried from the report", () => {
     // HTML-escaped by composeCardLabel, then XML-escaped for the attribute.
     expect(xml).toContain("&lt;b&gt;NexaCore ERP&lt;/b&gt;");
     expect(xml).toContain("Type: Application");
+  });
+
+  it("sizes the cell to the rows it carries, not to the report's node box", () => {
+    // The report draws at most two rows in a fixed 72px node but exports every
+    // row the reader ticked, so its own height cannot hold them.
+    const xml = buildLdvDiagramXml(
+      [
+        {
+          cardId: "44444444-4444-4444-4444-444444444444",
+          cardType: "Application",
+          name: "NexaCore ERP",
+          color: "#0f7eb5",
+          detailLines: [
+            { label: "A", value: "1" },
+            { label: "B", value: "2" },
+            { label: "C", value: "3" },
+            { label: "D", value: "4" },
+          ],
+          x: 0,
+          y: 0,
+          w: 200,
+          h: 72,
+        },
+      ],
+      rels,
+      layers,
+    );
+    expect(xml).toContain(`height="${60 + 2 * CARD_DETAIL_LINE_H}"`);
   });
 
   it("double-escapes an ampersand exactly once each way", () => {

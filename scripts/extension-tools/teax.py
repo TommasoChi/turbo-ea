@@ -80,13 +80,21 @@ VALID_GRANTS = {
     "core.cards.read",
     "core.cards.write",
     "core.events.card",
+    "core.notifications.channel",
 }
+# Artwork an extension may ship as its own logo (manifest `logo`), shown on the
+# Store and Installed tabs. Deliberately duplicated from
+# backend/app/services/extensions/bundle.py (LOGO_EXTENSIONS / MAX_LOGO_BYTES).
+LOGO_EXTENSIONS = {".png", ".svg", ".webp", ".jpg", ".jpeg"}
+MAX_LOGO_BYTES = 512 * 1024
 # Grants that require SDK 1.2+ surfaces at runtime.
 SDK_1_2_GRANT_PREFIXES = ("core.",)
 # Grants that require the SDK 1.3 users bridge specifically.
 SDK_1_3_GRANTS = {"core.users.read"}
 # Grants that require the SDK 1.5 inventory bridge / card events specifically.
 SDK_1_5_GRANTS = {"core.cards.read", "core.cards.write", "core.events.card"}
+# Grants that require the SDK 1.6 notification-channel surface specifically.
+SDK_1_6_GRANTS = {"core.notifications.channel"}
 BUILTIN_FIELD_TYPES = {
     "text",
     "multiline_text",
@@ -229,6 +237,25 @@ def _lint_source(src: Path) -> tuple[dict, dict[str, Path], list[str], list[str]
 
     files = _collect_files(src)
 
+    # `pack` sweeps the whole source dir and passes unknown manifest keys
+    # through verbatim, so a root logo.png is already hashed into `files` and
+    # zipped — lint is the only place that needs to know about it.
+    logo = manifest.get("logo")
+    if logo is None:
+        warnings.append(
+            "no logo declared — the Store and Installed tabs will show a generated tile"
+        )
+    elif not isinstance(logo, str) or not logo.strip():
+        problems.append("logo must be a relative path inside the bundle")
+    elif not _safe_member(logo):
+        problems.append(f"unsafe logo path: {logo}")
+    elif PurePosixPath(logo).suffix.lower() not in LOGO_EXTENSIONS:
+        problems.append(f"logo must end in one of {sorted(LOGO_EXTENSIONS)}: {logo}")
+    elif logo not in files:
+        problems.append(f"logo file listed but missing: {logo}")
+    elif files[logo].stat().st_size > MAX_LOGO_BYTES:
+        problems.append(f"logo is larger than {MAX_LOGO_BYTES // 1024} KB: {logo}")
+
     if "content" in capabilities:
         content = manifest.get("content") or [p for p in files if p.startswith("content/")]
         if not content:
@@ -281,8 +308,30 @@ def _lint_source(src: Path) -> tuple[dict, dict[str, Path], list[str], list[str]
     if "metamodel" in capabilities:
         block = manifest.get("metamodel") or {}
         sections = block.get("field_sections")
-        if not isinstance(sections, list) or not sections:
-            problems.append("metamodel capability needs metamodel.field_sections")
+        subtype_rows = block.get("subtypes")
+        if (not isinstance(sections, list) or not sections) and (
+            not isinstance(subtype_rows, list) or not subtype_rows
+        ):
+            problems.append("metamodel capability needs field_sections and/or subtypes")
+        for i, contrib in enumerate(subtype_rows if isinstance(subtype_rows, list) else []):
+            where = f"metamodel.subtypes[{i}]"
+            if not isinstance(contrib, dict):
+                problems.append(f"{where} must be an object")
+                continue
+            if not str(contrib.get("card_type", "")).strip():
+                problems.append(f"{where} is missing card_type")
+            rows = contrib.get("subtypes")
+            if not isinstance(rows, list) or not rows:
+                problems.append(f"{where} needs a non-empty subtypes list")
+                continue
+            for j, s in enumerate(rows):
+                sw = f"{where}.subtypes[{j}]"
+                if not isinstance(s, dict):
+                    problems.append(f"{sw} must be an object")
+                    continue
+                for req in ("key", "label"):
+                    if not str(s.get(req, "")).strip():
+                        problems.append(f"{sw} is missing {req}")
         for i, contrib in enumerate(sections or []):
             where = f"metamodel.field_sections[{i}]"
             if not isinstance(contrib, dict):
@@ -384,10 +433,16 @@ def _lint_source(src: Path) -> tuple[dict, dict[str, Path], list[str], list[str]
             needs_1_2 = any(g.startswith(SDK_1_2_GRANT_PREFIXES) for g in grants)
             needs_1_3 = bool(set(grants) & SDK_1_3_GRANTS)
             needs_1_5 = bool(set(grants) & SDK_1_5_GRANTS)
-            if (needs_1_2 or needs_1_3 or needs_1_5) and declared_sdk:
+            needs_1_6 = bool(set(grants) & SDK_1_6_GRANTS)
+            if (needs_1_2 or needs_1_3 or needs_1_5 or needs_1_6) and declared_sdk:
                 try:
                     major, minor = (int(x) for x in declared_sdk.split(".")[:2])
-                    if needs_1_5 and (major, minor) < (1, 5):
+                    if needs_1_6 and (major, minor) < (1, 6):
+                        warnings.append(
+                            f"core.notifications.channel requires SDK 1.6+ "
+                            f"but sdk_version is {declared_sdk}"
+                        )
+                    elif needs_1_5 and (major, minor) < (1, 5):
                         warnings.append(
                             f"core.cards.* / core.events.card grants require SDK 1.5+ "
                             f"but sdk_version is {declared_sdk}"
@@ -439,9 +494,9 @@ def cmd_pack(args) -> int:
     }
     manifest.setdefault("entitlement_key", manifest["key"])
     # Default to the SDK this teax ships with. The loader's compatibility
-    # check is major-only, so a 1.5 default still loads on a 1.1 core (with
+    # check is major-only, so a 1.6 default still loads on a 1.1 core (with
     # a newer-minor warning there).
-    manifest.setdefault("sdk_version", "1.5")
+    manifest.setdefault("sdk_version", "1.6")
     if args.key_id:
         manifest["key_id"] = args.key_id
     manifest["files"] = {

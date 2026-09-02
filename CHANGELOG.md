@@ -5,6 +5,254 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.100.0] - 2026-08-28
+
+### Added
+
+- **The PPM Portfolio view now prints and exports like a report.** The portfolio picks up the reports' title bar: **Print / Save as PDF**, **Export to PowerPoint (.pptx)** and **Export to Excel (.xlsx)**. Printing drops the tabs, filter bar and hover cards, prints the active grouping / subtype / search as a compact parameter line, and unclips the timeline grid so every column fits the page instead of being cut off at the scroll edge. The PowerPoint deck carries the portfolio at presentation quality and continues onto further slides for long portfolios, splitting only between initiatives. The Excel workbook has one row per initiative — group, subtype, project manager, start and end dates, the three health ratings, CapEx / OpEx planned vs. actual, and the latest report date.
+
+## [2.99.0] - 2026-08-28
+
+### Added
+
+- **Signing in with SSO now takes you to the page you asked for.** Opening a link to a specific report, initiative, diagram or card while signed out sends you through your identity provider and brings you back to that exact page instead of the dashboard. If your role cannot open it, you land on the dashboard with a short note explaining why. Signing in with an email and password already worked this way and now has a test guarding it.
+
+### Changed
+
+- **Typing a page's address now respects your permissions.** Every page checks your role before it opens, so a bookmarked or shared link to something your role cannot use shows «Access denied» with a link back to the dashboard, instead of a page that loads and then fails to fetch anything. **If you have a bookmark to a page your role cannot open, you will see this the first time you use it.**
+- **Menu entries now match exactly what each page needs.** The Reports menu hides an individual report your role cannot open rather than showing it and failing on click.
+
+### Fixed
+
+- **Adding a milestone to an Initiative's Gantt chart now says «Add Milestone».** The dialog is shared with work packages and kept its «Add Work Package» wording — on the title, the submit button and the delete confirmation — even when the Milestone toggle was on. Every label now follows the toggle. ([#1018](https://github.com/vincentmakes/turbo-ea/discussions/1018))
+- **The Reference Catalogue's EA Principles page no longer opens for roles that cannot read it.** It required administrator rights on the server but was reachable by anyone who knew the address, producing an empty page.
+- **The dashboard opens on My Workspace for roles without EA-dashboard access.** The Overview tab needs a permission not every role holds, which left those users on an empty landing page.
+- **An extension page placed under GRC no longer disappears for a role without GRC access.** It now falls back to a top-level entry, as it already did when the GRC module was switched off.
+
+## [2.98.0] - 2026-08-28
+
+### Added
+
+- **Extension pages can now sit inside the Governance menu.** An installed extension may place its page under **GRC** as well as **Reports**, so a compliance or governance extension lands where its subject already lives instead of adding another top-level icon to the nav bar. The GRC entry keeps its own link as the first item of the menu, and a page whose group is unavailable (module switched off, or the user lacks its permission) falls back to a top-level entry rather than disappearing.
+- **Extensions render choice fields with core's own coloured pill.** The select-option chip and the metamodel label resolvers are now part of the extension UI SDK (1.19), so a value shown on an extension page looks exactly like the same value on a card or in the Inventory grid — same colour, same width, same translated label.
+
+### Changed
+
+- **A field section contributed by an extension now appears above Relations on the card**, next to the card's own content, instead of being appended below it. Sections an administrator has since moved are never repositioned, and removing an extension no longer leaves the remaining sections' saved order pointing at the wrong ones.
+
+### Fixed
+
+- **The notification bell and user menu could be pushed off screen.** With enough pages in the top navigation the toolbar overflowed and the bell, search and account menu became unreachable; the navigation now shrinks and scrolls instead.
+- **A second navigation menu opened the first menu's contents.** With more than one grouped menu in the nav bar, opening one showed the other's entries (and in the mobile drawer, expanding one expanded them all).
+
+## [2.97.0] - 2026-08-28
+
+### Added
+
+- **Reverse-proxy sign-in can now take the user's role from your directory.** Set `TURBO_EA_PROXY_AUTH_ROLE_MAP` (for example `ADMIN:admin,MANAGER:member,READ-ONLY:viewer`) and the app roles your identity provider already assigns decide the Turbo EA role, instead of everyone landing on the default role for an administrator to promote by hand. The map is re-applied on every sign-in, so removing someone's directory role takes effect; the bootstrap admin address always overrides it. Off unless configured. ([#1006](https://github.com/vincentmakes/turbo-ea/discussions/1006))
+
+### Fixed
+
+- **A user in two Azure app roles had all but the first silently dropped.** When the App Service token store is off, the forwarded identity lists each role as its own entry; only the first was read, so the same person could resolve differently depending on whether token verification was on.
+
+## [2.96.2] - 2026-08-28
+
+### Fixed
+
+- **A role added or edited on the Roles tab now shows up on the Users tab straight away.** Creating, renaming, recolouring, archiving or restoring a role left the Users tab showing the list as it was when the page loaded — the new role was missing from the role dropdown, the bulk-role dialog and the filter sidebar until you reloaded the page. ([#1020](https://github.com/vincentmakes/turbo-ea/issues/1020))
+
+## [2.96.1] - 2026-08-27
+
+### Fixed
+
+- **Dates showed one day early for everyone west of UTC.** A PPM status report saved for 27 August displayed as 26 August in the Americas, and the same shift affected every date-only value in the app — lifecycle dates, task due dates, risk target dates, end-of-life dates — as well as the date filters on the Inventory and Decisions grids. ([#1016](https://github.com/vincentmakes/turbo-ea/issues/1016))
+- **"Today" defaults and overdue markers used UTC rather than your own timezone.** From late afternoon in the Americas, new status reports, cost lines and process assessments pre-filled tomorrow's date; the same mismatch flagged mitigation tasks and PPM tasks as overdue a day early, and let a lifecycle phase begin a day before its date.
+
+## [2.96.0] - 2026-08-27
+
+### Added
+
+- **User manual: a guide for every extension published in the Extension Store.** A new **Extensions** section in the manual documents what each published extension does and how to use it — setup, every screen and field, permissions, what happens if a licence lapses, and known limitations — in all 10 languages, alongside the existing Extension Store page that covers installing and licensing. Reachable from Administration → Extension Store and from the relevant feature guides.
+
+### Fixed
+
+- **Reverse proxy authentication: the Azure App Service setup example was incomplete.** The recommended EasyAuth configuration in `.env.example` and the Authentication & SSO guide omitted `TURBO_EA_PROXY_AUTH_TRUST_PLATFORM_HEADERS`, so following it literally made every sign-in fail with *Proxy authentication is enabled but not secured*. That flag is checked before the identity token is parsed, so verifying the token does not substitute for it; it is now shown as a required part of the App Service setup rather than only as a fallback for instances whose token store is disabled.
+
+## [2.95.0] - 2026-08-27
+
+### Added
+
+- **Sign in through an authenticating reverse proxy — no OIDC client needed.** Instances running behind a proxy that already signs users in (Azure App Service's built-in authentication, oauth2-proxy, Authelia, Cloudflare Access) can now accept that identity directly: users land in Turbo EA already signed in, and no identity-provider client registration or client secret is required. Off by default and enabled with environment variables; a shared proxy secret (or, on Azure, verification of the forwarded identity token) keeps a forged header from ever becoming a session, an email-domain allowlist is required, and an unverified identity can only sign in accounts that already exist. Signing out can end the proxy session too via a configurable logout address. See Administration → Authentication & SSO → Reverse proxy authentication. ([#1006](https://github.com/vincentmakes/turbo-ea/discussions/1006))
+
+### Security
+
+- **A role with full administrative access can no longer be made the default role for new accounts.** New accounts created automatically — through SSO or reverse-proxy sign-in — land on the default role, so allowing the admin role there would have turned any newly asserted identity into a site administrator.
+
+## [2.94.0] - 2026-08-27
+
+### Added
+
+- Extension UI SDK 1.18: the `loadAgGrid` loader now also resolves core's grid-template hooks (`useColumnFreeze` / `useColumnOrder`), so an extension grid offers the same column freeze and drag-reorder affordances as the Inventory.
+- The inventory grid renders extension-contributed custom field types with the extension's own display component, matching card detail (read-only in the grid; values degrade to plain text when the extension is absent).
+
+## [2.93.0] - 2026-08-27
+
+### Added
+
+- Extension UI SDK 1.17: extensions can render data grids with core's own AG Grid look via a lazy `loadAgGrid` loader, and open core's create-card dialog (`CreateCardDialog`) from their pages.
+- The create-card dialog accepts subtype and attribute presets (`initialSubtype` / `initialAttributes`), so callers can open it pre-configured for a specific kind of card.
+- Inventory deep links can filter by subtype (`/inventory?type=…&subtype=…`), alongside the existing attribute filters.
+
+## [2.92.0] - 2026-08-27
+
+### Added
+
+- Extensions can now contribute **subtypes to existing card types** through the manifest's `metamodel.subtypes` block — additive and reversible like field-section contributions: contributed subtypes are stamped, never hijack an existing subtype key, are stripped on disable/uninstall while card subtype values survive untouched, and reappear on re-enable. `teax lint` validates the new block.
+
+## [2.91.0] - 2026-08-26
+
+### Added
+
+- **Extensions can now carry their own logo, and the Store shows it.** The Store and Installed tabs rendered the same puzzle-piece glyph for every extension, so scanning the catalogue meant reading names. An extension may now ship artwork inside its signed bundle — so it appears even on an air-gapped instance and even while the extension is disabled — and a listing may carry one for extensions you have not installed yet. Anything without artwork gets a generated tile from its initials, in a colour fixed by its key, so a catalogue never looks half-finished.
+- **You can now see when the extension store was last checked, and check it on demand.** Turbo EA reads the store catalogue once a day and notifies administrators about new and updated extensions, but that was the only evidence the check produced: a store that refused the request recorded the reason where nobody could read it, so "I am not being notified" was indistinguishable from "the check never ran", "the fetch has been failing for a fortnight" and "it ran and nothing was new". The Store tab now reports when it last read the catalogue, shows the reason when a read failed, and offers **Check now**, which runs the check immediately and says what it found.
+
+### Changed
+
+- **The Store tab is now a grid of compact tiles with a detail panel.** Two large cards per row meant a lot of scrolling to survey a handful of extensions, and every card had to carry every field it owned. Tiles now fit roughly four to a row on a normal screen — logo, name, licence state, price and the actions you are most likely to want — and clicking one opens a panel on the right with the full description, screenshots, categories and source and licence credits. Each tile carries a small info mark and lifts as you point at it, so it is obvious there is more behind the click, and where an extension offers a free trial the tile shows **Try free** beside **Buy** rather than hiding the trial a click away. The panel keeps the grid in view, so looking through several extensions no longer means opening and closing a dialog each time.
+
+### Fixed
+
+- **An extension could be announced as new over and over on an instance tracking many of them.** The set of catalogue entries already seen was capped by keeping the alphabetically first entries, so once an instance had seen enough extensions, any whose key sorted late fell out of the set on every check and was announced as brand new on the next one — indefinitely. The cap now forgets the oldest entry instead, which is the one that can most afford to be forgotten.
+- **Nine of the ten languages showed English on parts of the Extensions page.** The page title, the instance-ID block, the licence-removal dialog and the install gate's licence prompt had never been translated, so they fell back to English everywhere. They are now translated in all supported languages.
+
+## [2.90.0] - 2026-08-26
+
+### Added
+
+- **A "My tasks" shortcut on the PPM task board.** One click narrows an initiative's Kanban board — and its list view — to the tasks assigned to you, with a count on the button so you can see your workload without filtering first. It combines with the Work Package filter and Group by, and the choice is kept in the page address, so a refresh or a shared link keeps the same view.
+
+### Changed
+
+- **Admin → Settings → Integrations now stays on the integration you were configuring.** Refreshing the page, or coming back to Integrations after visiting another Settings tab, used to drop you back on ServiceNow. The selected integration is now remembered, and its address can be shared to open the same one directly.
+
+## [2.89.2] - 2026-08-26
+
+### Fixed
+
+- **You are no longer notified about your own changes.** Editing a card you are a stakeholder on told *you* about the edit, alongside everyone else watching it. The same went for requesting, signing, recalling or rejecting a signature on an Architecture Decision Record or a Statement of Architecture Work. Turbo EA has always meant to leave the person who acted out of it — commenting on your own card already worked that way — but these paths never said who had acted, so the rule had nothing to apply. Everyone else watching is notified exactly as before, and the few types that deliberately do reach you (a task or risk assigned to yourself, a survey you sent, process-flow approvals) are unchanged.
+
+## [2.89.1] - 2026-08-26
+
+### Added
+
+- **Every notification type can now be switched on or off.** Notification preferences listed 12 types while the application actually sent 26 — so ADR signature requests, risk assignments, process-flow approvals and SoAW rejections arrived with no way to change how you received them. All 26 are now in one list, kept in step with what the backend really sends, and 13 of them appear in the preferences dialog for the first time. Nothing you had set changes: the newly listed types keep the behaviour they already had (in the bell, not in your inbox) and simply become switchable.
+- **Extensions can deliver notifications on a channel of their own.** An installed, licensed extension can add a third column to the notification preferences dialog — a chat message, a pager, whatever it connects to — and you choose per notification type whether it goes there, exactly as you already do for In-App and Email. Extension channels always start switched **off**, so installing one never begins sending on its own, and a type that is in-app only (like the upgrade announcement that reaches everyone) is never delivered to one. Disabling an extension or letting its licence lapse pauses its channel immediately and keeps every setting you chose, ready for when it comes back.
+
+### Changed
+
+- **Turning off a notification in the bell no longer turns off its email.** The bell used to act as a master switch: muting a type in-app silently stopped its emails too, so wanting something in your inbox but not in the bell got you nothing at all. Each channel now stands on its own. **If you had muted a type in the bell while leaving its email switched on, you will start receiving that email again** — check Notification Preferences if that is not what you want.
+- Survey invitations always send an email. The preferences dialog has always shown that switch as fixed on; the API used to accept a request to turn it off anyway.
+
+### Fixed
+
+- **The notification bell now updates itself after an upgrade — and after any interruption.** The «updated to …» notification was created correctly, but the badge kept showing its old count until the page was fully reloaded, so an upgrade looked like it had notified nobody. The announcement is written while the backend is still starting, before any browser is connected to be told about it, and the bell only ever read its count once when the page loaded. It now re-reads whenever the live connection comes back — which also covers a dropped network, a closed laptop lid, or anything else that interrupts the connection: notifications that arrived while you were disconnected are no longer missed until the next reload. The Todos and Surveys counters in the navigation bar were stale for the same reason and are fixed with it, and opening the bell now refreshes the badge too, so it can never disagree with the list underneath it.
+
+## [2.88.2] - 2026-08-26
+
+### Fixed
+
+- **Leftover permission entries are cleaned out of application-wide roles too.** Roles like Member and Viewer carry their own permission list, which went through a rename earlier this year — the same kind of leftover that stopped stakeholder roles saving in 2.88.1. Existing installs were repaired at the time, but importing a workspace from an instance that predates the rename could put the old entries back, and the Roles admin would then refuse to save: the entries are invisible in the permission editor yet sent back with every save. Those entries are now recognised wherever they turn up. **Unlike the stakeholder-role case they are converted, not removed:** each one still corresponds to a permission in use, so a role keeps exactly the access it had, including where the answer was «no».
+
+## [2.88.1] - 2026-08-25
+
+### Fixed
+
+- **Stakeholder roles can be edited again.** On instances upgraded from an early release, some roles carried two leftover permission entries from a rename made several versions ago. They were invisible in the role editor and impossible to remove, yet were sent back every time you pressed Save — so the save was rejected and the colour, label, description and translations you had just changed were quietly discarded. The leftovers are cleaned up on upgrade and ignored from now on, including in workspace bundles imported from an older instance. **No permission anyone actually holds changes:** the entries had granted nothing since the rename, so they are removed rather than converted, and a role that should approve cards or manage stakeholders can now be given those rights by ticking the boxes.
+- **A stakeholder role's colour now shows on a card's Stakeholders tab.** Each role group carries the colour set for that role in the metamodel, matching the dashboard's My roles section and the stakeholder hover card. The tab was the one place the colour never appeared.
+- **A stakeholder role that fails to save now says why, next to the Save button.** The message previously appeared only at the top of the panel, out of view when editing a role further down the list, which made a rejected save look as though nothing had happened.
+
+## [2.88.0] - 2026-08-25
+
+### Added
+
+- **A survey can target only the cards that have gone stale.** Building a survey, the **Target** step gains a **last update** filter — 30 days, 90 days, 6 months, 1 year, or your own number of days or months — so a data-maintenance survey can go to exactly the cards nobody has looked at, instead of everything of a type. It shows the date it resolves to as you pick, and measures from the card's Modified date, the same one the inventory and the card's History tab show. The window is relative, not a fixed date: a draft parked for a month and sent later still reaches the cards that are stale *then*. It narrows the other filters rather than replacing them, so "related to the Sales unit **and** untouched for six months" is one survey.
+
+### Fixed
+
+- **The survey preview names stakeholder roles instead of showing their internal keys.** On **Preview & send**, each person was listed against the role's internal key rather than its name, and never in the language you were using. Roles now read as their translated names on that step, as they already did earlier in the wizard, and someone matched on more than one role is shown all of them rather than whichever one the database happened to return first.
+- **Users to Notify counts people, not cards.** Anyone holding a role on several cards was counted once per card, so a survey reaching three people across twelve cards reported twelve users. The figure is now the number of people who will hear from you, with the number of survey requests it generates shown beneath it — that second number is what lands as todos and notifications, and it matches what Send reports.
+- **Reopening a survey draft no longer loses its "cards related to" filter.** The related-cards field came back empty even though the filter was still saved, so touching it cleared the filter for real. The chosen cards are now loaded back into the field with the rest of the draft.
+- **The survey preview now says when cards were left out because nobody could be asked.** A survey only reaches a card through someone holding one of the target stakeholder roles on it, so cards with no such stakeholder were dropped from the count with no explanation — a landscape where few cards have owners looked like a filter that was too narrow. The preview now reports how many cards matched alongside how many can actually be surveyed, and says how many were skipped for want of a stakeholder.
+- **The last-update window is measured in whole days.** The cut-off carried the current time of day, so a card modified on the boundary date was included in the afternoon and excluded in the morning — the same preview gave different answers as the day went on, and the date shown was wrong for part of it. The window now runs to the start of the day.
+- **Previewing a brand-new survey no longer leaves a duplicate draft behind.** Reaching **Preview & send** before saving created the survey twice and previewed the second copy, leaving the first orphaned in the list.
+- **Notification emails keep the line breaks of the message they carry.** A message written across several paragraphs arrived as one unbroken run of text.
+- **Sending a survey no longer hangs on its notifications.** Send used to deliver every notification before answering — and each emailed one opens its own connection to the mail server, so a survey reaching dozens of stakeholders left the button greyed out for the whole run. The survey is now created and activated immediately, with the notifications and emails delivered in the background right after; the button also shows a progress line while the request is in flight.
+
+### Changed
+
+- **A survey sends one notification per person, not one per card.** Someone holding a stakeholder role on forty applications received forty bell entries and forty emails for a single survey. They now get one, saying how many cards they have been asked about; the email lists those cards by name, each linking straight to its response form, and the notification opens My Surveys when there is more than one. The per-card review requests themselves are unchanged — each card still becomes its own entry under Todos → Surveys.
+- **The survey builder's Target step now uses the app's own pickers.** Choosing cards, related cards and tags was done through plain lists built just for that screen: they showed only the first 20 matches with no way to reach the rest, listed bare names with none of the colour coding used everywhere else, and labelled a related card with its internal type key. Cards are now picked with the same picker as the rest of the app — it opens showing the inventory, ranks as you type, and keeps loading as you scroll — and tags with the standard tag picker, so tag groups appear under their headings, a single-choice group replaces rather than accumulates, and groups restricted to other card types stop being offered.
+- **Stakeholder roles are shown in the target type's colours, and only that type's roles.** The list offered every role defined anywhere in the instance, including ones the chosen card type does not have, which could never match anything. It now lists only the roles that type defines, each with its colour.
+- **Choosing survey fields is done a section at a time.** The Fields step listed every field of the card type in one flat run with its section repeated in a column beside it, so a type with several sections was a wall of repetition and setting maintain or confirm meant visiting each row. Fields are now grouped under their section, and each section heading has its own tickbox that takes the whole section and its own maintain/confirm that applies to all of it — with any single field still free to differ, in which case the heading says so rather than claiming an answer its fields don't share. Selecting or clearing a whole section goes through its tickbox alone, so a stray click on the heading never silently changes it.
+- **Fields and relationships the card type requires are marked.** A survey author can now see at a glance which of them the metamodel treats as mandatory — the ones a data-maintenance survey most wants answered.
+
+## [2.87.1] - 2026-08-25
+
+### Fixed
+
+- **A card archived by a ServiceNow sync is now kept for the retention window, then purged like any other.** The sync marked the card archived but never stamped when — and the clean-up job only considers cards carrying that stamp, so those cards sat in the archive forever instead of being permanently deleted after the retention period. They also recorded nobody as having made the change. Cards already stranded this way are picked up on upgrade: their retention clock starts at the upgrade, so you get a full window to spot and restore anything that should not have been archived before it is removed.
+
+## [2.87.0] - 2026-08-25
+
+### Fixed
+
+- **The Modified date now means somebody changed the card.** An import, a ServiceNow sync, a tag change or a bulk edit could re-date a card that showed nothing at all in its History tab — so filtering the inventory by **Modified** to find cards nobody had reviewed returned the whole landscape. Every one of those paths now records what it changed on the card: applying a platform migration, a ServiceNow pull, an EOL mass-link and a PPM budget or cost edit each write a history entry, and re-applying an import that changes nothing leaves the card completely alone.
+- **A bulk edit no longer re-dates the cards it left untouched.** Selecting fifty cards and setting a field that forty of them already had marked all fifty as just modified. Only the cards that actually changed are touched now.
+- **Re-linking a card to the same End-of-Life product is a no-op.** The mass-link tool rewrote every card it visited whether or not the product and cycle differed; it now reports, and touches, only the ones it actually changed.
+
+### Changed
+
+- **Housekeeping no longer counts as a change.** Recalculating data-quality scores after a field-weight change, re-running calculated fields across a type, and backfilling hierarchy levels or card IDs all leave each card's **Modified** date where it was. The date answers "when did the content last change", which is what you filter it by.
+
+### Added
+
+- **Tags appear on a card's History tab.** Adding or removing a tag is recorded with who did it and when, so tags synced by an Excel import are as traceable as any other edit.
+- **A re-parent is recorded on the cards it moves.** Moving a card in the hierarchy rewrites the level of everything beneath it; those descendants now each get a history entry instead of silently changing.
+
+## [2.86.0] - 2026-08-25
+
+### Changed
+
+- **A diagram card shows every field you tick, and grows to fit.** **Show on card** used to draw only the first two picks, because a card shape was a fixed size and anything longer spilled outside its border. A third field is now drawn rather than silently dropped: the shape grows by a row per selection past the two it already had room for, and shrinks back when you untick one, so an existing diagram opens exactly as it did. A card you resized by hand keeps your height — it only gains or gives back the room a row needs. Cards tiled inside a **Drill-Down** or **Roll-Up** container still stop at what fits in their slot, and the Dependencies report still shows two lines per node (both are laid out in fixed positions) — but a diagram generated from that report opens with all of them.
+- **A container's title bar grows for its rows too.** Turning a card into a container — **Drill-Down**, **Roll-Up** or **Convert to Container** — put its detail rows in a fixed-height title strip, so they spilled over the cards inside; **Convert to Container** avoided that by silently dropping the rows altogether. The strip now sizes itself to what the card is showing, and the container and its contents move down to keep the same room, so a card never loses what it was saying by becoming a container.
+
+### Fixed
+
+- **Cards pulled in by Expand now show the fields you selected.** A card brought onto the canvas with **+** / **Expand**, **Drill-Down** or **Roll-Up** kept a bare name however many fields **Show on card** had ticked, so half a diagram said one thing and half said another. Those cards now carry the same detail rows as any other card — and pick up the active **Color by** perspective too, which they had also been missing. Collapsing and re-expanding a group brings the rows back with it.
+
+## [2.85.0] - 2026-08-25
+
+### Added
+
+- **The card picker marks what has already retired, and can hide it.** A card that reached its End of Life **as of today** now carries a *RETIRED* badge with its end-of-life date, and a **Hide end-of-life** switch beside the type chips filters those cards out. Judged against today, never against the timeline — the picker is reached by a button that hides the slider.
+
+### Fixed
+
+- **Expanding a card on a card page now rings it, as it does in the report.** The card page's dependency section offered Expand mode and pulled the neighbours in, but the expanded card never got the double border in its card type's colour, so your bearings vanished as the diagram grew. The report has always drawn it; the card page simply never passed the expanded cards on to the canvas.
+- **Back to card picker shows the whole inventory again.** The picker listed the landscape as of the timeline date, while the slider and its two visibility switches are hidden at that stage — so cards were dropped by controls you could not see, and a card that has not gone live yet never appeared at all, even on today's date. It now lists every card (archived aside) whatever the timeline shows, as does the toolbar's **Center on** picker, which likewise could not reach a retired card. The diagram, tree and table still show the landscape at the selected date.
+
+## [2.84.0] - 2026-08-25
+
+### Added
+
+- **Connection lines have a style option.** **View options** on the Layered Dependency View now offers **Solid**, **Dotted**, **Dashed** (the default, unchanged) and **Long dash**, each shown as a sample of the line itself. Hovering a line still draws it solid and a dependency being severed keeps its own dashes, so the choice never hides what a line is saying.
+
+### Changed
+
+- **Dependency connections take a cleaner path.** Lines in the Layered Dependency View run straight where they can, route around cards instead of over them, and no longer overlap or cross each other at a card's edge — so going around a busy layer costs a turn or two instead of a zigzag.
+- **A diagram created from a dependency view keeps its routing.** **Create diagram** used to hand DrawIO bare endpoints and let it re-route everything, so the diagram arrived looking nothing like the report. Lines now carry the bends and the exact attachment points the report worked out, and a relation whose data flows the other way finally exports with its arrow pointing the right way.
+- **Cards line up with what they connect to.** Cards linked across layers now stand in the same column, so a dependency reads as a short vertical line rather than a long diagonal — in the Dependencies report, the card page's dependency section and TurboLens target architectures alike.
+
 ## [2.83.0] - 2026-08-24
 
 ### Changed

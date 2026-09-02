@@ -165,6 +165,8 @@
   "dashboard.activity.action.file.uploaded": "a téléversé un fichier sur",
   "dashboard.activity.action.file.deleted": "a supprimé un fichier de",
   "dashboard.activity.action.comment.created": "a commenté",
+  "dashboard.activity.action.tag.added": "a étiqueté",
+  "dashboard.activity.action.tag.removed": "a retiré une étiquette de",
   "dashboard.activity.action.process_diagram.saved": "a sauvegardé un diagramme de processus pour",
   "dashboard.activity.action.process_diagram.deleted": "a supprimé un diagramme de processus pour",
   "dashboard.activity.action.process_flow.submitted": "a soumis un flux de processus pour",
@@ -306,6 +308,7 @@
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "Accès refusé",
   "accessDenied.body": "Vous n'avez pas l'autorisation de consulter cette page. Contactez votre administrateur si vous avez besoin d'un accès.",
+  "accessDenied.redirectedToDashboard": "Vous n'avez pas accès à cette page, nous vous avons donc dirigé vers le tableau de bord.",
   "moduleDisabled.title": "{{module}} est désactivé",
   "moduleDisabled.body": "Le module {{module}} est actuellement désactivé par un administrateur. Activez-le dans les paramètres d'administration pour accéder à cette section.",
   "moduleDisabled.backToDashboard": "Retour au tableau de bord",
@@ -463,5 +466,6 @@
   "cardDisplay.clearAll": "Tout effacer",
   "cardDisplay.subtypeLine": "Sous-type",
   "cardDisplay.linesHint": "Les {{count}} premiers apparaissent sur la fiche.",
+  "cardDisplay.linesHintAll": "Chaque choix apparaît sur la fiche, qui s'agrandit en conséquence.",
   "cardDisplay.noFields": "Aucun champ disponible"
 }

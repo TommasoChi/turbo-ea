@@ -34,11 +34,12 @@ Selezionate a quale tipo di card si applica il sondaggio (es. Application, IT Co
 
 ### Filtri
 
-Restringete opzionalmente l'ambito con i filtri. Sono disponibili tre tipi di filtro, combinabili tra loro:
+Restringete opzionalmente l'ambito con i filtri. Sono disponibili quattro tipi di filtro, combinabili tra loro:
 
 - **Schede specifiche** — Selezionate direttamente una o più schede (limitate al tipo di destinazione). Utile per destinare una singola scheda o un sottoinsieme scelto manualmente.
 - **Schede correlate a** — Include solo le schede che hanno una relazione con uno degli elementi elencati (es. tutte le applicazioni correlate all'organizzazione Vendite).
 - **Tag** e **filtri di attributi** — Filtrate le schede per tag o per condizione di attributo (es. costo maggiore di 10 000, valutazione TIME mancante).
+- **Ultimo aggiornamento** — Includete solo le schede che nessuno modifica da tempo: 30 giorni, 90 giorni, 6 mesi, 1 anno oppure un numero personalizzato di giorni o mesi. Il generatore mostra la data limite corrispondente mentre scegliete. La finestra è relativa al momento dell'**invio**, non a quello della progettazione: una bozza lasciata in sospeso troverà quindi le schede obsolete in quel momento. Misura la data di modifica della scheda, la stessa mostrata dalla colonna dell'inventario e dalla cronologia della scheda.
 
 ### Domande
 
@@ -71,6 +72,11 @@ Una volta che il vostro sondaggio è in stato **Active**:
 1. Cliccate su **Invia** per distribuire il sondaggio
 2. Ogni card target genera un todo per gli stakeholder assegnati
 3. Gli stakeholder vedono il sondaggio nella scheda **I miei sondaggi** nella [pagina Attività](../guide/tasks.md)
+4. Ogni stakeholder riceve **una** notifica — e una sola e-mail, se abilitata — indipendentemente da quante sue schede rientrano nel sondaggio; l'e-mail elenca quelle schede, ciascuna con un collegamento diretto al modulo di risposta
+
+!!! note "Una scheda ha bisogno di qualcuno a cui chiedere"
+
+    Una scheda viene inclusa nell'indagine solo se almeno una persona vi ricopre uno dei **ruoli di stakeholder selezionati**. Le schede che corrispondono ai filtri ma non hanno tale stakeholder vengono saltate; il passaggio **Anteprima e invio** ne riporta il numero, così potete assegnare i responsabili.
 
 ## Visualizzazione dei risultati
 

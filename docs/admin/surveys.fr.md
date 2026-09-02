@@ -34,11 +34,12 @@ Sélectionnez le type de fiche auquel l'enquête s'applique (par ex. Application
 
 ### Filtres
 
-Réduisez éventuellement le périmètre à l'aide de filtres. Trois types de filtres sont disponibles et peuvent être combinés :
+Réduisez éventuellement le périmètre à l'aide de filtres. Quatre types de filtres sont disponibles et peuvent être combinés :
 
 - **Fiches spécifiques** — Sélectionnez directement une ou plusieurs fiches (limitées au type cible). Utile pour cibler une fiche unique ou un sous-ensemble choisi à la main.
 - **Fiches liées à** — Inclure uniquement les fiches qui ont une relation avec l'un des éléments listés (par ex. toutes les applications liées à l'organisation Ventes).
 - **Tags** et **filtres d'attributs** — Faire correspondre les fiches par tag ou par condition d'attribut (par ex. coût supérieur à 10 000, note TIME manquante).
+- **Dernière mise à jour** — N'inclure que les fiches que personne n'a modifiées depuis un certain temps : 30 jours, 90 jours, 6 mois, 1 an, ou un nombre de jours ou de mois personnalisé. Le générateur affiche la date limite correspondante au fur et à mesure de votre choix. La fenêtre est relative à la date d'**envoi**, et non à celle de la conception : un brouillon laissé de côté trouvera donc les fiches obsolètes à ce moment-là. Elle mesure la date de modification de la fiche — celle-là même qu'affichent la colonne de l'inventaire et l'historique de la fiche.
 
 ### Questions
 
@@ -71,6 +72,11 @@ Une fois votre enquête en statut **Active** :
 1. Cliquez sur **Envoyer** pour distribuer l'enquête
 2. Chaque fiche ciblée génère une tâche pour les parties prenantes assignées
 3. Les parties prenantes voient l'enquête dans leur onglet **Mes enquêtes** sur la [page Tâches](../guide/tasks.md)
+4. Chaque partie prenante reçoit **une seule** notification — et un seul e-mail, s'il est activé — quel que soit le nombre de ses fiches concernées ; l'e-mail liste ces fiches, chacune renvoyant directement à son formulaire de réponse
+
+!!! note "Une fiche a besoin de quelqu'un à interroger"
+
+    Une fiche n'est incluse dans l'enquête que si au moins une personne y détient l'un des **rôles de partie prenante ciblés**. Les fiches qui correspondent à vos filtres sans une telle partie prenante sont ignorées ; l'étape **Aperçu et envoi** en indique le nombre, afin que vous puissiez affecter des responsables.
 
 ## Consultation des résultats
 

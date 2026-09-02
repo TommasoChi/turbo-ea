@@ -148,6 +148,8 @@ Stakeholder sind Personen mit einer bestimmten **Rolle** auf dieser Karte. Die v
 
 Stakeholder-Zuweisungen beeinflussen **Berechtigungen**: Die effektiven Berechtigungen eines Benutzers auf einer Karte sind die Kombination aus seiner anwendungsweiten Rolle und allen Stakeholder-Rollen, die er auf dieser Karte innehat.
 
+Wenn für eine Rolle im Metamodell eine **Farbe** festgelegt ist, wird ihre Gruppe damit gekennzeichnet, sodass Sie einen Eigentümer auf einen Blick von einem Beobachter unterscheiden können.
+
 ### Suchen und einladen
 
 Wähle einen Stakeholder über das **durchsuchbare Autocomplete** — beginne zu tippen und das Dropdown filtert sowohl nach Name als auch nach E-Mail (die E-Mail erscheint als sekundäre Zeile, sodass zwei Nutzer mit demselben Namen auf einen Blick unterschieden werden können).
@@ -161,6 +163,8 @@ Der Einladungspfad erfordert die **`users.invite`**-Berechtigung, eine delegiert
 ![Kartenänderungsverlauf](../assets/img/de/08_karten_historie.png)
 
 Zeigt die **vollständige Historie** der an der Karte vorgenommenen Änderungen: **Wer** hat die Änderung vorgenommen, **wann** wurde sie durchgeführt und **was** wurde geändert (vorheriger Wert vs. neuer Wert). Dies ermöglicht die vollständige Nachverfolgbarkeit aller Änderungen über die Zeit.
+
+Alles, was das Datum **Geändert** der Karte verschiebt, erscheint hier — eine manuelle Bearbeitung, ein Tabellen-Import, eine Plattform-Migration oder ServiceNow-Synchronisierung, eine Tag-Änderung, eine Massenbearbeitung oder eine Hierarchie-Verschiebung, die diese Karte mitgezogen hat. Systemseitige Wartung ändert beides nicht: Die Neuberechnung von Datenqualitätswerten, das erneute Ausführen berechneter Felder sowie das Nachfüllen von Hierarchieebenen oder Karten-IDs lassen Historie und **Geändert**-Datum unberührt.
 
 ## ADRs-Tab
 

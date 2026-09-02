@@ -34,11 +34,12 @@ Wählen Sie aus, auf welchen Kartentyp sich die Umfrage bezieht (z.B. Anwendung,
 
 ### Filter
 
-Schränken Sie den Umfang optional über Filter ein. Drei Filtertypen lassen sich beliebig kombinieren:
+Schränken Sie den Umfang optional über Filter ein. Vier Filtertypen lassen sich beliebig kombinieren:
 
 - **Bestimmte Karten** — Wählen Sie eine oder mehrere Karten direkt aus (eingeschränkt auf den gewählten Zieltyp). Geeignet, um eine einzelne oder eine handverlesene Auswahl von Karten anzusprechen.
 - **Mit Karten verknüpft** — Nur Karten einbeziehen, die eine Beziehung zu einem der aufgeführten Elemente haben (z. B. alle Anwendungen, die mit der Organisation Vertrieb verknüpft sind).
 - **Tags** und **Attributfilter** — Karten anhand von Tags oder Attributbedingungen treffen (z. B. Kosten größer als 10 000, TIME-Bewertung fehlt).
+- **Letzte Änderung** — Nur Karten einbeziehen, die seit Längerem niemand geändert hat: 30 Tage, 90 Tage, 6 Monate, 1 Jahr oder eine eigene Anzahl von Tagen oder Monaten. Der Builder zeigt bei der Auswahl das resultierende Stichtagsdatum an. Das Zeitfenster bezieht sich auf den Zeitpunkt des **Versands**, nicht auf den der Erstellung — ein länger liegen gebliebener Entwurf findet also weiterhin die dann veralteten Karten. Gemessen wird das Änderungsdatum der Karte — dasselbe, das die Inventarspalte und der Verlauf der Karte anzeigen.
 
 ### Fragen
 
@@ -71,6 +72,11 @@ Sobald Ihre Umfrage im Status **Aktiv** ist:
 1. Klicken Sie auf **Senden**, um die Umfrage zu verteilen
 2. Für jede Zielkarte wird eine Aufgabe für die zugewiesenen Stakeholder generiert
 3. Stakeholder sehen die Umfrage in ihrem Tab **Meine Umfragen** auf der [Aufgabenseite](../guide/tasks.md)
+4. Jeder Stakeholder erhält **eine** Benachrichtigung — und, sofern aktiviert, eine E-Mail —, unabhängig davon, wie viele seiner Karten in der Umfrage sind; die E-Mail listet diese Karten auf und verlinkt jede direkt auf ihr Antwortformular
+
+!!! note "Eine Karte braucht jemanden zum Fragen"
+
+    Eine Karte wird nur befragt, wenn mindestens eine Person eine der **Ziel-Stakeholder-Rollen** auf ihr innehat. Karten, die Ihren Filtern entsprechen, aber keinen solchen Stakeholder haben, werden übersprungen. Der Schritt **Vorschau & Senden** nennt deren Anzahl, damit Sie Verantwortliche zuweisen können.
 
 ## Ergebnisse anzeigen
 

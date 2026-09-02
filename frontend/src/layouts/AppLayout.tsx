@@ -17,7 +17,9 @@ import Badge from "@mui/material/Badge";
 import Button from "@mui/material/Button";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import Alert from "@mui/material/Alert";
 import Divider from "@mui/material/Divider";
+import Snackbar from "@mui/material/Snackbar";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Drawer from "@mui/material/Drawer";
@@ -50,19 +52,18 @@ import { useEnabledLocales } from "@/hooks/useEnabledLocales";
 import SearchDialog from "@/components/SearchDialog";
 import {
   getExtensionNavGroups,
+  EXTENSION_NAV_GROUPS,
   getExtensionRoutesForGroup,
   useExtensionUI,
 } from "@/lib/extensionHost";
 import CreateCardDialog from "@/components/CreateCardDialog";
+import {
+  ADMIN_ITEM_DEFS,
+  NAV_ITEM_DEFS,
+  type NavItemDef,
+} from "@/layouts/navItems";
+import { canAccessPath, permissionForPath } from "@/lib/routePermissions";
 import type { BadgeCounts, Card } from "@/types";
-
-interface NavItemDef {
-  labelKey: string;
-  icon: string;
-  path?: string;
-  children?: { labelKey: string; icon: string; path: string; permission?: string | string[] }[];
-  permission?: string | string[];
-}
 
 interface NavItem {
   label: string;
@@ -71,57 +72,6 @@ interface NavItem {
   children?: { label: string; icon: string; path: string; permission?: string | string[] }[];
   permission?: string | string[];
 }
-
-const NAV_ITEM_DEFS: NavItemDef[] = [
-  { labelKey: "dashboard", icon: "dashboard", path: "/" },
-  { labelKey: "inventory", icon: "inventory_2", path: "/inventory", permission: "inventory.view" },
-  {
-    labelKey: "reports",
-    icon: "analytics",
-    permission: "reports.ea_dashboard",
-    children: [
-      { labelKey: "reports.portfolio", icon: "dashboard", path: "/reports/portfolio" },
-      { labelKey: "reports.flexiblePortfolio", icon: "dashboard_customize", path: "/reports/flexible-portfolio" },
-      { labelKey: "reports.capabilityMap", icon: "grid_view", path: "/reports/capability-map" },
-      { labelKey: "reports.lifecycle", icon: "timeline", path: "/reports/lifecycle" },
-      { labelKey: "reports.dependencies", icon: "hub", path: "/reports/dependencies" },
-      { labelKey: "reports.cost", icon: "payments", path: "/reports/cost", permission: "costs.view" },
-      { labelKey: "reports.matrix", icon: "table_chart", path: "/reports/matrix" },
-      { labelKey: "reports.dataQuality", icon: "verified", path: "/reports/data-quality" },
-      { labelKey: "reports.endOfLife", icon: "update", path: "/reports/eol" },
-      // EA Delivery lives inside /ppm as a tab when PPM is enabled. When PPM
-      // is disabled the nav memo below promotes EA Delivery to a top-level
-      // nav item (in PPM's old slot) so the surface stays reachable.
-      { labelKey: "reports.saved", icon: "bookmarks", path: "/reports/saved" },
-    ],
-  },
-  {
-    labelKey: "strategyProcess",
-    icon: "route",
-    // No group-level permission gate: bpm.view and (extension) permissions
-    // like ext.value-chain.view are independent, so a user could have
-    // either without the other. The group is hidden entirely if permission
-    // filtering leaves it with zero children — see navItems below.
-    children: [{ labelKey: "bpm", icon: "route", path: "/bpm", permission: "bpm.view" }],
-  },
-  {
-    labelKey: "appData",
-    icon: "apps",
-    children: [],
-  },
-  { labelKey: "ppm", icon: "view_timeline", path: "/ppm", permission: "ppm.view" },
-  { labelKey: "diagrams", icon: "schema", path: "/diagrams", permission: "diagrams.view" },
-  { labelKey: "grc", icon: "policy", path: "/grc", permission: "grc.view" },
-  { labelKey: "todos", icon: "checklist", path: "/todos" },
-];
-
-const ADMIN_ITEM_DEFS: NavItemDef[] = [
-  { labelKey: "admin.metamodel", icon: "settings_suggest", path: "/admin/metamodel", permission: "admin.metamodel" },
-  { labelKey: "admin.usersAndRoles", icon: "group", path: "/admin/users", permission: "admin.users" },
-  { labelKey: "admin.surveys", icon: "assignment", path: "/admin/surveys", permission: "surveys.manage" },
-  { labelKey: "admin.extensions", icon: "extension", path: "/admin/extensions", permission: "admin.manage_extensions" },
-  { labelKey: "admin.settings", icon: "settings", path: "/admin/settings", permission: "admin.settings" },
-];
 
 interface PermissionMap {
   [key: string]: boolean;
@@ -227,7 +177,6 @@ export default function AppLayout({ children, user, onLogout }: Props) {
         labelKey: "delivery",
         icon: "architecture",
         path: "/reports/ea-delivery",
-        permission: "soaw.view",
       };
       const diagramsIdx = items.findIndex((i) => i.labelKey === "diagrams");
       const insertAt = diagramsIdx >= 0 ? diagramsIdx : items.length;
@@ -255,25 +204,59 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       return can(perm);
     };
 
-    // Inject extension routes that requested the Reports group as children of
-    // the Reports menu (desktop dropdown + mobile drawer both read `children`).
-    // Placed before the "saved" entry so they sit with the core reports. Labels
-    // are plain strings from the bundle, so t() falls through to them.
-    const reportExtChildren = getExtensionRoutesForGroup("reports").map(({ route }) => ({
-      labelKey: route.label,
-      icon: route.icon,
-      path: route.path,
-      permission: route.permission,
-    }));
-    if (reportExtChildren.length) {
+    // A nav entry that points at a route inherits that route's permission from
+    // ROUTE_PERMISSIONS, so the menu and the router can never disagree. An
+    // explicit `permission` still wins — that is how the pathless Reports group
+    // and extension-contributed entries carry their own.
+    const hasNavPerm = (def: { path?: string; permission?: string | string[] }) => {
+      if (def.permission) return hasPerm(def.permission);
+      if (def.path) return hasPerm(permissionForPath(def.path));
+      return true;
+    };
+
+    // Inject extension routes that requested a core nav group as children of
+    // that group's menu (desktop dropdown + mobile drawer both read `children`).
+    // Reports places them before the "saved" entry so they sit with the core
+    // reports; other groups append. Labels are plain strings from the bundle,
+    // so t() falls through to them.
+    //
+    // A group whose nav item is absent for this user — the module is off, or
+    // they lack its permission — would otherwise swallow the route entirely, so
+    // those fall back to a TOP-LEVEL entry: a licensed extension page stays
+    // reachable whatever a core module toggle says.
+    const groupedFallbacks: NavItemDef[] = [];
+    for (const group of EXTENSION_NAV_GROUPS) {
+      const groupRoutes = getExtensionRoutesForGroup(group).map(({ route }) => ({
+        labelKey: route.label,
+        icon: route.icon,
+        path: route.path,
+        permission: route.permission,
+      }));
+      if (!groupRoutes.length) continue;
+      const host = items.find((item) => item.labelKey === group);
+      // The permission check matters here, not only below: injecting into a
+      // host that the final filter then drops would swallow the route silently.
+      // Via hasNavPerm, so a core host whose permission is derived from
+      // ROUTE_PERMISSIONS rather than declared inline is still checked.
+      if (!host || !hasNavPerm(host)) {
+        groupedFallbacks.push(...groupRoutes);
+        continue;
+      }
       items = items.map((item) => {
-        if (item.labelKey !== "reports") return item;
+        if (item.labelKey !== group) return item;
         const kids = [...(item.children || [])];
+        // A group that is itself a page (GRC) turns into a dropdown the moment
+        // it gains children, so seed its own link as the first entry or the
+        // page becomes unreachable from the nav.
+        if (item.path && !kids.some((c) => c.path === item.path)) {
+          kids.unshift({ labelKey: item.labelKey, icon: item.icon, path: item.path });
+        }
         const savedIdx = kids.findIndex((c) => c.path === "/reports/saved");
-        kids.splice(savedIdx >= 0 ? savedIdx : kids.length, 0, ...reportExtChildren);
+        kids.splice(savedIdx >= 0 ? savedIdx : kids.length, 0, ...groupRoutes);
         return { ...item, children: kids };
       });
     }
+    items = [...items, ...groupedFallbacks];
 
     // Same idea for the Strategy & Process dropdown (BPM + extensions like
     // Value Chain that plug in alongside it).
@@ -347,45 +330,60 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       }
     }
 
-    const resolve = (def: NavItemDef): NavItem => ({
-      ...def,
-      label: t(def.labelKey),
-      children: def.children
-        ?.filter((c) => hasPerm(c.permission))
-        .map((c) => ({ ...c, label: t(c.labelKey) })),
-    });
+    const resolve = (def: NavItemDef): NavItem => {
+      const children = def.children
+        ?.filter((c) => hasNavPerm(c))
+        .map((c) => ({ ...c, label: t(c.labelKey) }));
+      return {
+        ...def,
+        label: t(def.labelKey),
+        // Normalise an empty list to undefined: a group host whose children are
+        // all filtered out (or that has none installed) renders as a plain link
+        // rather than a dropdown that opens onto nothing.
+        children: children && children.length ? children : undefined,
+      };
+    };
 
-    return items
-      .filter((item) => hasPerm(item.permission))
-      .map(resolve)
-      // A dropdown group (e.g. Strategy & Process) whose children all got
-      // permission-filtered out (or whose only core child is BPM and BPM is
-      // disabled) has nothing to show — drop the group itself rather than
-      // rendering an empty menu trigger. Leaf items (children === undefined)
-      // are untouched.
-      .filter((item) => item.children === undefined || item.children.length > 0);
+    return items.filter((item) => hasNavPerm(item)).map(resolve);
   }, [bpmEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, t]);
 
   // Resolve admin item labels via i18n and filter based on permissions
   const adminItems = useMemo(() => {
-    return ADMIN_ITEM_DEFS.filter((item) => {
-      if (!item.permission) return true;
-      if (Array.isArray(item.permission)) return item.permission.some((p) => can(p));
-      return can(item.permission);
-    }).map((def) => ({ ...def, label: t(def.labelKey) }));
-  }, [can, t]);
+    return ADMIN_ITEM_DEFS.filter((item) =>
+      canAccessPath(user.permissions, item.path ?? "/"),
+    ).map((def) => ({ ...def, label: t(def.labelKey) }));
+  }, [user.permissions, t]);
 
   // Should the admin section be shown at all?
   const showAdmin = adminItems.length > 0;
 
+  // A deep link the user asked for before signing in, that their role cannot
+  // actually open — SsoCallback lands them here and leaves the path in router
+  // state. Copied into local state so the message survives clearing that
+  // state, and cleared immediately so a refresh cannot resurrect it.
+  const [deniedPath, setDeniedPath] = useState<string | null>(null);
+  const deniedFromState = (location.state as { deniedPath?: string } | null)?.deniedPath;
+  useEffect(() => {
+    if (!deniedFromState) return;
+    setDeniedPath(deniedFromState);
+    navigate(location.pathname + location.search, { replace: true, state: null });
+  }, [deniedFromState, location.pathname, location.search, navigate]);
+
+  // Reference Catalogue links, gated by the same table as their routes.
+  const canOpen = useCallback(
+    (path: string) => canAccessPath(user.permissions, path),
+    [user.permissions],
+  );
+  const canOpenAnyCatalogue =
+    canOpen("/capability-catalogue") ||
+    canOpen("/process-catalogue") ||
+    canOpen("/value-stream-catalogue") ||
+    canOpen("/principles-catalogue");
+
   const [userMenu, setUserMenu] = useState<HTMLElement | null>(null);
-  // Which dropdown group's desktop Menu is open, if any — tracks both the
-  // anchor element and the item itself (not just an id) so the Menu can
-  // render the RIGHT group's children. Now that there's more than one
-  // dropdown group (Reports, Strategy & Process), a single anchor-only
-  // state + "find the first item with children" would always render
-  // whichever group happens to be first, regardless of which was clicked.
-  const [openNavMenu, setOpenNavMenu] = useState<{ anchorEl: HTMLElement; item: NavItem } | null>(null);
+  // Anchor AND which group opened it — one shared anchor rendered the first
+  // group-with-children's items under whichever group you clicked.
+  const [navMenu, setNavMenu] = useState<{ el: HTMLElement; group: string } | null>(null);
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [impersonateDialogOpen, setImpersonateDialogOpen] = useState(false);
   const [stopImpersonatingBusy, setStopImpersonatingBusy] = useState(false);
@@ -407,11 +405,8 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   // from any route without navigating to /inventory first.
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // Per-group collapse state, keyed by item.label (same key already used for
-  // React's own `key` prop on these items) — was a single shared boolean,
-  // which would expand/collapse every dropdown group in lockstep now that
-  // there's more than one (Reports, Strategy & Process).
-  const [drawerOpenGroups, setDrawerOpenGroups] = useState<Record<string, boolean>>({});
+  // Keyed by group label — a single boolean expanded every group together.
+  const [drawerGroupOpen, setDrawerGroupOpen] = useState<Record<string, boolean>>({});
   const [drawerAdminOpen, setDrawerAdminOpen] = useState(false);
   const [notifPrefsOpen, setNotifPrefsOpen] = useState(false);
   const [sponsorshipOpen, setSponsorshipOpen] = useState(false);
@@ -493,6 +488,10 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       },
       [debouncedBadgeRefresh],
     ),
+    // Same reasoning as the bell: events missed while the stream was down are
+    // gone, so re-read the counts on reconnect instead of waiting for the next
+    // navigation.
+    debouncedBadgeRefresh,
   );
 
   // Also refresh when navigating (covers completing a todo, responding to a survey)
@@ -609,7 +608,9 @@ export default function AppLayout({ children, user, onLogout }: Props) {
           item.children ? (
             <Box key={item.label}>
               <ListItemButton
-                onClick={() => setDrawerOpenGroups((prev) => ({ ...prev, [item.label]: !prev[item.label] }))}
+                onClick={() =>
+                  setDrawerGroupOpen((p) => ({ ...p, [item.label]: !p[item.label] }))
+                }
                 sx={{
                   borderRadius: 1,
                   color: isGroupActive(item.children) ? nav.fg : nav.fgMuted,
@@ -621,12 +622,12 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                 </ListItemIcon>
                 <ListItemText primary={renderMultilineLabel(item.label)} />
                 <MaterialSymbol
-                  icon={drawerOpenGroups[item.label] ? "expand_less" : "expand_more"}
+                  icon={drawerGroupOpen[item.label] ? "expand_less" : "expand_more"}
                   size={18}
                   color="inherit"
                 />
               </ListItemButton>
-              <Collapse in={!!drawerOpenGroups[item.label]}>
+              <Collapse in={!!drawerGroupOpen[item.label]}>
                 <List disablePadding sx={{ pl: 2 }}>
                   {item.children.map((child) => (
                     <ListItemButton
@@ -789,7 +790,20 @@ export default function AppLayout({ children, user, onLogout }: Props) {
 
           {/* Desktop / tablet nav items */}
           {!isMobile && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                // Shrinkable + scrollable: with enough installed extensions the
+                // nav used to push the notification bell and user menu off the
+                // right edge (everything else in the toolbar is flexShrink: 0).
+                minWidth: 0,
+                overflowX: "auto",
+                scrollbarWidth: "none",
+                "&::-webkit-scrollbar": { display: "none" },
+              }}
+            >
               {navItems.map((item) =>
                 item.children ? (
                   isCompact ? (
@@ -797,7 +811,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                       <IconButton
                         size="small"
                         sx={{ color: isGroupActive(item.children) ? nav.fg : nav.fgMuted }}
-                        onClick={(e) => setOpenNavMenu({ anchorEl: e.currentTarget, item })}
+                        onClick={(e) => setNavMenu({ el: e.currentTarget, group: item.label })}
                       >
                         <MaterialSymbol icon={item.icon} size={20} />
                       </IconButton>
@@ -809,7 +823,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                       startIcon={<MaterialSymbol icon={item.icon} size={18} />}
                       endIcon={<MaterialSymbol icon="expand_more" size={16} />}
                       sx={navBtnSx(isGroupActive(item.children))}
-                      onClick={(e) => setOpenNavMenu({ anchorEl: e.currentTarget, item })}
+                      onClick={(e) => setNavMenu({ el: e.currentTarget, group: item.label })}
                     >
                       {renderMultilineLabel(item.label)}
                     </Button>
@@ -851,16 +865,15 @@ export default function AppLayout({ children, user, onLogout }: Props) {
             </Box>
           )}
 
-          {/* Dropdown menu shared by every nav group (Reports, Strategy &
-              Process, …) — only one can be open at a time, so a single Menu
-              rendering whichever item's children are in openNavMenu is
-              simpler than one Menu per group. */}
+          {/* Nav group dropdown menu (Reports, GRC, …) */}
           <Menu
-            anchorEl={openNavMenu?.anchorEl ?? null}
-            open={!!openNavMenu}
-            onClose={() => setOpenNavMenu(null)}
+            anchorEl={navMenu?.el ?? null}
+            open={!!navMenu}
+            onClose={() => setNavMenu(null)}
           >
-            {openNavMenu?.item.children?.map((child, idx) => {
+            {navItems
+              .find((n) => n.children && n.label === navMenu?.group)
+              ?.children?.map((child, idx) => {
               const needsDivider =
                 child.path === "/reports/saved" || child.path === "/turbolens";
               return (
@@ -870,7 +883,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                     component={RouterLink}
                     to={child.path}
                     selected={isActive(child.path)}
-                    onClick={() => setOpenNavMenu(null)}
+                    onClick={() => setNavMenu(null)}
                   >
                     <ListItemIcon>
                       <MaterialSymbol icon={child.icon} size={18} />
@@ -1023,8 +1036,8 @@ export default function AppLayout({ children, user, onLogout }: Props) {
               </ListItemIcon>
               <ListItemText>{t("userMenu.userManual")}</ListItemText>
             </MenuItem>
-            {(can("inventory.view") || can("admin.metamodel")) && <Divider />}
-            {(can("inventory.view") || can("admin.metamodel")) && (
+            {canOpenAnyCatalogue && <Divider />}
+            {canOpenAnyCatalogue && (
               <MenuItem
                 onClick={toggleRefCat}
                 sx={{ minHeight: 32 }}
@@ -1050,7 +1063,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
               </MenuItem>
             )}
             <Collapse in={refCatExpanded} timeout="auto" unmountOnExit>
-              {can("inventory.view") && (
+              {canOpen("/capability-catalogue") && (
                 <MenuItem
                   component={RouterLink}
                   to="/capability-catalogue"
@@ -1063,7 +1076,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                   <ListItemText>{t("userMenu.capabilityCatalogue")}</ListItemText>
                 </MenuItem>
               )}
-              {can("inventory.view") && (
+              {canOpen("/process-catalogue") && (
                 <MenuItem
                   component={RouterLink}
                   to="/process-catalogue"
@@ -1076,7 +1089,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                   <ListItemText>{t("userMenu.processCatalogue")}</ListItemText>
                 </MenuItem>
               )}
-              {can("inventory.view") && (
+              {canOpen("/value-stream-catalogue") && (
                 <MenuItem
                   component={RouterLink}
                   to="/value-stream-catalogue"
@@ -1089,7 +1102,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                   <ListItemText>{t("userMenu.valueStreamCatalogue")}</ListItemText>
                 </MenuItem>
               )}
-              {can("admin.metamodel") && (
+              {canOpen("/principles-catalogue") && (
                 <MenuItem
                   component={RouterLink}
                   to="/principles-catalogue"
@@ -1299,6 +1312,21 @@ export default function AppLayout({ children, user, onLogout }: Props) {
         )}
         <Box sx={{ p: { xs: 1.5, sm: 3 } }}>{children}</Box>
       </Box>
+      <Snackbar
+        open={!!deniedPath}
+        autoHideDuration={6000}
+        onClose={() => setDeniedPath(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="info"
+          variant="filled"
+          onClose={() => setDeniedPath(null)}
+          sx={{ width: "100%" }}
+        >
+          {t("common:accessDenied.redirectedToDashboard")}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

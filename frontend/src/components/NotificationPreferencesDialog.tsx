@@ -16,39 +16,35 @@ import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
 import { api } from "@/api/client";
-import type { NotificationPreferences } from "@/types";
+import { ExtensionSlot, useExtensionSlots } from "@/lib/extensionHost";
+import { useAuthContext } from "@/hooks/AuthContext";
+import type { NotificationPreferences, NotificationTypeSpec } from "@/types";
 
-interface NotificationTypeRow {
-  key: string;
-  labelKey: string;
-  /** Email cannot be switched off — the type always mails. */
-  forceEmail?: boolean;
-  /** Email is not offered at all; the switch renders off and disabled. */
-  noEmail?: boolean;
+/**
+ * `todo_assigned` -> `preferences.todoAssigned`.
+ *
+ * The row list comes from the server so the two can no longer drift, but the
+ * labels stay in the frontend bundle where the translations live. A type with
+ * no label yet falls back to its key rather than rendering blank, which makes
+ * a missing translation obvious instead of invisible.
+ */
+function labelKeyFor(typeKey: string): string {
+  const camel = typeKey.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+  return `preferences.${camel}`;
 }
 
-const NOTIFICATION_TYPES: NotificationTypeRow[] = [
-  { key: "todo_assigned", labelKey: "preferences.todoAssigned" },
-  { key: "task_assigned", labelKey: "preferences.taskAssigned" },
-  { key: "card_updated", labelKey: "preferences.cardUpdated" },
-  { key: "comment_added", labelKey: "preferences.commentAdded" },
-  { key: "approval_status_changed", labelKey: "preferences.approvalStatusChanged" },
-  { key: "soaw_sign_requested", labelKey: "preferences.soawSignRequested" },
-  { key: "soaw_signed", labelKey: "preferences.soawSigned" },
-  { key: "survey_request", labelKey: "preferences.surveyRequest", forceEmail: true },
-  // Only ever sent to users whose role can act on it (admin.settings); listed
-  // for everyone the same way SoAW rows are, since roles change over time.
-  { key: "app_update_available", labelKey: "preferences.appUpdateAvailable" },
-  // In-app only: this one goes to every user on every upgrade, so an email
-  // channel would make each patch release a mass mailing. The backend enforces
-  // it via IN_APP_ONLY_TYPES; the disabled switch is the visible half.
-  { key: "app_updated", labelKey: "preferences.appUpdated", noEmail: true },
-  // Only ever sent to users whose role can act on them (admin.manage_extensions).
-  // Email stays a real opt-in rather than a mass mailing, so unlike app_updated
-  // these keep their email switch.
-  { key: "extension_available", labelKey: "preferences.extensionAvailable" },
-  { key: "extension_update_available", labelKey: "preferences.extensionUpdateAvailable" },
-];
+/** A column an extension delivers notifications on, ready to render. */
+interface ChannelColumn {
+  key: string;
+  label: string;
+  order: number;
+}
+
+/** What a `notification.preferences.channels` data slot may return. */
+interface ChannelSlotMeta {
+  label?: string;
+  order?: number;
+}
 
 interface Props {
   open: boolean;
@@ -57,6 +53,7 @@ interface Props {
 
 export default function NotificationPreferencesDialog({ open, onClose }: Props) {
   const { t } = useTranslation(["notifications", "common"]);
+  const { user } = useAuthContext();
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,6 +70,33 @@ export default function NotificationPreferencesDialog({ open, onClose }: Props) 
       .finally(() => setLoading(false));
   }, [open]);
 
+  const types: NotificationTypeSpec[] = prefs?.types ?? [];
+  const slotColumns = useExtensionSlots("notification.preferences.channels");
+
+  /**
+   * A channel column needs BOTH halves: the backend must report the channel
+   * as live (it decides whether a PATCH for it is honoured) and a slot
+   * supplies the localized label. Backend-only still renders, under the raw
+   * key, so a channel that is genuinely delivering is never unswitchable.
+   * Slot-only renders nothing — a UI bundle installs live while a backend
+   * channel needs a restart, and a column the backend would ignore is worse
+   * than no column at all.
+   */
+  const channels: ChannelColumn[] = (prefs?.available_channels ?? [])
+    .map((c) => {
+      const hit = slotColumns.find((s) => s.contribution.id === c.key);
+      let meta: ChannelSlotMeta = {};
+      try {
+        meta = (hit?.contribution.build?.({ channelKey: c.key }) ?? {}) as ChannelSlotMeta;
+      } catch {
+        // Same posture as extension ADR grid columns: a throwing build()
+        // costs its label, never the column or the dialog.
+        meta = {};
+      }
+      return { key: c.key, label: meta.label || c.key, order: meta.order ?? 0 };
+    })
+    .sort((a, b) => a.order - b.order || a.key.localeCompare(b.key));
+
   const toggle = (channel: "in_app" | "email", type: string) => {
     if (!prefs) return;
     setPrefs({
@@ -84,12 +108,32 @@ export default function NotificationPreferencesDialog({ open, onClose }: Props) 
     });
   };
 
+  const toggleChannel = (channelKey: string, type: string) => {
+    if (!prefs) return;
+    const current = prefs.channels ?? {};
+    const forChannel = current[channelKey] ?? {};
+    setPrefs({
+      ...prefs,
+      channels: {
+        ...current,
+        [channelKey]: { ...forChannel, [type]: !forChannel[type] },
+      },
+    });
+  };
+
   const handleSave = async () => {
     if (!prefs) return;
     setSaving(true);
     setError("");
     try {
-      await api.patch("/users/me/notification-preferences", prefs);
+      // Send the opt-ins only. `types` and `available_channels` are
+      // server-owned render metadata that came down on the GET; echoing them
+      // back would be noise on the wire.
+      await api.patch("/users/me/notification-preferences", {
+        in_app: prefs.in_app,
+        email: prefs.email,
+        ...(prefs.channels ? { channels: prefs.channels } : {}),
+      });
       onClose();
     } catch {
       setError(t("preferences.saveFailed"));
@@ -99,7 +143,7 @@ export default function NotificationPreferencesDialog({ open, onClose }: Props) 
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth={channels.length ? "md" : "sm"} fullWidth>
       <DialogTitle>{t("preferences.title")}</DialogTitle>
       <DialogContent>
         {error && (
@@ -128,31 +172,57 @@ export default function NotificationPreferencesDialog({ open, onClose }: Props) 
                   <TableCell align="center" sx={{ fontWeight: 600 }}>
                     {t("preferences.email")}
                   </TableCell>
+                  {channels.map((ch) => (
+                    <TableCell key={ch.key} align="center" sx={{ fontWeight: 600 }}>
+                      {ch.label}
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {NOTIFICATION_TYPES.map((nt) => (
+                {types.map((nt) => (
                   <TableRow key={nt.key}>
-                    <TableCell>{t(nt.labelKey)}</TableCell>
+                    <TableCell>{t(labelKeyFor(nt.key), nt.key)}</TableCell>
                     <TableCell align="center">
                       <Switch
                         size="small"
-                        checked={prefs.in_app[nt.key] ?? true}
+                        checked={prefs.in_app[nt.key] ?? nt.in_app_default}
                         onChange={() => toggle("in_app", nt.key)}
                       />
                     </TableCell>
                     <TableCell align="center">
                       <Switch
                         size="small"
-                        checked={!nt.noEmail && (nt.forceEmail || (prefs.email[nt.key] ?? false))}
+                        checked={
+                          !nt.in_app_only &&
+                          (nt.email_locked || (prefs.email[nt.key] ?? nt.email_default))
+                        }
                         onChange={() => toggle("email", nt.key)}
-                        disabled={nt.forceEmail || nt.noEmail}
+                        disabled={nt.email_locked || nt.in_app_only}
                       />
                     </TableCell>
+                    {channels.map((ch) => (
+                      <TableCell key={ch.key} align="center">
+                        <Switch
+                          size="small"
+                          // Extension channels are always opt-in-off: no
+                          // per-type default can raise them, so an install
+                          // never starts delivering on its own.
+                          checked={!nt.in_app_only && (prefs.channels?.[ch.key]?.[nt.key] ?? false)}
+                          onChange={() => toggleChannel(ch.key, nt.key)}
+                          disabled={nt.in_app_only}
+                        />
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+
+            <ExtensionSlot
+              name="notification.preferences.footer"
+              context={{ userId: user?.id }}
+            />
           </>
         ) : null}
       </DialogContent>

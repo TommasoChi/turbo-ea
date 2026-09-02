@@ -4949,6 +4949,17 @@
             ],
             "title": "Last Error"
           },
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -7057,6 +7068,23 @@
       },
       "NotificationPreferencesUpdate": {
         "properties": {
+          "channels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
           "email": {
             "anyOf": [
               {
@@ -13254,6 +13282,11 @@
             "title": "License Url",
             "type": "string"
           },
+          "logo": {
+            "default": "",
+            "title": "Logo",
+            "type": "string"
+          },
           "long_description": {
             "default": "",
             "title": "Long Description",
@@ -17600,6 +17633,28 @@
           }
         },
         "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/proxy/session": {
+      "post": {
+        "description": "Exchange a proxy-asserted identity for a Turbo EA session.\n\nFor instances behind a proxy that has already authenticated the user (Azure\nApp Service EasyAuth, oauth2-proxy, Authelia, Cloudflare Access). No OIDC\nclient and no app registration are needed. See\n``app/services/proxy_auth_service.py`` for the trust model.\n\n**404 when the feature is off**, mirroring the ops API with ``OPS_PUBLIC_KEY``\nunset: an instance that has not opted in should look like one where this\nroute does not exist.\n\nDeliberately an endpoint rather than a branch inside ``get_current_user``.\nThe ``samesite=lax`` cookie is currently the app's CSRF control; making\nauthentication ambient proxy headers would hand that control to the proxy's\nown cookie policy, and oauth2-proxy and Cloudflare Access can both be\nconfigured ``SameSite=None``. Minting a lax cookie at one POST-only route\nkeeps the existing posture, and leaves ``get_optional_user`` alone so\nanonymous portal and embedded-diagram visitors stay anonymous.\n\nDeliberately *not* rate limited: ``get_remote_address`` always resolves to the\nnginx container (uvicorn runs without ``--proxy-headers``), so a limit here\nwould be one shared bucket. It would not slow an attacker, who needs a single\nrequest, and would lock out a whole office once the SPA calls this on load.",
+        "operationId": "proxy_session_api_v1_auth_proxy_session_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Proxy Session",
         "tags": [
           "auth"
         ]
@@ -34646,6 +34701,46 @@
         ]
       }
     },
+    "/api/v1/settings/extension-store-check": {
+      "post": {
+        "description": "Run the extension-store check immediately and report what it found.\n\nWithout this, verifying the daily check means waiting up to a day and then\ninferring the result from whether a notification turned up \u2014 which cannot\ndistinguish \"nothing was new\" from \"the fetch is failing\".\n\nSame three phases as the daily loop, over this request's session rather\nthan sessions of its own: read the toggle, hand the connection back, fetch\nholding nothing, reopen for the writes. It is spelled out here rather than\ndelegated because a helper must never commit a session it was handed, and\nthe loop's entry point owns sessions this request does not have. Honours\nthe notices toggle, so a switched-off instance makes no outbound request\nhere any more than it does on the timer.",
+        "operationId": "run_extension_store_check_now_api_v1_settings_extension_store_check_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Run Extension Store Check Now",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/extension-store-status": {
+      "get": {
+        "description": "Cached result of the last extension-store check, for the Store tab.\n\nThe daily check is otherwise completely silent \u2014 a store that refuses the\nrequest records the reason in the settings row and nowhere else, so an\nadministrator who is not being notified has no way to tell \"nothing was\nnew\" from \"the fetch has been failing for a fortnight\". Gated on\n``admin.settings`` like its ``/update-status`` neighbour, and it serves only\nwhat the daily check already stored; it never reaches out to the store.",
+        "operationId": "get_extension_store_status_api_v1_settings_extension_store_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Extension Store Status",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/v1/settings/favicon": {
       "delete": {
         "description": "Admin endpoint \u2014 reset to the default favicon.",
@@ -38691,6 +38786,7 @@
     },
     "/api/v1/users/me/notification-preferences": {
       "get": {
+        "description": "Stored opt-ins, plus what the dialog needs to render itself.\n\n``types`` is served rather than hardcoded in the frontend because the two\nlists had already drifted: fourteen emitted types appeared in neither, so\nthey could not be configured at all. The dialog renders one row per entry\nhere, so adding a type to ``NOTIFICATION_TYPE_SPECS`` is all it takes.",
         "operationId": "get_notification_preferences_api_v1_users_me_notification_preferences_get",
         "responses": {
           "200": {

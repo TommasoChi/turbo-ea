@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import uuid
 from typing import Literal
 
@@ -13,7 +14,13 @@ from app.core.security import hash_password
 from app.database import get_db
 from app.models.role import Role
 from app.models.sso_invitation import SsoInvitation
-from app.models.user import DEFAULT_NOTIFICATION_PREFERENCES, DEFAULT_UI_PREFERENCES, User
+from app.models.user import (
+    DEFAULT_NOTIFICATION_PREFERENCES,
+    DEFAULT_UI_PREFERENCES,
+    NOTIFICATION_TYPE_SPECS,
+    User,
+)
+from app.services.extensions import notification_channels
 from app.services.permission_service import PermissionService
 from app.services.sso_service import get_sso_config
 
@@ -49,6 +56,14 @@ class UserUpdate(BaseModel):
 class NotificationPreferencesUpdate(BaseModel):
     in_app: dict[str, bool] | None = None
     email: dict[str, bool] | None = None
+    # Extension-delivered channels, namespaced under "channels" so a channel
+    # key can never collide with a core one. Keys for channels that are not
+    # currently registered are IGNORED, not rejected: the dialog sends the
+    # whole object, so a 400 for a channel that de-registered between the GET
+    # and the PATCH would stop the user saving their in-app settings too.
+    # Stored values for such channels are preserved, so an opt-in survives a
+    # license lapse and reappears when the extension comes back.
+    channels: dict[str, dict[str, bool]] | None = None
 
 
 class UiPreferencesUpdate(BaseModel):
@@ -267,7 +282,29 @@ async def delete_invitation(
 async def get_notification_preferences(
     current_user: User = Depends(get_current_user),
 ):
-    return current_user.notification_preferences or DEFAULT_NOTIFICATION_PREFERENCES
+    """Stored opt-ins, plus what the dialog needs to render itself.
+
+    ``types`` is served rather than hardcoded in the frontend because the two
+    lists had already drifted: fourteen emitted types appeared in neither, so
+    they could not be configured at all. The dialog renders one row per entry
+    here, so adding a type to ``NOTIFICATION_TYPE_SPECS`` is all it takes.
+    """
+    prefs = current_user.notification_preferences or DEFAULT_NOTIFICATION_PREFERENCES
+    return {
+        **prefs,
+        "available_channels": notification_channels.channel_descriptors(),
+        "types": [
+            {
+                "key": spec.key,
+                "in_app_default": spec.in_app_default,
+                "email_default": spec.email_default,
+                "in_app_only": spec.in_app_only,
+                "email_locked": spec.email_locked,
+            }
+            for spec in NOTIFICATION_TYPE_SPECS
+            if spec.user_configurable
+        ],
+    }
 
 
 @router.patch("/me/notification-preferences")
@@ -276,12 +313,29 @@ async def update_notification_preferences(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    prefs = dict(current_user.notification_preferences or DEFAULT_NOTIFICATION_PREFERENCES)
+    # deepcopy, not dict(): the column default shares its inner per-channel
+    # dicts with DEFAULT_NOTIFICATION_PREFERENCES, so a nested in-place write
+    # here would edit the module constant for the life of the process.
+    prefs = copy.deepcopy(current_user.notification_preferences or DEFAULT_NOTIFICATION_PREFERENCES)
 
     if body.in_app is not None:
         prefs["in_app"] = {**prefs.get("in_app", {}), **body.in_app}
     if body.email is not None:
         prefs["email"] = {**prefs.get("email", {}), **body.email}
+    if body.channels is not None:
+        live = set(notification_channels.registered_channel_keys())
+        known_types = {spec.key for spec in NOTIFICATION_TYPE_SPECS if spec.user_configurable}
+        stored = dict(prefs.get("channels") or {})
+        for channel_key, values in body.channels.items():
+            if channel_key not in live:
+                continue
+            stored[channel_key] = {
+                **stored.get(channel_key, {}),
+                # Bounded to the types the dialog actually offers, so this
+                # surface cannot be used to grow the JSONB blob arbitrarily.
+                **{t: v for t, v in values.items() if t in known_types},
+            }
+        prefs["channels"] = stored
 
     current_user.notification_preferences = prefs
     await db.commit()

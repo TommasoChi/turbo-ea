@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { Fragment, useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
@@ -11,14 +11,17 @@ import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
+import AlertTitle from "@mui/material/AlertTitle";
 import CircularProgress from "@mui/material/CircularProgress";
+import LinearProgress from "@mui/material/LinearProgress";
 import MuiCard from "@mui/material/Card";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
-import Autocomplete from "@mui/material/Autocomplete";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import Divider from "@mui/material/Divider";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -26,27 +29,39 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import CardPicker, { type CardOption } from "@/components/CardPicker";
+import TagPicker from "@/components/TagPicker";
 import { useExtensionFieldTypes } from "@/lib/extensionHost";
 import { api } from "@/api/client";
-import { useAbortableEffect } from "@/hooks/useLatestRequest";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import {
   useTypeLabel,
   useRelationLabel,
   useFieldLabel,
   useOptionLabel,
+  useResolveLabel,
 } from "@/hooks/useResolveLabel";
 import { FIELD_TYPE_OPTIONS } from "@/features/admin/metamodel/constants";
-import { readableTextColor } from "@/lib/color";
+import { isEnforcedRequiredField } from "@/features/cards/sections/cardDetailUtils";
+import { useDateFormat } from "@/hooks/useDateFormat";
+import {
+  MAX_STALENESS_BY_UNIT,
+  STALENESS_PRESETS,
+  matchStalenessPreset,
+  parseStalenessWindow,
+  stalenessCutoffDate,
+} from "@/lib/staleness";
 import type {
   Survey,
   SurveyField,
   SurveyTargetFilters,
+  FieldDef,
   SurveyPreviewResult,
   Card,
   TagGroup,
   StakeholderRoleDef,
+  StalenessUnit,
+  StalenessWindow,
 } from "@/types";
 
 export default function SurveyBuilder() {
@@ -56,6 +71,7 @@ export default function SurveyBuilder() {
   const { types, relationTypes } = useMetamodel();
   const extFieldTypes = useExtensionFieldTypes();
   const typeLabel = useTypeLabel();
+  const { formatDate } = useDateFormat();
   // An ext.* field whose extension isn't installed+enabled+licensed is absent
   // from the registry — surveying it will degrade to a plain input (and, if the
   // extension is uninstalled, collect into an orphan attribute). Warn the admin.
@@ -64,6 +80,9 @@ export default function SurveyBuilder() {
   const relLabel = useRelationLabel();
   const fieldLabel = useFieldLabel();
   const optLabel = useOptionLabel();
+  // Section names are loose strings on the schema, not entities — the low-level
+  // resolver is the right tool here (there is no section entity to pass).
+  const rl = useResolveLabel();
 
   const STEPS = [
     t("surveyBuilder.steps.basics"),
@@ -93,22 +112,30 @@ export default function SurveyBuilder() {
   const [targetTypeKey, setTargetTypeKey] = useState("");
   const [targetRoles, setTargetRoles] = useState<string[]>([]);
   const [relatedIds, setRelatedIds] = useState<string[]>([]);
-  const [relatedItems, setRelatedItems] = useState<Card[]>([]);
+  const [relatedItems, setRelatedItems] = useState<CardOption[]>([]);
   const [cardIds, setCardIds] = useState<string[]>([]);
-  const [cardItems, setCardItems] = useState<Card[]>([]);
+  const [cardItems, setCardItems] = useState<CardOption[]>([]);
   const [tagIds, setTagIds] = useState<string[]>([]);
-  const [relatedSearch, setRelatedSearch] = useState("");
-  const [relatedOptions, setRelatedOptions] = useState<Card[]>([]);
-  const [cardSearch, setCardSearch] = useState("");
-  const [cardOptions, setCardOptions] = useState<Card[]>([]);
   const [tagGroups, setTagGroups] = useState<TagGroup[]>([]);
   const [roles, setRoles] = useState<StakeholderRoleDef[]>([]);
   const [attributeFilters, setAttributeFilters] = useState<
     { key: string; op: string; value: string }[]
   >([]);
+  // Staleness window. `staleness` is the only thing that reaches
+  // target_filters; the draft/unit pair backs the Custom row and survives
+  // switching to a preset and back, so a typed value isn't lost on a detour.
+  const [staleness, setStaleness] = useState<StalenessWindow | null>(null);
+  const [stalenessCustom, setStalenessCustom] = useState(false);
+  const [stalenessDraft, setStalenessDraft] = useState("180");
+  const [stalenessUnit, setStalenessUnit] = useState<StalenessUnit>("days");
 
   // Step 3 — Fields
   const [selectedFields, setSelectedFields] = useState<SurveyField[]>([]);
+  // Per-section maintain/confirm default. Only what the author explicitly chose
+  // lives here; the control's displayed value is derived below.
+  const [sectionActions, setSectionActions] = useState<
+    Record<string, "maintain" | "confirm">
+  >({});
 
   // Step 4 — Preview
   const [preview, setPreview] = useState<SurveyPreviewResult | null>(null);
@@ -129,6 +156,15 @@ export default function SurveyBuilder() {
         setCardIds(s.target_filters?.card_ids || []);
         setTagIds(s.target_filters?.tag_ids || []);
         setAttributeFilters(s.target_filters?.attribute_filters || []);
+        // Through the parser, not a cast: a window stored by an extension
+        // template or edited by hand degrades to "Any" rather than rendering NaN.
+        const stored = parseStalenessWindow(s.target_filters?.not_updated_for);
+        setStaleness(stored);
+        setStalenessCustom(stored !== null && matchStalenessPreset(stored) === "custom");
+        if (stored) {
+          setStalenessDraft(String(stored.value));
+          setStalenessUnit(stored.unit);
+        }
         setSelectedFields(s.fields || []);
         setSurveyId(s.id);
       } catch (e) {
@@ -140,80 +176,51 @@ export default function SurveyBuilder() {
     load();
   }, [id]);
 
-  // Load tag groups and roles
   useEffect(() => {
     api.get<TagGroup[]>("/tag-groups").then(setTagGroups).catch(() => {});
-    api.get<StakeholderRoleDef[]>("/stakeholder-roles").then(setRoles).catch(() => {});
   }, []);
 
-  // Search cards for related filter. `clearTimeout` only cancelled the timer —
-  // once a request was dispatched nothing stopped a stale response from
-  // replacing newer results (#882).
-  const [debouncedRelatedSearch] = useDebouncedValue(relatedSearch, 300);
-  useAbortableEffect(
-    async ({ signal, isCurrent }) => {
-      try {
-        const params = new URLSearchParams({ page_size: "20" });
-        if (debouncedRelatedSearch) params.set("search", debouncedRelatedSearch);
-        const res = await api.get<{ items: Card[] }>(`/cards?${params.toString()}`, { signal });
-        if (!isCurrent()) return;
-        setRelatedOptions(res.items);
-      } catch {
-        // ignore — empty option list
-      }
-    },
-    [debouncedRelatedSearch],
-  );
-
-  // Search cards for the "specific cards" picker — restricted to the target type
-  const [debouncedCardSearch] = useDebouncedValue(cardSearch, 300);
-  useAbortableEffect(
-    async ({ signal, isCurrent }) => {
-      if (!targetTypeKey) {
-        setCardOptions([]);
-        return;
-      }
-      try {
-        const params = new URLSearchParams({ type: targetTypeKey, page_size: "20" });
-        if (debouncedCardSearch) params.set("search", debouncedCardSearch);
-        const res = await api.get<{ items: Card[] }>(`/cards?${params.toString()}`, { signal });
-        if (!isCurrent()) return;
-        setCardOptions(res.items);
-      } catch {
-        // ignore — empty option list
-      }
-    },
-    [debouncedCardSearch, targetTypeKey],
-  );
-
-  // Hydrate selected items so autocomplete chips render names when editing an existing survey
+  // Roles are per card type. Scoped to the target type once one is chosen, so
+  // the list stops offering roles that type does not define — those could never
+  // match a card and only pad the list. Unscoped until then, purely so the
+  // section isn't empty before a type is picked.
   useEffect(() => {
-    const missing = cardIds.filter((id) => !cardItems.some((c) => c.id === id));
-    if (missing.length === 0) return;
-    Promise.all(
-      missing.map((id) => api.get<Card>(`/cards/${id}`).catch(() => null)),
-    ).then((cards) => {
-      const fetched = cards.filter((c): c is Card => !!c);
-      if (fetched.length > 0) {
-        setCardItems((prev) => {
-          const known = new Set(prev.map((c) => c.id));
-          return [...prev, ...fetched.filter((c) => !known.has(c.id))];
-        });
-      }
-    });
+    const path = targetTypeKey
+      ? `/stakeholder-roles?type_key=${encodeURIComponent(targetTypeKey)}`
+      : "/stakeholder-roles";
+    api.get<StakeholderRoleDef[]>(path).then(setRoles).catch(() => {});
+  }, [targetTypeKey]);
+
+  // Hydrate the selected chips when an existing survey is opened: the survey
+  // stores ids, and a picker needs names. Covers both card filters — related
+  // cards used to be left un-hydrated, so the field rendered empty while the
+  // ids were still in state, and touching it wiped the filter.
+  useEffect(() => {
+    const wanted: [string[], CardOption[], React.Dispatch<React.SetStateAction<CardOption[]>>][] = [
+      [cardIds, cardItems, setCardItems],
+      [relatedIds, relatedItems, setRelatedItems],
+    ];
+    for (const [ids, held, setHeld] of wanted) {
+      const missing = ids.filter((id) => !held.some((c) => c.id === id));
+      if (missing.length === 0) continue;
+      Promise.all(missing.map((id) => api.get<Card>(`/cards/${id}`).catch(() => null))).then(
+        (cards) => {
+          const fetched = cards.filter((c): c is Card => !!c);
+          if (fetched.length === 0) return;
+          setHeld((prev) => {
+            const known = new Set(prev.map((c) => c.id));
+            return [
+              ...prev,
+              ...fetched
+                .filter((c) => !known.has(c.id))
+                .map((c) => ({ id: c.id, name: c.name, type: c.type })),
+            ];
+          });
+        },
+      );
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardIds]);
-
-  // Merge selected items with search results so selected values are always in options
-  const mergedRelatedOptions = useMemo(() => {
-    const ids = new Set(relatedOptions.map((o) => o.id));
-    return [...relatedOptions, ...relatedItems.filter((item) => !ids.has(item.id))];
-  }, [relatedOptions, relatedItems]);
-
-  const mergedCardOptions = useMemo(() => {
-    const ids = new Set(cardOptions.map((o) => o.id));
-    return [...cardOptions, ...cardItems.filter((item) => !ids.has(item.id))];
-  }, [cardOptions, cardItems]);
+  }, [cardIds, relatedIds]);
 
   // Get the selected type's fields schema
   const selectedType = useMemo(
@@ -223,20 +230,58 @@ export default function SurveyBuilder() {
 
   const allFields = useMemo(() => {
     if (!selectedType) return [];
-    const fields: { section: string; key: string; label: string; type: string; options?: { key: string; label: string; color?: string }[] }[] = [];
+    const fields: {
+      section: string;
+      sectionLabel: string;
+      key: string;
+      label: string;
+      type: string;
+      options?: { key: string; label: string; color?: string }[];
+      // Carried so the row can mark what the metamodel declares required —
+      // `isEnforcedRequiredField` needs both.
+      required?: boolean;
+      readonly?: boolean;
+    }[] = [];
     for (const section of selectedType.fields_schema || []) {
       for (const f of section.fields || []) {
         fields.push({
           section: section.section,
+          sectionLabel: rl(section.section, section.translations),
           key: f.key,
           label: fieldLabel(f),
           type: f.type,
           options: f.options?.map((o) => ({ ...o, label: optLabel(o) })),
+          required: f.required,
+          readonly: f.readonly,
         });
       }
     }
     return fields;
-  }, [selectedType, fieldLabel, optLabel]);
+  }, [selectedType, fieldLabel, optLabel, rl]);
+
+  // Sections in fields_schema order. Entries are already contiguous per section,
+  // so first-seen insertion order is the metamodel's own order.
+  const fieldSections = useMemo(() => {
+    const groups = new Map<string, { label: string; fields: typeof allFields }>();
+    for (const f of allFields) {
+      const group = groups.get(f.section);
+      if (group) group.fields.push(f);
+      else groups.set(f.section, { label: f.sectionLabel, fields: [f] });
+    }
+    return [...groups.entries()].map(([section, g]) => ({ section, ...g }));
+  }, [allFields]);
+
+  // Stakeholder role key → display label. The preview payload carries keys, and
+  // rendering those leaks slugs like "technicalApplicationOwner" into the UI.
+  const roleLabel = useMemo(() => {
+    const byKey = new Map(roles.map((r) => [r.key, r]));
+    return (key: string) => {
+      // typeLabel returns "" for an unknown entity, so fall back to the key —
+      // a role archived since the draft was written still renders something.
+      const def = byKey.get(key);
+      return def ? typeLabel(def) : key;
+    };
+  }, [roles, typeLabel]);
 
   // Relation types the surveyed card type can participate in, expanded into one
   // entry per direction (a self-referential relation yields both). Each becomes
@@ -254,6 +299,7 @@ export default function SurveyBuilder() {
       related_type_key: string;
       label: string;
       relatedTypeLabel: string;
+      mandatory: boolean;
     }[] = [];
     for (const rt of relationTypes) {
       if (rt.is_hidden) continue;
@@ -265,6 +311,9 @@ export default function SurveyBuilder() {
           related_type_key: rt.target_type_key,
           label: relLabel(rt),
           relatedTypeLabel: relatedTypeLabel(rt.target_type_key),
+          // Keyed off the generated direction, not `source_type_key === targetTypeKey`:
+          // on a self-referential relation both ends match and that test is ambiguous.
+          mandatory: rt.source_mandatory,
         });
       }
       if (rt.target_type_key === targetTypeKey) {
@@ -275,16 +324,33 @@ export default function SurveyBuilder() {
           related_type_key: rt.source_type_key,
           label: relLabel(rt, true),
           relatedTypeLabel: relatedTypeLabel(rt.source_type_key),
+          mandatory: rt.target_mandatory,
         });
       }
     }
     return entries;
   }, [relationTypes, targetTypeKey, types, typeLabel, relLabel]);
 
-  // All tags from all groups
-  const allTags = useMemo(
-    () => tagGroups.flatMap((g) => g.tags.map((tg) => ({ ...tg, group_name: g.name }))),
-    [tagGroups],
+  // The date the window resolves to, shown to the admin before anything is
+  // saved. Computed client-side by the mirror of the backend helper — no
+  // round-trip, and it cannot disagree with what the query will match.
+  const stalenessCutoff = useMemo(
+    () => (staleness ? stalenessCutoffDate(staleness) : null),
+    [staleness],
+  );
+
+  // One builder for both the save and the preview payloads. These were two
+  // byte-identical literals; a filter added to one and not the other is
+  // exactly how a preview ends up describing a different set than the send.
+  const buildTargetFilters = useCallback(
+    (): SurveyTargetFilters => ({
+      card_ids: cardIds.length > 0 ? cardIds : undefined,
+      related_ids: relatedIds.length > 0 ? relatedIds : undefined,
+      tag_ids: tagIds.length > 0 ? tagIds : undefined,
+      attribute_filters: attributeFilters.length > 0 ? attributeFilters : undefined,
+      not_updated_for: staleness ?? undefined,
+    }),
+    [cardIds, relatedIds, tagIds, attributeFilters, staleness],
   );
 
   // Save draft
@@ -297,65 +363,39 @@ export default function SurveyBuilder() {
         description,
         message,
         target_type_key: targetTypeKey,
-        target_filters: {
-          card_ids: cardIds.length > 0 ? cardIds : undefined,
-          related_ids: relatedIds.length > 0 ? relatedIds : undefined,
-          tag_ids: tagIds.length > 0 ? tagIds : undefined,
-          attribute_filters: attributeFilters.length > 0 ? attributeFilters : undefined,
-        } as SurveyTargetFilters,
+        target_filters: buildTargetFilters(),
         target_roles: targetRoles,
         fields: selectedFields,
       };
 
       if (surveyId) {
         await api.patch(`/surveys/${surveyId}`, body);
-      } else {
-        const created = await api.post<Survey>("/surveys", body);
-        setSurveyId(created.id);
-        window.history.replaceState(null, "", `/admin/surveys/${created.id}`);
+        return surveyId;
       }
+      const created = await api.post<Survey>("/surveys", body);
+      setSurveyId(created.id);
+      window.history.replaceState(null, "", `/admin/surveys/${created.id}`);
+      // Returned, not just stored: `setSurveyId` does not update the `surveyId`
+      // a caller already captured, so a caller that awaited us and then read
+      // that variable would still see "" and create a *second* survey.
+      return created.id;
     } catch (e) {
       setError(e instanceof Error ? e.message : t("common:errors.generic"));
+      return null;
     } finally {
       setSaving(false);
     }
-  }, [name, description, message, targetTypeKey, targetRoles, relatedIds, cardIds, tagIds, attributeFilters, selectedFields, surveyId]);
+  }, [name, description, message, targetTypeKey, targetRoles, buildTargetFilters, selectedFields, surveyId]);
 
-  // Preview targets
+  // Preview targets. The preview reads the *persisted* survey, so the draft has
+  // to be written first — `saveDraft` both creates-or-updates and hands back the
+  // id to preview, which is what keeps this from minting a second draft.
   const loadPreview = useCallback(async () => {
-    if (!surveyId) {
-      // Save first
-      await saveDraft();
-    }
+    const sid = await saveDraft();
+    if (!sid) return; // save failed; saveDraft has already surfaced the error
     setPreviewing(true);
     setError("");
     try {
-      // Save latest changes first
-      const body = {
-        name: name.trim() || "Untitled Survey",
-        description,
-        message,
-        target_type_key: targetTypeKey,
-        target_filters: {
-          card_ids: cardIds.length > 0 ? cardIds : undefined,
-          related_ids: relatedIds.length > 0 ? relatedIds : undefined,
-          tag_ids: tagIds.length > 0 ? tagIds : undefined,
-          attribute_filters: attributeFilters.length > 0 ? attributeFilters : undefined,
-        } as SurveyTargetFilters,
-        target_roles: targetRoles,
-        fields: selectedFields,
-      };
-
-      let sid = surveyId;
-      if (sid) {
-        await api.patch(`/surveys/${sid}`, body);
-      } else {
-        const created = await api.post<Survey>("/surveys", body);
-        sid = created.id;
-        setSurveyId(created.id);
-        window.history.replaceState(null, "", `/admin/surveys/${created.id}`);
-      }
-
       const data = await api.post<SurveyPreviewResult>(`/surveys/${sid}/preview`, {});
       setPreview(data);
     } catch (e) {
@@ -363,7 +403,7 @@ export default function SurveyBuilder() {
     } finally {
       setPreviewing(false);
     }
-  }, [surveyId, name, description, message, targetTypeKey, targetRoles, relatedIds, cardIds, tagIds, attributeFilters, selectedFields, saveDraft]);
+  }, [saveDraft]);
 
   // Send survey
   const handleSend = async () => {
@@ -380,16 +420,87 @@ export default function SurveyBuilder() {
     }
   };
 
+  /** The keys of the fields the section actually lists. Every section-level
+   *  helper works off this one set: derive from anything else (the stored
+   *  section name, say) and an entry hydrated from an old draft that no longer
+   *  matches a visible row makes the header describe rows the user can't see. */
+  const sectionFieldKeys = (section: string) =>
+    new Set(allFields.filter((f) => f.section === section).map((f) => f.key));
+
+  /** Field lists round-trip through JSONB (drafts, extension templates), so an
+   *  action is only trusted after normalising — an unexpected value must not
+   *  escape the union and flip the select uncontrolled. */
+  const normAction = (a: unknown): "maintain" | "confirm" =>
+    a === "confirm" ? "confirm" : "maintain";
+
+  /** The section's default action — what a newly ticked field inherits. */
+  const sectionAction = (section: string): "maintain" | "confirm" =>
+    sectionActions[section] ?? "maintain";
+
+  /** What the section's control shows. Derived rather than read straight from
+   *  `sectionActions`, so a field overridden on its own row can't leave the
+   *  header claiming an action its fields don't all have. "" renders as Mixed. */
+  const sectionActionValue = (section: string): "maintain" | "confirm" | "" => {
+    const keys = sectionFieldKeys(section);
+    const picked = selectedFields.filter((f) => keys.has(f.key));
+    if (picked.length === 0) return sectionAction(section);
+    const first = normAction(picked[0].action);
+    return picked.every((f) => normAction(f.action) === first) ? first : "";
+  };
+
+  const sectionSelection = (section: string) => {
+    const keys = sectionFieldKeys(section);
+    const picked = selectedFields.filter((f) => keys.has(f.key));
+    return { total: keys.size, picked: picked.length };
+  };
+
+  const asSurveyField = (
+    field: typeof allFields[number],
+    action: "maintain" | "confirm",
+  ): SurveyField => ({
+    key: field.key,
+    section: field.section,
+    label: field.label,
+    type: field.type,
+    options: field.options,
+    action,
+  });
+
   const toggleField = (field: typeof allFields[number]) => {
     const exists = selectedFields.find((f) => f.key === field.key);
     if (exists) {
       setSelectedFields((prev) => prev.filter((f) => f.key !== field.key));
     } else {
-      setSelectedFields((prev) => [
-        ...prev,
-        { key: field.key, section: field.section, label: field.label, type: field.type, options: field.options, action: "maintain" },
-      ]);
+      // Inherits whatever the section is set to, so ticking one more field
+      // after switching a section to Confirm doesn't silently arrive as Maintain.
+      setSelectedFields((prev) => [...prev, asSurveyField(field, sectionAction(field.section))]);
     }
+  };
+
+  /** Select or clear a whole section. Not a toggle: mapping `toggleField` over a
+   *  group would untick the fields that were already ticked. */
+  const setSectionSelected = (section: string, checked: boolean) => {
+    const group = allFields.filter((f) => f.section === section);
+    const keys = new Set(group.map((f) => f.key));
+    setSelectedFields((prev) => {
+      const rest = prev.filter((f) => !keys.has(f.key));
+      if (!checked) return rest;
+      const action = sectionAction(section);
+      const held = new Map(prev.map((f) => [f.key, f]));
+      // Keep an already-selected field's own action — ticking the header adds
+      // what is missing, it does not overwrite per-field choices.
+      return [...rest, ...group.map((f) => held.get(f.key) ?? asSurveyField(f, action))];
+    });
+  };
+
+  /** Set every selected field in a section to one action, and make it the
+   *  section's default so later ticks inherit it. Same key set as the
+   *  derivation above, so picking an action always updates exactly the
+   *  entries the header's value is computed from. */
+  const setSectionAction = (section: string, action: "maintain" | "confirm") => {
+    setSectionActions((prev) => ({ ...prev, [section]: action }));
+    const keys = sectionFieldKeys(section);
+    setSelectedFields((prev) => prev.map((f) => (keys.has(f.key) ? { ...f, action } : f)));
   };
 
   const toggleRelation = (rel: typeof allRelations[number]) => {
@@ -554,6 +665,9 @@ export default function SurveyBuilder() {
               setTargetTypeKey(e.target.value);
               setSelectedFields([]);
               setAttributeFilters([]);
+              // Roles are defined per type, so a type change invalidates them
+              // exactly as it does the fields and attribute filters above.
+              setTargetRoles([]);
             }}
             sx={{ mb: 3 }}
             required
@@ -577,39 +691,21 @@ export default function SurveyBuilder() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             {t("surveyBuilder.target.filterSpecificHint")}
           </Typography>
-          <Autocomplete
+          <CardPicker
             multiple
-            filterSelectedOptions
+            types={targetTypeKey}
+            enabled={!!targetTypeKey}
             disabled={!targetTypeKey}
-            options={mergedCardOptions}
-            getOptionLabel={(o) => o.name}
-            isOptionEqualToValue={(opt, val) => opt.id === val.id}
             value={cardItems}
-            inputValue={cardSearch}
-            onInputChange={(_, val, reason) => {
-              if (reason !== "reset") setCardSearch(val);
-            }}
-            onChange={(_, vals) => {
+            onChange={(vals) => {
               setCardItems(vals);
               setCardIds(vals.map((v) => v.id));
             }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label={t("surveyBuilder.target.searchSpecificCards")}
-                size="small"
-              />
-            )}
-            renderTags={(vals, getTagProps) =>
-              vals.map((v, i) => (
-                <Chip {...getTagProps({ index: i })} key={v.id} label={v.name} size="small" />
-              ))
-            }
+            label={t("surveyBuilder.target.searchSpecificCards")}
+            fullWidth
             sx={{ mb: 3 }}
             noOptionsText={
-              !targetTypeKey
-                ? t("surveyBuilder.target.selectTypeFirst")
-                : t("common:labels.noResults")
+              !targetTypeKey ? t("surveyBuilder.target.selectTypeFirst") : undefined
             }
           />
 
@@ -620,56 +716,28 @@ export default function SurveyBuilder() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             {t("surveyBuilder.target.filterRelatedHint")}
           </Typography>
-          <Autocomplete
+          <CardPicker
             multiple
-            filterSelectedOptions
-            options={mergedRelatedOptions}
-            getOptionLabel={(o) => `${o.name} (${o.type})`}
-            isOptionEqualToValue={(opt, val) => opt.id === val.id}
             value={relatedItems}
-            inputValue={relatedSearch}
-            onInputChange={(_, val, reason) => {
-              if (reason !== "reset") setRelatedSearch(val);
-            }}
-            onChange={(_, vals) => {
+            onChange={(vals) => {
               setRelatedItems(vals);
               setRelatedIds(vals.map((v) => v.id));
             }}
-            renderInput={(params) => (
-              <TextField {...params} label={t("surveyBuilder.target.searchCards")} size="small" />
-            )}
-            renderTags={(vals, getTagProps) =>
-              vals.map((v, i) => (
-                <Chip {...getTagProps({ index: i })} key={v.id} label={v.name} size="small" />
-              ))
-            }
+            label={t("surveyBuilder.target.searchCards")}
+            fullWidth
             sx={{ mb: 3 }}
-            noOptionsText={t("common:labels.noResults")}
           />
 
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
             {t("surveyBuilder.target.filterTags")}
           </Typography>
-          <Autocomplete
-            multiple
-            options={allTags}
-            getOptionLabel={(tg) => `${tg.group_name}: ${tg.name}`}
-            value={allTags.filter((tg) => tagIds.includes(tg.id))}
-            onChange={(_, vals) => setTagIds(vals.map((v) => v.id))}
-            renderInput={(params) => (
-              <TextField {...params} label={t("surveyBuilder.target.selectTags")} size="small" />
-            )}
-            renderTags={(vals, getTagProps) =>
-              vals.map((v, i) => (
-                <Chip
-                  {...getTagProps({ index: i })}
-                  key={v.id}
-                  label={v.name}
-                  size="small"
-                  sx={v.color ? { bgcolor: v.color, color: readableTextColor(v.color) } : undefined}
-                />
-              ))
-            }
+          <TagPicker
+            groups={tagGroups}
+            value={tagIds}
+            onChange={setTagIds}
+            typeKey={targetTypeKey || undefined}
+            size="small"
+            label={t("surveyBuilder.target.selectTags")}
             sx={{ mb: 3 }}
           />
 
@@ -763,6 +831,98 @@ export default function SurveyBuilder() {
 
           <Divider sx={{ my: 2 }} />
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+            {t("surveyBuilder.target.filterStale")}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {t("surveyBuilder.target.filterStaleHint")}
+          </Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={stalenessCustom ? "custom" : matchStalenessPreset(staleness)}
+            onChange={(_, key: string | null) => {
+              // MUI hands back null when the active button is re-clicked;
+              // an exclusive group has no "deselected" state to fall into.
+              if (!key) return;
+              if (key === "custom") {
+                setStalenessCustom(true);
+                setStaleness(
+                  parseStalenessWindow({ value: Number(stalenessDraft), unit: stalenessUnit }),
+                );
+                return;
+              }
+              setStalenessCustom(false);
+              setStaleness(STALENESS_PRESETS.find((p) => p.key === key)?.window ?? null);
+            }}
+            sx={{ flexWrap: "wrap" }}
+          >
+            {STALENESS_PRESETS.map((p) => (
+              <ToggleButton key={p.key} value={p.key} sx={{ textTransform: "none" }}>
+                {t(`surveyBuilder.target.stalePresets.${p.key}`)}
+              </ToggleButton>
+            ))}
+            <ToggleButton value="custom" sx={{ textTransform: "none" }}>
+              {t("surveyBuilder.target.stalePresets.custom")}
+            </ToggleButton>
+          </ToggleButtonGroup>
+
+          {stalenessCustom && (
+            <Box sx={{ display: "flex", gap: 1, mt: 1.5, alignItems: "flex-start" }}>
+              <TextField
+                size="small"
+                type="number"
+                sx={{ width: 140 }}
+                label={t("surveyBuilder.target.staleValueLabel")}
+                value={stalenessDraft}
+                inputProps={{ min: 1, max: MAX_STALENESS_BY_UNIT[stalenessUnit] }}
+                error={stalenessDraft !== "" && staleness === null}
+                helperText={
+                  stalenessDraft !== "" && staleness === null
+                    ? t("surveyBuilder.target.staleInvalid", {
+                        max: MAX_STALENESS_BY_UNIT[stalenessUnit],
+                      })
+                    : " "
+                }
+                onChange={(e) => {
+                  // Keep the raw text so the field can be cleared mid-typing;
+                  // an unparseable draft simply yields no window to save.
+                  setStalenessDraft(e.target.value);
+                  setStaleness(
+                    parseStalenessWindow({ value: Number(e.target.value), unit: stalenessUnit }),
+                  );
+                }}
+              />
+              <TextField
+                select
+                size="small"
+                sx={{ width: 150 }}
+                label={t("surveyBuilder.target.staleUnitLabel")}
+                value={stalenessUnit}
+                helperText=" "
+                onChange={(e) => {
+                  const unit = e.target.value as StalenessUnit;
+                  setStalenessUnit(unit);
+                  setStaleness(parseStalenessWindow({ value: Number(stalenessDraft), unit }));
+                }}
+              >
+                <MenuItem value="days">{t("surveyBuilder.target.staleUnits.days")}</MenuItem>
+                <MenuItem value="months">{t("surveyBuilder.target.staleUnits.months")}</MenuItem>
+              </TextField>
+            </Box>
+          )}
+
+          {stalenessCutoff && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mt: 1, mb: 2 }}
+            >
+              {t("surveyBuilder.target.staleCutoff", { date: formatDate(stalenessCutoff) })}
+            </Typography>
+          )}
+
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
             {t("surveyBuilder.target.stakeholderRoles")}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -785,7 +945,20 @@ export default function SurveyBuilder() {
               }
               label={
                 <Box>
-                  <Typography variant="body2">{role.label}</Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                    {role.color && (
+                      <Box
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: "50%",
+                          bgcolor: role.color,
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                    <Typography variant="body2">{typeLabel(role)}</Typography>
+                  </Box>
                   {role.allowed_types && (
                     <Typography variant="caption" color="text.secondary">
                       {t("surveyBuilder.target.onlyFor", { types: role.allowed_types.join(", ") })}
@@ -822,60 +995,133 @@ export default function SurveyBuilder() {
                 <TableHead>
                   <TableRow>
                     <TableCell padding="checkbox" />
-                    <TableCell>{t("surveyBuilder.fields.columns.section")}</TableCell>
                     <TableCell>{t("surveyBuilder.fields.columns.field")}</TableCell>
                     <TableCell>{t("surveyBuilder.fields.columns.type")}</TableCell>
                     <TableCell>{t("surveyBuilder.fields.columns.action")}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {allFields.map((f) => {
-                    const selected = selectedFields.find((sf) => sf.key === f.key);
+                  {fieldSections.map((group) => {
+                    const { total, picked } = sectionSelection(group.section);
+                    const value = sectionActionValue(group.section);
                     return (
-                      <TableRow
-                        key={f.key}
-                        hover
-                        onClick={() => toggleField(f)}
-                        sx={{ cursor: "pointer" }}
-                      >
-                        <TableCell padding="checkbox">
-                          <Checkbox checked={!!selected} size="small" />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" color="text.secondary">
-                            {f.section}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{f.label}</TableCell>
-                        <TableCell>
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                            <Chip label={fieldTypeLabel(f.type)} size="small" variant="outlined" />
-                            {isInactiveExtType(f.type) && (
-                              <Tooltip title={t("surveyBuilder.fields.inactiveExtType")}>
-                                <Box component="span" sx={{ display: "inline-flex" }}>
-                                  <MaterialSymbol icon="warning" size={16} color="#ed6c02" />
-                                </Box>
-                              </Tooltip>
-                            )}
-                          </Box>
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          {selected && (
+                      <Fragment key={group.section}>
+                        {/* Deliberately not click-to-toggle like the field rows:
+                            a whole section (de)selecting on a stray click on the
+                            header text is too much action for too little intent.
+                            Only the tickbox itself toggles. */}
+                        <TableRow sx={{ bgcolor: "action.hover" }}>
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              size="small"
+                              checked={picked === total && total > 0}
+                              indeterminate={picked > 0 && picked < total}
+                              onChange={() => setSectionSelected(group.section, picked < total)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </TableCell>
+                          <TableCell colSpan={2}>
+                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                {group.label}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {picked}/{total}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             <TextField
                               select
                               size="small"
-                              value={selected.action}
+                              value={value}
+                              disabled={picked === 0}
                               onChange={(e) =>
-                                setFieldAction(f.key, e.target.value as "maintain" | "confirm")
+                                setSectionAction(group.section, e.target.value as "maintain" | "confirm")
                               }
                               sx={{ minWidth: 120 }}
+                              // Without displayEmpty MUI renders "" as an empty
+                              // placeholder even when a MenuItem matches it.
+                              slotProps={{ select: { displayEmpty: true } }}
                             >
+                              {/* Always mounted so the "" (Mixed) value matches a
+                                  real item and the closed control renders its
+                                  label — an unmatched value renders blank. Hidden
+                                  from the open menu unless it is the state. */}
+                              <MenuItem
+                                value=""
+                                disabled
+                                sx={{ display: value === "" ? undefined : "none" }}
+                              >
+                                {t("surveyBuilder.fields.mixed")}
+                              </MenuItem>
                               <MenuItem value="maintain">{t("surveyBuilder.fields.maintain")}</MenuItem>
                               <MenuItem value="confirm">{t("surveyBuilder.fields.confirm")}</MenuItem>
                             </TextField>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                          </TableCell>
+                        </TableRow>
+
+                        {group.fields.map((f) => {
+                          const selected = selectedFields.find((sf) => sf.key === f.key);
+                          return (
+                            <TableRow
+                              key={f.key}
+                              hover
+                              onClick={() => toggleField(f)}
+                              sx={{ cursor: "pointer" }}
+                            >
+                              {/* Indented under the section's own tickbox so the
+                                  hierarchy reads at a glance. Deliberately NOT
+                                  padding="checkbox": that variant sets both
+                                  `width: 48` and the `padding` shorthand, so a
+                                  lone padding-left override half-fights a
+                                  shorthand inside a box too narrow to hold the
+                                  indent, and nothing moves. */}
+                              <TableCell sx={{ width: 56, py: 0, pr: 0, pl: 4 }}>
+                                <Checkbox checked={!!selected} size="small" />
+                              </TableCell>
+                              <TableCell>
+                                {f.label}
+                                {isEnforcedRequiredField(f as FieldDef) && (
+                                  <Tooltip title={t("common:labels.required")}>
+                                    <Box component="span" sx={{ color: "error.main", ml: 0.25 }}>
+                                      *
+                                    </Box>
+                                  </Tooltip>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                                  <Chip label={fieldTypeLabel(f.type)} size="small" variant="outlined" />
+                                  {isInactiveExtType(f.type) && (
+                                    <Tooltip title={t("surveyBuilder.fields.inactiveExtType")}>
+                                      <Box component="span" sx={{ display: "inline-flex" }}>
+                                        <MaterialSymbol icon="warning" size={16} color="#ed6c02" />
+                                      </Box>
+                                    </Tooltip>
+                                  )}
+                                </Box>
+                              </TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                {selected && (
+                                  <TextField
+                                    select
+                                    size="small"
+                                    value={selected.action}
+                                    onChange={(e) =>
+                                      setFieldAction(f.key, e.target.value as "maintain" | "confirm")
+                                    }
+                                    sx={{ minWidth: 120 }}
+                                  >
+                                    <MenuItem value="maintain">{t("surveyBuilder.fields.maintain")}</MenuItem>
+                                    <MenuItem value="confirm">{t("surveyBuilder.fields.confirm")}</MenuItem>
+                                  </TextField>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </Fragment>
                     );
                   })}
                 </TableBody>
@@ -919,7 +1165,16 @@ export default function SurveyBuilder() {
                             <TableCell padding="checkbox">
                               <Checkbox checked={!!selected} size="small" />
                             </TableCell>
-                            <TableCell>{r.label}</TableCell>
+                            <TableCell>
+                              {r.label}
+                              {r.mandatory && (
+                                <Tooltip title={t("common:labels.required")}>
+                                  <Box component="span" sx={{ color: "error.main", ml: 0.25 }}>
+                                    *
+                                  </Box>
+                                </Tooltip>
+                              )}
+                            </TableCell>
                             <TableCell>
                               <Chip label={r.relatedTypeLabel} size="small" variant="outlined" />
                             </TableCell>
@@ -988,6 +1243,15 @@ export default function SurveyBuilder() {
                   <Typography variant="body2" color="text.secondary">
                     {t("surveyBuilder.preview.cards")}
                   </Typography>
+                  {/* A card is only reachable through a stakeholder holding a
+                      target role, so the tile is a subset of what the filters
+                      matched. Say so, or thin ownership reads as a filter that
+                      is too narrow. */}
+                  {preview.total_matched !== preview.total_cards && (
+                    <Typography variant="caption" color="text.secondary">
+                      {t("surveyBuilder.preview.ofMatched", { count: preview.total_matched })}
+                    </Typography>
+                  )}
                 </MuiCard>
                 <MuiCard variant="outlined" sx={{ p: 2, flex: 1, textAlign: "center" }}>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: "#1976d2" }}>
@@ -995,6 +1259,12 @@ export default function SurveyBuilder() {
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {t("surveyBuilder.preview.usersToNotify")}
+                  </Typography>
+                  {/* One person on several cards is one user but several
+                      requests — show both so the headcount isn't read as the
+                      amount of work being created. */}
+                  <Typography variant="caption" color="text.secondary">
+                    {t("surveyBuilder.preview.requests", { count: preview.total_requests })}
                   </Typography>
                 </MuiCard>
                 <MuiCard variant="outlined" sx={{ p: 2, flex: 1, textAlign: "center" }}>
@@ -1007,9 +1277,20 @@ export default function SurveyBuilder() {
                 </MuiCard>
               </Box>
 
-              {preview.total_cards === 0 && (
+              {preview.total_cards === 0 && preview.total_matched === 0 && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
                   {t("surveyBuilder.preview.noMatches")}
+                </Alert>
+              )}
+
+              {preview.total_matched > preview.total_cards && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <AlertTitle sx={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                    {t("surveyBuilder.preview.skippedTitle", {
+                      count: preview.total_matched - preview.total_cards,
+                    })}
+                  </AlertTitle>
+                  {t("surveyBuilder.preview.skippedHint")}
                 </Alert>
               )}
 
@@ -1031,14 +1312,17 @@ export default function SurveyBuilder() {
                           <TableRow key={tp.card_id}>
                             <TableCell>{tp.card_name}</TableCell>
                             <TableCell>
-                              {tp.users.map((u) => (
-                                <Chip
-                                  key={u.user_id}
-                                  label={`${u.display_name} (${u.role})`}
-                                  size="small"
-                                  sx={{ mr: 0.5, mb: 0.5 }}
-                                />
-                              ))}
+                              {tp.users.map((u) => {
+                                const named = u.roles.map(roleLabel).filter(Boolean).join(", ");
+                                return (
+                                  <Chip
+                                    key={u.user_id}
+                                    label={named ? `${u.display_name} (${named})` : u.display_name}
+                                    size="small"
+                                    sx={{ mr: 0.5, mb: 0.5 }}
+                                  />
+                                );
+                              })}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1125,9 +1409,16 @@ export default function SurveyBuilder() {
                 preview.total_cards === 0
               }
               startIcon={<MaterialSymbol icon="send" size={18} />}
-              sx={{ textTransform: "none" }}
+              // overflow keeps the progress line inside the rounded corners.
+              sx={{ textTransform: "none", position: "relative", overflow: "hidden" }}
             >
               {sending ? t("surveyBuilder.sendingSurvey") : t("surveyBuilder.sendSurvey")}
+              {sending && (
+                <LinearProgress
+                  color="inherit"
+                  sx={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2 }}
+                />
+              )}
             </Button>
           )}
         </Box>

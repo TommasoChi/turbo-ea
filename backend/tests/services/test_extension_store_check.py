@@ -18,11 +18,13 @@ from app.models.extension import Extension
 from app.models.notification import Notification
 from app.services import extension_store_check as check
 from app.services.extension_store_check import (
+    MAX_TRACKED_KEYS,
     NEW_NOTIFICATION_TYPE,
     UPDATE_NOTIFICATION_TYPE,
     classify,
     extension_notices_enabled,
     installed_versions,
+    read_status,
     record_result,
 )
 from app.services.extensions import store_catalog
@@ -478,6 +480,68 @@ async def test_an_admin_who_muted_the_types_is_not_notified_but_state_advances(d
     assert "b" in (await _state(db))["knownKeys"]
 
 
+async def test_a_user_who_never_touched_preferences_is_notified(db):
+    """On by default. A type nobody has expressed an opinion about falls back
+    to its spec default, so an administrator gets the notice without having to
+    go and switch anything on first."""
+    await _one_admin(db)
+    await _seeded(db)
+
+    created = await record_result(db, items=_catalogue(("b", "Beta", "1.0.0")), error=None)
+
+    assert created == 1
+    assert len(await _notifications(db, NEW_NOTIFICATION_TYPE)) == 1
+
+
+async def test_preferences_saved_before_the_type_existed_still_notify(db):
+    """The subtle half of "on by default".
+
+    An account that saved its notification preferences before these types were
+    added carries a populated ``in_app`` dict that simply has no key for them.
+    Resolution is per-key with a spec fallback, not "the stored dict wins
+    wholesale" — otherwise every pre-existing account would have been silently
+    opted out of a type it had never seen.
+    """
+    admin = await _one_admin(db)
+    admin.notification_preferences = {
+        "in_app": {"todo_assigned": True, "comment_added": False},
+        "email": {"todo_assigned": True},
+    }
+    await db.flush()
+    await _seeded(db)
+
+    created = await record_result(db, items=_catalogue(("b", "Beta", "1.0.0")), error=None)
+
+    assert created == 1
+
+
+async def test_an_explicit_opt_out_survives(db):
+    """...and the opposite must hold just as firmly: somebody who turned these
+    off stays off, and nothing about adding the type re-enables them."""
+    admin = await _one_admin(db)
+    admin.notification_preferences = {"in_app": {"extension_available": False}}
+    await db.flush()
+    await _seeded(db)
+
+    assert await record_result(db, items=_catalogue(("b", "Beta", "1.0.0")), error=None) == 0
+    assert await _notifications(db, NEW_NOTIFICATION_TYPE) == []
+
+
+async def test_the_instance_toggle_is_on_until_an_admin_turns_it_off(db):
+    await _one_admin(db)
+    assert await extension_notices_enabled(db) is True
+
+    row = (
+        await db.execute(select(AppSettings).where(AppSettings.id == "default"))
+    ).scalar_one_or_none()
+    if row is None:
+        row = AppSettings(id="default", general_settings={})
+        db.add(row)
+    row.general_settings = {**(row.general_settings or {}), "extensionNoticesEnabled": False}
+    await db.flush()
+    assert await extension_notices_enabled(db) is False
+
+
 async def test_an_unreachable_store_records_the_error_and_stays_quiet(db):
     await _one_admin(db)
 
@@ -512,6 +576,72 @@ async def test_an_unparseable_catalogue_version_is_seen_but_never_an_update(db):
 
     assert await record_result(db, items=_catalogue(("a", "Acme", "nightly")), error=None) == 0
     assert (await _state(db))["knownKeys"] == ["a"]
+
+
+async def test_the_known_key_cap_evicts_the_oldest_not_the_alphabetically_last(db):
+    """The seen set is capped by dropping the *oldest* key.
+
+    It used to be ``sorted(known | catalog_keys)[:MAX_TRACKED_KEYS]``, which
+    evicts by key *name*. Past the cap, an extension whose key sorts late fell
+    out of the set on every run and was therefore announced as brand new on
+    every following run — a notification loop that could never converge.
+    """
+    await _one_admin(db)
+    # Fill the seen set to the cap with keys that all sort BEFORE "zzz".
+    filler = [f"k{i:04d}" for i in range(MAX_TRACKED_KEYS)]
+    db.add(
+        AppSettings(
+            id="default",
+            general_settings={"extensionStoreCheck": {"seeded": True, "knownKeys": filler}},
+        )
+    )
+    await db.flush()
+
+    # "zzz" arrives: announced once, and it must survive the cap.
+    assert await record_result(db, items=_catalogue(("zzz", "Zulu", "1.0.0")), error=None) == 1
+    known = (await _state(db))["knownKeys"]
+    assert len(known) == MAX_TRACKED_KEYS
+    assert "zzz" in known, "the newest key must never be the one evicted"
+    assert known[0] == "k0001", "the oldest key is the one that falls off the front"
+
+    # And the whole point: it is not announced a second time.
+    assert await record_result(db, items=_catalogue(("zzz", "Zulu", "1.0.0")), error=None) == 0
+
+
+async def test_the_status_readout_reports_what_the_last_run_found(db):
+    """``read_status`` is the only window onto an otherwise silent job."""
+    await _one_admin(db)
+    db.add(Extension(key="a", name="Acme", version="1.0.0", status="installed"))
+    await db.flush()
+    await _seeded(db)
+
+    await record_result(
+        db,
+        items=_catalogue(("a", "Acme", "1.1.0"), ("b", "Beta", "1.0.0")),
+        error=None,
+    )
+
+    status = await read_status(db)
+    assert status["last_new"] == 1  # b
+    assert status["last_updates"] == 1  # a 1.0.0 -> 1.1.0
+    assert status["last_notified"] == 2  # one digest per type, one admin
+    assert status["known_count"] == 2
+    assert status["error"] is None
+    assert status["checked_at"]
+    assert status["seeded"] is True
+    assert status["enabled"] is True
+
+
+async def test_the_status_readout_surfaces_a_failing_fetch(db):
+    """A store that refuses the request records the reason here and nowhere
+    else — without this readout the failure is completely invisible."""
+    await _one_admin(db)
+
+    await record_result(db, items=None, error="Store refused the request (HTTP 403)")
+
+    status = await read_status(db)
+    assert status["error"] == "Store refused the request (HTTP 403)"
+    assert status["seeded"] is False
 
 
 # ---------------------------------------------------------------------------

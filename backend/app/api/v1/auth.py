@@ -23,7 +23,7 @@ from app.schemas.auth import (
     TokenResponse,
     UserResponse,
 )
-from app.services import email_service, sso_service
+from app.services import email_service, proxy_auth_service, sso_service
 
 # SSO / OIDC machinery lives in ``app.services.sso_service`` so more than one
 # route module can reuse it (user login here, SSO-gated portals in
@@ -107,6 +107,184 @@ async def _default_role_key(db: AsyncSession) -> str:
     return role.key if role else "member"
 
 
+def _issue_session(request: Request, response: Response, user: User) -> TokenResponse:
+    """Mint the JWT + httpOnly cookie for an already-resolved user.
+
+    Centralises the three checks that must happen between "we know who this is"
+    and "they have a session". ``access_expires_at`` matters more than it looks:
+    ``get_current_user`` rejects on it (``api/deps.py``), so a path that mints a
+    token without checking it produces a token that 401s on the very next call —
+    and with an auto-signin frontend that becomes a tight mint/401/retry loop.
+    """
+    if not user.is_active:
+        raise HTTPException(403, "Account disabled")
+    if user.access_expires_at is not None and user.access_expires_at < datetime.now(timezone.utc):
+        raise HTTPException(403, "Account access has expired")
+    token = create_access_token(user.id, user.role)
+    _set_auth_cookie(response, token, secure=_is_secure_request(request))
+    return TokenResponse(access_token=token)
+
+
+async def _provision_federated_user(
+    db: AsyncSession,
+    *,
+    email: str,
+    subject_id: str,
+    display_name: str,
+    allow_create: bool,
+    honour_invitation: bool,
+) -> User:
+    """Find, link, or create the user behind a federated identity.
+
+    Shared by the SSO callback and trusted-proxy sign-in so the two provisioning
+    paths cannot drift apart — a divergence between them is exactly where the next
+    authentication bug would land.
+
+    The two flags are what the proxy path tightens:
+
+    - ``allow_create=False`` lets an identity sign in an account that already
+      exists but never mint one. The proxy path passes False unless the identity
+      was signature-verified, so a forged header cannot conjure a user. The seeded
+      default role is ``member``, which can create, edit and archive across the
+      whole inventory, so "it would only be a member" is not a mitigation.
+    - ``honour_invitation=False`` ignores a pending ``SsoInvitation`` role. On the
+      SSO path the invitee proved control of the mailbox by completing an OIDC
+      flow. On the proxy path nothing binds the asserted email to the invitation,
+      so guessing one pending invited address would otherwise hand over that
+      invitation's role, which is commonly admin.
+    """
+    result = await db.execute(select(User).where(User.sso_subject_id == subject_id))
+    user = result.scalar_one_or_none()
+    if user:
+        return user
+
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if user:
+        # ── M11: Don't auto-merge local accounts with SSO ──
+        if user.auth_provider == "local":
+            raise HTTPException(
+                409,
+                "A local account with this email already exists. "
+                "Contact an administrator to link your SSO account.",
+            )
+        # Already a federated user with a different subject id — link it.
+        user.sso_subject_id = subject_id
+        if display_name and not user.display_name:
+            user.display_name = display_name
+        user.password_setup_token = None
+        user.last_login = datetime.now(timezone.utc)
+        # The user has now accepted the invite; clear any pending SsoInvitation
+        # row for this email (#539).
+        await db.execute(delete(SsoInvitation).where(SsoInvitation.email == email))
+        await db.commit()
+        return user
+
+    if not allow_create:
+        raise HTTPException(
+            403,
+            "No Turbo EA account exists for this identity, and one cannot be created "
+            "automatically from an unverified proxy header. Ask an administrator to "
+            "invite you, or enable identity-token verification on this instance.",
+        )
+
+    role = await _default_role_key(db)
+    if honour_invitation:
+        inv_result = await db.execute(select(SsoInvitation).where(SsoInvitation.email == email))
+        invitation = inv_result.scalar_one_or_none()
+        if invitation:
+            role = invitation.role
+            await db.delete(invitation)
+
+    user = User(
+        email=email,
+        display_name=display_name or email.split("@")[0],
+        password_hash=None,
+        role=role,
+        auth_provider="sso",
+        sso_subject_id=subject_id,
+        last_login=datetime.now(timezone.utc),
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+def _is_bootstrap_admin(email: str) -> bool:
+    """Whether this email is the configured first admin for a proxy-auth install.
+
+    Deliberately *only* the explicitly configured address. Mirroring ``register``'s
+    "first user on an empty instance becomes admin" rule here looked tempting, but
+    on the proxy path the identity can come from an unverified header, so an empty
+    instance would hand admin to whoever arrived first. ``register`` keeps that
+    rule and is safe because it always bypasses its own blocks for the first user
+    (see ``is_first_user`` below), so a fresh proxy-auth install can still be
+    bootstrapped that way. This env var is the alternative for operators who would
+    rather never open registration at all.
+    """
+    configured = settings.PROXY_AUTH_BOOTSTRAP_ADMIN_EMAIL.strip().lower()
+    return bool(configured) and configured == email
+
+
+async def _resolve_proxy_role(
+    db: AsyncSession, identity: proxy_auth_service.ProxyIdentity
+) -> str | None:
+    """The role key to enforce for this proxy identity, or None to leave it alone.
+
+    Turns the directory's own answer into a Turbo EA role
+    (``TURBO_EA_PROXY_AUTH_ROLE_MAP``), so operators whose app registration already
+    declares app roles stop promoting every new user by hand.
+
+    Four rules, in this order:
+
+    1. **The bootstrap admin always wins.** Otherwise one mapping typo locks an
+       operator out of their own instance, with no route back in — ``/auth/register``
+       is closed while proxy auth is on.
+    2. **An absent claim changes nothing.** Deliberately different from "present but
+       unrecognised": a mistyped ``ROLE_CLAIM``, or a token store that stopped
+       forwarding, would otherwise demote every user on the instance in one pass.
+       An unrecognised *value* does fall back to the default role, so removing
+       someone's directory role takes effect.
+    3. **Only a trusted identity may be granted a role** (``role_mapping_trusted``),
+       mirroring the ``allow_create`` tiering above.
+    4. **An unknown or archived target falls back to the default role**, the way
+       ``_default_role_key`` already falls back to ``member``. Validated with the
+       existence + ``is_archived`` pair used by ``impersonate`` below — the roles
+       table is the authority, not the env var.
+    """
+    if _is_bootstrap_admin(identity.email):
+        return "admin"
+    if not settings.PROXY_AUTH_ROLE_MAP or not identity.roles:
+        return None
+    if not proxy_auth_service.role_mapping_trusted(identity):
+        logger.warning(
+            "Ignoring TURBO_EA_PROXY_AUTH_ROLE_MAP for %s: the identity was neither "
+            "signature-verified nor accompanied by a shared secret.",
+            identity.email,
+        )
+        return None
+
+    mapped = proxy_auth_service.map_role(identity.roles)
+    if mapped is None:
+        return await _default_role_key(db)
+
+    from app.models.role import Role
+
+    result = await db.execute(select(Role).where(Role.key == mapped))
+    role = result.scalar_one_or_none()
+    if role is None or role.is_archived:
+        logger.warning(
+            "TURBO_EA_PROXY_AUTH_ROLE_MAP points at role %r, which is %s. "
+            "Falling back to the default role.",
+            mapped,
+            "archived" if role is not None else "not defined",
+        )
+        return await _default_role_key(db)
+    return mapped
+
+
 @router.post("/register", response_model=TokenResponse)
 @limiter.limit("5/minute")
 async def register(
@@ -131,6 +309,16 @@ async def register(
         if sso_config.get("enabled"):
             raise HTTPException(
                 403, "Registration is disabled when SSO is enabled. Sign in via SSO."
+            )
+
+        # Same for trusted-proxy auth. Without this, a proxy-auth install — where
+        # sso.enabled is false by design — would leave self-registration open to
+        # anyone who can reach the login page.
+        if proxy_auth_service.is_enabled():
+            raise HTTPException(
+                403,
+                "Registration is disabled when proxy authentication is enabled. "
+                "Sign in through your identity provider.",
             )
 
         # Block registration when admin has disabled self-registration
@@ -349,6 +537,24 @@ async def refresh_token(
 # ---------------------------------------------------------------------------
 
 
+async def _local_login_available(db: AsyncSession) -> bool:
+    """Whether any *active* local (non-SSO) account exists.
+
+    When every usable account is federated the login page hides the
+    email/password form entirely — nobody could use it (password login is
+    rejected for SSO users, and disabled accounts can't log in at all). A single
+    active local or invited account keeps the form so they can sign in or set
+    their password.
+    """
+    local_count = await db.execute(
+        select(func.count(User.id)).where(
+            User.auth_provider != "sso",
+            User.is_active.is_(True),
+        )
+    )
+    return (local_count.scalar() or 0) > 0
+
+
 @router.get("/sso/config")
 async def sso_config_endpoint(db: AsyncSession = Depends(get_db)):
     """Public endpoint — returns SSO configuration needed by the frontend to
@@ -358,9 +564,26 @@ async def sso_config_endpoint(db: AsyncSession = Depends(get_db)):
     general = await _get_general_settings(db)
     registration_enabled = general.get("registrationEnabled", True)
 
+    # Trusted-proxy auth is independent of SSO and must be advertised even when
+    # SSO is off, which is the whole point of it — so this is resolved before the
+    # early return below. ``local_login_available`` likewise: a proxy-auth-only
+    # install needs to hide the password form too.
+    proxy_auth = proxy_auth_service.is_enabled()
+
     sso = general.get("sso", {})
     if not sso.get("enabled"):
-        return {"enabled": False, "registration_enabled": registration_enabled}
+        payload = {
+            "enabled": False,
+            "registration_enabled": registration_enabled,
+            "proxy_auth": proxy_auth,
+        }
+        if proxy_auth:
+            payload["local_login_available"] = await _local_login_available(db)
+            # Where to send the browser after logout so the proxy session ends
+            # too — without it the proxy re-asserts the identity immediately.
+            if settings.PROXY_AUTH_LOGOUT_URL:
+                payload["proxy_logout_url"] = settings.PROXY_AUTH_LOGOUT_URL
+        return payload
 
     provider = sso.get("provider", "microsoft")
     client_id = sso.get("client_id", "")
@@ -369,7 +592,11 @@ async def sso_config_endpoint(db: AsyncSession = Depends(get_db)):
         provider_cfg = _get_provider_config(sso)
     except ValueError as exc:
         logger.error("SSO provider config error: %s", exc)
-        return {"enabled": False, "registration_enabled": registration_enabled}
+        return {
+            "enabled": False,
+            "registration_enabled": registration_enabled,
+            "proxy_auth": proxy_auth,
+        }
 
     auth_endpoint = provider_cfg["authorization_endpoint"]
 
@@ -388,20 +615,13 @@ async def sso_config_endpoint(db: AsyncSession = Depends(get_db)):
                 "in SSO settings.",
                 discovery_url,
             )
-            return {"enabled": False, "registration_enabled": registration_enabled}
+            return {
+                "enabled": False,
+                "registration_enabled": registration_enabled,
+                "proxy_auth": proxy_auth,
+            }
 
-    # Detect whether any *active* local (non-SSO) account exists. When every
-    # usable account is SSO-based the login page hides the email/password form
-    # entirely — no one could use it (password login is rejected for SSO users,
-    # and disabled accounts can't log in at all). A single active local/invited
-    # account keeps the form so they can sign in or set their password.
-    local_count = await db.execute(
-        select(func.count(User.id)).where(
-            User.auth_provider != "sso",
-            User.is_active.is_(True),
-        )
-    )
-    local_login_available = (local_count.scalar() or 0) > 0
+    local_login_available = await _local_login_available(db)
 
     result = {
         "enabled": True,
@@ -412,7 +632,10 @@ async def sso_config_endpoint(db: AsyncSession = Depends(get_db)):
         "scopes": provider_cfg["scopes"],
         "registration_enabled": registration_enabled,
         "local_login_available": local_login_available,
+        "proxy_auth": proxy_auth,
     }
+    if proxy_auth and settings.PROXY_AUTH_LOGOUT_URL:
+        result["proxy_logout_url"] = settings.PROXY_AUTH_LOGOUT_URL
 
     # Include extra auth params (e.g. Google hd parameter)
     if provider_cfg.get("extra_auth_params"):
@@ -464,71 +687,97 @@ async def sso_callback(
 
     email = email.lower().strip()
 
-    # Check if a user with this SSO subject ID already exists
-    result = await db.execute(select(User).where(User.sso_subject_id == sso_subject_id))
-    user = result.scalar_one_or_none()
-
-    if user:
-        # Existing SSO user — just return a token
-        if not user.is_active:
-            raise HTTPException(403, "Account disabled")
-        tk = create_access_token(user.id, user.role)
-        _set_auth_cookie(response, tk, secure=_is_secure_request(request))
-        return TokenResponse(access_token=tk)
-
-    # ── M11: Don't auto-merge local accounts with SSO ──
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-
-    if user:
-        if user.auth_provider == "local":
-            raise HTTPException(
-                409,
-                "A local account with this email already exists. "
-                "Contact an administrator to link your SSO account.",
-            )
-        # Already an SSO user with a different subject ID — link
-        user.sso_subject_id = sso_subject_id
-        if display_name and not user.display_name:
-            user.display_name = display_name
-        user.password_setup_token = None
-        user.last_login = datetime.now(timezone.utc)
-        # The user has now accepted the invite via SSO; clear any pending
-        # SsoInvitation row for this email (#539).
-        await db.execute(delete(SsoInvitation).where(SsoInvitation.email == email))
-        await db.commit()
-        if not user.is_active:
-            raise HTTPException(403, "Account disabled")
-        tk = create_access_token(user.id, user.role)
-        _set_auth_cookie(response, tk, secure=_is_secure_request(request))
-        return TokenResponse(access_token=tk)
-
-    # New user — check for an invitation to determine the role
-    role = await _default_role_key(db)  # admin-configured default for new SSO users
-    inv_result = await db.execute(select(SsoInvitation).where(SsoInvitation.email == email))
-    invitation = inv_result.scalar_one_or_none()
-    if invitation:
-        role = invitation.role
-        # Remove the invitation after use
-        await db.delete(invitation)
-
-    # Create new user
-    user = User(
+    user = await _provision_federated_user(
+        db,
         email=email,
-        display_name=display_name or email.split("@")[0],
-        password_hash=None,
-        role=role,
-        auth_provider="sso",
-        sso_subject_id=sso_subject_id,
-        last_login=datetime.now(timezone.utc),
+        subject_id=sso_subject_id,
+        display_name=display_name,
+        allow_create=True,
+        honour_invitation=True,
     )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    return _issue_session(request, response, user)
 
-    tk = create_access_token(user.id, user.role)
-    _set_auth_cookie(response, tk, secure=_is_secure_request(request))
-    return TokenResponse(access_token=tk)
+
+# ---------------------------------------------------------------------------
+# Trusted reverse-proxy sign-in (#1006)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/proxy/session", response_model=TokenResponse)
+async def proxy_session(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    """Exchange a proxy-asserted identity for a Turbo EA session.
+
+    For instances behind a proxy that has already authenticated the user (Azure
+    App Service EasyAuth, oauth2-proxy, Authelia, Cloudflare Access). No OIDC
+    client and no app registration are needed. See
+    ``app/services/proxy_auth_service.py`` for the trust model.
+
+    **404 when the feature is off**, mirroring the ops API with ``OPS_PUBLIC_KEY``
+    unset: an instance that has not opted in should look like one where this
+    route does not exist.
+
+    Deliberately an endpoint rather than a branch inside ``get_current_user``.
+    The ``samesite=lax`` cookie is currently the app's CSRF control; making
+    authentication ambient proxy headers would hand that control to the proxy's
+    own cookie policy, and oauth2-proxy and Cloudflare Access can both be
+    configured ``SameSite=None``. Minting a lax cookie at one POST-only route
+    keeps the existing posture, and leaves ``get_optional_user`` alone so
+    anonymous portal and embedded-diagram visitors stay anonymous.
+
+    Deliberately *not* rate limited: ``get_remote_address`` always resolves to the
+    nginx container (uvicorn runs without ``--proxy-headers``), so a limit here
+    would be one shared bucket. It would not slow an attacker, who needs a single
+    request, and would lock out a whole office once the SPA calls this on load.
+    """
+    if not proxy_auth_service.is_enabled():
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    # Before any claim parsing, so a forged principal header never reaches the
+    # decoder.
+    proxy_auth_service.check_shared_secret(request)
+
+    identity = proxy_auth_service.resolve_identity(request)
+
+    # An unverified header may sign in an existing user but must never create one.
+    # A verified identity came from a signature-checked id token, so it may.
+    user = await _provision_federated_user(
+        db,
+        email=identity.email,
+        subject_id=identity.subject_id,
+        display_name=identity.display_name,
+        allow_create=identity.verified or _is_bootstrap_admin(identity.email),
+        honour_invitation=False,
+    )
+
+    # Role assignment, re-asserted on every sign-in. Two things live here: the
+    # first-admin bootstrap (a proxy-auth-only install has no other route to an
+    # admin, because /auth/register is closed while proxy auth is on) and the
+    # optional directory role map. See _resolve_proxy_role for the precedence.
+    #
+    # Deliberately *after* provisioning rather than inside it: that covers all
+    # three of _provision_federated_user's branches — including the subject-id
+    # match, which returns early without a commit — through one code path, and
+    # _issue_session then mints the JWT from the corrected role.
+    desired_role = await _resolve_proxy_role(db, identity)
+    if desired_role and user.role != desired_role:
+        # Logged because a demotion is otherwise invisible: the map is authoritative,
+        # so a role granted by hand in the Users admin is reverted here, and this
+        # line is what answers "why did I lose admin?".
+        logger.info(
+            "Proxy sign-in: role for %s changed from %r to %r.",
+            user.email,
+            user.role,
+            desired_role,
+        )
+        user.role = desired_role
+        await db.commit()
+        await db.refresh(user)
+
+    return _issue_session(request, response, user)
 
 
 # ---------------------------------------------------------------------------

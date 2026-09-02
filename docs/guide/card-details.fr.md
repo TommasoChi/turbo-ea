@@ -148,6 +148,8 @@ Les parties prenantes sont des personnes ayant un **rôle** spécifique sur cett
 
 Les affectations de parties prenantes affectent les **permissions** : les permissions effectives d'un utilisateur sur une fiche sont la combinaison de son rôle au niveau de l'application et de tous les rôles de parties prenantes qu'il détient sur cette fiche.
 
+Lorsqu'une **couleur** est définie pour un rôle dans le métamodèle, son groupe en est marqué, ce qui permet de distinguer un propriétaire d'un observateur d'un coup d'œil.
+
 ### Recherche et invitation
 
 Choisissez une partie prenante via l'**autocomplétion recherchable** — commencez à taper et la liste déroulante filtre à la fois sur le nom et sur l'e-mail (l'e-mail apparaît sur une ligne secondaire, pour que deux utilisateurs portant le même nom soient distinguables d'un coup d'œil).
@@ -161,6 +163,8 @@ Le chemin d'invitation nécessite la permission **`users.invite`**, une forme d�
 ![Historique des modifications de la fiche](../assets/img/fr/08_fiche_historique.png)
 
 Affiche la **piste d'audit complète** des modifications apportées à la fiche : **qui** a effectué la modification, **quand** elle a été effectuée, et **ce qui** a été modifié (valeur précédente vs nouvelle valeur). Cela permet une traçabilité complète de toutes les modifications au fil du temps.
+
+Tout ce qui déplace la date **Modifié** de la fiche apparaît ici — une modification manuelle, un import de tableur, une migration de plateforme ou une synchronisation ServiceNow, un changement d'étiquette, une modification en masse, ou un déplacement hiérarchique qui a entraîné cette fiche. La maintenance système ne change ni l'un ni l'autre : le recalcul des scores de qualité des données, la ré-exécution des champs calculés et le remplissage des niveaux hiérarchiques ou des identifiants de fiche laissent l'historique et la date **Modifié** intacts.
 
 ## Onglet ADR
 

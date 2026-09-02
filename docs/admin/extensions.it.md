@@ -8,6 +8,10 @@ La pagina ha due schede: **Store** sfoglia il catalogo delle estensioni del forn
 
 **Le estensioni sono realizzate e firmate da Turbo EA** — non sono auto-sviluppate né aperte a terzi. Se ti serve una funzionalità su misura per la tua organizzazione, possiamo realizzarla e concederla in licenza per te. Vedi [la consulenza Turbo EA](https://www.turbo-ea.org/consulting).
 
+## Guide per ogni estensione
+
+Ogni estensione pubblicata nello store ha la propria guida: che cosa fa, come configurarla e come usarla ogni giorno. Si veda [Estensioni](../extensions/index.md).
+
 ## Come funziona la fiducia
 
 Due verifiche indipendenti proteggono l'istanza:
@@ -27,7 +31,7 @@ L'ID viaggia con un trasferimento del workspace, quindi il passaggio a un nuovo 
 
 ## La scheda Store
 
-La scheda **Store** funziona senza alcuna configurazione ed elenca le estensioni pubblicate dal fornitore con descrizione e prezzo:
+La scheda **Store** funziona senza alcuna configurazione ed elenca le estensioni pubblicate dal fornitore come una griglia di riquadri compatti: logo, nome, stato della licenza e prezzo. Fai clic su un riquadro per aprire a destra un pannello con la descrizione completa, le schermate, i tag di categoria e i crediti di origine e licenza. Le estensioni senza immagine mostrano un riquadro generato con le loro iniziali.
 
 - **Acquista** apre la pagina di pagamento in una nuova scheda del browser. Non appena il pagamento è confermato, la licenza viene applicata automaticamente (una copia arriva anche via e-mail).
 - **Installa** (o **Aggiorna** quando è pubblicata una versione più recente) verifica prima la licenza — se l'estensione non è ancora licenziata, una finestra propone di acquistarla o incollare una licenza, poi continua automaticamente — e scarica il pacchetto con esattamente la stessa verifica della firma e la stessa anteprima di simulazione di un caricamento manuale. Le estensioni con demo mostrano un link **Guardalo in azione**, e una versione più recente pubblicata trasforma il pulsante in **Aggiorna**.
@@ -37,6 +41,8 @@ Quando il catalogo include categorie, ogni elemento mostra piccole pillole (free
 La scheda Store è in sola lettura e anonima: nessun account, nessun token, e nulla della tua istanza viene inviato — viene letto solo il catalogo pubblico del fornitore. Le istanze isolate non richiedono alcuna configurazione — la scheda mostra allora semplicemente un avviso cordiale — e usano il flusso basato su file qui sotto; il sito dello store del fornitore offre gli stessi acquisti e download da qualsiasi browser connesso a Internet. Se qualcosa tra la tua istanza e lo store blocca la richiesta — un proxy, un firewall o una protezione anti-bot davanti allo store —, la scheda lo segnala e indica lo stato HTTP ricevuto, così un'istanza bloccata non viene mai scambiata per una isolata.
 
 L'istanza **controlla inoltre il catalogo una volta al giorno** e segnala i cambiamenti, così una nuova estensione — o una correzione di sicurezza per una già in uso — non deve attendere che qualcuno apra per caso questa pagina. Gli amministratori (chiunque abbia un ruolo che concede `admin.manage_extensions`) ricevono una notifica nella campanella quando una nuova estensione viene pubblicata nello store e un'altra quando un'estensione installata ha una versione più recente. Ogni cambiamento viene annunciato una sola volta e una giornata di rilasci intensa arriva come una notifica per tipo anziché una per estensione. Non viene scaricato né installato nulla: la notifica ti porta semplicemente qui. Il controllo giornaliero può essere disattivato del tutto in [Admin → Impostazioni → Notifiche di aggiornamento](settings.md#update-notifications).
+
+La scheda mostra anche quando lo store è stato letto l'ultima volta e un pulsante **Verifica ora** che esegue subito il controllo e riporta ciò che ha trovato: puoi così confermare che il controllo quotidiano funziona senza aspettare un giorno. Se un controllo non è riuscito, il motivo viene mostrato qui anziché restare silenzioso.
 
 ## Prove
 
@@ -110,6 +116,7 @@ La maggior parte delle estensioni lavora solo con i propri dati. Un'estensione c
 - `core.cards.read` — leggere schede, relazioni e il metamodello, ad esempio perché un connettore possa abbinare le vostre applicazioni ai record di un sistema esterno. Le schede archiviate restano fuori dalla vista.
 - `core.cards.write` — creare, aggiornare o archiviare schede e aggiungere relazioni, con esattamente la stessa validazione applicata dall'editor dell'app. Gli aggiornamenti uniscono i valori dei campi invece di sostituirli, così un'estensione non può mai cancellare dati che non gestisce, e **non esiste l'eliminazione definitiva** — l'archiviazione, con la sua finestra di ripristino, è l'unica rimozione possibile per un'estensione.
 - `core.events.card` — ricevere gli eventi di modifica di schede e relazioni, così che un connettore reagisca subito ai cambiamenti dell'inventario invece di attendere il prossimo ciclo di polling.
+- `core.notifications.channel` — recapitare le notifiche che avete attivato su un canale proprio dell'estensione, ad esempio un messaggio di chat. L'estensione riceve titolo, messaggio e collegamento di una notifica oltre al vostro identificativo utente; non riceve il vostro indirizzo e-mail a meno che dichiari anche `core.users.read`, e non riceve mai un tipo che non avete attivato per essa. Le notifiche che restano solo nella campanella non vengono mai inviate a un canale di estensione.
 
 I grant fanno parte del bundle firmato dal fornitore: sono fissati al momento del confezionamento e visibili prima dell'installazione. Valgono solo finché l'estensione è installata, abilitata e con licenza — disabilitarla o lasciar scadere la licenza revoca l'accesso immediatamente, senza riavvio. Ogni modifica fatta da un'estensione è registrata in **Admin → Log di audit** con origine **Estensione**, e un todo replicato da un tracker esterno mostra un chip che rimanda all'elemento esterno.
 
@@ -117,4 +124,4 @@ Ogni modifica fatta da un'estensione compare in **Admin → Registro di audit** 
 
 ## Dove compaiono le pagine delle estensioni
 
-Le pagine delle estensioni compaiono nella navigazione una volta che l'estensione è installata e provvista di licenza — di solito come una propria voce di menu di primo livello, anche se alcuni report vengono collocati sotto il menu **Report** accanto a quelli integrati.
+Le pagine delle estensioni compaiono nella navigazione una volta che l'estensione è installata e provvista di licenza — di solito come una propria voce di menu di primo livello, anche se alcune vengono collocate dentro un menu del core accanto alle voci integrate: i report sotto il menu **Report**, e le pagine di governance, rischio o conformità sotto **GRC**. Una pagina raggruppata torna a essere una voce di primo livello quando il suo menu non è disponibile — il modulo è disattivato, oppure non hai il permesso relativo — così non scompare mai dalla navigazione.

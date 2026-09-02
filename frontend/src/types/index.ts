@@ -101,6 +101,10 @@ export interface SsoConfig {
   extra_auth_params?: Record<string, string>;
   registration_enabled?: boolean;
   local_login_available?: boolean;
+  /** Instance sits behind an authenticating reverse proxy (#1006). */
+  proxy_auth?: boolean;
+  /** Where logout sends the browser so the proxy session ends too. */
+  proxy_logout_url?: string;
 }
 
 export interface SsoInvitation {
@@ -115,6 +119,8 @@ export interface StakeholderRoleDef {
   key: string;
   label: string;
   allowed_types: string[] | null;
+  /** Absent on the JSONB fallback and the hardcoded default roles. */
+  color?: string | null;
   translations?: MetamodelTranslations;
 }
 
@@ -769,9 +775,35 @@ export interface ReleaseNotesResponse {
   current_version: string;
 }
 
+/** One row of the notification preferences dialog, as the server describes it. */
+export interface NotificationTypeSpec {
+  key: string;
+  in_app_default: boolean;
+  email_default: boolean;
+  /** Never leaves the bell: the email switch renders off and disabled. */
+  in_app_only: boolean;
+  /** Always mails: the email switch renders on and disabled. */
+  email_locked: boolean;
+}
+
+/** A notification channel an installed extension currently delivers on. */
+export interface NotificationChannelDescriptor {
+  key: string;
+  extension_key: string;
+}
+
 export interface NotificationPreferences {
   in_app: Record<string, boolean>;
   email: Record<string, boolean>;
+  /** Per-extension-channel opt-ins, namespaced so a channel key can never
+   *  collide with a core one. Always opt-in-off. */
+  channels?: Record<string, Record<string, boolean>>;
+  /** Channels the backend reports as live — the half that decides whether a
+   *  column renders at all. */
+  available_channels?: NotificationChannelDescriptor[];
+  /** Rows to render. Server-owned, so the list can no longer drift from what
+   *  the backend actually emits. */
+  types?: NotificationTypeSpec[];
 }
 
 // ---------------------------------------------------------------------------
@@ -970,12 +1002,26 @@ export interface SurveyField {
   related_type_key?: string;
 }
 
+/** Unit of a survey staleness window. Days and months only — weeks add
+ *  nothing over days, and years are just months. Mirrors STALENESS_UNITS in
+ *  backend/app/services/card_flags.py. */
+export type StalenessUnit = "days" | "months";
+
+/** "Not updated in the last N days/months". Stored relative rather than as a
+ *  resolved date, so a survey re-sent later re-reads the landscape as it is
+ *  then rather than as it was when the survey was authored. */
+export interface StalenessWindow {
+  value: number;
+  unit: StalenessUnit;
+}
+
 export interface SurveyTargetFilters {
   related_type?: string;
   related_ids?: string[];
   card_ids?: string[];
   tag_ids?: string[];
   attribute_filters?: { key: string; op: string; value: string }[];
+  not_updated_for?: StalenessWindow;
 }
 
 export interface Survey {
@@ -1020,12 +1066,22 @@ export interface SurveyPreviewTarget {
   card_id: string;
   card_name: string;
   card_type: string;
-  users: { user_id: string; display_name: string; email: string; role: string }[];
+  /** One entry per user, carrying every targeted role they hold on this card
+   *  (sorted server-side). Role **keys** — resolve them for display. */
+  users: { user_id: string; display_name: string; email: string; roles: string[] }[];
 }
 
 export interface SurveyPreviewResult {
+  /** Cards that will actually be surveyed — matched the filters AND have a
+   *  stakeholder in one of the target roles. A subset of `total_matched`. */
   total_cards: number;
+  /** Cards the filters matched, recipient or not. */
+  total_matched: number;
+  /** Distinct people across every target card. */
   total_users: number;
+  /** Survey requests `send` will create — one per (card, user), so a person on
+   *  several cards counts once in `total_users` and once per card here. */
+  total_requests: number;
   targets: SurveyPreviewTarget[];
 }
 

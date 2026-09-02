@@ -165,6 +165,8 @@
   "dashboard.activity.action.file.uploaded": "загрузил файл к",
   "dashboard.activity.action.file.deleted": "удалил файл у",
   "dashboard.activity.action.comment.created": "прокомментировал",
+  "dashboard.activity.action.tag.added": "добавил тег к",
+  "dashboard.activity.action.tag.removed": "удалил тег у",
   "dashboard.activity.action.process_diagram.saved": "сохранил диаграмму процесса для",
   "dashboard.activity.action.process_diagram.deleted": "удалил диаграмму процесса для",
   "dashboard.activity.action.process_flow.submitted": "отправил поток процесса для",
@@ -306,6 +308,7 @@
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "Доступ запрещён",
   "accessDenied.body": "У вас нет разрешения на просмотр этой страницы. Обратитесь к администратору, если вам нужен доступ.",
+  "accessDenied.redirectedToDashboard": "У вас нет доступа к этой странице, поэтому мы перенаправили вас на панель управления.",
   "moduleDisabled.title": "{{module}} отключён",
   "moduleDisabled.body": "Модуль {{module}} в настоящее время отключён администратором. Включите его в настройках администратора, чтобы получить доступ к этому разделу.",
   "moduleDisabled.backToDashboard": "Вернуться к панели",
@@ -463,5 +466,6 @@
   "cardDisplay.clearAll": "Очистить всё",
   "cardDisplay.subtypeLine": "Подтип",
   "cardDisplay.linesHint": "Первые {{count}} отображаются на карточке.",
+  "cardDisplay.linesHintAll": "Каждый выбранный пункт отображается на карточке, размер которой увеличивается.",
   "cardDisplay.noFields": "Нет доступных полей"
 }

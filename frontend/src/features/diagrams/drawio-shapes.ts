@@ -93,6 +93,15 @@ export interface RelationEdgeStyleOptions {
   pending?: boolean;
   /** The diagram is hiding relation verbs (see setRelationLabelsHidden). */
   hideLabel?: boolean;
+  /** Route with right-angled bends through explicit waypoints instead of the
+   *  default ER router. The ER router ignores fixed perimeter anchors and
+   *  re-routes freely, so a view handing over its own computed path needs
+   *  this. Only that caller sets it; everyone else keeps the ER routing. */
+  orthogonal?: boolean;
+  /** Fixed attachment point on the source / target shape, as {x, y} fractions
+   *  of its box (mxGraph `exitX/exitY`, `entryX/entryY`). */
+  exit?: { x: number; y: number };
+  entry?: { x: number; y: number };
 }
 
 /**
@@ -143,9 +152,14 @@ function relationArrowParts(opts: RelationEdgeStyleOptions): string {
  */
 export function relationEdgeStyle(opts: RelationEdgeStyleOptions = {}): string {
   const arrow = relationArrowParts(opts);
+  const router = opts.orthogonal ? "orthogonalEdgeStyle;rounded=1" : "entityRelationEdgeStyle";
+  const anchor = (p: { x: number; y: number } | undefined, kind: "exit" | "entry") =>
+    p ? `${kind}X=${p.x};${kind}Y=${p.y};${kind}Dx=0;${kind}Dy=0;` : "";
   return (
-    `edgeStyle=entityRelationEdgeStyle;strokeColor=${RELATION_EDGE_COLOR};` +
+    `edgeStyle=${router};strokeColor=${RELATION_EDGE_COLOR};` +
     `strokeWidth=1.5;${arrow};fontSize=10;fontColor=#666;` +
+    anchor(opts.exit, "exit") +
+    anchor(opts.entry, "entry") +
     (opts.pending ? "dashed=1;dashPattern=5 3;" : "") +
     (opts.hideLabel ? `${NO_LABEL_PART};` : "")
   );
@@ -268,19 +282,72 @@ export interface CardDetailLine {
 }
 
 /**
- * How many detail rows a card cell renders. Mirrors the Layered Dependency
- * View's own cap so a diagram and the report it was generated from show the
- * same amount — and because a 210x60 cell fits the name plus two small rows
- * and nothing more. mxGraph paints label overflow *outside* the shape, so this
- * is a hard limit, not a preference.
+ * Vertical room one detail row needs.
+ *
+ * A card cell renders every row it is given — there is no cap here, unlike the
+ * Layered Dependency View, whose nodes are laid out at a fixed size. mxGraph
+ * paints label overflow *outside* the shape, so the room has to come from
+ * somewhere: {@link applyCardLabels} grows the cell by this much per row and
+ * shrinks it back by the same when rows are removed.
+ *
+ * Rows render at `font-size:9px`; 14px covers the line box plus mxGraph's own
+ * label padding.
  */
-export const MAX_CARD_DETAIL_LINES = 2;
+export const CARD_DETAIL_LINE_H = 14;
+
+/** Natural height of a freshly inserted top-level card cell. */
+export const CARD_BASE_H = 60;
+
+/**
+ * How many detail rows a card cell holds without growing.
+ *
+ * Every insertion size was drawn around a name plus a couple of small lines —
+ * which is exactly what the old two-row cap was measuring — so the first two
+ * rows are free at 210x60, 190x40 and 180x50 alike, and no diagram already
+ * showing them changes height on upgrade.
+ */
+export const CARD_FREE_DETAIL_ROWS = 2;
+
+/**
+ * Height a cell owes to `count` detail rows — zero for the first
+ * {@link CARD_FREE_DETAIL_ROWS}, which every base size already had room for.
+ *
+ * Exported because more than the resizer needs it: the collapse-confirm check
+ * subtracts it before comparing a child's height against the baseline captured
+ * at expand time, so a cell the display pass grew doesn't read as a cell the
+ * user resized.
+ */
+export function detailRowsHeight(count: number): number {
+  return Math.max(0, count - CARD_FREE_DETAIL_ROWS) * CARD_DETAIL_LINE_H;
+}
+
+/** Height of a swimlane container's title strip with no detail rows on it. */
+export const CONTAINER_HEADER_H = 28;
+
+/**
+ * Header height for a container showing `count` detail rows.
+ *
+ * No free allowance, unlike {@link detailRowsHeight}: the strip was drawn for
+ * the name alone, where a 210x60 card had room for two small lines already.
+ */
+export function containerHeaderHeight(count: number): number {
+  return CONTAINER_HEADER_H + count * CARD_DETAIL_LINE_H;
+}
+
+/** True when a cell's style renders it as a swimlane container. */
+export function isSwimlaneStyle(style: unknown): boolean {
+  return String(style ?? "").includes("shape=swimlane");
+}
 
 /**
  * Build a card cell's `label` value. **The single renderer** — every path that
  * labels a card goes through here, the same rule `relationEdgeStyle` enforces
  * for edges, so a card cannot read one way when inserted from the picker and
  * another when pulled in by an expand.
+ *
+ * Every row is rendered: a card cell is resizable, so the answer to "more rows
+ * than fit" is a taller cell ({@link CARD_DETAIL_LINE_H}), not a truncated
+ * label. Whatever the reader ticked, the shape says.
  *
  * With no detail lines the result is the escaped bare name, byte-identical to
  * what shipped before for any name without `& < > " '` — so an untouched
@@ -292,9 +359,8 @@ export const MAX_CARD_DETAIL_LINES = 2;
  */
 export function composeCardLabel(name: string, lines: CardDetailLine[] = []): string {
   const safeName = escapeHtml(name);
-  const rows = lines.slice(0, MAX_CARD_DETAIL_LINES);
-  if (rows.length === 0) return safeName;
-  const detail = rows
+  if (lines.length === 0) return safeName;
+  const detail = lines
     .map(
       (l) =>
         `<div style="font-size:9px;font-weight:normal">` +
@@ -441,7 +507,7 @@ export function buildCardCellData(opts: InsertCardOpts): CardCellData {
     x,
     y,
     width: 210,
-    height: 60,
+    height: CARD_BASE_H,
     style,
   };
 }
@@ -1016,6 +1082,49 @@ const CHILD_GAP_Y = 10;
 const CHILD_GAP_X = 60;
 const TYPE_GROUP_GAP = 16;
 
+/** Height of a card tiled inside a container by drill-down / roll-up. Shared
+ *  by both so {@link baseCardHeight} cannot drift from what they insert. */
+const NESTED_CARD_H = 50;
+
+/**
+ * The height a card cell would have with no detail rows on it.
+ *
+ * {@link applyCardLabels} floors its resize at `base + extra rows`, so this has
+ * to match what each insertion path actually creates: an expanded child is
+ * {@link CHILD_CARD_H}, a drill-down / roll-up child sits at
+ * {@link NESTED_CARD_H}, and everything else is a full card.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function baseCardHeight(cell: any): number {
+  if (!cell?.value?.getAttribute) return CARD_BASE_H;
+  if (cell.value.getAttribute("parentGroupCell")) return CHILD_CARD_H;
+  if (isContainerChild(cell)) return NESTED_CARD_H;
+  return CARD_BASE_H;
+}
+
+/** A card tiled inside a swimlane container by drill-down / roll-up. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isContainerChild(cell: any): boolean {
+  if (!cell?.value?.getAttribute) return false;
+  return Boolean(
+    cell.value.getAttribute("drillDownChild") || cell.value.getAttribute("rollUpChild"),
+  );
+}
+
+/**
+ * The most detail rows a cell may render.
+ *
+ * Free-standing cards — top level or expanded out of a group — have none: they
+ * grow. A drill-down / roll-up child does **not**, because it sits in a fixed
+ * grid slot inside its container: making it taller would push it through the
+ * container's floor and over the row beneath it. It shows what fits for free
+ * and stops there.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function detailRowCap(cell: any): number {
+  return isContainerChild(cell) ? CARD_FREE_DETAIL_ROWS : Number.POSITIVE_INFINITY;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getMxGraph(iframe: HTMLIFrameElement): { win: any; graph: any } | null {
   try {
@@ -1039,6 +1148,10 @@ export interface ChildLayout {
   width: number;
   height: number;
   style: string;
+  /** The detail rows the child was showing. Restored with the geometry: a
+   *  height without the rows that earned it reads as a cell with room to
+   *  spare, and the next display pass would grow it a second time. */
+  detail: CardDetailLine[];
 }
 
 export interface ExpandChildData {
@@ -1102,6 +1215,7 @@ export function captureGroupChildLayout(
       width: geo.width,
       height: geo.height,
       style: (model.getStyle(cell) || "") as string,
+      detail: readCardDetail(cell.value),
     });
   }
   return out;
@@ -1209,7 +1323,7 @@ export function expandCardGroup(
 
       const xmlDoc = win.mxUtils.createXmlDocument();
       const obj = xmlDoc.createElement("object");
-      setCardLabel(obj, ch.name);
+      setCardLabel(obj, ch.name, ch.layout?.detail ?? []);
       obj.setAttribute("cardId", ch.id);
       obj.setAttribute("cardType", ch.type);
       obj.setAttribute("parentGroupCell", parentCellId);
@@ -2283,7 +2397,7 @@ export function dedupClonedCell(
 ): { mode: "regenerated"; tempId: string } | { mode: "unlinked" } | null {
   const ctx = getMxGraph(iframe);
   if (!ctx) return null;
-  const { graph } = ctx;
+  const { win, graph } = ctx;
 
   const model = graph.getModel();
   const cell = model.getCell(cellId);
@@ -2302,7 +2416,10 @@ export function dedupClonedCell(
 
     // Collapse the label first, while cardId is still readable: an unlinked
     // stub must not keep showing attribute rows for a card it no longer
-    // points at, and nothing manages them once the link is gone.
+    // points at, and nothing manages them once the link is gone. Give back the
+    // height those rows were occupying too — the label pass skips a cell with
+    // no cardId, so nothing else ever will.
+    resizeForDetailRows(win, graph, cell, readCardDetail(cell.value).length, 0);
     setCardLabel(cell.value, readCardName(cell.value));
     cell.value.removeAttribute("cardId");
     if (cell.value.removeAttribute) {
@@ -2350,7 +2467,7 @@ export function unlinkCell(
 ): string | null {
   const ctx = getMxGraph(iframe);
   if (!ctx) return null;
-  const { graph } = ctx;
+  const { win, graph } = ctx;
 
   const model = graph.getModel();
   const cell = model.getCell(cellId);
@@ -2360,7 +2477,9 @@ export function unlinkCell(
 
   model.beginUpdate();
   try {
-    // Same reasoning as `dedupClonedCell`: drop the detail rows with the link.
+    // Same reasoning as `dedupClonedCell`: drop the detail rows, and the height
+    // they were occupying, with the link.
+    resizeForDetailRows(win, graph, cell, readCardDetail(cell.value).length, 0);
     setCardLabel(cell.value, readCardName(cell.value));
     cell.value.removeAttribute("cardId");
     if (cell.value.removeAttribute) {
@@ -2566,6 +2685,7 @@ export function convertShapeToContainer(
     // Ensure the cell carries an XML user-object so the swimlane header
     // can show a label.
     let value = cell.value;
+    let headerRows = 0;
     if (!value?.setAttribute) {
       const xmlDoc = win.mxUtils.createXmlDocument();
       const obj = xmlDoc.createElement("object");
@@ -2575,10 +2695,13 @@ export function convertShapeToContainer(
       model.setValue(cell, obj);
       value = obj;
     } else {
-      // A composed card turning into a swimlane: the header strip is ~28px, so
-      // collapse back to the bare name rather than render detail rows in it.
+      // A composed card turning into a swimlane keeps its detail rows: the
+      // header strip below is sized for them. Re-composed rather than carried
+      // over verbatim so the label goes back through the one renderer.
       const plain = readCardName(value);
-      value.setAttribute("label", composeCardLabel(plain || fallbackLabel));
+      const rows = readCardDetail(value);
+      headerRows = rows.length;
+      value.setAttribute("label", composeCardLabel(plain || fallbackLabel, rows));
     }
 
     // Make sure the container is big enough to hold cells — 320×220 is
@@ -2602,7 +2725,7 @@ export function convertShapeToContainer(
       cell,
       [
         "shape=swimlane",
-        "startSize=28",
+        `startSize=${containerHeaderHeight(headerRows)}`,
         "horizontal=1",
         `fillColor=${fill}`,
         `fontColor=${readableTextColor(fill)}`,
@@ -3226,7 +3349,7 @@ function insertChildVertex(
 
   const xmlDoc = win.mxUtils.createXmlDocument();
   const obj = xmlDoc.createElement("object");
-  setCardLabel(obj, ch.name);
+  setCardLabel(obj, ch.name, ch.layout?.detail ?? []);
   obj.setAttribute("cardId", ch.id);
   obj.setAttribute("cardType", ch.type);
   obj.setAttribute("parentGroupCell", parentCellId);
@@ -3284,8 +3407,7 @@ export function isContainerCell(iframe: HTMLIFrameElement, cellId: string): bool
   const { graph } = ctx;
   const cell = graph.getModel().getCell(cellId);
   if (!cell) return false;
-  const style = String(graph.getModel().getStyle(cell) || "");
-  return style.includes("shape=swimlane");
+  return isSwimlaneStyle(graph.getModel().getStyle(cell));
 }
 
 /** Return true when the cell currently lives INSIDE another swimlane
@@ -3303,8 +3425,7 @@ export function isInsideContainer(iframe: HTMLIFrameElement, cellId: string): bo
   // Default parent / layer cells are not containers.
   if (parent === graph.getDefaultParent()) return false;
   if (!parent.value?.getAttribute) return false;
-  const parentStyle = String(graph.getModel().getStyle(parent) || "");
-  return parentStyle.includes("shape=swimlane");
+  return isSwimlaneStyle(graph.getModel().getStyle(parent));
 }
 
 /** Return the set of cardIds currently nested as direct children of
@@ -3391,10 +3512,9 @@ export function drillDownInto(
   if (!geo) return [];
 
   // Layout constants tuned to feel like LeanIX's container drill-down.
-  const HEADER = 28;
   const PAD = 12;
   const CHILD_W = 180;
-  const CHILD_H = 50;
+  const CHILD_H = NESTED_CARD_H;
   const GAP = 10;
 
   // Is the cell already rendered as a swimlane container? If so, we
@@ -3403,11 +3523,20 @@ export function drillDownInto(
   // backfill a child they previously removed without rebuilding the
   // group from scratch.
   const currentStyle = String(model.getStyle(parentCell) || "");
-  const isAlreadyContainer = currentStyle.includes("shape=swimlane");
+  const isAlreadyContainer = isSwimlaneStyle(currentStyle);
   const existingChildCount =
     isAlreadyContainer && typeof model.getChildCount === "function"
       ? model.getChildCount(parentCell)
       : 0;
+
+  // The title strip has to hold the card's detail rows as well as its name.
+  // On a re-drill the style is deliberately left alone, so the live `startSize`
+  // is what the grid must clear — a backfilled child laid out against the bare
+  // constant would be tucked under a header that has since grown.
+  const HEADER = isAlreadyContainer
+    ? Number(readStylePart(currentStyle.split(";").filter(Boolean), "startSize")) ||
+      CONTAINER_HEADER_H
+    : containerHeaderHeight(readCardDetail(parentCell.value).length);
 
   const totalCount = existingChildCount + children.length;
   const COLS = Math.min(3, Math.max(1, totalCount));
@@ -3437,7 +3566,7 @@ export function drillDownInto(
         parentCell,
         [
           "shape=swimlane",
-          "startSize=" + HEADER,
+          `startSize=${HEADER}`,
           "horizontal=1",
           `fillColor=${parentColor}`,
           `fontColor=${readableTextColor(parentColor)}`,
@@ -3532,10 +3661,12 @@ export function rollUpInto(
   // Build the list of vertices to nest: the current card + a vertex per
   // sibling. Siblings that already exist on the canvas keep their cell;
   // missing ones are freshly inserted.
-  const HEADER = 28;
+  // Bare label at creation, so the strip starts at its natural height; the
+  // display pass grows it (and moves these children down) once the rows land.
+  const HEADER = CONTAINER_HEADER_H;
   const PAD = 12;
   const CHILD_W = 180;
-  const CHILD_H = 50;
+  const CHILD_H = NESTED_CARD_H;
   const GAP = 10;
   const count = 1 + siblings.length;
   const COLS = Math.min(3, Math.max(1, count));
@@ -3570,7 +3701,7 @@ export function rollUpInto(
       containerH,
       [
         "shape=swimlane",
-        "startSize=" + HEADER,
+        `startSize=${HEADER}`,
         "horizontal=1",
         `fillColor=${parent.color}`,
         `fontColor=${readableTextColor(parent.color)}`,
@@ -3945,18 +4076,26 @@ export function applyCardTypeIcons(
 }
 
 /**
- * Re-render every synced card cell's label with the caller's detail rows.
+ * Re-render every card cell's label with the caller's detail rows, resizing
+ * each cell to hold them.
  *
  * Modelled on `applyCardTypeIcons`: one pass over the live model, no fetches,
  * returns how many cells it touched. A card whose id is absent from the map is
- * reset to its bare name, which is how turning a field off clears the canvas.
+ * reset to its bare name and shrunk back, which is how turning a field off
+ * clears the canvas.
+ *
+ * **Every** cell bound to a card is covered — including the children of an
+ * expanded group, a drill-down container and a roll-up container. They used to
+ * be skipped because a 190x40 child could not hold rows and mxGraph paints
+ * label overflow outside the shape; now the cell grows instead, so a card reads
+ * the same whether it was inserted from the picker or pulled in with `+`. The
+ * one exception is a container child, which is pinned in a grid slot and so
+ * shows only what fits without growing — see {@link detailRowCap}.
  *
  * Deliberately skipped:
  *  - **pending cells** (`pending-…` ids) — `scanDiagramItems` feeds their name
  *    straight into `POST /cards`, so a composed label there would create a card
  *    literally named `<b>Foo</b>…`;
- *  - **child cells** (expanded groups, drill-down, roll-up) — they are 190x40
- *    or smaller and mxGraph paints label overflow outside the shape;
  *  - **cells with no `cardId`** — unlinked stubs and plain DrawIO shapes are
  *    nobody's to rewrite.
  */
@@ -3966,7 +4105,7 @@ export function applyCardLabels(
 ): number {
   const ctx = getMxGraph(iframe);
   if (!ctx) return 0;
-  const { graph } = ctx;
+  const { win, graph } = ctx;
   const model = graph.getModel();
   const cells = model.cells || {};
   let touched = 0;
@@ -3978,23 +4117,27 @@ export function applyCardLabels(
       if (cell.edge) continue;
       const cardId = cell.value.getAttribute("cardId");
       if (!cardId || cardId.startsWith("pending-")) continue;
-      if (
-        cell.value.getAttribute("parentGroupCell") ||
-        cell.value.getAttribute("drillDownChild") ||
-        cell.value.getAttribute("rollUpChild")
-      ) {
-        continue;
-      }
       // Adopting a cell that predates `cardName`: its `label` is the name, but
       // it may carry hand-applied markup, which would otherwise be escaped and
       // rendered as literal text. `firstLineText` recovers the plain name.
       const stamped = cell.value.getAttribute(CARD_NAME_ATTR);
       const name = stamped || firstLineText(cell.value.getAttribute("label") || "");
       if (!name) continue;
-      const next = composeCardLabel(name, linesByCardId.get(cardId) ?? []);
-      if (next !== (cell.value.getAttribute("label") || "")) {
-        cell.value.setAttribute("label", next);
-        cell.value.setAttribute(CARD_NAME_ATTR, name);
+      const rows = (linesByCardId.get(cardId) ?? []).slice(0, detailRowCap(cell));
+      const next = composeCardLabel(name, rows);
+      const changed = next !== (cell.value.getAttribute("label") || "");
+      if (changed) {
+        // `readCardDetail` BEFORE the write — the row count the cell is
+        // currently sized for is what the resize below measures against.
+        const was = readCardDetail(cell.value).length;
+        // A container carries its label in a title strip, not in the body, so
+        // the room has to come out of `startSize` rather than the cell height.
+        if (isSwimlaneStyle(model.getStyle(cell))) {
+          resizeContainerHeader(win, graph, model, cell, was, rows.length);
+        } else {
+          resizeForDetailRows(win, graph, cell, was, rows.length);
+        }
+        setCardLabel(cell.value, name, rows);
         graph.refresh(cell);
         touched += 1;
       }
@@ -4003,6 +4146,104 @@ export function applyCardLabels(
     model.endUpdate();
   }
   return touched;
+}
+
+/**
+ * Grow or shrink a card cell to hold `newCount` detail rows.
+ *
+ * The height moves by the **delta** rather than being recomputed from scratch,
+ * because this pass re-runs on every diagram open: snapping to
+ * `base + rows * step` each time would silently undo a height the user had
+ * dragged themselves. The floor is the safety net — it guarantees the rows fit
+ * whatever the current height is, and repairs a cell whose stored row count and
+ * height disagree (a diagram generated by the Layered Dependency View before
+ * card cells could grow carries every row in a fixed 72px box).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resizeForDetailRows(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  win: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  graph: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cell: any,
+  oldCount: number,
+  newCount: number,
+): void {
+  const geo = graph.getCellGeometry?.(cell);
+  if (!geo) return;
+  // Only rows past what the cell already had room for cost height.
+  const owed = detailRowsHeight(newCount);
+  const target = Math.max(
+    geo.height + owed - detailRowsHeight(oldCount),
+    baseCardHeight(cell) + owed,
+  );
+  if (target === geo.height) return;
+  graph.resizeCell(cell, new win.mxRectangle(geo.x, geo.y, geo.width, target));
+}
+
+/**
+ * Grow or shrink a swimlane container's title strip to hold `newCount` rows.
+ *
+ * Three moves, and the order matters: widen `startSize`, give the container the
+ * same amount of extra height so its body keeps exactly the room its grid
+ * needs, then push every child down by that amount — the top grid row would
+ * otherwise end up underneath the header. Children move last so mxGraph's
+ * `constrainChild` has somewhere to put them.
+ *
+ * Delta-plus-floor like {@link resizeForDetailRows}, so a header divider the
+ * user dragged themselves survives the pass, and a second identical pass
+ * computes a zero delta and touches nothing.
+ */
+function resizeContainerHeader(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  win: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  graph: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  model: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cell: any,
+  oldCount: number,
+  newCount: number,
+): void {
+  const geo = graph.getCellGeometry?.(cell);
+  if (!geo) return;
+  const parts = String(model.getStyle(cell) || "").split(";").filter(Boolean);
+  const current = Number(readStylePart(parts, "startSize") ?? CONTAINER_HEADER_H);
+  if (!Number.isFinite(current)) return;
+  const next = Math.max(
+    current + (newCount - oldCount) * CARD_DETAIL_LINE_H,
+    containerHeaderHeight(newCount),
+  );
+  const delta = next - current;
+  // Everything below moves together — read the geometry first so a cell that
+  // has none cannot end up with a widened strip and an unchanged box.
+  if (delta === 0) return;
+
+  model.setStyle(
+    cell,
+    parts
+      .filter((part) => !part.startsWith("startSize="))
+      .concat([`startSize=${next}`])
+      .join(";"),
+  );
+  graph.resizeCell(
+    cell,
+    new win.mxRectangle(geo.x, geo.y, geo.width, geo.height + delta),
+  );
+
+  const count = typeof model.getChildCount === "function" ? model.getChildCount(cell) : 0;
+  for (let i = 0; i < count; i++) {
+    const child = model.getChildAt(cell, i);
+    if (!child || child.edge) continue;
+    const cgeo = graph.getCellGeometry?.(child);
+    if (!cgeo) continue;
+    graph.resizeCell(
+      child,
+      new win.mxRectangle(cgeo.x, cgeo.y + delta, cgeo.width, cgeo.height),
+    );
+  }
 }
 
 /**
@@ -4098,6 +4339,16 @@ export interface DiagramRelInput {
   targetCardId: string;
   relationType: string;
   label: string;
+  /** Which way the data flows, so the generated diagram puts the arrowhead
+   *  where the source view drew it. */
+  flow?: RelationFlowDirection;
+  /** Where the edge meets each card, as {x, y} fractions of its box. */
+  exit?: { x: number; y: number };
+  entry?: { x: number; y: number };
+  /** Bend points of the source view's own route, in the same coordinate space
+   *  as the card positions. Given these, the edge is routed orthogonally
+   *  through them instead of being re-routed by DrawIO. */
+  waypoints?: { x: number; y: number }[];
 }
 
 /** A background swim-lane box (one per EA layer). */
@@ -4176,6 +4427,10 @@ export function buildLdvDiagramXml(
       x: c.x,
       y: c.y,
     });
+    // The source view renders at most two rows in a fixed-size node but exports
+    // every row the reader ticked, so its own height cannot be trusted to hold
+    // them. Take whichever is taller.
+    const h = Math.max(c.h, CARD_BASE_H + detailRowsHeight(c.detailLines?.length ?? 0));
     // Two escaping layers, in this order: `composeCardLabel` escaped for HTML
     // (it is rendered under `html=1`), `escapeXml` now escapes for the XML
     // attribute. Reverse them and every `&` in a card name renders as `&amp;`.
@@ -4187,7 +4442,7 @@ export function buildLdvDiagramXml(
           : "") +
         `cardId="${escapeXml(c.cardId)}" cardType="${escapeXml(c.cardType)}">` +
         `<mxCell style="${escapeXml(style)}" vertex="1" parent="1">` +
-        `<mxGeometry x="${r(c.x)}" y="${r(c.y)}" width="${r(c.w)}" height="${r(c.h)}" ` +
+        `<mxGeometry x="${r(c.x)}" y="${r(c.y)}" width="${r(c.w)}" height="${r(h)}" ` +
         `as="geometry"/></mxCell></object>`,
     );
   });
@@ -4200,7 +4455,20 @@ export function buildLdvDiagramXml(
     if (!src || !tgt) continue;
     // Edges are emitted source -> target, so the default (end) arrowhead
     // already points at the relation's target.
-    const style = `${relationEdgeStyle()}html=1;`;
+    const routed = !!rel.waypoints?.length || !!rel.exit || !!rel.entry;
+    const style = `${relationEdgeStyle({
+      flow: rel.flow,
+      orthogonal: routed,
+      exit: rel.exit,
+      entry: rel.entry,
+    })}html=1;`;
+    // A route the caller computed travels as explicit waypoints; without one
+    // the edge keeps an empty geometry and DrawIO routes it itself.
+    const geometry = rel.waypoints?.length
+      ? `<mxGeometry relative="1" as="geometry"><Array as="points">` +
+        rel.waypoints.map((p) => `<mxPoint x="${r(p.x)}" y="${r(p.y)}"/>`).join("") +
+        `</Array></mxGeometry>`
+      : `<mxGeometry relative="1" as="geometry"/>`;
     // Only stamp a relationType for real relations; synthetic/hierarchy edges
     // (empty type) render as plain labelled lines.
     const relTypeAttr = rel.relationType
@@ -4210,7 +4478,7 @@ export function buildLdvDiagramXml(
       `<object id="edge-${edgeIdx}" label="${escapeXml(rel.label)}"${relTypeAttr}>` +
         `<mxCell style="${escapeXml(style)}" edge="1" parent="1" ` +
         `source="${escapeXml(src)}" target="${escapeXml(tgt)}">` +
-        `<mxGeometry relative="1" as="geometry"/></mxCell></object>`,
+        `${geometry}</mxCell></object>`,
     );
     edgeIdx += 1;
   }

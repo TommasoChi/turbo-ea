@@ -8,6 +8,10 @@ Die Seite hat zwei Tabs: **Store** durchsucht den Erweiterungskatalog Ihres Anbi
 
 **Erweiterungen werden von Turbo EA erstellt und signiert** — sie sind nicht selbst erstellbar und nicht für Dritte offen. Wenn Sie eine auf Ihre Organisation zugeschnittene Funktion benötigen, erstellen und lizenzieren wir sie für Sie. Siehe [Turbo-EA-Beratung](https://www.turbo-ea.org/consulting).
 
+## Anleitungen zu den einzelnen Erweiterungen
+
+Zu jeder im Store veröffentlichten Erweiterung gibt es eine eigene Anleitung — was sie leistet, wie sie eingerichtet wird und wie man sie im Alltag nutzt. Siehe [Erweiterungen](../extensions/index.md).
+
 ## So funktioniert das Vertrauensmodell
 
 Zwei unabhängige Prüfungen schützen Ihre Instanz:
@@ -27,7 +31,7 @@ Die ID wandert mit einem Workspace-Transfer mit, sodass ein Umzug auf einen neue
 
 ## Der Store-Tab
 
-Der Tab **Store** funktioniert ohne jede Konfiguration und listet die veröffentlichten Erweiterungen des Anbieters mit Beschreibung und Preis:
+Der Tab **Store** funktioniert ohne jede Konfiguration und listet die veröffentlichten Erweiterungen des Anbieters als Raster kompakter Kacheln auf – Logo, Name, Lizenzstatus und Preis. Ein Klick auf eine Kachel öffnet rechts ein Panel mit der vollständigen Beschreibung, Screenshots, Kategorie-Tags sowie Quellen- und Lizenzangaben. Erweiterungen ohne eigenes Logo erhalten eine generierte Kachel mit ihren Initialen.
 
 - **Kaufen** öffnet die Zahlungsseite in einem neuen Browser-Tab. Sobald die Zahlung bestätigt ist, wird Ihre Lizenz automatisch angewendet (eine Kopie kommt zusätzlich per E-Mail).
 - **Installieren** (bzw. **Aktualisieren**, wenn eine neuere Version veröffentlicht ist) prüft zuerst Ihre Lizenz — fehlt sie, bietet ein Dialog Kauf oder Einfügen einer Lizenz an und fährt danach automatisch fort — und lädt das Paket durch exakt dieselbe Signaturprüfung und Dry-Run-Vorschau wie ein manueller Upload. Erweiterungen mit Demo zeigen einen **In Aktion ansehen**-Link, und eine veröffentlichte neuere Version macht aus der Schaltfläche **Aktualisieren**.
@@ -37,6 +41,8 @@ Wenn der Katalog Kategorien enthält, zeigt jeder Eintrag kleine Pillen (free od
 Der Store-Tab ist schreibgeschützt und anonym: kein Konto, kein Token, und es werden keinerlei Informationen über Ihre Instanz übertragen — es wird nur der öffentliche Katalog des Anbieters gelesen. Abgeschottete Instanzen brauchen keine Konfiguration — der Tab zeigt dann einfach einen freundlichen Hinweis — und nutzen den dateibasierten Ablauf unten; die Storefront-Website des Anbieters bietet dieselben Käufe und Downloads von jedem Browser mit Internetzugang. Wenn etwas zwischen Ihrer Instanz und dem Store die Anfrage blockiert — ein Proxy, eine Firewall oder ein Bot-Schutz vor dem Store —, sagt der Tab dies und nennt den zurückgegebenen HTTP-Status, sodass eine blockierte Instanz nie mit einer abgeschotteten verwechselt wird.
 
 Die Instanz **prüft den Katalog außerdem einmal täglich** und meldet Änderungen, damit eine neue Erweiterung — oder ein Sicherheitsfix für eine bereits genutzte — nicht darauf warten muss, dass jemand zufällig diese Seite öffnet. Administratoren (alle, deren Rolle `admin.manage_extensions` gewährt) erhalten eine Benachrichtigung in der Glocke, wenn eine neue Erweiterung im Store veröffentlicht wird, und eine weitere, wenn für eine installierte Erweiterung eine neuere Version vorliegt. Jede Änderung wird einmal angekündigt, und ein ereignisreicher Release-Tag kommt als eine Benachrichtigung pro Art an, nicht als eine pro Erweiterung. Es wird nichts heruntergeladen oder installiert — die Benachrichtigung führt Sie lediglich hierher. Die tägliche Prüfung lässt sich unter [Admin → Einstellungen → Update-Benachrichtigungen](settings.md#update-notifications) vollständig deaktivieren.
+
+Der Tab zeigt außerdem, wann der Store zuletzt gelesen wurde, sowie eine Schaltfläche **Jetzt prüfen**, die die Prüfung sofort ausführt und das Ergebnis meldet – so lässt sich die tägliche Prüfung bestätigen, ohne einen Tag zu warten. Ist eine Prüfung fehlgeschlagen, wird der Grund hier angezeigt statt stillschweigend verworfen.
 
 ## Testphasen
 
@@ -110,6 +116,7 @@ Die meisten Erweiterungen arbeiten nur mit ihren eigenen Daten. Eine Erweiterung
 - `core.cards.read` — Karten, Relationen und das Metamodell lesen, z. B. damit ein Konnektor Ihre Applikationen mit Einträgen in einem externen System abgleichen kann. Archivierte Karten bleiben ausgeblendet.
 - `core.cards.write` — Karten anlegen, ändern oder archivieren und Relationen hinzufügen, mit exakt derselben Validierung wie im Editor der App. Änderungen führen Feldwerte zusammen statt sie zu ersetzen, sodass eine Erweiterung niemals Daten löschen kann, die sie nicht verwaltet, und es gibt **kein endgültiges Löschen** — Archivieren mit Wiederherstellungsfenster ist die einzige Entfernung, die einer Erweiterung möglich ist.
 - `core.events.card` — Änderungsereignisse zu Karten und Relationen empfangen, damit ein Konnektor sofort auf Inventaränderungen reagiert statt erst beim nächsten Abfragezyklus.
+- `core.notifications.channel` — Benachrichtigungen, für die Sie sich entschieden haben, über einen eigenen Kanal der Erweiterung zustellen, etwa als Chat-Nachricht. Die Erweiterung erhält Titel, Text und Link einer Benachrichtigung sowie Ihre Benutzer-ID; Ihre E-Mail-Adresse erhält sie nur, wenn sie zusätzlich `core.users.read` deklariert, und sie erhält nie einen Typ, den Sie für sie nicht aktiviert haben. Benachrichtigungen, die nur in der Glocke bleiben, werden nie an einen Erweiterungskanal gesendet.
 
 Grants sind Teil des vom Anbieter signierten Bundles, stehen also beim Paketieren fest und sind vor der Installation sichtbar. Sie gelten nur, solange die Erweiterung installiert, aktiviert und lizenziert ist — Deaktivieren oder ein Lizenzablauf entzieht den Zugriff sofort, ohne Neustart. Jede Änderung einer Erweiterung wird in **Admin → Audit-Log** unter der Herkunft **Erweiterung** aufgezeichnet, und ein aus einem externen Tracker gespiegeltes Todo zeigt einen Chip mit Link auf das externe Element.
 
@@ -117,4 +124,4 @@ Jede Änderung einer Erweiterung erscheint unter **Admin → Audit-Log** als `ex
 
 ## Wo Erweiterungsseiten erscheinen
 
-Erweiterungsseiten erscheinen in der Navigation, sobald die Erweiterung installiert und lizenziert ist — in der Regel als eigener Menüpunkt der obersten Ebene, wobei einige Berichte unter dem Menü **Berichte** neben den eingebauten platziert werden.
+Erweiterungsseiten erscheinen in der Navigation, sobald die Erweiterung installiert und lizenziert ist — in der Regel als eigener Menüpunkt der obersten Ebene, wobei einige innerhalb eines Kernmenüs neben den eingebauten Einträgen platziert werden: Berichte unter **Berichte**, Seiten zu Governance, Risiko oder Compliance unter **GRC**. Eine gruppierte Seite fällt auf einen Eintrag der obersten Ebene zurück, wenn ihr Menü nicht verfügbar ist — das Modul ist deaktiviert oder Ihnen fehlt die Berechtigung — und verschwindet damit nie aus der Navigation.

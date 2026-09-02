@@ -13,6 +13,7 @@ Covers the full survey lifecycle beyond basic CRUD:
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -239,6 +240,98 @@ class TestSendSurvey:
             headers=auth_headers(viewer),
         )
         assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Survey-send notification fan-out
+# ---------------------------------------------------------------------------
+
+
+class TestSendNotificationFanOut:
+    """One notification per person, however many of their cards are surveyed.
+
+    The response rows stay per (card, user) — they are the unit of work — but a
+    stakeholder who owns forty applications must not get forty bell entries and
+    forty emails. Asserted on the payload handed to the background delivery
+    task, which is where the fan-out is decided.
+    """
+
+    @staticmethod
+    def _capture(monkeypatch) -> list[list[dict]]:
+        from app.services import notification_service
+
+        calls: list[list[dict]] = []
+
+        async def fake_deliver(recipients, *, notif_type, actor_id=None):
+            calls.append(recipients)
+
+        monkeypatch.setattr(notification_service, "deliver_notification_batch", fake_deliver)
+        return calls
+
+    async def test_one_notification_for_a_user_holding_roles_on_several_cards(
+        self, client, db, survey_env, monkeypatch
+    ):
+        admin = survey_env["admin"]
+        member = survey_env["member"]
+
+        second = await create_card(
+            db,
+            card_type="Application",
+            name="Second App",
+            user_id=admin.id,
+            attributes={"costTotalAnnual": 2000, "riskLevel": "low"},
+        )
+        db.add(Stakeholder(card_id=second.id, user_id=member.id, role="responsible"))
+        await db.flush()
+
+        calls = self._capture(monkeypatch)
+        survey = await _create_draft_survey(client, admin)
+        resp = await client.post(
+            f"/api/v1/surveys/{survey['id']}/send",
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 200
+        # Both cards still generate their own response row / todo.
+        assert resp.json()["targets_created"] == 2
+
+        assert len(calls) == 1
+        recipients = calls[0]
+        assert len(recipients) == 1
+        (notif,) = recipients
+        assert notif["user_id"] == member.id
+        # Several cards → My Surveys, which lists them all.
+        assert notif["link"] == "/todos?tab=surveys"
+        assert "2 cards" in notif["message"]
+        assert notif["data"]["card_count"] == 2
+        # The email names both cards and links each to its own response form,
+        # so the recipient can start from their inbox.
+        assert {i["label"] for i in notif["email_items"]} == {"Survey Test App", "Second App"}
+        assert {i["link"] for i in notif["email_items"]} == {
+            f"/surveys/{survey['id']}/respond/{survey_env['card'].id}",
+            f"/surveys/{survey['id']}/respond/{second.id}",
+        }
+
+    async def test_a_single_card_links_straight_to_its_response_form(
+        self, client, db, survey_env, monkeypatch
+    ):
+        admin = survey_env["admin"]
+        member = survey_env["member"]
+        card = survey_env["card"]
+
+        calls = self._capture(monkeypatch)
+        survey = await _create_draft_survey(client, admin)
+        resp = await client.post(
+            f"/api/v1/surveys/{survey['id']}/send",
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 200
+
+        (recipients,) = calls
+        assert len(recipients) == 1
+        (notif,) = recipients
+        assert notif["user_id"] == member.id
+        assert notif["link"] == f"/surveys/{survey['id']}/respond/{card.id}"
+        assert "1 card" in notif["message"]
 
 
 # ---------------------------------------------------------------------------
@@ -1360,3 +1453,352 @@ class TestRelationSurveyFields:
             .all()
         )
         assert {r.target_id for r in rels} == {itc_current.id}
+
+
+# ---------------------------------------------------------------------------
+# target_filters.not_updated_for — staleness window
+# ---------------------------------------------------------------------------
+
+
+async def _age_card(db, card, days: int):
+    """Back-date a card's ``updated_at``.
+
+    Assigning the attribute explicitly suppresses the ``onupdate`` default, so
+    the flush writes the value we asked for rather than "now".
+    """
+    card.updated_at = datetime.now(timezone.utc) - timedelta(days=days)
+    db.add(card)
+    await db.flush()
+
+
+async def _preview(client, admin, survey_id):
+    resp = await client.post(f"/api/v1/surveys/{survey_id}/preview", headers=auth_headers(admin))
+    assert resp.status_code == 200, resp.json()
+    return resp.json()
+
+
+class TestNotUpdatedForFilter:
+    """The survey builder's "only cards nobody has touched" scope.
+
+    Asserted through ``/preview`` rather than ``/send`` so the tests don't fan
+    out notifications for what is purely a targeting question.
+    """
+
+    async def _app_with_owner(self, db, admin, member, name, *, age_days):
+        card = await create_card(
+            db,
+            card_type="Application",
+            name=name,
+            user_id=admin.id,
+            attributes={"costTotalAnnual": 1000, "riskLevel": "low"},
+        )
+        db.add(Stakeholder(card_id=card.id, user_id=member.id, role="responsible"))
+        await db.flush()
+        # Age last: the stakeholder insert above rescores data quality, which
+        # writes the card row and would otherwise refresh updated_at.
+        await _age_card(db, card, age_days)
+        return card
+
+    async def test_excludes_recently_touched_cards(self, client, db, survey_env):
+        admin, member = survey_env["admin"], survey_env["member"]
+        await _age_card(db, survey_env["card"], 400)
+        await self._app_with_owner(db, admin, member, "Ancient App", age_days=200)
+        await self._app_with_owner(db, admin, member, "Fresh App", age_days=5)
+
+        survey = await _create_draft_survey(
+            client, admin, target_filters={"not_updated_for": {"value": 90, "unit": "days"}}
+        )
+        body = await _preview(client, admin, survey["id"])
+
+        assert {t["card_name"] for t in body["targets"]} == {"Survey Test App", "Ancient App"}
+        assert body["total_cards"] == 2
+
+    async def test_day_boundary(self, client, db, survey_env):
+        """Pins `<` against the cutoff: 91 days out matches a 90-day window,
+        89 does not."""
+        admin, member = survey_env["admin"], survey_env["member"]
+        await _age_card(db, survey_env["card"], 91)
+        await self._app_with_owner(db, admin, member, "Just Inside", age_days=89)
+
+        survey = await _create_draft_survey(
+            client, admin, target_filters={"not_updated_for": {"value": 90, "unit": "days"}}
+        )
+        body = await _preview(client, admin, survey["id"])
+
+        assert {t["card_name"] for t in body["targets"]} == {"Survey Test App"}
+
+    async def test_months_are_calendar_months(self, client, db, survey_env):
+        admin, member = survey_env["admin"], survey_env["member"]
+        await _age_card(db, survey_env["card"], 200)
+        await self._app_with_owner(db, admin, member, "Hundred Days", age_days=100)
+
+        survey = await _create_draft_survey(
+            client, admin, target_filters={"not_updated_for": {"value": 6, "unit": "months"}}
+        )
+        body = await _preview(client, admin, survey["id"])
+
+        assert {t["card_name"] for t in body["targets"]} == {"Survey Test App"}
+
+    async def test_absent_key_targets_everything(self, client, db, survey_env):
+        admin, member = survey_env["admin"], survey_env["member"]
+        await self._app_with_owner(db, admin, member, "Fresh App", age_days=0)
+
+        survey = await _create_draft_survey(client, admin, target_filters={})
+        body = await _preview(client, admin, survey["id"])
+
+        assert body["total_cards"] == 2
+
+    async def test_composes_with_another_filter(self, client, db, survey_env):
+        """Filters AND together — the staleness window narrows the card_ids
+        selection rather than replacing it."""
+        admin, member = survey_env["admin"], survey_env["member"]
+        await _age_card(db, survey_env["card"], 200)
+        old_other = await self._app_with_owner(db, admin, member, "Other Old App", age_days=200)
+
+        survey = await _create_draft_survey(
+            client,
+            admin,
+            target_filters={
+                "card_ids": [str(old_other.id)],
+                "not_updated_for": {"value": 90, "unit": "days"},
+            },
+        )
+        body = await _preview(client, admin, survey["id"])
+
+        assert {t["card_name"] for t in body["targets"]} == {"Other Old App"}
+
+    @pytest.mark.parametrize(
+        "window",
+        [
+            "yesterday",
+            None,
+            [],
+            {},
+            {"value": 6},
+            {"unit": "months"},
+            {"value": 0, "unit": "days"},
+            {"value": -5, "unit": "days"},
+            {"value": True, "unit": "days"},
+            {"value": "90", "unit": "days"},
+            {"value": 90, "unit": "weeks"},
+            {"value": 10**9, "unit": "days"},
+            {"value": 10**9, "unit": "months"},
+        ],
+    )
+    async def test_malformed_window_is_ignored_not_fatal(self, client, db, survey_env, window):
+        """A window that cannot be read drops the clause. It must never 500 the
+        preview, and must never silently resolve to nobody."""
+        admin = survey_env["admin"]
+        await _age_card(db, survey_env["card"], 5)
+
+        survey = await _create_draft_survey(
+            client, admin, target_filters={"not_updated_for": window}
+        )
+        body = await _preview(client, admin, survey["id"])
+
+        assert body["total_cards"] == 1
+
+    async def test_cutoff_is_a_day_boundary_not_the_clock(self, client, db, survey_env):
+        """A card touched earlier on the cutoff day is inside the window. Before
+        the boundary fix this depended on the time of day the preview ran."""
+        admin = survey_env["admin"]
+        # 30 days back to the minute — same calendar day as the cutoff, so the
+        # card counts as touched within the window and must not be targeted.
+        await _age_card(db, survey_env["card"], 30)
+
+        survey = await _create_draft_survey(
+            client, admin, target_filters={"not_updated_for": {"value": 30, "unit": "days"}}
+        )
+        body = await _preview(client, admin, survey["id"])
+
+        assert body["total_cards"] == 0
+
+    async def test_window_round_trips_through_the_api(self, client, db, survey_env):
+        admin = survey_env["admin"]
+        window = {"value": 45, "unit": "days"}
+        survey = await _create_draft_survey(
+            client, admin, target_filters={"not_updated_for": window}
+        )
+
+        resp = await client.get(f"/api/v1/surveys/{survey['id']}", headers=auth_headers(admin))
+        assert resp.status_code == 200
+        assert resp.json()["target_filters"]["not_updated_for"] == window
+
+
+# ---------------------------------------------------------------------------
+# POST /surveys/{id}/preview — payload shape
+# ---------------------------------------------------------------------------
+
+
+class TestPreviewPayload:
+    """What the Preview & send step renders.
+
+    The role a user holds reaches the UI as a key that the builder resolves to a
+    label, and the two counters answer different questions: `total_users` is a
+    headcount, `total_requests` is how many response records `send` will create.
+    """
+
+    async def _app_with_roles(self, db, admin, user, name, roles):
+        card = await create_card(
+            db,
+            card_type="Application",
+            name=name,
+            user_id=admin.id,
+            attributes={"costTotalAnnual": 1000, "riskLevel": "low"},
+        )
+        for role in roles:
+            db.add(Stakeholder(card_id=card.id, user_id=user.id, role=role))
+        await db.flush()
+        return card
+
+    async def test_user_with_two_roles_on_one_card_appears_once(self, client, db, survey_env):
+        """One entry per user — SurveyResponse is unique on (survey, card, user),
+        so a second entry would break the send — but carrying both roles."""
+        admin, member = survey_env["admin"], survey_env["member"]
+        await create_stakeholder_role_def(
+            db, card_type_key="Application", key="observer", label="Observer"
+        )
+        # survey_env's card already has member as 'responsible'; add a second role.
+        db.add(Stakeholder(card_id=survey_env["card"].id, user_id=member.id, role="observer"))
+        await db.flush()
+
+        survey = await _create_draft_survey(client, admin, target_roles=["responsible", "observer"])
+        body = await _preview(client, admin, survey["id"])
+
+        assert body["total_cards"] == 1
+        users = body["targets"][0]["users"]
+        assert len(users) == 1
+        assert users[0]["roles"] == ["observer", "responsible"]  # sorted, not query order
+        assert body["total_users"] == 1
+        assert body["total_requests"] == 1
+
+    async def test_untargeted_roles_are_excluded(self, client, db, survey_env):
+        admin, member = survey_env["admin"], survey_env["member"]
+        await create_stakeholder_role_def(
+            db, card_type_key="Application", key="observer", label="Observer"
+        )
+        db.add(Stakeholder(card_id=survey_env["card"].id, user_id=member.id, role="observer"))
+        await db.flush()
+
+        survey = await _create_draft_survey(client, admin, target_roles=["responsible"])
+        body = await _preview(client, admin, survey["id"])
+
+        assert body["targets"][0]["users"][0]["roles"] == ["responsible"]
+
+    async def test_one_person_on_two_cards_is_one_user_two_requests(self, client, db, survey_env):
+        """The reported bug: total_users summed the per-card lists, so a single
+        person stakeholding several cards was reported as several users."""
+        admin, member = survey_env["admin"], survey_env["member"]
+        await self._app_with_roles(db, admin, member, "Second App", ["responsible"])
+
+        survey = await _create_draft_survey(client, admin)
+        body = await _preview(client, admin, survey["id"])
+
+        assert body["total_cards"] == 2
+        assert body["total_users"] == 1
+        assert body["total_requests"] == 2
+
+    async def test_distinct_people_are_counted_separately(self, client, db, survey_env):
+        admin, member, viewer = survey_env["admin"], survey_env["member"], survey_env["viewer"]
+        await self._app_with_roles(db, admin, viewer, "Viewer App", ["responsible"])
+
+        survey = await _create_draft_survey(client, admin)
+        body = await _preview(client, admin, survey["id"])
+
+        assert body["total_users"] == 2
+        assert body["total_requests"] == 2
+        assert member.id != viewer.id
+
+    async def test_total_requests_matches_what_send_creates(self, client, db, survey_env):
+        admin, member = survey_env["admin"], survey_env["member"]
+        await self._app_with_roles(db, admin, member, "Second App", ["responsible"])
+
+        survey = await _create_draft_survey(client, admin)
+        body = await _preview(client, admin, survey["id"])
+
+        send = await client.post(
+            f"/api/v1/surveys/{survey['id']}/send", headers=auth_headers(admin)
+        )
+        assert send.status_code == 200, send.json()
+        assert send.json()["targets_created"] == body["total_requests"]
+
+
+# ---------------------------------------------------------------------------
+# POST /surveys/{id}/preview — cards the filters matched but nobody can answer
+# ---------------------------------------------------------------------------
+
+
+class TestSkippedCards:
+    """A card is only reachable through someone holding a target role on it.
+
+    Cards that match every filter but have no such stakeholder used to vanish
+    from the preview with no explanation, so a landscape with thin ownership
+    read as a filter that was too narrow.
+    """
+
+    async def _app(self, db, admin, name, *, owner=None, role="responsible"):
+        card = await create_card(
+            db,
+            card_type="Application",
+            name=name,
+            user_id=admin.id,
+            attributes={"costTotalAnnual": 1000, "riskLevel": "low"},
+        )
+        if owner is not None:
+            db.add(Stakeholder(card_id=card.id, user_id=owner.id, role=role))
+        await db.flush()
+        return card
+
+    async def test_reports_matched_alongside_targeted_and_names_the_rest(
+        self, client, db, survey_env
+    ):
+        admin, member = survey_env["admin"], survey_env["member"]
+        await self._app(db, admin, "Ownerless One")
+        await self._app(db, admin, "Ownerless Two")
+
+        survey = await _create_draft_survey(client, admin)
+        body = await _preview(client, admin, survey["id"])
+
+        # survey_env's own card has the stakeholder; the two new ones do not.
+        assert body["total_matched"] == 3
+        assert body["total_cards"] == 1
+        assert member.id  # the one targeted card is reachable through member
+
+    async def test_a_stakeholder_in_another_role_still_counts_as_skipped(
+        self, client, db, survey_env
+    ):
+        admin, viewer = survey_env["admin"], survey_env["viewer"]
+        await create_stakeholder_role_def(
+            db, card_type_key="Application", key="observer", label="Observer"
+        )
+        await self._app(db, admin, "Watched Only", owner=viewer, role="observer")
+
+        survey = await _create_draft_survey(client, admin, target_roles=["responsible"])
+        body = await _preview(client, admin, survey["id"])
+
+        assert body["total_matched"] == 2
+        assert body["total_cards"] == 1
+        assert body["total_matched"] - body["total_cards"] == 1
+
+    async def test_nothing_skipped_when_every_card_has_a_recipient(self, client, db, survey_env):
+        admin, member = survey_env["admin"], survey_env["member"]
+        await self._app(db, admin, "Owned Too", owner=member)
+
+        survey = await _create_draft_survey(client, admin)
+        body = await _preview(client, admin, survey["id"])
+
+        assert body["total_matched"] == body["total_cards"] == 2
+        assert body["total_matched"] == body["total_cards"]
+
+    async def test_send_is_unaffected(self, client, db, survey_env):
+        """Skipped cards are reported, not surveyed — `send` behaves as before."""
+        admin = survey_env["admin"]
+        await self._app(db, admin, "Ownerless One")
+
+        survey = await _create_draft_survey(client, admin)
+        body = await _preview(client, admin, survey["id"])
+        send = await client.post(
+            f"/api/v1/surveys/{survey['id']}/send", headers=auth_headers(admin)
+        )
+        assert send.status_code == 200, send.json()
+        assert send.json()["targets_created"] == body["total_requests"] == 1

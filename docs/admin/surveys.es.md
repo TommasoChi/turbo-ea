@@ -34,11 +34,12 @@ Seleccione a qué tipo de ficha se aplica la encuesta (por ejemplo, Aplicación,
 
 ### Filtros
 
-Limite opcionalmente el alcance mediante filtros. Hay tres tipos de filtros que pueden combinarse:
+Limite opcionalmente el alcance mediante filtros. Hay cuatro tipos de filtros que pueden combinarse:
 
 - **Fichas específicas** — Elija una o varias fichas directamente (restringidas al tipo objetivo). Útil para dirigirse a una sola ficha o a un subconjunto seleccionado manualmente.
 - **Fichas relacionadas con** — Incluir solo fichas que tengan una relación con alguno de los elementos listados (por ejemplo, todas las aplicaciones relacionadas con la organización de Ventas).
 - **Etiquetas** y **filtros de atributos** — Acotar las fichas por etiqueta o por condición de atributo (por ejemplo, coste superior a 10 000, calificación TIME ausente).
+- **Última actualización** — Incluir solo las fichas que nadie ha modificado desde hace tiempo: 30 días, 90 días, 6 meses, 1 año o un número personalizado de días o meses. El generador muestra la fecha límite resultante mientras la elige. La ventana es relativa al momento del **envío**, no al del diseño, de modo que un borrador aparcado seguirá encontrando las fichas que estén desactualizadas entonces. Mide la fecha de modificación de la ficha: la misma que muestran la columna del inventario y el historial de la ficha.
 
 ### Preguntas
 
@@ -71,6 +72,11 @@ Una vez que su encuesta está en estado **Activa**:
 1. Haga clic en **Enviar** para distribuir la encuesta
 2. Cada ficha objetivo genera una tarea para las partes interesadas asignadas
 3. Las partes interesadas ven la encuesta en su pestaña **Mis Encuestas** en la [página de Tareas](../guide/tasks.es.md)
+4. Cada parte interesada recibe **una** notificación —y un solo correo, si está habilitado— sean cuantas sean sus fichas incluidas; el correo enumera esas fichas y enlaza cada una directamente con su formulario de respuesta
+
+!!! note "Una tarjeta necesita a alguien a quien preguntar"
+
+    Una tarjeta solo se incluye en la encuesta si al menos una persona ostenta en ella uno de los **roles de parte interesada seleccionados**. Las tarjetas que coinciden con sus filtros pero carecen de esa parte interesada se omiten; el paso **Vista previa y envío** indica cuántas son, para que pueda asignar responsables.
 
 ## Visualización de Resultados
 
