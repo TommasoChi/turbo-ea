@@ -155,7 +155,7 @@ In this mode, the server authenticates with email/password and refreshes the tok
 
 ## Available Capabilities
 
-The MCP server exposes **47 tools** across two groups: **30 read tools** that query EA data and **17 write tools** (13 additive, 4 destructive) that create and maintain cards, relations, diagrams, risks, ADRs and more — including turning artifacts an AI tool has in its own context (spreadsheets, BPMN XML, DrawIO XML, documents, images) into structured EA data. Every tool carries MCP `ToolAnnotations` (read-only / destructive / idempotent hints) so connectors can surface destructiveness in their UI.
+The MCP server exposes **51 tools** across two groups: **32 read tools** that query EA data and **19 write tools** (14 additive, 5 destructive) that create and maintain cards, relations, diagrams, risks, ADRs and more — including turning artifacts an AI tool has in its own context (spreadsheets, BPMN XML, DrawIO XML, documents, images) into structured EA data. Every tool carries MCP `ToolAnnotations` (read-only / destructive / idempotent hints) so connectors can surface destructiveness in their UI.
 
 ### Dry-run safety on writes
 
@@ -163,7 +163,7 @@ Every write tool defaults to **`dry_run=true`**. In this mode the backend runs e
 
 ### Read tools
 
-The server exposes 30 read tools grouped into eight clusters.
+The server exposes 32 read tools grouped into eight clusters.
 
 **Cards & metamodel**
 
@@ -226,6 +226,8 @@ The server exposes 30 read tools grouped into eight clusters.
 | `get_card_stakeholders` | Users + roles assigned to a card |
 | `get_card_comments` | Threaded comments on a card |
 | `get_card_documents` | Document links attached to a card |
+| `get_card_logo` | A card's logo: mime, size and a sha256 of the stored bytes, so a write can be verified without transferring the image (pass `include_image` when you do want it) |
+| `list_available_icons` | Search the built-in brand-icon pack for a slug to pass to `set_card_logos` |
 
 **Diagrams**
 
@@ -244,9 +246,9 @@ All tools are bound by the authenticated user's RBAC — a viewer will simply ge
 
 ### Write tools
 
-The server exposes 17 write tools, each annotated as **additive** (creates or extends data) or **destructive** (modifies or removes existing data) so connectors can warn accordingly.
+The server exposes 19 write tools, each annotated as **additive** (creates or extends data) or **destructive** (modifies or removes existing data) so connectors can warn accordingly.
 
-**Additive (13)**
+**Additive (14)**
 
 | Tool | Description |
 |------|-------------|
@@ -263,8 +265,9 @@ The server exposes 17 write tools, each annotated as **additive** (creates or ex
 | `sign_adr` | Sign an ADR (requires the `adr.sign` permission; otherwise returns a UI deep-link to sign in the browser). |
 | `create_diagram` | Create a free-form DrawIO diagram with optional links to existing cards. |
 | `import_bpmn` | Save a BPMN 2.0 XML diagram against an **existing** Business Process card. If no card matches the given name, the tool returns a `card_not_found` error pointing the agent at `create_cards_bulk` — this forces the agent to create the card explicitly with description, subtype and attributes first, instead of taking a shortcut that lands a sparse card. |
+| `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
-**Destructive (4)**
+**Destructive (5)**
 
 | Tool | Description |
 |------|-------------|
@@ -272,6 +275,7 @@ The server exposes 17 write tools, each annotated as **additive** (creates or ex
 | `archive_cards` | Soft-delete cards. Recoverable — archived cards can be restored for 30 days before auto-purge. |
 | `update_diagram` | Replace a diagram's DrawIO XML, name, or card links. |
 | `rollback_batch` | Reverse the writes performed under a previous mutation batch. |
+| `clear_card_logos` | Remove the custom logo from cards, falling them back to their card-type icon. Recoverable — set it again to restore. |
 
 ### Artifact upload
 
@@ -291,7 +295,8 @@ Defense in depth on top of dry-run, so an LLM mishap can't cause mass damage:
 
 - **Per-call size caps.** The MCP write tools enforce a much smaller cap than the underlying Excel-importer endpoints: 200 rows for `create_cards_bulk`, 500 ops for `upsert_relations_bulk`. Big enough for any realistic single artifact upload, small enough that a dry-run preview is still scannable.
 - **No relation deletion by default.** `upsert_relations_bulk` refuses `action: "delete"` ops — to remove relations, use the web UI where the action is captured under the user's identity. Operators can opt in by setting `MCP_ALLOW_RELATION_DELETE=true`.
-- **Kill switch.** `MCP_WRITES_ENABLED=false` turns off all 17 write tools without redeploying code. The 30 read tools keep working.
+- **Kill switch.** `MCP_WRITES_ENABLED=false` turns off all 19 write tools without redeploying code. The 32 read tools keep working.
+- **Logo fetching is allowlisted.** The built-in icon packs cannot cover every product a customer runs, and an assistant is often sandboxed with no route to the web, so `set_card_logos` accepts an `image_url` and the MCP server fetches it. Only `https`, only the hosts in `MCP_LOGO_FETCH_HOSTS`, only a public address, at most two redirects (each re-checked), at most 1 MB read as a stream, and the bytes must carry a real PNG/JPEG/WebP/GIF signature. The fetch happens at the MCP edge, never in the backend, and the image is then uploaded through the ordinary route — so a URL chosen by an LLM never reaches the process holding the database. `MCP_LOGO_FETCH_ENABLED=false` switches it off.
 - **Audit origin tag.** Every backend request from the MCP server carries an `X-Turbo-EA-Origin: mcp` header. Events emitted from those requests are tagged `origin: "mcp"` in the audit-log payload, so admins can filter MCP-driven writes out of the timeline distinct from web-UI actions.
 - **Mutation batches.** Every MCP write call opens a mutation batch before any writes; every event emitted during the call is stamped with the batch id. Admins (or the `get_change_history` tool) can reconstruct the full per-event diff of a commit from one id, and `rollback_batch` can reverse it. Commits above `MCP_BATCH_CONFIRMATION_THRESHOLD` rows must echo back a one-shot `confirm_token` issued by the prior dry-run (15-minute TTL), so a large commit always follows a reviewed preview.
 - **No hard delete.** The toolset deliberately omits permanent card deletion. `archive_cards` and `update_cards_bulk` *are* exposed, but archiving is a recoverable soft-delete (30-day restore window) and both are destructiveness-annotated and dry-run-gated. Adding any tool that performs an irreversible mutation (hard delete, force-purge) would require an explicit design review.
@@ -303,7 +308,10 @@ The six guardrail environment variables on the MCP container:
 | `MCP_WRITES_ENABLED` | `true` | Master switch for write tools. `false` → read-only MCP. |
 | `MCP_MAX_CARDS_PER_CALL` | `200` | Hard cap on `create_cards_bulk` / `update_cards_bulk` rows per request. |
 | `MCP_MAX_RELATIONS_PER_CALL` | `500` | Hard cap on `upsert_relations_bulk` operations per request. |
+| `MCP_MAX_LOGOS_PER_CALL` | `50` | Hard cap on `set_card_logos` rows per request. Lower than the card cap because each logo is its own upload and carries image bytes. |
 | `MCP_ALLOW_RELATION_DELETE` | `false` | When `true`, `upsert_relations_bulk` accepts `action: "delete"` ops. |
+| `MCP_LOGO_FETCH_ENABLED` | `true` | When `true`, `set_card_logos` may take an `image_url`: the MCP server downloads the image and uploads it through the ordinary route, so every permission, size and format check still applies. Set to `false` to refuse the URL path entirely — icon slugs and pasted bytes keep working. |
+| `MCP_LOGO_FETCH_HOSTS` | *(built-in)* | Comma-separated hosts a logo may be fetched from, exact match. Defaults to `raw.githubusercontent.com`, `cdn.jsdelivr.net`, `cdn.simpleicons.org`, `upload.wikimedia.org` — public icon hosting, where the request carries a file name and nothing about your landscape. A domain-to-logo lookup service can be added, at the cost of telling it which vendors you run. |
 | `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | Commits touching more rows than this require the `confirm_token` from a prior dry-run. |
 | `MCP_REQUIRE_DRYRUN_FIRST` | `true` | Enables the confirm-token gate above. Set `false` only for trusted automation pipelines that explicitly skip the preview round-trip. |
 

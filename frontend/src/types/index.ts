@@ -268,6 +268,9 @@ export interface CardType {
   category?: string;
   has_hierarchy: boolean;
   has_successors: boolean;
+  /** Whether editors may upload a per-card logo for cards of this type
+   *  (discussion #1024). Governs upload and display, never the stored image. */
+  allow_card_logo: boolean;
   subtypes?: SubtypeDef[];
   fields_schema: SectionDef[];
   stakeholder_roles?: StakeholderRoleDefinition[];
@@ -347,6 +350,10 @@ export interface Card {
   updated_by?: string;
   created_at?: string;
   updated_at?: string;
+  /** When this card's custom logo was last written, or null when it has none —
+   *  or when its type has logos switched off, so no client-side rule is needed
+   *  to fall back to the type icon. Doubles as the image URL's cache-buster. */
+  logo_updated_at?: string | null;
   tags: TagRef[];
   stakeholders: StakeholderRef[];
 }
@@ -1016,7 +1023,13 @@ export interface StalenessWindow {
 }
 
 export interface SurveyTargetFilters {
+  /** The related CARD type the picked `related_ids` belong to. */
   related_type?: string;
+  /** Narrow the target to ONE relationship. Several relation types may connect
+   *  the same pair of card types, so "owned by Acme" is a different target set
+   *  from "used by Acme". Absent = related through any of them, which is what
+   *  every survey written before this field means. */
+  relation_type_key?: string;
   related_ids?: string[];
   card_ids?: string[];
   tag_ids?: string[];
@@ -1190,6 +1203,9 @@ export interface DiagramGroup {
 
 export type PortalAccessMode = "public" | "sso";
 
+/** Which board a portal publishes: the card grid, the PPM portfolio, or the Process House. */
+export type PortalView = "cards" | "ppm_portfolio" | "process_navigator";
+
 export interface WebPortal {
   id: string;
   name: string;
@@ -1200,6 +1216,7 @@ export interface WebPortal {
   display_fields?: string[];
   card_config?: Record<string, unknown>;
   is_published: boolean;
+  view?: PortalView;
   access_mode: PortalAccessMode;
   allowed_email_domains?: string[] | null;
   created_by?: string;
@@ -1256,12 +1273,71 @@ export interface PublicPortal {
   slug: string;
   description?: string;
   card_type: string;
+  // Optional so a payload from an older backend still resolves to "cards".
+  view?: PortalView;
   filters?: Record<string, unknown>;
   display_fields?: string[];
   card_config?: Record<string, unknown>;
   type_info: PortalTypeInfo | null;
   relation_types: PortalRelationType[];
   tag_groups: PortalTagGroup[];
+}
+
+/**
+ * A named thing a portal references by an opaque, per-response token.
+ *
+ * Used for Organizations, which the published Process House filters on
+ * client-side within one payload — so no real card id is published for them.
+ */
+export interface PortalRef {
+  token: string;
+  name: string;
+}
+
+/** One node of the published Process House. */
+export interface PortalProcess {
+  id: string;
+  name: string;
+  subtype?: string;
+  parent_id?: string | null;
+  description?: string | null;
+  lifecycle?: Record<string, string>;
+  /** Only the four colour-overlay keys and `sortOrder` — never a custom field. */
+  attributes?: Record<string, unknown>;
+  org_tokens?: string[];
+  /** Whether a *published* BPMN version exists. Drafts are never published. */
+  has_flow?: boolean;
+  step_count?: number;
+}
+
+export interface PortalProcessMap {
+  row_order: string[];
+  organizations: PortalRef[];
+  items: PortalProcess[];
+}
+
+/** One step of a published BPMN flow, as a portal serves it. */
+export interface PortalProcessStep {
+  bpmn_element_id: string;
+  element_type: string;
+  name?: string;
+  documentation?: string;
+  lane_name?: string;
+  is_automated: boolean;
+  sequence_order: number;
+  /** Populated only when the portal enables `show_element_links`. Names, never ids. */
+  application_name?: string | null;
+  data_object_name?: string | null;
+  it_component_name?: string | null;
+  organizations?: PortalRef[];
+}
+
+export interface PortalProcessFlow {
+  revision?: number | null;
+  published_at?: string | null;
+  bpmn_xml?: string | null;
+  svg_thumbnail?: string | null;
+  steps: PortalProcessStep[];
 }
 
 export interface PortalCard {
@@ -1287,6 +1363,10 @@ export interface PortalCard {
     display_name: string;
   }[];
   updated_at?: string;
+  /** Present only when the portal's card type allows logos — the image itself
+   *  comes from the unauthenticated /cards/{id}/logo route, so an anonymous
+   *  visitor renders it with no token. */
+  logo_updated_at?: string | null;
 }
 
 export interface PortalCardListResponse {
@@ -1683,6 +1763,75 @@ export interface PpmTaskComment {
 export interface PpmGroupOption {
   type_key: string;
   type_label: string;
+  // The metamodel entity, so the label can be resolved without the metamodel.
+  translations?: MetamodelTranslations;
+  icon?: string | null;
+  color?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// PPM portfolio board — the narrow shape the board component actually renders.
+//
+// Deliberately NOT `PpmGanttItem`: the account-less portal board is served by a
+// separate, least-privilege payload that withholds identifiers, people and (per
+// the portal's configuration) costs and narrative. Mirroring the backend's
+// two-model split here means the view can only read what both callers supply.
+// `PpmGanttItem` and friends are structurally assignable to these.
+// ---------------------------------------------------------------------------
+
+export interface PpmPortfolioPerson {
+  display_name: string;
+  role_key?: string | null;
+}
+
+export interface PpmPortfolioReport {
+  report_date: string;
+  schedule_health: string;
+  cost_health: string;
+  scope_health: string;
+  reporter?: { display_name: string } | null;
+  summary?: string | null;
+  accomplishments?: string | null;
+  next_steps?: string | null;
+}
+
+export interface PpmPortfolioItem {
+  id: string;
+  name: string;
+  subtype: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  /** Opaque on the public board; a card UUID on the authenticated one. */
+  group_id: string | null;
+  group_name: string | null;
+  capex_planned?: number | null;
+  capex_actual?: number | null;
+  opex_planned?: number | null;
+  opex_actual?: number | null;
+  stakeholders: PpmPortfolioPerson[];
+  latest_report: PpmPortfolioReport | null;
+}
+
+export interface PpmPortfolioDashboard {
+  total_initiatives: number;
+  total_budget?: number | null;
+  health_schedule: PpmHealthCounts;
+}
+
+export interface PpmPortfolioGroupOption {
+  type_key: string;
+  label: string;
+  translations?: MetamodelTranslations;
+  icon?: string | null;
+  color?: string | null;
+}
+
+/** The public portal's one-round-trip portfolio payload. */
+export interface PortalPpmPortfolio {
+  group_by: string | null;
+  group_options: PpmPortfolioGroupOption[];
+  dashboard: PpmPortfolioDashboard;
+  items: PpmPortfolioItem[];
 }
 
 export interface PpmDashboardData {

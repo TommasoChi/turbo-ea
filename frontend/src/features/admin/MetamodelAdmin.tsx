@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -47,8 +47,9 @@ import {
   RelationTypeValuesDialog,
   RelationTranslationDialog,
 } from "./metamodel";
-import { cleanTranslations } from "./metamodel/helpers";
+import { cleanTranslations, deriveRelationKey } from "./metamodel/helpers";
 import { CATEGORIES, CARDINALITY_OPTIONS } from "./metamodel/constants";
+import { successorRelationKeys } from "@/lib/successorRelation";
 
 /**
  * English is the base language: it lives in the `label` / `reverse_label`
@@ -133,6 +134,10 @@ export default function MetamodelAdmin() {
   const [editRelOpen, setEditRelOpen] = useState(false);
   const [editRel, setEditRel] = useState<(RType & { translations?: MetamodelTranslations }) | null>(null);
   const [relError, setRelError] = useState<string | null>(null);
+  // True once the admin edits the key by hand. The suggestion tracks the types
+  // and verb until then; after that the key is theirs and a later type change
+  // must not silently wipe it.
+  const [relKeyTouched, setRelKeyTouched] = useState(false);
 
   /* --- Manage relation "type" values dialog --- */
   const [valuesRel, setValuesRel] = useState<RType | null>(null);
@@ -177,15 +182,42 @@ export default function MetamodelAdmin() {
     ? types
     : types.filter((ct) => !ct.is_hidden);
 
+  const successorRelKeys = useMemo(() => successorRelationKeys(relationTypes), [relationTypes]);
+
   const displayRelationTypes = (showHiddenRels
     ? relationTypes
     : relationTypes.filter((r) => !r.is_hidden)
-  ).filter((r) => !r.key.endsWith("Successor"));
+    // Hide each card type's ONE lineage relation (managed by the type's "Supports
+    // Lineage" toggle) — but never every `*Successor`-suffixed key: any other
+    // self-pair relation type is an ordinary relation and must stay editable here.
+  ).filter((r) => !successorRelKeys.has(r.key));
 
-  const autoRelKey =
-    newRel.source_type_key && newRel.target_type_key
-      ? `${newRel.source_type_key}To${newRel.target_type_key}`
-      : "";
+  // Suggested key for a new relation type. The rule lives in
+  // `metamodel/helpers.deriveRelationKey` so the unit test exercises the real
+  // implementation rather than a copy that could silently drift from it.
+  const autoRelKey = useMemo(
+    () =>
+      deriveRelationKey(
+        newRel.source_type_key,
+        newRel.target_type_key,
+        newRel.label,
+        relationTypes,
+      ),
+    [newRel.source_type_key, newRel.target_type_key, newRel.label, relationTypes],
+  );
+
+  // Relation types already connecting the chosen pair. Not an error — the
+  // metamodel allows any number — but worth surfacing, since a variant of one
+  // relationship is usually better modelled as an attribute on the existing type.
+  const relPairConflicts = useMemo(() => {
+    if (!newRel.source_type_key || !newRel.target_type_key) return [];
+    return relationTypes.filter(
+      (r) =>
+        !r.is_hidden &&
+        r.source_type_key === newRel.source_type_key &&
+        r.target_type_key === newRel.target_type_key
+    );
+  }, [newRel.source_type_key, newRel.target_type_key, relationTypes]);
 
   /* ---- Handlers ---- */
   const handleCreateType = async () => {
@@ -322,6 +354,7 @@ export default function MetamodelAdmin() {
       translations: {},
     });
     setRelError(null);
+    setRelKeyTouched(false);
     setCreateRelOpen(true);
   };
 
@@ -405,7 +438,7 @@ export default function MetamodelAdmin() {
               const subtypeCount = (ct.subtypes || []).length;
               const relCount = relationTypes.filter(
                 (r) =>
-                  !r.key.endsWith("Successor") &&
+                  !successorRelKeys.has(r.key) &&
                   (r.source_type_key === ct.key ||
                   r.target_type_key === ct.key),
               ).length;
@@ -993,10 +1026,9 @@ export default function MetamodelAdmin() {
                 setNewRel({
                   ...newRel,
                   source_type_key: src,
-                  key:
-                    src && newRel.target_type_key
-                      ? `${src}To${newRel.target_type_key}`
-                      : newRel.key,
+                  // Clear so the derived key refills — unless the admin typed
+                  // their own, which theirs to keep.
+                  key: relKeyTouched ? newRel.key : "",
                 });
               }}
             >
@@ -1031,10 +1063,9 @@ export default function MetamodelAdmin() {
                 setNewRel({
                   ...newRel,
                   target_type_key: tgt,
-                  key:
-                    newRel.source_type_key && tgt
-                      ? `${newRel.source_type_key}To${tgt}`
-                      : newRel.key,
+                  // Clear so the derived key refills — unless the admin typed
+                  // their own, which is theirs to keep.
+                  key: relKeyTouched ? newRel.key : "",
                 });
               }}
             >
@@ -1059,15 +1090,14 @@ export default function MetamodelAdmin() {
             </Select>
           </FormControl>
 
-          <KeyInput
-            fullWidth
-            label={t("metamodel.keyLabel")}
-            value={newRel.key || autoRelKey}
-            onChange={(v) => setNewRel({ ...newRel, key: v })}
-            sx={{ mb: 2 }}
-            size="small"
-            required={!!newRel.label.trim()}
-          />
+          {relPairConflicts.length > 0 && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {t("metamodel.relPairExistsWarning", {
+                relations: relPairConflicts.map((r) => relationLabel(r)).join(", "),
+              })}
+            </Alert>
+          )}
+
           <TextField
             fullWidth
             label={`${t("metamodel.labelVerb")}${localeSuffix}`}
@@ -1084,6 +1114,19 @@ export default function MetamodelAdmin() {
               setNewRel({ ...newRel, reverse_label: e.target.value })
             }
             sx={{ mb: 2 }}
+          />
+          <KeyInput
+            fullWidth
+            label={t("metamodel.keyLabel")}
+            value={newRel.key || autoRelKey}
+            onChange={(v) => {
+              setRelKeyTouched(true);
+              setNewRel({ ...newRel, key: v });
+            }}
+            sx={{ mb: 2 }}
+            size="small"
+            required={!!newRel.label.trim()}
+            hint={t("metamodel.relKeyGeneratedHint")}
           />
           <FormControl fullWidth>
             <InputLabel>{t("metamodel.cardinality")}</InputLabel>

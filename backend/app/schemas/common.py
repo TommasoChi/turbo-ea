@@ -282,6 +282,7 @@ class WebPortalCreate(BaseModel):
     display_fields: list | None = None
     card_config: dict | None = None
     is_published: bool = False
+    view: str | None = None  # "cards" | "ppm_portfolio"; None → "cards"
     access_mode: str | None = None  # "public" | "sso"; None → "public"
     allowed_email_domains: list[str] | None = None
 
@@ -295,6 +296,7 @@ class WebPortalUpdate(BaseModel):
     display_fields: list | None = None
     card_config: dict | None = None
     is_published: bool | None = None
+    view: str | None = None
     access_mode: str | None = None
     allowed_email_domains: list[str] | None = None
 

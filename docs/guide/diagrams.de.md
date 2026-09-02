@@ -33,12 +33,13 @@ Beim Öffnen eines Diagramms startet der DrawIO-Editor im Vollbildmodus in einem
 Verwenden Sie den Dialog **Karten einfügen** (aus der Symbolleiste oder dem Kontextmenü), um Karten zur Leinwand hinzuzufügen:
 
 - **Typen-Chips mit Live-Zählern** in der linken Spalte filtern die Ergebnisse.
-- Suchen Sie rechts nach Namen; jede Zeile hat ein Kontrollkästchen.
-- **Ausgewählte einfügen** fügt die markierten Karten als Raster ein; **Alle einfügen** fügt jede Karte ein, die dem aktuellen Filter entspricht (mit Bestätigung ab 50 Ergebnissen).
+- Suchen Sie rechts nach Namen; jede Zeile hat ein Kontrollkästchen. Beschränken Sie den Filter auf einen einzigen hierarchischen Typ, wird die Liste zu einem eingerückten Baum, sodass Sie eine Karte über ihren Zweig finden.
+- Markierte Karten erscheinen als Chips über der Liste und bleiben ausgewählt, während Sie Filter oder Suche ändern — entfernen Sie eine mit ihrem ×.
+- **Alle angezeigten auswählen** markiert alles, was der aktuelle Filter übrig lässt; **Ausgewählte einfügen** fügt die markierten Karten als Raster auf der Leinwand ein.
 
 Derselbe Dialog öffnet sich im Einzelauswahlmodus für **Verknüpfte Karte ändern** und **Mit bestehender Karte verknüpfen**.
 
-Jede Karte auf der Arbeitsfläche zeigt ihr **Kartentyp-Symbol** als kleines weißes Glyph in der oberen linken Ecke, neben der Typfarbe — der Typ einer Karte wird also sowohl durch Symbol als auch durch Farbe vermittelt. Das entspricht den in der gesamten Anwendung verwendeten Symbolen und verbessert die Lesbarkeit für farbenblinde Benutzer. Das Symbol erscheint auf ab jetzt eingefügten Karten. Um Symbole zu Karten hinzuzufügen, die bereits auf einem älteren Diagramm liegen, klicken Sie in der Editor-Symbolleiste auf **Kartentyp-Symbole anwenden**.
+Jede Karte auf der Arbeitsfläche zeigt ihr **Kartentyp-Symbol** als kleines weißes Glyph in der oberen linken Ecke, neben der Typfarbe — der Typ einer Karte wird also sowohl durch Symbol als auch durch Farbe vermittelt. Das entspricht den in der gesamten Anwendung verwendeten Symbolen und verbessert die Lesbarkeit für farbenblinde Benutzer. Das Symbol erscheint auf ab jetzt eingefügten Karten. Um Symbole zu Karten hinzuzufügen, die bereits auf einem älteren Diagramm liegen, klicken Sie in der Editor-Symbolleiste auf **Kartentyp-Symbole anwenden**. Trägt eine Karte ein eigenes **Logo**, wird stattdessen dieses angezeigt; das Kartentyp-Symbol bleibt als kleines Abzeichen in der Ecke erhalten — so zeigt die Form sowohl, um welches Produkt es sich handelt, als auch um welchen Kartentyp. Logos erscheinen beim Öffnen des Diagramms und werden bei einer Änderung aktualisiert; eine Karte ohne Logo und jede Karte eines Typs, für den ein Administrator Logos deaktiviert hat, wird genau wie zuvor gezeichnet. Ein Häkchen **Kartenlogos** im selben Menü schaltet sie ab, wenn Sie ein schmuckloses Diagramm möchten; standardmäßig ist es aktiv.
 
 ### Rechtsklick-Aktionen
 

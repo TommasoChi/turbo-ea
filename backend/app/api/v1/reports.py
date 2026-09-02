@@ -29,6 +29,7 @@ from app.models.todo import Todo
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
 from app.services.card_flags import orphaned_condition, stale_condition, stale_cutoff
+from app.services.card_logo_service import logo_updated_map
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.kpi_snapshot_service import (
     compute_trend_block,
@@ -795,30 +796,31 @@ async def landscape(
     for g in groups:
         group_map[str(g.id)] = {"id": str(g.id), "name": g.name, "items": []}
 
+    # A card may reach the same group through several relation types (the metamodel
+    # allows any number per ordered card-type pair) — list it once per group.
+    seen_in_group: dict[str, set[str]] = {gid: set() for gid in group_map}
+
+    def _add_to_group(group_id: str, card: Card) -> None:
+        card_id = str(card.id)
+        if card_id in seen_in_group[group_id]:
+            return
+        seen_in_group[group_id].add(card_id)
+        group_map[group_id]["items"].append(
+            {
+                "id": card_id,
+                "name": card.name,
+                "type": card.type,
+                "attributes": _strip_attrs(card.attributes),
+                "lifecycle": card.lifecycle,
+            }
+        )
+
     for rel in rels:
         sid, tid = str(rel.source_id), str(rel.target_id)
         if sid in sheet_map and tid in group_map:
-            card = sheet_map[sid]
-            group_map[tid]["items"].append(
-                {
-                    "id": str(card.id),
-                    "name": card.name,
-                    "type": card.type,
-                    "attributes": _strip_attrs(card.attributes),
-                    "lifecycle": card.lifecycle,
-                }
-            )
+            _add_to_group(tid, sheet_map[sid])
         elif tid in sheet_map and sid in group_map:
-            card = sheet_map[tid]
-            group_map[sid]["items"].append(
-                {
-                    "id": str(card.id),
-                    "name": card.name,
-                    "type": card.type,
-                    "attributes": _strip_attrs(card.attributes),
-                    "lifecycle": card.lifecycle,
-                }
-            )
+            _add_to_group(sid, sheet_map[tid])
 
     # Ungrouped
     grouped_ids = set()
@@ -1036,16 +1038,18 @@ async def app_portfolio(
     # 5. Get relation types for label resolution
     rt_result = await db.execute(select(RelationType).where(RelationType.is_hidden.is_(False)))
     relation_types_list = rt_result.scalars().all()
+    # One entry per relation type touching this card type. Several may share an
+    # ``other_type_key`` (the metamodel allows any number of relation types per
+    # ordered card-type pair); the grid groups them into a single column per related
+    # type, so the payload must carry them all or the extra types become invisible.
     rel_type_defs = []
-    seen_other_types: set[str] = set()
     for rt in relation_types_list:
         other = None
         if rt.source_type_key == type:
             other = rt.target_type_key
         elif rt.target_type_key == type:
             other = rt.source_type_key
-        if other and other not in seen_other_types:
-            seen_other_types.add(other)
+        if other:
             rel_type_defs.append(
                 {
                     "key": rt.key,
@@ -1258,8 +1262,9 @@ async def matrix(
             raise HTTPException(status_code=400, detail=f"Unknown card type {key!r}")
 
     # The whole relation-type table: small, and needed twice over. `declared`
-    # is the subset the metamodel says connects these two axes — at most two,
-    # one per orientation — which is what the attribute filters are validated
+    # is the subset the metamodel says connects these two axes — any number of
+    # relation types may share an ordered pair, so this is a list, not a single
+    # type per orientation — which is what the attribute filters are validated
     # against. `all_schemas` interprets the attributes of whatever type a
     # relation actually carries, which is not always a declared one.
     rt_rows = (
@@ -1449,7 +1454,12 @@ async def cost_report(
     type: str = Query("Application"),
 ):
     """Cost aggregation report."""
-    await PermissionService.require_permission(db, user, "reports.ea_dashboard")
+    # `costs.view` is the whole gate here, not an add-on. Elsewhere a report
+    # carries its own base permission and adds `costs.view` only when the
+    # request actually returns money (portfolio when an axis is a cost field,
+    # capability-heatmap when metric == "total_cost"). This report is entirely
+    # cost data, so its subject permission *is* its base permission — and
+    # `costs.view` is documented as covering cost reports.
     await PermissionService.require_permission(db, user, "costs.view")
 
     # Detect cost fields from type schema
@@ -1504,7 +1514,8 @@ async def cost_treemap(
     powers the treemap drill-down — clicking a parent rectangle re-queries with
     the related type as ``type`` and the parent's id as ``parent_card_id``.
     """
-    await PermissionService.require_permission(db, user, "reports.ea_dashboard")
+    # See `cost_report` above: `costs.view` alone gates a report that is
+    # nothing but costs.
     await PermissionService.require_permission(db, user, "costs.view")
     # M-3: Validate cost_field format
     if not _SAFE_KEY_RE.match(cost_field):
@@ -1770,17 +1781,35 @@ async def capability_heatmap(
     # Build cap_id -> [app_card] and app -> {type: [related_id]} mappings
     cap_apps: dict[str, list] = {str(c.id): [] for c in caps}
     app_related: dict[str, dict[str, list[str]]] = {}  # app_id -> {type_key: [related_id, ...]}
+    # Same shape keyed by RELATION type, so the report can filter "owned by" apart
+    # from "used by" when several relation types reach one card type. The
+    # card-type map above stays — it is the union, and what existing saved
+    # reports and deep links are keyed on.
+    app_related_by_rel: dict[str, dict[str, list[str]]] = {}
+    # Both maps are keyed by CARD, while `rels` carries one row per relation — and
+    # two cards may be connected by several relation types. Track what has been
+    # added so a capability never lists the same application twice.
+    cap_app_seen: dict[str, set[str]] = {cid: set() for cid in cap_apps}
+
+    def _link_cap_app(cap_id: str, app_id: str) -> None:
+        if app_id in cap_app_seen[cap_id]:
+            return
+        cap_app_seen[cap_id].add(app_id)
+        cap_apps[cap_id].append(app_map[app_id])
+
     for r in rels:
         sid, tid = str(r.source_id), str(r.target_id)
         if sid in cap_id_set and tid in app_map:
-            cap_apps[sid].append(app_map[tid])
+            _link_cap_app(sid, tid)
         elif tid in cap_id_set and sid in app_map:
-            cap_apps[tid].append(app_map[sid])
+            _link_cap_app(tid, sid)
         # app -> related card relations (for filtering)
         if sid in app_id_set and tid in related_map:
             app_related.setdefault(sid, {}).setdefault(related_map[tid]["type"], []).append(tid)
+            app_related_by_rel.setdefault(sid, {}).setdefault(r.type, []).append(tid)
         elif tid in app_id_set and sid in related_map:
             app_related.setdefault(tid, {}).setdefault(related_map[sid]["type"], []).append(sid)
+            app_related_by_rel.setdefault(tid, {}).setdefault(r.type, []).append(sid)
 
     # Tag assignments per application (for tag filter)
     cap_app_tag_ids: dict[str, list[str]] = {}
@@ -1819,8 +1848,13 @@ async def capability_heatmap(
             "subtype": a.subtype,
             "attributes": attrs,
             "lifecycle": a.lifecycle,
-            "org_ids": sorted(by_type.get("Organization", [])),
-            "related_by_type": {k: sorted(v) for k, v in by_type.items()},
+            # Deduped: a related card reached through two relation types is one
+            # card, and these lists drive filter matching and counts.
+            "org_ids": sorted(set(by_type.get("Organization", []))),
+            "related_by_type": {k: sorted(set(v)) for k, v in by_type.items()},
+            "related_by_rel_type": {
+                k: sorted(set(v)) for k, v in app_related_by_rel.get(aid, {}).items()
+            },
             "tag_ids": cap_app_tag_ids.get(aid, []),
         }
 
@@ -1873,6 +1907,36 @@ async def capability_heatmap(
         "items": items,
         "metric": metric,
         "filterable_types": filterable_types,
+        # Relation types reaching each filterable card type, so the report can
+        # offer a facet per relationship when several share a card-type pair.
+        "relation_types": [
+            {
+                "key": rt.key,
+                "label": rt.label,
+                "reverse_label": rt.reverse_label,
+                "source_type_key": rt.source_type_key,
+                "target_type_key": rt.target_type_key,
+                "other_type_key": (
+                    rt.target_type_key
+                    if rt.source_type_key == "Application"
+                    else rt.source_type_key
+                ),
+                "translations": rt.translations or {},
+            }
+            for rt in (
+                await db.execute(
+                    select(RelationType).where(
+                        RelationType.is_hidden.is_(False),
+                        or_(
+                            RelationType.source_type_key == "Application",
+                            RelationType.target_type_key == "Application",
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        ],
         "fields_schema": app_fields_schema,
         "tag_groups": cap_tag_groups_payload,
     }
@@ -1961,11 +2025,18 @@ async def dependencies(
         return path
 
     # Build nodes
+    visible_cards = [c for c in (sheet_map.get(nid) for nid in visible_ids) if c]
+    # One pair of bulk queries for the whole graph, not one per node. Cards
+    # whose type has logos switched off never appear in the map, so the view
+    # needs no rule of its own.
+    logos = await logo_updated_map(db, visible_cards)
+
     nodes = []
     for nid in visible_ids:
         card = sheet_map.get(nid)
         if not card:
             continue
+        logo_at = logos.get(card.id)
         nodes.append(
             {
                 "id": nid,
@@ -1976,6 +2047,7 @@ async def dependencies(
                 "attributes": card.attributes,
                 "parent_id": str(card.parent_id) if card.parent_id else None,
                 "path": _ancestor_path(nid),
+                "logo_updated_at": logo_at.isoformat() if logo_at else None,
             }
         )
 
@@ -1985,7 +2057,11 @@ async def dependencies(
     for r in rels:
         sid, tid = str(r.source_id), str(r.target_id)
         if sid in visible_ids and tid in visible_ids:
-            edge_key = f"{min(sid, tid)}:{max(sid, tid)}"
+            # Keyed by card pair AND relation type: two cards may be connected by
+            # several relation types and each carries its own verb / attributes, so
+            # each contributes its own edge. Two rows of the SAME type between the
+            # same pair (either direction) still collapse to one.
+            edge_key = f"{min(sid, tid)}:{max(sid, tid)}:{r.type}"
             if edge_key not in seen_edges:
                 seen_edges.add(edge_key)
                 rt_info = rel_type_info.get(r.type, {})
@@ -2341,25 +2417,30 @@ async def eol_report(
         )
         rels = rels_result.scalars().all()
         it_id_strs = {str(i) for i in it_ids}
+        # An ITComponent may reach the same Application through several relation
+        # types; list each affected application ONCE, so the per-item count
+        # agrees with `summary.impacted_apps` (which is a set).
+        seen_apps: dict[str, set[str]] = {}
+
+        def _add_app(it_id: str, app_id: str) -> None:
+            if app_id in seen_apps.setdefault(it_id, set()):
+                return
+            seen_apps[it_id].add(app_id)
+            it_to_apps.setdefault(it_id, []).append(
+                {
+                    "id": app_id,
+                    "name": app_map[app_id].name,
+                    "lifecycle": app_map[app_id].lifecycle,
+                }
+            )
+
         for r in rels:
             sid, tid = str(r.source_id), str(r.target_id)
             # ITComponent → Application relation in either direction
             if sid in it_id_strs and tid in app_map:
-                it_to_apps.setdefault(sid, []).append(
-                    {
-                        "id": tid,
-                        "name": app_map[tid].name,
-                        "lifecycle": app_map[tid].lifecycle,
-                    }
-                )
+                _add_app(sid, tid)
             elif tid in it_id_strs and sid in app_map:
-                it_to_apps.setdefault(tid, []).append(
-                    {
-                        "id": sid,
-                        "name": app_map[sid].name,
-                        "lifecycle": app_map[sid].lifecycle,
-                    }
-                )
+                _add_app(tid, sid)
 
     # 4. Build response items
     items = []

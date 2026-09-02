@@ -16,6 +16,43 @@ La parte superiore della card mostra:
 - **Anello della qualità dei dati** — Indicatore visivo della completezza delle informazioni (0-100%)
 - **Menu azioni** — Archiviazione, eliminazione e azioni di approvazione. Include anche un'azione con un clic **Osserva questa scheda** (quando il tipo di scheda definisce un ruolo Osservatore) che consente a qualsiasi utente con permessi di lettura di seguire la scheda senza passare dalla scheda Stakeholder.
 
+### Logo personalizzato
+
+Le schede di un tipo che lo consente possono avere un proprio **logo** al posto
+dell'icona generica del tipo: un'Applicazione per SAP, Kafka o Jira mostra
+quindi il marchio del prodotto. I loghi riconoscibili rendono un inventario
+molto più rapido da scorrere, soprattutto per chi lo consulta senza
+mantenerlo.
+
+Passa il puntatore sull'icona in alto a sinistra della scheda e fai clic per
+**caricare**, **sostituire** o **rimuovere** l'immagine. L'icona del tipo non
+scompare: si sposta come piccolo distintivo nell'angolo del logo, così resta
+sempre chiaro a colpo d'occhio di che tipo di scheda si tratta.
+
+- **Formati accettati** — PNG, JPEG, WebP o GIF, fino a 1 MB. Il formato SVG
+  non è accettato perché può contenere script.
+- **Dove compare** — nell'intestazione della scheda, nella colonna **Logo**
+  facoltativa dell'[Inventario](inventory.md) e in qualsiasi portale web
+  pubblicato basato su quel tipo di scheda.
+- **Se non c'è un logo** — la scheda torna alla sua icona di tipo, come prima.
+
+I loghi sono disponibili per i tipi di scheda che un amministratore ha
+attivato; di serie sono Applicazione e Componente IT. Vedi
+[Metamodello](../admin/metamodel.md).
+
+Fai clic sul logo e scegli **Scegli un'icona di marca…** per attingere a un
+insieme integrato di diverse migliaia di marchi: cerca il prodotto per nome e
+selezionalo, non serve alcun file immagine. **Carica** consente invece di usare
+un tuo file. Un assistente IA collegato via [MCP](../admin/mcp.md) può impostare
+i logo allo stesso modo in blocco e, se un prodotto non è nell'insieme, recupera
+il marchio da sé.
+
+Lo stesso menu è disponibile dalla colonna **Logo** dell'[Inventario](inventory.md)
+— passate il mouse su una cella del logo e fate clic —, così da poter applicare
+i marchi a un panorama appena importato senza aprire ogni scheda. È una scheda
+alla volta di proposito: il logo non viene offerto né al riempimento verso il
+basso né alla modifica di massa.
+
 ### Workflow di approvazione
 
 Le card possono attraversare un ciclo di approvazione:
@@ -82,7 +119,7 @@ Mostra tutte le connessioni con altre card, raggruppate per tipo di relazione. P
 
 - **Nome della card correlata** — Cliccate per navigare alla card correlata
 - **Tipo di relazione** — La natura della connessione (es. "utilizza", "funziona su", "dipende da")
-- **Aggiungi relazione** — Cliccate su **+** per aprire la finestra di quella relazione. Elenca le carte corrispondenti mentre digitate (le corrispondenze migliori per prime, altre si caricano scorrendo) e nasconde quelle già collegate, con una didascalia che ne indica il numero. Cliccando una carta la collegate subito e compare come chip in alto: cliccate la **×** di un chip per annullare quell'aggiunta. La finestra resta aperta per aggiungerne quante volete e su smartphone si apre a schermo intero. Le relazioni senza una sezione propria si raggiungono dal pulsante **Aggiungi relazione** in fondo alla sezione
+- **Aggiungi relazione** — Cliccate su **+** per aprire la finestra di quella relazione. Elenca le carte corrispondenti mentre digitate (le corrispondenze migliori per prime, altre si caricano scorrendo) e nasconde quelle già collegate, con una didascalia che ne indica il numero. Cliccando una carta la collegate subito e compare come chip in alto: cliccate la **×** di un chip per annullare quell'aggiunta. La finestra resta aperta per aggiungerne quante volete e su smartphone si apre a schermo intero. Le relazioni senza una sezione propria si raggiungono dal pulsante **Aggiungi relazione** in fondo alla sezione. Quando il tipo collegato è gerarchico (capacità di business, organizzazione e simili), la finestra lo mostra come un albero indentato anziché come elenco alfabetico, così potete scegliere una sotto-capacità dal suo ramo. La ricerca mantiene visibili i genitori di ogni corrispondenza come contesto e le carte non selezionabili (già collegate, appena aggiunte o la carta stessa) restano al loro posto in grigio, così i livelli intorno restano leggibili.
 - **Ordinamento** — Le carte collegate sono elencate in ordine alfabetico per nome
 - **Rimuovi relazione** — Cliccate sull'icona di eliminazione per rimuovere una relazione
 - **Raggruppa per sottotipo** — Quando una sezione di relazioni contiene molte card correlate, vengono raggruppate automaticamente in gruppi di sottotipo comprimibili (ciascuno con un conteggio), con un gruppo finale **Nessun sottotipo** per le card non classificate. Usate il pulsante di attivazione nell'intestazione della sezione per passare dalla vista raggruppata all'elenco semplice.

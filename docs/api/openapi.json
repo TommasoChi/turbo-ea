@@ -787,6 +787,35 @@
         "title": "Body_upload_bundle_api_v1_admin_extensions_install_post",
         "type": "object"
       },
+      "Body_upload_card_logo_api_v1_cards__card_id__logo_post": {
+        "properties": {
+          "file": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File"
+          },
+          "icon_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Slug"
+          }
+        },
+        "title": "Body_upload_card_logo_api_v1_cards__card_id__logo_post",
+        "type": "object"
+      },
       "Body_upload_favicon_api_v1_settings_favicon_post": {
         "properties": {
           "file": {
@@ -1161,6 +1190,300 @@
           "enabled"
         ],
         "title": "BpmEnabledPayload",
+        "type": "object"
+      },
+      "BpmPublicFlow": {
+        "description": "The published BPMN flow for one in-scope process.\n\n``bpmn_xml`` is ``None`` and ``steps`` empty when the process has no\npublished version \u2014 including when it has only drafts, only archived or\nwithdrawn revisions, or only a legacy ``process_diagrams`` row. That is not\nan error: the House marks such a process as having no flow, and the drawer\nrenders its empty state.",
+        "properties": {
+          "bpmn_xml": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bpmn Xml"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "steps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BpmPublicStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "svg_thumbnail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Svg Thumbnail"
+          }
+        },
+        "title": "BpmPublicFlow",
+        "type": "object"
+      },
+      "BpmPublicProcess": {
+        "description": "One node of the published Process House.\n\n``parent_id`` shares the id space with ``id`` so the client's ``buildTree``\nstill assembles the hierarchy. A process whose parent is out of the portal's\nscope simply becomes a root \u2014 the same re-rooting the authenticated\nnavigator already does for a filtered tree.",
+        "properties": {
+          "attributes": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Attributes",
+            "type": "object"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "has_flow": {
+            "default": false,
+            "title": "Has Flow",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lifecycle": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Lifecycle",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "org_tokens": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Org Tokens",
+            "type": "array"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "step_count": {
+            "default": 0,
+            "title": "Step Count",
+            "type": "integer"
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtype"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "BpmPublicProcess",
+        "type": "object"
+      },
+      "BpmPublicProcessMap": {
+        "description": "Everything the published Process House needs, in one round-trip.\n\n``row_order`` rides along rather than being a second request. It is served\nby ``GET /settings/bpm-row-order``, which happens to be unauthenticated\ntoday, but a portal must not depend on another route's incidental\npublic-ness \u2014 and one round-trip is the posture the PPM board set.",
+        "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BpmPublicProcess"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "organizations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BpmPublicRef"
+            },
+            "title": "Organizations",
+            "type": "array"
+          },
+          "row_order": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Row Order",
+            "type": "array"
+          }
+        },
+        "title": "BpmPublicProcessMap",
+        "type": "object"
+      },
+      "BpmPublicRef": {
+        "description": "A named thing referenced by an opaque, per-response token.\n\nUsed for Organizations, which the House's organization filter matches on\nclient-side within a single payload \u2014 so the token only has to be stable\nfor the life of one response, and a real card id would be published for\nnothing.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "name"
+        ],
+        "title": "BpmPublicRef",
+        "type": "object"
+      },
+      "BpmPublicStep": {
+        "description": "One step of a published BPMN flow.\n\n``bpmn_element_id`` is an id local to the BPMN XML, not a card id, and it is\nthe correlation key the viewer needs to place overlays \u2014 it is already\ninside the XML the visitor is holding.\n\nThe four link fields are populated only when the portal enables\n``show_element_links``; they carry **names, never ids**. The viewer's and the\nSteps tab's existing truthiness guards then render the reduced row with no\nextra branching.",
+        "properties": {
+          "application_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Name"
+          },
+          "bpmn_element_id": {
+            "title": "Bpmn Element Id",
+            "type": "string"
+          },
+          "data_object_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Object Name"
+          },
+          "documentation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documentation"
+          },
+          "element_type": {
+            "title": "Element Type",
+            "type": "string"
+          },
+          "is_automated": {
+            "default": false,
+            "title": "Is Automated",
+            "type": "boolean"
+          },
+          "it_component_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "It Component Name"
+          },
+          "lane_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lane Name"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "organizations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BpmPublicRef"
+            },
+            "title": "Organizations",
+            "type": "array"
+          },
+          "sequence_order": {
+            "default": 0,
+            "title": "Sequence Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bpmn_element_id",
+          "element_type"
+        ],
+        "title": "BpmPublicStep",
         "type": "object"
       },
       "BpmRowOrderPayload": {
@@ -2640,6 +2963,18 @@
               }
             ],
             "title": "Lifecycle"
+          },
+          "logo_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Updated At"
           },
           "name": {
             "title": "Name",
@@ -7847,6 +8182,34 @@
       },
       "PpmGroupOption": {
         "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "translations": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Translations",
+            "type": "object"
+          },
           "type_key": {
             "title": "Type Key",
             "type": "string"
@@ -7861,6 +8224,360 @@
           "type_label"
         ],
         "title": "PpmGroupOption",
+        "type": "object"
+      },
+      "PpmPublicDashboard": {
+        "description": "The three KPI values the board actually renders.\n\nThe internal dashboard also carries ``by_subtype``, ``by_status``,\n``health_cost``, ``health_scope`` and ``total_actual``; none of them is drawn\non the board, so none of them is published.",
+        "properties": {
+          "health_schedule": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "Health Schedule",
+            "type": "object"
+          },
+          "total_budget": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Budget"
+          },
+          "total_initiatives": {
+            "title": "Total Initiatives",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_initiatives"
+        ],
+        "title": "PpmPublicDashboard",
+        "type": "object"
+      },
+      "PpmPublicGroupOption": {
+        "description": "A card type the board can group by.\n\nShips the metamodel entity (``label`` + ``translations``) rather than a\nresolved string: label resolution lives on the client, in the shared\nresolvers, so there is exactly one implementation of it and no second place\nfor the key-as-fallback bug to reappear.",
+        "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "translations": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Translations",
+            "type": "object"
+          },
+          "type_key": {
+            "title": "Type Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type_key",
+          "label"
+        ],
+        "title": "PpmPublicGroupOption",
+        "type": "object"
+      },
+      "PpmPublicItem": {
+        "description": "One board row.\n\n``id`` is the initiative's real card UUID \u2014 a portfolio portal links its rows\nto ``/ppm/{id}`` behind the login wall, so it is exposed by design. Every\nother identifier is withheld: ``group_id`` is an opaque per-response token,\nand the parent, report, reporter and stakeholder ids are not emitted at all.",
+        "properties": {
+          "capex_actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capex Actual"
+          },
+          "capex_planned": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capex Planned"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "group_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "latest_report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PpmPublicReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "opex_actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opex Actual"
+          },
+          "opex_planned": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opex Planned"
+          },
+          "stakeholders": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PpmPublicPerson"
+            },
+            "title": "Stakeholders",
+            "type": "array"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtype"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PpmPublicItem",
+        "type": "object"
+      },
+      "PpmPublicPerson": {
+        "description": "A named person. Carries **no** user id and never an email address.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "role_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Key"
+          }
+        },
+        "required": [
+          "display_name"
+        ],
+        "title": "PpmPublicPerson",
+        "type": "object"
+      },
+      "PpmPublicPortfolio": {
+        "description": "Everything the public board needs, in one round-trip.",
+        "properties": {
+          "dashboard": {
+            "$ref": "#/components/schemas/PpmPublicDashboard"
+          },
+          "group_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group By"
+          },
+          "group_options": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PpmPublicGroupOption"
+            },
+            "title": "Group Options",
+            "type": "array"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PpmPublicItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dashboard"
+        ],
+        "title": "PpmPublicPortfolio",
+        "type": "object"
+      },
+      "PpmPublicReport": {
+        "description": "The latest status report, as shown in the board's hover overview.\n\n``reporter`` is populated only when the portal enables people, and the three\nnarrative fields only when it enables narrative \u2014 the viewer's existing\ntruthiness guards then render the reduced popover with no extra branching.",
+        "properties": {
+          "accomplishments": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accomplishments"
+          },
+          "cost_health": {
+            "title": "Cost Health",
+            "type": "string"
+          },
+          "next_steps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Steps"
+          },
+          "report_date": {
+            "format": "date",
+            "title": "Report Date",
+            "type": "string"
+          },
+          "reporter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PpmPublicPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule_health": {
+            "title": "Schedule Health",
+            "type": "string"
+          },
+          "scope_health": {
+            "title": "Scope Health",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "report_date",
+          "schedule_health",
+          "cost_health",
+          "scope_health"
+        ],
+        "title": "PpmPublicReport",
         "type": "object"
       },
       "PpmRiskCreate": {
@@ -15312,6 +16029,17 @@
           "slug": {
             "title": "Slug",
             "type": "string"
+          },
+          "view": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View"
           }
         },
         "required": [
@@ -15439,6 +16167,17 @@
               }
             ],
             "title": "Slug"
+          },
+          "view": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View"
           }
         },
         "title": "WebPortalUpdate",
@@ -20159,6 +20898,145 @@
         ]
       }
     },
+    "/api/v1/card-logos/brand-icons": {
+      "get": {
+        "description": "Search the bundled brand-icon pack.\n\nGated on ``inventory.view``: the payload is public CC0 metadata, so nothing\nhere needs shaping, but this would otherwise be the only authenticated read\nin the file with no permission at all \u2014 and ``inventory.view`` is the\nweakest permission anyone who could act on the result already holds.",
+        "operationId": "list_brand_icons_api_v1_card_logos_brand_icons_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 64,
+              "title": "Search",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Brand Icons",
+        "tags": [
+          "card-logos"
+        ]
+      }
+    },
+    "/api/v1/card-logos/brand-icons/resolve": {
+      "get": {
+        "description": "Say which of many icon references the packs actually carry.\n\nExists for the MCP dry run. Previewing a batch of logos has to be able to\ntell the caller that a slug is unknown *before* it commits \u2014 otherwise a\npreview says every row is fine and the commit is where it learns\notherwise, which is precisely when an agent stops rather than going to\nfetch the mark itself. Searching one slug at a time would be one request\nper row, so this answers the whole batch in one.\n\nReturns ``{known: {ref: canonical_ref}, unknown: [ref]}``; the canonical\nform is what a caller should store, since a bare slug resolves to whichever\npack carries it.",
+        "operationId": "resolve_brand_icons_api_v1_card_logos_brand_icons_resolve_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "refs",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 8192,
+              "title": "Refs",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Brand Icons",
+        "tags": [
+          "card-logos"
+        ]
+      }
+    },
+    "/api/v1/card-logos/brand-icons/{slug}.png": {
+      "get": {
+        "description": "Public endpoint \u2014 one brand icon's PNG, for the picker to render.\n\nUnauthenticated, on the same reasoning as ``GET /settings/logo`` beside it:\nan ``<img>`` is what loads this, and the bytes are public CC0 artwork that\nships inside the image. Nothing here is instance data \u2014 not a card, not a\nname, not a count \u2014 so there is nothing for a permission to protect.\n\nThe *listing* endpoint above stays gated all the same: enumerating the pack\nis a different act from rendering one icon a caller already knows the name\nof, and least privilege is free there.\n\nTakes no database session on purpose \u2014 the pack is read from disk, so this\nroute never needs a connection out of the pool.",
+        "operationId": "get_brand_icon_api_v1_card_logos_brand_icons__slug__png_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Brand Icon",
+        "tags": [
+          "card-logos"
+        ]
+      }
+    },
     "/api/v1/cards": {
       "get": {
         "operationId": "list_cards_api_v1_cards_get",
@@ -21783,6 +22661,129 @@
         "summary": "Get History",
         "tags": [
           "cards"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/logo": {
+      "delete": {
+        "description": "Remove the card's logo, falling the card back to its type icon.\n\nAllowed even when the type's ``allow_card_logo`` switch is off, so turning\nthe feature off for a type never strands existing images as undeletable.",
+        "operationId": "delete_card_logo_api_v1_cards__card_id__logo_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Card Logo",
+        "tags": [
+          "card-logos"
+        ]
+      },
+      "get": {
+        "description": "Public endpoint \u2014 returns a card's logo image bytes, or 404.\n\nUnauthenticated on purpose. An ``<img>`` tag cannot carry the bearer token\n(it lives in sessionStorage), and published web portals are viewed with no\naccount at all, so a gated route would mean either blob-fetching through\nthe API client on every surface or a second portal-scoped copy of this\nendpoint. What is returned is the artefact and nothing else \u2014 no card name,\ntype, or any other field \u2014 keyed by an unguessable UUID, the same posture\n``GET /diagrams/public/{slug}`` and ``/ext-assets`` take.\n\nA missing card, a card with no logo, and a malformed id all answer 404\nidentically, so this cannot be used to probe which card ids exist. The\nper-type ``allow_card_logo`` switch deliberately does not gate this: it\ngoverns upload and display, and enforcing it here would 404 images that\nare still on screen in a portal the moment an admin flips it off.",
+        "operationId": "get_card_logo_api_v1_cards__card_id__logo_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Card Logo",
+        "tags": [
+          "card-logos"
+        ]
+      },
+      "post": {
+        "description": "Upload or replace the card's logo, from a file or a built-in brand icon.\n\nExactly one of ``file`` and ``icon_slug`` is required. The icon path exists\nso an agent can set a product's mark without carrying the image at all \u2014\nsee ``app/services/brand_icons.py``.",
+        "operationId": "upload_card_logo_api_v1_cards__card_id__logo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_card_logo_api_v1_cards__card_id__logo_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Card Logo",
+        "tags": [
+          "card-logos"
         ]
       }
     },
@@ -30008,7 +31009,7 @@
     },
     "/api/v1/reports/bpm/process-map": {
       "get": {
-        "description": "Process landscape map: hierarchy + related apps, data objects, orgs, contexts.",
+        "description": "Process landscape map: hierarchy + related apps, data objects, orgs, contexts.\n\nThe landscape itself is assembled by ``process_map_service`` so this route and\nthe account-less Process Navigator portal are built from one implementation and\ncannot drift. The response shape below stays this route's own \u2014 the service\nreturns the data, the route decides what an authenticated caller sees.",
         "operationId": "process_map_api_v1_reports_bpm_process_map_get",
         "responses": {
           "200": {
@@ -39240,6 +40241,101 @@
         ]
       }
     },
+    "/api/v1/web-portals/public/{slug}/bpm/process-map": {
+      "get": {
+        "description": "The read-only Process House, for a portal published with that view.\n\nShares one builder with the authenticated ``/reports/bpm/process-map`` route\nso the two houses cannot drift, then projects the result onto a separate,\nopt-in public shape (``to_public_process_map``) rather than filtering fields\nout of the internal one \u2014 a subtractive filter would publish whatever field\nsomeone adds to the internal item next.\n\nOn what is *not* published: the internal item carries every linked\nApplication with its full attributes (costs included), every linked\nDataObject, an application count and a cost rollup. None of it is here, and\nthere is no switch to turn it on \u2014 a navigator portal publishes how the\norganisation works, not which systems run it. See ``app/schemas/bpm_public.py``.",
+        "operationId": "get_public_portal_process_map_api_v1_web_portals_public__slug__bpm_process_map_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BpmPublicProcessMap"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Portal Process Map",
+        "tags": [
+          "web-portals"
+        ]
+      }
+    },
+    "/api/v1/web-portals/public/{slug}/bpm/processes/{process_id}/flow": {
+      "get": {
+        "description": "The published BPMN flow and its steps for one in-scope process.\n\nOne route rather than two because the Steps tab, the flow thumbnail and the\nfullscreen preview are three renderings of the same published artefact; the\nauthenticated navigator fetches it three times over two endpoints today. One\nroute means one scope check and one rate-limit bucket.\n\n**The scope check is the security of this route.** A portal narrowed by\n``filters`` publishes a subset of processes, and process ids are handed out\nfreely by other portals' maps \u2014 so without re-running the portal's own\npredicate against the requested id, a portal scoped to one branch of the\nhouse would serve every other process's BPMN to anyone who asks.\n\nOnly a ``published`` version is ever served. A process with only drafts, only\narchived or withdrawn revisions, or only a legacy ``process_diagrams`` row\nreturns an empty flow \u2014 and its steps stay empty too, because that legacy\nsave path populates ``process_elements`` with no approval involved.",
+        "operationId": "get_public_portal_process_flow_api_v1_web_portals_public__slug__bpm_processes__process_id__flow_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "process_id",
+            "required": true,
+            "schema": {
+              "title": "Process Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BpmPublicFlow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Portal Process Flow",
+        "tags": [
+          "web-portals"
+        ]
+      }
+    },
     "/api/v1/web-portals/public/{slug}/cards": {
       "get": {
         "description": "Public endpoint: returns cards for a published portal with optional filtering.",
@@ -39472,6 +40568,67 @@
           }
         },
         "summary": "Get Portal Gate",
+        "tags": [
+          "web-portals"
+        ]
+      }
+    },
+    "/api/v1/web-portals/public/{slug}/ppm/portfolio": {
+      "get": {
+        "description": "The read-only PPM portfolio board, for a portal published with that view.\n\nShares one builder with the authenticated ``/reports/ppm/*`` routes so the two\nboards cannot drift, then projects the result onto a separate, opt-in public\nshape (``to_public_portfolio``) rather than filtering fields out of the\ninternal one \u2014 a subtractive filter would publish whatever field someone adds\nto ``PpmGanttItem`` next.\n\nOn what may be published: ``show_costs`` governs the capex/opex aggregates and\nthe portfolio budget total, which are sums over ``ppm_cost_lines`` /\n``ppm_budget_lines``. It does **not** reach the Initiative card's own\n``costBudget`` / ``costActual`` attributes \u2014 those are ``type: \"cost\"``\nmetamodel fields, and public portals strip cost-typed fields unconditionally\n(see ``get_public_portal``). This is not an exemption from that invariant; the\nPPM tables simply sit outside it, and the board renders the two card\nattributes nowhere.\n\nA 404 (never a 400) is returned when the portal is not a portfolio portal or\nthe module is off, so a card-portal slug never confirms that this route exists.",
+        "operationId": "get_public_portal_ppm_portfolio_api_v1_web_portals_public__slug__ppm_portfolio_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Card type key to group by",
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Card type key to group by",
+              "title": "Group By"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PpmPublicPortfolio"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Portal Ppm Portfolio",
         "tags": [
           "web-portals"
         ]

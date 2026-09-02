@@ -12,6 +12,107 @@ Web portals are useful for sharing architecture information with stakeholders wh
 - **Service directory** — Publish IT services and their owners
 - **Capability map** — Provide a public view of business capabilities
 
+## Portal Type
+
+Each portal publishes one of three things, chosen with **Portal type**:
+
+| Type | What visitors see |
+|------|-------------------|
+| **Card list** | A searchable, filterable grid of cards — the classic portal, configured with the properties below. |
+| **PPM portfolio board** | The read-only [PPM portfolio board](../guide/ppm.md) — timeline, health indicators and budget-versus-actual for every active initiative. |
+| **Process navigator** | The read-only [Process House](../guide/bpm.md) — your business process hierarchy, and each process's published BPMN flow. |
+
+### PPM portfolio portals
+
+Selecting **PPM portfolio board** turns the portal into an executive view of your
+project portfolio, available on a public link with **no account, no licence and no
+login**. It exists for the common case where leadership wants portfolio visibility
+but will not maintain another set of credentials.
+
+The board is always scoped to **Initiative** cards, so the card-type picker is
+locked. The **subtypes** and **tags** filters still apply, which is how you publish
+a single programme rather than the whole portfolio.
+
+Visitors get the same board your team uses inside Turbo EA: the quarterly
+timeline, the schedule/cost/scope indicators, the CapEx and OpEx bars, grouping by
+any related card type, and the status-report overview that appears when you hover
+the **Last Report** date. Clicking an initiative leads into Turbo EA behind the
+normal sign-in — after signing in you land on the initiative you clicked.
+
+Three switches control what the published board reveals:
+
+| Switch | Default | Publishes |
+|--------|---------|-----------|
+| **Show budget and actual spend** | On | The CapEx and OpEx bars and the total-budget figure |
+| **Show status report commentary** | On | Summary, accomplishments and next steps in the hover overview. The report date and health indicators are always shown |
+| **Show project manager names** | **Off** | The names of project managers and report authors. Off by default because names are personal data |
+
+The board also opens on a grouping and subtype of your choosing:
+
+| Setting | Default | Effect |
+|---------|---------|--------|
+| **Opens grouped by** | Organization | Which grouping the board shows first |
+| **Opens showing subtype** | All | Which subtype is selected first |
+
+Both are only a starting point — a visitor can change either control, and nothing
+is remembered, so reopening the portal returns to what you configured here. This
+is separate from the **subtype filter** above, which decides which initiatives
+are published at all.
+
+!!! note
+    Some things are never published, whatever you choose: cost fields stored on the
+    Initiative card itself, user email addresses, and everything on the initiative
+    detail page — work packages, milestones, risks, tasks and report history all
+    stay behind the login.
+
+A portfolio portal can be SSO-gated like any other portal. Turning the PPM module
+off in **Admin > Settings** takes every portfolio portal dark immediately; you do
+not have to unpublish them one by one.
+
+### Process navigator portals
+
+Selecting **Process navigator** turns the portal into a read-only view of your
+**Process House**, available on a public link with **no account, no licence and no
+login**. It exists for the people who most need to read how the organisation
+works and are least likely to have a seat: new joiners, auditors, front-line
+staff and external partners.
+
+The board is always scoped to **Business Process** cards, so the card-type picker
+is locked. The **subtypes** and **tags** filters still apply, which is how you
+publish one branch of the house rather than all of it.
+
+Visitors get the same house your team uses inside Turbo EA: the process hierarchy
+grouped into rows by process type, the level slider, zoom and breadcrumbs, search,
+the colour overlays, the organization filter and the column-count control. Opening
+a process shows its overview, its steps, and its **published BPMN flow** — full
+screen, pan and zoom, exactly as your team sees it.
+
+Two switches and two opening settings control the published house:
+
+| Setting | Default | Effect |
+|---------|---------|--------|
+| **Show linked systems on each step** | **Off** | The names of the applications, data objects, IT components and organizations linked to each process step. Off by default because it reveals which systems run your processes |
+| **Opens at level** | 2 | How deep the hierarchy is shown first |
+| **Opens coloured by** | Process type | Which attribute colours the boxes first |
+
+The last two are only a starting point — a visitor can change either control, and
+nothing is remembered, so reopening the portal returns to what you configured here.
+
+!!! note
+    Some things are never published, whatever you choose: the applications, data
+    objects and costs behind a process, the Process × Application matrix and the
+    dependency view, and any BPMN that has not been **published** — drafts,
+    pending, archived and withdrawn revisions all stay behind the login.
+
+Unlike a portfolio portal, whose rows lead into Turbo EA behind the normal
+sign-in, a process navigator portal **links nowhere**. It is a dead end by
+design: a house published for readers without accounts should answer "how do we
+do this" without presenting a door they cannot open.
+
+A process navigator portal can be SSO-gated like any other portal. Turning the BPM
+module off in **Admin > Settings** takes every process portal dark immediately; you
+do not have to unpublish them one by one.
+
 ## Creating a Portal
 
 1. Navigate to **Admin > Settings > Web Portals**
@@ -22,7 +123,8 @@ Web portals are useful for sharing architecture information with stakeholders wh
 |-------|-------------|
 | **Name** | Display name for the portal |
 | **Slug** | URL-friendly identifier (auto-generated from name, editable). The portal will be accessible at `/portal/{slug}` |
-| **Card Type** | Which card type to display |
+| **Portal Type** | Card list, or the read-only PPM portfolio board (see [Portal Type](#portal-type)) |
+| **Card Type** | Which card type to display (locked to Initiative for a portfolio portal) |
 | **Subtypes** | Optionally restrict to specific subtypes |
 | **Who can view this portal** | Access mode — **Anyone with the link** or **Sign in with SSO** (see [Access Protection](#access-protection)) |
 | **Show Logo** | Whether to display the platform logo on the portal |

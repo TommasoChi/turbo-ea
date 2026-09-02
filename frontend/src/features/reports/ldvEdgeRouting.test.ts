@@ -300,8 +300,15 @@ describe("routeLdvEdges port assignment", () => {
       edge("platform", "altium"),
     ];
     const { routes } = route(oriented, positions, lanes);
+    // Derived, never written out: a hard-coded half-height silently shrinks
+    // the clearance box — and so weakens every assertion below — the day the
+    // card changes size.
     const bounds = Object.entries(positions).map(([id, p]) => ({
-      id, x1: p.x - 100, y1: p.y - 36, x2: p.x + 100, y2: p.y + 36,
+      id,
+      x1: p.x - LDV_NODE_W / 2,
+      y1: p.y - LDV_NODE_H / 2,
+      x2: p.x + LDV_NODE_W / 2,
+      y2: p.y + LDV_NODE_H / 2,
     }));
     for (let i = 0; i < routes.length; i++) {
       const r = routes[i];
@@ -441,10 +448,11 @@ describe("routeLdvEdges horizontal-run placement (centerY)", () => {
       { s: { x: 0, y: 0 }, t: { x: 300, y: 400 } },
       { s: "A", t: "B" },
     );
-    // Handle ys: 36 (source bottom) and 364 (target top) — the run must sit
-    // between them, at the midpoint when nothing conflicts.
-    expect(routes[0].centerY).toBeGreaterThan(36);
-    expect(routes[0].centerY).toBeLessThan(364);
+    // The run must sit between the two handle ys — half a card below the
+    // source centre and half a card above the target's — at the midpoint when
+    // nothing conflicts.
+    expect(routes[0].centerY).toBeGreaterThan(LDV_NODE_H / 2);
+    expect(routes[0].centerY).toBeLessThan(400 - LDV_NODE_H / 2);
     expect(routes[0].centerY).toBe(200);
   });
 
@@ -644,13 +652,22 @@ describe("routeLdvEdges vertical de-overlap", () => {
 describe("exportRoute", () => {
   const sourceCentre = { x: 0, y: 0 };
   const targetCentre = { x: 0, y: 400 };
-  // b-3 / t-3 are the centre slots, so the handle points are (0, 36), (0, 364).
+  // b-3 / t-3 are the centre slots, so the handle points sit half a card below
+  // and above the two centres. Derived from LDV_NODE_H rather than written out:
+  // a hard-coded 36 silently made every anchor look stale the day the card grew
+  // to hold a logo, and the whole suite reported dropped waypoints instead.
+  const halfCard = LDV_NODE_H / 2;
   const base = {
     sourceHandle: "b-3",
     targetHandle: "t-3",
     sourceCentre,
     targetCentre,
-    anchors: { sx: 0, sy: 36, tx: 0, ty: 364 },
+    anchors: {
+      sx: 0,
+      sy: sourceCentre.y + halfCard,
+      tx: 0,
+      ty: targetCentre.y - halfCard,
+    },
   };
 
   it("translates handles into fractional anchors on the cards", () => {

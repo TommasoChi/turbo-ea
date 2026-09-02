@@ -142,6 +142,68 @@ describe("extensionHost", () => {
     // SDK 1.17 — data-grid loader + create-card dialog
     expect(typeof sdk.loadAgGrid).toBe("function");
     expect(sdk.CreateCardDialog).toBeDefined();
+    // SDK 1.20 — workspace date format + in-app navigation. Without these an
+    // extension can only approximate core: a hand-rolled date ignores the
+    // workspace setting, and an <a href> to a core route reloads the SPA.
+    expect(typeof sdk.useDateFormat).toBe("function");
+    expect(typeof sdk.useNavigate).toBe("function");
+    // SDK 1.23 — the shared commit-on-blur native date input.
+    expect(sdk.DateField).toBeDefined();
+    // SDK 1.24 — the full card browser, for anything wider than the
+    // single-type scope control CardScopeDialog covers.
+    expect(sdk.CardMultiPicker).toBeDefined();
+    // SDK 1.21 — timeline + dependency-view loaders and the filter-sidebar
+    // primitives. Without these an extension timeline/graph/sidebar can only
+    // be a drifting lookalike of core's.
+    expect(typeof sdk.loadTimeline).toBe("function");
+    expect(typeof sdk.loadDependencyView).toBe("function");
+    expect(sdk.FilterSectionHeader).toBeDefined();
+    expect(sdk.FilterCheckboxList).toBeDefined();
+    expect(sdk.ColumnFreezeToggle).toBeDefined();
+    expect(typeof sdk.loadReportExport).toBe("function");
+    // 1.25 — the card-detail lifecycle line plus gantt arrow routing.
+    expect(sdk.LifecycleSection).toBeTruthy();
+    expect(sdk.PHASES).toEqual(["plan", "phaseIn", "active", "phaseOut", "endOfLife"]);
+    expect(typeof sdk.getPhaseLabels).toBe("function");
+    expect(typeof sdk.buildGanttArrowPath).toBe("function");
+  });
+
+  it("loadReportExport resolves core's own report exporters", async () => {
+    // An extension that wants a deck must reuse this rather than bundling a
+    // presentation library — so the entry point has to actually resolve.
+    initExtensionHost();
+    const sdk = window.TurboEA?.sdk as Record<string, unknown>;
+    const loaded =
+      (await (sdk.loadReportExport as () => Promise<Record<string, unknown>>)()) ?? {};
+    expect(typeof loaded.exportReportToPptx).toBe("function");
+    expect(typeof loaded.exportReportToXlsx).toBe("function");
+    expect(typeof loaded.extractSheetsFromDOM).toBe("function");
+  });
+
+  it("loadTimeline resolves the time-travel slider and its helpers", async () => {
+    initExtensionHost();
+    const sdk = window.TurboEA?.sdk as Record<string, unknown>;
+    const loaded = (await (sdk.loadTimeline as () => Promise<Record<string, unknown>>)()) ?? {};
+    expect(loaded.TimelineSlider).toBeDefined();
+    expect(typeof loaded.useTimeline).toBe("function");
+    expect(typeof loaded.computeTimelineRange).toBe("function");
+    expect(typeof loaded.classifyTimelineChange).toBe("function");
+    expect(typeof loaded.isPresentAtDate).toBe("function");
+    expect(typeof loaded.isVisibleAtDate).toBe("function");
+    expect(typeof loaded.computeTimelineMilestones).toBe("function");
+    expect(typeof loaded.cardsChangingBetween).toBe("function");
+  });
+
+  it("loadDependencyView resolves the layered dependency view and layout engine", async () => {
+    initExtensionHost();
+    const sdk = window.TurboEA?.sdk as Record<string, unknown>;
+    const loaded =
+      (await (sdk.loadDependencyView as () => Promise<Record<string, unknown>>)()) ?? {};
+    expect(loaded.LayeredDependencyView).toBeDefined();
+    const layout = loaded.layeredDependencyLayout as Record<string, unknown>;
+    expect(layout).toBeDefined();
+    expect(typeof layout.filterEndOfLifeNodes).toBe("function");
+    expect(layout.LDV_NODE_W).toBeDefined();
   });
 
   it("loadAgGrid resolves core's AG Grid module and themes", async () => {
@@ -154,6 +216,8 @@ describe("extensionHost", () => {
     // SDK 1.18 — the documented grid-template hooks ride the same chunk.
     expect(typeof loaded.useColumnFreeze).toBe("function");
     expect(typeof loaded.useColumnOrder).toBe("function");
+    // SDK 1.22 — the shared cell context-menu hook rides it too.
+    expect(typeof loaded.useCellContextMenu).toBe("function");
   });
 
   it("loadDocxTemplater resolves all three classes from core's code-split chunk", async () => {
@@ -509,7 +573,7 @@ describe("extensionHost", () => {
   });
 
   it("pins the current UI SDK version", () => {
-    expect(UI_SDK_VERSION).toBe("1.19");
+    expect(UI_SDK_VERSION).toBe("1.26");
   });
 
   it("whitelists the nav groups an extension route may request", () => {

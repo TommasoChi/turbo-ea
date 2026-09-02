@@ -21,14 +21,14 @@ import DialogActions from "@mui/material/DialogActions";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import InsertCardsDialog from "./InsertCardsDialog";
+import type { PickedCard } from "@/components/CardMultiPicker";
 import CreateOnDiagramDialog from "./CreateOnDiagramDialog";
 import RelationPickerDialog from "./RelationPickerDialog";
 import type { EdgeEndpoints } from "./RelationPickerDialog";
 import DiagramSyncPanel from "./DiagramSyncPanel";
-import type {
-  PendingCard,
-  PendingRelation,
-} from "./DiagramSyncPanel";
+import type { PendingCard, PendingRelation } from "./DiagramSyncPanel";
+import { composeCardLogoImage } from "./cardLogoImage";
+import { cardLogoUrl } from "@/components/CardLogoAvatar";
 import { diffStaleItems, fetchInventoryState } from "./staleCheck";
 import type { StaleItem } from "./staleCheck";
 import {
@@ -44,6 +44,7 @@ import {
   captureGroupChildLayout,
   detailRowsHeight,
   getGroupChildCardIds,
+  getGroupChildRelationIds,
   refreshCardOverlays,
   insertPendingCard,
   stampEdgeAsRelation,
@@ -81,11 +82,17 @@ import {
   applyViewToGraph,
   setRelationLabelsHidden,
   applyCardTypeIcons,
+  applyCardLogos,
   applyCardLabels,
   attachCardLabelEditListener,
+  attachCardResizeListener,
+  logoKey,
+  logoLookupFor,
+  readCardCellBoxes,
   readCardName,
 } from "./drawio-shapes";
 import type {
+  CardLogoLookup,
   HierarchyChild,
   ParentChangeEvent,
   PendingParentChange,
@@ -98,11 +105,9 @@ import type {
   RelationFlowDirection,
   RemovedRelationTombstone,
 } from "./drawio-shapes";
+import { groupRelationsByOtherCard, pruneDeletedRelations } from "./expandChildren";
 import ExpandMenu from "./ExpandMenu";
-import type {
-  ExpandMenuPick,
-  ExpandMenuTarget,
-} from "./ExpandMenu";
+import type { ExpandMenuPick, ExpandMenuTarget } from "./ExpandMenu";
 import ColorBySelector from "./ColorBySelector";
 import ShowOnCardSelector from "@/components/cardDisplay/ShowOnCardSelector";
 import {
@@ -119,10 +124,16 @@ import DiagramViewLegend from "./DiagramViewLegend";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
-import { relationLabel, useFieldLabel, useOptionLabel, useTypeLabel } from "@/hooks/useResolveLabel";
+import {
+  relationLabel,
+  useFieldLabel,
+  useOptionLabel,
+  useTypeLabel,
+} from "@/hooks/useResolveLabel";
 import {
   buildFieldCatalog,
   DEFAULT_CARD_LABELS,
+  showsCardLogos,
   EMPTY_VALUE,
   formatFieldValue,
   hasCardLabelLines,
@@ -212,7 +223,6 @@ interface DiagramData {
     hideRelationLabels?: boolean;
   };
 }
-
 
 interface DrawIOMessage {
   event:
@@ -369,7 +379,8 @@ function bootstrapDrawIO(iframe: HTMLIFrameElement) {
               _cells: any[],
               evt: MouseEvent,
             ) {
-              if (!parent || !this.graph.getModel().isVertex(parent)) return false;
+              if (!parent || !this.graph.getModel().isVertex(parent))
+                return false;
               const pState = this.graph.view.getState(parent);
               if (!pState) return false;
               const pt = win.mxUtils.convertPoint(
@@ -406,10 +417,12 @@ function bootstrapDrawIO(iframe: HTMLIFrameElement) {
           const s = graph.view.scale;
           const tr = graph.view.translate;
           const gx = Math.round(
-            (mxEvent.getClientX(evt) - offset.left + container.scrollLeft) / s - tr.x,
+            (mxEvent.getClientX(evt) - offset.left + container.scrollLeft) / s -
+              tr.x,
           );
           const gy = Math.round(
-            (mxEvent.getClientY(evt) - offset.top + container.scrollTop) / s - tr.y,
+            (mxEvent.getClientY(evt) - offset.top + container.scrollTop) / s -
+              tr.y,
           );
 
           // If the right-click landed on (or inside) a card cell, surface
@@ -421,7 +434,8 @@ function bootstrapDrawIO(iframe: HTMLIFrameElement) {
           }
           const cardId = cardCell?.value?.getAttribute?.("cardId");
           const isPending = cardCell?.value?.getAttribute?.("pending") === "1";
-          const isSyncedCard = !!cardId && !isPending && !cardId.startsWith("pending-");
+          const isSyncedCard =
+            !!cardId && !isPending && !cardId.startsWith("pending-");
           const isVertex = cell && !cell.edge;
           const hasNoCardId = isVertex && !cardId;
 
@@ -493,7 +507,10 @@ function bootstrapDrawIO(iframe: HTMLIFrameElement) {
           if (isSyncedCard && cardCell) {
             menu.addItem("Convert to Container", null, () => {
               win.parent.postMessage(
-                JSON.stringify({ event: "containerizeCell", cellId: cardCell.id }),
+                JSON.stringify({
+                  event: "containerizeCell",
+                  cellId: cardCell.id,
+                }),
                 "*",
               );
             });
@@ -519,50 +536,53 @@ function bootstrapDrawIO(iframe: HTMLIFrameElement) {
       /* ---------- Edge connection interception ---------- */
       const connHandler = graph.connectionHandler;
       if (connHandler) {
-        connHandler.addListener(win.mxEvent.CONNECT, function (
-          _sender: unknown,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          evt: any,
-        ) {
-          const edge = evt.getProperty("cell");
-          if (!edge) return;
+        connHandler.addListener(
+          win.mxEvent.CONNECT,
+          function (
+            _sender: unknown,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            evt: any,
+          ) {
+            const edge = evt.getProperty("cell");
+            if (!edge) return;
 
-          const model = graph.getModel();
-          const src = model.getTerminal(edge, true);
-          const tgt = model.getTerminal(edge, false);
-          if (!src || !tgt) return;
+            const model = graph.getModel();
+            const src = model.getTerminal(edge, true);
+            const tgt = model.getTerminal(edge, false);
+            if (!src || !tgt) return;
 
-          const srcFsId = src.value?.getAttribute?.("cardId");
-          const tgtFsId = tgt.value?.getAttribute?.("cardId");
-          const srcType = src.value?.getAttribute?.("cardType");
-          const tgtType = tgt.value?.getAttribute?.("cardType");
+            const srcFsId = src.value?.getAttribute?.("cardId");
+            const tgtFsId = tgt.value?.getAttribute?.("cardId");
+            const srcType = src.value?.getAttribute?.("cardType");
+            const tgtType = tgt.value?.getAttribute?.("cardType");
 
-          if (srcFsId && tgtFsId && srcType && tgtType) {
-            // Resolve colors via stored style (fillColor)
-            const srcStyle = model.getStyle(src) || "";
-            const tgtStyle = model.getStyle(tgt) || "";
-            const pick = (s: string) => {
-              const m = /fillColor=([^;]+)/.exec(s);
-              return m ? m[1] : "#999";
-            };
+            if (srcFsId && tgtFsId && srcType && tgtType) {
+              // Resolve colors via stored style (fillColor)
+              const srcStyle = model.getStyle(src) || "";
+              const tgtStyle = model.getStyle(tgt) || "";
+              const pick = (s: string) => {
+                const m = /fillColor=([^;]+)/.exec(s);
+                return m ? m[1] : "#999";
+              };
 
-            win.parent.postMessage(
-              JSON.stringify({
-                event: "edgeConnected",
-                edgeCellId: edge.id,
-                sourceCardId: srcFsId,
-                targetCardId: tgtFsId,
-                sourceType: srcType,
-                targetType: tgtType,
-                sourceName: readCardName(src.value),
-                targetName: readCardName(tgt.value),
-                sourceColor: pick(srcStyle),
-                targetColor: pick(tgtStyle),
-              }),
-              "*",
-            );
-          }
-        });
+              win.parent.postMessage(
+                JSON.stringify({
+                  event: "edgeConnected",
+                  edgeCellId: edge.id,
+                  sourceCardId: srcFsId,
+                  targetCardId: tgtFsId,
+                  sourceType: srcType,
+                  targetType: tgtType,
+                  sourceName: readCardName(src.value),
+                  targetName: readCardName(tgt.value),
+                  sourceColor: pick(srcStyle),
+                  targetColor: pick(tgtStyle),
+                }),
+                "*",
+              );
+            }
+          },
+        );
       }
     });
   } catch {
@@ -637,6 +657,10 @@ export default function DiagramEditor() {
   // Expand/collapse caches — survive collapse/expand cycles so locally
   // deleted children don't reappear.
   const expandCacheRef = useRef<Map<string, ExpandChildData[]>>(new Map());
+  // Relations the user deleted from an expanded group, per parent cell. Tracked
+  // by RELATION id rather than card id: a child can carry several edges, so
+  // "is the card still connected?" no longer answers "was this relation removed?".
+  const deletedRelationsRef = useRef<Map<string, Set<string>>>(new Map());
   const deletedChildrenRef = useRef<Map<string, Set<string>>>(new Map());
   // Layout each group's children had immediately after we expanded them.
   // Compared against the live layout at collapse time to tell "the user
@@ -671,23 +695,20 @@ export default function DiagramEditor() {
   /** Run an mxGraph mutation while suppressing the parent-change
    *  dialog. Clears the suppression on the next tick so the safety-net
    *  mouseup diff (which uses setTimeout(0)) still sees it. */
-  const withSuppressedHierarchy = useCallback(
-    <T,>(fn: () => T): T => {
-      suppressHierarchyEventsRef.current = true;
-      try {
-        return fn();
-      } finally {
-        // 50 ms is conservative — long enough to cover the mouseup
-        // safety net and any deferred re-emission, short enough that a
-        // real drag immediately after a programmatic re-parent isn't
-        // missed.
-        window.setTimeout(() => {
-          suppressHierarchyEventsRef.current = false;
-        }, 50);
-      }
-    },
-    [],
-  );
+  const withSuppressedHierarchy = useCallback(<T,>(fn: () => T): T => {
+    suppressHierarchyEventsRef.current = true;
+    try {
+      return fn();
+    } finally {
+      // 50 ms is conservative — long enough to cover the mouseup
+      // safety net and any deferred re-emission, short enough that a
+      // real drag immediately after a programmatic re-parent isn't
+      // missed.
+      window.setTimeout(() => {
+        suppressHierarchyEventsRef.current = false;
+      }, 50);
+    }
+  }, []);
   const edgeRelationMapRef = useRef<Map<string, ResolvedRelationMeta>>(
     new Map(),
   );
@@ -705,7 +726,9 @@ export default function DiagramEditor() {
   const pendingEdgeRef = useRef<EdgeEndpoints | null>(null);
   // Attributes captured in the relation picker for not-yet-synced edges.
   // Keyed by edgeCellId, drained by handleSyncRel on backend creation.
-  const pendingEdgeAttributesRef = useRef<Map<string, Record<string, unknown>>>(new Map());
+  const pendingEdgeAttributesRef = useRef<Map<string, Record<string, unknown>>>(
+    new Map(),
+  );
 
   // Sync panel
   const [syncOpen, setSyncOpen] = useState(false);
@@ -730,15 +753,22 @@ export default function DiagramEditor() {
   // for each entry. Card-cell removals are intentionally NOT tombstoned:
   // removing a card from the diagram is treated as a visual-only "I don't
   // want to see this here" gesture; archival happens from the Inventory page.
-  const [pendingRelRemovals, setPendingRelRemovals] = useState<RemovedRelationTombstone[]>([]);
+  const [pendingRelRemovals, setPendingRelRemovals] = useState<
+    RemovedRelationTombstone[]
+  >([]);
 
   // Phase 2 context-menu actions
-  const [relinkTargetCellId, setRelinkTargetCellId] = useState<string | null>(null);
-  const [convertTargetCellId, setConvertTargetCellId] = useState<string | null>(null);
+  const [relinkTargetCellId, setRelinkTargetCellId] = useState<string | null>(
+    null,
+  );
+  const [convertTargetCellId, setConvertTargetCellId] = useState<string | null>(
+    null,
+  );
   const [convertPrefillName, setConvertPrefillName] = useState<string>("");
 
   // Phase 3 — chevron expand menu
-  const [expandMenuTarget, setExpandMenuTarget] = useState<ExpandMenuTarget | null>(null);
+  const [expandMenuTarget, setExpandMenuTarget] =
+    useState<ExpandMenuTarget | null>(null);
 
   // Relation-deletion confirmation queue. Each canvas-side edge removal
   // that carries a real relationId surfaces a "delete from inventory?"
@@ -764,17 +794,22 @@ export default function DiagramEditor() {
   const [view, setView] = useState<ViewSource>({ kind: "card_type" });
   // Which attributes render as detail lines under each card name. Orthogonal
   // to `view` — one is what colours a shape, the other is what it says.
-  const [cardLabels, setCardLabels] = useState<CardLabelSettings>(DEFAULT_CARD_LABELS);
+  const [cardLabels, setCardLabels] =
+    useState<CardLabelSettings>(DEFAULT_CARD_LABELS);
   // Always-current line builder. A ref for the same reason
   // `hideRelationLabelsRef` is one: the insert callback is declared far above
   // the builder and doesn't re-create when the settings change, so a plain
   // closure capture would go stale.
-  const detailLinesForCardRef = useRef<(card: Card) => CardDetailLine[]>(() => []);
+  const detailLinesForCardRef = useRef<(card: PickedCard) => CardDetailLine[]>(
+    () => [],
+  );
   /** Re-run the display pass (colours + detail rows) over the whole canvas.
    *  A ref for the same staleness reason, and because every expand / drill-down
    *  / roll-up callback is declared long before `applyView` itself. */
   const applyViewRef = useRef<() => void>(() => {});
-  const [viewLegendSections, setViewLegendSections] = useState<LegendSection[]>([]);
+  const [viewLegendSections, setViewLegendSections] = useState<LegendSection[]>(
+    [],
+  );
   const [viewAppliedCount, setViewAppliedCount] = useState(0);
   // Relation verbs ("provides", "consumes", …) hidden on this diagram. Saved
   // with the diagram, so the read-only viewer and any published embed show
@@ -786,7 +821,10 @@ export default function DiagramEditor() {
   const [activeTypeKeys, setActiveTypeKeys] = useState<string[]>([]);
 
   // Local autosave restore prompt
-  const [restoreBanner, setRestoreBanner] = useState<{ xml: string; savedAt: string } | null>(null);
+  const [restoreBanner, setRestoreBanner] = useState<{
+    xml: string;
+    savedAt: string;
+  } | null>(null);
   const restoreCheckedRef = useRef(false);
   // True while DrawIO is mid-replace from a restored draft. CELLS_REMOVED
   // fires for every cell on the old canvas during this window — we must
@@ -888,11 +926,22 @@ export default function DiagramEditor() {
 
   /** Expand children into the graph and wire up overlays. */
   const doExpand = useCallback(
-    (frame: HTMLIFrameElement, cellId: string, cardId: string, children: ExpandChildData[]) => {
+    (
+      frame: HTMLIFrameElement,
+      cellId: string,
+      cardId: string,
+      children: ExpandChildData[],
+    ) => {
       const deleted = deletedChildrenRef.current.get(cellId);
-      const visible = deleted?.size
+      const byCard = deleted?.size
         ? children.filter((c) => !deleted.has(c.id))
         : children;
+      // Then drop the individual relations the user removed, so a child that
+      // kept one of its edges comes back with only that one.
+      const deletedRels = deletedRelationsRef.current.get(cellId);
+      const visible = deletedRels?.size
+        ? pruneDeletedRelations(byCard, deletedRels)
+        : byCard;
 
       if (visible.length === 0) {
         setSnackMsg(t("editor.noRelatedCards"));
@@ -900,7 +949,10 @@ export default function DiagramEditor() {
       }
 
       const inserted = expandCardGroup(
-        frame, cellId, visible, hideRelationLabelsRef.current,
+        frame,
+        cellId,
+        visible,
+        hideRelationLabelsRef.current,
       );
       // Baseline for the "has the user arranged these?" check on collapse.
       pristineChildLayoutRef.current.set(
@@ -912,9 +964,7 @@ export default function DiagramEditor() {
       );
       // If some children were locally removed, show resync icon
       if (deleted?.size) {
-        addResyncOverlay(frame, cellId, () =>
-          handleResync(cellId, cardId),
-        );
+        addResyncOverlay(frame, cellId, () => handleResync(cellId, cardId));
       }
       // Each newly-inserted child gets its own chevron so the user can
       // recursively explore the dependency graph from any node.
@@ -948,11 +998,35 @@ export default function DiagramEditor() {
       const cached = expandCacheRef.current.get(cellId);
       if (cached) {
         const stillPresent = getGroupChildCardIds(frame, cellId);
-        const nowDeleted = cached.filter((c) => !stillPresent.has(c.id)).map((c) => c.id);
+        const nowDeleted = cached
+          .filter((c) => !stillPresent.has(c.id))
+          .map((c) => c.id);
         if (nowDeleted.length > 0) {
-          const existing = deletedChildrenRef.current.get(cellId) ?? new Set<string>();
+          const existing =
+            deletedChildrenRef.current.get(cellId) ?? new Set<string>();
           nowDeleted.forEach((id) => existing.add(id));
           deletedChildrenRef.current.set(cellId, existing);
+        }
+
+        // Same diff one level down: which RELATIONS were removed. A child kept
+        // one of its two edges, so it never shows up in `nowDeleted` — without
+        // this the deleted relation returns on the next expand.
+        const liveRelIds = getGroupChildRelationIds(frame, cellId);
+        const removedRelIds = new Set<string>();
+        for (const c of cached) {
+          for (const rel of [
+            { relationId: c.relationId },
+            ...(c.extraRelations ?? []),
+          ]) {
+            if (rel.relationId && !liveRelIds.has(rel.relationId)) {
+              removedRelIds.add(rel.relationId);
+            }
+          }
+        }
+        if (removedRelIds.size > 0) {
+          const existing = deletedRelationsRef.current.get(cellId) ?? new Set<string>();
+          removedRelIds.forEach((id) => existing.add(id));
+          deletedRelationsRef.current.set(cellId, existing);
         }
 
         // Snapshot where the user put each child (and how they styled it) so
@@ -1008,7 +1082,8 @@ export default function DiagramEditor() {
       // has fetched them and grown them to hold their rows — so comparing raw
       // heights would read every expansion as arranged and put a confirm dialog
       // in front of every collapse.
-      const dragged = (l: ChildLayout) => l.height - detailRowsHeight(l.detail.length);
+      const dragged = (l: ChildLayout) =>
+        l.height - detailRowsHeight(l.detail.length);
       const arranged =
         live.size > 0 &&
         (pristine == null ||
@@ -1053,7 +1128,11 @@ export default function DiagramEditor() {
    *  Application that *consumes* an Interface is distinguishable from one that
    *  *provides* it without opening the link (discussion #905). */
   const relationEdgeMeta = useCallback(
-    (relationTypeKey: string, incoming: boolean, attributes?: RelationAttributes) => {
+    (
+      relationTypeKey: string,
+      incoming: boolean,
+      attributes?: RelationAttributes,
+    ) => {
       const rt = relTypesRef.current.find((x) => x.key === relationTypeKey);
       return {
         incoming,
@@ -1087,31 +1166,43 @@ export default function DiagramEditor() {
         .get<Relation[]>(`/relations?card_id=${cardId}`)
         .then((rels) => {
           if (!iframeRef.current) return;
-          const seen = new Set<string>();
-          const children: ExpandChildData[] = [];
-          for (const r of rels) {
-            const other = r.source_id === cardId ? r.target : r.source;
-            if (!other || seen.has(other.id)) continue;
-            seen.add(other.id);
-            const ct = fsTypesRef.current.find((tp) => tp.key === other.type);
-            children.push({
-              id: other.id,
-              name: other.name,
-              type: other.type,
-              color: ct?.color || "#999",
-              icon: ct?.icon,
-              relationType: r.type,
-              relationId: r.id,
-              ...relationEdgeMeta(r.type, r.target_id === cardId, r.attributes),
-            });
-          }
+          // One child (vertex) per related CARD; a card reached through several
+          // relation types keeps the rest as extra edges on that same vertex.
+          const children: ExpandChildData[] = groupRelationsByOtherCard(rels, cardId).map(
+            ({ other, primary, extras }) => {
+              const ct = fsTypesRef.current.find((tp) => tp.key === other.type);
+              return {
+                id: other.id,
+                name: other.name,
+                type: other.type,
+                color: ct?.color || "#999",
+                icon: ct?.icon,
+                relationType: primary.type,
+                relationId: primary.id,
+                ...relationEdgeMeta(
+                  primary.type,
+                  primary.target_id === cardId,
+                  primary.attributes,
+                ),
+                extraRelations: extras.map((r) => ({
+                  relationType: r.type,
+                  relationId: r.id,
+                  ...relationEdgeMeta(r.type, r.target_id === cardId, r.attributes),
+                })),
+              };
+            },
+          );
           if (children.length === 0) {
             setSnackMsg(t("editor.noRelatedCards"));
             return;
           }
           children.sort((a, b) => {
-            const sa = fsTypesRef.current.find((tp) => tp.key === a.type)?.sort_order ?? 99;
-            const sb = fsTypesRef.current.find((tp) => tp.key === b.type)?.sort_order ?? 99;
+            const sa =
+              fsTypesRef.current.find((tp) => tp.key === a.type)?.sort_order ??
+              99;
+            const sb =
+              fsTypesRef.current.find((tp) => tp.key === b.type)?.sort_order ??
+              99;
             if (sa !== sb) return sa - sb;
             return a.name.localeCompare(b.name);
           });
@@ -1184,14 +1275,18 @@ export default function DiagramEditor() {
 
       if (pick.mode === "show") {
         // Multi-select Show Dependency: load relations for each picked
-        // (type, direction) pair, dedupe by neighbour, and skip any
+        // (type, direction) pair, one CELL per neighbour, and skip any
         // neighbour that's already on the canvas (inserting a second
         // cell with the same cardId would trigger our dedup logic and
-        // unlink one of them).
+        // unlink one of them). Picking two relation types that both reach
+        // the same neighbour draws that card once, with an edge per type.
         try {
-          const seen = new Set<string>();
-          const children: ExpandChildData[] = [];
-          let skippedAlreadyPresent = 0;
+          // Collect every picked relation first, deduped BY RELATION ID: two
+          // picked entries can name the same relation (the expand menu keys on
+          // `direction:type` while the summary groups by `(type, peer type)`),
+          // and folding one relation in twice would draw two edges sharing a
+          // single relationId.
+          const relById = new Map<string, Relation>();
           for (const entry of pick.entries) {
             const params = new URLSearchParams({
               card_id: target.cardId,
@@ -1202,25 +1297,48 @@ export default function DiagramEditor() {
               const isOutgoing = r.source_id === target.cardId;
               if (entry.direction === "outgoing" && !isOutgoing) continue;
               if (entry.direction === "incoming" && isOutgoing) continue;
-              const other = isOutgoing ? r.target : r.source;
-              if (!other || seen.has(other.id)) continue;
-              seen.add(other.id);
-              if (findExistingCardCellId(frame, other.id)) {
-                skippedAlreadyPresent += 1;
-                continue;
-              }
-              children.push({
-                id: other.id,
-                name: other.name,
-                type: other.type,
-                color: colorForType(other.type),
-                icon: iconForType(other.type),
-                relationType: r.type,
-                relationId: r.id,
-                ...relationEdgeMeta(r.type, !isOutgoing, r.attributes),
-              });
+              if (!relById.has(r.id)) relById.set(r.id, r);
             }
           }
+          const allRels = [...relById.values()];
+
+          // Neighbours already drawn are left alone — a second cell with the
+          // same cardId would trip the canvas dedup and unlink one of them.
+          const onCanvas = new Set(
+            [
+              ...new Set(
+                allRels
+                  .map((r) => (r.source_id === target.cardId ? r.target?.id : r.source?.id))
+                  .filter((id): id is string => !!id),
+              ),
+            ].filter((id) => findExistingCardCellId(frame, id)),
+          );
+          const skippedAlreadyPresent = onCanvas.size;
+
+          // One child per related CARD; its further relations become extra edges.
+          const children: ExpandChildData[] = groupRelationsByOtherCard(
+            allRels,
+            target.cardId,
+            (id) => onCanvas.has(id),
+          ).map(({ other, primary, extras }) => ({
+            id: other.id,
+            name: other.name,
+            type: other.type,
+            color: colorForType(other.type),
+            icon: iconForType(other.type),
+            relationType: primary.type,
+            relationId: primary.id,
+            ...relationEdgeMeta(
+              primary.type,
+              primary.target_id === target.cardId,
+              primary.attributes,
+            ),
+            extraRelations: extras.map((r) => ({
+              relationType: r.type,
+              relationId: r.id,
+              ...relationEdgeMeta(r.type, r.target_id === target.cardId, r.attributes),
+            })),
+          }));
           if (children.length === 0) {
             setSnackMsg(
               skippedAlreadyPresent > 0
@@ -1231,7 +1349,11 @@ export default function DiagramEditor() {
           }
           children.sort((a, b) => a.name.localeCompare(b.name));
           const inserted = expandCardGroupAt(
-            frame, target.cellId, children, "right", hideRelationLabelsRef.current,
+            frame,
+            target.cellId,
+            children,
+            "right",
+            hideRelationLabelsRef.current,
           );
           pristineChildLayoutRef.current.set(
             target.cellId,
@@ -1250,16 +1372,29 @@ export default function DiagramEditor() {
           const childNameById = new Map(children.map((c) => [c.id, c.name]));
           for (const child of inserted) {
             registerCellId(child.cellId);
-            if (child.edgeCellId && child.relationId) {
+            // Register EVERY edge to this child, not just the first: a card
+            // reached through several relation types carries one edge per type,
+            // and an unregistered edge has no side-table fallback if DrawIO
+            // drops its user-object attributes.
+            const childEdges = [
+              {
+                edgeCellId: child.edgeCellId,
+                relationId: child.relationId,
+                relationType: child.relationType,
+              },
+              ...(child.extraEdges ?? []),
+            ];
+            for (const e of childEdges) {
+              if (!e.edgeCellId || !e.relationId) continue;
               // Snapshot the live edge state so a future delete +
               // restore puts the edge back with the same colour and
               // label. Show-Dependency edges have label="" so the
               // restored edge won't grow phantom text either.
-              const live = describeEdgeEndpoints(frame, child.edgeCellId);
-              const humanLabel = humanRelationLabel(child.relationType || "");
-              registerEdgeRelation(child.edgeCellId, {
-                relationId: child.relationId,
-                relationType: child.relationType || "",
+              const live = describeEdgeEndpoints(frame, e.edgeCellId);
+              const humanLabel = humanRelationLabel(e.relationType || "");
+              registerEdgeRelation(e.edgeCellId, {
+                relationId: e.relationId,
+                relationType: e.relationType || "",
                 relationLabel: humanLabel,
                 sourceName,
                 targetName: childNameById.get(child.cardId) || "",
@@ -1275,7 +1410,9 @@ export default function DiagramEditor() {
           }
           if (skippedAlreadyPresent > 0) {
             setSnackMsg(
-              t("editor.someNeighboursSkipped", { count: skippedAlreadyPresent }),
+              t("editor.someNeighboursSkipped", {
+                count: skippedAlreadyPresent,
+              }),
             );
           }
           // Same as `doExpand`: label + colour the freshly-inserted children.
@@ -1293,8 +1430,7 @@ export default function DiagramEditor() {
         // currently nested inside (via target.nestedCardIds). We still
         // filter top-level duplicates here: dropping a second copy of
         // the same cardId at the canvas root would trigger our dedup.
-        const nestedInContainer =
-          target.nestedCardIds ?? new Set<string>();
+        const nestedInContainer = target.nestedCardIds ?? new Set<string>();
         const onCanvasTopLevel = new Set<string>(
           pick.children
             .filter((c) => {
@@ -1462,24 +1598,32 @@ export default function DiagramEditor() {
         .get<Relation[]>(`/relations?card_id=${cardId}`)
         .then((rels) => {
           if (!iframeRef.current) return;
-          const seen = new Set<string>();
-          const children: ExpandChildData[] = [];
-          for (const r of rels) {
-            const other = r.source_id === cardId ? r.target : r.source;
-            if (!other || seen.has(other.id)) continue;
-            seen.add(other.id);
-            const ct = fsTypesRef.current.find((tp) => tp.key === other.type);
-            children.push({
-              id: other.id,
-              name: other.name,
-              type: other.type,
-              color: ct?.color || "#999",
-              icon: ct?.icon,
-              relationType: r.type,
-              relationId: r.id,
-              ...relationEdgeMeta(r.type, r.target_id === cardId, r.attributes),
-            });
-          }
+          // One child (vertex) per related CARD; a card reached through several
+          // relation types keeps the rest as extra edges on that same vertex.
+          const children: ExpandChildData[] = groupRelationsByOtherCard(rels, cardId).map(
+            ({ other, primary, extras }) => {
+              const ct = fsTypesRef.current.find((tp) => tp.key === other.type);
+              return {
+                id: other.id,
+                name: other.name,
+                type: other.type,
+                color: ct?.color || "#999",
+                icon: ct?.icon,
+                relationType: primary.type,
+                relationId: primary.id,
+                ...relationEdgeMeta(
+                  primary.type,
+                  primary.target_id === cardId,
+                  primary.attributes,
+                ),
+                extraRelations: extras.map((r) => ({
+                  relationType: r.type,
+                  relationId: r.id,
+                  ...relationEdgeMeta(r.type, r.target_id === cardId, r.attributes),
+                })),
+              };
+            },
+          );
           if (children.length === 0) {
             addExpandOverlay(iframeRef.current!, cellId, false, () =>
               handleToggleGroup(cellId, cardId, false),
@@ -1488,8 +1632,12 @@ export default function DiagramEditor() {
             return;
           }
           children.sort((a, b) => {
-            const sa = fsTypesRef.current.find((tp) => tp.key === a.type)?.sort_order ?? 99;
-            const sb = fsTypesRef.current.find((tp) => tp.key === b.type)?.sort_order ?? 99;
+            const sa =
+              fsTypesRef.current.find((tp) => tp.key === a.type)?.sort_order ??
+              99;
+            const sb =
+              fsTypesRef.current.find((tp) => tp.key === b.type)?.sort_order ??
+              99;
             if (sa !== sb) return sa - sb;
             return a.name.localeCompare(b.name);
           });
@@ -1586,74 +1734,82 @@ export default function DiagramEditor() {
   /** Listener entry point — fires whenever a card cell's parent
    *  changes in mxGraph. Decides whether to surface a confirm dialog
    *  (same-type re-parent) or silently revert (cross-type drop). */
-  const handleParentChanged = useCallback((ev: ParentChangeEvent) => {
-    if (suppressHierarchyEventsRef.current) return;
-    if (restoreInProgressRef.current) return;
-    // Pending cells don't have a real cardId yet — we can't PATCH them,
-    // and re-parenting their visual cell is harmless. Ignore so the
-    // user can re-arrange in-flight cards freely.
-    if (!ev.cardId || ev.cardId.startsWith("pending-")) return;
+  const handleParentChanged = useCallback(
+    (ev: ParentChangeEvent) => {
+      if (suppressHierarchyEventsRef.current) return;
+      if (restoreInProgressRef.current) return;
+      // Pending cells don't have a real cardId yet — we can't PATCH them,
+      // and re-parenting their visual cell is harmless. Ignore so the
+      // user can re-arrange in-flight cards freely.
+      if (!ev.cardId || ev.cardId.startsWith("pending-")) return;
 
-    // Determine "into" vs "out of".
-    const attachingTo = ev.newParentCardId;
-    const detachingFrom = ev.oldParentCardId;
-    // No-op when the move stayed at the graph root or shuffled between
-    // non-card parents.
-    if (!attachingTo && !detachingFrom) return;
+      // Determine "into" vs "out of".
+      const attachingTo = ev.newParentCardId;
+      const detachingFrom = ev.oldParentCardId;
+      // No-op when the move stayed at the graph root or shuffled between
+      // non-card parents.
+      if (!attachingTo && !detachingFrom) return;
 
-    if (attachingTo) {
-      // Cross-type drops snap back silently. This matches the backend's
-      // strict same-type parent_id contract: we'd just get a 4xx
-      // anyway, and the user usually drops by accident.
-      if (ev.newParentType && ev.newParentType !== ev.cardType) {
-        const frame = iframeRef.current;
-        if (frame) {
-          // Suppress so the revert itself doesn't re-fire the dialog.
-          withSuppressedHierarchy(() =>
-            revertParentChange(frame, ev.cellId, ev.oldParentCellId, ev.oldGeometry),
-          );
+      if (attachingTo) {
+        // Cross-type drops snap back silently. This matches the backend's
+        // strict same-type parent_id contract: we'd just get a 4xx
+        // anyway, and the user usually drops by accident.
+        if (ev.newParentType && ev.newParentType !== ev.cardType) {
+          const frame = iframeRef.current;
+          if (frame) {
+            // Suppress so the revert itself doesn't re-fire the dialog.
+            withSuppressedHierarchy(() =>
+              revertParentChange(
+                frame,
+                ev.cellId,
+                ev.oldParentCellId,
+                ev.oldGeometry,
+              ),
+            );
+          }
+          setSnackMsg(t("editor.errors.parentTypeMismatch"));
+          return;
         }
-        setSnackMsg(t("editor.errors.parentTypeMismatch"));
+        // Same-type attach — queue the confirmation.
+        setParentChangeQueue((prev) => [
+          ...prev,
+          {
+            kind: "attach",
+            cellId: ev.cellId,
+            cardId: ev.cardId!,
+            cardName: ev.cardName,
+            cardType: ev.cardType,
+            parentCardId: attachingTo,
+            parentCardName: ev.newParentName,
+            oldParentCellId: ev.oldParentCellId,
+            oldGeometry: ev.oldGeometry,
+          },
+        ]);
         return;
       }
-      // Same-type attach — queue the confirmation.
-      setParentChangeQueue((prev) => [
-        ...prev,
-        {
-          kind: "attach",
-          cellId: ev.cellId,
-          cardId: ev.cardId!,
-          cardName: ev.cardName,
-          cardType: ev.cardType,
-          parentCardId: attachingTo,
-          parentCardName: ev.newParentName,
-          oldParentCellId: ev.oldParentCellId,
-          oldGeometry: ev.oldGeometry,
-        },
-      ]);
-      return;
-    }
 
-    // Detaching: child moved out of a card-shaped container back to
-    // the graph root. Only meaningful when the OLD parent was a card
-    // of the same type (mirrors the attach gate).
-    if (detachingFrom && ev.oldParentType === ev.cardType) {
-      setParentChangeQueue((prev) => [
-        ...prev,
-        {
-          kind: "detach",
-          cellId: ev.cellId,
-          cardId: ev.cardId!,
-          cardName: ev.cardName,
-          cardType: ev.cardType,
-          parentCardId: detachingFrom,
-          parentCardName: ev.oldParentName,
-          oldParentCellId: ev.oldParentCellId,
-          oldGeometry: ev.oldGeometry,
-        },
-      ]);
-    }
-  }, [t, withSuppressedHierarchy]);
+      // Detaching: child moved out of a card-shaped container back to
+      // the graph root. Only meaningful when the OLD parent was a card
+      // of the same type (mirrors the attach gate).
+      if (detachingFrom && ev.oldParentType === ev.cardType) {
+        setParentChangeQueue((prev) => [
+          ...prev,
+          {
+            kind: "detach",
+            cellId: ev.cellId,
+            cardId: ev.cardId!,
+            cardName: ev.cardName,
+            cardType: ev.cardType,
+            parentCardId: detachingFrom,
+            parentCardName: ev.oldParentName,
+            oldParentCellId: ev.oldParentCellId,
+            oldGeometry: ev.oldGeometry,
+          },
+        ]);
+      }
+    },
+    [t, withSuppressedHierarchy],
+  );
 
   /** Confirm: persist the hierarchy change at the next Sync All. */
   const handleConfirmParentChange = useCallback(() => {
@@ -1705,7 +1861,9 @@ export default function DiagramEditor() {
       if (prev.length === 0) return prev;
       const [head, ...rest] = prev;
       setPendingRelRemovals((curr) =>
-        curr.some((c) => c.edgeCellId === head.edgeCellId) ? curr : [...curr, head],
+        curr.some((c) => c.edgeCellId === head.edgeCellId)
+          ? curr
+          : [...curr, head],
       );
       return rest;
     });
@@ -1768,7 +1926,8 @@ export default function DiagramEditor() {
           relationType: meta.relationType,
           // Resolve via the metamodel so the dialog shows "uses"
           // rather than the raw relation-type key like "appUsesItc".
-          relationLabel: humanRelationLabel(meta.relationType) || meta.relationLabel,
+          relationLabel:
+            humanRelationLabel(meta.relationType) || meta.relationLabel,
           sourceName: "",
           targetName: "",
         });
@@ -1840,7 +1999,10 @@ export default function DiagramEditor() {
         const liveEdgeIds = collectLiveEdgeCellIds(f);
         // Collect ids to remove + corresponding tombstones so we don't
         // mutate the Map while iterating.
-        const removed: Array<{ edgeCellId: string; meta: ResolvedRelationMeta }> = [];
+        const removed: Array<{
+          edgeCellId: string;
+          meta: ResolvedRelationMeta;
+        }> = [];
         edgeRelationMapRef.current.forEach((meta, edgeCellId) => {
           if (!liveEdgeIds.has(edgeCellId)) {
             removed.push({ edgeCellId, meta });
@@ -1876,7 +2038,7 @@ export default function DiagramEditor() {
 
   /* ---------- Insert existing card(s) ---------- */
   const handleInsertCard = useCallback(
-    (cards: Card[], cardTypeKeysByCardId: Map<string, CardType>) => {
+    (cards: PickedCard[], cardTypeKeysByCardId: Map<string, CardType>) => {
       const frame = iframeRef.current;
       if (!frame || cards.length === 0) return;
 
@@ -2068,7 +2230,11 @@ export default function DiagramEditor() {
     (cellId: string) => {
       const frame = iframeRef.current;
       if (!frame) return;
-      const ok = convertShapeToContainer(frame, cellId, t("editor.container.defaultName"));
+      const ok = convertShapeToContainer(
+        frame,
+        cellId,
+        t("editor.container.defaultName"),
+      );
       if (ok) {
         setSnackMsg(t("editor.containerized"));
       } else {
@@ -2083,7 +2249,11 @@ export default function DiagramEditor() {
     const frame = iframeRef.current;
     if (!frame) return;
 
-    const { pendingCards: pfs, pendingRels: prels, syncedFS } = scanDiagramItems(frame);
+    const {
+      pendingCards: pfs,
+      pendingRels: prels,
+      syncedFS,
+    } = scanDiagramItems(frame);
 
     // Free: this scan already knows what is on the canvas, and it runs on every
     // change, so the card-display dropdown stays current as cards come and go.
@@ -2207,7 +2377,12 @@ export default function DiagramEditor() {
       const verb = relationLabel(relType, i18n.language);
 
       stampEdgeAsRelation(
-        frame, ep.edgeCellId, relType.key, verb, reversed, true,
+        frame,
+        ep.edgeCellId,
+        relType.key,
+        verb,
+        reversed,
+        true,
         hideRelationLabelsRef.current,
         relationFlowFor(relType, attributes),
       );
@@ -2296,7 +2471,10 @@ export default function DiagramEditor() {
         if (!rel) return;
 
         // Both endpoints must have real (non-pending) IDs
-        if (rel.sourceCardId.startsWith("pending-") || rel.targetCardId.startsWith("pending-")) {
+        if (
+          rel.sourceCardId.startsWith("pending-") ||
+          rel.targetCardId.startsWith("pending-")
+        ) {
           setSnackMsg(t("editor.errors.syncCardsFirst"));
           return;
         }
@@ -2315,7 +2493,13 @@ export default function DiagramEditor() {
         const created = await api.post<Relation>("/relations", payload);
         pendingEdgeAttributesRef.current.delete(edgeCellId);
 
-        markEdgeSynced(frame, edgeCellId, rel.reversed, created.id, hideRelationLabelsRef.current);
+        markEdgeSynced(
+          frame,
+          edgeCellId,
+          rel.reversed,
+          created.id,
+          hideRelationLabelsRef.current,
+        );
         // Mirror the new relation into the side-table so a later canvas
         // delete still reaches the confirm dialog. The endpoint cellIds,
         // live style and visible label come from the cell so the
@@ -2324,7 +2508,8 @@ export default function DiagramEditor() {
         registerEdgeRelation(edgeCellId, {
           relationId: created.id,
           relationType: rel.relationType,
-          relationLabel: humanRelationLabel(rel.relationType) || rel.relationLabel,
+          relationLabel:
+            humanRelationLabel(rel.relationType) || rel.relationLabel,
           sourceName: rel.sourceName,
           targetName: rel.targetName,
           sourceCellId: endpoints.sourceCellId,
@@ -2372,7 +2557,10 @@ export default function DiagramEditor() {
       // 2. Sync all pending relations
       const { pendingRels: prels } = scanDiagramItems(frame);
       for (const r of prels) {
-        if (r.sourceCardId.startsWith("pending-") || r.targetCardId.startsWith("pending-")) {
+        if (
+          r.sourceCardId.startsWith("pending-") ||
+          r.targetCardId.startsWith("pending-")
+        ) {
           continue; // skip if endpoints still pending
         }
         try {
@@ -2382,13 +2570,18 @@ export default function DiagramEditor() {
             target_id: r.reversed ? r.sourceCardId : r.targetCardId,
           });
           markEdgeSynced(
-            frame, r.edgeCellId, r.reversed, created.id, hideRelationLabelsRef.current,
+            frame,
+            r.edgeCellId,
+            r.reversed,
+            created.id,
+            hideRelationLabelsRef.current,
           );
           const endpoints = describeEdgeEndpoints(frame, r.edgeCellId);
           registerEdgeRelation(r.edgeCellId, {
             relationId: created.id,
             relationType: r.relationType,
-            relationLabel: humanRelationLabel(r.relationType) || r.relationLabel,
+            relationLabel:
+              humanRelationLabel(r.relationType) || r.relationLabel,
             sourceName: r.sourceName,
             targetName: r.targetName,
             sourceCellId: endpoints.sourceCellId,
@@ -2397,7 +2590,9 @@ export default function DiagramEditor() {
             edgeLabel: endpoints.label,
           });
         } catch {
-          setSnackMsg(t("editor.errors.syncRelationFailed", { label: r.relationLabel }));
+          setSnackMsg(
+            t("editor.errors.syncRelationFailed", { label: r.relationLabel }),
+          );
         }
       }
 
@@ -2407,7 +2602,9 @@ export default function DiagramEditor() {
         try {
           await api.delete(`/relations/${r.relationId}`);
         } catch {
-          setSnackMsg(t("editor.errors.deleteRelationFailed", { label: r.relationLabel }));
+          setSnackMsg(
+            t("editor.errors.deleteRelationFailed", { label: r.relationLabel }),
+          );
         }
       }
       if (relRemovals.length > 0) setPendingRelRemovals([]);
@@ -2466,8 +2663,12 @@ export default function DiagramEditor() {
    *  side-table so the next deletion attempt still hits the dialog. */
   const handleDiscardRelRemoval = useCallback(
     (edgeCellId: string) => {
-      const target = pendingRelRemovals.find((r) => r.edgeCellId === edgeCellId);
-      setPendingRelRemovals((prev) => prev.filter((r) => r.edgeCellId !== edgeCellId));
+      const target = pendingRelRemovals.find(
+        (r) => r.edgeCellId === edgeCellId,
+      );
+      setPendingRelRemovals((prev) =>
+        prev.filter((r) => r.edgeCellId !== edgeCellId),
+      );
       if (!target) return;
       const frame = iframeRef.current;
       if (!frame) return;
@@ -2497,22 +2698,31 @@ export default function DiagramEditor() {
   /** Sync a single relation deletion immediately. */
   const handleSyncRelRemoval = useCallback(
     async (edgeCellId: string) => {
-      const target = pendingRelRemovals.find((r) => r.edgeCellId === edgeCellId);
+      const target = pendingRelRemovals.find(
+        (r) => r.edgeCellId === edgeCellId,
+      );
       if (!target) return;
       setSyncing(true);
       try {
         await api.delete(`/relations/${target.relationId}`);
-        setPendingRelRemovals((prev) => prev.filter((r) => r.edgeCellId !== edgeCellId));
-        setSnackMsg(t("editor.relationDeleted", { label: target.relationLabel }));
+        setPendingRelRemovals((prev) =>
+          prev.filter((r) => r.edgeCellId !== edgeCellId),
+        );
+        setSnackMsg(
+          t("editor.relationDeleted", { label: target.relationLabel }),
+        );
       } catch {
-        setSnackMsg(t("editor.errors.deleteRelationFailed", { label: target.relationLabel }));
+        setSnackMsg(
+          t("editor.errors.deleteRelationFailed", {
+            label: target.relationLabel,
+          }),
+        );
       } finally {
         setSyncing(false);
       }
     },
     [pendingRelRemovals, t],
   );
-
 
   /* ---------- Inventory-freshness check ---------- */
   const staleReq = useLatestRequest();
@@ -2648,8 +2858,10 @@ export default function DiagramEditor() {
   const handleAcceptAllStale = useCallback(() => {
     for (const item of staleItems) {
       if (item.kind === "renamed") handleAcceptStale(item.cellId);
-      else if (item.kind === "relationDeleted") handleRemoveStaleEdge(item.cellId);
-      else if (item.kind === "relationFlowChanged") handleAcceptStaleFlow(item.cellId);
+      else if (item.kind === "relationDeleted")
+        handleRemoveStaleEdge(item.cellId);
+      else if (item.kind === "relationFlowChanged")
+        handleAcceptStaleFlow(item.cellId);
       else handleRemoveStaleCard(item.cellId);
     }
   }, [
@@ -2716,8 +2928,16 @@ export default function DiagramEditor() {
             pendingSaveXmlRef.current = msg.xml;
             // "Save & Exit" arrives as a `save` event carrying `exit: true`.
             exitAfterSaveRef.current = !!msg.exit;
-            postToDrawIO({ action: "export", format: "svg", spinKey: "saving" });
-            postToDrawIO({ action: "status", messageKey: "allChangesSaved", modified: false });
+            postToDrawIO({
+              action: "export",
+              format: "svg",
+              spinKey: "saving",
+            });
+            postToDrawIO({
+              action: "status",
+              messageKey: "allChangesSaved",
+              modified: false,
+            });
           }
           break;
 
@@ -2851,7 +3071,9 @@ export default function DiagramEditor() {
         await api.patch(`/cards/${target.cardId}`, {
           parent_id: target.kind === "attach" ? target.parentCardId : null,
         });
-        setPendingParentChanges((prev) => prev.filter((p) => p.cellId !== cellId));
+        setPendingParentChanges((prev) =>
+          prev.filter((p) => p.cellId !== cellId),
+        );
         setSnackMsg(
           target.kind === "attach"
             ? t("editor.parentChange.attachSynced", {
@@ -2904,7 +3126,10 @@ export default function DiagramEditor() {
         const xml = win.mxUtils.getXml(node);
         if (!xml) return;
         const draft = { xml, savedAt: new Date().toISOString() };
-        localStorage.setItem(`turbo-ea-diagram-draft-${id}`, JSON.stringify(draft));
+        localStorage.setItem(
+          `turbo-ea-diagram-draft-${id}`,
+          JSON.stringify(draft),
+        );
       } catch {
         // Editor not ready — try next tick
       }
@@ -2921,9 +3146,10 @@ export default function DiagramEditor() {
    *  them out is what left a card pulled in with `+` unlabelled AND uncoloured
    *  while its neighbours followed the perspective. Ids are de-duplicated: the
    *  same card can sit on the canvas more than once. */
-  const collectCanvasCards = useCallback(():
-    | { ids: string[]; types: Set<string> }
-    | null => {
+  const collectCanvasCards = useCallback((): {
+    ids: string[];
+    types: Set<string>;
+  } | null => {
     const frame = iframeRef.current;
     if (!frame) return null;
     const { syncedFS, syncedChildren } = scanDiagramItems(frame);
@@ -2951,7 +3177,10 @@ export default function DiagramEditor() {
    *  so `applyCardLabels` grows it to hold everything the reader ticked, where
    *  the report's fixed-size nodes have to stop at `MAX_CARD_LINES`. */
   const buildDetailLines = useCallback(
-    (card: Card, catalog: Map<string, ReturnType<typeof buildFieldCatalog>[number]>) => {
+    (
+      card: PickedCard,
+      catalog: Map<string, ReturnType<typeof buildFieldCatalog>[number]>,
+    ) => {
       const lines: CardDetailLine[] = [];
       if (cardLabels.showType) {
         const tp = fsTypesRef.current.find((t2) => t2.key === card.type);
@@ -2981,14 +3210,17 @@ export default function DiagramEditor() {
     [cardLabels, t, typeLabel, subtypeLabel, optionLabel, fieldLabel],
   );
 
-  detailLinesForCardRef.current = (card: Card) =>
-    hasCardLabelLines(cardLabels) ? buildDetailLines(card, labelFieldMetaByKey) : [];
+  detailLinesForCardRef.current = (card: PickedCard) =>
+    hasCardLabelLines(cardLabels)
+      ? buildDetailLines(card, labelFieldMetaByKey)
+      : [];
 
   const buildLinesByCardId = useCallback(
     (cards: Card[]) => {
       const out = new Map<string, CardDetailLine[]>();
       if (!hasCardLabelLines(cardLabels)) return out;
-      for (const c of cards) out.set(c.id, buildDetailLines(c, labelFieldMetaByKey));
+      for (const c of cards)
+        out.set(c.id, buildDetailLines(c, labelFieldMetaByKey));
       return out;
     },
     [cardLabels, buildDetailLines, labelFieldMetaByKey],
@@ -2996,13 +3228,106 @@ export default function DiagramEditor() {
 
   /** Fetch the canvas cards and re-render their labels only — used by the
    *  card-type (no colour perspective) branch, which has no fetch of its own. */
-  const refreshCardLabels = useCallback(
-    async (frame: HTMLIFrameElement, ids: string[]) => {
-      const params = new URLSearchParams({ ids: ids.join(",") });
-      const resp = await api.get<{ items: Card[] }>(`/cards?${params.toString()}`);
-      applyCardLabels(frame, buildLinesByCardId(resp.items));
+  /** The composed logo images, as last applied to the canvas — keyed by card
+   *  id AND the cell size each was built for, since the composite is
+   *  card-shaped and one card can sit on the canvas at two sizes. Read by the
+   *  logo pass and by the "Apply card-type icons" action, which needs it so it
+   *  cannot overwrite a logo with a generic glyph. */
+  const logoLookupRef = useRef<CardLogoLookup>(() => undefined);
+  const lastLogoCardsRef = useRef<Card[]>([]);
+
+  /**
+   * Draw each card's own logo on its cell, and take it off cards that no longer
+   * have one.
+   *
+   * Composing downscales and rasterises, so it is asynchronous and deliberately
+   * not awaited by the view pass: colours and labels must not wait on images.
+   * The canvas mutation is one synchronous step at the end, guarded against
+   * landing on a diagram the reader has since navigated away from.
+   */
+  const applyLogosFromCards = useCallback(
+    (frame: HTMLIFrameElement, cards: Card[]) => {
+      const iconByType = new Map<string, string>(
+        fsTypesRef.current
+          .filter((tp) => tp.icon)
+          .map((tp) => [tp.key, tp.icon] as const),
+      );
+      const colorByType = new Map(
+        fsTypesRef.current.map((tp) => [tp.key, tp.color] as const),
+      );
+      // Switched off: hand `applyCardLogos` an empty map so it *restores* the
+      // cells it took over, rather than simply not painting new ones — a card
+      // that already carries a logo has to lose it when the reader turns them
+      // off, not keep the one baked into the saved style.
+      const wanted = showsCardLogos(cardLabels) ? cards : [];
+      // Remembered so a resize can rebuild the pictures at the new size without
+      // going back to the API for cards it already has.
+      lastLogoCardsRef.current = cards;
+
+      // One composite per (card, cell size) actually on the canvas. Reading the
+      // geometry first is what keeps the type glyph inside the card: a picture
+      // built for the plain 210x60 card puts it off a 190x40 group child, off a
+      // 180x50 drill-down child, and off every card exported from the
+      // dependency view (200x72).
+      const byCard = new Map(wanted.filter((c) => c.logo_updated_at).map((c) => [c.id, c]));
+      const boxes = new Map<string, { cardId: string; w: number; h: number }>();
+      for (const b of readCardCellBoxes(frame)) {
+        if (byCard.has(b.cardId)) boxes.set(logoKey(b.cardId, b.w, b.h), b);
+      }
+
+      void (async () => {
+        const composed = await Promise.all(
+          Array.from(boxes.entries()).map(async ([key, b]) => {
+            const c = byCard.get(b.cardId) as Card;
+            const image = await composeCardLogoImage(
+              cardLogoUrl(c.id, c.logo_updated_at as string),
+              iconByType.get(c.type),
+              colorByType.get(c.type) ?? "#999999",
+              b.w,
+              b.h,
+            );
+            return image ? ([key, image] as const) : null;
+          }),
+        );
+        if (iframeRef.current !== frame) return; // the reader moved on mid-compose
+        const map = new Map(
+          composed.filter((e): e is readonly [string, string] => e !== null),
+        );
+        logoLookupRef.current = logoLookupFor(map);
+        applyCardLogos(frame, logoLookupRef.current, iconByType);
+      })();
     },
-    [buildLinesByCardId],
+    [cardLabels],
+  );
+
+  // Rebuild the logos after a resize. The composite is card-shaped, so a card
+  // dragged wider keeps a picture whose type glyph now stops short of the
+  // corner — the same wrong-size symptom, arrived at by hand. Cheap: the cards
+  // are already in hand and every unchanged cell hits the compose cache.
+  useEffect(() => {
+    const frame = iframeRef.current;
+    if (!drawioReady || !frame) return;
+    return attachCardResizeListener(frame, () => {
+      const f = iframeRef.current;
+      if (f && lastLogoCardsRef.current.length) {
+        applyLogosFromCards(f, lastLogoCardsRef.current);
+      }
+    });
+  }, [drawioReady, applyLogosFromCards]);
+
+  const refreshCardDisplay = useCallback(
+    async (frame: HTMLIFrameElement, ids: string[], wantLabels: boolean) => {
+      const params = new URLSearchParams({ ids: ids.join(",") });
+      const resp = await api.get<{ items: Card[] }>(
+        `/cards?${params.toString()}`,
+      );
+      applyCardLabels(
+        frame,
+        wantLabels ? buildLinesByCardId(resp.items) : new Map(),
+      );
+      applyLogosFromCards(frame, resp.items);
+    },
+    [buildLinesByCardId, applyLogosFromCards],
   );
 
   /** Refresh the set of card types on the canvas — the list both halves of the
@@ -3040,8 +3365,14 @@ export default function DiagramEditor() {
       const { restored } = applyViewToGraph(frame, new Map(), restore);
       setViewLegendSections([]);
       setViewAppliedCount(restored);
-      if (snapshot.ids.length > 0 && hasCardLabelLines(cardLabels)) {
-        await refreshCardLabels(frame, snapshot.ids);
+      if (snapshot.ids.length > 0) {
+        // Fetched even when no label rows are switched on: a card's logo is
+        // display state too, and `logo_updated_at` only comes with the payload.
+        await refreshCardDisplay(
+          frame,
+          snapshot.ids,
+          hasCardLabelLines(cardLabels),
+        );
       } else {
         applyCardLabels(frame, new Map());
       }
@@ -3066,7 +3397,10 @@ export default function DiagramEditor() {
     try {
       await viewReq.run(async ({ signal, isCurrent }) => {
         const params = new URLSearchParams({ ids: snapshot.ids.join(",") });
-        const resp = await api.get<{ items: Card[] }>(`/cards?${params.toString()}`, { signal });
+        const resp = await api.get<{ items: Card[] }>(
+          `/cards?${params.toString()}`,
+          { signal },
+        );
         // Nothing above this line touched the graph. A rejected fetch must not
         // leave the canvas half-reset while the toolbar advertises new rules —
         // and the 5s autosave would snapshot exactly that.
@@ -3091,6 +3425,7 @@ export default function DiagramEditor() {
         if (!isCurrent()) return;
         const { painted } = applyViewToGraph(frame, colorByCardId, restore);
         applyCardLabels(frame, buildLinesByCardId(resp.items));
+        applyLogosFromCards(frame, resp.items);
 
         // One legend section per rule. The "no value" swatch only appears where
         // a card on this canvas actually has no value — a permanent grey swatch
@@ -3119,7 +3454,8 @@ export default function DiagramEditor() {
     cardLabels,
     collectCanvasCards,
     buildLinesByCardId,
-    refreshCardLabels,
+    refreshCardDisplay,
+    applyLogosFromCards,
     viewResolvers,
     viewReq,
     t,
@@ -3131,7 +3467,9 @@ export default function DiagramEditor() {
 
   // Overflow ("More") menu for occasional / migration actions that don't
   // warrant a permanent toolbar button.
-  const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
+  const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(
+    null,
+  );
 
   /** Show / hide the relation verb on every relation edge. Display-only — the
    *  label value stays on the cell, so this is reversible and costs no data.
@@ -3161,7 +3499,7 @@ export default function DiagramEditor() {
         .filter((tp) => tp.icon)
         .map((tp) => [tp.key, tp.icon] as const),
     );
-    const touched = applyCardTypeIcons(frame, iconByType);
+    const touched = applyCardTypeIcons(frame, iconByType, logoLookupRef.current);
     setSnackMsg(
       touched > 0
         ? t("editor.toolbar.iconsApplied", { count: touched })
@@ -3175,11 +3513,20 @@ export default function DiagramEditor() {
   // view pass — including its `/cards?ids=` round-trip — after every single save
   // (discussion #905). Synced-cell additions still re-apply via the
   // syncOpen / refreshSyncPanel hooks.
+  // Also gated on `drawioReady`: `diagramId` lands well before DrawIO has a
+  // graph, so on a fresh load this fired once, `collectCanvasCards()` returned
+  // null, and the pass returned having done nothing. That went unnoticed for
+  // as long as the pass only set colours and label text, because both are
+  // saved *into the diagram XML* and so are already on the canvas when it
+  // opens. A logo is not — it is derived from the card record at display time
+  // — so opening a diagram showed no logos at all until something happened to
+  // re-run the pass, in practice picking a view. Same shape as the bug the
+  // comment on `refreshActiveTypeKeys` describes.
   useEffect(() => {
-    if (!diagramId) return;
+    if (!diagramId || !drawioReady) return;
     void applyView();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diagramId, view, cardLabels]);
+  }, [diagramId, drawioReady, view, cardLabels]);
 
   /* ---------- Restore banner: replace the XML with the locally-saved draft ---------- */
   const acceptRestore = useCallback(() => {
@@ -3208,7 +3555,8 @@ export default function DiagramEditor() {
         relationType: meta.relationType,
         // Resolve to the metamodel's human label so the eventual
         // delete-confirm dialog says "uses" rather than the raw key.
-        relationLabel: humanRelationLabel(meta.relationType) || meta.relationLabel,
+        relationLabel:
+          humanRelationLabel(meta.relationType) || meta.relationLabel,
         sourceName: "",
         targetName: "",
       });
@@ -3273,7 +3621,8 @@ export default function DiagramEditor() {
       </Box>
     );
   }
-  if (!diagram) return <Typography color="error">{t("editor.notFound")}</Typography>;
+  if (!diagram)
+    return <Typography color="error">{t("editor.notFound")}</Typography>;
 
   const iframeSrc = `${DRAWIO_BASE_URL}?${buildDrawioUrlParams(libsParam)}`;
 
@@ -3311,7 +3660,12 @@ export default function DiagramEditor() {
         <IconButton size="small" onClick={() => navigate(`/diagrams/${id}`)}>
           <MaterialSymbol icon="arrow_back" size={20} />
         </IconButton>
-        <Typography variant="subtitle1" fontWeight={600} noWrap sx={{ flex: 1 }}>
+        <Typography
+          variant="subtitle1"
+          fontWeight={600}
+          noWrap
+          sx={{ flex: 1 }}
+        >
           {diagram.name}
         </Typography>
         {saving && <CircularProgress size={16} sx={{ ml: 1 }} />}
@@ -3319,7 +3673,10 @@ export default function DiagramEditor() {
         {/* Overflow menu for occasional actions (e.g. one-off migration of an
             older diagram to show the card-type icons). */}
         <Tooltip title={t("editor.toolbar.moreActions")}>
-          <IconButton size="small" onClick={(e) => setMoreMenuAnchor(e.currentTarget)}>
+          <IconButton
+            size="small"
+            onClick={(e) => setMoreMenuAnchor(e.currentTarget)}
+          >
             <MaterialSymbol icon="more_vert" size={20} />
           </IconButton>
         </Tooltip>
@@ -3366,6 +3723,19 @@ export default function DiagramEditor() {
           types={fsTypes}
           labels={cardLabels}
           onChange={setCardLabels}
+          // Offered here rather than as a shared row inside the picker: the
+          // Layered Dependency View already carries the same switch in its own
+          // View options, and a shared row would give that surface two
+          // controls for one setting.
+          extraLines={[
+            {
+              key: "showLogos",
+              label: t("editor.showCardLogos"),
+              checked: showsCardLogos(cardLabels),
+              onSet: (checked) =>
+                setCardLabels({ ...cardLabels, showLogos: checked }),
+            },
+          ]}
         />
 
         {/* Sync button — louder when there are unsynced changes so users
@@ -3408,7 +3778,9 @@ export default function DiagramEditor() {
                 fontSize: "0.8rem",
                 fontWeight: totalPending > 0 ? 700 : 500,
                 animation:
-                  totalPending > 0 ? "turboea-pulse 1.6s ease-in-out infinite" : "none",
+                  totalPending > 0
+                    ? "turboea-pulse 1.6s ease-in-out infinite"
+                    : "none",
                 "@keyframes turboea-pulse": {
                   "0%,100%": { boxShadow: "0 0 0 0 rgba(237,108,2,0.5)" },
                   "50%": { boxShadow: "0 0 0 6px rgba(237,108,2,0)" },
@@ -3458,7 +3830,14 @@ export default function DiagramEditor() {
           <iframe
             ref={iframeRef}
             src={iframeSrc}
-            style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              border: "none",
+            }}
             title={t("editor.title")}
           />
           {viewLegendSections.length > 0 && (
@@ -3555,7 +3934,8 @@ export default function DiagramEditor() {
         fullWidth
       >
         <DialogTitle>
-          {parentChangeQueue.length > 0 && parentChangeQueue[0].kind === "attach"
+          {parentChangeQueue.length > 0 &&
+          parentChangeQueue[0].kind === "attach"
             ? t("editor.parentChange.attachTitle")
             : t("editor.parentChange.detachTitle")}
         </DialogTitle>
@@ -3651,7 +4031,10 @@ export default function DiagramEditor() {
             color="warning"
             onClick={() => {
               if (collapseConfirm) {
-                handleCollapseGroup(collapseConfirm.cellId, collapseConfirm.cardId);
+                handleCollapseGroup(
+                  collapseConfirm.cellId,
+                  collapseConfirm.cardId,
+                );
               }
               setCollapseConfirm(null);
             }}

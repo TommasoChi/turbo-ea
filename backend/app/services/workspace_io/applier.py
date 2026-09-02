@@ -127,10 +127,22 @@ class ApplyResult:
 
 
 def _coerce(row: dict[str, Any], columns: tuple[str, ...], json_cols: frozenset[str]) -> dict:
+    """Coerce one sheet row into column values.
+
+    A column the sheet does not carry is left out of the result entirely,
+    rather than coerced to None. "This bundle has nothing to say about the
+    column" is not the same statement as "set this column to NULL": a bundle
+    written before the column existed, or a hand-authored content pack that
+    lists only the columns it cares about, must not blank it — and for a
+    NOT NULL column with a default, writing None fails the insert outright.
+    An empty *cell* in a column the sheet does declare still clears the value,
+    so exports keep their ability to blank a field.
+    """
     out: dict[str, Any] = {}
     for col in columns:
-        raw = row.get(col)
-        out[col] = from_cell(raw, is_json=col in json_cols)
+        if col not in row:
+            continue
+        out[col] = from_cell(row[col], is_json=col in json_cols)
     return out
 
 
@@ -140,8 +152,11 @@ def _update_if_changed(current: Any, data: dict[str, Any], cols, sr: SectionResu
     re-importing an unchanged export into the same instance is a true no-op."""
     changed = False
     for col in cols:
-        if getattr(current, col) != data.get(col):
-            setattr(current, col, data.get(col))
+        # A column the bundle does not carry is left alone — see _coerce.
+        if col not in data:
+            continue
+        if getattr(current, col) != data[col]:
+            setattr(current, col, data[col])
             changed = True
     if changed:
         sr.updated += 1
@@ -174,8 +189,7 @@ async def apply_selected(
 
     Public facade for callers outside workspace transfer (the Extension
     Store's content packs) that reuse the idempotent upsert engine —
-    built-in protection, one-relation-type-per-pair enforcement,
-    topo-sorted cards, dry-run via savepoint — over an in-memory
+    built-in protection, topo-sorted cards, dry-run via savepoint — over an in-memory
     :class:`WorkspaceBundle` carrying only the listed sheets.
     """
     return await _run(db, bundle, user, dry_run=dry_run, sheets=sheets)
@@ -416,14 +430,9 @@ async def _apply_relation_types(
     db, bundle: WorkspaceBundle, sr: SectionResult, dry_run: bool
 ) -> None:
     existing = {rt.key: rt for rt in (await db.execute(select(RelationType))).scalars().all()}
-    # One relation type per ordered (source, target) pair — enforced here too.
-    # Successor (lineage) relation types are exempt (see below), so they never claim
-    # a pair.
-    pair_owner = {
-        (rt.source_type_key, rt.target_type_key): rt.key
-        for rt in existing.values()
-        if not rt.key.endswith("Successor")
-    }
+    # Relation types are keyed by ``key`` alone. Any number of them may share an
+    # ordered (source, target) pair — the bundle is applied as authored, matching
+    # what the API (metamodel.py) and the platform-migration importer accept.
     for row in bundle.rows(schema.SHEET_RELATION_TYPES):
         data = _coerce(row, exp.RELATION_TYPE_COLUMNS, exp.RELATION_TYPE_JSON)
         key = data.get("key")
@@ -431,25 +440,10 @@ async def _apply_relation_types(
             sr.failed += 1
             continue
         current = existing.get(key)
-        pair = (data.get("source_type_key"), data.get("target_type_key"))
-        # Successor (lineage) relation types are a separate, UI-isolated category and
-        # are exempt from the one-relation-type-per-pair rule (mirrors the API in
-        # metamodel.py) — a self-referential rel{Key}Successor must be able to coexist
-        # with a custom self-relation on the same pair.
-        is_successor = bool(key) and key.endswith("Successor")
         if current is None:
-            owner = pair_owner.get(pair)
-            if not is_successor and owner is not None and owner != key:
-                sr.conflict += 1
-                sr.errors.append(
-                    f"relation_type {key!r}: pair {pair} already used by {owner!r} — skipped"
-                )
-                continue
             rt = RelationType(**{k: v for k, v in data.items()})
             db.add(rt)
             existing[key] = rt
-            if not is_successor:
-                pair_owner[pair] = key
             sr.created += 1
         else:
             cols = [c for c in exp.RELATION_TYPE_COLUMNS if c not in ("key", "built_in")]

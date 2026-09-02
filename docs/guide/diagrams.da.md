@@ -34,11 +34,12 @@ Brug dialogen **Insert Cards** (åbnes fra værktøjslinjen eller højrekliks-me
 
 - Type-**chips med live-tællere** på venstre skinne filtrerer resultaterne.
 - Søg efter navn på højre skinne; hver række har et afkrydsningsfelt.
-- **Insert selected** tilføjer de valgte kort i et gitter; **Insert all** tilføjer hvert kort, der matcher det aktuelle filter (med et bekræftelsestrin ud over 50 resultater).
+- Kort, du sætter flueben ved, vises som chips over listen og forbliver valgte, mens du ændrer filter eller søgning — fjern et med dets ×. Begræns filteret til én hierarkisk type, og listen bliver et indrykket træ.
+- **Select all shown** vælger alt, som det aktuelle filter efterlader på skærmen; **Insert selected** tilføjer de valgte kort i et gitter.
 
 Den samme dialog åbnes i enkeltvalgstilstand for **Change Linked Card** og **Link to Existing Card**.
 
-Hvert kort på lærredet viser sit **korttype-ikon** som en lille hvid glyf i øverste venstre hjørne, ved siden af typefarven — så et korts type formidles af både ikon og farve. Det svarer til de ikoner, der bruges i hele appen, og forbedrer læsbarheden for farveblinde brugere. Ikonet vises på kort, der indsættes fra nu af. For at tilføje ikoner til kort, der allerede er på et ældre diagram, skal du klikke på **Anvend korttype-ikoner** på editorens værktøjslinje.
+Hvert kort på lærredet viser sit **korttype-ikon** som en lille hvid glyf i øverste venstre hjørne, ved siden af typefarven — så et korts type formidles af både ikon og farve. Det svarer til de ikoner, der bruges i hele appen, og forbedrer læsbarheden for farveblinde brugere. Ikonet vises på kort, der indsættes fra nu af. For at tilføje ikoner til kort, der allerede er på et ældre diagram, skal du klikke på **Anvend korttype-ikoner** på editorens værktøjslinje. Har et kort sit eget **logo**, vises det i stedet, mens korttypeikonet bevares som et lille mærke i hjørnet — så figuren fortæller både hvilket produkt det er, og hvilken slags kort. Logoer dukker op, når diagrammet åbnes, og opdateres, når et logo skiftes; et kort uden logo, og ethvert kort af en type, hvor en administrator har slået logoer fra, tegnes præcis som før. Et flueben **Kortlogoer** i samme menu slår dem fra, hvis du vil have et udsmykningsfrit diagram; det er slået til som standard.
 
 ### Højrekliks-handlinger
 

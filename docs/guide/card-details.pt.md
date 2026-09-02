@@ -16,6 +16,42 @@ A parte superior do card mostra:
 - **Anel de qualidade dos dados** — Indicador visual da completude das informações (0-100%)
 - **Menu de ações** — Arquivar, excluir e ações de aprovação. Também inclui uma ação de um clique **Observar este cartão** (quando o tipo de card define um papel de Observador), permitindo que qualquer usuário com permissão de leitura siga o card sem precisar abrir a aba Partes interessadas.
 
+### Logótipo personalizado
+
+Os cartões de um tipo que o permita podem ter o seu próprio **logótipo** em vez
+do ícone genérico do tipo — assim, uma Aplicação para SAP, Kafka ou Jira mostra
+a marca do próprio produto. Logótipos reconhecíveis tornam um inventário muito
+mais rápido de percorrer, sobretudo para quem o consulta sem o manter.
+
+Passe o rato sobre o ícone no canto superior esquerdo do cartão e clique para
+**carregar**, **substituir** ou **remover** a imagem. O ícone do tipo não
+desaparece: passa a um pequeno emblema no canto do logótipo, pelo que continua
+a perceber-se num relance de que tipo de cartão se trata.
+
+- **Formatos aceites** — PNG, JPEG, WebP ou GIF, até 1 MB. O formato SVG não é
+  aceite, porque pode conter scripts.
+- **Onde aparece** — no cabeçalho do cartão, na coluna **Logótipo** opcional
+  do [Inventário](inventory.md) e em qualquer portal web publicado sobre esse
+  tipo de cartão.
+- **Sem logótipo** — o cartão volta ao ícone do seu tipo, tal como antes.
+
+Os logótipos estão disponíveis nos tipos de cartão que um administrador tenha
+ativado; de origem, são Aplicação e Componente de TI. Consulte
+[Metamodelo](../admin/metamodel.md).
+
+Clique no logótipo e escolha **Escolher um ícone de marca…** para selecionar de
+um conjunto integrado de vários milhares de marcas: procure o produto pelo nome e
+selecione-o; não é preciso qualquer ficheiro de imagem. **Carregar** permite usar
+o seu próprio ficheiro. Um assistente de IA ligado por [MCP](../admin/mcp.md)
+pode definir logótipos da mesma forma em massa e, se um produto não constar do
+conjunto, vai buscar a marca por si.
+
+O mesmo menu está disponível na coluna **Logótipo** do
+[Inventário](inventory.md) — passe o rato sobre uma célula de logótipo e clique
+—, para que se possam colocar marcas num panorama acabado de importar sem abrir
+cada cartão. É cartão a cartão de propósito: o logótipo não é oferecido nem ao
+preenchimento para baixo nem à edição em massa.
+
 ### Fluxo de Aprovação
 
 Os cards podem passar por um ciclo de aprovação:
@@ -82,7 +118,7 @@ Mostra todas as conexões com outros cards, agrupadas por tipo de relacionamento
 
 - **Nome do card relacionado** — Clique para navegar até o card relacionado
 - **Tipo de relacionamento** — A natureza da conexão (ex.: "utiliza", "roda em", "depende de")
-- **Adicionar relacionamento** — Clique em **+** para abrir a caixa desse relacionamento. Ela lista os cartões correspondentes enquanto você digita (as melhores correspondências primeiro, e mais são carregados ao rolar) e oculta os já ligados, com uma legenda indicando quantos são. Clicar num cartão liga-o de imediato e ele aparece como etiqueta no topo — clique no **×** de uma etiqueta para desfazer essa adição. A caixa permanece aberta para adicionar quantos quiser e no telemóvel abre em ecrã inteiro. Os relacionamentos sem secção própria são alcançados pelo botão **Adicionar relacionamento** no fim da secção
+- **Adicionar relacionamento** — Clique em **+** para abrir a caixa desse relacionamento. Ela lista os cartões correspondentes enquanto você digita (as melhores correspondências primeiro, e mais são carregados ao rolar) e oculta os já ligados, com uma legenda indicando quantos são. Clicar num cartão liga-o de imediato e ele aparece como etiqueta no topo — clique no **×** de uma etiqueta para desfazer essa adição. A caixa permanece aberta para adicionar quantos quiser e no telemóvel abre em ecrã inteiro. Os relacionamentos sem secção própria são alcançados pelo botão **Adicionar relacionamento** no fim da secção. Quando o tipo ligado é hierárquico (capacidade de negócio, organização e afins), a caixa mostra-o como uma árvore indentada em vez de uma lista alfabética, para que possa escolher uma subcapacidade pelo seu ramo. A pesquisa mantém visíveis os pais de cada correspondência como contexto, e os cartões que não pode escolher (já ligados, acabados de adicionar ou o próprio cartão) permanecem no lugar a cinzento, para que os níveis à volta continuem a fazer sentido.
 - **Ordenação** — Os cartões relacionados são listados em ordem alfabética por nome
 - **Remover relacionamento** — Clique no ícone de exclusão para remover um relacionamento
 - **Agrupar por subtipo** — Quando uma seção de relacionamentos tem muitos cards relacionados, eles são agrupados automaticamente em grupos de subtipo recolhíveis (cada um com uma contagem), com um grupo final **Sem subtipo** para os cards não classificados. Use o botão de alternância no cabeçalho da seção para alternar entre a visualização agrupada e a lista simples.

@@ -29,6 +29,7 @@ Haga clic en **+ Nuevo Tipo** para crear un tipo de ficha personalizado. Configu
 | **Color** | Color de marca para el tipo (usado en inventario, informes y diagramas) |
 | **Categoría** | Agrupación por capa de arquitectura |
 | **Tiene Jerarquía** | Si las fichas de este tipo pueden tener relaciones padre/hijo |
+| **Permitir logotipos personalizados** | Si los editores pueden subir un logotipo por tarjeta, que se muestra en lugar del icono del tipo (activado de origen para Aplicación y Componente de TI) |
 
 ### Editar un Tipo
 
@@ -155,7 +156,7 @@ Los tipos de relación definen las conexiones permitidas entre tipos de fichas. 
 
 | Campo | Descripción |
 |-------|-------------|
-| **Clave** | Identificador único |
+| **Clave** | Identificador único: se propone a partir de su verbo, se puede editar durante la creación y queda fijo después |
 | **Etiqueta** | Etiqueta de dirección directa (ej., «utiliza») |
 | **Etiqueta Inversa** | Etiqueta de dirección inversa (ej., «es utilizado por») |
 | **Tipo Origen** | El tipo de ficha en el lado «de» |
@@ -172,7 +173,9 @@ Use **Gestionar traducciones** en la parte superior de la pestaña Tipos de rela
 
 Algunas relaciones incluyen atributos adicionales que se establecen en cada enlace individual en lugar de en el tipo de relación. Por ejemplo, la relación integrada **Organización → Aplicación** («utiliza») tiene un atributo **Tipo de uso**: establézcalo en **Propietario**, **Usuario** o **Parte interesada** en cada enlace. Así puede modelar una aplicación *propiedad de* una organización y *utilizada por* otras mediante un único tipo de relación. El valor elegido aparece como una etiqueta de color en la sección **Relaciones** de la tarjeta; establézcalo al añadir la relación o más tarde mediante el icono de edición en la fila de la relación.
 
-Solo puede existir un tipo de relación entre un par dado de tipos de tarjeta, así que utilice estos atributos para matizar el significado de un enlace en lugar de crear un segundo tipo de relación para el mismo origen y destino.
+También puede crear **varios tipos de relación entre el mismo par de tipos de tarjeta** — por ejemplo, una organización que *posee* una aplicación junto a otra que la *utiliza*. Prefiera un atributo cuando describa variantes de una misma relación (mantiene una sola columna en el inventario y una sola línea en un diagrama); cree un segundo tipo de relación cuando las relaciones sean realmente distintas y merezcan sus propios verbos, atributos o filtros. Cuando un par tiene más de un tipo de relación, el inventario sigue mostrando una única columna para el tipo de tarjeta relacionado, y al abrir esa celda obtiene una sección por tipo de relación. En una tarjeta, cada tipo de relación conserva su propia sección: las secciones que apuntan al mismo tipo de tarjeta se muestran juntas, y una tarjeta que haya vinculado mediante más de una de ellas aparece marcada con *También …* en cada una de sus secciones.
+
+Cuando un par tiene más de un tipo de relación, los informes, portales y encuestas pueden apuntar a uno concreto: el informe de Cartera ofrece un eje de agrupación y un filtro por relación, el Mapa de capacidades añade un filtro por relación, los filtros y secciones de relación del portal se etiquetan con su verbo, y el filtro **relacionado con** de una encuesta incorpora un selector **A través de la relación**. No elegir nada sigue significando «relacionado por cualquiera de ellas».
 
 ### Gestionar valores de relación
 

@@ -17,6 +17,7 @@ from app.models.app_settings import AppSettings
 from app.models.card import Card
 from app.models.comment import Comment
 from app.models.relation import Relation
+from app.models.relation_type import RelationType
 from app.models.risk import Risk, RiskCard
 from app.services.workspace_io import (
     apply_bundle,
@@ -425,6 +426,54 @@ async def test_diagram_with_card_link_roundtrips(db):
     assert restored.data["thumbnail"] == "data:image/png;base64,AA"  # meta preserved
     links = (await db.execute(select(diagram_cards))).all()
     assert any(row.diagram_id == diag_id and row.card_id == card.id for row in links)
+
+
+async def test_card_logo_roundtrips(db):
+    """A card's custom logo — bytes and all — plus the per-type switch that
+    governs it survive export → delete → re-import."""
+    from app.models.card_logo import CardLogo
+    from app.models.card_type import CardType
+
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+    user = await create_user(db, email="logo@test.com", role="admin")
+    await create_card_type(db, key="Application", label="Application", allow_card_logo=True)
+    card = await create_card(db, card_type="Application", name="Kafka", user_id=user.id)
+    db.add(
+        CardLogo(
+            card_id=card.id,
+            mime_type="image/png",
+            size=len(png),
+            data=png,
+            created_by=user.id,
+        )
+    )
+    await db.flush()
+
+    raw = await build_bundle(db)
+    # The image is offloaded to the assets folder, not inlined in a cell.
+    _, _, assets = bundle_io.unpack(raw)
+    assert any(p.startswith("CardLogos/") for p in assets)
+
+    await db.execute(delete(CardLogo))
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    ct.allow_card_logo = False
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    # `data` is deferred on the model, so ask for the columns explicitly —
+    # the same way the serving endpoint does.
+    restored = (
+        await db.execute(
+            select(CardLogo.data, CardLogo.mime_type).where(CardLogo.card_id == card.id)
+        )
+    ).one()
+    assert restored.data == png
+    assert restored.mime_type == "image/png"
+
+    await db.refresh(ct)
+    assert ct.allow_card_logo is True, "the per-type switch must transfer too"
 
 
 async def test_diagram_groups_and_favorites_roundtrip(db):
@@ -1003,3 +1052,86 @@ async def test_import_renames_legacy_app_permission_keys(db):
     stored = (await db.execute(select(Role.permissions).where(Role.key == "auditor"))).scalar_one()
     assert "subscriptions.view" not in stored
     assert stored == {"inventory.view": True, "stakeholders.view": False}
+
+
+async def test_import_accepts_multiple_relation_types_per_pair(db):
+    """A bundle may carry several relation types on one ordered card-type pair.
+
+    The applier used to re-enforce a one-type-per-pair rule and skip the extra
+    rows as conflicts, so a workspace that legitimately modelled "owns" and
+    "uses" separately lost one of them on every transfer.
+    """
+    user = await create_user(db, email="wsmulti@test.com", role="admin")
+
+    card_types = [
+        {c: None for c in exp.CARD_TYPE_COLUMNS}
+        | {
+            "key": "Widget",
+            "label": "Widget",
+            "icon": "category",
+            "color": "#123456",
+            "category": "Application & Data",
+            "has_hierarchy": False,
+            "subtypes": [],
+            "fields_schema": [],
+            "stakeholder_roles": [],
+            "section_config": {},
+            "built_in": False,
+            "is_hidden": False,
+            "sort_order": 0,
+            "translations": {},
+        }
+    ]
+
+    def _rel_type(key: str, label: str, reverse: str) -> dict:
+        return {c: None for c in exp.RELATION_TYPE_COLUMNS} | {
+            "key": key,
+            "label": label,
+            "reverse_label": reverse,
+            "source_type_key": "Widget",
+            "target_type_key": "Widget",
+            "cardinality": "n:m",
+            "attributes_schema": [],
+            "built_in": False,
+            "is_hidden": False,
+            "sort_order": 0,
+            "translations": {},
+            "source_visible": True,
+            "source_mandatory": False,
+            "target_visible": True,
+            "target_mandatory": False,
+        }
+
+    relation_types = [
+        _rel_type("widget_uses", "uses", "is used by"),
+        _rel_type("widget_owns", "owns", "is owned by"),
+    ]
+
+    raw = _make_bundle(
+        {
+            schema.SHEET_CARD_TYPES: (exp.CARD_TYPE_COLUMNS, exp.CARD_TYPE_JSON, card_types),
+            schema.SHEET_RELATION_TYPES: (
+                exp.RELATION_TYPE_COLUMNS,
+                exp.RELATION_TYPE_JSON,
+                relation_types,
+            ),
+        }
+    )
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+    assert result.total_conflict == 0, result.as_dict()
+
+    stored = set(
+        (
+            await db.execute(
+                select(RelationType.key).where(
+                    RelationType.source_type_key == "Widget",
+                    RelationType.target_type_key == "Widget",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {"widget_uses", "widget_owns"} <= stored

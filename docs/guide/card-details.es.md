@@ -16,6 +16,45 @@ La parte superior de la ficha muestra:
 - **Anillo de calidad de datos** — Indicador visual de la completitud de la información (0–100%)
 - **Menú de acciones** — Archivar, eliminar y acciones de aprobación. También incluye una acción de un clic **Observar esta ficha** (cuando el tipo de ficha define un rol Observador), para que cualquier usuario con permiso de lectura pueda seguir la ficha sin pasar por la pestaña de Partes interesadas.
 
+### Logotipo personalizado
+
+Las tarjetas de un tipo que lo permita pueden llevar su propio **logotipo** en
+lugar del icono genérico del tipo, de modo que una Aplicación de SAP, Kafka o
+Jira muestre la marca del propio producto. Los logotipos reconocibles hacen que
+un inventario se explore mucho más rápido, sobre todo para quienes lo consultan
+sin mantenerlo.
+
+Pase el ratón sobre el icono de la esquina superior izquierda de la tarjeta y
+haga clic para **subir**, **reemplazar** o **eliminar** la imagen. El icono del
+tipo no desaparece: se traslada como una pequeña insignia a la esquina del
+logotipo, así que sigue viéndose de un vistazo qué clase de tarjeta se está
+consultando.
+
+- **Formatos admitidos** — PNG, JPEG, WebP o GIF, hasta 1 MB. No se admite SVG,
+  porque puede contener scripts.
+- **Dónde aparece** — en la cabecera de la tarjeta, en la columna
+  **Logotipo** opcional del [Inventario](inventory.md) y en cualquier portal
+  web publicado sobre ese tipo de tarjeta.
+- **Si no hay logotipo** — la tarjeta vuelve a su icono de tipo, igual que
+  antes.
+
+Los logotipos están disponibles en los tipos de tarjeta que un administrador
+haya activado; de fábrica son Aplicación y Componente de TI. Consulte
+[Metamodelo](../admin/metamodel.md).
+
+Haga clic en el logotipo y elija **Elegir un icono de marca…** para seleccionar
+de un conjunto integrado de varios miles de marcas: busque el producto por su
+nombre y selecciónelo; no hace falta ningún archivo de imagen. **Subir** permite
+usar su propio archivo. Un asistente de IA conectado por [MCP](../admin/mcp.md)
+puede asignar logotipos del mismo modo de forma masiva y, si un producto no está
+en el conjunto, obtiene la marca por su cuenta.
+
+El mismo menú está disponible desde la columna **Logotipo** del
+[Inventario](inventory.md) — pase el ratón sobre una celda de logotipo y haga
+clic —, de modo que se pueden poner marcas en un paisaje recién importado sin
+abrir cada ficha. Es ficha a ficha a propósito: el logotipo no se ofrece ni en
+el rellenado hacia abajo ni en la edición masiva.
+
 ### Flujo de Aprobación
 
 Las fichas pueden pasar por un ciclo de aprobación:
@@ -82,7 +121,7 @@ Muestra todas las conexiones con otras fichas, agrupadas por tipo de relación. 
 
 - **Nombre de la ficha relacionada** — Haga clic para navegar a la ficha relacionada
 - **Tipo de relación** — La naturaleza de la conexión (por ejemplo, «utiliza», «se ejecuta en», «depende de»)
-- **Agregar relación** — Haga clic en **+** para abrir el diálogo de esa relación. Lista las tarjetas coincidentes mientras escribe (las mejores coincidencias primero, y se cargan más al desplazarse) y oculta las ya vinculadas, con un texto que indica cuántas son. Al hacer clic en una tarjeta se vincula de inmediato y aparece como una etiqueta arriba: haga clic en la **×** de una etiqueta para deshacer esa adición. El diálogo permanece abierto para añadir tantas como quiera, y en el móvil se abre a pantalla completa. Las relaciones sin sección propia se alcanzan desde el botón **Agregar relación** al final de la sección
+- **Agregar relación** — Haga clic en **+** para abrir el diálogo de esa relación. Lista las tarjetas coincidentes mientras escribe (las mejores coincidencias primero, y se cargan más al desplazarse) y oculta las ya vinculadas, con un texto que indica cuántas son. Al hacer clic en una tarjeta se vincula de inmediato y aparece como una etiqueta arriba: haga clic en la **×** de una etiqueta para deshacer esa adición. El diálogo permanece abierto para añadir tantas como quiera, y en el móvil se abre a pantalla completa. Las relaciones sin sección propia se alcanzan desde el botón **Agregar relación** al final de la sección. Cuando el tipo vinculado es jerárquico (capacidad de negocio, organización, etc.), el diálogo lo muestra como un árbol indentado en lugar de una lista alfabética, de modo que puede elegir una subcapacidad por su rama. La búsqueda mantiene visibles los padres de cada coincidencia como contexto, y las tarjetas que no se pueden elegir (ya vinculadas, recién añadidas o la propia tarjeta) permanecen en su sitio en gris para que los niveles a su alrededor sigan leyéndose bien.
 - **Orden** — Las tarjetas relacionadas se listan alfabéticamente por nombre
 - **Eliminar relación** — Haga clic en el icono de eliminar para quitar una relación
 - **Agrupar por subtipo** — Cuando una sección de relaciones tiene muchas fichas relacionadas, se agrupan automáticamente en grupos de subtipo plegables (cada uno con un recuento), con un grupo final **Sin subtipo** para las fichas sin clasificar. Utilice el botón de alternancia en el encabezado de la sección para cambiar entre la vista agrupada y la vista de lista.

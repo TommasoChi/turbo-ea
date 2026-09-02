@@ -155,7 +155,7 @@ pip install ./mcp-server
 
 ## 可用功能
 
-MCP 服务器提供 **47 个工具**，分为两组：**30 个读取工具** 用于查询 EA 数据，**17 个写入工具**（13 个增量型、4 个破坏型）用于创建和维护卡片、关系、图表、风险、ADR 等——包括将 AI 工具上下文中的工件（电子表格、BPMN XML、DrawIO XML、文档、图像）转换为结构化的 EA 数据。每个工具都带有 MCP `ToolAnnotations`（只读 / 破坏性 / 幂等提示），以便连接器在其界面中呈现破坏性程度。
+MCP 服务器提供 **51 个工具**，分为两组：**32 个读取工具** 用于查询 EA 数据，**19 个写入工具**（14 个增量型、5 个破坏型）用于创建和维护卡片、关系、图表、风险、ADR 等——包括将 AI 工具上下文中的工件（电子表格、BPMN XML、DrawIO XML、文档、图像）转换为结构化的 EA 数据。每个工具都带有 MCP `ToolAnnotations`（只读 / 破坏性 / 幂等提示），以便连接器在其界面中呈现破坏性程度。
 
 ### 写入操作的演练安全机制
 
@@ -163,7 +163,7 @@ MCP 服务器提供 **47 个工具**，分为两组：**30 个读取工具** 用
 
 ### 读取工具
 
-服务器以八个集群提供 30 个读取工具。
+服务器以八个集群提供 32 个读取工具。
 
 **卡片与元模型**
 
@@ -226,6 +226,8 @@ MCP 服务器提供 **47 个工具**，分为两组：**30 个读取工具** 用
 | `get_card_stakeholders` | 卡片上分配的用户与角色 |
 | `get_card_comments` | 卡片的评论线程 |
 | `get_card_documents` | 附加到卡片的文档链接（URL，非文件） |
+| `get_card_logo` | A card's logo: mime, size and a sha256 of the stored bytes, so a write can be verified without transferring the image (pass `include_image` when you do want it) |
+| `list_available_icons` | Search the built-in brand-icon pack for a slug to pass to `set_card_logos` |
 
 **图表**
 
@@ -244,9 +246,9 @@ MCP 服务器提供 **47 个工具**，分为两组：**30 个读取工具** 用
 
 ### 写入工具
 
-服务器提供 17 个写入工具，每个都标注为**增量型**（创建或扩展数据）或**破坏型**（修改或删除现有数据），以便连接器给出相应的警示。
+服务器提供 19 个写入工具，每个都标注为**增量型**（创建或扩展数据）或**破坏型**（修改或删除现有数据），以便连接器给出相应的警示。
 
-**增量型（13 个）**
+**增量型（14 个）**
 
 | 工具 | 描述 |
 |------|------|
@@ -263,8 +265,9 @@ MCP 服务器提供 **47 个工具**，分为两组：**30 个读取工具** 用
 | `sign_adr` | 签署 ADR（需要 `adr.sign` 权限；否则返回一个界面深层链接，供在浏览器中签署）。 |
 | `create_diagram` | 创建一个自由形式的 DrawIO 图，可选链接到已有卡片。 |
 | `import_bpmn` | 将 BPMN 2.0 XML 图保存到**已存在**的业务流程卡片上。如果没有匹配指定名称的卡片，工具会返回 `card_not_found` 错误，引导代理使用 `create_cards_bulk` — 这迫使先以完整的描述、子类型和属性显式创建卡片，而不是走捷径生成一张内容稀薄的卡片。 |
+| `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
-**破坏型（4 个）**
+**破坏型（5 个）**
 
 | 工具 | 描述 |
 |------|------|
@@ -272,6 +275,7 @@ MCP 服务器提供 **47 个工具**，分为两组：**30 个读取工具** 用
 | `archive_cards` | 归档卡片（软删除）。可恢复——归档的卡片在自动清除前可在 30 天内还原。 |
 | `update_diagram` | 替换图表的 DrawIO XML、名称或卡片链接。 |
 | `rollback_batch` | 撤销先前某个变更批次下执行的写入。 |
+| `clear_card_logos` | Remove the custom logo from cards, falling them back to their card-type icon. Recoverable — set it again to restore. |
 
 ### 工件上传
 
@@ -291,7 +295,8 @@ MCP 服务器提供 **47 个工具**，分为两组：**30 个读取工具** 用
 
 - **每次调用的大小上限。** MCP 写入工具强制施加比底层 Excel 导入端点小得多的上限：`create_cards_bulk` 为 200 行，`upsert_relations_bulk` 为 500 次操作。足以应对任何实际的单一工件上传，又小到可以快速扫描演练预览。
 - **默认不允许删除关系。** `upsert_relations_bulk` 拒绝 `action: "delete"` 操作——若要删除关系，请使用 Web 界面，那里的操作会以用户身份被记录。运营者可通过设置 `MCP_ALLOW_RELATION_DELETE=true` 启用此功能。
-- **紧急开关。** `MCP_WRITES_ENABLED=false` 可在无需重新部署代码的情况下关闭全部 17 个写入工具。30 个读取工具继续工作。
+- **紧急开关。** `MCP_WRITES_ENABLED=false` 可在无需重新部署代码的情况下关闭全部 19 个写入工具。32 个读取工具继续工作。
+- **徽标下载仅限白名单主机。** 内置图标包无法覆盖客户使用的每一款产品，而助手往往运行在无法访问外网的沙箱里，因此 `set_card_logos` 接受 `image_url`，由 MCP 服务器代为下载。仅限 `https`、仅限 `MCP_LOGO_FETCH_HOSTS` 中的主机、仅限公网地址，最多两次重定向（每次重新校验），最多以流式读取 1 MB，且字节必须带有真实的 PNG/JPEG/WebP/GIF 签名。下载发生在 MCP 边缘而非后端，随后图片经普通通道上传 —— 由大模型选定的 URL 永远不会抵达持有数据库的进程。`MCP_LOGO_FETCH_ENABLED=false` 可将其关闭。
 - **审计来源标记。** 来自 MCP 服务器的每个后端请求都携带 `X-Turbo-EA-Origin: mcp` 头。从这些请求发出的事件在审计日志载荷中被标记为 `origin: "mcp"`，以便管理员可以将 MCP 驱动的写入与 Web 界面操作分别从时间线中筛选出来。
 - **变更批次。** 每次 MCP 写入调用都会在任何写入发生之前打开一个变更批次；调用期间发出的每个事件都会被标记上批次 id。管理员（或 `get_change_history` 工具）可以凭一个 id 重建某次提交的完整逐事件差异，而 `rollback_batch` 可以将其撤销。超过 `MCP_BATCH_CONFIRMATION_THRESHOLD` 行的提交必须回传由先前演练签发的一次性 `confirm_token`（15 分钟有效期），因此大型提交总是先经过一次经审阅的预览。
 - **没有硬删除。** 工具集刻意省略了卡片的永久删除。`archive_cards` 和 `update_cards_bulk` *确实*已暴露，但归档是可恢复的软删除（30 天还原窗口），且两者都带有破坏性标注并受演练机制约束。添加任何执行不可逆变更的工具（硬删除、强制清除）都需要进行明确的设计评审。
@@ -303,7 +308,10 @@ MCP 容器上的六个防护栏环境变量：
 | `MCP_WRITES_ENABLED` | `true` | 写入工具的总开关。`false` → 只读 MCP。 |
 | `MCP_MAX_CARDS_PER_CALL` | `200` | 每次请求 `create_cards_bulk` / `update_cards_bulk` 行数的硬性上限。 |
 | `MCP_MAX_RELATIONS_PER_CALL` | `500` | 每次请求 `upsert_relations_bulk` 操作数的硬性上限。 |
+| `MCP_MAX_LOGOS_PER_CALL` | `50` | Hard cap on `set_card_logos` rows per request. Lower than the card cap because each logo is its own upload and carries image bytes. |
 | `MCP_ALLOW_RELATION_DELETE` | `false` | 当为 `true` 时，`upsert_relations_bulk` 接受 `action: "delete"` 操作。 |
+| `MCP_LOGO_FETCH_ENABLED` | `true` | 为 `true` 时，`set_card_logos` 可接受 `image_url`：由 MCP 服务器下载图片，再经普通上传通道写入，因此权限、大小与格式校验一律照常执行。设为 `false` 则完全拒绝 URL 方式 —— 图标 slug 与直接粘贴的字节仍可使用。 |
+| `MCP_LOGO_FETCH_HOSTS` | *(built-in)* | 允许下载徽标的主机，逗号分隔，精确匹配。默认为 `raw.githubusercontent.com`, `cdn.jsdelivr.net`, `cdn.simpleicons.org`, `upload.wikimedia.org` —— 公共图标托管，请求中只带文件名，不透露任何landscape信息。也可加入按域名查徽标的服务，但代价是让该服务知道你在用哪些供应商。 |
 | `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | 涉及行数超过此值的提交需要出示先前演练签发的 `confirm_token`。 |
 | `MCP_REQUIRE_DRYRUN_FIRST` | `true` | 启用上述确认令牌门槛。仅在受信任的、明确跳过预览环节的自动化流水线中设置为 `false`。 |
 

@@ -20,6 +20,8 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import CardLogoMenu from "@/components/CardLogoMenu";
+import CardLogoAvatar from "@/components/CardLogoAvatar";
 import ApprovalStatusBadge from "@/components/ApprovalStatusBadge";
 import LifecycleBadge from "@/components/LifecycleBadge";
 import AiSuggestPanel, { type AiApplyPayload } from "@/components/AiSuggestPanel";
@@ -83,6 +85,10 @@ export default function CardDetail() {
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [actionsMenuAnchor, setActionsMenuAnchor] = useState<HTMLElement | null>(null);
   const [snack, setSnack] = useState("");
+
+  // Custom logo (discussion #1024). The menu itself lives in CardLogoMenu,
+  // shared with the Inventory grid's Logo column.
+  const [logoMenuAnchor, setLogoMenuAnchor] = useState<HTMLElement | null>(null);
 
   // Favorite star
   const [isFavorite, setIsFavorite] = useState(false);
@@ -265,7 +271,7 @@ export default function CardDetail() {
   const hasSubtypes = !!(typeConfig?.subtypes && typeConfig.subtypes.length > 0);
   const isArchived = card.status === "ARCHIVED";
   const canEditSubtype = hasSubtypes && perms.can_edit && !isArchived;
-
+  const canEditLogo = !!typeConfig?.allow_card_logo && perms.can_edit && !isArchived;
 
   const handleApprovalAction = async (action: "approve" | "reject" | "reset") => {
     try {
@@ -428,23 +434,45 @@ export default function CardDetail() {
           <MaterialSymbol icon="arrow_back" size={24} />
         </IconButton>
         {typeConfig && (
-          <Box
-            sx={{
-              width: { xs: 32, sm: 40 },
-              height: { xs: 32, sm: 40 },
-              borderRadius: 2,
-              bgcolor: typeConfig.color + "18",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <MaterialSymbol
-              icon={typeConfig.icon}
-              size={isMobile ? 20 : 24}
-              color={typeConfig.color}
-            />
-          </Box>
+          <Tooltip title={canEditLogo ? t("cards:logo.edit") : ""}>
+            <Box
+              onClick={canEditLogo ? (e) => setLogoMenuAnchor(e.currentTarget) : undefined}
+              sx={{
+                position: "relative",
+                cursor: canEditLogo ? "pointer" : "default",
+                // The affordance is the hover, so the tile stays quiet until
+                // the pointer is on it.
+                "&:hover .card-logo-edit": { opacity: canEditLogo ? 1 : 0 },
+              }}
+            >
+              <CardLogoAvatar
+                cardId={card.id}
+                logoUpdatedAt={card.logo_updated_at}
+                typeIcon={typeConfig.icon}
+                typeColor={typeConfig.color}
+                size={isMobile ? 32 : 40}
+              />
+              {canEditLogo && (
+                <Box
+                  className="card-logo-edit"
+                  sx={{
+                    position: "absolute",
+                    inset: 0,
+                    borderRadius: 2,
+                    bgcolor: "rgba(0,0,0,0.45)",
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: 0,
+                    transition: "opacity 120ms",
+                  }}
+                >
+                  <MaterialSymbol icon="photo_camera" size={isMobile ? 16 : 20} color="#fff" />
+                </Box>
+              )}
+            </Box>
+          </Tooltip>
         )}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           {editingName ? (
@@ -749,6 +777,19 @@ export default function CardDetail() {
         cardName={card.name}
         onClose={() => setRestoreDialogOpen(false)}
         onConfirmed={handleRestoreConfirmed}
+      />
+
+      {/* ── Custom logo: hidden file picker, menu and brand-icon dialog ── */}
+      <CardLogoMenu
+        cardId={card.id}
+        hasLogo={!!card.logo_updated_at}
+        anchorEl={logoMenuAnchor}
+        onClose={() => setLogoMenuAnchor(null)}
+        onChanged={(_id, logoUpdatedAt) =>
+          setCard((prev) => (prev ? { ...prev, logo_updated_at: logoUpdatedAt } : prev))
+        }
+        onNotify={setSnack}
+        onError={setError}
       />
 
       <Snackbar

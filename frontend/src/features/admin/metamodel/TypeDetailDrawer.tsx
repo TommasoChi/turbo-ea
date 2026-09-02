@@ -39,6 +39,7 @@ import FieldEditorDialog from "./FieldEditorDialog";
 import DataQualityPanel from "./DataQualityPanel";
 import StakeholderRolePanel from "./StakeholderRolePanel";
 import TranslationDialog from "./TranslationDialog";
+import { successorRelationKeys } from "@/lib/successorRelation";
 
 /* ------------------------------------------------------------------ */
 /*  Type Detail Dialog (full-width, 2-panel layout)                    */
@@ -92,6 +93,7 @@ export default function TypeDetailDrawer({
   const [icon, setIcon] = useState("category");
   const [hasHierarchy, setHasHierarchy] = useState(false);
   const [hasSuccessors, setHasSuccessors] = useState(false);
+  const [allowCardLogo, setAllowCardLogo] = useState(false);
   /* --- Human-readable card ID config (#811) --- */
   const [idEnabled, setIdEnabled] = useState(false);
   const [idPrefix, setIdPrefix] = useState("");
@@ -189,6 +191,7 @@ export default function TypeDetailDrawer({
       setIcon(cardTypeKey.icon);
       setHasHierarchy(cardTypeKey.has_hierarchy);
       setHasSuccessors(cardTypeKey.has_successors);
+      setAllowCardLogo(cardTypeKey.allow_card_logo);
       const rc = cardTypeKey.reference_config || {};
       setIdEnabled(rc.mode === "auto");
       setIdPrefix(rc.prefix || "");
@@ -205,10 +208,13 @@ export default function TypeDetailDrawer({
 
   if (!cardTypeKey) return null;
 
+  // Only the card type's ONE lineage relation is hidden here (it is managed by the
+  // "Supports Lineage" toggle); any other self-pair type is an ordinary relation.
+  const successorKeys = successorRelationKeys(relationTypes);
   const connectedRelations = relationTypes.filter(
     (r) =>
       (r.source_type_key === cardTypeKey.key || r.target_type_key === cardTypeKey.key) &&
-      !r.key.endsWith("Successor"),
+      !successorKeys.has(r.key),
   );
 
   /* --- Save header --- */
@@ -228,6 +234,7 @@ export default function TypeDetailDrawer({
         icon,
         has_hierarchy: hasHierarchy,
         has_successors: hasSuccessors,
+        allow_card_logo: allowCardLogo,
         reference_config: idEnabled
           ? { mode: "auto", prefix: idPrefix, start: idStart, padding: idPadding }
           : { mode: "off" },
@@ -650,6 +657,18 @@ export default function TypeDetailDrawer({
               control={<Switch checked={hasSuccessors} onChange={(e) => setHasSuccessors(e.target.checked)} />}
               label={t("metamodel.typeDrawer.supportsSuccessors")}
             />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={allowCardLogo}
+                  onChange={(e) => setAllowCardLogo(e.target.checked)}
+                />
+              }
+              label={t("metamodel.typeDrawer.allowCardLogo")}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: -1, ml: 6 }}>
+              {t("metamodel.typeDrawer.allowCardLogoHelp")}
+            </Typography>
             {/* -- Human-readable card ID (#811) -- */}
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <FormControlLabel

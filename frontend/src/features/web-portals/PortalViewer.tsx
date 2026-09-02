@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router";
 import DOMPurify from "dompurify";
@@ -24,6 +24,7 @@ import Collapse from "@mui/material/Collapse";
 import LinearProgress from "@mui/material/LinearProgress";
 import Divider from "@mui/material/Divider";
 import Tooltip from "@mui/material/Tooltip";
+import CardLogoAvatar from "@/components/CardLogoAvatar";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import {
@@ -38,15 +39,22 @@ import { useDateFormat } from "@/hooks/useDateFormat";
 import { bandColor, bandOf, type DataQualityBand } from "@/lib/dataQualityBands";
 import { todayIsoDate } from "@/lib/dates";
 import TagPicker from "@/components/TagPicker";
+import { publicGet, type ApiError } from "./publicApi";
+import PortalPpmPortfolio from "./PortalPpmPortfolio";
+import { BOARD_MAX_WIDTH, BOARD_GUTTER } from "@/features/ppm/ppmPortfolioFormat";
 import type {
   PublicPortal,
   PortalCard,
   PortalCardListResponse,
   PortalGate,
+  PortalView,
   TagGroup,
 } from "@/types";
 
-const BASE = "/api/v1";
+// Lazy so the navigator — and the bpmn-js chunk behind its flow viewer — never
+// enters the bundle a card-portal visitor downloads.
+const PortalProcessNavigator = lazy(() => import("./PortalProcessNavigator"));
+
 const TOOLBAR_COLOR = "#1a1a2e";
 
 /** Tinted variants of the data-quality band palette, for the detail chip. */
@@ -95,21 +103,6 @@ function isVisible(
   if (entry) return mode === "card" ? entry.card : entry.detail;
   const defaults = mode === "card" ? DEFAULT_CARD : DEFAULT_DETAIL;
   return defaults[key] ?? fallback;
-}
-
-type ApiError = Error & { status?: number };
-
-async function publicGet<T>(path: string): Promise<T> {
-  // credentials: "same-origin" so the httpOnly portal-session cookie is sent
-  // to the path-scoped public endpoints of an SSO-gated portal.
-  const res = await fetch(`${BASE}${path}`, { credentials: "same-origin" });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const e = new Error(err.detail || res.statusText) as ApiError;
-    e.status = res.status;
-    throw e;
-  }
-  return res.json();
 }
 
 // Portal SSO reuses the app's existing /auth/callback redirect URI (already
@@ -481,7 +474,9 @@ export default function PortalViewer() {
   }, [slug, search, subtype, attrFilters, relationFilters, tagFilter, page, pageSize, sortBy, sortDir]);
 
   useEffect(() => {
-    if (portal) loadCards();
+    // A board portal renders its own data; issuing the card query would be a
+    // wasted round-trip on every load.
+    if (portal && (portal.view || "cards") === "cards") loadCards();
   }, [portal, loadCards]);
 
   const handleSearchChange = (value: string) => {
@@ -628,6 +623,17 @@ export default function PortalViewer() {
   }
 
   const typeColor = portal.type_info?.color || "#1976d2";
+  // A board portal keeps the shared header and gate chrome but replaces the card
+  // grid, filter bar and detail dialog with the board itself.
+  const view = (portal.view || "cards") as PortalView;
+  const isPortfolio = view === "ppm_portfolio";
+  const isNavigator = view === "process_navigator";
+  // Both boards are dense and carry no description or item count under the
+  // title, so the card portal's hero proportions leave a mostly-empty band above
+  // them. The gutter and max width stay portfolio-specific: they exist to align
+  // the banner with the Gantt grid's first column, and the house is a fluid
+  // responsive grid with no fixed first column and its own padding.
+  const isBoard = view !== "cards";
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
@@ -636,11 +642,15 @@ export default function PortalViewer() {
         sx={{
           bgcolor: TOOLBAR_COLOR,
           color: "#fff",
-          py: { xs: 3, md: 4 },
-          px: { xs: 2, md: 4 },
+          // The portfolio board is a dense grid with no description or item
+          // count under the title, so the card portal's hero proportions leave
+          // a mostly-empty band above it. Its gutter matches the board's, which
+          // is what puts the portal name over the grid's first column.
+          py: isBoard ? { xs: 2, md: 2.5 } : { xs: 3, md: 4 },
+          px: isPortfolio ? BOARD_GUTTER : { xs: 2, md: 4 },
         }}
       >
-        <Box sx={{ maxWidth: 1200, mx: "auto" }}>
+        <Box sx={{ maxWidth: isPortfolio ? BOARD_MAX_WIDTH : 1200, mx: "auto" }}>
           <Box
             sx={{
               display: "flex",
@@ -656,8 +666,8 @@ export default function PortalViewer() {
               >
                 <Box
                   sx={{
-                    width: 40,
-                    height: 40,
+                    width: isBoard ? 32 : 40,
+                    height: isBoard ? 32 : 40,
                     borderRadius: 1.5,
                     bgcolor: "rgba(255,255,255,0.12)",
                     display: "flex",
@@ -668,11 +678,15 @@ export default function PortalViewer() {
                 >
                   <Icon
                     name={portal.type_info?.icon || "language"}
-                    size={24}
+                    size={isBoard ? 20 : 24}
                     color="#fff"
                   />
                 </Box>
-                <Typography variant="h4" fontWeight={700} sx={{ letterSpacing: -0.5 }}>
+                <Typography
+                  variant={isBoard ? "h5" : "h4"}
+                  fontWeight={700}
+                  sx={{ letterSpacing: -0.5 }}
+                >
                   {portal.name}
                 </Typography>
               </Box>
@@ -684,9 +698,11 @@ export default function PortalViewer() {
                   {portal.description}
                 </Typography>
               )}
-              <Typography variant="body2" sx={{ mt: 1.5, opacity: 0.5, fontSize: "0.8rem" }}>
-                {t("portal.itemCount", { count: total, label: portal.type_info ? typeLabel(portal.type_info) : "item" })}
-              </Typography>
+              {!isBoard && (
+                <Typography variant="body2" sx={{ mt: 1.5, opacity: 0.5, fontSize: "0.8rem" }}>
+                  {t("portal.itemCount", { count: total, label: portal.type_info ? typeLabel(portal.type_info) : "item" })}
+                </Typography>
+              )}
             </Box>
 
             {/* Right: app logo */}
@@ -695,7 +711,7 @@ export default function PortalViewer() {
                 src="/api/v1/settings/logo"
                 alt=""
                 style={{
-                  height: 45,
+                  height: isBoard ? 32 : 45,
                   objectFit: "contain",
                   opacity: 0.85,
                   flexShrink: 0,
@@ -707,1037 +723,1105 @@ export default function PortalViewer() {
         </Box>
       </Box>
 
-      {/* Search & Filters Bar */}
-      <Box
-        sx={{
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-          bgcolor: "background.paper",
-          borderBottom: 1,
-          borderColor: "divider",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-          px: { xs: 2, md: 4 },
-          py: 1.5,
-        }}
-      >
+      {isPortfolio ? (
+        <PortalPpmPortfolio slug={slug!} portal={portal} />
+      ) : isNavigator ? (
+        <Suspense fallback={null}>
+          <PortalProcessNavigator slug={slug!} portal={portal} />
+        </Suspense>
+      ) : (
+        <>
+        {/* Search & Filters Bar */}
         <Box
           sx={{
-            maxWidth: 1200,
-            mx: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: 1.5,
-            flexWrap: "wrap",
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+            bgcolor: "background.paper",
+            borderBottom: 1,
+            borderColor: "divider",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+            px: { xs: 2, md: 4 },
+            py: 1.5,
           }}
         >
-          <TextField
-            size="small"
-            placeholder={t("portal.searchPlaceholder", { label: portal.type_info ? typeLabel(portal.type_info) : "items" })}
-            defaultValue={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            sx={{ flex: 1, minWidth: 200 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Icon name="search" size={20} color="#999" />
-                </InputAdornment>
-              ),
-            }}
-          />
-
-          <IconButton
-            size="small"
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            sx={{
-              bgcolor: filtersOpen ? `${typeColor}15` : "transparent",
-              color: filtersOpen ? typeColor : "text.secondary",
-            }}
-          >
-            <Icon name="tune" size={22} />
-          </IconButton>
-
-          <TextField
-            select
-            size="small"
-            value={`${sortBy}-${sortDir}`}
-            onChange={(e) => {
-              const [sb, sd] = e.target.value.split("-");
-              setSortBy(sb);
-              setSortDir(sd);
-              setPage(1);
-            }}
-            InputLabelProps={{ shrink: true }}
-            sx={{ width: 180 }}
-          >
-            <MenuItem value="name-asc">{t("portal.sortNameAsc")}</MenuItem>
-            <MenuItem value="name-desc">{t("portal.sortNameDesc")}</MenuItem>
-            <MenuItem value="updated_at-desc">{t("portal.sortRecentlyUpdated")}</MenuItem>
-            <MenuItem value="data_quality-desc">{t("portal.sortHighestQuality")}</MenuItem>
-            <MenuItem value="data_quality-asc">{t("portal.sortLowestQuality")}</MenuItem>
-          </TextField>
-        </Box>
-
-        <Collapse in={filtersOpen}>
           <Box
             sx={{
               maxWidth: 1200,
               mx: "auto",
               display: "flex",
+              alignItems: "center",
               gap: 1.5,
               flexWrap: "wrap",
-              alignItems: "center",
-              mt: 1.5,
-              pb: 0.5,
             }}
           >
-            {portal.type_info?.subtypes &&
-              portal.type_info.subtypes.length > 0 && (
+            <TextField
+              size="small"
+              placeholder={t("portal.searchPlaceholder", { label: portal.type_info ? typeLabel(portal.type_info) : "items" })}
+              defaultValue={search}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              sx={{ flex: 1, minWidth: 200 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Icon name="search" size={20} color="#999" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            <IconButton
+              size="small"
+              onClick={() => setFiltersOpen(!filtersOpen)}
+              sx={{
+                bgcolor: filtersOpen ? `${typeColor}15` : "transparent",
+                color: filtersOpen ? typeColor : "text.secondary",
+              }}
+            >
+              <Icon name="tune" size={22} />
+            </IconButton>
+
+            <TextField
+              select
+              size="small"
+              value={`${sortBy}-${sortDir}`}
+              onChange={(e) => {
+                const [sb, sd] = e.target.value.split("-");
+                setSortBy(sb);
+                setSortDir(sd);
+                setPage(1);
+              }}
+              InputLabelProps={{ shrink: true }}
+              sx={{ width: 180 }}
+            >
+              <MenuItem value="name-asc">{t("portal.sortNameAsc")}</MenuItem>
+              <MenuItem value="name-desc">{t("portal.sortNameDesc")}</MenuItem>
+              <MenuItem value="updated_at-desc">{t("portal.sortRecentlyUpdated")}</MenuItem>
+              <MenuItem value="data_quality-desc">{t("portal.sortHighestQuality")}</MenuItem>
+              <MenuItem value="data_quality-asc">{t("portal.sortLowestQuality")}</MenuItem>
+            </TextField>
+          </Box>
+
+          <Collapse in={filtersOpen}>
+            <Box
+              sx={{
+                maxWidth: 1200,
+                mx: "auto",
+                display: "flex",
+                gap: 1.5,
+                flexWrap: "wrap",
+                alignItems: "center",
+                mt: 1.5,
+                pb: 0.5,
+              }}
+            >
+              {portal.type_info?.subtypes &&
+                portal.type_info.subtypes.length > 0 && (
+                  <TextField
+                    select
+                    size="small"
+                    label={t("portal.filterSubtype")}
+                    value={subtype}
+                    onChange={(e) => {
+                      setSubtype(e.target.value);
+                      setPage(1);
+                    }}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ width: 180 }}
+                  >
+                    <MenuItem value="">{t("portal.allSubtypes")}</MenuItem>
+                    {portal.type_info.subtypes.map((st) => (
+                      <MenuItem key={st.key} value={st.key}>
+                        {stLabel(st)}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
+
+              {filterableFields.map((field) => (
                 <TextField
+                  key={field.key}
                   select
                   size="small"
-                  label={t("portal.filterSubtype")}
-                  value={subtype}
+                  label={fieldLabel(field)}
+                  value={attrFilters[field.key] || ""}
                   onChange={(e) => {
-                    setSubtype(e.target.value);
+                    setAttrFilters((prev) => ({
+                      ...prev,
+                      [field.key]: e.target.value,
+                    }));
                     setPage(1);
                   }}
                   InputLabelProps={{ shrink: true }}
                   sx={{ width: 180 }}
                 >
-                  <MenuItem value="">{t("portal.allSubtypes")}</MenuItem>
-                  {portal.type_info.subtypes.map((st) => (
-                    <MenuItem key={st.key} value={st.key}>
-                      {stLabel(st)}
+                  <MenuItem value="">{t("labels.all")}</MenuItem>
+                  {field.options!.map((opt) => (
+                    <MenuItem key={opt.key} value={opt.key}>
+                      {optLabel(opt)}
                     </MenuItem>
                   ))}
                 </TextField>
-              )}
+              ))}
 
-            {filterableFields.map((field) => (
-              <TextField
-                key={field.key}
-                select
-                size="small"
-                label={fieldLabel(field)}
-                value={attrFilters[field.key] || ""}
-                onChange={(e) => {
-                  setAttrFilters((prev) => ({
-                    ...prev,
-                    [field.key]: e.target.value,
-                  }));
-                  setPage(1);
-                }}
-                InputLabelProps={{ shrink: true }}
-                sx={{ width: 180 }}
-              >
-                <MenuItem value="">{t("labels.all")}</MenuItem>
-                {field.options!.map((opt) => (
-                  <MenuItem key={opt.key} value={opt.key}>
-                    {optLabel(opt)}
-                  </MenuItem>
-                ))}
-              </TextField>
-            ))}
+              {visibleRelTypes.map((rt) => {
+                const opts = relationOptions[rt.other_type_key] || [];
+                if (opts.length === 0) return null;
+                // The filter state is keyed by relation type, but the label was
+                // the CARD type — so two relation types reaching one card type
+                // rendered two identical dropdowns. Add the verb to tell them
+                // apart; a lone relation keeps the plain type label.
+                const sharesPair =
+                  visibleRelTypes.filter((o) => o.other_type_key === rt.other_type_key)
+                    .length > 1;
+                const relFilterLabel = sharesPair
+                  ? `${rt.other_type_label} · ${
+                      rt.source_type_key === rt.other_type_key
+                        ? relLabel(rt, true)
+                        : relLabel(rt)
+                    }`
+                  : rt.other_type_label;
+                return (
+                  <TextField
+                    key={rt.key}
+                    select
+                    size="small"
+                    label={relFilterLabel}
+                    value={relationFilters[rt.key] || ""}
+                    onChange={(e) => {
+                      setRelationFilters((prev) => ({
+                        ...prev,
+                        [rt.key]: e.target.value,
+                      }));
+                      setPage(1);
+                    }}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ width: 200 }}
+                  >
+                    <MenuItem value="">
+                      {t("portal.allRelType", { label: relFilterLabel })}
+                    </MenuItem>
+                    {opts.map((o) => (
+                      <MenuItem key={o.id} value={o.id}>
+                        {o.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                );
+              })}
 
-            {visibleRelTypes.map((rt) => {
-              const opts = relationOptions[rt.other_type_key] || [];
-              if (opts.length === 0) return null;
-              return (
-                <TextField
-                  key={rt.key}
-                  select
-                  size="small"
-                  label={rt.other_type_label}
-                  value={relationFilters[rt.key] || ""}
-                  onChange={(e) => {
-                    setRelationFilters((prev) => ({
-                      ...prev,
-                      [rt.key]: e.target.value,
-                    }));
+              {(portal.tag_groups || []).some((g) => (g.tags || []).length > 0) && (
+                <TagPicker
+                  groups={(portal.tag_groups || []) as unknown as TagGroup[]}
+                  value={tagFilter}
+                  onChange={(ids) => {
+                    setTagFilter(ids);
                     setPage(1);
                   }}
-                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                  label={t("portal.tags")}
+                  placeholder=""
+                  inputLabelShrink
                   sx={{ width: 200 }}
-                >
-                  <MenuItem value="">
-                    {t("portal.allRelType", { label: rt.other_type_label })}
-                  </MenuItem>
-                  {opts.map((o) => (
-                    <MenuItem key={o.id} value={o.id}>
-                      {o.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              );
-            })}
+                />
+              )}
 
-            {(portal.tag_groups || []).some((g) => (g.tags || []).length > 0) && (
-              <TagPicker
-                groups={(portal.tag_groups || []) as unknown as TagGroup[]}
-                value={tagFilter}
-                onChange={(ids) => {
-                  setTagFilter(ids);
-                  setPage(1);
+              {hasActiveFilters && (
+                <Chip
+                  label={t("portal.clearFilters")}
+                  size="small"
+                  onDelete={() => {
+                    setSubtype("");
+                    setAttrFilters({});
+                    setRelationFilters({});
+                    setTagFilter([]);
+                    setPage(1);
+                  }}
+                />
+              )}
+            </Box>
+          </Collapse>
+        </Box>
+
+        {fsLoading && <LinearProgress sx={{ height: 2 }} />}
+
+        {/* Cards Grid */}
+        <Box sx={{ maxWidth: 1200, mx: "auto", px: { xs: 2, md: 4 }, py: 3 }}>
+          {cards.length === 0 && !fsLoading && (
+            <Box sx={{ textAlign: "center", py: 8 }}>
+              <Icon name="search_off" size={48} color="#ccc" />
+              <Typography variant="h6" color="text.secondary" sx={{ mt: 1 }}>
+                {t("portal.noResults")}
+              </Typography>
+              <Typography variant="body2" color="text.disabled">
+                {t("portal.noResultsHint")}
+              </Typography>
+            </Box>
+          )}
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "repeat(2, 1fr)",
+                md: "repeat(3, 1fr)",
+              },
+              gap: 2.5,
+            }}
+          >
+            {cards.map((card) => (
+              <Card
+                key={card.id}
+                sx={{
+                  borderRadius: 2.5,
+                  border: 1,
+                  borderColor: "divider",
+                  bgcolor: "background.paper",
+                  transition: "box-shadow 0.2s, transform 0.15s",
+                  "&:hover": {
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+                    transform: "translateY(-2px)",
+                  },
                 }}
-                size="small"
-                label={t("portal.tags")}
-                placeholder=""
-                inputLabelShrink
-                sx={{ width: 200 }}
-              />
-            )}
-
-            {hasActiveFilters && (
-              <Chip
-                label={t("portal.clearFilters")}
-                size="small"
-                onDelete={() => {
-                  setSubtype("");
-                  setAttrFilters({});
-                  setRelationFilters({});
-                  setTagFilter([]);
-                  setPage(1);
-                }}
-              />
-            )}
-          </Box>
-        </Collapse>
-      </Box>
-
-      {fsLoading && <LinearProgress sx={{ height: 2 }} />}
-
-      {/* Cards Grid */}
-      <Box sx={{ maxWidth: 1200, mx: "auto", px: { xs: 2, md: 4 }, py: 3 }}>
-        {cards.length === 0 && !fsLoading && (
-          <Box sx={{ textAlign: "center", py: 8 }}>
-            <Icon name="search_off" size={48} color="#ccc" />
-            <Typography variant="h6" color="text.secondary" sx={{ mt: 1 }}>
-              {t("portal.noResults")}
-            </Typography>
-            <Typography variant="body2" color="text.disabled">
-              {t("portal.noResultsHint")}
-            </Typography>
-          </Box>
-        )}
-
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              sm: "repeat(2, 1fr)",
-              md: "repeat(3, 1fr)",
-            },
-            gap: 2.5,
-          }}
-        >
-          {cards.map((card) => (
-            <Card
-              key={card.id}
-              sx={{
-                borderRadius: 2.5,
-                border: 1,
-                borderColor: "divider",
-                bgcolor: "background.paper",
-                transition: "box-shadow 0.2s, transform 0.15s",
-                "&:hover": {
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-                  transform: "translateY(-2px)",
-                },
-              }}
-              variant="outlined"
-            >
-              <CardActionArea onClick={() => setSelectedFs(card)}>
-                {/* Colored top stripe */}
-                <Box sx={{ height: 4, bgcolor: typeColor }} />
-                <CardContent sx={{ p: 2.5, pt: 2 }}>
-                  {/* Header */}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 1.5,
-                      mb: 1.5,
-                    }}
-                  >
+                variant="outlined"
+              >
+                <CardActionArea onClick={() => setSelectedFs(card)}>
+                  {/* Colored top stripe */}
+                  <Box sx={{ height: 4, bgcolor: typeColor }} />
+                  <CardContent sx={{ p: 2.5, pt: 2 }}>
+                    {/* Header */}
                     <Box
                       sx={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 1.5,
-                        bgcolor: `${typeColor}12`,
-                        border: `1px solid ${typeColor}30`,
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
+                        alignItems: "flex-start",
+                        gap: 1.5,
+                        mb: 1.5,
                       }}
                     >
-                      <Icon
-                        name={portal.type_info?.icon || "description"}
-                        size={22}
-                        color={typeColor}
-                      />
+                      {card.logo_updated_at ? (
+                        <CardLogoAvatar
+                          cardId={card.id}
+                          logoUpdatedAt={card.logo_updated_at}
+                          typeIcon={portal.type_info?.icon || "description"}
+                          typeColor={typeColor}
+                          size={42}
+                          radius={1.5}
+                        />
+                      ) : (
+                        <Box
+                          sx={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 1.5,
+                            bgcolor: `${typeColor}12`,
+                            border: `1px solid ${typeColor}30`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Icon
+                            name={portal.type_info?.icon || "description"}
+                            size={22}
+                            color={typeColor}
+                          />
+                        </Box>
+                      )}
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography
+                          variant="subtitle1"
+                          fontWeight={700}
+                          sx={{
+                            lineHeight: 1.3,
+                            color: "text.primary",
+                            fontSize: "0.95rem",
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {card.name}
+                        </Typography>
+                        {card.subtype && (
+                          <Typography
+                            variant="caption"
+                            sx={{ color: "text.secondary", fontSize: "0.75rem" }}
+                          >
+                            {(() => {
+                              const stDef = portal.type_info?.subtypes?.find(
+                                (st) => st.key === card.subtype
+                              );
+                              return stDef ? stLabel(stDef) : card.subtype;
+                            })()}
+                          </Typography>
+                        )}
+                      </Box>
                     </Box>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
+
+                    {/* Description preview */}
+                    {show("description", "card") && card.description && (
                       <Typography
-                        variant="subtitle1"
-                        fontWeight={700}
+                        variant="body2"
                         sx={{
-                          lineHeight: 1.3,
-                          color: "text.primary",
-                          fontSize: "0.95rem",
+                          mb: 1.5,
                           display: "-webkit-box",
                           WebkitLineClamp: 2,
                           WebkitBoxOrient: "vertical",
                           overflow: "hidden",
+                          fontSize: "0.82rem",
+                          lineHeight: 1.6,
+                          color: "text.secondary",
                         }}
                       >
-                        {card.name}
+                        {new DOMParser().parseFromString(card.description, "text/html").body.textContent ?? ""}
                       </Typography>
-                      {card.subtype && (
+                    )}
+
+                    {/* Key fields */}
+                    {cardVisibleFields.length > 0 && (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 2,
+                          mb: 1.5,
+                        }}
+                      >
+                        {cardVisibleFields.slice(0, 3).map((field) => {
+                          const val = card.attributes?.[field.key];
+                          if (val === null || val === undefined || val === "")
+                            return null;
+                          return (
+                            <Box key={field.key} sx={{ minWidth: 0 }}>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  display: "block",
+                                  fontSize: "0.68rem",
+                                  textTransform: "uppercase",
+                                  letterSpacing: 0.5,
+                                  color: "text.secondary",
+                                  fontWeight: 600,
+                                  mb: 0.4,
+                                }}
+                              >
+                                {fieldLabel(field)}
+                              </Typography>
+                              <FieldValue value={val} field={field} />
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    )}
+
+                    {/* Lifecycle */}
+                    {show("lifecycle", "card") && (
+                      <LifecycleBar lifecycle={card.lifecycle} t={t} />
+                    )}
+
+                    {/* Approval Status */}
+                    {show("approval_status", "card", false) && card.approval_status && card.approval_status !== "DRAFT" && (
+                      <Chip
+                        label={card.approval_status}
+                        size="small"
+                        sx={{
+                          mt: 1,
+                          height: 24,
+                          fontSize: "0.73rem",
+                          fontWeight: 600,
+                          px: 0.5,
+                          bgcolor:
+                            card.approval_status === "APPROVED"
+                              ? "#e8f5e9"
+                              : card.approval_status === "REJECTED"
+                                ? "#ffebee"
+                                : "#fff3e0",
+                          color:
+                            card.approval_status === "APPROVED"
+                              ? "#2e7d32"
+                              : card.approval_status === "REJECTED"
+                                ? "#c62828"
+                                : "#e65100",
+                        }}
+                      />
+                    )}
+
+                    {/* Tags */}
+                    {show("tags", "card") && card.tags.length > 0 && (
+                      <Box sx={{ mt: 1.5, pt: 1.5, borderTop: "1px dashed", borderColor: "divider" }}>
                         <Typography
                           variant="caption"
-                          sx={{ color: "text.secondary", fontSize: "0.75rem" }}
+                          sx={{
+                            display: "block",
+                            mb: 0.5,
+                            textTransform: "uppercase",
+                            fontSize: "0.65rem",
+                            letterSpacing: 0.8,
+                            color: "text.secondary",
+                            fontWeight: 600,
+                          }}
                         >
-                          {(() => {
-                            const stDef = portal.type_info?.subtypes?.find(
-                              (st) => st.key === card.subtype
-                            );
-                            return stDef ? stLabel(stDef) : card.subtype;
-                          })()}
+                          {t("portal.tags")}
                         </Typography>
-                      )}
-                    </Box>
-                  </Box>
+                        <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
+                        {card.tags.slice(0, 4).map((tag) => (
+                          <Chip
+                            key={tag.id}
+                            label={tag.name}
+                            size="small"
+                            sx={{
+                              height: 24,
+                              fontSize: "0.73rem",
+                              px: 0.5,
+                              bgcolor: tag.color
+                                ? `${tag.color}18`
+                                : "action.selected",
+                              color: tag.color || "text.secondary",
+                              fontWeight: 500,
+                            }}
+                          />
+                        ))}
+                        {card.tags.length > 4 && (
+                          <Chip
+                            label={`+${card.tags.length - 4}`}
+                            size="small"
+                            sx={{ height: 24, fontSize: "0.73rem" }}
+                          />
+                        )}
+                        </Box>
+                      </Box>
+                    )}
 
-                  {/* Description preview */}
-                  {show("description", "card") && card.description && (
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        mb: 1.5,
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                        fontSize: "0.82rem",
-                        lineHeight: 1.6,
-                        color: "text.secondary",
-                      }}
-                    >
-                      {new DOMParser().parseFromString(card.description, "text/html").body.textContent ?? ""}
-                    </Typography>
-                  )}
+                    {/* Card-level relations */}
+                    {cardRelTypes.length > 0 && card.relations.length > 0 && (() => {
+                      const cardRelKeys = new Set(cardRelTypes.map((r) => r.key));
+                      // One chip per related CARD, not per relation: a card
+                      // reached through two relation types rendered twice, and
+                      // the "+N" counted relations rather than cards. The tile
+                      // names *what* this card is connected to; the verbs are on
+                      // the detail panel.
+                      const seenRelated = new Set<string>();
+                      const visible = card.relations.filter((r) => {
+                        if (!cardRelKeys.has(r.type)) return false;
+                        if (seenRelated.has(r.related_id)) return false;
+                        seenRelated.add(r.related_id);
+                        return true;
+                      });
+                      if (visible.length === 0) return null;
+                      return (
+                        <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mt: 1.5 }}>
+                          {visible.slice(0, 4).map((rel) => (
+                            <Chip
+                              key={rel.related_id}
+                              label={rel.related_name}
+                              size="small"
+                              variant="outlined"
+                              sx={{ height: 24, fontSize: "0.73rem", px: 0.5, fontWeight: 500 }}
+                            />
+                          ))}
+                          {visible.length > 4 && (
+                            <Chip
+                              label={`+${visible.length - 4}`}
+                              size="small"
+                              sx={{ height: 24, fontSize: "0.73rem" }}
+                            />
+                          )}
+                        </Box>
+                      );
+                    })()}
 
-                  {/* Key fields */}
-                  {cardVisibleFields.length > 0 && (
+                    {/* Bottom row: stakeholders + data_quality */}
+                    {(show("subscribers", "card") || show("data_quality", "card")) && (
                     <Box
                       sx={{
                         display: "flex",
-                        flexWrap: "wrap",
-                        gap: 2,
-                        mb: 1.5,
+                        alignItems: "center",
+                        gap: 1,
+                        mt: 2,
+                        pt: 1.5,
+                        borderTop: 1,
+                        borderColor: "divider",
                       }}
                     >
-                      {cardVisibleFields.slice(0, 3).map((field) => {
-                        const val = card.attributes?.[field.key];
-                        if (val === null || val === undefined || val === "")
-                          return null;
-                        return (
-                          <Box key={field.key} sx={{ minWidth: 0 }}>
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                display: "block",
-                                fontSize: "0.68rem",
-                                textTransform: "uppercase",
-                                letterSpacing: 0.5,
-                                color: "text.secondary",
+                      {/* Stakeholders */}
+                      {show("subscribers", "card") && card.stakeholders && card.stakeholders.length > 0 && (
+                        <Tooltip
+                          title={card.stakeholders
+                            .map(
+                              (s) =>
+                                `${s.display_name} (${ROLE_LABEL_KEYS[s.role] ? t(ROLE_LABEL_KEYS[s.role]) : s.role})`
+                            )
+                            .join(", ")}
+                        >
+                          <AvatarGroup
+                            max={3}
+                            sx={{
+                              "& .MuiAvatar-root": {
+                                width: 24,
+                                height: 24,
+                                fontSize: "0.6rem",
                                 fontWeight: 600,
-                                mb: 0.4,
-                              }}
-                            >
-                              {fieldLabel(field)}
-                            </Typography>
-                            <FieldValue value={val} field={field} />
-                          </Box>
-                        );
-                      })}
+                                border: "2px solid #fff",
+                              },
+                            }}
+                          >
+                            {card.stakeholders.map((s, i) => (
+                              <Avatar
+                                key={i}
+                                sx={{
+                                  bgcolor:
+                                    s.role === "responsible"
+                                      ? typeColor
+                                      : "#9e9e9e",
+                                }}
+                              >
+                                {initials(s.display_name)}
+                              </Avatar>
+                            ))}
+                          </AvatarGroup>
+                        </Tooltip>
+                      )}
+
+                      <Box sx={{ flex: 1 }} />
+
+                      {/* Completion */}
+                      {show("data_quality", "card") && (
+                      <>
+                      <LinearProgress
+                        variant="determinate"
+                        value={card.data_quality}
+                        sx={{
+                          width: 60,
+                          height: 4,
+                          borderRadius: 2,
+                          bgcolor: "action.hover",
+                          "& .MuiLinearProgress-bar": {
+                            bgcolor: bandColor(card.data_quality),
+                            borderRadius: 2,
+                          },
+                        }}
+                      />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontSize: "0.73rem",
+                          color: "text.secondary",
+                          fontWeight: 600,
+                          minWidth: 32,
+                          textAlign: "right",
+                        }}
+                      >
+                        {Math.round(card.data_quality)}%
+                      </Typography>
+                      </>
+                      )}
                     </Box>
-                  )}
+                    )}
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            ))}
+          </Box>
 
-                  {/* Lifecycle */}
-                  {show("lifecycle", "card") && (
-                    <LifecycleBar lifecycle={card.lifecycle} t={t} />
-                  )}
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={(_, p) => setPage(p)}
+                color="primary"
+                size={isMobile ? "small" : "medium"}
+              />
+            </Box>
+          )}
+        </Box>
 
-                  {/* Approval Status */}
-                  {show("approval_status", "card", false) && card.approval_status && card.approval_status !== "DRAFT" && (
+        {/* Detail Dialog */}
+        <Dialog
+          open={!!selectedFs}
+          onClose={() => setSelectedFs(null)}
+          maxWidth="md"
+          fullWidth
+          fullScreen={isMobile}
+        >
+          {selectedFs && (
+            <>
+              <DialogTitle
+                sx={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 2,
+                  pb: 1,
+                  bgcolor: "action.hover",
+                  borderBottom: 1,
+                  borderColor: "divider",
+                }}
+              >
+                {selectedFs.logo_updated_at ? (
+                  <Box sx={{ mt: 0.5 }}>
+                    <CardLogoAvatar
+                      cardId={selectedFs.id}
+                      logoUpdatedAt={selectedFs.logo_updated_at}
+                      typeIcon={portal.type_info?.icon || "description"}
+                      typeColor={typeColor}
+                      size={48}
+                    />
+                  </Box>
+                ) : (
+                  <Box
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 2,
+                      bgcolor: `${typeColor}12`,
+                      border: `1px solid ${typeColor}30`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      mt: 0.5,
+                    }}
+                  >
+                    <Icon
+                      name={portal.type_info?.icon || "description"}
+                      size={28}
+                      color={typeColor}
+                    />
+                  </Box>
+                )}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography
+                    variant="h5"
+                    fontWeight={700}
+                    sx={{ color: "text.primary" }}
+                  >
+                    {selectedFs.name}
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.25,
+                      mt: 1,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <Chip
-                      label={card.approval_status}
+                      label={portal.type_info ? typeLabel(portal.type_info) : selectedFs.type}
                       size="small"
                       sx={{
-                        mt: 1,
-                        height: 24,
-                        fontSize: "0.73rem",
+                        height: 28,
+                        fontSize: "0.8rem",
+                        px: 0.75,
+                        bgcolor: `${typeColor}15`,
+                        color: typeColor,
                         fontWeight: 600,
-                        px: 0.5,
+                      }}
+                    />
+                    {selectedFs.subtype && (
+                      <Chip
+                        label={
+                          (() => {
+                            const stDef = portal.type_info?.subtypes?.find(
+                              (st) => st.key === selectedFs.subtype
+                            );
+                            return stDef ? stLabel(stDef) : selectedFs.subtype;
+                          })()
+                        }
+                        size="small"
+                        variant="outlined"
+                        sx={{ height: 28, fontSize: "0.8rem", px: 0.75 }}
+                      />
+                    )}
+                    {show("data_quality", "detail") && (
+                    <Chip
+                      label={t("portal.complete", { percent: Math.round(selectedFs.data_quality) })}
+                      size="small"
+                      sx={{
+                        height: 28,
+                        fontSize: "0.8rem",
+                        px: 0.75,
+                        // Tinted rather than the solid band colour, but bucketed
+                        // by the same bands so it can't disagree with the bar
+                        // above it.
+                        bgcolor: QUALITY_CHIP_BG[bandOf(selectedFs.data_quality)],
+                        color: QUALITY_CHIP_FG[bandOf(selectedFs.data_quality)],
+                        fontWeight: 600,
+                      }}
+                    />
+                    )}
+                    {show("approval_status", "detail") && selectedFs.approval_status && selectedFs.approval_status !== "DRAFT" && (
+                    <Chip
+                      label={selectedFs.approval_status}
+                      size="small"
+                      sx={{
+                        height: 28,
+                        fontSize: "0.8rem",
+                        px: 0.75,
+                        fontWeight: 600,
                         bgcolor:
-                          card.approval_status === "APPROVED"
+                          selectedFs.approval_status === "APPROVED"
                             ? "#e8f5e9"
-                            : card.approval_status === "REJECTED"
+                            : selectedFs.approval_status === "REJECTED"
                               ? "#ffebee"
                               : "#fff3e0",
                         color:
-                          card.approval_status === "APPROVED"
+                          selectedFs.approval_status === "APPROVED"
                             ? "#2e7d32"
-                            : card.approval_status === "REJECTED"
+                            : selectedFs.approval_status === "REJECTED"
                               ? "#c62828"
                               : "#e65100",
                       }}
                     />
-                  )}
+                    )}
+                  </Box>
+                </Box>
+                <IconButton onClick={() => setSelectedFs(null)} sx={{ mt: -0.5 }}>
+                  <Icon name="close" size={24} />
+                </IconButton>
+              </DialogTitle>
+              <DialogContent sx={{ pt: 3 }}>
+                {/* Description */}
+                {show("description", "detail") && selectedFs.description && (
+                  <Box sx={{ mb: 3 }}>
+                    <Typography
+                      variant="subtitle2"
+                      fontWeight={700}
+                      sx={{
+                        mb: 0.75,
+                        textTransform: "uppercase",
+                        fontSize: "0.75rem",
+                        letterSpacing: 1,
+                        color: "text.secondary",
+                      }}
+                    >
+                      {t("portal.description")}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        lineHeight: 1.7,
+                        whiteSpace: "pre-wrap",
+                        color: "text.primary",
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: DOMPurify.sanitize(selectedFs.description || ""),
+                      }}
+                    />
+                  </Box>
+                )}
 
-                  {/* Tags */}
-                  {show("tags", "card") && card.tags.length > 0 && (
-                    <Box sx={{ mt: 1.5, pt: 1.5, borderTop: "1px dashed", borderColor: "divider" }}>
+                {/* Lifecycle */}
+                {show("lifecycle", "detail") && selectedFs.lifecycle &&
+                  Object.values(selectedFs.lifecycle).some(Boolean) && (
+                    <Box sx={{ mb: 3 }}>
                       <Typography
-                        variant="caption"
+                        variant="subtitle2"
+                        fontWeight={700}
                         sx={{
-                          display: "block",
-                          mb: 0.5,
+                          mb: 1.25,
                           textTransform: "uppercase",
-                          fontSize: "0.65rem",
-                          letterSpacing: 0.8,
+                          fontSize: "0.75rem",
+                          letterSpacing: 1,
                           color: "text.secondary",
-                          fontWeight: 600,
                         }}
                       >
-                        {t("portal.tags")}
+                        {t("portal.lifecycle")}
                       </Typography>
-                      <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
-                      {card.tags.slice(0, 4).map((tag) => (
+                      <Box sx={{ display: "flex", gap: 2.5, flexWrap: "wrap" }}>
+                        {[
+                          { key: "plan", label: t("lifecycle.plan") },
+                          { key: "phaseIn", label: t("lifecycle.phaseIn") },
+                          { key: "active", label: t("lifecycle.active") },
+                          { key: "phaseOut", label: t("lifecycle.phaseOut") },
+                          { key: "endOfLife", label: t("lifecycle.endOfLife") },
+                        ].map((phase) => {
+                          const date = selectedFs.lifecycle?.[phase.key];
+                          if (!date) return null;
+                          return (
+                            <Box key={phase.key}>
+                              <Typography
+                                variant="caption"
+                                sx={{ display: "block", fontSize: "0.73rem", color: "text.secondary", mb: 0.25 }}
+                              >
+                                {phase.label}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                fontWeight={600}
+                                sx={{ color: "text.primary" }}
+                              >
+                                {date}
+                              </Typography>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                      <LifecycleBar lifecycle={selectedFs.lifecycle} t={t} />
+                    </Box>
+                  )}
+
+                {/* Attributes */}
+                {portal.type_info?.fields_schema?.map((section) => {
+                  const detailFieldKeys = new Set(detailVisibleFields.map((f) => f.key));
+                  const fieldsWithValues = section.fields.filter(
+                    (f) =>
+                      detailFieldKeys.has(f.key) &&
+                      selectedFs.attributes?.[f.key] !== undefined &&
+                      selectedFs.attributes?.[f.key] !== null &&
+                      selectedFs.attributes?.[f.key] !== ""
+                  );
+                  if (fieldsWithValues.length === 0) return null;
+                  return (
+                    <Box key={section.section} sx={{ mb: 3 }}>
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={700}
+                        sx={{
+                          mb: 1.25,
+                          textTransform: "uppercase",
+                          fontSize: "0.75rem",
+                          letterSpacing: 1,
+                          color: "text.secondary",
+                        }}
+                      >
+                        {rl(section.section, section.translations)}
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                          gap: 2,
+                        }}
+                      >
+                        {fieldsWithValues.map((field) => (
+                          <Box key={field.key}>
+                            <Typography
+                              variant="caption"
+                              sx={{ display: "block", fontSize: "0.73rem", color: "text.secondary", mb: 0.25 }}
+                            >
+                              {fieldLabel(field)}
+                            </Typography>
+                            <FieldValue
+                              value={selectedFs.attributes?.[field.key]}
+                              field={field}
+                            />
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  );
+                })}
+
+                {/* Stakeholders */}
+                {show("subscribers", "detail") && selectedFs.stakeholders &&
+                  selectedFs.stakeholders.length > 0 && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={700}
+                        sx={{
+                          mb: 1.25,
+                          textTransform: "uppercase",
+                          fontSize: "0.75rem",
+                          letterSpacing: 1,
+                          color: "text.secondary",
+                        }}
+                      >
+                        {t("portal.stakeholders")}
+                      </Typography>
+                      <Box
+                        sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}
+                      >
+                        {selectedFs.stakeholders.map((sub, i) => (
+                          <Box
+                            key={i}
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                              bgcolor: "action.selected",
+                              borderRadius: 2,
+                              px: 1.5,
+                              py: 0.75,
+                            }}
+                          >
+                            <Avatar
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                fontSize: "0.73rem",
+                                fontWeight: 700,
+                                bgcolor:
+                                  sub.role === "responsible"
+                                    ? typeColor
+                                    : "#9e9e9e",
+                              }}
+                            >
+                              {initials(sub.display_name)}
+                            </Avatar>
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                fontWeight={600}
+                                sx={{ fontSize: "0.85rem", color: "text.primary" }}
+                              >
+                                {sub.display_name}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ display: "block", fontSize: "0.73rem", color: "text.secondary", mb: 0.25 }}
+                              >
+                                {ROLE_LABEL_KEYS[sub.role] ? t(ROLE_LABEL_KEYS[sub.role]) : sub.role}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
+                {/* Tags */}
+                {show("tags", "detail") && selectedFs.tags.length > 0 && (
+                  <Box sx={{ mb: 3 }}>
+                    <Typography
+                      variant="subtitle2"
+                      fontWeight={700}
+                      sx={{
+                        mb: 1,
+                        textTransform: "uppercase",
+                        fontSize: "0.75rem",
+                        letterSpacing: 1,
+                        color: "text.secondary",
+                      }}
+                    >
+                      {t("portal.tags")}
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                      {selectedFs.tags.map((tag) => (
                         <Chip
                           key={tag.id}
-                          label={tag.name}
+                          label={
+                            tag.group_name
+                              ? `${tag.group_name}: ${tag.name}`
+                              : tag.name
+                          }
                           size="small"
                           sx={{
-                            height: 24,
-                            fontSize: "0.73rem",
-                            px: 0.5,
-                            bgcolor: tag.color
-                              ? `${tag.color}18`
-                              : "action.selected",
+                            height: 28,
+                            fontSize: "0.8rem",
+                            px: 0.75,
+                            bgcolor: tag.color ? `${tag.color}18` : "action.selected",
                             color: tag.color || "text.secondary",
                             fontWeight: 500,
                           }}
                         />
                       ))}
-                      {card.tags.length > 4 && (
-                        <Chip
-                          label={`+${card.tags.length - 4}`}
-                          size="small"
-                          sx={{ height: 24, fontSize: "0.73rem" }}
-                        />
-                      )}
-                      </Box>
                     </Box>
-                  )}
-
-                  {/* Card-level relations */}
-                  {cardRelTypes.length > 0 && card.relations.length > 0 && (() => {
-                    const cardRelKeys = new Set(cardRelTypes.map((r) => r.key));
-                    const visible = card.relations.filter((r) => cardRelKeys.has(r.type));
-                    if (visible.length === 0) return null;
-                    return (
-                      <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mt: 1.5 }}>
-                        {visible.slice(0, 4).map((rel, i) => (
-                          <Chip
-                            key={`${rel.related_id}-${i}`}
-                            label={rel.related_name}
-                            size="small"
-                            variant="outlined"
-                            sx={{ height: 24, fontSize: "0.73rem", px: 0.5, fontWeight: 500 }}
-                          />
-                        ))}
-                        {visible.length > 4 && (
-                          <Chip
-                            label={`+${visible.length - 4}`}
-                            size="small"
-                            sx={{ height: 24, fontSize: "0.73rem" }}
-                          />
-                        )}
-                      </Box>
-                    );
-                  })()}
-
-                  {/* Bottom row: stakeholders + data_quality */}
-                  {(show("subscribers", "card") || show("data_quality", "card")) && (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      mt: 2,
-                      pt: 1.5,
-                      borderTop: 1,
-                      borderColor: "divider",
-                    }}
-                  >
-                    {/* Stakeholders */}
-                    {show("subscribers", "card") && card.stakeholders && card.stakeholders.length > 0 && (
-                      <Tooltip
-                        title={card.stakeholders
-                          .map(
-                            (s) =>
-                              `${s.display_name} (${ROLE_LABEL_KEYS[s.role] ? t(ROLE_LABEL_KEYS[s.role]) : s.role})`
-                          )
-                          .join(", ")}
-                      >
-                        <AvatarGroup
-                          max={3}
-                          sx={{
-                            "& .MuiAvatar-root": {
-                              width: 24,
-                              height: 24,
-                              fontSize: "0.6rem",
-                              fontWeight: 600,
-                              border: "2px solid #fff",
-                            },
-                          }}
-                        >
-                          {card.stakeholders.map((s, i) => (
-                            <Avatar
-                              key={i}
-                              sx={{
-                                bgcolor:
-                                  s.role === "responsible"
-                                    ? typeColor
-                                    : "#9e9e9e",
-                              }}
-                            >
-                              {initials(s.display_name)}
-                            </Avatar>
-                          ))}
-                        </AvatarGroup>
-                      </Tooltip>
-                    )}
-
-                    <Box sx={{ flex: 1 }} />
-
-                    {/* Completion */}
-                    {show("data_quality", "card") && (
-                    <>
-                    <LinearProgress
-                      variant="determinate"
-                      value={card.data_quality}
-                      sx={{
-                        width: 60,
-                        height: 4,
-                        borderRadius: 2,
-                        bgcolor: "action.hover",
-                        "& .MuiLinearProgress-bar": {
-                          bgcolor: bandColor(card.data_quality),
-                          borderRadius: 2,
-                        },
-                      }}
-                    />
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        fontSize: "0.73rem",
-                        color: "text.secondary",
-                        fontWeight: 600,
-                        minWidth: 32,
-                        textAlign: "right",
-                      }}
-                    >
-                      {Math.round(card.data_quality)}%
-                    </Typography>
-                    </>
-                    )}
-                  </Box>
-                  )}
-                </CardContent>
-              </CardActionArea>
-            </Card>
-          ))}
-        </Box>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={(_, p) => setPage(p)}
-              color="primary"
-              size={isMobile ? "small" : "medium"}
-            />
-          </Box>
-        )}
-      </Box>
-
-      {/* Detail Dialog */}
-      <Dialog
-        open={!!selectedFs}
-        onClose={() => setSelectedFs(null)}
-        maxWidth="md"
-        fullWidth
-        fullScreen={isMobile}
-      >
-        {selectedFs && (
-          <>
-            <DialogTitle
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 2,
-                pb: 1,
-                bgcolor: "action.hover",
-                borderBottom: 1,
-                borderColor: "divider",
-              }}
-            >
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 2,
-                  bgcolor: `${typeColor}12`,
-                  border: `1px solid ${typeColor}30`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  mt: 0.5,
-                }}
-              >
-                <Icon
-                  name={portal.type_info?.icon || "description"}
-                  size={28}
-                  color={typeColor}
-                />
-              </Box>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography
-                  variant="h5"
-                  fontWeight={700}
-                  sx={{ color: "text.primary" }}
-                >
-                  {selectedFs.name}
-                </Typography>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1.25,
-                    mt: 1,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <Chip
-                    label={portal.type_info ? typeLabel(portal.type_info) : selectedFs.type}
-                    size="small"
-                    sx={{
-                      height: 28,
-                      fontSize: "0.8rem",
-                      px: 0.75,
-                      bgcolor: `${typeColor}15`,
-                      color: typeColor,
-                      fontWeight: 600,
-                    }}
-                  />
-                  {selectedFs.subtype && (
-                    <Chip
-                      label={
-                        (() => {
-                          const stDef = portal.type_info?.subtypes?.find(
-                            (st) => st.key === selectedFs.subtype
-                          );
-                          return stDef ? stLabel(stDef) : selectedFs.subtype;
-                        })()
-                      }
-                      size="small"
-                      variant="outlined"
-                      sx={{ height: 28, fontSize: "0.8rem", px: 0.75 }}
-                    />
-                  )}
-                  {show("data_quality", "detail") && (
-                  <Chip
-                    label={t("portal.complete", { percent: Math.round(selectedFs.data_quality) })}
-                    size="small"
-                    sx={{
-                      height: 28,
-                      fontSize: "0.8rem",
-                      px: 0.75,
-                      // Tinted rather than the solid band colour, but bucketed
-                      // by the same bands so it can't disagree with the bar
-                      // above it.
-                      bgcolor: QUALITY_CHIP_BG[bandOf(selectedFs.data_quality)],
-                      color: QUALITY_CHIP_FG[bandOf(selectedFs.data_quality)],
-                      fontWeight: 600,
-                    }}
-                  />
-                  )}
-                  {show("approval_status", "detail") && selectedFs.approval_status && selectedFs.approval_status !== "DRAFT" && (
-                  <Chip
-                    label={selectedFs.approval_status}
-                    size="small"
-                    sx={{
-                      height: 28,
-                      fontSize: "0.8rem",
-                      px: 0.75,
-                      fontWeight: 600,
-                      bgcolor:
-                        selectedFs.approval_status === "APPROVED"
-                          ? "#e8f5e9"
-                          : selectedFs.approval_status === "REJECTED"
-                            ? "#ffebee"
-                            : "#fff3e0",
-                      color:
-                        selectedFs.approval_status === "APPROVED"
-                          ? "#2e7d32"
-                          : selectedFs.approval_status === "REJECTED"
-                            ? "#c62828"
-                            : "#e65100",
-                    }}
-                  />
-                  )}
-                </Box>
-              </Box>
-              <IconButton onClick={() => setSelectedFs(null)} sx={{ mt: -0.5 }}>
-                <Icon name="close" size={24} />
-              </IconButton>
-            </DialogTitle>
-            <DialogContent sx={{ pt: 3 }}>
-              {/* Description */}
-              {show("description", "detail") && selectedFs.description && (
-                <Box sx={{ mb: 3 }}>
-                  <Typography
-                    variant="subtitle2"
-                    fontWeight={700}
-                    sx={{
-                      mb: 0.75,
-                      textTransform: "uppercase",
-                      fontSize: "0.75rem",
-                      letterSpacing: 1,
-                      color: "text.secondary",
-                    }}
-                  >
-                    {t("portal.description")}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      lineHeight: 1.7,
-                      whiteSpace: "pre-wrap",
-                      color: "text.primary",
-                    }}
-                    dangerouslySetInnerHTML={{
-                      __html: DOMPurify.sanitize(selectedFs.description || ""),
-                    }}
-                  />
-                </Box>
-              )}
-
-              {/* Lifecycle */}
-              {show("lifecycle", "detail") && selectedFs.lifecycle &&
-                Object.values(selectedFs.lifecycle).some(Boolean) && (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography
-                      variant="subtitle2"
-                      fontWeight={700}
-                      sx={{
-                        mb: 1.25,
-                        textTransform: "uppercase",
-                        fontSize: "0.75rem",
-                        letterSpacing: 1,
-                        color: "text.secondary",
-                      }}
-                    >
-                      {t("portal.lifecycle")}
-                    </Typography>
-                    <Box sx={{ display: "flex", gap: 2.5, flexWrap: "wrap" }}>
-                      {[
-                        { key: "plan", label: t("lifecycle.plan") },
-                        { key: "phaseIn", label: t("lifecycle.phaseIn") },
-                        { key: "active", label: t("lifecycle.active") },
-                        { key: "phaseOut", label: t("lifecycle.phaseOut") },
-                        { key: "endOfLife", label: t("lifecycle.endOfLife") },
-                      ].map((phase) => {
-                        const date = selectedFs.lifecycle?.[phase.key];
-                        if (!date) return null;
-                        return (
-                          <Box key={phase.key}>
-                            <Typography
-                              variant="caption"
-                              sx={{ display: "block", fontSize: "0.73rem", color: "text.secondary", mb: 0.25 }}
-                            >
-                              {phase.label}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              fontWeight={600}
-                              sx={{ color: "text.primary" }}
-                            >
-                              {date}
-                            </Typography>
-                          </Box>
-                        );
-                      })}
-                    </Box>
-                    <LifecycleBar lifecycle={selectedFs.lifecycle} t={t} />
                   </Box>
                 )}
 
-              {/* Attributes */}
-              {portal.type_info?.fields_schema?.map((section) => {
-                const detailFieldKeys = new Set(detailVisibleFields.map((f) => f.key));
-                const fieldsWithValues = section.fields.filter(
-                  (f) =>
-                    detailFieldKeys.has(f.key) &&
-                    selectedFs.attributes?.[f.key] !== undefined &&
-                    selectedFs.attributes?.[f.key] !== null &&
-                    selectedFs.attributes?.[f.key] !== ""
-                );
-                if (fieldsWithValues.length === 0) return null;
-                return (
-                  <Box key={section.section} sx={{ mb: 3 }}>
-                    <Typography
-                      variant="subtitle2"
-                      fontWeight={700}
-                      sx={{
-                        mb: 1.25,
-                        textTransform: "uppercase",
-                        fontSize: "0.75rem",
-                        letterSpacing: 1,
-                        color: "text.secondary",
-                      }}
-                    >
-                      {rl(section.section, section.translations)}
-                    </Typography>
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-                        gap: 2,
-                      }}
-                    >
-                      {fieldsWithValues.map((field) => (
-                        <Box key={field.key}>
+                {/* Relations — only show detail-visible relation types */}
+                {detailRelTypes.length > 0 && selectedFs.relations.length > 0 && (() => {
+                  const detailRelKeys = new Set(detailRelTypes.map((r) => r.key));
+                  const visibleRels = selectedFs.relations.filter((r) => detailRelKeys.has(r.type));
+                  if (visibleRels.length === 0) return null;
+
+                  // Group by RELATION TYPE + direction, not by the rendered verb:
+                  // several relation types may share a card-type pair, and two of
+                  // them can carry the same verb (or the same translation in some
+                  // locale), which silently merged them into one section — and
+                  // that string was the React key too.
+                  const grouped = new Map<
+                    string,
+                    { label: string; rels: typeof visibleRels }
+                  >();
+                  for (const rel of visibleRels) {
+                    const rt = portal.relation_types.find((r) => r.key === rel.type);
+                    const label =
+                      rel.direction === "outgoing"
+                        ? (rt ? relLabel(rt) : rel.type)
+                        : (rt ? relLabel(rt, true) : rel.type);
+                    const groupKey = `${rel.type}|${rel.direction}`;
+                    const bucket = grouped.get(groupKey);
+                    if (bucket) bucket.rels.push(rel);
+                    else grouped.set(groupKey, { label, rels: [rel] });
+                  }
+
+                  return (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={700}
+                        sx={{
+                          mb: 1.25,
+                          textTransform: "uppercase",
+                          fontSize: "0.75rem",
+                          letterSpacing: 1,
+                          color: "text.secondary",
+                        }}
+                      >
+                        {t("portal.relatedItems")}
+                      </Typography>
+                      {[...grouped].map(([groupKey, { label, rels }]) => (
+                        <Box key={groupKey} sx={{ mb: 2 }}>
                           <Typography
                             variant="caption"
-                            sx={{ display: "block", fontSize: "0.73rem", color: "text.secondary", mb: 0.25 }}
-                          >
-                            {fieldLabel(field)}
-                          </Typography>
-                          <FieldValue
-                            value={selectedFs.attributes?.[field.key]}
-                            field={field}
-                          />
-                        </Box>
-                      ))}
-                    </Box>
-                  </Box>
-                );
-              })}
-
-              {/* Stakeholders */}
-              {show("subscribers", "detail") && selectedFs.stakeholders &&
-                selectedFs.stakeholders.length > 0 && (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography
-                      variant="subtitle2"
-                      fontWeight={700}
-                      sx={{
-                        mb: 1.25,
-                        textTransform: "uppercase",
-                        fontSize: "0.75rem",
-                        letterSpacing: 1,
-                        color: "text.secondary",
-                      }}
-                    >
-                      {t("portal.stakeholders")}
-                    </Typography>
-                    <Box
-                      sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}
-                    >
-                      {selectedFs.stakeholders.map((sub, i) => (
-                        <Box
-                          key={i}
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 1,
-                            bgcolor: "action.selected",
-                            borderRadius: 2,
-                            px: 1.5,
-                            py: 0.75,
-                          }}
-                        >
-                          <Avatar
+                            fontWeight={600}
                             sx={{
-                              width: 32,
-                              height: 32,
-                              fontSize: "0.73rem",
-                              fontWeight: 700,
-                              bgcolor:
-                                sub.role === "responsible"
-                                  ? typeColor
-                                  : "#9e9e9e",
+                              mb: 0.75,
+                              display: "block",
+                              fontSize: "0.78rem",
+                              color: "text.secondary",
                             }}
                           >
-                            {initials(sub.display_name)}
-                          </Avatar>
-                          <Box>
-                            <Typography
-                              variant="body2"
-                              fontWeight={600}
-                              sx={{ fontSize: "0.85rem", color: "text.primary" }}
-                            >
-                              {sub.display_name}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              sx={{ display: "block", fontSize: "0.73rem", color: "text.secondary", mb: 0.25 }}
-                            >
-                              {ROLE_LABEL_KEYS[sub.role] ? t(ROLE_LABEL_KEYS[sub.role]) : sub.role}
-                            </Typography>
+                            {label}
+                          </Typography>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: 1,
+                            }}
+                          >
+                            {rels.map((rel, i) => (
+                              <Chip
+                                key={`${rel.related_id}-${i}`}
+                                label={rel.related_name}
+                                size="small"
+                                variant="outlined"
+                                sx={{ height: 28, fontSize: "0.8rem", px: 0.75, fontWeight: 500 }}
+                              />
+                            ))}
                           </Box>
                         </Box>
                       ))}
                     </Box>
-                  </Box>
-                )}
+                  );
+                })()}
 
-              {/* Tags */}
-              {show("tags", "detail") && selectedFs.tags.length > 0 && (
-                <Box sx={{ mb: 3 }}>
-                  <Typography
-                    variant="subtitle2"
-                    fontWeight={700}
-                    sx={{
-                      mb: 1,
-                      textTransform: "uppercase",
-                      fontSize: "0.75rem",
-                      letterSpacing: 1,
-                      color: "text.secondary",
-                    }}
-                  >
-                    {t("portal.tags")}
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                    {selectedFs.tags.map((tag) => (
-                      <Chip
-                        key={tag.id}
-                        label={
-                          tag.group_name
-                            ? `${tag.group_name}: ${tag.name}`
-                            : tag.name
-                        }
-                        size="small"
-                        sx={{
-                          height: 28,
-                          fontSize: "0.8rem",
-                          px: 0.75,
-                          bgcolor: tag.color ? `${tag.color}18` : "action.selected",
-                          color: tag.color || "text.secondary",
-                          fontWeight: 500,
-                        }}
-                      />
-                    ))}
-                  </Box>
-                </Box>
-              )}
-
-              {/* Relations — only show detail-visible relation types */}
-              {detailRelTypes.length > 0 && selectedFs.relations.length > 0 && (() => {
-                const detailRelKeys = new Set(detailRelTypes.map((r) => r.key));
-                const visibleRels = selectedFs.relations.filter((r) => detailRelKeys.has(r.type));
-                if (visibleRels.length === 0) return null;
-
-                const grouped: Record<string, typeof visibleRels> = {};
-                for (const rel of visibleRels) {
-                  const rt = portal.relation_types.find((r) => r.key === rel.type);
-                  const label =
-                    rel.direction === "outgoing"
-                      ? (rt ? relLabel(rt) : rel.type)
-                      : (rt ? relLabel(rt, true) : rel.type);
-                  grouped[label] = grouped[label] || [];
-                  grouped[label].push(rel);
-                }
-
-                return (
-                  <Box sx={{ mb: 3 }}>
+                {/* Last updated */}
+                {selectedFs.updated_at && (
+                  <>
+                    <Divider sx={{ my: 2 }} />
                     <Typography
-                      variant="subtitle2"
-                      fontWeight={700}
-                      sx={{
-                        mb: 1.25,
-                        textTransform: "uppercase",
-                        fontSize: "0.75rem",
-                        letterSpacing: 1,
-                        color: "text.secondary",
-                      }}
+                      variant="caption"
+                      sx={{ color: "text.disabled", fontSize: "0.75rem" }}
                     >
-                      {t("portal.relatedItems")}
+                      {t("portal.lastUpdated", { date: formatDate(selectedFs.updated_at) })}
                     </Typography>
-                    {Object.entries(grouped).map(([label, rels]) => (
-                      <Box key={label} sx={{ mb: 2 }}>
-                        <Typography
-                          variant="caption"
-                          fontWeight={600}
-                          sx={{
-                            mb: 0.75,
-                            display: "block",
-                            fontSize: "0.78rem",
-                            color: "text.secondary",
-                          }}
-                        >
-                          {label}
-                        </Typography>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 1,
-                          }}
-                        >
-                          {rels.map((rel, i) => (
-                            <Chip
-                              key={`${rel.related_id}-${i}`}
-                              label={rel.related_name}
-                              size="small"
-                              variant="outlined"
-                              sx={{ height: 28, fontSize: "0.8rem", px: 0.75, fontWeight: 500 }}
-                            />
-                          ))}
-                        </Box>
-                      </Box>
-                    ))}
-                  </Box>
-                );
-              })()}
-
-              {/* Last updated */}
-              {selectedFs.updated_at && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography
-                    variant="caption"
-                    sx={{ color: "text.disabled", fontSize: "0.75rem" }}
-                  >
-                    {t("portal.lastUpdated", { date: formatDate(selectedFs.updated_at) })}
-                  </Typography>
-                </>
-              )}
-            </DialogContent>
-          </>
-        )}
-      </Dialog>
+                  </>
+                )}
+              </DialogContent>
+            </>
+          )}
+        </Dialog>
+        </>
+      )}
     </Box>
   );
 }

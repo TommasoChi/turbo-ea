@@ -16,6 +16,40 @@ Toppen af kortet viser:
 - **Datakvalitets­ring** — Visuel indikator for informationsfuldstændighed (0–100%)
 - **Handlingsmenu** — Arkivér, slet og godkendelseshandlinger. Indeholder også en ét-klik **Observe this card**-skifter (når korttypen definerer en Observer-rolle), så enhver bruger med læseadgang kan følge kortet uden at skulle gå gennem Stakeholders-fanen.
 
+### Eget logo
+
+Kort af en type, der tillader det, kan have deres eget **logo** i stedet for
+det generiske typeikon — så et Application-kort for SAP, Kafka eller Jira viser
+produktets eget mærke. Genkendelige logoer gør en fortegnelse langt hurtigere
+at skimme, især for dem, der læser den frem for at vedligeholde den.
+
+Hold musen over ikonet øverst til venstre på kortet og klik for at **uploade**,
+**erstatte** eller **fjerne** billedet. Typeikonet forsvinder ikke: det flytter
+ned som et lille mærke i hjørnet af logoet, så man stadig kan se med det samme,
+hvilken slags kort man har foran sig.
+
+- **Tilladte formater** — PNG, JPEG, WebP eller GIF på op til 1 MB. SVG
+  accepteres ikke, da formatet kan indeholde scripts.
+- **Hvor det vises** — i kortets overskrift, i den valgfri **Logo**-kolonne i
+  [Inventory](inventory.md) og i enhver offentliggjort webportal bygget på den
+  korttype.
+- **Uden logo** — kortet falder tilbage til sit typeikon præcis som før.
+
+Logoer er tilgængelige for de korttyper, en administrator har slået dem til
+for; fra start er det Application og IT Component. Se
+[Metamodel](../admin/metamodel.md).
+
+Klik på logoet og vælg **Vælg et brandikon…** for at hente det fra et indbygget
+sæt på flere tusinde brandmærker — søg efter produktet på navn og vælg det; der
+skal ingen billedfil til. **Upload** bruger din egen fil i stedet. En
+AI-assistent forbundet via [MCP](../admin/mcp.md) kan sætte logoer på samme måde
+i stor skala, og er et produkt ikke i sættet, henter den selv mærket.
+
+Den samme menu findes i **Logo**-kolonnen i [Inventory](inventory.md) — hold
+musen over en logo-celle og klik — så et netop importeret landskab kan få
+mærker uden at åbne hvert enkelt kort. Det er ét kort ad gangen med vilje: et
+logo tilbydes hverken til udfyld-nedad eller Mass Edit.
+
 ### Godkendelses­arbejdsproces
 
 Kort kan gå gennem en godkendelses­cyklus:
@@ -82,7 +116,7 @@ Viser alle forbindelser til andre kort, grupperet efter relations­type. For hve
 
 - **Relateret kortnavn** — Klik for at navigere til det relaterede kort
 - **Relations­type** — Forbindelsens karakter (f.eks. "uses", "runs on", "depends on")
-- **Tilføj relation** — Klik på **+** for at åbne dialogen for den relation. Den viser matchende kort, mens du skriver (de bedste match først, flere hentes, når du ruller), og skjuler dem, der allerede er tilknyttet, med en billedtekst der viser hvor mange. Et klik på et kort tilknytter det med det samme, og det vises som en chip øverst — klik på chippens **×** for at fortryde den tilføjelse. Dialogen forbliver åben, så du kan tilføje så mange du vil, og på telefon åbner den i fuld skærm. Relationer uden deres eget afsnit nås fra knappen **Tilføj relation** nederst i afsnittet
+- **Tilføj relation** — Klik på **+** for at åbne dialogen for den relation. Den viser matchende kort, mens du skriver (de bedste match først, flere hentes, når du ruller), og skjuler dem, der allerede er tilknyttet, med en billedtekst der viser hvor mange. Et klik på et kort tilknytter det med det samme, og det vises som en chip øverst — klik på chippens **×** for at fortryde den tilføjelse. Dialogen forbliver åben, så du kan tilføje så mange du vil, og på telefon åbner den i fuld skærm. Relationer uden deres eget afsnit nås fra knappen **Tilføj relation** nederst i afsnittet. Når den tilknyttede type er hierarkisk (forretningsevne, organisation og lignende), viser dialogen den som et indrykket træ i stedet for en alfabetisk liste, så du kan vælge en underevne ud fra dens gren. Søgningen bevarer et træfs overordnede kort som kontekst, og kort du ikke kan vælge (allerede tilknyttet, netop tilføjet eller kortet selv) bliver liggende nedtonet, så niveauerne omkring dem stadig kan læses.
 - **Sortering** — Relaterede kort vises alfabetisk efter navn
 - **Fjern relation** — Klik på slet-ikonet for at fjerne en relation
 - **Gruppér efter undertype** — Når en relationssektion har mange relaterede kort, grupperes de automatisk i sammenklappelige undertype-grupper (hver med et antal), med en afsluttende **Ingen undertype**-gruppe til uklassificerede kort. Brug gruppe/liste-knappen i sektionsoverskriften for at skifte mellem den grupperede og den flade visning.

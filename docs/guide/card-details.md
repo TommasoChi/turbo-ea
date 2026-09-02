@@ -16,6 +16,42 @@ The top of the card shows:
 - **Data quality ring** — Visual indicator of information completeness (0–100%)
 - **Actions menu** — Archive, delete, and approval actions. Also includes a one-click **Observe this card** toggle (when the card type defines an Observer role) so any user with view access can follow the card without going through the Stakeholders tab.
 
+### Custom Logo
+
+Cards of a type that allows it can carry their own **logo** instead of the
+generic type icon — so an Application for SAP, Kafka or Jira shows that
+product's own mark. Recognisable logos make an inventory much faster to scan,
+especially for people who are reading it rather than maintaining it.
+
+Hover the icon at the top-left of the card and click it to **upload**,
+**replace** or **remove** the image. The type icon does not disappear: it moves
+to a small badge on the corner of the logo, so you can still tell at a glance
+what kind of card you are looking at.
+
+- **Accepted formats** — PNG, JPEG, WebP or GIF, up to 1 MB. SVG is not
+  accepted, because it can carry scripts.
+- **Where it shows** — the card header, the optional **Logo** column in the
+  [Inventory](inventory.md), and any published web portal built on that card
+  type.
+- **When there is no logo** — the card falls back to its type icon, exactly as
+  before.
+
+Logos are available on card types where an administrator has switched them on;
+out of the box that is Application and IT Component. See
+[Meta Model](../admin/metamodel.md).
+
+Click the logo and choose **Choose a brand icon…** to pick from a built-in
+pack of several thousand brand marks — search for the product by name and
+select it; no image file is needed. **Upload** takes your own file instead.
+An AI assistant connected over [MCP](../admin/mcp.md) can set logos the same
+way in bulk, and where a product is not in the pack it will fetch the mark
+itself and upload it.
+
+The same menu is available from the **Logo** column in the
+[Inventory](inventory.md) — hover a logo cell and click — so marks can be put
+on a freshly imported landscape without opening every card. It is one card at a
+time on purpose: a logo is not offered to fill-down or Mass Edit.
+
 ### Approval Workflow
 
 Cards can go through an approval cycle:
@@ -82,7 +118,7 @@ Shows all connections to other cards, grouped by relation type. For each relatio
 
 - **Related card name** — Click to navigate to the related card
 - **Relation type** — The nature of the connection (e.g., "uses", "runs on", "depends on")
-- **Add relation** — Click **+** to open the add dialog for that relation. It lists matching cards as you type (best matches first, more load as you scroll) and hides the ones already linked, with a caption showing how many. Clicking a card links it straight away and it appears as a chip at the top — click a chip's **×** to undo that one. The dialog stays open so you can add as many as you like, and on a phone it opens full-screen. Relations that have no section of their own are reached from the **Add Relation** button at the bottom of the section
+- **Add relation** — Click **+** to open the add dialog for that relation. It lists matching cards as you type (best matches first, more load as you scroll) and hides the ones already linked, with a caption showing how many. Clicking a card links it straight away and it appears as a chip at the top — click a chip's **×** to undo that one. The dialog stays open so you can add as many as you like, and on a phone it opens full-screen. Relations that have no section of their own are reached from the **Add Relation** button at the bottom of the section. When the linked type is hierarchical — Business Capability, Organization and the like — the dialog shows it as an indented tree instead of an alphabetical list, so you can pick a sub-capability by its branch. Searching keeps a match's parents visible for context, and cards you can't pick (already linked, just added, or this card itself) stay in place greyed out so the levels around them still read correctly.
 - **Ordering** — Related cards are listed alphabetically by name
 - **Remove relation** — Click the delete icon to remove a relation
 - **Group by subtype** — When a relation section has many related cards, they are automatically grouped into collapsible subtype buckets (each with a count), with a trailing **No subtype** bucket for unclassified cards. Use the group/list toggle in the section header to switch between the grouped and flat views.

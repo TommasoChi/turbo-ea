@@ -72,6 +72,7 @@ from app.services import card_lifecycle, card_reference, card_write_service, not
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_completeness import missing_mandatory
 from app.services.card_flags import orphaned_condition, stale_condition
+from app.services.card_logo_service import logo_updated_map
 from app.services.card_resolver import CardResolver
 from app.services.card_uniqueness import check_sibling_name_unique
 from app.services.card_write_service import (
@@ -101,7 +102,12 @@ from app.services.search_rank import search_filter, search_rank
 router = APIRouter(prefix="/cards", tags=["cards"])
 
 
-def _card_to_response(card: Card, *, strip_cost_keys: frozenset[str] = frozenset()) -> CardResponse:
+def _card_to_response(
+    card: Card,
+    *,
+    strip_cost_keys: frozenset[str] = frozenset(),
+    logo_updated_at: datetime | None = None,
+) -> CardResponse:
     tags = []
     for t in card.tags or []:
         tags.append(
@@ -146,6 +152,7 @@ def _card_to_response(card: Card, *, strip_cost_keys: frozenset[str] = frozenset
         updated_by=str(card.updated_by) if card.updated_by else None,
         created_at=card.created_at,
         updated_at=card.updated_at,
+        logo_updated_at=logo_updated_at,
         tags=tags,
         stakeholders=stakeholder_refs,
     )
@@ -188,7 +195,29 @@ async def _cost_redaction_map(
 async def _card_response_with_cost_check(db: AsyncSession, user: User, card: Card) -> CardResponse:
     """Build a CardResponse, redacting cost fields per the cost permission rule."""
     redact = await _cost_redaction_map(db, user, [card])
-    return _card_to_response(card, strip_cost_keys=redact.get(card.id, frozenset()))
+    logos = await logo_updated_map(db, [card])
+    return _card_to_response(
+        card,
+        strip_cost_keys=redact.get(card.id, frozenset()),
+        logo_updated_at=logos.get(card.id),
+    )
+
+
+async def _require_card_read(db: AsyncSession, user: User, card_id: uuid.UUID) -> None:
+    """Read gate for card-scoped GETs: `inventory.view` OR stakeholder `card.view`
+    OR — when the card is an Initiative — the PPM module's `ppm.view`. The PPM
+    detail page (/ppm/:id, route-gated on ppm.view) fronts the Initiative card
+    itself, so ppm.view must be able to read it (#1043). The type lookup runs
+    only on the fallback path, so the common path costs nothing extra.
+    """
+    if await PermissionService.check_permission(db, user, "inventory.view", card_id, "card.view"):
+        return
+    card_type = (await db.execute(select(Card.type).where(Card.id == card_id))).scalar_one_or_none()
+    if card_type == "Initiative" and await PermissionService.has_app_permission(
+        db, user, "ppm.view"
+    ):
+        return
+    raise HTTPException(403, "Insufficient permissions")
 
 
 _ALLOWED_SORT_COLUMNS = {
@@ -348,8 +377,14 @@ async def list_cards(
     result = await db.execute(q)
     cards = list(result.scalars().all())
     redact = await _cost_redaction_map(db, user, cards)
+    logos = await logo_updated_map(db, cards)
     items = [
-        _card_to_response(card, strip_cost_keys=redact.get(card.id, frozenset())) for card in cards
+        _card_to_response(
+            card,
+            strip_cost_keys=redact.get(card.id, frozenset()),
+            logo_updated_at=logos.get(card.id),
+        )
+        for card in cards
     ]
 
     return CardListResponse(items=items, total=total, page=page, page_size=page_size)
@@ -973,9 +1008,7 @@ async def cards_counts(
 async def get_card(
     card_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    await PermissionService.require_permission(
-        db, user, "inventory.view", card_id=uuid.UUID(card_id), card_permission="card.view"
-    )
+    await _require_card_read(db, user, uuid.UUID(card_id))
     result = await db.execute(
         select(Card)
         .where(Card.id == uuid.UUID(card_id))
@@ -996,9 +1029,7 @@ async def get_hierarchy(
 ):
     """Return ancestors (root→parent), children, and computed level."""
     uid = uuid.UUID(card_id)
-    await PermissionService.require_permission(
-        db, user, "inventory.view", card_id=uid, card_permission="card.view"
-    )
+    await _require_card_read(db, user, uid)
     result = await db.execute(select(Card).where(Card.id == uid))
     card = result.scalar_one_or_none()
     if not card:
@@ -2571,9 +2602,7 @@ async def get_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
-    await PermissionService.require_permission(
-        db, user, "inventory.view", card_id=uuid.UUID(card_id), card_permission="card.view"
-    )
+    await _require_card_read(db, user, uuid.UUID(card_id))
     q = (
         select(Event)
         .where(Event.card_id == uuid.UUID(card_id))
@@ -2737,7 +2766,11 @@ async def export_json(
                         prov_name = prov_name_map[rel.target_id]
                     else:
                         continue
-                    provider_names_by_card.setdefault(card_key, []).append(prov_name)
+                    # Name each provider once per card: a card may be linked to
+                    # the same provider through several relation types.
+                    names = provider_names_by_card.setdefault(card_key, [])
+                    if prov_name not in names:
+                        names.append(prov_name)
 
     redact = await _cost_redaction_map(db, user, list(cards))
     items = []

@@ -34,7 +34,7 @@ import ColumnFreezeToggle from "@/components/grid/ColumnFreezeToggle";
 import ColumnOrderSection, {
   type ColumnOrderItem,
 } from "@/components/grid/ColumnOrderSection";
-import { useTypeLabel, useSubtypeLabel, useFieldLabel, useOptionLabel } from "@/hooks/useResolveLabel";
+import { useTypeLabel, useSubtypeLabel, useFieldLabel, useOptionLabel, useRelationLabel } from "@/hooks/useResolveLabel";
 import { api } from "@/api/client";
 import { readableTextColor } from "@/lib/color";
 import {
@@ -93,6 +93,13 @@ interface Props {
   width: number;
   onWidthChange: (w: number) => void;
   relevantRelTypes?: RelationType[];
+  /**
+   * Every relation type touching the selected type, *without* the per-related-type
+   * dedup `relevantRelTypes` applies for columns. Relation facets are keyed by
+   * relation type, so they must come from this list or cards related only through
+   * a second relation type on the same card-type pair become unfilterable.
+   */
+  allRelevantRelTypes?: RelationType[];
   // Stakeholder roles of the single selected type — one togglable
   // "Stakeholders: <role>" column each.
   stakeholderRoles?: StakeholderRoleOption[];
@@ -209,11 +216,15 @@ export function normalizeSelectAttributeFilters(
  * `rel_<relatedCardTypeKey>` (`rel_Provider`) because the report thinks in
  * related card types — an untranslated entry matches nothing and silently
  * empties the grid. Rules: a key that already is a relation-type key is kept;
- * a related-card-type key moves its names under the FIRST mapped relation
- * type (the same dedup rule the relation columns use), merging with any
- * existing values; an unresolvable key is DROPPED — a deep link may degrade
- * to showing more items, never to an inexplicable zero. Returns the SAME
- * object reference when nothing changed, so callers can setState safely.
+ * a related-card-type key that maps to exactly ONE relation type moves its
+ * names under it, merging with any existing values; a key mapping to SEVERAL
+ * relation types is KEPT AS THE CARD-TYPE KEY, because the matcher resolves it
+ * as the union across them — collapsing to the first would silently filter by
+ * one relationship when the report meant "related to this card type at all",
+ * and spreading it across the group would AND them. An unresolvable key is
+ * DROPPED — a deep link may degrade to showing more items, never to an
+ * inexplicable zero. Returns the SAME object reference when nothing changed,
+ * so callers can setState safely.
  */
 export function normalizeRelationFilterKeys(
   relations: Filters["relations"],
@@ -228,8 +239,14 @@ export function normalizeRelationFilterKeys(
       continue;
     }
     const mapped = cardTypeToRelTypes.get(key);
+    if (mapped && mapped.length > 1) {
+      // Several relation types reach this card type — keep the card-type key
+      // and let the matcher union across them.
+      next[key] = [...new Set([...(next[key] ?? []), ...names])];
+      continue;
+    }
     changed = true;
-    if (mapped && mapped.length > 0) {
+    if (mapped && mapped.length === 1) {
       const target = mapped[0];
       next[target] = [...new Set([...(next[target] ?? []), ...names])];
     }
@@ -309,6 +326,7 @@ export default function InventoryFilterSidebar({
   width,
   onWidthChange,
   relevantRelTypes = [],
+  allRelevantRelTypes = [],
   stakeholderRoles = [],
   relationsMap,
   tagGroups = [],
@@ -335,6 +353,7 @@ export default function InventoryFilterSidebar({
 }: Props) {
   const { t } = useTranslation(["inventory", "common"]);
   const typeLabel = useTypeLabel();
+  const relLabel = useRelationLabel();
   const stLabel = useSubtypeLabel();
   const fieldLabel = useFieldLabel();
   const optLabel = useOptionLabel();
@@ -455,11 +474,27 @@ export default function InventoryFilterSidebar({
     onFiltersChange({ ...filters, relations: next });
   };
 
+  // Relation facets are per relation type (never deduped by related card type), so
+  // each of several relation types sharing a card-type pair gets its own filter row.
+  const filterRelTypes = allRelevantRelTypes.length > 0 ? allRelevantRelTypes : relevantRelTypes;
+
+  // How many relation types in this list reach the same related card type — a
+  // count above 1 means the plain type label is ambiguous and needs its verb.
+  const relTypeCountByOtherKey = useMemo(() => {
+    const selected = filters.types.length === 1 ? filters.types[0] : "";
+    const counts = new Map<string, number>();
+    for (const rt of filterRelTypes) {
+      const otherKey = rt.source_type_key === selected ? rt.target_type_key : rt.source_type_key;
+      counts.set(otherKey, (counts.get(otherKey) || 0) + 1);
+    }
+    return counts;
+  }, [filterRelTypes, filters.types]);
+
   // Compute unique related names per relation type for filter dropdowns
   const relFilterOptions = useMemo(() => {
-    if (!relationsMap || relevantRelTypes.length === 0) return new Map<string, string[]>();
+    if (!relationsMap || filterRelTypes.length === 0) return new Map<string, string[]>();
     const result = new Map<string, string[]>();
-    for (const rt of relevantRelTypes) {
+    for (const rt of filterRelTypes) {
       const index = relationsMap.get(rt.key);
       if (!index) continue;
       const names = new Set<string>();
@@ -473,7 +508,7 @@ export default function InventoryFilterSidebar({
       }
     }
     return result;
-  }, [relationsMap, relevantRelTypes]);
+  }, [relationsMap, filterRelTypes]);
 
   const clearAll = () =>
     onFiltersChange({ types: [], search: "", subtypes: [], lifecyclePhases: [], dataQualityBands: [], approvalStatuses: [], showArchived: false, attributes: {}, relations: {}, tagIds: [], mineScope: null, orphanedOnly: false, staleOnly: false });
@@ -1201,13 +1236,19 @@ export default function InventoryFilterSidebar({
                   />
                   <Collapse in={expandedSections.relationships}>
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2, px: 0.5 }}>
-                      {relevantRelTypes.map((rt) => {
+                      {filterRelTypes.map((rt) => {
                         const options = relFilterOptions.get(rt.key);
                         if (!options || options.length === 0) return null;
                         const isSource = rt.source_type_key === (filters.types.length === 1 ? filters.types[0] : "");
                         const otherTypeKey = isSource ? rt.target_type_key : rt.source_type_key;
                         const otherType = types.find((t) => t.key === otherTypeKey);
-                        const label = otherType ? typeLabel(otherType) : otherTypeKey;
+                        const baseLabel = otherType ? typeLabel(otherType) : otherTypeKey;
+                        // Several relation types can reach the same card type; the
+                        // verb is what tells their filter rows apart.
+                        const label =
+                          (relTypeCountByOtherKey.get(otherTypeKey) || 0) > 1
+                            ? `${baseLabel} · ${isSource ? relLabel(rt) : relLabel(rt, true)}`
+                            : baseLabel;
                         const selected = (filters.relations || {})[rt.key] || [];
                         const searchKey = `rel_${rt.key}`;
                         const searchTerm = (dropdownSearch[searchKey] || "").toLowerCase();
@@ -2030,6 +2071,9 @@ const METADATA_COLUMNS = [
 export const CORE_COLUMNS = [
   { key: "core_type", icon: "category", tKey: "common:labels.type" as const },
   { key: "core_name", icon: "label", tKey: "common:labels.name" as const },
+  // Off by default (`optIn`), and offered only for types that allow logos —
+  // see LOGO_COLUMN_KEY below.
+  { key: "core_logo", icon: "image", tKey: "columns.logo" as const, optIn: true },
   { key: "core_reference", icon: "tag", tKey: "columns.id" as const },
   { key: "core_parent", icon: "account_tree", tKey: "columns.parent" as const },
   { key: "core_path", icon: "account_tree", tKey: "columns.path" as const },
@@ -2041,7 +2085,28 @@ export const CORE_COLUMNS = [
   { key: "core_tags", icon: "sell", tKey: "columns.tags" as const },
 ];
 
-export const CORE_COLUMN_KEYS = CORE_COLUMNS.map((c) => c.key);
+// The core columns a freshly-selected type (or a "Reset columns") turns on.
+// `optIn` columns are deliberately excluded: the Logo column makes every row
+// taller, so it is a choice the user makes rather than one made for them.
+export const CORE_COLUMN_KEYS = CORE_COLUMNS.filter((c) => !c.optIn).map((c) => c.key);
+
+export const LOGO_COLUMN_KEY = "core_logo";
+
+/**
+ * Whether the Logo column applies to what is on screen — i.e. whether any of
+ * the card types in view can carry a logo at all.
+ *
+ * Shared by the column picker (which offers the column) and the grid (which
+ * builds it), so the two can never disagree about when it exists. With no type
+ * filter the grid shows everything, so any logo-bearing type qualifies.
+ */
+export function logoColumnApplies(types: CardType[], selectedTypeKeys: string[]): boolean {
+  const inView =
+    selectedTypeKeys.length > 0
+      ? types.filter((ct) => selectedTypeKeys.includes(ct.key))
+      : types;
+  return inView.some((ct) => ct.allow_card_logo);
+}
 
 // Columns that must always be visible — deselecting them broke the inventory
 // in subtle ways (no way to identify rows, broken keyboard navigation, etc.).
@@ -2181,8 +2246,12 @@ function ColumnsTab({
     filters.types.length === 1
       ? types.find((ct) => ct.key === filters.types[0])?.subtypes?.length ?? 0
       : 0;
+  // Logos exist per card type, so the column is only offered when a type in
+  // view can actually carry one.
+  const logoAvailable = logoColumnApplies(types, filters.types);
   const filteredCore = CORE_COLUMNS.filter((c) => {
     if (c.key === "core_subtype" && !singleTypeWithSubtypes) return false;
+    if (c.key === LOGO_COLUMN_KEY && !logoAvailable) return false;
     if (searchQuery && !t(c.tKey).toLowerCase().includes(lowerSearch)) return false;
     return true;
   });

@@ -12,6 +12,110 @@ Los portales web son útiles para compartir información de arquitectura con par
 - **Directorio de servicios** — Publique los servicios de TI y sus responsables
 - **Mapa de capacidades** — Proporcione una vista pública de las capacidades de negocio
 
+## Tipo de portal
+
+Cada portal publica una de tres vistas, elegida con **Tipo de portal**:
+
+| Tipo | Lo que ven los visitantes |
+|------|---------------------------|
+| **Lista de tarjetas** | Una cuadrícula de tarjetas con búsqueda y filtros: el portal clásico, configurado con las propiedades de más abajo. |
+| **Tablero de cartera PPM** | El [tablero de cartera PPM](../guide/ppm.md) de solo lectura: cronograma, indicadores de estado y presupuesto frente a real de cada iniciativa activa. |
+| **Navegador de procesos** | La [Casa de Procesos](../guide/bpm.md) de solo lectura: su jerarquía de procesos de negocio y el flujo BPMN publicado de cada proceso. |
+
+### Portales de cartera PPM
+
+Elegir **Tablero de cartera PPM** convierte el portal en una vista directiva de su
+cartera de proyectos, accesible mediante un enlace público **sin cuenta, sin licencia
+y sin inicio de sesión**. Pensado para el caso habitual en el que la dirección quiere
+visibilidad de la cartera pero no va a mantener otras credenciales.
+
+El tablero siempre se refiere a tarjetas de **Iniciativa**, por lo que el selector de
+tipo de tarjeta queda bloqueado. Los filtros de **subtipos** y **etiquetas** siguen
+aplicándose, que es como se publica un único programa en lugar de toda la cartera.
+
+Los visitantes ven el mismo tablero que su equipo dentro de Turbo EA: el cronograma
+trimestral, los indicadores de plazo/coste/alcance, las barras de CapEx y OpEx, la
+agrupación por cualquier tipo de tarjeta relacionado y la vista emergente del informe
+de estado al pasar el ratón sobre la fecha de **Último informe**. Al hacer clic en una
+iniciativa se entra en Turbo EA tras el inicio de sesión habitual; una vez dentro,
+aterriza en la iniciativa que pulsó.
+
+Tres interruptores controlan lo que revela el tablero publicado:
+
+| Interruptor | Por defecto | Publica |
+|-------------|-------------|---------|
+| **Mostrar presupuesto y gasto real** | Activado | Las barras de CapEx y OpEx y la cifra de presupuesto total |
+| **Mostrar comentarios de los informes de estado** | Activado | Resumen, logros y próximos pasos en la vista emergente. La fecha del informe y los indicadores de estado siempre se muestran |
+| **Mostrar nombres de los jefes de proyecto** | **Desactivado** | Los nombres de jefes de proyecto y autores de informes. Desactivado por defecto porque los nombres son datos personales |
+
+El tablero también se abre con una agrupación y un subtipo que usted elige:
+
+| Ajuste | Por defecto | Efecto |
+|--------|-------------|--------|
+| **Se abre agrupado por** | Organización | Qué agrupación muestra el tablero primero |
+| **Se abre mostrando el subtipo** | Todos | Qué subtipo se selecciona primero |
+
+Ambos son solo un punto de partida: el visitante puede cambiar cualquiera de los
+dos y nada se recuerda, así que volver a abrir el portal regresa a lo que usted
+configuró. Es distinto del **filtro por subtipos** de más arriba, que decide qué
+iniciativas se publican.
+
+!!! note
+    Hay cosas que nunca se publican, elija lo que elija: los campos de coste guardados
+    en la propia tarjeta de Iniciativa, las direcciones de correo de los usuarios y todo
+    lo que hay en la página de detalle de una iniciativa: paquetes de trabajo, hitos,
+    riesgos, tareas e historial de informes quedan detrás del inicio de sesión.
+
+Un portal de cartera puede protegerse con SSO como cualquier otro portal. Desactivar el
+módulo PPM en **Admin > Configuración** deja inaccesibles de inmediato todos los portales
+de cartera, sin necesidad de despublicarlos uno a uno.
+
+### Portales de navegador de procesos
+
+Seleccionar **Navegador de procesos** convierte el portal en una vista de solo
+lectura de su **Casa de Procesos**, disponible en un enlace público **sin cuenta,
+sin licencia y sin inicio de sesión**. Existe para quienes más necesitan entender
+cómo funciona la organización y menos probabilidades tienen de tener acceso: nuevas
+incorporaciones, auditores, personal de primera línea y socios externos.
+
+El portal siempre se limita a tarjetas de **Proceso de Negocio**, por lo que el
+selector de tipo de tarjeta queda bloqueado. Los filtros de **subtipos** y
+**etiquetas** siguen aplicándose: así es como publica una rama de la casa en lugar
+de toda ella.
+
+Los visitantes obtienen la misma casa que usa su equipo dentro de Turbo EA: la
+jerarquía agrupada en filas por tipo de proceso, el control de nivel, el zoom y las
+migas de pan, la búsqueda, los coloreados, el filtro por organización y el número de
+columnas. Al abrir un proceso se muestran su resumen, sus pasos y su **flujo BPMN
+publicado**: a pantalla completa, con desplazamiento y zoom, tal como lo ve su equipo.
+
+Dos ajustes y dos estados de apertura controlan la casa publicada:
+
+| Ajuste | Predeterminado | Efecto |
+|--------|----------------|--------|
+| **Mostrar sistemas vinculados en cada paso** | **Desactivado** | Los nombres de las aplicaciones, objetos de datos, componentes de TI y organizaciones vinculados a cada paso. Desactivado por defecto porque revela qué sistemas ejecutan sus procesos |
+| **Se abre en el nivel** | 2 | Qué profundidad de jerarquía se muestra primero |
+| **Se abre coloreado por** | Tipo de proceso | Qué atributo colorea las cajas primero |
+
+Los dos últimos son solo un punto de partida: un visitante puede cambiar cualquiera
+de los controles y no se recuerda nada, así que reabrir el portal vuelve a lo que
+usted configuró aquí.
+
+!!! note
+    Algunas cosas nunca se publican, elija lo que elija: las aplicaciones, objetos de
+    datos y costes detrás de un proceso, la matriz Proceso × Aplicación y la vista de
+    dependencias, y cualquier BPMN que no esté **publicado**: borradores, versiones
+    pendientes, archivadas y retiradas permanecen detrás del inicio de sesión.
+
+A diferencia de un portal de cartera, cuyas filas llevan a Turbo EA tras el inicio de
+sesión habitual, un portal de navegador de procesos **no enlaza a ninguna parte**. Es
+deliberado: una casa publicada para lectores sin cuenta debe responder «cómo hacemos
+esto» sin mostrar una puerta que no pueden abrir.
+
+Un portal de navegador de procesos puede protegerse con SSO como cualquier otro
+portal. Desactivar el módulo BPM en **Admin > Configuración** apaga de inmediato todos
+los portales de procesos; no tiene que despublicarlos uno por uno.
+
 ## Protección de acceso
 
 Cada portal tiene un **modo de acceso** que controla quién puede abrirlo:

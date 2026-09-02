@@ -33,12 +33,13 @@ Opening a diagram launches the full-screen DrawIO editor in a same-origin iframe
 Use the **Insert Cards** dialog (opened from the toolbar or the right-click menu) to add cards to the canvas:
 
 - Type **chips with live counts** on the left rail filter the results.
-- Search by name on the right rail; each row carries a checkbox.
-- **Insert selected** adds the picked cards in a grid; **Insert all** adds every card matching the current filter (with a confirm step past 50 results).
+- Search by name on the right rail; each row carries a checkbox. Narrow the filter to a single hierarchical type and the list becomes an indented tree, so you can find a card by its branch.
+- Ticked cards appear as chips above the list and stay picked while you change the filter or the search — remove one with its ×.
+- **Select all shown** ticks everything the current filter leaves on screen; **Insert selected** adds the picked cards to the canvas in a grid.
 
 The same dialog opens in single-select mode for **Change Linked Card** and **Link to Existing Card**.
 
-Each card on the canvas shows its **card-type icon** as a small white glyph in the top-left corner, next to the type colour — so a card's type is conveyed by both icon and colour. This matches the icons used across the app and improves readability for colour-blind users. The icon appears on cards inserted from now on. To add icons to cards already on an older diagram, click **Apply card-type icons** in the editor toolbar.
+Each card on the canvas shows its **card-type icon** as a small white glyph in the top-left corner, next to the type colour — so a card's type is conveyed by both icon and colour. This matches the icons used across the app and improves readability for colour-blind users. The icon appears on cards inserted from now on. To add icons to cards already on an older diagram, click **Apply card-type icons** in the editor toolbar. A card that carries its own **logo** shows that instead, with the card-type icon kept as a small badge in its corner — so the shape says both which product it is and what kind of card. Logos appear when the diagram opens and refresh when one is changed; a card with no logo, and every card of a type where an administrator has switched logos off, is drawn exactly as before. A **Card logos** tick in the same menu turns them off if you want an unadorned diagram; it is on by default.
 
 ### Right-click actions
 

@@ -33,7 +33,7 @@ import { toBlob, toSvg } from "html-to-image";
 import { saveAs } from "file-saver";
 import { useNavigate } from "react-router";
 import { api } from "@/api/client";
-import { readableTypeColor } from "@/lib/color";
+import { readableTypeColor, tint as washColor } from "@/lib/color";
 import {
   buildFieldCatalog,
   EMPTY_VALUE,
@@ -44,6 +44,7 @@ import {
 } from "@/lib/cardDisplayFields";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import MenuSectionHeader from "@/components/MenuSectionHeader";
+import { cardLogoUrl } from "@/components/CardLogoAvatar";
 import { getCurrentPhase } from "@/components/LifecycleBadge";
 import LdvShowOnCard from "./LdvShowOnCard";
 import LdvLineStyleSelect from "./LdvLineStyleSelect";
@@ -155,6 +156,51 @@ function computeObstacles(nodeList: Node[]): ObstacleBounds[] {
 
 const LP_CIRCUMFERENCE = 2 * Math.PI * 15; // ~94.25
 
+// The logo tile in the card's top-left corner, and how far into that corner it
+// tucks. Small and close in: the mark is an aid to recognition, not the card's
+// subject — every pixel it takes is a pixel of name, since the text starts
+// under it (see TEXT_TOP_WITH_LOGO).
+const LOGO_SIZE = 22;
+const LOGO_INSET = 4;
+
+/**
+ * Where the type icon sits when a logo has taken the top-left corner: on the
+ * card's top edge, immediately LEFT of the lifecycle dot.
+ *
+ * The dot is 9px wide with a 1.5px border, inset 6px from the right, so this
+ * clears it by 3px. Computed rather than written as a literal so the two can
+ * never drift apart — and applied only when a dot is actually drawn, since
+ * reserving room for one that isn't there would leave the icon floating.
+ */
+const DOT_INSET = 6;
+const DOT_BOX = 9 + 1.5 * 2;
+const TYPE_ICON_RIGHT_BESIDE_DOT = DOT_INSET + DOT_BOX + 3;
+
+/**
+ * Where the card's text starts when a logo is present: clear of the top band
+ * the logo, the type icon and the lifecycle dot occupy.
+ *
+ * The alternative was the diagram's grammar — symmetric side gutters and a
+ * wrapping label, keeping the name centred beside the mark. Measured on the
+ * real card it makes long names WORSE: the gutters leave ~124px, which breaks
+ * "Salesforce Customer Community" as "Salesforce / Customer…" — fewer
+ * characters than the single cut line it replaced. A 200px card is too narrow
+ * for a 14px name to share a line with anything. So the text takes the whole
+ * width and starts under the band instead, which is what actually shows a long
+ * name whole.
+ *
+ * A few pixels ABOVE the logo's bottom edge, not level with it: a line box is
+ * taller than its glyphs, so half the difference sits above them as leading.
+ * Offsetting by the box would push the letters visibly below the mark, where a
+ * card with no logo has its name starting level with the bottom of the type
+ * icon. This is the same relationship, measured in glyphs.
+ *
+ * 3 is the measured limit, not a guess: at 5 a full-width first line's
+ * ascenders poked into the tile's bottom-left corner. The room comes out of
+ * the logo instead — it is the mark that should shrink, not the name.
+ */
+const TEXT_TOP_WITH_LOGO = LOGO_INSET + LOGO_SIZE - 3;
+
 const HANDLE_POSITIONS = {
   top: Position.Top,
   bottom: Position.Bottom,
@@ -250,7 +296,19 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
   // by mixing toward white rather than going translucent.
   const tint = isDark ? `rgba(${r},${g},${b},0.22)` : `rgba(${r},${g},${b},0.12)`;
 
-  const name = data.name.length > 26 ? data.name.slice(0, 25) + "\u2026" : data.name;
+  // The whole name. It used to be cut at 26 characters here, in JavaScript,
+  // before CSS ever saw it \u2014 which is why a long name stayed truncated however
+  // much room the card was given. The name now wraps and the clamp below bounds
+  // it, so the cut is the renderer's to make, not this line's.
+  const name = data.name;
+
+  // A logo that fails to load falls the card back to the plain type icon it
+  // rendered before logos existed \u2014 never a broken-image glyph. Keyed on the
+  // URL so a replaced logo is retried rather than suppressed by a past failure.
+  const [logoFailed, setLogoFailed] = useState<string | null>(null);
+  const logoSrc = (data.logoUrl as string | undefined) ?? null;
+  const logoUrl = logoSrc && logoFailed !== logoSrc ? logoSrc : null;
+  const handleLogoError = useCallback(() => setLogoFailed(logoSrc), [logoSrc]);
 
   // Display extensions injected by the parent (see rfNodes memo)
   const lifecyclePhase = (data.lifecyclePhase as string | null | undefined) ?? null;
@@ -434,7 +492,9 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
+        // Centred on a plain card, exactly as before logos existed. With a logo
+        // the text hangs from the band instead, so it cannot drift up into it.
+        justifyContent: logoUrl ? "flex-start" : "center",
         px: 1,
         // Cards are draggable: use the grab/grabbing cursor so it doesn't
         // flicker against React Flow's drag cursor (the previous "pointer" did).
@@ -446,33 +506,78 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
         "&:hover": { boxShadow: 4 },
       }}
     >
-      {/* Card-type icon from the metamodel (top-left corner). Tagged
-          `ldv-type-icon` so image export can drop it — it's a Material Symbols
-          font ligature, which html-to-image can't rasterise (it would emit the
-          raw icon name as text). */}
+      {/* The card's own logo, when it has one and the reader has logos on. It
+          takes the top-left corner — where a card's mark belongs, and where the
+          type icon sat before logos existed — and the NAME keeps out of its way
+          rather than the other way round: see TEXT_GUTTER. Being absolute is
+          what makes that free, since the tile then costs the card no height.
+
+          Deliberately NOT tagged `ldv-type-icon`: that class is the export
+          filter's drop list, and a real <img> is exactly what html-to-image
+          CAN inline (it is same-origin), so a logo exports correctly. */}
+      {logoUrl && (
+        <Box
+          component="img"
+          src={logoUrl}
+          alt=""
+          aria-hidden
+          onError={handleLogoError}
+          sx={{
+            position: "absolute",
+            top: LOGO_INSET,
+            left: LOGO_INSET,
+            width: LOGO_SIZE,
+            height: LOGO_SIZE,
+            boxSizing: "border-box",
+            p: "1px",
+            borderRadius: 0.75,
+            // Never `cover` — a vendor's mark must not be cropped.
+            objectFit: "contain",
+            // A pale wash of the card type's colour rather than paper: a great
+            // many marks are dark ink drawn for a white page, and the node is
+            // already tinted, so a white tile would read as a hole punched in
+            // it. Same treatment, and the same helper, as the diagram cards.
+            bgcolor: washColor(color),
+            pointerEvents: "none",
+          }}
+        />
+      )}
+      {/* Card-type icon from the metamodel. Top-left on a card with no logo,
+          where it has always been; when a logo takes that corner it moves to
+          the top-RIGHT, immediately left of the lifecycle dot, so the two
+          pieces of card chrome read as one row along the top edge and the
+          logo keeps the whole left side to itself.
+
+          Tagged `ldv-type-icon` so image export can drop it — it's a Material
+          Symbols font ligature, which html-to-image can't rasterise (it would
+          emit the raw icon name as text). */}
       {data.typeIcon && (
         <Box
           className="ldv-type-icon"
           sx={{
             position: "absolute",
-            top: 5,
-            left: 6,
             display: "flex",
             lineHeight: 0,
             opacity: 0.9,
             pointerEvents: "none",
+            top: 5,
+            ...(logoUrl
+              ? { right: dotColor ? TYPE_ICON_RIGHT_BESIDE_DOT : DOT_INSET }
+              : { left: 6 }),
           }}
         >
           <MaterialSymbol icon={data.typeIcon} size={16} color={accent} />
         </Box>
       )}
-      {/* Lifecycle status dot (top-right corner) */}
+      {/* Lifecycle status dot (top-right corner). Its size and inset are the
+          constants the type icon measures itself against, so moving one moves
+          the other. */}
       {dotColor && (
         <Box
           sx={{
             position: "absolute",
-            top: 6,
-            right: 6,
+            top: DOT_INSET,
+            right: DOT_INSET,
             width: 9,
             height: 9,
             borderRadius: "50%",
@@ -642,54 +747,82 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
           )}
         />
       ))}
-      <Typography
-        variant="body2"
+      {/* The card's text, centred on the CARD and using its whole width — the
+          same place and the same width as on a card with no logo. On a card
+          that has one it simply starts below the logo's band, which is what
+          keeps a wrapping name clear of the mark without narrowing it. */}
+      <Box
         sx={{
-          fontWeight: 600,
-          lineHeight: 1.3,
-          textAlign: "center",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
           width: "100%",
           textDecoration: changePresentation.strikeThrough ? "line-through" : undefined,
+          mt: logoUrl ? `${TEXT_TOP_WITH_LOGO}px` : 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          minWidth: 0,
         }}
       >
-        {name}
-      </Typography>
-      {extraLines.length > 0 ? (
-        extraLines.slice(0, MAX_CARD_LINES).map((line) => (
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 600,
+            lineHeight: 1.3,
+            textAlign: "center",
+            width: "100%",
+            // Wraps rather than running off: the clamp is what bounds a long
+            // name now that it is no longer cut short before rendering. Two
+            // lines is what the card's height affords beside two caption lines.
+            display: "-webkit-box",
+            // The name takes the room the caption lines leave: two lines
+            // normally, one when the reader has switched on two extra fields.
+            // Without this a full card spills past its own border, which
+            // nothing clips (the badges deliberately overhang it).
+            WebkitLineClamp: extraLines.length > 1 ? 1 : 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            wordBreak: "break-word",
+          }}
+        >
+          {name}
+        </Typography>
+        {extraLines.length > 0 ? (
+          extraLines.slice(0, MAX_CARD_LINES).map((line) => (
+            <Typography
+              key={line.label}
+              variant="caption"
+              sx={{
+                lineHeight: 1.25,
+                maxWidth: "100%",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                color: "text.secondary",
+              }}
+            >
+              <Box component="span" sx={{ color: accent, fontWeight: 600 }}>
+                {line.label}:
+              </Box>{" "}
+              {line.value}
+            </Typography>
+          ))
+        ) : showType ? (
           <Typography
-            key={line.label}
             variant="caption"
             sx={{
-              lineHeight: 1.25,
+              color: accent,
+              fontStyle: "italic",
+              lineHeight: 1.2,
+              mt: 0.25,
               maxWidth: "100%",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              color: "text.secondary",
             }}
           >
-            <Box component="span" sx={{ color: accent, fontWeight: 600 }}>
-              {line.label}:
-            </Box>{" "}
-            {line.value}
+            [{typeLabel({ key: data.typeKey, label: data.typeLabel }) || data.typeLabel}]
           </Typography>
-        ))
-      ) : showType ? (
-        <Typography
-          variant="caption"
-          sx={{
-            color: accent,
-            fontStyle: "italic",
-            lineHeight: 1.2,
-            mt: 0.25,
-          }}
-        >
-          [{typeLabel({ key: data.typeKey, label: data.typeLabel }) || data.typeLabel}]
-        </Typography>
-      ) : null}
+        ) : null}
+      </Box>
     </Box>
   );
 });
@@ -1350,6 +1483,12 @@ function LayeredDependencyInner({
         // "apps"). The card keeps its colour, label and lifecycle dot.
         filter: (node: HTMLElement) =>
           !(node.classList && node.classList.contains("ldv-type-icon")),
+        // Card logos are real same-origin <img>s, so html-to-image inlines them
+        // and they export properly. Should one fail to fetch, this 1×1
+        // transparent GIF is what lands in its place — a broken-image glyph
+        // baked into a saved diagram would be worse than an empty corner.
+        imagePlaceholder:
+          "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
         style: {
           width: `${imageWidth}px`,
           height: `${imageHeight}px`,
@@ -1392,19 +1531,6 @@ function LayeredDependencyInner({
   const [createName, setCreateName] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(false);
-
-  // Real relation-type key per displayed card pair (one type per ordered pair
-  // in the metamodel). Synthetic hierarchy edges are excluded — they render as
-  // plain labelled lines, not relations.
-  const relTypeByPair = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const e of edges) {
-      if (!e.type || e.type === "hierarchy") continue;
-      const k = [e.source, e.target].sort().join("|");
-      if (!m.has(k)) m.set(k, e.type);
-    }
-    return m;
-  }, [edges]);
 
   const openCreateDialog = useCallback(() => {
     setCreateError(false);
@@ -1493,7 +1619,10 @@ function LayeredDependencyInner({
         rels.push({
           sourceCardId: e.source,
           targetCardId: e.target,
-          relationType: relTypeByPair.get([e.source, e.target].sort().join("|")) ?? "",
+          // Each line IS one relation type (several may connect a card pair), so
+          // take it off the edge rather than guessing one per pair. Synthetic
+          // hierarchy lines are not relations and carry no type.
+          relationType: d?.relType && d.relType !== "hierarchy" ? d.relType : "",
           label: d?.relLabel ?? "",
           flow: d?.flowDirection,
           ...route,
@@ -1521,7 +1650,7 @@ function LayeredDependencyInner({
     } finally {
       setCreating(false);
     }
-  }, [createName, creating, getNodes, rfEdges, relTypeByPair, navigate, settings, t]);
+  }, [createName, creating, getNodes, rfEdges, navigate, settings, t]);
 
   // ReactFlow's `fitView` prop only fits on the initial render. When the parent
   // navigates to a new centre, the new graph is laid out at different coordinates
@@ -1641,6 +1770,14 @@ function LayeredDependencyInner({
         // they dug into. Both ring the card in its type colour.
         isCenter: !!centerId && n.id === centerId,
         isExpanded: expandedIds?.has(n.id) ?? false,
+        // Resolved here rather than in the node so flipping the switch
+        // re-patches already-positioned nodes without disturbing their drags.
+        // A card with no logo, and every card of a type whose logos are off,
+        // has no `logo_updated_at` at all — so this is simply null for them.
+        logoUrl:
+          settings.showCardLogos && g?.logo_updated_at
+            ? cardLogoUrl(n.id, g.logo_updated_at)
+            : null,
       };
     },
     [
@@ -1649,6 +1786,7 @@ function LayeredDependencyInner({
       asOfMs,
       centerId,
       expandedIds,
+      settings.showCardLogos,
       settings.showLifecycle,
       settings.showType,
       settings.showSubtype,
@@ -2263,6 +2401,12 @@ function LayeredDependencyInner({
         </Typography>
         {(
           [
+            {
+              group: "cards",
+              key: "showCardLogos",
+              label: t("dependency.showCardLogos"),
+              hint: t("dependency.showCardLogosHint"),
+            },
             {
               group: "cards",
               key: "showHierarchyMarkers",

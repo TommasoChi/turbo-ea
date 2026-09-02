@@ -2,6 +2,13 @@ import { describe, it, expect } from "vitest";
 import {
   buildCardCellData,
   applyCardTypeIcons,
+  applyCardLogos,
+  applyCardLogosToXml,
+  logoKey,
+  logoLookupFor,
+  readCardBoxesFromXml,
+  readCardCellBoxes,
+  CARD_BASE_H,
   buildLdvDiagramXml,
   rollUpInto,
   drillDownInto,
@@ -34,7 +41,9 @@ import {
   type DiagramCardInput,
   type DiagramRelInput,
   type DiagramLayerInput,
+  fanWaypoints,
 } from "./drawio-shapes";
+import { LOGO_BOX_PX } from "./cardLogoImage";
 import { ICON_PATHS } from "./iconPaths";
 
 /** Minimal fake mxGraph model so applyCardTypeIcons can run without DrawIO. */
@@ -42,6 +51,9 @@ type FakeCell = {
   _style: string;
   edge?: boolean;
   value?: { getAttribute: (k: string) => string | null };
+  /** Cell geometry, for the passes that size a logo to the cell it lands on.
+   *  Absent means "no geometry", which falls back to the plain 210×60 card. */
+  _geo?: { width: number; height: number };
 };
 function fakeFrame(cells: Record<string, FakeCell>) {
   const model = {
@@ -53,9 +65,18 @@ function fakeFrame(cells: Record<string, FakeCell>) {
       c._style = s;
     },
   };
-  const graph = { getModel: () => model };
+  const graph = {
+    getModel: () => model,
+    getCellGeometry: (c: FakeCell) => c._geo,
+  };
   return { contentWindow: { __turboGraph: graph } } as unknown as HTMLIFrameElement;
 }
+
+/** A size-agnostic logo lookup, for the tests that are not about geometry. */
+const logos =
+  (byId: Record<string, string>) =>
+  (cardId: string): string | undefined =>
+    byId[cardId];
 function cardCell(cardType: string | null, style: string, edge = false): FakeCell {
   return {
     _style: style,
@@ -1232,6 +1253,7 @@ function expandFrame() {
   const parent = {
     id: "parent-cell",
     value: attrBag({ cardId: "org-1", cardType: "Organization", label: "Nexatech" }),
+    geometry: { x: 0, y: 0, width: 180, height: 50 },
   };
   cells["parent-cell"] = parent;
   const model = {
@@ -1243,20 +1265,34 @@ function expandFrame() {
     setValue: (cell: any, v: unknown) => {
       cell.value = v;
     },
+    // Geometry support: the fanned parallel-edge path reads both endpoints'
+    // boxes and writes a waypoint onto the edge.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getGeometry: (cell: any) => cell.geometry ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setGeometry: (cell: any, g: unknown) => {
+      cell.geometry = g;
+    },
   };
   const graph = {
     getModel: () => model,
     getDefaultParent: () => root,
     getCellGeometry: () => ({ x: 0, y: 0, width: 180, height: 50 }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    insertVertex: (_p: any, id: string, obj: any, _x: number, _y: number, _w: number, _h: number, style: string) => {
-      const cell = { id, value: obj, style };
+    insertVertex: (_p: any, id: string, obj: any, x: number, y: number, w: number, h: number, style: string) => {
+      const cell = { id, value: obj, style, geometry: { x, y, width: w, height: h } };
       cells[id] = cell;
       return cell;
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insertEdge: (_p: any, id: string, _v: unknown, _s: any, _t: any, style: string) => {
-      const cell = { id, value: null, style, edge: true };
+      const geometry = {
+        points: undefined as unknown,
+        clone() {
+          return { ...this, clone: this.clone };
+        },
+      };
+      const cell = { id, value: null, style, edge: true, geometry };
       cells[id] = cell;
       return cell;
     },
@@ -1265,6 +1301,12 @@ function expandFrame() {
     contentWindow: {
       __turboGraph: graph,
       mxUtils: { createXmlDocument: () => ({ createElement: () => attrBag() }) },
+      mxPoint: class {
+        constructor(
+          public x: number,
+          public y: number,
+        ) {}
+      },
     },
   } as unknown as HTMLIFrameElement;
   return { iframe, cells };
@@ -1327,12 +1369,138 @@ describe("expandCardGroup edges", () => {
     expect(inserted[0].relationLabel).toBe("uses");
   });
 
+  it("draws one edge per relation when a child is reached several times", () => {
+    // The card stays ONE vertex — a second cell with the same cardId would trip
+    // the canvas dedup and unlink one of them — so the extra relation becomes an
+    // extra edge on that vertex.
+    const f = expandFrame();
+    const inserted = expandCardGroup(f.iframe, "parent-cell", [
+      { ...expandChild(false), extraRelations: [
+        { relationType: "relOrgToAppOwns", relationId: "rel-2", relationLabel: "owns" },
+      ] },
+    ]);
+
+    const vertices = Object.values(f.cells).filter((c) => !c.edge && c.id !== "parent-cell");
+    const edges = Object.values(f.cells).filter((c) => c.edge);
+    expect(vertices).toHaveLength(1);
+    expect(edges).toHaveLength(2);
+
+    // Each edge carries its OWN relation id and verb.
+    const stamped = edges.map((e) => [
+      e.value.getAttribute("relationId"),
+      e.value.getAttribute("relationType"),
+      e.value.getAttribute("label"),
+    ]);
+    expect(stamped).toEqual(
+      expect.arrayContaining([
+        ["rel-1", "relOrgToApp", "uses"],
+        ["rel-2", "relOrgToAppOwns", "owns"],
+      ]),
+    );
+    // Distinct cell ids, so neither overwrites the other in the model.
+    expect(new Set(edges.map((e) => e.id)).size).toBe(2);
+
+    // Reported back so the editor can seed its edge → relation side-table for
+    // every edge, not just the first — extras have no other fallback.
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].relationId).toBe("rel-1");
+    expect(inserted[0].extraEdges).toHaveLength(1);
+    expect(inserted[0].extraEdges?.[0].relationId).toBe("rel-2");
+  });
+
+  it("fans parallel edges apart instead of drawing them on top of each other", () => {
+    // The default ER router ignores fixed anchors, so without this both lines
+    // follow the same path and read as one line with two superimposed verbs.
+    const f = expandFrame();
+    expandCardGroup(f.iframe, "parent-cell", [
+      { ...expandChild(false), extraRelations: [
+        { relationType: "relOrgToAppOwns", relationId: "rel-2", relationLabel: "owns" },
+      ] },
+    ]);
+
+    const edges = Object.values(f.cells).filter((c) => c.edge);
+    for (const e of edges) {
+      expect(e.style).toContain("orthogonalEdgeStyle");
+    }
+    // TWO waypoints each, at a matched offset: that is what holds the lines
+    // apart over the middle of the run instead of pinching them back together
+    // at a single mid-point, which is what made a pair easy to miss.
+    for (const e of edges) {
+      expect(e.geometry.points).toHaveLength(2);
+      const [a, b] = e.geometry.points;
+      expect(a.y).toBe(b.y);
+      expect(b.x).toBeGreaterThan(a.x);
+    }
+    const ys = edges.map((e) => e.geometry.points[0].y);
+    expect(new Set(ys).size).toBe(2);
+    expect(Math.abs(ys[0] - ys[1])).toBeGreaterThanOrEqual(30);
+  });
+
+  it("leaves a lone relation on the default router with no waypoint", () => {
+    const f = expandFrame();
+    expandCardGroup(f.iframe, "parent-cell", [expandChild(false)]);
+
+    const edge = Object.values(f.cells).find((c) => c.edge);
+    expect(edge.style).toContain("entityRelationEdgeStyle");
+    expect(edge.geometry.points).toBeUndefined();
+  });
+
   it("hides the verb on expansion edges when the diagram hides labels", () => {
     const f = expandFrame();
     expandCardGroup(f.iframe, "parent-cell", [expandChild(false)], true);
 
     const edge = Object.values(f.cells).find((c) => c.edge);
     expect(edge.style.split(";")).toContain("noLabel=1");
+  });
+});
+
+describe("fanWaypoints", () => {
+  const win = { mxPoint: class { constructor(public x: number, public y: number) {} } };
+  const box = (x: number, y: number) => ({ x, y, width: 180, height: 50 });
+
+  it("offsets perpendicular to a horizontal run", () => {
+    const pts = fanWaypoints(win, box(0, 0), box(600, 0), 17);
+    expect(pts).toHaveLength(2);
+    // Both points sit on one horizontal line offset from the straight run.
+    expect(pts[0].y).toBe(25 + 17);
+    expect(pts[1].y).toBe(25 + 17);
+    expect(pts[1].x).toBeGreaterThan(pts[0].x);
+  });
+
+  it("offsets perpendicular to a VERTICAL run", () => {
+    // The bug this guards: always offsetting in y moves a stacked pair's lines
+    // along the same corridor, separating them by nothing at all.
+    const pts = fanWaypoints(win, box(0, 0), box(0, 600), 17);
+    expect(pts).toHaveLength(2);
+    expect(pts[0].x).toBe(90 + 17);
+    expect(pts[1].x).toBe(90 + 17);
+    expect(pts[1].y).toBeGreaterThan(pts[0].y);
+  });
+
+  it("holds the corridor over the middle half of the run", () => {
+    const pts = fanWaypoints(win, box(0, 0), box(800, 0), 0);
+    // Centres 800 apart: split off at 25% and rejoin at 75%.
+    expect(pts[0].x).toBe(290);
+    expect(pts[1].x).toBe(690);
+  });
+
+  it("falls back to a single point when the cards are too close to route", () => {
+    const pts = fanWaypoints(win, box(0, 0), box(40, 0), 17);
+    expect(pts).toHaveLength(1);
+    expect(pts[0].y).toBe(25 + 17);
+  });
+
+  it("mirrors the offset for the opposite side of the fan", () => {
+    const up = fanWaypoints(win, box(0, 0), box(600, 0), 17);
+    const down = fanWaypoints(win, box(0, 0), box(600, 0), -17);
+    expect(up[0].x).toBe(down[0].x);
+    expect(up[0].y - 25).toBe(-(down[0].y - 25));
+  });
+
+  it("routes a run that is diagonal-but-mostly-vertical on the vertical plan", () => {
+    const pts = fanWaypoints(win, box(0, 0), box(100, 600), 17);
+    expect(pts[0].x).toBe(pts[1].x);
+    expect(pts[0].y).not.toBe(pts[1].y);
   });
 });
 
@@ -2218,3 +2386,345 @@ describe("buildLdvDiagramXml — detail lines carried from the report", () => {
     expect(xml).toContain('label="Plain App"');
   });
 });
+
+describe("applyCardLogos — a card's own logo on the canvas", () => {
+  const PLAIN =
+    "rounded=1;whiteSpace=wrap;html=1;fillColor=#0f7eb5;fontColor=#ffffff;strokeColor=#0a5a82";
+  const iconByType = new Map([["Application", "apps"]]);
+  // What `composeCardLogoImage` produces: a percent-encoded (never base64)
+  // PNG data URI, so it carries no `;` or `=` of its own.
+  const LOGO = "data:image/png,%89PNG%0D%0A%1A%0Aabc";
+
+  function logoCell(cardId: string | null, cardType: string, style: string, edge = false) {
+    return {
+      _style: style,
+      edge,
+      value: {
+        getAttribute: (k: string) =>
+          k === "cardType" ? cardType : k === "cardId" ? cardId : null,
+      },
+    };
+  }
+
+  it("puts the logo in the image slot of a plain card cell", () => {
+    const cells = { c1: logoCell("card-1", "Application", PLAIN) };
+    const { painted } = applyCardLogos(fakeFrame(cells), logos({ "card-1": LOGO }), iconByType);
+    expect(painted).toBe(1);
+    expect(cells.c1._style).toContain(`image=${LOGO}`);
+    expect(cells.c1._style).toContain("shape=label");
+    expect(cells.c1._style).toContain("fillColor=#0f7eb5");
+  });
+
+  it("keeps the style parseable as `;`-delimited key=value pairs", () => {
+    // The whole reason the composed image is percent-encoded rather than
+    // base64: a raw `;` or `=` in the data URI would truncate the token and
+    // corrupt every style part after it — including this file's own helpers,
+    // which split on `;`.
+    const cells = { c1: logoCell("card-1", "Application", PLAIN) };
+    applyCardLogos(fakeFrame(cells), logos({ "card-1": LOGO }), iconByType);
+    const parts = cells.c1._style.split(";").filter(Boolean);
+    expect(parts.filter((p) => p.startsWith("image=")).length).toBe(1);
+    for (const p of parts) expect(p).toMatch(/^[^;]+=[^;]*$/);
+  });
+
+  it("restores the card-type icon when the logo goes away", () => {
+    const cells = { c1: logoCell("card-1", "Application", PLAIN) };
+    const frame = fakeFrame(cells);
+    applyCardTypeIcons(frame, iconByType); // the cell starts with a type icon
+    applyCardLogos(frame, logos({ "card-1": LOGO }), iconByType);
+    expect(cells.c1._style).toContain(`image=${LOGO}`);
+
+    const { restored } = applyCardLogos(frame, logos({}), iconByType);
+    expect(restored).toBe(1);
+    expect(cells.c1._style).toContain("image=data:image/svg+xml,");
+    expect(cells.c1._style).not.toContain("turboLogo=");
+  });
+
+  it("gives no icon back to a cell that never had one", () => {
+    // A diagram drawn before card icons existed must come out of a logo exactly
+    // as it went in — this pass owns the slot it took, and nothing else.
+    const cells = { c1: logoCell("card-1", "Application", PLAIN) };
+    const frame = fakeFrame(cells);
+    applyCardLogos(frame, logos({ "card-1": LOGO }), iconByType);
+    applyCardLogos(frame, logos({}), iconByType);
+    expect(cells.c1._style).not.toContain("shape=label");
+    expect(cells.c1._style).not.toContain("image=");
+    expect(cells.c1._style).toContain("fillColor=#0f7eb5");
+  });
+
+  it("leaves an untouched card alone rather than imposing an icon on it", () => {
+    const cells = { c1: logoCell("card-1", "Application", PLAIN) };
+    const { painted, restored } = applyCardLogos(fakeFrame(cells), logos({}), iconByType);
+    expect({ painted, restored }).toEqual({ painted: 0, restored: 0 });
+    expect(cells.c1._style).toBe(PLAIN);
+  });
+
+  it("is idempotent, and never re-stamps its own logo as the base", () => {
+    const cells = { c1: logoCell("card-1", "Application", PLAIN) };
+    const frame = fakeFrame(cells);
+    applyCardTypeIcons(frame, iconByType);
+    applyCardLogos(frame, logos({ "card-1": LOGO }), iconByType);
+    const after = cells.c1._style;
+    applyCardLogos(frame, logos({ "card-1": LOGO }), iconByType);
+    expect(cells.c1._style).toBe(after);
+    expect(cells.c1._style.match(/turboLogo=/g)?.length).toBe(1);
+    // Re-stamping would have recorded "icon" as "icon" over our own image and
+    // the restore below would hand back the logo instead of the glyph.
+    applyCardLogos(frame, logos({}), iconByType);
+    expect(cells.c1._style).toContain("image=data:image/svg+xml,");
+  });
+
+  it("skips swimlanes, edges and pending cards", () => {
+    const cells = {
+      lane: logoCell("card-1", "Application", "shape=swimlane;startSize=28"),
+      edge: logoCell("card-1", "Application", "edgeStyle=entityRelationEdgeStyle", true),
+      pending: logoCell("pending-xyz", "Application", PLAIN),
+    };
+    const { painted } = applyCardLogos(
+      fakeFrame(cells),
+      logos({ "card-1": LOGO, "pending-xyz": LOGO }),
+      iconByType,
+    );
+    expect(painted).toBe(0);
+  });
+});
+
+describe("applyCardTypeIcons — with logos on the canvas", () => {
+  const PLAIN = "rounded=1;whiteSpace=wrap;html=1;fillColor=#0f7eb5";
+  const iconByType = new Map([["Application", "apps"]]);
+  const LOGO = "data:image/png,%89PNG%1A";
+
+  function logoCell(cardId: string, cardType: string, style: string) {
+    return {
+      _style: style,
+      value: {
+        getAttribute: (k: string) =>
+          k === "cardType" ? cardType : k === "cardId" ? cardId : null,
+      },
+    };
+  }
+
+  it("does not replace a card's logo with a generic type glyph", () => {
+    // This action strips the whole image family and rebuilds it, so without
+    // the logo map it would silently wipe every logo on the canvas.
+    const cells = { c1: logoCell("card-1", "Application", PLAIN) };
+    applyCardTypeIcons(fakeFrame(cells), iconByType, logos({ "card-1": LOGO }));
+    expect(cells.c1._style).toContain(`image=${LOGO}`);
+    expect(cells.c1._style).not.toContain("image=data:image/svg+xml,");
+  });
+
+  it("still icons the cards that have no logo", () => {
+    const cells = {
+      c1: logoCell("card-1", "Application", PLAIN),
+      c2: logoCell("card-2", "Application", PLAIN),
+    };
+    applyCardTypeIcons(fakeFrame(cells), iconByType, logos({ "card-1": LOGO }));
+    expect(cells.c1._style).toContain(`image=${LOGO}`);
+    expect(cells.c2._style).toContain("image=data:image/svg+xml,");
+  });
+});
+
+describe("applyCardLogosToXml — logos for the read-only viewer", () => {
+  const LOGO = "data:image/png,%89PNG%1A";
+  // The shape the editor actually saves: the cardId lives on the user object
+  // wrapping the cell, not on the cell itself.
+  const xml = (style: string, cardId = "card-1") =>
+    `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>` +
+    `<object label="NexaCore" cardId="${cardId}" cardType="Application" id="c1">` +
+    `<mxCell style="${style}" vertex="1" parent="1">` +
+    `<mxGeometry x="0" y="0" width="210" height="60" as="geometry"/>` +
+    `</mxCell></object></root></mxGraphModel>`;
+
+  const PLAIN = "rounded=1;whiteSpace=wrap;html=1;fillColor=#0f7eb5";
+
+  it("writes the logo into the stored style", () => {
+    const out = applyCardLogosToXml(xml(PLAIN), logos({ "card-1": LOGO }));
+    expect(out).toContain(`image=${LOGO}`);
+    expect(out).toContain("shape=label");
+    expect(out).toContain("fillColor=#0f7eb5");
+  });
+
+  it("leaves a diagram untouched when no card on it has a logo", () => {
+    // Byte-for-byte: the viewer renders the stored document unless there is
+    // something to add, so an unrelated diagram cannot be perturbed.
+    const original = xml(PLAIN);
+    expect(applyCardLogosToXml(original, logos({}))).toBe(original);
+    expect(applyCardLogosToXml(original, logos({ other: LOGO }))).toBe(original);
+  });
+
+  it("preserves shapes the user chose", () => {
+    const swim = "shape=swimlane;startSize=28;fillColor=#0f7eb5";
+    const out = applyCardLogosToXml(xml(swim), logos({ "card-1": LOGO }));
+    expect(out).toContain(swim);
+    expect(out).not.toContain("image=");
+  });
+
+  it("returns the input unchanged rather than throwing on unparseable XML", () => {
+    // A viewer must never fail to render because a logo could not be drawn.
+    const junk = "<mxGraphModel><root><broken";
+    expect(applyCardLogosToXml(junk, logos({ "card-1": LOGO }))).toBe(junk);
+  });
+
+  it("keeps the result parseable as `;`-delimited style pairs", () => {
+    const out = applyCardLogosToXml(xml(PLAIN), logos({ "card-1": LOGO }));
+    const style = out.match(/style="([^"]*)"/)?.[1] ?? "";
+    expect(style).not.toBe("");
+    for (const part of style.split(";").filter(Boolean)) {
+      expect(part).toMatch(/^[^;]+=[^;]*$/);
+    }
+  });
+});
+
+describe("iconStyleParts sizing — logo versus bare type icon", () => {
+  const LOGO = "data:image/svg+xml,%3Csvg%3E";
+  const cellStyle = (style: string, cardId = "card-1") => ({
+    _style: style,
+    value: {
+      getAttribute: (k: string) =>
+        k === "cardType" ? "Application" : k === "cardId" ? cardId : null,
+    },
+  });
+  const read = (style: string, key: string) =>
+    Number(style.split(";").find((p) => p.startsWith(`${key}=`))?.split("=")[1]);
+
+  it("gives a logo an image the size of the card, and a bare glyph a small one", () => {
+    // A `shape=label` cell has one image slot, so the ONLY way to put the type
+    // glyph in the card's own top-right corner is for the image to be the
+    // card. A card with no logo keeps the small corner glyph it always had.
+    const withLogo = { c1: cellStyle("rounded=1;fillColor=#0f7eb5") };
+    applyCardLogos(fakeFrame(withLogo), logos({ "card-1": LOGO }), new Map());
+
+    const bare = { c1: cellStyle("rounded=1;fillColor=#0f7eb5") };
+    applyCardTypeIcons(fakeFrame(bare), new Map([["Application", "apps"]]));
+
+    expect(read(withLogo.c1._style, "imageWidth")).toBe(210);
+    expect(read(withLogo.c1._style, "imageHeight")).toBe(CARD_BASE_H);
+    expect(read(bare.c1._style, "imageWidth")).toBe(18);
+  });
+
+  it("centres the card name on the card, not on what is left beside the image", () => {
+    // `spacingLeft` alone centres the label in the REMAINING width, so a left
+    // gutter silently pushes the name right of true centre by half the gutter.
+    // Symmetric gutters are what put it back.
+    for (const cells of [
+      (() => {
+        const c = { c1: cellStyle("rounded=1;fillColor=#0f7eb5") };
+        applyCardLogos(fakeFrame(c), logos({ "card-1": LOGO }), new Map());
+        return c;
+      })(),
+      (() => {
+        const c = { c1: cellStyle("rounded=1;fillColor=#0f7eb5") };
+        applyCardTypeIcons(fakeFrame(c), new Map([["Application", "apps"]]));
+        return c;
+      })(),
+    ]) {
+      const style = cells.c1._style;
+      expect(read(style, "spacingRight")).toBe(read(style, "spacingLeft"));
+    }
+  });
+
+  it("keeps the label gutter clear of the logo", () => {
+    // The gutter has to clear the logo box, or a centred card name runs over
+    // the mark.
+    const cells = { c1: cellStyle("rounded=1;fillColor=#0f7eb5") };
+    applyCardLogos(fakeFrame(cells), logos({ "card-1": LOGO }), new Map());
+    expect(read(cells.c1._style, "spacingLeft")).toBeGreaterThan(LOGO_BOX_PX);
+  });
+
+  it("sizes the image to the cell it is painted on, not to the plain card", () => {
+    // The composite IS the card, so a picture built for 210×60 hangs its type
+    // glyph off a smaller cell entirely — the expanded-group child (190×40),
+    // the drill-down child (180×50) and every card exported from the
+    // dependency view (200×72) are all smaller or taller than the default.
+    const cells = {
+      c1: { ...cellStyle("rounded=1;fillColor=#0f7eb5"), _geo: { width: 190, height: 40 } },
+    };
+    applyCardLogos(fakeFrame(cells), logos({ "card-1": LOGO }), new Map());
+    expect(read(cells.c1._style, "imageWidth")).toBe(190);
+    expect(read(cells.c1._style, "imageHeight")).toBe(40);
+  });
+
+  it("shrinks the label gutter with the logo on a short cell", () => {
+    // The gutter reserves room for the mark, and the mark shrinks to fit a
+    // card too short to hold the full box — reserving the full-size gutter
+    // would push that card's name off-centre for a logo that is not that wide.
+    const tall = { c1: cellStyle("rounded=1;fillColor=#0f7eb5") };
+    applyCardLogos(fakeFrame(tall), logos({ "card-1": LOGO }), new Map());
+    const short = {
+      c1: { ...cellStyle("rounded=1;fillColor=#0f7eb5"), _geo: { width: 190, height: 30 } },
+    };
+    applyCardLogos(fakeFrame(short), logos({ "card-1": LOGO }), new Map());
+    expect(read(short.c1._style, "spacingLeft")).toBeLessThan(
+      read(tall.c1._style, "spacingLeft"),
+    );
+  });
+});
+
+describe("reading the geometry a logo has to match", () => {
+  const LOGO = "data:image/svg+xml,%3Csvg%3E";
+  const cell = (cardId: string, style: string, geo?: { width: number; height: number }) => ({
+    _style: style,
+    _geo: geo,
+    value: {
+      getAttribute: (k: string) =>
+        k === "cardType" ? "Application" : k === "cardId" ? cardId : null,
+    },
+  });
+
+  it("reports each card cell's own size", () => {
+    const cells = {
+      c1: cell("card-1", "rounded=1", { width: 190, height: 40 }),
+      c2: cell("card-2", "rounded=1", { width: 200, height: 72 }),
+    };
+    expect(readCardCellBoxes(fakeFrame(cells))).toEqual([
+      { cardId: "card-1", w: 190, h: 40 },
+      { cardId: "card-2", w: 200, h: 72 },
+    ]);
+  });
+
+  it("skips what the logo pass itself skips", () => {
+    // Same guards, so the caller never composes a picture for a cell that will
+    // never be painted.
+    const cells = {
+      lane: cell("card-1", "shape=swimlane;startSize=28", { width: 400, height: 300 }),
+      pending: cell("pending-x", "rounded=1", { width: 210, height: 60 }),
+    };
+    expect(readCardCellBoxes(fakeFrame(cells))).toEqual([]);
+  });
+
+  it("falls back to the plain card when a cell has no geometry", () => {
+    const cells = { c1: cell("card-1", "rounded=1") };
+    expect(readCardCellBoxes(fakeFrame(cells))).toEqual([
+      { cardId: "card-1", w: 210, h: CARD_BASE_H },
+    ]);
+  });
+
+  it("keeps a logo on a card that was resized since it was composed", () => {
+    // "Apply card-type icons" reads the same lookup so it cannot wipe logos.
+    // If a resize made every key a miss, that guard would invert: the action
+    // would replace the logo with a generic glyph. A picture built for the old
+    // size is briefly off; losing the logo is not recoverable by looking.
+    const lookup = logoLookupFor(new Map([[logoKey("card-1", 210, 60), LOGO]]));
+    expect(lookup("card-1", 240, 60)).toBe(LOGO);
+    expect(lookup("card-2", 210, 60)).toBeUndefined();
+  });
+
+  it("reads the geometry out of stored XML, and paints to it", () => {
+    // The viewer has no live graph, so the document itself is the only place
+    // the size can come from.
+    const xml =
+      `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>` +
+      `<object label="NexaCore" cardId="card-1" cardType="Application" id="c1">` +
+      `<mxCell style="rounded=1;fillColor=#0f7eb5" vertex="1" parent="1">` +
+      `<mxGeometry x="0" y="0" width="180" height="50" as="geometry"/>` +
+      `</mxCell></object></root></mxGraphModel>`;
+    expect(readCardBoxesFromXml(xml)).toEqual([{ cardId: "card-1", w: 180, h: 50 }]);
+
+    const out = applyCardLogosToXml(xml, (cardId, w, h) =>
+      cardId === "card-1" && w === 180 && h === 50 ? LOGO : undefined,
+    );
+    expect(out).toContain("imageWidth=180");
+    expect(out).toContain("imageHeight=50");
+  });
+});
+

@@ -33,12 +33,13 @@ Aprire un diagramma avvia l'editor DrawIO a schermo intero in un iframe della st
 Usate la finestra **Inserisci schede** (dalla barra strumenti o dal menu contestuale) per aggiungere schede alla tela:
 
 - I **chip di tipo con contatori in tempo reale** nella colonna sinistra filtrano i risultati.
-- Cercate per nome nella colonna destra; ogni riga ha una casella di selezione.
-- **Inserisci selezionate** aggiunge le schede scelte in una griglia; **Inserisci tutte** aggiunge ogni scheda che corrisponde al filtro corrente (con conferma oltre 50 risultati).
+- Cercate per nome nella colonna destra; ogni riga ha una casella di selezione. Restringete il filtro a un solo tipo gerarchico e la lista diventa un albero rientrato, così trovate una scheda dal suo ramo.
+- Le schede selezionate compaiono come chip sopra la lista e restano selezionate mentre cambiate filtro o ricerca — rimuovetene una con la sua ×.
+- **Seleziona tutti i visibili** seleziona tutto ciò che il filtro corrente lascia a schermo; **Inserisci selezionate** aggiunge le schede scelte alla tela in una griglia.
 
 La stessa finestra si apre in modalità a selezione singola per **Cambia scheda collegata** e **Collega a scheda esistente**.
 
-Ogni scheda sull'area di lavoro mostra la sua **icona del tipo di scheda** come un piccolo glifo bianco nell'angolo in alto a sinistra, accanto al colore del tipo — così il tipo di una scheda è indicato sia dall'icona sia dal colore. Questo corrisponde alle icone usate in tutta l'applicazione e migliora la leggibilità per gli utenti daltonici. L'icona compare sulle schede inserite d'ora in poi. Per aggiungere le icone alle schede già presenti su un diagramma più vecchio, fai clic su **Applica icone del tipo di scheda** nella barra degli strumenti dell'editor.
+Ogni scheda sull'area di lavoro mostra la sua **icona del tipo di scheda** come un piccolo glifo bianco nell'angolo in alto a sinistra, accanto al colore del tipo — così il tipo di una scheda è indicato sia dall'icona sia dal colore. Questo corrisponde alle icone usate in tutta l'applicazione e migliora la leggibilità per gli utenti daltonici. L'icona compare sulle schede inserite d'ora in poi. Per aggiungere le icone alle schede già presenti su un diagramma più vecchio, fai clic su **Applica icone del tipo di scheda** nella barra degli strumenti dell'editor. Se una scheda possiede un proprio **logo**, viene mostrato quello, mantenendo l'icona del tipo di scheda come piccolo badge nell'angolo: la forma indica così sia il prodotto sia il tipo di scheda. I logo compaiono all'apertura del diagramma e si aggiornano quando uno viene sostituito; una scheda senza logo, e ogni scheda di un tipo per cui un amministratore ha disattivato i logo, viene disegnata esattamente come prima. Una casella **Logo delle schede** nello stesso menu li disattiva se preferisci un diagramma essenziale; è attiva per impostazione predefinita.
 
 ### Azioni del clic destro
 

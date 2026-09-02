@@ -60,8 +60,10 @@ import CreateCardDialog from "@/components/CreateCardDialog";
 import {
   ADMIN_ITEM_DEFS,
   NAV_ITEM_DEFS,
+  resolveNavPlacement,
   type NavItemDef,
 } from "@/layouts/navItems";
+import { hasPermission } from "@/components/RequirePermission";
 import { canAccessPath, permissionForPath } from "@/lib/routePermissions";
 import type { BadgeCounts, Card } from "@/types";
 
@@ -190,11 +192,11 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       );
     }
 
-    const hasPerm = (perm?: string | string[]) => {
-      if (!perm) return true;
-      if (Array.isArray(perm)) return perm.some((p) => can(p));
-      return can(perm);
-    };
+    // Delegates to the shared helper rather than re-deriving the semantics —
+    // OR over a list, wildcard, fail-closed — so the nav can never drift from
+    // what RouteGuard enforces.
+    const hasPerm = (perm?: string | string[]) =>
+      !perm || hasPermission(user.permissions, perm);
 
     // A nav entry that points at a route inherits that route's permission from
     // ROUTE_PERMISSIONS, so the menu and the router can never disagree. An
@@ -278,15 +280,22 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     for (const { plugin } of uiExtensions) {
       for (const route of plugin.routes ?? []) {
         if (route.navGroup) continue;
-        items = [
-          ...items,
-          {
-            labelKey: route.label,
-            icon: route.icon,
-            path: route.path,
-            permission: route.permission,
-          },
-        ];
+        const entry: NavItemDef = {
+          labelKey: route.label,
+          icon: route.icon,
+          path: route.path,
+          permission: route.permission,
+        };
+        // The index is recomputed per route, against the list AS IT NOW
+        // STANDS. That is what keeps two routes sharing one placement in
+        // registration order: the first lands before the anchor, the second
+        // then lands before the anchor and after the first, rather than both
+        // resolving to the same stale index and coming out reversed.
+        const at = resolveNavPlacement(
+          items.map((item) => item.labelKey),
+          route.navPlacement,
+        );
+        items = [...items.slice(0, at), entry, ...items.slice(at)];
       }
     }
 
@@ -305,7 +314,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     };
 
     return items.filter((item) => hasNavPerm(item)).map(resolve);
-  }, [bpmEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, t]);
+  }, [bpmEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, user.permissions, t]);
 
   // Resolve admin item labels via i18n and filter based on permissions
   const adminItems = useMemo(() => {

@@ -155,7 +155,7 @@ En este modo, el servidor se autentica con correo/contraseña y renueva el token
 
 ## Capacidades disponibles
 
-El servidor MCP expone **47 herramientas** repartidas en dos grupos: **30 herramientas de lectura** que consultan datos de EA y **17 herramientas de escritura** (13 aditivas, 4 destructivas) que crean y mantienen fichas, relaciones, diagramas, riesgos, ADRs y más — incluida la conversión de artefactos que una herramienta de IA tiene en su propio contexto (hojas de cálculo, BPMN XML, DrawIO XML, documentos, imágenes) en datos EA estructurados. Cada herramienta lleva `ToolAnnotations` de MCP (indicaciones de solo lectura / destructiva / idempotente) para que los conectores puedan mostrar la destructividad en su interfaz.
+El servidor MCP expone **51 herramientas** repartidas en dos grupos: **32 herramientas de lectura** que consultan datos de EA y **19 herramientas de escritura** (14 aditivas, 5 destructivas) que crean y mantienen fichas, relaciones, diagramas, riesgos, ADRs y más — incluida la conversión de artefactos que una herramienta de IA tiene en su propio contexto (hojas de cálculo, BPMN XML, DrawIO XML, documentos, imágenes) en datos EA estructurados. Cada herramienta lleva `ToolAnnotations` de MCP (indicaciones de solo lectura / destructiva / idempotente) para que los conectores puedan mostrar la destructividad en su interfaz.
 
 ### Seguridad mediante ejecución en seco en las escrituras
 
@@ -163,7 +163,7 @@ Cada herramienta de escritura usa por defecto **`dry_run=true`**. En este modo, 
 
 ### Herramientas de lectura
 
-El servidor expone 30 herramientas de lectura agrupadas en ocho clusters.
+El servidor expone 32 herramientas de lectura agrupadas en ocho clusters.
 
 **Fichas y metamodelo**
 
@@ -226,6 +226,8 @@ El servidor expone 30 herramientas de lectura agrupadas en ocho clusters.
 | `get_card_stakeholders` | Usuarios + roles asignados a la ficha |
 | `get_card_comments` | Hilo de comentarios de una ficha |
 | `get_card_documents` | Enlaces a documentos adjuntos a una ficha (URL, no archivos) |
+| `get_card_logo` | A card's logo: mime, size and a sha256 of the stored bytes, so a write can be verified without transferring the image (pass `include_image` when you do want it) |
+| `list_available_icons` | Search the built-in brand-icon pack for a slug to pass to `set_card_logos` |
 
 **Diagramas**
 
@@ -244,9 +246,9 @@ Todas las herramientas respetan el RBAC del usuario autenticado — una visualiz
 
 ### Herramientas de escritura
 
-El servidor expone 17 herramientas de escritura, cada una anotada como **aditiva** (crea o amplía datos) o **destructiva** (modifica o elimina datos existentes) para que los conectores puedan advertir en consecuencia.
+El servidor expone 19 herramientas de escritura, cada una anotada como **aditiva** (crea o amplía datos) o **destructiva** (modifica o elimina datos existentes) para que los conectores puedan advertir en consecuencia.
 
-**Aditivas (13)**
+**Aditivas (14)**
 
 | Herramienta | Descripción |
 |-------------|-------------|
@@ -263,8 +265,9 @@ El servidor expone 17 herramientas de escritura, cada una anotada como **aditiva
 | `sign_adr` | Firma un ADR (requiere el permiso `adr.sign`; de lo contrario devuelve un enlace profundo a la interfaz para firmar en el navegador). |
 | `create_diagram` | Crea un diagrama libre DrawIO con vínculos opcionales a fichas existentes. |
 | `import_bpmn` | Guarda un diagrama BPMN 2.0 XML contra una ficha de Proceso de negocio **existente**. Si no hay ficha con el nombre indicado, la herramienta devuelve un error `card_not_found` que dirige al agente a `create_cards_bulk` — esto obliga a crear la ficha explícitamente con descripción, subtipo y atributos antes, en vez de tomar un atajo que deja una ficha pobre. |
+| `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
-**Destructivas (4)**
+**Destructivas (5)**
 
 | Herramienta | Descripción |
 |-------------|-------------|
@@ -272,6 +275,7 @@ El servidor expone 17 herramientas de escritura, cada una anotada como **aditiva
 | `archive_cards` | Borrado suave de fichas. Recuperable — las fichas archivadas pueden restaurarse durante 30 días antes de la purga automática. |
 | `update_diagram` | Reemplaza el XML de DrawIO, el nombre o los vínculos de fichas de un diagrama. |
 | `rollback_batch` | Revierte las escrituras realizadas bajo un lote de mutación anterior. |
+| `clear_card_logos` | Remove the custom logo from cards, falling them back to their card-type icon. Recoverable — set it again to restore. |
 
 ### Carga de artefactos
 
@@ -291,7 +295,8 @@ Defensa en profundidad sobre la ejecución en seco, para que un descuido del LLM
 
 - **Límite de tamaño por llamada.** Las herramientas de escritura MCP aplican un límite mucho menor que los endpoints subyacentes del importador de Excel: 200 filas para `create_cards_bulk`, 500 operaciones para `upsert_relations_bulk`. Suficientemente grandes para cualquier carga realista de un artefacto, suficientemente pequeñas para que una vista previa de ejecución en seco siga siendo revisable.
 - **Sin eliminación de relaciones por defecto.** `upsert_relations_bulk` rechaza operaciones `action: "delete"` — para eliminar relaciones, use la interfaz web donde la acción queda registrada bajo la identidad del usuario. Los operadores pueden activarlo estableciendo `MCP_ALLOW_RELATION_DELETE=true`.
-- **Interruptor de apagado.** `MCP_WRITES_ENABLED=false` desactiva las 17 herramientas de escritura sin redesplegar código. Las 30 herramientas de lectura siguen funcionando.
+- **Interruptor de apagado.** `MCP_WRITES_ENABLED=false` desactiva las 19 herramientas de escritura sin redesplegar código. Las 32 herramientas de lectura siguen funcionando.
+- **La descarga de logotipos está restringida a hosts permitidos.** Los paquetes de iconos incluidos no pueden cubrir todos los productos de un cliente, y un asistente suele estar aislado sin acceso a la web, así que `set_card_logos` acepta una `image_url` que descarga el servidor MCP. Solo `https`, solo los hosts de `MCP_LOGO_FETCH_HOSTS`, solo direcciones públicas, como máximo dos redirecciones (revisadas de nuevo cada una), como máximo 1 MB leído en streaming, y los bytes deben llevar una firma real de PNG/JPEG/WebP/GIF. La descarga ocurre en el borde MCP, nunca en el backend, y después la imagen se sube por la vía habitual: una URL elegida por un LLM nunca llega al proceso que guarda la base de datos. `MCP_LOGO_FETCH_ENABLED=false` lo desactiva.
 - **Etiqueta de origen para auditoría.** Cada solicitud al backend desde el servidor MCP lleva un encabezado `X-Turbo-EA-Origin: mcp`. Los eventos emitidos desde esas solicitudes se etiquetan con `origin: "mcp"` en el payload del registro de auditoría, de modo que los administradores pueden filtrar las escrituras impulsadas por MCP de la línea de tiempo, separadas de las acciones de la interfaz web.
 - **Lotes de mutación.** Cada llamada de escritura MCP abre un lote de mutación antes de cualquier escritura; cada evento emitido durante la llamada se sella con el id del lote. Los administradores (o la herramienta `get_change_history`) pueden reconstruir el diff completo, evento por evento, de un commit a partir de un solo id, y `rollback_batch` puede revertirlo. Los commits que superan `MCP_BATCH_CONFIRMATION_THRESHOLD` filas deben devolver un `confirm_token` de un solo uso emitido por la ejecución en seco previa (validez de 15 minutos), de modo que un commit grande siempre sigue a una vista previa revisada.
 - **Sin borrado permanente.** El conjunto de herramientas omite deliberadamente el borrado permanente de fichas. `archive_cards` y `update_cards_bulk` *sí* están expuestas, pero el archivado es un borrado suave recuperable (ventana de restauración de 30 días) y ambas están anotadas como destructivas y protegidas por la ejecución en seco. Añadir cualquier herramienta que realice una mutación irreversible (borrado permanente, purga forzada) requeriría una revisión de diseño explícita.
@@ -303,7 +308,10 @@ Las seis variables de entorno de salvaguarda en el contenedor MCP:
 | `MCP_WRITES_ENABLED` | `true` | Interruptor maestro de las herramientas de escritura. `false` → MCP de solo lectura. |
 | `MCP_MAX_CARDS_PER_CALL` | `200` | Límite estricto de filas `create_cards_bulk` / `update_cards_bulk` por solicitud. |
 | `MCP_MAX_RELATIONS_PER_CALL` | `500` | Límite estricto de operaciones `upsert_relations_bulk` por solicitud. |
+| `MCP_MAX_LOGOS_PER_CALL` | `50` | Hard cap on `set_card_logos` rows per request. Lower than the card cap because each logo is its own upload and carries image bytes. |
 | `MCP_ALLOW_RELATION_DELETE` | `false` | Cuando es `true`, `upsert_relations_bulk` acepta operaciones `action: "delete"`. |
+| `MCP_LOGO_FETCH_ENABLED` | `true` | Si es `true`, `set_card_logos` admite una `image_url`: el servidor MCP descarga la imagen y la sube por la vía habitual, de modo que se siguen aplicando todas las comprobaciones de permisos, tamaño y formato. Con `false` se rechaza por completo la vía por URL — los slugs de iconos y los bytes pegados siguen funcionando. |
+| `MCP_LOGO_FETCH_HOSTS` | *(built-in)* | Hosts desde los que se puede descargar un logotipo, separados por comas y con coincidencia exacta. Por defecto: `raw.githubusercontent.com`, `cdn.jsdelivr.net`, `cdn.simpleicons.org`, `upload.wikimedia.org` — alojamiento público de iconos, donde la petición lleva un nombre de archivo y nada sobre su panorama. Puede añadirse un servicio de búsqueda de logotipos por dominio, a cambio de revelarle qué proveedores utiliza. |
 | `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | Los commits que tocan más filas que este umbral requieren el `confirm_token` de una ejecución en seco previa. |
 | `MCP_REQUIRE_DRYRUN_FIRST` | `true` | Habilita la barrera de confirm-token anterior. Establezca `false` solo para pipelines de automatización de confianza que omiten explícitamente el ciclo de vista previa. |
 

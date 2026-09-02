@@ -16,6 +16,45 @@ Der obere Bereich der Karte zeigt:
 - **Datenqualitätsring** — Visueller Indikator der Informationsvollständigkeit (0–100%)
 - **Aktionsmenü** — Archivieren, Löschen und Genehmigungsaktionen. Enthält außerdem eine Ein-Klick-Aktion **Diese Karte beobachten** (sofern der Kartentyp eine Beobachter-Rolle definiert), mit der jeder Benutzer mit Leserechten der Karte folgen kann, ohne den Stakeholder-Tab zu öffnen.
 
+### Eigenes Logo
+
+Karten eines Typs, der dies erlaubt, können ein eigenes **Logo** anstelle des
+allgemeinen Typ-Symbols tragen — eine Anwendung für SAP, Kafka oder Jira zeigt
+dann das Zeichen des jeweiligen Produkts. Wiedererkennbare Logos machen ein
+Inventar deutlich schneller erfassbar, vor allem für Personen, die es lesen und
+nicht pflegen.
+
+Fahren Sie mit der Maus über das Symbol oben links auf der Karte und klicken
+Sie darauf, um das Bild **hochzuladen**, zu **ersetzen** oder zu **entfernen**.
+Das Typ-Symbol verschwindet dabei nicht: Es wandert als kleines Abzeichen in
+die Ecke des Logos, sodass weiterhin auf einen Blick erkennbar bleibt, um
+welche Art von Karte es sich handelt.
+
+- **Zulässige Formate** — PNG, JPEG, WebP oder GIF, bis 1 MB. SVG wird nicht
+  akzeptiert, da es Skripte enthalten kann.
+- **Wo es erscheint** — im Kartenkopf, in der optionalen Spalte **Logo** im
+  [Inventar](inventory.md) und in jedem veröffentlichten Webportal, das auf
+  diesem Kartentyp basiert.
+- **Ohne Logo** — die Karte greift wie bisher auf ihr Typ-Symbol zurück.
+
+Logos stehen für Kartentypen zur Verfügung, für die eine Administratorin oder
+ein Administrator sie aktiviert hat; standardmäßig sind das Anwendung und
+IT-Komponente. Siehe [Metamodell](../admin/metamodel.md).
+
+Klicken Sie auf das Logo und wählen Sie **Markensymbol wählen…**, um aus einem
+integrierten Satz von mehreren tausend Markenzeichen auszuwählen — suchen Sie das
+Produkt nach Namen und wählen Sie es aus; eine Bilddatei ist nicht nötig. Mit
+**Hochladen** verwenden Sie stattdessen eine eigene Datei. Ein über
+[MCP](../admin/mcp.md) verbundener KI-Assistent kann Logos auf demselben Weg in
+großer Zahl setzen und holt das Zeichen selbst, wenn ein Produkt nicht im Satz
+enthalten ist.
+
+Dasselbe Menü steht in der Spalte **Logo** im [Inventar](inventory.md) zur
+Verfügung — mit der Maus über eine Logo-Zelle fahren und klicken —, sodass sich
+eine frisch importierte Landschaft mit Marken versehen lässt, ohne jede Karte
+zu öffnen. Das geschieht bewusst Karte für Karte: Logos werden weder beim
+Ausfüllen nach unten noch in der Massenbearbeitung angeboten.
+
 ### Genehmigungsworkflow
 
 Karten können einen Genehmigungszyklus durchlaufen:
@@ -82,7 +121,7 @@ Zeigt alle Verbindungen zu anderen Karten, gruppiert nach Beziehungstyp. Für je
 
 - **Name der verwandten Karte** — Klicken zum Navigieren zur verwandten Karte
 - **Beziehungstyp** — Die Art der Verbindung (z.B. «nutzt», «läuft auf», «hängt ab von»)
-- **Beziehung hinzufügen** — Klicken Sie auf **+**, um den Dialog für diese Beziehung zu öffnen. Er listet passende Karten während der Eingabe auf (die besten Treffer zuerst, weitere werden beim Scrollen geladen) und blendet bereits verknüpfte Karten aus; eine Beschriftung nennt ihre Anzahl. Ein Klick auf eine Karte verknüpft sie sofort, und sie erscheint oben als Chip — ein Klick auf das **×** macht diese Zuordnung rückgängig. Der Dialog bleibt geöffnet, sodass Sie beliebig viele hinzufügen können; auf dem Smartphone öffnet er im Vollbild. Beziehungen ohne eigenen Abschnitt erreichen Sie über die Schaltfläche **Beziehung hinzufügen** am Ende des Abschnitts
+- **Beziehung hinzufügen** — Klicken Sie auf **+**, um den Dialog für diese Beziehung zu öffnen. Er listet passende Karten während der Eingabe auf (die besten Treffer zuerst, weitere werden beim Scrollen geladen) und blendet bereits verknüpfte Karten aus; eine Beschriftung nennt ihre Anzahl. Ein Klick auf eine Karte verknüpft sie sofort, und sie erscheint oben als Chip — ein Klick auf das **×** macht diese Zuordnung rückgängig. Der Dialog bleibt geöffnet, sodass Sie beliebig viele hinzufügen können; auf dem Smartphone öffnet er im Vollbild. Beziehungen ohne eigenen Abschnitt erreichen Sie über die Schaltfläche **Beziehung hinzufügen** am Ende des Abschnitts. Wenn der verknüpfte Typ hierarchisch ist — Business Capability, Organisation und Ähnliches —, zeigt der Dialog ihn als eingerückten Baum statt als alphabetische Liste, sodass Sie eine Teilfähigkeit über ihren Zweig auswählen können. Bei der Suche bleiben die übergeordneten Karten eines Treffers als Kontext sichtbar, und nicht auswählbare Karten (bereits verknüpft, gerade hinzugefügt oder die Karte selbst) bleiben ausgegraut an ihrem Platz, damit die Ebenen ringsum weiterhin stimmen.
 - **Sortierung** — Verwandte Karten werden alphabetisch nach Namen aufgelistet
 - **Beziehung entfernen** — Klicken Sie auf das Löschsymbol, um eine Beziehung zu entfernen
 - **Nach Untertyp gruppieren** — Enthält ein Beziehungsabschnitt viele verwandte Karten, werden sie automatisch in aufklappbare Untertyp-Gruppen (jeweils mit Anzahl) gruppiert, mit einer abschließenden Gruppe **Kein Untertyp** für nicht klassifizierte Karten. Über den Umschalter in der Abschnittsüberschrift wechseln Sie zwischen gruppierter und flacher Ansicht.

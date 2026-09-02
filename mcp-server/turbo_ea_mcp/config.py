@@ -52,6 +52,10 @@ MCP_MAX_CARDS_PER_CALL: int = int(os.environ.get("MCP_MAX_CARDS_PER_CALL", "200"
 MCP_MAX_RELATIONS_PER_CALL: int = int(
     os.environ.get("MCP_MAX_RELATIONS_PER_CALL", "500")
 )
+# Logos are uploaded one HTTP request per card and carry image bytes, so
+# the cap is lower than the card cap — 50 images is already several
+# megabytes of base64 in the agent's context.
+MCP_MAX_LOGOS_PER_CALL: int = int(os.environ.get("MCP_MAX_LOGOS_PER_CALL", "50"))
 
 # Kill switch — set to ``false`` to disable all MCP write tools without a
 # code redeploy. Read tools keep working.
@@ -75,6 +79,39 @@ MCP_BATCH_CONFIRMATION_THRESHOLD: int = int(
 # trusted automation pipelines that explicitly do not want the second
 # round-trip.
 MCP_REQUIRE_DRYRUN_FIRST: bool = _env_bool("MCP_REQUIRE_DRYRUN_FIRST", True)
+
+# ── Logo fetching ──────────────────────────────────────────────────────────
+#
+# `set_card_logos` accepts an `image_url` and downloads it here, at the agent
+# edge, rather than in the backend: the bytes then go up the ordinary upload
+# route, so an LLM-chosen URL never reaches the process that holds the
+# database. It exists because the packs cannot cover every product a customer
+# runs and many agents are sandboxed with no route to the open web — telling
+# such an agent to "go and fetch the mark yourself" is advice it cannot take.
+#
+# Off with one variable. An air-gapped install needs no change: the fetch
+# simply fails and the row says so.
+MCP_LOGO_FETCH_ENABLED: bool = _env_bool("MCP_LOGO_FETCH_ENABLED", True)
+
+# Hosts a logo may be fetched from. **Exact** host match, no wildcards and no
+# suffix matching — `evil-raw.githubusercontent.com.attacker.test` must not
+# pass. The default set is public, static icon hosting: the request carries a
+# file name and nothing about the customer. Deliberately excluded are the
+# domain→logo services (`logo.clearbit.com` and friends), where the request IS
+# the vendor's domain — that tells a third party which products a customer
+# runs, one lookup at a time, and is an operator's decision to make rather
+# than ours to ship on by default.
+_DEFAULT_LOGO_FETCH_HOSTS = (
+    "raw.githubusercontent.com",
+    "cdn.jsdelivr.net",
+    "cdn.simpleicons.org",
+    "upload.wikimedia.org",
+)
+MCP_LOGO_FETCH_HOSTS: tuple[str, ...] = tuple(
+    h.strip().lower()
+    for h in os.environ.get("MCP_LOGO_FETCH_HOSTS", "").split(",")
+    if h.strip()
+) or _DEFAULT_LOGO_FETCH_HOSTS
 
 # ── OAuth authorization-server guardrails ──────────────────────────────────
 #

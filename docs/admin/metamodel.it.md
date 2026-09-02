@@ -29,6 +29,7 @@ Cliccate su **+ Nuovo tipo** per creare un tipo di card personalizzato. Configur
 | **Colore** | Colore del brand per il tipo (utilizzato nell'inventario, nei report e nei diagrammi) |
 | **Categoria** | Raggruppamento per livello architetturale |
 | **Ha gerarchia** | Se le card di questo tipo possono avere relazioni genitore/figlio |
+| **Consenti loghi personalizzati** | Se gli editor possono caricare un logo per ogni scheda, mostrato al posto dell'icona del tipo (attivo di serie per Applicazione e Componente IT) |
 
 ### Modifica di un tipo
 
@@ -155,7 +156,7 @@ I tipi di relazione definiscono le connessioni consentite tra i tipi di card. Og
 
 | Campo | Descrizione |
 |-------|-------------|
-| **Key** | Identificatore univoco |
+| **Key** | Identificatore univoco — proposto dal verbo, modificabile durante la creazione e poi fisso |
 | **Etichetta** | Etichetta della direzione in avanti (es. "utilizza") |
 | **Etichetta inversa** | Etichetta della direzione inversa (es. "è utilizzato da") |
 | **Tipo sorgente** | Il tipo di card sul lato "da" |
@@ -172,7 +173,9 @@ Usate **Gestisci traduzioni** in cima alla scheda Tipi di relazione per tradurre
 
 Alcune relazioni includono attributi aggiuntivi che si impostano su ogni singolo collegamento anziché sul tipo di relazione. Ad esempio, la relazione integrata **Organizzazione → Applicazione** («utilizza») ha un attributo **Tipo di utilizzo**: impostatelo su **Proprietario**, **Utente** o **Stakeholder** per ogni collegamento. In questo modo potete modellare un'applicazione *di proprietà di* un'organizzazione e *utilizzata da* altre tramite un unico tipo di relazione. Il valore scelto appare come un chip colorato nella sezione **Relazioni** della card; impostatelo quando aggiungete la relazione, oppure in seguito tramite l'icona di modifica sulla riga della relazione.
 
-Tra una determinata coppia di tipi di card può esistere un solo tipo di relazione, quindi utilizzate questi attributi per qualificare il significato di un collegamento anziché creare un secondo tipo di relazione per la stessa origine e destinazione.
+Potete anche creare **più tipi di relazione tra la stessa coppia di tipi di card** — ad esempio un'organizzazione che *possiede* un'applicazione accanto a una che la *utilizza*. Preferite un attributo quando descrivete varianti di una singola relazione (mantiene una sola colonna nell'inventario e una sola linea sul diagramma); create un secondo tipo di relazione quando le relazioni sono davvero diverse e meritano verbi, attributi o filtri propri. Quando una coppia porta più tipi di relazione, l'inventario mostra comunque un'unica colonna per il tipo di card collegato e, aprendo quella cella, ottenete una sezione per ciascun tipo di relazione. Su una scheda ogni tipo di relazione mantiene la propria sezione: le sezioni che puntano allo stesso tipo di scheda sono mostrate insieme, e una scheda collegata tramite più di una di esse è contrassegnata con *Anche …* in ciascuna delle sue sezioni.
+
+Quando una coppia porta più tipi di relazione, report, portali e sondaggi possono puntare a uno specifico: il report Portfolio offre un asse di raggruppamento e un filtro per relazione, la Mappa delle capacità aggiunge un filtro per relazione, i filtri e le sezioni di relazione del portale riportano il proprio verbo e il filtro **collegato a** di un sondaggio ottiene un selettore **Tramite relazione**. Non scegliere nulla continua a significare «collegato tramite una qualsiasi di esse».
 
 ### Gestire i valori di relazione
 

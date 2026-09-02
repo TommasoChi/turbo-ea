@@ -5,6 +5,230 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.117.0] - 2026-09-02
+
+### Added
+
+- **An extension can say where its nav entry belongs (UI SDK 1.26).** A top-level route contribution takes an optional `navPlacement` — `start`, `end`, `before:<anchor>` or `after:<anchor>`, anchors being the core nav keys — so a page can sit next to the work it relates to instead of always at the end of the bar. It is the same grammar a manifest field section already uses to place itself on a card type, and it defaults to `end`, so every existing extension keeps the position it has.
+
+### Changed
+
+- A placement naming a nav entry that is not currently shown — one behind a module toggle — falls back to the default rather than dropping the entry, matching how a field-section placement handles an anchor its card type does not carry.
+
+## [2.116.0] - 2026-09-01
+
+### Added
+
+- **Picking a card to link now shows the hierarchy.** When the type on the other end of a relation is hierarchical, the add-relation dialog — and the Inventory grid's relation cell — lists it as an indented tree instead of an alphabetical list, so a sub-capability is found by its branch rather than by remembering its name. Searching keeps a match's parents in view for context, and cards you cannot pick (already linked, just added, or the card itself) stay in place greyed out so the levels around them still read correctly.
+
+## [2.115.0] - 2026-09-01
+
+### Added
+
+- **The card-detail lifecycle line and the gantt's dependency-arrow routing are now on the extension UI SDK (1.25).** An extension can render a card's five lifecycle phases exactly as core does — including the edit mode, committing through its own writer via `onSave` — and can draw a finish-to-start arrow with the same three-case routing the project gantt uses, rather than a second convention that drifts. `LifecycleSection` gains an optional `phaseAnnotation` prop so a caller that knows something the component cannot (that a date differs from a baseline it tracks, say) can mark a phase and hang its own control under it.
+
+### Changed
+
+- Gantt dependency-arrow routing moved out of the project-gantt component into a pure module, and now has unit tests covering all three routings and the click-safe hit path it produces. No visual change to the project gantt.
+- `PHASES` and `getPhaseLabels` moved to a leaf module; `cardDetailUtils` re-exports them, so every existing import is unchanged.
+
+## [2.114.0] - 2026-09-01
+
+### Added
+
+- **You can now create several relation types between the same two card types.** An Organization that *owns* an application and one that *uses* it can be modelled as two relations with their own verbs, attributes and filters, instead of being squeezed into a single relation qualified by an attribute. Attributes are still the better fit for variants of one relationship, and the create dialog now says so — as a hint, not a refusal — when the pair you picked is already connected.
+
+### Fixed
+
+- The Landscape report listed a card twice in a group when it was related through more than one relation type.
+- The Dependencies report dropped an edge when two cards were connected by more than one relation type. Each relation now gets its own labelled line in the diagram view and on diagrams you build from it, so "owns" and "uses" are visibly two relationships. The tree view still shows the combined verbs (for example "owns / uses"), because it draws one branch per related card.
+- The TurboLens architect built its dependency graph — and the prompt derived from it — with the same collapse, silently losing one of the relationships.
+- Vendor analysis counted an application, and its annual cost, once per relation instead of once per vendor, so app counts and total spend were overstated wherever a vendor was linked through more than one relation type.
+- The End-of-Life report listed an affected application once per relation, so an item's "affected applications" count disagreed with the summary above it.
+- The JSON export used by integrations repeated a provider name per relation.
+- A card type with lineage enabled could fail to save when more than one successor relation existed for it.
+- The Process Map ignored any Process → Application, Data Object, Organization or Business Context relation beyond the built-in one.
+- A second self-referencing relation type whose key ended in "Successor" was invisible everywhere — it could not be seen, edited or deleted from the card, the metamodel tab or the relation graph.
+- The inventory relation cell could show a related card it would not let you edit or remove. The cell has always merged every relation type reaching that card type; the editor now opens a section per relation type instead of only reaching the first, and the filter sidebar offers a row per relation type rather than hiding all but one.
+- Opening the inventory from a report's relation grouping filtered by only one relation type when several connect that pair of card types; the link now means "related to this card type at all".
+- Expanding a card on a diagram drew a single line to a neighbour connected by more than one relation type, showing one verb and omitting the other relations. Each relation now gets its own labelled edge on that neighbour, and deleting one still removes the relation it stands for. The lines are held apart over the middle of the run rather than meeting again right at each card, so a pair is visible at a glance, and the separation now works for cards stacked vertically as well as side by side.
+- The Capability Map counted an application twice under a capability, and listed a related card twice in its filters, when the link existed through more than one relation type.
+- Grouping the PPM portfolio by a card type connected through more than one relation type no longer places initiatives unpredictably.
+- The vendor field and the Provider link created with a new card now pick the same relation type consistently when several connect Provider to that card type.
+- A web portal showed two identically-labelled filter dropdowns, and repeated a card's chip, when two relation types reached the same card type; its detail sections also merged two relationships that happened to share a verb in the current language.
+
+### Changed
+
+- **Reports, portals and surveys can now target a specific relationship.** The Portfolio report offers a group-by axis and a filter per relation type, the Capability Map adds a filter per relation type, portal filters and relation sections carry their verb, and a survey's "related to" filter gains a **Via relation** picker. Existing saved reports, bookmarks, portals and surveys are unaffected — they keep meaning "related through any of them".
+- **A second relation type between two card types gets a usable key.** Its suggested key now builds on the existing relation's key plus the verb you type (`relOrgToApp` + "owns" → `relOrgToAppOwns`), so a pair's keys read as one family; a numeric suffix is only the fallback when no verb has been entered. The key is what appears as an Excel column, a calculation variable and a survey field, so it has to be recognisable. The create dialog also asks for the verbs before the key, so the suggestion is meaningful the first time you see it, and a key you type by hand is no longer wiped if you change a card type afterwards.
+- **A card's Relations section groups the relation types that point at the same card type together.** Each relation type still has its own section, headed by its verb, but sections reaching the same card type are now shown side by side rather than wherever the metamodel's ordering happened to put them. A card you have linked through more than one of them is marked "Also …" in each of its sections, so the two rows read as one card rather than two.
+- The relation-type key field now says it is generated from the verb and cannot be changed after creation. It stays editable while you create the relation type — that is the only chance to choose it.
+
+## [2.113.0] - 2026-09-01
+
+### Added
+
+- **Extension-created todos can deep-link into the app.** The extension todos bridge (backend SDK 1.7) accepts a `link` on create and update — the relative in-app path the todo's Open button navigates to, validated exactly like a human-created todo's. External-tracker references stay on `external_url`, and system todos keep refusing everything but their mirror fields.
+
+## [2.112.1] - 2026-09-01
+
+### Changed
+- Upgraded the bundled DrawIO editor from v31.1.8 to v31.4.1.
+- Upgraded `bpmn-js` from 18.25.1 to 18.27.0.
+
+## [2.112.0] - 2026-08-31
+
+### Added
+
+- **Picking cards for a diagram now shows the hierarchy.** Narrow the type filter to a single hierarchical type (Business Capability, Organization, …) and the Insert-Cards dialog lists it as an indented tree instead of a flat list, so you can find a sub-capability by its branch rather than by remembering its name.
+- Extension UI SDK 1.24: the shared multi-select card picker is exposed on the SDK surface, so an extension that needs "pick some cards across types" gets the type rail, live counts, hierarchy and subtree semantics core uses rather than a weaker copy.
+
+### Fixed
+
+- **The diagram Insert-Cards dialog no longer loses a selected card.** Ticking a card, then switching the type filter or typing in the search box, silently dropped that card: only what was on screen at the moment you pressed Insert was actually inserted. Every tick now survives filtering and searching, and the selected cards are listed as removable chips so you can see what the basket holds.
+
+### Changed
+
+- The Insert-Cards dialog's **Insert all** button is now **Select all shown**, which fills the basket without inserting; **Insert selected** stays the one button that commits. The old "click again to confirm" step for large batches is gone — the basket itself is the review step, and it can be edited before you commit.
+
+## [2.111.1] - 2026-08-31
+
+### Fixed
+
+- **A role granted PPM view can now open a PPM initiative's detail page.** The page fronts the underlying Initiative card, and reading a card required the separate inventory-view permission — so a role given **PPM → View** could browse the portfolio but clicking any initiative failed with a permission error. PPM view now also grants read access to Initiative cards (including their hierarchy and history), matching what the permission's own description promises; other card types stay behind inventory view. ([#1043](https://github.com/vincentmakes/turbo-ea/issues/1043))
+- **The PPM initiative detail page no longer renders a blank page when loading fails.** A permission error, a deleted initiative, or a network failure now shows an error message with a way back to the portfolio instead of an empty screen.
+
+## [2.111.0] - 2026-08-31
+
+### Added
+
+- Extension UI SDK 1.23: the shared `DateField` (commit-on-blur, focus-protected native date input) is exposed on the SDK surface, so extension forms get the same date-entry behaviour as core.
+
+### Fixed
+
+- Report chart capture now neutralises positioning on the capture root, so a chart mounted off-screen for export can no longer rasterise as a blank image.
+
+## [2.110.1] - 2026-08-31
+
+### Fixed
+
+- **An administrator could lock themselves out of administration.** Turbo EA already refused any change that would leave the instance with no administrator, but nothing stopped you from demoting or deactivating *your own* account while other administrators existed — and an administrator who drops their own role loses the administration screens in the same click. Your own row's role dropdown and Deactivate button are now disabled, bulk role changes and bulk deactivations skip your own account, and the API refuses both changes on every path. Another administrator makes the change for you, which is the correct hand-over anyway.
+
+### Added
+
+- **Documentation: recovering administrator access.** Admin → Operations & Upgrades now documents what to do when nobody can sign in as an administrator — ask a second administrator, use the self-service password reset, or, as a last resort, reset the password directly in the database, with the exact commands and the reason each part of them is needed.
+## [2.110.0] - 2026-08-31
+
+### Added
+
+- Extension UI SDK 1.22: `loadAgGrid` now also resolves the shared cell context-menu hook (`useCellContextMenu`), so an extension grid gets the same right-click / long-press menu core grids have — filter by cell value, copy, and page-specific row actions — instead of rebuilding its own menu.
+
+## [2.109.0] - 2026-08-31
+
+### Added
+
+- Extension UI SDK 1.21: async loaders for the time-travel timeline slider (with its range/classification helpers), the Layered Dependency View (renderer + layout engine), and the XLSX/PowerPoint report exporters — all resolved from core's code-split chunks — plus the shared grid filter-sidebar primitives (`FilterSectionHeader`, `FilterCheckboxList`, `ColumnFreezeToggle`). Extension timelines, dependency graphs, grid sidebars and exported decks now reuse core's own components instead of rebuilding them.
+
+## [2.108.0] - 2026-08-30
+
+### Fixed
+
+- **The login screenshot in the manual was the English one, in every language.** The capture script wrote the browser's language into `i18nextLng`, which is i18next's default key — but Turbo EA's detector reads `turboea-locale`. Every other page survived that mismatch, because signing in applies the account's language directly; the login page is the one screen with nobody signed in, so it silently fell back to English. All ten manuals shipped the same English picture, six of them under a translated filename, and the Arabic one lost its right-to-left layout with it. The login page is now captured in each language, reading in the right direction.
+- **The manual's "AI Suggestion Panel" screenshot did not contain the panel.** The sparkle button only appears once an AI provider is configured, and the instance the screenshots were taken on had none — so the click quietly did nothing and the capture fell through to a plain card, byte-for-byte identical to the card-detail screenshot two pages earlier. The AI settings page documented a panel the reader could never see in it. The screenshot now shows the panel open with a real suggestion.
+
+### Changed
+
+- **Every screenshot in the manual has been retaken, in all ten languages.** The previous set predates card logos, so the inventory and card pages showed a wall of identical type icons where the product now shows real product marks; it also predates the Process Navigator portal and the macro capability tier. Around 700 images across the ten locale manuals were recaptured against the current release.
+
+### Added
+
+- **Seven screens that the manual described but never showed.** TurboLens now has pictures of its dashboard, the Architecture AI wizard and the analysis history; the Risk Register shows its 4x4 matrix; and the notification preferences dialog, the calculation editor and the Tags administration tab are all illustrated for the first time. Each is captured in all ten languages.
+
+## [2.107.0] - 2026-08-29
+
+### Added
+
+- **The demo dataset now arrives with logos on.** Card logos shipped two releases ago, but nothing in the NexaTech demo data ever set one, so anyone evaluating Turbo EA with `SEED_DEMO=true` saw the feature switched on and entirely unused — a wall of identical type icons. Fifty-three of the demo applications and IT components now carry their real product mark, resolved from the brand-icon pack that already ships inside the product, and NexaTech's own software — NexaSCADA, NexaPortal, NexaCloud and the rest of the family — carries a house mark drawn for it. Nothing is downloaded: an air-gapped install gets exactly the same result. About a third of the landscape deliberately keeps its type icon, either because the packs genuinely have no mark for that brand or because the card is an internal service or a shadow-IT spreadsheet that would look wrong wearing one — which is also what a real landscape looks like.
+- **A demo instance now has something to publish.** The demo data ships three public web portals — an application catalogue, a delivery portfolio and the Process House — plus one published diagram, so the portal and diagram-sharing features can be opened and read rather than only configured. The process portal publishes the whole process hierarchy and opens the Order to Cash flow full-screen, with the systems behind each step named. Every published diagram gets a fresh unguessable address when it is seeded, so no two installs share a link.
+- **The demo diagram gallery is organised, and the dashboard is not empty.** Demo diagrams are now filed into groups and a few are starred, and the demo admin starts with a handful of favourite cards, so **My Workspace** shows what it is for instead of an empty panel.
+- **The demo capability map has a top tier.** Six macro capabilities — Design & Engineer, Plan & Source, Make & Deliver, Market & Sell, Serve & Support, Govern & Enable — now sit above the ten level-1 capabilities, so the Macro tier and the capability hierarchy it heads can be seen without importing the catalogue first.
+
+## [2.106.0] - 2026-08-29
+
+### Added
+
+- **Publish the Process Navigator as a web portal.** A portal can now serve the read-only Process House — the process hierarchy with its levels, zoom, search, colour overlays and organization filter — and open each process's **published** BPMN flow full-screen, all without an account. It is aimed at the people who most need to read how the organisation works and are least likely to have a seat: new joiners, auditors, front-line staff and external partners. Pick **Process navigator** as the portal type; the card type is pinned to Business Process, and the subtype and tag filters are how you publish one branch of the house rather than all of it. The portal can be SSO-gated like any other, and switching the BPM module off takes every process portal dark at once. Nothing is published beyond the process itself: the applications, data objects and costs behind it stay behind the login, as do the Process × Application matrix, the dependency view, and every draft, pending, archived or withdrawn BPMN revision. The names of the systems linked to each step are published only if you switch them on, and they are off by default. Unlike a portfolio portal, whose rows lead into Turbo EA, a process portal links nowhere at all — a house published for readers without accounts should not present doors they cannot open.
+
+## [2.105.0] - 2026-08-29
+
+### Added
+
+- **See card logos in the inventory, and set them there.** The Columns tab gains a **Logo** column for card types that allow logos, so a portfolio can be scanned by product mark rather than by name — the thing logos were for, on the screen where the scanning actually happens. Hover a logo cell and click to upload, replace, choose a brand icon or remove it without leaving the grid; it is the same menu as on the card page, so there is one gesture to learn. Cards with no logo show their type icon, so the column reads as one column rather than a ragged mix of images and blanks, and a card whose type does not allow logos leaves the cell empty rather than offering an upload that would be refused. The column is off by default and rows grow taller only while it is shown. Logos are deliberately left out of fill-down and Mass Edit: a mark belongs to one card, and there is no undo for overwriting two hundred of them.
+
+## [2.104.1] - 2026-08-28
+
+### Fixed
+
+- **A role granted cost visibility can now open the Cost report.** The report also demanded the separate EA-dashboard permission, so a role given **Costs → View** — which is described as covering cost reports — saw the menu entry, opened the page, and got nothing but a permission error. Cost visibility is now the only permission the report asks for. No default role changes: Admin, BPM Admin and Member could already open it, and Viewer, which has no cost visibility, still cannot.
+
+## [2.104.0] - 2026-08-28
+
+### Added
+
+- **Give a card its own logo.** An Application for SAP, Kafka or Jira can now show that product's own mark instead of the generic type icon — recognisable logos make an inventory far faster to scan, especially for the business stakeholders and managers who read it rather than maintain it ([#1024](https://github.com/vincentmakes/turbo-ea/discussions/1024)). Hover the icon on a card and click to upload, replace or remove the image. The type icon does not disappear: it moves to a small badge on the corner of the logo, so a reader still sees at a glance what kind of card they are looking at. Logos appear on the card header and on published web portals, where visitors need no account to see them. Administrators decide which card types offer this, under Admin → Meta Model — Application and IT Component are switched on out of the box, everything else is off until you say otherwise. PNG, JPEG, WebP and GIF up to 1 MB are accepted; SVG is refused because it can carry scripts, and every upload is checked against its actual file signature rather than the label the browser puts on it. A card with no logo, or one whose type an administrator later switches off, renders exactly as it always has — nothing is deleted, so switching the type back on brings every image back.
+- **Populate logos in bulk from an AI assistant.** The MCP server gains a `set_card_logos` write tool, so an agent holding the artwork can put marks on a whole application portfolio in one reviewed step rather than one card at a time. It previews before it writes like every other MCP write tool, is capped at 50 images per call (`MCP_MAX_LOGOS_PER_CALL`), and reports each rejected image individually instead of abandoning the batch.
+- **Set a card's logo from a built-in brand-icon pack.** Turbo EA now ships several thousand brand icons, and an AI assistant connected over MCP can put one on a card by name — `simpleicons:sap` — instead of carrying the image itself. Across a whole application portfolio that was the dominant cost of the job and its dominant risk: every icon meant thousands of characters of base64 transcribed by hand, and one of them arrived corrupted. Nothing is fetched from the internet to do this; the icons are part of the product.
+- **Read a logo back, and remove one, over MCP.** `get_card_logo` reports what a card carries — including a checksum, so an assistant can prove the image it sent is the image that landed, without downloading it again. `clear_card_logos` removes one. Previously an assistant that set the wrong logo had no way to inspect or undo its own work and had to send you to the web UI.
+- **Pick a card's logo from the built-in brand-icon pack, in the browser.** The logo menu gains **Choose a brand icon…**: search several thousand product marks by name and click one. Nothing is uploaded — the icon is resolved on the server, so setting SAP's logo costs a word rather than hunting down a PNG. Until now the pack was reachable only by an AI assistant over MCP. Two sets ship: full-colour product logos, and single-colour silhouettes with broader coverage — 5,563 marks in total, and the colour one wins where both have a brand.
+- **Logos on diagrams and on the dependency view.** A card that has a logo now carries it onto a DrawIO diagram and into the Layered Dependency View, so a landscape reads as the products it is made of rather than as a wall of identical shapes. The card-type icon stays as a small badge in the corner in both places, and logos are included in image exports. On the dependency view a **Show card logos** switch under **View options** turns them off for an unadorned diagram; it is on by default. Cards with no logo, and every card of a type where an administrator has switched logos off, are drawn exactly as before. On a diagram a **Card logos** tick in the **Show on card** menu turns them off per diagram.
+
+### Changed
+
+- **An assistant can now have Turbo EA fetch a logo it cannot reach itself.** Asking an AI assistant to go and find a missing brand's mark turned out to be advice many of them cannot take — they run in a sandbox with no route to the open web — so `set_card_logos` accepts an image URL and the MCP server downloads it on their behalf. Only `https`, only a short list of public icon hosts (`MCP_LOGO_FETCH_HOSTS`), only a public address, at most 1 MB, and the file must genuinely be a PNG, JPEG, WebP or GIF; the image is then stored through exactly the same route as one you upload yourself, so every permission and format check still applies. Deliberately excluded from the default list are the services that look a logo up by company domain: those would tell a third party which products you run. `MCP_LOGO_FETCH_ENABLED=false` switches the whole path off, and an air-gapped instance needs no change — nothing is fetched unless an assistant asks for a specific URL.
+- **A brand icon that isn't in the pack no longer stops an assistant.** `set_card_logos` now answers an unknown slug with the next step — supply a URL, or the image itself — instead of a bare error, and a dry run reports both the slugs the packs do not carry and any URL that cannot be fetched, so gaps surface before anything is written rather than at the moment of commit. The packs cover well-known brands, not every product a customer runs, so a miss is an ordinary outcome.
+- **The bundled brand-icon pack ships as one file instead of 3,453.** No behaviour change — the same icons resolve by the same slugs. Thousands of tracked files made a code review of the pack impossible to read and silently truncated CI's own changed-file detection.
+- **`set_card_logos` reports errors more precisely, and no longer needs `mime`.** The format is read from the image itself and only compared when you supply it. Statuses now name the field to change: a missing format is `missing_mime` rather than `unsupported_mime`, and `content_mime_mismatch` is now `mime_mismatch`. Each row echoes `bytes_received` and a `sha256_received` (previously just `bytes`). The dry run also resolves each card's type, so a card type with logos switched off is reported in the preview instead of only on commit.
+
+### Fixed
+
+- **A card logo on a diagram showed as a broken image.** The composed picture is now handed to the diagram in the same encoding the card-type icons have always used, which is the one this product has proof the embedded editor renders. The card-type mark beside it is now a small white glyph in the band under the logo, rather than a white square sitting over it. A logo drawn in dark ink now sits on a pale wash of the card's own colour, so it stays legible whatever the card type is. Both the logo and the card-type mark are drawn large enough to read, and share a centre line. The card-type mark now sits in its own corner rather than crowding the logo, and the card name is centred on the card instead of on the space beside the image.
+- **A logo on a diagram no longer overflows the card it belongs to.** The picture is now built for the size of the cell it lands on, so the card-type mark stays inside the card on a group child, a drilled-down child and a card exported from the dependency view — all of which are smaller or taller than a plain card — and it is rebuilt when you resize a card by hand. The logo itself sits higher, on the same line as the card-type mark, on a backing plate that hugs it instead of framing it — every pixel of plate padding was costing the mark twice its size — and the card name now keeps a visible gap from that plate rather than butting against it. The card-type mark has come in off the rounded corner it used to hug.
+- **A long card name in the dependency view is now readable, and no longer runs under the logo.** Two things were wrong: a name was cut short at 26 characters before it was ever drawn, and it was written on one line across the card's full width — so a logo in the corner sat on top of any name long enough to reach it. Names are no longer cut; they wrap onto a second line and are shortened only when they genuinely do not fit. The logo keeps the top-left corner where a card's mark belongs, the card-type mark has moved along the top edge to sit beside the lifecycle dot, and the text starts below them both, using the card's whole width. Cards are taller to hold that second line.
+- **A diagram shows its logos when you open it, not only when you edit it.** The read-only diagram view renders the stored drawing directly and never ran the display pass, so logos appeared in the editor and vanished the moment anyone merely looked at the diagram.
+- **A logo whose artwork runs to the edge is no longer clipped.** The rounded tile cropped marks that filled their canvas — Apache Kafka's among them. Existing logos are fixed as they are, with no need to upload them again.
+- **The row-selection checkboxes stay at the far left of every grid.** Freezing a column on a narrow window could hand the checkbox column back to the scrolling area, so it slid away with the content instead of staying beside the rows it selects.
+- **A grid's saved list of frozen columns no longer picks up an internal column id.** It was invisible on screen, but it travelled into saved views as a freeze nobody could release.
+
+## [2.103.0] - 2026-08-28
+
+### Added
+
+- **Dates in an extension's pages now follow your date format.** An extension can read the workspace date format from **Admin → Settings**, so a date it shows is written the same way as everywhere else in Turbo EA rather than in whatever format the extension happened to pick. Extensions can also link into a Turbo EA page — an inventory view, a report — without the full page reload that used to cost.
+
+## [2.102.0] - 2026-08-28
+
+### Added
+
+- **An extension can say where the section it adds to a card type belongs.** Its manifest declares a placement — at the top, at the bottom, or before/after any built-in section — and Turbo EA writes that position into the card type's layout. Turbo EA itself has no opinion beyond a sensible default of "just above Relations": a block of regulatory attributes and a post-decision summary want different homes, and only the extension knows which it is.
+
+### Fixed
+
+- **A section an extension adds to a card type is now given a place in that type's saved layout.** Previously it had no position of its own, so on a card type whose layout had been arranged it rendered at the very bottom — underneath Relations, the longest section on the page — where it was easy to miss. The extension chooses where its section belongs and the position is written into the layout you see in **Admin → Metamodel → Card layout**, so the layout editor and the card always agree on it. Existing installs pick this up the next time the extension is installed, enabled or updated. It is only a starting position: move the section anywhere you like, including below Relations, and it stays where you put it — neither a re-install nor an extension update will move it again.
+
+## [2.101.0] - 2026-08-28
+
+### Added
+
+- **Publish the PPM portfolio board as a web portal.** A web portal now has a **Portal type**: the card list it has always shown, or the read-only **PPM portfolio board** — the same timeline, health indicators, budget-versus-actual bars and hover status-report overview your team sees inside Turbo EA, on a public link that needs no account and no licence. Built for executives who want portfolio visibility but will not maintain another login ([#1019](https://github.com/vincentmakes/turbo-ea/discussions/1019)). Three switches control what the published board reveals — budget and actual spend, status-report commentary, and project-manager names (off by default, since names are personal data). Card cost fields, email addresses and the per-initiative detail are never published, whatever you pick. Clicking an initiative still leads into Turbo EA behind the normal sign-in, and signing in lands you on the initiative you clicked. Portfolio portals honour the same subtype and tag filters as any other portal, so you can publish one programme rather than the whole portfolio, and they can be SSO-gated like any other portal too. Turning the PPM module off takes every portfolio portal dark immediately, without unpublishing anything.
+
+### Changed
+
+- **The portfolio board loads a fixed number of database queries** instead of two more for every initiative on it. A portfolio of 200 initiatives previously issued several hundred extra queries per page load.
+
+### Fixed
+
+- **The portfolio's Group by dropdown shows type names, not internal keys.** It listed the raw type key for any card type the browser had not already loaded into its metamodel cache.
+
 ## [2.100.0] - 2026-08-28
 
 ### Added

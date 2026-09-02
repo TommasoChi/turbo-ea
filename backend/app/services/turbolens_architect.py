@@ -114,10 +114,17 @@ async def load_landscape(db: AsyncSession) -> dict[str, Any]:
         for rel in rels_result.scalars().all():
             src_id = str(rel.source_id)
             tgt_id = str(rel.target_id)
+            # Name each vendor once per card: several relation types may connect
+            # the same card to the same Provider, and a repeated name reads to
+            # the model as a stronger signal than it is.
             if tgt_id in providers:
-                card_vendors.setdefault(src_id, []).append(providers[tgt_id].name)
+                names = card_vendors.setdefault(src_id, [])
+                if providers[tgt_id].name not in names:
+                    names.append(providers[tgt_id].name)
             elif src_id in providers:
-                card_vendors.setdefault(tgt_id, []).append(providers[src_id].name)
+                names = card_vendors.setdefault(tgt_id, [])
+                if providers[src_id].name not in names:
+                    names.append(providers[src_id].name)
 
     apps = []
     for card in cards:
@@ -447,6 +454,9 @@ async def _load_relation_types_context(db: AsyncSession) -> str:
         "",
         "=== METAMODEL RELATION TYPES (STRICT — only these relations are allowed) ===",
         "Each relation type defines which source card type can relate to which target card type.",
+        "Several relation types may connect the SAME pair of card types with different verbs",
+        "(e.g. 'owns' and 'uses' between Organization and Application) — pick the key whose verb",
+        "matches the relationship you mean, not merely the first key that fits the types.",
         "You MUST only propose relations using these exact keys AND matching source/target types.",
         "If a relation type says 'Application → ITComponent', you CANNOT use it between",
         "BusinessCapability → ITComponent. Choose the card type that fits the available relations.",

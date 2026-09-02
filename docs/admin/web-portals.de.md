@@ -12,6 +12,109 @@ Web-Portale sind nützlich, um Architekturinformationen mit Stakeholdern zu teil
 - **Serviceverzeichnis** — IT-Services und ihre Eigentümer veröffentlichen
 - **Fähigkeitskarte** — Eine öffentliche Ansicht der Geschäftsfähigkeiten bereitstellen
 
+## Portaltyp
+
+Jedes Portal veröffentlicht eine von drei Ansichten, ausgewählt über **Portaltyp**:
+
+| Typ | Was Besucher sehen |
+|-----|--------------------|
+| **Kartenliste** | Ein durchsuch- und filterbares Raster von Karten — das klassische Portal, konfiguriert über die unten stehenden Eigenschaften. |
+| **PPM-Portfolio-Board** | Das schreibgeschützte [PPM-Portfolio-Board](../guide/ppm.md) — Zeitachse, Statusampeln und Budget-gegen-Ist für jede aktive Initiative. |
+| **Prozessnavigator** | Das schreibgeschützte [Prozesshaus](../guide/bpm.md) — Ihre Geschäftsprozesshierarchie und der veröffentlichte BPMN-Ablauf jedes Prozesses. |
+
+### PPM-Portfolio-Portale
+
+Mit **PPM-Portfolio-Board** wird das Portal zu einer Führungsansicht Ihres
+Projektportfolios, erreichbar über einen öffentlichen Link — **ohne Konto, ohne
+Lizenz und ohne Anmeldung**. Gedacht für den häufigen Fall, dass die Geschäftsleitung
+Einblick in das Portfolio möchte, aber keine weiteren Zugangsdaten pflegen will.
+
+Das Board bezieht sich immer auf **Initiative**-Karten, daher ist die Kartentyp-Auswahl
+gesperrt. Die Filter für **Subtypen** und **Tags** greifen weiterhin — so veröffentlichen
+Sie ein einzelnes Programm statt des gesamten Portfolios.
+
+Besucher sehen dasselbe Board wie Ihr Team in Turbo EA: die Quartals-Zeitachse, die
+Ampeln für Termin/Kosten/Umfang, die CapEx- und OpEx-Balken, die Gruppierung nach
+beliebigen verknüpften Kartentypen und die Statusbericht-Übersicht, die beim Überfahren
+des Datums **Letzter Bericht** erscheint. Ein Klick auf eine Initiative führt hinter die
+normale Anmeldung in Turbo EA — nach dem Anmelden landen Sie auf der angeklickten Initiative.
+
+Drei Schalter steuern, was das veröffentlichte Board preisgibt:
+
+| Schalter | Standard | Veröffentlicht |
+|----------|----------|----------------|
+| **Budget und Ist-Kosten anzeigen** | Ein | Die CapEx- und OpEx-Balken sowie das Gesamtbudget |
+| **Kommentare aus Statusberichten anzeigen** | Ein | Zusammenfassung, Erreichtes und nächste Schritte in der Hover-Übersicht. Berichtsdatum und Statusampeln werden immer angezeigt |
+| **Namen der Projektleitung anzeigen** | **Aus** | Die Namen von Projektleitungen und Berichtsverfassern. Standardmäßig aus, da Namen personenbezogene Daten sind |
+
+Das Board öffnet außerdem mit einer Gruppierung und einem Subtyp Ihrer Wahl:
+
+| Einstellung | Standard | Wirkung |
+|-------------|----------|---------|
+| **Öffnet gruppiert nach** | Organisation | Welche Gruppierung das Board zuerst zeigt |
+| **Öffnet mit Subtyp** | Alle | Welcher Subtyp zuerst ausgewählt ist |
+
+Beides ist nur ein Ausgangspunkt — Besucher können beide Bedienelemente ändern,
+und nichts wird gespeichert; ein erneuter Aufruf kehrt zu Ihrer Konfiguration
+zurück. Das ist etwas anderes als der **Subtyp-Filter** oben, der bestimmt,
+welche Initiativen überhaupt veröffentlicht werden.
+
+!!! note
+    Manches wird niemals veröffentlicht, unabhängig von Ihrer Auswahl: Kosten-Felder
+    auf der Initiative-Karte selbst, E-Mail-Adressen von Benutzern und alles auf der
+    Detailseite einer Initiative — Arbeitspakete, Meilensteine, Risiken, Aufgaben und
+    die Berichtshistorie bleiben hinter der Anmeldung.
+
+Ein Portfolio-Portal kann wie jedes andere Portal per SSO geschützt werden. Wird das
+PPM-Modul unter **Admin > Einstellungen** deaktiviert, sind alle Portfolio-Portale
+sofort nicht mehr erreichbar; Sie müssen sie nicht einzeln zurückziehen.
+
+### Prozessnavigator-Portale
+
+Mit **Prozessnavigator** wird das Portal zu einer schreibgeschützten Ansicht Ihres
+**Prozesshauses**, erreichbar über einen öffentlichen Link — **ohne Konto, ohne
+Lizenz und ohne Anmeldung**. Es richtet sich an die Personen, die am dringendsten
+verstehen müssen, wie die Organisation arbeitet, und am wenigsten wahrscheinlich
+einen Zugang haben: neue Mitarbeitende, Prüfer, operative Teams und externe Partner.
+
+Das Portal ist immer auf **Geschäftsprozess**-Karten beschränkt, daher ist die
+Kartentyp-Auswahl gesperrt. Die Filter **Untertypen** und **Tags** gelten weiterhin —
+so veröffentlichen Sie einen Zweig des Hauses statt des gesamten Hauses.
+
+Besucher sehen dasselbe Haus wie Ihr Team in Turbo EA: die nach Prozessart in Zeilen
+gruppierte Hierarchie, den Ebenenregler, Zoom und Brotkrümel, die Suche, die
+Farbüberlagerungen, den Organisationsfilter und die Spaltenanzahl. Beim Öffnen eines
+Prozesses erscheinen Übersicht, Schritte und der **veröffentlichte BPMN-Ablauf** —
+im Vollbild, mit Verschieben und Zoomen, genau wie für Ihr Team.
+
+Zwei Schalter und zwei Startwerte steuern das veröffentlichte Haus:
+
+| Einstellung | Standard | Wirkung |
+|-------------|----------|---------|
+| **Verknüpfte Systeme je Schritt anzeigen** | **Aus** | Die Namen der mit jedem Prozessschritt verknüpften Anwendungen, Datenobjekte, IT-Komponenten und Organisationen. Standardmäßig aus, da dies zeigt, welche Systeme Ihre Prozesse betreiben |
+| **Öffnet auf Ebene** | 2 | Wie tief die Hierarchie zuerst angezeigt wird |
+| **Öffnet eingefärbt nach** | Prozessart | Welches Attribut die Kacheln zuerst einfärbt |
+
+Die letzten beiden sind nur ein Ausgangspunkt — Besucher können beide Steuerelemente
+ändern, und nichts wird gespeichert; ein erneuter Aufruf kehrt zu Ihrer Konfiguration
+zurück.
+
+!!! note
+    Einiges wird nie veröffentlicht, unabhängig von Ihrer Auswahl: die Anwendungen,
+    Datenobjekte und Kosten hinter einem Prozess, die Prozess-×-Anwendungs-Matrix und
+    die Abhängigkeitsansicht sowie jedes BPMN, das nicht **veröffentlicht** ist —
+    Entwürfe, eingereichte, archivierte und zurückgezogene Revisionen bleiben hinter
+    der Anmeldung.
+
+Anders als ein Portfolio-Portal, dessen Zeilen hinter der normalen Anmeldung nach
+Turbo EA führen, **verlinkt** ein Prozessnavigator-Portal **nirgendwohin**. Das ist
+Absicht: Ein Haus, das für Leser ohne Konto veröffentlicht wird, sollte die Frage
+«Wie machen wir das?» beantworten, ohne eine Tür zu zeigen, die sie nicht öffnen können.
+
+Ein Prozessnavigator-Portal kann wie jedes andere Portal per SSO geschützt werden.
+Wird das BPM-Modul unter **Admin > Einstellungen** deaktiviert, sind sofort alle
+Prozessportale dunkel; Sie müssen sie nicht einzeln zurückziehen.
+
 ## Zugriffsschutz
 
 Jedes Portal hat einen **Zugriffsmodus**, der steuert, wer es öffnen darf:

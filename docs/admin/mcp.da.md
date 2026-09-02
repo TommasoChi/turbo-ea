@@ -155,7 +155,7 @@ I denne tilstand autentificerer serveren sig med e-mail/adgangskode og fornyer t
 
 ## Tilgængelige funktioner
 
-MCP-serveren eksponerer **47 værktøjer** på tværs af to grupper: **30 læseværktøjer**, der forespørger EA-data, og **17 skriveværktøjer** (13 additive, 4 destruktive), der opretter og vedligeholder kort, relationer, diagrammer, risici, ADR'er og mere — herunder omdannelse af artefakter, som et AI-værktøj har i sin egen kontekst (regneark, BPMN XML, DrawIO XML, dokumenter, billeder), til strukturerede EA-data. Hvert værktøj bærer MCP-`ToolAnnotations` (skrivebeskyttet / destruktiv / idempotent-hints), så connectors kan vise destruktivitet i deres UI.
+MCP-serveren eksponerer **51 værktøjer** på tværs af to grupper: **32 læseværktøjer**, der forespørger EA-data, og **19 skriveværktøjer** (14 additive, 5 destruktive), der opretter og vedligeholder kort, relationer, diagrammer, risici, ADR'er og mere — herunder omdannelse af artefakter, som et AI-værktøj har i sin egen kontekst (regneark, BPMN XML, DrawIO XML, dokumenter, billeder), til strukturerede EA-data. Hvert værktøj bærer MCP-`ToolAnnotations` (skrivebeskyttet / destruktiv / idempotent-hints), så connectors kan vise destruktivitet i deres UI.
 
 ### Dry-run-sikkerhed på skrivninger
 
@@ -163,7 +163,7 @@ Hvert skriveværktøj har **`dry_run=true`** som standard. I denne tilstand kør
 
 ### Læseværktøjer
 
-Serveren eksponerer 30 læseværktøjer grupperet i otte klynger.
+Serveren eksponerer 32 læseværktøjer grupperet i otte klynger.
 
 **Kort og metamodel**
 
@@ -226,6 +226,8 @@ Serveren eksponerer 30 læseværktøjer grupperet i otte klynger.
 | `get_card_stakeholders` | Brugere + roller tildelt et kort |
 | `get_card_comments` | Trådede kommentarer på et kort |
 | `get_card_documents` | Dokumentlinks vedhæftet et kort |
+| `get_card_logo` | A card's logo: mime, size and a sha256 of the stored bytes, so a write can be verified without transferring the image (pass `include_image` when you do want it) |
+| `list_available_icons` | Search the built-in brand-icon pack for a slug to pass to `set_card_logos` |
 
 **Diagrammer**
 
@@ -244,9 +246,9 @@ Alle værktøjer er bundet af den autentificerede brugers RBAC — en viewer vil
 
 ### Skriveværktøjer
 
-Serveren eksponerer 17 skriveværktøjer, hver annoteret som **additiv** (opretter eller udvider data) eller **destruktiv** (ændrer eller fjerner eksisterende data), så connectors kan advare tilsvarende.
+Serveren eksponerer 19 skriveværktøjer, hver annoteret som **additiv** (opretter eller udvider data) eller **destruktiv** (ændrer eller fjerner eksisterende data), så connectors kan advare tilsvarende.
 
-**Additive (13)**
+**Additive (14)**
 
 | Værktøj | Beskrivelse |
 |------|-------------|
@@ -263,8 +265,9 @@ Serveren eksponerer 17 skriveværktøjer, hver annoteret som **additiv** (oprett
 | `sign_adr` | Signér en ADR (kræver tilladelsen `adr.sign`; ellers returneres et UI-dybdelink til at signere i browseren). |
 | `create_diagram` | Opret et fritformatet DrawIO-diagram med valgfri links til eksisterende kort. |
 | `import_bpmn` | Gem et BPMN 2.0 XML-diagram mod et **eksisterende** Business Process-kort. Hvis intet kort matcher det angivne navn, returnerer værktøjet en `card_not_found`-fejl, der peger agenten mod `create_cards_bulk` — dette tvinger agenten til at oprette kortet eksplicit med beskrivelse, undertype og egenskaber først, i stedet for at tage en genvej, der lander et sparsomt kort. |
+| `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
-**Destruktive (4)**
+**Destruktive (5)**
 
 | Værktøj | Beskrivelse |
 |------|-------------|
@@ -272,6 +275,7 @@ Serveren eksponerer 17 skriveværktøjer, hver annoteret som **additiv** (oprett
 | `archive_cards` | Soft-delete af kort. Kan genoprettes — arkiverede kort kan gendannes i 30 dage før auto-udrensning. |
 | `update_diagram` | Erstat et diagrams DrawIO XML, navn eller kortlinks. |
 | `rollback_batch` | Tilbagerul de skrivninger, der blev udført under en tidligere mutations-batch. |
+| `clear_card_logos` | Remove the custom logo from cards, falling them back to their card-type icon. Recoverable — set it again to restore. |
 
 ### Artefakt-upload
 
@@ -291,7 +295,8 @@ Forsvar i dybden ovenpå dry-run, så en LLM-fejltagelse ikke kan forårsage mas
 
 - **Per-kald-størrelsesgrænser.** MCP-skriveværktøjerne håndhæver en meget mindre grænse end de underliggende Excel-importør-endpoints: 200 rækker for `create_cards_bulk`, 500 operationer for `upsert_relations_bulk`. Stort nok til enhver realistisk enkelt artefakt-upload, lille nok til, at en dry-run-forhåndsvisning stadig kan gennemses.
 - **Ingen relationssletning som standard.** `upsert_relations_bulk` afviser `action: "delete"`-operationer — for at fjerne relationer, brug web-UI'et, hvor handlingen registreres under brugerens identitet. Operatører kan tilvælge ved at indstille `MCP_ALLOW_RELATION_DELETE=true`.
-- **Kill switch.** `MCP_WRITES_ENABLED=false` slår alle 17 skriveværktøjer fra uden at re-deploye kode. De 30 læseværktøjer fortsætter med at virke.
+- **Kill switch.** `MCP_WRITES_ENABLED=false` slår alle 19 skriveværktøjer fra uden at re-deploye kode. De 32 læseværktøjer fortsætter med at virke.
+- **Logo-hentning sker kun fra tilladte værter.** De medfølgende ikonpakker kan ikke dække alle produkter hos en kunde, og en assistent kører ofte i en sandkasse uden adgang til nettet, så `set_card_logos` accepterer en `image_url`, som MCP-serveren henter. Kun `https`, kun værter fra `MCP_LOGO_FETCH_HOSTS`, kun offentlige adresser, højst to omdirigeringer (hver kontrolleret på ny), højst 1 MB læst som stream, og byte-strømmen skal bære en ægte PNG/JPEG/WebP/GIF-signatur. Hentningen sker i MCP-kanten, aldrig i backend'en, og billedet uploades derefter ad den almindelige vej — en URL valgt af en sprogmodel når aldrig den proces, der holder databasen. `MCP_LOGO_FETCH_ENABLED=false` slår det fra.
 - **Audit origin-tag.** Hver backend-anmodning fra MCP-serveren bærer en `X-Turbo-EA-Origin: mcp`-header. Hændelser udsendt fra disse anmodninger er tagget `origin: "mcp"` i revisions-log-payloaden, så admins kan filtrere MCP-drevne skrivninger ud af tidslinjen adskilt fra web-UI-handlinger.
 - **Mutations-batches.** Hvert MCP-skrivekald åbner en mutations-batch før nogen skrivninger; hver hændelse udsendt under kaldet stemples med batch-id'et. Admins (eller værktøjet `get_change_history`) kan rekonstruere den fulde per-hændelses-diff for en commit fra ét id, og `rollback_batch` kan tilbagerulle den. Commits over `MCP_BATCH_CONFIRMATION_THRESHOLD` rækker skal ekko en engangs-`confirm_token` udstedt af den forudgående dry-run (15 minutters TTL), så en stor commit altid følger efter en gennemgået forhåndsvisning.
 - **Ingen hård sletning.** Værktøjssættet udelader bevidst permanent kortsletning. `archive_cards` og `update_cards_bulk` *er* eksponeret, men arkivering er en genoprettelig soft-delete (30-dages gendannelsesvindue), og begge er destruktivitets-annoterede og dry-run-gatede. Tilføjelse af et værktøj, der udfører en irreversibel mutation (hård sletning, tvungen udrensning), ville kræve en eksplicit designgennemgang.
@@ -303,7 +308,10 @@ De seks rettesnore-miljøvariabler på MCP-containeren:
 | `MCP_WRITES_ENABLED` | `true` | Hovedkontakt for skriveværktøjer. `false` → skrivebeskyttet MCP. |
 | `MCP_MAX_CARDS_PER_CALL` | `200` | Hård grænse på `create_cards_bulk`- / `update_cards_bulk`-rækker pr. anmodning. |
 | `MCP_MAX_RELATIONS_PER_CALL` | `500` | Hård grænse på `upsert_relations_bulk`-operationer pr. anmodning. |
+| `MCP_MAX_LOGOS_PER_CALL` | `50` | Hard cap on `set_card_logos` rows per request. Lower than the card cap because each logo is its own upload and carries image bytes. |
 | `MCP_ALLOW_RELATION_DELETE` | `false` | Når `true`, accepterer `upsert_relations_bulk` `action: "delete"`-operationer. |
+| `MCP_LOGO_FETCH_ENABLED` | `true` | Når `true`, kan `set_card_logos` tage en `image_url`: MCP-serveren henter billedet og uploader det ad den almindelige vej, så alle kontroller af rettigheder, størrelse og format stadig gælder. Sæt `false` for helt at afvise URL-vejen — ikon-slugs og indsatte bytes virker fortsat. |
+| `MCP_LOGO_FETCH_HOSTS` | *(built-in)* | Kommaseparerede værter, som et logo må hentes fra, med nøjagtigt match. Standard: `raw.githubusercontent.com`, `cdn.jsdelivr.net`, `cdn.simpleicons.org`, `upload.wikimedia.org` — offentlig ikon-hosting, hvor forespørgslen indeholder et filnavn og intet om dit landskab. En domæne-til-logo-tjeneste kan tilføjes, men så får den at vide, hvilke leverandører du bruger. |
 | `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | Commits, der berører flere rækker end dette, kræver `confirm_token` fra en forudgående dry-run. |
 | `MCP_REQUIRE_DRYRUN_FIRST` | `true` | Aktiverer confirm-token-gaten ovenfor. Sæt kun til `false` for betroede automatiseringspipelines, der eksplicit springer forhåndsvisnings-rundturen over. |
 

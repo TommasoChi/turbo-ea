@@ -33,12 +33,13 @@ Abrir um diagrama lança o editor DrawIO em ecrã inteiro num iframe da mesma or
 Use a caixa de diálogo **Inserir cartões** (a partir da barra de ferramentas ou do menu de contexto) para adicionar cartões à tela:
 
 - Os **chips de tipo com contadores ao vivo** na coluna esquerda filtram os resultados.
-- Pesquise por nome na coluna direita; cada linha tem uma caixa de seleção.
-- **Inserir selecionados** adiciona os cartões escolhidos em grelha; **Inserir todos** adiciona cada cartão que corresponde ao filtro atual (com confirmação acima de 50 resultados).
+- Pesquise por nome na coluna direita; cada linha tem uma caixa de seleção. Restrinja o filtro a um único tipo hierárquico e a lista passa a ser uma árvore indentada, para encontrar um cartão pelo seu ramo.
+- Os cartões marcados surgem como chips acima da lista e continuam selecionados enquanto muda o filtro ou a pesquisa — remova um com o seu ×.
+- **Selecionar tudo o que é mostrado** marca tudo o que o filtro atual deixa no ecrã; **Inserir selecionados** adiciona os cartões escolhidos à tela em grelha.
 
 A mesma caixa abre em modo seleção única para **Mudar cartão vinculado** e **Vincular a cartão existente**.
 
-Cada cartão na tela mostra o seu **ícone de tipo de cartão** como um pequeno glifo branco no canto superior esquerdo, ao lado da cor do tipo — assim o tipo de um cartão é transmitido tanto pelo ícone quanto pela cor. Isso corresponde aos ícones usados em toda a aplicação e melhora a legibilidade para utilizadores daltónicos. O ícone aparece nos cartões inseridos a partir de agora. Para adicionar ícones aos cartões já presentes num diagrama mais antigo, clique em **Aplicar ícones de tipo de cartão** na barra de ferramentas do editor.
+Cada cartão na tela mostra o seu **ícone de tipo de cartão** como um pequeno glifo branco no canto superior esquerdo, ao lado da cor do tipo — assim o tipo de um cartão é transmitido tanto pelo ícone quanto pela cor. Isso corresponde aos ícones usados em toda a aplicação e melhora a legibilidade para utilizadores daltónicos. O ícone aparece nos cartões inseridos a partir de agora. Para adicionar ícones aos cartões já presentes num diagrama mais antigo, clique em **Aplicar ícones de tipo de cartão** na barra de ferramentas do editor. Se um cartão tiver o seu próprio **logótipo**, é esse que aparece, mantendo o ícone do tipo de cartão como um pequeno emblema no canto — assim a forma indica tanto o produto como o tipo de cartão. Os logótipos surgem ao abrir o diagrama e são atualizados quando algum muda; um cartão sem logótipo, e qualquer cartão de um tipo em que um administrador desativou os logótipos, é desenhado exatamente como antes. Uma caixa **Logótipos dos cartões** no mesmo menu desativa-os se preferir um diagrama sem adornos; está ativada por predefinição.
 
 ### Ações do clique direito
 

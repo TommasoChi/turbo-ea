@@ -16,6 +16,43 @@ Le haut de la fiche affiche :
 - **Anneau de qualité des données** -- Indicateur visuel de complétude des informations (0-100%)
 - **Menu d'actions** -- Archiver, supprimer et actions d'approbation. Contient aussi une option en un clic **Observer cette fiche** (lorsque le type de fiche définit un rôle Observateur) qui permet à tout utilisateur disposant d'un accès en lecture de suivre la fiche sans passer par l'onglet Parties prenantes.
 
+### Logo personnalisé
+
+Les fiches d'un type qui l'autorise peuvent porter leur propre **logo** à la
+place de l'icône générique du type — une Application pour SAP, Kafka ou Jira
+affiche ainsi la marque du produit. Des logos reconnaissables rendent un
+inventaire bien plus rapide à parcourir, en particulier pour les personnes qui
+le consultent sans le maintenir.
+
+Survolez l'icône en haut à gauche de la fiche et cliquez dessus pour
+**téléverser**, **remplacer** ou **supprimer** l'image. L'icône du type ne
+disparaît pas : elle se déplace sous forme de petit badge dans le coin du logo,
+si bien que l'on distingue toujours d'un coup d'œil le type de fiche consulté.
+
+- **Formats acceptés** — PNG, JPEG, WebP ou GIF, jusqu'à 1 Mo. Le format SVG
+  est refusé, car il peut contenir des scripts.
+- **Où il apparaît** — l'en-tête de la fiche, la colonne **Logo** facultative
+  de l'[Inventaire](inventory.md) et tout portail web publié fondé sur ce type
+  de fiche.
+- **En l'absence de logo** — la fiche revient à son icône de type, comme avant.
+
+Les logos sont disponibles pour les types de fiches qu'un administrateur a
+activés ; par défaut, il s'agit d'Application et de Composant informatique.
+Voir [Métamodèle](../admin/metamodel.md).
+
+Cliquez sur le logo et choisissez **Choisir un logo de marque…** pour puiser
+dans un jeu intégré de plusieurs milliers de marques : recherchez le produit par
+son nom et sélectionnez-le, aucun fichier image n'est nécessaire. **Téléverser**
+permet d'utiliser votre propre fichier. Un assistant IA connecté via
+[MCP](../admin/mcp.md) peut définir les logos de la même façon en masse et, si un
+produit ne figure pas dans le jeu, il récupère la marque lui-même.
+
+Le même menu est disponible depuis la colonne **Logo** de
+l'[Inventaire](inventory.md) — survolez une cellule Logo et cliquez —, ce qui
+permet d'apposer des marques sur un paysage fraîchement importé sans ouvrir
+chaque fiche. C'est volontairement fiche par fiche : le logo n'est proposé ni
+au remplissage vers le bas ni à l'édition en masse.
+
 ### Workflow d'approbation
 
 Les fiches peuvent passer par un cycle d'approbation :
@@ -82,7 +119,7 @@ Affiche toutes les connexions avec d'autres fiches, groupées par type de relati
 
 - **Nom de la fiche liée** -- Cliquer pour naviguer vers la fiche liée
 - **Type de relation** -- La nature de la connexion (par ex. « utilise », « s'exécute sur », « dépend de »)
-- **Ajouter une relation** -- Cliquez sur **+** pour ouvrir la boîte de dialogue de cette relation. Elle liste les fiches correspondantes au fil de la saisie (les meilleures correspondances d'abord, d'autres se chargent au défilement) et masque celles déjà liées, avec une légende indiquant leur nombre. Cliquer sur une fiche la lie aussitôt et elle apparaît sous forme de puce en haut -- cliquez sur le **×** d'une puce pour annuler cet ajout. La boîte de dialogue reste ouverte pour en ajouter autant que vous voulez, et sur téléphone elle s'ouvre en plein écran. Les relations sans section propre sont accessibles via le bouton **Ajouter une relation** en bas de la section
+- **Ajouter une relation** -- Cliquez sur **+** pour ouvrir la boîte de dialogue de cette relation. Elle liste les fiches correspondantes au fil de la saisie (les meilleures correspondances d'abord, d'autres se chargent au défilement) et masque celles déjà liées, avec une légende indiquant leur nombre. Cliquer sur une fiche la lie aussitôt et elle apparaît sous forme de puce en haut -- cliquez sur le **×** d'une puce pour annuler cet ajout. La boîte de dialogue reste ouverte pour en ajouter autant que vous voulez, et sur téléphone elle s'ouvre en plein écran. Les relations sans section propre sont accessibles via le bouton **Ajouter une relation** en bas de la section. Lorsque le type lié est hiérarchique (capacité métier, organisation, etc.), la boîte de dialogue l'affiche sous forme d'arborescence indentée plutôt qu'en liste alphabétique, ce qui permet de choisir une sous-capacité par sa branche. La recherche conserve les parents d'un résultat pour le contexte, et les fiches non sélectionnables (déjà liées, tout juste ajoutées, ou la fiche elle-même) restent à leur place en grisé afin que les niveaux alentour restent lisibles.
 - **Tri** -- Les cartes liées sont listées par ordre alphabétique
 - **Supprimer une relation** -- Cliquez sur l'icône de suppression pour retirer une relation
 - **Grouper par sous-type** — Lorsqu'une section de relations contient de nombreuses fiches liées, elles sont automatiquement regroupées en groupes de sous-types repliables (chacun avec un décompte), avec un groupe final **Aucun sous-type** pour les fiches non classées. Utilisez le bouton de bascule dans l'en-tête de la section pour passer de la vue groupée à la vue en liste.

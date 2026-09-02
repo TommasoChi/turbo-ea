@@ -33,12 +33,13 @@ Ouvrir un diagramme lance l'éditeur DrawIO plein écran dans une iframe de mêm
 Utilisez le dialogue **Insérer des fiches** (depuis la barre d'outils ou le menu contextuel) pour ajouter des fiches au canevas :
 
 - Les **puces de types avec compteurs en direct** dans le rail gauche filtrent les résultats.
-- Recherchez par nom dans le rail droit ; chaque ligne porte une case à cocher.
-- **Insérer la sélection** ajoute les fiches choisies en grille ; **Tout insérer** ajoute toutes les fiches du filtre actif (avec une confirmation au-delà de 50 résultats).
+- Recherchez par nom dans le rail droit ; chaque ligne porte une case à cocher. Limitez le filtre à un seul type hiérarchique et la liste devient un arbre indenté, pour retrouver une fiche par sa branche.
+- Les fiches cochées apparaissent en puces au-dessus de la liste et restent sélectionnées pendant que vous changez de filtre ou de recherche — retirez-en une avec son ×.
+- **Sélectionner tout l'affichage** coche tout ce que laisse le filtre actif ; **Insérer la sélection** ajoute les fiches choisies au canevas en grille.
 
 Le même dialogue s'ouvre en mode sélection unique pour **Changer la fiche liée** et **Lier à une fiche existante**.
 
-Chaque fiche sur le canevas affiche son **icône de type de fiche** sous la forme d'un petit glyphe blanc dans le coin supérieur gauche, à côté de la couleur du type — le type d'une fiche est ainsi indiqué à la fois par l'icône et par la couleur. Cela correspond aux icônes utilisées dans toute l'application et améliore la lisibilité pour les utilisateurs daltoniens. L'icône apparaît sur les fiches insérées à partir de maintenant. Pour ajouter des icônes aux fiches déjà présentes sur un diagramme plus ancien, cliquez sur **Appliquer les icônes de type de fiche** dans la barre d'outils de l'éditeur.
+Chaque fiche sur le canevas affiche son **icône de type de fiche** sous la forme d'un petit glyphe blanc dans le coin supérieur gauche, à côté de la couleur du type — le type d'une fiche est ainsi indiqué à la fois par l'icône et par la couleur. Cela correspond aux icônes utilisées dans toute l'application et améliore la lisibilité pour les utilisateurs daltoniens. L'icône apparaît sur les fiches insérées à partir de maintenant. Pour ajouter des icônes aux fiches déjà présentes sur un diagramme plus ancien, cliquez sur **Appliquer les icônes de type de fiche** dans la barre d'outils de l'éditeur. Si une carte possède son propre **logo**, c'est lui qui s'affiche, l'icône du type de carte étant conservée comme petit badge dans un coin : la forme indique ainsi à la fois de quel produit et de quel type de carte il s'agit. Les logos apparaissent à l'ouverture du diagramme et se rafraîchissent lorsqu'un logo change ; une carte sans logo, comme toute carte d'un type pour lequel un administrateur a désactivé les logos, est dessinée exactement comme avant. Une case **Logos des cartes** dans le même menu les désactive si vous voulez un diagramme sans ornement ; elle est cochée par défaut.
 
 ### Actions du clic droit
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 import { LdvNode } from "./LayeredDependencyView";
 import type { LdvNodeData } from "./layeredDependencyLayout";
@@ -136,5 +136,144 @@ describe("LdvNode badges and focus ring", () => {
     expect(outlineOf(centre)).toContain("solid");
     // The ring wears the card type's colour, not a palette entry of its own.
     expect(outlineOf(centre)).toContain("#0f7eb5");
+  });
+});
+
+describe("LdvNode card logo", () => {
+  const logo = () => document.querySelector("img");
+  const typeIcon = () => document.querySelector(".ldv-type-icon");
+
+  it("renders no image at all when the card has no logo", () => {
+    renderNode();
+    expect(logo()).toBeNull();
+    // The type icon keeps the corner it has always had.
+    expect(typeIcon()).not.toBeNull();
+  });
+
+  it("renders the logo and keeps the type icon as a badge when one is supplied", () => {
+    renderNode({ logoUrl: "/api/v1/cards/app-1/logo?v=2026-08-28T10%3A00%3A00Z" });
+    expect(logo()?.getAttribute("src")).toBe(
+      "/api/v1/cards/app-1/logo?v=2026-08-28T10%3A00%3A00Z",
+    );
+    // Both identities stay readable: the mark AND what kind of card it is.
+    expect(typeIcon()).not.toBeNull();
+  });
+
+  it("keeps the logo out of the export drop list and the type icon in it", () => {
+    // The image export filter drops `.ldv-type-icon` because a Material
+    // Symbols ligature rasterises as its raw name. A real same-origin <img>
+    // is the one thing html-to-image CAN inline, so tagging it would throw
+    // away the logo for no reason.
+    renderNode({ logoUrl: "/api/v1/cards/app-1/logo?v=1" });
+    expect(logo()?.classList.contains("ldv-type-icon")).toBe(false);
+    expect(typeIcon()).not.toBeNull();
+  });
+
+  it("starts the text below the logo's band, at the card's full width", () => {
+    // The logo is out of the flow, so it costs no height; the text hangs from
+    // its band instead. Narrowing the text to sit BESIDE the mark was measured
+    // and is worse than doing nothing — ~124px breaks a name after its second
+    // word — so the name keeps the whole width and drops below the logo.
+    renderNode({ logoUrl: "/api/v1/cards/app-1/logo?v=1" });
+    const img = logo() as HTMLElement;
+    const imgStyle = getComputedStyle(img);
+    expect(imgStyle.position).toBe("absolute");
+
+    const block = (document.querySelector("p") as HTMLElement).parentElement as HTMLElement;
+    const blockStyle = getComputedStyle(block);
+    const logoBottom = parseFloat(imgStyle.top) + parseFloat(imgStyle.height);
+    // Level with the bottom of the mark, give or take the line box's leading —
+    // a few pixels of the box sit above the glyphs, so offsetting by the full
+    // box would leave a gap a card without a logo does not have.
+    const top = parseFloat(blockStyle.marginTop);
+    expect(top).toBeGreaterThan(logoBottom - 6);
+    expect(top).toBeLessThanOrEqual(logoBottom);
+    // Full width: no side gutters eating into a long name.
+    expect(parseFloat(blockStyle.paddingLeft) || 0).toBe(0);
+    expect(parseFloat(blockStyle.paddingRight) || 0).toBe(0);
+  });
+
+  it("leaves a card with no logo exactly as it was before logos existed", () => {
+    renderNode();
+    const block = (document.querySelector("p") as HTMLElement).parentElement as HTMLElement;
+    expect(parseFloat(getComputedStyle(block).marginTop) || 0).toBe(0);
+  });
+
+  it("shows a long name whole, wrapped, rather than cutting it short", () => {
+    // The name used to be sliced at 26 characters in JS, before CSS ever saw
+    // it — so no amount of room ever made a long name readable. The renderer
+    // owns the cut now: the text is complete in the DOM and wraps.
+    const long = "Salesforce Customer Community Portal";
+    renderNode({ name: long, logoUrl: "/api/v1/cards/app-1/logo?v=1" });
+    const nameEl = document.querySelector("p") as HTMLElement;
+    expect(nameEl.textContent).toBe(long);
+    expect(getComputedStyle(nameEl).whiteSpace).not.toBe("nowrap");
+    expect(getComputedStyle(nameEl).webkitLineClamp).toBe("2");
+  });
+
+  it("gives the name one line when two extra fields need the other", () => {
+    // Nothing clips a card — the badges deliberately overhang it — so the name
+    // has to yield the line rather than let the card spill past its border.
+    renderNode({
+      logoUrl: "/api/v1/cards/app-1/logo?v=1",
+      extraLines: [
+        { label: "Subtype", value: "Business Application" },
+        { label: "Owner", value: "A. Someone" },
+      ],
+    });
+    const nameEl = document.querySelector("p") as HTMLElement;
+    expect(getComputedStyle(nameEl).webkitLineClamp).toBe("1");
+  });
+
+  it("falls back to the plain type icon when the image fails to load", () => {
+    // A wiped volume or a 404 must land on exactly the card this app drew
+    // before logos existed — never a broken-image glyph.
+    renderNode({ logoUrl: "/api/v1/cards/app-1/logo?v=1" });
+    fireEvent.error(logo() as HTMLElement);
+    expect(logo()).toBeNull();
+    expect(typeIcon()).not.toBeNull();
+  });
+});
+
+describe("LdvNode type icon placement", () => {
+  // `sx` compiles to an emotion class, so the inline `style` attribute is
+  // empty — read the resolved value, as the outline test above does.
+  const iconPos = () => {
+    const el = document.querySelector(".ldv-type-icon") as HTMLElement;
+    const cs = getComputedStyle(el);
+    return { top: cs.top, bottom: cs.bottom, left: cs.left, right: cs.right };
+  };
+  const isSet = (v: string) => v !== "" && v !== "auto";
+
+  it("keeps the type icon at the top when there is no logo", () => {
+    renderNode();
+    const p = iconPos();
+    expect(isSet(p.top)).toBe(true);
+    expect(isSet(p.bottom)).toBe(false);
+  });
+
+  it("moves the type icon along the top edge when a logo takes the left corner", () => {
+    // The logo owns the whole left side; the type icon joins the lifecycle dot
+    // on the right, so the card's chrome reads as one row along the top.
+    renderNode({ logoUrl: "/api/v1/cards/app-1/logo?v=1" });
+    const p = iconPos();
+    expect(isSet(p.top)).toBe(true);
+    expect(isSet(p.right)).toBe(true);
+    expect(isSet(p.bottom)).toBe(false);
+    expect(isSet(p.left)).toBe(false);
+  });
+
+  it("sits clear of the lifecycle dot rather than under it", () => {
+    // The dot is 9px plus a 1.5px border at right:6, so anything less than
+    // ~18px of inset would overlap it.
+    renderNode({ logoUrl: "/api/v1/cards/app-1/logo?v=1", lifecyclePhase: "active" });
+    expect(parseFloat(iconPos().right)).toBeGreaterThanOrEqual(18);
+  });
+
+  it("takes the dot's own inset when there is no dot to clear", () => {
+    // Reserving room for a dot that is not drawn would leave the icon
+    // floating in from the edge for no reason.
+    renderNode({ logoUrl: "/api/v1/cards/app-1/logo?v=1", lifecyclePhase: null });
+    expect(parseFloat(iconPos().right)).toBeLessThan(18);
   });
 });
