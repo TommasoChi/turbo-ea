@@ -188,8 +188,18 @@ export const UI_SDK_VERSION = "1.19";
  * default top-level nav entry). Whitelisted on purpose so an extension can only
  * land in sanctioned menus (never admin/arbitrary ones); extend deliberately.
  * See `layouts/navItems.ts` for the current dropdown-capable nav items.
+ *
+ * "strategy_process" and "app_data" are fork-local legacy groups: this fork
+ * used to have dropdown nav items with those keys, and installed extensions
+ * (organization, value-chain, product-technology-what-if) were built against
+ * them. Upstream's merge dropped the dead inline dropdowns that hosted them,
+ * which took the extensions' nav entries down too — an unrecognised navGroup
+ * is swallowed entirely (see AppLayout.tsx), not just un-dropdowned. Keeping
+ * them whitelisted here (with no matching host item) makes AppLayout's
+ * existing "host absent -> top-level fallback" path do the degrade for free,
+ * so already-shipped extension bundles don't need to be rebuilt.
  */
-export const EXTENSION_NAV_GROUPS = ["reports", "grc"] as const;
+export const EXTENSION_NAV_GROUPS = ["reports", "grc", "strategy_process", "app_data"] as const;
 export type ExtensionNavGroup = (typeof EXTENSION_NAV_GROUPS)[number];
 
 /**

@@ -582,7 +582,11 @@ describe("extensionHost", () => {
   it("whitelists the nav groups an extension route may request", () => {
     // A route can only land in a sanctioned core menu — never admin or an
     // arbitrary one. Extend deliberately; this pins the current set.
-    expect([...EXTENSION_NAV_GROUPS]).toEqual(["reports", "grc"]);
+    // "strategy_process"/"app_data" are fork-local legacy groups kept so
+    // already-shipped extensions (organization, value-chain,
+    // product-technology-what-if) degrade to a top-level nav entry instead
+    // of vanishing — see the comment on EXTENSION_NAV_GROUPS.
+    expect([...EXTENSION_NAV_GROUPS]).toEqual(["reports", "grc", "strategy_process", "app_data"]);
   });
 
   it("returns routes for the grc nav group independently of reports", () => {
