@@ -1,0 +1,5 @@
+# Dockerfiles embed shell scripts via heredoc RUN steps; a CRLF checkout
+# (Windows core.autocrlf=true) bakes \r into the generated script's shebang
+# and breaks it inside the Linux container ("interpreter not found").
+Dockerfile text eol=lf
+*.sh text eol=lf
