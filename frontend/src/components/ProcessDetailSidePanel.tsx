@@ -25,7 +25,7 @@
  * Exposed on the extension SDK (see lib/extensionHost.tsx,
  * `ExtensionProcessDetailSidePanel` / `sdk.ProcessDetailSidePanel`).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
@@ -39,6 +39,7 @@ import { useTranslation } from "react-i18next";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
+import { useAuth } from "@/hooks/useAuth";
 import {
   buildTree,
   findNode,
@@ -50,6 +51,18 @@ import {
   type ProcItem,
   type ProcNode,
 } from "@/features/bpm/ProcessNavigator";
+import { useProcessTypeOptions } from "@/features/bpm/useProcessTypeOptions";
+import {
+  FULL_CAPABILITIES,
+  ProcessNavigatorProvider,
+} from "@/features/bpm/ProcessNavigatorContext";
+import type {
+  NavigatorCapabilities,
+  NavigatorMeta,
+  ProcessFlowPayload,
+  ProcessNavigatorSource,
+} from "@/features/bpm/ProcessNavigatorContext";
+import type { ProcessElement, ProcessFlowVersion } from "@/types";
 
 export interface ProcessDetailSidePanelProps {
   processId: string | null;
@@ -68,10 +81,81 @@ export default function ProcessDetailSidePanel({ processId, open, onClose }: Pro
   const { t } = useTranslation(["bpm", "common"]);
   const navigate = useNavigate();
   const { getType } = useMetamodel();
+  const processTypes = useProcessTypeOptions();
+  const { user } = useAuth();
   const [tab, setTab] = useState(0);
   const [roots, setRoots] = useState<ProcNode[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [currentId, setCurrentId] = useState<string | null>(null);
+
+  // DrawerOverview/DrawerSteps/DrawerFlow/DrawerApps/DrawerData (reused as-is
+  // from ProcessNavigator.tsx) read their data source, capability flags and
+  // metamodel facts from ProcessNavigatorContext, not from props — this
+  // panel is the ONE caller of those components outside ProcessNavigator
+  // itself, so it must supply that context exactly like the authenticated
+  // `ProcessNavigator` container does (same shape as
+  // `features/web-portals/PortalProcessNavigator.tsx`'s portal twin), or
+  // every tab throws "must render inside a ProcessNavigatorProvider".
+  const bpType = getType("BusinessProcess");
+  const source = useMemo<ProcessNavigatorSource>(
+    () => ({
+      loadMap: async () => {
+        const [r, rowOrderRes] = await Promise.all([
+          api.get<{ items: ProcItem[]; organizations: { id: string; name: string }[] }>("/reports/bpm/process-map"),
+          api
+            .get<{ row_order: string[] }>("/settings/bpm-row-order")
+            .catch(() => ({ row_order: ["management", "core", "support"] })),
+        ]);
+        return {
+          items: r.items,
+          organizations: r.organizations ?? [],
+          rowOrder: rowOrderRes.row_order ?? [],
+        };
+      },
+      loadFlow: async (processId): Promise<ProcessFlowPayload> => {
+        const [pub, els, drafts] = await Promise.all([
+          api
+            .get<ProcessFlowVersion | null>(`/bpm/processes/${processId}/flow/published`)
+            .catch(() => null),
+          api
+            .get<ProcessElement[]>(`/bpm/processes/${processId}/elements`)
+            .catch(() => [] as ProcessElement[]),
+          api
+            .get<{ id: string }[]>(`/bpm/processes/${processId}/flow/drafts`)
+            .catch(() => [] as { id: string }[]),
+        ]);
+        return {
+          bpmnXml: pub?.bpmn_xml ?? null,
+          svgThumbnail: pub?.svg_thumbnail ?? null,
+          steps: (els ?? []) as ProcessFlowPayload["steps"],
+          hasDrafts: (drafts?.length ?? 0) > 0,
+        };
+      },
+      loadCard: (id) => api.get<Record<string, unknown>>(`/cards/${id}`),
+      reorderCards: async (updates) => {
+        await Promise.all(
+          updates.map((u) => api.patch(`/cards/${u.id}`, { attributes: { sortOrder: u.sortOrder } })),
+        );
+      },
+      saveRowOrder: async (order) => {
+        await api.patch("/settings/bpm-row-order", { row_order: order });
+      },
+    }),
+    [],
+  );
+  const capabilities = useMemo<NavigatorCapabilities>(
+    () => ({ ...FULL_CAPABILITIES, canReorder: user?.role === "admin" }),
+    [user?.role],
+  );
+  const meta = useMemo<NavigatorMeta>(
+    () => ({
+      typeIcon: bpType?.icon ?? "route",
+      typeColor: bpType?.color ?? "#028f00",
+      subtypes: bpType?.subtypes ?? [],
+      processTypes,
+    }),
+    [bpType, processTypes],
+  );
 
   // A NEW externally-opened process: (re)load the whole tree and jump to
   // it. Internal navigation (Sub-Processes list, Drill down) only changes
@@ -110,11 +194,11 @@ export default function ProcessDetailSidePanel({ processId, open, onClose }: Pro
 
   if (!processId) return null;
 
-  const typeConfig = getType("BusinessProcess");
-  const typeColor = typeConfig?.color || "#028f00";
-  const typeIcon = typeConfig?.icon || "route";
+  const typeColor = bpType?.color || "#028f00";
+  const typeIcon = bpType?.icon || "route";
 
   return (
+    <ProcessNavigatorProvider value={{ source, capabilities, meta }}>
     <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: "100%", sm: 520 } } }}>
       <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
         <Box sx={{ px: 2.5, pt: 2, pb: 1, bgcolor: typeColor, color: "#fff" }}>
@@ -210,5 +294,6 @@ export default function ProcessDetailSidePanel({ processId, open, onClose }: Pro
         </Box>
       </Box>
     </Drawer>
+    </ProcessNavigatorProvider>
   );
 }
