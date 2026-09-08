@@ -486,10 +486,15 @@ async def list_my_stakeholder_cards(
         for srd in srd_rows.scalars().all():
             role_def_map[(srd.card_type_key, srd.key)] = srd
 
+    # Same as GET /cards and GET /cards/counts: surface each card's custom
+    # logo timestamp so a consumer (e.g. CardLogoAvatar) can render it —
+    # without this every card here silently degrades to the type icon.
+    logos = await logo_updated_map(db, [card for card, _roles in rows])
+
     items = []
     roles_by_card_id: dict[str, list[dict]] = {}
     for card, roles in rows:
-        items.append(_card_to_response(card))
+        items.append(_card_to_response(card, logo_updated_at=logos.get(card.id)))
         descriptors: list[dict] = []
         seen: set[str] = set()
         for role_key in roles or []:
