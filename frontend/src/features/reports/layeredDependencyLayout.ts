@@ -245,6 +245,13 @@ const CATEGORY_ORDER = [
 
 const CATEGORY_COLORS: Record<string, string> = LAYER_COLORS;
 
+/** Optional, consumer-scoped remapping of card types into LDV groups. */
+export interface LayerOverrides {
+  typeGroups?: Record<string, string>;
+  groupOrder?: string[];
+  groupLabels?: Record<string, string>;
+}
+
 /** Padding inside each group boundary */
 const PAD = 30;
 /** Extra empty space inside each layer box so cards can be dragged/rearranged
@@ -682,6 +689,7 @@ export function buildLdvFlow(
    * exactly as before (label-only).
    */
   relValueResolver?: (edge: GEdge) => string | undefined,
+  layerOverrides?: LayerOverrides,
 ): { nodes: Node[]; edges: Edge[] } {
   if (gNodes.length === 0) return { nodes: [], edges: [] };
 
@@ -694,7 +702,7 @@ export function buildLdvFlow(
   // Map nodeId → category
   const nodeCatMap = new Map<string, string>();
   for (const n of gNodes) {
-    nodeCatMap.set(n.id, typeCategory(n.type, types));
+    nodeCatMap.set(n.id, layerOverrides?.typeGroups?.[n.type] ?? typeCategory(n.type, types));
   }
 
   // Group nodes by category
@@ -707,8 +715,11 @@ export function buildLdvFlow(
 
   // Ordered categories
   const orderedCats = [
-    ...CATEGORY_ORDER.filter((c) => groups.has(c)),
-    ...[...groups.keys()].filter((c) => !CATEGORY_ORDER.includes(c)),
+    ...(layerOverrides?.groupOrder || []).filter((c) => groups.has(c)),
+    ...CATEGORY_ORDER.filter((c) => groups.has(c) && !layerOverrides?.groupOrder?.includes(c)),
+    ...[...groups.keys()].filter((c) =>
+      !CATEGORY_ORDER.includes(c) && !layerOverrides?.groupOrder?.includes(c),
+    ),
   ];
 
   // Valid edges (both endpoints exist)
@@ -790,7 +801,7 @@ export function buildLdvFlow(
       type: "ldvGroup",
       position: { x: gx, y: gy },
       data: {
-        label: gl.cat,
+        label: layerOverrides?.groupLabels?.[gl.cat] ?? gl.cat,
         color: CATEGORY_COLORS[gl.cat] || "#999",
       } satisfies LdvGroupData,
       style: { width: gl.groupW, height: gl.groupH },

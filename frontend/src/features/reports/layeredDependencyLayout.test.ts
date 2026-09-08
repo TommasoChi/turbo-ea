@@ -54,6 +54,14 @@ const IT_TYPE = makeType({
   sort_order: 2,
 });
 
+const DATA_TYPE = makeType({
+  key: "DataObject",
+  label: "Data Object",
+  color: "#7f5aa2",
+  category: "Application & Data",
+  sort_order: 3,
+});
+
 const BIZ_TYPE = makeType({
   key: "Organization",
   label: "Organization",
@@ -62,7 +70,7 @@ const BIZ_TYPE = makeType({
   sort_order: 3,
 });
 
-const TYPES = [APP_TYPE, IT_TYPE, BIZ_TYPE];
+const TYPES = [APP_TYPE, IT_TYPE, DATA_TYPE, BIZ_TYPE];
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -109,6 +117,31 @@ describe("buildLdvFlow", () => {
     const groupLabels = groups.map((g) => (g.data as { label: string }).label);
     expect(groupLabels).toContain("Application & Data");
     expect(groupLabels).toContain("Technical Architecture");
+  });
+
+  it("separates and relabels extension-requested application and data object groups", () => {
+    const result = buildLdvFlow(
+      [
+        { id: "app", name: "Portal", type: "Application" },
+        { id: "itc", name: "Archive", type: "ITComponent" },
+        { id: "data", name: "Invoices", type: "DataObject" },
+      ],
+      [],
+      TYPES,
+      undefined,
+      {
+        typeGroups: { Application: "application", DataObject: "data_object" },
+        groupOrder: ["application", "Technical Architecture", "data_object"],
+        groupLabels: { application: "Application", data_object: "Data Object" },
+      },
+    );
+
+    const groups = result.nodes.filter((n) => n.type === "ldvGroup");
+    expect(groups.map((group) => (group.data as { label: string }).label)).toEqual([
+      "Application", "Technical Architecture", "Data Object",
+    ]);
+    expect(result.nodes.find((node) => node.id === "app")?.parentId).toBe("group:application");
+    expect(result.nodes.find((node) => node.id === "data")?.parentId).toBe("group:data_object");
   });
 
   it("marks edges with a retired endpoint as severed, in either direction", () => {

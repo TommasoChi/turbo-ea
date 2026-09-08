@@ -17,10 +17,11 @@ vi.mock("@/hooks/useMetamodel", () => ({
 }));
 
 vi.mock("@/features/reports/LayeredDependencyView", () => ({
-  default: ({ canCreateDiagram }: { canCreateDiagram?: boolean }) => (
+  default: ({ canCreateDiagram, layerOverrides }: { canCreateDiagram?: boolean; layerOverrides?: unknown }) => (
     <div
       data-testid="extension-dependency-graph"
       data-can-create-diagram={String(canCreateDiagram)}
+      data-layer-overrides={JSON.stringify(layerOverrides)}
     />
   ),
 }));
@@ -100,6 +101,22 @@ describe("extensionHost", () => {
       "data-can-create-diagram",
       "true",
     );
+  });
+
+  it("forwards optional layer overrides without changing SDK version", async () => {
+    render(
+      <ExtensionDependencyGraph
+        nodes={[]}
+        edges={[]}
+        layerOverrides={{ typeGroups: { DataObject: "data_object" } }}
+      />,
+    );
+
+    expect(await screen.findByTestId("extension-dependency-graph")).toHaveAttribute(
+      "data-layer-overrides",
+      JSON.stringify({ typeGroups: { DataObject: "data_object" } }),
+    );
+    expect(UI_SDK_VERSION).toBe("1.19");
   });
 
   it("exposes the SDK 1.6–1.8 report/dashboard surface", () => {

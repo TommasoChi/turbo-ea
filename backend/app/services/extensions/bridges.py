@@ -25,6 +25,7 @@ from app.services.event_bus import event_bus
 from app.services.extensions.sdk import (
     ApplicationCandidate,
     AuditEvent,
+    CardHierarchy,
     CardRef,
     DependencyEdge,
     DependencyNode,
@@ -57,7 +58,16 @@ _ALLOWED_CARD_TYPES: dict[str, frozenset[str] | None] = {
 }
 
 
-_DEPENDENCY_CARD_TYPES = frozenset({"BusinessContext", "Platform", "Application", "ITComponent"})
+_DEPENDENCY_CARD_TYPES = frozenset(
+    {
+        "BusinessContext",
+        "Platform",
+        "Application",
+        "ITComponent",
+        "Interface",
+        "DataObject",
+    }
+)
 _DEPENDENCY_RELATION_TYPES = frozenset(
     {
         "relAppToBizCtx",
@@ -65,6 +75,12 @@ _DEPENDENCY_RELATION_TYPES = frozenset(
         "relPlatformToApp",
         "relAppToITC",
         "relPlatformToITC",
+        "relITCToDataObj",
+        "ITComponentToDataObject",
+        "relAppToDataObj",
+        "relAppToInterface",
+        "relInterfaceToDataObj",
+        "relInterfaceToITC",
     }
 )
 _DEPENDENCY_CARD_ATTRIBUTE_KEYS = frozenset(
@@ -434,6 +450,99 @@ class _CoreQueryBridge:
                     ),
                 )
             ),
+            partial=partial,
+        )
+
+    async def read_card_hierarchy(
+        self,
+        card_id: UUID,
+        *,
+        allowed_card_types: Sequence[str],
+        card_attribute_keys: Sequence[str] = (),
+    ) -> CardHierarchy:
+        card_types = self._validate_dependency_subset(
+            allowed_card_types,
+            allowed=_DEPENDENCY_CARD_TYPES,
+            field="allowed_card_types",
+        )
+        card_attributes = self._validate_dependency_subset(
+            card_attribute_keys,
+            allowed=_DEPENDENCY_CARD_ATTRIBUTE_KEYS,
+            field="card_attribute_keys",
+            allow_empty=True,
+        )
+        root = (
+            await self._db.execute(select(Card).where(Card.id == card_id, Card.status == "ACTIVE"))
+        ).scalar_one_or_none()
+        if root is None:
+            raise ExtensionBridgeError(
+                "reference_not_found",
+                "The referenced card does not exist or is not active",
+                details={"card_id": str(card_id)},
+            )
+        if root.type not in card_types or not self._dependency_subtype_is_allowed(root):
+            raise ExtensionBridgeError(
+                "reference_type_mismatch",
+                "The hierarchy root has an unexpected type or subtype",
+                details={"card_id": str(card_id)},
+            )
+        if not await PermissionService.check_permission(
+            self._db, self._user, "inventory.view", root.id, "card.view"
+        ):
+            raise ExtensionBridgeError(
+                "permission_denied",
+                "The current actor cannot view the referenced card",
+                details={"card_id": str(card_id)},
+            )
+
+        partial = False
+        parent: DependencyNode | None = None
+        if root.parent_id is not None:
+            parent_card = (
+                await self._db.execute(
+                    select(Card).where(Card.id == root.parent_id, Card.status == "ACTIVE")
+                )
+            ).scalar_one_or_none()
+            if (
+                parent_card is None
+                or parent_card.type not in card_types
+                or not self._dependency_subtype_is_allowed(parent_card)
+            ):
+                partial = True
+            elif not await PermissionService.check_permission(
+                self._db, self._user, "inventory.view", parent_card.id, "card.view"
+            ):
+                partial = True
+            else:
+                parent = self._dependency_node(parent_card, card_attributes)
+
+        child_rows = (
+            (
+                await self._db.execute(
+                    select(Card)
+                    .where(Card.parent_id == root.id, Card.status == "ACTIVE")
+                    .order_by(Card.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        children: list[DependencyNode] = []
+        for child in child_rows:
+            if child.type not in card_types or not self._dependency_subtype_is_allowed(child):
+                partial = True
+                continue
+            if not await PermissionService.check_permission(
+                self._db, self._user, "inventory.view", child.id, "card.view"
+            ):
+                partial = True
+                continue
+            children.append(self._dependency_node(child, card_attributes))
+
+        return CardHierarchy(
+            root=self._dependency_node(root, card_attributes),
+            parent=parent,
+            children=tuple(children),
             partial=partial,
         )
 

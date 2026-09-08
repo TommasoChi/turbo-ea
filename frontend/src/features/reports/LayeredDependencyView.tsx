@@ -94,6 +94,7 @@ import {
   type LdvNodeData,
   type LdvGroupData,
   type LdvEdgeData,
+  type LayerOverrides,
 } from "./layeredDependencyLayout";
 import { LDV_HANDLE_SPECS } from "./ldvHandles";
 import { ldvEdgeStroke } from "./ldvLineStyle";
@@ -1240,6 +1241,8 @@ interface Props {
   /** When true, show the "Create diagram" toolbar action (gated on `diagrams.manage`
    *  by the parent). Only enable in consumers whose nodes are real inventory cards. */
   canCreateDiagram?: boolean;
+  /** Optional consumer-scoped remapping of DependencyGraph groups. */
+  layerOverrides?: LayerOverrides;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1268,6 +1271,7 @@ function LayeredDependencyInner({
   pulseCards,
   openInReportHref,
   canCreateDiagram,
+  layerOverrides,
 }: Props) {
   const { t } = useTranslation(["reports", "common"]);
   const theme = useTheme();
@@ -1310,8 +1314,9 @@ function LayeredDependencyInner({
         edges,
         types,
         settings.showRelationValues ? relValueResolver : undefined,
+        layerOverrides,
       ),
-    [nodes, edges, types, settings.showRelationValues, relValueResolver],
+    [nodes, edges, types, settings.showRelationValues, relValueResolver, layerOverrides],
   );
 
   /* ---- Original card data (attributes/lifecycle) by id + field catalogue ---- */

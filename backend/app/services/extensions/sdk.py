@@ -250,6 +250,16 @@ class DependencySubgraph:
 
 
 @dataclass(frozen=True)
+class CardHierarchy:
+    """Direct, permission-shaped hierarchy around one active Card."""
+
+    root: DependencyNode
+    parent: DependencyNode | None
+    children: tuple[DependencyNode, ...]
+    partial: bool
+
+
+@dataclass(frozen=True)
 class ApplicationCandidate:
     """Application reachable directly from a product, via platforms, or both."""
 
@@ -337,6 +347,14 @@ class CoreQueryGateway(Protocol):
         card_attribute_keys: Sequence[str] = (),
         relation_attribute_keys: Sequence[str] = (),
     ) -> DependencySubgraph: ...
+
+    async def read_card_hierarchy(
+        self,
+        card_id: UUID,
+        *,
+        allowed_card_types: Sequence[str],
+        card_attribute_keys: Sequence[str] = (),
+    ) -> CardHierarchy: ...
 
     async def list_product_platforms(
         self,

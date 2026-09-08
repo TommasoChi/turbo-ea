@@ -218,6 +218,10 @@ def test_sdk_1_4_exposes_read_only_audit_and_request_permission_queries():
 
 def test_sdk_1_5_exposes_dependency_subgraph_contract():
     assert callable(getattr(sdk.CoreQueryGateway, "read_dependency_subgraph", None))
+
+
+def test_sdk_1_5_exposes_read_only_direct_card_hierarchy_contract():
+    assert callable(getattr(sdk.CoreQueryGateway, "read_card_hierarchy", None))
     assert sdk.DependencyNode.__dataclass_params__.frozen is True
     assert sdk.DependencyEdge.__dataclass_params__.frozen is True
     assert sdk.DependencySubgraph.__dataclass_params__.frozen is True

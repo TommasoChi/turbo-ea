@@ -16,7 +16,7 @@ from app.models.file_attachment import FileAttachment
 from app.models.notification import Notification
 from app.models.process_element import ProcessElement, ProcessElementOrganization
 from app.models.stakeholder import Stakeholder
-from app.services.extensions import sdk
+from app.services.extensions import bridges, sdk
 from app.services.extensions.bridges import build_request_context
 from app.services.extensions.sdk import CardRef, ExtensionBridgeError
 from tests.conftest import (
@@ -1197,6 +1197,72 @@ async def test_list_descendant_ids_excludes_invisible_branch_without_discovering
     # grandchild is only reachable via child_a — never discovered once child_a is hidden.
     assert env["grandchild"].id not in descendants
     assert set(descendants) == {env["child_b"].id}
+
+
+async def test_core_query_reads_visible_direct_card_hierarchy_for_inventory_types(db):
+    await create_role(db, key="admin", permissions={"*": True})
+    actor = await create_user(db, role="admin")
+    await create_card_type(db, key="ITComponent", label="IT Component")
+
+    parent = await create_card(
+        db, card_type="ITComponent", name="Document services", user_id=actor.id
+    )
+    root = await create_card(
+        db,
+        card_type="ITComponent",
+        name="Document archive",
+        user_id=actor.id,
+        parent_id=parent.id,
+        attributes={"technology": "S3", "private": "never exposed"},
+    )
+    child = await create_card(
+        db,
+        card_type="ITComponent",
+        name="Document repository",
+        user_id=actor.id,
+        parent_id=root.id,
+    )
+    grandchild = await create_card(
+        db,
+        card_type="ITComponent",
+        name="Repository replica",
+        user_id=actor.id,
+        parent_id=child.id,
+    )
+    archived = await create_card(
+        db,
+        card_type="ITComponent",
+        name="Retired repository",
+        user_id=actor.id,
+        parent_id=root.id,
+        status="ARCHIVED",
+    )
+    context = build_request_context("product-technology-what-if", db, actor)
+
+    hierarchy = await context.core_query.read_card_hierarchy(
+        root.id,
+        allowed_card_types=("ITComponent",),
+        card_attribute_keys=("technology",),
+    )
+
+    assert hierarchy.root.id == root.id
+    assert hierarchy.parent.id == parent.id
+    assert tuple(node.id for node in hierarchy.children) == (child.id,)
+    assert grandchild.id not in {node.id for node in hierarchy.children}
+    assert archived.id not in {node.id for node in hierarchy.children}
+    assert hierarchy.root.attributes == {"technology": "S3"}
+
+
+def test_dependency_query_allowlists_include_architecture_data_and_interface_cards():
+    assert {"DataObject", "Interface"} <= bridges._DEPENDENCY_CARD_TYPES
+    assert {
+        "relAppToDataObj",
+        "relITCToDataObj",
+        "ITComponentToDataObject",
+        "relAppToInterface",
+        "relInterfaceToDataObj",
+        "relInterfaceToITC",
+    } <= bridges._DEPENDENCY_RELATION_TYPES
 
 
 async def _organization_links_context(db):

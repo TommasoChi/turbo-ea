@@ -137,7 +137,7 @@ import MetricCard from "@/features/reports/MetricCard";
 import ReportLegend from "@/features/reports/ReportLegend";
 import SaveReportDialog from "@/features/reports/SaveReportDialog";
 import type { ReportShellProps } from "@/features/reports/ReportShell";
-import type { GEdge, GNode } from "@/features/reports/layeredDependencyLayout";
+import type { GEdge, GNode, LayerOverrides } from "@/features/reports/layeredDependencyLayout";
 import { useChartTheme } from "@/hooks/useChartTheme";
 import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -783,6 +783,7 @@ export interface DependencyGraphProps {
   onPrev?: () => void;
   onNext?: () => void;
   canCreateDiagram?: boolean;
+  layerOverrides?: LayerOverrides;
 }
 
 const extensionDependencyGraphNoop = () => undefined;
@@ -810,6 +811,7 @@ export function ExtensionDependencyGraph(props: DependencyGraphProps) {
         onPrev={props.onPrev}
         onNext={props.onNext}
         canCreateDiagram={props.canCreateDiagram ?? false}
+        layerOverrides={props.layerOverrides}
       />
     </React.Suspense>
   );
