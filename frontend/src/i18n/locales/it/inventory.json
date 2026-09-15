@@ -33,10 +33,12 @@
   "columns.reset": "Ripristina",
   "columns.alwaysVisible": "Sempre visibile",
   "columns.parent": "Padre",
+  "columns.parentLabel": "Tipo di collegamento",
   "gridEdit.parentHint": "Svuotate il campo per spostare questa scheda al livello principale.",
   "gridEdit.parentFailed": "Impossibile modificare il padre.",
   "gridEdit.attrFailed": "Impossibile salvare il valore.",
   "gridEdit.saveFailed": "Impossibile salvare la modifica.",
+  "gridEdit.parentLabelFailed": "Impossibile modificare il tipo di collegamento.",
   "columns.path": "Percorso",
   "filter.title": "Filtri",
   "filter.expand": "Espandi filtri",
@@ -268,5 +270,6 @@
   "columns.eol": "Fine vita",
   "columns.eolSupport": "Fine del supporto",
   "filter.eol": "Fine vita",
+  "filter.linkType": "Tipo di collegamento",
   "filter.eolManual": "Gestito manualmente"
 }

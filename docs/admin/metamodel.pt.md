@@ -160,6 +160,7 @@ Clique no botão **Traduzir** na barra de ferramentas do drawer do tipo para abr
 
 - **Rótulo do tipo** — O nome de exibição do tipo de card
 - **Subtipos** — Rótulos para cada subtipo
+- **Tipos de ligação hierárquica** — Rótulos para cada tipo de ligação hierárquica
 - **Seções** — Cabeçalhos de seção na página de detalhe do card
 - **Campos** — Rótulos de campos e rótulos de opções de seleção
 - **Papéis de stakeholder** — Nomes de papéis exibidos na interface de atribuição de stakeholders
@@ -186,9 +187,23 @@ Tipos de relacionamento definem as conexões permitidas entre tipos de card. Cad
 
 Clique em **+ Novo Tipo de Relacionamento** para criar um relacionamento, ou clique em um existente para editar seus rótulos e atributos.
 
+Cada linha de relação tem ainda os interruptores **Visível** e **Obrigatório** para *cada* uma das suas duas extremidades, indicando o tipo de card a que se aplicam: Visível decide se a relação aparece na página de detalhe desse tipo, Obrigatório se tem de ser preenchida. Um tipo de relação cujas duas extremidades são o mesmo card recebe um par de interruptores por direção, pelo que o lado de entrada se configura separadamente do de saída.
+
 Os campos **Rótulo** e **Rótulo Inverso** são escritos no idioma que está a utilizar no momento — a legenda do campo indica qual (por exemplo, *Rótulo (Português)*). Renomear uma relação atualiza esse idioma em todos os locais onde o verbo aparece: a secção **Relações** de um card, as colunas de relação do inventário, os relatórios, os portais e os diagramas. Os restantes idiomas mantêm a sua própria redação até que os traduza.
 
-Use **Gerir traduções** no topo do separador Tipos de Relacionamento para traduzir os verbos de todas as relações para cada idioma ativado de uma só vez. Escolha um separador de idioma, escreva a redação ao lado do original em inglês e guarde — o contador em cada separador mostra quantos verbos faltam ainda nesse idioma. O inglês não aparece aqui porque é a redação da própria relação; um verbo não traduzido recorre a ela.
+Use **Gerir traduções** no topo do separador Relações, acima dos seus subseparadores, para traduzir os verbos de todas as relações para cada idioma ativado de uma só vez. Escolha um separador de idioma, escreva a redação ao lado do original em inglês e guarde — o contador em cada separador mostra quantos verbos faltam ainda nesse idioma. O inglês não aparece aqui porque é a redação da própria relação; um verbo não traduzido recorre a ela. A mesma caixa de diálogo inclui uma secção separada, **Tipos de ligação hierárquica**, com o vocabulário de cada tipo de cartão hierárquico, pelo que os verbos e os tipos de ligação são traduzidos numa só passagem.
+
+### Tipos de ligação hierárquica
+
+Para um tipo de card com hierarquia ativada, pode definir **tipos de ligação** — um vocabulário curto que rotula cada ligação pai-filho. Numa árvore de organizações, por exemplo, permite marcar uma subsidiária como *comercial* e outra como de *vendas*, sem inventar um segundo tipo de relacionamento.
+
+1. No separador **Relações**, abra o subseparador **Tipos de ligação hierárquica** — nele consta cada tipo de card com hierarquia ativada. (O primeiro subseparador, **Tipos de relação**, é a lista de relações habitual.) O separador **Relações** de um tipo de card mostra o mesmo numa única linha no topo, limitado a esse tipo.
+2. Clique em **Editar tipos de ligação** e adicione uma entrada por rótulo, com chave, nome e cor.
+3. Traduza os nomes com o botão **Traduzir**, como qualquer outro rótulo do metamodelo.
+
+Os editores escolhem depois um tipo de ligação na seção **Hierarquia** do card, ou na coluna **Tipo de ligação** do inventário. O rótulo pertence ao card filho, pelo que é limpo automaticamente quando esse card passa para o nível superior.
+
+Remover um tipo de ligação **não** reescreve os cards que já o usam: mantêm o valor armazenado e mostram-no como tipo de ligação desconhecido até alguém o alterar, de modo que uma remoção acidental não perde nada. A caixa de diálogo indica quantos cards são afetados antes de confirmar.
 
 ### Atributos de relação
 

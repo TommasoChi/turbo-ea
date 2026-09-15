@@ -160,6 +160,7 @@ Cliquez sur le bouton **Traduire** dans la barre d'outils du tiroir de type pour
 
 - **Libellé du type** — Le nom d'affichage du type de fiche
 - **Sous-types** — Libellés pour chaque sous-type
+- **Types de lien hiérarchique** — Libellés pour chaque type de lien hiérarchique
 - **Sections** — En-têtes de section sur la page de détail de la fiche
 - **Champs** — Libellés des champs et des options de sélection
 - **Rôles des parties prenantes** — Noms de rôles affichés dans l'interface d'attribution des parties prenantes
@@ -186,9 +187,23 @@ Les types de relations définissent les connexions autorisées entre les types d
 
 Cliquez sur **+ Nouveau type de relation** pour créer une relation, ou cliquez sur un type existant pour modifier ses libellés et attributs.
 
+Chaque ligne de relation porte également les interrupteurs **Visible** et **Obligatoire** pour *chacune* de ses deux extrémités, avec le nom du type de fiche auquel ils s'appliquent : Visible détermine si la relation apparaît sur la page de détail de ce type, Obligatoire si elle doit être renseignée. Un type de relation dont les deux extrémités sont le même type de fiche reçoit une paire d'interrupteurs par direction, de sorte que le côté entrant se configure séparément du côté sortant.
+
 Les champs **Libellé** et **Libellé inverse** sont saisis dans la langue que vous utilisez actuellement — l'intitulé du champ indique laquelle (par exemple *Libellé (Français)*). Renommer une relation met à jour cette langue partout où le verbe apparaît : la section **Relations** d'une fiche, les colonnes de relation de l'inventaire, les rapports, les portails et les diagrammes. Les autres langues conservent leur propre formulation jusqu'à ce que vous les traduisiez.
 
-Utilisez **Gérer les traductions** en haut de l'onglet Types de relation pour traduire les verbes de toutes les relations dans chaque langue activée en une seule fois. Choisissez un onglet de langue, saisissez la formulation à côté de la source anglaise et enregistrez — le compteur de chaque onglet indique combien de verbes manquent encore dans cette langue. L'anglais n'y figure pas : c'est la formulation portée par la relation elle-même, et un verbe non traduit y revient.
+Utilisez **Gérer les traductions** en haut de l'onglet Relations, au-dessus de ses sous-onglets, pour traduire les verbes de toutes les relations dans chaque langue activée en une seule fois. Choisissez un onglet de langue, saisissez la formulation à côté de la source anglaise et enregistrez — le compteur de chaque onglet indique combien de verbes manquent encore dans cette langue. L'anglais n'y figure pas : c'est la formulation portée par la relation elle-même, et un verbe non traduit y revient. La même boîte de dialogue comporte une section distincte **Types de liens hiérarchiques** qui liste le vocabulaire de chaque type de fiche hiérarchique : les verbes et les types de liens se traduisent donc en une seule passe.
+
+### Types de lien hiérarchique
+
+Pour un type de fiche dont la hiérarchie est activée, vous pouvez définir des **types de lien** — un court vocabulaire qui qualifie chaque lien parent-enfant. Dans un arbre d'organisations, cela permet de marquer une filiale comme *commerciale* et une autre comme *vente*, sans créer un second type de relation.
+
+1. Dans l'onglet **Relations**, ouvrez le sous-onglet **Types de liens hiérarchiques** — chaque type de fiche dont la hiérarchie est activée y figure. (Le premier sous-onglet, **Types de relations**, est la liste de relations habituelle.) L'onglet **Relations** d'un type de fiche affiche la même chose sur une seule ligne en haut, limitée à ce type.
+2. Cliquez sur **Modifier les types de lien**, puis ajoutez une entrée par libellé avec une clé, un nom et une couleur.
+3. Traduisez les noms avec le bouton **Traduire**, comme n'importe quel libellé du métamodèle.
+
+Les éditeurs choisissent ensuite un type de lien dans la section **Hiérarchie** de la fiche, ou dans la colonne **Type de lien** de l'inventaire. Le libellé appartient à la fiche enfant : il est donc effacé automatiquement lorsque celle-ci est remontée au niveau supérieur.
+
+Supprimer un type de lien ne réécrit **pas** les fiches qui l'utilisent déjà : elles conservent la valeur enregistrée et l'affichent comme type de lien inconnu jusqu'à ce que quelqu'un la modifie, de sorte qu'une suppression accidentelle ne perd rien. La boîte de dialogue indique le nombre de fiches concernées avant confirmation.
 
 ### Attributs de relation
 

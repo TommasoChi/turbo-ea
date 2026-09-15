@@ -162,6 +162,7 @@ Click the **Translate** button in the type drawer toolbar to open the **Translat
 
 - **Type label** — The display name of the card type
 - **Subtypes** — Labels for each subtype
+- **Hierarchy link types** — Labels for each hierarchy link type
 - **Sections** — Section headings on the card detail page
 - **Fields** — Field labels and select option labels
 - **Stakeholder Roles** — Role names displayed in the stakeholder assignment UI
@@ -188,9 +189,23 @@ Relation types define the allowed connections between card types. Each relation 
 
 Click **+ New Relation Type** to create a relation, or click an existing one to edit its labels and attributes.
 
+Each relation row also carries **Visible** and **Mandatory** switches for *each* of its two ends, naming the card type they apply to: Visible decides whether the relation shows on that type's card detail page, Mandatory whether it must be filled in. A relation type whose two ends are the same card type gets one pair of switches per direction, so the incoming side can be configured separately from the outgoing one.
+
 The **Label** and **Reverse Label** fields are written in the language you are currently using — the field caption shows which one (for example *Label (English)*). Renaming a relation updates that language everywhere the verb appears: the **Relations** section on a card, the inventory relation columns, reports, portals and diagrams. Other languages keep their own wording until you translate them.
 
-Use **Manage Translations** at the top of the Relation Types tab to translate every relation's verbs into each enabled language in one pass. Pick a language tab, fill in the wording next to the English source, and save — the counter on each tab shows how many verbs that language still needs. English is not listed here because it is the wording on the relation itself; a verb left untranslated falls back to it.
+Use **Manage Translations** at the top of the Relations tab, above its sub-tabs, to translate every relation's verbs into each enabled language in one pass. Pick a language tab, fill in the wording next to the English source, and save — the counter on each tab shows how many verbs that language still needs. English is not listed here because it is the wording on the relation itself; a verb left untranslated falls back to it. The same dialog carries a separate **Hierarchy link types** section listing the vocabulary of every hierarchical card type, so the verbs and the link types are translated in one pass.
+
+### Hierarchy link types
+
+For a card type with hierarchy switched on, you can define **link types** — a short vocabulary that labels each parent-child link. An Organization tree, for example, can mark one subsidiary as *commercial* and another as *sales*, without inventing a second relation type.
+
+1. On the **Relations** tab, open the **Hierarchy link types** sub-tab — every card type with hierarchy switched on is listed there. (The first sub-tab, **Relation types**, is the ordinary relation list.) A card type's own **Relations** tab shows the same thing as a single line at the top, scoped to that type.
+2. Click **Edit link types**, then add one entry per label with a key, a name and a colour.
+3. Translate the names with the **Translate** button, like any other metamodel label.
+
+Editors then pick a link type on the card's **Hierarchy** section, or in the Inventory's **Link type** column. The label belongs to the child card, so it is cleared automatically when that card is moved to the top level.
+
+Removing a link type does **not** rewrite the cards already using it: they keep the stored value and show it as an unknown link type until someone changes it, so nothing is lost if you remove an entry by mistake. The dialog tells you how many cards are affected before you confirm.
 
 ### Relation attributes
 

@@ -160,6 +160,7 @@ Haga clic en el botón **Traducir** en la barra de herramientas del cajón de ti
 
 - **Etiqueta del tipo** — El nombre de visualización del tipo de ficha
 - **Subtipos** — Etiquetas para cada subtipo
+- **Tipos de vínculo jerárquico** — Etiquetas para cada tipo de vínculo jerárquico
 - **Secciones** — Encabezados de sección en la página de detalle de la ficha
 - **Campos** — Etiquetas de campos y etiquetas de opciones de selección
 - **Roles de Parte Interesada** — Nombres de roles mostrados en la interfaz de asignación de stakeholders
@@ -186,9 +187,23 @@ Los tipos de relación definen las conexiones permitidas entre tipos de fichas. 
 
 Haga clic en **+ Nuevo Tipo de Relación** para crear una relación, o haga clic en una existente para editar sus etiquetas y atributos.
 
+Cada fila de relación lleva además los interruptores **Visible** y **Obligatorio** para *cada uno* de sus dos extremos, indicando el tipo de ficha al que se aplican: Visible decide si la relación aparece en la página de detalle de ese tipo, Obligatorio si debe rellenarse. Un tipo de relación cuyos dos extremos son la misma ficha recibe un par de interruptores por dirección, de modo que el lado entrante se configura por separado del saliente.
+
 Los campos **Etiqueta** y **Etiqueta Inversa** se escriben en el idioma que está utilizando en ese momento: el rótulo del campo indica cuál (por ejemplo, *Etiqueta (Español)*). Cambiar el nombre de una relación actualiza ese idioma en todos los lugares donde aparece el verbo: la sección **Relaciones** de una ficha, las columnas de relación del inventario, los informes, los portales y los diagramas. Los demás idiomas conservan su propia redacción hasta que los traduzca.
 
-Use **Gestionar traducciones** en la parte superior de la pestaña Tipos de relación para traducir los verbos de todas las relaciones a cada idioma habilitado de una sola vez. Elija una pestaña de idioma, escriba la redacción junto al original en inglés y guarde: el contador de cada pestaña muestra cuántos verbos faltan todavía en ese idioma. El inglés no aparece aquí porque es la redacción de la propia relación; un verbo sin traducir vuelve a ella.
+Use **Gestionar traducciones** en la parte superior de la pestaña Relaciones, encima de sus subpestañas, para traducir los verbos de todas las relaciones a cada idioma habilitado de una sola vez. Elija una pestaña de idioma, escriba la redacción junto al original en inglés y guarde: el contador de cada pestaña muestra cuántos verbos faltan todavía en ese idioma. El inglés no aparece aquí porque es la redacción de la propia relación; un verbo sin traducir vuelve a ella. El mismo cuadro de diálogo incluye una sección aparte, **Tipos de vínculo jerárquico**, con el vocabulario de cada tipo de tarjeta jerárquico, de modo que los verbos y los tipos de vínculo se traducen en una sola pasada.
+
+### Tipos de vínculo jerárquico
+
+Para un tipo de ficha con la jerarquía activada, puede definir **tipos de vínculo**: un vocabulario breve que etiqueta cada vínculo padre-hijo. En un árbol de organizaciones, por ejemplo, permite marcar una filial como *comercial* y otra como de *ventas*, sin inventar un segundo tipo de relación.
+
+1. En la pestaña **Relaciones**, abra la subpestaña **Tipos de vínculo jerárquico**: allí figura cada tipo de ficha con la jerarquía activada. (La primera subpestaña, **Tipos de relación**, es la lista de relaciones habitual.) La pestaña **Relaciones** de un tipo de ficha muestra lo mismo en una sola línea arriba, limitada a ese tipo.
+2. Haga clic en **Editar tipos de vínculo** y añada una entrada por etiqueta, con clave, nombre y color.
+3. Traduzca los nombres con el botón **Traducir**, como cualquier otra etiqueta del metamodelo.
+
+Los editores eligen después un tipo de vínculo en la sección **Jerarquía** de la ficha, o en la columna **Tipo de vínculo** del inventario. La etiqueta pertenece a la ficha hija, por lo que se borra automáticamente cuando esa ficha pasa al nivel superior.
+
+Eliminar un tipo de vínculo **no** reescribe las fichas que ya lo usan: conservan el valor almacenado y lo muestran como tipo de vínculo desconocido hasta que alguien lo cambie, de modo que un borrado accidental no pierde nada. El diálogo indica cuántas fichas se ven afectadas antes de confirmar.
 
 ### Atributos de relación
 

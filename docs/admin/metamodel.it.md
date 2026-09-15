@@ -160,6 +160,7 @@ Cliccate sul pulsante **Traduci** nella barra degli strumenti del drawer del tip
 
 - **Etichetta del tipo** — Il nome visualizzato del tipo di card
 - **Sottotipi** — Etichette per ogni sottotipo
+- **Tipi di collegamento gerarchico** — Etichette per ogni tipo di collegamento gerarchico
 - **Sezioni** — Intestazioni delle sezioni nella pagina di dettaglio della card
 - **Campi** — Etichette dei campi e delle opzioni di selezione
 - **Ruoli degli stakeholder** — Nomi dei ruoli visualizzati nell'interfaccia di assegnazione degli stakeholder
@@ -186,9 +187,23 @@ I tipi di relazione definiscono le connessioni consentite tra i tipi di card. Og
 
 Cliccate su **+ Nuovo tipo di relazione** per creare una relazione, o cliccate su una esistente per modificare le etichette e gli attributi.
 
+Ogni riga di relazione porta inoltre gli interruttori **Visibile** e **Obbligatorio** per *ciascuna* delle due estremità, con il nome del tipo di card a cui si applicano: Visibile decide se la relazione compare nella pagina di dettaglio di quel tipo, Obbligatorio se deve essere compilata. Un tipo di relazione le cui due estremità sono la stessa card riceve una coppia di interruttori per direzione, così il lato entrante si configura separatamente da quello uscente.
+
 I campi **Etichetta** ed **Etichetta inversa** vengono scritti nella lingua che state usando in quel momento — la didascalia del campo indica quale (ad esempio *Etichetta (Italiano)*). Rinominare una relazione aggiorna quella lingua ovunque compaia il verbo: la sezione **Relazioni** di una card, le colonne di relazione dell'inventario, i report, i portali e i diagrammi. Le altre lingue mantengono la propria formulazione finché non le traducete.
 
-Usate **Gestisci traduzioni** in cima alla scheda Tipi di relazione per tradurre i verbi di tutte le relazioni in ogni lingua abilitata in un'unica passata. Scegliete una scheda lingua, inserite la formulazione accanto all'originale inglese e salvate: il contatore su ogni scheda mostra quanti verbi mancano ancora in quella lingua. L'inglese non compare qui perché è la formulazione sulla relazione stessa; un verbo non tradotto vi ricade.
+Usate **Gestisci traduzioni** in cima alla scheda Relazioni, sopra le sue sotto-schede, per tradurre i verbi di tutte le relazioni in ogni lingua abilitata in un'unica passata. Scegliete una scheda lingua, inserite la formulazione accanto all'originale inglese e salvate: il contatore su ogni scheda mostra quanti verbi mancano ancora in quella lingua. L'inglese non compare qui perché è la formulazione sulla relazione stessa; un verbo non tradotto vi ricade. La stessa finestra contiene una sezione separata **Tipi di collegamento gerarchico** con il vocabolario di ogni tipo di scheda gerarchico, così i verbi e i tipi di collegamento si traducono in un'unica passata.
+
+### Tipi di collegamento gerarchico
+
+Per un tipo di card con la gerarchia attiva potete definire i **tipi di collegamento**: un breve vocabolario che etichetta ogni collegamento padre-figlio. In un albero di organizzazioni, per esempio, consente di segnare una controllata come *commerciale* e un'altra come di *vendita*, senza inventare un secondo tipo di relazione.
+
+1. Nella scheda **Relazioni**, aprite la sotto-scheda **Tipi di collegamento gerarchico**: vi compare ogni tipo di card con la gerarchia attiva. (La prima sotto-scheda, **Tipi di relazione**, è il consueto elenco delle relazioni.) La scheda **Relazioni** di un tipo di card mostra la stessa cosa su una sola riga in alto, limitata a quel tipo.
+2. Cliccate su **Modifica tipi di collegamento** e aggiungete una voce per etichetta, con chiave, nome e colore.
+3. Traducete i nomi con il pulsante **Traduci**, come qualsiasi altra etichetta del metamodello.
+
+Gli editor scelgono poi un tipo di collegamento nella sezione **Gerarchia** della card, o nella colonna **Tipo di collegamento** dell'inventario. L'etichetta appartiene alla card figlia, quindi viene cancellata automaticamente quando quella card viene spostata al livello superiore.
+
+Rimuovere un tipo di collegamento **non** riscrive le card che già lo usano: mantengono il valore memorizzato e lo mostrano come tipo di collegamento sconosciuto finché qualcuno non lo cambia, così una rimozione accidentale non perde nulla. La finestra indica quante card sono interessate prima della conferma.
 
 ### Attributi della relazione
 
