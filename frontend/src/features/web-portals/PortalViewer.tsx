@@ -37,6 +37,7 @@ import {
 } from "@/hooks/useResolveLabel";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { bandColor, bandOf, type DataQualityBand } from "@/lib/dataQualityBands";
+import { PercentBar } from "@/components/PercentBar";
 import { todayIsoDate } from "@/lib/dates";
 import TagPicker from "@/components/TagPicker";
 import { publicGet, type ApiError } from "./publicApi";
@@ -247,6 +248,9 @@ function FieldValue({
         —
       </Typography>
     );
+  }
+  if (field?.type === "percentage") {
+    return <PercentBar value={Number(value)} width={80} height={6} />;
   }
   if (field?.type === "boolean") {
     return (
@@ -1089,7 +1093,7 @@ export default function PortalViewer() {
                           mb: 1.5,
                         }}
                       >
-                        {cardVisibleFields.slice(0, 3).map((field) => {
+                        {cardVisibleFields.map((field) => {
                           const val = card.attributes?.[field.key];
                           if (val === null || val === undefined || val === "")
                             return null;
@@ -1286,36 +1290,21 @@ export default function PortalViewer() {
 
                       <Box sx={{ flex: 1 }} />
 
-                      {/* Completion */}
+                      {/* Data quality — the card's completeness score, never
+                          project progress: a bare "71%" here read as the
+                          latter to an Initiative's readers (#1111). */}
                       {show("data_quality", "card") && (
-                      <>
-                      <LinearProgress
-                        variant="determinate"
-                        value={card.data_quality}
-                        sx={{
-                          width: 60,
-                          height: 4,
-                          borderRadius: 2,
-                          bgcolor: "action.hover",
-                          "& .MuiLinearProgress-bar": {
-                            bgcolor: bandColor(card.data_quality),
-                            borderRadius: 2,
-                          },
-                        }}
-                      />
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontSize: "0.73rem",
-                          color: "text.secondary",
-                          fontWeight: 600,
-                          minWidth: 32,
-                          textAlign: "right",
-                        }}
-                      >
-                        {Math.round(card.data_quality)}%
-                      </Typography>
-                      </>
+                        <PercentBar
+                          value={card.data_quality}
+                          color={bandColor(card.data_quality)}
+                          width={60}
+                          height={4}
+                          trackColor="action.hover"
+                          label={t("portal.dataQuality", {
+                            percent: Math.round(card.data_quality),
+                          })}
+                          labelSx={{ fontSize: "0.73rem", color: "text.secondary", fontWeight: 600 }}
+                        />
                       )}
                     </Box>
                     )}
@@ -1438,7 +1427,7 @@ export default function PortalViewer() {
                     )}
                     {show("data_quality", "detail") && (
                     <Chip
-                      label={t("portal.complete", { percent: Math.round(selectedFs.data_quality) })}
+                      label={t("portal.dataQuality", { percent: Math.round(selectedFs.data_quality) })}
                       size="small"
                       sx={{
                         height: 28,
@@ -1484,88 +1473,79 @@ export default function PortalViewer() {
                 </IconButton>
               </DialogTitle>
               <DialogContent sx={{ pt: 3 }}>
-                {/* Description */}
-                {show("description", "detail") && selectedFs.description && (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography
-                      variant="subtitle2"
-                      fontWeight={700}
-                      sx={{
-                        mb: 0.75,
-                        textTransform: "uppercase",
-                        fontSize: "0.75rem",
-                        letterSpacing: 1,
-                        color: "text.secondary",
-                      }}
-                    >
-                      {t("portal.description")}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        lineHeight: 1.7,
-                        whiteSpace: "pre-wrap",
-                        color: "text.primary",
-                      }}
-                      dangerouslySetInnerHTML={{
-                        __html: DOMPurify.sanitize(selectedFs.description || ""),
-                      }}
-                    />
-                  </Box>
-                )}
-
-                {/* Lifecycle */}
-                {show("lifecycle", "detail") && selectedFs.lifecycle &&
-                  Object.values(selectedFs.lifecycle).some(Boolean) && (
+                {/* Description — plus the fields the metamodel files under the
+                    reserved `__description` section, which card detail folds in
+                    here too. Rendering that section by its raw name printed a
+                    `__DESCRIPTION` heading to visitors. */}
+                {(() => {
+                  const detailKeys = new Set(detailVisibleFields.map((f) => f.key));
+                  const hasValue = (key: string) => {
+                    const v = selectedFs.attributes?.[key];
+                    return v !== undefined && v !== null && v !== "";
+                  };
+                  const descriptionFields = (portal.type_info?.fields_schema ?? [])
+                    .filter((s) => s.section === "__description")
+                    .flatMap((s) => s.fields)
+                    .filter((f) => detailKeys.has(f.key) && hasValue(f.key));
+                  const showText = show("description", "detail") && !!selectedFs.description;
+                  if (!showText && descriptionFields.length === 0) return null;
+                  return (
                     <Box sx={{ mb: 3 }}>
                       <Typography
                         variant="subtitle2"
                         fontWeight={700}
                         sx={{
-                          mb: 1.25,
+                          mb: 0.75,
                           textTransform: "uppercase",
                           fontSize: "0.75rem",
                           letterSpacing: 1,
                           color: "text.secondary",
                         }}
                       >
-                        {t("portal.lifecycle")}
+                        {t("portal.description")}
                       </Typography>
-                      <Box sx={{ display: "flex", gap: 2.5, flexWrap: "wrap" }}>
-                        {[
-                          { key: "plan", label: t("lifecycle.plan") },
-                          { key: "phaseIn", label: t("lifecycle.phaseIn") },
-                          { key: "active", label: t("lifecycle.active") },
-                          { key: "phaseOut", label: t("lifecycle.phaseOut") },
-                          { key: "endOfLife", label: t("lifecycle.endOfLife") },
-                        ].map((phase) => {
-                          const date = selectedFs.lifecycle?.[phase.key];
-                          if (!date) return null;
-                          return (
-                            <Box key={phase.key}>
+                      {showText && (
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            lineHeight: 1.7,
+                            whiteSpace: "pre-wrap",
+                            color: "text.primary",
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html: DOMPurify.sanitize(selectedFs.description || ""),
+                          }}
+                        />
+                      )}
+                      {descriptionFields.length > 0 && (
+                        <Box
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                            gap: 2,
+                            mt: showText ? 2 : 0,
+                          }}
+                        >
+                          {descriptionFields.map((field) => (
+                            <Box key={field.key}>
                               <Typography
                                 variant="caption"
                                 sx={{ display: "block", fontSize: "0.73rem", color: "text.secondary", mb: 0.25 }}
                               >
-                                {phase.label}
+                                {fieldLabel(field)}
                               </Typography>
-                              <Typography
-                                variant="body2"
-                                fontWeight={600}
-                                sx={{ color: "text.primary" }}
-                              >
-                                {date}
-                              </Typography>
+                              <FieldValue value={selectedFs.attributes?.[field.key]} field={field} />
                             </Box>
-                          );
-                        })}
-                      </Box>
-                      <LifecycleBar lifecycle={selectedFs.lifecycle} t={t} />
+                          ))}
+                        </Box>
+                      )}
                     </Box>
-                  )}
+                  );
+                })()}
 
                 {/* Attributes */}
                 {portal.type_info?.fields_schema?.map((section) => {
+                  if (section.section === "__description") return null;
                   const detailFieldKeys = new Set(detailVisibleFields.map((f) => f.key));
                   const fieldsWithValues = section.fields.filter(
                     (f) =>

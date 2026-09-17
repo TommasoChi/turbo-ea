@@ -17,7 +17,6 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import TextField from "@mui/material/TextField";
 import Chip from "@mui/material/Chip";
-import LinearProgress from "@mui/material/LinearProgress";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -74,6 +73,23 @@ import { exportToExcel, exportCurrentViewToExcel } from "./excelExport";
 import { dateColumnFilterDef } from "@/lib/dateColumnFilter";
 import RelationCellPopover from "./RelationCellPopover";
 import ExtFieldCell from "./ExtFieldCell";
+import { PercentBar, percentValue } from "@/components/PercentBar";
+
+/**
+ * A `percentage` attribute column: the same bar card detail draws, and the
+ * export carries the caption it is labelled with. Shared by the single-type
+ * and common-fields branches below so the two cannot drift.
+ */
+const percentageColumnDef = {
+  valueFormatter: (p: { value?: unknown }) =>
+    p.value === null || p.value === undefined || p.value === ""
+      ? ""
+      : `${percentValue(Number(p.value))}%`,
+  cellRenderer: (p: { value: unknown }) =>
+    p.value === null || p.value === undefined || p.value === "" ? null : (
+      <PercentBar value={Number(p.value)} width={72} height={6} />
+    ),
+} as const;
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { canCreateAnyCardType, hasTypePermission } from "@/components/RequirePermission";
 import { useCardSearch } from "@/hooks/useCardSearch";
@@ -85,6 +101,7 @@ import { useThemeMode } from "@/hooks/useThemeMode";
 import { useIsRtl } from "@/hooks/useIsRtl";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { useCurrency } from "@/hooks/useCurrency";
+import { useCalculatedFields } from "@/hooks/useCalculatedFields";
 import { FieldEditor } from "@/features/cards/sections/cardDetailUtils";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useApiQuery } from "@/hooks/useApiQuery";
@@ -1158,6 +1175,13 @@ export default function InventoryPage() {
 
   // Derive the single selected type for column rendering (only when exactly one type selected)
   const selectedType = facetedType;
+  // A field written by an active calculation is read-only everywhere card
+  // detail locks it; the grid and the mass-edit picker owe the same lock.
+  const { calculatedFields } = useCalculatedFields();
+  const calculatedKeys = useMemo(
+    () => new Set(selectedType ? calculatedFields[selectedType] ?? [] : []),
+    [calculatedFields, selectedType],
+  );
   const typeConfig = types.find((t) => t.key === selectedType);
 
   // --- Logo column -----------------------------------------------------------
@@ -2299,7 +2323,7 @@ export default function InventoryPage() {
     if (typeConfig) {
       for (const section of typeConfig.fields_schema) {
         for (const field of section.fields) {
-          if (field.readonly) continue;
+          if (field.readonly || calculatedKeys.has(field.key)) continue;
           // Same gate the grid columns and the export use: a user without
           // costs.view must not be able to overwrite figures they cannot see.
           if (field.type === "cost" && !canViewCostsGlobally) continue;
@@ -2355,7 +2379,7 @@ export default function InventoryPage() {
       }
     }
     return fields;
-  }, [typeConfig, selectedType, relationTypes, visibleTypeKeys, types, t, fieldLabel, relLabel, typeLabel, canViewCostsGlobally]);
+  }, [typeConfig, selectedType, relationTypes, visibleTypeKeys, types, t, fieldLabel, relLabel, typeLabel, canViewCostsGlobally, calculatedKeys]);
 
   const currentMassField = massEditableFields.find((f) => f.key === massEditField);
 
@@ -3177,38 +3201,11 @@ export default function InventoryPage() {
         // The export carries the caption the bar is labelled with, not the raw
         // float — same rounding, same "missing reads as 0%".
         valueFormatter: (p: { value?: number }) => `${Math.round(p.value || 0)}%`,
-        cellRenderer: (p: { value: number }) => {
-          const v = Math.round(p.value || 0);
+        cellRenderer: (p: { value: number }) => (
           // Band colour, so the bar agrees with the sidebar chip that filters
           // it and with the Data Quality report's segments.
-          const color = bandColor(v);
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                width: "100%",
-                pr: 1,
-              }}
-            >
-              <LinearProgress
-                variant="determinate"
-                value={v}
-                sx={{
-                  flex: 1,
-                  height: 6,
-                  borderRadius: 3,
-                  bgcolor: "action.selected",
-                  "& .MuiLinearProgress-bar": { bgcolor: color, borderRadius: 3 },
-                }}
-              />
-              <Typography variant="caption" sx={{ minWidth: 32, textAlign: "right" }}>
-                {v}%
-              </Typography>
-            </Box>
-          );
-        },
+          <PercentBar value={p.value} color={bandColor(Math.round(p.value || 0))} width={72} height={6} />
+        ),
       },
       {
         colId: "core_tags",
@@ -3280,7 +3277,7 @@ export default function InventoryPage() {
             headerName: fieldLabel(field),
             width: 150,
             hide: !selectedColumns.has(colKey),
-            editable: gridEditMode && !field.readonly,
+            editable: gridEditMode && !field.readonly && !calculatedKeys.has(field.key),
             valueGetter: (p: { data: Card }) =>
               (p.data?.attributes || {})[field.key] ?? "",
             valueSetter: (p) => {
@@ -3339,6 +3336,13 @@ export default function InventoryPage() {
                   cellEditorParams: { rows: 8, cols: 60, maxLength: 100000 },
                 }
               : {}),
+            ...(field.type === "percentage"
+              ? {
+                  ...percentageColumnDef,
+                  cellEditor: "agNumberCellEditor",
+                  cellEditorParams: { min: 0, max: 100, precision: 2 },
+                }
+              : {}),
             ...(field.type === "date" ? dateColumnFilterDef : {}),
             // Extension-typed columns render through the fieldTypes registry
             // (same display component as card detail) and are never
@@ -3394,6 +3398,7 @@ export default function InventoryPage() {
                 ),
               }
             : {}),
+          ...(field.type === "percentage" ? percentageColumnDef : {}),
           ...(field.type === "date" ? dateColumnFilterDef : {}),
           ...(field.type.startsWith("ext.")
             ? {
@@ -3631,7 +3636,7 @@ export default function InventoryPage() {
       : cols.filter((c) => c.colId !== LOGO_COLUMN_KEY);
 
     return gridColumnOrder.applyOrder(columnFreeze.applyFrozen(applicable));
-  }, [columnFreeze, gridColumnOrder, types, typeConfig, commonFields, gridEditMode, relevantRelTypes, relTypeObjGroupMap, relatedRefsOf, relationsLoading, selectedType, parentPaths, cardsById, parentNameOf, descendantIndex, filters.showArchived, selectedColumns, userNameMap, t, i18n.language, formatDate, formatDateTime, canViewCostsGlobally, canManageStakeholders, canEditLogos, logoColumnAvailable, openLogoMenu, tagGroups, stakeholderRoles, typeLabel, eolColumnAvailable, eolOf, eolLoading, tReports]);
+  }, [columnFreeze, gridColumnOrder, types, typeConfig, commonFields, gridEditMode, relevantRelTypes, relTypeObjGroupMap, relatedRefsOf, relationsLoading, selectedType, parentPaths, cardsById, parentNameOf, descendantIndex, filters.showArchived, selectedColumns, userNameMap, t, i18n.language, formatDate, formatDateTime, canViewCostsGlobally, canManageStakeholders, canEditLogos, logoColumnAvailable, openLogoMenu, tagGroups, stakeholderRoles, typeLabel, eolColumnAvailable, eolOf, eolLoading, tReports, calculatedKeys]);
 
   // Feeds the Columns tab's "Column order" section: only the columns actually
   // on screen, built from the grid's own defs. On this page that matters twice
