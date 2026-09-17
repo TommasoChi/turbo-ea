@@ -32,6 +32,9 @@ jobs:
       mcp: ${{ steps.filter.outputs.mcp == 'true' || steps.filter.outputs.ci == 'true' }}
       docs: ${{ steps.filter.outputs.docs == 'true' || steps.filter.outputs.ci == 'true' }}
       devcontainer: ${{ steps.filter.outputs.devcontainer == 'true' || steps.filter.outputs.ci == 'true' }}
+      helm: ${{ steps.filter.outputs.helm == 'true' || steps.filter.outputs.ci == 'true' }}
+      deploy: ${{ steps.filter.outputs.deploy == 'true' || steps.filter.outputs.ci == 'true' }}
+      terraform: ${{ steps.filter.outputs.terraform == 'true' || steps.filter.outputs.ci == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -67,6 +70,23 @@ jobs:
               - 'requirements-docs.txt'
             devcontainer:
               - '.devcontainer/**'
+            helm:
+              - 'charts/**'
+              # The edge nginx entrypoint reads the NGINX_*_UPSTREAM overrides
+              # the chart depends on, so a Dockerfile change re-runs the kind test.
+              - 'Dockerfile'
+              - 'nginx/**'
+            deploy:
+              - 'deploy/**'
+              # The Terraform modules have their own job below.
+              - '!deploy/terraform/**'
+              - 'scripts/check_cloud_run_manifest.py'
+              - 'scripts/check_deploy_versions.py'
+              # Every template sets NGINX_HTTP_PORT, which the edge entrypoint reads.
+              - 'Dockerfile'
+            terraform:
+              - 'deploy/terraform/**'
+              - 'scripts/check_deploy_versions.py'
             ci:
               - '.github/workflows/**'
 
@@ -514,3 +534,273 @@ jobs:
         run: |
           bash -n .devcontainer/setup-demo.sh
           bash -n .devcontainer/start-demo.sh
+
+  # ── Helm chart ───────────────────────────────────────────────────────
+  # Two layers. `helm-lint` is static: lint + render every fixture and every
+  # cloud example through kubeconform. `helm-kind-test` installs the chart on
+  # a kind cluster against a throwaway PostgreSQL and runs `helm test` — an
+  # untested chart is exactly the failure mode a one-command install must not
+  # have. The kind job builds the edge nginx from THIS checkout (the stage is
+  # cheap: no npm, no pip) because the chart depends on the NGINX_*_UPSTREAM
+  # overrides its entrypoint reads; the other images come from GHCR `:latest`
+  # — the chart is under test here, not the application build.
+  helm-lint:
+    name: Helm Lint
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CHART: charts/turbo-ea
+      KUBECONFORM_VERSION: v0.7.0
+      KUBECONFORM_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: Install kubeconform
+        run: |
+          set -euo pipefail
+          curl -fsSLo kubeconform.tgz "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  kubeconform.tgz" | sha256sum -c -
+          tar -xzf kubeconform.tgz kubeconform
+          sudo install -m 0755 kubeconform /usr/local/bin/kubeconform
+
+      - name: Lint every fixture
+        run: |
+          set -euo pipefail
+          for f in "$CHART"/ci/*-values.yaml; do
+            echo "::group::helm lint -f $f"
+            helm lint --strict "$CHART" -f "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Render fixtures and examples through kubeconform
+        run: |
+          set -euo pipefail
+          for f in "$CHART"/ci/*-values.yaml "$CHART"/examples/*.yaml; do
+            echo "::group::helm template -f $f"
+            helm template turbo-ea "$CHART" --namespace turbo-ea -f "$f" \
+              | kubeconform -strict -summary -kubernetes-version 1.30.0 -ignore-missing-schemas
+            echo "::endgroup::"
+          done
+
+      # The chart must refuse to render without its required values, and the
+      # backend must never scale past one replica (in-process SSE bus, unlocked
+      # boot-time migrations, ReadWriteOnce data volume).
+      - name: Guard rails
+        run: |
+          set -euo pipefail
+          if helm template turbo-ea "$CHART" >/dev/null 2>err.log; then
+            echo "::error::bare 'helm template' rendered; required-value validation is gone"
+            exit 1
+          fi
+          grep -q 'publicUrl' err.log
+          rendered="$(helm template turbo-ea "$CHART" --namespace turbo-ea -f "$CHART/ci/minimal-values.yaml")"
+          backend="$(printf '%s\n' "$rendered" | awk '/^kind: Deployment/{d=1} d && /name: turbo-ea-backend$/{b=1} b && /^---/{exit} b')"
+          printf '%s\n' "$backend" | grep -q '^  replicas: 1$'
+          printf '%s\n' "$backend" | grep -q 'type: Recreate'
+          if helm template turbo-ea "$CHART" --namespace turbo-ea -f "$CHART/ci/minimal-values.yaml" --set backend.replicaCount=3 >/dev/null 2>&1; then
+            echo "::error::backend.replicaCount was accepted; values.schema.json must reject it"
+            exit 1
+          fi
+
+  helm-kind-test:
+    name: Helm Kind Smoke Test
+    needs: [changes, helm-lint]
+    if: needs.changes.outputs.helm == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CHART: charts/turbo-ea
+      NS: turbo-ea
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - uses: helm/kind-action@92086f6be054225fa813e0a4b13787fc9088faab # v1.13.0
+        with:
+          cluster_name: turbo-ea
+
+      - name: Build the edge nginx from this checkout
+        run: |
+          docker build --target nginx -t turbo-ea-ci/nginx:ci .
+          kind load docker-image --name turbo-ea turbo-ea-ci/nginx:ci
+
+      - name: Start a throwaway PostgreSQL
+        run: |
+          kubectl create namespace "$NS"
+          kubectl apply -n "$NS" -f "$CHART/ci/postgres.yaml"
+          kubectl rollout status -n "$NS" deployment/turbo-ea-ci-postgres --timeout=180s
+
+      - name: Install the chart
+        run: |
+          helm install turbo-ea "$CHART" --namespace "$NS" \
+            -f "$CHART/ci/kind-values.yaml" \
+            --set image.tag=latest \
+            --set nginx.image.registry=docker.io \
+            --set nginx.image.repository=turbo-ea-ci \
+            --set nginx.image.tag=ci \
+            --set nginx.image.pullPolicy=Never \
+            --wait --timeout 12m
+
+      - name: helm test
+        run: helm test turbo-ea --namespace "$NS" --logs
+
+      - name: Probe through the edge nginx
+        run: |
+          set -euo pipefail
+          kubectl port-forward -n "$NS" svc/turbo-ea-nginx 8080:80 >/dev/null 2>&1 &
+          sleep 3
+          curl -fsS http://localhost:8080/api/health
+          curl -fsS http://localhost:8080/ | grep -q '<div id="root"'
+          # MCP routing: the OAuth discovery document is served by the MCP pod.
+          curl -fsS http://localhost:8080/.well-known/oauth-protected-resource | grep -q resource
+          # The backend root filesystem is read-only; only the data volume is writable.
+          pod="$(kubectl get pod -n "$NS" -l app.kubernetes.io/component=backend -o jsonpath='{.items[0].metadata.name}')"
+          if kubectl exec -n "$NS" "$pod" -- touch /app/ro-probe 2>/dev/null; then
+            echo "::error::backend root filesystem is writable"
+            exit 1
+          fi
+          kubectl exec -n "$NS" "$pod" -- sh -c 'touch /app/data/rw-probe && rm /app/data/rw-probe'
+
+      - name: Upgrade keeps working
+        run: |
+          helm upgrade turbo-ea "$CHART" --namespace "$NS" \
+            -f "$CHART/ci/kind-values.yaml" \
+            --set image.tag=latest \
+            --set nginx.image.registry=docker.io \
+            --set nginx.image.repository=turbo-ea-ci \
+            --set nginx.image.tag=ci \
+            --set nginx.image.pullPolicy=Never \
+            --set backend.podAnnotations.ci-upgrade=\"1\" \
+            --wait --timeout 12m
+          helm test turbo-ea --namespace "$NS"
+
+      - name: Diagnostics
+        if: always()
+        run: |
+          kubectl get pods,svc,pvc,ingress -n "$NS" -o wide || true
+          kubectl describe pods -n "$NS" || true
+          for c in backend frontend nginx mcp; do
+            echo "::group::logs $c"
+            kubectl logs -n "$NS" -l app.kubernetes.io/component=$c --tail=200 || true
+            echo "::endgroup::"
+          done
+
+  # ── Managed-container templates (deploy/) ───────────────────────────
+  # Bicep, CloudFormation and the Cloud Run manifest have no unit tests, so
+  # this is the whole safety net: each must at least compile / lint, the
+  # Cloud Run manifest must keep the properties the guide depends on, and the
+  # edge nginx must honour NGINX_HTTP_PORT — every template moves it to 8920
+  # because the frontend sidecar owns 8080 on the same localhost.
+  deploy-templates-lint:
+    name: Deploy Templates Lint
+    needs: changes
+    if: needs.changes.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Bicep (Azure Container Apps)
+        run: |
+          set -euo pipefail
+          az bicep install --version v0.47.16
+          az bicep build --file deploy/azure-container-apps/main.bicep --stdout > /dev/null
+          az bicep build-params --file deploy/azure-container-apps/main.bicepparam --stdout > /dev/null
+
+      - name: CloudFormation (ECS Fargate)
+        run: |
+          set -euo pipefail
+          pip install cfn-lint==1.41.0 pyyaml
+          cfn-lint deploy/ecs-fargate/template.yaml
+
+      - name: Cloud Run manifest
+        run: python3 scripts/check_cloud_run_manifest.py
+
+      - name: Release pins under deploy/ agree and exist in the changelog
+        run: python3 scripts/check_deploy_versions.py
+
+      # The kind job covers the default port; this covers the override the
+      # templates rely on, in the real image.
+      - name: Edge nginx honours NGINX_HTTP_PORT
+        run: |
+          set -euo pipefail
+          docker build --target nginx -t turbo-ea-ci/nginx:ci .
+          docker run -d --name edge -p 18920:8920 \
+            -e NGINX_HTTP_PORT=8920 -e NGINX_ENABLE_IPV6=true \
+            -e NGINX_BACKEND_UPSTREAM=http://127.0.0.1:8000 \
+            turbo-ea-ci/nginx:ci
+          for i in $(seq 1 20); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:18920/api/health || true)"
+            [ "$code" = "502" ] && break
+            sleep 1
+          done
+          echo "GET /api/health on 8920 -> $code (502 = listening, no backend behind it)"
+          test "$code" = "502"
+          docker exec edge nginx -T 2>/dev/null | grep -q 'listen \[::\]:8920;'
+          docker rm -f edge
+          if docker run --rm -e NGINX_HTTP_PORT=abc turbo-ea-ci/nginx:ci; then
+            echo "::error::an invalid NGINX_HTTP_PORT must fail the container start"
+            exit 1
+          fi
+
+  # ── Terraform (deploy/terraform) ─────────────────────────────────────
+  # No cloud credentials in CI: `terraform test` runs against mock providers
+  # (real schemas, invented values), so it checks the wiring the guide depends
+  # on — NGINX_HTTP_PORT=8920, one backend, secrets by reference, the data
+  # volume — not whether a cloud would accept the plan. tflint's cloud rulesets
+  # cover the literal values (instance classes, SKUs) that mocks never see.
+  terraform-lint:
+    name: Terraform (${{ matrix.module }})
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [ecs-fargate, azure-container-apps, cloud-run, kubernetes]
+    defaults:
+      run:
+        working-directory: deploy/terraform/${{ matrix.module }}
+    env:
+      TF_IN_AUTOMATION: "1"
+      TF_INPUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.3"
+          terraform_wrapper: false
+
+      - name: Format
+        run: terraform fmt -check -diff -recursive
+
+      # -lockfile=readonly: the committed lock file must already carry the
+      # linux_amd64 hashes (terraform providers lock -platform=…).
+      - name: Init
+        run: terraform init -backend=false -lockfile=readonly
+
+      - name: Validate
+        run: terraform validate
+
+      - name: Tests (mock providers)
+        run: terraform test
+
+      - uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
+        with:
+          tflint_version: v0.64.0
+
+      - name: tflint
+        env:
+          # Ruleset plugins are fetched from GitHub releases.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --init
+          tflint --format compact
+
+      - name: Release pins under deploy/ agree and exist in the changelog
+        if: matrix.module == 'ecs-fargate'
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/check_deploy_versions.py

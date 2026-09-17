@@ -189,12 +189,24 @@ fi
 tls_enabled=$(printf '%s' "${TURBO_EA_TLS_ENABLED:-false}" | tr '[:upper:]' '[:lower:]')
 ipv6_enabled=$(printf '%s' "${NGINX_ENABLE_IPV6:-false}" | tr '[:upper:]' '[:lower:]')
 
+# Port the HTTP server block listens on. 8080 is what compose (HOST_PORT:8080)
+# and the Helm chart (containerPort 8080) expect. A sidecar layout that runs the
+# frontend image in the same network namespace (Container Apps, Cloud Run, ECS)
+# has the frontend on 8080 already, so the edge moves to e.g. 8920 there.
+http_port="${NGINX_HTTP_PORT:-8080}"
+case "$http_port" in
+    ''|*[!0-9]*)
+        echo "Turbo EA nginx: NGINX_HTTP_PORT must be a port number, got: $http_port" >&2
+        exit 1
+        ;;
+esac
+
 nginx_http_ipv6_line=''
 nginx_https_ipv6_line=''
 
 case "$ipv6_enabled" in
     true|1|yes|on)
-        nginx_http_ipv6_line='    listen [::]:8080;'
+        nginx_http_ipv6_line="    listen [::]:${http_port};"
         nginx_https_ipv6_line='    listen [::]:8443 ssl;'
         ;;
     false|0|no|off|'')
@@ -224,6 +236,31 @@ case "$resolver_addr" in
 esac
 resolver_directive="resolver ${resolver_addr} valid=30s ipv6=off;"
 
+# Upstream service addresses. Docker resolves the bare compose service names through
+# its embedded DNS, but an orchestrator whose resolver ignores search domains
+# (Kubernetes: nginx's own `resolver` never consults /etc/resolv.conf search paths)
+# needs fully-qualified names, e.g. http://turbo-ea-backend.turbo-ea.svc.cluster.local:8000.
+# The defaults are the compose service names, so an install that does not set
+# these is unchanged. Values land unquoted inside the generated nginx config, so
+# refuse anything that is not a plain http(s) URL.
+backend_upstream="${NGINX_BACKEND_UPSTREAM:-http://backend:8000}"
+frontend_upstream="${NGINX_FRONTEND_UPSTREAM:-http://frontend:8080}"
+mcp_upstream="${NGINX_MCP_UPSTREAM:-http://mcp-server:8001}"
+for upstream in "$backend_upstream" "$frontend_upstream" "$mcp_upstream"; do
+    case "$upstream" in
+        http://*|https://*) ;;
+        *)
+            echo "Turbo EA nginx: upstream must start with http:// or https://: $upstream" >&2
+            exit 1
+            ;;
+    esac
+    stripped=$(printf '%s' "$upstream" | tr -d ' \t;{}$"'"'"'')
+    if [ "$stripped" != "$upstream" ]; then
+        echo "Turbo EA nginx: invalid characters in upstream address: $upstream" >&2
+        exit 1
+    fi
+done
+
 # Cross-origin embedding of published diagrams. OFF unless an operator names the
 # sites allowed to frame them: the default value is exactly what every other
 # route already sends, so an install that does not set this is unchanged.
@@ -252,7 +289,7 @@ case "$tls_enabled" in
             exit 1
         fi
         export NGINX_HTTP_SERVER_BLOCK="server {
-    listen 8080;
+    listen ${http_port};
 ${nginx_http_ipv6_line}
     server_name ${NGINX_SERVER_NAME};
     return 301 https://\$host:${NGINX_TLS_HOST_PORT}\$request_uri;
@@ -293,8 +330,8 @@ ${nginx_https_ipv6_line}
     # if backend/frontend are recreated (new IP) while this nginx keeps running
     # — e.g. after \"docker compose pull && up -d\" — every proxied request 502s
     # until nginx restarts. Variable upstreams + resolver avoid that.
-    set \$backend_upstream http://backend:8000;
-    set \$frontend_upstream http://frontend:8080;
+    set \$backend_upstream ${backend_upstream};
+    set \$frontend_upstream ${frontend_upstream};
 
     add_header X-Frame-Options \"SAMEORIGIN\" always;
     add_header X-Content-Type-Options \"nosniff\" always;
@@ -341,14 +378,14 @@ ${nginx_https_ipv6_line}
     # RFC 8414 resource suffix (e.g. .../oauth-authorization-server/mcp) to the
     # bare canonical path the MCP server serves.
     location ^~ /.well-known/oauth-authorization-server {
-        set \$mcp_upstream http://mcp-server:8001;
+        set \$mcp_upstream ${mcp_upstream};
         rewrite ^ /.well-known/oauth-authorization-server break;
         proxy_pass \$mcp_upstream;
         proxy_set_header Host \$host;
     }
 
     location ^~ /.well-known/oauth-protected-resource {
-        set \$mcp_upstream http://mcp-server:8001;
+        set \$mcp_upstream ${mcp_upstream};
         rewrite ^ /.well-known/oauth-protected-resource break;
         proxy_pass \$mcp_upstream;
         proxy_set_header Host \$host;
@@ -360,7 +397,7 @@ ${nginx_https_ipv6_line}
     # doubled /mcp/mcp. This maps external /mcp -> internal /mcp; /mcp/mcp still
     # works via the prefixed block below for already-configured clients.
     location = /mcp {
-        set \$mcp_upstream http://mcp-server:8001;
+        set \$mcp_upstream ${mcp_upstream};
         rewrite ^ /mcp break;
         proxy_pass \$mcp_upstream;
         proxy_http_version 1.1;
@@ -375,7 +412,7 @@ ${nginx_https_ipv6_line}
     }
 
     location /mcp/ {
-        set \$mcp_upstream http://mcp-server:8001;
+        set \$mcp_upstream ${mcp_upstream};
         rewrite ^/mcp/(.*) /\$1 break;
         proxy_pass \$mcp_upstream;
         proxy_http_version 1.1;
@@ -472,7 +509,7 @@ ${nginx_https_ipv6_line}
         ;;
     false|0|no|off|'')
         export NGINX_HTTP_SERVER_BLOCK="server {
-    listen 8080;
+    listen ${http_port};
 ${nginx_http_ipv6_line}
     server_name ${NGINX_SERVER_NAME};
     client_max_body_size 5m;
@@ -503,8 +540,8 @@ ${nginx_http_ipv6_line}
     # if backend/frontend are recreated (new IP) while this nginx keeps running
     # — e.g. after \"docker compose pull && up -d\" — every proxied request 502s
     # until nginx restarts. Variable upstreams + resolver avoid that.
-    set \$backend_upstream http://backend:8000;
-    set \$frontend_upstream http://frontend:8080;
+    set \$backend_upstream ${backend_upstream};
+    set \$frontend_upstream ${frontend_upstream};
 
     add_header X-Frame-Options \"SAMEORIGIN\" always;
     add_header X-Content-Type-Options \"nosniff\" always;
@@ -549,14 +586,14 @@ ${nginx_http_ipv6_line}
     # RFC 8414 resource suffix (e.g. .../oauth-authorization-server/mcp) to the
     # bare canonical path the MCP server serves.
     location ^~ /.well-known/oauth-authorization-server {
-        set \$mcp_upstream http://mcp-server:8001;
+        set \$mcp_upstream ${mcp_upstream};
         rewrite ^ /.well-known/oauth-authorization-server break;
         proxy_pass \$mcp_upstream;
         proxy_set_header Host \$host;
     }
 
     location ^~ /.well-known/oauth-protected-resource {
-        set \$mcp_upstream http://mcp-server:8001;
+        set \$mcp_upstream ${mcp_upstream};
         rewrite ^ /.well-known/oauth-protected-resource break;
         proxy_pass \$mcp_upstream;
         proxy_set_header Host \$host;
@@ -568,7 +605,7 @@ ${nginx_http_ipv6_line}
     # doubled /mcp/mcp. This maps external /mcp -> internal /mcp; /mcp/mcp still
     # works via the prefixed block below for already-configured clients.
     location = /mcp {
-        set \$mcp_upstream http://mcp-server:8001;
+        set \$mcp_upstream ${mcp_upstream};
         rewrite ^ /mcp break;
         proxy_pass \$mcp_upstream;
         proxy_http_version 1.1;
@@ -583,7 +620,7 @@ ${nginx_http_ipv6_line}
     }
 
     location /mcp/ {
-        set \$mcp_upstream http://mcp-server:8001;
+        set \$mcp_upstream ${mcp_upstream};
         rewrite ^/mcp/(.*) /\$1 break;
         proxy_pass \$mcp_upstream;
         proxy_http_version 1.1;
