@@ -6,7 +6,8 @@ import { MemoryRouter } from "react-router";
 /* ── mocks ─────────────────────────────────────────────────────── */
 
 vi.mock("@/api/client", () => ({
-  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  isAbortError: () => false,
 }));
 vi.mock("./BpmnViewer", () => ({
   default: ({ bpmnXml }: any) => <div data-testid="bpmn-viewer">{bpmnXml ? "BPMN loaded" : ""}</div>,
@@ -29,6 +30,24 @@ vi.mock("react-router", async () => {
   const actual = await vi.importActual("react-router");
   return { ...actual, useNavigate: () => mockNavigate };
 });
+// The element tables resolve the card-type display names for their link
+// placeholders ("Link Business Process", never the key).
+vi.mock("@/hooks/useMetamodel", () => ({
+  useMetamodel: () => ({
+    loading: false,
+    types: [],
+    relationTypes: [],
+    getType: (key: string) =>
+      ({
+        BusinessProcess: { key, label: "Business Process", translations: {} },
+        Application: { key, label: "Application", translations: {} },
+        DataObject: { key, label: "Data Object", translations: {} },
+        ITComponent: { key, label: "IT Component", translations: {} },
+      })[key],
+    getRelationsForType: () => [],
+    invalidateCache: () => undefined,
+  }),
+}));
 
 import { api } from "@/api/client";
 import ProcessFlowTab from "./ProcessFlowTab";
@@ -66,6 +85,44 @@ const mockElements = [
     it_component_name: null,
     custom_fields: {},
     bpmn_element_id: "task_1",
+  },
+  {
+    id: "el2",
+    name: "Order received",
+    element_type: "startEvent",
+    event_definition_type: "message",
+    definition_name: "Customer Order",
+    lane_name: "Sales",
+    is_automated: false,
+    custom_fields: {},
+    bpmn_element_id: "start_1",
+    sequence_order: 1,
+  },
+  {
+    id: "el3",
+    name: "Order record",
+    element_type: "dataObjectReference",
+    lane_name: null,
+    is_automated: false,
+    custom_fields: {},
+    bpmn_element_id: "do_1",
+    sequence_order: 2,
+  },
+];
+
+const mockMessageFlows = [
+  {
+    id: "mf1",
+    process_id: "proc-1",
+    bpmn_element_id: "MessageFlow_1",
+    name: "Order",
+    source_ref: "Task_Send",
+    target_ref: "Participant_Supplier",
+    source_name: "Send order",
+    target_name: "Supplier",
+    sequence_order: 0,
+    interface_id: null,
+    interface_name: null,
   },
 ];
 
@@ -122,6 +179,7 @@ beforeEach(() => {
   vi.mocked(api.get).mockImplementation((url: string) => {
     if (url.includes("/flow/permissions")) return Promise.resolve(mockPerms);
     if (url.includes("/flow/published")) return Promise.resolve(mockPublished);
+    if (url.includes("/message-flows")) return Promise.resolve(mockMessageFlows);
     if (url.includes("/elements")) return Promise.resolve(mockElements);
     if (url.includes("/flow/drafts")) return Promise.resolve(mockDrafts);
     if (url.includes("/flow/archived")) return Promise.resolve(mockArchived);
@@ -166,7 +224,8 @@ describe("ProcessFlowTab", () => {
     await waitFor(() => {
       expect(screen.getByText("Process Steps & Elements")).toBeInTheDocument();
       expect(screen.getByText("Create Order")).toBeInTheDocument();
-      expect(screen.getByText("Sales")).toBeInTheDocument();
+      // Two mock steps sit in the Sales lane.
+      expect(screen.getAllByText("Sales").length).toBeGreaterThan(0);
     });
   });
 
@@ -356,6 +415,33 @@ describe("ProcessFlowTab", () => {
       });
     });
 
+    it("orders the link columns Organization, Application, Data Object, IT Component, Business Process", async () => {
+      // Organization sits ahead of the card links a step supports, and the
+      // process a step hands over to reads last — the order the user asked for.
+      mockWithOrgs();
+      renderTab();
+      await waitFor(() => {
+        expect(screen.getByText("Organization")).toBeInTheDocument();
+      });
+      // The info glyph is text in the DOM (a Material Symbols ligature), so
+      // strip it before reading the header label.
+      const headers = screen.getAllByRole("columnheader").map((h) => {
+        const clone = h.cloneNode(true) as HTMLElement;
+        clone.querySelectorAll(".material-symbols-outlined").forEach((n) => n.remove());
+        return clone.textContent?.trim();
+      });
+      const from = headers.indexOf("Organization");
+      expect(from).toBeGreaterThan(0);
+      expect(headers.slice(from)).toEqual([
+        "Organization",
+        "Application",
+        "Data Object",
+        "IT Component",
+        "Business Process",
+      ]);
+      expect(headers[headers.length - 1]).toBe("Business Process");
+    });
+
     it("shows the highlighted informative-only note above the table", async () => {
       mockWithOrgs();
       renderTab();
@@ -391,6 +477,97 @@ describe("ProcessFlowTab", () => {
           "/bpm/processes/proc-1/elements/el1",
           { organization_ids: ["org-2"] },
         );
+      });
+    });
+  });
+
+  describe("Business Process column (a step → the process it hands over to)", () => {
+    const CALLEE = "3f2c9a1e-7b4d-4c6e-9a1f-0d2e5b7c8a90";
+    const callActivity = {
+      id: "el4",
+      name: "Run Credit Check",
+      element_type: "callActivity",
+      lane_name: "Finance",
+      is_automated: false,
+      custom_fields: {},
+      bpmn_element_id: "call_1",
+      called_element: CALLEE,
+      business_process_id: CALLEE,
+      business_process_name: "Credit Check",
+    };
+
+    function mockWith(elements: unknown[]) {
+      vi.mocked(api.get).mockImplementation((url: string) => {
+        if (url.includes("/flow/permissions")) return Promise.resolve(mockPerms);
+        if (url.includes("/flow/published")) return Promise.resolve(mockPublished);
+        if (url.includes("/message-flows")) return Promise.resolve([]);
+        if (url.includes("/elements")) return Promise.resolve(elements);
+        if (url.includes("/flow/drafts")) return Promise.resolve(mockDrafts);
+        if (url.includes("/flow/archived")) return Promise.resolve(mockArchived);
+        return Promise.reject(new Error(`no mock for ${url}`));
+      });
+    }
+
+    it("offers the link on every step — a task included — and a dash on an artefact", async () => {
+      // el1 is a task, el3 a data object reference.
+      mockWith([mockElements[0], mockElements[2], callActivity]);
+      renderTab();
+      await waitFor(() => {
+        expect(screen.getByText("Business Process")).toBeInTheDocument();
+        expect(screen.getByText("Credit Check")).toBeInTheDocument();
+      });
+      // The placeholder carries the type's display name, not its key. The
+      // task row offers it; the data object row is not a step at all.
+      expect(screen.getAllByText("Link Business Process")).toHaveLength(1);
+      const artefactRow = document.querySelector('tr[data-artefact="true"]')!;
+      expect(within(artefactRow as HTMLElement).queryByText("Link Business Process")).toBeNull();
+    });
+
+    it("links a plain task the same way as a call activity", async () => {
+      mockWith([mockElements[0]]);
+      vi.mocked(api.put).mockResolvedValue({ id: "el1", status: "updated" });
+      renderTab();
+      await waitFor(() => expect(screen.getByText("Link Business Process")).toBeInTheDocument());
+      // The cell opens the same CardPicker every other link column opens.
+      await userEvent.click(screen.getByText("Link Business Process"));
+      expect(screen.getByRole("combobox")).toBeInTheDocument();
+    });
+
+    it("drills down into the linked process's flow when the chip is clicked", async () => {
+      mockWith([callActivity]);
+      renderTab();
+      await waitFor(() => expect(screen.getByText("Credit Check")).toBeInTheDocument());
+      await userEvent.click(screen.getByText("Credit Check"));
+      expect(mockNavigate).toHaveBeenCalledWith(`/cards/${CALLEE}?tab=1`);
+    });
+
+    it("removing the chip clears the link", async () => {
+      mockWith([callActivity]);
+      vi.mocked(api.put).mockResolvedValue({ id: "el4", status: "updated" });
+      renderTab();
+      await waitFor(() => expect(screen.getByText("Credit Check")).toBeInTheDocument());
+      const chip = screen.getByText("Credit Check").closest(".MuiChip-root")!;
+      await userEvent.click(chip.querySelector(".MuiChip-deleteIcon") as Element);
+      await waitFor(() => {
+        expect(api.put).toHaveBeenCalledWith("/bpm/processes/proc-1/elements/el4", {
+          business_process_id: "",
+        });
+      });
+    });
+
+    it("shows a foreign reference from an imported diagram as a hint beside the link affordance", async () => {
+      mockWith([
+        {
+          ...callActivity,
+          called_element: "Process_CreditCheck",
+          business_process_id: null,
+          business_process_name: null,
+        },
+      ]);
+      renderTab();
+      await waitFor(() => {
+        expect(screen.getByText("Link Business Process")).toBeInTheDocument();
+        expect(screen.getByText("references Process_CreditCheck")).toBeInTheDocument();
       });
     });
   });
@@ -519,6 +696,62 @@ describe("ProcessFlowTab", () => {
       expect(
         screen.getByText(/Approved by mistake, wrong revision/),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("element types, artefacts and message flows", () => {
+    it("renders the element type as a translated label with its event definition", async () => {
+      renderTab();
+      await waitForLoad();
+      expect(screen.getByText("Task")).toBeInTheDocument();
+      expect(screen.getByText("Start event")).toBeInTheDocument();
+      expect(screen.getByText(/Message: Customer Order/)).toBeInTheDocument();
+      // The raw parser strings never reach the screen.
+      expect(screen.queryByText("startEvent")).not.toBeInTheDocument();
+    });
+
+    it("renders a data object row with only the Data Object cell editable", async () => {
+      renderTab();
+      await waitForLoad();
+      const row = screen.getByText("Order record").closest("tr")!;
+      expect(row).toHaveAttribute("data-artefact", "true");
+      // Automated / TCode / Application / IT Component / Organization are dashed out…
+      expect(within(row).getAllByText("\u2014").length).toBeGreaterThanOrEqual(5);
+      // …and the row still offers the Data Object link.
+      expect(within(row).getByText("Link Data Object")).toBeInTheDocument();
+      // A step row keeps its Application link.
+      const step = screen.getByText("Create Order").closest("tr")!;
+      expect(within(step).getByText("SAP")).toBeInTheDocument();
+    });
+
+    it("lists the message flows and PATCHes the Interface link", async () => {
+      vi.mocked(api.patch).mockResolvedValue({ ...mockMessageFlows[0], interface_id: "if1", interface_name: "Order API" });
+      renderTab();
+      await waitForLoad();
+      const table = await screen.findByTestId("message-flows-table");
+      expect(within(table).getByText("Message flows")).toBeInTheDocument();
+      expect(within(table).getByText("Order")).toBeInTheDocument();
+      expect(within(table).getByText("Send order")).toBeInTheDocument();
+      expect(within(table).getByText("Supplier")).toBeInTheDocument();
+      // Editable: the link affordance is offered when the viewer may edit.
+      expect(within(table).getByText("Link Interface")).toBeInTheDocument();
+    });
+
+    it("offers no Interface link when the viewer cannot edit", async () => {
+      vi.mocked(api.get).mockImplementation((url: string) => {
+        if (url.includes("/flow/permissions"))
+          return Promise.resolve({ ...mockPerms, can_edit_draft: false });
+        if (url.includes("/flow/published")) return Promise.resolve(mockPublished);
+        if (url.includes("/message-flows")) return Promise.resolve(mockMessageFlows);
+        if (url.includes("/elements")) return Promise.resolve(mockElements);
+        if (url.includes("/flow/drafts")) return Promise.resolve(mockDrafts);
+        if (url.includes("/flow/archived")) return Promise.resolve(mockArchived);
+        return Promise.reject(new Error(`no mock for ${url}`));
+      });
+      renderTab();
+      await waitForLoad();
+      const table = await screen.findByTestId("message-flows-table");
+      expect(within(table).queryByText("Link Interface")).not.toBeInTheDocument();
     });
   });
 });

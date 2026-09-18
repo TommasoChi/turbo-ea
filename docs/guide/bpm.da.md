@@ -45,18 +45,58 @@ Diagrammer viser fordeling efter procestype, modenhedsniveau og automatiseringsn
 
 Hvert forretningsproceskort kan have et **BPMN 2.0-procesflowdiagram**. Editoren bruger [bpmn-js](https://bpmn.io/) og tilbyder:
 
-- **Visuel modellering** — Træk og slip BPMN-elementer: opgaver, hændelser, gateways, baner og underprocesser
-- **Skabeloner** — Vælg blandt 6 forudbyggede BPMN-skabeloner til almindelige procesmønstre (eller start fra et blankt lærred)
-- **Element­udtrækning** — Når du gemmer et diagram, udtrækker systemet automatisk alle opgaver, hændelser, gateways og baner til analyse. De udtrukne elementer vises i **procesforløbets rækkefølge** — langs diagrammets sekvens- og beskedforløb med start i starthændelsen — og ikke grupperet efter elementtype. Trin i en løkke holdes samlet, og indholdet af en underproces vises lige under den
+- **Visuel modellering** — Træk og slip BPMN-elementer fra paletten: opgaver, hændelser, gateways, baner, pools og underprocesser. Punktet **…** nederst i paletten åbner en søgbar **Create element**-menu, der når alle BPMN-elementtyper — besked-, timer-, signal-, fejl- og eskaleringshændelser, transaktioner, hændelsesunderprocesser, kaldeaktiviteter, sende-/modtageopgaver, dataobjekter og datalagre (genvej `N`). Punktet **+** i kontekstpanelet for en markeret figur åbner den tilsvarende **Append element**-menu (genvej `A`)
+- **Skabeloner** — Vælg blandt 7 forudbyggede BPMN-skabeloner til almindelige procesmønstre, herunder en **Samarbejds**-skabelon med to pools og beskedflows (eller start fra et blankt lærred)
+- **Element­udtrækning** — Når du gemmer et diagram, udtrækker systemet automatisk alle opgaver, hændelser, gateways, baner, dataobjekter og beskedflows til analyse. Hændelser beholder deres art — en *besked*-starthændelse vises som en sådan med navnet på den besked, den modtager — og sende-/modtageopgaver bærer den besked, de udveksler. De udtrukne elementer vises i **procesforløbets rækkefølge** — langs diagrammets sekvens- og beskedforløb med start i starthændelsen — og ikke grupperet efter elementtype. Trin i en løkke holdes samlet, indholdet af en underproces vises lige under den, og dataobjekter og datalagre kommer til sidst
 - **Elementfarver** — Markér et eller flere elementer, og brug malerbøtte-knappen i kontekstpanelet for at give dem en farve. Farverne gemmes i selve BPMN-filen, så de vises også i den skrivebeskyttede fremviser, i eksporter og på udskrifter
+- **Egenskabspanel** — Panelet til højre (vis eller skjul det med skyderknappen i værktøjslinjen) redigerer det, en figur ikke kan vise: elementets navn og dokumentation, den **besked**, det **signal**, den **fejl** eller den **eskalering**, en hændelse henviser til, betingelsen på et sekvensflow og multi-instans-markører. Dokumentation indtastet her vises i procesnavigatoren og i den skrivebeskyttede fremviser
+
+![Create element-menu](../assets/img/da/89_bpm_create_element_menu.png)
+
+![Egenskabspanel](../assets/img/da/90_bpm_properties_panel.png)
+
+### Pools og beskedflows
+
+En proces, der spænder over flere parter — en kunde og virksomheden, to afdelinger, et partnersystem — modelleres som et **samarbejde**: én pool pr. part, forbundet med **beskedflows**. Tilføj en anden pool fra paletten (eller start fra **Samarbejds**-skabelonen), og tegn så et beskedflow mellem de to pools med det globale forbindelsesværktøj, eller fra en sendeopgave, en beskedsluthændelse eller en beskedkasthændelse i den ene pool til en modtageopgave eller beskedhændelse i den anden. Navngiv beskeden i egenskabspanelet, så den læses ens overalt.
+
+![Samarbejdsskabelon](../assets/img/da/91_bpm_collaboration_template.png)
 
 ### Element-linking
 
 BPMN-elementer kan **linkes til EA-kort**. For eksempel kan du linke en opgave i dit procesdiagram til den applikation, der understøtter den. Det skaber en sporbar forbindelse mellem din procesmodel og dit arkitekturlandskab:
 
-- Vælg en opgave, hændelse eller gateway i BPMN-diagrammet
-- Panelet **Element Linker** viser matchende kort (Application, Data Object, IT Component, Organization)
-- Link elementet til et kort — forbindelsen gemmes og er synlig i både procesflowet og kortets relationer
+- Hver navngiven opgave, hændelse og gateway i det udgivne flow er en række i tabellen **Procestrin og elementer** under diagrammet (et udkast har samme tabel under **Forhåndslink elementer**, som anvendes, når udkastet godkendes)
+- Klik på cellen **Applikation**, **Dataobjekt** eller **IT-komponent** på et trin og vælg kortet — vælgeren gennemser inventaret, så intet indtastes i hånden
+- Linket gemmes på trinnet og opretter en relation mellem processen og kortet, så det er synligt i både procesflowet og kortets fane Relationer
+- Kolonnen **Forretningsproces** forbinder et trin med den proces, det giver videre til — se nedenfor
+- De samme fem tilknytninger tilbydes **i editoren**, så længe et udkast er åbent: en gruppe **Tilknyttede kort** i egenskabspanelet og et punkt **Tilknyt kort** i kontekstmenuen, der åbner listen over dem
+- På selve diagrammet bærer et tilknyttet trin **én lille prik pr. tilknyttet korttype** under sit navn, i korttypens farve — både i editoren og i den skrivebeskyttede fremviser. Navne holdes væk fra lærredet: klik på trinnet for at se dem, eller hold musen over en prik
+
+### Tilknyt et trin til en proces
+
+Et trin giver ofte videre til en proces, der findes i sin egen ret — en med eget diagram, egen ejer og egen livscyklus, som typisk genbruges flere steder. Ethvert trin kan sige det: en opgave, en underproces, en hændelse eller en gateway peger på et **Forretningsproces**-kort, og du indtaster aldrig et proces-id i hånden:
+
+- **Egenskabspanelet** viser en gruppe **Tilknyttede kort** på hvert trin med én række pr. tilknytning — Forretningsproces, Applikation, Dataobjekt, IT-komponent, Organisationer — hver med **Vælg**, **Åbn** (som borer ned i det tilknyttede kort) og **Fjern**
+- **Kontekstmenuen** for et valgt trin har punktet **Tilknyt kort** med de samme fem, til når panelet er foldet sammen. Et dataobjekt eller datalager tilbyder kun Dataobjekt-tilknytningen, som i tabellen
+- **Trintabellen** for det udgivne flow (og forhåndslink-tabellen for et udkast) har samme link i kolonnen **Forretningsproces**, og chippen dér borer ned i den tilknyttede proces' fane Procesflow. Dataobjekter og datalagre er ikke trin, så deres rækker viser en tankestreg
+
+![Tilknyttede kort](../assets/img/da/92_bpm_called_process.png)
+
+BPMN har én konstruktion, der *er* en anden proces: **kaldeaktiviteten** (call activity), en opgave med tyk kant, der kalder en selvstændigt defineret proces. En indlejret **underproces** grupperer også trin, men hører til det diagram, den er tegnet i; reglen fra Method & Style er enkel: findes processen selvstændigt, så brug en kaldeaktivitet. Turbo EA behandler den som det oprindelige tilfælde — **når du placerer en kaldeaktivitet, bliver du spurgt, hvilken proces den kalder**, og tilknytningen gemmes i BPMN's eget *kaldte element*, som andre værktøjer kan læse. Ethvert andet trin gemmer i stedet tilknytningen som en Turbo EA-attribut i diagrammet.
+
+Udgivelse af et flow med et tilknyttet trin opretter en **kalder**-relation mellem de to processer — den tilknyttede proces' fane Relationer viser *kaldes af*, og afhængighedsvisningen tegner kaldgrafen. Et diagram importeret fra et andet værktøj beholder værktøjets egen procesreference; trintabellen viser den som et hint (*refererer til Process_X*), indtil du vælger den tilsvarende proces i Turbo EA.
+
+### Ét sæt tilknytninger
+
+Editoren og tabellerne viser de samme tilknytninger, så et trin læses ens, uanset hvor du ser det:
+
+- Inde i et **udkast** gælder det, du sætter der — i editoren eller i tabellen **Forhåndstilknyt elementer**; de er samme lager — og diagrammets egen procesreference er reserven for et trin, du intet har sagt om. At fjerne en tilknytning fjerner den, også ved udgivelse.
+- Et **udgivet** flow forbliver godkendt, mens dets tilknytninger redigeres i dets elementtabel: det er metadata oven på et godkendt diagram, ikke en grund til at godkende det igen.
+- Et udkast, der **oprettes fra den udgivne version**, starter med de tilknytninger, processen har på det tidspunkt. Et allerede åbent udkast beholder sine egne, så en andens redigering ikke ændrer det diagram, du arbejder i.
+
+### Beskedflows
+
+Det udgivne diagrams beskedflows vises under elementtabellen; hvert viser, hvad det forbinder — en opgave, en hændelse eller en hel pool i hver ende. Knyt et beskedflow til det **Interface**-kort, der bærer det. Ligesom organisationslinks på trin er dette kun til orientering: der oprettes ingen relation mellem kort.
 
 ### Link organisationer
 

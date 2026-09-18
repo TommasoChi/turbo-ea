@@ -10,3 +10,35 @@ declare module "bpmn-js-color-picker" {
   const colorPickerModule: import("didi").ModuleDeclaration;
   export default colorPickerModule;
 }
+
+/**
+ * `bpmn-js-create-append-anything` ships no type declarations either. It
+ * exports named didi module descriptors: the create/append-anything menus and
+ * an optional element-templates integration we do not use.
+ */
+declare module "bpmn-js-create-append-anything" {
+  export const CreateAppendAnythingModule: import("didi").ModuleDeclaration;
+  export const CreateAppendElementTemplatesModule: import("didi").ModuleDeclaration;
+}
+
+/**
+ * `bpmn-js-properties-panel` ships its `.d.ts` only for the source tree, not
+ * for the `dist/` entry the package resolves to, so the two module descriptors
+ * used here are declared by hand. `@bpmn-io/properties-panel` (the widget
+ * library underneath) is only ever imported for its stylesheet.
+ */
+declare module "bpmn-js-properties-panel" {
+  export const BpmnPropertiesPanelModule: import("didi").ModuleDeclaration;
+  export const BpmnPropertiesProviderModule: import("didi").ModuleDeclaration;
+  /** Resolve a bpmn-js service from inside a panel entry (Preact hook). */
+  export function useService(type: string, strict?: boolean): unknown;
+}
+
+/**
+ * `@bpmn-io/properties-panel` ships no `.d.ts` for its `dist/` entry either.
+ * Only the stock `Group` container is used — the "Called process" group of
+ * `calledProcessModule.ts` hands it the entries to render.
+ */
+declare module "@bpmn-io/properties-panel" {
+  export function Group(props: unknown): unknown;
+}

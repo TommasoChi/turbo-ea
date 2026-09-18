@@ -42,8 +42,15 @@ import Collapse from "@mui/material/Collapse";
 import Snackbar from "@mui/material/Snackbar";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import CardPicker from "@/components/CardPicker";
+import { useMetamodel } from "@/hooks/useMetamodel";
+import { useLinkTypeColors } from "./useLinkTypeColors";
+import { useTypeLabel } from "@/hooks/useResolveLabel";
+import { calledProcessPath } from "./calledProcess";
 import BpmnViewer from "./BpmnViewer";
 import BpmnTemplateChooser from "./BpmnTemplateChooser";
+import ElementTypeChip from "./ElementTypeChip";
+import MessageFlowsTable from "./MessageFlowsTable";
+import { isArtefactType } from "./elementTypes";
 import { api } from "@/api/client";
 import { useDateFormat } from "@/hooks/useDateFormat";
 // Aliased: this file already has a local STATUS_COLORS holding MUI palette
@@ -72,6 +79,9 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
   const { t } = useTranslation(["bpm", "common"]);
   const { formatDate, formatDateTime } = useDateFormat();
   const navigate = useNavigate();
+  const { getType } = useMetamodel();
+  const linkTypeColors = useLinkTypeColors();
+  const typeLabelOf = useTypeLabel();
   const [subTab, setSubTab] = useState(initialSubTab ?? 0);
 
   // Permissions
@@ -485,14 +495,24 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
 
   const renderEditableCell = (
     element: ProcessElement,
-    field: "application" | "data_object" | "it_component",
+    field: "application" | "data_object" | "it_component" | "business_process",
     cardTypeKey: string,
     onUpdate: (id: string, updates: Record<string, unknown>) => void,
     elementId: string,
   ) => {
     const nameField = `${field}_name` as keyof ProcessElement;
+    const idField = `${field}_id` as keyof ProcessElement;
     const currentName = element[nameField] as string | undefined;
+    const currentId = element[idField] as string | undefined;
     const isEditing = editingCell?.elementId === elementId && editingCell?.field === field;
+    // The display name of the card type, never its key ("Business Process",
+    // not "BusinessProcess").
+    const typeName = typeLabelOf(getType(cardTypeKey)) || cardTypeKey;
+    // A step whose XML reference is another tool's process id: shown as a
+    // hint under the link affordance until the process is picked.
+    const isProcessLink = field === "business_process";
+    const foreignRef =
+      isProcessLink && !currentId && element.called_element ? element.called_element : null;
 
     if (isEditing) {
       return (
@@ -502,9 +522,10 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
           onChange={(val) => onUpdate(elementId, { [`${field}_id`]: val?.id || "" })}
           onBlur={() => setEditingCell(null)}
           enabled={isEditing}
+          excludeIds={isProcessLink ? [processId] : undefined}
           autoFocus
           sx={{ minWidth: 160 }}
-          placeholder={t("flowTab.searchCardType", { type: cardTypeKey })}
+          placeholder={t("flowTab.searchCardType", { type: typeName })}
         />
       );
     }
@@ -512,21 +533,40 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
     return (
       <Box
         onClick={() => setEditingCell({ elementId, field })}
-        sx={linkCellSx}
+        sx={{ ...linkCellSx, ...(foreignRef ? { height: "auto", flexDirection: "column", alignItems: "flex-start" } : {}) }}
       >
         {currentName ? (
           <Chip
             label={currentName}
             size="small"
-            color={field === "application" ? "primary" : field === "data_object" ? "secondary" : "default"}
+            color={field === "application" ? "primary" : field === "data_object" ? "secondary" : field === "business_process" ? "success" : "default"}
+            variant={isProcessLink ? "outlined" : "filled"}
+            icon={isProcessLink ? <MaterialSymbol icon="route" size={14} /> : undefined}
+            // The Calls chip drills down into the callee's flow; the cell
+            // behind it still opens the picker.
+            onClick={
+              isProcessLink && currentId
+                ? (ev) => {
+                    ev.stopPropagation();
+                    navigate(calledProcessPath(currentId));
+                  }
+                : undefined
+            }
             onDelete={() => onUpdate(elementId, { [`${field}_id`]: "" })}
             sx={{ maxWidth: 160 }}
           />
         ) : (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <MaterialSymbol icon="add_link" size={14} color="#bbb" />
-            <Typography variant="caption" color="text.disabled">{t("flowTab.linkCardType", { type: cardTypeKey })}</Typography>
-          </Box>
+          <>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <MaterialSymbol icon="add_link" size={14} color="#bbb" />
+              <Typography variant="caption" color="text.disabled">{t("flowTab.linkCardType", { type: typeName })}</Typography>
+            </Box>
+            {foreignRef && (
+              <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                {t("flowTab.importedReference", { ref: foreignRef })}
+              </Typography>
+            )}
+          </>
         )}
       </Box>
     );
@@ -686,13 +726,21 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
                   </Tooltip>
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.tCode")}</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.application")}</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.dataObject")}</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.itComponent")}</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>
                   <Tooltip title={t("flowTab.organizationTooltip")}>
                     <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
                       {t("flowTab.organization")}
+                      <MaterialSymbol icon="info" size={14} color="#999" />
+                    </Box>
+                  </Tooltip>
+                </TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.application")}</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.dataObject")}</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>{t("flowTab.itComponent")}</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>
+                  <Tooltip title={t("flowTab.businessProcessTooltip")}>
+                    <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+                      {t("flowTab.businessProcess")}
                       <MaterialSymbol icon="info" size={14} color="#999" />
                     </Box>
                   </Tooltip>
@@ -702,26 +750,39 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
             <TableBody>
               {namedElements.map((e, idx) => {
                 const elemKey = e[idField] as string;
+                // A data object / data store is not a step: it has no lane,
+                // no automation and links only to a Data Object card.
+                const artefact = isArtefactType(e.element_type);
+                const dash = <Typography variant="body2" color="text.secondary">{"\u2014"}</Typography>;
                 return (
-                  <TableRow key={elemKey} hover>
+                  <TableRow key={elemKey} hover data-artefact={artefact ? "true" : undefined}>
                     <TableCell>{idx + 1}</TableCell>
                     <TableCell>{e.name}</TableCell>
                     <TableCell>
-                      <Chip label={e.element_type} size="small" variant="outlined" />
+                      <ElementTypeChip
+                        elementType={e.element_type}
+                        eventDefinitionType={e.event_definition_type}
+                        definitionName={e.definition_name}
+                      />
                     </TableCell>
                     <TableCell>{e.lane_name || "\u2014"}</TableCell>
                     <TableCell>
-                      {e.is_automated ? (
+                      {artefact ? (
+                        dash
+                      ) : e.is_automated ? (
                         <Chip label={t("common:labels.yes")} size="small" color="success" />
                       ) : (
                         <Typography variant="body2" color="text.secondary">{t("common:labels.no")}</Typography>
                       )}
                     </TableCell>
-                    <TableCell>{renderTCodeCell(e, onUpdate, elemKey)}</TableCell>
-                    <TableCell>{renderEditableCell(e, "application", "Application", onUpdate, elemKey)}</TableCell>
+                    <TableCell>{artefact ? dash : renderTCodeCell(e, onUpdate, elemKey)}</TableCell>
+                    <TableCell>{artefact ? dash : renderOrgCell(e, onUpdate, elemKey)}</TableCell>
+                    <TableCell>{artefact ? dash : renderEditableCell(e, "application", "Application", onUpdate, elemKey)}</TableCell>
                     <TableCell>{renderEditableCell(e, "data_object", "DataObject", onUpdate, elemKey)}</TableCell>
-                    <TableCell>{renderEditableCell(e, "it_component", "ITComponent", onUpdate, elemKey)}</TableCell>
-                    <TableCell>{renderOrgCell(e, onUpdate, elemKey)}</TableCell>
+                    <TableCell>{artefact ? dash : renderEditableCell(e, "it_component", "ITComponent", onUpdate, elemKey)}</TableCell>
+                    <TableCell>
+                      {artefact ? dash : renderEditableCell(e, "business_process", "BusinessProcess", onUpdate, elemKey)}
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -858,11 +919,19 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
             elements={elements}
             onElementClick={() => {}}
             height={400}
+            typeColors={linkTypeColors}
           />
         )}
 
         {/* Editable process elements table */}
         {renderElementsTable(elements, handleElementUpdate)}
+
+        {/* Messages exchanged between pools, each linkable to an Interface card */}
+        <MessageFlowsTable
+          processId={processId}
+          canEdit={perms.can_edit_draft}
+          onNotify={setSnack}
+        />
       </Box>
     );
   };

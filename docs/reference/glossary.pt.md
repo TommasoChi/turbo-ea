@@ -8,6 +8,11 @@
 | **Favorito / Visualização Salva** | Uma configuração salva de filtros, colunas e ordenação no Inventário que pode ser recarregada com um clique |
 | **BPM** | Business Process Management (Gestão de Processos de Negócio) — a disciplina de modelar, analisar e melhorar processos de negócio |
 | **BPMN** | Business Process Model and Notation — a notação padrão para modelagem de processos de negócio (versão 2.0) |
+| **Definição de evento** | O tipo de um evento BPMN: mensagem, temporizador, sinal, erro, escalonamento, condicional, link, compensação, cancelamento ou término. Exibida ao lado do tipo de elemento na tabela de etapas, com o nome da mensagem, do sinal ou do erro ao qual o evento se refere |
+| **Raia** | Uma faixa horizontal dentro de um pool que agrupa as etapas executadas por um papel, equipe ou departamento |
+| **Atividade de chamada** | Uma tarefa BPMN com borda grossa que invoca um processo definido de forma independente: a maneira própria do BPMN de dizer «este passo é outro processo», e o único tipo de passo para o qual o Turbo EA pergunta o processo de negócio ao colocá-lo. Qualquer outro passo vincula um processo do mesmo modo, pelo painel de propriedades, pelo menu de contexto ou pela tabela de passos; publicar o fluxo cria uma relação *invoca* entre os dois processos |
+| **Fluxo de mensagem** | Uma mensagem trocada entre dois pools de uma colaboração BPMN. Listado abaixo da tabela de elementos de um fluxo de processo publicado, onde pode ser vinculado ao card de Interface que o transporta |
+| **Pool** | Um participante de uma colaboração BPMN — um cliente, um departamento, um sistema parceiro — desenhado como um contêiner que abriga o processo próprio daquela parte |
 | **Capacidade de Negócio** | O que uma organização pode fazer, independentemente de como o faz |
 | **Cálculo** | Uma fórmula definida pelo administrador que calcula automaticamente o valor de um campo quando um card é salvo |
 | **Card** | A unidade básica de informação no Turbo EA representando qualquer componente de arquitetura |

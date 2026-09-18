@@ -33,6 +33,7 @@ from app.models.process_assessment import ProcessAssessment
 from app.models.process_diagram import ProcessDiagram
 from app.models.process_element import ProcessElement, ProcessElementOrganization
 from app.models.process_flow_version import ProcessFlowVersion
+from app.models.process_message_flow import ProcessMessageFlow
 from app.models.risk import Risk, RiskCard
 from app.models.risk_mitigation_task import RiskMitigationTask, RiskMitigationTaskOccurrence
 from app.models.saved_report import SavedReport
@@ -123,7 +124,13 @@ ENTITY_SECTIONS: tuple[EntitySection, ...] = (
     EntitySection(
         "ProcessElements",
         ProcessElement,
-        card_fk_columns=("process_id", "application_id", "data_object_id", "it_component_id"),
+        card_fk_columns=(
+            "process_id",
+            "application_id",
+            "data_object_id",
+            "it_component_id",
+            "business_process_id",
+        ),
     ),
     # After ProcessElements so the junction's element_id (an intra-module FK,
     # preserved verbatim) resolves; organization_id is remapped by card ref.
@@ -131,6 +138,13 @@ ENTITY_SECTIONS: tuple[EntitySection, ...] = (
         "ProcessElementOrgs",
         ProcessElementOrganization,
         card_fk_columns=("organization_id",),
+    ),
+    # Message flows between pools; `interface_id` is the one EA link a flow
+    # carries, remapped by card ref like an element's Application link.
+    EntitySection(
+        "ProcessMessageFlows",
+        ProcessMessageFlow,
+        card_fk_columns=("process_id", "interface_id"),
     ),
     EntitySection(
         "ProcessFlowVersions",

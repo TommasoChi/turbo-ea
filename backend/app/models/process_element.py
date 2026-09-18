@@ -32,6 +32,19 @@ class ProcessElement(Base, UUIDMixin, TimestampMixin):
     lane_name: Mapped[str | None] = mapped_column(String(200))
     is_automated: Mapped[bool] = mapped_column(Boolean, default=False)
     sequence_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Event sub-type (`message`, `timer`, `signal`, `error`, ...) — NULL on a
+    # plain event and on every non-event element. Parser-derived, like
+    # `element_type`; never edited by hand.
+    event_definition_type: Mapped[str | None] = mapped_column(String(50))
+    # Name of the Message / Signal / Error / Escalation the element refers to,
+    # resolved from the BPMN root definitions (also set on send/receive tasks).
+    definition_name: Mapped[str | None] = mapped_column(String(500))
+    # The step's raw process reference from the XML (parser-derived): a call
+    # activity's `calledElement`, else the `turboea:processRef` any flow node
+    # may carry. Shown as a hint when it does not resolve to a card — an
+    # imported diagram's own process id — so the user can pick the process it
+    # means. Never set on a data artefact.
+    called_element: Mapped[str | None] = mapped_column(String(200))
 
     # EA cross-references (optional, set by user via UI)
     application_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -46,6 +59,14 @@ class ProcessElement(Base, UUIDMixin, TimestampMixin):
         UUID(as_uuid=True),
         ForeignKey("cards.id", ondelete="SET NULL"),
     )
+    # The BusinessProcess a step links to (a call activity's callee, or the
+    # process a plain step hands over to). Derived from the XML reference when
+    # that holds a card UUID (the XML wins), else set by the user and kept
+    # across re-publishes like the other links. Never set on a data artefact.
+    business_process_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("cards.id", ondelete="SET NULL"),
+    )
 
     custom_fields: Mapped[dict | None] = mapped_column(JSONB, default=dict)
 
@@ -53,6 +74,7 @@ class ProcessElement(Base, UUIDMixin, TimestampMixin):
     application = relationship("Card", foreign_keys=[application_id], lazy="noload")
     data_object = relationship("Card", foreign_keys=[data_object_id], lazy="noload")
     it_component = relationship("Card", foreign_keys=[it_component_id], lazy="noload")
+    business_process = relationship("Card", foreign_keys=[business_process_id], lazy="noload")
     organizations = relationship("Card", secondary="process_element_organizations", lazy="noload")
 
 

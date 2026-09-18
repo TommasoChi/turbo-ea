@@ -45,18 +45,58 @@ Diagramme zeigen die Verteilung nach Prozesstyp, Reifegrad und Automatisierungsg
 
 Jede Geschäftsprozess-Karte kann ein **BPMN 2.0 Prozessflussdiagramm** haben. Der Editor verwendet [bpmn-js](https://bpmn.io/) und bietet:
 
-- **Visuelle Modellierung** — BPMN-Elemente per Drag & Drop: Aufgaben, Ereignisse, Gateways, Bahnen und Teilprozesse
-- **Startervorlagen** — Wählen Sie aus 6 vorgefertigten BPMN-Vorlagen für gängige Prozessmuster (oder beginnen Sie mit einer leeren Zeichenfläche)
-- **Elementextraktion** — Wenn Sie ein Diagramm speichern, extrahiert das System automatisch alle Aufgaben, Ereignisse, Gateways und Bahnen zur Analyse. Die extrahierten Elemente werden in der **Reihenfolge des Prozessablaufs** aufgelistet — entlang der Sequenz- und Nachrichtenflüsse des Diagramms, beginnend beim Startereignis — und nicht nach Elementtyp gruppiert. Schritte innerhalb einer Schleife bleiben zusammen, und der Inhalt eines Teilprozesses wird direkt darunter aufgeführt
+- **Visuelle Modellierung** — BPMN-Elemente per Drag & Drop aus der Palette: Aufgaben, Ereignisse, Gateways, Bahnen, Pools und Teilprozesse. Der Eintrag **…** am unteren Ende der Palette öffnet ein durchsuchbares Menü **Create element**, das jeden BPMN-Elementtyp erreicht — Nachrichten-, Timer-, Signal-, Fehler- und Eskalationsereignisse, Transaktionen, Ereignis-Teilprozesse, Aufrufaktivitäten, Sende-/Empfangsaufgaben, Datenobjekte und Datenspeicher (Tastenkürzel `N`). Der Eintrag **+** im Kontextmenü einer ausgewählten Form öffnet das passende Menü **Append element** (Tastenkürzel `A`)
+- **Startervorlagen** — Wählen Sie aus 7 vorgefertigten BPMN-Vorlagen für gängige Prozessmuster, darunter eine **Kollaborations**-Vorlage mit zwei Pools und Nachrichtenflüssen (oder beginnen Sie mit einer leeren Zeichenfläche)
+- **Elementextraktion** — Wenn Sie ein Diagramm speichern, extrahiert das System automatisch alle Aufgaben, Ereignisse, Gateways, Bahnen, Datenobjekte und Nachrichtenflüsse zur Analyse. Ereignisse behalten ihre Art — ein *Nachrichten*-Startereignis wird als solches aufgeführt, mit dem Namen der empfangenen Nachricht — und Sende-/Empfangsaufgaben tragen die ausgetauschte Nachricht. Die extrahierten Elemente werden in der **Reihenfolge des Prozessablaufs** aufgelistet — entlang der Sequenz- und Nachrichtenflüsse des Diagramms, beginnend beim Startereignis — und nicht nach Elementtyp gruppiert. Schritte innerhalb einer Schleife bleiben zusammen, der Inhalt eines Teilprozesses wird direkt darunter aufgeführt, und Datenobjekte sowie Datenspeicher stehen am Ende
 - **Elementfarben** — Wählen Sie ein oder mehrere Elemente aus und verwenden Sie die Farbeimer-Schaltfläche im Kontextmenü, um eine Farbe zuzuweisen. Farben werden in der BPMN-Datei selbst gespeichert und erscheinen daher auch im schreibgeschützten Viewer, in Exporten und Ausdrucken
+- **Eigenschaftenpanel** — Das Panel rechts (ein-/ausblenden über die Schieberegler-Schaltfläche in der Werkzeugleiste) bearbeitet, was eine Form nicht zeigen kann: Name und Dokumentation des Elements, die **Nachricht**, das **Signal**, den **Fehler** oder die **Eskalation**, auf die sich ein Ereignis bezieht, die Bedingung eines Sequenzflusses und Mehrfachinstanz-Markierungen. Hier eingegebene Dokumentation erscheint im Prozessnavigator und im schreibgeschützten Viewer
+
+![Menü „Create element“](../assets/img/de/89_bpm_menue_element_erstellen.png)
+
+![Eigenschaftenpanel](../assets/img/de/90_bpm_eigenschaftenpanel.png)
+
+### Pools und Nachrichtenflüsse
+
+Ein Prozess, der mehrere Parteien umfasst — ein Kunde und das Unternehmen, zwei Abteilungen, ein Partnersystem — wird als **Kollaboration** modelliert: ein Pool pro Partei, verbunden durch **Nachrichtenflüsse**. Fügen Sie einen zweiten Pool aus der Palette hinzu (oder starten Sie mit der **Kollaborations**-Vorlage) und zeichnen Sie dann mit dem globalen Verbindungswerkzeug einen Nachrichtenfluss zwischen den beiden Pools — oder von einer Sendeaufgabe, einem Nachrichten-Endereignis oder einem sendenden Nachrichtenereignis im einen Pool zu einer Empfangsaufgabe oder einem Nachrichtenereignis im anderen. Benennen Sie die Nachricht im Eigenschaftenpanel, damit sie überall gleich heißt.
+
+![Kollaborations-Vorlage](../assets/img/de/91_bpm_kollaborationsvorlage.png)
 
 ### Elementverknüpfung
 
 BPMN-Elemente können mit **EA-Karten verknüpft** werden. Verknüpfen Sie beispielsweise eine Aufgabe in Ihrem Prozessdiagramm mit der Anwendung, die sie unterstützt. Dies schafft eine nachvollziehbare Verbindung zwischen Ihrem Prozessmodell und Ihrer Architekturlandschaft:
 
-- Wählen Sie eine beliebige Aufgabe, ein Ereignis oder ein Gateway im BPMN-Diagramm
-- Das **Elementverknüpfungs**-Panel zeigt passende Karten (Anwendung, Datenobjekt, IT-Komponente, Organisation)
-- Verknüpfen Sie das Element mit einer Karte — die Verbindung wird gespeichert und ist sowohl im Prozessfluss als auch in den Beziehungen der Karte sichtbar
+- Jede benannte Aufgabe, jedes Ereignis und jedes Gateway des veröffentlichten Ablaufs ist eine Zeile der Tabelle **Prozessschritte & Elemente** unter dem Diagramm (ein Entwurf hat dieselbe Tabelle unter **Elemente vorverknüpfen**, angewendet bei der Genehmigung)
+- Klicken Sie auf die Zelle **Anwendung**, **Datenobjekt** oder **IT-Komponente** eines Schritts und wählen Sie die Karte — die Auswahl durchsucht das Inventar, es wird nichts von Hand eingetippt
+- Die Verknüpfung wird am Schritt gespeichert und erzeugt eine Beziehung zwischen Prozess und Karte, sichtbar sowohl im Prozessfluss als auch auf der Registerkarte Beziehungen der Karte
+- Die Spalte **Geschäftsprozess** verknüpft einen Schritt mit dem Prozess, an den er übergibt — siehe unten
+- Dieselben fünf Verknüpfungen stehen **im Editor** zur Verfügung, solange ein Entwurf geöffnet ist: eine Gruppe **Verknüpfte Karten** im Eigenschaftenpanel und ein Eintrag **Karten verknüpfen** im Kontextmenü, der ein Menü davon öffnet
+- Im Diagramm selbst trägt ein verknüpfter Schritt **je einen kleinen Punkt pro verknüpftem Kartentyp** unter seinem Namen, in der Farbe des Kartentyps — im Editor wie im schreibgeschützten Viewer. Namen bleiben vom Zeichenblatt fern; klicken Sie auf den Schritt, um sie zu sehen, oder fahren Sie mit der Maus über einen Punkt
+
+### Einen Schritt mit einem Prozess verknüpfen
+
+Ein Schritt übergibt oft an einen Prozess, der eigenständig existiert — einen mit eigenem Diagramm, eigenem Verantwortlichen und eigenem Lebenszyklus, der meist an mehreren Stellen wiederverwendet wird. Jeder Schritt kann das ausdrücken: eine Aufgabe, ein Teilprozess, ein Ereignis oder ein Gateway verweist auf eine **Geschäftsprozess**-Karte, und Sie geben nie eine Prozess-ID von Hand ein:
+
+- **Das Eigenschaftenpanel** zeigt bei jedem Schritt eine Gruppe **Verknüpfte Karten** mit je einer Zeile pro Verknüpfung — Geschäftsprozess, Anwendung, Datenobjekt, IT-Komponente, Organisationen — jeweils mit **Wählen**, **Öffnen** (springt zur verknüpften Karte) und **Entfernen**
+- **Das Kontextmenü** eines ausgewählten Schritts enthält den Eintrag **Karten verknüpfen** mit denselben fünf, falls das Panel eingeklappt ist. Ein Datenobjekt oder Datenspeicher bietet wie in der Tabelle nur die Datenobjekt-Verknüpfung
+- **Die Schritttabelle** des veröffentlichten Ablaufs (und die Vorverknüpfungstabelle eines Entwurfs) hat dieselbe Verknüpfung in der Spalte **Geschäftsprozess**; der Chip dort springt in die Registerkarte Prozessfluss des verknüpften Prozesses. Datenobjekte und Datenspeicher sind keine Schritte, ihre Zeilen zeigen daher einen Strich
+
+![Verknüpfte Karten](../assets/img/de/92_bpm_aufgerufener_prozess.png)
+
+BPMN kennt ein Konstrukt, das *selbst* ein anderer Prozess ist: die **Aufrufaktivität** (call activity), eine Aufgabe mit dickem Rand, die einen eigenständig definierten Prozess aufruft. Ein eingebetteter **Teilprozess** gruppiert ebenfalls Schritte, gehört aber zu dem Diagramm, in dem er gezeichnet ist; die Regel aus Method & Style ist einfach: Existiert der Prozess eigenständig, verwenden Sie eine Aufrufaktivität. Turbo EA behandelt sie als den nativen Fall — **beim Platzieren einer Aufrufaktivität wird gefragt, welchen Prozess sie aufruft**, und die Verknüpfung wird im BPMN-eigenen *aufgerufenen Element* gespeichert, sodass andere Werkzeuge sie lesen. Jeder andere Schritt speichert die Verknüpfung stattdessen als Turbo-EA-Attribut im Diagramm.
+
+Beim Veröffentlichen eines Ablaufs mit einem verknüpften Schritt entsteht eine **ruft auf**-Beziehung zwischen den beiden Prozessen — auf der Registerkarte Beziehungen des verknüpften Prozesses steht *wird aufgerufen von*, und die Abhängigkeitsansicht zeichnet den Aufrufgraphen. Ein aus einem anderen Werkzeug importiertes Diagramm behält dessen eigene Prozessreferenz; die Schritttabelle zeigt sie als Hinweis (*verweist auf Process_X*), bis Sie den passenden Prozess in Turbo EA wählen.
+
+### Ein Satz von Verknüpfungen
+
+Editor und Tabellen zeigen dieselben Verknüpfungen, ein Schritt liest sich also überall gleich:
+
+- Innerhalb eines **Entwurfs** gilt, was Sie dort setzen — im Editor oder in der Tabelle **Elemente vorverknüpfen**, beide sind derselbe Speicher — und die Prozessreferenz des Diagramms ist der Rückfall für einen Schritt, zu dem Sie nichts gesagt haben. Das Entfernen einer Verknüpfung entfernt sie, auch beim Veröffentlichen.
+- Ein **veröffentlichter** Ablauf bleibt genehmigt, während seine Verknüpfungen in seiner Elementtabelle bearbeitet werden: Das sind Metadaten auf einem freigegebenen Diagramm und kein Grund für eine erneute Genehmigung.
+- Ein Entwurf, der **aus der veröffentlichten Version erstellt** wird, startet mit den Verknüpfungen, die der Prozess in diesem Moment hat. Ein bereits offener Entwurf behält seine eigenen, damit die Bearbeitung anderer nicht das Diagramm ändert, an dem Sie arbeiten.
+
+### Nachrichtenflüsse
+
+Die Nachrichtenflüsse des veröffentlichten Diagramms werden unter der Elementtabelle aufgelistet; jeder zeigt, was er verbindet — eine Aufgabe, ein Ereignis oder einen ganzen Pool an beiden Enden. Verknüpfen Sie einen Nachrichtenfluss mit der **Schnittstellen**-Karte, die ihn überträgt. Wie die Organisationsverknüpfungen an Schritten ist dies nur informativ: Es wird keine Beziehung zwischen Karten angelegt.
 
 ### Organisationen verknüpfen
 

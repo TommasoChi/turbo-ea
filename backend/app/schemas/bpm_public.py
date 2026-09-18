@@ -122,7 +122,7 @@ class BpmPublicStep(BaseModel):
     the correlation key the viewer needs to place overlays — it is already
     inside the XML the visitor is holding.
 
-    The four link fields are populated only when the portal enables
+    The five link fields are populated only when the portal enables
     ``show_element_links``; they carry **names, never ids**. The viewer's and the
     Steps tab's existing truthiness guards then render the reduced row with no
     extra branching.
@@ -135,8 +135,15 @@ class BpmPublicStep(BaseModel):
     lane_name: str | None = None
     is_automated: bool = False
     sequence_order: int = 0
+    # Event sub-type and the Message / Signal / Error name it refers to —
+    # parser-derived, so a portal shows a message start event as one.
+    event_definition_type: str | None = None
+    definition_name: str | None = None
     application_name: str | None = None
     data_object_name: str | None = None
+    # The process a call activity invokes — a name only, like the others; the
+    # portal links nowhere by design.
+    called_process_name: str | None = None
     it_component_name: str | None = None
     organizations: list[BpmPublicRef] = []
 

@@ -8,6 +8,11 @@
 | **Segnalibro / Vista salvata** | Una configurazione salvata di filtri, colonne e ordinamento nell'Inventario che può essere ricaricata con un clic |
 | **BPM** | Business Process Management — la disciplina della modellazione, analisi e miglioramento dei processi aziendali |
 | **BPMN** | Business Process Model and Notation — la notazione standard per la modellazione dei processi aziendali (versione 2.0) |
+| **Definizione di evento** | Il tipo di un evento BPMN: messaggio, timer, segnale, errore, escalation, condizione, collegamento, compensazione, annullamento o terminazione. Mostrata accanto al tipo di elemento nella tabella dei passaggi, insieme al nome del messaggio, del segnale o dell'errore a cui l'evento fa riferimento |
+| **Corsia** | Una banda orizzontale all'interno di un pool che raggruppa i passaggi svolti da un ruolo, un team o un reparto |
+| **Attività di chiamata** | Un'attività BPMN con bordo spesso che richiama un processo definito in modo autonomo: il modo proprio di BPMN per dire «questo passo è un altro processo», e l'unico tipo di passo per cui Turbo EA chiede il processo aziendale quando lo si posiziona. Ogni altro passo collega un processo allo stesso modo, dal pannello delle proprietà, dal menu contestuale o dalla tabella dei passi; la pubblicazione del flusso crea una relazione *richiama* tra i due processi |
+| **Flusso di messaggio** | Un messaggio scambiato tra due pool di una collaborazione BPMN. Elencato sotto la tabella degli elementi di un flusso di processo pubblicato, dove può essere collegato alla card Interfaccia che lo trasporta |
+| **Pool** | Un partecipante di una collaborazione BPMN — un cliente, un reparto, un sistema partner — disegnato come contenitore del processo proprio di quella parte |
 | **Business Capability** | Ciò che un'organizzazione può fare, indipendentemente da come lo fa |
 | **Calcolo** | Una formula definita dall'amministratore che calcola automaticamente il valore di un campo quando una card viene salvata |
 | **Card** | L'unità base di informazione in Turbo EA che rappresenta qualsiasi componente architetturale |

@@ -19,9 +19,18 @@ class ElementUpdate(BaseModel):
     application_id: str | None = None
     data_object_id: str | None = None
     it_component_id: str | None = None
+    # The BusinessProcess the step links to. Refused on a data artefact, and
+    # never the process itself.
+    business_process_id: str | None = None
     # Full replacement set for the step's M:N Organization links.
     organization_ids: list[str] | None = None
     custom_fields: dict | None = None
+
+
+class MessageFlowUpdate(BaseModel):
+    """Set (or clear, with ``null``) the Interface card a message flow realises."""
+
+    interface_id: str | None = None
 
 
 class ProcessAssessmentCreate(BaseModel):

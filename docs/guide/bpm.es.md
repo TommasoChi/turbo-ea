@@ -45,18 +45,58 @@ Los gráficos muestran la distribución por tipo de proceso, nivel de madurez y 
 
 Cada ficha de Proceso de Negocio puede tener un **diagrama de flujo de proceso BPMN 2.0**. El editor utiliza [bpmn-js](https://bpmn.io/) y proporciona:
 
-- **Modelado visual** — Arrastre y suelte elementos BPMN: tareas, eventos, compuertas, carriles y subprocesos
-- **Plantillas de inicio** — Elija entre 6 plantillas BPMN predefinidas para patrones de proceso comunes (o comience desde un lienzo en blanco)
-- **Extracción de elementos** — Al guardar un diagrama, el sistema extrae automáticamente todas las tareas, eventos, compuertas y carriles para su análisis. Los elementos extraídos se enumeran en **orden de flujo del proceso** —siguiendo los flujos de secuencia y de mensaje del diagrama, desde el evento de inicio— y no agrupados por tipo de elemento. Los pasos de un bucle se mantienen juntos y el contenido de un subproceso se enumera justo debajo de él
+- **Modelado visual** — Arrastre y suelte elementos BPMN desde la paleta: tareas, eventos, compuertas, carriles, pools y subprocesos. La entrada **…** al final de la paleta abre un menú **Create element** con búsqueda que alcanza todos los tipos de elementos BPMN: eventos de mensaje, temporizador, señal, error y escalado, transacciones, subprocesos de eventos, actividades de llamada, tareas de envío/recepción, objetos y almacenes de datos (atajo `N`). La entrada **+** del panel contextual de una forma seleccionada abre el menú **Append element** correspondiente (atajo `A`)
+- **Plantillas de inicio** — Elija entre 7 plantillas BPMN predefinidas para patrones de proceso comunes, incluida una plantilla de **Colaboración** con dos pools y flujos de mensajes (o comience desde un lienzo en blanco)
+- **Extracción de elementos** — Al guardar un diagrama, el sistema extrae automáticamente todas las tareas, eventos, compuertas, carriles, objetos de datos y flujos de mensajes para su análisis. Los eventos conservan su tipo —un evento de inicio de *mensaje* se lista como tal, con el nombre del mensaje que recibe— y las tareas de envío/recepción llevan el mensaje que intercambian. Los elementos extraídos se enumeran en **orden de flujo del proceso** —siguiendo los flujos de secuencia y de mensaje del diagrama, desde el evento de inicio— y no agrupados por tipo de elemento. Los pasos de un bucle se mantienen juntos, el contenido de un subproceso se enumera justo debajo de él, y los objetos y almacenes de datos van al final
 - **Colores de los elementos** — Seleccione uno o varios elementos y use el botón del bote de pintura en el panel contextual para aplicar un color. Los colores se guardan en el propio archivo BPMN, por lo que también aparecen en el visor de solo lectura, en las exportaciones y en las impresiones
+- **Panel de propiedades** — El panel de la derecha (muéstrelo u ocúltelo con el botón de deslizadores de la barra de herramientas) edita lo que una forma no puede mostrar: el nombre y la documentación del elemento, el **mensaje**, la **señal**, el **error** o el **escalado** al que se refiere un evento, la condición de un flujo de secuencia y los marcadores de instancias múltiples. La documentación introducida aquí se muestra en el navegador de procesos y en el visor de solo lectura
+
+![Menú «Create element»](../assets/img/es/89_bpm_menu_crear_elemento.png)
+
+![Panel de propiedades](../assets/img/es/90_bpm_panel_propiedades.png)
+
+### Pools y flujos de mensajes
+
+Un proceso que abarca varias partes —un cliente y la empresa, dos departamentos, un sistema asociado— se modela como una **colaboración**: un pool por parte, conectados mediante **flujos de mensajes**. Añada un segundo pool desde la paleta (o parta de la plantilla **Colaboración**) y trace un flujo de mensaje entre los dos pools con la herramienta de conexión global, o desde una tarea de envío, un evento de fin de mensaje o un evento de lanzamiento de mensaje de un pool hacia una tarea de recepción o un evento de mensaje del otro. Nombre el mensaje en el panel de propiedades para que se lea igual en todas partes.
+
+![Plantilla de colaboración](../assets/img/es/91_bpm_plantilla_colaboracion.png)
 
 ### Vinculación de Elementos
 
 Los elementos BPMN pueden ser **vinculados a fichas de EA**. Por ejemplo, vincule una tarea en su diagrama de proceso a la Aplicación que la soporta. Esto crea una conexión trazable entre su modelo de proceso y su panorama de arquitectura:
 
-- Seleccione cualquier tarea, evento o compuerta en el diagrama BPMN
-- El panel de **Vinculador de Elementos** muestra fichas coincidentes (Aplicación, Objeto de Datos, Componente TI, Organización)
-- Vincule el elemento a una ficha — la conexión se almacena y es visible tanto en el flujo de proceso como en las relaciones de la ficha
+- Cada tarea, evento y compuerta con nombre del flujo publicado es una fila de la tabla **Pasos y elementos del proceso** bajo el diagrama (un borrador tiene la misma tabla bajo **Previncular elementos**, aplicada al aprobar el borrador)
+- Haga clic en la celda **Aplicación**, **Objeto de datos** o **Componente IT** de una etapa y elija la ficha — el selector recorre el inventario, no se escribe nada a mano
+- El vínculo se guarda en el paso y crea una relación entre el proceso y la ficha, visible tanto en el flujo de proceso como en la pestaña Relaciones de la ficha
+- La columna **Proceso de negocio** vincula una etapa con el proceso al que da paso — véase más abajo
+- Los mismos cinco vínculos se ofrecen **en el editor** mientras hay un borrador abierto: un grupo **Fichas vinculadas** en el panel de propiedades y una entrada **Vincular fichas** en el menú contextual que abre la lista
+- En el propio diagrama, un paso vinculado lleva **un pequeño punto por cada tipo de ficha vinculada** bajo su nombre, en el color de ese tipo de ficha, tanto en el editor como en el visor de solo lectura. Los nombres no se dibujan en el lienzo: haga clic en el paso para verlos, o pase el cursor sobre un punto
+
+### Vincular una etapa con un proceso
+
+Una etapa suele dar paso a un proceso que existe por sí mismo — con su propio diagrama, su propio responsable y su propio ciclo de vida, y normalmente reutilizado desde varios lugares. Cualquier etapa puede indicarlo: una tarea, un subproceso, un evento o una compuerta apunta a una ficha de **Proceso de negocio**, y nunca se introduce un identificador de proceso a mano:
+
+- **El panel de propiedades** muestra un grupo **Fichas vinculadas** en cada etapa, una fila por vínculo — Proceso de negocio, Aplicación, Objeto de datos, Componente IT, Organizaciones — cada una con **Elegir**, **Abrir** (que baja a la ficha vinculada) y **Quitar**
+- **El menú contextual** de una etapa seleccionada incluye una entrada **Vincular fichas** con los cinco, para cuando el panel está plegado. Un objeto o almacén de datos ofrece solo el vínculo de Objeto de datos, como en la tabla
+- **La tabla de pasos** del flujo publicado (y la tabla de previnculación de un borrador) tiene el mismo vínculo en su columna **Proceso de negocio**, y el chip que hay allí baja a la pestaña Flujo de proceso del proceso vinculado. Los objetos y almacenes de datos no son etapas, así que sus filas muestran un guion
+
+![Fichas vinculadas](../assets/img/es/92_bpm_proceso_invocado.png)
+
+BPMN tiene un constructo que *es* otro proceso: la **actividad de llamada** (call activity), una tarea con borde grueso que invoca un proceso definido de forma independiente. Un **subproceso** embebido también agrupa pasos, pero pertenece al diagrama en el que se dibuja; la regla de Method & Style es sencilla: si el proceso existe de forma independiente, use una actividad de llamada. Turbo EA la trata como el caso nativo: **al colocar una actividad de llamada se pregunta qué proceso invoca**, y el vínculo se guarda en el *elemento invocado* propio de BPMN, que otras herramientas saben leer. Cualquier otra etapa guarda el vínculo como un atributo de Turbo EA en el diagrama.
+
+Publicar un flujo que contiene una etapa vinculada crea una relación **invoca** entre los dos procesos — la pestaña Relaciones del proceso vinculado indica *es invocado por*, y la vista de dependencias dibuja el grafo de llamadas. Un diagrama importado desde otra herramienta conserva la referencia de proceso propia de esa herramienta; la tabla de pasos la muestra como pista (*referencia Process_X*) hasta que elija el proceso correspondiente en Turbo EA.
+
+### Un único juego de vínculos
+
+El editor y las tablas muestran los mismos vínculos, así que una etapa se lee igual en cualquier sitio:
+
+- Dentro de un **borrador** manda lo que usted defina allí — en el editor o en la tabla **Previncular elementos**, ambos son el mismo almacén — y la referencia de proceso del diagrama es el respaldo para una etapa sobre la que no ha dicho nada. Quitar un vínculo lo quita, también al publicar.
+- Un flujo **publicado** sigue aprobado mientras sus vínculos se editan en su tabla de elementos: son metadatos sobre un diagrama ya firmado, no un motivo para volver a aprobarlo.
+- Un borrador **creado a partir de la versión publicada** parte de los vínculos que el proceso tiene en ese momento. Un borrador ya abierto conserva los suyos, de modo que la edición de otra persona no cambia el diagrama en el que usted trabaja.
+
+### Flujos de mensajes
+
+Los flujos de mensajes del diagrama publicado se listan bajo la tabla de elementos; cada uno muestra qué conecta —una tarea, un evento o un pool completo en cada extremo—. Vincule un flujo de mensaje a la ficha de **Interfaz** que lo transporta. Como los vínculos de organización en los pasos, es solo informativo: no se crea ninguna relación entre fichas.
 
 ### Vincular Organizaciones
 
