@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   buildCardCellData,
   applyCardTypeIcons,
@@ -44,6 +44,10 @@ import {
   type DiagramGroupInput,
   type DiagramConnectorInput,
   fanWaypoints,
+  resolveMenuCardCell,
+  fitMenuToBand,
+  visibleBand,
+  enableMenuTouchScroll,
 } from "./drawio-shapes";
 import { LOGO_BOX_PX } from "./cardLogoImage";
 import { ICON_PATHS } from "./iconPaths";
@@ -2857,3 +2861,178 @@ describe("reading the geometry a logo has to match", () => {
   });
 });
 
+
+describe("resolveMenuCardCell", () => {
+  type C = { id: string; value?: { getAttribute: (n: string) => string | null }; parent?: C | null };
+  const node = (id: string, cardId: string | null, parent: C | null = null): C => ({
+    id,
+    value: { getAttribute: (n) => (n === "cardId" ? cardId : null) },
+    parent,
+  });
+  const container = node("container", "card-1");
+  const child = node("child", "card-2", container);
+  const plain = node("plain", null, null);
+  const label = node("label", null, child);
+
+  it("resolves the hit cell, walking up from an inner label", () => {
+    expect(resolveMenuCardCell(child, () => container)?.id).toBe("child");
+    expect(resolveMenuCardCell(label, () => null)?.id).toBe("child");
+  });
+
+  it("falls back to the container under the pointer when DrawIO hit nothing", () => {
+    // The open body of a drilled-down card is not hit-tested by DrawIO.
+    expect(resolveMenuCardCell(null, () => container)?.id).toBe("container");
+  });
+
+  it("does not claim a plain shape or empty canvas for a card", () => {
+    expect(resolveMenuCardCell(plain, () => container)).toBeNull();
+    expect(resolveMenuCardCell(null, () => null)).toBeNull();
+    expect(resolveMenuCardCell(null, () => plain)).toBeNull();
+  });
+});
+
+describe("visibleBand", () => {
+  it("is the whole frame when the frame is fully on screen", () => {
+    expect(
+      visibleBand({
+        innerHeight: 500,
+        frameElement: { getBoundingClientRect: () => ({ top: 100 }) },
+        parent: { innerHeight: 800 },
+      }),
+    ).toEqual({ top: 0, bottom: 500 });
+  });
+
+  it("cuts off the part of the frame below what the browser shows", () => {
+    // iPad: a 900px frame starting at 100px inside a 680px visible area.
+    expect(
+      visibleBand({
+        innerHeight: 900,
+        frameElement: { getBoundingClientRect: () => ({ top: 100 }) },
+        parent: { innerHeight: 1000, visualViewport: { offsetTop: 0, height: 680 } },
+      }),
+    ).toEqual({ top: 0, bottom: 580 });
+  });
+
+  it("follows a parent visual viewport that has scrolled", () => {
+    expect(
+      visibleBand({
+        innerHeight: 900,
+        frameElement: { getBoundingClientRect: () => ({ top: 100 }) },
+        parent: { innerHeight: 1000, visualViewport: { offsetTop: 200, height: 500 } },
+      }),
+    ).toEqual({ top: 100, bottom: 600 });
+  });
+
+  it("falls back to the frame when the parent cannot be read", () => {
+    const win = {
+      innerHeight: 700,
+      visualViewport: { offsetTop: 0, height: 650 },
+      get frameElement(): never {
+        throw new Error("cross-origin");
+      },
+    };
+    expect(visibleBand(win)).toEqual({ top: 0, bottom: 650 });
+  });
+});
+
+describe("fitMenuToBand", () => {
+  function menu(top: number, height: number): HTMLElement {
+    const div = document.createElement("div");
+    Object.defineProperty(div, "offsetTop", { get: () => top });
+    Object.defineProperty(div, "offsetHeight", { get: () => height });
+    return div;
+  }
+
+  it("caps the height to the band and lets it scroll", () => {
+    const div = menu(10, 100);
+    fitMenuToBand(div, { top: 0, bottom: 500 });
+    expect(div.style.maxHeight).toBe("484px");
+    expect(div.style.overflowY).toBe("auto");
+    expect(div.style.boxSizing).toBe("border-box");
+    expect(div.style.top).toBe(""); // already inside: left where it was
+  });
+
+  it("lifts a menu hanging below the band", () => {
+    const div = menu(400, 300);
+    fitMenuToBand(div, { top: 0, bottom: 580 });
+    expect(div.style.top).toBe("272px");
+  });
+
+  it("only caps the height when asked not to reposition", () => {
+    const div = menu(0, 300);
+    fitMenuToBand(div, { top: 20, bottom: 580 }, 8, false);
+    expect(div.style.maxHeight).toBe("544px");
+    expect(div.style.top).toBe("");
+  });
+
+  it("never lifts it above the band's top, and never sets a negative height", () => {
+    const div = menu(400, 900);
+    fitMenuToBand(div, { top: 50, bottom: 60 });
+    expect(div.style.top).toBe("58px");
+    expect(div.style.maxHeight).toBe("0px");
+    expect(() => fitMenuToBand(null, { top: 0, bottom: 1 })).not.toThrow();
+  });
+});
+
+describe("enableMenuTouchScroll", () => {
+  function touch(type: string, clientY: number | null, cancelable = true): Event {
+    const e = new Event(type, { bubbles: true, cancelable });
+    Object.defineProperty(e, "touches", { value: clientY == null ? [] : [{ clientY }] });
+    return e;
+  }
+
+  function setup() {
+    const div = document.createElement("div");
+    const row = document.createElement("div");
+    div.appendChild(row);
+    document.body.appendChild(div);
+    // A scrollable menu: jsdom does no layout, so scrollTop is a plain field here.
+    let top = 0;
+    Object.defineProperty(div, "scrollTop", { get: () => top, set: (v: number) => (top = v) });
+    const rowEnd = vi.fn();
+    row.addEventListener("touchend", rowEnd);
+    enableMenuTouchScroll(div);
+    return { div, row, rowEnd };
+  }
+
+  it("scrolls the menu with the finger and keeps the swipe from the page", () => {
+    const { div, row } = setup();
+    row.dispatchEvent(touch("touchstart", 400));
+    const move = touch("touchmove", 300);
+    row.dispatchEvent(move);
+    expect(div.scrollTop).toBe(100);
+    expect(move.defaultPrevented).toBe(true);
+  });
+
+  it("does not let the end of a swipe trigger the row under the finger", () => {
+    const { row, rowEnd } = setup();
+    row.dispatchEvent(touch("touchstart", 400));
+    row.dispatchEvent(touch("touchmove", 300));
+    row.dispatchEvent(touch("touchend", null));
+    expect(rowEnd).not.toHaveBeenCalled();
+  });
+
+  it("lets a tap through to the row", () => {
+    const { div, row, rowEnd } = setup();
+    row.dispatchEvent(touch("touchstart", 400));
+    row.dispatchEvent(touch("touchmove", 397)); // a finger's jitter, not a swipe
+    row.dispatchEvent(touch("touchend", null));
+    expect(rowEnd).toHaveBeenCalledTimes(1);
+    expect(div.scrollTop).toBe(0);
+  });
+
+  it("stands aside while the browser scrolls natively", () => {
+    const { div, row } = setup();
+    row.dispatchEvent(touch("touchstart", 400));
+    row.dispatchEvent(touch("touchmove", 300, false));
+    expect(div.scrollTop).toBe(0);
+  });
+
+  it("installs only once per menu", () => {
+    const { div, row } = setup();
+    enableMenuTouchScroll(div); // a second show of the same menu
+    row.dispatchEvent(touch("touchstart", 400));
+    row.dispatchEvent(touch("touchmove", 350));
+    expect(div.scrollTop).toBe(50);
+  });
+});

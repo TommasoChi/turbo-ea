@@ -76,6 +76,10 @@ import {
   convertShapeToPendingCard,
   convertShapeToContainer,
   drillDownInto,
+  resolveMenuCardCell,
+  fitMenuToBand,
+  visibleBand,
+  enableMenuTouchScroll,
   rollUpInto,
   isInsideContainer,
   findExistingCardCellId,
@@ -116,7 +120,7 @@ import {
   colorKeyForCard,
   describeView,
   normaliseViewSource,
-  NO_VALUE,
+  buildLegend,
   type ViewResolvers,
   type ViewSource,
 } from "./viewSource";
@@ -242,7 +246,8 @@ interface DrawIOMessage {
     | "relinkCell"
     | "convertCell"
     | "containerizeCell"
-    | "detachCell";
+    | "detachCell"
+    | "popupMenu";
   xml?: string;
   data?: string;
   libraries?: string;
@@ -252,6 +257,8 @@ interface DrawIOMessage {
   y?: number;
   cardId?: string;
   cellId?: string;
+  /** `popupMenu` only: whether DrawIO's right-click menu is now open. */
+  open?: boolean;
   edgeCellId?: string;
   sourceCardId?: string;
   targetCardId?: string;
@@ -399,6 +406,32 @@ function bootstrapDrawIO(iframe: HTMLIFrameElement) {
       }
 
       /* ---------- Right-click context menu ---------- */
+      // Fit the menu to the visible screen before DrawIO positions it, so a
+      // menu taller than a tablet in landscape scrolls instead of being
+      // cropped (see visibleBand / fitMenuToBand). The host is told when it opens and
+      // closes: the colour legend floats over the canvas in the parent page
+      // and would otherwise cover the menu's last rows.
+      const popupHandler = graph.popupMenuHandler;
+      if (popupHandler && typeof popupHandler.showMenu === "function") {
+        const origShowMenu = popupHandler.showMenu;
+        popupHandler.showMenu = function (...args: unknown[]) {
+          fitMenuToBand(this.div, visibleBand(win), 8, false);
+          enableMenuTouchScroll(this.div);
+          win.parent.postMessage(JSON.stringify({ event: "popupMenu", open: true }), "*");
+          const result = origShowMenu.apply(this, args);
+          // DrawIO fits the menu to the frame in a deferred callback; this one
+          // is queued after it, so the on-screen band gets the last word.
+          win.setTimeout(() => fitMenuToBand(this.div, visibleBand(win)), 0);
+          return result;
+        };
+      }
+      if (popupHandler && typeof popupHandler.hideMenu === "function") {
+        const origHideMenu = popupHandler.hideMenu;
+        popupHandler.hideMenu = function (...args: unknown[]) {
+          win.parent.postMessage(JSON.stringify({ event: "popupMenu", open: false }), "*");
+          return origHideMenu.apply(this, args);
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const menus = ui.menus as any;
       if (menus?.createPopupMenu) {
@@ -428,12 +461,14 @@ function bootstrapDrawIO(iframe: HTMLIFrameElement) {
           );
 
           // If the right-click landed on (or inside) a card cell, surface
-          // the card-details shortcut. Walk up so clicks on inner labels
-          // still resolve to the card.
-          let cardCell = cell;
-          while (cardCell && !cardCell.value?.getAttribute?.("cardId")) {
-            cardCell = cardCell.parent;
-          }
+          // the card-details shortcut — including the open body of a
+          // drilled-down container, which DrawIO does not hit-test.
+          const cardCell = resolveMenuCardCell(cell, () =>
+            graph.getSwimlaneAt(
+              mxEvent.getClientX(evt) - offset.left + container.scrollLeft,
+              mxEvent.getClientY(evt) - offset.top + container.scrollTop,
+            ),
+          );
           const cardId = cardCell?.value?.getAttribute?.("cardId");
           const isPending = cardCell?.value?.getAttribute?.("pending") === "1";
           const isSyncedCard =
@@ -814,6 +849,9 @@ export default function DiagramEditor() {
     [],
   );
   const [viewAppliedCount, setViewAppliedCount] = useState(0);
+  // DrawIO's right-click menu lives inside the iframe; while it is open the
+  // legend (which floats over the canvas from this page) steps aside.
+  const [popupMenuOpen, setPopupMenuOpen] = useState(false);
   // Relation verbs ("provides", "consumes", …) hidden on this diagram. Saved
   // with the diagram, so the read-only viewer and any published embed show
   // exactly what the author arranged. A ref mirrors it because the edge-style
@@ -3031,6 +3069,10 @@ export default function DiagramEditor() {
           if (msg.cellId) handleDetachRequest(msg.cellId);
           break;
 
+        case "popupMenu":
+          setPopupMenuOpen(msg.open === true);
+          break;
+
         default:
           break;
       }
@@ -3402,18 +3444,16 @@ export default function DiagramEditor() {
 
         const cardById = new Map(items.map((c) => [c.id, c] as const));
         const colorByCardId = new Map<string, string>();
-        const seenKeys = new Set<string>();
-        let coloured = 0;
+        const onCanvas: Card[] = [];
         for (const id of snapshot.ids) {
           const c = cardById.get(id);
           if (!c) continue;
+          onCanvas.push(c);
           const key = colorKeyForCard(view, c);
           if (key == null) continue; // no rule covers this card — leave it alone
           const entry = colorMap.get(key);
           if (!entry) continue;
           colorByCardId.set(id, entry.color);
-          seenKeys.add(key);
-          if (entry.value !== NO_VALUE) coloured += 1;
         }
 
         if (!isCurrent()) return;
@@ -3421,21 +3461,14 @@ export default function DiagramEditor() {
         applyCardLabels(frame, buildLinesByCardId(items));
         applyLogosFromCards(frame, items);
 
-        // One legend section per rule. The "no value" swatch only appears where
-        // a card on this canvas actually has no value — a permanent grey swatch
-        // in every section would be noise.
-        setViewLegendSections(
-          described.sections.map((sec) => ({
-            key: sec.key,
-            title: sec.title,
-            entries: Array.from(colorMap.values()).filter(
-              (e) =>
-                e.typeKey === sec.typeKey &&
-                e.fieldKey === sec.fieldKey &&
-                (e.value !== NO_VALUE || seenKeys.has(e.key)),
-            ),
-          })),
+        // One legend section per rule — shared with the read-only viewer.
+        const { sections, coloured } = buildLegend(
+          view,
+          fsTypesRef.current,
+          onCanvas,
+          viewResolvers,
         );
+        setViewLegendSections(sections);
         // Cells a rule actually coloured — not "cells touched", which used to
         // report the number greyed out whenever nothing matched.
         setViewAppliedCount(coloured > 0 ? coloured : painted);
@@ -3834,7 +3867,7 @@ export default function DiagramEditor() {
             }}
             title={t("editor.title")}
           />
-          {viewLegendSections.length > 0 && (
+          {viewLegendSections.length > 0 && !popupMenuOpen && (
             <DiagramViewLegend
               sections={viewLegendSections}
               appliedCount={viewAppliedCount}

@@ -5,6 +5,17 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.149.0] - 2026-09-23
+
+### Added
+
+- **The diagram colour legend now also appears in view mode and on published and embedded diagram links.** When a diagram is coloured by approval status or by a card field, opening it read-only — in the app, from its public link or embedded in another site — shows the same legend as the editor, so readers can tell what each colour means. The published legend carries only the labels, colours and counts it displays, never the cards behind them.
+
+### Fixed
+
+- **Right-clicking inside a drilled-down card on a diagram shows the card actions again.** Once a card had been drilled down into a container, right-clicking the open area inside it offered only the canvas menu; *View Card Details…*, *Change Linked Card…* and the other card actions are back.
+- **The diagram editor's right-click menu fits the screen on tablets.** On an iPad in landscape the menu ran off the bottom, hiding the card actions; it now stays within the visible screen, can be scrolled with a finger (a swipe no longer triggers an item or slides the page), and the colour legend steps aside while it is open.
+
 ## [2.148.0] - 2026-09-22
 
 ### Added

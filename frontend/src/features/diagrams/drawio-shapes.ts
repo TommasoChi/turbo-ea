@@ -412,6 +412,182 @@ export function isSwimlaneStyle(style: unknown): boolean {
   return String(style ?? "").includes("shape=swimlane");
 }
 
+/** A vertical span in a frame's own client coordinates. */
+export interface VisibleBand {
+  top: number;
+  bottom: number;
+}
+
+interface ViewportLike {
+  offsetTop?: number;
+  height: number;
+}
+
+interface FrameWindowLike {
+  innerHeight: number;
+  visualViewport?: ViewportLike | null;
+  frameElement?: { getBoundingClientRect(): { top: number } } | null;
+  parent?: { innerHeight: number; visualViewport?: ViewportLike | null } | null;
+}
+
+/**
+ * The part of a frame's height that is actually on screen.
+ *
+ * DrawIO's right-click menu lives inside the editor iframe, so the iframe's own
+ * `innerHeight` / `visualViewport` only say how tall the *frame* is. On an iPad
+ * the frame's bottom sits below what Safari shows (its toolbars and the app bar
+ * take the difference), so a menu fitted to the frame still ran off the screen.
+ * Intersect with the parent's visual viewport, mapped through the frame's
+ * position; a parent that cannot be read degrades to the frame alone.
+ */
+export function visibleBand(win: FrameWindowLike): VisibleBand {
+  let top = 0;
+  let bottom = win.innerHeight;
+  const own = win.visualViewport;
+  if (own) {
+    top = Math.max(top, own.offsetTop ?? 0);
+    bottom = Math.min(bottom, (own.offsetTop ?? 0) + own.height);
+  }
+  try {
+    const frame = win.frameElement;
+    const parent = win.parent;
+    if (frame && parent && parent !== (win as unknown)) {
+      const frameTop = frame.getBoundingClientRect().top;
+      const pv = parent.visualViewport ?? { offsetTop: 0, height: parent.innerHeight };
+      const pvTop = pv.offsetTop ?? 0;
+      top = Math.max(top, pvTop - frameTop);
+      bottom = Math.min(bottom, pvTop + pv.height - frameTop);
+    }
+  } catch {
+    // Cross-origin or detached: the frame's own band is all we know.
+  }
+  return { top, bottom: Math.max(top, bottom) };
+}
+
+/**
+ * Keep a DrawIO popup menu inside `band`, scrolling when it is taller.
+ *
+ * `mxPopupMenu.showMenu` only *moves* the menu into the frame (`mxUtils.fit`),
+ * never shrinks it, and fits it to the frame rather than the screen, so the
+ * editor's ~25-row right-click menu ran off the bottom of an iPad and cropped
+ * the card actions. Called once before DrawIO shows the menu with
+ * `reposition = false` (height cap only) and again after its deferred fit
+ * (position), so it has the last word.
+ */
+export function fitMenuToBand(
+  div: HTMLElement | null | undefined,
+  band: VisibleBand,
+  margin = 8,
+  reposition = true,
+): void {
+  if (!div) return;
+  const s = div.style;
+  // Border-box so the cap includes the menu's own padding and border.
+  s.boxSizing = "border-box";
+  s.maxHeight = `${Math.max(0, Math.floor(band.bottom - band.top - 2 * margin))}px`;
+  s.overflowY = "auto";
+  s.overflowX = "hidden";
+  s.setProperty("-webkit-overflow-scrolling", "touch");
+  // A scroll that reaches the menu's end must not carry on into the page.
+  s.setProperty("overscroll-behavior", "contain");
+  // Before DrawIO shows the menu it is not in the document yet, so its
+  // offsets read 0 — position only once it has been placed.
+  if (!reposition) return;
+  const top = div.offsetTop;
+  const height = div.offsetHeight;
+  if (top + height > band.bottom - margin) {
+    s.top = `${Math.max(band.top + margin, band.bottom - margin - height)}px`;
+  } else if (top < band.top + margin) {
+    s.top = `${band.top + margin}px`;
+  }
+}
+
+/** Movement, in px, before a touch on the menu counts as a scroll, not a tap. */
+const MENU_DRAG_THRESHOLD = 6;
+
+/**
+ * Let a finger scroll a DrawIO popup menu.
+ *
+ * On iPadOS Safari (which reports itself as a Mac) DrawIO registers touch
+ * listeners on the menu rows and `preventDefault`s every `touchstart`, so the
+ * browser never starts a native scroll: the capped menu could not be scrolled,
+ * a swipe ended as a tap on whatever row it lifted from, and the gesture fell
+ * through to the page. These capture-phase listeners run before the rows'.
+ * They act only while `touchmove` is still `cancelable` — i.e. while the
+ * browser is *not* scrolling natively — so where native scrolling works
+ * (pointer-event browsers) they stand aside and there is no double scroll.
+ * A tap still reaches the row untouched. Installed once per menu element.
+ */
+export function enableMenuTouchScroll(div: HTMLElement | null | undefined): void {
+  if (!div || div.dataset.turboTouchScroll === "1") return;
+  div.dataset.turboTouchScroll = "1";
+  let startY = 0;
+  let startScroll = 0;
+  let dragging = false;
+  div.addEventListener(
+    "touchstart",
+    (e: TouchEvent) => {
+      startY = e.touches[0]?.clientY ?? 0;
+      startScroll = div.scrollTop;
+      dragging = false;
+    },
+    { capture: true, passive: true },
+  );
+  div.addEventListener(
+    "touchmove",
+    (e: TouchEvent) => {
+      if (!e.cancelable) return; // the browser is scrolling natively
+      const dy = (e.touches[0]?.clientY ?? startY) - startY;
+      if (!dragging && Math.abs(dy) < MENU_DRAG_THRESHOLD) return;
+      dragging = true;
+      div.scrollTop = startScroll - dy;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    { capture: true, passive: false },
+  );
+  div.addEventListener(
+    "touchend",
+    (e: TouchEvent) => {
+      if (!dragging) return;
+      // The end of a swipe is not a tap on the row it lifted from.
+      dragging = false;
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+    },
+    { capture: true, passive: false },
+  );
+}
+
+/** The part of an mxCell the context-menu resolver reads. */
+export interface MenuCellLike {
+  value?: { getAttribute?: (name: string) => string | null } | null;
+  parent?: MenuCellLike | null;
+}
+
+/**
+ * The card cell a right-click belongs to, or `null` when it landed on no card.
+ *
+ * DrawIO hands the popup menu the cell it hit-tested, and a swimlane is only
+ * hit on its header and border: right-clicking the open body of a card that
+ * was drilled down into a container passes no cell at all, which used to drop
+ * every card action (View Card Details…, Unlink, …) from the menu. So when the
+ * hit cell resolves to no card, fall back to the container under the pointer
+ * (`swimlaneAt`, the graph's `getSwimlaneAt`). Walks up either way, so a click
+ * on an inner label still resolves to its card.
+ */
+export function resolveMenuCardCell<T extends MenuCellLike>(
+  cell: T | null | undefined,
+  swimlaneAt: () => T | null | undefined,
+): T | null {
+  const walk = (start: T | null | undefined): T | null => {
+    let c: MenuCellLike | null | undefined = start;
+    while (c && !c.value?.getAttribute?.("cardId")) c = c.parent;
+    return (c as T | null | undefined) ?? null;
+  };
+  return walk(cell) ?? (cell ? null : walk(swimlaneAt()));
+}
+
 /**
  * Build a card cell's `label` value. **The single renderer** — every path that
  * labels a card goes through here, the same rule `relationEdgeStyle` enforces
