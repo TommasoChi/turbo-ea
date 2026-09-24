@@ -152,6 +152,18 @@ The **Cost Report** provides financial analysis of your technology landscape:
 - **Bar chart view** — Cost comparison across components
 - **Card Type** — Pick which card type the report is built around (Application, IT Component, Provider, …).
 
+### Fiscal year
+
+Costs are annual, so the report shows them for **the current fiscal year** — a chip in the toolbar names it, for example **Current fiscal year: FY 2026** (or *FY 2025–2026* when your fiscal year does not start in January). A card's annual cost counts **in full** when the current fiscal year falls between the one the card goes **Active** in and the one its **End of Life** falls in, both included. Nothing is pro-rated: an application retiring in November still carries its whole annual cost this year. A card whose End of Life fell in an earlier fiscal year is left out.
+
+Missing lifecycle dates are read as in the time-travel reports:
+
+- **No Active date, but a Plan or Phase In date** — the card is still planned and is not counted.
+- **No End of Life date** — the card counts from the year it goes Active.
+- **No lifecycle dates at all** — the card counts.
+
+The rule applies to everything on the page — the totals, the treemap, the table, **Cost Source** roll-ups (a retired IT Component stops adding to its Application's total) and drill-downs — and the fiscal year is printed in the report header. There is no picker for other years: a card carries one annual figure, and real costs change from one year to the next, so the same number shown against another year would mislead. An administrator sets the month the fiscal year starts in under [Settings → General](../admin/settings.md#fiscal-year-start).
+
 ### Cost Source
 
 When the selected card type has at least one relation type pointing to a type that owns a cost field, a **Cost Source** picker appears next to **Card Type**. It lets you choose where the numbers come from:
@@ -180,7 +192,7 @@ Whenever at least one Cost Source is active, the treemap rectangles are **clicka
 - **Single Cost Source active** — drill renders one treemap of the related cards (e.g. clicking *NexaCore ERP* with `IT Component · Total Annual Cost` ticked shows the IT Components linked to NexaCore ERP, sized by their annual cost).
 - **Multiple Cost Sources active** — drill renders **one treemap per source side-by-side** (1 column on narrow viewports, 2 on wide ones). Each panel has its own header, its own total, and its own per-panel `% of total` in the tooltip — so different card types stay on their own scale instead of being squashed into a single chart.
 
-The timeline slider, Cost Source selection, and other filters are preserved as you drill, and the drilled level is part of the saved-report config — saving a report while drilled in re-opens directly at that level. With **no** Cost Source active, clicking a rectangle opens the card side panel instead (there's nothing to break down).
+The Cost Source selection and other filters are preserved as you drill, and the drilled level is part of the saved-report config — saving a report while drilled in re-opens directly at that level. With **no** Cost Source active, clicking a rectangle opens the card side panel instead (there's nothing to break down).
 
 **Scoping to specific cards** — The chip beside the card-type selector opens a picker: select one or more cards and the treemap, the totals and the table all narrow to those and everything beneath them. The chip is hidden while you are drilled into a rectangle, since a drill has already moved you to a different card type; leave the drill and the scope is still there.
 

@@ -283,6 +283,8 @@
   "timelineSlider.milestoneCardsMore_one": "+{{count}} mere",
   "timelineSlider.milestoneCardsMore_other": "+{{count}} flere",
   "timelineSlider.milestoneCardsLabel": "Kort der ændrer sig på denne dato",
+  "fiscalYear.single": "Regnskabsår {{year}}",
+  "fiscalYear.span": "Regnskabsår {{from}}–{{to}}",
   "todos.title": "Mine opgaver",
   "todos.tabs.open": "Åbne",
   "todos.tabs.done": "Udførte",

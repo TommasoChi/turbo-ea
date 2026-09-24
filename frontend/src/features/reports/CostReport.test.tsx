@@ -1,11 +1,15 @@
 /**
- * Tests for the Cost report's card scope (#954). The risk here is not the
- * filter itself but its blast radius: the metric strip, the treemap and the
- * table footer are all derived separately, so a scope applied in the wrong
- * place leaves them disagreeing with each other.
+ * Tests for the Cost report's card scope (#954) and its fiscal-year indicator.
+ *
+ * Scope: the risk is not the filter itself but its blast radius — the metric
+ * strip, the treemap and the table footer are all derived separately, so a
+ * scope applied in the wrong place leaves them disagreeing with each other.
+ *
+ * Fiscal year: the server shows the current year only and names it; the page
+ * must say which year that is and never ask for another.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { createRef } from "react";
 import CostReport from "./CostReport";
@@ -73,15 +77,23 @@ const COST_ITEMS = [
   { id: "erp", name: "ERP", cost: 500, attributes: {} },
 ];
 
+let fyStart = 1;
+
 let consumedConfig: Record<string, unknown> | null = { view: "table" };
 
 beforeEach(() => {
   vi.clearAllMocks();
   consumedConfig = { view: "table" };
+  fyStart = 1;
 
   vi.mocked(api.get).mockImplementation((path: string) => {
     if (path.startsWith("/reports/cost-treemap")) {
-      return Promise.resolve({ items: COST_ITEMS }) as never;
+      return Promise.resolve({
+        items: COST_ITEMS,
+        total: 620,
+        fiscal_year: 2026,
+        fiscal_year_start: fyStart,
+      }) as never;
     }
     // The scope hook's own hierarchy fetch.
     return Promise.resolve({ items: HIERARCHY, total: HIERARCHY.length }) as never;
@@ -164,5 +176,39 @@ describe("CostReport scope filter", () => {
 
     await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
     expect(within(toolbar()).getByText("All cards")).toBeInTheDocument();
+  });
+});
+
+describe("CostReport fiscal year", () => {
+  const indicator = () => document.querySelector('[data-testid="cost-fiscal-year"]');
+
+  it("names the current fiscal year the figures are for", async () => {
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    expect(indicator()).toHaveTextContent("Current fiscal year: FY 2026");
+    expect(within(toolbar()).getByText("Current fiscal year: FY 2026")).toBeInTheDocument();
+  });
+
+  it("names a fiscal year that straddles two calendar years by both", async () => {
+    fyStart = 10;
+    renderCost();
+    await waitFor(() => expect(indicator()).toHaveTextContent("Current fiscal year: FY 2025–2026"));
+  });
+
+  it("never asks the server for a particular year", async () => {
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    const calls = vi
+      .mocked(api.get)
+      .mock.calls.map(([path]) => String(path))
+      .filter((path) => path.startsWith("/reports/cost-treemap"));
+    expect(calls.length).toBeGreaterThan(0);
+    for (const path of calls) expect(path).not.toContain("fiscal_year");
+  });
+
+  it("offers no year picker", async () => {
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    expect(document.querySelector(".MuiSlider-root")).toBeNull();
   });
 });

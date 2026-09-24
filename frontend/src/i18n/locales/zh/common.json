@@ -207,6 +207,8 @@
   "timelineSlider.milestoneCardsMore_one": "还有 {{count}} 张",
   "timelineSlider.milestoneCardsMore_other": "还有 {{count}} 张",
   "timelineSlider.milestoneCardsLabel": "在此日期发生变化的卡片",
+  "fiscalYear.single": "{{year}} 财年",
+  "fiscalYear.span": "{{from}}–{{to}} 财年",
   "todos.title": "我的任务",
   "todos.tabs.open": "进行中",
   "todos.tabs.done": "已完成",

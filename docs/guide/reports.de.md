@@ -152,6 +152,18 @@ Der **Kostenbericht** bietet eine finanzielle Analyse Ihrer Technologielandschaf
 - **Balkendiagramm-Ansicht** — Kostenvergleich über Komponenten hinweg
 - **Kartentyp** — Wählen Sie, um welchen Kartentyp der Bericht aufgebaut wird (Anwendung, IT-Komponente, Anbieter, …).
 
+### Geschäftsjahr
+
+Kosten sind jährlich, daher zeigt der Bericht sie für **das aktuelle Geschäftsjahr** — ein Chip in der Werkzeugleiste nennt es, zum Beispiel **Aktuelles Geschäftsjahr: GJ 2026** (oder *GJ 2025–2026*, wenn Ihr Geschäftsjahr nicht im Januar beginnt). Die Jahreskosten einer Karte zählen **in voller Höhe**, wenn das aktuelle Geschäftsjahr zwischen dem liegt, in dem die Karte **Aktiv** wird, und dem, in das ihr **End of Life** fällt, beide eingeschlossen. Nichts wird anteilig verrechnet: Eine Anwendung, die im November ausläuft, trägt in diesem Jahr noch ihre vollen Jahreskosten. Eine Karte, deren End of Life in einem früheren Geschäftsjahr lag, zählt nicht mit.
+
+Fehlende Lebenszyklusdaten werden wie in den Zeitreise-Berichten gelesen:
+
+- **Kein Aktiv-Datum, aber ein Planungs- oder Einführungsdatum** — die Karte ist noch geplant und zählt nicht.
+- **Kein End-of-Life-Datum** — die Karte zählt ab dem Jahr, in dem sie aktiv wird.
+- **Überhaupt keine Lebenszyklusdaten** — die Karte zählt.
+
+Die Regel gilt für alles auf der Seite — die Summen, die Treemap, die Tabelle, **Kostenquellen**-Aggregationen (eine ausgelaufene IT-Komponente zählt nicht mehr zur Summe ihrer Anwendung) und Drilldowns —, und das Geschäftsjahr wird im Berichtskopf gedruckt. Eine Auswahl anderer Jahre gibt es nicht: Eine Karte trägt einen einzigen Jahreswert, und echte Kosten ändern sich von Jahr zu Jahr, sodass dieselbe Zahl für ein anderes Jahr in die Irre führen würde. In welchem Monat das Geschäftsjahr beginnt, legt ein Administrator unter [Einstellungen → Allgemein](../admin/settings.md) fest.
+
 ### Kostenquelle
 
 Sobald der gewählte Kartentyp mindestens eine Beziehung zu einem Typ besitzt, der ein Kostenfeld trägt, erscheint neben **Kartentyp** ein **Kostenquelle**-Auswahlfeld. Damit legen Sie fest, woher die Zahlen stammen:
@@ -180,7 +192,7 @@ Sobald mindestens eine Kostenquelle aktiv ist, sind die Treemap-Rechtecke **ankl
 - **Eine Kostenquelle aktiv** — der Drilldown zeigt eine Treemap der verknüpften Karten (z. B. zeigt ein Klick auf *NexaCore ERP* mit angehakter `IT-Komponente · Jährliche Gesamtkosten` die mit NexaCore ERP verknüpften IT-Komponenten, dimensioniert nach ihren Jahreskosten).
 - **Mehrere Kostenquellen aktiv** — der Drilldown zeigt **eine Treemap pro Quelle nebeneinander** (eine Spalte auf schmalen Anzeigen, zwei auf breiten). Jedes Panel hat seine eigene Überschrift, seinen eigenen Gesamtbetrag und seinen eigenen `% des Gesamtwerts` im Tooltip — so behalten unterschiedliche Kartentypen ihre eigene Skala, anstatt in ein einziges Diagramm gequetscht zu werden.
 
-Der Zeitleisten-Schieberegler, die Kostenquellen-Auswahl und andere Filter bleiben beim Drilldown erhalten, und die Drilldown-Ebene ist Teil der gespeicherten Berichtskonfiguration — wer einen Bericht im hineingezoomten Zustand speichert, öffnet ihn direkt auf dieser Ebene wieder. Wenn **keine** Kostenquelle aktiv ist, öffnet ein Klick auf ein Rechteck stattdessen das Karten-Seitenpanel (es gibt nichts aufzuschlüsseln).
+Die Kostenquellen-Auswahl und andere Filter bleiben beim Drilldown erhalten, und die Drilldown-Ebene ist Teil der gespeicherten Berichtskonfiguration — wer einen Bericht im hineingezoomten Zustand speichert, öffnet ihn direkt auf dieser Ebene wieder. Wenn **keine** Kostenquelle aktiv ist, öffnet ein Klick auf ein Rechteck stattdessen das Karten-Seitenpanel (es gibt nichts aufzuschlüsseln).
 
 **Auf bestimmte Karten eingrenzen** — Der Chip neben der Kartentyp-Auswahl öffnet eine Auswahl: Wählen Sie eine oder mehrere Karten, und Treemap, Summen und Tabelle zeigen nur diese und alles darunter. Während Sie in ein Rechteck hineingezoomt haben, wird der Chip ausgeblendet, da eine Detailansicht bereits zu einem anderen Kartentyp gewechselt ist; verlassen Sie sie, ist die Eingrenzung weiterhin aktiv.
 

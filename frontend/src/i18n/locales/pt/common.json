@@ -207,6 +207,8 @@
   "timelineSlider.milestoneCardsMore_one": "+{{count}} mais",
   "timelineSlider.milestoneCardsMore_other": "+{{count}} mais",
   "timelineSlider.milestoneCardsLabel": "Cards que mudam nesta data",
+  "fiscalYear.single": "AF {{year}}",
+  "fiscalYear.span": "AF {{from}}–{{to}}",
   "todos.title": "Minhas tarefas",
   "todos.tabs.open": "Abertas",
   "todos.tabs.done": "Concluídas",

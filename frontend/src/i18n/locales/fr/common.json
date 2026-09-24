@@ -207,6 +207,8 @@
   "timelineSlider.milestoneCardsMore_one": "+{{count}} autre",
   "timelineSlider.milestoneCardsMore_other": "+{{count}} autres",
   "timelineSlider.milestoneCardsLabel": "Fiches qui changent à cette date",
+  "fiscalYear.single": "EF {{year}}",
+  "fiscalYear.span": "EF {{from}}–{{to}}",
   "todos.title": "Mes tâches",
   "todos.tabs.open": "Ouvertes",
   "todos.tabs.done": "Terminées",

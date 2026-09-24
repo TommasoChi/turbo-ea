@@ -207,6 +207,8 @@
   "timelineSlider.milestoneCardsMore_one": "+{{count}} ещё",
   "timelineSlider.milestoneCardsMore_other": "+{{count}} ещё",
   "timelineSlider.milestoneCardsLabel": "Карточки, меняющиеся в эту дату",
+  "fiscalYear.single": "ФГ {{year}}",
+  "fiscalYear.span": "ФГ {{from}}–{{to}}",
   "todos.title": "Мои задачи",
   "todos.tabs.open": "Открытые",
   "todos.tabs.done": "Выполненные",

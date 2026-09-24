@@ -45,11 +45,12 @@ from app.services.eol_service import (
     find_cycle,
     manual_eol_status,
 )
+from app.services.fiscal_year import current_fiscal_year, get_fiscal_year_start
 from app.services.kpi_snapshot_service import (
     compute_trend_block,
     get_comparison_snapshot,
 )
-from app.services.lifecycle import current_lifecycle_phase
+from app.services.lifecycle import current_lifecycle_phase, is_live_in_fiscal_year
 from app.services.permission_service import PermissionService
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -1484,7 +1485,11 @@ async def cost_report(
     user: User = Depends(get_current_user),
     type: str = Query("Application"),
 ):
-    """Cost aggregation report."""
+    """Cost aggregation report for the current fiscal year.
+
+    Only cards live in the current fiscal year count, by the same rule as
+    ``GET /reports/cost-treemap``.
+    """
     # `costs.view` is the whole gate here, not an add-on. Elsewhere a report
     # carries its own base permission and adds `costs.view` only when the
     # request actually returns money (portfolio when an axis is a cost field,
@@ -1502,8 +1507,13 @@ async def cost_report(
             if field.get("type") == "cost":
                 cost_field_keys.append(field["key"])
 
+    fy_start = await get_fiscal_year_start(db)
+    fy = current_fiscal_year(fy_start)
+
     result = await db.execute(select(Card).where(Card.type == type, Card.status == "ACTIVE"))
-    sheets = result.scalars().all()
+    sheets = [
+        c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
+    ]
     items = []
     total = 0
     for card in sheets:
@@ -1515,7 +1525,7 @@ async def cost_report(
             items.append({"id": str(card.id), "name": card.name, "cost": cost})
             total += cost
     items.sort(key=lambda x: x["cost"], reverse=True)
-    return {"items": items, "total": total}
+    return {"items": items, "total": total, "fiscal_year": fy, "fiscal_year_start": fy_start}
 
 
 @router.get("/cost-treemap")
@@ -1529,6 +1539,17 @@ async def cost_treemap(
     parent_card_id: uuid.UUID | None = Query(None),
 ):
     """Cost treemap: items with cost, optionally grouped by a related type.
+
+    Costs are annual and shown for the current fiscal year only: a card counts,
+    at its full annual cost, when the current fiscal year falls between the one
+    it goes ``active`` in and the one its ``endOfLife`` falls in, both included —
+    no pro-rating, so a card retired in an earlier fiscal year is left out. A
+    card carries one annual figure, so projecting it onto other years would
+    only restate today's number; that is why there is no year parameter. The
+    rule applies to the primary cards and, in ``aggregate`` mode, to the related
+    cards being summed, so a retired IT Component stops adding to its
+    Application's total. The response names the fiscal year (``fiscal_year``)
+    and the workspace's start month (``fiscal_year_start``).
 
     When ``aggregate`` is non-empty, each entry is a ``"<typeKey>:<costFieldKey>"``
     pair identifying a cost field on a related card type. The endpoint sums that
@@ -1551,8 +1572,12 @@ async def cost_treemap(
     # M-3: Validate cost_field format
     if not _SAFE_KEY_RE.match(cost_field):
         raise HTTPException(400, f"Invalid cost_field: {cost_field!r}")
+    fy_start = await get_fiscal_year_start(db)
+    fy = current_fiscal_year(fy_start)
     result = await db.execute(select(Card).where(Card.type == type, Card.status == "ACTIVE"))
-    sheets = result.scalars().all()
+    sheets = [
+        c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
+    ]
 
     if parent_card_id is not None:
         # Restrict sheets to those linked (in either direction) to the parent card.
@@ -1619,7 +1644,12 @@ async def cost_treemap(
             rel_result = await db.execute(
                 select(Card).where(Card.type == type_key, Card.status == "ACTIVE")
             )
-            related_cards = rel_result.scalars().all()
+            # A related card outside the current fiscal year contributes nothing.
+            related_cards = [
+                c
+                for c in rel_result.scalars().all()
+                if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
+            ]
             related_cost_by_id = {
                 str(c.id): float((c.attributes or {}).get(field_key, 0) or 0) for c in related_cards
             }
@@ -1729,7 +1759,13 @@ async def cost_treemap(
             {"name": k, "cost": v} for k, v in sorted(groups_dict.items(), key=lambda x: -x[1])
         ]
 
-    return {"items": items, "total": total, "groups": groups}
+    return {
+        "items": items,
+        "total": total,
+        "groups": groups,
+        "fiscal_year": fy,
+        "fiscal_year_start": fy_start,
+    }
 
 
 @router.get("/capability-heatmap")
