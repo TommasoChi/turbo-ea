@@ -490,5 +490,17 @@
   "cardDisplay.subtypeLine": "子类型",
   "cardDisplay.linesHint": "前 {{count}} 个显示在卡片上。",
   "cardDisplay.linesHintAll": "每一项都会显示在卡片上，卡片会相应变大。",
-  "cardDisplay.noFields": "无可用字段"
+  "cardDisplay.noFields": "无可用字段",
+  "dateField.incomplete": "日期不完整——请填写日、月和年，或清空该字段。",
+  "dateField.placeholder.day": "日",
+  "dateField.placeholder.month": "月",
+  "dateField.placeholder.year": "年",
+  "dateField.openPicker": "打开日历",
+  "dateField.clear": "清除日期",
+  "dateField.today": "今天",
+  "dateField.previousMonth": "上个月",
+  "dateField.nextMonth": "下个月",
+  "dateField.chooseYear": "选择年份",
+  "dateField.calendar": "日历",
+  "dateField.invalid": "日期无效——请按 {{pattern}} 格式输入，或从日历中选择。"
 }

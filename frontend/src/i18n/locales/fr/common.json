@@ -490,5 +490,17 @@
   "cardDisplay.subtypeLine": "Sous-type",
   "cardDisplay.linesHint": "Les {{count}} premiers apparaissent sur la fiche.",
   "cardDisplay.linesHintAll": "Chaque choix apparaît sur la fiche, qui s'agrandit en conséquence.",
-  "cardDisplay.noFields": "Aucun champ disponible"
+  "cardDisplay.noFields": "Aucun champ disponible",
+  "dateField.incomplete": "Date incomplète — renseignez le jour, le mois et l’année, ou videz le champ.",
+  "dateField.placeholder.day": "jj",
+  "dateField.placeholder.month": "mm",
+  "dateField.placeholder.year": "aaaa",
+  "dateField.openPicker": "Ouvrir le calendrier",
+  "dateField.clear": "Effacer la date",
+  "dateField.today": "Aujourd’hui",
+  "dateField.previousMonth": "Mois précédent",
+  "dateField.nextMonth": "Mois suivant",
+  "dateField.chooseYear": "Choisir l’année",
+  "dateField.calendar": "Calendrier",
+  "dateField.invalid": "Date non valide — saisissez-la au format {{pattern}} ou choisissez-la dans le calendrier."
 }

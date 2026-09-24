@@ -490,5 +490,17 @@
   "cardDisplay.subtypeLine": "Subtipo",
   "cardDisplay.linesHint": "Os primeiros {{count}} aparecem no cartão.",
   "cardDisplay.linesHintAll": "Cada escolha aparece no cartão, que cresce para caber.",
-  "cardDisplay.noFields": "Nenhum campo disponível"
+  "cardDisplay.noFields": "Nenhum campo disponível",
+  "dateField.incomplete": "Data incompleta — preencha o dia, o mês e o ano, ou limpe o campo.",
+  "dateField.placeholder.day": "dd",
+  "dateField.placeholder.month": "mm",
+  "dateField.placeholder.year": "aaaa",
+  "dateField.openPicker": "Abrir calendário",
+  "dateField.clear": "Limpar data",
+  "dateField.today": "Hoje",
+  "dateField.previousMonth": "Mês anterior",
+  "dateField.nextMonth": "Próximo mês",
+  "dateField.chooseYear": "Escolher ano",
+  "dateField.calendar": "Calendário",
+  "dateField.invalid": "Data inválida — digite-a como {{pattern}} ou escolha-a no calendário."
 }

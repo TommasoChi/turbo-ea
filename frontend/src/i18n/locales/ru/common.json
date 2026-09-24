@@ -490,5 +490,17 @@
   "cardDisplay.subtypeLine": "Подтип",
   "cardDisplay.linesHint": "Первые {{count}} отображаются на карточке.",
   "cardDisplay.linesHintAll": "Каждый выбранный пункт отображается на карточке, размер которой увеличивается.",
-  "cardDisplay.noFields": "Нет доступных полей"
+  "cardDisplay.noFields": "Нет доступных полей",
+  "dateField.incomplete": "Неполная дата — укажите день, месяц и год или очистите поле.",
+  "dateField.placeholder.day": "дд",
+  "dateField.placeholder.month": "мм",
+  "dateField.placeholder.year": "гггг",
+  "dateField.openPicker": "Открыть календарь",
+  "dateField.clear": "Очистить дату",
+  "dateField.today": "Сегодня",
+  "dateField.previousMonth": "Предыдущий месяц",
+  "dateField.nextMonth": "Следующий месяц",
+  "dateField.chooseYear": "Выбрать год",
+  "dateField.calendar": "Календарь",
+  "dateField.invalid": "Недопустимая дата — введите её в формате {{pattern}} или выберите в календаре."
 }

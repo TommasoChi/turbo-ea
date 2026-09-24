@@ -490,5 +490,17 @@
   "cardDisplay.subtypeLine": "Undertype",
   "cardDisplay.linesHint": "De første {{count}} vises på kortet.",
   "cardDisplay.linesHintAll": "Hvert valg vises på kortet, som vokser, så der er plads.",
-  "cardDisplay.noFields": "Ingen felter tilgængelige"
+  "cardDisplay.noFields": "Ingen felter tilgængelige",
+  "dateField.incomplete": "Ufuldstændig dato — udfyld dag, måned og år, eller ryd feltet.",
+  "dateField.placeholder.day": "dd",
+  "dateField.placeholder.month": "mm",
+  "dateField.placeholder.year": "åååå",
+  "dateField.openPicker": "Åbn kalender",
+  "dateField.clear": "Ryd dato",
+  "dateField.today": "I dag",
+  "dateField.previousMonth": "Forrige måned",
+  "dateField.nextMonth": "Næste måned",
+  "dateField.chooseYear": "Vælg år",
+  "dateField.calendar": "Kalender",
+  "dateField.invalid": "Ikke en gyldig dato — skriv den som {{pattern}}, eller vælg den i kalenderen."
 }
