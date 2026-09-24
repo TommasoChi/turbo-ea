@@ -110,7 +110,8 @@ import type {
   RelationFlowDirection,
   RemovedRelationTombstone,
 } from "./drawio-shapes";
-import { groupRelationsByOtherCard, pruneDeletedRelations } from "./expandChildren";
+import { edgeIncoming, groupRelationsByOtherCard, pruneDeletedRelations } from "./expandChildren";
+import { relationCreatePayload } from "./relationSync";
 import ExpandMenu from "./ExpandMenu";
 import type { ExpandMenuPick, ExpandMenuTarget } from "./ExpandMenu";
 import ColorBySelector from "./ColorBySelector";
@@ -128,6 +129,7 @@ import type { LegendSection } from "./DiagramViewLegend";
 import DiagramViewLegend from "./DiagramViewLegend";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import { useMetamodel } from "@/hooks/useMetamodel";
+import { runsAgainstType } from "@/lib/relationSort";
 import { usePageSubject } from "@/hooks/usePageTitle";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import {
@@ -1167,17 +1169,15 @@ export default function DiagramEditor() {
    *  `incoming` still decides which end carries the arrowhead, and when the
    *  relation carries a `flowDirection` attribute that takes over, so an
    *  Application that *consumes* an Interface is distinguishable from one that
-   *  *provides* it without opening the link (discussion #905). */
+   *  *provides* it without opening the link (discussion #905). `incoming` is
+   *  read on the relation type's axis (`edgeIncoming`), so a row stored the
+   *  other way round still puts the arrowhead where its flow says (#1140). */
   const relationEdgeMeta = useCallback(
-    (
-      relationTypeKey: string,
-      incoming: boolean,
-      attributes?: RelationAttributes,
-    ) => {
-      const rt = relTypesRef.current.find((x) => x.key === relationTypeKey);
+    (rel: Relation, expandedCardId: string) => {
+      const rt = relTypesRef.current.find((x) => x.key === rel.type);
       return {
-        incoming,
-        flow: relationFlowFor(rt, attributes),
+        incoming: edgeIncoming(rel, expandedCardId, rt),
+        flow: relationFlowFor(rt, rel.attributes as RelationAttributes | undefined),
         relationLabel: rt ? relationLabel(rt, i18n.language) : "",
       };
     },
@@ -1220,15 +1220,11 @@ export default function DiagramEditor() {
                 icon: ct?.icon,
                 relationType: primary.type,
                 relationId: primary.id,
-                ...relationEdgeMeta(
-                  primary.type,
-                  primary.target_id === cardId,
-                  primary.attributes,
-                ),
+                ...relationEdgeMeta(primary, cardId),
                 extraRelations: extras.map((r) => ({
                   relationType: r.type,
                   relationId: r.id,
-                  ...relationEdgeMeta(r.type, r.target_id === cardId, r.attributes),
+                  ...relationEdgeMeta(r, cardId),
                 })),
               };
             },
@@ -1369,15 +1365,11 @@ export default function DiagramEditor() {
             icon: iconForType(other.type),
             relationType: primary.type,
             relationId: primary.id,
-            ...relationEdgeMeta(
-              primary.type,
-              primary.target_id === target.cardId,
-              primary.attributes,
-            ),
+            ...relationEdgeMeta(primary, target.cardId),
             extraRelations: extras.map((r) => ({
               relationType: r.type,
               relationId: r.id,
-              ...relationEdgeMeta(r.type, r.target_id === target.cardId, r.attributes),
+              ...relationEdgeMeta(r, target.cardId),
             })),
           }));
           if (children.length === 0) {
@@ -1652,15 +1644,11 @@ export default function DiagramEditor() {
                 icon: ct?.icon,
                 relationType: primary.type,
                 relationId: primary.id,
-                ...relationEdgeMeta(
-                  primary.type,
-                  primary.target_id === cardId,
-                  primary.attributes,
-                ),
+                ...relationEdgeMeta(primary, cardId),
                 extraRelations: extras.map((r) => ({
                   relationType: r.type,
                   relationId: r.id,
-                  ...relationEdgeMeta(r.type, r.target_id === cardId, r.attributes),
+                  ...relationEdgeMeta(r, cardId),
                 })),
               };
             },
@@ -2520,18 +2508,10 @@ export default function DiagramEditor() {
           return;
         }
 
-        const stashedAttrs = pendingEdgeAttributesRef.current.get(edgeCellId);
-        const payload: Record<string, unknown> = {
-          type: rel.relationType,
-          // A relation picked in its reverse direction runs target -> source
-          // even though the edge points the other way.
-          source_id: rel.reversed ? rel.targetCardId : rel.sourceCardId,
-          target_id: rel.reversed ? rel.sourceCardId : rel.targetCardId,
-        };
-        if (stashedAttrs && Object.keys(stashedAttrs).length > 0) {
-          payload.attributes = stashedAttrs;
-        }
-        const created = await api.post<Relation>("/relations", payload);
+        const created = await api.post<Relation>(
+          "/relations",
+          relationCreatePayload(rel, pendingEdgeAttributesRef.current.get(edgeCellId)),
+        );
         pendingEdgeAttributesRef.current.delete(edgeCellId);
 
         markEdgeSynced(
@@ -2605,11 +2585,13 @@ export default function DiagramEditor() {
           continue; // skip if endpoints still pending
         }
         try {
-          const created = await api.post<Relation>("/relations", {
-            type: r.relationType,
-            source_id: r.reversed ? r.targetCardId : r.sourceCardId,
-            target_id: r.reversed ? r.sourceCardId : r.targetCardId,
-          });
+          // Same body as a single-edge sync, attributes chosen in the picker
+          // included — Sync all used to drop them (#1140).
+          const created = await api.post<Relation>(
+            "/relations",
+            relationCreatePayload(r, pendingEdgeAttributesRef.current.get(r.edgeCellId)),
+          );
+          pendingEdgeAttributesRef.current.delete(r.edgeCellId);
           markEdgeSynced(
             frame,
             r.edgeCellId,
@@ -2801,6 +2783,12 @@ export default function DiagramEditor() {
               relationFlowFor(
                 relTypesRef.current.find((x) => x.key === relationTypeKey),
                 attributes as RelationAttributes | undefined,
+              ),
+            (relation) =>
+              runsAgainstType(
+                relTypesRef.current.find((x) => x.key === relation.type),
+                relation.source?.type,
+                relation.target?.type,
               ),
           );
           setStaleItems(items);
