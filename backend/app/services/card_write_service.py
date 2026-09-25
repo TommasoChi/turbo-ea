@@ -37,7 +37,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,12 +46,13 @@ from app.models.card_type import CardType
 from app.models.ppm_cost_line import PpmBudgetLine, PpmCostLine
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
-from app.services import card_lifecycle, card_reference, notification_service
+from app.services import card_approval, card_lifecycle, card_reference, notification_service
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_uniqueness import check_sibling_name_unique
 from app.services.data_quality import calc_data_quality
 from app.services.event_bus import event_bus
 from app.services.hierarchy import HIERARCHY_LEVEL_KEY
+from app.services.relation_orientation import orient_endpoints
 
 # Fields that PPM budget/cost lines manage — calculations must not overwrite these.
 _PPM_MANAGED_FIELDS = {"costBudget", "costActual"}
@@ -106,6 +107,22 @@ async def _get_ppm_exclusions(db: AsyncSession, card: Card) -> set[str]:
     return excluded
 
 
+async def recalculate_and_rescore(db: AsyncSession, card: Card) -> None:
+    """Re-run a card's calculations, then re-score its data quality.
+
+    The pair every write path owes after it changed something a formula can
+    read — the card itself, a relation, or (for an Initiative) any PPM row:
+    tasks, work packages, risks, status reports, budget and cost lines all feed
+    the ``ppm`` context root. The order matters: scoring before the
+    calculations would leave the score one edit stale, since a calculated
+    field counts towards completeness like any other.
+
+    Flushes nothing and commits nothing — the caller owns the transaction.
+    """
+    await run_calculations_for_card(db, card, exclude_fields=await _get_ppm_exclusions(db, card))
+    card.data_quality = await calc_data_quality(db, card)
+
+
 # ---------------------------------------------------------------------------
 # Attribute validation
 # ---------------------------------------------------------------------------
@@ -144,6 +161,36 @@ async def _validate_url_attributes(db: AsyncSession, card_type: str, attributes:
                     422,
                     f"Field '{key}' must use http://, https://, or mailto: scheme",
                 )
+
+
+async def _validate_percentage_attributes(
+    db: AsyncSession, card_type: str, attributes: dict
+) -> None:
+    """Validate that any attribute whose field type is 'percentage' is a number in 0-100.
+
+    The only numeric range check in the metamodel: a ``percentage`` renders as
+    a progress bar, so a value outside the bar is meaningless rather than
+    merely odd. Booleans are rejected explicitly because ``True`` would pass an
+    ``isinstance(..., int)`` check. A calculated result is written by the
+    engine directly and never passes through here — the bar clamps visually.
+    """
+    if not attributes:
+        return
+    result = await db.execute(select(CardType.fields_schema).where(CardType.key == card_type))
+    schema = result.scalar_one_or_none()
+    if not schema:
+        return
+    percentage_keys: set[str] = set()
+    for section in schema:
+        for field in section.get("fields", []):
+            if field.get("type") == "percentage":
+                percentage_keys.add(field["key"])
+    for key in percentage_keys:
+        val = attributes.get(key)
+        if val is None or val == "":
+            continue
+        if isinstance(val, bool) or not isinstance(val, (int, float)) or not 0 <= val <= 100:
+            raise HTTPException(422, f"Field '{key}' must be a number between 0 and 100")
 
 
 def _is_empty_attr(val: object) -> bool:
@@ -279,6 +326,78 @@ async def _validate_select_attributes(
     result = await db.execute(select(CardType.fields_schema).where(CardType.key == card_type))
     schema = result.scalar_one_or_none()
     _check_select_options(card_type, schema, new_attrs, old_attrs)
+
+
+def _check_hierarchy_label(
+    card_type: str,
+    vocabulary: list | None,
+    new_label: str | None,
+    old_label: str | None,
+    has_parent: bool,
+) -> None:
+    """Reject a parent-link label that is not a declared option (#1100).
+
+    The label qualifies this card's edge to its parent — "commercial" vs
+    "sales" between two Organizations that are already parent and child. Its
+    vocabulary is ``card_types.hierarchy_labels``, so the same reasoning as
+    ``_check_select_options`` applies: free text typed into a grid cell or a
+    spreadsheet import would render as an unknown chip and mean nothing.
+
+    Deliberately narrow, so it can never block legitimate work:
+
+    * Clearing the label passes — that is not a validation failure.
+    * A value **unchanged from what is stored** passes, so a card whose label
+      option an admin has since deleted stays editable. The stale value keeps
+      rendering as the outlined warning chip until someone changes it.
+
+    A label on a card with **no parent** is refused rather than dropped: there
+    is no edge for it to describe, and silently discarding it would lose the
+    user's input with no feedback anywhere.
+    """
+    if not new_label or new_label == old_label:
+        return
+    if not has_parent:
+        raise HTTPException(
+            422,
+            {
+                "code": "hierarchy_label_without_parent",
+                "message": (
+                    "A hierarchy link label describes the link to a parent card, "
+                    "so it cannot be set on a card that has no parent."
+                ),
+                "card_type": card_type,
+            },
+        )
+    valid = [str(o.get("key")) for o in (vocabulary or []) if o.get("key") is not None]
+    if new_label in valid:
+        return
+    raise HTTPException(
+        422,
+        {
+            "code": "invalid_hierarchy_label",
+            "message": (
+                f"Card type '{card_type}' does not define hierarchy link label "
+                f"{new_label!r}" + (f"; valid labels: {', '.join(valid)}." if valid else ".")
+            ),
+            "valid_labels": valid,
+            "card_type": card_type,
+        },
+    )
+
+
+async def _validate_hierarchy_label(
+    db: AsyncSession,
+    card_type: str,
+    new_label: str | None,
+    old_label: str | None,
+    has_parent: bool,
+) -> None:
+    """Fetch the type's vocabulary and run the hierarchy-label check against it."""
+    if not new_label or new_label == old_label:
+        return
+    result = await db.execute(select(CardType.hierarchy_labels).where(CardType.key == card_type))
+    vocabulary = result.scalar_one_or_none()
+    _check_hierarchy_label(card_type, vocabulary, new_label, old_label, has_parent)
 
 
 async def _validate_strict_attributes(db: AsyncSession, card_type: str, attributes: dict) -> None:
@@ -590,6 +709,7 @@ async def create_card(
     subtype: str | None = None,
     description: str | None = None,
     parent_id: uuid.UUID | None = None,
+    parent_label: str | None = None,
     lifecycle: dict | None = None,
     attributes: dict | None = None,
     external_id: str | None = None,
@@ -600,7 +720,11 @@ async def create_card(
     """Create one card with full validation and side effects; returns the
     flushed (uncommitted) row. Caller owns permission checks + the commit."""
     await _validate_url_attributes(db, type_key, attributes or {})
+    await _validate_percentage_attributes(db, type_key, attributes or {})
     await _validate_select_attributes(db, type_key, attributes or {}, {})
+    await _validate_hierarchy_label(
+        db, type_key, parent_label, None, has_parent=parent_id is not None
+    )
     if strict_attributes:
         await _validate_strict_attributes(db, type_key, attributes or {})
     await check_sibling_name_unique(db, type_key=type_key, parent_id=parent_id, name=name)
@@ -610,6 +734,7 @@ async def create_card(
         name=name,
         description=description,
         parent_id=parent_id,
+        parent_label=parent_label if parent_id is not None else None,
         lifecycle=lifecycle or {},
         attributes=attributes or {},
         external_id=external_id,
@@ -675,9 +800,10 @@ async def update_card(
     updates = dict(updates)
     updates.pop("reference", None)
 
-    # Validate URL-typed attributes
+    # Validate URL- and percentage-typed attributes
     if "attributes" in updates and updates["attributes"]:
         await _validate_url_attributes(db, card.type, updates["attributes"])
+        await _validate_percentage_attributes(db, card.type, updates["attributes"])
         if strict_attributes:
             await _validate_strict_attributes(db, card.type, updates["attributes"])
 
@@ -710,6 +836,25 @@ async def update_card(
         if new_pid != card.parent_id:
             await _check_parent_not_descendant(db, {card.id}, new_pid)
             await _check_hierarchy_depth(db, card, new_pid)
+
+    # Guard: the parent-link label must be a declared option, and cannot outlive
+    # the edge it describes. Resolved against the FINAL parent so setting a
+    # parent and naming the link in one PATCH is a single valid write, and so a
+    # cleared parent takes its label with it rather than leaving a label
+    # describing a link that no longer exists (#1100).
+    final_parent_id = (
+        (uuid.UUID(updates["parent_id"]) if updates["parent_id"] else None)
+        if "parent_id" in updates
+        else card.parent_id
+    )
+    if final_parent_id is None:
+        # Not conditional on `parent_label` being in `updates`: dropping the
+        # parent must clear the label whether or not the caller thought to.
+        updates["parent_label"] = None
+    elif "parent_label" in updates:
+        await _validate_hierarchy_label(
+            db, card.type, updates["parent_label"], card.parent_label, has_parent=True
+        )
 
     # Guard: sibling-name uniqueness when name or parent changes. Only
     # fires when the requested final state would introduce a new
@@ -747,19 +892,13 @@ async def update_card(
         return False
 
     card.updated_by = actor.user_id
-    # Break approval status on edit (attribute/lifecycle changes break it)
-    if card.approval_status == "APPROVED":
-        status_breaking = {
-            "name",
-            "description",
-            "lifecycle",
-            "attributes",
-            "subtype",
-            "alias",
-            "parent_id",
-        }
-        if status_breaking & changes.keys():
-            card.approval_status = "BROKEN"
+    # Break approval status on edit (attribute/lifecycle changes break it).
+    # Recorded in `changes` rather than left implicit: from there it reaches the
+    # `card.updated` payload (so the History tab shows it, and `rollback_service`
+    # can undo it) and the `card_updated` notification's field list.
+    approval_broke = card_approval.break_approval(card, changes.keys())
+    if approval_broke:
+        changes["approval_status"] = card_approval.approval_change_entry()
 
     # Auto-sync hierarchy levels when the parent changes or a level is
     # missing (lazy heal). Covers hierarchyLevel for any hierarchical type
@@ -827,6 +966,13 @@ async def update_card(
             link=f"/cards/{card.id}",
             data={"changes": list(changes.keys())},
         )
+        # …and separately that it now needs re-review. Two entries for one edit
+        # is deliberate: "what changed" and "your approval is void" are
+        # different facts, and the preferences dialog switches them apart.
+        if approval_broke:
+            await card_approval.notify_approval_broken(
+                db, card=card, actor_id=actor.user_id, actor_display_name=actor.display_name
+            )
 
     return True
 
@@ -893,21 +1039,30 @@ async def archive_card_set(
     full_affected: list[uuid.UUID],
     direct_children: list[Card],
     dry_run: bool = False,
+    background_tasks: BackgroundTasks | None = None,
 ) -> tuple[list[Card], list[uuid.UUID], list[uuid.UUID]]:
     """Flip the primary plus the resolved affected set to ARCHIVED, applying
     the child strategy first. Returns ``(flipped, affected_children_ids,
     affected_related_card_ids)``. Caller has already run permission checks
     on every affected card and owns the commit."""
     # Apply parent-id mutation on the primary's direct children for disconnect/reparent.
+    # The results are kept: a child moved out of the way has its Modified date
+    # bumped and may lose its approval, and both facts are owed an event and a
+    # notification (`card_approval.record_child_strategy_effects`, below).
+    child_results: list[card_lifecycle.ChildStrategyResult] = []
     if direct_children and (child_strategy == "disconnect" or child_strategy == "reparent"):
-        await card_lifecycle.apply_child_strategy(db, primary, child_strategy, actor.user_id)
+        child_results.append(
+            await card_lifecycle.apply_child_strategy(db, primary, child_strategy, actor.user_id)
+        )
     # For ticked related cards, give their own children a `disconnect` so their
     # `parent_id` doesn't point at a soon-to-be-archived parent. Single-hop.
     for rid in related_card_ids:
         rel_res = await db.execute(select(Card).where(Card.id == rid))
         rcard = rel_res.scalar_one_or_none()
         if rcard is not None and rcard.status == "ACTIVE":
-            await card_lifecycle.apply_child_strategy(db, rcard, "disconnect", actor.user_id)
+            child_results.append(
+                await card_lifecycle.apply_child_strategy(db, rcard, "disconnect", actor.user_id)
+            )
 
     # Flip primary + cascade descendants + ticked related to ARCHIVED.
     from sqlalchemy.orm import selectinload
@@ -938,6 +1093,17 @@ async def archive_card_set(
     affected_related_card_ids = [rid for rid in related_card_ids if rid in {c.id for c in flipped}]
 
     if not dry_run:
+        # `flipped` is the "we just archived this" set: those children keep
+        # their event but must not be told to re-approve a card that is gone
+        # from the active landscape.
+        await card_approval.record_child_strategy_effects(
+            db,
+            results=child_results,
+            actor_id=actor.user_id,
+            actor_display_name=actor.display_name,
+            archived_ids=frozenset(c.id for c in flipped),
+            background_tasks=background_tasks,
+        )
         for fcard in flipped:
             await event_bus.publish(
                 "card.archived",
@@ -1079,7 +1245,12 @@ async def upsert_relation(
     the ``POST /relations`` semantics (#905): reuse an existing row and merge
     supplied attributes / description onto it rather than inserting a
     duplicate. Returns ``(relation, reused, changed_fields)``; the row is
-    flushed, never committed."""
+    flushed, never committed.
+
+    The ends are turned into the relation type's direction first
+    (``relation_orientation``), so a request sent the other way round merges
+    into the existing row instead of forking a backwards one (#1140)."""
+    source_id, target_id = await orient_endpoints(db, type_key, source_id, target_id)
     existing = await db.execute(
         select(Relation).where(
             Relation.type == type_key,

@@ -485,6 +485,9 @@ class TestInstallLifecycle:
         entries = res.json()
         assert [e["key"] for e in entries] == ["sample-ext"]
         assert entries[0]["entry"].endswith("/ext-assets/sample-ext/1.0.0/entry.js")
+        # The display name rides along so the bell can say who sent a
+        # notification without a second request.
+        assert entries[0]["name"] == "Sample Extension"
 
     async def test_backend_install_still_needs_restart(self, client, db, vendor):
         """Backend code loads at import time — installing it must keep the
@@ -1108,6 +1111,7 @@ class TestStoreCatalog:
             catalog=catalog_payload(
                 demo_url="https://youtu.be/demo",
                 trial_link="https://buy.stripe.test/pl_trial_1",
+                monthly_payment_link="https://buy.stripe.test/pl_month_1",
             ),
         )
 
@@ -1123,6 +1127,8 @@ class TestStoreCatalog:
         assert item["payment_link"] == "https://buy.stripe.test/pl_1"
         # Trial checkout link passes through; absent from the catalogue → "".
         assert item["trial_link"] == "https://buy.stripe.test/pl_trial_1"
+        # A second billing plan is its own link, beside the yearly one.
+        assert item["monthly_payment_link"] == "https://buy.stripe.test/pl_month_1"
         # A paid (non-trial) entitlement is not flagged as a trial.
         assert item["entitlement_trial"] is False
         assert item["demo_url"] == "https://youtu.be/demo"
@@ -1307,6 +1313,42 @@ class TestStoreCatalog:
         (item,) = res.json()["items"]
         assert item["tags"] == []
 
+    async def test_catalog_surfaces_category_slug(self, client, db, vendor, monkeypatch):
+        """The store section slug passes through untouched — the frontend owns
+        the vocabulary and files an unknown slug under its "Other" section."""
+        admin = await make_admin(db)
+        mock_store(monkeypatch, catalog=catalog_payload(category="integrations"))
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        assert res.status_code == 200
+        (item,) = res.json()["items"]
+        assert item["category"] == "integrations"
+
+    @pytest.mark.parametrize(
+        "raw",
+        ["<script>", "Not A Slug", 123, ["integrations"], "x" * 40],
+    )
+    async def test_catalog_drops_a_category_that_is_not_a_slug(
+        self, client, db, vendor, monkeypatch, raw
+    ):
+        admin = await make_admin(db)
+        mock_store(monkeypatch, catalog=catalog_payload(category=raw))
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        (item,) = res.json()["items"]
+        assert item["category"] == ""
+
+    async def test_catalog_without_category_defaults_empty(self, client, db, vendor, monkeypatch):
+        admin = await make_admin(db)
+        mock_store(monkeypatch, catalog=catalog_payload())
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        (item,) = res.json()["items"]
+        assert item["category"] == ""
+
     async def test_unlicensed_uninstalled_item(self, client, db, vendor, monkeypatch):
         admin = await make_admin(db)
         mock_store(monkeypatch, catalog=catalog_payload(key="other-ext", name="Other"))
@@ -1342,6 +1384,51 @@ class TestStoreCatalog:
 
 
 class TestStoreInstall:
+    async def test_service_catalog_item_flag_surfaced(self, client, db, vendor, monkeypatch):
+        # A service listing has nothing to install: no version, no bundle. It
+        # still annotates like any item, and is never "update available".
+        admin = await make_admin(db)
+        mock_store(
+            monkeypatch,
+            catalog=catalog_payload(
+                key="support", name="Support", service=True, version="", bundle_url=""
+            ),
+        )
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        (item,) = res.json()["items"]
+        assert item["service"] is True
+        assert item["version"] == ""
+        assert item["installed_version"] is None
+        assert item["update_available"] is False
+        assert item["entitlement_state"] == "unlicensed"
+
+    async def test_service_flag_defaults_false(self, client, db, vendor, monkeypatch):
+        admin = await make_admin(db)
+        mock_store(monkeypatch, catalog=catalog_payload())
+        res = await client.get(
+            "/api/v1/admin/extensions/store/catalog", headers=auth_headers(admin)
+        )
+        (item,) = res.json()["items"]
+        assert item["service"] is False
+
+    async def test_install_from_store_refuses_a_service_listing(
+        self, client, db, vendor, monkeypatch
+    ):
+        admin = await make_admin(db)
+        mock_store(
+            monkeypatch,
+            catalog=catalog_payload(key="support", service=True, version="", bundle_url=""),
+        )
+        res = await client.post(
+            "/api/v1/admin/extensions/store/install",
+            json={"key": "support"},
+            headers=auth_headers(admin),
+        )
+        assert res.status_code == 404
+        assert "service" in res.json()["detail"]
+
     async def test_install_from_store_lands_in_upload_pipeline(
         self, client, db, vendor, monkeypatch
     ):

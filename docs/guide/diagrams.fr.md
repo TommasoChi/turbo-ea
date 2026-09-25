@@ -6,18 +6,18 @@ Le module **Diagrammes** vous permet de créer des **diagrammes d'architecture v
 
 ## Galerie de diagrammes
 
-La galerie présente chaque diagramme sous forme de carte compacte avec une miniature, un nom, un auteur et le nombre de cartes référencées. **Créez**, **Ouvrez**, **Modifiez les détails**, organisez ou **Supprimez** n'importe quel diagramme.
+La galerie présente chaque diagramme sous forme de fiche compacte avec une miniature, un nom, un auteur et le nombre de fiches référencées. **Créez**, **Ouvrez**, **Modifiez les détails**, organisez ou **Supprimez** n'importe quel diagramme.
 
 ### Trouver des diagrammes
 
 - **Barre latérale de filtres** — le volet de gauche restreint la galerie à **Tous les diagrammes**, **Créés par moi** ou vos **Favoris**. Le chevron permet de la réduire en une fine barre ; sur petits écrans, le bouton **Filtres** l'ouvre en panneau coulissant.
-- **Recherche** — le champ de recherche correspond au nom d'un diagramme, à son auteur et aux noms des cartes qui y sont dessinées, afin de retrouver un diagramme par son contenu.
+- **Recherche** — le champ de recherche correspond au nom d'un diagramme, à son auteur et aux noms des fiches qui y sont dessinées, afin de retrouver un diagramme par son contenu.
 - **Tri** — par récemment mis à jour, récemment créé ou nom.
-- **Favoris** — cliquez sur l'étoile d'une carte pour l'ajouter à vos favoris personnels ; le filtre **Favoris** les affiche tous.
+- **Favoris** — cliquez sur l'étoile d'une fiche pour l'ajouter à vos favoris personnels ; le filtre **Favoris** les affiche tous.
 
 ### Groupes
 
-Regroupez les diagrammes associés dans des **groupes** — des étiquettes partagées à l'échelle de l'espace de travail. Un diagramme peut appartenir à plusieurs groupes à la fois. En vue carte, la galerie affiche chaque groupe sous forme d'en-tête repliable ; les diagrammes non affectés apparaissent sous **Non groupé**.
+Regroupez les diagrammes associés dans des **groupes** — des étiquettes partagées à l'échelle de l'espace de travail. Un diagramme peut appartenir à plusieurs groupes à la fois. En vue fiche, la galerie affiche chaque groupe sous forme d'en-tête repliable ; les diagrammes non affectés apparaissent sous **Non groupé**.
 
 - Utilisez **Gérer les groupes** dans la barre latérale pour créer, renommer, recolorer ou supprimer des groupes.
 - Utilisez **Ajouter à des groupes…** depuis le menu d'un diagramme pour le placer dans un ou plusieurs groupes (vous pouvez créer un nouveau groupe au passage).
@@ -27,6 +27,8 @@ Regroupez les diagrammes associés dans des **groupes** — des étiquettes part
 ## L'éditeur de diagrammes
 
 Ouvrir un diagramme lance l'éditeur DrawIO plein écran dans une iframe de même origine. La barre d'outils native de DrawIO est disponible pour les formes, connecteurs, texte et mise en page -- chaque action propre à Turbo EA est exposée via le menu contextuel (clic droit), le bouton Sync de la barre d'outils, et la pastille en chevron qui surmonte chaque fiche.
+
+![Éditeur de diagrammes avec des fiches colorées selon la criticité métier](../assets/img/fr/99_editeur_diagramme.png)
 
 ### Insertion de fiches
 
@@ -39,7 +41,7 @@ Utilisez le dialogue **Insérer des fiches** (depuis la barre d'outils ou le men
 
 Le même dialogue s'ouvre en mode sélection unique pour **Changer la fiche liée** et **Lier à une fiche existante**.
 
-Chaque fiche sur le canevas affiche son **icône de type de fiche** sous la forme d'un petit glyphe blanc dans le coin supérieur gauche, à côté de la couleur du type — le type d'une fiche est ainsi indiqué à la fois par l'icône et par la couleur. Cela correspond aux icônes utilisées dans toute l'application et améliore la lisibilité pour les utilisateurs daltoniens. L'icône apparaît sur les fiches insérées à partir de maintenant. Pour ajouter des icônes aux fiches déjà présentes sur un diagramme plus ancien, cliquez sur **Appliquer les icônes de type de fiche** dans la barre d'outils de l'éditeur. Si une carte possède son propre **logo**, c'est lui qui s'affiche, l'icône du type de carte étant conservée comme petit badge dans un coin : la forme indique ainsi à la fois de quel produit et de quel type de carte il s'agit. Les logos apparaissent à l'ouverture du diagramme et se rafraîchissent lorsqu'un logo change ; une carte sans logo, comme toute carte d'un type pour lequel un administrateur a désactivé les logos, est dessinée exactement comme avant. Une case **Logos des cartes** dans le même menu les désactive si vous voulez un diagramme sans ornement ; elle est cochée par défaut.
+Chaque fiche sur le canevas affiche son **icône de type de fiche** sous la forme d'un petit glyphe blanc dans le coin supérieur gauche, à côté de la couleur du type — le type d'une fiche est ainsi indiqué à la fois par l'icône et par la couleur. Cela correspond aux icônes utilisées dans toute l'application et améliore la lisibilité pour les utilisateurs daltoniens. L'icône apparaît sur les fiches insérées à partir de maintenant. Pour ajouter des icônes aux fiches déjà présentes sur un diagramme plus ancien, cliquez sur **Appliquer les icônes de type de fiche** dans la barre d'outils de l'éditeur. Si une fiche possède son propre **logo**, c'est lui qui s'affiche, l'icône du type de fiche étant conservée comme petit badge dans un coin : la forme indique ainsi à la fois de quel produit et de quel type de fiche il s'agit. Les logos apparaissent à l'ouverture du diagramme et se rafraîchissent lorsqu'un logo change ; une fiche sans logo, comme toute fiche d'un type pour lequel un administrateur a désactivé les logos, est dessinée exactement comme avant. Une case **Logos des fiches** dans le même menu les désactive si vous voulez un diagramme sans ornement ; elle est cochée par défaut.
 
 ### Actions du clic droit
 
@@ -86,7 +88,9 @@ Le menu déroulant **Colorer par** dans la barre d'outils recolore les fiches du
 - **Statut d'approbation** -- recolore par `approuvée` / `en attente` / `cassée`.
 - **Valeurs de champ** -- cochez un champ à sélection unique sous n'importe quel type de fiche présent sur le canevas. **Plusieurs types de fiches peuvent porter chacun une règle en même temps** -- les Applications par criticité *et* les Composants IT par modèle d'hébergement. Un type sans règle conserve sa couleur actuelle, y compris un remplissage défini à la main ; seule une fiche dont la règle ne trouve aucune valeur devient grise. Un second champ au sein d'un même type remplace le premier, car une fiche n'a qu'un remplissage.
 
-Une légende flottante en bas à gauche affiche une échelle par règle active. Les règles de champ et le **Statut d'approbation** sont des alternatives, pas des couches : choisir l'un efface l'autre. Décochez toutes les règles et le canevas revient aux couleurs des fiches. Le choix est enregistré avec le diagramme.
+Une légende flottante en bas à gauche affiche une échelle par règle active. Les règles de champ et le **Statut d'approbation** sont des alternatives, pas des couches : choisir l'un efface l'autre. Décochez toutes les règles et le canevas revient aux couleurs des fiches. Le choix est enregistré avec le diagramme. La même légende s'affiche lorsque le diagramme est ouvert en mode consultation ainsi que sur son lien publié ou intégré, afin que les lecteurs sachent ce que signifient les couleurs.
+
+![Diagramme en mode lecture avec sa légende de couleurs](../assets/img/fr/99b_diagramme_vue_legende.png)
 
 #### Afficher sur la fiche
 
@@ -139,6 +143,8 @@ Le bouton **Sync** de la barre d'outils ouvre le tiroir latéral avec tout ce qu
     - une **relation supprimée** -- *Retirer l'arête du diagramme* enlève l'arête obsolète du canevas ;
     - une relation dont le **sens du flux** a changé -- *Accepter la mise à jour* aligne la flèche sur l'inventaire.
 
+![Panneau de synchronisation de l'éditeur de diagrammes](../assets/img/fr/99a_diagramme_synchronisation.png)
+
 Turbo EA **vérifie automatiquement les changements d'inventaire à chaque ouverture d'un diagramme** -- un badge bleu sur le bouton Sync de la barre d'outils compte les changements à examiner. Rien n'est appliqué sans votre confirmation ; le badge ne fait que vous inviter dans le panneau. Le bouton **Vérifier les mises à jour** du panneau relance la même vérification à la demande.
 
 Le bouton Sync de la barre d'outils affiche une pastille pulsée « N non synchronisé(s) » dès qu'un travail est en attente. Quitter l'onglet avec des changements non synchronisés déclenche un avertissement navigateur, et le canevas est sauvegardé localement toutes les cinq secondes pour pouvoir être restauré après un rafraîchissement accidentel.
@@ -156,7 +162,7 @@ Dans la galerie, ouvrez le menu **⋮** du diagramme et choisissez **Partager / 
 La boîte de dialogue propose deux choix et deux chaînes à copier :
 
 - **Toute personne disposant du lien** — aucune connexion. Traitez le lien comme un mot de passe : toute personne à qui il est transféré peut voir le diagramme.
-- **Uniquement les personnes connectées** — les visiteurs s'authentifient auprès de votre fournisseur d'identité, éventuellement restreint à certains domaines de messagerie. Aucun compte Turbo EA n'est créé pour eux.
+- **Uniquement les personnes connectées** — les visiteurs s'authentifient auprès de votre fournisseur d'identité, éventuellement restreint à certains domaines de messagerie. Aucun compte Turbo EA n'est créé pour eux. Dans une intégration, la connexion s'ouvre dans une petite fenêtre contextuelle, et Turbo EA doit être servi en HTTPS pour que la session soit conservée dans le cadre ; les visiteurs se connectent une fois par site dans lequel le diagramme est intégré.
 
 La page publiée n'affiche que l'image. Elle permet le déplacement et le zoom, mais aucun accès aux détails des fiches, et les identifiants des fiches derrière les formes sont retirés avant que le diagramme ne quitte le serveur. Dépublier prend effet immédiatement, y compris pour les personnes en train de consulter. Republier ultérieurement restaure le même lien, de sorte que les URL déjà collées continuent de fonctionner.
 
@@ -176,3 +182,6 @@ La page publiée n'affiche que l'image. Elle permet le déplacement et le zoom, 
 3. Dans Confluence, insérez une macro **HTML** (ou *Iframe* / *HTML include*, selon ce que votre instance autorise) et collez le code d'intégration.
 
 Si votre Confluence n'autorise pas les macros HTML, collez plutôt le **lien** simple : il ouvre la même vue dans un nouvel onglet.
+
+!!! note "Connexion dans une intégration"
+    Un diagramme publié pour *Uniquement les personnes connectées* affiche un bouton **Se connecter** dans l'intégration. Il ouvre votre fournisseur d'identité dans une petite fenêtre contextuelle, et le diagramme apparaît dès que cette fenêtre se ferme. Trois choses peuvent faire obstacle : Turbo EA doit être servi en **HTTPS** (les navigateurs ne conservent la session intersite dont une intégration a besoin que sur une origine sécurisée) ; la page hôte doit autoriser les fenêtres contextuelles depuis ses cadres (un cadre en bac à sable sans `allow-popups` bloque à la fois la fenêtre contextuelle et le lien de secours) ; et dans Safari, utilisez le lien **Ouvrir le diagramme dans un nouvel onglet** proposé par l'écran de connexion. Par ailleurs, Chrome refuse de charger une intégration depuis une adresse de réseau privé (une IP ou un nom d'hôte interne) dans une page publique telle que Confluence Cloud — publiez l'instance sous un nom d'hôte HTTPS public, ou intégrez-la depuis un wiki du même réseau.

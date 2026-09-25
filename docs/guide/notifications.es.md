@@ -26,6 +26,14 @@ Haga clic en cualquier notificación para navegar directamente a la ficha o docu
 | **SoAW firmado** | Un SoAW que está siguiendo recibe una firma |
 | **Solicitud de encuesta** | Se envía una encuesta que requiere su respuesta |
 
+**Estado de aprobación cambiado** también cubre el caso automático. Una ficha
+aprobada pasa a **Rota** en cuanto alguien la edita, o cuando archivar su ficha
+principal la desplaza en la jerarquía: se le notifica en ambos casos y el cambio
+queda registrado en la pestaña **Historial** de la ficha. Cuando una sola acción
+rompe varias de sus fichas a la vez, como una edición masiva, recibe un único
+resumen en lugar de una notificación por ficha.
+
+
 ## Entrega en Tiempo Real
 
 Las notificaciones se entregan en tiempo real utilizando Server-Sent Events (SSE). No necesita actualizar la página — las nuevas notificaciones aparecen automáticamente y el contador de la insignia se actualiza al instante.
@@ -54,3 +62,5 @@ a «En la aplicación» y «Correo», y usted elige tipo por tipo si la notifica
 va allí. Esas columnas empiezan siempre **desactivadas**. Desactivar la extensión
 o dejar que caduque su licencia oculta la columna y pausa la entrega, pero
 conserva todo lo que eligió: vuelve con la extensión. [Slack Notifications](../extensions/slack-notify.md) es una de esas extensiones.
+
+Una extensión también puede declarar sus propios tipos de notificación — por ejemplo **Notificaciones de automatizaciones** —, que aparecen aquí como filas propias (en la aplicación activado, correo desactivado por defecto), para ajustarlas por separado de la fila genérica **Aviso de extensión**. Si la extensión se desactiva o su licencia caduca, sus filas desaparecen hasta que vuelva; lo que eligió se conserva. Algunas notificaciones de extensiones abren sus **detalles** en la aplicación al hacer clic en lugar de llevarle a una página: el mensaje completo, más botones para abrir la ficha relacionada o la página de la extensión cuando tiene permiso.

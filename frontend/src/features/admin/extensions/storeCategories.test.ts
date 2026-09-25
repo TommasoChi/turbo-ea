@@ -1,0 +1,88 @@
+import { describe, it, expect } from "vitest";
+import { groupStoreItems } from "./storeCategories";
+import type { StoreItem } from "./types";
+
+function item(key: string, category?: string): StoreItem {
+  return {
+    key,
+    name: key,
+    description: "",
+    price: "Commercial",
+    payment_link: "https://buy.test/pl",
+    version: "1.0.0",
+    installed_version: null,
+    update_available: false,
+    entitlement_state: "unlicensed",
+    ...(category === undefined ? {} : { category }),
+  };
+}
+
+describe("groupStoreItems", () => {
+  it("orders sections by the fixed vocabulary, not by first appearance", () => {
+    // Fed in reverse, so passing this cannot be an accident of input order.
+    const groups = groupStoreItems([
+      item("r", "regulations"),
+      item("i", "integrations"),
+      item("g", "governance"),
+      item("s", "strategy"),
+      item("v", "services"),
+    ]);
+    expect(groups.map((g) => g.category)).toEqual([
+      "services",
+      "strategy",
+      "governance",
+      "integrations",
+      "regulations",
+    ]);
+    // Governance sits directly after strategy, ahead of integrations.
+    expect(
+      groupStoreItems([item("i", "integrations"), item("g", "governance")]).map((g) => g.category),
+    ).toEqual(["governance", "integrations"]);
+    // Services lead, even when the catalogue lists them last.
+    expect(
+      groupStoreItems([item("s", "strategy"), item("v", "services")]).map((g) => g.category),
+    ).toEqual(["services", "strategy"]);
+  });
+
+  it("keeps catalogue order inside a section and omits empty sections", () => {
+    const groups = groupStoreItems([
+      item("b", "integrations"),
+      item("a", "integrations"),
+      item("s", "strategy"),
+    ]);
+    expect(groups.map((g) => g.category)).toEqual(["strategy", "integrations"]);
+    expect(groups[1].items.map((i) => i.key)).toEqual(["b", "a"]);
+  });
+
+  it("files unknown and missing categories under a trailing Other section", () => {
+    // A newer catalogue may introduce a slug this build has never heard of;
+    // it must still be listed, never dropped.
+    const groups = groupStoreItems([
+      item("new", "observability"),
+      item("none"),
+      item("s", "strategy"),
+    ]);
+    expect(groups.map((g) => g.category)).toEqual(["strategy", "other"]);
+    expect(groups[1].items.map((i) => i.key)).toEqual(["new", "none"]);
+  });
+
+  it("files services in their own section ahead of Other", () => {
+    // A service listing (nothing to install) is a known section, not a
+    // stray slug — it must never land under Other.
+    const groups = groupStoreItems([item("x", "whatever"), item("sup", "services")]);
+    expect(groups.map((g) => g.category)).toEqual(["services", "other"]);
+  });
+
+  it("returns one unlabeled group when nothing carries a known category", () => {
+    // A pre-category catalogue keeps rendering as the flat grid it always
+    // did — a lone "Other" heading over everything would be noise.
+    const groups = groupStoreItems([item("a"), item("b", "whatever")]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].category).toBeNull();
+    expect(groups[0].items.map((i) => i.key)).toEqual(["a", "b"]);
+  });
+
+  it("returns nothing for an empty list", () => {
+    expect(groupStoreItems([])).toEqual([]);
+  });
+});

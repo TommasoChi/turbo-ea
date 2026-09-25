@@ -46,6 +46,7 @@ O Turbo EA fornece um editor de SoAW integrado com templates de seções alinhad
 O editor oferece:
 
 - **Edição de texto rico** — Barra de ferramentas completa de formatação (títulos, negrito, itálico, listas, links) alimentada pelo editor TipTap
+- **Links** — Uma URL digitada ou colada torna-se um link enquanto você escreve, e todo link em um documento abre em uma nova aba. Endereços em documentos escritos antes do suporte a links são convertidos em links ao serem exibidos
 - **Templates de seções** — Seções predefinidas seguindo os padrões TOGAF (ex.: Descrição do Problema, Objetivos, Abordagem, Partes Interessadas, Restrições, Plano de Trabalho)
 - **Tabelas editáveis inline** — Adicione e edite tabelas dentro de qualquer seção
 - **Fluxo de status** — Documentos progridem através de estágios definidos:
@@ -85,5 +86,5 @@ O **registo principal de ADR** — onde cada ADR a nível do panorama é filtrad
 Os cards agora incluem uma aba de **Recursos** que consolida:
 
 - **Decisões de Arquitetura** — os ADR não são mais listados aqui. Agora cada card tem sua própria aba **ADR**; consulte [Detalhe do card](card-details.md) para ver o que ela mostra e como vincular, criar ou desvincular decisões a partir de um card.
-- **Anexos de Arquivos** — Carregue e gerencie arquivos (PDF, DOCX, XLSX, imagens, até 10 MB). Ao carregar, selecione uma **categoria de documento** entre: Arquitetura, Segurança, Conformidade, Operações, Notas de Reunião, Design ou Outro. A categoria aparece como um chip ao lado de cada arquivo.
+- **Anexos de Arquivos** — Carregue e gerencie arquivos (documentos, folhas de cálculo, apresentações, ficheiros OpenDocument e Office antigos, imagens, arquivos, mensagens do Outlook e e-mail, CSV, Markdown, JSON e XML — até 20 MB). Ao carregar, selecione uma **categoria de documento** entre: Arquitetura, Segurança, Conformidade, Operações, Notas de Reunião, Design ou Outro. A categoria aparece como um chip ao lado de cada arquivo.
 - **Links de Documentos** — Referências de documentos baseadas em URL. Ao adicionar um link, selecione um **tipo de link** entre: Documentação, Segurança, Conformidade, Arquitetura, Operações, Suporte ou Outro. O tipo de link aparece como um chip ao lado de cada link, e o ícone muda de acordo com o tipo selecionado.

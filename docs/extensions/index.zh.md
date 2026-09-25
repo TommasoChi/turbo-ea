@@ -10,12 +10,26 @@
 
 ## 可用扩展
 
+### 战略、规划与转型
+
 | 扩展 | 功能 | 许可 |
 |------|------|------|
 | [Digital Autonomy Assessment](digital-autonomy.md) | 依据乌得勒支大学的 Digital Autonomy Assessment Framework 评估每个应用——22 项加权指标、自动生成的 1–10 自主性评分，以及风险/缓解四象限图 | **免费** |
 | [EA Value Tracker](value-savings.md) | 把架构决策变成可审计的财务台账：分类的节省申报、四眼原则的实现审批，以及价值仪表板 | 商业 |
+| [Roadmap Studio](roadmap-studio.md) | 以假设方案规划架构版图的多种未来，逐个里程平台推演，按成本与生命周期终止风险敞口进行比较，并推动其经过评审直至评审委员会作出决策 | 商业 |
+| [Automations](automations.md) | 运行由下拉选项搭建的治理规则——当卡片、关系或待办发生变化或计划到点时，若条件成立，则设置字段、标签和角色、创建待办、提出风险、创建决策草稿、通知人员或调用 webhook——每一次运行都是一个可回滚的审计批次 | 商业 |
+
+### 集成
+
+| 扩展 | 功能 | 许可 |
+|------|------|------|
 | [Jira Todo Sync](jira-todos.md) | 让 Turbo EA 待办事项与 Jira Cloud 项目双向保持一致——状态、标题、截止日期与负责人 | 商业 |
 | [Slack Notifications](slack-notify.md) | 以 Slack 私信向每个人投递其 Turbo EA 通知，按人、按类型自愿开启 | 商业 |
+
+### 法规
+
+| 扩展 | 功能 | 许可 |
+|------|------|------|
 | [DORA Register of Information](dora-roi.md) | 在既有卡片上维护欧盟 DORA 第 28 条的信息登记册，并导出官方 xBRL-CSV 报送包 | 商业 |
 
 ## 所有扩展的共同点

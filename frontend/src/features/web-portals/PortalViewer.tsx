@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router";
-import DOMPurify from "dompurify";
+import { sanitizeRichHtml } from "@/lib/richHtml";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import LinkifiedText from "@/components/LinkifiedText";
+import MuiLink from "@mui/material/Link";
+import { isLinkableHref } from "@/lib/linkify";
 import TextField from "@mui/material/TextField";
 import InputAdornment from "@mui/material/InputAdornment";
 import Button from "@mui/material/Button";
@@ -37,9 +40,11 @@ import {
 } from "@/hooks/useResolveLabel";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { bandColor, bandOf, type DataQualityBand } from "@/lib/dataQualityBands";
+import { PercentBar } from "@/components/PercentBar";
 import { todayIsoDate } from "@/lib/dates";
 import TagPicker from "@/components/TagPicker";
 import { publicGet, type ApiError } from "./publicApi";
+import { buildAuthorizeUrl, newNonce } from "@/lib/publicSso";
 import PortalPpmPortfolio from "./PortalPpmPortfolio";
 import { BOARD_MAX_WIDTH, BOARD_GUTTER } from "@/features/ppm/ppmPortfolioFormat";
 import type {
@@ -105,48 +110,30 @@ function isVisible(
   return defaults[key] ?? fallback;
 }
 
-// Portal SSO reuses the app's existing /auth/callback redirect URI (already
-// registered with the IdP for login), so an SSO-gated portal needs no IdP
-// reconfiguration. The OAuth `state` carries the portal slug so the shared
-// callback can tell a portal sign-in apart from a normal login.
-const PORTAL_SSO_REDIRECT_PATH = "/auth/callback";
-
 function portalSilentKey(slug: string): string {
   // Keyed by resource kind as well as slug — SsoCallback now serves both
   // portals and published diagrams and writes the same key on failure.
   return `portal_silent_portal_${slug}`;
 }
 
-// Send the browser to the IdP to authenticate a portal visitor. `silent` adds
-// prompt=none for a no-UI attempt that only completes if the visitor already
-// has an active IdP session; on any interaction requirement the IdP bounces
-// straight back with an error and we fall back to an explicit sign-in button.
+// Send the browser to the IdP to authenticate a portal visitor. A portal is
+// always a top-level page on this origin (it is never framed by another site),
+// so a plain navigation is right here — the shared `/auth/callback` brings the
+// visitor back. `silent` adds prompt=none for a no-UI attempt that only
+// completes if the visitor already has an active IdP session; on any
+// interaction requirement the IdP bounces straight back with an error and we
+// fall back to an explicit sign-in button. The URL itself is built by the
+// shared helper so the portal and the published diagram cannot drift.
 function doSsoRedirect(
   sso: NonNullable<PortalGate["sso"]>,
   slug: string,
   silent: boolean,
 ): void {
-  if (!sso.authorization_endpoint || !sso.client_id) return;
-  const nonce =
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : String(Date.now());
+  const nonce = newNonce();
+  const url = buildAuthorizeUrl(sso, { t: "portal", slug, nonce, silent });
+  if (!url) return;
   sessionStorage.setItem("portal_sso_nonce", nonce);
-  const state = btoa(JSON.stringify({ t: "portal", slug, nonce, silent }));
-  const redirectUri = `${window.location.origin}${PORTAL_SSO_REDIRECT_PATH}`;
-  const params = new URLSearchParams({
-    client_id: sso.client_id,
-    response_type: "code",
-    redirect_uri: redirectUri,
-    scope: sso.scopes || "openid email profile",
-    response_mode: "query",
-    state,
-  });
-  if (silent) params.set("prompt", "none");
-  if (sso.extra_auth_params) {
-    Object.entries(sso.extra_auth_params).forEach(([k, v]) => params.set(k, v));
-  }
-  window.location.href = `${sso.authorization_endpoint}?${params.toString()}`;
+  window.location.href = url;
 }
 
 function Icon({
@@ -248,6 +235,9 @@ function FieldValue({
       </Typography>
     );
   }
+  if (field?.type === "percentage") {
+    return <PercentBar value={Number(value)} width={80} height={6} />;
+  }
   if (field?.type === "boolean") {
     return (
       <Icon
@@ -303,7 +293,29 @@ function FieldValue({
       </Box>
     );
   }
-  return <Typography variant="body2">{String(value)}</Typography>;
+  if (field?.type === "url" && typeof value === "string" && isLinkableHref(value)) {
+    // A url-typed value is one whole link, whatever its scheme in the
+    // allowlist (mailto included) — the same rendering the card page gives it.
+    return (
+      <Typography variant="body2" sx={{ wordBreak: "break-all" }}>
+        <MuiLink href={value.trim()} target="_blank" rel="noopener noreferrer" underline="hover">
+          {value}
+        </MuiLink>
+      </Typography>
+    );
+  }
+  if (field?.type === "multiline_text") {
+    return (
+      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+        <LinkifiedText text={String(value)} />
+      </Typography>
+    );
+  }
+  return (
+    <Typography variant="body2">
+      <LinkifiedText text={String(value)} />
+    </Typography>
+  );
 }
 
 export default function PortalViewer() {
@@ -695,7 +707,7 @@ export default function PortalViewer() {
                   variant="body1"
                   sx={{ opacity: 0.8, maxWidth: 700, mt: 0.5, lineHeight: 1.6 }}
                 >
-                  {portal.description}
+                  <LinkifiedText text={portal.description} />
                 </Typography>
               )}
               {!isBoard && (
@@ -791,7 +803,6 @@ export default function PortalViewer() {
                 setSortDir(sd);
                 setPage(1);
               }}
-              InputLabelProps={{ shrink: true }}
               sx={{ width: 180 }}
             >
               <MenuItem value="name-asc">{t("portal.sortNameAsc")}</MenuItem>
@@ -826,7 +837,6 @@ export default function PortalViewer() {
                       setSubtype(e.target.value);
                       setPage(1);
                     }}
-                    InputLabelProps={{ shrink: true }}
                     sx={{ width: 180 }}
                   >
                     <MenuItem value="">{t("portal.allSubtypes")}</MenuItem>
@@ -852,7 +862,6 @@ export default function PortalViewer() {
                     }));
                     setPage(1);
                   }}
-                  InputLabelProps={{ shrink: true }}
                   sx={{ width: 180 }}
                 >
                   <MenuItem value="">{t("labels.all")}</MenuItem>
@@ -874,13 +883,17 @@ export default function PortalViewer() {
                 const sharesPair =
                   visibleRelTypes.filter((o) => o.other_type_key === rt.other_type_key)
                     .length > 1;
-                const relFilterLabel = sharesPair
-                  ? `${rt.other_type_label} · ${
-                      rt.source_type_key === rt.other_type_key
-                        ? relLabel(rt, true)
-                        : relLabel(rt)
-                    }`
-                  : rt.other_type_label;
+                // The verb from the PORTAL type's end. A self-referencing type
+                // has this filter matching either direction (the backend unions
+                // them), so it carries both verbs; "is the source the other
+                // type" alone is true at both of its ends and read inverted.
+                const selfPair = rt.source_type_key === rt.target_type_key;
+                const relVerb = selfPair
+                  ? `${relLabel(rt)} / ${relLabel(rt, true)}`
+                  : rt.source_type_key === rt.other_type_key
+                    ? relLabel(rt, true)
+                    : relLabel(rt);
+                const relFilterLabel = sharesPair ? `${rt.other_type_label} · ${relVerb}` : rt.other_type_label;
                 return (
                   <TextField
                     key={rt.key}
@@ -895,7 +908,6 @@ export default function PortalViewer() {
                       }));
                       setPage(1);
                     }}
-                    InputLabelProps={{ shrink: true }}
                     sx={{ width: 200 }}
                   >
                     <MenuItem value="">
@@ -921,7 +933,6 @@ export default function PortalViewer() {
                   size="small"
                   label={t("portal.tags")}
                   placeholder=""
-                  inputLabelShrink
                   sx={{ width: 200 }}
                 />
               )}
@@ -1090,7 +1101,7 @@ export default function PortalViewer() {
                           mb: 1.5,
                         }}
                       >
-                        {cardVisibleFields.slice(0, 3).map((field) => {
+                        {cardVisibleFields.map((field) => {
                           const val = card.attributes?.[field.key];
                           if (val === null || val === undefined || val === "")
                             return null;
@@ -1287,36 +1298,21 @@ export default function PortalViewer() {
 
                       <Box sx={{ flex: 1 }} />
 
-                      {/* Completion */}
+                      {/* Data quality — the card's completeness score, never
+                          project progress: a bare "71%" here read as the
+                          latter to an Initiative's readers (#1111). */}
                       {show("data_quality", "card") && (
-                      <>
-                      <LinearProgress
-                        variant="determinate"
-                        value={card.data_quality}
-                        sx={{
-                          width: 60,
-                          height: 4,
-                          borderRadius: 2,
-                          bgcolor: "action.hover",
-                          "& .MuiLinearProgress-bar": {
-                            bgcolor: bandColor(card.data_quality),
-                            borderRadius: 2,
-                          },
-                        }}
-                      />
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontSize: "0.73rem",
-                          color: "text.secondary",
-                          fontWeight: 600,
-                          minWidth: 32,
-                          textAlign: "right",
-                        }}
-                      >
-                        {Math.round(card.data_quality)}%
-                      </Typography>
-                      </>
+                        <PercentBar
+                          value={card.data_quality}
+                          color={bandColor(card.data_quality)}
+                          width={60}
+                          height={4}
+                          trackColor="action.hover"
+                          label={t("portal.dataQuality", {
+                            percent: Math.round(card.data_quality),
+                          })}
+                          labelSx={{ fontSize: "0.73rem", color: "text.secondary", fontWeight: 600 }}
+                        />
                       )}
                     </Box>
                     )}
@@ -1439,7 +1435,7 @@ export default function PortalViewer() {
                     )}
                     {show("data_quality", "detail") && (
                     <Chip
-                      label={t("portal.complete", { percent: Math.round(selectedFs.data_quality) })}
+                      label={t("portal.dataQuality", { percent: Math.round(selectedFs.data_quality) })}
                       size="small"
                       sx={{
                         height: 28,
@@ -1485,88 +1481,79 @@ export default function PortalViewer() {
                 </IconButton>
               </DialogTitle>
               <DialogContent sx={{ pt: 3 }}>
-                {/* Description */}
-                {show("description", "detail") && selectedFs.description && (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography
-                      variant="subtitle2"
-                      fontWeight={700}
-                      sx={{
-                        mb: 0.75,
-                        textTransform: "uppercase",
-                        fontSize: "0.75rem",
-                        letterSpacing: 1,
-                        color: "text.secondary",
-                      }}
-                    >
-                      {t("portal.description")}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        lineHeight: 1.7,
-                        whiteSpace: "pre-wrap",
-                        color: "text.primary",
-                      }}
-                      dangerouslySetInnerHTML={{
-                        __html: DOMPurify.sanitize(selectedFs.description || ""),
-                      }}
-                    />
-                  </Box>
-                )}
-
-                {/* Lifecycle */}
-                {show("lifecycle", "detail") && selectedFs.lifecycle &&
-                  Object.values(selectedFs.lifecycle).some(Boolean) && (
+                {/* Description — plus the fields the metamodel files under the
+                    reserved `__description` section, which card detail folds in
+                    here too. Rendering that section by its raw name printed a
+                    `__DESCRIPTION` heading to visitors. */}
+                {(() => {
+                  const detailKeys = new Set(detailVisibleFields.map((f) => f.key));
+                  const hasValue = (key: string) => {
+                    const v = selectedFs.attributes?.[key];
+                    return v !== undefined && v !== null && v !== "";
+                  };
+                  const descriptionFields = (portal.type_info?.fields_schema ?? [])
+                    .filter((s) => s.section === "__description")
+                    .flatMap((s) => s.fields)
+                    .filter((f) => detailKeys.has(f.key) && hasValue(f.key));
+                  const showText = show("description", "detail") && !!selectedFs.description;
+                  if (!showText && descriptionFields.length === 0) return null;
+                  return (
                     <Box sx={{ mb: 3 }}>
                       <Typography
                         variant="subtitle2"
                         fontWeight={700}
                         sx={{
-                          mb: 1.25,
+                          mb: 0.75,
                           textTransform: "uppercase",
                           fontSize: "0.75rem",
                           letterSpacing: 1,
                           color: "text.secondary",
                         }}
                       >
-                        {t("portal.lifecycle")}
+                        {t("portal.description")}
                       </Typography>
-                      <Box sx={{ display: "flex", gap: 2.5, flexWrap: "wrap" }}>
-                        {[
-                          { key: "plan", label: t("lifecycle.plan") },
-                          { key: "phaseIn", label: t("lifecycle.phaseIn") },
-                          { key: "active", label: t("lifecycle.active") },
-                          { key: "phaseOut", label: t("lifecycle.phaseOut") },
-                          { key: "endOfLife", label: t("lifecycle.endOfLife") },
-                        ].map((phase) => {
-                          const date = selectedFs.lifecycle?.[phase.key];
-                          if (!date) return null;
-                          return (
-                            <Box key={phase.key}>
+                      {showText && (
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            lineHeight: 1.7,
+                            whiteSpace: "pre-wrap",
+                            color: "text.primary",
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html: sanitizeRichHtml(selectedFs.description),
+                          }}
+                        />
+                      )}
+                      {descriptionFields.length > 0 && (
+                        <Box
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                            gap: 2,
+                            mt: showText ? 2 : 0,
+                          }}
+                        >
+                          {descriptionFields.map((field) => (
+                            <Box key={field.key}>
                               <Typography
                                 variant="caption"
                                 sx={{ display: "block", fontSize: "0.73rem", color: "text.secondary", mb: 0.25 }}
                               >
-                                {phase.label}
+                                {fieldLabel(field)}
                               </Typography>
-                              <Typography
-                                variant="body2"
-                                fontWeight={600}
-                                sx={{ color: "text.primary" }}
-                              >
-                                {date}
-                              </Typography>
+                              <FieldValue value={selectedFs.attributes?.[field.key]} field={field} />
                             </Box>
-                          );
-                        })}
-                      </Box>
-                      <LifecycleBar lifecycle={selectedFs.lifecycle} t={t} />
+                          ))}
+                        </Box>
+                      )}
                     </Box>
-                  )}
+                  );
+                })()}
 
                 {/* Attributes */}
                 {portal.type_info?.fields_schema?.map((section) => {
+                  if (section.section === "__description") return null;
                   const detailFieldKeys = new Set(detailVisibleFields.map((f) => f.key));
                   const fieldsWithValues = section.fields.filter(
                     (f) =>

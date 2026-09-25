@@ -46,6 +46,7 @@ Turbo EA fornisce un editor SoAW integrato con template di sezioni allineati a T
 L'editor fornisce:
 
 - **Editing di testo ricco** — Barra degli strumenti di formattazione completa (intestazioni, grassetto, corsivo, elenchi, link) alimentata dall'editor TipTap
+- **Link** — Un URL digitato o incollato diventa un link mentre scrivi, e ogni link di un documento si apre in una nuova scheda. Gli indirizzi nei documenti scritti prima del supporto ai link vengono collegati al momento della visualizzazione
 - **Template di sezioni** — Sezioni predefinite seguendo gli standard TOGAF (es. Descrizione del problema, Obiettivi, Approccio, Stakeholder, Vincoli, Piano di lavoro)
 - **Tabelle modificabili in linea** — Aggiungete e modificate tabelle all'interno di qualsiasi sezione
 - **Workflow degli stati** — I documenti progrediscono attraverso fasi definite:
@@ -85,5 +86,5 @@ Il **registro principale degli ADR** — dove ogni ADR a livello di landscape vi
 Le card ora includono una scheda **Risorse** che consolida:
 
 - **Decisioni architetturali** — gli ADR non sono più elencati qui. Ogni card dispone ora di una propria scheda **ADR**; vedere [Dettaglio della card](card-details.md) per sapere che cosa mostra e come collegare, creare o scollegare decisioni da una card.
-- **Allegati file** — Caricate e gestite file (PDF, DOCX, XLSX, immagini, fino a 10 MB). Durante il caricamento, selezionate una **categoria documento** tra: Architettura, Sicurezza, Conformità, Operazioni, Note di riunione, Design o Altro. La categoria viene visualizzata come chip accanto a ogni file.
+- **Allegati file** — Caricate e gestite file (documenti, fogli di calcolo, presentazioni, file OpenDocument e Office legacy, immagini, archivi, messaggi Outlook ed e-mail, CSV, Markdown, JSON e XML — fino a 20 MB). Durante il caricamento, selezionate una **categoria documento** tra: Architettura, Sicurezza, Conformità, Operazioni, Note di riunione, Design o Altro. La categoria viene visualizzata come chip accanto a ogni file.
 - **Link ai documenti** — Riferimenti a documenti basati su URL. Quando aggiungete un link, selezionate un **tipo di link** tra: Documentazione, Sicurezza, Conformità, Architettura, Operazioni, Supporto o Altro. Il tipo di link viene visualizzato come chip accanto a ogni link e l'icona cambia in base al tipo selezionato.

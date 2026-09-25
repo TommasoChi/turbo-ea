@@ -277,3 +277,73 @@ export function toggleFieldRule(view: ViewSource, typeKey: string, fieldKey: str
     ? { kind: "card_fields", fields: next }
     : { kind: "card_type" };
 }
+
+/** One legend row: a rule's title and the swatches it shows. */
+export interface LegendSectionData {
+  key: string;
+  title: string;
+  entries: ColorEntry[];
+}
+
+/**
+ * The legend sections for a view. `hasMissing` says whether any card on the
+ * canvas has no value for a rule — the "no value" swatch appears only then; a
+ * permanent grey swatch in every section would be noise.
+ *
+ * The one section builder behind every legend: the editor and the in-app
+ * viewer derive `hasMissing` from the cards they hold, the published page gets
+ * it from the server, which never hands an account-less visitor the cards.
+ */
+export function legendSections(
+  view: ViewSource,
+  types: CardType[],
+  hasMissing: (typeKey: string, fieldKey: string) => boolean,
+  r: ViewResolvers,
+): LegendSectionData[] {
+  const colorMap = buildColorMap(view, types, r);
+  return describeView(view, types, r).sections.map((sec) => ({
+    key: sec.key,
+    title: sec.title,
+    entries: Array.from(colorMap.values()).filter(
+      (e) =>
+        e.typeKey === sec.typeKey &&
+        e.fieldKey === sec.fieldKey &&
+        (e.value !== NO_VALUE || hasMissing(e.typeKey, e.fieldKey)),
+    ),
+  }));
+}
+
+/**
+ * The legend for a view over the cards actually on a canvas, plus the number of
+ * cards a rule coloured with a real value. Shared by the editor and the in-app
+ * viewer so the two cannot disagree on what the key says.
+ */
+export function buildLegend(
+  view: ViewSource,
+  types: CardType[],
+  cards: Array<{
+    type: string;
+    approval_status?: string;
+    attributes?: Record<string, unknown> | null;
+  }>,
+  r: ViewResolvers,
+): { sections: LegendSectionData[]; coloured: number } {
+  const colorMap = buildColorMap(view, types, r);
+  const seenKeys = new Set<string>();
+  let coloured = 0;
+  for (const c of cards) {
+    const key = colorKeyForCard(view, c);
+    if (key == null) continue;
+    const entry = colorMap.get(key);
+    if (!entry) continue;
+    seenKeys.add(key);
+    if (entry.value !== NO_VALUE) coloured += 1;
+  }
+  const sections = legendSections(
+    view,
+    types,
+    (typeKey, fieldKey) => seenKeys.has(colorKey(typeKey, fieldKey, NO_VALUE)),
+    r,
+  );
+  return { sections, coloured };
+}

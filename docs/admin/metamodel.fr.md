@@ -37,12 +37,12 @@ Cliquez sur n'importe quel type pour ouvrir le **Tiroir de détail du type**. Vo
 
 #### Couleur du type
 
-Chaque type de carte — y compris les types intégrés — possède une couleur personnalisable utilisée dans l'inventaire, les rapports, les vues de dépendances et les diagrammes. Vous pouvez ainsi aligner Turbo EA sur les conventions visuelles de votre organisation (par exemple les palettes TOGAF/ArchiMate : éléments métier en jaune/orange, applications en bleu).
+Chaque type de fiche — y compris les types intégrés — possède une couleur personnalisable utilisée dans l'inventaire, les rapports, les vues de dépendances et les diagrammes. Vous pouvez ainsi aligner Turbo EA sur les conventions visuelles de votre organisation (par exemple les palettes TOGAF/ArchiMate : éléments métier en jaune/orange, applications en bleu).
 
 - Choisissez une couleur avec la pastille de couleur du panneau. Un avertissement apparaît lorsque la couleur choisie offre un contraste très faible sur fond clair ou sombre.
 - Les types intégrés affichent un bouton de **réinitialisation** à côté de la pastille dès que la couleur diffère de la valeur par défaut de Turbo EA, afin de toujours pouvoir revenir à la palette standard.
 - Le texte affiché sur les couleurs de type (puces, formes de diagramme) bascule automatiquement entre noir et blanc pour rester lisible, en mode clair comme en mode sombre.
-- Le sélecteur affiche un **aperçu en direct** à côté de la palette : nom du type, puce, icône de carte, sous-type, pastille d'ID de carte et nœud de vue de dépendances, rendus une fois en mode clair et une fois en mode sombre, mis à jour au fil de la sélection.
+- Le sélecteur affiche un **aperçu en direct** à côté de la palette : nom du type, puce, icône de fiche, sous-type, pastille d'ID de fiche et nœud de vue de dépendances, rendus une fois en mode clair et une fois en mode sombre, mis à jour au fil de la sélection.
 
 #### Champs
 
@@ -52,13 +52,13 @@ Les champs définissent les attributs personnalisés disponibles sur les fiches 
 |-----------|-------------|
 | **Clé** | Identifiant unique du champ |
 | **Libellé** | Nom d'affichage |
-| **Type** | text, multiline_text, number, cost, boolean, date, url, single_select ou multiple_select |
+| **Type** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select ou multiple_select. Un pourcentage est un nombre de 0 à 100, affiché sous forme de barre de progression et modifié avec un curseur ou saisi exactement |
 | **Options** | Pour les champs de sélection : les choix disponibles avec libellés et couleurs optionnelles |
 | **Obligatoire** | Si le champ est obligatoire — voir les règles d'application ci-dessous |
 | **Qualité des données** | La contribution de chaque champ au score est gérée dans le panneau **Qualité des données** (voir ci-dessous) |
 | **Lecture seule** | Empêche la modification manuelle (utile pour les champs calculés) |
 
-**Application des champs obligatoires.** La création d'une carte n'exige jamais ces champs — les cartes peuvent être créées rapidement et complétées plus tard. Tant qu'un champ obligatoire reste vide, le score de qualité des données de la carte reste à **0** et la page de détail affiche un bandeau d'avertissement listant les champs à remplir. Lors de la modification d'une section de carte, celle-ci ne peut pas être enregistrée tant que ses champs obligatoires ne sont pas remplis, et l'API refuse de vider un champ obligatoire déjà renseigné. Les champs booléens et en lecture seule (calculés) sont exemptés.
+**Application des champs obligatoires.** La création d'une fiche n'exige jamais ces champs — les fiches peuvent être créées rapidement et complétées plus tard. Tant qu'un champ obligatoire reste vide, le score de qualité des données de la fiche reste à **0** et la page de détail affiche un bandeau d'avertissement listant les champs à remplir. Lors de la modification d'une section de fiche, celle-ci ne peut pas être enregistrée tant que ses champs obligatoires ne sont pas remplis, et l'API refuse de vider un champ obligatoire déjà renseigné. Les champs booléens et en lecture seule (calculés) sont exemptés.
 
 Cliquez sur **+ Ajouter un champ** pour créer un nouveau champ, ou cliquez sur un champ existant pour le modifier dans le **Dialogue de l'éditeur de champs**.
 
@@ -73,16 +73,16 @@ Les champs sont organisés en **sections** sur la page de détail des fiches. Vo
 
 Le nom de section special `__description` ajoute les champs à la section Description de la page de détail des fiches.
 
-#### ID de carte
+#### ID de fiche
 
-Activez la **génération d'ID de carte** pour attribuer aux cartes de ce type un ID stable et lisible (par exemple `APP-00001`). L'ID apparaît sous forme de pastille copiable à côté du type de la carte, comme colonne optionnelle (triable et filtrable) dans l'inventaire, dans les exports Excel et dans les formules des champs calculés (via `data.reference`).
+Activez la **génération d'ID de fiche** pour attribuer aux fiches de ce type un ID stable et lisible (par exemple `APP-00001`). L'ID apparaît sous forme de pastille copiable à côté du type de la fiche, comme colonne optionnelle (triable et filtrable) dans l'inventaire, dans les exports Excel et dans les formules des champs calculés (via `data.reference`).
 
 Le **numéro est toujours généré automatiquement** ; vous ne contrôlez que le **préfixe**. À l'activation, un préfixe suggéré (dérivé du nom du type, ex. `APP-`) s'affiche sous forme de texte — cliquez sur le crayon pour le modifier. Deux réglages ajustent le numéro :
 
 - **Début** — le premier numéro de la série (par défaut `1`).
 - **Chiffres min.** — largeur du remplissage par des zéros (par défaut `5`), donc `1` s'affiche `00001`. C'est un minimum ; les numéros s'allongent une fois dépassés. Un **Exemple** affiche en direct le premier ID.
 
-Les ID sont **uniques globalement, en lecture seule, jamais réutilisés ni modifiés**. La séquence de numéros est suivie **par préfixe sur tout l'espace de travail** : deux types partageant un préfixe forment une seule série continue et sans collision. Dès qu'une carte de ce type a un ID, tout le format — préfixe, début et chiffres min. — est verrouillé (les champs deviennent en lecture seule) ; vous pouvez encore désactiver la génération. L'enregistrement n'attribue jamais d'ID aux cartes existantes ; utilisez le bouton dédié **Générer les ID** pour combler le retard à la demande (avec barre de progression et confirmation).
+Les ID sont **uniques globalement, en lecture seule, jamais réutilisés ni modifiés**. La séquence de numéros est suivie **par préfixe sur tout l'espace de travail** : deux types partageant un préfixe forment une seule série continue et sans collision. Dès qu'une fiche de ce type a un ID, tout le format — préfixe, début et chiffres min. — est verrouillé (les champs deviennent en lecture seule) ; vous pouvez encore désactiver la génération. L'enregistrement n'attribue jamais d'ID aux fiches existantes ; utilisez le bouton dédié **Générer les ID** pour combler le retard à la demande (avec barre de progression et confirmation).
 
 #### Évaluation de la qualité des données
 
@@ -133,12 +133,34 @@ Les rôles peuvent être retirés de deux façons :
 
 La clé d'un rôle peut être corrigée tant que **personne ne détient le rôle** — les enquêtes qui le ciblent suivent le renommage automatiquement, et renommer l'unique rôle d'un type ne pose pas de problème puisque le rôle lui survit. Dès que quelqu'un détient le rôle, la clé est verrouillée et le champ en explique la raison. Les rôles créés avant cette convention conservent leur clé existante et continuent de fonctionner ; seule une clé nouvelle ou modifiée est vérifiée.
 
+#### Autorisations
+
+Les types de fiches peuvent restreindre ce que chaque rôle applicatif peut faire avec leurs fiches. Ouvrez l'onglet **Autorisations** dans le panneau du type pour afficher une matrice des rôles et des quatre actions — **Créer**, **Modifier**, **Archiver** et **Supprimer**.
+
+![Autorisations par type de fiche](../assets/img/fr/85_admin_autorisations_type_fiche.png)
+
+Chaque cellule a trois états :
+
+- **Hériter** (par défaut) — l'autorisation globale du rôle décide. L'icône indique laquelle c'est actuellement.
+- **Autoriser** — le rôle peut effectuer cette action sur les fiches de ce type, même s'il ne dispose pas de l'autorisation globale.
+- **Refuser** — le rôle ne peut pas effectuer cette action sur les fiches de ce type, même s'il dispose de l'autorisation globale.
+
+Cela permet de dire « tout le monde peut créer des applications, mais seule l'équipe centrale crée les organisations et les initiatives » sans inventer un rôle par type de fiche. Refuser **Créer** sur un type le retire aussi de la boîte de dialogue de création, de l'éditeur de diagrammes et de l'importateur de feuilles de calcul.
+
+Quelques règles à connaître :
+
+- **Les administrateurs ne sont jamais restreints.** La ligne administrateur est verrouillée.
+- **Les rôles de parties prenantes s'appliquent toujours.** Refuser **Modifier** à un rôle sur un type supprime son autorisation à l'échelle du paysage, pas l'autorité détenue en tant que propriétaire désigné d'une fiche précise. Voir [Utilisateurs et rôles](users.md).
+- **La modification en masse suit un refus, pas une autorisation.** Un type qui refuse **Modifier** bloque aussi les modifications en masse ; une autorisation n'accorde pas pour autant l'autorisation distincte de modification en masse.
+- Les changements prennent effet pour les autres utilisateurs au prochain rechargement de l'application.
+
 #### Traductions
 
 Cliquez sur le bouton **Traduire** dans la barre d'outils du tiroir de type pour ouvrir le **Dialogue de traductions**. Vous pouvez y fournir des traductions pour tous les libellés du métamodèle dans chaque langue supportée :
 
 - **Libellé du type** — Le nom d'affichage du type de fiche
 - **Sous-types** — Libellés pour chaque sous-type
+- **Types de lien hiérarchique** — Libellés pour chaque type de lien hiérarchique
 - **Sections** — En-têtes de section sur la page de détail de la fiche
 - **Champs** — Libellés des champs et des options de sélection
 - **Rôles des parties prenantes** — Noms de rôles affichés dans l'interface d'attribution des parties prenantes
@@ -165,15 +187,29 @@ Les types de relations définissent les connexions autorisées entre les types d
 
 Cliquez sur **+ Nouveau type de relation** pour créer une relation, ou cliquez sur un type existant pour modifier ses libellés et attributs.
 
+Chaque ligne de relation porte également les interrupteurs **Visible** et **Obligatoire** pour *chacune* de ses deux extrémités, avec le nom du type de fiche auquel ils s'appliquent : Visible détermine si la relation apparaît sur la page de détail de ce type, Obligatoire si elle doit être renseignée. Un type de relation dont les deux extrémités sont le même type de fiche reçoit une paire d'interrupteurs par direction, de sorte que le côté entrant se configure séparément du côté sortant.
+
 Les champs **Libellé** et **Libellé inverse** sont saisis dans la langue que vous utilisez actuellement — l'intitulé du champ indique laquelle (par exemple *Libellé (Français)*). Renommer une relation met à jour cette langue partout où le verbe apparaît : la section **Relations** d'une fiche, les colonnes de relation de l'inventaire, les rapports, les portails et les diagrammes. Les autres langues conservent leur propre formulation jusqu'à ce que vous les traduisiez.
 
-Utilisez **Gérer les traductions** en haut de l'onglet Types de relation pour traduire les verbes de toutes les relations dans chaque langue activée en une seule fois. Choisissez un onglet de langue, saisissez la formulation à côté de la source anglaise et enregistrez — le compteur de chaque onglet indique combien de verbes manquent encore dans cette langue. L'anglais n'y figure pas : c'est la formulation portée par la relation elle-même, et un verbe non traduit y revient.
+Utilisez **Gérer les traductions** en haut de l'onglet Relations, au-dessus de ses sous-onglets, pour traduire les verbes de toutes les relations dans chaque langue activée en une seule fois. Choisissez un onglet de langue, saisissez la formulation à côté de la source anglaise et enregistrez — le compteur de chaque onglet indique combien de verbes manquent encore dans cette langue. L'anglais n'y figure pas : c'est la formulation portée par la relation elle-même, et un verbe non traduit y revient. La même boîte de dialogue comporte une section distincte **Types de liens hiérarchiques** qui liste le vocabulaire de chaque type de fiche hiérarchique : les verbes et les types de liens se traduisent donc en une seule passe.
+
+### Types de lien hiérarchique
+
+Pour un type de fiche dont la hiérarchie est activée, vous pouvez définir des **types de lien** — un court vocabulaire qui qualifie chaque lien parent-enfant. Dans un arbre d'organisations, cela permet de marquer une filiale comme *commerciale* et une autre comme *vente*, sans créer un second type de relation.
+
+1. Dans l'onglet **Relations**, ouvrez le sous-onglet **Types de liens hiérarchiques** — chaque type de fiche dont la hiérarchie est activée y figure. (Le premier sous-onglet, **Types de relations**, est la liste de relations habituelle.) L'onglet **Relations** d'un type de fiche affiche la même chose sur une seule ligne en haut, limitée à ce type.
+2. Cliquez sur **Modifier les types de lien**, puis ajoutez une entrée par libellé avec une clé, un nom et une couleur.
+3. Traduisez les noms avec le bouton **Traduire**, comme n'importe quel libellé du métamodèle.
+
+Les éditeurs choisissent ensuite un type de lien dans la section **Hiérarchie** de la fiche, ou dans la colonne **Type de lien** de l'inventaire. Le libellé appartient à la fiche enfant : il est donc effacé automatiquement lorsque celle-ci est remontée au niveau supérieur.
+
+Supprimer un type de lien ne réécrit **pas** les fiches qui l'utilisent déjà : elles conservent la valeur enregistrée et l'affichent comme type de lien inconnu jusqu'à ce que quelqu'un la modifie, de sorte qu'une suppression accidentelle ne perd rien. La boîte de dialogue indique le nombre de fiches concernées avant confirmation.
 
 ### Attributs de relation
 
 Certaines relations portent des attributs supplémentaires que vous définissez sur chaque lien plutôt que sur le type de relation. Par exemple, la relation intégrée **Organisation → Application** (« utilise ») possède un attribut **Type d'usage** — définissez-le sur **Propriétaire**, **Utilisateur** ou **Partie prenante** pour chaque lien. Vous pouvez ainsi modéliser une application *détenue par* une organisation et *utilisée par* d'autres au moyen d'un seul type de relation. La valeur choisie apparaît sous forme de puce colorée dans la section **Relations** de la fiche ; définissez-la lors de l'ajout de la relation, ou plus tard via l'icône de modification sur la ligne de la relation.
 
-Vous pouvez aussi créer **plusieurs types de relation entre la même paire de types de cartes** — par exemple une organisation qui *possède* une application et une autre qui l'*utilise*. Préférez un attribut lorsque vous décrivez des variantes d'une même relation (cela conserve une seule colonne dans l'inventaire et une seule ligne sur un diagramme) ; créez un second type de relation lorsque les relations sont réellement différentes et méritent leurs propres verbes, attributs ou filtres. Lorsqu'une paire porte plusieurs types de relation, l'inventaire affiche toujours une seule colonne pour le type de carte lié, et l'ouverture de cette cellule vous donne une section par type de relation. Sur une fiche, chaque type de relation conserve sa propre section : les sections qui pointent vers le même type de carte sont regroupées, et une fiche que vous avez reliée par plusieurs d'entre elles porte la mention *Également …* dans chacune de ses sections.
+Vous pouvez aussi créer **plusieurs types de relation entre la même paire de types de fiches** — par exemple une organisation qui *possède* une application et une autre qui l'*utilise*. Préférez un attribut lorsque vous décrivez des variantes d'une même relation (cela conserve une seule colonne dans l'inventaire et une seule ligne sur un diagramme) ; créez un second type de relation lorsque les relations sont réellement différentes et méritent leurs propres verbes, attributs ou filtres. Lorsqu'une paire porte plusieurs types de relation, l'inventaire affiche toujours une seule colonne pour le type de fiche lié, et l'ouverture de cette cellule vous donne une section par type de relation. Sur une fiche, chaque type de relation conserve sa propre section : les sections qui pointent vers le même type de fiche sont regroupées, et une fiche que vous avez reliée par plusieurs d'entre elles porte la mention *Également …* dans chacune de ses sections. Un type de relation dont les deux extrémités sont le même type de fiche — une organisation qui *a pour site* une autre organisation — affiche les *deux* verbes sur une fiche, sous forme de deux sections, et dans l'inventaire sous forme de deux lignes de filtre et de deux sections d'édition ; donnez à ce type un libellé inverse, sinon les deux sections se liront de la même façon.
 
 Lorsqu'une paire porte plusieurs types de relation, les rapports, portails et enquêtes peuvent en cibler un en particulier : le rapport Portefeuille propose un axe de regroupement et un filtre par relation, la Carte des capacités ajoute un filtre par relation, les filtres et sections de relation des portails affichent leur verbe, et le filtre **lié à** d'une enquête gagne un sélecteur **Via la relation**. Ne rien choisir signifie toujours « relié par l'une quelconque d'entre elles ».
 
@@ -184,7 +220,7 @@ Cliquez sur l'icône **Gérer les valeurs de relation** (étiquette) sur une lig
 - **Ajouter vos propres valeurs** à un sélecteur existant — par exemple un nouveau Type d'usage au-delà de Propriétaire / Utilisateur / Partie prenante.
 - **Ajouter un tout nouveau sélecteur de type** à une relation qui n'en a pas, via **Ajouter un type** — y compris sur les relations intégrées.
 
-Les valeurs intégrées (Propriétaire, Utilisateur, Partie prenante, les valeurs de sens du flux…) sont **verrouillées** : elles ne peuvent pas être renommées, recolorées ni supprimées. Vous pouvez toutefois **masquer** une valeur intégrée pour qu'elle n'apparaisse plus dans le sélecteur sur les cartes — une valeur déjà définie reste visible. Vos propres valeurs sont entièrement modifiables et supprimables.
+Les valeurs intégrées (Propriétaire, Utilisateur, Partie prenante, les valeurs de sens du flux…) sont **verrouillées** : elles ne peuvent pas être renommées, recolorées ni supprimées. Vous pouvez toutefois **masquer** une valeur intégrée pour qu'elle n'apparaisse plus dans le sélecteur sur les fiches — une valeur déjà définie reste visible. Vos propres valeurs sont entièrement modifiables et supprimables.
 
 ## Calculs
 
@@ -207,7 +243,7 @@ Chaque principe comporte quatre champs :
 | **Justification** | Pourquoi ce principe est important |
 | **Implications** | Les conséquences pratiques du respect du principe |
 
-Les principes peuvent être **activés** ou **désactivés** individuellement via l'interrupteur sur chaque carte.
+Les principes peuvent être **activés** ou **désactivés** individuellement via l'interrupteur sur chaque fiche.
 
 ### Importer depuis le catalogue de principes
 
@@ -269,16 +305,16 @@ Pour chaque type de fiche, la section **Mise en page** dans le tiroir du type co
 
 ## Ressources
 
-L'onglet **Ressources** gère les deux listes proposées dans l'onglet **Ressources** de chaque carte :
+L'onglet **Ressources** gère les deux listes proposées dans l'onglet **Ressources** de chaque fiche :
 
 - **Types de liens** — la catégorie d'un lien de document (p. ex. *Documentation*, *Contrat*, *Sécurité*). Chaque type de lien porte aussi une **icône** affichée à côté du lien.
 - **Catégories de fichiers** — la catégorie attribuée à un fichier joint téléversé.
 
 Pour chaque liste, vous pouvez :
 
-- **Ajouter une entrée** — avec une clé (un identifiant en minuscules stocké sur les cartes, figé après création), un libellé d'affichage et — pour les types de liens — une icône.
+- **Ajouter une entrée** — avec une clé (un identifiant en minuscules stocké sur les fiches, figé après création), un libellé d'affichage et — pour les types de liens — une icône.
 - **Modifier** le libellé, l'icône, l'ordre de tri et les traductions par langue de chaque entrée, y compris celles intégrées.
-- **Activer / désactiver** une entrée avec le commutateur — les entrées désactivées disparaissent du sélecteur, mais les valeurs existantes sur les cartes sont conservées.
+- **Activer / désactiver** une entrée avec le commutateur — les entrées désactivées disparaissent du sélecteur, mais les valeurs existantes sur les fiches sont conservées.
 - **Supprimer** une entrée personnalisée — les entrées intégrées ne peuvent pas être supprimées, seulement désactivées.
 
 Un type de lien **Contrat** intégré est activé par défaut. Les deux listes sont incluses dans le **Transfert d'espace de travail** et se clonent ainsi entre instances.

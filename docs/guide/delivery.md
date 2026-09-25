@@ -46,6 +46,7 @@ Turbo EA provides a built-in SoAW editor with TOGAF-aligned section templates, r
 The editor provides:
 
 - **Rich text editing** — Full formatting toolbar (headings, bold, italic, lists, links) powered by the TipTap editor
+- **Links** — A URL you type or paste becomes a link as you type, and every link in a document opens in a new tab. Addresses in documents written before links were supported are linked when the document is displayed
 - **Section templates** — Pre-defined sections following TOGAF standards (e.g., Problem Description, Objectives, Approach, Stakeholders, Constraints, Work Plan)
 - **Inline editable tables** — Add and edit tables within any section
 - **Status workflow** — Documents progress through defined stages:
@@ -85,5 +86,5 @@ The **master ADR registry** — where every ADR across the landscape is filtered
 Cards now include a **Resources** tab that consolidates:
 
 - **Architecture Decisions** — ADRs are no longer listed here. Every card now has its own **ADRs** tab; see [Card Details](card-details.md) for what it shows and how to link, create, or unlink decisions from a card.
-- **File Attachments** — Upload and manage files (PDF, DOCX, XLSX, images, up to 10 MB). When uploading, select a **document category** from: Architecture, Security, Compliance, Operations, Meeting Notes, Design, or Other. The category appears as a chip next to each file.
+- **File Attachments** — Upload and manage files (documents, spreadsheets, presentations, OpenDocument and legacy Office files, images, archives, Outlook and e-mail messages, CSV, Markdown, JSON and XML — up to 20 MB). When uploading, select a **document category** from: Architecture, Security, Compliance, Operations, Meeting Notes, Design, or Other. The category appears as a chip next to each file.
 - **Document Links** — URL-based document references. When adding a link, select a **link type** from: Documentation, Security, Compliance, Architecture, Operations, Support, or Other. The link type appears as a chip next to each link, and the icon changes based on the selected type.

@@ -19,8 +19,8 @@ from app.services.extensions import sdk
 
 def test_sdk_version_is_1_5():
     # Fork note: SDK_VERSION is pinned at 1.5 (frozen — see CLAUDE.md's SDK
-    # surface section). Upstream has since moved this to 1.7; the new 1.6/1.7
-    # surface (notification channels, todos-bridge link) is present below
+    # surface section). Upstream has since moved this to 1.15; the new 1.6-1.15
+    # surface (notification channels, batch reads, decisions, surveys, ...) is present
     # without the constant following it.
     assert sdk.SDK_VERSION == "1.5"
 
@@ -78,6 +78,7 @@ def test_ext_card_is_frozen_and_wire_shaped():
         name="App",
         description=None,
         parent_id=None,
+        parent_label=None,
         status="ACTIVE",
         approval_status="DRAFT",
         reference=None,
@@ -167,6 +168,8 @@ def test_extension_context_1_1_construction_still_works():
     assert ctx.users is None
     assert ctx.get_settings is None
     assert ctx.set_settings is None
+    assert ctx.data is None
+    assert ctx.decisions is None
     assert ctx.settings_namespace == "ext.sample-ext."
 
 
@@ -203,6 +206,13 @@ def test_sdk_compatibility_is_major_only():
     assert sdk.sdk_compatible("1.3")
     assert sdk.sdk_compatible("1.4")
     assert sdk.sdk_compatible("1.5")
+    assert sdk.sdk_compatible("1.8")
+    assert sdk.sdk_compatible("1.10")
+    assert sdk.sdk_compatible("1.11")
+    assert sdk.sdk_compatible("1.12")
+    assert sdk.sdk_compatible("1.13")
+    assert sdk.sdk_compatible("1.14")
+    assert sdk.sdk_compatible("1.15")
     assert not sdk.sdk_compatible("2.0")
 
 
@@ -241,8 +251,15 @@ def test_dependency_subgraph_is_an_immutable_tuple_projection():
 
 def test_sdk_minor_newer_truth_table():
     # Newer minor on the same major → warn (still loads).
-    assert sdk.sdk_minor_newer("1.9")
+    assert sdk.sdk_minor_newer("1.16")
     # Same or older minor → no warning.
+    assert not sdk.sdk_minor_newer("1.15")
+    assert not sdk.sdk_minor_newer("1.14")
+    assert not sdk.sdk_minor_newer("1.13")
+    assert not sdk.sdk_minor_newer("1.12")
+    assert not sdk.sdk_minor_newer("1.11")
+    assert not sdk.sdk_minor_newer("1.10")
+    assert not sdk.sdk_minor_newer("1.8")
     assert not sdk.sdk_minor_newer("1.5")
     assert not sdk.sdk_minor_newer("1.4")
     assert not sdk.sdk_minor_newer("1.3")
@@ -290,3 +307,219 @@ def test_notification_delivery_is_frozen_and_wire_shaped():
         raise AssertionError("NotificationDelivery must be frozen")
     except AttributeError:
         pass
+
+
+def test_sdk_1_8_surface_exists():
+    # SDK 1.8 — batch inventory reads, the decisions bridge, the batch handle.
+    assert sdk.ExtBatch is not None
+    assert sdk.ExtStakeholder is not None
+    assert sdk.ExtDecision is not None
+    assert sdk.DecisionsBridge is not None
+    assert "decisions" in sdk.ExtensionContext.__dataclass_fields__
+    for name in ("get_cards", "get_relations_for", "get_stakeholders_for"):
+        assert hasattr(sdk.DataBridge, name)
+
+
+def test_ext_batch_and_stakeholder_are_frozen():
+    handle = sdk.ExtBatch(id="b1", label="nightly")
+    assert handle.id == "b1"
+    try:
+        handle.id = "x"  # type: ignore[misc]
+        raise AssertionError("ExtBatch must be frozen")
+    except AttributeError:
+        pass
+    row = sdk.ExtStakeholder(card_id="c1", user_id="u1", role="owner")
+    # Least privilege: the inventory grant alone never exposes the directory.
+    assert not hasattr(row, "display_name")
+    assert not hasattr(row, "email")
+    try:
+        row.role = "x"  # type: ignore[misc]
+        raise AssertionError("ExtStakeholder must be frozen")
+    except AttributeError:
+        pass
+
+
+def test_ext_decision_is_frozen_and_wire_shaped():
+    decision = sdk.ExtDecision(
+        id="d1",
+        reference_number="ADR-001",
+        title="Keep one billing system",
+        status="draft",
+        revision_number=1,
+        linked_card_ids=("c1",),
+        attributes={"ext.sample-planner.scenario_id": "s1"},
+        created_at=None,
+    )
+    assert decision.linked_card_ids == ("c1",)
+    try:
+        decision.status = "signed"  # type: ignore[misc]
+        raise AssertionError("ExtDecision must be frozen")
+    except AttributeError:
+        pass
+
+
+def test_sdk_1_9_surface_exists():
+    # SDK 1.9 — the risks bridge, the notification bridge, and tag +
+    # stakeholder writes on the data bridge.
+    assert sdk.ExtRisk is not None
+    assert sdk.RisksBridge is not None
+    assert sdk.NotifyBridge is not None
+    for name in ("risks", "notify"):
+        assert name in sdk.ExtensionContext.__dataclass_fields__
+    for name in ("get", "list_for_card", "find_by_source_ref", "create", "update"):
+        assert hasattr(sdk.RisksBridge, name)
+    assert hasattr(sdk.NotifyBridge, "send")
+    for name in (
+        "get_tag_groups",
+        "get_card_tags",
+        "set_card_tags",
+        "assign_stakeholder",
+        "remove_stakeholder",
+    ):
+        assert hasattr(sdk.DataBridge, name)
+
+
+def test_sdk_1_10_surface_exists():
+    # SDK 1.10 — the resolved end-of-life status read on the data bridge.
+    assert sdk.ExtEolStatus is not None
+    assert hasattr(sdk.DataBridge, "get_eol_status")
+    entry = sdk.ExtEolStatus(
+        card_id="c1",
+        status="approaching",
+        source="api",
+        eol_product="postgresql",
+        eol_cycle="13",
+        eol_date="2026-11-13",
+        support_date=None,
+        latest="13.22",
+    )
+    try:
+        entry.status = "eol"  # type: ignore[misc]
+        raise AssertionError("ExtEolStatus must be frozen")
+    except AttributeError:
+        pass
+
+
+def test_ext_risk_is_frozen_and_wire_shaped():
+    risk = sdk.ExtRisk(
+        id="r1",
+        reference="R-000001",
+        title="Unowned cost centre",
+        description="",
+        category="financial",
+        status="identified",
+        source_type="extension",
+        source_ref="rule-1:card-1",
+        initial_probability="high",
+        initial_impact="high",
+        initial_level="high",
+        residual_level=None,
+        owner_id=None,
+        target_resolution_date=None,
+        linked_card_ids=("c1",),
+        created_at=None,
+    )
+    assert risk.linked_card_ids == ("c1",)
+    try:
+        risk.status = "closed"  # type: ignore[misc]
+        raise AssertionError("ExtRisk must be frozen")
+    except AttributeError:
+        pass
+
+
+def test_sdk_1_11_surface_exists():
+    # SDK 1.11 — a notification sent under a type the extension declared in
+    # its manifest, and one whose details open in the bell instead of a link.
+    import inspect
+
+    params = inspect.signature(sdk.NotifyBridge.send).parameters
+    assert "type" in params and params["type"].default is None
+    assert "detail" in params and params["detail"].default is False
+
+
+def test_sdk_1_12_surface_exists():
+    # SDK 1.12 — the per-card half of the permission question. require_permission
+    # is a dependency factory and cannot carry a per-request card id, so these
+    # take (db, user, ...) explicitly, the shape PermissionService uses.
+    import inspect
+
+    for fn in (sdk.check_card_permission, sdk.require_card_permission):
+        params = list(inspect.signature(fn).parameters)
+        assert params == [
+            "db",
+            "user",
+            "app_permission",
+            "card_id",
+            "card_permission",
+        ], fn.__name__
+        assert inspect.iscoroutinefunction(fn)
+
+
+def test_per_card_permission_helpers_are_not_grant_gated():
+    # They are route dependencies in spirit, like require_permission above, not
+    # bridges: one boolean about the CALLER, no content, and core already lets
+    # any authenticated user ask more of any card via /cards/{id}/my-permissions.
+    # A grant here would mean an extension without one can only write a LESS
+    # safe route.
+    from app.services.extensions import bundle
+
+    assert not any("permission" in grant for grant in bundle.VALID_GRANTS)
+
+
+def test_sdk_1_13_surface_exists():
+    # SDK 1.13 — the batch scope reachable without the inventory grant. Every
+    # write bridge already JOINS an open batch; ``ctx.batch`` is what lets an
+    # extension holding only ``core.todos.write`` open one, so a poll cycle is
+    # one Audit Log row instead of one per todo.
+    import dataclasses
+
+    fields = {f.name: f for f in dataclasses.fields(sdk.ExtensionContext)}
+    assert "batch" in fields
+    assert fields["batch"].default is None  # 1.12-era direct constructions keep working
+
+    from app.services.extensions import data_service
+
+    assert callable(data_service.open_context_batch)
+    assert "core.todos.write" in data_service.CONTEXT_BATCH_GRANTS
+    assert "core.cards.write" in data_service.CONTEXT_BATCH_GRANTS
+
+
+def test_sdk_1_14_surface_exists():
+    # SDK 1.14 — the surveys bridge: send a data-maintenance survey to the
+    # stakeholders of a set of cards. Send only; closing and applying stay
+    # human acts, and the send is what a rollback reverses (by closing).
+    import dataclasses
+
+    fields = {f.name: f for f in dataclasses.fields(sdk.ExtensionContext)}
+    assert "surveys" in fields
+    assert fields["surveys"].default is None  # 1.13-era direct constructions keep working
+    assert sdk.SurveysBridge is not None
+    assert {f.name for f in dataclasses.fields(sdk.ExtSurvey)} == {
+        "id",
+        "name",
+        "status",
+        "target_type",
+        "card_count",
+        "targeted_card_count",
+        "user_count",
+        "response_count",
+        "completed_count",
+        "sent_at",
+        "closed_at",
+    }
+    assert {f.name for f in dataclasses.fields(sdk.ExtSurveyPreview)} == {
+        "cards_matched",
+        "cards_with_targets",
+        "users",
+        "requests",
+        "targets",
+    }
+    for name in ("get", "preview", "send"):
+        assert callable(getattr(sdk.SurveysBridge, name))
+    for name in ("close", "update", "delete", "apply"):
+        assert not hasattr(sdk.SurveysBridge, name)
+
+    from app.services.extensions import bundle, data_service
+
+    assert {"core.surveys.read", "core.surveys.write"} <= bundle.VALID_GRANTS
+    assert "core.surveys.write" in data_service.CONTEXT_BATCH_GRANTS

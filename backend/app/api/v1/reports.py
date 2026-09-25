@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, case, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,14 +26,31 @@ from app.models.tag import CardTag, Tag, TagGroup
 from app.models.todo import Todo
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
-from app.services.card_flags import orphaned_condition, stale_condition, stale_cutoff
+from app.services.card_flags import (
+    EOL_BUCKETS,
+    EOL_TYPES,
+    eol_bucket_condition,
+    has_eol_coverage,
+    has_eol_link,
+    has_manual_eol,
+    orphaned_condition,
+    stale_condition,
+    stale_cutoff,
+)
 from app.services.card_logo_service import logo_updated_map
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
+from app.services.eol_service import (
+    eol_status,
+    fetch_cycles_for_products,
+    find_cycle,
+    manual_eol_status,
+)
+from app.services.fiscal_year import current_fiscal_year, get_fiscal_year_start
 from app.services.kpi_snapshot_service import (
     compute_trend_block,
     get_comparison_snapshot,
 )
-from app.services.lifecycle import current_lifecycle_phase
+from app.services.lifecycle import current_lifecycle_phase, is_live_in_fiscal_year
 from app.services.permission_service import PermissionService
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -959,8 +974,19 @@ async def app_portfolio(
             related_ids.add(sid)
     related_ids -= app_id_set
 
-    # 3. Fetch related cards in bulk
-    related_map: dict[str, dict] = {}
+    # 3. Fetch related cards in bulk. The portfolio's own cards are seeded
+    # first: a self-referencing relation type links two portfolio cards, and
+    # excluding them from `related_map` used to drop that relation entirely —
+    # neither branch of the loop below could resolve its far end.
+    related_map: dict[str, dict] = {
+        str(a.id): {
+            "id": str(a.id),
+            "name": a.name,
+            "type": a.type,
+            "parent_id": str(a.parent_id) if a.parent_id else None,
+        }
+        for a in apps
+    }
     if related_ids:
         rel_result = await db.execute(
             select(Card).where(
@@ -976,7 +1002,11 @@ async def app_portfolio(
                 "parent_id": str(card.parent_id) if card.parent_id else None,
             }
 
-    # 4. Build card -> relations lookup
+    # 4. Build card -> relations lookup. Each entry carries the card's side
+    # (`direction`): for a self-referencing type the same row is outgoing on
+    # one portfolio card and incoming on the other, and the report's facets
+    # split the two verbs on it. `if`/`if`, not `elif` — such a row must land
+    # on BOTH cards.
     app_relations: dict[str, list[dict]] = {str(a.id): [] for a in apps}
     for r in rels:
         sid, tid = str(r.source_id), str(r.target_id)
@@ -984,16 +1014,18 @@ async def app_portfolio(
             app_relations[sid].append(
                 {
                     "relation_type": r.type,
+                    "direction": "outgoing",
                     "related_id": tid,
                     "related_name": related_map[tid]["name"],
                     "related_type": related_map[tid]["type"],
                     "attributes": r.attributes or {},
                 }
             )
-        elif tid in app_id_set and sid in related_map:
+        if tid in app_id_set and sid in related_map:
             app_relations[tid].append(
                 {
                     "relation_type": r.type,
+                    "direction": "incoming",
                     "related_id": sid,
                     "related_name": related_map[sid]["name"],
                     "related_type": related_map[sid]["type"],
@@ -1211,7 +1243,7 @@ def _matrix_attr_clause(field_key: str, field_type: str, value: str):
         )
     if field_type == "boolean":
         return Relation.attributes.contains({field_key: value == "true"})
-    if field_type == "number":
+    if field_type in ("number", "percentage"):
         try:
             return Relation.attributes.contains({field_key: float(value)})
         except ValueError:
@@ -1453,7 +1485,11 @@ async def cost_report(
     user: User = Depends(get_current_user),
     type: str = Query("Application"),
 ):
-    """Cost aggregation report."""
+    """Cost aggregation report for the current fiscal year.
+
+    Only cards live in the current fiscal year count, by the same rule as
+    ``GET /reports/cost-treemap``.
+    """
     # `costs.view` is the whole gate here, not an add-on. Elsewhere a report
     # carries its own base permission and adds `costs.view` only when the
     # request actually returns money (portfolio when an axis is a cost field,
@@ -1471,8 +1507,13 @@ async def cost_report(
             if field.get("type") == "cost":
                 cost_field_keys.append(field["key"])
 
+    fy_start = await get_fiscal_year_start(db)
+    fy = current_fiscal_year(fy_start)
+
     result = await db.execute(select(Card).where(Card.type == type, Card.status == "ACTIVE"))
-    sheets = result.scalars().all()
+    sheets = [
+        c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
+    ]
     items = []
     total = 0
     for card in sheets:
@@ -1484,7 +1525,7 @@ async def cost_report(
             items.append({"id": str(card.id), "name": card.name, "cost": cost})
             total += cost
     items.sort(key=lambda x: x["cost"], reverse=True)
-    return {"items": items, "total": total}
+    return {"items": items, "total": total, "fiscal_year": fy, "fiscal_year_start": fy_start}
 
 
 @router.get("/cost-treemap")
@@ -1498,6 +1539,17 @@ async def cost_treemap(
     parent_card_id: uuid.UUID | None = Query(None),
 ):
     """Cost treemap: items with cost, optionally grouped by a related type.
+
+    Costs are annual and shown for the current fiscal year only: a card counts,
+    at its full annual cost, when the current fiscal year falls between the one
+    it goes ``active`` in and the one its ``endOfLife`` falls in, both included —
+    no pro-rating, so a card retired in an earlier fiscal year is left out. A
+    card carries one annual figure, so projecting it onto other years would
+    only restate today's number; that is why there is no year parameter. The
+    rule applies to the primary cards and, in ``aggregate`` mode, to the related
+    cards being summed, so a retired IT Component stops adding to its
+    Application's total. The response names the fiscal year (``fiscal_year``)
+    and the workspace's start month (``fiscal_year_start``).
 
     When ``aggregate`` is non-empty, each entry is a ``"<typeKey>:<costFieldKey>"``
     pair identifying a cost field on a related card type. The endpoint sums that
@@ -1520,8 +1572,12 @@ async def cost_treemap(
     # M-3: Validate cost_field format
     if not _SAFE_KEY_RE.match(cost_field):
         raise HTTPException(400, f"Invalid cost_field: {cost_field!r}")
+    fy_start = await get_fiscal_year_start(db)
+    fy = current_fiscal_year(fy_start)
     result = await db.execute(select(Card).where(Card.type == type, Card.status == "ACTIVE"))
-    sheets = result.scalars().all()
+    sheets = [
+        c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
+    ]
 
     if parent_card_id is not None:
         # Restrict sheets to those linked (in either direction) to the parent card.
@@ -1588,7 +1644,12 @@ async def cost_treemap(
             rel_result = await db.execute(
                 select(Card).where(Card.type == type_key, Card.status == "ACTIVE")
             )
-            related_cards = rel_result.scalars().all()
+            # A related card outside the current fiscal year contributes nothing.
+            related_cards = [
+                c
+                for c in rel_result.scalars().all()
+                if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
+            ]
             related_cost_by_id = {
                 str(c.id): float((c.attributes or {}).get(field_key, 0) or 0) for c in related_cards
             }
@@ -1698,7 +1759,13 @@ async def cost_treemap(
             {"name": k, "cost": v} for k, v in sorted(groups_dict.items(), key=lambda x: -x[1])
         ]
 
-    return {"items": items, "total": total, "groups": groups}
+    return {
+        "items": items,
+        "total": total,
+        "groups": groups,
+        "fiscal_year": fy,
+        "fiscal_year_start": fy_start,
+    }
 
 
 @router.get("/capability-heatmap")
@@ -1769,8 +1836,12 @@ async def capability_heatmap(
     related_ids -= app_id_set
     related_ids -= cap_id_set
 
-    # Fetch related cards in bulk
-    related_map: dict[str, dict] = {}
+    # Fetch related cards in bulk. Applications are seeded first so an
+    # application-to-application relation (a self-referencing type) resolves —
+    # excluding them dropped such rows from the filter maps altogether.
+    related_map: dict[str, dict] = {
+        str(a.id): {"id": str(a.id), "name": a.name, "type": a.type} for a in apps
+    }
     if related_ids:
         rel_cards_result = await db.execute(
             select(Card).where(Card.id.in_(list(related_ids)), Card.status == "ACTIVE")
@@ -1803,13 +1874,21 @@ async def capability_heatmap(
             _link_cap_app(sid, tid)
         elif tid in cap_id_set and sid in app_map:
             _link_cap_app(tid, sid)
-        # app -> related card relations (for filtering)
+        # app -> related card relations (for filtering). `if`/`if`, not `elif`:
+        # a self-referencing row belongs to BOTH applications, and lands under
+        # a per-side key (`<type>__out` / `<type>__in`) so the report can tell
+        # "has site" from "is site of"; a cross-type row keeps the bare key.
+        # Both ends are portfolio cards ⇒ the type is self-referencing (the
+        # portfolio is every active card of one type).
+        self_pair = sid in app_id_set and tid in app_id_set
         if sid in app_id_set and tid in related_map:
             app_related.setdefault(sid, {}).setdefault(related_map[tid]["type"], []).append(tid)
-            app_related_by_rel.setdefault(sid, {}).setdefault(r.type, []).append(tid)
-        elif tid in app_id_set and sid in related_map:
+            rel_key = f"{r.type}__out" if self_pair else r.type
+            app_related_by_rel.setdefault(sid, {}).setdefault(rel_key, []).append(tid)
+        if tid in app_id_set and sid in related_map:
             app_related.setdefault(tid, {}).setdefault(related_map[sid]["type"], []).append(sid)
-            app_related_by_rel.setdefault(tid, {}).setdefault(r.type, []).append(sid)
+            rel_key = f"{r.type}__in" if self_pair else r.type
+            app_related_by_rel.setdefault(tid, {}).setdefault(rel_key, []).append(sid)
 
     # Tag assignments per application (for tag filter)
     cap_app_tag_ids: dict[str, list[str]] = {}
@@ -2133,6 +2212,40 @@ async def data_quality(db: AsyncSession = Depends(get_db), user: User = Depends(
     cutoff = stale_cutoff()
     stale = sum(1 for card in sheets if card.updated_at and card.updated_at < cutoff)
 
+    # EOL coverage, per card type. Only Applications and IT Components can
+    # carry an end of life, so this counts that population rather than every
+    # card — a share of the whole inventory would read as a rounding error.
+    # Split by where the information came from, because the two are not
+    # interchangeable: a vendor link keeps itself current, a hand-entered date
+    # is only as good as the last person to review it. Same predicates as the
+    # EOL report (`card_flags`), so the chart and the report agree.
+    eol_coverage = []
+    for type_key in EOL_TYPES:
+        of_type = [card for card in sheets if card.type == type_key]
+        if not of_type:
+            continue
+        linked = sum(1 for card in of_type if has_eol_link(card.attributes))
+        manual = sum(
+            1
+            for card in of_type
+            if not has_eol_link(card.attributes) and has_manual_eol(card.lifecycle)
+        )
+        eol_coverage.append(
+            {
+                "type": type_key,
+                "linked": linked,
+                "manual": manual,
+                # The negation of the shared predicate, not `total - linked
+                # - manual`: deriving it arithmetically would be a second
+                # definition of "missing" that could drift from the one the
+                # EOL report uses.
+                "missing": sum(
+                    1 for card in of_type if not has_eol_coverage(card.attributes, card.lifecycle)
+                ),
+                "total": len(of_type),
+            }
+        )
+
     # By-type breakdown
     by_type = []
     for t, ts in sorted(
@@ -2168,6 +2281,7 @@ async def data_quality(db: AsyncSession = Depends(get_db), user: User = Depends(
         "with_lifecycle": with_lifecycle,
         "orphaned": orphaned,
         "stale": stale,
+        "eol_coverage": eol_coverage,
         "by_type": by_type,
         "worst_items": worst_items,
     }
@@ -2188,7 +2302,13 @@ _DQ_BAND_BOUNDS: dict[str, tuple[float | None, float | None]] = {
 async def data_quality_cards(
     type: str | None = Query(default=None, description="Card type key"),
     band: str | None = Query(default=None, description="complete | partial | minimal"),
-    scope: str | None = Query(default=None, description="orphaned | stale"),
+    scope: str | None = Query(
+        default=None,
+        description=(
+            "orphaned | stale | eol_linked | eol_manual | eol_missing. The three "
+            "`eol_*` scopes are the EOL coverage chart's segments and pair with `type`."
+        ),
+    ),
     limit: int = Query(default=200, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -2204,7 +2324,8 @@ async def data_quality_cards(
 
     if band is not None and band not in _DQ_BAND_BOUNDS:
         raise HTTPException(status_code=400, detail=f"Unknown band: {band}")
-    if scope is not None and scope not in ("orphaned", "stale"):
+    eol_scopes = {f"eol_{bucket}": bucket for bucket in EOL_BUCKETS}
+    if scope is not None and scope not in ("orphaned", "stale", *eol_scopes):
         raise HTTPException(status_code=400, detail=f"Unknown scope: {scope}")
 
     conditions = [Card.status == "ACTIVE"]
@@ -2220,6 +2341,8 @@ async def data_quality_cards(
         conditions.append(stale_condition())
     elif scope == "orphaned":
         conditions.append(orphaned_condition())
+    elif scope in eol_scopes:
+        conditions.append(eol_bucket_condition(eol_scopes[scope]))
 
     total_result = await db.execute(select(func.count()).select_from(Card).where(*conditions))
     total = total_result.scalar_one()
@@ -2252,87 +2375,10 @@ async def data_quality_cards(
 #  EOL Risk & Impact report
 # ---------------------------------------------------------------------------
 
-_EOL_BASE = "https://endoflife.date/api"
-
-
-def _eol_status(eol_val, support_val) -> str:
-    """Classify a cycle as 'eol', 'approaching', 'supported', or 'unknown'."""
-    now = datetime.now(timezone.utc).date()
-
-    # Check EOL first
-    if eol_val is True:
-        return "eol"
-    if isinstance(eol_val, str):
-        try:
-            eol_date = datetime.strptime(eol_val, "%Y-%m-%d").date()
-            if eol_date <= now:
-                return "eol"
-            six_months = now + timedelta(days=182)
-            if eol_date <= six_months:
-                return "approaching"
-        except ValueError:
-            pass
-
-    # If active support has ended
-    if isinstance(support_val, str):
-        try:
-            sup_date = datetime.strptime(support_val, "%Y-%m-%d").date()
-            if sup_date <= now:
-                return "approaching"
-        except ValueError:
-            pass
-
-    if eol_val is False:
-        return "supported"
-
-    return "supported" if eol_val is not None else "unknown"
-
-
-async def _fetch_product_cycles(
-    client: httpx.AsyncClient,
-    product: str,
-) -> list[dict] | None:
-    """Fetch cycles for a single product, returning None on failure."""
-    try:
-        resp = await client.get(f"{_EOL_BASE}/{product}.json", timeout=10.0)
-        if resp.status_code == 200:
-            return resp.json()
-    except httpx.HTTPError:
-        log.warning("Failed to fetch EOL data for %s", product)
-    return None
-
-
-def _manual_eol_status(lifecycle: dict | None) -> str:
-    """Classify a card with manually maintained lifecycle dates."""
-    if not lifecycle:
-        return "unknown"
-
-    now = datetime.now(timezone.utc).date()
-    eol_str = lifecycle.get("endOfLife")
-    phase_out_str = lifecycle.get("phaseOut")
-
-    # Check endOfLife date
-    if isinstance(eol_str, str) and eol_str:
-        try:
-            eol_date = datetime.strptime(eol_str, "%Y-%m-%d").date()
-            if eol_date <= now:
-                return "eol"
-            six_months = now + timedelta(days=182)
-            if eol_date <= six_months:
-                return "approaching"
-        except ValueError:
-            pass
-
-    # Check phaseOut date (analogous to support ending)
-    if isinstance(phase_out_str, str) and phase_out_str:
-        try:
-            po_date = datetime.strptime(phase_out_str, "%Y-%m-%d").date()
-            if po_date <= now:
-                return "approaching"
-        except ValueError:
-            pass
-
-    return "supported"
+# The classifiers and the upstream fetch live in `services/eol_service.py`:
+# the inventory grid asks the same question of the same cards, and two
+# implementations of "approaching" would be two different answers to the same
+# user looking at one component in two places.
 
 
 @router.get("/eol")
@@ -2349,62 +2395,62 @@ async def eol_report(
 
     Each item includes a ``source`` field: ``"api"`` for items linked
     to endoflife.date, ``"manual"`` for items with only a hand-entered
-    ``endOfLife`` lifecycle date.
+    ``endOfLife`` lifecycle date, and ``"none"`` for cards carrying neither.
+
+    Those last ones (``status: "missing"``) are the answer to "which of my
+    hundreds of IT Components has nobody recorded an end of life for?"
+    ([#1065](https://github.com/vincentmakes/turbo-ea/discussions/1065)). The
+    report used to drop them silently, which made the one question the report
+    is best placed to answer the one it could not.
     """
     await PermissionService.require_permission(db, user, "reports.ea_dashboard")
     # 1. Fetch all active Applications and ITComponents
     result = await db.execute(
         select(Card).where(
             Card.status == "ACTIVE",
-            Card.type.in_(["Application", "ITComponent"]),
+            Card.type.in_(EOL_TYPES),
         )
     )
     all_sheets = result.scalars().all()
 
-    # Split into API-linked and manually-maintained sets
+    # Split into API-linked, manually-maintained, and uncovered sets. The
+    # coverage predicates come from `card_flags` so the report, the Data
+    # Quality tile and the inventory filter cannot disagree about which cards
+    # count as "missing".
     api_sheets = []
     manual_sheets = []
-    seen_ids: set[str] = set()
+    missing_sheets = []
 
     for card in all_sheets:
-        attrs = card.attributes or {}
-        has_api_link = bool(attrs.get("eol_product") and attrs.get("eol_cycle"))
-        lifecycle = card.lifecycle or {}
-        has_manual_eol = bool(lifecycle.get("endOfLife"))
-
-        if has_api_link:
+        if has_eol_link(card.attributes):
             api_sheets.append(card)
-            seen_ids.add(str(card.id))
-        elif has_manual_eol:
+        elif has_manual_eol(card.lifecycle):
             manual_sheets.append(card)
-            seen_ids.add(str(card.id))
+        else:
+            missing_sheets.append(card)
 
-    if not api_sheets and not manual_sheets:
+    if not all_sheets:
         return {
             "items": [],
             "summary": {
                 "eol": 0,
                 "approaching": 0,
                 "supported": 0,
+                "missing": 0,
                 "impacted_apps": 0,
                 "manual": 0,
             },
         }
 
     # 2. Batch-fetch unique products from endoflife.date (for API-linked items)
-    unique_products = {(card.attributes or {})["eol_product"] for card in api_sheets}
-    product_cycles: dict[str, list[dict]] = {}
+    product_cycles = await fetch_cycles_for_products(
+        {(card.attributes or {})["eol_product"] for card in api_sheets}
+    )
 
-    if unique_products:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            tasks = {product: _fetch_product_cycles(client, product) for product in unique_products}
-            results = await asyncio.gather(*tasks.values())
-            for product, cycles in zip(tasks.keys(), results):
-                if cycles is not None:
-                    product_cycles[product] = cycles
-
-    # 3. Get relations between ITComponent and Application for impact mapping
-    all_eol_sheets = api_sheets + manual_sheets
+    # 3. Get relations between ITComponent and Application for impact mapping.
+    #    Uncovered components are included: "what would this hit if it went
+    #    end of life" is exactly the argument for going and finding out.
+    all_eol_sheets = api_sheets + manual_sheets + missing_sheets
     it_ids = [card.id for card in all_eol_sheets if card.type == "ITComponent"]
     app_map = {str(card.id): card for card in all_sheets if card.type == "Application"}
     it_to_apps: dict[str, list[dict]] = {}
@@ -2456,16 +2502,11 @@ async def eol_report(
         cycle_key = str(attrs["eol_cycle"])
 
         # Match cycle data
-        cycle_data = None
-        cycles = product_cycles.get(product, [])
-        for c in cycles:
-            if str(c.get("cycle")) == cycle_key:
-                cycle_data = c
-                break
+        cycle_data = find_cycle(product_cycles.get(product, []), cycle_key)
 
         status = "unknown"
         if cycle_data:
-            status = _eol_status(cycle_data.get("eol"), cycle_data.get("support"))
+            status = eol_status(cycle_data.get("eol"), cycle_data.get("support"))
 
         if status in counts:
             counts[status] += 1
@@ -2498,7 +2539,7 @@ async def eol_report(
     # 4b. Manually maintained items (lifecycle.endOfLife set, no API link)
     for card in manual_sheets:
         lifecycle = card.lifecycle or {}
-        status = _manual_eol_status(lifecycle)
+        status = manual_eol_status(lifecycle)
         manual_count += 1
 
         if status in counts:
@@ -2538,8 +2579,32 @@ async def eol_report(
             }
         )
 
-    # Sort: EOL first, then approaching, then supported
-    status_order = {"eol": 0, "approaching": 1, "unknown": 2, "supported": 3}
+    # 4c. Cards nobody has recorded any end-of-life information for. They
+    #     carry no dates, so they have no place on the timeline — but they are
+    #     the population an architect has to work through, and until #1065
+    #     nothing outside the admin mass-link screen listed them.
+    for card in missing_sheets:
+        items.append(
+            {
+                "id": str(card.id),
+                "name": card.name,
+                "type": card.type,
+                "subtype": card.subtype,
+                "eol_product": None,
+                "eol_cycle": None,
+                "status": "missing",
+                "source": "none",
+                "cycle_data": None,
+                "lifecycle": card.lifecycle,
+                "affected_apps": it_to_apps.get(str(card.id), []),
+            }
+        )
+
+    # Sort: EOL first, then approaching, then supported, then the unrecorded.
+    # "Missing" sorts last on purpose: it is a backlog to work through, not a
+    # risk to act on today, and putting it above `supported` would bury the
+    # cards whose dates someone has actually checked.
+    status_order = {"eol": 0, "approaching": 1, "unknown": 2, "supported": 3, "missing": 4}
     items.sort(key=lambda x: (status_order.get(x["status"], 9), x["name"]))
 
     return {
@@ -2548,6 +2613,7 @@ async def eol_report(
             "eol": counts["eol"],
             "approaching": counts["approaching"],
             "supported": counts["supported"],
+            "missing": len(missing_sheets),
             "impacted_apps": len(eol_impacted_app_ids),
             "approaching_impacted_apps": len(approaching_impacted_app_ids - eol_impacted_app_ids),
             "manual": manual_count,

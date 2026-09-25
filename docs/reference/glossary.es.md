@@ -8,6 +8,11 @@
 | **Marcador / Vista Guardada** | Una configuración guardada de filtros, columnas y ordenamiento en el Inventario que se puede recargar con un clic |
 | **BPM** | Gestión de Procesos de Negocio — la disciplina de modelar, analizar y mejorar procesos de negocio |
 | **BPMN** | Notación de Modelado de Procesos de Negocio — la notación estándar para modelar procesos de negocio (versión 2.0) |
+| **Definición de evento** | El tipo de un evento BPMN: mensaje, temporizador, señal, error, escalado, condicional, enlace, compensación, cancelación o terminación. Se muestra junto al tipo de elemento en la tabla de pasos, con el nombre del mensaje, la señal o el error al que el evento hace referencia |
+| **Carril** | Una banda horizontal dentro de un pool que agrupa los pasos realizados por un rol, equipo o departamento |
+| **Actividad de llamada** | Una tarea BPMN con borde grueso que invoca un proceso definido de forma independiente: la manera propia de BPMN de decir «este paso es otro proceso», y el único tipo de etapa por el que Turbo EA pregunta el proceso de negocio al colocarla. Cualquier otra etapa vincula un proceso igual, desde el panel de propiedades, el menú contextual o la tabla de pasos; publicar el flujo crea una relación *invoca* entre los dos procesos |
+| **Flujo de mensaje** | Un mensaje intercambiado entre dos pools de una colaboración BPMN. Se lista bajo la tabla de elementos de un flujo de proceso publicado, donde puede vincularse a la ficha de Interfaz que lo transporta |
+| **Pool** | Un participante de una colaboración BPMN —un cliente, un departamento, un sistema asociado— dibujado como un contenedor que alberga el proceso propio de esa parte |
 | **Capacidad de Negocio** | Lo que una organización puede hacer, independientemente de cómo lo hace |
 | **Cálculo** | Una fórmula definida por el administrador que calcula automáticamente el valor de un campo cuando se guarda una ficha |
 | **Feed OData** | Un feed de datos JSON disponible en las vistas guardadas del inventario (marcadores) para el consumo por herramientas externas como Power BI o Excel |
@@ -16,7 +21,7 @@
 | **Puntuación de Confianza** | Una calificación de 0–100% que indica la fiabilidad de una descripción generada por IA |
 | **Línea de costo** | Una entrada de presupuesto o costo real (CapEx/OpEx) en una iniciativa PPM, utilizada para rastrear el gasto financiero |
 | **Calidad de Datos** | Una puntuación de completitud de 0–100% basada en campos completados y sus pesos configurados |
-| **Archivo adjunto** | Un archivo binario (PDF, DOCX, XLSX, imágenes, hasta 10 MB) cargado directamente a una ficha mediante la pestaña Recursos |
+| **Archivo adjunto** | Un archivo binario (documentos, hojas de cálculo, presentaciones, archivos OpenDocument y de Office heredados, imágenes, archivos comprimidos, mensajes de Outlook y correo electrónico, CSV, Markdown, JSON y XML: hasta 20 MB) cargado directamente a una ficha mediante la pestaña Recursos |
 | **Diagrama** | Un diagrama visual de arquitectura creado con el editor DrawIO integrado |
 | **DrawIO** | La herramienta de diagramación de código abierto integrada utilizada para diagramas visuales de arquitectura |
 | **Arquitectura Empresarial (EA)** | La disciplina que organiza y documenta la estructura de negocio y tecnología de una organización |
@@ -26,6 +31,10 @@
 | **Entitlement (derecho)** | Una línea de una licencia de extensión firmada: el derecho a ejecutar una extensión concreta hasta una fecha de caducidad, seguida de un periodo de gracia antes de la desactivación suave |
 | **Content Pack (paquete de contenido)** | La parte de solo datos de una extensión: tipos de tarjeta, etiquetas, tarjetas y relaciones aplicadas con el mismo motor idempotente que la transferencia de espacio de trabajo, con vista previa |
 | **DAAF** | Digital Autonomy Assessment Framework — el método de la Universidad de Utrecht para puntuar cuánto depende una aplicación de un proveedor y hasta qué punto puede mitigarse. Reproducido por una extensión gratuita |
+| **Regla de automatización** | Una regla que la extensión Automations ejecuta por usted: *cuando* una ficha, una relación o una tarea cambia o se dispara una programación, *si* se cumplen unas condiciones construidas con desplegables, *entonces* se ejecuta una lista de acciones. Cada ejecución se registra como un lote de mutación |
+| **Ejecución (automatización)** | Una ejecución de una regla de automatización para una ficha — su disparador, su resultado y cada línea de acción, listada en la pestaña Ejecuciones y enlazada a su lote de mutación |
+| **Clave de disparo** | Lo que una regla de automatización recuerda tras dispararse para una ficha: la ficha y los valores que leyeron sus condiciones. Mientras no cambien, la regla no vuelve a dispararse para esa ficha, de modo que una regla nocturna no puede crear el mismo riesgo cada noche |
+| **Lote de mutación** | Una unidad auditada de cambio en Admin → Registro de auditoría — quién escribió qué y desde dónde (interfaz web, API, herramienta de IA o extensión), con un diff por evento y un Revertir que deshace las escrituras en fichas, relaciones, riesgos, roles de partes interesadas, etiquetas y borradores de decisión |
 | **Registro de información** | El registro que toda entidad financiera de la UE debe mantener sobre sus acuerdos con proveedores TIC terceros y presentar anualmente conforme al art. 28 de DORA — 15 plantillas entrelazadas |
 | **LEI** | Legal Entity Identifier — código ISO 17442 de 20 caracteres que identifica a una entidad jurídica, con dos dígitos de control. Necesario en todo el registro de información DORA |
 | **xBRL-CSV** | El formato de paquete de informe legible por máquina que los supervisores aceptan para presentaciones regulatorias como el registro de información DORA |

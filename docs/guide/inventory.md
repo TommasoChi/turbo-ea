@@ -10,14 +10,16 @@ The **Inventory** is the heart of Turbo EA. Here all **cards** (components) of t
 
 The left sidebar panel allows you to **filter** cards by different criteria:
 
-- **Search** — Free text search across card names, from the very first letter. Best matches come first: exact names, then names starting with what you typed, then names where it starts a word, then the rest. Every search box in Turbo EA orders results this way — the global search (**Ctrl+K** / **⌘K**), each card picker, the Risk Register, Decisions and published portals — unless you have chosen a sort of your own, which always wins
-- **Types** — Filter by one or more card types: Objective, Platform, Initiative, Organization, Business Capability, Business Context, Business Process, Application, Interface, Data Object, IT Component, Tech Category, Provider, System
+- **Search** — Free text search across card names, from the very first letter. Best matches come first: exact names, then names starting with what you typed, then names where it starts a word, then the rest. Every search box in Turbo EA orders results this way — the global search (**Ctrl+K** / **⌘K**), each card picker, the Risk Register, Decisions and published portals — unless you have chosen a sort of your own, which always wins. A card's **alias** and its description are matched too, so a card is found by the name your organisation actually uses for it — and an alias that matches exactly ranks as highly as a name that does
+- **Types** — Filter by one or more card types, grouped by the architecture layer each type belongs to: Strategy & Transformation (Objective, Platform, Initiative), Business Architecture (Organization, Business Capability, Business Context, Business Process), Application & Data (Application, Interface, Data Object) and Technical Architecture (IT Component, Tech Category, Provider). A type your administrator places in a layer of its own gets its own heading after those four, and any type with no layer set is listed last under **Uncategorized**
 - **Subtypes** — When a type is selected, filter further by subtype (e.g., Application → Business Application, Microservice, AI Agent, Deployment)
 - **Approval Status** — Draft, Approved, Broken, or Rejected
 - **Lifecycle** — Filter by lifecycle phase: Plan, Phase In, Active, Phase Out, End of Life
 - **Data Quality** — Band filtering (multi-select): Complete (≥80%), Partial (40–79%), Minimal (below 40%). Same bands the [Data Quality report](reports.md#data-quality-report) charts, so clicking a bar segment there lands here.
 - **Orphaned** — Only cards with no relation in either direction. Evaluated server-side, so it works with no card type selected.
 - **Stale** — Only cards not updated in the last 90 days. Both mirror the [Data Quality report](reports.md#data-quality-report)'s KPI tiles, so clicking a tile there lands here.
+- **End of life** — For Applications and IT Components, filter by the support status Turbo EA resolves from the [EOL link](../admin/eol.md) on each card: End of Life, Approaching, Supported or Unknown. **(empty)** lists the cards with nothing recorded at all. The matching **End of life** column shows the date beside a status dot, and sorts and exports as a date.
+- **Link type** — When a single hierarchical card type is selected and an administrator has defined [link types](../admin/metamodel.md) for it, filter by the type of link each card has to its parent — for example the subsidiaries that are *commercial* rather than *sales*. **(empty)** lists the cards whose link carries no type, and the top-level cards, since neither has one recorded. The matching **Link type** column shows the value as a coloured chip and is editable in grid edit mode.
 - **Tags** — Filter by tags from any tag group
 - **Relations** — Filter by related cards across relation types
 - **Custom attributes** — Filter by values in custom fields (text search, select options)
@@ -66,6 +68,8 @@ The **Path** column shows the card's hierarchy breadcrumb (e.g. `North America /
 
 The **Logo** column shows each card's own logo, or its type icon where none has been set, so a landscape can be scanned by product mark rather than by name. It is offered only for card types that allow logos (out of the box, Application and IT Component), is switched off by default, and makes the rows taller while it is shown so the marks stay legible. If you may edit the card, hover its logo cell and click to upload, replace, choose a brand icon or remove the logo without leaving the grid — the same menu as on the card page. Logos are deliberately excluded from fill-down and Mass Edit: one mark per card, set on purpose.
 
+The **Alias** column shows a card's other name — the internal one your organisation calls it by. It is switched off by default, since most landscapes carry none: turn it on in the **Columns** tab. It edits inline in grid edit mode and fills down like any other text column, and it travels with Excel export and import, so a list of aliases can be loaded in one pass.
+
 Each category has a **Select all** checkbox to quickly toggle all columns in that group. A search field at the top lets you find specific columns by name. The badge on each section header shows how many columns from that group are currently visible.
 
 When a card type is first selected, **all attribute and relation columns are enabled by default**. You can then uncheck columns you don't need. A **Reset** button at the bottom of the Columns tab restores the default column selection.
@@ -83,8 +87,9 @@ The inventory uses an **AG Grid** data table with powerful features:
 | **Type** | Card type with color-coded icon |
 | **Name** | Component name (click to open card detail). Each name cell has a 👁 eye icon — click it to open the card detail in a side panel without leaving the grid. Ctrl/Cmd-click the name to open the card in a new browser tab. |
 | **Logo** | The card's own logo, or its type icon when it has none. Off by default — switch it on in the Columns tab; click a cell to change the logo |
+| **Alias** | The card's other name. Off by default — switch it on in the Columns tab; matched by every search box |
 | **Path** | Hierarchy breadcrumb up to the card's parent — empty for root cards |
-| **Description** | Brief description |
+| **Description** | Brief description — a web address in it is a clickable link |
 | **Lifecycle** | Current lifecycle state |
 | **Approval Status** | Review status badge |
 | **Data Quality** | Completeness percentage with visual ring |
@@ -131,6 +136,8 @@ The **Field** dropdown groups what you can change:
 - **Attributes** — any editable field defined for the selected card type
 - **Relations** — one entry per relation type and direction (for example *runs on → IT Component*)
 
+![Mass Edit dialog](../assets/img/en/98_inventory_mass_edit.png)
+
 Tags, relations and parent each offer an **add / remove** toggle, so you extend or trim existing values instead of replacing them.
 
 The value control matches the field's type: a multi-select shows its options with checkboxes, a yes/no field a switch, a date field a date picker. Leaving the value empty clears the field on every selected card. Fields calculated by a formula, and cost fields you do not have permission to view, are not offered.
@@ -153,6 +160,8 @@ A card takes its own children with it when it moves, and approved cards drop bac
 ## Grouping the Inventory { #group-by }
 
 Click **Group by** in the toolbar (next to the item count) to organise the grid into collapsible groups. Lifecycle phase and approval status are always available; filtering the grid to a single card type also unlocks its subtype and every single-select attribute.
+
+![Inventory grouped by TIME Model](../assets/img/en/98a_inventory_group_by.png)
 
 - Cards without a value on the chosen field land in a **Not set** group at the top — the natural triage bucket for unclassified cards.
 - Click a group header to collapse or expand it. The header shows the group's card count.
@@ -214,7 +223,9 @@ Inventory exports and imports use a **multi-sheet Excel workbook** that round-tr
 A single export produces:
 
 - **One sheet per card type** present in the export (Application, Business Capability, IT Component, …). Each sheet carries the type's core columns, its custom `attr_<field_key>` columns, its lifecycle columns, its `rel:<relation_type_key>` relation columns, and its `stakeholder:<role_key>` stakeholder columns.
-- **A `Relations` sheet** for relation types that carry attributes (e.g. cost, description). Simple relations live inline on the card sheet; attribute-bearing relations live here.
+- **A `Relations` sheet** carrying the **values** relations hold — one row per relation whose type has values to set.
+
+The division is simple, and it has no exceptions: **a card sheet says which cards are linked; the `Relations` sheet says what those links hold.** Every relation type gets a `rel:` column on the card sheet of the type it starts from, whether or not it carries values.
 - **A `_Meta` sheet** carrying the workbook format version. The importer reads it to detect older formats and prints a banner.
 
 ### Identifying cards (no GUIDs needed)
@@ -238,7 +249,9 @@ rel:depends_on   →  Sales / Customer Mgmt / CRM
 
 Semicolons (not commas) separate targets because card names commonly contain `,` (e.g. `Acme, Inc.`). Inside a name, `/` and `\` must be escaped as `\/` and `\\` — the importer reads the cell with the same rules as `parent_path`, so a name like `SAP S/4HANA` is written as `SAP S\/4HANA`. The exporter does this for you automatically; only hand-typed cells need the escapes.
 
-Cells are **declarative**: the set of targets in the cell becomes the complete set of outgoing relations of that type from that source after import. **Removing a target from the list drops that relation**; emptying the cell drops them all. Omitting the column entirely (no `rel:supports` column at all) leaves existing relations untouched.
+There is one column per relation type that starts from the sheet's card type — **all of them**, including types that carry values. Targets are listed alphabetically, so re-exporting an unchanged landscape gives you a byte-identical file and a real edit is the only thing that shows up in a diff.
+
+Cells are **declarative**: the set of targets in the cell becomes the complete set of outgoing relations of that type from that source after import. **Removing a target from the list drops that relation**; emptying the cell drops them all. Omitting the column entirely (no `rel:supports` column at all) leaves existing relations untouched — so deleting columns you don't care about before re-importing is safe.
 
 For backwards compatibility, the importer also accepts comma-separated cells (workbooks exported before this convention). A cell containing any `;` is always treated as semicolon-separated.
 
@@ -261,18 +274,31 @@ Like relation cells, stakeholder cells are **declarative per role**: the users l
 
 ### Relations sheet
 
-For relations that carry attributes (e.g. annual cost on an `Application` → `IT Component` link), use the dedicated `Relations` sheet:
+A relation can carry values of its own — a *Usage Type* on an `Organization` → `Application` link, an annual cost on an `Application` → `IT Component` link, or a free-text description. A `rel:` cell on a card sheet is a list of card names with nowhere to put them, so those values live on the `Relations` sheet, one row per relation:
 
-| relation_type | source_ref | target_ref | action | attr_costTotalAnnual | description |
-|---------------|------------|------------|--------|----------------------|-------------|
-| app_to_itc    | NexaCore ERP | Oracle Database | upsert | 25000 | Production tier |
-| app_to_itc    | OldApp | DB | delete |  |  |
+| relation_type | source_type | source_ref | target_type | target_ref | attr_usageType | description |
+|---------------|-------------|------------|-------------|------------|----------------|-------------|
+| relOrgToApp   | Organization | EMEA Sales | Application | Salesforce | user  | |
+| relOrgToApp   | Organization | Sales & Marketing | Application | Salesforce | owner | Primary tenant |
 
-`action` defaults to `upsert`. A row with `action = delete` removes that specific relation.
+The sheet holds the relations whose type actually has values to set — the others have nothing to fill in and live entirely on the card sheets. Relations pointing *at* an exported card are included, so an Application export can still edit the *Usage Type* on the organizations using it; `source_ref` and `target_ref` say which way round each row goes. The `attr_<field>` columns are those of the relation types in this workbook, not every one defined in the instance. Rows are sorted by source card, then relation type, then target.
+
+**This sheet only sets values. It never creates or removes a relation** — that is the card sheet's job:
+
+- **Deleting a row deletes nothing.** Trim the sheet down to the rows you care about and import it; the relations you removed from the file are untouched.
+- Editing a row's values replaces what that relation holds.
+- A row naming two cards that aren't linked has no values to set, so it's reported in the preview and skipped. Link them in the `rel:` column on the card sheet — you can do both in the same import, and the relation is created with its values in one go.
+
+!!! note "Workbooks exported before this change"
+    Older workbooks carry an `action` column. It is no longer needed and is ignored; a row with `action = delete` is reported and skipped rather than appearing to work. The import banner tells you when a file predates the current format.
+
+If a card sheet and the `Relations` sheet contradict each other — a card removed from a `rel:` cell while its values row is left in place — the **removal wins**, and the import preview says so.
 
 ### Importing
 
 Click **Import** in the toolbar, drop the workbook, and review the preview before applying. The preview shows:
+
+![Import Cards dialog](../assets/img/en/98b_inventory_import.png)
 
 - **Cards to create / update** — same as before
 - **Relations to add / remove** — every relation operation queued by the workbook
@@ -285,8 +311,8 @@ Errors block the apply. Warnings (e.g. unknown tag, format version mismatch) don
 Click **Export** in the toolbar and choose one of two options:
 
 - **Export all fields** — the full, re-importable workbook described below. The current grid filter determines the contents:
-    - **Single-type filter active** → one card sheet for that type, plus the Relations sheet for any attribute-bearing relations, plus `_Meta`.
-    - **No filter or multi-type filter** → one sheet per type present, plus the Relations sheet, plus `_Meta`. The workbook is fully editable and can be re-imported without losing per-type attributes.
+    - **Single-type filter active** → one card sheet for that type, plus the `Relations` sheet, plus `_Meta`.
+    - **No filter or multi-type filter** → one sheet per type present, plus the `Relations` sheet, plus `_Meta`. The workbook is fully editable and can be re-imported without losing per-type attributes.
 - **Export current view** — a flat, single-sheet snapshot that mirrors exactly what's on screen: only the **visible columns**, in their current **left-to-right order**, with the displayed column headers, for the **filtered rows**. Use this to share an organized view with stakeholders. This format carries no card IDs and only the columns you chose, so it is **not suitable for re-import** — use *Export all fields* when you intend to edit and re-import. If relation columns are still loading, the export waits for them, so they can never come out blank.
 
 ### Round-trip tips

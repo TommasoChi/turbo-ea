@@ -58,8 +58,8 @@ from app.schemas.turbolens import (
     VendorAnalysisOut,
     VendorHierarchyOut,
 )
+from app.services.card_search import card_search_filter, card_search_rank
 from app.services.permission_service import PermissionService
-from app.services.search_rank import search_filter, search_rank
 from app.services.turbolens_ai import get_ai_config, is_ai_configured
 
 logger = logging.getLogger(__name__)
@@ -472,7 +472,7 @@ def _ordered_by_relevance(q, search: str | None):
     order is "what I typed, at the top" (#918).
     """
     if search:
-        return q.order_by(search_rank(Card.name, search).asc(), Card.name.asc())
+        return q.order_by(card_search_rank(search).asc(), Card.name.asc())
     return q.order_by(Card.name.asc())
 
 
@@ -483,18 +483,11 @@ async def architect_objectives(
     search: str | None = None,
 ):
     """Search Objective cards for architect objective selection."""
-    from sqlalchemy import or_
-
     await PermissionService.require_permission(db, user, "turbolens.manage")
 
     q = select(Card).where(Card.type == "Objective", Card.status != "ARCHIVED")
     if search:
-        q = q.where(
-            or_(
-                search_filter(Card.name, search),
-                search_filter(Card.description, search),
-            )
-        )
+        q = q.where(card_search_filter(search))
     q = _ordered_by_relevance(q, search).limit(50)
     result = await db.execute(q)
     cards = result.scalars().all()
@@ -516,18 +509,11 @@ async def architect_capabilities(
     search: str | None = None,
 ):
     """Search BusinessCapability cards for architect capability selection."""
-    from sqlalchemy import or_
-
     await PermissionService.require_permission(db, user, "turbolens.manage")
 
     q = select(Card).where(Card.type == "BusinessCapability", Card.status != "ARCHIVED")
     if search:
-        q = q.where(
-            or_(
-                search_filter(Card.name, search),
-                search_filter(Card.description, search),
-            )
-        )
+        q = q.where(card_search_filter(search))
     q = _ordered_by_relevance(q, search).limit(50)
     result = await db.execute(q)
     cards = result.scalars().all()
@@ -1657,6 +1643,7 @@ async def submit_ai_verdict(
     if card is None:
         raise HTTPException(404, "Impacted card not found")
 
+    from app.services import card_approval
     from app.services.calculation_engine import run_calculations_for_card
     from app.services.data_quality import calc_data_quality
     from app.services.event_bus import event_bus
@@ -1668,25 +1655,28 @@ async def submit_ai_verdict(
         old_attrs["hasAiFeatures"] = new_value
         card.attributes = old_attrs
         card.updated_by = user.id
-        if card.approval_status == "APPROVED":
-            card.approval_status = "BROKEN"
+        approval_broke = card_approval.break_approval(card, ("attributes",))
         card.data_quality = await calc_data_quality(db, card)
         await run_calculations_for_card(db, card)
+        changes: dict[str, dict] = {
+            "attributes": {
+                "old": {"hasAiFeatures": old_value},
+                "new": {"hasAiFeatures": new_value},
+            }
+        }
+        if approval_broke:
+            changes["approval_status"] = card_approval.approval_change_entry()
         await event_bus.publish(
             "card.updated",
-            {
-                "id": str(card.id),
-                "changes": {
-                    "attributes": {
-                        "old": {"hasAiFeatures": old_value},
-                        "new": {"hasAiFeatures": new_value},
-                    }
-                },
-            },
+            {"id": str(card.id), "changes": changes},
             db=db,
             card_id=card.id,
             user_id=user.id,
         )
+        if approval_broke:
+            await card_approval.notify_approval_broken(
+                db, card=card, actor_id=user.id, actor_display_name=user.display_name
+            )
 
     # Move the finding into in_review unless it's already in a state the
     # user has explicitly chosen (mitigated/verified/accepted/risk_tracked).

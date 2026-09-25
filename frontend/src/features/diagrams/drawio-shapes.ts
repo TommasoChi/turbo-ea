@@ -104,6 +104,12 @@ export interface RelationEdgeStyleOptions {
   /** Fixed attachment point on the source / target shape, as {x, y} fractions
    *  of its box (mxGraph `exitX/exitY`, `entryX/entryY`). */
   exit?: { x: number; y: number };
+  /** How many relations the edge stands for. Set only by the aggregated
+   *  Layered Dependency View's export, where one line joins two boxes: the
+   *  stroke thickens with the count, as the view draws it, and the label is
+   *  boxed so the number reads as a chip rather than a verb. Left undefined,
+   *  the edge is an ordinary one-relation line. */
+  weight?: number;
   entry?: { x: number; y: number };
 }
 
@@ -158,9 +164,17 @@ export function relationEdgeStyle(opts: RelationEdgeStyleOptions = {}): string {
   const router = opts.orthogonal ? "orthogonalEdgeStyle;rounded=1" : "entityRelationEdgeStyle";
   const anchor = (p: { x: number; y: number } | undefined, kind: "exit" | "entry") =>
     p ? `${kind}X=${p.x};${kind}Y=${p.y};${kind}Dx=0;${kind}Dy=0;` : "";
+  const weight = opts.weight ?? 0;
+  // Same curve as the view's connectors: 1 → 1.5, 2 → 2.5, 8 → 4.3.
+  const strokeWidth = weight > 0 ? (1.5 + Math.min(2.8, Math.log2(weight))).toFixed(1) : "1.5";
+  const chip =
+    weight > 0
+      ? `labelBackgroundColor=#ffffff;labelBorderColor=${RELATION_EDGE_COLOR};fontStyle=1;`
+      : "";
   return (
     `edgeStyle=${router};strokeColor=${RELATION_EDGE_COLOR};` +
-    `strokeWidth=1.5;${arrow};fontSize=10;fontColor=#666;` +
+    `strokeWidth=${strokeWidth};${arrow};fontSize=10;fontColor=#666;` +
+    chip +
     anchor(opts.exit, "exit") +
     anchor(opts.entry, "entry") +
     (opts.pending ? "dashed=1;dashPattern=5 3;" : "") +
@@ -396,6 +410,182 @@ export function containerHeaderHeight(count: number): number {
 /** True when a cell's style renders it as a swimlane container. */
 export function isSwimlaneStyle(style: unknown): boolean {
   return String(style ?? "").includes("shape=swimlane");
+}
+
+/** A vertical span in a frame's own client coordinates. */
+export interface VisibleBand {
+  top: number;
+  bottom: number;
+}
+
+interface ViewportLike {
+  offsetTop?: number;
+  height: number;
+}
+
+interface FrameWindowLike {
+  innerHeight: number;
+  visualViewport?: ViewportLike | null;
+  frameElement?: { getBoundingClientRect(): { top: number } } | null;
+  parent?: { innerHeight: number; visualViewport?: ViewportLike | null } | null;
+}
+
+/**
+ * The part of a frame's height that is actually on screen.
+ *
+ * DrawIO's right-click menu lives inside the editor iframe, so the iframe's own
+ * `innerHeight` / `visualViewport` only say how tall the *frame* is. On an iPad
+ * the frame's bottom sits below what Safari shows (its toolbars and the app bar
+ * take the difference), so a menu fitted to the frame still ran off the screen.
+ * Intersect with the parent's visual viewport, mapped through the frame's
+ * position; a parent that cannot be read degrades to the frame alone.
+ */
+export function visibleBand(win: FrameWindowLike): VisibleBand {
+  let top = 0;
+  let bottom = win.innerHeight;
+  const own = win.visualViewport;
+  if (own) {
+    top = Math.max(top, own.offsetTop ?? 0);
+    bottom = Math.min(bottom, (own.offsetTop ?? 0) + own.height);
+  }
+  try {
+    const frame = win.frameElement;
+    const parent = win.parent;
+    if (frame && parent && parent !== (win as unknown)) {
+      const frameTop = frame.getBoundingClientRect().top;
+      const pv = parent.visualViewport ?? { offsetTop: 0, height: parent.innerHeight };
+      const pvTop = pv.offsetTop ?? 0;
+      top = Math.max(top, pvTop - frameTop);
+      bottom = Math.min(bottom, pvTop + pv.height - frameTop);
+    }
+  } catch {
+    // Cross-origin or detached: the frame's own band is all we know.
+  }
+  return { top, bottom: Math.max(top, bottom) };
+}
+
+/**
+ * Keep a DrawIO popup menu inside `band`, scrolling when it is taller.
+ *
+ * `mxPopupMenu.showMenu` only *moves* the menu into the frame (`mxUtils.fit`),
+ * never shrinks it, and fits it to the frame rather than the screen, so the
+ * editor's ~25-row right-click menu ran off the bottom of an iPad and cropped
+ * the card actions. Called once before DrawIO shows the menu with
+ * `reposition = false` (height cap only) and again after its deferred fit
+ * (position), so it has the last word.
+ */
+export function fitMenuToBand(
+  div: HTMLElement | null | undefined,
+  band: VisibleBand,
+  margin = 8,
+  reposition = true,
+): void {
+  if (!div) return;
+  const s = div.style;
+  // Border-box so the cap includes the menu's own padding and border.
+  s.boxSizing = "border-box";
+  s.maxHeight = `${Math.max(0, Math.floor(band.bottom - band.top - 2 * margin))}px`;
+  s.overflowY = "auto";
+  s.overflowX = "hidden";
+  s.setProperty("-webkit-overflow-scrolling", "touch");
+  // A scroll that reaches the menu's end must not carry on into the page.
+  s.setProperty("overscroll-behavior", "contain");
+  // Before DrawIO shows the menu it is not in the document yet, so its
+  // offsets read 0 — position only once it has been placed.
+  if (!reposition) return;
+  const top = div.offsetTop;
+  const height = div.offsetHeight;
+  if (top + height > band.bottom - margin) {
+    s.top = `${Math.max(band.top + margin, band.bottom - margin - height)}px`;
+  } else if (top < band.top + margin) {
+    s.top = `${band.top + margin}px`;
+  }
+}
+
+/** Movement, in px, before a touch on the menu counts as a scroll, not a tap. */
+const MENU_DRAG_THRESHOLD = 6;
+
+/**
+ * Let a finger scroll a DrawIO popup menu.
+ *
+ * On iPadOS Safari (which reports itself as a Mac) DrawIO registers touch
+ * listeners on the menu rows and `preventDefault`s every `touchstart`, so the
+ * browser never starts a native scroll: the capped menu could not be scrolled,
+ * a swipe ended as a tap on whatever row it lifted from, and the gesture fell
+ * through to the page. These capture-phase listeners run before the rows'.
+ * They act only while `touchmove` is still `cancelable` — i.e. while the
+ * browser is *not* scrolling natively — so where native scrolling works
+ * (pointer-event browsers) they stand aside and there is no double scroll.
+ * A tap still reaches the row untouched. Installed once per menu element.
+ */
+export function enableMenuTouchScroll(div: HTMLElement | null | undefined): void {
+  if (!div || div.dataset.turboTouchScroll === "1") return;
+  div.dataset.turboTouchScroll = "1";
+  let startY = 0;
+  let startScroll = 0;
+  let dragging = false;
+  div.addEventListener(
+    "touchstart",
+    (e: TouchEvent) => {
+      startY = e.touches[0]?.clientY ?? 0;
+      startScroll = div.scrollTop;
+      dragging = false;
+    },
+    { capture: true, passive: true },
+  );
+  div.addEventListener(
+    "touchmove",
+    (e: TouchEvent) => {
+      if (!e.cancelable) return; // the browser is scrolling natively
+      const dy = (e.touches[0]?.clientY ?? startY) - startY;
+      if (!dragging && Math.abs(dy) < MENU_DRAG_THRESHOLD) return;
+      dragging = true;
+      div.scrollTop = startScroll - dy;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    { capture: true, passive: false },
+  );
+  div.addEventListener(
+    "touchend",
+    (e: TouchEvent) => {
+      if (!dragging) return;
+      // The end of a swipe is not a tap on the row it lifted from.
+      dragging = false;
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+    },
+    { capture: true, passive: false },
+  );
+}
+
+/** The part of an mxCell the context-menu resolver reads. */
+export interface MenuCellLike {
+  value?: { getAttribute?: (name: string) => string | null } | null;
+  parent?: MenuCellLike | null;
+}
+
+/**
+ * The card cell a right-click belongs to, or `null` when it landed on no card.
+ *
+ * DrawIO hands the popup menu the cell it hit-tested, and a swimlane is only
+ * hit on its header and border: right-clicking the open body of a card that
+ * was drilled down into a container passes no cell at all, which used to drop
+ * every card action (View Card Details…, Unlink, …) from the menu. So when the
+ * hit cell resolves to no card, fall back to the container under the pointer
+ * (`swimlaneAt`, the graph's `getSwimlaneAt`). Walks up either way, so a click
+ * on an inner label still resolves to its card.
+ */
+export function resolveMenuCardCell<T extends MenuCellLike>(
+  cell: T | null | undefined,
+  swimlaneAt: () => T | null | undefined,
+): T | null {
+  const walk = (start: T | null | undefined): T | null => {
+    let c: MenuCellLike | null | undefined = start;
+    while (c && !c.value?.getAttribute?.("cardId")) c = c.parent;
+    return (c as T | null | undefined) ?? null;
+  };
+  return walk(cell) ?? (cell ? null : walk(swimlaneAt()));
 }
 
 /**
@@ -1161,12 +1351,17 @@ function baseCardHeight(cell: any): number {
   return CARD_BASE_H;
 }
 
-/** A card tiled inside a swimlane container by drill-down / roll-up. */
+/** A card sitting inside a swimlane container: tiled there by drill-down /
+ *  roll-up, or exported into a group box by the aggregated Layered Dependency
+ *  View (`groupChild`). All three are managed by their container — fixed
+ *  height, capped detail rows, never a paste candidate. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isContainerChild(cell: any): boolean {
   if (!cell?.value?.getAttribute) return false;
   return Boolean(
-    cell.value.getAttribute("drillDownChild") || cell.value.getAttribute("rollUpChild"),
+    cell.value.getAttribute("drillDownChild") ||
+      cell.value.getAttribute("rollUpChild") ||
+      cell.value.getAttribute("groupChild"),
   );
 }
 
@@ -1981,8 +2176,7 @@ export function attachCellLifecycleListeners(
     // are managed by their parent and must not be treated as paste
     // candidates — their cardId is intentional, not a clone.
     if (cell.value.getAttribute("parentGroupCell")) return;
-    if (cell.value.getAttribute("drillDownChild") === "1") return;
-    if (cell.value.getAttribute("rollUpChild") === "1") return;
+    if (isContainerChild(cell)) return;
     const cardId = cell.value.getAttribute("cardId");
     if (!cardId) return;
     if (handlers.isRegistered(cell.id)) return;
@@ -3345,6 +3539,7 @@ export function attachParentChangeListener(
             if (v?.removeAttribute) {
               v.removeAttribute("drillDownChild");
               v.removeAttribute("rollUpChild");
+              v.removeAttribute("groupChild");
             }
             const existing = cell.getGeometry();
             const newGeo = new win.mxGeometry(
@@ -4904,6 +5099,9 @@ export interface DiagramCardInput {
   w: number;
   h: number;
   marker?: "MODIFY" | "REMOVE";
+  /** The group box the card sits in, when the source view had it in one.
+   *  `x` / `y` are then RELATIVE to that box, as an mxGraph child's are. */
+  groupKey?: string;
 }
 
 export interface DiagramFreeformInput {
@@ -4946,6 +5144,38 @@ export interface DiagramLayerInput {
   h: number;
 }
 
+/** A group box of the aggregated Layered Dependency View: a swimlane
+ *  container whose member cards are its mxGraph children. */
+export interface DiagramGroupInput {
+  /** The view's own id for the box; cards and connectors reference it. */
+  key: string;
+  label: string;
+  color: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * A merged connector of the aggregated view: ONE line standing for `count`
+ * relations between two groups, or between a group and a card left on its
+ * own (the centred card). It is decoration — it carries no relation identity,
+ * so the editor's sync never creates, deletes or flags anything for it.
+ */
+export interface DiagramConnectorInput {
+  /** A group key or a card id. */
+  sourceKey: string;
+  targetKey: string;
+  /** The verb, while the connector stands for one relation type; "" otherwise. */
+  label: string;
+  count: number;
+  flow?: RelationFlowDirection;
+  exit?: { x: number; y: number };
+  entry?: { x: number; y: number };
+  waypoints?: { x: number; y: number }[];
+}
+
 /**
  * Serialise a set of positioned cards, relation edges and layer boxes into a
  * complete DrawIO `<mxGraphModel>` XML string — without touching a live graph.
@@ -4960,11 +5190,25 @@ export interface DiagramLayerInput {
  *
  * Layer boxes are plain cells with no `cardId`, so they're ignored by card-ref
  * extraction and render behind the cards (emitted first).
+ *
+ * An **aggregated** view adds two more kinds. A group box becomes a swimlane
+ * container (the very style drill-down and roll-up use) with its member cards
+ * as real mxGraph children, stamped `groupChild="1"` so every container-child
+ * rule of the editor applies to them — they move with the box, keep a fixed
+ * height, and are never mistaken for a paste. The cards stay live: `cardId`
+ * is on them exactly as on a top-level card. A merged connector is emitted as
+ * a bare `<mxCell>` edge — no `<object>`, no `relationType`, no `relationId`,
+ * no `pending` — because it stands for N relations and is a picture of them,
+ * not one of them: `scanDiagramItems` falls through every branch for it, the
+ * stale check never sees it, and deleting it asks nothing. Its label carries
+ * the count, and its stroke thickens with it (`relationEdgeStyle({ weight })`).
  */
 export function buildLdvDiagramXml(
   cards: DiagramCardInput[],
   rels: DiagramRelInput[],
   layers: DiagramLayerInput[],
+  groups: DiagramGroupInput[] = [],
+  connectors: DiagramConnectorInput[] = [],
   freeforms: DiagramFreeformInput[] = [],
 ): string {
   const r = (n: number) => Math.round(n);
@@ -4997,12 +5241,48 @@ export function buildLdvDiagramXml(
     );
   });
 
+  // Group boxes: swimlane containers, painted before their members so the
+  // members (their mxGraph children) draw on top. Connectors reference them.
+  const cellIdByGroup = new Map<string, string>();
+  groups.forEach((g, i) => {
+    const cellId = `group-${i}`;
+    cellIdByGroup.set(g.key, cellId);
+    const style = [
+      "shape=swimlane",
+      `startSize=${CONTAINER_HEADER_H}`,
+      "horizontal=1",
+      `fillColor=${tint(g.color)}`,
+      `fontColor=${darken(g.color)}`,
+      `strokeColor=${g.color}`,
+      "fontSize=12",
+      "fontStyle=1",
+      "rounded=1",
+      "arcSize=12",
+      "html=1",
+      "whiteSpace=wrap",
+      "swimlaneLine=0",
+    ].join(";");
+    parts.push(
+      `<mxCell id="${cellId}" value="${escapeXml(g.label)}" style="${escapeXml(style)}" ` +
+        `vertex="1" parent="1">` +
+        `<mxGeometry x="${r(g.x)}" y="${r(g.y)}" width="${r(g.w)}" height="${r(g.h)}" ` +
+        `as="geometry"/></mxCell>`,
+    );
+  });
+
   // Cards. The id lives on the wrapping <object> (mxGraph's UserObject
   // encoding); edges reference these ids.
   const cellIdByCard = new Map<string, string>();
   cards.forEach((c, i) => {
     const cellId = `card-${i}-${c.cardId.slice(0, 8)}`;
     cellIdByCard.set(c.cardId, cellId);
+    // A card inside a group box is the box's mxGraph child, at the relative
+    // position the view had it. A key naming no exported box falls back to
+    // the root rather than vanishing.
+    const groupCellId = c.groupKey ? cellIdByGroup.get(c.groupKey) : undefined;
+    const parentId = groupCellId ?? "1";
+    const childAttr = groupCellId ? `groupChild="1" ` : "";
+    
     const { style: baseStyle, label: baseLabel } = buildCardCellData({
       cardId: c.cardId,
       cardType: c.cardType,
@@ -5033,8 +5313,9 @@ export function buildLdvDiagramXml(
         (c.detailLines?.length
           ? `cardDetail="${escapeXml(JSON.stringify(c.detailLines))}" `
           : "") +
+        `${childAttr}` +
         `cardId="${escapeXml(c.cardId)}" cardType="${escapeXml(c.cardType)}">` +
-        `<mxCell style="${escapeXml(style)}" vertex="1" parent="1">` +
+        `<mxCell style="${escapeXml(style)}" vertex="1" parent="${parentId}">` +
         `<mxGeometry x="${r(c.x)}" y="${r(c.y)}" width="${r(c.w)}" height="${r(h)}" ` +
         `as="geometry"/></mxCell></object>`,
     );
@@ -5088,6 +5369,35 @@ export function buildLdvDiagramXml(
     );
     edgeIdx += 1;
   }
+
+  // Merged connectors: decoration edges between boxes (or a box and a lone
+  // card). Deliberately a bare <mxCell>, never an <object> — see the doc
+  // comment above for why they must carry no relation identity at all.
+  const cellIdByKey = (key: string) => cellIdByGroup.get(key) ?? cellIdByCard.get(key);
+  connectors.forEach((c, i) => {
+    const src = cellIdByKey(c.sourceKey);
+    const tgt = cellIdByKey(c.targetKey);
+    if (!src || !tgt) return;
+    const routed = !!c.waypoints?.length || !!c.exit || !!c.entry;
+    const style = `${relationEdgeStyle({
+      flow: c.flow,
+      orthogonal: routed,
+      exit: c.exit,
+      entry: c.entry,
+      weight: c.count,
+    })}html=1;`;
+    const geometry = c.waypoints?.length
+      ? `<mxGeometry relative="1" as="geometry"><Array as="points">` +
+        c.waypoints.map((p) => `<mxPoint x="${r(p.x)}" y="${r(p.y)}"/>`).join("") +
+        `</Array></mxGeometry>`
+      : `<mxGeometry relative="1" as="geometry"/>`;
+    const label = c.label ? `${c.label} · ${c.count}` : String(c.count);
+    parts.push(
+      `<mxCell id="connector-${i}" value="${escapeXml(label)}" style="${escapeXml(style)}" ` +
+        `edge="1" parent="1" source="${escapeXml(src)}" target="${escapeXml(tgt)}">` +
+        `${geometry}</mxCell>`,
+    );
+  });
 
   return (
     `<mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" ` +

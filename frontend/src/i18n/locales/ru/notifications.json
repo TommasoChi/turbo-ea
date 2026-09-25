@@ -4,6 +4,10 @@
   "noNotifications": "Нет уведомлений",
   "opensExternally": "Откроется в новой вкладке",
   "opensReleaseNotes": "Открывает заметки о выпуске",
+  "opensDetails": "Открывает подробности",
+  "detail.sentBy": "Отправлено: {{extension}}",
+  "detail.openCard": "Открыть карточку",
+  "detail.open": "Открыть",
   "releaseNotes.title": "Доступна версия {{app}} {{version}}",
   "releaseNotes.titleFallback": "Заметки о выпуске",
   "releaseNotes.running": "У вас установлена версия {{version}}",
@@ -11,6 +15,7 @@
   "releaseNotes.empty": "Для этой версии заметки о выпуске не публиковались.",
   "releaseNotes.loadFailed": "Не удалось загрузить заметки о выпуске",
   "releaseNotes.installedTitle": "Что нового в {{app}} {{version}}",
+  "releaseNotes.extensionTitle": "Что нового в {{name}} {{version}}",
   "releaseNotes.updatedFrom": "Обновлено с версии {{version}}",
   "releaseNotes.alreadyInstalled": "Уже установлена",
   "releaseNotes.unavailableForVersion": "Заметки о выпуске {{version}} недоступны в этом экземпляре.",
@@ -46,5 +51,7 @@
   "preferences.appUpdateAvailable": "Доступно обновление",
   "preferences.appUpdated": "Приложение обновлено",
   "preferences.extensionAvailable": "Доступно новое расширение",
-  "preferences.extensionUpdateAvailable": "Доступно обновление расширения"
+  "preferences.extensionUpdateAvailable": "Доступно обновление расширения",
+  "preferences.extensionUpdated": "Расширение обновлено",
+  "preferences.extensionNotice": "Уведомление расширения"
 }

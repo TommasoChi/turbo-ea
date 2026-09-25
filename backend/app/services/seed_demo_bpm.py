@@ -1488,15 +1488,30 @@ _ASSESSMENT_SPECS = [
 # ===================================================================
 # BPMN DIAGRAM DATA  (embedded XML for key processes)
 # ===================================================================
-def _make_otc_bpmn() -> str:
-    """Return a NexaTech-specific Order-to-Cash BPMN 2.0 XML."""
-    return """<?xml version="1.0" encoding="UTF-8"?>
+def _make_otc_bpmn(
+    credit_check_id: uuid.UUID | None = None, invoicing_id: uuid.UUID | None = None
+) -> str:
+    """Return a NexaTech-specific Order-to-Cash BPMN 2.0 XML.
+
+    ``Task_CreditCheck`` is a **call activity** invoking the Credit Check
+    process — an independently defined process of its own in the demo — so
+    ``calledElement`` carries that card's UUID, the way the modeler writes it.
+    ``Task_Invoice`` is a plain service task linked to the Invoicing process
+    through Turbo EA's own ``turboea:processRef`` attribute — the general
+    case, since BPMN has no native slot for it. The ids exist only after the
+    cards are inserted, hence the arguments.
+    """
+    called = f' calledElement="{credit_check_id}"' if credit_check_id else ""
+    linked = f' turboea:processRef="{invoicing_id}"' if invoicing_id else ""
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:turboea="http://turbo-ea.io/schema/bpmn/1.0"
                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
                   id="Definitions_NexaOTC"
                   targetNamespace="http://turbo-ea.io/bpmn">
+  <bpmn:message id="Msg_CustomerOrder" name="Customer Order" />
   <bpmn:collaboration id="Collab_1">
     <bpmn:participant id="Part_1" name="NexaTech Order to Cash" processRef="Proc_1" />
   </bpmn:collaboration>
@@ -1522,17 +1537,17 @@ def _make_otc_bpmn() -> str:
         <bpmn:flowNodeRef>Task_ConfirmDelivery</bpmn:flowNodeRef>
       </bpmn:lane>
     </bpmn:laneSet>
-    <bpmn:startEvent id="Start_1" name="Customer Order Received"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:startEvent id="Start_1" name="Customer Order Received"><bpmn:outgoing>F1</bpmn:outgoing><bpmn:messageEventDefinition id="MsgDef_Start_1" messageRef="Msg_CustomerOrder" /></bpmn:startEvent>
     <bpmn:userTask id="Task_ReceiveOrder" name="Receive &amp; Log Order"><bpmn:documentation>Log order in Salesforce, create SO in SAP.</bpmn:documentation><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing></bpmn:userTask>
     <bpmn:serviceTask id="Task_ValidateOrder" name="Validate Order Data"><bpmn:documentation>Check pricing, product availability, and customer data.</bpmn:documentation><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing></bpmn:serviceTask>
-    <bpmn:serviceTask id="Task_CreditCheck" name="Run Credit Check"><bpmn:documentation>Automated credit scoring via SAP Credit Management.</bpmn:documentation><bpmn:incoming>F3</bpmn:incoming><bpmn:outgoing>F4</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:callActivity id="Task_CreditCheck" name="Run Credit Check"{called}><bpmn:documentation>Automated credit scoring via SAP Credit Management.</bpmn:documentation><bpmn:incoming>F3</bpmn:incoming><bpmn:outgoing>F4</bpmn:outgoing></bpmn:callActivity>
     <bpmn:exclusiveGateway id="GW_Credit" name="Credit Approved?"><bpmn:incoming>F4</bpmn:incoming><bpmn:outgoing>F_OK</bpmn:outgoing><bpmn:outgoing>F_Fail</bpmn:outgoing></bpmn:exclusiveGateway>
     <bpmn:userTask id="Task_RejectOrder" name="Notify &amp; Reject Order"><bpmn:incoming>F_Fail</bpmn:incoming><bpmn:outgoing>F_EndR</bpmn:outgoing></bpmn:userTask>
     <bpmn:endEvent id="End_Rejected" name="Order Rejected"><bpmn:incoming>F_EndR</bpmn:incoming></bpmn:endEvent>
     <bpmn:userTask id="Task_PickPack" name="Pick &amp; Pack"><bpmn:documentation>Warehouse staff picks items and packs for shipping.</bpmn:documentation><bpmn:incoming>F_OK</bpmn:incoming><bpmn:outgoing>F5</bpmn:outgoing></bpmn:userTask>
     <bpmn:serviceTask id="Task_Ship" name="Ship &amp; Track"><bpmn:documentation>Generate shipping label, dispatch carrier, track delivery.</bpmn:documentation><bpmn:incoming>F5</bpmn:incoming><bpmn:outgoing>F6</bpmn:outgoing></bpmn:serviceTask>
     <bpmn:userTask id="Task_ConfirmDelivery" name="Confirm Delivery"><bpmn:incoming>F6</bpmn:incoming><bpmn:outgoing>F7</bpmn:outgoing></bpmn:userTask>
-    <bpmn:serviceTask id="Task_Invoice" name="Generate Invoice"><bpmn:documentation>Auto-generate invoice in SAP upon delivery confirmation.</bpmn:documentation><bpmn:incoming>F7</bpmn:incoming><bpmn:outgoing>F8</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_Invoice" name="Generate Invoice"{linked}><bpmn:documentation>Auto-generate invoice in SAP upon delivery confirmation.</bpmn:documentation><bpmn:incoming>F7</bpmn:incoming><bpmn:outgoing>F8</bpmn:outgoing></bpmn:serviceTask>
     <bpmn:userTask id="Task_CollectPayment" name="Collect Payment"><bpmn:incoming>F8</bpmn:incoming><bpmn:outgoing>F9</bpmn:outgoing></bpmn:userTask>
     <bpmn:endEvent id="End_Complete" name="Order Complete"><bpmn:incoming>F9</bpmn:incoming></bpmn:endEvent>
     <bpmn:sequenceFlow id="F1" sourceRef="Start_1" targetRef="Task_ReceiveOrder" />
@@ -1586,7 +1601,7 @@ def _make_otc_bpmn() -> str:
 _OTC_ELEMENTS = [
     ("Task_ReceiveOrder", "userTask", "Receive & Log Order", "Sales", False, 0),
     ("Task_ValidateOrder", "serviceTask", "Validate Order Data", "Sales", True, 1),
-    ("Task_CreditCheck", "serviceTask", "Run Credit Check", "Finance", True, 2),
+    ("Task_CreditCheck", "callActivity", "Run Credit Check", "Finance", True, 2),
     ("GW_Credit", "exclusiveGateway", "Credit Approved?", "Finance", False, 3),
     ("Task_RejectOrder", "userTask", "Notify & Reject Order", "Finance", False, 4),
     ("Task_PickPack", "userTask", "Pick & Pack", "Warehouse & Logistics", False, 5),
@@ -1713,7 +1728,9 @@ async def seed_bpm_demo_data(db: AsyncSession) -> dict:
     diagram_count = 0
     element_count = 0
     if otc_id:
-        otc_xml = _make_otc_bpmn()
+        credit_check_id = _refs.get("bp_credit_check")
+        invoicing_id = _refs.get("bp_invoicing")
+        otc_xml = _make_otc_bpmn(credit_check_id, invoicing_id)
         diagram = ProcessDiagram(
             process_id=otc_id,
             bpmn_xml=otc_xml,
@@ -1752,12 +1769,18 @@ async def seed_bpm_demo_data(db: AsyncSession) -> dict:
                 elem.application_id = name_to_id.get("SAP S/4HANA")
             elif name == "Run Credit Check":
                 elem.application_id = name_to_id.get("SAP S/4HANA")
+                # The call activity's callee — what the XML's calledElement says.
+                elem.called_element = str(credit_check_id) if credit_check_id else None
+                elem.business_process_id = credit_check_id
             elif name == "Pick & Pack":
                 elem.application_id = name_to_id.get("Siemens Opcenter")
             elif name == "Ship & Track":
                 elem.application_id = name_to_id.get("SAP S/4HANA")
             elif name == "Generate Invoice":
                 elem.application_id = name_to_id.get("SAP S/4HANA")
+                # A plain step linked to a process — what turboea:processRef says.
+                elem.called_element = str(invoicing_id) if invoicing_id else None
+                elem.business_process_id = invoicing_id
             elif name == "Collect Payment":
                 elem.application_id = name_to_id.get("SAP S/4HANA")
             db.add(elem)

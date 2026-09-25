@@ -29,8 +29,45 @@ export function canBuy(item: StoreItem, claimingKey: string | null): boolean {
   );
 }
 
+/**
+ * Is a second, monthly billing plan on offer?
+ *
+ * The yearly plan is `payment_link` and stays the default everywhere — it is
+ * the discounted one, and the only one every listing has. A listing that also
+ * sells monthly carries `monthly_payment_link`, and then the buyer picks.
+ *
+ * Deliberately NOT a tile action: the tile shows at most two buttons (see
+ * `tileActions`), and a plan choice is not worth evicting Install or Try
+ * free. The drawer, which shows everything, is where the two plans sit.
+ */
+export function canBuyMonthly(item: StoreItem, claimingKey: string | null): boolean {
+  return canBuy(item, claimingKey) && Boolean(item.monthly_payment_link);
+}
+
+/**
+ * A service listing has nothing to install — the purchase is confirmed by the
+ * licence that reaches the instance, so neither Install nor Update ever
+ * applies to it, whatever the catalogue says about versions.
+ */
 export function canInstall(item: StoreItem): boolean {
+  if (item.service) return false;
   return !item.installed_version || item.update_available;
+}
+
+/**
+ * Is this button an *update* rather than a first install?
+ *
+ * Only ever true for something already installed. A catalogue item that is
+ * not installed always offers a plain **Install**, which downloads whatever
+ * version the catalogue currently publishes — there is no older version to
+ * update from, so labelling it "Update to X" describes an act the admin has
+ * not performed. The backend agrees (`store_update_available` requires an
+ * installed version), but the label read `update_available` alone, so a
+ * catalogue that ever set the flag on an uninstalled item would say Update.
+ */
+export function isUpdate(item: StoreItem): boolean {
+  if (item.service) return false;
+  return Boolean(item.installed_version) && item.update_available;
 }
 
 /**

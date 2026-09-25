@@ -28,6 +28,8 @@ Gruppieren Sie zusammengehörige Diagramme in **Gruppen** — gemeinsame, arbeit
 
 Beim Öffnen eines Diagramms startet der DrawIO-Editor im Vollbildmodus in einem Same-Origin-iframe. Die native DrawIO-Symbolleiste steht für Formen, Verbinder, Text und Layout zur Verfügung -- jede Turbo-EA-Aktion ist über das Rechtsklick-Kontextmenü, die Sync-Schaltfläche in der Symbolleiste und das Chevron-Overlay über jeder Karte erreichbar.
 
+![Diagramm-Editor mit nach Geschäftskritikalität eingefärbten Karten](../assets/img/de/99_diagramm_editor.png)
+
 ### Karten einfügen
 
 Verwenden Sie den Dialog **Karten einfügen** (aus der Symbolleiste oder dem Kontextmenü), um Karten zur Leinwand hinzuzufügen:
@@ -86,7 +88,9 @@ Das Dropdown **Färben nach** in der Symbolleiste färbt die Karten auf der Lein
 - **Genehmigungsstatus** -- färbt nach `genehmigt` / `ausstehend` / `defekt`.
 - **Feldwerte** -- haken Sie ein Einzelauswahl-Feld unter einem beliebigen Kartentyp auf der Leinwand an. **Mehrere Kartentypen können gleichzeitig je eine Regel tragen** -- Anwendungen nach Kritikalität *und* IT-Komponenten nach Hosting-Modell. Ein Kartentyp ohne Regel behält seine bisherige Farbe, auch eine von Hand gesetzte Füllung; grau wird nur eine Karte, deren eigene Regel keinen Wert findet. Ein zweites Feld innerhalb eines Kartentyps ersetzt das erste, denn eine Karte hat eine Füllung.
 
-Eine schwebende Legende unten links zeigt eine Skala je aktiver Regel. Feldregeln und **Genehmigungsstatus** sind Alternativen, keine Ebenen: die Wahl der einen löscht die andere. Werden alle Regeln abgewählt, kehrt die Leinwand zu den Kartenfarben zurück. Die Wahl wird mit dem Diagramm gespeichert.
+Eine schwebende Legende unten links zeigt eine Skala je aktiver Regel. Feldregeln und **Genehmigungsstatus** sind Alternativen, keine Ebenen: die Wahl der einen löscht die andere. Werden alle Regeln abgewählt, kehrt die Leinwand zu den Kartenfarben zurück. Die Wahl wird mit dem Diagramm gespeichert. Dieselbe Legende erscheint auch, wenn das Diagramm im Ansichtsmodus geöffnet oder über seinen veröffentlichten bzw. eingebetteten Link angezeigt wird, damit Leser die Bedeutung der Farben erkennen.
+
+![Diagramm im Ansichtsmodus mit Farblegende](../assets/img/de/99b_diagramm_ansicht_legende.png)
 
 #### Auf Karte anzeigen
 
@@ -139,6 +143,8 @@ Die **Sync**-Schaltfläche in der Symbolleiste öffnet den Seiten-Drawer mit all
     - eine **gelöschte Relation** -- *Kante vom Diagramm entfernen* nimmt die veraltete Kante von der Leinwand;
     - eine Relation mit geänderter **Flussrichtung** -- *Update übernehmen* richtet die Pfeilspitze nach dem Inventar aus.
 
+![Synchronisierungsleiste im Diagramm-Editor](../assets/img/de/99a_diagramm_synchronisierung.png)
+
 Turbo EA **prüft bei jedem Öffnen eines Diagramms automatisch auf Inventaränderungen** -- ein blaues Badge auf der Sync-Schaltfläche der Symbolleiste zählt die zu prüfenden Änderungen. Nichts wird ohne Ihre Bestätigung angewendet; das Badge lädt nur in die Seitenleiste ein. Die Schaltfläche **Updates prüfen** in der Seitenleiste führt dieselbe Prüfung bei Bedarf erneut aus.
 
 Die Sync-Schaltfläche der Symbolleiste zeigt eine pulsierende «N unsynchron»-Pille, sobald ausstehende Arbeit existiert. Das Verlassen des Tabs mit nicht synchronisierten Änderungen löst eine Browser-Warnung aus, und die Leinwand wird alle fünf Sekunden im lokalen Speicher gespeichert, damit ein versehentlicher Refresh beim erneuten Öffnen wiederhergestellt werden kann.
@@ -156,7 +162,7 @@ Ein Diagramm kann als **schreibgeschützter Link veröffentlicht werden, der sic
 Der Dialog bietet zwei Optionen und zwei Zeichenfolgen zum Kopieren:
 
 - **Jeder mit dem Link** — keine Anmeldung. Behandeln Sie den Link wie ein Passwort: Wer ihn weitergeleitet bekommt, kann das Diagramm sehen.
-- **Nur angemeldete Personen** — Besucher authentifizieren sich über Ihren Identitätsanbieter, optional beschränkt auf bestimmte E-Mail-Domains. Es wird kein Turbo-EA-Konto für sie angelegt.
+- **Nur angemeldete Personen** — Besucher authentifizieren sich über Ihren Identitätsanbieter, optional beschränkt auf bestimmte E-Mail-Domains. Es wird kein Turbo-EA-Konto für sie angelegt. In einer Einbettung öffnet sich die Anmeldung in einem kleinen Pop-up-Fenster, und Turbo EA muss über HTTPS bereitgestellt werden, damit die Sitzung im Frame erhalten bleibt; Besucher melden sich einmal pro Website an, in die das Diagramm eingebettet ist.
 
 Die veröffentlichte Seite zeigt nur das Bild. Sie lässt sich verschieben und zoomen, es gibt jedoch keinen Absprung zu Kartendetails, und die Kartenkennungen hinter den Formen werden entfernt, bevor das Diagramm den Server verlässt. Das Deaktivieren der Veröffentlichung wirkt sofort, auch für Personen, die gerade zusehen. Ein späteres erneutes Veröffentlichen stellt denselben Link wieder her, sodass bereits eingefügte URLs weiter funktionieren.
 
@@ -176,3 +182,6 @@ Die veröffentlichte Seite zeigt nur das Bild. Sie lässt sich verschieben und z
 3. Fügen Sie in Confluence ein **HTML**-Makro ein (oder *Iframe* / *HTML include*, je nachdem, was Ihre Instanz zulässt) und setzen Sie den Einbettungscode ein.
 
 Erlaubt Ihr Confluence keine HTML-Makros, fügen Sie stattdessen den einfachen **Link** ein — er öffnet dieselbe Ansicht in einem neuen Tab.
+
+!!! note "Anmeldung in einer Einbettung"
+    Ein für *Nur angemeldete Personen* veröffentlichtes Diagramm zeigt in der Einbettung eine Schaltfläche **Anmelden**. Sie öffnet Ihren Identitätsanbieter in einem kleinen Pop-up-Fenster; sobald sich dieses Fenster schließt, erscheint das Diagramm. Drei Dinge können im Weg stehen: Turbo EA muss über **HTTPS** bereitgestellt werden (Browser behalten die websiteübergreifende Sitzung, die eine Einbettung braucht, nur auf einem sicheren Ursprung); die einbettende Seite muss Pop-ups aus ihren Frames zulassen (ein Sandbox-Frame ohne `allow-popups` blockiert sowohl das Pop-up als auch den Ersatzlink); und in Safari verwenden Sie den Link **Diagramm in einem neuen Tab öffnen**, den die Anmeldeseite anbietet. Unabhängig davon weigert sich Chrome, eine Einbettung von einer Adresse im privaten Netz (eine interne IP oder ein interner Hostname) in eine öffentliche Seite wie Confluence Cloud zu laden — veröffentlichen Sie die Instanz unter einem öffentlichen HTTPS-Hostnamen oder betten Sie sie aus einem Wiki im selben Netz ein.

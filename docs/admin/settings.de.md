@@ -29,6 +29,12 @@ Laden Sie ein benutzerdefiniertes Logo hoch, das in der oberen Navigationsleiste
 
 Wählen Sie Hintergrund- und Textfarbe der oberen Navigationsleiste. Der gewählte Stil gilt für **alle Benutzer** der Instanz, auf Desktop und Mobilgeräten (einschließlich des mobilen Menüs). Wählen Sie eine der sieben kuratierten Voreinstellungen — Marineblau (Standard), Hell, Anthrazit, Schiefer, Blau, Waldgrün oder Pflaume — oder wählen Sie **Benutzerdefiniert**, um Hintergrund- und Textfarbe frei über die Farbwähler festzulegen. Eine Live-Vorschau zeigt vor dem Speichern, wie die Navigationsleiste aussehen wird, und eine Warnung erscheint, wenn der Kontrast zwischen Text und Hintergrund zu gering ist (unter WCAG AA). Klicken Sie auf **Auf Standard zurücksetzen**, um zum Standard zurückzukehren.
 
+### Anwendungstitel
+
+Legen Sie den Namen fest, unter dem diese Instanz bekannt ist. Er ersetzt «Turbo EA» im Browser-Tab, auf der Anmeldeseite und in den E-Mails, die die Instanz versendet.
+
+Der Browser-Tab stellt die aktuelle Seite davor — `Inventar | Turbo EA` im Inventar, `SAP S/4HANA | Turbo EA` auf einer Karte, `GRC · Risiko | Turbo EA` auf einer Seite, die mit einem bestimmten Tab geöffnet wurde — sodass eine Reihe offener Tabs lesbar bleibt. Die Startseite und die Anmeldeseite zeigen nur den Titel.
+
 ### Favicon
 
 Laden Sie ein benutzerdefiniertes Browser-Symbol (Favicon) hoch. Die Änderung wird beim nächsten Seitenaufruf wirksam. Klicken Sie auf **Zurücksetzen**, um zum Standardsymbol zurückzukehren.
@@ -59,7 +65,7 @@ Mindestens eine Sprache muss jederzeit aktiviert bleiben.
 
 ### Beginn des Geschäftsjahres
 
-Wählen Sie den Monat, in dem das Geschäftsjahr Ihrer Organisation beginnt (Januar bis Dezember). Diese Einstellung beeinflusst, wie **Budgetzeilen** im PPM-Modul nach Geschäftsjahr gruppiert werden. Wenn das Geschäftsjahr beispielsweise im April beginnt, gehört eine Budgetzeile vom Juni 2026 zum GJ 2026–2027.
+Wählen Sie den Monat, in dem das Geschäftsjahr Ihrer Organisation beginnt (Januar bis Dezember). Diese Einstellung beeinflusst, wie **Budgetzeilen** im PPM-Modul nach Geschäftsjahr gruppiert werden. Wenn das Geschäftsjahr beispielsweise im April beginnt, gehört eine Budgetzeile vom Juni 2026 zum GJ 2026–2027. Sie bestimmt außerdem, welches Geschäftsjahr der [Kostenbericht](../guide/reports.md) zeigt.
 
 Der Standardwert ist **Januar** (Kalenderjahr = Geschäftsjahr).
 
@@ -84,6 +90,8 @@ Turbo EA versendet Einladungs-E-Mails, Umfrage-Benachrichtigungen, Passwort-Zur�
     Microsoft 365 deaktiviert die Basis-SMTP-Authentifizierung (für neue Mandanten nicht verfügbar, für bestehende über 2026–2027 entfernt), und Google Workspace hat sie im März 2025 deaktiviert. Verwenden Sie für diese Plattformen eine der untenstehenden OAuth-Methoden anstelle eines Postfachpassworts.
 
 ### Versandmethoden
+
+![E-Mail-Versand mit der Auswahl der Versandmethode](../assets/img/de/95a_admin_einstellungen_email.png)
 
 | Methode | Wann verwenden |
 |---------|----------------|
@@ -132,6 +140,8 @@ Klicken Sie nach der Konfiguration auf **Test-E-Mail senden**, um die Funktion z
     E-Mail ist optional. Wenn keine Methode konfiguriert ist, überspringen Funktionen, die E-Mails senden, die Zustellung ohne Fehler.
 
 ## BPM-Modul
+
+![Modulschalter unter Einstellungen → Allgemein](../assets/img/de/95_admin_einstellungen_module.png)
 
 Schalten Sie das **Business Process Management**-Modul ein oder aus. Wenn deaktiviert:
 

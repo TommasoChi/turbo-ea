@@ -4,6 +4,10 @@
   "noNotifications": "Aucune notification",
   "opensExternally": "S'ouvre dans un nouvel onglet",
   "opensReleaseNotes": "Ouvre les notes de version",
+  "opensDetails": "Ouvre les détails",
+  "detail.sentBy": "Envoyé par {{extension}}",
+  "detail.openCard": "Ouvrir la fiche",
+  "detail.open": "Ouvrir",
   "releaseNotes.title": "{{app}} {{version}} est disponible",
   "releaseNotes.titleFallback": "Notes de version",
   "releaseNotes.running": "Vous utilisez la version {{version}}",
@@ -11,6 +15,7 @@
   "releaseNotes.empty": "Aucune note de version n'a été publiée pour cette version.",
   "releaseNotes.loadFailed": "Impossible de charger les notes de version",
   "releaseNotes.installedTitle": "Nouveautés de {{app}} {{version}}",
+  "releaseNotes.extensionTitle": "Nouveautés de {{name}} {{version}}",
   "releaseNotes.updatedFrom": "Mise à jour depuis la version {{version}}",
   "releaseNotes.alreadyInstalled": "Déjà installée",
   "releaseNotes.unavailableForVersion": "Les notes de version pour {{version}} ne sont pas disponibles sur cette instance.",
@@ -46,5 +51,7 @@
   "preferences.appUpdateAvailable": "Mise à jour disponible",
   "preferences.appUpdated": "Application mise à jour",
   "preferences.extensionAvailable": "Nouvelle extension disponible",
-  "preferences.extensionUpdateAvailable": "Mise à jour d'extension disponible"
+  "preferences.extensionUpdateAvailable": "Mise à jour d'extension disponible",
+  "preferences.extensionUpdated": "Extension mise à jour",
+  "preferences.extensionNotice": "Avis d’une extension"
 }

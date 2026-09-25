@@ -47,6 +47,9 @@ import MenuSectionHeader from "@/components/MenuSectionHeader";
 import { cardLogoUrl } from "@/components/CardLogoAvatar";
 import { getCurrentPhase } from "@/components/LifecycleBadge";
 import LdvShowOnCard from "./LdvShowOnCard";
+import LdvTypeFilter from "./LdvTypeFilter";
+import LdvAggregateSelect from "./LdvAggregateSelect";
+import LdvCluster from "./LdvCluster";
 import LdvLineStyleSelect from "./LdvLineStyleSelect";
 import {
   ReactFlow,
@@ -75,17 +78,16 @@ import { useCardSubtypeLabel } from "@/hooks/useCardSubtypeLabel";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useLdvSettings, toCardLabels, type LdvBackgroundStyle } from "./ldvDisplaySettings";
 import type { CardType } from "@/types";
-import {
-  buildLdvDiagramXml,
-  type DiagramCardInput,
-  type DiagramFreeformInput,
-  type DiagramRelInput,
-  type DiagramLayerInput,
-} from "@/features/diagrams/drawio-shapes";
+import { buildLdvDiagramXml } from "@/features/diagrams/drawio-shapes";
+import { collectDiagramInputs } from "./ldvDiagramExport";
+import LdvExportAggregatedDialog from "./LdvExportAggregatedDialog";
 import {
   buildLdvFlow,
   relationValueSuffix,
   filterEndOfLifeNodes,
+  filterHiddenTypes,
+  buildLdvAggregateFlow,
+  orientEdgesToRelationTypes,
   stripEdgeLabels,
   LDV_NODE_W,
   LDV_NODE_H,
@@ -97,10 +99,11 @@ import {
   type LdvGroupData,
   type LdvEdgeData,
   type LayerOverrides,
+  type LdvClusterData,
 } from "./layeredDependencyLayout";
 import { LDV_HANDLE_SPECS } from "./ldvHandles";
 import { ldvEdgeStroke } from "./ldvLineStyle";
-import { computeAbsPos, exportRoute } from "./ldvEdgeRouting";
+import { absolutePosition } from "./ldvEdgeRouting";
 import { buildRoundedOrthPath } from "./ldvChannels";
 import { ldvFocusRing } from "./ldvFocusRing";
 import LinkChangeIcon from "./LinkChangeIcon";
@@ -138,12 +141,21 @@ function computeObstacles(nodeList: Node[]): ObstacleBounds[] {
   const bounds: ObstacleBounds[] = [];
   for (const n of nodeList) {
     if (n.type === "ldvNode" && n.parentId) {
-      const parent = byId.get(n.parentId);
-      if (!parent) continue;
       const w = (n.style?.width as number) ?? LDV_NODE_W;
       const h = (n.style?.height as number) ?? LDV_NODE_H;
-      const ax = parent.position.x + n.position.x;
-      const ay = parent.position.y + n.position.y;
+      // Through the whole chain: in aggregate mode a card sits inside a type
+      // box inside a lane, and one level of flattening puts its obstacle box
+      // in the wrong place.
+      const { x: ax, y: ay } = absolutePosition(n, byId);
+      bounds.push({ x1: ax, y1: ay, x2: ax + w, y2: ay + h });
+    } else if (n.type === "ldvCluster") {
+      // The WHOLE box, not just its title strip: an aggregate connector may
+      // cross a box it does not belong to, and its count must not come to rest
+      // inside one — a number floating among a box's cards reads as belonging
+      // to them.
+      const w = (n.style?.width as number) ?? 0;
+      const h = (n.style?.height as number) ?? 0;
+      const { x: ax, y: ay } = absolutePosition(n, byId);
       bounds.push({ x1: ax, y1: ay, x2: ax + w, y2: ay + h });
     } else if (n.type === "ldvGroup") {
       // Group label strip across the top of the box.
@@ -1130,17 +1142,35 @@ const LdvEdgeComponent = memo(
     const [labelPos, setLabelPos] = useState<{ x: number; y: number } | null>(null);
 
     const flowDir = edgeData?.flowDirection;
+    // Aggregate mode: how many relations this one connector stands for. Its own
+    // span, never part of `relLabel` — the cap below would eat it on a long
+    // verb, and with the verbs hidden the count is all the line has left to say.
+    const mergedCount = edgeData?.count;
+    const countText = mergedCount !== undefined ? String(mergedCount) : "";
     const maxChars = 24;
     const displayLabel = label.length > maxChars
       ? label.slice(0, maxChars - 1) + "\u2026"
       : label;
-    const labelW = displayLabel.length * 6.5 + 16 + (flowDir ? 17 : 0) + ((removed || added) ? 50 : 0);
+    // A connector's count is a filled pill beside the verb, wider than the
+    // bracketed text it replaces.
+    const labelW =
+      displayLabel.length * 6.5 + 16 + (flowDir ? 17 : 0) + (countText ? countText.length * 7 + 14 : 0) +
+      (removed || added ? 50 : 0);
+    // A connector standing for N relations is ONE heavy solid line, never the
+    // dotted idle style — a 1.2 px dotted line is what the eye reads as several
+    // thin lines running together, which is the picture aggregating exists to
+    // replace. Width grows with the count so "one heavy line = many relations"
+    // reads at fit-to-screen, as in the #1117 sketch.
+    const isConnector = mergedCount !== undefined;
+    const connectorWidth = isConnector
+      ? 1.6 + Math.min(2.8, Math.log2(Math.max(1, mergedCount)))
+      : 0;
     const labelH = 20;
     const margin = 6;
 
     useEffect(() => {
       const el = pathRef.current;
-      if (!el || !label) return;
+      if (!el || (!label && !countText)) return;
       el.setAttribute("d", path);
       const total = el.getTotalLength();
 
@@ -1182,7 +1212,7 @@ const LdvEdgeComponent = memo(
       }
 
       setLabelPos(bestPt ?? { x: preferred.x, y: preferred.y });
-    }, [path, labelT, label, obstacleBounds, labelW, labelH]);
+    }, [path, labelT, label, countText, obstacleBounds, labelW, labelH]);
 
     const finalLx = labelPos?.x ?? lx;
     const finalLy = labelPos?.y ?? ly;
@@ -1192,6 +1222,12 @@ const LdvEdgeComponent = memo(
         {/* Hidden path for label position measurement */}
         <path ref={pathRef} fill="none" stroke="none" visibility="hidden" />
         {/* Invisible wider path for easier hover targeting */}
+        {/* The wide invisible path is the line's hover target, so it is also
+            where its tooltip belongs: a relation's description, and on an
+            aggregate connector the list of relations it stands for. A <title>
+            rather than a MUI Tooltip — this is inside React Flow's SVG layer,
+            where a portalled popper would be positioned against the wrong
+            coordinate space. */}
         <path
           d={path}
           fill="none"
@@ -1200,7 +1236,9 @@ const LdvEdgeComponent = memo(
           style={{ cursor: "pointer", pointerEvents: "stroke" }}
           onMouseEnter={edgeData?.onHover}
           onMouseLeave={edgeData?.onLeave}
-        />
+        >
+          {edgeData?.description && <title>{edgeData.description}</title>}
+        </path>
         <BaseEdge
           id={id}
           path={path}
@@ -1208,12 +1246,20 @@ const LdvEdgeComponent = memo(
           markerStart={markerStart}
           style={{
             stroke: color,
-            strokeWidth: active ? 2 : 1.2,
-            ...ldvEdgeStroke(edgeData?.lineStyle, { active, severed }),
+            strokeWidth: isConnector
+              ? active
+                ? connectorWidth + 0.8
+                : connectorWidth
+              : active
+                ? 2
+                : 1.2,
+            ...(isConnector
+              ? ldvEdgeStroke("solid", { active, severed })
+              : ldvEdgeStroke(edgeData?.lineStyle, { active, severed })),
             transition: "stroke 0.15s, stroke-width 0.15s",
           }}
         />
-        {label && (
+        {(label || countText) && (
           <EdgeLabelRenderer>
             <div
               style={{
@@ -1245,7 +1291,28 @@ const LdvEdgeComponent = memo(
                 background: STATUS_COLORS.success, color: "#fff", borderRadius: 3,
                 fontSize: 9, fontWeight: 700, lineHeight: "14px", padding: "0 3px",
               }}>NEW</span>}
-              <span>{displayLabel}</span>
+              {displayLabel && <span>{displayLabel}</span>}
+              {isConnector && (
+                // The count as a filled pill in the line's own colour: the one
+                // number a merged connector exists to carry, readable at
+                // fit-to-screen instead of 10 px text in brackets.
+                <span
+                  style={{
+                    display: "inline-block",
+                    minWidth: 18,
+                    padding: "1px 6px",
+                    borderRadius: 9,
+                    background: color,
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    lineHeight: "16px",
+                    textAlign: "center",
+                  }}
+                >
+                  {mergedCount}
+                </span>
+              )}
             </div>
           </EdgeLabelRenderer>
         )}
@@ -1262,6 +1329,7 @@ LdvEdgeComponent.displayName = "LdvEdgeComponent";
 const nodeTypes = {
   ldvNode: LdvNode,
   ldvGroup: LdvGroup,
+  ldvCluster: LdvCluster,
 };
 
 const edgeTypes = {
@@ -1458,41 +1526,95 @@ function LayeredDependencyInner({
     return () => { cancelled = true; };
   }, [rawNodes, selectedDisplayKeySignature, cardTypeByKey]);
 
+  const { relationTypes } = useMetamodel();
+  const relTypeByKey = useMemo(
+    () => new Map(relationTypes.map((rt) => [rt.key, rt])),
+    [relationTypes],
+  );
+
+  /* ---- Draw every relation the way its TYPE runs ----
+     `flowDirection` means something on the relation type's axis (forward on
+     Application → Interface is the application providing), so a row stored the
+     other way round must be turned before anything lays it out or draws its
+     arrowheads — otherwise a provider is drawn as a consumer (#1140). Done once,
+     here, so both layouts, hover and "Create diagram" agree. */
+  const orientedEdges = useMemo(
+    () => orientEdgesToRelationTypes(rawNodes, rawEdges, relTypeByKey),
+    [rawNodes, rawEdges, relTypeByKey],
+  );
+
   /* ---- Hide end-of-life related cards unless toggled on (centre always kept) ---- */
-  const { nodes, edges } = useMemo(
+  const lifecycleFiltered = useMemo(
     () =>
       settings.showEndOfLife
-        ? { nodes: rawNodes, edges: rawEdges }
-        : filterEndOfLifeNodes(rawNodes, rawEdges, centerId, asOfMs),
-    [rawNodes, rawEdges, settings.showEndOfLife, centerId, asOfMs],
+        ? { nodes: rawNodes, edges: orientedEdges }
+        : filterEndOfLifeNodes(rawNodes, orientedEdges, centerId, asOfMs),
+    [rawNodes, orientedEdges, settings.showEndOfLife, centerId, asOfMs],
+  );
+
+  /* ---- Card types on the view, counted BEFORE the type filter ----
+     The Card types menu lists these, so a type the reader has switched off is
+     still listed, with the number of cards ticking it would bring back. */
+  const typeCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of lifecycleFiltered.nodes) m.set(n.type, (m.get(n.type) ?? 0) + 1);
+    return m;
+  }, [lifecycleFiltered.nodes]);
+
+  const hiddenTypes = useMemo(
+    () => new Set(settings.hiddenTypeKeys),
+    [settings.hiddenTypeKeys],
+  );
+
+  /* ---- Drop the card types the reader unticked (centre always kept) ----
+     Everything downstream — the layout builders, the field catalogue, the
+     hierarchy markers, the stats chip — reads `nodes`/`edges`, so the filter
+     applies once here and nothing else has to know about it. */
+  const { nodes, edges } = useMemo(
+    () =>
+      filterHiddenTypes(lifecycleFiltered.nodes, lifecycleFiltered.edges, hiddenTypes, centerId),
+    [lifecycleFiltered, hiddenTypes, centerId],
   );
 
   /* ---- Resolve a relation's single-select attribute value(s) into a
          bracketed label suffix (e.g. " [Leading]"), using the metamodel's
          relation-type attribute schemas. flowDirection is excluded — it is
          shown as a direction arrow, not a bracket. ---- */
-  const { relationTypes } = useMetamodel();
-  const relTypeByKey = useMemo(
-    () => new Map(relationTypes.map((rt) => [rt.key, rt])),
-    [relationTypes],
-  );
   const relValueResolver = useCallback(
     (edge: GEdge): string | undefined =>
       relationValueSuffix(edge, relTypeByKey, (opt) => fieldLabel(opt)),
     [relTypeByKey, fieldLabel],
   );
 
-  const { nodes: builtNodes, edges: rfEdges } = useMemo(
-    () =>
-      buildLdvFlow(
+  const {
+    nodes: builtNodes,
+    edges: rfEdges,
+    memberOf,
+  } = useMemo(() => {
+    const resolver = settings.showRelationValues ? relValueResolver : undefined;
+    if (settings.aggregateBy !== "none") {
+      return buildLdvAggregateFlow(
         nodes,
         edges,
         types,
-        settings.showRelationValues ? relValueResolver : undefined,
-        layerOverrides,
-      ),
-    [nodes, edges, types, settings.showRelationValues, relValueResolver, layerOverrides],
-  );
+        settings.aggregateBy,
+        centerId,
+        resolver,
+        (n) => t("dependency.aggregateMore", { count: n }),
+      );
+    }
+    return { ...buildLdvFlow(nodes, edges, types, resolver, layerOverrides), memberOf: undefined };
+  }, [
+    nodes,
+    edges,
+    types,
+    settings.showRelationValues,
+    settings.aggregateBy,
+    relValueResolver,
+    centerId,
+    layerOverrides,
+    t,
+  ]);
 
   /* ---- Original card data (attributes/lifecycle) by id + field catalogue ---- */
   const gnodeById = useMemo(
@@ -1610,19 +1732,9 @@ function LayeredDependencyInner({
       if (exportNodes.length === 0) return;
       // Flatten child coordinates to absolute so bounds cover the whole graph.
       const byId = new Map(exportNodes.map((n) => [n.id, n]));
-      const absNodes = exportNodes.map((n) => {
-        if (n.parentId) {
-          const p = byId.get(n.parentId);
-          if (p) {
-            return {
-              ...n,
-              parentId: undefined,
-              position: { x: p.position.x + n.position.x, y: p.position.y + n.position.y },
-            };
-          }
-        }
-        return n;
-      });
+      const absNodes = exportNodes.map((n) =>
+        n.parentId ? { ...n, parentId: undefined, position: absolutePosition(n, byId) } : n,
+      );
       const bounds = getNodesBounds(absNodes);
       const pad = 48;
 
@@ -1722,13 +1834,19 @@ function LayeredDependencyInner({
      Turns the on-screen LDV into a real diagram in the Diagram module. Card
      shapes carry cardId/cardType so they stay connected to the inventory;
      relation edges are display-only (never marked pending → no duplicate
-     relations created). Layer swim-lanes render as background boxes. */
+     relations created). Layer swim-lanes render as background boxes. An
+     AGGREGATED view exports its boxes as containers with the cards nested
+     inside, and its merged connectors as decoration — said to the reader in
+     a confirmation step first, since a line standing for N relations cannot
+     be synced or flagged the way a relation line is. */
+  const [createConfirmOpen, setCreateConfirmOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(false);
 
-  const openCreateDialog = useCallback(() => {
+  const openCreateNameDialog = useCallback(() => {
+    setCreateConfirmOpen(false);
     setCreateError(false);
     setCreateName(
       t("dependency.createDiagramDefaultName", { name: centerName || t("dependency.title") }),
@@ -1736,105 +1854,30 @@ function LayeredDependencyInner({
     setCreateOpen(true);
   }, [centerName, t]);
 
+  const openCreateDialog = useCallback(() => {
+    if (settings.aggregateBy !== "none") setCreateConfirmOpen(true);
+    else openCreateNameDialog();
+  }, [settings.aggregateBy, openCreateNameDialog]);
+
   const submitCreateDiagram = useCallback(async () => {
     const name = createName.trim();
     if (!name || creating) return;
     setCreating(true);
     setCreateError(false);
     try {
-      // Flatten child (card) coordinates to absolute — child nodes are
-      // positioned relative to their layer group (mirrors exportImage).
-      const live = getNodes();
-      const byId = new Map(live.map((n) => [n.id, n]));
-      const absOf = (n: Node) => {
-        const p = n.parentId ? byId.get(n.parentId) : undefined;
-        return p
-          ? { x: p.position.x + n.position.x, y: p.position.y + n.position.y }
-          : { x: n.position.x, y: n.position.y };
-      };
-
-      const cards: DiagramCardInput[] = [];
-      const freeforms: DiagramFreeformInput[] = [];
-      const layers: DiagramLayerInput[] = [];
-      const included = new Set<string>();
-      for (const n of live) {
-        if (n.type === "ldvNode") {
-          const d = n.data as LdvNodeData;
-          const p = absOf(n);
-          if (d.proposed || d.changeKind === "added") {
-            freeforms.push({
-              id: n.id, name: d.name, type: d.typeLabel || d.typeKey,
-              changeKind: "NEW", color: d.typeColor,
-              x: p.x, y: p.y,
-              w: (n.style?.width as number) ?? LDV_NODE_W,
-              h: (n.style?.height as number) ?? LDV_NODE_H,
-            });
-          } else {
-            cards.push({
-              cardId: n.id,
-              cardType: d.typeKey,
-              name: d.name,
-              color: d.typeColor,
-              icon: d.typeIcon,
-            // Carry across exactly what the reader is looking at. `extraLines`
-            // already holds the subtype row and the picked attribute rows,
-            // resolved and formatted; the type row is rendered separately on an
-            // LDV node (as "[Application]"), so it is prepended here.
-            detailLines: [
-              ...(settings.showType
-                ? [{ label: t("dependency.typeLabel"), value: d.typeLabel || d.typeKey }]
-                : []),
-              ...((d.extraLines as DisplayLine[] | undefined) ?? []),
-            ],
-              x: p.x,
-              y: p.y,
-              w: (n.style?.width as number) ?? LDV_NODE_W,
-              h: (n.style?.height as number) ?? LDV_NODE_H,
-              marker: d.changeKind === "modified" ? "MODIFY" : d.changeKind === "removed" ? "REMOVE" : undefined,
-            });
-          }
-          included.add(n.id);
-        } else if (n.type === "ldvGroup") {
-          const d = n.data as LdvGroupData;
-          layers.push({
-            label: d.label,
-            color: d.color,
-            x: n.position.x,
-            y: n.position.y,
-            w: (n.style?.width as number) ?? 0,
-            h: (n.style?.height as number) ?? 0,
-          });
-        }
-      }
-
-      // Card centres in the same space the shapes are written in, so the
-      // view's own route can travel onto the diagram unchanged.
-      const centres = computeAbsPos(live);
-      const rels: DiagramRelInput[] = [];
-      for (const e of rfEdges) {
-        if (!included.has(e.source) || !included.has(e.target)) continue;
-        const d = e.data as LdvEdgeData | undefined;
-        const route = exportRoute({
-          sourceHandle: e.sourceHandle,
-          targetHandle: e.targetHandle,
-          sourceCentre: centres.get(e.source),
-          targetCentre: centres.get(e.target),
-          waypoints: d?.waypoints,
-          centerY: d?.centerY,
-          anchors: d?.anchors,
-        });
-        rels.push({
-          sourceCardId: e.source,
-          targetCardId: e.target,
-          // Each line IS one relation type (several may connect a card pair), so
-          // take it off the edge rather than guessing one per pair. Synthetic
-          // hierarchy lines are not relations and carry no type.
-          relationType: d?.relType && d.relType !== "hierarchy" ? d.relType : "",
-          label: d?.relLabel ?? "",
-          flow: d?.flowDirection,
-          ...route,
-        });
-      }
+      // Live nodes, so a dragged box or card exports where the reader put it.
+      const { cards, rels, layers, groups, connectors, freeforms } = collectDiagramInputs(
+        getNodes(),
+        rfEdges,
+        settings.showType
+          ? {
+              typeRow: (d) => ({
+                label: t("dependency.typeLabel"),
+                value: d.typeLabel || d.typeKey,
+              }),
+            }
+          : {},
+      );
 
       if (cards.length + freeforms.length === 0) {
         setCreateError(true);
@@ -1842,7 +1885,7 @@ function LayeredDependencyInner({
         return;
       }
 
-      const xml = buildLdvDiagramXml(cards, rels, layers, freeforms);
+      const xml = buildLdvDiagramXml(cards, rels, layers, groups, connectors, freeforms);
       const payload = {
         name,
         // Seed the diagram's own display settings from the report's, so the
@@ -2019,13 +2062,14 @@ function LayeredDependencyInner({
   );
 
   // Build the full node list from the layout: structure + position, plus click /
-  // long-press callbacks and display data. Layer (group) boxes are draggable so
-  // a whole layer can be moved; cards stay clamped to their layer via extent.
+  // long-press callbacks and display data. Layer (group) boxes and aggregate
+  // boxes are draggable so a whole layer or group can be moved; cards stay
+  // clamped to their box via extent and ride along with it.
   const buildDisplayNodes = useCallback(
     (): Node[] =>
       builtNodes.map((n) => {
         if (n.type !== "ldvNode") {
-          if (n.type === "ldvGroup") return { ...n, draggable: true };
+          if (n.type === "ldvGroup" || n.type === "ldvCluster") return { ...n, draggable: true };
           return n;
         }
         return {
@@ -2110,7 +2154,9 @@ function LayeredDependencyInner({
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
     if (modeRef.current !== "normal") return; // hover only in normal mode
-    if (node.type === "ldvNode") {
+    // A type box highlights too: hovering it is how a reader asks "what does
+    // everything in here connect to?".
+    if (node.type === "ldvNode" || node.type === "ldvCluster") {
       if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
       setHoveredNode(node.id);
     }
@@ -2120,16 +2166,54 @@ function LayeredDependencyInner({
     leaveTimer.current = setTimeout(() => setHoveredNode(null), 0);
   }, []);
 
-  // Set of nodes connected to the hovered node (for dimming others)
+  /** Cluster id → the cards inside it, for highlighting a whole box. */
+  const clusterMembers = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const n of builtNodes) {
+      if (n.type === "ldvCluster") m.set(n.id, (n.data as LdvClusterData).memberIds ?? []);
+    }
+    return m;
+  }, [builtNodes]);
+
+  // Set of nodes connected to the hovered node (for dimming others).
+  //
+  // Read off each line's `members` — the card-level relations behind it — not
+  // off its endpoints: an aggregate connector's endpoints are boxes, so
+  // hovering one card inside a box would otherwise light up every card in the
+  // box at the other end rather than the ones it is actually related to.
   const hoveredNeighbors = useMemo(() => {
     if (!hoveredNode) return null;
     const s = new Set<string>([hoveredNode]);
+    const ownMembers = clusterMembers.get(hoveredNode);
+    if (ownMembers) for (const id of ownMembers) s.add(id);
+
     for (const e of rfEdges) {
-      if (e.source === hoveredNode) s.add(e.target);
-      if (e.target === hoveredNode) s.add(e.source);
+      const d = e.data as LdvEdgeData | undefined;
+      const pairs = d?.members ?? [{ source: e.source, target: e.target }];
+      // The box itself is hovered: everything it connects to lights up.
+      if (e.source === hoveredNode || e.target === hoveredNode) {
+        s.add(e.source === hoveredNode ? e.target : e.source);
+        for (const p of pairs) {
+          s.add(p.source);
+          s.add(p.target);
+        }
+        continue;
+      }
+      for (const p of pairs) {
+        if (p.source === hoveredNode) s.add(p.target);
+        if (p.target === hoveredNode) s.add(p.source);
+      }
+    }
+
+    // Keep a lit card's box lit, or the box would dim out from under it.
+    if (memberOf) {
+      for (const id of [...s]) {
+        const box = memberOf.get(id);
+        if (box) s.add(box);
+      }
     }
     return s;
-  }, [hoveredNode, rfEdges]);
+  }, [hoveredNode, rfEdges, clusterMembers, memberOf]);
 
   // Inject hover state + callbacks into edges + reorder for z-index
   const orderedEdges = useMemo(() => {
@@ -2141,7 +2225,13 @@ function LayeredDependencyInner({
         data: {
           ...e.data,
           connectedToHovered: hoveredNode
-            ? e.source === hoveredNode || e.target === hoveredNode
+            ? e.source === hoveredNode ||
+              e.target === hoveredNode ||
+              // A connector stays lit when the hovered card is one of the
+              // relations it merged, not just when a whole box is hovered.
+              ((e.data as LdvEdgeData | undefined)?.members ?? []).some(
+                (m) => m.source === hoveredNode || m.target === hoveredNode,
+              )
             : false,
           isHovered: e.id === hoveredEdge,
           highlightMode,
@@ -2174,11 +2264,13 @@ function LayeredDependencyInner({
   // CSS-based dimming avoids recreating node objects (which causes flickering)
   const hoverStyle = useMemo(() => {
     if (!hoveredNeighbors) return "";
+    // CSS.escape: a cluster id carries colons (`cluster:type:Application`),
+    // which are selector syntax. Card ids are UUIDs and never needed it.
     const keep = [...hoveredNeighbors]
-      .map((id) => `.react-flow__node[data-id="${id}"]`)
+      .map((id) => `.react-flow__node[data-id="${CSS.escape(id)}"]`)
       .join(",");
     return [
-      `.ldv-hover-active .react-flow__node-ldvNode { opacity: 0.35; transition: opacity 0.15s; }`,
+      `.ldv-hover-active .react-flow__node-ldvNode, .ldv-hover-active .react-flow__node-ldvCluster { opacity: 0.35; transition: opacity 0.15s; }`,
       `${keep} { opacity: 1 !important; }`,
     ].join("\n");
   }, [hoveredNeighbors]);
@@ -2212,9 +2304,23 @@ function LayeredDependencyInner({
   const obstacles = useMemo(() => computeObstacles(flowNodes), [flowNodes]);
 
   if (builtNodes.length === 0) {
+    // This early return renders no toolbar, so a reader who hid every type on
+    // the canvas would have no way back to the button that hid them. Offer the
+    // escape hatch here whenever the filter is what emptied the view.
+    const hidSomething = [...hiddenTypes].some((k) => typeCounts.has(k));
     return (
       <Paper variant="outlined" sx={{ p: 6, textAlign: "center", borderRadius: 2 }}>
         <Typography color="text.disabled">{t("dependency.ldvNoData")}</Typography>
+        {hidSomething && (
+          <Button
+            size="small"
+            sx={{ mt: 2, textTransform: "none" }}
+            startIcon={<MaterialSymbol icon="filter_alt_off" size={18} />}
+            onClick={() => updateSettings({ hiddenTypeKeys: [] })}
+          >
+            {t("dependency.showAllTypes")}
+          </Button>
+        )}
       </Paper>
     );
   }
@@ -2300,6 +2406,13 @@ function LayeredDependencyInner({
           >
             {t("dependency.shiftClickHint")}
           </Typography>
+          <LdvTypeFilter
+            types={types}
+            typeCounts={typeCounts}
+            hiddenTypeKeys={settings.hiddenTypeKeys}
+            onChange={(hiddenTypeKeys) => updateSettings({ hiddenTypeKeys })}
+            container={isFullscreen ? containerRef.current : undefined}
+          />
           <LdvShowOnCard
             types={types}
             activeTypeKeys={activeTypeKeys}
@@ -2558,7 +2671,13 @@ function LayeredDependencyInner({
         </MenuItem>
       </Menu>
 
-      {/* Create-diagram name dialog */}
+      {/* Create-diagram: the aggregated-view caveat, then the name */}
+      <LdvExportAggregatedDialog
+        open={createConfirmOpen}
+        onClose={() => setCreateConfirmOpen(false)}
+        onContinue={openCreateNameDialog}
+        container={isFullscreen ? containerRef.current : undefined}
+      />
       <Dialog
         open={createOpen}
         onClose={() => !creating && setCreateOpen(false)}
@@ -2657,15 +2776,27 @@ function LayeredDependencyInner({
                 what applies to a card and what applies to a relation, which
                 read as one undifferentiated run without it. */}
             {(i === 0 || rows[i - 1].group !== row.group) && (
-              <MenuSectionHeader
-                px={0}
-                icon={row.group === "relations" ? "linear_scale" : "credit_card"}
-                label={
-                  row.group === "relations"
-                    ? t("dependency.groupRelations")
-                    : t("dependency.groupCards")
-                }
-              />
+              <>
+                <MenuSectionHeader
+                  px={0}
+                  icon={row.group === "relations" ? "linear_scale" : "credit_card"}
+                  label={
+                    row.group === "relations"
+                      ? t("dependency.groupRelations")
+                      : t("dependency.groupCards")
+                  }
+                />
+                {/* First in the Relations group: it decides what a line IS —
+                    one relation, or a merged connector standing for many — and
+                    the switches below then say how that line is drawn. A union,
+                    so like Line style it cannot join the run of switch rows. */}
+                {row.group === "relations" && (
+                  <LdvAggregateSelect
+                    value={settings.aggregateBy}
+                    onChange={(aggregateBy) => updateSettings({ aggregateBy })}
+                  />
+                )}
+              </>
             )}
           <Box
             sx={{

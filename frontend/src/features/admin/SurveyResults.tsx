@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import LinkifiedText from "@/components/LinkifiedText";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Card from "@mui/material/Card";
@@ -28,8 +29,10 @@ import { useTheme } from "@mui/material/styles";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useFieldLabel } from "@/hooks/useResolveLabel";
 import { useMetamodel } from "@/hooks/useMetamodel";
+import { useSurveyRelationFieldLabel } from "@/lib/surveyFieldLabel";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { api } from "@/api/client";
+import { usePageSubject } from "@/hooks/usePageTitle";
 import type { Survey, SurveyResponseDetail, SurveyField } from "@/types";
 
 /** True when a value is a list of related-card references ({id, name}). */
@@ -69,6 +72,7 @@ export default function SurveyResults() {
   const fieldLabel = useFieldLabel();
   const theme = useTheme();
   const { types } = useMetamodel();
+  const surveyRelationLabel = useSurveyRelationFieldLabel();
   const boolLabels = { yes: t("surveyResults.boolTrue"), no: t("surveyResults.boolFalse") };
 
   // Relation values render as colour-coded pills (by the related card type's
@@ -102,6 +106,7 @@ export default function SurveyResults() {
   const navigate = useNavigate();
 
   const [survey, setSurvey] = useState<Survey | null>(null);
+  usePageSubject(survey?.name);
   const [responses, setResponses] = useState<SurveyResponseDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -250,7 +255,7 @@ export default function SurveyResults() {
 
       {survey.description && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {survey.description}
+          <LinkifiedText text={survey.description} />
         </Typography>
       )}
 
@@ -443,7 +448,7 @@ export default function SurveyResults() {
                       <TableRow key={field.key}>
                         <TableCell>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {field.kind === "relation" ? field.label : fieldLabel(field)}
+                            {field.kind === "relation" ? surveyRelationLabel(field) : fieldLabel(field)}
                           </Typography>
                         </TableCell>
                         <TableCell>{renderCellValue(resp.current_value, field, false)}</TableCell>

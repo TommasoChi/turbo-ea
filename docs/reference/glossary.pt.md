@@ -8,6 +8,11 @@
 | **Favorito / Visualização Salva** | Uma configuração salva de filtros, colunas e ordenação no Inventário que pode ser recarregada com um clique |
 | **BPM** | Business Process Management (Gestão de Processos de Negócio) — a disciplina de modelar, analisar e melhorar processos de negócio |
 | **BPMN** | Business Process Model and Notation — a notação padrão para modelagem de processos de negócio (versão 2.0) |
+| **Definição de evento** | O tipo de um evento BPMN: mensagem, temporizador, sinal, erro, escalonamento, condicional, link, compensação, cancelamento ou término. Exibida ao lado do tipo de elemento na tabela de etapas, com o nome da mensagem, do sinal ou do erro ao qual o evento se refere |
+| **Raia** | Uma faixa horizontal dentro de um pool que agrupa as etapas executadas por um papel, equipe ou departamento |
+| **Atividade de chamada** | Uma tarefa BPMN com borda grossa que invoca um processo definido de forma independente: a maneira própria do BPMN de dizer «este passo é outro processo», e o único tipo de passo para o qual o Turbo EA pergunta o processo de negócio ao colocá-lo. Qualquer outro passo vincula um processo do mesmo modo, pelo painel de propriedades, pelo menu de contexto ou pela tabela de passos; publicar o fluxo cria uma relação *invoca* entre os dois processos |
+| **Fluxo de mensagem** | Uma mensagem trocada entre dois pools de uma colaboração BPMN. Listado abaixo da tabela de elementos de um fluxo de processo publicado, onde pode ser vinculado ao card de Interface que o transporta |
+| **Pool** | Um participante de uma colaboração BPMN — um cliente, um departamento, um sistema parceiro — desenhado como um contêiner que abriga o processo próprio daquela parte |
 | **Capacidade de Negócio** | O que uma organização pode fazer, independentemente de como o faz |
 | **Cálculo** | Uma fórmula definida pelo administrador que calcula automaticamente o valor de um campo quando um card é salvo |
 | **Card** | A unidade básica de informação no Turbo EA representando qualquer componente de arquitetura |
@@ -15,7 +20,7 @@
 | **Pontuação de Confiança** | Uma classificação de 0–100% indicando o quão confiável é uma descrição gerada por IA |
 | **Linha de custo** | Uma entrada de orçamento ou custo real (CapEx/OpEx) em uma iniciativa PPM, usada para rastrear gastos financeiros |
 | **Qualidade de Dados** | Uma pontuação de completude de 0–100% baseada nos campos preenchidos e seus pesos configurados |
-| **Anexo de arquivo** | Um arquivo binário (PDF, DOCX, XLSX, imagens, até 10 MB) carregado diretamente em um card pela aba Recursos |
+| **Anexo de arquivo** | Um arquivo binário (documentos, folhas de cálculo, apresentações, ficheiros OpenDocument e Office antigos, imagens, arquivos, mensagens do Outlook e e-mail, CSV, Markdown, JSON e XML — até 20 MB) carregado diretamente em um card pela aba Recursos |
 | **Feed OData** | Um feed de dados JSON disponível em visualizações salvas do inventário (marcadores) para consumo por ferramentas externas como Power BI ou Excel |
 | **Diagrama** | Um diagrama visual de arquitetura criado com o editor DrawIO integrado |
 | **DrawIO** | A ferramenta de diagramação de código aberto integrada, utilizada para diagramas visuais de arquitetura |
@@ -26,6 +31,10 @@
 | **Entitlement (direito)** | Uma linha de uma licença de extensão assinada: o direito de executar uma extensão específica até uma data de validade, seguida de um período de tolerância antes da desativação suave |
 | **Content Pack (pacote de conteúdo)** | A parte só de dados de uma extensão: tipos de cartão, etiquetas, cartões e relações aplicados com o mesmo motor idempotente da transferência de workspace, com pré-visualização |
 | **DAAF** | Digital Autonomy Assessment Framework — o método da Universidade de Utreque para pontuar o quanto uma aplicação depende de um fornecedor e até que ponto isso pode ser mitigado. Reproduzido por uma extensão gratuita |
+| **Regra de automação** | Uma regra que a extensão Automations executa por si: *quando* um card, uma relação ou uma tarefa muda ou um horário dispara, *se* as condições construídas a partir de listas pendentes se verificam, *então* é executada uma lista de ações. Cada execução fica registada como um lote de mutação |
+| **Execução (automação)** | Uma execução de uma regra de automação para um card — o seu gatilho, o seu resultado e cada linha de ação, listada no separador Execuções e ligada ao seu lote de mutação |
+| **Chave de disparo** | O que uma regra de automação memoriza depois de disparar para um card: o card e os valores que as suas condições leram. Enquanto estes não mudarem, a regra não volta a disparar para esse card, pelo que uma regra noturna não pode levantar o mesmo risco todas as noites |
+| **Lote de mutação** | Uma unidade auditada de alteração em Admin → Registo de auditoria — quem escreveu o quê, a partir de onde (web, API, ferramenta de IA ou extensão), com um diff por evento e um Reverter que anula as escritas em cards, relações, riscos, papéis de partes interessadas, etiquetas e rascunhos de decisão |
 | **Registo de informação** | O registo que toda a entidade financeira da UE deve manter sobre os seus acordos com terceiros prestadores de TIC e apresentar anualmente ao abrigo do art. 28.º do DORA — 15 modelos interligados |
 | **LEI** | Legal Entity Identifier — código ISO 17442 de 20 caracteres que identifica uma entidade jurídica, com dois dígitos de controlo. Necessário em todo o registo de informação DORA |
 | **xBRL-CSV** | O formato de pacote de relatório legível por máquina que os supervisores aceitam para submissões regulamentares como o registo de informação DORA |

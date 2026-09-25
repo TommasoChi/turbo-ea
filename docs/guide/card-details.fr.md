@@ -10,6 +10,7 @@ Le haut de la fiche affiche :
 
 - **Icône et libellé du type** -- Indicateur du type de fiche codé par couleur
 - **Nom de la fiche** -- Modifiable en ligne
+- **Alias** -- L'autre nom de la fiche, affiché sous le titre lorsqu'il est renseigné. Le crayon d'édition du titre permet de modifier le nom et l'alias ensemble. Les alias sont pris en compte par tous les champs de recherche : une fiche se retrouve donc par le nom réellement employé dans votre organisation.
 - **Sous-type** -- Classification secondaire (le cas échéant)
 - **Badge de statut d'approbation** -- Brouillon, Approuvé, Cassé ou Rejeté
 - **Bouton de suggestion IA** -- Cliquez pour générer une description avec l'IA (visible lorsque l'IA est activée pour ce type de fiche et que l'utilisateur a la permission de modification)
@@ -64,7 +65,7 @@ Les fiches peuvent passer par un cycle d'approbation :
 | **Cassé** | Était approuvé, mais a été modifié depuis -- nécessite un réexamen |
 | **Rejeté** | Examiné et rejeté, nécessite des corrections |
 
-Lorsqu'une fiche approuvée est modifiée, son statut passe automatiquement à **Cassé** pour indiquer qu'elle nécessite un réexamen.
+Lorsqu'une fiche approuvée est modifiée, son statut passe automatiquement à **Cassé** pour indiquer qu'elle nécessite un réexamen. L'archivage d'une fiche parente produit le même effet sur les fiches enfants approuvées qu'il déplace dans la hiérarchie. Toutes les personnes ayant un rôle de partie prenante sur la fiche sont averties — sauf celle qui a fait la modification — et le changement est consigné dans l'onglet **Historique** de la fiche. Une action qui casse plusieurs fiches, comme une modification en masse, envoie à chacun un récapitulatif unique plutôt qu'une notification par fiche.
 
 ## Onglet Détail (Principal)
 
@@ -73,7 +74,8 @@ L'onglet détail est organisé en **sections** qui peuvent être réorganisées 
 ### Section Description
 
 - **Description** -- Description en texte riche du composant. Prend en charge la fonctionnalité de suggestion IA pour la génération automatique
-- **Champs de description supplémentaires** -- Certains types de fiches incluent des champs supplémentaires dans la section description (par ex. alias, identifiant externe)
+- **Champs de description supplémentaires** -- Un administrateur peut rattacher n'importe quel champ propre à un type de fiche à la section description ; celle-ci peut donc porter d'autres champs que la description elle-même
+- **Liens** -- Une adresse web (`http://` ou `https://`) saisie dans la description, dans n'importe quel champ texte, un commentaire ou une tâche devient un lien qui s'ouvre dans un nouvel onglet
 
 ### Section Cycle de vie
 
@@ -88,6 +90,8 @@ Le modèle de cycle de vie suit un composant à travers cinq phases :
 | **Fin de vie** | Plus utilisé ni supporté |
 
 Chaque phase dispose d'un **sélecteur de date** pour enregistrer quand le composant est entré ou entrera dans cette phase. Une barre chronologique visuelle montre la position du composant dans son cycle de vie.
+
+Si une phase est datée après une phase qui devrait la suivre — par exemple **Retrait progressif** après **Fin de vie** —, une icône d'avertissement apparaît à côté de cette date, et le même avertissement s'affiche sous le champ pendant la modification. Ce n'est qu'une indication : les dates peuvent tout de même être enregistrées telles quelles.
 
 ### Sections d'attributs personnalisés
 
@@ -112,6 +116,7 @@ Pour les types de fiches qui prennent en charge la hiérarchie (par ex. Organisa
 - **Parent** -- Le parent de la fiche dans la hiérarchie (cliquer pour naviguer)
 - **Enfants** -- Liste des fiches enfants (cliquer sur l'une d'elles pour naviguer)
 - **Fil d'Ariane hiérarchique** -- Affiche le chemin complet de la racine à la fiche actuelle
+- **Type de lien** -- Lorsqu'un administrateur a configuré des types de lien pour ce type de fiche, chaque lien parent-enfant peut être qualifié -- par exemple une filiale *commerciale* et une autre *vente*. Le libellé appartient à la fiche enfant : la fiche parente l'affiche à côté de chaque enfant, et la fiche enfant à côté de son parent. Retirer une fiche ou la remonter au niveau supérieur efface son libellé, et la modification est consignée dans l'onglet **Historique**.
 
 ### Section Relations
 
@@ -120,7 +125,7 @@ Affiche toutes les connexions avec d'autres fiches, groupées par type de relati
 - **Nom de la fiche liée** -- Cliquer pour naviguer vers la fiche liée
 - **Type de relation** -- La nature de la connexion (par ex. « utilise », « s'exécute sur », « dépend de »)
 - **Ajouter une relation** -- Cliquez sur **+** pour ouvrir la boîte de dialogue de cette relation. Elle liste les fiches correspondantes au fil de la saisie (les meilleures correspondances d'abord, d'autres se chargent au défilement) et masque celles déjà liées, avec une légende indiquant leur nombre. Cliquer sur une fiche la lie aussitôt et elle apparaît sous forme de puce en haut -- cliquez sur le **×** d'une puce pour annuler cet ajout. La boîte de dialogue reste ouverte pour en ajouter autant que vous voulez, et sur téléphone elle s'ouvre en plein écran. Les relations sans section propre sont accessibles via le bouton **Ajouter une relation** en bas de la section. Lorsque le type lié est hiérarchique (capacité métier, organisation, etc.), la boîte de dialogue l'affiche sous forme d'arborescence indentée plutôt qu'en liste alphabétique, ce qui permet de choisir une sous-capacité par sa branche. La recherche conserve les parents d'un résultat pour le contexte, et les fiches non sélectionnables (déjà liées, tout juste ajoutées, ou la fiche elle-même) restent à leur place en grisé afin que les niveaux alentour restent lisibles.
-- **Tri** -- Les cartes liées sont listées par ordre alphabétique
+- **Tri** -- Les fiches liées sont listées par ordre alphabétique
 - **Supprimer une relation** -- Cliquez sur l'icône de suppression pour retirer une relation
 - **Grouper par sous-type** — Lorsqu'une section de relations contient de nombreuses fiches liées, elles sont automatiquement regroupées en groupes de sous-types repliables (chacun avec un décompte), avec un groupe final **Aucun sous-type** pour les fiches non classées. Utilisez le bouton de bascule dans l'en-tête de la section pour passer de la vue groupée à la vue en liste.
 - **Fiches liées aux sous-éléments** — Lorsqu'une fiche possède des sous-éléments, chaque groupe de relations affiche une puce **+N dans les sous-éléments** comptant les fiches liées plus bas dans la hiérarchie — par exemple les applications rattachées aux sous-capacités d'une capacité. Un clic ouvre une liste en lecture seule où chaque ligne nomme le sous-élément qui porte le lien (une fiche atteinte via plusieurs sous-éléments apparaît une seule fois, avec chacun d'eux listé). Le décompte n'inclut que les fiches absentes du groupe ci-dessus. Pour modifier un lien, ouvrez le sous-élément qui le détient. La liste est organisée en sections de sous-types repliables : le sous-type est ainsi indiqué une fois par section plutôt que sur chaque ligne. Au sein d'une section, les fiches dont la phase de cycle de vie demande une attention particulière apparaissent en premier (fin de vie, puis retrait progressif), et la phase de chaque fiche est signalée par une pastille de couleur à côté de son nom — survolez-la pour afficher le nom de la phase.
@@ -143,7 +148,7 @@ Appliquez des tags à partir des [groupes de tags](../admin/tags.md) configurés
 
 L'onglet **Ressources** regroupe tous les documents de support d'une fiche :
 
-- **Pièces jointes** -- Téléchargez et gérez des fichiers (PDF, DOCX, XLSX, images, jusqu'à 10 Mo). Lors du téléchargement, sélectionnez une **catégorie de document** parmi : Architecture, Sécurité, Conformité, Opérations, Notes de réunion, Design ou Autre. La catégorie s'affiche sous forme de puce à côté de chaque fichier.
+- **Pièces jointes** -- Téléchargez et gérez des fichiers (documents, feuilles de calcul, présentations, fichiers OpenDocument et Office hérités, images, archives, messages Outlook et e-mails, CSV, Markdown, JSON et XML — jusqu'à 20 Mo). Lors du téléchargement, sélectionnez une **catégorie de document** parmi : Architecture, Sécurité, Conformité, Opérations, Notes de réunion, Design ou Autre. La catégorie s'affiche sous forme de puce à côté de chaque fichier.
 - **Liens de documents** -- Références de documents basées sur des URL. Lors de l'ajout d'un lien, sélectionnez un **type de lien** parmi : Documentation, Sécurité, Conformité, Architecture, Opérations, Support ou Autre. Le type de lien s'affiche sous forme de puce à côté de chaque lien, et l'icône change en fonction du type sélectionné.
 - **Diagrammes** -- Liez des [diagrammes](diagrams.fr.md) existants à cette fiche. Les diagrammes liés s'affichent sous forme de miniatures que vous pouvez cliquer pour ouvrir dans l'éditeur de diagrammes. Utilisez le bouton **Lier un diagramme** pour rechercher et attacher un diagramme existant, ou cliquez sur l'icône de déliaison pour supprimer l'association.
 
@@ -162,6 +167,7 @@ Si la fiche est liée à un produit [endoflife.date]( (via [Administration EOL](
 - **Ajouter des commentaires** -- Laissez des notes, questions ou décisions concernant le composant
 - **Réponses en fil** -- Répondez à des commentaires spécifiques pour créer des fils de conversation
 - **Horodatages** -- Voyez quand chaque commentaire a été publié et par qui
+- **Liens** -- Une adresse web dans un commentaire est cliquable et s'ouvre dans un nouvel onglet
 
 ## Onglet Tâches
 

@@ -28,6 +28,8 @@ Organize related diagrams into **groups** — shared, workspace-wide labels. A d
 
 Opening a diagram launches the full-screen DrawIO editor in a same-origin iframe. The native DrawIO toolbar is available for shapes, connectors, text, and layout — every Turbo EA action is exposed via the right-click context menu, the toolbar Sync button, and the chevron overlay that sits on top of each card.
 
+![Diagram editor with cards coloured by business criticality](../assets/img/en/99_diagram_editor.png)
+
 ### Inserting cards
 
 Use the **Insert Cards** dialog (opened from the toolbar or the right-click menu) to add cards to the canvas:
@@ -86,7 +88,9 @@ The **Color by** dropdown in the toolbar recolors the cards on the canvas:
 - **Approval status** — recolors by `approved` / `pending` / `broken`.
 - **Field values** — tick a single-select field under any card type on the canvas. **Several card types can each carry one rule at the same time** — Applications by criticality *and* IT Components by hosting model. A card type you give no rule keeps the colour it already has, including a fill you set by hand; only a card whose own rule finds no value turns grey. Ticking a second field within one card type replaces the first, because a card has one fill.
 
-A floating legend in the bottom-left shows one scale per active rule. Field rules and **Approval status** are alternatives rather than layers: choosing one clears the other. Untick every rule and the canvas returns to card colors. The choice is saved with the diagram.
+A floating legend in the bottom-left shows one scale per active rule. Field rules and **Approval status** are alternatives rather than layers: choosing one clears the other. Untick every rule and the canvas returns to card colors. The choice is saved with the diagram. The same legend is shown when the diagram is opened in view mode and on its published or embedded link, so readers can tell what the colours mean.
+
+![Diagram in view mode with its colour legend](../assets/img/en/99b_diagram_viewer_legend.png)
 
 #### Show on card
 
@@ -140,6 +144,8 @@ The **Sync** button in the toolbar opens the side drawer with everything queued 
     - a **deleted relation** — *Remove edge from diagram* takes the stale edge off the canvas;
     - a relation whose **flow direction** changed — *Accept update* moves the arrowhead to match the inventory.
 
+![Sync drawer in the diagram editor](../assets/img/en/99a_diagram_sync_drawer.png)
+
 Turbo EA **checks for inventory changes automatically every time you open a diagram** — a blue badge on the toolbar Sync button counts the changes awaiting review. Nothing is applied without your confirmation; the badge only invites you into the drawer. The **Check updates** button in the drawer re-runs the same check on demand.
 
 The toolbar Sync button shows a pulsing "N unsynced" pill whenever pending work exists. Leaving the tab with unsynced changes triggers a browser warning, and the canvas autosaves to local storage every five seconds so an accidental refresh can be restored on reopen.
@@ -157,7 +163,7 @@ Open the diagram's **⋮** menu in the gallery and choose **Share / embed…**. 
 The dialog gives you two choices and two strings to copy:
 
 - **Anyone with the link** — no sign-in. Treat the link like a password: anyone it is forwarded to can view the diagram.
-- **Only people who sign in** — visitors authenticate with your identity provider, optionally restricted to named email domains. No Turbo EA account is created for them.
+- **Only people who sign in** — visitors authenticate with your identity provider, optionally restricted to named email domains. No Turbo EA account is created for them. Inside an embed, the sign-in opens in a small pop-up window, and Turbo EA must be served over HTTPS for the session to hold inside the frame; visitors sign in once per site the diagram is embedded in.
 
 The published page shows the picture only. It is pannable and zoomable, but there is no click-through to card details, and the card identifiers behind the shapes are stripped before the diagram leaves the server. Turning publishing off takes effect immediately, including for anyone already viewing. Re-publishing later restores the same link, so URLs already pasted into a wiki keep working.
 
@@ -177,3 +183,6 @@ The published page shows the picture only. It is pannable and zoomable, but ther
 3. In Confluence, insert an **HTML** macro (or *Iframe* / *HTML include*, depending on what your instance allows) and paste the embed code.
 
 If your Confluence does not allow HTML macros, paste the plain **Link** instead — it opens the same view in a new tab.
+
+!!! note "Sign-in inside an embed"
+    A diagram published for *Only people who sign in* shows a **Sign in** button inside the embed. It opens your identity provider in a small pop-up window, and the diagram appears once that window closes. Three things can get in the way: Turbo EA must be served over **HTTPS** (browsers only keep the cross-site session an embed needs on a secure origin); the embedding page must allow pop-ups from its frames (a sandboxed frame without `allow-popups` blocks both the pop-up and the fallback link); and in Safari, use the **Open the diagram in a new tab** link the gate offers. Separately, Chrome refuses to load an embed from a private-network address (an internal IP or hostname) into a public page such as Confluence Cloud — publish the instance on a public HTTPS hostname, or embed it from a wiki on the same network.

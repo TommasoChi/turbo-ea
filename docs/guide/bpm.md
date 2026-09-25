@@ -45,18 +45,58 @@ Charts show distribution by process type, maturity level, and automation level. 
 
 Each Business Process card can have a **BPMN 2.0 process flow diagram**. The editor uses [bpmn-js](https://bpmn.io/) and provides:
 
-- **Visual modeling** — Drag and drop BPMN elements: tasks, events, gateways, lanes, and sub-processes
-- **Starter templates** — Choose from 6 pre-built BPMN templates for common process patterns (or start from a blank canvas)
-- **Element extraction** — When you save a diagram, the system automatically extracts all tasks, events, gateways, and lanes for analysis. Extracted elements are listed in **process-flow order** — following the sequence and message flows of the diagram, starting from the start event — rather than grouped by element type. Steps inside a loop are kept together, and a sub-process's contents are listed directly beneath it
+- **Visual modeling** — Drag and drop BPMN elements from the palette: tasks, events, gateways, lanes, pools and sub-processes. The **…** entry at the bottom of the palette opens a searchable **Create element** menu that reaches every BPMN element type — message, timer, signal, error and escalation events, transactions, event sub-processes, call activities, send/receive tasks, data objects and data stores (shortcut `N`). The **+** entry on a selected shape's context pad opens the matching **Append element** menu (shortcut `A`)
+- **Starter templates** — Choose from 7 pre-built BPMN templates for common process patterns, including a two-pool **Collaboration** template with message flows (or start from a blank canvas)
+- **Element extraction** — When you save a diagram, the system automatically extracts all tasks, events, gateways, lanes, data objects and message flows for analysis. Events keep their kind — a *message* start event is listed as one, with the name of the message it receives — and send/receive tasks carry the message they exchange. Extracted elements are listed in **process-flow order** — following the sequence and message flows of the diagram, starting from the start event — rather than grouped by element type. Steps inside a loop are kept together, a sub-process's contents are listed directly beneath it, and data objects and data stores come last
 - **Element colors** — Select one or more elements and use the paint bucket button on the context pad to apply a color. Colors are stored in the BPMN file itself, so they also appear in the read-only viewer, exports, and printouts
+- **Properties panel** — The panel on the right (toggle it with the sliders button in the toolbar) edits what a shape cannot show: the element's name and documentation, the **Message**, **Signal**, **Error** or **Escalation** an event refers to, a sequence flow's condition, and multi-instance markers. Documentation entered here is shown in the process navigator and the read-only viewer
+
+![Create element menu](../assets/img/en/89_bpm_create_element_menu.png)
+
+![Properties panel](../assets/img/en/90_bpm_properties_panel.png)
+
+### Pools and message flows
+
+A process that spans several parties — a customer and the company, two departments, a partner system — is modelled as a **collaboration**: one pool per party, connected by **message flows**. Add a second pool from the palette (or start from the **Collaboration** template), then draw a message flow between the two pools with the global connect tool, or from a send task, a message end event or a message throw event in one pool to a receive task or message event in the other. Name the message in the properties panel so it reads the same wherever it appears.
+
+![Collaboration template](../assets/img/en/91_bpm_collaboration_template.png)
 
 ### Element Linking
 
 BPMN elements can be **linked to EA cards**. For example, link a task in your process diagram to the Application that supports it. This creates a traceable connection between your process model and your architecture landscape:
 
-- Select any task, event, or gateway in the BPMN diagram
-- The **Element Linker** panel shows matching cards (Application, Data Object, IT Component, Organization)
-- Link the element to a card — the connection is stored and visible in both the process flow and the card's relations
+- Every named task, event and gateway of the published flow is a row of the **Process Steps & Elements** table below the diagram (a draft has the same table under **Pre-link Elements**, applied when the draft is approved)
+- Click the **Application**, **Data Object** or **IT Component** cell of a step and pick the card — the picker browses the inventory, so nothing is typed by hand
+- The link is stored on the step and creates a relation between the process and the card, so it is visible in both the process flow and the card's Relations tab
+- The **Business Process** column links a step to the process it hands over to — see below
+- The same five links are offered **in the editor** while a draft is open: a **Linked cards** group in the properties panel, and a **Link cards** entry on the context pad that opens a menu of them
+- On the diagram itself a linked step wears **one small dot per linked card type** under its name, in that card type's colour, in the editor and the read-only viewer alike — names are kept off the canvas; click the step to see them, or hover a dot
+
+### Linking a step to a process
+
+A step often hands over to a process that exists in its own right — one with its own diagram, owner and lifecycle, typically reused from several places. Any step can say so: a task, a sub-process, an event or a gateway links to a **Business Process** card, and you never enter a process id by hand:
+
+- **The properties panel** shows a **Linked cards** group on every step, one row per link — Business Process, Application, Data Object, IT Component, Organizations — each with **Choose**, **Open** (which drills down into the linked card) and **Clear**
+- **The context pad** of a selected step carries a **Link cards** entry listing the same five, for when the panel is collapsed. A data object or data store offers the Data Object link alone, as in the table
+- **The steps table** of the published flow (and the pre-link table of a draft) has the same link in its **Business Process** column, and the chip there drills down into the linked process's Process Flow tab. Data objects and data stores are not steps, so their rows show a dash
+
+![Linked cards](../assets/img/en/92_bpm_called_process.png)
+
+BPMN has one construct that *is* another process: the **call activity**, a task drawn with a thick border that invokes a process defined on its own. An embedded **sub-process** is the other way to group steps, but it belongs to the diagram it is drawn in; the Method & Style rule is simple: if the process exists independently, use a call activity. Turbo EA treats it as the native case — **placing a call activity asks which process it calls**, and the link is stored in BPMN's own *called element*, so other tools read it. Every other step stores the link as a Turbo EA attribute in the diagram instead.
+
+Publishing a flow that contains a linked step creates a **calls** relation between the two processes — the linked process's Relations tab reads *is called by*, and the Dependencies view draws the call graph. A diagram imported from another tool keeps that tool's own process reference; the steps table shows it as a hint (*references Process_X*) until you pick the matching process in Turbo EA.
+
+### One set of links
+
+The editor and the tables show the same links, so a step reads the same wherever you look at it:
+
+- Inside a **draft**, what you set wins — in the editor or in the **Pre-link Elements** table, they are one store — and the diagram's own process reference is the fallback for a step you have said nothing about. Clearing a link clears it, including at publish.
+- A **published** flow stays approved while its links are edited in its elements table: that is metadata on top of a signed-off diagram, not a reason to approve it again.
+- A draft **created from the published version** starts from the links the process has at that moment. A draft already open keeps its own, so somebody else's edit cannot change a diagram you are working on.
+
+### Message flows
+
+The message flows of the published diagram are listed under the elements table, each showing what it connects — a task, an event or a whole pool on either end. Link a message flow to the **Interface** card that carries it. Like organization links on steps, this is informative only: no relation is created between cards.
 
 ### Linking Organizations
 

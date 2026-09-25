@@ -7,6 +7,11 @@
 | **Lesezeichen / Gespeicherte Ansicht** | Eine gespeicherte Filter-, Spalten- und Sortierkonfiguration im Inventar, die mit einem Klick geladen werden kann |
 | **BPM** | Business Process Management — die Disziplin der Modellierung, Analyse und Verbesserung von Geschäftsprozessen |
 | **BPMN** | Business Process Model and Notation — die Standardnotation zur Modellierung von Geschäftsprozessen (Version 2.0) |
+| **Ereignisdefinition** | Die Art eines BPMN-Ereignisses — Nachricht, Timer, Signal, Fehler, Eskalation, Bedingung, Link, Kompensation, Abbruch oder Terminierung. Wird in der Schritttabelle neben dem Elementtyp angezeigt, zusammen mit dem Namen der Nachricht, des Signals oder des Fehlers, auf den sich das Ereignis bezieht |
+| **Bahn** | Ein waagerechter Streifen innerhalb eines Pools, der die von einer Rolle, einem Team oder einer Abteilung ausgeführten Schritte zusammenfasst |
+| **Aufrufaktivität** | Eine BPMN-Aufgabe mit dickem Rand, die einen eigenständig definierten Prozess aufruft — BPMNs eigene Art zu sagen „dieser Schritt ist ein anderer Prozess“, und der einzige Schritttyp, bei dem Turbo EA beim Platzieren nach dem Geschäftsprozess fragt. Jeder andere Schritt verknüpft einen Prozess genauso, über das Eigenschaftenpanel, das Kontextmenü oder die Schritttabelle; beim Veröffentlichen des Ablaufs entsteht eine *ruft auf*-Beziehung zwischen den beiden Prozessen |
+| **Nachrichtenfluss** | Eine zwischen zwei Pools einer BPMN-Kollaboration ausgetauschte Nachricht. Wird unter der Elementtabelle eines veröffentlichten Prozessflusses aufgelistet und kann dort mit der Schnittstellen-Karte verknüpft werden, die sie überträgt |
+| **Pool** | Ein Teilnehmer einer BPMN-Kollaboration — ein Kunde, eine Abteilung, ein Partnersystem — dargestellt als Container mit dem eigenen Prozess dieser Partei |
 | **BPM-Zeilenreihenfolge** | Die Anzeigereihenfolge der Prozesstypzeilen (Kern, Unterstützung, Management) im BPM-Prozessnavigator, konfigurierbar durch Ziehen von Zeilen |
 | **Geschäftsjahr** | Der 12-monatige Zeitraum für Budgetierung und Finanzberichterstattung. Konfigurierbar über Admin > Einstellungen — der Startmonat (Januar bis Dezember) bestimmt, wie PPM-Budgetzeilen gruppiert werden |
 | **Geschäftsfähigkeit** | Was eine Organisation tun kann, unabhängig davon, wie sie es tut |
@@ -16,7 +21,7 @@
 | **Konfidenzwert** | Eine Bewertung von 0–100%, die angibt, wie zuverlässig eine KI-generierte Beschreibung ist |
 | **Kostenposition** | Ein Budget- oder Ist-Kosteneintrag (CapEx/OpEx) in einer PPM-Initiative zur Verfolgung finanzieller Ausgaben |
 | **Datenqualität** | Ein Vollständigkeitswert von 0–100%, basierend auf ausgefüllten Feldern und deren konfigurierten Gewichtungen |
-| **Dateianhang** | Eine binäre Datei (PDF, DOCX, XLSX, Bilder, bis 10 MB), die direkt über den Ressourcen-Tab auf eine Karte hochgeladen wird |
+| **Dateianhang** | Eine binäre Datei (Dokumente, Tabellen, Präsentationen, OpenDocument- und ältere Office-Dateien, Bilder, Archive, Outlook- und E-Mail-Nachrichten, CSV, Markdown, JSON und XML – bis zu 20 MB), die direkt über den Ressourcen-Tab auf eine Karte hochgeladen wird |
 | **Diagramm** | Ein visuelles Architekturdiagramm, erstellt mit dem eingebetteten DrawIO-Editor |
 | **DrawIO** | Das eingebettete Open-Source-Diagrammwerkzeug für visuelle Architekturdiagramme |
 | **Enterprise Architecture (EA)** | Die Disziplin, die die Geschäfts- und Technologiestruktur einer Organisation organisiert und dokumentiert |
@@ -26,6 +31,10 @@
 | **Entitlement (Berechtigung)** | Eine Zeile einer signierten Erweiterungslizenz: das Recht, eine bestimmte Erweiterung bis zu einem Ablaufdatum zu betreiben, gefolgt von einer Kulanzfrist vor der weichen Deaktivierung |
 | **Content Pack (Inhaltspaket)** | Der reine Datenteil einer Erweiterung: Kartentypen, Tags, Karten und Beziehungen, angewendet über dieselbe idempotente Engine wie der Workspace-Transfer, mit Vorschau |
 | **DAAF** | Digital Autonomy Assessment Framework — die Methode der Universität Utrecht, um zu bewerten, wie stark eine Anwendung von einem Anbieter abhängt und wie gut sich das abfedern lässt. Wird von einer kostenlosen Erweiterung nachgebildet |
+| **Automatisierungsregel** | Eine Regel, die die Erweiterung Automations für Sie ausführt: *wenn* sich eine Karte, Beziehung oder ein Todo ändert oder ein Zeitplan fällig wird, *falls* aus Auswahllisten gebaute Bedingungen zutreffen, *dann* läuft eine Liste von Aktionen. Jeder Lauf wird als Mutations-Batch festgehalten |
+| **Lauf (Automatisierung)** | Eine Ausführung einer Automatisierungsregel für eine Karte — ihr Auslöser, ihr Ergebnis und jede Aktionszeile, aufgelistet auf dem Reiter Läufe und verlinkt mit ihrem Mutations-Batch |
+| **Auslöseschlüssel** | Was sich eine Automatisierungsregel nach dem Auslösen für eine Karte merkt: die Karte und die Werte, die ihre Bedingungen gelesen haben. Solange diese unverändert sind, löst die Regel für diese Karte nicht erneut aus, sodass eine nächtliche Regel nicht jede Nacht dasselbe Risiko anlegen kann |
+| **Mutations-Batch** | Eine auditierte Änderungseinheit unter Admin → Audit-Log — wer was geschrieben hat und von wo (Web, API, KI-Werkzeug oder Erweiterung), mit einem Diff pro Ereignis und einem Rollback, das Schreibvorgänge an Karten, Beziehungen, Risiken, Stakeholder-Rollen, Tags und Entscheidungsentwürfen zurücknimmt |
 | **Informationsregister** | Das Verzeichnis, das jedes EU-Finanzunternehmen über seine IKT-Drittparteienvereinbarungen führen und nach DORA Art. 28 jährlich einreichen muss — 15 ineinandergreifende Meldebögen |
 | **LEI** | Legal Entity Identifier — ein 20-stelliger Code nach ISO 17442 zur Identifikation eines Rechtsträgers, mit zwei Prüfziffern. Im DORA-Informationsregister durchgängig erforderlich |
 | **xBRL-CSV** | Das maschinenlesbare Berichtspaketformat, das Aufsichtsbehörden für regulatorische Meldungen wie das DORA-Informationsregister akzeptieren |

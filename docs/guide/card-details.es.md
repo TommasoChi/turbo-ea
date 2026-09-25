@@ -10,6 +10,7 @@ La parte superior de la ficha muestra:
 
 - **Icono y etiqueta del tipo** — Indicador del tipo de ficha con código de color
 - **Nombre de la ficha** — Editable en línea
+- **Alias** — El otro nombre de la ficha, mostrado bajo el título cuando está definido. El lápiz de edición del título permite cambiar el nombre y el alias a la vez. Los alias se tienen en cuenta en todos los cuadros de búsqueda, de modo que una ficha se encuentra por el nombre que su organización usa realmente.
 - **Subtipo** — Clasificación secundaria (si aplica)
 - **Insignia de estado de aprobación** — Borrador, Aprobado, Roto o Rechazado
 - **Botón de sugerencia IA** — Haga clic para generar una descripción con IA (visible cuando la IA está habilitada para este tipo de ficha y el usuario tiene permiso de edición)
@@ -66,7 +67,7 @@ Las fichas pueden pasar por un ciclo de aprobación:
 | **Roto** | Fue aprobado, pero ha sido editado desde entonces — necesita re-revisión |
 | **Rechazado** | Revisado y rechazado, necesita correcciones |
 
-Cuando una ficha aprobada es editada, su estado cambia automáticamente a **Roto** para indicar que necesita re-revisión.
+Cuando una ficha aprobada es editada, su estado cambia automáticamente a **Roto** para indicar que necesita re-revisión. Archivar la ficha principal produce el mismo efecto en las fichas hijas aprobadas que se desplazan en la jerarquía. Se notifica a todas las personas con un rol de parte interesada en la ficha — salvo a quien realizó el cambio — y el cambio queda registrado en la pestaña **Historial** de la ficha. Una acción que rompe varias fichas, como una edición masiva, envía a cada persona un único resumen en lugar de una notificación por ficha.
 
 ## Pestaña Detalle (Principal)
 
@@ -75,7 +76,8 @@ La pestaña de detalle está organizada en **secciones** que pueden ser reordena
 ### Sección de Descripción
 
 - **Descripción** — Descripción en texto enriquecido del componente. Soporta la función de sugerencia con IA para generación automática
-- **Campos de descripción adicionales** — Algunos tipos de ficha incluyen campos extra en la sección de descripción (por ejemplo, alias, ID externo)
+- **Campos de descripción adicionales** — Un administrador puede asignar cualquier campo propio de un tipo de ficha a la sección de descripción, por lo que esta puede llevar campos adicionales además de la descripción misma
+- **Enlaces** — Una dirección web (`http://` o `https://`) escrita en la descripción, en cualquier campo de texto, un comentario o una tarea se convierte en un enlace que se abre en una pestaña nueva
 
 ### Sección de Ciclo de Vida
 
@@ -90,6 +92,8 @@ El modelo de ciclo de vida rastrea un componente a través de cinco fases:
 | **Fin de Vida** | Ya no está en uso ni tiene soporte |
 
 Cada fase tiene un **selector de fecha** para registrar cuándo el componente entró o entrará en esa fase. Una barra de línea temporal visual muestra la posición del componente en su ciclo de vida.
+
+Si una fase tiene una fecha posterior a la de una fase que debería seguirla —por ejemplo, **Fase de Salida** después de **Fin de Vida**—, aparece un icono de advertencia junto a esa fecha, y la misma advertencia se muestra bajo el campo durante la edición. Es solo un aviso: las fechas se pueden guardar igualmente tal como se introdujeron.
 
 ### Secciones de Atributos Personalizados
 
@@ -114,6 +118,7 @@ Para tipos de ficha que soportan jerarquía (por ejemplo, Organización, Capacid
 - **Padre** — La ficha padre en la jerarquía (haga clic para navegar)
 - **Hijos** — Lista de fichas hijas (haga clic en cualquiera para navegar)
 - **Ruta jerárquica** — Muestra la ruta completa desde la raíz hasta la ficha actual
+- **Tipo de vínculo** — Cuando un administrador ha configurado tipos de vínculo para este tipo de ficha, cada vínculo padre-hijo puede etiquetarse — por ejemplo, una filial *comercial* y otra de *ventas*. La etiqueta pertenece a la ficha hija: la ficha padre la muestra junto a cada hija, y la ficha hija junto a su padre. Quitar una ficha o moverla al nivel superior borra su etiqueta, y el cambio queda registrado en la pestaña **Historial**.
 
 ### Sección de Relaciones
 
@@ -145,7 +150,7 @@ Aplique etiquetas de los [grupos de etiquetas](../admin/tags.es.md) configurados
 
 La pestaña de **Recursos** consolida todos los materiales de apoyo de una ficha:
 
-- **Archivos Adjuntos** — Cargue y gestione archivos (PDF, DOCX, XLSX, imágenes, hasta 10 MB). Al cargar, seleccione una **categoría de documento** entre: Arquitectura, Seguridad, Compliance, Operaciones, Notas de Reunión, Diseño u Otro. La categoría aparece como un chip junto a cada archivo.
+- **Archivos Adjuntos** — Cargue y gestione archivos (documentos, hojas de cálculo, presentaciones, archivos OpenDocument y de Office heredados, imágenes, archivos comprimidos, mensajes de Outlook y correo electrónico, CSV, Markdown, JSON y XML: hasta 20 MB). Al cargar, seleccione una **categoría de documento** entre: Arquitectura, Seguridad, Compliance, Operaciones, Notas de Reunión, Diseño u Otro. La categoría aparece como un chip junto a cada archivo.
 - **Enlaces de Documentos** — Referencias de documentos basadas en URL. Al agregar un enlace, seleccione un **tipo de enlace** entre: Documentación, Seguridad, Compliance, Arquitectura, Operaciones, Soporte u Otro. El tipo de enlace aparece como un chip junto a cada enlace, y el icono cambia según el tipo seleccionado.
 - **Diagramas** — Vincule [diagramas](diagrams.es.md) existentes a esta ficha. Los diagramas vinculados se muestran como vistas previas en miniatura que puede hacer clic para abrir en el editor de diagramas. Use el botón **Vincular Diagrama** para buscar y adjuntar un diagrama existente, o haga clic en el icono de desvincular para eliminar la asociación.
 
@@ -164,6 +169,7 @@ Si la ficha está vinculada a un producto de [endoflife.date](https://endoflife.
 - **Agregar comentarios** — Deje notas, preguntas o decisiones sobre el componente
 - **Respuestas en hilo** — Responda a comentarios específicos para crear hilos de conversación
 - **Marcas de tiempo** — Vea cuándo se publicó cada comentario y por quién
+- **Enlaces** — Una dirección web en un comentario es clicable y se abre en una pestaña nueva
 
 ## Pestaña de Tareas
 

@@ -8,6 +8,11 @@
 | **Segnalibro / Vista salvata** | Una configurazione salvata di filtri, colonne e ordinamento nell'Inventario che può essere ricaricata con un clic |
 | **BPM** | Business Process Management — la disciplina della modellazione, analisi e miglioramento dei processi aziendali |
 | **BPMN** | Business Process Model and Notation — la notazione standard per la modellazione dei processi aziendali (versione 2.0) |
+| **Definizione di evento** | Il tipo di un evento BPMN: messaggio, timer, segnale, errore, escalation, condizione, collegamento, compensazione, annullamento o terminazione. Mostrata accanto al tipo di elemento nella tabella dei passaggi, insieme al nome del messaggio, del segnale o dell'errore a cui l'evento fa riferimento |
+| **Corsia** | Una banda orizzontale all'interno di un pool che raggruppa i passaggi svolti da un ruolo, un team o un reparto |
+| **Attività di chiamata** | Un'attività BPMN con bordo spesso che richiama un processo definito in modo autonomo: il modo proprio di BPMN per dire «questo passo è un altro processo», e l'unico tipo di passo per cui Turbo EA chiede il processo aziendale quando lo si posiziona. Ogni altro passo collega un processo allo stesso modo, dal pannello delle proprietà, dal menu contestuale o dalla tabella dei passi; la pubblicazione del flusso crea una relazione *richiama* tra i due processi |
+| **Flusso di messaggio** | Un messaggio scambiato tra due pool di una collaborazione BPMN. Elencato sotto la tabella degli elementi di un flusso di processo pubblicato, dove può essere collegato alla card Interfaccia che lo trasporta |
+| **Pool** | Un partecipante di una collaborazione BPMN — un cliente, un reparto, un sistema partner — disegnato come contenitore del processo proprio di quella parte |
 | **Business Capability** | Ciò che un'organizzazione può fare, indipendentemente da come lo fa |
 | **Calcolo** | Una formula definita dall'amministratore che calcola automaticamente il valore di un campo quando una card viene salvata |
 | **Card** | L'unità base di informazione in Turbo EA che rappresenta qualsiasi componente architetturale |
@@ -17,7 +22,7 @@
 | **Qualità dei dati** | Un punteggio di completezza 0-100% basato sui campi compilati e sui loro pesi configurati |
 | **Diagramma** | Un diagramma architetturale visivo creato con l'editor DrawIO integrato |
 | **Feed OData** | Un feed di dati JSON disponibile sulle viste dell'inventario salvate (segnalibri) per il consumo da parte di strumenti esterni come Power BI o Excel |
-| **File allegato** | Un file binario (PDF, DOCX, XLSX, immagini, fino a 10 MB) caricato direttamente su una card tramite la scheda Risorse |
+| **File allegato** | Un file binario (documenti, fogli di calcolo, presentazioni, file OpenDocument e Office legacy, immagini, archivi, messaggi Outlook ed e-mail, CSV, Markdown, JSON e XML — fino a 20 MB) caricato direttamente su una card tramite la scheda Risorse |
 | **DrawIO** | Lo strumento di disegno open-source integrato utilizzato per i diagrammi architetturali visivi |
 | **Enterprise Architecture (EA)** | La disciplina che organizza e documenta la struttura aziendale e tecnologica di un'organizzazione |
 | **EOL (End of Life)** | La data in cui un prodotto tecnologico perde il supporto del fornitore. Tracciato tramite l'integrazione con endoflife.date |
@@ -26,6 +31,10 @@
 | **Entitlement (diritto)** | Una riga di una licenza di estensione firmata: il diritto di eseguire una specifica estensione fino a una scadenza, seguita da un periodo di tolleranza prima della disattivazione dolce |
 | **Content Pack (pacchetto di contenuti)** | La parte di soli dati di un'estensione: tipi di scheda, tag, schede e relazioni applicati con lo stesso motore idempotente del trasferimento workspace, con anteprima |
 | **DAAF** | Digital Autonomy Assessment Framework — il metodo dell'Università di Utrecht per valutare quanto un'applicazione dipenda da un fornitore e quanto ciò sia mitigabile. Riprodotto da un'estensione gratuita |
+| **Regola di automazione** | Una regola che l'estensione Automations esegue per voi: *quando* una scheda, una relazione o un todo cambia o scatta una pianificazione, *se* valgono le condizioni costruite da menu a tendina, *allora* viene eseguito un elenco di azioni. Ogni esecuzione è registrata come batch di modifiche |
+| **Esecuzione (automazione)** | Una singola esecuzione di una regola di automazione per una scheda: il suo attivatore, il suo esito e ogni riga di azione, elencata nella scheda Esecuzioni e collegata al proprio batch di modifiche |
+| **Chiave di attivazione** | Ciò che una regola di automazione ricorda dopo essere scattata per una scheda: la scheda e i valori letti dalle sue condizioni. Finché restano invariati la regola non scatta di nuovo per quella scheda, così una regola notturna non può aprire lo stesso rischio ogni notte |
+| **Batch di modifiche** | Un'unità di modifica tracciata in Admin → Registro di audit: chi ha scritto cosa, da dove (web, API, strumento IA o estensione), con le differenze per evento e un Rollback che annulla le scritture su schede, relazioni, rischi, ruoli di stakeholder, tag e bozze di decisione |
 | **Registro delle informazioni** | Il registro che ogni entità finanziaria dell'UE deve tenere sui propri accordi con fornitori terzi di servizi TIC e trasmettere annualmente ai sensi dell'art. 28 DORA — 15 modelli interconnessi |
 | **LEI** | Legal Entity Identifier — codice ISO 17442 di 20 caratteri che identifica un soggetto giuridico, con due cifre di controllo. Richiesto in tutto il registro delle informazioni DORA |
 | **xBRL-CSV** | Il formato di pacchetto di report leggibile da macchina che le autorità accettano per gli invii regolamentari come il registro delle informazioni DORA |

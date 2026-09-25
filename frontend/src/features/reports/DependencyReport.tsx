@@ -6,6 +6,7 @@ import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
 import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
+import LinkifiedText from "@/components/LinkifiedText";
 import Paper from "@mui/material/Paper";
 import Chip from "@mui/material/Chip";
 import Table from "@mui/material/Table";
@@ -57,6 +58,7 @@ import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import { api } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import type { CardType } from "@/types";
+import { compareByRank, searchRank } from "@/lib/searchRank";
 
 // GNode / GEdge are the Layered Dependency View's own input types, re-used here
 // rather than mirrored: this report is where they are fetched, and a local copy
@@ -145,6 +147,20 @@ const FALLBACK_COLORS: Record<string, string> = {
 
 function tc(key: string, types: CardType[]): string {
   return types.find((t) => t.key === key)?.color || FALLBACK_COLORS[key] || "#999";
+}
+
+/**
+ * Filter + rank the "Center on" options against what has been typed.
+ *
+ * The same shape as `CardPicker.filterAndRank`: the list is already in memory,
+ * so it narrows from the first character with no debounce, and the tiers match
+ * the server's so the order never jumps. Matched on the name — the dependency
+ * graph payload carries no other text to match against.
+ */
+function filterAndRank(options: GNode[], query: string): GNode[] {
+  const q = query.trim();
+  if (!q) return options;
+  return options.filter((o) => searchRank(o.name, q) >= 0).sort(compareByRank(q));
 }
 
 /** Tolerance for matching the debounced date to the mark's span — the same
@@ -1096,8 +1112,19 @@ export default function DependencyReport() {
   // "Center on" chooses a starting point, and centring is always honoured (the
   // `nodes` memo keeps `n.id === center` at every date), so filtering the list
   // by the slider only made a retired card impossible to reach.
+  //
+  // Sorted, though: `/reports/dependencies` builds its node list by iterating a
+  // set, so the order it arrives in is arbitrary and the drop-down read as
+  // random (#1107). `compareByRank("")` ranks every row equally and falls
+  // through to its locale-aware name compare, which is the ordering every
+  // other browse-on-open list in the app uses. `rawNodes` itself is left
+  // alone — the full-page picker below deliberately ranks by connection count,
+  // and the table has its own sort.
   const acOptions = useMemo(
-    () => (cardTypeKey ? rawNodes.filter((n) => n.type === cardTypeKey) : rawNodes),
+    () =>
+      (cardTypeKey ? rawNodes.filter((n) => n.type === cardTypeKey) : rawNodes)
+        .slice()
+        .sort(compareByRank("")),
     [rawNodes, cardTypeKey],
   );
 
@@ -1175,6 +1202,21 @@ export default function DependencyReport() {
           <Autocomplete
             size="small"
             options={acOptions}
+            // MUI's default filter is an unranked "contains", which buries the
+            // obvious answers — typing `work` would list "Cloud Work Hub"
+            // above "Workday". The list is already in memory, so it filters on
+            // the raw input with no debounce, exactly like `CardPicker`.
+            filterOptions={(opts, state) => filterAndRank(opts, state.inputValue)}
+            // MUI pins the popper to the input's width, and each row spends
+            // ~120px of it on the dot, the gaps and the type caption — so a
+            // card name was left about 95px and most of them were clipped. The
+            // list sizes to its content instead, while the input keeps the
+            // width a toolbar control should take. `90vw` is the same phone
+            // guard the other wide popups in the app use.
+            slotProps={{
+              popper: { style: { width: "fit-content" } },
+              paper: { sx: { minWidth: 280, maxWidth: "min(560px, 90vw)" } },
+            }}
             getOptionLabel={(o) => o.name}
             value={nodes.find((n) => n.id === center) || null}
             onChange={(_, v) => setCenter(v?.id || "")}
@@ -1190,7 +1232,11 @@ export default function DependencyReport() {
                     flexShrink: 0,
                   }}
                 />
-                <Typography variant="body2" noWrap sx={{ flex: 1 }}>
+                {/* Not `noWrap`: a name longer than the popper's max wraps
+                    onto a second line rather than being clipped, matching
+                    `CardPicker`. Stays `body2` (a `<p>`) — the #1107 tests
+                    read option names with `querySelector("p")`. */}
+                <Typography variant="body2" sx={{ flex: 1 }}>
                   {option.name}
                 </Typography>
                 <Typography
@@ -1203,9 +1249,15 @@ export default function DependencyReport() {
               </li>
             )}
             renderInput={(params) => (
-              <TextField {...params} label={t("dependency.centerOn")} sx={{ minWidth: 220 }} />
+              <TextField
+                {...params}
+                label={t("dependency.centerOn")}
+                // Hovering the collapsed field names the card in full, which a
+                // 280px input cannot always show.
+                inputProps={{ ...params.inputProps, title: centerNode?.name ?? "" }}
+              />
             )}
-            sx={{ minWidth: 220 }}
+            sx={{ minWidth: 280 }}
           />
 
           {hasLifecycleData && diagramShown && (
@@ -1508,7 +1560,7 @@ export default function DependencyReport() {
                     )}
                     {hoveredConn.conn.relDescription && (
                       <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 0.5, lineHeight: 1.3, fontStyle: "italic" }}>
-                        {hoveredConn.conn.relDescription}
+                        <LinkifiedText text={hoveredConn.conn.relDescription} />
                       </Typography>
                     )}
                   </Paper>

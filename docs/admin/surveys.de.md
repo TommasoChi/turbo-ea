@@ -54,7 +54,7 @@ Gestalten Sie Ihre Fragen. Jede Frage kann sein:
 
 ### Beziehungen
 
-Über Attribute hinaus kann eine Umfrage die Befragten auch bitten, die **Beziehungen** einer Karte aktuell zu halten. Im Schritt **Felder** listet der Abschnitt **Beziehungen** jede Beziehung auf, die der Ziel-Kartentyp haben kann, in beiden Richtungen (zum Beispiel für eine Anwendung: *unterstützt → IT-Komponente* und *genutzt von ← Organisation*). Für jede ausgewählte Beziehung wählen Sie eine Aktion:
+Über Attribute hinaus kann eine Umfrage die Befragten auch bitten, die **Beziehungen** einer Karte aktuell zu halten. Im Schritt **Felder** listet der Abschnitt **Beziehungen** jede Beziehung auf, die der Ziel-Kartentyp haben kann, in beiden Richtungen (zum Beispiel für eine Anwendung: *unterstützt → IT-Komponente* und *genutzt von ← Organisation*). Ein Kartentyp, der Abstammung unterstützt, erscheint hier wie jede andere Beziehung, in beiden Richtungen und mit seinen eigenen Verben — bei einer Anwendung erfasst *folgt auf* die abgelösten Karten und *wird abgelöst durch* die ablösenden. Seiten, die eine Administratorin oder ein Administrator am Kartentyp ausgeblendet hat, werden nicht angeboten. Für jede ausgewählte Beziehung wählen Sie eine Aktion:
 
 - **Pflegen** — Der Befragte sieht die aktuell verknüpften Karten und kann über eine Suchauswahl Verknüpfungen hinzufügen oder entfernen.
 - **Bestätigen** — Der Befragte bestätigt lediglich, dass die aktuellen Verknüpfungen korrekt sind, oder schaltet den Schalter aus, um Änderungen vorzuschlagen.
@@ -77,6 +77,8 @@ Sobald Ihre Umfrage im Status **Aktiv** ist:
 !!! note "Eine Karte braucht jemanden zum Fragen"
 
     Eine Karte wird nur befragt, wenn mindestens eine Person eine der **Ziel-Stakeholder-Rollen** auf ihr innehat. Karten, die Ihren Filtern entsprechen, aber keinen solchen Stakeholder haben, werden übersprungen. Der Schritt **Vorschau & Senden** nennt deren Anzahl, damit Sie Verantwortliche zuweisen können.
+
+Eine Umfrage kann auch von einer installierten Erweiterung erstellt und gesendet werden — etwa von einer geplanten Regel, die die Verantwortlichen aller Karten, die eine Bedingung erfüllen, um Vervollständigung bittet. Eine solche Umfrage nennt keinen Autor, ihre Felder sind die des Kartentyps, und sie verhält sich wie jede andere: Sie schließen sie und übernehmen ihre Antworten hier. Das Zurückrollen des Erweiterungslaufs in **Admin → Audit-Log** schließt die Umfrage und zieht die noch unbeantworteten Anfragen zurück.
 
 ## Ergebnisse anzeigen
 

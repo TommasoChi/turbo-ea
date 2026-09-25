@@ -26,6 +26,10 @@ class CardType(Base, UUIDMixin, TimestampMixin):
     # without destroying them.
     allow_card_logo: Mapped[bool] = mapped_column(Boolean, default=False)
     subtypes: Mapped[list | None] = mapped_column(JSONB, default=list)  # [{key, label}]
+    # Vocabulary for labelling a parent/child link on hierarchical types
+    # (discussion #1100): [{key, label, color, translations}]. Empty means the
+    # feature is invisible, which is why every pre-existing install is unchanged.
+    hierarchy_labels: Mapped[list | None] = mapped_column(JSONB, default=list, server_default="[]")
     fields_schema: Mapped[list] = mapped_column(JSONB, default=list)
     stakeholder_roles: Mapped[list | None] = mapped_column(JSONB, default=list)  # [{key, label}]
     section_config: Mapped[dict | None] = mapped_column(
@@ -35,6 +39,11 @@ class CardType(Base, UUIDMixin, TimestampMixin):
     # "auto" = system-generated {prefix}{number}. Empty dict means the feature is
     # off (mode defaults to "off").
     reference_config: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    # Per-role overrides of the four type-scoped inventory permissions:
+    # {role_key: {"inventory.create": bool, ...}}. Only explicitly overridden
+    # cells are stored — an absent key inherits the role's global grant. The
+    # admin (wildcard) role can never appear here.
+    role_permissions: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     built_in: Mapped[bool] = mapped_column(Boolean, default=True)
     is_hidden: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)

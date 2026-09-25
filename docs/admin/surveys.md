@@ -54,7 +54,7 @@ Design your questions. Each question can be:
 
 ### Relationships
 
-Beyond attributes, a survey can also ask respondents to keep a card's **relationships** current. In the **Fields** step, the **Relations** section lists every relationship the target card type can have, in both directions (for example, for an Application: *supports → IT Component* and *used by ← Organization*). For each one you pick, choose an action:
+Beyond attributes, a survey can also ask respondents to keep a card's **relationships** current. In the **Fields** step, the **Relations** section lists every relationship the target card type can have, in both directions (for example, for an Application: *supports → IT Component* and *used by ← Organization*). A card type that supports lineage appears here like any other relationship, in both directions and under its own verbs — for an Application, *succeeds* collects the cards it replaced and *is succeeded by* collects the ones replacing it. Sides an administrator has hidden on the card type are not offered. For each one you pick, choose an action:
 
 - **Maintain** — The respondent sees the currently linked cards and can add or remove links using a search picker.
 - **Confirm** — The respondent simply acknowledges that the current links are correct, or turns the toggle off to propose changes.
@@ -77,6 +77,8 @@ Once your survey is in **Active** status:
 !!! note "A card needs someone to ask"
 
     A card is only surveyed if at least one person holds one of the **target stakeholder roles** on it. Cards that match your filters but have no such stakeholder are skipped, and the **Preview & send** step reports how many, so you can assign owners rather than wonder why the count is low.
+
+A survey can also be created and sent by an installed extension — a scheduled rule, say, that asks the owners of every card matching a condition to complete it. Such a survey lists no author, its fields are the ones the card type defines, and it behaves like any other: you close it and apply its answers here. Rolling back the extension's run in **Admin → Audit log** closes the survey and withdraws the requests nobody had answered yet.
 
 ## Viewing Results
 

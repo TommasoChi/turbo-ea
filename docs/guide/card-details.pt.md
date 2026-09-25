@@ -10,6 +10,7 @@ A parte superior do card mostra:
 
 - **Ícone e rótulo do tipo** — Indicador colorido do tipo de card
 - **Nome do card** — Editável inline
+- **Alias** — O outro nome do card, exibido sob o título quando definido. O lápis de edição do título permite alterar o nome e o alias em conjunto. Os aliases são considerados por todas as caixas de pesquisa, de modo que um card é encontrado pelo nome que a sua organização realmente usa.
 - **Subtipo** — Classificação secundária (se aplicável)
 - **Badge de status de aprovação** — Rascunho, Aprovado, Quebrado ou Rejeitado
 - **Botão de sugestão IA** — Clique para gerar uma descrição com IA (visível quando a IA está habilitada para este tipo de card e o usuário tem permissão de edição)
@@ -63,7 +64,7 @@ Os cards podem passar por um ciclo de aprovação:
 | **Quebrado** | Estava aprovado, mas foi editado desde então — precisa de nova revisão |
 | **Rejeitado** | Revisado e rejeitado, precisa de correções |
 
-Quando um card aprovado é editado, seu status muda automaticamente para **Quebrado** para indicar que precisa de nova revisão.
+Quando um card aprovado é editado, seu status muda automaticamente para **Quebrado** para indicar que precisa de nova revisão. Arquivar o card pai tem o mesmo efeito sobre os cards filhos aprovados que são deslocados na hierarquia. Todas as pessoas com um papel de parte interessada no card são notificadas — exceto quem fez a alteração — e a mudança fica registada na aba **Histórico** do card. Uma ação que quebra vários cards, como uma edição em massa, envia a cada pessoa um único resumo em vez de uma notificação por card.
 
 ## Aba de Detalhe (Principal)
 
@@ -72,7 +73,8 @@ A aba de detalhe é organizada em **seções** que podem ser reordenadas e confi
 ### Seção de Descrição
 
 - **Descrição** — Descrição em texto rico do componente. Suporta o recurso de sugestão de IA para geração automática
-- **Campos adicionais de descrição** — Alguns tipos de card incluem campos extras na seção de descrição (ex.: alias, ID externo)
+- **Campos adicionais de descrição** — Um administrador pode atribuir qualquer campo próprio de um tipo de card à seção de descrição, que pode assim conter campos além da própria descrição
+- **Links** — Um endereço web (`http://` ou `https://`) digitado na descrição, em qualquer campo de texto, em um comentário ou em uma tarefa torna-se um link que abre em uma nova aba
 
 ### Seção de Ciclo de Vida
 
@@ -87,6 +89,8 @@ O modelo de ciclo de vida acompanha um componente através de cinco fases:
 | **Fim de Vida** | Não mais em uso ou com suporte |
 
 Cada fase tem um **seletor de data** para que você possa registrar quando o componente entrou ou entrará nessa fase. Uma barra de linha do tempo visual mostra a posição do componente em seu ciclo de vida.
+
+Se uma fase tiver uma data posterior à de uma fase que deveria vir depois dela — por exemplo, **Desativação** após **Fim de Vida** —, um ícone de aviso aparece ao lado dessa data, e o mesmo aviso é exibido abaixo do campo durante a edição. É apenas uma indicação: as datas ainda podem ser salvas como foram inseridas.
 
 ### Seções de Atributos Personalizados
 
@@ -111,6 +115,7 @@ Para tipos de card que suportam hierarquia (ex.: Organização, Capacidade de Ne
 - **Pai** — O card pai na hierarquia (clique para navegar)
 - **Filhos** — Lista de cards filhos (clique em qualquer um para navegar)
 - **Breadcrumb de hierarquia** — Mostra o caminho completo da raiz até o card atual
+- **Tipo de ligação** — Quando um administrador configurou tipos de ligação para este tipo de card, cada ligação pai-filho pode ser rotulada — por exemplo, uma subsidiária *comercial* e outra de *vendas*. O rótulo pertence ao card filho: o card pai mostra-o ao lado de cada filho, e o card filho ao lado do seu pai. Remover um card ou movê-lo para o nível superior limpa o seu rótulo, e a alteração fica registada na aba **Histórico**.
 
 ### Seção de Relacionamentos
 
@@ -142,7 +147,7 @@ Aplique tags dos [grupos de tags](../admin/tags.md) configurados. Dependendo do 
 
 A aba de **Recursos** consolida todos os materiais de apoio de um card:
 
-- **Anexos de Arquivos** — Carregue e gerencie arquivos (PDF, DOCX, XLSX, imagens, até 10 MB). Ao carregar, selecione uma **categoria de documento** entre: Arquitetura, Segurança, Conformidade, Operações, Notas de Reunião, Design ou Outro. A categoria aparece como um chip ao lado de cada arquivo.
+- **Anexos de Arquivos** — Carregue e gerencie arquivos (documentos, folhas de cálculo, apresentações, ficheiros OpenDocument e Office antigos, imagens, arquivos, mensagens do Outlook e e-mail, CSV, Markdown, JSON e XML — até 20 MB). Ao carregar, selecione uma **categoria de documento** entre: Arquitetura, Segurança, Conformidade, Operações, Notas de Reunião, Design ou Outro. A categoria aparece como um chip ao lado de cada arquivo.
 - **Links de Documentos** — Referências de documentos baseadas em URL. Ao adicionar um link, selecione um **tipo de link** entre: Documentação, Segurança, Conformidade, Arquitetura, Operações, Suporte ou Outro. O tipo de link aparece como um chip ao lado de cada link, e o ícone muda de acordo com o tipo selecionado.
 - **Diagramas** — Vincule [diagramas](diagrams.pt.md) existentes a este card. Os diagramas vinculados são exibidos como pré-visualizações em miniatura que você pode clicar para abrir no editor de diagramas. Use o botão **Vincular Diagrama** para pesquisar e anexar um diagrama existente, ou clique no ícone de desvincular para remover a associação.
 
@@ -161,6 +166,7 @@ Se o card estiver vinculado a um produto do [endoflife.date](https://endoflife.d
 - **Adicionar comentários** — Deixe notas, perguntas ou decisões sobre o componente
 - **Respostas em thread** — Responda a comentários específicos para criar conversações encadeadas
 - **Timestamps** — Veja quando cada comentário foi postado e por quem
+- **Links** — Um endereço web em um comentário é clicável e abre em uma nova aba
 
 ## Aba de Tarefas
 

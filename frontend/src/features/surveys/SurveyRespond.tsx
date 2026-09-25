@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DateField } from "@/components/DateField";
+import { PercentageInput } from "@/components/PercentageInput";
 import { useNavigate, useParams } from "react-router";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import LinkifiedText from "@/components/LinkifiedText";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
@@ -25,10 +27,12 @@ import {
   useFieldLabel,
 } from "@/hooks/useResolveLabel";
 import { useMetamodel } from "@/hooks/useMetamodel";
+import { useSurveyRelationFieldLabel } from "@/lib/surveyFieldLabel";
 import Tooltip from "@mui/material/Tooltip";
 import Divider from "@mui/material/Divider";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
+import { usePageSubject } from "@/hooks/usePageTitle";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ExtensionBoundary, useExtensionFieldTypes } from "@/lib/extensionHost";
@@ -217,6 +221,7 @@ export default function SurveyRespond() {
   const fieldLabel = useFieldLabel();
   const theme = useTheme();
   const { types } = useMetamodel();
+  const surveyRelationLabel = useSurveyRelationFieldLabel();
   const { surveyId, cardId } = useParams<{ surveyId: string; cardId: string }>();
 
   // A relation field is scoped to ONE relation type, so its related cards are
@@ -234,6 +239,7 @@ export default function SurveyRespond() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState<SurveyRespondForm | null>(null);
+  usePageSubject(form?.card.name);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -407,6 +413,16 @@ export default function SurveyRespond() {
       );
     }
 
+    if (field.type === "percentage") {
+      return (
+        <PercentageInput
+          fullWidth
+          value={value}
+          onChange={(v) => setNewValue(field.key, v ?? null)}
+        />
+      );
+    }
+
     if (field.type === "number" || field.type === "cost") {
       return (
         <TextField
@@ -523,7 +539,7 @@ export default function SurveyRespond() {
       {form.survey.message && (
         <Card variant="outlined" sx={{ p: 2, mb: 3, bgcolor: "action.hover" }}>
           <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-            {form.survey.message}
+            <LinkifiedText text={form.survey.message} />
           </Typography>
         </Card>
       )}
@@ -543,7 +559,7 @@ export default function SurveyRespond() {
           <Card key={field.key} sx={{ mb: 2, p: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: field.kind === "relation" ? 0.5 : 1 }}>
               <Typography sx={{ fontWeight: 600, flex: 1 }}>
-                {field.kind === "relation" ? field.label : fieldLabel(field)}
+                {field.kind === "relation" ? surveyRelationLabel(field) : fieldLabel(field)}
               </Typography>
               <Chip
                 label={isMaintain ? t("surveys.respond.maintain") : t("surveys.respond.confirmLabel")}

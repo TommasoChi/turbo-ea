@@ -1244,8 +1244,15 @@ class TestSuccessorRelationType:
         assert rt["is_hidden"] is False
         assert rt["built_in"] is False
         assert rt["label"] == "succeeds"
+        # The reverse verb has to mean the opposite of the forward one — it read
+        # "is preceded by" until #1091, i.e. the same thing as "succeeds".
+        assert rt["reverse_label"] == "is succeeded by"
         assert rt["translations"]  # non-empty i18n
         assert rt["translations"]["label"].get("en") == "succeeds"
+        assert rt["translations"]["reverse_label"].get("en") == "is succeeded by"
+        # Spot-check two locales that were wrong, pinning this path to the seed.
+        assert rt["translations"]["reverse_label"].get("fr") == "a pour successeur"
+        assert rt["translations"]["label"].get("ru") == "следует за"
 
     async def test_idempotent(self, client, db, metamodel_env):
         admin = metamodel_env["admin"]
@@ -1379,3 +1386,334 @@ class TestScoringSignatureRequiredFlag:
         a = [{"section": "S", "fields": [{"key": "a", "weight": 1, "label": "Old"}]}]
         b = [{"section": "S", "fields": [{"key": "a", "weight": 1, "label": "New"}]}]
         assert _scoring_signature(a, None) == _scoring_signature(b, None)
+
+
+# ---------------------------------------------------------------------------
+# Per-card-type role permission overrides (discussion #1068)
+# ---------------------------------------------------------------------------
+
+
+class TestTypeRolePermissions:
+    """PATCH validation + the matrix endpoint that feeds the admin Permissions tab."""
+
+    async def test_serialized_type_carries_the_map(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await create_card_type(db, key="Application", label="Application")
+
+        response = await client.get(
+            "/api/v1/metamodel/types/Application", headers=auth_headers(admin)
+        )
+        assert response.status_code == 200
+        assert response.json()["role_permissions"] == {}
+
+    async def test_patch_round_trips(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await create_card_type(db, key="Application", label="Application")
+        await create_role(db, key="member", label="Member", permissions={"inventory.view": True})
+
+        response = await client.patch(
+            "/api/v1/metamodel/types/Application",
+            json={"role_permissions": {"member": {"inventory.create": False}}},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 200
+        assert response.json()["role_permissions"] == {"member": {"inventory.create": False}}
+
+    async def test_patch_drops_an_empty_override_map(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await create_card_type(db, key="Application", label="Application")
+        await create_role(db, key="member", label="Member", permissions={"inventory.view": True})
+
+        response = await client.patch(
+            "/api/v1/metamodel/types/Application",
+            json={"role_permissions": {"member": {}}},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 200
+        assert response.json()["role_permissions"] == {}
+
+    async def test_unknown_role_rejected(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await create_card_type(db, key="Application", label="Application")
+
+        response = await client.patch(
+            "/api/v1/metamodel/types/Application",
+            json={"role_permissions": {"ghost": {"inventory.create": False}}},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 400
+
+    async def test_wildcard_role_rejected(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await create_card_type(db, key="Application", label="Application")
+
+        response = await client.patch(
+            "/api/v1/metamodel/types/Application",
+            json={"role_permissions": {"admin": {"inventory.create": False}}},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 400
+
+    async def test_non_type_scoped_permission_rejected(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await create_card_type(db, key="Application", label="Application")
+        await create_role(db, key="member", label="Member", permissions={"inventory.view": True})
+
+        response = await client.patch(
+            "/api/v1/metamodel/types/Application",
+            json={"role_permissions": {"member": {"inventory.view": False}}},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 400
+
+    async def test_create_type_accepts_the_map(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await create_role(db, key="member", label="Member", permissions={"inventory.view": True})
+
+        response = await client.post(
+            "/api/v1/metamodel/types",
+            json={
+                "key": "CustomThing",
+                "label": "Custom Thing",
+                "role_permissions": {"member": {"inventory.create": False}},
+            },
+            headers=auth_headers(admin),
+        )
+        assert response.status_code in (200, 201)
+        assert response.json()["role_permissions"] == {"member": {"inventory.create": False}}
+
+
+class TestTypePermissionsMatrix:
+    async def test_returns_actions_and_roles(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await create_card_type(db, key="Application", label="Application")
+        await create_role(
+            db,
+            key="member",
+            label="Member",
+            permissions={"inventory.create": True, "inventory.edit": True},
+            is_system=False,
+        )
+
+        response = await client.get(
+            "/api/v1/metamodel/types/Application/permissions", headers=auth_headers(admin)
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert [a["key"] for a in body["actions"]] == [
+            "inventory.create",
+            "inventory.edit",
+            "inventory.archive",
+            "inventory.delete",
+        ]
+        # Descriptions come from the permission registry, not a hardcoded list.
+        assert all(a["description"] for a in body["actions"])
+
+        by_key = {r["key"]: r for r in body["roles"]}
+        assert by_key["member"]["inherited"]["inventory.create"] is True
+        assert by_key["member"]["inherited"]["inventory.delete"] is False
+        assert by_key["member"]["overrides"] == {}
+
+    async def test_wildcard_role_inherits_everything(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await create_card_type(db, key="Application", label="Application")
+
+        response = await client.get(
+            "/api/v1/metamodel/types/Application/permissions", headers=auth_headers(admin)
+        )
+        by_key = {r["key"]: r for r in response.json()["roles"]}
+        assert by_key["admin"]["is_wildcard"] is True
+        assert all(by_key["admin"]["inherited"].values())
+
+    async def test_overrides_are_reported(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        ct = await create_card_type(db, key="Application", label="Application")
+        await create_role(db, key="member", label="Member", permissions={"inventory.create": True})
+        ct.role_permissions = {"member": {"inventory.create": False}}
+        await db.flush()
+
+        response = await client.get(
+            "/api/v1/metamodel/types/Application/permissions", headers=auth_headers(admin)
+        )
+        by_key = {r["key"]: r for r in response.json()["roles"]}
+        assert by_key["member"]["overrides"] == {"inventory.create": False}
+
+    async def test_archived_role_is_omitted(self, client, db, metamodel_env):
+        from app.models.role import Role
+
+        admin = metamodel_env["admin"]
+        await create_card_type(db, key="Application", label="Application")
+        role = await create_role(db, key="oldrole", label="Old", permissions={})
+        role.is_archived = True
+        await db.flush()
+
+        response = await client.get(
+            "/api/v1/metamodel/types/Application/permissions", headers=auth_headers(admin)
+        )
+        assert "oldrole" not in {r["key"] for r in response.json()["roles"]}
+        assert isinstance(role, Role)
+
+    async def test_stale_override_role_is_ignored(self, client, db, metamodel_env):
+        """A role key that no longer resolves is inert — never listed, never checked."""
+        admin = metamodel_env["admin"]
+        ct = await create_card_type(db, key="Application", label="Application")
+        ct.role_permissions = {"vanished": {"inventory.create": False}}
+        await db.flush()
+
+        response = await client.get(
+            "/api/v1/metamodel/types/Application/permissions", headers=auth_headers(admin)
+        )
+        assert response.status_code == 200
+        assert "vanished" not in {r["key"] for r in response.json()["roles"]}
+
+    async def test_requires_admin_metamodel(self, client, db, metamodel_env):
+        viewer = metamodel_env["viewer"]
+        await create_card_type(db, key="Application", label="Application")
+
+        response = await client.get(
+            "/api/v1/metamodel/types/Application/permissions", headers=auth_headers(viewer)
+        )
+        assert response.status_code == 403
+
+    async def test_unknown_type_404s(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        response = await client.get(
+            "/api/v1/metamodel/types/Nope/permissions", headers=auth_headers(admin)
+        )
+        assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Hierarchy link labels (#1100)
+# ---------------------------------------------------------------------------
+
+
+class TestHierarchyLinkLabels:
+    """The per-type vocabulary a parent/child link is labelled from.
+
+    Stored like `subtypes` and shaped like a `single_select`'s options, so it is
+    translatable and colourable. The two things worth pinning are that a PATCH
+    can actually write it (an absent entry in `update_type`'s `updatable` list
+    fails silently, with a 200 and no change) and that removing an entry leaves
+    the cards already carrying it alone.
+    """
+
+    async def test_patch_writes_the_vocabulary(self, client, db, metamodel_env):
+        await create_card_type(db, key="Organization", label="Organization", has_hierarchy=True)
+        vocab = [
+            {"key": "commercial", "label": "Commercial", "color": "#2889ff"},
+            {"key": "sales", "label": "Sales", "color": "#33cc58"},
+        ]
+        response = await client.patch(
+            "/api/v1/metamodel/types/Organization",
+            json={"hierarchy_labels": vocab},
+            headers=auth_headers(metamodel_env["admin"]),
+        )
+        assert response.status_code == 200
+        assert response.json()["hierarchy_labels"] == vocab
+
+    async def test_types_listing_reports_it(self, client, db, metamodel_env):
+        await create_card_type(
+            db,
+            key="Organization",
+            label="Organization",
+            has_hierarchy=True,
+            hierarchy_labels=[{"key": "commercial", "label": "Commercial"}],
+        )
+        response = await client.get(
+            "/api/v1/metamodel/types", headers=auth_headers(metamodel_env["admin"])
+        )
+        assert response.status_code == 200
+        org = next(t for t in response.json() if t["key"] == "Organization")
+        assert org["hierarchy_labels"] == [{"key": "commercial", "label": "Commercial"}]
+
+    async def test_a_type_without_a_vocabulary_reports_an_empty_list(
+        self, client, db, metamodel_env
+    ):
+        """Never null: the frontend gates the whole feature on `.length`."""
+        await create_card_type(db, key="Application", label="Application")
+        response = await client.get(
+            "/api/v1/metamodel/types", headers=auth_headers(metamodel_env["admin"])
+        )
+        app = next(t for t in response.json() if t["key"] == "Application")
+        assert app["hierarchy_labels"] == []
+
+    async def test_usage_endpoint_counts_cards(self, client, db, metamodel_env):
+        await create_card_type(
+            db,
+            key="Organization",
+            label="Organization",
+            has_hierarchy=True,
+            hierarchy_labels=[{"key": "commercial", "label": "Commercial"}],
+        )
+        parent = await create_card(db, card_type="Organization", name="Company A")
+        await db.flush()
+        await create_card(
+            db,
+            card_type="Organization",
+            name="Company B",
+            parent_id=parent.id,
+            parent_label="commercial",
+        )
+        await create_card(
+            db,
+            card_type="Organization",
+            name="Company C",
+            parent_id=parent.id,
+            parent_label="commercial",
+        )
+        await create_card(db, card_type="Organization", name="Company D", parent_id=parent.id)
+        await db.commit()
+
+        response = await client.get(
+            "/api/v1/metamodel/types/Organization/hierarchy-label-usage?label_key=commercial",
+            headers=auth_headers(metamodel_env["admin"]),
+        )
+        assert response.status_code == 200
+        assert response.json() == {"label_key": "commercial", "card_count": 2}
+
+    async def test_usage_endpoint_requires_admin(self, client, db, metamodel_env):
+        await create_card_type(db, key="Organization", label="Organization", has_hierarchy=True)
+        response = await client.get(
+            "/api/v1/metamodel/types/Organization/hierarchy-label-usage?label_key=commercial",
+            headers=auth_headers(metamodel_env["viewer"]),
+        )
+        assert response.status_code == 403
+
+    async def test_usage_endpoint_404s_for_an_unknown_type(self, client, db, metamodel_env):
+        response = await client.get(
+            "/api/v1/metamodel/types/Nope/hierarchy-label-usage?label_key=commercial",
+            headers=auth_headers(metamodel_env["admin"]),
+        )
+        assert response.status_code == 404
+
+    async def test_removing_an_entry_leaves_stored_values_alone(self, client, db, metamodel_env):
+        """Cards keep the value and render it as an unknown chip — they are not
+        rewritten, so nothing is lost if an admin removes an entry by mistake."""
+        await create_card_type(
+            db,
+            key="Organization",
+            label="Organization",
+            has_hierarchy=True,
+            hierarchy_labels=[{"key": "commercial", "label": "Commercial"}],
+        )
+        parent = await create_card(db, card_type="Organization", name="Company A")
+        await db.flush()
+        child = await create_card(
+            db,
+            card_type="Organization",
+            name="Company B",
+            parent_id=parent.id,
+            parent_label="commercial",
+        )
+        await db.commit()
+
+        response = await client.patch(
+            "/api/v1/metamodel/types/Organization",
+            json={"hierarchy_labels": []},
+            headers=auth_headers(metamodel_env["admin"]),
+        )
+        assert response.status_code == 200
+
+        await db.refresh(child)
+        assert child.parent_label == "commercial"

@@ -7,6 +7,17 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// These components read the signed-in user to apply per-card-type create
+// permissions (discussion #1068). They render deep in the tree, always inside
+// an AuthProvider in the app; the tests mount them directly, so the context is
+// stubbed with an admin (whose wildcard grants every type).
+vi.mock("@/hooks/AuthContext", () => ({
+  useAuthContext: () => ({
+    user: { id: "u1", email: "a@test.com", display_name: "Admin", permissions: { "*": true } },
+    refreshUser: vi.fn(),
+  }),
+}));
+
 vi.mock("@/api/client", () => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
   ApiError: class extends Error {},
@@ -43,7 +54,7 @@ vi.mock("@/hooks/useMetamodel", () => ({
 }));
 
 import { api } from "@/api/client";
-import type { RelationType } from "@/types";
+import type { Relation, RelationType } from "@/types";
 import AddRelationsDialog from "./AddRelationsDialog";
 
 const FS = "app-1";
@@ -78,6 +89,7 @@ function mountDialog(props: Partial<React.ComponentProps<typeof AddRelationsDial
       fsId={FS}
       cardTypeKey="Application"
       relationType={rtWithAttrs}
+      isSource
       relations={[]}
       onAdded={onAdded}
       onRemoved={vi.fn()}
@@ -298,6 +310,7 @@ function mountTree(props: Partial<React.ComponentProps<typeof AddRelationsDialog
       fsId={FS}
       cardTypeKey="Application"
       relationType={rtCapability}
+      isSource
       relations={[]}
       onAdded={vi.fn()}
       onRemoved={vi.fn()}
@@ -488,5 +501,103 @@ describe("AddRelationsDialog hierarchy (#1050)", () => {
     expect(self.textContent).toContain("this card");
     // Its children are still offered — only the card itself is out.
     expect(rowFor("Lead Scoring")).not.toHaveAttribute("aria-disabled", "true");
+  });
+});
+
+describe("AddRelationsDialog side (self-referencing relation types)", () => {
+  // Organization → Organization "has site" / "is site of": the reported bug.
+  // "Am I the source" cannot be read off the type here — it is true at both
+  // ends — so the group that opened the dialog says which side it serves.
+  const orgToOrg = {
+    key: "orgToOrg",
+    label: "has site",
+    reverse_label: "is site of",
+    source_type_key: "Organization",
+    target_type_key: "Organization",
+    cardinality: "n:m",
+    attributes_schema: [],
+  } as unknown as RelationType;
+  const ORG = "org-hq";
+
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+    vi.mocked(api.get).mockResolvedValue({
+      items: [{ id: "org-site", name: "INCHN", type: "Organization" }],
+      total: 1,
+      page: 1,
+      page_size: 50,
+    } as never);
+    vi.mocked(api.post).mockImplementation(
+      async (_url: string, body: unknown) => ({ id: "rel-new", ...(body as object) }) as never,
+    );
+  });
+
+  it("puts the card on the TARGET side when opened from the incoming group", async () => {
+    mountDialog({
+      fsId: ORG,
+      cardTypeKey: "Organization",
+      relationType: orgToOrg,
+      isSource: false,
+    });
+    const dialog = await screen.findByRole("dialog");
+    // The title carries the side's verb, not the forward one.
+    expect(within(dialog).getByText(/is site of/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/· has site/)).not.toBeInTheDocument();
+
+    await userEvent.click(await within(dialog).findByText("INCHN"));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalled());
+    const body = vi.mocked(api.post).mock.calls[0][1] as { source_id: string; target_id: string };
+    expect(body.source_id).toBe("org-site");
+    expect(body.target_id).toBe(ORG);
+  });
+
+  it("still offers a card linked only the OTHER way round", async () => {
+    // "INCHN has site HQ" exists; the "HQ has site …" group is a different
+    // edge, so INCHN is pickable there and the linked-count hint stays quiet.
+    const incoming: Relation = {
+      id: "r-in",
+      type: "orgToOrg",
+      source_id: "org-site",
+      target_id: ORG,
+      source: { id: "org-site", type: "Organization", name: "INCHN" },
+      target: { id: ORG, type: "Organization", name: "HQ" },
+    };
+    mountDialog({
+      fsId: ORG,
+      cardTypeKey: "Organization",
+      relationType: orgToOrg,
+      isSource: true,
+      relations: [incoming],
+    });
+    const dialog = await screen.findByRole("dialog");
+    const row = (await within(dialog).findByText("INCHN")).closest('[role="button"]');
+    expect(row).not.toHaveAttribute("aria-disabled", "true");
+    // Neither the caption nor a greyed row: nothing on this side is linked.
+    expect(within(dialog).queryAllByText(/already linked/i)).toHaveLength(0);
+  });
+
+  it("hides a card already linked on THIS side", async () => {
+    const outgoing: Relation = {
+      id: "r-out",
+      type: "orgToOrg",
+      source_id: ORG,
+      target_id: "org-site",
+      source: { id: ORG, type: "Organization", name: "HQ" },
+      target: { id: "org-site", type: "Organization", name: "INCHN" },
+    };
+    mountDialog({
+      fsId: ORG,
+      cardTypeKey: "Organization",
+      relationType: orgToOrg,
+      isSource: true,
+      relations: [outgoing],
+    });
+    const dialog = await screen.findByRole("dialog");
+    // The caption above the list and the greyed row both say so.
+    await waitFor(() =>
+      expect(within(dialog).getAllByText(/already linked/i).length).toBeGreaterThan(0),
+    );
   });
 });

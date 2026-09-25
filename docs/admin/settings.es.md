@@ -29,6 +29,12 @@ Cargue un logotipo personalizado que aparecerá en la barra de navegación super
 
 Elija los colores de fondo y de texto de la barra de navegación superior. El estilo elegido se aplica a **todos los usuarios** de la instancia, en escritorio y móvil (incluido el menú lateral móvil). Seleccione uno de los siete estilos predefinidos — Azul marino (predeterminado), Claro, Carbón, Pizarra, Azul, Verde bosque o Ciruela — o elija **Personalizado** para definir libremente los colores de fondo y de texto con los selectores de color. Una vista previa en vivo muestra cómo se verá la barra de navegación antes de guardar, y aparece una advertencia cuando el contraste entre el texto y el fondo es demasiado bajo (por debajo de WCAG AA). Haga clic en **Restablecer valores predeterminados** para volver al estilo predeterminado.
 
+### Título de la aplicación
+
+Defina el nombre con el que se conoce esta instancia. Sustituye a «Turbo EA» en la pestaña del navegador, en la página de inicio de sesión y en los correos que envía la instancia.
+
+La pestaña del navegador muestra delante la página en la que se encuentra — `Inventario | Turbo EA` en el inventario, `SAP S/4HANA | Turbo EA` en una ficha, `GRC · Riesgo | Turbo EA` en una página abierta en una pestaña concreta — de modo que una fila de pestañas abiertas sigue siendo legible. La página de inicio y la de acceso muestran solo el título.
+
 ### Favicon
 
 Cargue un icono de navegador personalizado (favicon). El cambio se aplicará en la siguiente carga de página. Haga clic en **Restablecer** para volver al icono predeterminado.
@@ -59,7 +65,7 @@ Al menos un idioma debe permanecer habilitado en todo momento.
 
 ### Inicio del Año Fiscal
 
-Seleccione el mes en que comienza el año fiscal de su organización (enero a diciembre). Esta configuración afecta cómo se agrupan las **líneas de presupuesto** en el módulo PPM por año fiscal. Por ejemplo, si el año fiscal comienza en abril, una línea de presupuesto de junio de 2026 pertenece al AF 2026–2027.
+Seleccione el mes en que comienza el año fiscal de su organización (enero a diciembre). Esta configuración afecta cómo se agrupan las **líneas de presupuesto** en el módulo PPM por año fiscal. Por ejemplo, si el año fiscal comienza en abril, una línea de presupuesto de junio de 2026 pertenece al AF 2026–2027. También determina qué año fiscal muestra el [Informe de Costos](../guide/reports.md).
 
 El valor predeterminado es **enero** (año calendario = año fiscal).
 
@@ -84,6 +90,8 @@ Turbo EA envía correos de invitación, notificaciones de encuestas, restablecim
     Microsoft 365 está deshabilitando la autenticación SMTP básica (no disponible para inquilinos nuevos, eliminada para los existentes durante 2026–2027) y Google Workspace la deshabilitó en marzo de 2025. Para esas plataformas, use uno de los métodos OAuth a continuación en lugar de una contraseña de buzón.
 
 ### Métodos de envío
+
+![Envío de correo electrónico con la lista de métodos de envío](../assets/img/es/95a_admin_config_correo.png)
 
 | Método | Cuándo usarlo |
 |--------|---------------|
@@ -132,6 +140,8 @@ Después de configurar cualquier método, haga clic en **Enviar correo de prueba
     El correo es opcional. Si no se configura ningún método, las funciones que envían correos omiten la entrega de forma silenciosa.
 
 ## Módulo BPM
+
+![Interruptores de módulos en Configuración → General](../assets/img/es/95_admin_config_modulos.png)
 
 Active o desactive el módulo de **Gestión de Procesos de Negocio** (BPM). Cuando está desactivado:
 

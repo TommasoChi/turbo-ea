@@ -2,13 +2,35 @@
  * BpmnViewer — Read-only BPMN viewer embedded in ProcessFlowTab.
  * Uses bpmn-js NavigatedViewer for smaller bundle.
  * Click element to see details in popover. Color overlay for automation.
+ *
+ * A step's linked cards show on the canvas as one coloured dot per card type
+ * under the step's name (`linkDots.ts`, shared with the editor) — never as
+ * names, which made a linked diagram unreadable. The names are in the click
+ * popover, and on each dot as hover text.
  */
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import LinkifiedText from "@/components/LinkifiedText";
+import ElementTypeChip from "./ElementTypeChip";
 import Popover from "@mui/material/Popover";
 import Chip from "@mui/material/Chip";
+import MaterialSymbol from "@/components/MaterialSymbol";
+import { CALLED_PROCESS_COLOR, calledProcessPath } from "./calledProcess";
+import type { LinkKind } from "./calledProcess";
+import {
+  LINK_DOTS_OVERLAY_TYPE,
+  LINK_TYPE_COLORS,
+  escapeHtml,
+  linkDotPlacement,
+  linkDotsFor,
+  linkDotsHtml,
+} from "./linkDots";
+
+// Kept here for existing importers; the renderer owns it now.
+export { escapeHtml };
 
 import "bpmn-js/dist/assets/diagram-js.css";
 import "bpmn-js/dist/assets/bpmn-js.css";
@@ -30,8 +52,15 @@ export interface BpmnViewerElement {
   documentation?: string;
   lane_name?: string;
   is_automated: boolean;
+  event_definition_type?: string | null;
+  definition_name?: string | null;
   application_name?: string | null;
   data_object_name?: string | null;
+  it_component_name?: string | null;
+  /** The process a call activity invokes. The id is absent on a portal
+   *  payload, where the chip is inert. */
+  business_process_id?: string | null;
+  business_process_name?: string | null;
   organizations?: { id: string; name: string }[];
 }
 
@@ -53,10 +82,24 @@ interface Props {
   elements?: BpmnViewerElement[];
   onElementClick?: (bpmnElementId: string) => void;
   height?: number | string;
+  /**
+   * Card-type colours for the link dots, from the metamodel
+   * (`useLinkTypeColors`). Absent in a portal, which has no metamodel session
+   * and gets the seeded `LINK_TYPE_COLORS`.
+   */
+  typeColors?: Partial<Record<LinkKind, string>>;
 }
 
-export default function BpmnViewer({ bpmnXml, elements, onElementClick, height = 400 }: Props) {
+export default function BpmnViewer({
+  bpmnXml,
+  elements,
+  onElementClick,
+  height = 400,
+  typeColors,
+}: Props) {
   const { t } = useTranslation(["bpm", "common"]);
+  const navigate = useNavigate();
+  const dotColors = useMemo(() => ({ ...LINK_TYPE_COLORS, ...typeColors }), [typeColors]);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
   const [popover, setPopover] = useState<{
@@ -103,12 +146,27 @@ export default function BpmnViewer({ bpmnXml, elements, onElementClick, height =
               }
             }
 
-            // Show application badge
-            if (el.application_name) {
+            // One dot per linked card type under the name — the names are in
+            // the popover. A kind is linked when the payload names a card for
+            // it; the portal payload carries names and no ids, so names are
+            // the one signal both hosts share.
+            const dots = linkDotsFor(
+              {
+                process: el.business_process_name,
+                application: el.application_name,
+                data_object: el.data_object_name,
+                it_component: el.it_component_name,
+                organization: (el.organizations ?? []).map((o) => o.name).join(", "),
+              },
+              dotColors,
+            );
+            const placement = linkDotPlacement(shape);
+            const html = linkDotsHtml(dots, placement.width);
+            if (html) {
               try {
-                overlays.add(el.bpmn_element_id, {
-                  position: { bottom: -4, right: 4 },
-                  html: `<div style="background:#1976d2;color:#fff;font-size:10px;padding:1px 4px;border-radius:2px;white-space:nowrap">${el.application_name}</div>`,
+                overlays.add(placement.elementId, LINK_DOTS_OVERLAY_TYPE, {
+                  position: placement.position,
+                  html,
                 });
               } catch {
                 // Overlay may fail if element not visible
@@ -145,7 +203,7 @@ export default function BpmnViewer({ bpmnXml, elements, onElementClick, height =
         viewerRef.current = null;
       }
     };
-  }, [bpmnXml, elements, onElementClick]);
+  }, [bpmnXml, elements, onElementClick, dotColors]);
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -165,12 +223,17 @@ export default function BpmnViewer({ bpmnXml, elements, onElementClick, height =
           <Box sx={{ p: 2, maxWidth: 300 }}>
             <Typography variant="subtitle2">{popover.element.name || t("viewer.unnamed")}</Typography>
             <Typography variant="body2" color="text.secondary">
-              {popover.element.element_type}
+              <ElementTypeChip
+                variant="text"
+                elementType={popover.element.element_type}
+                eventDefinitionType={popover.element.event_definition_type}
+                definitionName={popover.element.definition_name}
+              />
               {popover.element.lane_name && ` | ${popover.element.lane_name}`}
             </Typography>
             {popover.element.documentation && (
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                {popover.element.documentation}
+              <Typography variant="body2" sx={{ mt: 1, whiteSpace: "pre-wrap" }}>
+                <LinkifiedText text={popover.element.documentation} />
               </Typography>
             )}
             <Box sx={{ mt: 1, display: "flex", gap: 0.5, flexWrap: "wrap" }}>
@@ -180,6 +243,28 @@ export default function BpmnViewer({ bpmnXml, elements, onElementClick, height =
               )}
               {popover.element.data_object_name && (
                 <Chip label={popover.element.data_object_name} size="small" color="secondary" />
+              )}
+              {popover.element.it_component_name && (
+                <Chip
+                  icon={<MaterialSymbol icon="memory" size={14} />}
+                  label={popover.element.it_component_name}
+                  size="small"
+                  variant="outlined"
+                />
+              )}
+              {popover.element.business_process_name && (
+                <Chip
+                  icon={<MaterialSymbol icon="route" size={14} />}
+                  label={`${t("viewer.process")}: ${popover.element.business_process_name}`}
+                  size="small"
+                  variant="outlined"
+                  sx={{ borderColor: CALLED_PROCESS_COLOR, color: CALLED_PROCESS_COLOR }}
+                  onClick={
+                    popover.element.business_process_id
+                      ? () => navigate(calledProcessPath(popover.element.business_process_id!))
+                      : undefined
+                  }
+                />
               )}
               {(popover.element.organizations || []).map((org) => (
                 <Chip key={org.id} label={org.name} size="small" color="info" />

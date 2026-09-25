@@ -46,6 +46,7 @@ Turbo EA fournit un éditeur SoAW intégré avec des modèles de sections align�
 L'éditeur offre :
 
 - **Édition de texte riche** -- Barre d'outils de mise en forme complète (titres, gras, italique, listes, liens) propulsée par l'éditeur TipTap
+- **Liens** -- Une URL saisie ou collée devient un lien au fil de la frappe, et chaque lien d'un document s'ouvre dans un nouvel onglet. Les adresses des documents rédigés avant la prise en charge des liens sont converties en liens à l'affichage
 - **Modèles de sections** -- Sections prédéfinies suivant les standards TOGAF (par ex. Description du problème, Objectifs, Approche, Parties prenantes, Contraintes, Plan de travail)
 - **Tableaux éditables en ligne** -- Ajoutez et éditez des tableaux dans n'importe quelle section
 - **Workflow de statut** -- Les documents progressent à travers des étapes définies :
@@ -82,8 +83,8 @@ Le **registre principal des ADR** — où chaque ADR à l'échelle du paysage es
 
 ![Onglet Ressources de la fiche](../assets/img/fr/17c_fiche_ressources.png)
 
-Les cartes incluent désormais un onglet **Ressources** qui regroupe :
+Les fiches incluent désormais un onglet **Ressources** qui regroupe :
 
 - **Décisions d'architecture** — les ADR ne sont plus listées ici. Chaque fiche dispose désormais de son propre onglet **ADR** ; voir [Détail d'une fiche](card-details.md) pour ce qu'il affiche et comment lier, créer ou dissocier des décisions depuis une fiche.
-- **Pièces jointes** -- Téléchargez et gérez des fichiers (PDF, DOCX, XLSX, images, jusqu'à 10 Mo). Lors du téléchargement, sélectionnez une **catégorie de document** parmi : Architecture, Sécurité, Conformité, Opérations, Notes de réunion, Design ou Autre. La catégorie s'affiche sous forme de puce à côté de chaque fichier.
+- **Pièces jointes** -- Téléchargez et gérez des fichiers (documents, feuilles de calcul, présentations, fichiers OpenDocument et Office hérités, images, archives, messages Outlook et e-mails, CSV, Markdown, JSON et XML — jusqu'à 20 Mo). Lors du téléchargement, sélectionnez une **catégorie de document** parmi : Architecture, Sécurité, Conformité, Opérations, Notes de réunion, Design ou Autre. La catégorie s'affiche sous forme de puce à côté de chaque fichier.
 - **Liens de documents** -- Références de documents basées sur des URL. Lors de l'ajout d'un lien, sélectionnez un **type de lien** parmi : Documentation, Sécurité, Conformité, Architecture, Opérations, Support ou Autre. Le type de lien s'affiche sous forme de puce à côté de chaque lien, et l'icône change en fonction du type sélectionné.

@@ -17,7 +17,9 @@ import { fileURLToPath } from "url";
 // ---------------------------------------------------------------------------
 
 export type ScreenshotAction =
-  | { type: "scroll"; target: "bottom" | "top" | string; pixels?: number }
+  // `align: "start"` puts the target element at the top of its scroll area
+  // (just under the app bar) instead of wherever scrollIntoViewIfNeeded lands.
+  | { type: "scroll"; target: "bottom" | "top" | string; pixels?: number; align?: "start" }
   | { type: "click"; selector: string; nth?: number }
   // Right-click (context menu) — used to capture the grid cell menu.
   | { type: "rightClick"; selector: string; nth?: number }
@@ -25,15 +27,21 @@ export type ScreenshotAction =
   | { type: "hover"; selector: string }
   // Type text into a field one key at a time (via pressSequentially) so
   // keystroke-driven widgets like MUI Autocomplete open their option popup.
-  | { type: "type"; selector: string; text: string };
+  | { type: "type"; selector: string; text: string }
+  // Wait until any of the comma-separated selectors is visible — for state
+  // that takes an unpredictable time to appear (an LLM answer, DrawIO booting
+  // inside its iframe). A timeout only warns, like the page-level `waitFor`.
+  | { type: "waitFor"; selector: string; timeout?: number };
 
 export interface PageDef {
   /** Unique identifier (used as fallback filename when locale name is missing). */
   id: string;
 
   /**
-   * Route to navigate to. Use `{{cardId}}` as a placeholder — it will be
-   * replaced at runtime with a card UUID looked up by name from the demo data.
+   * Route to navigate to. Placeholders are replaced at runtime with ids looked
+   * up in the demo data: `{{cardId:<key>}}` (CARD_LOOKUPS), `{{draftId:<key>}}`
+   * (a draft flow version of that process card), `{{diagramId:<key>}}`
+   * (DIAGRAM_LOOKUPS) and `{{riskId:<key>}}` (RISK_LOOKUPS).
    */
   route: string;
 
@@ -73,6 +81,21 @@ export const CARD_LOOKUPS = {
   // application subtypes, so the drawer shows real grouping rather than one
   // undifferentiated list.
   sampleParentCapability: { name: "Service & After-Sales", type: "BusinessCapability" },
+} as const;
+
+/** Demo diagrams looked up by exact name at runtime (`{{diagramId:<key>}}`). */
+export const DIAGRAM_LOOKUPS = {
+  // Eight Application cards — seed_demo_extras.py. The 99b shot saves a colour
+  // view onto it, which is what gives view mode a legend to show.
+  landscape: "Application Landscape Overview",
+} as const;
+
+/** Demo risks looked up by reference at runtime (`{{riskId:<key>}}`). */
+export const RISK_LOOKUPS = {
+  // NIS2 OT playbook risk (seed_demo.py): a completed one-shot mitigation task
+  // plus a quarterly recurring one with completed cycles — so the mitigation
+  // panel shows both kinds and a real occurrence history.
+  nis2Playbook: "R-000006",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -205,13 +228,56 @@ function buttonSelector(...labels: string[]): string {
   return labels.map((l) => `button:has-text("${hasTextArg(l)}")`).join(", ");
 }
 
+/**
+ * Build an aria-label selector chain across locales.
+ *
+ * An icon-only button has no text to match on — MUI stamps its Tooltip's
+ * string title as the child's `aria-label` — and so does a toggle button whose
+ * label is a glyph. Same reason `tabSelector` exists: the label still comes
+ * from the locale files, never hardcoded.
+ */
+function ariaSelector(tag: string, ...labels: string[]): string {
+  return labels.map((l) => `${tag}[aria-label="${hasTextArg(l)}"]`).join(", ");
+}
+
 const TAB_MM_CALCULATIONS = tabSelector(...i18nLabels("admin:metamodel.tabs.calculations"));
 const TAB_MM_TAGS = tabSelector(...i18nLabels("admin:metamodel.tabs.tags"));
+// The card-type drawer's Permissions tab (per-card-type RBAC, discussion #1068).
+const TAB_TYPE_PERMISSIONS = tabSelector(
+  ...i18nLabels("admin:metamodel.permissionsPanel.title"),
+);
 
 /** Top navbar "Reports" menu button, across locales. */
 const NAV_REPORTS = i18nLabels("nav:reports")
   .map((l) => `.MuiToolbar-root button:has-text("${hasTextArg(l)}")`)
   .join(", ");
+
+/** DrawIO has booted inside the editor's iframe and drawn its canvas. */
+const DRAWIO_READY = "iframe >> internal:control=enter-frame >> .geDiagramContainer";
+
+/** DrawIO's own "Save & Exit" button (DrawIO is not translated by us). */
+const DRAWIO_SAVE_AND_EXIT =
+  "iframe >> internal:control=enter-frame >> button:has-text(\"Save & Exit\"), " +
+  "iframe >> internal:control=enter-frame >> a:has-text(\"Save & Exit\")";
+
+/**
+ * Colour the diagram's Application cards by business criticality via the
+ * editor's palette menu (the demo diagram's eight apps span three criticality
+ * levels, whereas they are all "Invest" on TIME model). Rows are picked by
+ * position because field labels come from the metamodel, not the locale files:
+ * 0 = card colours (resets any saved rule, so the toggle below always switches
+ * the rule ON), 3 = Application › Business Criticality (after approval status
+ * and hosting type).
+ */
+const COLOR_BY_CRITICALITY: ScreenshotAction[] = [
+  { type: "click", selector: "button:has(span.material-symbols-outlined:text-is('palette'))" },
+  { type: "wait", ms: 400 },
+  { type: "click", selector: ".MuiMenu-list li[role='menuitem']", nth: 0 },
+  { type: "wait", ms: 400 },
+  { type: "click", selector: ".MuiMenu-list li[role='menuitem']", nth: 3 },
+  { type: "wait", ms: 600 },
+  { type: "click", selector: ".MuiPopover-root .MuiBackdrop-root" },
+];
 
 // ---------------------------------------------------------------------------
 // Docs screenshots (docs/assets/img/{locale}/)
@@ -512,6 +578,51 @@ export const DOC_PAGES: PageDef[] = [
     },
   },
 
+  {
+    id: "13c_dependencies_aggregate",
+    route: "/reports/dependencies",
+    waitFor: "[value='c4']",
+    // Same path into the Layered Dependency View as 13b, then aggregate the
+    // relations so the shot shows the boxes-and-counts reading of the same
+    // landscape (discussion #1117).
+    actions: [
+      { type: "click", selector: "[value='c4']" },
+      { type: "wait", ms: 800 },
+      { type: "type", selector: "input[role='combobox']", text: "SAP S/4HANA" },
+      { type: "wait", ms: 700 },
+      { type: "click", selector: "[role='option']" },
+      { type: "wait", ms: 2500 },
+      // View options → Aggregate relations → By card type. Both controls are
+      // reached by aria-label: the first is an icon button, the second a
+      // toggle button inside the popover.
+      {
+        type: "click",
+        selector: ariaSelector("button", ...i18nLabels("reports:dependency.viewSettings")),
+      },
+      { type: "wait", ms: 400 },
+      {
+        type: "click",
+        selector: ariaSelector("button", ...i18nLabels("reports:dependency.aggregateBy_type")),
+      },
+      { type: "wait", ms: 400 },
+      // Close the popover so it does not sit over the diagram. There is no
+      // key-press action, so click its backdrop.
+      { type: "click", selector: ".MuiPopover-root .MuiBackdrop-root" },
+      // React Flow re-lays out and re-fits after the switch; let it settle.
+      { type: "wait", ms: 2500 },
+    ],
+    filenames: {
+      en: "13c_dependencies_aggregate",
+      de: "13c_abhaengigkeiten_aggregiert",
+      fr: "13c_dependances_agregees",
+      es: "13c_dependencias_agregadas",
+      it: "13c_dipendenze_aggregate",
+      pt: "13c_dependencias_agregadas",
+      zh: "13c_dependencies_aggregate",
+      ru: "13c_zavisimosti_agregirovannye",
+    },
+  },
+
   // ── BPM ────────────────────────────────────────────────────────────────
   {
     id: "14_bpm_navigator",
@@ -808,7 +919,16 @@ export const DOC_PAGES: PageDef[] = [
       // silent WARNING and the shot is plain card detail — which is exactly
       // how this file shipped as a byte-identical copy of 04_card_detail.png.
       { type: "click", selector: "[data-testid='ai-suggest-button']" },
-      { type: "wait", ms: 2500 },
+      // A small local model on CPU plus the web search takes anywhere from a
+      // few seconds to a minute; wait for the answer rather than a fixed time.
+      {
+        type: "waitFor",
+        selector: buttonSelector(
+          ...i18nLabels("common:ai.applyDescription", "common:ai.applySuggestions")
+        ),
+        timeout: 120000,
+      },
+      { type: "wait", ms: 500 },
     ],
     filenames: {
       en: "27_ai_suggest_panel",
@@ -1231,6 +1351,125 @@ export const DOC_PAGES: PageDef[] = [
       pt: "47_bpm_fluxo_processo",
       zh: "47_bpm_process_flow",
       ru: "47_bpm_potok_protsessa",
+    },
+  },
+
+  // ── BPMN modeler — Create element menu ───────────────────────────────────
+  {
+    id: "89_bpm_create_element_menu",
+    route: "/bpm/processes/{{cardId:sampleProcess}}/flow",
+    waitFor: ".djs-palette",
+    actions: [
+      { type: "wait", ms: 2000 },
+      // The `…` palette entry from bpmn-js-create-append-anything. Its action
+      // name is `create`, which is what the module's own positioning code
+      // queries for — see BpmnModeler.tsx.
+      { type: "click", selector: '.djs-palette [data-action="create"]' },
+      { type: "wait", ms: 800 },
+    ],
+    filenames: {
+      en: "89_bpm_create_element_menu",
+      de: "89_bpm_menue_element_erstellen",
+      fr: "89_bpm_menu_creer_element",
+      es: "89_bpm_menu_crear_elemento",
+      it: "89_bpm_menu_crea_elemento",
+      pt: "89_bpm_menu_criar_elemento",
+      zh: "89_bpm_create_element_menu",
+      ru: "89_bpm_menyu_sozdat_element",
+    },
+  },
+
+  // ── BPMN modeler — Properties panel on a message start event ─────────────
+  {
+    id: "90_bpm_properties_panel",
+    route: "/bpm/processes/{{cardId:sampleProcess}}/flow",
+    waitFor: '[data-testid="bpmn-properties-panel"]',
+    actions: [
+      { type: "wait", ms: 2000 },
+      // A step in the middle of the canvas: the leftmost shapes of the demo
+      // flow sit behind the palette, which swallows the click that selects
+      // them. This one carries real documentation in the demo data, which is
+      // the panel's headline capability — nothing else in the app can author
+      // an element's documentation.
+      { type: "click", selector: '[data-element-id="Task_CreditCheck"]' },
+      { type: "wait", ms: 500 },
+      // bpmn-js's own panel is English-only (localising it is a follow-up),
+      // so the group header matches in every locale.
+      {
+        type: "click",
+        selector: '.bio-properties-panel-group-header:has-text("Documentation")',
+      },
+      { type: "wait", ms: 600 },
+    ],
+    filenames: {
+      en: "90_bpm_properties_panel",
+      de: "90_bpm_eigenschaftenpanel",
+      fr: "90_bpm_panneau_proprietes",
+      es: "90_bpm_panel_propiedades",
+      it: "90_bpm_pannello_proprieta",
+      pt: "90_bpm_painel_propriedades",
+      zh: "90_bpm_properties_panel",
+      ru: "90_bpm_panel_svoystv",
+    },
+  },
+
+  // ── BPMN modeler — Linked process group on a step ───────────────────────
+  {
+    id: "92_bpm_called_process",
+    // A *draft*, not the published flow: the four card links are stored on the
+    // draft, so the group only carries its five rows when one is open.
+    route: "/bpm/processes/{{cardId:sampleProcess}}/flow?versionId={{draftId:sampleProcess}}",
+    waitFor: '[data-testid="bpmn-properties-panel"]',
+    actions: [
+      { type: "wait", ms: 2500 },
+      // The demo Order-to-Cash flow's credit check is a call activity whose
+      // calledElement is the Credit Check process — the "Linked cards" group
+      // shows the resolved name with Open / Choose / Clear on its Business
+      // Process row, above the four card rows. The same group is on every
+      // step; a call activity is the clearest example.
+      { type: "click", selector: '[data-element-id="Task_CreditCheck"]' },
+      { type: "wait", ms: 800 },
+      // Expand the group — keyed on its id, since its label is localised.
+      {
+        type: "click",
+        selector: '[data-group-id="group-turboea__calledProcess"] .bio-properties-panel-group-header',
+      },
+      { type: "wait", ms: 600 },
+    ],
+    filenames: {
+      en: "92_bpm_called_process",
+      de: "92_bpm_aufgerufener_prozess",
+      fr: "92_bpm_processus_appele",
+      es: "92_bpm_proceso_invocado",
+      it: "92_bpm_processo_richiamato",
+      pt: "92_bpm_processo_invocado",
+      zh: "92_bpm_called_process",
+      ru: "92_bpm_vyzyvaemyy_protsess",
+    },
+  },
+
+  // ── BPMN starter templates, incl. the two-pool Collaboration template ────
+  {
+    id: "91_bpm_collaboration_template",
+    route: "/cards/{{cardId:sampleProcess}}?tab=1&subtab=1",
+    waitFor: ".MuiPaper-root",
+    actions: [
+      { type: "wait", ms: 1500 },
+      {
+        type: "click",
+        selector: buttonSelector(...i18nLabels("bpm:flowTab.newDraftFromTemplate")),
+      },
+      { type: "wait", ms: 800 },
+    ],
+    filenames: {
+      en: "91_bpm_collaboration_template",
+      de: "91_bpm_kollaborationsvorlage",
+      fr: "91_bpm_modele_collaboration",
+      es: "91_bpm_plantilla_colaboracion",
+      it: "91_bpm_template_collaborazione",
+      pt: "91_bpm_template_colaboracao",
+      zh: "91_bpm_collaboration_template",
+      ru: "91_bpm_shablon_kollaboratsiya",
     },
   },
 
@@ -1784,6 +2023,426 @@ export const DOC_PAGES: PageDef[] = [
       pt: "84_admin_etiquetas",
       zh: "84_admin_tags",
       ru: "84_admin_tegi",
+    },
+  },
+
+  // ── Admin: per-card-type permissions ───────────────────────────────────
+  {
+    id: "85_admin_card_type_permissions",
+    route: "/admin/metamodel",
+    // Same reasoning as 83: wait for the tablist, not a Paper — the type cards
+    // render only after the async metamodel load.
+    waitFor: "[role='tablist']",
+    actions: [
+      { type: "wait", ms: 1200 },
+      // Open the first card type's drawer. Clicking by position rather than by
+      // name keeps the entry locale-independent.
+      { type: "click", selector: ".MuiCard-root", nth: 0 },
+      { type: "wait", ms: 700 },
+      { type: "click", selector: TAB_TYPE_PERMISSIONS },
+      { type: "wait", ms: 700 },
+    ],
+    filenames: {
+      en: "85_admin_card_type_permissions",
+      de: "85_admin_kartentyp_berechtigungen",
+      fr: "85_admin_autorisations_type_fiche",
+      es: "85_admin_permisos_tipo_ficha",
+      it: "85_admin_autorizzazioni_tipo_scheda",
+      pt: "85_admin_permissoes_tipo_card",
+      zh: "85_admin_card_type_permissions",
+      ru: "85_admin_razresheniya_tipa_kartochki",
+    },
+  },
+
+  // ── Admin: Extensions (Store + Installed) ──────────────────────────────
+  {
+    id: "93_admin_extensions_store",
+    // Store is the default tab once localStorage is cleared (capturePage does
+    // that), so no click is needed. The catalogue is fetched server-side from
+    // the public store; an air-gapped instance shows the offline hint instead.
+    route: "/admin/extensions",
+    waitFor: ".MuiCardActionArea-root, .MuiAlert-root",
+    actions: [
+      { type: "wait", ms: 2500 },
+      // Scroll past the page intro so the tabs, category chips and the first
+      // sections of tiles are in frame (anchored on the tab bar, since the
+      // intro's height varies with the language).
+      { type: "scroll", target: "[role='tablist']", align: "start" },
+      { type: "wait", ms: 400 },
+    ],
+    filenames: {
+      en: "93_admin_extensions_store",
+      de: "93_admin_erweiterungen_store",
+      fr: "93_admin_extensions_boutique",
+      es: "93_admin_extensiones_tienda",
+      it: "93_admin_estensioni_store",
+      pt: "93_admin_extensoes_loja",
+      zh: "93_admin_extensions_store",
+      ru: "93_admin_rasshireniya_magazin",
+    },
+  },
+  {
+    id: "93a_admin_extensions_installed",
+    // The instance-ID chip sits in the page header, above both tabs.
+    route: "/admin/extensions?tab=installed",
+    waitFor: "[role='tablist']",
+    actions: [{ type: "wait", ms: 1500 }],
+    filenames: {
+      en: "93a_admin_extensions_installed",
+      de: "93a_admin_erweiterungen_installiert",
+      fr: "93a_admin_extensions_installees",
+      es: "93a_admin_extensiones_instaladas",
+      it: "93a_admin_estensioni_installate",
+      pt: "93a_admin_extensoes_instaladas",
+      zh: "93a_admin_extensions_installed",
+      ru: "93a_admin_rasshireniya_ustanovlennye",
+    },
+  },
+
+  // ── Admin: platform migration (LeanIX importer) ─────────────────────────
+  {
+    id: "94_admin_migration_leanix",
+    route: "/admin/settings?tab=migration",
+    waitFor: "[role='tablist']",
+    actions: [
+      // The New-migration button stays disabled until GET /migration/sources
+      // has answered.
+      { type: "wait", ms: 1500 },
+      { type: "click", selector: buttonSelector(...i18nLabels("admin:migration.newButton")) },
+      { type: "wait", ms: 800 },
+    ],
+    filenames: {
+      en: "94_admin_migration_leanix",
+      de: "94_admin_migration_leanix",
+      fr: "94_admin_migration_leanix",
+      es: "94_admin_migracion_leanix",
+      it: "94_admin_migrazione_leanix",
+      pt: "94_admin_migracao_leanix",
+      zh: "94_admin_migration_leanix",
+      ru: "94_admin_migratsiya_leanix",
+    },
+  },
+
+  // ── Admin Settings: modules, email, MCP ─────────────────────────────────
+  {
+    id: "95_admin_settings_modules",
+    route: "/admin/settings",
+    waitFor: ".MuiPaper-root",
+    actions: [
+      { type: "wait", ms: 800 },
+      // Centre the PPM toggle so BPM sits above it and GRC below.
+      {
+        type: "scroll",
+        target: i18nLabels("admin:settings.ppm.title")
+          .map((l) => `h6:has-text("${hasTextArg(l)}")`)
+          .join(", "),
+      },
+      { type: "wait", ms: 400 },
+    ],
+    filenames: {
+      en: "95_admin_settings_modules",
+      de: "95_admin_einstellungen_module",
+      fr: "95_admin_parametres_modules",
+      es: "95_admin_config_modulos",
+      it: "95_admin_impostazioni_moduli",
+      pt: "95_admin_config_modulos",
+      zh: "95_admin_settings_modules",
+      ru: "95_admin_nastroyki_moduli",
+    },
+  },
+  {
+    id: "95a_admin_settings_email",
+    route: "/admin/settings",
+    waitFor: ".MuiPaper-root",
+    actions: [
+      { type: "wait", ms: 800 },
+      {
+        type: "scroll",
+        target: i18nLabels("admin:settings.email.title")
+          .map((l) => `h6:has-text("${hasTextArg(l)}")`)
+          .join(", "),
+      },
+      { type: "wait", ms: 300 },
+      // Open the sending-method select (SMTP / SMTP OAuth / Microsoft Graph).
+      {
+        type: "click",
+        selector: i18nLabels("admin:settings.email.method.smtpBasic")
+          .map((l) => `[role='combobox']:has-text("${hasTextArg(l)}")`)
+          .join(", "),
+      },
+      { type: "wait", ms: 500 },
+    ],
+    filenames: {
+      en: "95a_admin_settings_email",
+      de: "95a_admin_einstellungen_email",
+      fr: "95a_admin_parametres_email",
+      es: "95a_admin_config_correo",
+      it: "95a_admin_impostazioni_email",
+      pt: "95a_admin_config_email",
+      zh: "95a_admin_settings_email",
+      ru: "95a_admin_nastroyki_pochta",
+    },
+  },
+  {
+    id: "95b_admin_settings_mcp",
+    // The MCP block is the last section of the AI tab. Without SSO configured
+    // (the demo has none) it shows the SSO prerequisite and a disabled switch —
+    // which is the state the MCP guide's step 4 describes.
+    route: "/admin/settings?tab=ai",
+    waitFor: i18nLabels("admin:settings.mcp.title")
+      .map((l) => `h6:has-text("${hasTextArg(l)}")`)
+      .join(", "),
+    actions: [
+      { type: "scroll", target: "bottom" },
+      { type: "wait", ms: 600 },
+    ],
+    filenames: {
+      en: "95b_admin_settings_mcp",
+      de: "95b_admin_einstellungen_mcp",
+      fr: "95b_admin_parametres_mcp",
+      es: "95b_admin_config_mcp",
+      it: "95b_admin_impostazioni_mcp",
+      pt: "95b_admin_config_mcp",
+      zh: "95b_admin_settings_mcp",
+      ru: "95b_admin_nastroyki_mcp",
+    },
+  },
+
+  // ── Saving a report ─────────────────────────────────────────────────────
+  {
+    id: "96_save_report_dialog",
+    route: "/reports/portfolio",
+    waitFor: "[role='combobox']",
+    // Same configuration as 10_report_portfolio, then the Save-report icon
+    // button (an IconButton whose Tooltip title becomes its aria-label).
+    actions: [
+      { type: "wait", ms: 800 },
+      { type: "click", selector: "[role='combobox']", nth: 0 },
+      { type: "wait", ms: 300 },
+      { type: "click", selector: "li[data-value='rel:Organization']" },
+      { type: "wait", ms: 300 },
+      { type: "click", selector: "[role='combobox']", nth: 1 },
+      { type: "wait", ms: 300 },
+      { type: "click", selector: "li[data-value='timeModel']" },
+      { type: "wait", ms: 1200 },
+      { type: "click", selector: ariaSelector("button", ...i18nLabels("reports:shell.saveReport")) },
+      // The dialog renders a thumbnail of the report before it settles.
+      { type: "wait", ms: 1500 },
+    ],
+    filenames: {
+      en: "96_save_report_dialog",
+      de: "96_bericht_speichern_dialog",
+      fr: "96_dialogue_enregistrer_rapport",
+      es: "96_dialogo_guardar_informe",
+      it: "96_dialogo_salva_report",
+      pt: "96_dialogo_salvar_relatorio",
+      zh: "96_save_report_dialog",
+      ru: "96_dialog_sokhraneniya_otcheta",
+    },
+  },
+
+  // ── Risk detail: mitigation tasks ───────────────────────────────────────
+  {
+    id: "97_risk_mitigation_tasks",
+    route: "/grc/risks/{{riskId:nis2Playbook}}",
+    waitFor: i18nLabels("grc:risks.tasks.section.title")
+      .map((l) => `h6:has-text("${hasTextArg(l)}")`)
+      .join(", "),
+    actions: [
+      { type: "wait", ms: 1000 },
+      // Expand the recurring task's occurrence history (tasks are listed with
+      // the open recurring one first).
+      {
+        type: "click",
+        selector: ariaSelector("button", ...i18nLabels("grc:risks.tasks.actions.showHistory")),
+        nth: 0,
+      },
+      { type: "wait", ms: 600 },
+      // Move the pointer off the button so its tooltip is not in the shot.
+      { type: "hover", selector: "h6" },
+      {
+        type: "scroll",
+        target: i18nLabels("grc:risks.tasks.section.title")
+          .map((l) => `h6:has-text("${hasTextArg(l)}")`)
+          .join(", "),
+        align: "start",
+      },
+      { type: "wait", ms: 400 },
+    ],
+    filenames: {
+      en: "97_risk_mitigation_tasks",
+      de: "97_risiko_massnahmen",
+      fr: "97_risque_taches_attenuation",
+      es: "97_riesgo_tareas_mitigacion",
+      it: "97_rischio_attivita_mitigazione",
+      pt: "97_risco_tarefas_mitigacao",
+      zh: "97_risk_mitigation_tasks",
+      ru: "97_risk_zadachi_snizheniya",
+    },
+  },
+
+  // ── Inventory: mass edit, grouping, import ──────────────────────────────
+  {
+    id: "98_inventory_mass_edit",
+    route: "/inventory?type=Application",
+    waitFor: ".ag-root",
+    actions: [
+      { type: "wait", ms: 1200 },
+      { type: "click", selector: ".ag-row[row-index='0'] .ag-selection-checkbox input" },
+      { type: "click", selector: ".ag-row[row-index='1'] .ag-selection-checkbox input" },
+      { type: "click", selector: ".ag-row[row-index='2'] .ag-selection-checkbox input" },
+      { type: "wait", ms: 400 },
+      { type: "click", selector: buttonSelector(...i18nLabels("inventory:massEdit.title")) },
+      { type: "wait", ms: 600 },
+      // Pick TIME model as the field, then open its value list — the dialog
+      // stays readable behind the short menu (the field list is taller than
+      // the viewport and would hide it).
+      { type: "click", selector: ".MuiDialog-root [role='combobox']" },
+      { type: "wait", ms: 400 },
+      { type: "click", selector: "li[data-value='attr_timeModel']" },
+      { type: "wait", ms: 500 },
+      { type: "click", selector: ".MuiDialog-root [role='combobox']", nth: 1 },
+      { type: "wait", ms: 500 },
+    ],
+    filenames: {
+      en: "98_inventory_mass_edit",
+      de: "98_inventar_massenbearbeitung",
+      fr: "98_inventaire_modification_masse",
+      es: "98_inventario_edicion_masiva",
+      it: "98_inventario_modifica_massiva",
+      pt: "98_inventario_edicao_massa",
+      zh: "98_inventory_mass_edit",
+      ru: "98_inventarizatsiya_massovoe_redaktirovanie",
+    },
+  },
+  {
+    id: "98a_inventory_group_by",
+    // Grouping comes from the URL; expand_group opens one group and leaves the
+    // others collapsed with their counts. Migrate is small enough (4 demo
+    // apps) that every group header stays in frame.
+    route: "/inventory?type=Application&group_by=attr_timeModel&expand_group=migrate",
+    waitFor: ".ag-root",
+    actions: [{ type: "wait", ms: 1500 }],
+    filenames: {
+      en: "98a_inventory_group_by",
+      de: "98a_inventar_gruppierung",
+      fr: "98a_inventaire_regroupement",
+      es: "98a_inventario_agrupacion",
+      it: "98a_inventario_raggruppamento",
+      pt: "98a_inventario_agrupamento",
+      zh: "98a_inventory_group_by",
+      ru: "98a_inventarizatsiya_gruppirovka",
+    },
+  },
+  {
+    id: "98b_inventory_import",
+    route: "/inventory?type=Application",
+    waitFor: ".ag-root",
+    actions: [
+      { type: "wait", ms: 800 },
+      {
+        type: "click",
+        selector: [
+          buttonSelector(...i18nLabels("common:actions.import")),
+          ariaSelector("button", ...i18nLabels("common:actions.import")),
+        ].join(", "),
+      },
+      { type: "wait", ms: 600 },
+    ],
+    filenames: {
+      en: "98b_inventory_import",
+      de: "98b_inventar_import",
+      fr: "98b_inventaire_import",
+      es: "98b_inventario_importacion",
+      it: "98b_inventario_importazione",
+      pt: "98b_inventario_importacao",
+      zh: "98b_inventory_import",
+      ru: "98b_inventarizatsiya_import",
+    },
+  },
+
+  // ── Diagram editor, sync drawer, view mode with legend ──────────────────
+  // These need DrawIO served same-origin at /drawio/ (the nginx image does;
+  // see README for a vite-preview setup). DrawIO's own UI follows the browser
+  // language, so its chrome stays English in every locale.
+  {
+    id: "99_diagram_editor",
+    route: "/diagrams/{{diagramId:landscape}}/edit",
+    waitFor: "iframe",
+    actions: [
+      { type: "waitFor", selector: DRAWIO_READY, timeout: 30000 },
+      { type: "wait", ms: 2500 },
+      ...COLOR_BY_CRITICALITY,
+      { type: "wait", ms: 2500 },
+    ],
+    filenames: {
+      en: "99_diagram_editor",
+      de: "99_diagramm_editor",
+      fr: "99_editeur_diagramme",
+      es: "99_editor_diagrama",
+      it: "99_editor_diagramma",
+      pt: "99_editor_diagrama",
+      zh: "99_diagram_editor",
+      ru: "99_redaktor_diagramm",
+    },
+  },
+  {
+    id: "99a_diagram_sync_drawer",
+    route: "/diagrams/{{diagramId:landscape}}/edit",
+    waitFor: "iframe",
+    actions: [
+      { type: "waitFor", selector: DRAWIO_READY, timeout: 30000 },
+      { type: "wait", ms: 2500 },
+      {
+        type: "click",
+        selector: buttonSelector(...i18nLabels("diagrams:editor.toolbar.sync")),
+      },
+      { type: "wait", ms: 2000 },
+    ],
+    filenames: {
+      en: "99a_diagram_sync_drawer",
+      de: "99a_diagramm_synchronisierung",
+      fr: "99a_diagramme_synchronisation",
+      es: "99a_diagrama_sincronizacion",
+      it: "99a_diagramma_sincronizzazione",
+      pt: "99a_diagrama_sincronizacao",
+      zh: "99a_diagram_sync_drawer",
+      ru: "99a_diagramma_sinkhronizatsiya",
+    },
+  },
+  {
+    id: "99b_diagram_viewer_legend",
+    // View mode shows a legend only for a colour view that was saved with the
+    // diagram, so this entry applies the view in the editor, saves through
+    // DrawIO's own Save & Exit and lands in the viewer. It therefore writes to
+    // the demo diagram — run it once (`--only 99b`) before a full capture so
+    // 16_diagrams shows the same thumbnail in every locale.
+    route: "/diagrams/{{diagramId:landscape}}/edit",
+    waitFor: "iframe",
+    actions: [
+      { type: "waitFor", selector: DRAWIO_READY, timeout: 30000 },
+      { type: "wait", ms: 2500 },
+      ...COLOR_BY_CRITICALITY,
+      { type: "wait", ms: 1500 },
+      { type: "click", selector: DRAWIO_SAVE_AND_EXIT },
+      {
+        type: "waitFor",
+        selector: i18nLabels("diagrams:viewer.title")
+          .map((l) => `iframe[title="${hasTextArg(l)}"]`)
+          .join(", "),
+        timeout: 20000,
+      },
+      { type: "wait", ms: 5000 },
+    ],
+    filenames: {
+      en: "99b_diagram_viewer_legend",
+      de: "99b_diagramm_ansicht_legende",
+      fr: "99b_diagramme_vue_legende",
+      es: "99b_diagrama_vista_leyenda",
+      it: "99b_diagramma_vista_legenda",
+      pt: "99b_diagrama_visualizacao_legenda",
+      zh: "99b_diagram_viewer_legend",
+      ru: "99b_diagramma_prosmotr_legenda",
     },
   },
 

@@ -49,6 +49,7 @@ from app.models.user import User
 from app.services import card_reference
 from app.services.card_resolver import CardResolver
 from app.services.email_backends.runtime import apply_email_settings_to_runtime
+from app.services.relation_orientation import oriented
 from app.services.workspace_io import exporter as exp
 from app.services.workspace_io import schema
 from app.services.workspace_io.bundle import WorkspaceBundle, from_cell
@@ -298,7 +299,15 @@ async def _run(
             await root.rollback()
 
     if not dry_run:
+        from app.services.permission_service import PermissionService
+
         await db.commit()
+        # An import can rewrite roles and card types, both of which the
+        # permission checks read through a per-process cache. Drop them so the
+        # imported RBAC takes effect immediately rather than up to a TTL later.
+        PermissionService.invalidate_role_cache()
+        PermissionService.invalidate_srd_cache()
+        PermissionService.invalidate_type_permission_cache()
     return result
 
 
@@ -409,6 +418,13 @@ async def _apply_card_types(db, bundle: WorkspaceBundle, sr: SectionResult, dry_
     existing = {ct.key: ct for ct in (await db.execute(select(CardType))).scalars().all()}
     for row in bundle.rows(schema.SHEET_CARD_TYPES):
         data = _coerce(row, exp.CARD_TYPE_COLUMNS, exp.CARD_TYPE_JSON)
+        # NOT NULL JSONB columns: a hand-authored content pack may declare the
+        # column and leave the cell blank, which `from_cell` reads as None and
+        # the insert would reject. An absent column is still left alone (see
+        # `_coerce`) — this only normalises a declared-but-empty cell.
+        for not_null_json in ("reference_config", "role_permissions", "translations"):
+            if not_null_json in data and data[not_null_json] is None:
+                data[not_null_json] = {}
         key = data.get("key")
         if not key:
             sr.failed += 1
@@ -659,10 +675,14 @@ async def _apply_settings(db, bundle: WorkspaceBundle, sr: SectionResult, dry_ru
 
 
 def _find_asset(bundle: WorkspaceBundle, prefix: str) -> bytes | None:
-    """Return the first asset whose path matches ``prefix`` (any extension)."""
-    for path, data in bundle.assets.items():
+    """Return the first asset whose path matches ``prefix`` (any extension).
+
+    Iterates names and reads the one match — the store may be lazy, so asking
+    for every value here would inflate the whole assets tree.
+    """
+    for path in bundle.assets.keys():
         if path == prefix or path.startswith(prefix + "."):
-            return data
+            return bundle.assets.get(path)
     return None
 
 
@@ -818,6 +838,9 @@ def _make_cards_applier(user: User):
                     name=name,
                     description=data.get("description"),
                     parent_id=resolved_parent,
+                    parent_label=(
+                        data.get("parent_label") if resolved_parent is not None else None
+                    ),
                     lifecycle=data.get("lifecycle") or {},
                     attributes=data.get("attributes") or {},
                     external_id=external_id,
@@ -920,6 +943,7 @@ async def _apply_relations(db, bundle: WorkspaceBundle, sr: SectionResult, dry_r
         if r.get("target_type"):
             type_keys.add(r["target_type"])
     resolver = await CardResolver.load(db, type_keys)
+    rt_by_key = {rt.key: rt for rt in (await db.execute(select(RelationType))).scalars().all()}
     existing = {
         (rel.type, rel.source_id, rel.target_id)
         for rel in (await db.execute(select(Relation))).scalars().all()
@@ -940,15 +964,24 @@ async def _apply_relations(db, bundle: WorkspaceBundle, sr: SectionResult, dry_r
                 f"({data.get('source_ref')!r} -> {data.get('target_ref')!r})"
             )
             continue
-        key = (rtype, s_res.card_id, t_res.card_id)
+        # A bundle from an instance that still held a relation stored the other
+        # way round lands in the relation type's direction here (#1140).
+        source_id, target_id = oriented(
+            rt_by_key.get(rtype),
+            s_res.card_id,
+            t_res.card_id,
+            str(data.get("source_type") or ""),
+            str(data.get("target_type") or ""),
+        )
+        key = (rtype, source_id, target_id)
         if key in existing:
             sr.skip("already_present")
             continue
         db.add(
             Relation(
                 type=rtype,
-                source_id=s_res.card_id,
-                target_id=t_res.card_id,
+                source_id=source_id,
+                target_id=target_id,
                 description=data.get("description"),
                 attributes=data.get("attributes") or {},
             )

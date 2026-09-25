@@ -54,7 +54,7 @@ Design dine spørgsmål. Hvert spørgsmål kan være:
 
 ### Relationer
 
-Ud over attributter kan en undersøgelse også bede respondenter om at holde et korts **relationer** opdaterede. I trinnet **Felter** viser afsnittet **Relationer** alle de relationer, måltypen for kortet kan have, i begge retninger (for eksempel for en Applikation: *understøtter → IT-komponent* og *bruges af ← Organisation*). For hver enkelt, du vælger, skal du vælge en handling:
+Ud over attributter kan en undersøgelse også bede respondenter om at holde et korts **relationer** opdaterede. I trinnet **Felter** viser afsnittet **Relationer** alle de relationer, måltypen for kortet kan have, i begge retninger (for eksempel for en Applikation: *understøtter → IT-komponent* og *bruges af ← Organisation*). En korttype, der understøtter slægtskab, vises her som enhver anden relation, i begge retninger og med sine egne udsagnsord: for en Applikation opsamler *efterfølger* de kort, den afløste, og *efterfølges af* dem, der afløser den. Sider, som en administrator har skjult på korttypen, tilbydes ikke. For hver enkelt, du vælger, skal du vælge en handling:
 
 - **Vedligehold** — Respondenten ser de aktuelt tilknyttede kort og kan tilføje eller fjerne tilknytninger via en søgevælger.
 - **Bekræft** — Respondenten bekræfter blot, at de aktuelle tilknytninger er korrekte, eller slår kontakten fra for at foreslå ændringer.
@@ -77,6 +77,8 @@ Når din undersøgelse er i **Aktiv**-status:
 !!! note "Et kort skal have nogen at spørge"
 
     Et kort indgår kun i undersøgelsen, hvis mindst én person har en af de **valgte interessentroller** på det. Kort, der matcher dine filtre, men ikke har en sådan interessent, springes over; trinnet **Forhåndsvis og send** oplyser hvor mange, så du kan tildele ansvarlige.
+
+En undersøgelse kan også oprettes og sendes af en installeret udvidelse — for eksempel en planlagt regel, der beder ejerne af hvert kort, som opfylder en betingelse, om at udfylde det. Sådan en undersøgelse viser ingen ophavsmand, dens felter er dem, korttypen definerer, og den opfører sig som enhver anden: du lukker den og anvender dens svar her. En tilbagerulning af udvidelsens kørsel i **Admin → Revisionslog** lukker undersøgelsen og trækker de anmodninger tilbage, som ingen endnu havde besvaret.
 
 ## Visning af resultater
 

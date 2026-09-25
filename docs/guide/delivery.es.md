@@ -46,6 +46,7 @@ Turbo EA proporciona un editor SoAW integrado con plantillas de secciones alinea
 El editor proporciona:
 
 - **Edición de texto enriquecido** — Barra de herramientas completa de formato (encabezados, negrita, cursiva, listas, enlaces) impulsada por el editor TipTap
+- **Enlaces** — Una URL escrita o pegada se convierte en enlace mientras escribe, y todos los enlaces de un documento se abren en una pestaña nueva. Las direcciones de los documentos redactados antes de que se admitieran los enlaces se convierten en enlaces al mostrarse
 - **Plantillas de secciones** — Secciones predefinidas siguiendo estándares TOGAF (ej., Descripción del Problema, Objetivos, Enfoque, Partes Interesadas, Restricciones, Plan de Trabajo)
 - **Tablas editables en línea** — Agregue y edite tablas dentro de cualquier sección
 - **Flujo de estados** — Los documentos progresan a través de etapas definidas:
@@ -85,5 +86,5 @@ El **registro maestro de ADR** — donde cada ADR del paisaje se filtra, busca, 
 Las tarjetas ahora incluyen una pestaña de **Recursos** que consolida:
 
 - **Decisiones de Arquitectura** — los ADR ya no se listan aquí. Ahora cada ficha tiene su propia pestaña **ADR**; consulte [Detalle de la ficha](card-details.md) para ver qué muestra y cómo vincular, crear o desvincular decisiones desde una ficha.
-- **Archivos Adjuntos** — Cargue y gestione archivos (PDF, DOCX, XLSX, imágenes, hasta 10 MB). Al cargar, seleccione una **categoría de documento** entre: Arquitectura, Seguridad, Compliance, Operaciones, Notas de Reunión, Diseño u Otro. La categoría aparece como un chip junto a cada archivo.
+- **Archivos Adjuntos** — Cargue y gestione archivos (documentos, hojas de cálculo, presentaciones, archivos OpenDocument y de Office heredados, imágenes, archivos comprimidos, mensajes de Outlook y correo electrónico, CSV, Markdown, JSON y XML: hasta 20 MB). Al cargar, seleccione una **categoría de documento** entre: Arquitectura, Seguridad, Compliance, Operaciones, Notas de Reunión, Diseño u Otro. La categoría aparece como un chip junto a cada archivo.
 - **Enlaces de Documentos** — Referencias de documentos basadas en URL. Al agregar un enlace, seleccione un **tipo de enlace** entre: Documentación, Seguridad, Compliance, Arquitectura, Operaciones, Soporte u Otro. El tipo de enlace aparece como un chip junto a cada enlace, y el icono cambia según el tipo seleccionado.

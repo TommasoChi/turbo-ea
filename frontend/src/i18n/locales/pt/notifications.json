@@ -4,6 +4,10 @@
   "noNotifications": "Sem notificações",
   "opensExternally": "Abre num novo separador",
   "opensReleaseNotes": "Abre as notas de lançamento",
+  "opensDetails": "Abre os detalhes",
+  "detail.sentBy": "Enviado por {{extension}}",
+  "detail.openCard": "Abrir ficha",
+  "detail.open": "Abrir",
   "releaseNotes.title": "{{app}} {{version}} está disponível",
   "releaseNotes.titleFallback": "Notas de lançamento",
   "releaseNotes.running": "Está a utilizar a versão {{version}}",
@@ -11,6 +15,7 @@
   "releaseNotes.empty": "Não foram publicadas notas para esta versão.",
   "releaseNotes.loadFailed": "Não foi possível carregar as notas de lançamento",
   "releaseNotes.installedTitle": "Novidades de {{app}} {{version}}",
+  "releaseNotes.extensionTitle": "Novidades em {{name}} {{version}}",
   "releaseNotes.updatedFrom": "Atualizado a partir da versão {{version}}",
   "releaseNotes.alreadyInstalled": "Já instalada",
   "releaseNotes.unavailableForVersion": "As notas da versão {{version}} não estão disponíveis nesta instância.",
@@ -46,5 +51,7 @@
   "preferences.appUpdateAvailable": "Atualização disponível",
   "preferences.appUpdated": "Aplicação atualizada",
   "preferences.extensionAvailable": "Nova extensão disponível",
-  "preferences.extensionUpdateAvailable": "Atualização de extensão disponível"
+  "preferences.extensionUpdateAvailable": "Atualização de extensão disponível",
+  "preferences.extensionUpdated": "Extensão atualizada",
+  "preferences.extensionNotice": "Aviso de extensão"
 }

@@ -10,14 +10,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.database import get_db
+from app.models.app_settings import AppSettings
 from app.models.file_attachment import FileAttachment
 from app.models.user import User
+from app.services.attachment_validation import (
+    MAX_ATTACHMENT_BYTES,
+    MAX_ATTACHMENT_MB,
+    SNIFF_BYTES,
+    InvalidAttachmentError,
+    resolve_format,
+    validate_content,
+)
 from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
-from app.services.resource_service import (
-    ResourcePolicyError,
-    validate_file_upload,
-)
 
 router = APIRouter(tags=["file-attachments"])
 
@@ -74,17 +79,35 @@ async def upload_file_attachment(
     ):
         raise HTTPException(403, "Not enough permissions")
 
-    content_type = file.content_type or ""
-    data = await file.read()
+    settings_result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
+    settings_row = settings_result.scalar_one_or_none()
+    general = (settings_row.general_settings if settings_row else None) or {}
+    if not general.get("fileUploadsEnabled", True):
+        raise HTTPException(403, "File uploads are disabled by the administrator")
+
+    # The declared content type is client-written multipart metadata and
+    # decides nothing: the extension picks the format and the bytes prove it.
+    # Resolving first costs nothing and refuses a bad name before any read.
     try:
-        await validate_file_upload(db, mime_type=content_type, data=data)
-    except ResourcePolicyError as exc:
-        raise HTTPException(exc.status_code, exc.detail) from exc
+        fmt = resolve_format(file.filename or "")
+    except InvalidAttachmentError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    # One byte past the cap is enough to know it was exceeded, and bounds what
+    # a single request can pull into memory without trusting Content-Length.
+    data = await file.read(MAX_ATTACHMENT_BYTES + 1)
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(400, f"File exceeds maximum size of {MAX_ATTACHMENT_MB} MB")
+
+    try:
+        validate_content(fmt, data[:SNIFF_BYTES])
+    except InvalidAttachmentError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
     attachment = FileAttachment(
         card_id=card_uuid,
         name=file.filename or "untitled",
-        mime_type=content_type,
+        mime_type=fmt.mime,
         size=len(data),
         data=data,
         category=category,

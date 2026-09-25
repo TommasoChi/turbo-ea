@@ -52,7 +52,7 @@ Fields define the custom attributes available on cards of this type. Each field 
 |---------|-------------|
 | **Key** | Unique field identifier |
 | **Label** | Display name |
-| **Type** | text, multiline_text, number, cost, boolean, date, url, single_select, or multiple_select |
+| **Type** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select, or multiple_select. A percentage is a number from 0 to 100, shown as a progress bar and edited with a slider or typed exactly |
 | **Options** | For select fields: the available choices with labels and optional colors |
 | **Required** | Whether the field is mandatory — see the enforcement rules below |
 | **Data quality** | Each field's contribution to the score is managed in the **Data quality** panel — see [Data quality scoring](#data-quality-scoring) below |
@@ -135,12 +135,34 @@ Roles can be removed in two ways:
 
 A role's key can be corrected as long as **nobody holds the role** — surveys that target it follow the rename automatically, and renaming the type's only role is fine since the role survives it. Once someone holds the role, the key is locked and the field explains why. Roles created before this convention keep the key they already have and go on working; only a new or changed key is checked.
 
+#### Permissions
+
+Card types can restrict what each app-level role may do with their cards. Open the **Permissions** tab in the type drawer for a matrix of roles against the four card actions — **Create**, **Edit**, **Archive** and **Delete**.
+
+![Card type permissions](../assets/img/en/85_admin_card_type_permissions.png)
+
+Every cell has three states:
+
+- **Inherit** (the default) — the role's landscape-wide permission decides. The icon shows what that currently is, so you can see at a glance what the role would be allowed.
+- **Allow** — the role may perform this action on cards of this type, even when it lacks the permission globally.
+- **Deny** — the role may not perform this action on cards of this type, even when it holds the permission globally.
+
+This is what lets you say "anyone may create Applications, but only the central team creates Organizations and Initiatives" without inventing a role per card type. Denying **Create** on a type also removes it from the create dialog, the diagram editor and the spreadsheet importer, so users are not offered an action that would only fail.
+
+A few rules are worth knowing:
+
+- **Administrators are never restricted.** The admin row is locked, and an admin keeps full access to every card type.
+- **Stakeholder roles still apply.** Denying a role **Edit** on a type removes their landscape-wide ability to edit those cards; it does not remove the authority someone holds as the assigned owner of one particular card. See [Users & Roles](users.md) for how the two levels combine.
+- **Bulk edit follows a deny, not an allow.** A type that denies **Edit** also blocks bulk edits of its cards; a type that allows **Edit** does not by itself grant the separate bulk-edit permission.
+- Changes take effect for other users the next time they reload the app, the same as an edit to the role itself.
+
 #### Translations
 
 Click the **Translate** button in the type drawer toolbar to open the **Translation Dialog**. Here you can provide translations for all metamodel labels in each supported language:
 
 - **Type label** — The display name of the card type
 - **Subtypes** — Labels for each subtype
+- **Hierarchy link types** — Labels for each hierarchy link type
 - **Sections** — Section headings on the card detail page
 - **Fields** — Field labels and select option labels
 - **Stakeholder Roles** — Role names displayed in the stakeholder assignment UI
@@ -167,15 +189,29 @@ Relation types define the allowed connections between card types. Each relation 
 
 Click **+ New Relation Type** to create a relation, or click an existing one to edit its labels and attributes.
 
+Each relation row also carries **Visible** and **Mandatory** switches for *each* of its two ends, naming the card type they apply to: Visible decides whether the relation shows on that type's card detail page, Mandatory whether it must be filled in. A relation type whose two ends are the same card type gets one pair of switches per direction, so the incoming side can be configured separately from the outgoing one.
+
 The **Label** and **Reverse Label** fields are written in the language you are currently using — the field caption shows which one (for example *Label (English)*). Renaming a relation updates that language everywhere the verb appears: the **Relations** section on a card, the inventory relation columns, reports, portals and diagrams. Other languages keep their own wording until you translate them.
 
-Use **Manage Translations** at the top of the Relation Types tab to translate every relation's verbs into each enabled language in one pass. Pick a language tab, fill in the wording next to the English source, and save — the counter on each tab shows how many verbs that language still needs. English is not listed here because it is the wording on the relation itself; a verb left untranslated falls back to it.
+Use **Manage Translations** at the top of the Relations tab, above its sub-tabs, to translate every relation's verbs into each enabled language in one pass. Pick a language tab, fill in the wording next to the English source, and save — the counter on each tab shows how many verbs that language still needs. English is not listed here because it is the wording on the relation itself; a verb left untranslated falls back to it. The same dialog carries a separate **Hierarchy link types** section listing the vocabulary of every hierarchical card type, so the verbs and the link types are translated in one pass.
+
+### Hierarchy link types
+
+For a card type with hierarchy switched on, you can define **link types** — a short vocabulary that labels each parent-child link. An Organization tree, for example, can mark one subsidiary as *commercial* and another as *sales*, without inventing a second relation type.
+
+1. On the **Relations** tab, open the **Hierarchy link types** sub-tab — every card type with hierarchy switched on is listed there. (The first sub-tab, **Relation types**, is the ordinary relation list.) A card type's own **Relations** tab shows the same thing as a single line at the top, scoped to that type.
+2. Click **Edit link types**, then add one entry per label with a key, a name and a colour.
+3. Translate the names with the **Translate** button, like any other metamodel label.
+
+Editors then pick a link type on the card's **Hierarchy** section, or in the Inventory's **Link type** column. The label belongs to the child card, so it is cleared automatically when that card is moved to the top level.
+
+Removing a link type does **not** rewrite the cards already using it: they keep the stored value and show it as an unknown link type until someone changes it, so nothing is lost if you remove an entry by mistake. The dialog tells you how many cards are affected before you confirm.
 
 ### Relation attributes
 
 Some relations carry extra attributes that you set on each individual link rather than on the relation type. For example, the built-in **Organization → Application** relation ("uses") has a **Usage Type** attribute — set it to **Owner**, **User**, or **Stakeholder** on each link. This lets you model an application that is *owned by* one Organization and *used by* others through a single relation type. The chosen value appears as a coloured chip in the card's **Relations** section; set it when adding the relation, or later via the edit icon on the relation row.
 
-You can also create **several relation types between the same pair of card types** — for example an Organization that *owns* an application alongside one that *uses* it. Prefer an attribute when you are describing variants of a single relationship (it keeps one column in the inventory and one line on a diagram); create a second relation type when the relationships are genuinely different and deserve their own verbs, their own attributes, or their own filters. When a pair carries more than one relation type, the inventory still shows a single column for the related card type, and opening that cell gives you one section per relation type. On a card, each relation type keeps its own section: sections pointing at the same card type are shown together, and a card you have linked through more than one of them is marked *Also …* in each of its sections.
+You can also create **several relation types between the same pair of card types** — for example an Organization that *owns* an application alongside one that *uses* it. Prefer an attribute when you are describing variants of a single relationship (it keeps one column in the inventory and one line on a diagram); create a second relation type when the relationships are genuinely different and deserve their own verbs, their own attributes, or their own filters. When a pair carries more than one relation type, the inventory still shows a single column for the related card type, and opening that cell gives you one section per relation type. On a card, each relation type keeps its own section: sections pointing at the same card type are shown together, and a card you have linked through more than one of them is marked *Also …* in each of its sections. A relation type whose two ends are the same card type — an Organization that *has site* another Organization — shows *both* verbs on a card, as two sections, and in the inventory as two filter rows and two editor sections; give such a type a reverse label, or both sections will read alike.
 
 When a pair carries more than one relation type, reports, portals and surveys can target a specific one: the Portfolio report offers a group-by axis and a filter per relationship, the Capability Map adds a filter per relationship, portal filters and relation sections are labelled with their verb, and a survey's **related to** filter gains a **Via relation** picker. Choosing nothing still means “related through any of them”.
 

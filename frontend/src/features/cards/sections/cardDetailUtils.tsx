@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import LinkifiedText from "@/components/LinkifiedText";
 import Chip from "@mui/material/Chip";
 import Collapse from "@mui/material/Collapse";
 import Select from "@mui/material/Select";
@@ -17,6 +18,8 @@ import InputAdornment from "@mui/material/InputAdornment";
 import { useTheme } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import { DateField } from "@/components/DateField";
+import { PercentBar } from "@/components/PercentBar";
+import { PercentageInput } from "@/components/PercentageInput";
 import type { CurrencyFormatter } from "@/hooks/useCurrency";
 import { readableTextColor, readableTypeColor } from "@/lib/color";
 import { OptionChip, SELECT_CHIP_BASE, chipWidthForField } from "@/components/OptionChip";
@@ -144,7 +147,7 @@ export function FieldHelp({ text }: { text: string }) {
           color="text.secondary"
           sx={{ display: "block", mt: 0.25, whiteSpace: "pre-wrap" }}
         >
-          {text}
+          <LinkifiedText text={text} />
         </Typography>
       </Collapse>
     </Box>
@@ -466,12 +469,22 @@ export function FieldValue({
   if (field.type === "multiline_text") {
     return (
       <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-        {safeString(value) || "—"}
+        {safeString(value) ? <LinkifiedText text={safeString(value)} /> : "—"}
       </Typography>
     );
   }
+  if (field.type === "percentage") {
+    // A percentage is drawn, not just printed: the same bar the portal and
+    // the inventory use, in the neutral primary — a quantity, not a verdict.
+    if (value === null || value === undefined || value === "") {
+      return <Typography variant="body2">—</Typography>;
+    }
+    return <PercentBar value={Number(value)} width={120} height={6} />;
+  }
   return (
-    <Typography variant="body2">{safeString(value) || "—"}</Typography>
+    <Typography variant="body2">
+      {safeString(value) ? <LinkifiedText text={safeString(value)} /> : "—"}
+    </Typography>
   );
 }
 
@@ -561,14 +574,12 @@ export function FieldEditor({
       const labelText = fieldLabel(field);
       return (
         <FormControl size="small" required={isRequired} error={!!error} sx={{ minWidth: 200 }}>
-          {/* `shrink` + `notched` keep the label on the outline while the
-              displayEmpty placeholder renders inside — without them the
-              un-shrunk label and the placeholder overlap when nothing is
-              selected (MUI never auto-shrinks for multiple + value=[]). */}
-          <InputLabel shrink>{labelText}</InputLabel>
+          {/* The theme floats every label and notches every outline
+              (UI_GUIDELINES §3.5), so the displayEmpty placeholder below
+              renders under a label that is already on the border. */}
+          <InputLabel>{labelText}</InputLabel>
           <Select
             multiple
-            notched
             value={arrVal}
             label={labelText}
             onChange={(e) => {
@@ -683,6 +694,16 @@ export function FieldEditor({
             onChange(e.target.value ? Number(e.target.value) : undefined)
           }
           sx={{ minWidth: 200 }}
+        />
+      );
+    case "percentage":
+      return (
+        <PercentageInput
+          label={fieldLabel(field)}
+          required={isRequired}
+          error={error}
+          value={value}
+          onChange={onChange}
         />
       );
     case "boolean":

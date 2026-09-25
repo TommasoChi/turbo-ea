@@ -10,6 +10,7 @@ Der obere Bereich der Karte zeigt:
 
 - **Typsymbol und -bezeichnung** — Farbcodierter Kartentyp-Indikator
 - **Kartenname** — Inline bearbeitbar
+- **Alias** — Der zweite Name der Karte, unter dem Titel angezeigt, wenn gesetzt. Über das Bearbeiten-Symbol am Titel lassen sich Name und Alias gemeinsam ändern. Aliasse werden von jedem Suchfeld berücksichtigt, sodass eine Karte über den in Ihrer Organisation tatsächlich verwendeten Namen gefunden wird.
 - **Subtyp** — Sekundäre Klassifizierung (falls zutreffend)
 - **Genehmigungsstatus-Badge** — Entwurf, Genehmigt, Ungültig oder Abgelehnt
 - **KI-Vorschlags-Schaltfläche** — Klicken, um eine Beschreibung mit KI zu generieren (sichtbar, wenn KI für diesen Kartentyp aktiviert ist und der Benutzer Bearbeitungsrechte hat)
@@ -66,7 +67,7 @@ Karten können einen Genehmigungszyklus durchlaufen:
 | **Ungültig** | War genehmigt, wurde aber seitdem bearbeitet — erneute Überprüfung nötig |
 | **Abgelehnt** | Überprüft und abgelehnt, Korrekturen erforderlich |
 
-Wenn eine genehmigte Karte bearbeitet wird, ändert sich ihr Status automatisch auf **Ungültig**, um anzuzeigen, dass eine erneute Überprüfung erforderlich ist.
+Wenn eine genehmigte Karte bearbeitet wird, ändert sich ihr Status automatisch auf **Ungültig**, um anzuzeigen, dass eine erneute Überprüfung erforderlich ist. Das Archivieren einer übergeordneten Karte hat dieselbe Wirkung auf alle genehmigten untergeordneten Karten, die dabei in der Hierarchie verschoben werden. Alle Personen mit einer Stakeholder-Rolle auf der Karte werden benachrichtigt — mit Ausnahme derjenigen, die die Änderung vorgenommen hat — und der Wechsel wird auf dem Tab **Verlauf** der Karte festgehalten. Eine Aktion, die mehrere Karten betrifft, etwa eine Massenbearbeitung, sendet jeder Person eine einzige Zusammenfassung statt einer Benachrichtigung pro Karte.
 
 ## Detail-Tab (Hauptansicht)
 
@@ -75,7 +76,8 @@ Der Detail-Tab ist in **Abschnitte** gegliedert, die pro Kartentyp von einem Adm
 ### Beschreibungsabschnitt
 
 - **Beschreibung** — Rich-Text-Beschreibung der Komponente. Unterstützt die KI-Vorschlagsfunktion zur automatischen Generierung
-- **Zusätzliche Beschreibungsfelder** — Einige Kartentypen enthalten zusätzliche Felder im Beschreibungsabschnitt (z.B. Alias, externe ID)
+- **Zusätzliche Beschreibungsfelder** — Eine Administratorin kann beliebige eigene Felder eines Kartentyps dem Abschnitt Beschreibung zuordnen; dieser Abschnitt kann daher weitere Felder neben der Beschreibung selbst enthalten
+- **Links** — Eine Webadresse (`http://` oder `https://`) in der Beschreibung, in einem beliebigen Textfeld, einem Kommentar oder einer Aufgabe wird zu einem Link, der sich in einem neuen Tab öffnet
 
 ### Lebenszyklusabschnitt
 
@@ -90,6 +92,8 @@ Das Lebenszyklusmodell verfolgt eine Komponente durch fünf Phasen:
 | **Lebensende** | Nicht mehr in Gebrauch oder unterstützt |
 
 Jede Phase verfügt über eine **Datumsauswahl**, damit Sie festhalten können, wann die Komponente in diese Phase eingetreten ist oder eintreten wird. Ein visueller Zeitleistenbalken zeigt die Position der Komponente in ihrem Lebenszyklus.
+
+Liegt das Datum einer Phase nach dem einer folgenden Phase — zum Beispiel **Auslauf** nach **Lebensende** —, erscheint neben diesem Datum ein Warnsymbol, und beim Bearbeiten steht derselbe Hinweis unter dem Feld. Es ist nur ein Hinweis: Die Daten lassen sich trotzdem wie eingegeben speichern.
 
 ### Benutzerdefinierte Attributabschnitte
 
@@ -114,6 +118,7 @@ Für Kartentypen, die Hierarchie unterstützen (z.B. Organisation, Geschäftsfä
 - **Übergeordnete Karte** — Die übergeordnete Karte in der Hierarchie (klicken zum Navigieren)
 - **Untergeordnete Karten** — Liste der untergeordneten Karten (klicken zum Navigieren)
 - **Hierarchie-Brotkrumen** — Zeigt den vollständigen Pfad von der Wurzel zur aktuellen Karte
+- **Verbindungstyp** — Wenn eine Administratorin Verbindungstypen für diesen Kartentyp konfiguriert hat, lässt sich jede Eltern-Kind-Verbindung benennen — zum Beispiel eine Tochtergesellschaft als *Vertrieb* und eine andere als *Verkauf*. Die Bezeichnung gehört zur untergeordneten Karte: Auf der übergeordneten Karte steht sie neben jeder untergeordneten Karte, auf der untergeordneten neben ihrer übergeordneten. Wird eine Karte entfernt oder auf die oberste Ebene verschoben, entfällt ihre Bezeichnung; die Änderung wird im Tab **Verlauf** festgehalten.
 
 ### Beziehungsabschnitt
 
@@ -145,7 +150,7 @@ Wenden Sie Tags aus den konfigurierten [Tag-Gruppen](../admin/tags.md) an. Je na
 
 Die **Ressourcen**-Registerkarte bündelt alle unterstützenden Materialien einer Karte:
 
-- **Dateianhänge** — Dateien hochladen und verwalten (PDF, DOCX, XLSX, Bilder, bis zu 10 MB). Beim Hochladen wählen Sie eine **Dokumentenkategorie** aus: Architektur, Sicherheit, Compliance, Betrieb, Besprechungsnotizen, Design oder Sonstiges. Die Kategorie wird als Chip neben jeder Datei angezeigt.
+- **Dateianhänge** — Dateien hochladen und verwalten (Dokumente, Tabellen, Präsentationen, OpenDocument- und ältere Office-Dateien, Bilder, Archive, Outlook- und E-Mail-Nachrichten, CSV, Markdown, JSON und XML – bis zu 20 MB). Beim Hochladen wählen Sie eine **Dokumentenkategorie** aus: Architektur, Sicherheit, Compliance, Betrieb, Besprechungsnotizen, Design oder Sonstiges. Die Kategorie wird als Chip neben jeder Datei angezeigt.
 - **Dokumentenlinks** — URL-basierte Dokumentenverweise. Beim Hinzufügen eines Links wählen Sie einen **Linktyp** aus: Dokumentation, Sicherheit, Compliance, Architektur, Betrieb, Support oder Sonstiges. Der Linktyp wird als Chip neben jedem Link angezeigt, und das Symbol ändert sich je nach ausgewähltem Typ.
 - **Diagramme** — Verknüpfen Sie bestehende [Diagramme](diagrams.de.md) mit dieser Karte. Verknüpfte Diagramme werden als Miniaturvorschauen angezeigt, die Sie anklicken können, um sie im Diagramm-Editor zu öffnen. Verwenden Sie die Schaltfläche **Diagramm verknüpfen**, um ein vorhandenes Diagramm zu suchen und anzuhängen, oder klicken Sie auf das Entknüpfungssymbol, um die Zuordnung zu entfernen.
 
@@ -164,6 +169,7 @@ Wenn die Karte mit einem [endoflife.date](https://endoflife.date/)-Produkt verkn
 - **Kommentare hinzufügen** — Notizen, Fragen oder Entscheidungen über die Komponente hinterlassen
 - **Verschachtelte Antworten** — Auf bestimmte Kommentare antworten, um Gesprächsfäden zu erstellen
 - **Zeitstempel** — Sehen, wann jeder Kommentar gepostet wurde und von wem
+- **Links** — Eine Webadresse in einem Kommentar ist anklickbar und öffnet sich in einem neuen Tab
 
 ## Aufgaben-Tab
 

@@ -29,6 +29,12 @@ Upload a custom logo that appears in the top navigation bar. Supported formats: 
 
 Choose the background and text colors of the top navigation bar. The chosen style applies to **every user** of the instance, on desktop and mobile (including the mobile drawer menu). Pick one of the seven curated presets — Navy (default), Light, Charcoal, Slate, Blue, Forest, or Plum — or select **Custom** to set fully custom background and text colors with the color pickers. A live preview shows how the navigation bar will look before you save, and a warning appears when the contrast between text and background is too low to read comfortably (below WCAG AA). Click **Reset to default** to return to the navy default.
 
+### Application title
+
+Set the name this instance is known by. It replaces «Turbo EA» in the browser tab, on the sign-in page, and in the notification emails the instance sends.
+
+The browser tab shows the page you are on in front of it — `Inventory | Turbo EA` on the inventory, `SAP S/4HANA | Turbo EA` on a card, `GRC · Risk | Turbo EA` on a page opened at a particular tab — so a row of open tabs stays readable. The home page and the sign-in page show the title on its own.
+
 ### Favicon
 
 Upload a custom browser icon (favicon). The change takes effect on the next page load. Click **Reset** to revert to the default icon.
@@ -59,7 +65,7 @@ At least one language must remain enabled at all times.
 
 ### Fiscal Year Start
 
-Select the month that begins your organization's fiscal year (January through December). This setting affects how **budget lines** in the PPM module are grouped by fiscal year. For example, if the fiscal year starts in April, a budget line dated June 2026 belongs to FY 2026–2027.
+Select the month that begins your organization's fiscal year (January through December). This setting affects how **budget lines** in the PPM module are grouped by fiscal year. For example, if the fiscal year starts in April, a budget line dated June 2026 belongs to FY 2026–2027. It also decides which fiscal year the [Cost Report](../guide/reports.md#cost-report) shows.
 
 The default is **January** (calendar year = fiscal year).
 
@@ -84,6 +90,8 @@ Turbo EA sends invitation emails, survey notifications, password resets, and oth
     Microsoft 365 is disabling basic SMTP authentication (unavailable for new tenants, removed for existing ones across 2026–2027) and Google Workspace disabled it in March 2025. For those platforms, use one of the OAuth methods below instead of a mailbox password.
 
 ### Sending methods
+
+![Email delivery settings with the sending-method list](../assets/img/en/95a_admin_settings_email.png)
 
 | Method | When to use |
 |--------|-------------|
@@ -132,6 +140,8 @@ After configuring any method, click **Send Test Email** to verify it works.
     Email is optional. If no method is configured, features that send emails gracefully skip delivery.
 
 ## BPM Module
+
+![Module toggles in Settings → General](../assets/img/en/95_admin_settings_modules.png)
 
 Toggle the **Business Process Management** module on or off. When disabled:
 

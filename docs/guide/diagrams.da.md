@@ -28,6 +28,8 @@ Gruppér relaterede diagrammer i **grupper** — delte etiketter på tværs af a
 
 Når du åbner et diagram, starter den fuldskærms DrawIO-editor i en same-origin iframe. Den oprindelige DrawIO-værktøjslinje er tilgængelig for figurer, forbindelser, tekst og layout — hver Turbo EA-handling eksponeres via højrekliks-kontekstmenuen, synkroniseringsknappen i værktøjslinjen og chevron-overlejringen, der ligger oven på hvert kort.
 
+![Diagrameditor med kort farvelagt efter forretningskritikalitet](../assets/img/da/99_diagram_editor.png)
+
 ### Indsættelse af kort
 
 Brug dialogen **Insert Cards** (åbnes fra værktøjslinjen eller højrekliks-menuen) til at føje kort til lærredet:
@@ -86,7 +88,9 @@ Dropdownen **Farvelæg efter** i værktøjslinjen omfarver kortene på lærredet
 - **Approval status** — omfarver efter `approved` / `pending` / `broken`.
 - **Field values** — sæt flueben ved et single-select-felt under en hvilken som helst korttype på lærredet. **Flere korttyper kan hver bære én regel samtidig** — Applications efter kritikalitet *og* IT Components efter hosting-model. En korttype uden regel beholder den farve, den allerede har, også en udfyldning du selv har sat; kun et kort, hvis egen regel ikke finder nogen værdi, bliver gråt. Et andet felt inden for samme korttype erstatter det første, for et kort har én udfyldning.
 
-En flydende forklaring nederst til venstre viser én skala pr. aktiv regel. Feltregler og **Approval status** er alternativer, ikke lag: vælger du det ene, ryddes det andet. Fjerner du alle regler, vender lærredet tilbage til kortfarverne. Valget gemmes med diagrammet.
+En flydende forklaring nederst til venstre viser én skala pr. aktiv regel. Feltregler og **Approval status** er alternativer, ikke lag: vælger du det ene, ryddes det andet. Fjerner du alle regler, vender lærredet tilbage til kortfarverne. Valget gemmes med diagrammet. Den samme forklaring vises også, når diagrammet åbnes i visningstilstand og via dets publicerede eller indlejrede link, så læserne kan se, hvad farverne betyder.
+
+![Diagram i visningstilstand med farveforklaring](../assets/img/da/99b_diagram_viewer_legend.png)
 
 #### Vis på kortet
 
@@ -139,6 +143,8 @@ Knappen **Sync** i værktøjslinjen åbner sideskuffen med alt, der er kø-still
     - en **slettet relation** — *Fjern kanten fra diagrammet* fjerner den forældede kant fra lærredet;
     - en relation med ændret **flowretning** — *Acceptér opdatering* retter pilespidsen ind efter lageret.
 
+![Synkroniseringspanelet i diagrameditoren](../assets/img/da/99a_diagram_sync_drawer.png)
+
 Turbo EA **tjekker automatisk for lagerændringer, hver gang du åbner et diagram** — et blåt badge på værktøjslinjens Sync-knap tæller de ændringer, der afventer gennemgang. Intet anvendes uden din bekræftelse; badget inviterer dig blot ind i panelet. Knappen **Tjek opdateringer** i panelet kører det samme tjek igen efter behov.
 
 Synkroniseringsknappen i værktøjslinjen viser en pulserende "N usynkroniseret"-pille, når der findes afventende arbejde. At forlade fanen med usynkroniserede ændringer udløser en browseradvarsel, og lærredet gemmes automatisk i lokalt lager hvert femte sekund, så en utilsigtet opdatering kan gendannes ved genåbning.
@@ -156,7 +162,7 @@ Et diagram kan udgives som et **skrivebeskyttet link, der åbnes uden login**, s
 Dialogen giver dig to valg og to strenge at kopiere:
 
 - **Alle med linket** — intet login. Behandl linket som en adgangskode: alle, det videresendes til, kan se diagrammet.
-- **Kun personer, der logger ind** — besøgende godkendes hos din identitetsudbyder, eventuelt begrænset til bestemte e-maildomæner. Der oprettes ingen Turbo EA-konto til dem.
+- **Kun personer, der logger ind** — besøgende godkendes hos din identitetsudbyder, eventuelt begrænset til bestemte e-maildomæner. Der oprettes ingen Turbo EA-konto til dem. I en indlejring åbner login i et lille pop op-vindue, og Turbo EA skal leveres over HTTPS, for at sessionen holder inde i rammen; besøgende logger ind én gang pr. websted, som diagrammet er indlejret på.
 
 Den udgivne side viser kun billedet. Du kan panorere og zoome, men der er ingen adgang til kortdetaljer, og kort-id'erne bag figurerne fjernes, før diagrammet forlader serveren. At slå udgivelsen fra virker med det samme, også for dem der er i gang med at se. Udgiver du igen senere, gendannes det samme link, så URL'er, der allerede er indsat, bliver ved med at virke.
 
@@ -176,3 +182,6 @@ Den udgivne side viser kun billedet. Du kan panorere og zoome, men der er ingen 
 3. Indsæt en **HTML**-makro i Confluence (eller *Iframe* / *HTML include*, afhængigt af hvad din instans tillader), og indsæt koden.
 
 Hvis dit Confluence ikke tillader HTML-makroer, kan du i stedet indsætte det almindelige **link** — det åbner den samme visning i en ny fane.
+
+!!! note "Login i en indlejring"
+    Et diagram, der er udgivet til *Kun personer, der logger ind*, viser en **Log ind**-knap inde i indlejringen. Den åbner din identitetsudbyder i et lille pop op-vindue, og diagrammet vises, så snart det vindue lukker. Tre ting kan komme i vejen: Turbo EA skal leveres over **HTTPS** (browsere beholder kun den sessionen på tværs af websteder, som en indlejring har brug for, på en sikker oprindelse); den indlejrende side skal tillade pop op-vinduer fra sine rammer (en sandboxed ramme uden `allow-popups` blokerer både pop op-vinduet og reservelinket); og i Safari skal du bruge linket **Åbn diagrammet i en ny fane**, som loginskærmen tilbyder. Derudover nægter Chrome at indlæse en indlejring fra en adresse på et privat netværk (en intern IP eller et internt værtsnavn) på en offentlig side som Confluence Cloud — udgiv instansen på et offentligt HTTPS-værtsnavn, eller indlejr den fra en wiki på samme netværk.

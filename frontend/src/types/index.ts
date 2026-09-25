@@ -22,6 +22,11 @@ export interface User {
   created_at?: string;
   last_login?: string;
   permissions?: Record<string, boolean>;
+  /** Per-card-type overrides of the four type-scoped inventory permissions for
+   *  this user's effective role: `{typeKey: {permission: allowed}}`. Carries only
+   *  the cells an admin actually set — an absent cell inherits `permissions`.
+   *  Always empty for the admin (wildcard) role (discussion #1068). */
+  type_permissions?: Record<string, Record<string, boolean>>;
   ui_preferences?: UiPreferences | null;
   impersonated_role?: string | null;
   impersonated_role_label?: string | null;
@@ -171,7 +176,8 @@ export type BuiltInFieldType =
   | "date"
   | "single_select"
   | "multiple_select"
-  | "url";
+  | "url"
+  | "percentage";
 
 export interface FieldDef {
   key: string;
@@ -272,10 +278,19 @@ export interface CardType {
    *  (discussion #1024). Governs upload and display, never the stored image. */
   allow_card_logo: boolean;
   subtypes?: SubtypeDef[];
+  /** Vocabulary for labelling a parent→child link on a hierarchical type
+   *  (discussion #1100). Same shape as a `single_select`'s options, so it gets
+   *  colours, translations and the `OptionChip` renderer for free. Empty (or
+   *  absent) means the feature renders nowhere for this type. */
+  hierarchy_labels?: FieldOption[];
   fields_schema: SectionDef[];
   stakeholder_roles?: StakeholderRoleDefinition[];
   section_config?: Record<string, SectionConfig>;
   reference_config?: ReferenceConfig;
+  /** Per-role overrides of the type-scoped inventory permissions
+   *  (`{roleKey: {permission: allowed}}`) — admin-only, edited on the type
+   *  drawer's Permissions tab (discussion #1068). */
+  role_permissions?: Record<string, Record<string, boolean>>;
   built_in: boolean;
   is_hidden: boolean;
   sort_order: number;
@@ -283,6 +298,26 @@ export interface CardType {
   /** Seed default color for built-in types (null for custom types) — powers
    * the admin "reset to default color" affordance (discussion #740). */
   default_color?: string | null;
+}
+
+/** One row of the card-type permission matrix (`GET /metamodel/types/{key}/permissions`).
+ *  `inherited` is what the role grants landscape-wide; `overrides` is what this
+ *  type stores. A permission missing from `overrides` inherits. */
+export interface CardTypePermissionRole {
+  key: string;
+  label: string;
+  color: string;
+  is_system: boolean;
+  /** Admin (`{"*": true}`) — never overridable, rendered locked. */
+  is_wildcard: boolean;
+  inherited: Record<string, boolean>;
+  overrides: Record<string, boolean>;
+}
+
+export interface CardTypePermissionMatrix {
+  /** The four overridable actions, in display order, with their registry descriptions. */
+  actions: { key: string; description: string }[];
+  roles: CardTypePermissionRole[];
 }
 
 /** Per-type human-readable card ID config (discussion #811). When enabled
@@ -337,6 +372,10 @@ export interface Card {
   name: string;
   description?: string;
   parent_id?: string;
+  /** Label on this card's link to its parent, from the type's
+   *  `hierarchy_labels` vocabulary. Cleared by the server whenever the card
+   *  loses its parent. */
+  parent_label?: string | null;
   lifecycle?: Record<string, string>;
   attributes?: Record<string, unknown>;
   status: string;
@@ -466,12 +505,20 @@ export interface HierarchyNode {
   id: string;
   name: string;
   type: string;
+  /** This node's OWN link label — the label on the edge from its parent down
+   *  to it. On a `children` node that is the edge from the card under view; on
+   *  an `ancestor` node it is the edge one level above that ancestor. */
+  parent_label?: string | null;
 }
 
 export interface HierarchyData {
   ancestors: HierarchyNode[];
   children: HierarchyNode[];
   level: number;
+  /** The label on THIS card's link to its own parent — what the Parent chip
+   *  renders. Deliberately top-level rather than read off the last ancestor,
+   *  whose own `parent_label` describes its link one level further up. */
+  parent_label?: string | null;
 }
 
 export interface CardListResponse {
@@ -521,6 +568,8 @@ export interface Relation {
  */
 export interface DescendantRelationSummaryEntry {
   relation_type_key: string;
+  /** Which end of the type the card sits at; a self-referencing type rolls up twice. */
+  direction: "outgoing" | "incoming";
   count: number;
 }
 
@@ -724,7 +773,12 @@ export type NotificationType =
   | "app_update_available"
   | "app_updated"
   | "extension_available"
-  | "extension_update_available";
+  | "extension_update_available"
+  | "extension_updated"
+  | "extension_notice"
+  // An installed extension may declare types of its own (`ext.<key>.<name>`,
+  // backend SDK 1.11); keep the union open so the bell can carry them untouched.
+  | (string & {});
 
 export interface Notification {
   id: string;
@@ -791,6 +845,10 @@ export interface NotificationTypeSpec {
   in_app_only: boolean;
   /** Always mails: the email switch renders on and disabled. */
   email_locked: boolean;
+  /** Present on a row an extension declared: its label resolved server-side
+   *  for the viewer's locale (core has no i18n key for it), and the owner. */
+  label?: string;
+  extension_key?: string;
 }
 
 /** A notification channel an installed extension currently delivers on. */
@@ -1150,6 +1208,26 @@ export interface EolCycle {
   link?: string | null;
 }
 
+/**
+ * The resolved end-of-life picture for one card, from
+ * `GET /eol/card-status`. Cards carrying no EOL data at all are absent from
+ * that response rather than present with a null status.
+ */
+export interface EolCardStatus {
+  status: "eol" | "approaching" | "supported" | "unknown";
+  source: "api" | "manual";
+  eol_product?: string | null;
+  eol_cycle?: string | null;
+  /** ISO date, or null when upstream reports only a boolean. */
+  eol_date?: string | null;
+  support_date?: string | null;
+  latest?: string | null;
+}
+
+export interface EolCardStatusResponse {
+  items: Record<string, EolCardStatus>;
+}
+
 export interface EolProductMatch {
   name: string;
   score: number;
@@ -1325,10 +1403,15 @@ export interface PortalProcessStep {
   lane_name?: string;
   is_automated: boolean;
   sequence_order: number;
+  /** Event sub-type (`message`, `timer`, …) and the Message / Signal / Error name it refers to. */
+  event_definition_type?: string | null;
+  definition_name?: string | null;
   /** Populated only when the portal enables `show_element_links`. Names, never ids. */
   application_name?: string | null;
   data_object_name?: string | null;
   it_component_name?: string | null;
+  /** The process a call activity invokes — a name only, like the others. */
+  called_process_name?: string | null;
   organizations?: PortalRef[];
 }
 
@@ -1400,15 +1483,43 @@ export interface ProcessElement {
   lane_name?: string;
   is_automated: boolean;
   sequence_order: number;
+  /** Event sub-type (`message`, `timer`, `signal`, `error`, …); null on plain events and non-events. */
+  event_definition_type?: string | null;
+  /** Name of the Message / Signal / Error the element refers to (also on send/receive tasks). */
+  definition_name?: string | null;
   application_id?: string;
   application_name?: string;
   data_object_id?: string;
   data_object_name?: string;
   it_component_id?: string;
   it_component_name?: string;
+  /** The step's raw process reference from the XML (parser-derived): a call
+   *  activity's `calledElement`, else `turboea:processRef`. A card uuid
+   *  resolves into `business_process_id`; anything else is a foreign reference
+   *  from another tool, shown as a hint until the process is picked. */
+  called_element?: string | null;
+  /** The Business Process the step links to — every step but a data artefact. */
+  business_process_id?: string | null;
+  business_process_name?: string | null;
   /** M:N — a step can be linked to several Organization cards. */
   organizations?: { id: string; name: string }[];
   custom_fields?: Record<string, unknown>;
+}
+
+/** A message flow between two pools of a process's BPMN diagram. */
+export interface ProcessMessageFlow {
+  id: string;
+  process_id: string;
+  bpmn_element_id: string;
+  name?: string | null;
+  source_ref: string;
+  target_ref: string;
+  source_name?: string | null;
+  target_name?: string | null;
+  sequence_order: number;
+  /** The Interface card the exchange realises — informative, no relation is derived. */
+  interface_id?: string | null;
+  interface_name?: string | null;
 }
 
 export interface ProcessAssessment {
@@ -1478,6 +1589,7 @@ export interface ProcessFlowVersion {
     application_id?: string;
     data_object_id?: string;
     it_component_id?: string;
+    business_process_id?: string;
     organization_ids?: string[];
     custom_fields?: Record<string, unknown>;
   }>;
@@ -2056,7 +2168,7 @@ export type RiskCategory =
   | "reputational"
   | "strategic";
 
-export type RiskSourceType = "manual" | "compliance";
+export type RiskSourceType = "manual" | "compliance" | "extension";
 
 export type RiskLevel = "critical" | "high" | "medium" | "low";
 
@@ -2536,3 +2648,18 @@ export interface CardRestoreResponse {
   primary: Card;
   restored_passenger_ids: string[];
 }
+
+/**
+ * The colour legend of a published diagram (`GET /diagrams/public/{slug}`).
+ * Aggregate only — labels, colours and counts, never a card's identity. The
+ * `card_fields` shape carries a trimmed card type per rule, in the shape
+ * `viewSource.ts` already consumes.
+ */
+export type PublicDiagramLegend =
+  | { kind: "approval_status"; coloured: number }
+  | {
+      kind: "card_fields";
+      coloured: number;
+      rules: Array<{ type_key: string; field_key: string; has_missing: boolean }>;
+      types: CardType[];
+    };

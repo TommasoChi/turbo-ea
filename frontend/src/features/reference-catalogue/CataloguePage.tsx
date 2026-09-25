@@ -7,6 +7,7 @@ import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
+import LinkifiedText from "@/components/LinkifiedText";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Chip from "@mui/material/Chip";
@@ -21,6 +22,7 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Snackbar from "@mui/material/Snackbar";
 import { api } from "@/api/client";
 import { useAuth } from "@/hooks/useAuth";
+import { hasTypePermission } from "@/components/RequirePermission";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import CatalogueBrowser from "./CatalogueBrowser";
 import type {
@@ -52,7 +54,9 @@ export default function CataloguePage({ config }: Props) {
     if (p["*"]) return true;
     return !!p[key];
   };
-  const canCreate = can("inventory.create");
+  // The importer creates cards of exactly one type, so the per-card-type
+  // override for that type decides (discussion #1068).
+  const canCreate = hasTypePermission(user, "inventory.create", config.inventoryCardType);
   const canManageUpdates = can("admin.metamodel");
 
   const [payload, setPayload] = useState<CataloguePayload | null>(null);
@@ -593,7 +597,7 @@ function DetailDialog({ node, byId, byParent, onOpen, onClose, config }: DetailD
 
         {node.description && (
           <Typography variant="body1" sx={{ mb: 2 }}>
-            {node.description}
+            <LinkifiedText text={node.description} />
           </Typography>
         )}
 
@@ -684,7 +688,11 @@ function DetailTreeNode({
           </Tooltip>
         )}
         <span className="tcc-tree-name">{node.name}</span>
-        {node.description && <span className="tcc-tree-desc">{node.description}</span>}
+        {node.description && (
+          <span className="tcc-tree-desc">
+            <LinkifiedText text={node.description} />
+          </span>
+        )}
       </div>
       {kids.length > 0 && (
         <div className="tcc-detail-tree-children">

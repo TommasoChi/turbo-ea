@@ -28,6 +28,8 @@ Raggruppa i diagrammi correlati in **gruppi** — etichette condivise a livello 
 
 Aprire un diagramma avvia l'editor DrawIO a schermo intero in un iframe della stessa origine. La barra degli strumenti nativa di DrawIO è disponibile per forme, connettori, testo e layout -- ogni azione propria di Turbo EA è esposta tramite il menu contestuale del clic destro, il pulsante Sync della barra strumenti e il chevron sopra ogni scheda.
 
+![Editor di diagrammi con schede colorate per criticità aziendale](../assets/img/it/99_editor_diagramma.png)
+
 ### Inserire schede
 
 Usate la finestra **Inserisci schede** (dalla barra strumenti o dal menu contestuale) per aggiungere schede alla tela:
@@ -86,7 +88,9 @@ Il menu a tendina **Colora per** nella barra strumenti ricolora le schede sulla 
 - **Stato di approvazione** -- ricolora per `approvata` / `in attesa` / `rotta`.
 - **Valori di campo** -- spuntate un campo a selezione singola sotto qualsiasi tipo di scheda presente sulla tela. **Più tipi di scheda possono portare una regola ciascuno nello stesso momento**: le Applicazioni per criticità *e* i Componenti IT per modello di hosting. Un tipo senza regola mantiene il colore che ha già, compreso un riempimento impostato a mano; diventa grigia solo una scheda la cui regola non trova alcun valore. Un secondo campo all'interno di uno stesso tipo sostituisce il primo, perché una scheda ha un solo riempimento.
 
-Una legenda fluttuante in basso a sinistra mostra una scala per ogni regola attiva. Le regole di campo e lo **Stato di approvazione** sono alternative, non livelli: sceglierne una cancella l'altra. Togliendo ogni regola la tela torna ai colori delle schede. La scelta viene salvata col diagramma.
+Una legenda fluttuante in basso a sinistra mostra una scala per ogni regola attiva. Le regole di campo e lo **Stato di approvazione** sono alternative, non livelli: sceglierne una cancella l'altra. Togliendo ogni regola la tela torna ai colori delle schede. La scelta viene salvata col diagramma. La stessa legenda compare anche quando il diagramma è aperto in modalità di visualizzazione e sul suo link pubblicato o incorporato, così chi lo legge sa cosa significano i colori.
+
+![Diagramma in modalità visualizzazione con la legenda dei colori](../assets/img/it/99b_diagramma_vista_legenda.png)
 
 #### Mostra sulla scheda
 
@@ -139,6 +143,8 @@ Il pulsante **Sync** della barra strumenti apre il pannello laterale con tutto c
     - una **relazione eliminata** -- *Rimuovi il collegamento dal diagramma* toglie il collegamento obsoleto dalla tela;
     - una relazione con **direzione del flusso** cambiata -- *Accetta aggiornamento* allinea la freccia all'inventario.
 
+![Pannello di sincronizzazione dell'editor di diagrammi](../assets/img/it/99a_diagramma_sincronizzazione.png)
+
 Turbo EA **controlla automaticamente le modifiche dell'inventario a ogni apertura di un diagramma** -- un badge blu sul pulsante Sync della barra strumenti conta le modifiche da rivedere. Nulla viene applicato senza la vostra conferma; il badge vi invita solo ad aprire il pannello. Il pulsante **Verifica aggiornamenti** nel pannello riesegue lo stesso controllo su richiesta.
 
 Il pulsante Sync della barra strumenti mostra una pillola pulsante «N non sincronizzate» finché esiste lavoro in sospeso. Lasciare la scheda con modifiche non sincronizzate attiva un avviso del browser, e la tela viene salvata automaticamente nello storage locale ogni cinque secondi per poter essere ripristinata dopo un aggiornamento accidentale.
@@ -156,7 +162,7 @@ Apri il menu **⋮** del diagramma nella galleria e scegli **Condividi / incorpo
 La finestra offre due scelte e due stringhe da copiare:
 
 - **Chiunque abbia il collegamento** — nessun accesso richiesto. Tratta il collegamento come una password: chiunque lo riceva può vedere il diagramma.
-- **Solo chi effettua l'accesso** — i visitatori si autenticano con il tuo provider di identità, eventualmente limitato a domini email specifici. Non viene creato alcun account Turbo EA per loro.
+- **Solo chi effettua l'accesso** — i visitatori si autenticano con il tuo provider di identità, eventualmente limitato a domini email specifici. Non viene creato alcun account Turbo EA per loro. All'interno di un'incorporazione, l'accesso si apre in una piccola finestra pop-up e Turbo EA deve essere servito tramite HTTPS perché la sessione venga mantenuta nel frame; i visitatori accedono una volta per ogni sito in cui il diagramma è incorporato.
 
 La pagina pubblicata mostra solo l'immagine. È possibile spostarla e ingrandirla, ma non si accede ai dettagli delle schede, e gli identificatori delle schede dietro le forme vengono rimossi prima che il diagramma lasci il server. Annullare la pubblicazione ha effetto immediato, anche per chi lo sta guardando. Ripubblicandolo in seguito si ottiene lo stesso collegamento, quindi gli URL già incollati continuano a funzionare.
 
@@ -176,3 +182,6 @@ La pagina pubblicata mostra solo l'immagine. È possibile spostarla e ingrandirl
 3. In Confluence inserisci una macro **HTML** (oppure *Iframe* / *HTML include*, a seconda di ciò che la tua istanza consente) e incolla il codice.
 
 Se il tuo Confluence non consente le macro HTML, incolla invece il **collegamento** semplice: apre la stessa vista in una nuova scheda.
+
+!!! note "Accesso all'interno di un'incorporazione"
+    Un diagramma pubblicato per *Solo chi effettua l'accesso* mostra un pulsante **Accedi** all'interno dell'incorporazione. Apre il tuo provider di identità in una piccola finestra pop-up e il diagramma compare appena quella finestra si chiude. Tre cose possono ostacolarlo: Turbo EA deve essere servito tramite **HTTPS** (i browser conservano la sessione tra siti di cui un'incorporazione ha bisogno solo su un'origine sicura); la pagina ospitante deve consentire i pop-up dai suoi frame (un frame in sandbox senza `allow-popups` blocca sia il pop-up sia il link di riserva); e in Safari usa il link **Apri il diagramma in una nuova scheda** offerto dalla schermata di accesso. A parte questo, Chrome rifiuta di caricare un'incorporazione da un indirizzo di rete privata (un IP o un nome host interno) in una pagina pubblica come Confluence Cloud: pubblica l'istanza su un nome host HTTPS pubblico, oppure incorporala da un wiki della stessa rete.

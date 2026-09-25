@@ -24,7 +24,7 @@ from starlette.applications import Starlette
 from starlette.routing import Route
 
 from turbo_ea_mcp import oauth
-from turbo_ea_mcp.api_client import TurboEAClient
+from turbo_ea_mcp.api_client import CARD_IDS_CHUNK, TurboEAClient, chunked
 from turbo_ea_mcp.batches import mutation_batch
 from turbo_ea_mcp.mcp_extensions import register_extension_tools
 from turbo_ea_mcp.config import (
@@ -153,7 +153,7 @@ async def search_cards(
     """Search and list cards (EA items) with optional filtering.
 
     Args:
-        query: Free-text search across card name and description.
+        query: Free-text search across card name, description and alias.
         type: Filter by card type key (e.g. 'Application', 'ITComponent').
         status: Filter by status ('ACTIVE', 'PHASING_IN', 'PHASING_OUT', 'END_OF_LIFE', 'ARCHIVED').
         page: Page number (default 1).
@@ -561,7 +561,13 @@ async def get_cost_treemap(
     cost_field: str = "costTotalAnnual",
     group_by: str = "",
 ) -> str:
-    """Treemap of card cost grouped optionally by a related card type.
+    """Treemap of annual card cost for the current fiscal year, grouped optionally.
+
+    Only cards live in the current fiscal year count, each at its full annual
+    cost: from the fiscal year a card goes active in through the one its
+    end-of-life date falls in. Cards retired in an earlier fiscal year are left
+    out. The response names the fiscal year (`fiscal_year`, named after the
+    calendar year it ends in) and its start month (`fiscal_year_start`).
 
     Args:
         type: Card type to aggregate (default 'Application').
@@ -746,10 +752,12 @@ async def rollback_batch(
     override (requires ``admin.events`` on the calling user — accepts
     the data loss of clobbering someone else's later edits).
 
-    Coverage today: ``card.created``, ``card.updated``,
-    ``card.archived``, ``card.restored``, ``relation.created``, and
-    ``relation.upserted``. Other event types (ADR / risk / SoAW /
-    comment / stakeholder writes) surface in the dry-run plan under
+    Coverage: card writes (``card.created`` / ``updated`` / ``archived``
+    / ``restored``), ``relation.created``, risks raised or edited in the
+    batch (``risk.added`` / ``risk.updated``), stakeholder role
+    assignments, card tags and draft decisions (``adr.created``). Todos
+    and notifications are deliberately never reversed, and a deleted
+    risk cannot be rebuilt; those surface in the dry-run plan under
     ``unsupported_events`` so the caller can decide whether to proceed
     on the partial coverage.
 
@@ -1898,7 +1906,9 @@ def _logo_validation_problem(index: int, item: object, exc: ValidationError) -> 
 async def _check_logo_types(token: str, prepared: list[dict]) -> tuple[dict, list[dict], list[dict]]:
     """Settle the per-type 'custom logos' switch during the preview.
 
-    Two batched requests for the whole call, never one per row. Degrades
+    Batched requests for the whole call, never one per row — the card lookup
+    goes through ``get_cards_by_ids`` so a raised ``MCP_MAX_LOGOS_PER_CALL``
+    cannot push one URL past the proxy's request-line limit (#1093). Degrades
     rather than fails: if either read is unavailable — a caller without
     `inventory.view`, a transient error — every row stays previewable and the
     caller is told the check did not run. A preview exists to be informative,
@@ -1909,14 +1919,11 @@ async def _check_logo_types(token: str, prepared: list[dict]) -> tuple[dict, lis
     ids = [p["card_id"] for p in prepared]
     try:
         client = TurboEAClient(token)
-        cards = await client.get(
-            "/cards", params={"ids": ",".join(ids), "page_size": len(ids)}
-        )
+        items = await client.get_cards_by_ids(ids)
         types = await client.get("/metamodel/types")
     except Exception as exc:  # noqa: BLE001 — informative, never fatal
         return {"status": "unavailable", "reason": str(exc)}, prepared, []
 
-    items = cards.get("items", []) if isinstance(cards, dict) else []
     type_of = {str(c.get("id")): c.get("type") for c in items}
     allows = {
         t.get("key"): bool(t.get("allow_card_logo"))
@@ -1967,26 +1974,31 @@ async def _check_logo_icon_slugs(
     half written. Answering it up front turns a miss into the ordinary next
     step — go and fetch that mark — while there is still nothing to undo.
 
-    One request for the whole call. Degrades exactly like the type check: an
-    unavailable answer leaves every row previewable rather than inventing a
-    failure. Membership is read off ``known`` rather than ``unknown`` so a
-    value that is not a well-formed ref at all (a comma, say, which the
-    request joins on) still lands on the unknown side.
+    Batched requests for the whole call (chunked like the card lookup, so a
+    raised per-call cap cannot overrun the proxy's request line — #1093).
+    Degrades exactly like the type check: an unavailable answer leaves every
+    row previewable rather than inventing a failure. Membership is read off
+    ``known`` rather than ``unknown`` so a value that is not a well-formed ref
+    at all (a comma, say, which the request joins on) still lands on the
+    unknown side.
 
     Returns ``(icon_check, kept_rows, unknown_rows)``.
     """
     slugs = sorted({p["icon_slug"] for p in prepared if p["icon_slug"]})
     if not slugs:
         return {"status": "skipped"}, prepared, []
+    known: dict = {}
     try:
         client = TurboEAClient(token)
-        resp = await client.get(
-            "/card-logos/brand-icons/resolve", params={"refs": ",".join(slugs)}
-        )
+        for chunk in chunked(slugs, CARD_IDS_CHUNK):
+            resp = await client.get(
+                "/card-logos/brand-icons/resolve", params={"refs": ",".join(chunk)}
+            )
+            if isinstance(resp, dict):
+                known.update(resp.get("known", {}))
     except Exception as exc:  # noqa: BLE001 — informative, never fatal
         return {"status": "unavailable", "reason": str(exc)}, prepared, []
 
-    known = resp.get("known", {}) if isinstance(resp, dict) else {}
     missing = [s for s in slugs if s not in known]
 
     kept: list[dict] = []
@@ -2664,10 +2676,7 @@ async def clear_card_logos(
         would = 0
         try:
             client = TurboEAClient(token)
-            cards = await client.get(
-                "/cards", params={"ids": ",".join(card_ids), "page_size": len(card_ids)}
-            )
-            items = cards.get("items", []) if isinstance(cards, dict) else []
+            items = await client.get_cards_by_ids(card_ids)
             has_logo = {str(c.get("id")): bool(c.get("logo_updated_at")) for c in items}
         except Exception as exc:  # noqa: BLE001 — informative, never fatal
             return _fmt(
@@ -3271,9 +3280,10 @@ async def upsert_relations_bulk(
     """Create or delete many relations between cards in one call.
 
     Call get_relation_types first to see which relation type keys exist
-    and which source/target card types each one connects — the backend
-    rejects relations whose source or target types don't match the
-    metamodel definition.
+    and which source/target card types each one connects. A name reference
+    whose `type` does not match the relation type's end is rejected; an id
+    reference sent the other way round (target card first) is stored in the
+    relation type's direction, with its attributes unchanged.
 
     Args:
         operations: List of operation dicts. Each dict mirrors
@@ -3525,27 +3535,32 @@ async def import_bpmn(
     # we don't want to fake one. The card-create step above already
     # validated the card path; for the flow side, we surface the parsed
     # element count via a parser-free regex count of *Task / *Event /
-    # *Gateway so the agent can show the user something useful. The
-    # namespace prefix is optional: plenty of exports declare BPMN as the
-    # default namespace (`<definitions xmlns="...">`), which the real
-    # parser handles and a prefix-only pattern would count as zero.
+    # *Gateway / data artefacts (mirroring the backend's EXTRACTABLE_TYPES)
+    # plus the message flows, so the agent can show the user something
+    # useful. The namespace prefix is optional: plenty of exports declare
+    # BPMN as the default namespace (`<definitions xmlns="...">`), which the
+    # real parser handles and a prefix-only pattern would count as zero.
     if dry_run:
         preview_node_count = len(
             re.findall(
                 r"<(?:\w+:)?(?:task|userTask|serviceTask|scriptTask|businessRuleTask|"
                 r"sendTask|receiveTask|manualTask|callActivity|subProcess|"
+                r"transaction|adHocSubProcess|"
                 r"exclusiveGateway|parallelGateway|inclusiveGateway|"
-                r"eventBasedGateway|startEvent|endEvent|"
-                r"intermediateCatchEvent|intermediateThrowEvent|boundaryEvent)\b",
+                r"eventBasedGateway|complexGateway|startEvent|endEvent|"
+                r"intermediateCatchEvent|intermediateThrowEvent|boundaryEvent|"
+                r"dataObjectReference|dataStoreReference)\b",
                 bpmn_xml,
             )
         )
+        preview_message_flow_count = len(re.findall(r"<(?:\w+:)?messageFlow\b", bpmn_xml))
         response: dict = {
             "dry_run": True,
             "committed": False,
             "business_process_id": process_id,
             "diagram_preview": {
                 "flow_nodes_estimated": preview_node_count,
+                "message_flows_estimated": preview_message_flow_count,
                 "bpmn_xml_bytes": len(bpmn_xml),
             },
             "next_action": (

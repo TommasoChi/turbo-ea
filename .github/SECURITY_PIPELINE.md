@@ -16,7 +16,7 @@ Four scanners cover four overlapping layers. Trivy and CodeQL gate merges/publis
 | **Trivy**         |                                |                                 | ✓ (publish + daily)             | ✓ (daily)                         |                         |
 | **Scout**         |                                |                                 | ✓ (publish + daily, observe)    | ✓ (daily, observe)                |                         |
 | **Dependabot**    |                                | ✓ (security PRs)                | ✓ (security PRs, base images)   |                                   | ✓ (monthly, grouped)    |
-| **cosign**        |                                |                                 | (signs every publish)           |                                   |                         |
+| **cosign**        |                                |                                 | (signs every publish, images + Helm chart; each publish re-verified with the documented minimum client) |                        |                         |
 | **SLSA provenance + SBOM** |                       |                                 | (attests every publish)         |                                   |                         |
 
 Two scanners covering the same layer is deliberate — different vuln DBs have different blind spots. Trivy is the primary; Scout is second-opinion until we've characterised the overlap.
@@ -35,10 +35,13 @@ Two scanners covering the same layer is deliberate — different vuln DBs have d
 [`docker-publish.yml`](workflows/docker-publish.yml) — for each of the 5 image targets (`db`, `backend`, `frontend`, `nginx`, `mcp-server`):
 1. Build multi-arch (`linux/amd64,linux/arm64`) with `provenance: true` + `sbom: true` (SLSA attestations).
 2. Push to `ghcr.io/vincentmakes/turbo-ea/<image>` with `latest` + `sha-<short>` + semver tags.
-3. **cosign** — keyless OIDC signing of the manifest list digest. No key to rotate; verification uses the workflow identity certificate.
+3. **cosign** — keyless OIDC signing of the manifest list digest. No key to rotate; verification uses the workflow identity certificate. The signature is a **Sigstore bundle** (cosign 3 via cosign-installer v4), stored on GHCR under the `sha256-<digest>` index tag because GHCR has no referrers API.
+   - **Verify with the documented minimum client** — a second `cosign-installer` step pins `cosign-release: v2.6.3` (the oldest client `docs/admin/supply-chain.md` promises) into `$RUNNER_TEMP/cosign-floor` and verifies the digest with a strict `--certificate-identity` for this workflow. Fails the publish if the signature is missing or unreadable by that client. See *Image signing + verification* below.
 4. **Trivy observe** (HIGH + CRITICAL, `ignore-unfixed: true`) — SARIF → Security tab under `trivy-<image>`. Never fails the job.
 5. **Trivy gate** (CRITICAL only, `exit-code: 1`, `ignore-unfixed: true`) — fails the publish on any CRITICAL not in [`.github/trivy-allowlist`](trivy-allowlist). Introduced after CVE-2026-42945 ("NGINX Rift") slipped through the observe-only setup.
 6. **Scout observe** (`only-severities: critical,high`, `exit-code: false`) — SARIF → Security tab under `scout-<image>`. Gated on `DOCKERHUB_PAT` secret presence so the workflow stays green if credentials are removed.
+
+[`helm-publish.yml`](workflows/helm-publish.yml) — on `v*.*.*` tags only: packages `charts/turbo-ea` with `version` and `appVersion` stamped from `/VERSION` (the job fails if the tag disagrees), pushes it to `oci://ghcr.io/vincentmakes/turbo-ea/charts/turbo-ea`, **cosign**-signs the chart digest with the same keyless OIDC identity as the images, and re-verifies it with the same pinned minimum client. `main` never publishes a chart — a chart version must be unique semver. A `workflow_dispatch` with `sign_only_version: <X.Y.Z>` skips packaging and pushing and only signs an already-published chart tag (used once for `2.141.0`, whose first run pushed the chart and then failed at *Sign chart* before #1113).
 
 > **`:latest` publishing + apk freshness — the two things to know.**
 > 1. **What publishes `:latest`.** `latest=auto` + the two explicit `type=raw`
@@ -78,6 +81,10 @@ Two scanners covering the same layer is deliberate — different vuln DBs have d
 [`security-scan-published.yml`](workflows/security-scan-published.yml) — re-scans the **live `:latest` manifests** on GHCR. Identical Trivy + Scout setup as the publish workflow with one twist: the observe step uses `ignore-unfixed: false` so actively-exploited zero-days surface here *before* an upstream patch ships. The gate step keeps `ignore-unfixed: true` (no point failing on something we can't yet fix).
 
 Why this exists: CVEs disclosed *after* the last image build would otherwise go unnoticed until the next code-quiet stretch ended. Daily re-scan closes that window to 24 hours.
+
+The scan also **repairs** what it finds, not just reports it. A third Trivy step per image asks the narrower question "does `:latest` carry a HIGH/CRITICAL that upstream has **already** fixed?" (`ignore-unfixed: true`, allowlist applied). If any image says yes, a single `rebuild` job — `needs: scan`, so one dispatch for the whole matrix rather than one per image — dispatches `docker-publish.yml` on `main`, which is `no-cache: true` and retags `:latest`.
+
+That closes a week-long window. `:latest` is otherwise only retagged on a release, a manual dispatch, or the Monday cron, so an Alpine fix landing on a Tuesday was not shipped until the following Monday while the daily scan reported it every morning. Two details are load-bearing: the detection step writes its job output **only when it finds something** (matrix jobs share one output namespace, so a clean image emitting `false` would clobber a dirty image's `true`), and the rebuild job is `if: always() && …` so a red gate step — a CRITICAL *with* a fix, the case that most needs shipping — still triggers the rebuild. There is no loop risk: a `workflow_dispatch` run of `docker-publish.yml` cannot re-trigger this workflow, which fires only on `schedule` and `workflow_dispatch`.
 
 ### Weekly — Dependabot
 [`.github/dependabot.yml`](dependabot.yml) — four ecosystems, all security-focused:
@@ -130,11 +137,20 @@ you republish the image.
 
 1. **Confirm the live image is actually patched.** Run
    [`trivy-reconcile.yml`](workflows/trivy-reconcile.yml) with the default
-   `upload_sarif=false` and read the installed-vs-fixed table in the job log. If
+   `upload_sarif=false` and read the installed-vs-fixed table in the job log.
+   Note that Trivy refreshes its vulnerability DB on its own TTL, so a scan a
+   few hours older than yours can legitimately disagree: an alert filed this
+   morning against a correct image may simply be a DB that has since been
+   corrected, in which case the table shows a clean image and the fix is step 3
+   alone. If
    the **installed** version is still the old one, the image itself is stale —
    go to step 2. If it already shows the fixed version, the alert is just stale
    in the tab — skip to step 3.
-2. **Republish so `:latest` carries the fix.** Any publish rebuilds `apk
+2. **Republish so `:latest` carries the fix.** Since the daily scan gained its
+   `rebuild` job this is usually already done for you — a *fixable* HIGH or
+   CRITICAL on `:latest` dispatches `docker-publish.yml` automatically, so the
+   fix ships within a day. Do it by hand when you don't want to wait, or when
+   the finding is below HIGH. Any publish rebuilds `apk
    upgrade` against the live alpine repos, so `:latest` picks up the fix and
    stays patched across subsequent pushes — a cached push via the
    `no-cache-filters` on the runtime stages, a `workflow_dispatch` run of
@@ -209,7 +225,7 @@ The pipeline is already at the "two scanners per layer" point for OS / image con
 
 ## Image signing + verification
 
-Every published image's manifest list digest is signed with `cosign` using keyless OIDC. To verify locally:
+Every published image's manifest list digest — and every chart digest — is signed with `cosign` using keyless OIDC. To verify locally, with **cosign ≥ 2.6 or 3.x**:
 
 ```bash
 cosign verify \
@@ -219,6 +235,27 @@ cosign verify \
 ```
 
 The certificate identity binds the signature to the GHA workflow + repo + ref that produced it, so a leaked GHCR write token can't backdate-sign a malicious image.
+
+The Helm chart is an OCI artifact in the same registry and is verified the same way:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp '^https://github.com/vincentmakes/turbo-ea/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/vincentmakes/turbo-ea/charts/turbo-ea:<version>
+```
+
+### Signature format, and why the publish gate verifies with an *old* client
+
+The format is decided by the cosign version `sigstore/cosign-installer` ships, not by anything in our workflows. cosign 2 wrote the legacy `sha256-<digest>.sig` tag; cosign 3 (installer v4, Dependabot #631, 2026-06-02 — between releases 1.36.0 and 1.37.0) writes a **Sigstore bundle** as an OCI 1.1 referrer, which GHCR — no referrers API — keeps under the bare `sha256-<digest>` index tag. Nothing failed and nothing warned: cosign 2.5 and older simply report `no signatures found` on every image since 1.37.0, which is how #1136 was filed three months later. Measured client matrix (September 2026): 2.4.1 ✗, 2.5.3 ✗ (even with `--new-bundle-format`), 2.6.3 ✓, 3.0.6 ✓ (cosign 3 also still reads the legacy tag on ≤ 1.36.0).
+
+Hence the gate: after `Sign image` / `Sign chart`, both publish workflows install cosign at the **documented minimum version** (`cosign-release: v2.6.3`, into its own `install-dir` *after* signing, because the installer prepends to `PATH`) and run `verify` with a strict `--certificate-identity` for the workflow. Verifying with the same binary that signed would only prove the upload landed (the #1113 class); verifying with the oldest supported client proves the promise in the docs. Dependabot bumps action SHAs, never `with:` inputs, so the floor moves only when a human edits it — and `backend/tests/services/test_publish_workflow_signing.py` fails unless `docker-publish.yml`, `helm-publish.yml` and `docs/admin/supply-chain.md` name the same `major.minor`.
+
+### `cosign verify` says "no signatures found"
+
+1. `cosign version` — anything below 2.6 cannot read the bundle format. Upgrade; that is the answer for every report so far.
+2. `cosign tree ghcr.io/vincentmakes/turbo-ea/<image>:<tag>` — lists what is attached to the digest. A `https://sigstore.dev/cosign/sign/v1` artifact "via OCI referrer" is the signature.
+3. Still nothing attached → open the publish run for that tag and read the `Verify signature with the documented minimum client` step; it cannot have been green. Chart `2.141.0` is the one historic case (signed after the fact via `sign_only_version`, so its identity is `…/helm-publish.yml@refs/heads/main`).
 
 ## What's deliberately *not* covered
 

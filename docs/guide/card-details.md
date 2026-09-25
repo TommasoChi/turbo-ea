@@ -10,6 +10,7 @@ The top of the card shows:
 
 - **Type icon and label** — Color-coded card type indicator
 - **Card name** — Editable inline
+- **Alias** — The card's other name, shown under the title when set. Click the title's edit pencil to change the name and the alias together. Aliases are matched by every search box, so a card can be found by the name your organisation actually uses for it.
 - **Subtype** — Secondary classification (if applicable)
 - **Approval status badge** — Draft, Approved, Broken, or Rejected
 - **AI suggest button** — Click to generate a description with AI (visible when AI is enabled for this card type and the user has edit permission)
@@ -63,7 +64,7 @@ Cards can go through an approval cycle:
 | **Broken** | Was approved, but has been edited since — needs re-review |
 | **Rejected** | Reviewed and rejected, needs corrections |
 
-When an approved card is edited, its status automatically changes to **Broken** to indicate it needs re-review.
+When an approved card is edited, its status automatically changes to **Broken** to indicate it needs re-review. Archiving a card's parent has the same effect on any approved children it moves in the hierarchy. Everyone with a stakeholder role on the card is notified — except whoever made the change — and the flip is recorded on the card's **History** tab. One action that breaks several cards, such as a mass edit, sends each person a single summary rather than one notification per card.
 
 ## Detail Tab (Main)
 
@@ -72,7 +73,8 @@ The detail tab is organized into **sections** that can be reordered and configur
 ### Description Section
 
 - **Description** — Rich text description of the component. Supports the AI suggestion feature for automatic generation
-- **Additional description fields** — Some card types include extra fields in the description section (e.g., alias, external ID)
+- **Additional description fields** — An administrator can file any of a card type's own fields under Description, so this section may carry extra fields beyond the description itself
+- **Links** — A web address (`http://` or `https://`) typed into the description, any text field, a comment or a to-do becomes a link that opens in a new tab
 
 ### Lifecycle Section
 
@@ -87,6 +89,8 @@ The lifecycle model tracks a component through five phases:
 | **End of Life** | No longer in use or supported |
 
 Each phase has a **date picker** so you can record when the component entered or will enter that phase. A visual timeline bar shows the component's position in its lifecycle.
+
+If a phase is dated after a phase that should follow it — for example **Phase Out** after **End of Life** — a warning icon appears next to that date, and the same warning shows under the field while editing. It is only a hint: the dates can still be saved as entered.
 
 ### Custom Attribute Sections
 
@@ -111,6 +115,7 @@ For card types that support hierarchy (e.g., Organization, Business Capability, 
 - **Parent** — The card's parent in the hierarchy (click to navigate)
 - **Children** — List of child cards (click any to navigate)
 - **Hierarchy breadcrumb** — Shows the full path from root to current card
+- **Link type** — When an administrator has configured link types for this card type, each parent-child link can be labelled — for example one subsidiary that is *commercial* and another that is *sales*. The label sits on the child, so the parent's card shows a label beside every child and the child's card shows its own beside its parent. Removing or moving a card to the top level clears its label, and the change is recorded on the **History** tab.
 
 ### Relations Section
 
@@ -142,7 +147,7 @@ Apply tags from the configured [tag groups](../admin/tags.md). Depending on the 
 
 The **Resources** tab consolidates all supporting materials for a card:
 
-- **File Attachments** — Upload and manage files (PDF, DOCX, XLSX, images, up to 10 MB). When uploading, select a **document category** from: Architecture, Security, Compliance, Operations, Meeting Notes, Design, or Other. The category appears as a chip next to each file.
+- **File Attachments** — Upload and manage files (documents, spreadsheets, presentations, OpenDocument and legacy Office files, images, archives, Outlook and e-mail messages, CSV, Markdown, JSON and XML — up to 20 MB). When uploading, select a **document category** from: Architecture, Security, Compliance, Operations, Meeting Notes, Design, or Other. The category appears as a chip next to each file.
 - **Document Links** — URL-based document references. When adding a link, select a **link type** from: Documentation, Security, Compliance, Architecture, Operations, Support, or Other. The link type appears as a chip next to each link, and the icon changes based on the selected type.
 - **Diagrams** — Link existing [diagrams](diagrams.md) to this card. Linked diagrams appear as thumbnail previews that you can click to open in the diagram editor. Use the **Link Diagram** button to search for and attach an existing diagram, or click the unlink icon to remove the association.
 
@@ -161,6 +166,7 @@ If the card is linked to an [endoflife.date](https://endoflife.date/) product (v
 - **Add comments** — Leave notes, questions, or decisions about the component
 - **Threaded replies** — Reply to specific comments to create conversation threads
 - **Timestamps** — See when each comment was posted and by whom
+- **Links** — A web address in a comment is clickable and opens in a new tab
 
 ## Todos Tab
 

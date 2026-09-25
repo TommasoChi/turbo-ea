@@ -10,14 +10,16 @@ El **Inventario** es el corazón de Turbo EA. Aquí se listan todas las **fichas
 
 El panel lateral izquierdo permite **filtrar** las fichas por diferentes criterios:
 
-- **Buscar** — Búsqueda de texto libre en los nombres de las tarjetas, desde la primera letra. Las mejores coincidencias aparecen primero: nombres exactos, luego los que empiezan por lo que escribió, luego aquellos donde inicia una palabra y después el resto. Todos los campos de búsqueda de Turbo EA ordenan así — la búsqueda global (**Ctrl+K** / **⌘K**), cada selector de tarjetas, el registro de riesgos, las decisiones y los portales publicados — salvo que haya elegido un orden propio, que siempre prevalece
-- **Tipos** — Filtrar por uno o más tipos de ficha: Objetivo, Plataforma, Iniciativa, Organización, Capacidad de Negocio, Contexto de Negocio, Proceso de Negocio, Aplicación, Interfaz, Objeto de Datos, Componente TI, Categoría Tecnológica, Proveedor, Sistema
+- **Buscar** — Búsqueda de texto libre en los nombres de las tarjetas, desde la primera letra. Las mejores coincidencias aparecen primero: nombres exactos, luego los que empiezan por lo que escribió, luego aquellos donde inicia una palabra y después el resto. Todos los campos de búsqueda de Turbo EA ordenan así — la búsqueda global (**Ctrl+K** / **⌘K**), cada selector de tarjetas, el registro de riesgos, las decisiones y los portales publicados — salvo que haya elegido un orden propio, que siempre prevalece. También se buscan el **alias** de la ficha y su descripción, de modo que una ficha se encuentra por el nombre que su organización usa realmente — y un alias que coincide exactamente puntúa igual que un nombre que coincide exactamente
+- **Tipos** — Filtrar por uno o más tipos de ficha, agrupados por la capa de arquitectura a la que pertenece cada tipo: Estrategia y Transformación (Objetivo, Plataforma, Iniciativa), Arquitectura de Negocio (Organización, Capacidad de Negocio, Contexto de Negocio, Proceso de Negocio), Aplicación y Datos (Aplicación, Interfaz, Objeto de Datos) y Arquitectura Técnica (Componente TI, Categoría Tecnológica, Proveedor). Un tipo que su administrador sitúe en una capa propia obtiene su propio encabezado después de esas cuatro, y cualquier tipo sin capa definida aparece al final bajo **Sin categoría**
 - **Subtipos** — Cuando se selecciona un tipo, permite filtrar por subtipo (por ejemplo, Aplicación → Aplicación de Negocio, Microservicio, Agente IA, Despliegue)
 - **Estado de Aprobación** — Borrador, Aprobado, Roto o Rechazado
 - **Ciclo de Vida** — Filtrar por fase del ciclo de vida: Plan, Fase de Entrada, Activo, Fase de Salida, Fin de Vida
 - **Calidad de Datos** — Filtrado por banda (selección múltiple): Completo (≥80%), Parcial (40–79%), Mínimo (menos del 40%). Son las bandas del [informe de Calidad de datos](reports.md#data-quality-report): al hacer clic en un segmento de barra allí se llega aquí.
 - **Huérfanas** — Solo fichas sin ninguna relación, en ningún sentido. Se evalúa en el servidor, por lo que funciona sin seleccionar un tipo de ficha.
 - **Desactualizadas** — Solo fichas sin actualizar en los últimos 90 días. Ambas reflejan los mosaicos del [informe de Calidad de datos](reports.md#data-quality-report): al hacer clic en uno se llega aquí.
+- **Fin de vida** — Para aplicaciones y componentes de TI, filtra por el estado de soporte que Turbo EA resuelve a partir del [enlace EOL](../admin/eol.md) de cada tarjeta: Fin de vida, Próximo, Con soporte o Desconocido. **(vacío)** lista las tarjetas sin nada registrado. La columna **Fin de vida** correspondiente muestra la fecha junto a un punto de estado, y se ordena y exporta como fecha.
+- **Tipo de vínculo** — Cuando hay un único tipo de ficha jerárquico seleccionado y un administrador ha definido [tipos de vínculo](../admin/metamodel.md) para él, filtra por el tipo del vínculo de cada ficha con su ficha padre — por ejemplo las filiales *comerciales* en lugar de *ventas*. **(vacío)** lista las fichas cuyo vínculo no lleva tipo, y las fichas de primer nivel, ya que para ninguna hay nada registrado. La columna **Tipo de vínculo** correspondiente muestra el valor como una etiqueta de color y es editable en el modo de edición de la cuadrícula.
 - **Etiquetas** — Filtrar por etiquetas de cualquier grupo de etiquetas
 - **Relaciones** — Filtrar por fichas relacionadas a través de tipos de relación
 - **Atributos personalizados** — Filtrar por valores en campos personalizados (búsqueda de texto, opciones de selección)
@@ -66,6 +68,8 @@ La columna **Ruta** muestra la jerarquía de la ficha (p. ej. «América del Nor
 
 La columna **Logotipo** muestra el logotipo propio de la ficha, o su icono de tipo cuando no se ha definido ninguno, de modo que un paisaje puede recorrerse por la marca del producto en lugar de por el nombre. Solo se ofrece para los tipos de ficha que permiten logotipos (de fábrica, Aplicación y Componente de TI), está desactivada de forma predeterminada y hace las filas más altas mientras está visible, para que las marcas se distingan. Si puede editar la ficha, pase el ratón sobre su celda de logotipo y haga clic para subir, sustituir, elegir un icono de marca o eliminar el logotipo sin salir de la cuadrícula — el mismo menú que en la página de la ficha. Los logotipos quedan deliberadamente fuera del rellenado hacia abajo y de la edición masiva: una marca por ficha, definida a propósito.
 
+La columna **Alias** muestra el otro nombre de la ficha — el interno con el que su organización la designa. Está desactivada de forma predeterminada, porque la mayoría de los paisajes no tienen ninguno: actívela en la pestaña **Columnas**. Se edita en la propia celda en modo de edición de la cuadrícula y se rellena hacia abajo como cualquier otra columna de texto, y viaja con la exportación e importación de Excel, de modo que una lista de alias puede cargarse de una pasada.
+
 Cada categoría tiene una casilla **Seleccionar todo** para activar o desactivar rápidamente todas las columnas de ese grupo. Un campo de búsqueda en la parte superior permite encontrar columnas específicas por nombre. La insignia en cada encabezado de sección muestra cuántas columnas de ese grupo están actualmente visibles.
 
 Cuando se selecciona un tipo de tarjeta por primera vez, **todas las columnas de atributos y relaciones se activan por defecto**. Luego puede desmarcar las columnas que no necesite. Un botón **Restablecer** en la parte inferior de la pestaña «Columnas» restaura la selección de columnas predeterminada.
@@ -83,7 +87,8 @@ El inventario utiliza una tabla de datos **AG Grid** con funciones avanzadas:
 | **Tipo** | Tipo de ficha con icono de color |
 | **Nombre** | Nombre del componente (haga clic para abrir el detalle de la ficha) |
 | **Logotipo** | El logotipo propio de la ficha, o su icono de tipo cuando no tiene ninguno. Desactivada de forma predeterminada — actívela en la pestaña Columnas; haga clic en una celda para cambiarlo |
-| **Descripción** | Descripción breve |
+| **Alias** | El otro nombre de la ficha. Desactivada de forma predeterminada — actívela en la pestaña Columnas; se tiene en cuenta en todos los cuadros de búsqueda |
+| **Descripción** | Descripción breve — una dirección web incluida es un enlace clicable |
 | **Ciclo de Vida** | Estado actual del ciclo de vida |
 | **Estado de Aprobación** | Insignia de estado de revisión |
 | **Calidad de Datos** | Porcentaje de completitud con anillo visual |
@@ -129,6 +134,8 @@ La lista desplegable **Campo** agrupa lo que se puede modificar:
 - **Atributos** — cualquier campo editable definido para el tipo de tarjeta seleccionado
 - **Relaciones** — una entrada por tipo de relación y dirección (por ejemplo *se ejecuta en → Componente de TI*)
 
+![Diálogo Edición masiva](../assets/img/es/98_inventario_edicion_masiva.png)
+
 Las etiquetas, las relaciones y el padre ofrecen un conmutador **añadir / quitar**, de modo que amplíe o reduzca los valores existentes en lugar de sustituirlos.
 
 El control de valor se adapta al tipo de campo: un campo de selección múltiple muestra sus opciones con casillas, un campo de sí/no un interruptor y un campo de fecha un selector de fecha. Si deja el valor vacío, el campo se borra en todas las tarjetas seleccionadas. Los campos calculados por una fórmula, y los campos de coste que no tiene permiso para ver, no se ofrecen.
@@ -151,6 +158,8 @@ Una tarjeta arrastra consigo a sus hijas al moverse, y las tarjetas aprobadas vu
 ## Agrupar el inventario { #group-by }
 
 Haga clic en **Agrupar por** en la barra de herramientas (junto al recuento de elementos) para organizar la cuadrícula en grupos plegables. La fase del ciclo de vida y el estado de aprobación están siempre disponibles; al filtrar la cuadrícula a un único tipo de tarjeta se añaden su subtipo y todos sus atributos de selección única.
+
+![Inventario agrupado por modelo TIME](../assets/img/es/98a_inventario_agrupacion.png)
 
 - Las tarjetas sin valor en el campo elegido se agrupan en **Sin definir**, al principio de la lista: el punto de partida natural para clasificar tarjetas pendientes.
 - Haga clic en la cabecera de un grupo para plegarlo o desplegarlo. La cabecera muestra el número de tarjetas del grupo.
@@ -210,7 +219,9 @@ Las importaciones y exportaciones del inventario usan un **libro Excel multi-hoj
 ### Estructura del libro
 
 - **Una hoja por tipo de ficha** (Application, Business Capability, IT Component, …) con sus columnas principales, sus columnas `attr_<campo>`, las columnas de ciclo de vida las columnas de relaciones `rel:<tipo_de_relación>` y las columnas de partes interesadas `stakeholder:<clave_de_rol>`.
-- **Una hoja `Relations`** para los tipos de relación que llevan atributos (coste, descripción…). Las relaciones simples permanecen en línea en la hoja de la ficha origen.
+- **Una hoja `Relations`** con los **valores** que llevan las relaciones — una fila por relación cuyo tipo tiene valores que rellenar.
+
+El reparto es simple y sin excepciones: **la hoja de fichas dice qué fichas están enlazadas; la hoja `Relations` dice qué contienen esos enlaces.** Cada tipo de relación tiene una columna `rel:` en la hoja del tipo del que parte, lleve valores o no.
 - **Una hoja `_Meta`** con la versión del formato del libro.
 
 ### Identificación sin GUIDs
@@ -223,7 +234,7 @@ Como las fichas se identifican por nombre + ruta, **dos fichas del mismo tipo no
 
 ### Celdas de relación en línea
 
-Cada columna `rel:<tipo_de_relación>` expresa las relaciones salientes como una lista **separada por punto y coma** (por ejemplo `NexaCore ERP; BillingApp`). Punto y coma en lugar de coma, porque los nombres de las fichas suelen contener comas (`Acme, Inc.`). Dentro de un nombre, `/` y `\` se escapan como `\/` y `\\` — el exportador lo hace automáticamente (p. ej. `SAP S/4HANA` → `SAP S\/4HANA`). Las celdas son **declarativas**: su contenido reemplaza el conjunto de relaciones salientes de ese tipo desde el origen. Eliminar un destino elimina la relación correspondiente; vaciar la celda elimina todas. Por compatibilidad, las celdas separadas por comas (formato antiguo) también se aceptan.
+Cada columna `rel:<tipo_de_relación>` expresa las relaciones salientes como una lista **separada por punto y coma** (por ejemplo `NexaCore ERP; BillingApp`). Punto y coma en lugar de coma, porque los nombres de las fichas suelen contener comas (`Acme, Inc.`). Dentro de un nombre, `/` y `\` se escapan como `\/` y `\\` — el exportador lo hace automáticamente (p. ej. `SAP S/4HANA` → `SAP S\/4HANA`). Las celdas son **declarativas**: su contenido reemplaza el conjunto de relaciones salientes de ese tipo desde el origen. Eliminar un destino elimina la relación correspondiente; vaciar la celda elimina todas. Por compatibilidad, las celdas separadas por comas (formato antiguo) también se aceptan. Hay una columna por tipo de relación que parte del tipo de ficha de la hoja — **todos**, incluidos los que llevan valores. Los destinos se ordenan alfabéticamente, de modo que reexportar un paisaje sin cambios da un archivo idéntico.
 
 ### Celdas de partes interesadas
 
@@ -235,11 +246,23 @@ En cada hoja de fichas, las columnas `stakeholder:<clave_de_rol>` llevan los usu
 
 ### Hoja `Relations`
 
-Para relaciones con atributos, use la hoja dedicada con las columnas `relation_type`, `source_ref`, `target_ref`, `action` (por defecto `upsert`, alternativamente `delete`), `attr_<campo>` y `description`.
+Una relación puede llevar valores propios — un *tipo de uso* en un enlace `Organization` → `Application`, un coste anual, o una descripción libre. Una celda `rel:` es una lista de nombres sin sitio para ellos, así que esos valores viven en la hoja `Relations`, una fila por relación, con las columnas `relation_type`, `source_type`, `source_ref`, `target_type`, `target_ref`, `attr_<campo>` y `description`.
+
+La hoja contiene las relaciones cuyo tipo realmente tiene valores — las demás no tienen nada que rellenar y viven por completo en las hojas de fichas. También aparecen las relaciones que apuntan *hacia* una ficha exportada; `source_ref` y `target_ref` indican el sentido. Las columnas `attr_<campo>` son las de los tipos de relación de este libro. Se ordena por ficha origen, luego tipo de relación, luego destino.
+
+**Esta hoja solo establece valores. Nunca crea ni elimina una relación** — eso es cosa de la hoja de fichas: **borrar una fila no borra nada**; editar sus valores reemplaza lo que la relación contiene; y una fila que nombra dos fichas no enlazadas se informa en la vista previa y se omite — enlácelas en la columna `rel:`, incluso en el mismo import.
+
+Los libros más antiguos llevan una columna `action`. Se ignora; una fila con `action = delete` se informa y se omite. Si la hoja de fichas y la hoja `Relations` se contradicen, **prevalece la eliminación**.
+
+La hoja lista **todas las relaciones de las fichas exportadas**, lleve o no valores su tipo actualmente — así que un tipo de relación al que acaba de dar un valor ya tiene ahí su fila. También aparecen las relaciones que apuntan *hacia* una ficha exportada; `source_ref` y `target_ref` indican el sentido. Las columnas `attr_<campo>` son las de los tipos de relación de este libro, no las de todos los definidos en la instancia.
+
+Un tipo de relación que lleva valores **no tiene columna `rel:`** — una lista de nombres no puede albergarlos; se edita en esta hoja. Si la hoja de fichas y la hoja `Relations` se contradicen, **prevalece la eliminación**, y la vista previa lo indica.
 
 ### Importar
 
 Haga clic en **Importar** en la barra de herramientas, suelte el libro y revise la vista previa antes de aplicar. Verá tanto las fichas a crear / actualizar como las relaciones a añadir / eliminar. Los errores (por ejemplo, un destino ambiguo con sus rutas candidatas) bloquean la aplicación.
+
+![Diálogo Importar fichas](../assets/img/es/98b_inventario_importacion.png)
 
 Algunas aclaraciones sobre la importación:
 

@@ -54,7 +54,7 @@ Concevez vos questions. Chaque question peut être :
 
 ### Relations
 
-Au-delà des attributs, une enquête peut également demander aux répondants de tenir à jour les **relations** d'une fiche. À l'étape **Champs**, la section **Relations** répertorie toutes les relations que le type de fiche cible peut avoir, dans les deux sens (par exemple, pour une Application : *prend en charge → Composant informatique* et *utilisée par ← Organisation*). Pour chacune que vous sélectionnez, choisissez une action :
+Au-delà des attributs, une enquête peut également demander aux répondants de tenir à jour les **relations** d'une fiche. À l'étape **Champs**, la section **Relations** répertorie toutes les relations que le type de fiche cible peut avoir, dans les deux sens (par exemple, pour une Application : *prend en charge → Composant informatique* et *utilisée par ← Organisation*). Un type de fiche qui prend en charge la lignée apparaît ici comme toute autre relation, dans les deux sens et sous ses propres verbes : pour une Application, *succède à* collecte les fiches qu'elle a remplacées et *a pour successeur* celles qui la remplacent. Les côtés qu'un administrateur a masqués sur le type de fiche ne sont pas proposés. Pour chacune que vous sélectionnez, choisissez une action :
 
 - **Maintenir** — Le répondant voit les fiches actuellement liées et peut ajouter ou supprimer des liens à l'aide d'un sélecteur de recherche.
 - **Confirmer** — Le répondant se contente de confirmer que les liens actuels sont corrects, ou désactive le bouton pour proposer des modifications.
@@ -77,6 +77,8 @@ Une fois votre enquête en statut **Active** :
 !!! note "Une fiche a besoin de quelqu'un à interroger"
 
     Une fiche n'est incluse dans l'enquête que si au moins une personne y détient l'un des **rôles de partie prenante ciblés**. Les fiches qui correspondent à vos filtres sans une telle partie prenante sont ignorées ; l'étape **Aperçu et envoi** en indique le nombre, afin que vous puissiez affecter des responsables.
+
+Une enquête peut aussi être créée et envoyée par une extension installée — par exemple une règle planifiée qui demande aux responsables de chaque fiche remplissant une condition de la compléter. Une telle enquête n'affiche aucun auteur, ses champs sont ceux que définit le type de fiche, et elle se comporte comme toute autre : c'est ici que vous la clôturez et appliquez ses réponses. Annuler l'exécution de l'extension dans **Admin → Journal d'audit** clôt l'enquête et retire les demandes auxquelles personne n'avait encore répondu.
 
 ## Consultation des résultats
 

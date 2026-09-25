@@ -72,6 +72,48 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 from app.api.deps import get_current_user, require_permission  # noqa: F401
 from app.database import get_db  # noqa: F401
 
+
+async def check_card_permission(
+    db: AsyncSession,
+    user: Any,
+    app_permission: str,
+    card_id: Any,
+    card_permission: str,
+) -> bool:
+    """May ``user`` do ``card_permission`` to this one card? (SDK 1.12)
+
+    True when the app-level permission grants it landscape-wide, OR when a
+    stakeholder role the user holds ON THAT CARD carries the card-level key.
+    The canonical pair for "may they see it" is
+    ``("inventory.view", "card.view")``.
+
+    A thin wrapper rather than a re-export of ``PermissionService``: that class
+    also carries the role cache, the impersonation resolution and the
+    stakeholder internals, none of which is a supported surface.
+
+    An unknown card id answers False, not 404 — check existence first if the
+    caller needs to tell the two apart.
+    """
+    from app.services.permission_service import PermissionService
+
+    return await PermissionService.check_permission(
+        db, user, app_permission, card_id, card_permission
+    )
+
+
+async def require_card_permission(
+    db: AsyncSession,
+    user: Any,
+    app_permission: str,
+    card_id: Any,
+    card_permission: str,
+) -> None:
+    """:func:`check_card_permission`, raising 403 instead of returning False."""
+    from app.services.permission_service import PermissionService
+
+    await PermissionService.require_permission(db, user, app_permission, card_id, card_permission)
+
+
 # --- SDK 1.2 — core-data bridge, events, secrets ----------------------------
 # 1.2 added three additive surfaces (existing 1.0/1.1 extensions load and run
 # unchanged):
@@ -171,6 +213,100 @@ from app.database import get_db  # noqa: F401
 #   System todos keep refusing it: their mirror carve-out remains
 #   ``external_ref`` / ``external_url`` only.
 
+# SDK 1.8 adds three additive surfaces (existing 1.x extensions load and run
+# unchanged):
+#
+# - ``ctx.data.get_cards(ids)`` / ``get_relations_for(card_ids)`` /
+#   ``get_stakeholders_for(card_ids)`` — batch lookups on the inventory
+#   bridge: one query for up to 500 ids (the same cap as a ``search_cards``
+#   page and ``GET /relations?card_ids=``), with the same hidden-type and
+#   archived exclusions as the single-id reads. Unlike ``get_card``, a
+#   malformed id or an over-long list is REFUSED with ``ExtensionDataError``
+#   — on a batch call a silently dropped id is indistinguishable from "not
+#   found". ``get_stakeholders_for`` returns ``(card_id, user_id, role)``
+#   only: no name, no email — an extension that needs names declares
+#   ``core.users.read`` and goes through ``ctx.users``.
+# - ``ctx.decisions`` — a typed bridge to core decision records (ADRs),
+#   gated by ``core.adr.read`` / ``core.adr.write`` (write implies read).
+#   ``create_draft`` files a DRAFT only: an extension can never sign, send
+#   for review or change status — the same posture as the todos bridge's
+#   system-todo carve-out. ``attributes`` keys must be namespaced
+#   ``ext.{own key}.*`` (stricter than REST's ``ext.*``), linked cards must
+#   exist and be active, ``created_by`` is NULL and provenance is the
+#   ``ext:{key}`` mutation batch with origin ``ext``.
+# - ``ctx.data.batch(label)`` now yields an ``ExtBatch(id, label)`` handle so
+#   an extension can record which audit batch its writes landed in.
+#   ``async with ctx.data.batch(label):`` (ignoring the value) is unchanged.
+
+# SDK 1.10 adds one additive read (existing 1.x extensions load and run
+# unchanged):
+#
+# - ``ctx.data.get_eol_status(card_ids)`` — the resolved end-of-life status
+#   of up to 500 cards in one call, as ``{card_id: ExtEolStatus}``: the same
+#   ``eol`` / ``approaching`` / ``supported`` / ``unknown`` classification,
+#   dates and endoflife.date product/cycle the EOL report and the
+#   inventory's EOL column show, so an extension acting on a component's
+#   remaining support never re-implements (or diverges from) core's
+#   resolver. Cards with nothing recorded are absent rather than present
+#   with a null status. It is outbound HTTP behind core's 30-minute
+#   per-product cache; the database session is closed BEFORE the fetch.
+#   Gated by ``core.cards.read``.
+
+# SDK 1.12 adds the per-card half of the permission question (existing 1.x
+# extensions load and run unchanged):
+#
+# - ``check_card_permission(db, user, app_permission, card_id, card_permission)``
+#   and ``require_card_permission(...)`` — "may THIS caller do this to THIS
+#   card?", answered by the same ``PermissionService`` core answers it with, so
+#   an extension route that returns per-card data gates it exactly as a core
+#   route does. The canonical pair is ``("inventory.view", "card.view")``,
+#   which is the literal core repeats at every card-scoped read of its own.
+#
+#   ``require_permission`` cannot express this: it is a dependency factory, and
+#   the card id is per-request path or body data that does not exist when the
+#   dependency is declared. There is no ambient current-user seam either — the
+#   contextvars carry origin, batch, endpoint and impersonation, never
+#   identity — so these take ``db`` and ``user`` explicitly, the same shape
+#   ``PermissionService`` uses.
+#
+#   UNGATED, deliberately, like the route dependencies above and unlike every
+#   bridge on ``ExtensionContext``. Grants mark *data* an extension would not
+#   otherwise hold; this returns one boolean about the caller, adds no content,
+#   and can only ever subtract — and core already lets any authenticated user
+#   ask strictly more of any card through ``GET /cards/{id}/my-permissions``.
+#   An unknown card id answers False rather than 404, so a caller that needs a
+#   404 checks existence first.
+
+#
+# 1.13 — ``ctx.batch(label)``: the audited batch scope, reachable without the
+#   inventory grant. ``ctx.data.batch`` groups an extension's writes into ONE
+#   Audit Log row with one Rollback, and every write bridge joins the open
+#   scope — but ``ctx.data`` exists only with ``core.cards.*``, so a connector
+#   whose writes all go through the todos bridge had no way to open one and
+#   left one row per todo per poll. ``ctx.batch`` is the same scope, gated on
+#   ANY write grant (``open_context_batch``). Also from 1.13: a scope that
+#   recorded no write leaves no row — "sync ran, nothing changed" is not an
+#   audit event, and an empty batch offered a Rollback that reversed nothing.
+
+# 1.14: ``ctx.surveys`` — send a data-maintenance survey to the stakeholders of
+#   a set of cards (grants ``core.surveys.read`` / ``core.surveys.write``). Send
+#   only: an extension creates and activates the survey in one audited step
+#   (the same writer as POST /surveys/{id}/send), while closing it and applying
+#   the answers stay with people. The ``survey.sent`` events it fans out to the
+#   matched cards are what a rollback of the batch reverses — by closing the
+#   survey and dropping the responses nobody had answered yet.
+
+# 1.15: hierarchy link labels (#1100). ``ExtCard.parent_label`` carries the
+#   label on a card's link to its parent, and ``update_card`` accepts it — the
+#   vocabulary is the card type's ``hierarchy_labels``, and the shared
+#   ``card_write_service`` validator applies to the bridge exactly as it does to
+#   a human PATCH, so an unknown key or a label on a rootless card is refused
+#   rather than stored. Clearing ``parent_id`` clears the label with it.
+
+# Fork note: the constant is pinned at 1.5 (frozen — several extension projects
+# build against this fork concurrently, and an uncoordinated bump corrupts the
+# shared contract). The 1.6-1.15 surface described above is present in code;
+# upstream's own value for it is "1.15".
 SDK_VERSION = "1.5"
 
 
@@ -760,6 +896,9 @@ class ExtCard:
     name: str
     description: str | None
     parent_id: str | None
+    #: Label on this card's link to its parent, from the card type's
+    #: ``hierarchy_labels`` vocabulary — ``None`` when unset or unrooted.
+    parent_label: str | None
     status: str
     approval_status: str
     reference: str | None
@@ -793,6 +932,260 @@ class ExtRelation:
     attributes: dict[str, Any]
     description: str | None
     created_at: str | None
+
+
+@dataclass(frozen=True)
+class ExtBatch:
+    """Handle yielded by ``DataBridge.batch`` (SDK 1.8): the id of the
+    audited ``mutation_batches`` row the scope writes into, and the label
+    the caller gave it."""
+
+    id: str
+    label: str
+
+
+@dataclass(frozen=True)
+class ExtStakeholder:
+    """One stakeholder assignment on a card (SDK 1.8). Deliberately carries
+    no name or email: resolve the user through ``ctx.users`` (grant
+    ``core.users.read``) — the inventory grant alone never exposes the
+    directory."""
+
+    card_id: str
+    user_id: str
+    role: str
+
+
+@dataclass(frozen=True)
+class ExtEolStatus:
+    """A card's resolved end-of-life status (SDK 1.10), exactly what the
+    EOL report and the inventory's EOL column show. ``source`` is ``api``
+    when the card links an endoflife.date product + cycle and ``manual``
+    when only a hand-kept ``lifecycle.endOfLife`` date exists; ``status``
+    is ``eol`` / ``approaching`` / ``supported`` / ``unknown``. Dates are
+    ISO strings or ``None``."""
+
+    card_id: str
+    status: str
+    source: str
+    eol_product: str | None
+    eol_cycle: str | None
+    eol_date: str | None
+    support_date: str | None
+    latest: str | None
+
+
+@dataclass(frozen=True)
+class ExtDecision:
+    """Read model returned by the decisions bridge (SDK 1.8). Wire-shaped:
+    string ids, ISO timestamps, a plain ``attributes`` dict copy."""
+
+    id: str
+    reference_number: str
+    title: str
+    status: str
+    revision_number: int
+    linked_card_ids: tuple[str, ...]
+    attributes: dict[str, Any]
+    created_at: str | None
+
+
+class DecisionsBridge(Protocol):
+    """Typed access to core decision records (SDK 1.8).
+
+    ``get`` needs ``core.adr.read`` (or ``core.adr.write``, which implies
+    it); ``create_draft`` needs ``core.adr.write``. Both are re-evaluated per
+    call. Drafts only — status transitions, review requests and signing stay
+    human-only through the app; ``attributes`` keys must be namespaced under
+    the calling extension's own ``ext.{key}.`` prefix; every filing is an
+    ``ext:{key}`` mutation batch in the audit log.
+    """
+
+    async def get(self, decision_id: str) -> ExtDecision | None: ...
+
+    async def create_draft(
+        self,
+        *,
+        title: str,
+        context: str | None = None,
+        decision: str | None = None,
+        consequences: str | None = None,
+        alternatives_considered: str | None = None,
+        linked_card_ids: Sequence[str] = (),
+        attributes: dict[str, Any] | None = None,
+        related_decisions: Sequence[Any] | None = None,
+    ) -> ExtDecision: ...
+
+
+@dataclass(frozen=True)
+class ExtRisk:
+    """Read model for a risk-register entry (SDK 1.9). Wire-shaped like
+    :class:`ExtCard`. ``source_ref`` is the extension's own reference as it
+    passed it — the ``{key}:`` prefix core stores is stripped on the way
+    out, so a caller can compare against what it wrote."""
+
+    id: str
+    reference: str
+    title: str
+    description: str
+    category: str
+    status: str
+    source_type: str
+    source_ref: str | None
+    initial_probability: str
+    initial_impact: str
+    initial_level: str
+    residual_level: str | None
+    owner_id: str | None
+    target_resolution_date: str | None
+    linked_card_ids: tuple[str, ...]
+    created_at: str | None
+
+
+class RisksBridge(Protocol):
+    """Typed access to the risk register (SDK 1.9), grant-gated per call:
+    ``core.risks.read`` for reads, ``core.risks.write`` for ``create`` /
+    ``update`` (write implies read). An extension can raise a risk and keep
+    its owner and target date current; it can never move a risk through its
+    status workflow, accept it or close it — those stay with people, the
+    same posture as the decisions bridge's drafts-only rule. Every risk it
+    files carries ``source_type="extension"`` and a ``source_ref`` prefixed
+    with the extension key, which is what ``find_by_source_ref`` looks up
+    so a rule that fires again finds the risk it already raised."""
+
+    async def get(self, risk_id: str) -> ExtRisk | None: ...
+
+    async def list_for_card(self, card_id: str) -> list[ExtRisk]: ...
+
+    async def find_by_source_ref(self, source_ref: str) -> ExtRisk | None: ...
+
+    async def create(
+        self,
+        *,
+        title: str,
+        description: str = "",
+        category: str = "operational",
+        probability: str = "medium",
+        impact: str = "medium",
+        owner_id: str | None = None,
+        target_resolution_date: str | None = None,
+        card_ids: Sequence[str] = (),
+        source_ref: str | None = None,
+    ) -> ExtRisk: ...
+
+    async def update(
+        self,
+        risk_id: str,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        owner_id: str | None = None,
+        clear_owner: bool = False,
+        target_resolution_date: str | None = None,
+        clear_target_resolution_date: bool = False,
+        add_card_ids: Sequence[str] = (),
+    ) -> ExtRisk: ...
+
+
+@dataclass(frozen=True)
+class ExtSurvey:
+    """Read model for a survey (SDK 1.14). ``card_count`` is the number of
+    cards the survey named, ``targeted_card_count`` how many of them had
+    someone to ask, ``user_count`` the distinct people asked,
+    ``response_count`` the (card, person) requests it created and
+    ``completed_count`` how many were answered."""
+
+    id: str
+    name: str
+    status: str
+    target_type: str
+    card_count: int
+    targeted_card_count: int
+    user_count: int
+    response_count: int
+    completed_count: int
+    sent_at: str | None
+    closed_at: str | None
+
+
+@dataclass(frozen=True)
+class ExtSurveyPreview:
+    """Who a survey would reach (SDK 1.14): ``cards_matched`` is every card
+    passed in, ``cards_with_targets`` those holding at least one person in
+    the chosen roles, ``users`` the distinct people, ``requests`` the (card,
+    person) pairs a send would create. ``targets`` lists the per-card user
+    ids so a caller can show who is asked about what."""
+
+    cards_matched: int
+    cards_with_targets: int
+    users: int
+    requests: int
+    targets: tuple[dict[str, Any], ...] = ()
+
+
+class SurveysBridge(Protocol):
+    """Send data-maintenance surveys (SDK 1.14), grant-gated per call:
+    ``core.surveys.read`` for ``get`` / ``preview``, ``core.surveys.write``
+    for ``send`` (write implies read). ``send`` creates the survey AND
+    activates it in one audited step: one response per (card, stakeholder in
+    ``roles``), one notification per person, the cards' History tabs record
+    it, and a rollback of the batch closes the survey. The extension names
+    the cards explicitly (at most 500, all active and of ``target_type``) and
+    the fields by key — labels, sections and options come from the card
+    type's metamodel, exactly as the survey builder fills them in. An
+    extension can never close a survey or apply its answers: those stay in
+    Admin → Surveys, with people."""
+
+    async def get(self, survey_id: str) -> ExtSurvey | None: ...
+
+    async def preview(
+        self, *, target_type: str, card_ids: Sequence[str], roles: Sequence[str]
+    ) -> ExtSurveyPreview: ...
+
+    async def send(
+        self,
+        *,
+        name: str,
+        target_type: str,
+        card_ids: Sequence[str],
+        roles: Sequence[str],
+        fields: Sequence[dict[str, Any]],
+        message: str = "",
+        description: str = "",
+    ) -> ExtSurvey: ...
+
+
+class NotifyBridge(Protocol):
+    """Send an in-app notification to named people (SDK 1.9), grant
+    ``core.notifications.send``. The message lands as the generic
+    ``extension_notice`` type, so each recipient's own preference matrix
+    decides where it reaches them — bell, email, or an extension channel —
+    and can switch it off; the extension never chooses a channel. ``link``
+    must be an in-app relative path (the same rule as a todo's link). At most
+    50 recipients per call; inactive users are skipped silently. Returns the
+    number of recipients the notification was created for.
+
+    Since SDK 1.11: ``type`` names one of the notification types this
+    extension declares under ``notifications.types`` in its manifest (each a
+    row of its own in the recipient's preferences; any other value is
+    refused), and ``detail=True`` asks the bell to open the notification's
+    details in the app — full text plus the extension's ``notification.detail``
+    slot — instead of following ``link``, which is then offered as a button
+    only to people who may open it. ``data`` is bounded to 16 KiB and the keys
+    ``ext`` / ``open`` are core's."""
+
+    async def send(
+        self,
+        user_ids: Sequence[str],
+        *,
+        title: str,
+        message: str = "",
+        link: str | None = None,
+        card_id: str | None = None,
+        data: dict[str, Any] | None = None,
+        type: str | None = None,  # noqa: A002
+        detail: bool = False,
+    ) -> int: ...
 
 
 class DataBridge(Protocol):
@@ -835,15 +1228,40 @@ class DataBridge(Protocol):
 
     async def get_relations(self, card_id: str) -> list[ExtRelation]: ...
 
+    async def get_cards(
+        self, ids: Sequence[str], *, include_archived: bool = False
+    ) -> list[ExtCard]: ...
+
+    async def get_relations_for(self, card_ids: Sequence[str]) -> list[ExtRelation]: ...
+
+    async def get_stakeholders_for(self, card_ids: Sequence[str]) -> list[ExtStakeholder]: ...
+
+    async def get_eol_status(self, card_ids: Sequence[str]) -> dict[str, ExtEolStatus]:
+        """Resolved end-of-life status per card (SDK 1.10), keyed by card id.
+        A card with neither an endoflife.date link nor a manual End of Life
+        date is ABSENT from the map — "no entry" cannot be misread as a
+        status. Same id cap and exclusions as ``get_cards``."""
+        ...
+
+    async def get_tag_groups(self) -> list[dict]:
+        """Every tag group with its tags (SDK 1.9) — ``{id, name, mode,
+        mandatory, restrict_to_types, tags: [{id, name, color}]}``."""
+        ...
+
+    async def get_card_tags(self, card_id: str) -> list[str]:
+        """Tag ids on a card (SDK 1.9); ``[]`` for an unknown card."""
+        ...
+
     async def get_card_types(self) -> list[dict]: ...
 
     async def get_relation_types(self) -> list[dict]: ...
 
     # -- writes -------------------------------------------------------------
 
-    def batch(self, label: str) -> AbstractAsyncContextManager[None]:
+    def batch(self, label: str) -> AbstractAsyncContextManager[ExtBatch]:
         """Group several writes into ONE audited mutation batch. Without it
-        each write opens its own single-op batch."""
+        each write opens its own single-op batch. Yields the batch handle
+        (SDK 1.8) — ``async with ctx.data.batch(label) as b: ... b.id``."""
         ...
 
     async def create_card(
@@ -881,6 +1299,33 @@ class DataBridge(Protocol):
         dry_run: bool = False,
     ) -> ExtRelation: ...
 
+    async def set_card_tags(
+        self,
+        card_id: str,
+        tag_ids: Sequence[str],
+        *,
+        mode: str = "replace",
+        dry_run: bool = False,
+    ) -> list[str]:
+        """Make the card's tags equal to (``replace``), include (``add``) or
+        exclude (``remove``) ``tag_ids`` (SDK 1.9, grant ``core.cards.write``).
+        Single-choice groups and type-restricted groups are enforced; an
+        unchanged set writes nothing. Returns the resulting tag ids."""
+        ...
+
+    async def assign_stakeholder(
+        self, card_id: str, user_id: str, role: str, *, dry_run: bool = False
+    ) -> ExtStakeholder:
+        """Give ``user_id`` the stakeholder ``role`` on a card (SDK 1.9,
+        grant ``core.stakeholders.write`` — its own grant because a role
+        confers permissions on the card). The role must be one the card's
+        type defines. Idempotent: an existing assignment is returned as-is."""
+        ...
+
+    async def remove_stakeholder(self, card_id: str, user_id: str, role: str) -> bool:
+        """Remove one assignment (SDK 1.9). ``False`` when there was none."""
+        ...
+
 
 @dataclass
 class ExtensionContext:
@@ -896,7 +1341,19 @@ class ExtensionContext:
     database transaction for N keys (``set_settings`` refuses ``secret.``
     names; use ``set_secret``). SDK 1.5 adds ``data`` — the inventory
     bridge to cards, relations, and the metamodel (grants
-    ``core.cards.read`` / ``core.cards.write``).
+    ``core.cards.read`` / ``core.cards.write``). SDK 1.8 adds ``decisions``
+    — the decision-record bridge (grants ``core.adr.read`` /
+    ``core.adr.write``; drafts only). SDK 1.9 adds ``risks`` — the
+    risk-register bridge (grants ``core.risks.read`` / ``core.risks.write``;
+    no status transitions) — and ``notify`` — in-app notifications to named
+    people (grant ``core.notifications.send``); the data bridge gains tag
+    and stakeholder writes. SDK 1.13 adds ``batch`` — ``async with
+    ctx.batch("nightly sync"):`` groups every bridge write made inside into
+    one audited mutation batch (one Audit Log row, one Rollback), open to
+    any extension holding a write grant; a scope that wrote nothing leaves
+    no row. SDK 1.14 adds ``surveys`` — send a data-maintenance survey to
+    the stakeholders of a set of cards (grants ``core.surveys.read`` /
+    ``core.surveys.write``; send only).
     """
 
     key: str
@@ -912,6 +1369,11 @@ class ExtensionContext:
     get_settings: Callable[[Sequence[str]], Awaitable[dict[str, Any]]] | None = None
     set_settings: Callable[[dict[str, Any]], Awaitable[None]] | None = None
     data: DataBridge | None = None
+    decisions: DecisionsBridge | None = None
+    risks: RisksBridge | None = None
+    notify: NotifyBridge | None = None
+    batch: Callable[[str], AbstractAsyncContextManager[ExtBatch]] | None = None
+    surveys: SurveysBridge | None = None
 
     def __post_init__(self) -> None:
         if not self.settings_namespace:
@@ -927,7 +1389,8 @@ class EventSubscription:
     ``core.events.*`` grant in the extension's manifest or the subscription
     is skipped at registration with a warning. ``handler`` receives the
     extension's :class:`ExtensionContext` and the raw event message
-    (``{"event", "data", "card_id", "batch_id", "timestamp"}``); it runs
+    (``{"event", "data", "card_id", "user_id", "batch_id", "timestamp"}`` —
+    ``user_id`` since SDK 1.9, ``None`` when no person caused it); it runs
     with a 30s timeout and a crash is logged, never fatal. ``include_self``
     controls whether events caused by this extension's own bridge writes
     (``data["ext"] == key``) are delivered — the default ``False`` breaks

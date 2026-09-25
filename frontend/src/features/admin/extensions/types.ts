@@ -71,6 +71,26 @@ export interface InstallReport {
     failed: number;
   };
   downgrade?: { from: string; to: string };
+  /**
+   * Release notes for the bundle being previewed, read out of its signed
+   * CHANGELOG.md. Stamped for every bundle — for a code-only extension the
+   * rest of this preview is empty, so it is the only thing the confirm step
+   * can show. `from_version` is null on a first install.
+   */
+  changelog?: ExtensionNotes;
+}
+
+/** Resolved release notes for one extension version. */
+export interface ExtensionNotes {
+  key?: string;
+  version: string;
+  from_version?: string | null;
+  /** Keep-a-Changelog markdown, or "" when no source had anything. */
+  notes: string;
+  /** Which source answered: "store", "bundle", or "none". */
+  source: string;
+  /** The store listing's page with the complete changelog, when the store answered. */
+  changelog_url?: string | null;
 }
 
 export interface ExtensionInstall {
@@ -94,6 +114,9 @@ export interface StoreItem {
   // Optional no-card trial checkout link; opened through the same
   // claim-token flow as payment_link.
   trial_link?: string;
+  // A SECOND billing plan: the same listing sold monthly beside the
+  // yearly payment_link. Present only when the catalogue offers both.
+  monthly_payment_link?: string;
   demo_url?: string;
   homepage?: string;
   license?: string;
@@ -105,6 +128,11 @@ export interface StoreItem {
   // Category slugs; the first is the commercial-model tag ("free"/"commercial")
   // the catalogue derives at publish time, the rest are topical.
   tags?: string[];
+  // Store section slug. The vocabulary, its order and the labels are
+  // STORE_CATEGORIES / storeCategories.ts on this side; a slug the catalogue
+  // sends that this build does not know files under the trailing "Other"
+  // section, so a newer catalogue never hides an item from an older core.
+  category?: string;
   version: string;
   installed_version?: string | null;
   update_available: boolean;
@@ -118,6 +146,11 @@ export interface StoreItem {
   entitlement_grace_until?: string | null;
   entitlement_auto_renew?: boolean | null;
   free?: boolean;
+  // A service listing — sold and licensed like an extension (its key rides in
+  // the licence, so the entitlement fields above apply) but with nothing to
+  // download or install. The tile and the drawer offer Buy only, never
+  // Install, and there is no version to show.
+  service?: boolean;
 }
 
 export interface StoreCatalog {
@@ -162,6 +195,24 @@ export interface StoreCheckRun {
 
 // The commercial-model tags always sort ahead of topical ones in the filter bar.
 export const MODEL_TAGS = ["free", "commercial"];
+
+// The store's sections, in display order. Labels are the i18n keys
+// `extensions.store.category.<slug>`; grouping lives in storeCategories.ts.
+// Services lead: an offering with nothing to install is sold directly by the
+// people who make the platform, so it is the first thing the catalogue shows
+// rather than a footnote after four sections of extensions. This array's
+// order is the only thing that decides that — the storefront website mirrors
+// it in its own list.
+export const STORE_CATEGORIES = [
+  "services",
+  "strategy",
+  "governance",
+  "integrations",
+  "regulations",
+] as const;
+export type StoreCategory = (typeof STORE_CATEGORIES)[number];
+// Where an item with no recognised category lands — always the last section.
+export const OTHER_CATEGORY = "other";
 
 export const ENTITLEMENT_COLOR: Record<
   EntitlementInfo["state"],

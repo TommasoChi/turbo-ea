@@ -39,6 +39,8 @@ import { api, auth, setToken } from "@/api/client";
 import { useAuthContext } from "@/hooks/AuthContext";
 import ImpersonateRoleDialog from "@/features/admin/ImpersonateRoleDialog";
 import { useEventStream } from "@/hooks/useEventStream";
+import { useMetamodel } from "@/hooks/useMetamodel";
+import { canCreateAnyCardType } from "@/components/RequirePermission";
 import { useBpmEnabled } from "@/hooks/useBpmEnabled";
 import { useGrcEnabled } from "@/hooks/useGrcEnabled";
 import { useSponsorButtonEnabled } from "@/hooks/useSponsorButtonEnabled";
@@ -156,6 +158,16 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     [user.permissions]
   );
 
+  // "Create card" is offered when the user can create at least ONE card type.
+  // A per-card-type deny (discussion #1068) can take `inventory.create` away
+  // for every type, and a per-type allow can grant it to a role that lacks it
+  // globally — so the button follows the types, not the bare permission.
+  const { types: metamodelTypes } = useMetamodel();
+  const canCreateAnyType = useMemo(
+    () => canCreateAnyCardType(user, metamodelTypes),
+    [metamodelTypes, user]
+  );
+
   // Resolve nav item labels via i18n and filter based on BPM/PPM/TurboLens/permissions
   const navItems = useMemo(() => {
     let items = NAV_ITEM_DEFS as NavItemDef[];
@@ -229,6 +241,10 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     // reachable whatever a core module toggle says.
     const groupedFallbacks: NavItemDef[] = [];
     for (const group of EXTENSION_NAV_GROUPS) {
+      // The admin group has no top-bar host: its routes render in the Admin
+      // section of the user menu and the drawer (`adminItems` below), and
+      // deliberately never fall back to the bar.
+      if (group === "admin") continue;
       const groupRoutes = getExtensionRoutesForGroup(group).map(({ route }) => ({
         labelKey: route.label,
         icon: route.icon,
@@ -332,12 +348,28 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       .filter((item) => item.path || item.children);
   }, [bpmEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, user.permissions, t]);
 
-  // Resolve admin item labels via i18n and filter based on permissions
+  // Resolve admin item labels via i18n and filter based on permissions.
+  // Extension routes that requested the "admin" nav group follow the core
+  // entries, gated by the permission the extension declared on the route
+  // (an `/ext/*` path is ungated in ROUTE_PERMISSIONS, so that is the only
+  // gate); a user without it simply does not see the entry. Labels are plain
+  // strings from the bundle, so t() falls through to them.
   const adminItems = useMemo(() => {
-    return ADMIN_ITEM_DEFS.filter((item) =>
+    const core = ADMIN_ITEM_DEFS.filter((item) =>
       canAccessPath(user.permissions, item.path ?? "/"),
     ).map((def) => ({ ...def, label: t(def.labelKey) }));
-  }, [user.permissions, t]);
+    const contributed = uiExtensions
+      .flatMap(({ plugin }) => (plugin.routes ?? []).filter((r) => r.navGroup === "admin"))
+      .filter((route) => !route.permission || hasPermission(user.permissions, route.permission))
+      .map((route) => ({
+        labelKey: route.label,
+        icon: route.icon,
+        path: route.path,
+        permission: route.permission,
+        label: t(route.label),
+      }));
+    return [...core, ...contributed];
+  }, [user.permissions, t, uiExtensions]);
 
   // Should the admin section be shown at all?
   const showAdmin = adminItems.length > 0;
@@ -693,7 +725,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
           </>
         )}
 
-        {can("inventory.create") && (
+        {canCreateAnyType && (
           <>
             <Divider sx={{ my: 1, borderColor: nav.divider }} />
 
@@ -896,7 +928,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
           )}
 
           {/* Create button — icon-only on mobile */}
-          {can("inventory.create") && (
+          {canCreateAnyType && (
             isMobile ? (
               <Tooltip title={t("create")}>
                 <IconButton
@@ -1160,7 +1192,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       {/* Create card dialog — global so the top-nav Create button works from
           any route without first navigating to /inventory. CreateCardDialog
           handles routing to /cards/{newId} on success. */}
-      {can("inventory.create") && (
+      {canCreateAnyType && (
         <CreateCardDialog
           open={createOpen}
           onClose={() => setCreateOpen(false)}

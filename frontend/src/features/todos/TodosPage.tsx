@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import LinkifiedText from "@/components/LinkifiedText";
 import Card from "@mui/material/Card";
 import CardActionArea from "@mui/material/CardActionArea";
 import Link from "@mui/material/Link";
@@ -22,6 +23,7 @@ import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
+import { usePageSection } from "@/hooks/usePageTitle";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { formatRecurrence } from "@/lib/recurrence/recurrenceLabel";
@@ -356,7 +358,7 @@ function TodosPanel() {
                 else if (todo.card_id) navigate(`/cards/${todo.card_id}`);
               }}
             >
-              {todo.description}
+              <LinkifiedText text={todo.description} />
             </Typography>
             {metaItems.length > 0 && (
               <Typography
@@ -640,7 +642,7 @@ function SurveysPanel() {
             {s.survey_message && (
               <Card variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: "action.hover" }}>
                 <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                  {s.survey_message}
+                  <LinkifiedText text={s.survey_message} />
                 </Typography>
               </Card>
             )}
@@ -672,6 +674,7 @@ export default function TodosPage() {
   const { t } = useTranslation("common");
   const [searchParams, setSearchParams] = useSearchParams();
   const section = searchParams.get("tab") === "surveys" ? 1 : 0;
+  usePageSection(t(section === 1 ? "todos.tabs.surveys" : "todos.tabs.todos"));
 
   const [badgeCounts, setBadgeCounts] = useState({ open_todos: 0, pending_surveys: 0 });
 

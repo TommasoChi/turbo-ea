@@ -29,6 +29,12 @@ Téléchargez un logo personnalisé qui apparaît dans la barre de navigation su
 
 Choisissez les couleurs d'arrière-plan et de texte de la barre de navigation supérieure. Le style choisi s'applique à **tous les utilisateurs** de l'instance, sur ordinateur comme sur mobile (y compris le menu latéral mobile). Sélectionnez l'un des sept préréglages — Bleu marine (par défaut), Clair, Anthracite, Ardoise, Bleu, Vert forêt ou Prune — ou choisissez **Personnalisé** pour définir librement les couleurs d'arrière-plan et de texte avec les sélecteurs de couleurs. Un aperçu en direct montre l'apparence de la barre de navigation avant l'enregistrement, et un avertissement apparaît lorsque le contraste entre le texte et l'arrière-plan est trop faible (inférieur à WCAG AA). Cliquez sur **Réinitialiser par défaut** pour revenir au style par défaut.
 
+### Titre de l'application
+
+Définissez le nom sous lequel cette instance est connue. Il remplace « Turbo EA » dans l'onglet du navigateur, sur la page de connexion et dans les e-mails envoyés par l'instance.
+
+L'onglet du navigateur affiche la page en cours devant ce nom — `Inventaire | Turbo EA` dans l'inventaire, `SAP S/4HANA | Turbo EA` sur une fiche, `GRC · Risque | Turbo EA` sur une page ouverte sur un onglet particulier — afin qu'une série d'onglets ouverts reste lisible. La page d'accueil et la page de connexion affichent le titre seul.
+
 ### Favicon
 
 Téléchargez une icône de navigateur personnalisée (favicon). Le changement prend effet au prochain chargement de page. Cliquez sur **Réinitialiser** pour revenir à l'icône par défaut.
@@ -59,7 +65,7 @@ Au moins une langue doit rester activée en permanence.
 
 ### Début de l'exercice fiscal
 
-Sélectionnez le mois de début de l'exercice fiscal de votre organisation (janvier à décembre). Ce paramètre affecte le regroupement des **lignes budgétaires** dans le module PPM par exercice fiscal. Par exemple, si l'exercice fiscal commence en avril, une ligne budgétaire de juin 2026 appartient à l'EF 2026–2027.
+Sélectionnez le mois de début de l'exercice fiscal de votre organisation (janvier à décembre). Ce paramètre affecte le regroupement des **lignes budgétaires** dans le module PPM par exercice fiscal. Par exemple, si l'exercice fiscal commence en avril, une ligne budgétaire de juin 2026 appartient à l'EF 2026–2027. Il détermine aussi l'exercice présenté par le [Rapport Coûts](../guide/reports.md).
 
 La valeur par défaut est **janvier** (année civile = exercice fiscal).
 
@@ -84,6 +90,8 @@ Turbo EA envoie des e-mails d'invitation, des notifications d'enquête, des réi
     Microsoft 365 désactive l'authentification SMTP de base (indisponible pour les nouveaux locataires, supprimée pour les existants au cours de 2026–2027) et Google Workspace l'a désactivée en mars 2025. Pour ces plateformes, utilisez l'une des méthodes OAuth ci-dessous au lieu d'un mot de passe de boîte aux lettres.
 
 ### Méthodes d'envoi
+
+![Envoi d'e-mails avec la liste des méthodes d'envoi](../assets/img/fr/95a_admin_parametres_email.png)
 
 | Méthode | Quand l'utiliser |
 |---------|------------------|
@@ -132,6 +140,8 @@ Après avoir configuré une méthode, cliquez sur **Envoyer un e-mail de test** 
     L'e-mail est facultatif. Si aucune méthode n'est configurée, les fonctionnalités qui envoient des e-mails ignorent simplement l'envoi.
 
 ## Module BPM
+
+![Activation des modules dans Paramètres → Général](../assets/img/fr/95_admin_parametres_modules.png)
 
 Activez ou désactivez le module **Gestion des processus métier**. Lorsqu'il est désactivé :
 

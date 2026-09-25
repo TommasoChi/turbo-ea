@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   buildCardCellData,
   applyCardTypeIcons,
@@ -41,7 +41,13 @@ import {
   type DiagramCardInput,
   type DiagramRelInput,
   type DiagramLayerInput,
+  type DiagramGroupInput,
+  type DiagramConnectorInput,
   fanWaypoints,
+  resolveMenuCardCell,
+  fitMenuToBand,
+  visibleBand,
+  enableMenuTouchScroll,
 } from "./drawio-shapes";
 import { LOGO_BOX_PX } from "./cardLogoImage";
 import { ICON_PATHS } from "./iconPaths";
@@ -297,6 +303,90 @@ describe("buildLdvDiagramXml", () => {
     ];
     const xml = buildLdvDiagramXml(cards, orphanRel, layers);
     expect(xml).not.toContain('edge="1"');
+  });
+
+  /* ---- Aggregated view: group boxes as containers, connectors as decoration ---- */
+  const groups: DiagramGroupInput[] = [
+    { key: "cluster:type:Application", label: "Application (1)", color: "#0f7eb5", x: 40, y: 20, w: 300, h: 160 },
+  ];
+  const nested: DiagramCardInput[] = [
+    { ...cards[0], x: 16, y: 30, groupKey: "cluster:type:Application" },
+    cards[1],
+  ];
+
+  it("exports a group box as a swimlane container with its card nested inside", () => {
+    const xml = buildLdvDiagramXml(nested, [], [], groups);
+    expect(xml).toContain('id="group-0"');
+    expect(xml).toContain("shape=swimlane");
+    expect(xml).toContain("startSize=28");
+    expect(xml).toContain('value="Application (1)"');
+    // the box's geometry is where the view had it
+    expect(xml).toContain('x="40" y="20" width="300" height="160"');
+    // the member is the box's mxGraph child, at its RELATIVE position, and
+    // carries the container-child marker the editor keys its rules on
+    const member = /<object[^>]*cardId="11111111-1111-1111-1111-111111111111"[^>]*>\s*<mxCell[^>]*>/.exec(xml)?.[0] ?? "";
+    expect(member).toContain('groupChild="1"');
+    expect(member).toContain('parent="group-0"');
+    expect(xml).toContain('x="16" y="30" width="200"');
+    // a card outside any box still sits on the root
+    const loose = /<object[^>]*cardId="22222222-2222-2222-2222-222222222222"[^>]*>\s*<mxCell[^>]*>/.exec(xml)?.[0] ?? "";
+    expect(loose).toContain('parent="1"');
+    expect(loose).not.toContain("groupChild");
+    // the box itself is not a card: still exactly two cardId occurrences
+    expect(xml.match(/cardId=/g)?.length).toBe(2);
+  });
+
+  it("falls a card back to the root when its group key names no exported box", () => {
+    const xml = buildLdvDiagramXml(nested, [], [], []);
+    const member = /<object[^>]*cardId="11111111-1111-1111-1111-111111111111"[^>]*>\s*<mxCell[^>]*>/.exec(xml)?.[0] ?? "";
+    expect(member).toContain('parent="1"');
+    expect(member).not.toContain("groupChild");
+  });
+
+  it("draws a merged connector as a bare edge with a count and no relation identity", () => {
+    const connectors: DiagramConnectorInput[] = [
+      {
+        sourceKey: "cluster:type:Application",
+        targetKey: "22222222-2222-2222-2222-222222222222",
+        label: "reads",
+        count: 3,
+        exit: { x: 0.5, y: 1 },
+        entry: { x: 0.5, y: 0 },
+        waypoints: [{ x: 190, y: 200 }, { x: 500, y: 200 }],
+      },
+    ];
+    const xml = buildLdvDiagramXml(nested, [], [], groups, connectors);
+    const cell = /<mxCell id="connector-0"[^>]*>/.exec(xml)?.[0] ?? "";
+    expect(cell).not.toBe("");
+    expect(cell).toContain('value="reads · 3"');
+    expect(cell).toContain('source="group-0"');
+    expect(cell).toContain('target="card-1-22222222"');
+    // 1.5 + log2(3) → heavier than a one-relation line, boxed label
+    expect(cell).toContain("strokeWidth=3.1");
+    expect(cell).toContain("labelBackgroundColor=#ffffff");
+    expect(cell).toContain("edgeStyle=orthogonalEdgeStyle");
+    expect(cell).toContain("exitX=0.5;exitY=1");
+    expect(xml).toContain('<mxPoint x="190" y="200"/>');
+    // decoration: nothing the sync, the stale check or the delete flow reads
+    expect(cell).not.toContain("relationType");
+    expect(cell).not.toContain("relationId");
+    expect(cell).not.toContain("pending");
+    expect(xml).not.toContain('<object id="connector');
+  });
+
+  it("labels a connector with the count alone when it stands for several relation types", () => {
+    const xml = buildLdvDiagramXml(nested, [], [], groups, [
+      { sourceKey: "cluster:type:Application", targetKey: "22222222-2222-2222-2222-222222222222", label: "", count: 7 },
+    ]);
+    expect(xml).toContain('value="7"');
+    expect(xml).toContain("strokeWidth=4.3");
+  });
+
+  it("drops a connector whose endpoint is not on the diagram", () => {
+    const xml = buildLdvDiagramXml(nested, [], [], groups, [
+      { sourceKey: "cluster:type:Application", targetKey: "cluster:type:Ghost", label: "", count: 2 },
+    ]);
+    expect(xml).not.toContain('id="connector-');
   });
 
   it("carries a computed route as waypoints and fixed anchors", () => {
@@ -1131,6 +1221,20 @@ describe("edge builders all delegate to relationEdgeStyle", () => {
 /*  flowDirection arrowheads — provider vs consumer on an edge (#905)      */
 /* ---------------------------------------------------------------------- */
 
+describe("relationEdgeStyle weight", () => {
+  it("thickens the stroke and boxes the label for a merged connector", () => {
+    const one = relationEdgeStyle({ weight: 1 });
+    expect(one).toContain("strokeWidth=1.5");
+    expect(one).toContain("labelBackgroundColor=#ffffff");
+    const eight = relationEdgeStyle({ weight: 8 });
+    expect(eight).toContain("strokeWidth=4.3");
+    // an ordinary relation line is untouched
+    const plain = relationEdgeStyle();
+    expect(plain).toContain("strokeWidth=1.5");
+    expect(plain).not.toContain("labelBackgroundColor");
+  });
+});
+
 describe("relationEdgeStyle honours a relation's flowDirection", () => {
   const arrows = (style: string) => {
     const parts = style.split(";");
@@ -1555,6 +1659,35 @@ describe("scanDiagramItems — synced children", () => {
       { cellId: "child", cardId: "id-child", name: "Child", type: "Application" },
     ]);
     expect(scan.pendingCards).toHaveLength(1);
+  });
+
+  it("counts a card exported inside a group box as a top-level synced card", () => {
+    // `groupChild` marks a container child for the editor's sizing and
+    // paste rules; it is not an expansion child, so the sync and the stale
+    // check see it like any other card on the canvas.
+    const frame = scanFrame({
+      member: scanVertex("member", {
+        cardId: "id-member",
+        cardType: "Application",
+        label: "Member",
+        groupChild: "1",
+      }),
+    });
+    const scan = scanDiagramItems(frame);
+    expect(scan.syncedFS).toEqual([
+      { cellId: "member", cardId: "id-member", name: "Member", type: "Application" },
+    ]);
+    expect(scan.syncedChildren).toEqual([]);
+  });
+
+  it("ignores a merged connector: a bare edge is neither a pending nor a synced relation", () => {
+    const frame = scanFrame({
+      a: scanVertex("a", { cardId: "id-a", cardType: "Application", label: "A" }),
+      connector: { id: "connector-0", edge: true, value: "reads · 3", source: { id: "a" }, target: { id: "a" } },
+    });
+    const scan = scanDiagramItems(frame);
+    expect(scan.pendingRels).toEqual([]);
+    expect(scan.syncedFS).toHaveLength(1);
   });
 });
 
@@ -2728,3 +2861,178 @@ describe("reading the geometry a logo has to match", () => {
   });
 });
 
+
+describe("resolveMenuCardCell", () => {
+  type C = { id: string; value?: { getAttribute: (n: string) => string | null }; parent?: C | null };
+  const node = (id: string, cardId: string | null, parent: C | null = null): C => ({
+    id,
+    value: { getAttribute: (n) => (n === "cardId" ? cardId : null) },
+    parent,
+  });
+  const container = node("container", "card-1");
+  const child = node("child", "card-2", container);
+  const plain = node("plain", null, null);
+  const label = node("label", null, child);
+
+  it("resolves the hit cell, walking up from an inner label", () => {
+    expect(resolveMenuCardCell(child, () => container)?.id).toBe("child");
+    expect(resolveMenuCardCell(label, () => null)?.id).toBe("child");
+  });
+
+  it("falls back to the container under the pointer when DrawIO hit nothing", () => {
+    // The open body of a drilled-down card is not hit-tested by DrawIO.
+    expect(resolveMenuCardCell(null, () => container)?.id).toBe("container");
+  });
+
+  it("does not claim a plain shape or empty canvas for a card", () => {
+    expect(resolveMenuCardCell(plain, () => container)).toBeNull();
+    expect(resolveMenuCardCell(null, () => null)).toBeNull();
+    expect(resolveMenuCardCell(null, () => plain)).toBeNull();
+  });
+});
+
+describe("visibleBand", () => {
+  it("is the whole frame when the frame is fully on screen", () => {
+    expect(
+      visibleBand({
+        innerHeight: 500,
+        frameElement: { getBoundingClientRect: () => ({ top: 100 }) },
+        parent: { innerHeight: 800 },
+      }),
+    ).toEqual({ top: 0, bottom: 500 });
+  });
+
+  it("cuts off the part of the frame below what the browser shows", () => {
+    // iPad: a 900px frame starting at 100px inside a 680px visible area.
+    expect(
+      visibleBand({
+        innerHeight: 900,
+        frameElement: { getBoundingClientRect: () => ({ top: 100 }) },
+        parent: { innerHeight: 1000, visualViewport: { offsetTop: 0, height: 680 } },
+      }),
+    ).toEqual({ top: 0, bottom: 580 });
+  });
+
+  it("follows a parent visual viewport that has scrolled", () => {
+    expect(
+      visibleBand({
+        innerHeight: 900,
+        frameElement: { getBoundingClientRect: () => ({ top: 100 }) },
+        parent: { innerHeight: 1000, visualViewport: { offsetTop: 200, height: 500 } },
+      }),
+    ).toEqual({ top: 100, bottom: 600 });
+  });
+
+  it("falls back to the frame when the parent cannot be read", () => {
+    const win = {
+      innerHeight: 700,
+      visualViewport: { offsetTop: 0, height: 650 },
+      get frameElement(): never {
+        throw new Error("cross-origin");
+      },
+    };
+    expect(visibleBand(win)).toEqual({ top: 0, bottom: 650 });
+  });
+});
+
+describe("fitMenuToBand", () => {
+  function menu(top: number, height: number): HTMLElement {
+    const div = document.createElement("div");
+    Object.defineProperty(div, "offsetTop", { get: () => top });
+    Object.defineProperty(div, "offsetHeight", { get: () => height });
+    return div;
+  }
+
+  it("caps the height to the band and lets it scroll", () => {
+    const div = menu(10, 100);
+    fitMenuToBand(div, { top: 0, bottom: 500 });
+    expect(div.style.maxHeight).toBe("484px");
+    expect(div.style.overflowY).toBe("auto");
+    expect(div.style.boxSizing).toBe("border-box");
+    expect(div.style.top).toBe(""); // already inside: left where it was
+  });
+
+  it("lifts a menu hanging below the band", () => {
+    const div = menu(400, 300);
+    fitMenuToBand(div, { top: 0, bottom: 580 });
+    expect(div.style.top).toBe("272px");
+  });
+
+  it("only caps the height when asked not to reposition", () => {
+    const div = menu(0, 300);
+    fitMenuToBand(div, { top: 20, bottom: 580 }, 8, false);
+    expect(div.style.maxHeight).toBe("544px");
+    expect(div.style.top).toBe("");
+  });
+
+  it("never lifts it above the band's top, and never sets a negative height", () => {
+    const div = menu(400, 900);
+    fitMenuToBand(div, { top: 50, bottom: 60 });
+    expect(div.style.top).toBe("58px");
+    expect(div.style.maxHeight).toBe("0px");
+    expect(() => fitMenuToBand(null, { top: 0, bottom: 1 })).not.toThrow();
+  });
+});
+
+describe("enableMenuTouchScroll", () => {
+  function touch(type: string, clientY: number | null, cancelable = true): Event {
+    const e = new Event(type, { bubbles: true, cancelable });
+    Object.defineProperty(e, "touches", { value: clientY == null ? [] : [{ clientY }] });
+    return e;
+  }
+
+  function setup() {
+    const div = document.createElement("div");
+    const row = document.createElement("div");
+    div.appendChild(row);
+    document.body.appendChild(div);
+    // A scrollable menu: jsdom does no layout, so scrollTop is a plain field here.
+    let top = 0;
+    Object.defineProperty(div, "scrollTop", { get: () => top, set: (v: number) => (top = v) });
+    const rowEnd = vi.fn();
+    row.addEventListener("touchend", rowEnd);
+    enableMenuTouchScroll(div);
+    return { div, row, rowEnd };
+  }
+
+  it("scrolls the menu with the finger and keeps the swipe from the page", () => {
+    const { div, row } = setup();
+    row.dispatchEvent(touch("touchstart", 400));
+    const move = touch("touchmove", 300);
+    row.dispatchEvent(move);
+    expect(div.scrollTop).toBe(100);
+    expect(move.defaultPrevented).toBe(true);
+  });
+
+  it("does not let the end of a swipe trigger the row under the finger", () => {
+    const { row, rowEnd } = setup();
+    row.dispatchEvent(touch("touchstart", 400));
+    row.dispatchEvent(touch("touchmove", 300));
+    row.dispatchEvent(touch("touchend", null));
+    expect(rowEnd).not.toHaveBeenCalled();
+  });
+
+  it("lets a tap through to the row", () => {
+    const { div, row, rowEnd } = setup();
+    row.dispatchEvent(touch("touchstart", 400));
+    row.dispatchEvent(touch("touchmove", 397)); // a finger's jitter, not a swipe
+    row.dispatchEvent(touch("touchend", null));
+    expect(rowEnd).toHaveBeenCalledTimes(1);
+    expect(div.scrollTop).toBe(0);
+  });
+
+  it("stands aside while the browser scrolls natively", () => {
+    const { div, row } = setup();
+    row.dispatchEvent(touch("touchstart", 400));
+    row.dispatchEvent(touch("touchmove", 300, false));
+    expect(div.scrollTop).toBe(0);
+  });
+
+  it("installs only once per menu", () => {
+    const { div, row } = setup();
+    enableMenuTouchScroll(div); // a second show of the same menu
+    row.dispatchEvent(touch("touchstart", 400));
+    row.dispatchEvent(touch("touchmove", 350));
+    expect(div.scrollTop).toBe(50);
+  });
+});

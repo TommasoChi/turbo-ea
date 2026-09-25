@@ -8,6 +8,11 @@
 | **BPM** | Business Process Management — disciplinen at modellere, analysere og forbedre forretningsprocesser |
 | **BPM rækkefølge** | Visningsrækkefølgen af procestyperækker (Core, Support, Management) i BPM-procesnavigatoren, kan konfigureres ved at trække rækker |
 | **BPMN** | Business Process Model and Notation — standardnotationen for modellering af forretningsprocesser (version 2.0) |
+| **Hændelsesdefinition** | Arten af en BPMN-hændelse: besked, timer, signal, fejl, eskalering, betinget, link, kompensation, annullering eller afslutning. Vises ved siden af elementtypen i trintabellen sammen med navnet på den besked, det signal eller den fejl, hændelsen henviser til |
+| **Bane** | Et vandret bånd inde i en pool, der samler de trin, som udføres af én rolle, ét team eller én afdeling |
+| **Kaldeaktivitet** | En BPMN-opgave med tyk kant, der kalder en selvstændigt defineret proces — BPMN's egen måde at sige »dette trin er en anden proces«, og den eneste trintype, Turbo EA spørger om forretningsprocessen for, når du placerer den. Ethvert andet trin tilknytter en proces på samme måde, fra egenskabspanelet, kontekstmenuen eller trintabellen; udgivelse af flowet opretter en *kalder*-relation mellem de to processer |
+| **Beskedflow** | En besked, der udveksles mellem to pools i et BPMN-samarbejde. Vises under elementtabellen for et udgivet procesflow, hvor den kan knyttes til det Interface-kort, der bærer den |
+| **Pool** | En deltager i et BPMN-samarbejde — en kunde, en afdeling, et partnersystem — tegnet som en beholder med den parts egen proces |
 | **Forretningskompetence** | Hvad en organisation kan, uanset hvordan den gør det |
 | **Beregning** | En administratordefineret formel, der automatisk beregner en feltværdi, når et kort gemmes |
 | **Kort** | Den grundlæggende informationsenhed i Turbo EA, der repræsenterer enhver arkitekturkomponent |
@@ -15,7 +20,7 @@
 | **Konfidensscore** | En 0–100 % vurdering, der angiver, hvor pålidelig en AI-genereret beskrivelse er |
 | **Datakvalitet** | En 0–100 % fuldstændighedsscore baseret på udfyldte felter og deres konfigurerede vægte |
 | **Diagram** | Et visuelt arkitekturdiagram oprettet med den indlejrede DrawIO-editor |
-| **Filvedhæftning** | En binær fil (PDF, DOCX, XLSX, billeder, op til 10 MB) uploadet direkte til et kort via fanen Ressourcer |
+| **Filvedhæftning** | En binær fil (dokumenter, regneark, præsentationer, OpenDocument- og ældre Office-filer, billeder, arkiver, Outlook- og e-mailbeskeder, CSV, Markdown, JSON og XML — op til 20 MB) uploadet direkte til et kort via fanen Ressourcer |
 | **Regnskabsår** | 12-månedersperioden, der bruges til budgettering og økonomisk rapportering. Kan konfigureres via Admin > Indstillinger — startmåneden (januar til december) bestemmer, hvordan PPM-budgetlinjer grupperes |
 | **DrawIO** | Det indlejrede open source-diagramværktøj, der bruges til visuelle arkitekturdiagrammer |
 | **Omkostningslinje** | En budget- eller faktisk omkostningspost (CapEx/OpEx) i et PPM-initiativ, brugt til at spore økonomiske udgifter |
@@ -26,6 +31,10 @@
 | **Entitlement (rettighed)** | Én linje i en signeret udvidelseslicens: retten til at køre en bestemt udvidelse indtil en udløbsdato, efterfulgt af en henstandsperiode før blød deaktivering |
 | **Content Pack (indholdspakke)** | Den rene datadel af en udvidelse: korttyper, tags, kort og relationer anvendt gennem samme idempotente motor som workspace-overførsel, med forhåndsvisning |
 | **DAAF** | Digital Autonomy Assessment Framework — Utrecht Universitets metode til at score, hvor afhængig en applikation er af en leverandør, og hvor godt det kan afbødes. Gengivet af en gratis udvidelse |
+| **Automatiseringsregel** | En regel, som udvidelsen Automations kører for dig: *når* et kort, en relation eller en opgave ændres, eller en tidsplan indtræffer, *hvis* betingelser bygget af dropdowns er opfyldt, *så* udføres en liste af handlinger. Hver kørsel registreres som en mutationsbatch |
+| **Kørsel (automatisering)** | Én udførelse af en automatiseringsregel for ét kort — dens udløser, dens udfald og hver handlingslinje, vist på fanen Kørsler og knyttet til sin mutationsbatch |
+| **Udløsningsnøgle** | Det, en automatiseringsregel husker, efter at den er udløst for et kort: kortet og de værdier, dens betingelser læste. Så længe de er uændrede, udløses reglen ikke igen for det kort, så en natlig regel ikke kan rejse den samme risiko hver nat |
+| **Mutationsbatch** | Én auditeret ændringsenhed i Admin → Auditlog — hvem der skrev hvad, hvorfra (web, API, AI-værktøj eller udvidelse), med en diff pr. hændelse og en tilbagerulning (**Rul tilbage**), der omgør skrivninger på kort, relationer, risici, interessentroller, tags og beslutningsudkast |
 | **Informationsregister** | Det register, enhver finansiel enhed i EU skal føre over sine aftaler med IKT-tredjeparter og indberette årligt efter DORA art. 28 — 15 sammenhængende skemaer |
 | **LEI** | Legal Entity Identifier — en ISO 17442-kode på 20 tegn, der identificerer en juridisk enhed, med to kontrolcifre. Påkrævet overalt i DORA-informationsregistret |
 | **xBRL-CSV** | Det maskinlæsbare rapportpakkeformat, som tilsynsmyndigheder accepterer til regulatoriske indberetninger såsom DORA-informationsregistret |

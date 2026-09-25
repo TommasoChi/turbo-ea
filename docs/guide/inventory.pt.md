@@ -10,14 +10,16 @@ O **Inventário** é o coração do Turbo EA. Aqui todos os **cards** (component
 
 O painel lateral esquerdo permite **filtrar** cards por diferentes critérios:
 
-- **Pesquisa** — Busca de texto livre nos nomes dos cards, desde a primeira letra. As melhores correspondências aparecem primeiro: nomes exatos, depois os que começam pelo que você digitou, depois aqueles em que inicia uma palavra e então os restantes. Todos os campos de busca do Turbo EA ordenam assim — a busca global (**Ctrl+K** / **⌘K**), cada seletor de cards, o registo de riscos, as decisões e os portais publicados — a não ser que você tenha escolhido uma ordenação própria, que prevalece sempre
-- **Tipos** — Filtrar por um ou mais tipos de card: Objetivo, Plataforma, Iniciativa, Organização, Capacidade de Negócio, Contexto de Negócio, Processo de Negócio, Aplicação, Interface, Objeto de Dados, Componente de TI, Categoria Tecnológica, Fornecedor, Sistema
+- **Pesquisa** — Busca de texto livre nos nomes dos cards, desde a primeira letra. As melhores correspondências aparecem primeiro: nomes exatos, depois os que começam pelo que você digitou, depois aqueles em que inicia uma palavra e então os restantes. Todos os campos de busca do Turbo EA ordenam assim — a busca global (**Ctrl+K** / **⌘K**), cada seletor de cards, o registo de riscos, as decisões e os portais publicados — a não ser que você tenha escolhido uma ordenação própria, que prevalece sempre. O **alias** do card e a sua descrição também são pesquisados, de modo que um card é encontrado pelo nome que a sua organização realmente usa — e um alias que corresponde exatamente vale tanto quanto um nome que corresponde exatamente
+- **Tipos** — Filtrar por um ou mais tipos de card, agrupados pela camada de arquitetura à qual cada tipo pertence: Estratégia e Transformação (Objetivo, Plataforma, Iniciativa), Arquitetura de Negócio (Organização, Capacidade de Negócio, Contexto de Negócio, Processo de Negócio), Aplicação e Dados (Aplicação, Interface, Objeto de Dados) e Arquitetura Técnica (Componente de TI, Categoria Tecnológica, Fornecedor). Um tipo que o seu administrador coloque numa camada própria recebe o seu próprio cabeçalho depois dessas quatro, e qualquer tipo sem camada definida é listado por último em **Sem categoria**
 - **Subtipos** — Quando um tipo é selecionado, filtre ainda mais por subtipo (ex.: Aplicação -> Aplicação de Negócio, Microsserviço, Agente de IA, Implantação)
 - **Status de Aprovação** — Rascunho, Aprovado, Quebrado ou Rejeitado
 - **Ciclo de Vida** — Filtrar por fase do ciclo de vida: Planejamento, Implantação, Ativo, Desativação, Fim de Vida
 - **Qualidade dos Dados** — Filtragem por faixa (seleção múltipla): Completo (≥80%), Parcial (40-79%), Mínimo (abaixo de 40%). São as faixas do [relatório Qualidade dos dados](reports.md#data-quality-report): clicar num segmento de barra leva até aqui.
 - **Órfãs** — Apenas fichas sem qualquer relação, em ambos os sentidos. Avaliado no servidor, pelo que funciona sem um tipo selecionado.
 - **Desatualizadas** — Apenas fichas não atualizadas nos últimos 90 dias. Ambas espelham os blocos do [relatório Qualidade dos dados](reports.md#data-quality-report): clicar num bloco leva até aqui.
+- **Fim de vida** — Para aplicações e componentes de TI, filtre pelo estado de suporte que o Turbo EA determina a partir da [ligação EOL](../admin/eol.md) de cada cartão: Fim de vida, A aproximar-se, Suportado ou Desconhecido. **(vazio)** lista os cartões sem nada registado. A coluna **Fim de vida** correspondente mostra a data ao lado de um ponto de estado, e é ordenada e exportada como data.
+- **Tipo de ligação** — Quando está selecionado um único tipo de cartão hierárquico e um administrador definiu [tipos de ligação](../admin/metamodel.md) para ele, filtre pelo tipo da ligação de cada cartão ao seu cartão pai — por exemplo as filiais *comerciais* em vez de *vendas*. **(vazio)** lista os cartões cuja ligação não tem tipo, e os cartões de primeiro nível, pois nem uns nem outros têm algo registado. A coluna **Tipo de ligação** correspondente mostra o valor como uma etiqueta colorida e é editável no modo de edição da grelha.
 - **Tags** — Filtrar por tags de qualquer grupo de tags
 - **Relacionamentos** — Filtrar por cards relacionados através de tipos de relacionamento
 - **Atributos personalizados** — Filtrar por valores em campos personalizados (busca de texto, opções de seleção)
@@ -66,6 +68,8 @@ A coluna **Caminho** mostra a hierarquia da ficha (por ex. «América do Norte /
 
 A coluna **Logótipo** mostra o logótipo próprio da ficha, ou o ícone do seu tipo quando nenhum foi definido, permitindo percorrer um panorama pela marca do produto em vez do nome. Só é oferecida para os tipos de ficha que permitem logótipos (de origem, Aplicação e Componente de TI), está desativada por predefinição e torna as linhas mais altas enquanto está visível, para que as marcas continuem legíveis. Se puder editar a ficha, passe o rato sobre a célula do logótipo e clique para carregar, substituir, escolher um ícone de marca ou remover o logótipo sem sair da grelha — o mesmo menu da página da ficha. Os logótipos ficam deliberadamente de fora do preenchimento para baixo e da edição em massa: uma marca por ficha, definida de propósito.
 
+A coluna **Alias** mostra o outro nome do card — o interno pelo qual a sua organização o trata. Está desativada por predefinição, pois a maioria dos panoramas não tem nenhum: ative-a no separador **Colunas**. Edita-se na própria célula em modo de edição da grelha e preenche-se para baixo como qualquer outra coluna de texto, e viaja com a exportação e importação Excel, pelo que uma lista de aliases pode ser carregada de uma só vez.
+
 Cada categoria tem uma caixa de seleção **Selecionar tudo** para ativar ou desativar rapidamente todas as colunas desse grupo. Um campo de pesquisa no topo permite encontrar colunas específicas por nome. O indicador em cada cabeçalho de seção mostra quantas colunas desse grupo estão atualmente visíveis.
 
 Quando um tipo de cartão é selecionado pela primeira vez, **todas as colunas de atributos e relações são ativadas por padrão**. Você pode então desmarcar as colunas que não precisa. Um botão **Redefinir** na parte inferior da aba «Colunas» restaura a seleção de colunas padrão.
@@ -83,7 +87,8 @@ O inventário usa uma tabela de dados **AG Grid** com recursos poderosos:
 | **Tipo** | Tipo do card com ícone colorido |
 | **Nome** | Nome do componente (clique para abrir o detalhe do card) |
 | **Logótipo** | O logótipo próprio da ficha, ou o ícone do seu tipo quando não tem nenhum. Desativada por predefinição — ative-a no separador Colunas; clique numa célula para o alterar |
-| **Descrição** | Breve descrição |
+| **Alias** | O outro nome do card. Desativada por predefinição — ative-a no separador Colunas; é considerada por todas as caixas de pesquisa |
+| **Descrição** | Breve descrição — um endereço web nela é um link clicável |
 | **Ciclo de Vida** | Estado atual do ciclo de vida |
 | **Status de Aprovação** | Badge de status de revisão |
 | **Qualidade dos Dados** | Porcentagem de completude com anel visual |
@@ -129,6 +134,8 @@ A lista **Campo** agrupa o que pode ser alterado:
 - **Atributos** — qualquer campo editável definido para o tipo de cartão selecionado
 - **Relações** — uma entrada por tipo de relação e direção (por exemplo *é executado em → Componente de TI*)
 
+![Diálogo Edição em massa](../assets/img/pt/98_inventario_edicao_massa.png)
+
 Etiquetas, relações e pai oferecem um botão **adicionar / remover**, para que amplie ou reduza os valores existentes em vez de os substituir.
 
 O controlo de valor adapta-se ao tipo de campo: um campo de seleção múltipla mostra as suas opções com caixas de verificação, um campo sim/não um interruptor e um campo de data um seletor de data. Deixar o valor vazio limpa o campo em todos os cartões selecionados. Os campos calculados por uma fórmula, e os campos de custo que não tem permissão para ver, não são disponibilizados.
@@ -151,6 +158,8 @@ Um cartão leva consigo os seus próprios filhos ao mover-se, e os cartões apro
 ## Agrupar o inventário { #group-by }
 
 Clique em **Agrupar por** na barra de ferramentas (ao lado da contagem de itens) para organizar a grelha em grupos expansíveis. A fase do ciclo de vida e o estado de aprovação estão sempre disponíveis; ao filtrar a grelha para um único tipo de cartão, acrescentam-se o seu subtipo e todos os atributos de seleção única.
+
+![Inventário agrupado por modelo TIME](../assets/img/pt/98a_inventario_agrupamento.png)
 
 - Os cartões sem valor no campo escolhido caem num grupo **Não definido**, no topo: o ponto de partida natural para classificar cartões pendentes.
 - Clique no cabeçalho de um grupo para o recolher ou expandir. O cabeçalho mostra o número de cartões do grupo.
@@ -210,7 +219,9 @@ As importações e exportações do inventário usam uma **pasta de trabalho Exc
 ### Estrutura da pasta de trabalho
 
 - **Uma planilha por tipo de card** (Application, Business Capability, IT Component, …) com as colunas principais, as colunas `attr_<campo>`, as colunas de ciclo de vida as colunas de relação `rel:<tipo_de_relação>` e as colunas de partes interessadas `stakeholder:<chave_do_papel>`.
-- **Uma planilha `Relations`** para tipos de relação com atributos (custo, descrição…). As relações simples permanecem em linha na planilha do card de origem.
+- **Uma planilha `Relations`** com os **valores** que as relações carregam — uma linha por relação cujo tipo tem valores a preencher.
+
+A divisão é simples e sem exceções: **a planilha de cards diz quais cards estão ligados; a planilha `Relations` diz o que essas ligações contêm.** Cada tipo de relação tem uma coluna `rel:` na planilha do tipo de onde parte, carregue valores ou não.
 - **Uma planilha `_Meta`** com a versão do formato da pasta de trabalho.
 
 ### Identificação sem GUIDs
@@ -223,7 +234,7 @@ Como os cards são identificados por nome + caminho, **dois cards do mesmo tipo 
 
 ### Células de relação em linha
 
-Cada coluna `rel:<tipo_de_relação>` expressa as relações de saída como uma lista **separada por ponto e vírgula** (por exemplo `NexaCore ERP; BillingApp`). Ponto e vírgula em vez de vírgula, porque os nomes de cards frequentemente contêm vírgulas (`Acme, Inc.`). Dentro de um nome, `/` e `\` são escapados como `\/` e `\\` — o exportador faz isso automaticamente (ex.: `SAP S/4HANA` → `SAP S\/4HANA`). As células são **declarativas**: o seu conteúdo substitui o conjunto de relações de saída desse tipo a partir da origem. Remover um destino elimina a relação correspondente; esvaziar a célula elimina todas. Por compatibilidade, células separadas por vírgulas (formato antigo) continuam a ser aceites.
+Cada coluna `rel:<tipo_de_relação>` expressa as relações de saída como uma lista **separada por ponto e vírgula** (por exemplo `NexaCore ERP; BillingApp`). Ponto e vírgula em vez de vírgula, porque os nomes de cards frequentemente contêm vírgulas (`Acme, Inc.`). Dentro de um nome, `/` e `\` são escapados como `\/` e `\\` — o exportador faz isso automaticamente (ex.: `SAP S/4HANA` → `SAP S\/4HANA`). As células são **declarativas**: o seu conteúdo substitui o conjunto de relações de saída desse tipo a partir da origem. Remover um destino elimina a relação correspondente; esvaziar a célula elimina todas. Por compatibilidade, células separadas por vírgulas (formato antigo) continuam a ser aceites. Há uma coluna por tipo de relação que parte do tipo de card da planilha — **todos**, incluindo os que carregam valores. Os destinos são ordenados alfabeticamente, pelo que reexportar um panorama inalterado dá um ficheiro idêntico.
 
 ### Células de partes interessadas
 
@@ -235,11 +246,23 @@ Em cada planilha de fichas, as colunas `stakeholder:<chave_do_papel>` carregam o
 
 ### Planilha `Relations`
 
-Para relações com atributos, use a planilha dedicada com as colunas `relation_type`, `source_ref`, `target_ref`, `action` (por defeito `upsert`, alternativamente `delete`), `attr_<campo>` e `description`.
+Uma relação pode ter valores próprios — um *tipo de utilização* numa ligação `Organization` → `Application`, um custo anual, ou uma descrição livre. Uma célula `rel:` é uma lista de nomes sem lugar para eles, por isso esses valores vivem na planilha `Relations`, uma linha por relação, com as colunas `relation_type`, `source_type`, `source_ref`, `target_type`, `target_ref`, `attr_<campo>` e `description`.
+
+A planilha contém as relações cujo tipo tem realmente valores — as restantes nada têm a preencher e vivem inteiramente nas planilhas de cards. As relações que apontam *para* um card exportado também aparecem; `source_ref` e `target_ref` indicam o sentido. As colunas `attr_<campo>` são as dos tipos de relação desta pasta de trabalho. A ordenação é por card de origem, depois tipo de relação, depois destino.
+
+**Esta planilha só define valores. Nunca cria nem remove uma relação** — isso é da planilha de cards: **apagar uma linha não apaga nada**; editar os seus valores substitui o que a relação contém; e uma linha que nomeia dois cards não ligados é comunicada na pré-visualização e ignorada — ligue-os na coluna `rel:`, mesmo no mesmo import.
+
+As pastas de trabalho mais antigas têm uma coluna `action`. É ignorada; uma linha com `action = delete` é comunicada e ignorada. Se a planilha de cards e a planilha `Relations` se contradisserem, **a remoção prevalece**.
+
+A planilha lista **todas as relações dos cards exportados**, tenha ou não o seu tipo valores neste momento — por isso um tipo de relação a que acabou de dar um valor já tem ali a sua linha. As relações que apontam *para* um card exportado também aparecem; `source_ref` e `target_ref` indicam o sentido. As colunas `attr_<campo>` são as dos tipos de relação presentes nesta pasta de trabalho, não as de todos os definidos na instância.
+
+Um tipo de relação que tem valores **não tem coluna `rel:`** — uma lista de nomes não os pode acolher; edita-se nesta planilha. Se a planilha de cards e a planilha `Relations` se contradisserem, **a remoção prevalece**, e a pré-visualização assinala-o.
 
 ### Importar
 
 Clique em **Importar** na barra de ferramentas, solte a pasta de trabalho e verifique a pré-visualização antes de aplicar. Verá tanto os cards a criar / atualizar como as relações a adicionar / remover. Os erros (por exemplo, um destino ambíguo com os seus caminhos candidatos) bloqueiam a aplicação.
+
+![Diálogo Importar fichas](../assets/img/pt/98b_inventario_importacao.png)
 
 Algumas notas sobre a importação:
 

@@ -54,7 +54,7 @@ Progettate le vostre domande. Ogni domanda può essere:
 
 ### Relazioni
 
-Oltre agli attributi, un'indagine può anche chiedere ai rispondenti di mantenere aggiornate le **relazioni** di una scheda. Nel passaggio **Campi**, la sezione **Relazioni** elenca ogni relazione che il tipo di scheda di destinazione può avere, in entrambe le direzioni (ad esempio, per un'Applicazione: *supporta → Componente IT* e *utilizzata da ← Organizzazione*). Per ciascuna selezionata, scegli un'azione:
+Oltre agli attributi, un'indagine può anche chiedere ai rispondenti di mantenere aggiornate le **relazioni** di una scheda. Nel passaggio **Campi**, la sezione **Relazioni** elenca ogni relazione che il tipo di scheda di destinazione può avere, in entrambe le direzioni (ad esempio, per un'Applicazione: *supporta → Componente IT* e *utilizzata da ← Organizzazione*). Un tipo di scheda che supporta il lignaggio compare qui come qualsiasi altra relazione, in entrambe le direzioni e con i propri verbi: per un'Applicazione, *succede a* raccoglie le schede che ha sostituito e *ha come successore* quelle che la sostituiscono. I lati che un amministratore ha nascosto sul tipo di scheda non vengono proposti. Per ciascuna selezionata, scegli un'azione:
 
 - **Mantieni** — Il rispondente vede le schede attualmente collegate e può aggiungere o rimuovere collegamenti tramite un selettore di ricerca.
 - **Conferma** — Il rispondente si limita a confermare che i collegamenti attuali sono corretti, oppure disattiva l'interruttore per proporre modifiche.
@@ -77,6 +77,8 @@ Una volta che il vostro sondaggio è in stato **Active**:
 !!! note "Una scheda ha bisogno di qualcuno a cui chiedere"
 
     Una scheda viene inclusa nell'indagine solo se almeno una persona vi ricopre uno dei **ruoli di stakeholder selezionati**. Le schede che corrispondono ai filtri ma non hanno tale stakeholder vengono saltate; il passaggio **Anteprima e invio** ne riporta il numero, così potete assegnare i responsabili.
+
+Un'indagine può anche essere creata e inviata da un'estensione installata — per esempio una regola pianificata che chiede ai responsabili di ogni scheda che soddisfa una condizione di completarla. Un'indagine del genere non mostra alcun autore, i suoi campi sono quelli definiti dal tipo di scheda e si comporta come tutte le altre: la chiudete e ne applicate le risposte qui. Annullare l'esecuzione dell'estensione in **Admin → Registro di audit** chiude l'indagine e ritira le richieste a cui nessuno aveva ancora risposto.
 
 ## Visualizzazione dei risultati
 

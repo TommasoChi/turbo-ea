@@ -413,7 +413,14 @@ function buildPatch(
     changes.name = { old: ex.name, new: d.name };
   }
 
-  for (const key of ["description", "subtype", "parent_id", "external_id", "alias"] as const) {
+  for (const key of [
+    "description",
+    "subtype",
+    "parent_id",
+    "parent_label",
+    "external_id",
+    "alias",
+  ] as const) {
     const exVal = (ex as unknown as Record<string, unknown>)[key] ?? "";
     if (d[key] !== undefined && norm(d[key]) !== norm(exVal)) {
       patch[key] = d[key] || null;
@@ -471,15 +478,12 @@ const RELATIONS_SHEET_NAME = "Relations";
  * Legacy single-sheet parser. Kept for backwards compatibility with callers
  * that only care about the first sheet. New code should use
  * `parseWorkbookSheets()` to get a structured view of every sheet.
+ *
+ * The reader itself lives in the leaf `@/lib/spreadsheet` (it is what the
+ * extension SDK's `loadSpreadsheet` resolves — an extension needs "read this
+ * file into rows" without this module's card-import validators riding along).
  */
-export function parseWorkbook(file: ArrayBuffer): Record<string, unknown>[] {
-  // cellDates: true so that Excel-reformatted date cells come back as JS Date
-  // objects (handled by str()) instead of opaque serial numbers.
-  const wb = XLSX.read(file, { type: "array", cellDates: true });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  if (!ws) return [];
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
-}
+export { parseWorkbook } from "@/lib/spreadsheet";
 
 /**
  * Multi-sheet parser: returns one entry per non-meta, non-relations sheet,
@@ -612,6 +616,7 @@ export function validateImport(
   // Warn about unrecognised columns
   const knownCoreCols = new Set([
     "id", "type", "name", "description", "subtype", "parent_id", "parent_path",
+    "parent_label",
     "external_id", "reference", "alias", "approval_status", "tags",
     ...LIFECYCLE_PHASES.map((p) => `lifecycle_${p}`),
   ]);
@@ -728,6 +733,7 @@ export function validateImport(
     const subtype = str(raw["subtype"] ?? raw["Subtype"]);
     let parentId = str(raw["parent_id"]);
     const parentPathRaw = str(raw["parent_path"]);
+    const parentLabel = str(raw["parent_label"]);
     const externalId = str(raw["external_id"]);
     const alias = str(raw["alias"] ?? raw["Alias"]);
     const approvalStatus = str(raw["approval_status"]).toUpperCase();
@@ -967,6 +973,20 @@ export function validateImport(
 
       // Validate by field type
       switch (field.type) {
+        case "percentage": {
+          const num = Number(val);
+          if (isNaN(num) || num < 0 || num > 100) {
+            errors.push({
+              row: rowNum,
+              column: colKey,
+              message: t("import.errors.expectsPercentage", { row: rowNum, field: fieldLabel(field, i18n.language), value: val }),
+            });
+            rowHasAttrError = true;
+          } else {
+            attributes[field.key] = num;
+          }
+          break;
+        }
         case "cost":
         case "number": {
           // Rule 11
@@ -1149,6 +1169,13 @@ export function validateImport(
     if (description) data.description = description;
     if (subtype) data.subtype = subtype;
     if (parentId) data.parent_id = parentId;
+    // Only a non-empty cell is sent, exactly like `parent_id` above: an empty
+    // cell in a bulk sheet means "leave it alone", not "clear it" — clearing is
+    // the grid editor's and the card's job, where the intent is unambiguous.
+    // An unknown key is refused by the server with the valid list, which
+    // surfaces as this row's error — never pre-validated here, since the
+    // vocabulary is per type and the server owns it.
+    if (parentLabel) data.parent_label = parentLabel;
     if (externalId) data.external_id = externalId;
     if (alias) data.alias = alias;
     if (Object.keys(lifecycle).length > 0) data.lifecycle = lifecycle;
@@ -1278,7 +1305,7 @@ export async function validateMultiSheet(
 
   const meta = parsed.meta;
   // Banner-trigger: a format mismatch is non-fatal — surface as a warning.
-  if (meta?.formatVersion && meta.formatVersion !== "2") {
+  if (meta?.formatVersion && meta.formatVersion !== "3") {
     warnings.push({
       message: t("import.warnings.formatVersionMismatch", {
         version: meta.formatVersion,
@@ -1599,10 +1626,12 @@ export async function validateMultiSheet(
     // sheet's type as source. Reject columns referring to relation types
     // that don't match or that carry attributes (those belong on the
     // Relations sheet).
+    // Every relation type starting at this sheet's card type is a valid column,
+    // whether or not it carries values — membership is this sheet's job for all
+    // of them. The values themselves live on the Relations sheet.
     const validRelTypes = new Map<string, RelationType>();
     for (const rt of relationTypes) {
       if (rt.source_type_key !== sheetType) continue;
-      if (rt.attributes_schema && rt.attributes_schema.length > 0) continue;
       validRelTypes.set(rt.key, rt);
     }
 
@@ -1739,7 +1768,16 @@ export async function validateMultiSheet(
     }
   }
 
-  // ----- Relations sheet --------------------------------------------------
+  // ----- Relations sheet (values only) -------------------------------------
+  // Triples the card sheets are creating in this same import, so a row setting
+  // values on a brand-new relation is accepted rather than reported missing.
+  const inlineUpsertTriples = new Set<string>();
+  for (const op of relationOps) {
+    if (op.action !== "upsert") continue;
+    if (op.sourceRef.kind !== "id" || op.targetRef.kind !== "id") continue;
+    inlineUpsertTriples.add(`${op.relationType}|${op.sourceRef.id}|${op.targetRef.id}`);
+  }
+
   if (parsed.relationRows.length > 0) {
     for (let i = 0; i < parsed.relationRows.length; i++) {
       const raw = parsed.relationRows[i];
@@ -1762,12 +1800,17 @@ export async function validateMultiSheet(
         });
         continue;
       }
-      const action = (str(raw["action"]) || "upsert").toLowerCase();
-      if (action !== "upsert" && action !== "delete") {
-        errors.push({
+      // The sheet is values-only: it sets what a relation holds and never
+      // creates or removes one. A workbook exported before that (format 2)
+      // carries an `action` column; `upsert` reads the same either way, but a
+      // `delete` row is no longer honoured and says so rather than looking
+      // like it worked.
+      const legacyAction = str(raw["action"]).toLowerCase();
+      if (legacyAction === "delete") {
+        warnings.push({
           row: rowNum,
           column: "action",
-          message: t("import.errors.invalidRelationAction", { action }),
+          message: t("import.warnings.relationActionIgnored"),
         });
         continue;
       }
@@ -1800,6 +1843,9 @@ export async function validateMultiSheet(
         if (f.type === "number" || f.type === "cost") {
           const n = Number(cell);
           if (!isNaN(n)) attributes[f.key] = n;
+        } else if (f.type === "percentage") {
+          const n = Number(cell);
+          if (!isNaN(n) && n >= 0 && n <= 100) attributes[f.key] = n;
         } else if (f.type === "boolean") {
           const lower = cell.toLowerCase();
           if (TRUTHY.has(lower)) attributes[f.key] = true;
@@ -1808,10 +1854,30 @@ export async function validateMultiSheet(
           attributes[f.key] = cell;
         }
       }
+      // Values-only: this row annotates a relation, it does not bring one into
+      // existence. When both ends resolve to real cards we can tell whether the
+      // relation is there — if it is not, and no card sheet is creating it in
+      // this import, say so and point at the card sheet. When an end is a card
+      // this workbook is still creating, existence is unknowable here and the
+      // row is trusted.
+      if (sourceHandle.kind === "id" && targetHandle.kind === "id") {
+        const triple = `${relType}|${sourceHandle.id}|${targetHandle.id}`;
+        if (!relationByTriple.has(triple) && !inlineUpsertTriples.has(triple)) {
+          warnings.push({
+            row: rowNum,
+            column: "relation_type",
+            message: t("import.warnings.relationRowNotLinked", {
+              source: sourceRefStr,
+              target: targetRefStr,
+            }),
+          });
+          continue;
+        }
+      }
       relationOps.push({
         rowIndex: rowNum,
         sheet: RELATIONS_SHEET_NAME,
-        action: action as "upsert" | "delete",
+        action: "upsert",
         relationType: relType,
         sourceRef: sourceHandle,
         targetRef: targetHandle,
@@ -1869,6 +1935,66 @@ export async function validateMultiSheet(
   }
   relationOps.length = 0;
   relationOps.push(...dedupedOps);
+
+  // ----- Reconcile ops naming the same relation ----------------------------
+  // A relation can be created by a card sheet's `rel:` cell and given its
+  // values by a `Relations` row in the same import — two ops for one relation,
+  // which must MERGE into a single upsert carrying the values rather than race.
+  //
+  // The other case is a contradictory hand edit: the card taken out of the
+  // inline cell while its `Relations` row is left in place. Removal wins — a
+  // delete can only come from a name somebody deliberately removed — and the
+  // reader is told the two disagreed.
+  const opTriple = (op: RelationOp): string | null => {
+    if (op.sourceRef.kind !== "id" || op.targetRef.kind !== "id") return null;
+    return `${op.relationType}|${op.sourceRef.id}|${op.targetRef.id}`;
+  };
+  const deletedTriples = new Set<string>();
+  for (const op of relationOps) {
+    if (op.action !== "delete") continue;
+    const key = opTriple(op);
+    if (key) deletedTriples.add(key);
+  }
+  const seenTriples = new Map<string, RelationOp>();
+  const reconciled: RelationOp[] = [];
+  for (const op of relationOps) {
+    const key = opTriple(op);
+    // Ops naming a card this workbook is still creating cannot collide — the
+    // relation cannot already exist — so they pass through untouched.
+    if (!key) {
+      reconciled.push(op);
+      continue;
+    }
+    if (op.action === "upsert" && deletedTriples.has(key)) {
+      warnings.push({
+        row: op.rowIndex,
+        column: op.sheet,
+        message: t("import.warnings.relationOpConflict"),
+      });
+      continue;
+    }
+    const prior = seenTriples.get(key);
+    if (prior) {
+      // The same relation listed twice with the same intent. Keep one, but let
+      // a `Relations`-sheet upsert win over a bare inline one so the values
+      // and description it carries survive the merge.
+      if (
+        op.action === "upsert" &&
+        prior.action === "upsert" &&
+        (op.attributes !== undefined || op.description !== undefined) &&
+        prior.attributes === undefined &&
+        prior.description === undefined
+      ) {
+        reconciled[reconciled.indexOf(prior)] = op;
+        seenTriples.set(key, op);
+      }
+      continue;
+    }
+    seenTriples.set(key, op);
+    reconciled.push(op);
+  }
+  relationOps.length = 0;
+  relationOps.push(...reconciled);
 
   // Hand every relation op a workbook-wide unique `wireRow` so a
   // `/relations/bulk` response can be tied back to the exact op for

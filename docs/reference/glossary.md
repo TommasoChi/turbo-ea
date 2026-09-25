@@ -8,6 +8,11 @@
 | **BPM** | Business Process Management — the discipline of modeling, analyzing, and improving business processes |
 | **BPM Row Order** | The display order of process type rows (Core, Support, Management) in the BPM process navigator, configurable by dragging rows |
 | **BPMN** | Business Process Model and Notation — the standard notation for modeling business processes (version 2.0) |
+| **Event definition** | The kind of a BPMN event — message, timer, signal, error, escalation, conditional, link, compensation, cancel or terminate. Shown beside the element type in the process steps table, together with the name of the Message, Signal or Error the event refers to |
+| **Lane** | A horizontal band inside a pool that groups the steps performed by one role, team or department |
+| **Call activity** | A BPMN task with a thick border that invokes a process defined on its own — BPMN's native way to say "this step is another process", and the one step type Turbo EA prompts for its Business Process when you place it. Any other step links a process the same way, from the properties panel, the context pad or the steps table; publishing the flow creates a *calls* relation between the two processes |
+| **Message flow** | A message exchanged between two pools of a BPMN collaboration. Listed under the elements table of a published process flow, where it can be linked to the Interface card that carries it |
+| **Pool** | One participant of a BPMN collaboration — a customer, a department, a partner system — drawn as a container holding that party's own process |
 | **Business Capability** | What an organization can do, regardless of how it does it |
 | **Calculation** | An admin-defined formula that automatically computes a field value when a card is saved |
 | **Card** | The basic unit of information in Turbo EA representing any architecture component |
@@ -15,7 +20,7 @@
 | **Confidence Score** | A 0–100% rating indicating how reliable an AI-generated description is |
 | **Data Quality** | A 0–100% completeness score based on filled fields and their configured weights |
 | **Diagram** | A visual architecture diagram created with the embedded DrawIO editor |
-| **File Attachment** | A binary file (PDF, DOCX, XLSX, images, up to 10 MB) uploaded directly to a card via the Resources tab |
+| **File Attachment** | A binary file (documents, spreadsheets, presentations, OpenDocument and legacy Office files, images, archives, Outlook and e-mail messages, CSV, Markdown, JSON and XML — up to 20 MB) uploaded directly to a card via the Resources tab |
 | **Fiscal Year** | The 12-month period used for budgeting and financial reporting. Configurable via Admin > Settings — the start month (January through December) determines how PPM budget lines are grouped |
 | **DrawIO** | The embedded open-source diagramming tool used for visual architecture diagrams |
 | **Cost Line** | A budget or actual cost entry (CapEx/OpEx) in a PPM initiative, used to track financial spending |
@@ -26,6 +31,10 @@
 | **Entitlement** | One line of a signed extension license: the right to run a specific extension until an expiry date, followed by a grace window before soft-disable |
 | **Content Pack** | The data-only part of an extension: card types, tags, cards, and relations applied through the same idempotent engine as Workspace Transfer, with a dry-run preview |
 | **DAAF** | Digital Autonomy Assessment Framework — Utrecht University's method for scoring how exposed an application is to a supplier and how well that exposure can be mitigated. Reproduced by a free extension |
+| **Automation rule** | A rule the Automations extension runs for you: *when* a card, relation or todo changes or a schedule fires, *if* conditions built from dropdowns hold, *then* a list of actions runs. Every run is recorded as a mutation batch |
+| **Run (automation)** | One execution of an automation rule for one card — its trigger, its outcome and every action line, listed on the Runs tab and linked to its mutation batch |
+| **Fire key** | What an automation rule remembers after firing for a card: the card and the values its conditions read. While they are unchanged the rule does not fire again for that card, so a nightly rule cannot raise the same risk every night |
+| **Mutation batch** | One audited unit of change in Admin → Audit log — who wrote what, from where (web, API, AI tool or extension), with a per-event diff and a Rollback that reverts card, relation, risk, stakeholder-role, tag and draft-decision writes |
 | **Register of Information** | The record every EU financial entity must keep of its ICT third-party arrangements and file annually under DORA Art. 28, as 15 interlocking templates |
 | **LEI** | Legal Entity Identifier — a 20-character ISO 17442 code identifying a legal entity, with two check digits. Required throughout the DORA Register of Information |
 | **xBRL-CSV** | The machine-readable report package format supervisors accept for regulatory filings such as the DORA Register of Information |

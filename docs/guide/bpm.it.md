@@ -43,20 +43,60 @@ I grafici mostrano la distribuzione per tipo di processo, livello di maturità e
 
 ![Editor del flusso di processo](../assets/img/it/47_bpm_flusso_processo.png)
 
-Ogni card Business Process può avere un **diagramma del flusso di processo BPMN 2.0**. L'editor utilizza [bpmn-js]( e fornisce:)
+Ogni card Business Process può avere un **diagramma del flusso di processo BPMN 2.0**. L'editor utilizza [bpmn-js](https://bpmn.io/) e fornisce:
 
-- **Modellazione visiva** — Trascinate elementi BPMN: attività, eventi, gateway, corsie e sotto-processi
-- **Template iniziali** — Scegliete tra 6 template BPMN predefiniti per i pattern di processo comuni (o iniziate da una tela bianca)
-- **Estrazione degli elementi** — Quando salvate un diagramma, il sistema estrae automaticamente tutte le attività, gli eventi, i gateway e le corsie per l'analisi. Gli elementi estratti sono elencati nell'**ordine del flusso di processo** — seguendo i flussi di sequenza e di messaggio del diagramma, a partire dall'evento di inizio — e non raggruppati per tipo di elemento. I passaggi di un ciclo restano uniti e il contenuto di un sotto-processo è elencato subito sotto di esso
+- **Modellazione visiva** — Trascinate elementi BPMN dalla palette: attività, eventi, gateway, corsie, pool e sotto-processi. La voce **…** in fondo alla palette apre un menu **Create element** con ricerca che raggiunge ogni tipo di elemento BPMN — eventi di messaggio, timer, segnale, errore ed escalation, transazioni, sotto-processi di evento, attività di chiamata, attività di invio/ricezione, oggetti e archivi dati (scorciatoia `N`). La voce **+** nel pannello contestuale di una forma selezionata apre il corrispondente menu **Append element** (scorciatoia `A`)
+- **Template iniziali** — Scegliete tra 7 template BPMN predefiniti per i pattern di processo comuni, compreso un template **Collaborazione** a due pool con flussi di messaggi (o iniziate da una tela bianca)
+- **Estrazione degli elementi** — Quando salvate un diagramma, il sistema estrae automaticamente tutte le attività, gli eventi, i gateway, le corsie, gli oggetti dati e i flussi di messaggi per l'analisi. Gli eventi conservano il proprio tipo — un evento di inizio di tipo *messaggio* è elencato come tale, con il nome del messaggio ricevuto — e le attività di invio/ricezione riportano il messaggio scambiato. Gli elementi estratti sono elencati nell'**ordine del flusso di processo** — seguendo i flussi di sequenza e di messaggio del diagramma, a partire dall'evento di inizio — e non raggruppati per tipo di elemento. I passaggi di un ciclo restano uniti, il contenuto di un sotto-processo è elencato subito sotto di esso, e oggetti e archivi dati vengono per ultimi
 - **Colori degli elementi** — Selezionate uno o più elementi e usate il pulsante con il secchiello di vernice nel pannello contestuale per applicare un colore. I colori vengono salvati nel file BPMN stesso, quindi compaiono anche nel visualizzatore di sola lettura, nelle esportazioni e nelle stampe
+- **Pannello proprietà** — Il pannello a destra (mostratelo o nascondetelo con il pulsante a cursori della barra degli strumenti) modifica ciò che una forma non può mostrare: nome e documentazione dell'elemento, il **messaggio**, il **segnale**, l'**errore** o l'**escalation** a cui un evento fa riferimento, la condizione di un flusso di sequenza e i marcatori multi-istanza. La documentazione inserita qui compare nel navigatore dei processi e nel visualizzatore di sola lettura
+
+![Menu «Create element»](../assets/img/it/89_bpm_menu_crea_elemento.png)
+
+![Pannello proprietà](../assets/img/it/90_bpm_pannello_proprieta.png)
+
+### Pool e flussi di messaggi
+
+Un processo che coinvolge più parti — un cliente e l'azienda, due reparti, un sistema partner — si modella come **collaborazione**: un pool per parte, collegati da **flussi di messaggi**. Aggiungete un secondo pool dalla palette (o partite dal template **Collaborazione**), quindi tracciate un flusso di messaggio tra i due pool con lo strumento di connessione globale, oppure da un'attività di invio, un evento di fine messaggio o un evento di invio messaggio in un pool verso un'attività di ricezione o un evento di messaggio nell'altro. Date un nome al messaggio nel pannello proprietà, così si legge allo stesso modo ovunque.
+
+![Template Collaborazione](../assets/img/it/91_bpm_template_collaborazione.png)
+
+### Flussi di messaggi
+
+I flussi di messaggi del diagramma pubblicato sono elencati sotto la tabella degli elementi; ciascuno mostra cosa collega — un'attività, un evento o un intero pool a ciascuna estremità. Collegate un flusso di messaggio alla card **Interfaccia** che lo trasporta. Come i collegamenti alle organizzazioni sui passaggi, è solo informativo: non viene creata alcuna relazione tra card.
 
 ### Collegamento degli elementi
 
 Gli elementi BPMN possono essere **collegati alle card EA**. Ad esempio, collegate un'attività nel vostro diagramma di processo all'Application che la supporta. Questo crea una connessione tracciabile tra il vostro modello di processo e il panorama architetturale:
 
-- Selezionate qualsiasi attività, evento o gateway nel diagramma BPMN
-- Il pannello **Element Linker** mostra le card corrispondenti (Application, Data Object, IT Component, Organization)
-- Collegate l'elemento a una card — la connessione è memorizzata e visibile sia nel flusso di processo che nelle relazioni della card
+- Ogni attività, evento e gateway con nome del flusso pubblicato è una riga della tabella **Passi ed elementi del processo** sotto il diagramma (una bozza ha la stessa tabella sotto **Pre-collega elementi**, applicata all'approvazione della bozza)
+- Clicca sulla cella **Applicazione**, **Oggetto dati** o **Componente IT** di un passo e scegli la card — il selettore sfoglia l'inventario, non si digita nulla a mano
+- Il collegamento è memorizzato sul passo e crea una relazione tra il processo e la card, visibile sia nel flusso di processo sia nella scheda Relazioni della card
+- La colonna **Processo aziendale** collega un passo al processo a cui passa il testimone — vedi sotto
+- Gli stessi cinque collegamenti sono disponibili **nell'editor** finché una bozza è aperta: un gruppo **Card collegate** nel pannello delle proprietà e una voce **Collega card** nel menu contestuale che ne apre l'elenco
+- Nel diagramma stesso, un passo collegato porta **un piccolo punto per ogni tipo di scheda collegata** sotto il suo nome, nel colore di quel tipo di scheda, sia nell'editor sia nel visualizzatore in sola lettura. I nomi non compaiono sulla tela: fate clic sul passo per vederli, oppure passate il mouse su un punto
+
+### Collegare un passo a un processo
+
+Un passo spesso passa il testimone a un processo che esiste di per sé — con il proprio diagramma, il proprio responsabile e il proprio ciclo di vita, di norma riutilizzato da più punti. Ogni passo può dirlo: un'attività, un sottoprocesso, un evento o un gateway punta a una card **Processo aziendale**, e non si inserisce mai un identificativo di processo a mano:
+
+- **Il pannello delle proprietà** mostra un gruppo **Card collegate** su ogni passo, una riga per collegamento — Processo aziendale, Applicazione, Oggetto dati, Componente IT, Organizzazioni — ciascuna con **Scegli**, **Apri** (che scende nella card collegata) e **Rimuovi**
+- **Il menu contestuale** di un passo selezionato porta una voce **Collega card** con gli stessi cinque, per quando il pannello è chiuso. Un oggetto o archivio dati offre solo il collegamento Oggetto dati, come nella tabella
+- **La tabella dei passi** del flusso pubblicato (e la tabella di pre-collegamento di una bozza) ha lo stesso collegamento nella colonna **Processo aziendale**, e il chip che vi si trova scende nella scheda Flusso di processo del processo collegato. Gli oggetti e gli archivi dati non sono passi, quindi le loro righe mostrano un trattino
+
+![Schede collegate](../assets/img/it/92_bpm_processo_richiamato.png)
+
+BPMN ha un costrutto che *è* un altro processo: l'**attività di chiamata** (call activity), un'attività con bordo spesso che richiama un processo definito in modo autonomo. Un **sottoprocesso** incorporato raggruppa anch'esso dei passi, ma appartiene al diagramma in cui è disegnato; la regola di Method & Style è semplice: se il processo esiste in modo indipendente, usate un'attività di chiamata. Turbo EA la tratta come il caso nativo: **posizionare un'attività di chiamata chiede quale processo richiama**, e il collegamento viene memorizzato nell'*elemento richiamato* proprio di BPMN, che gli altri strumenti sanno leggere. Ogni altro passo memorizza invece il collegamento come attributo Turbo EA nel diagramma.
+
+Pubblicare un flusso che contiene un passo collegato crea una relazione **richiama** tra i due processi — la scheda Relazioni del processo collegato riporta *è richiamato da*, e la vista delle dipendenze disegna il grafo delle chiamate. Un diagramma importato da un altro strumento conserva il riferimento di processo proprio di quello strumento; la tabella dei passi lo mostra come suggerimento (*riferimento a Process_X*) finché non scegliete il processo corrispondente in Turbo EA.
+
+### Un solo insieme di collegamenti
+
+L'editor e le tabelle mostrano gli stessi collegamenti, quindi un passo si legge allo stesso modo ovunque:
+
+- Dentro una **bozza** vale ciò che imposti lì — nell'editor o nella tabella **Pre-collega elementi**, sono lo stesso archivio — e il riferimento di processo del diagramma è il ripiego per un passo su cui non hai detto nulla. Rimuovere un collegamento lo rimuove, anche alla pubblicazione.
+- Un flusso **pubblicato** resta approvato mentre i suoi collegamenti vengono modificati nella sua tabella degli elementi: sono metadati sopra un diagramma già approvato, non un motivo per approvarlo di nuovo.
+- Una bozza **creata dalla versione pubblicata** parte dai collegamenti che il processo ha in quel momento. Una bozza già aperta mantiene i propri, così la modifica di un altro non cambia il diagramma su cui stai lavorando.
 
 ### Collegare le organizzazioni
 

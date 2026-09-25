@@ -64,3 +64,127 @@ export function orderRelationTypesByOtherEnd<
   // anchoring — no explicit sort needed.
   return [...runs.values()].flat();
 }
+
+/** One relation type as seen from ONE of its ends. */
+export interface RelationSide<T> {
+  rt: T;
+  /** True when the card under view sits at the relation's SOURCE end. */
+  isSource: boolean;
+}
+
+/**
+ * Every side of every relation type a card type takes part in.
+ *
+ * "Am I the source?" must never be derived from the relation *type*: for a
+ * self-referencing type (source type === target type) that test is true at
+ * BOTH ends, so both directions collapsed into one group under the forward
+ * verb and nothing could ever create the incoming one. A cross-type rt has
+ * exactly one side, as before; a self-referencing rt has two, emitted
+ * together so they stay adjacent wherever the list is rendered. A type that
+ * touches neither end is dropped rather than guessed at.
+ */
+export function expandSides<T extends { source_type_key: string; target_type_key: string }>(
+  rts: T[],
+  cardTypeKey: string,
+): RelationSide<T>[] {
+  const out: RelationSide<T>[] = [];
+  for (const rt of rts) {
+    if (rt.source_type_key === cardTypeKey) out.push({ rt, isSource: true });
+    if (rt.target_type_key === cardTypeKey) out.push({ rt, isSource: false });
+  }
+  return out;
+}
+
+/**
+ * Visibility / mandatory flags for ONE side of a relation type.
+ *
+ * The side is passed in, never derived from the type: for a self-referencing
+ * type the "am I the source" test is true at both ends, which is how both
+ * directions used to collapse into one group under the forward verb and the
+ * target-side flags became unreachable.
+ */
+export function sideFlags(
+  rt: {
+    source_visible: boolean;
+    target_visible: boolean;
+    source_mandatory: boolean;
+    target_mandatory: boolean;
+  },
+  isSource: boolean,
+): { visible: boolean; mandatory: boolean } {
+  return {
+    visible: isSource ? rt.source_visible : rt.target_visible,
+    mandatory: isSource ? rt.source_mandatory : rt.target_mandatory,
+  };
+}
+
+/**
+ * The key one side is filed under. A cross-type rt keeps its bare key, so
+ * persisted filters, bookmarks and `rel_<key>` deep links keep resolving; a
+ * self-referencing rt takes the `__out` / `__in` suffix the inventory's mass
+ * edit already uses for exactly this split.
+ */
+export function sideKey<T extends { key: string; source_type_key: string; target_type_key: string }>(
+  rt: T,
+  isSource: boolean,
+): string {
+  if (rt.source_type_key !== rt.target_type_key) return rt.key;
+  return `${rt.key}__${isSource ? "out" : "in"}`;
+}
+
+/**
+ * Does relation `r` belong on this side of `rtKey`, seen from `myId`?
+ *
+ * Per row, never per type — see `otherEnd`. A degenerate self-loop
+ * (`source_id === target_id === myId`) lands on the outgoing side, once.
+ */
+export function onSide(
+  r: { type: string; source_id: string; target_id: string },
+  rtKey: string,
+  myId: string,
+  isSource: boolean,
+): boolean {
+  return r.type === rtKey && (r.source_id === myId) === isSource;
+}
+
+/**
+ * Inverse of `sideKey`: the bare relation-type key plus, when the key names
+ * one side of a self-referencing type, which side. A bare key means "either
+ * side" — the union every saved report and bookmark has always meant.
+ */
+export function parseSideKey(key: string): { key: string; isSource?: boolean } {
+  if (key.endsWith("__out")) return { key: key.slice(0, -5), isSource: true };
+  if (key.endsWith("__in")) return { key: key.slice(0, -4), isSource: false };
+  return { key };
+}
+
+/**
+ * Is this relation row stored against its relation type's direction?
+ *
+ * True when the row's source card is of the type's TARGET card type and its
+ * target card of the SOURCE type — e.g. a `relAppToInterface` row whose source
+ * is the Interface. Several write paths accept ids without checking them
+ * against the type (the Excel Relations sheet, `/relations/bulk` id refs, the
+ * MCP server, the extension bridge, workspace import, and the diagram editor
+ * before 2.39.1), so such rows exist in the wild.
+ *
+ * It matters wherever a direction is DRAWN: a relation's `flowDirection` means
+ * something on the type's axis — card detail offers `forward` as the
+ * Application being *Provider* — so reading it on the stored row's axis draws
+ * a backwards row's provider as a consumer (discussion #1140). Every arrow
+ * renderer asks this one question and reads the row as if it were stored the
+ * type's way.
+ *
+ * Never true for a self-referencing type (the stored direction IS the meaning
+ * there), and false whenever anything is unknown, so unrecognised data draws
+ * exactly as stored.
+ */
+export function runsAgainstType(
+  rt: { source_type_key: string; target_type_key: string } | undefined,
+  sourceCardType: string | undefined,
+  targetCardType: string | undefined,
+): boolean {
+  if (!rt || !sourceCardType || !targetCardType) return false;
+  if (rt.source_type_key === rt.target_type_key) return false;
+  return sourceCardType === rt.target_type_key && targetCardType === rt.source_type_key;
+}

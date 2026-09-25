@@ -23,6 +23,7 @@
  */
 
 import { createContext, useContext } from "react";
+import type { LinkKind } from "./calledProcess";
 import type { ProcessTypeOptionsResult } from "./useProcessTypeOptions";
 import type { SubtypeDef } from "@/types";
 
@@ -37,6 +38,8 @@ export interface NavigatorStep {
   lane_name?: string;
   is_automated: boolean;
   sequence_order: number;
+  event_definition_type?: string | null;
+  definition_name?: string | null;
   application_name?: string;
   data_object_name?: string;
   it_component_name?: string;
@@ -45,6 +48,10 @@ export interface NavigatorStep {
   application_id?: string;
   data_object_id?: string;
   it_component_id?: string;
+  /** The process the step links to — the id is authenticated-only, so the
+   *  chip drills down in the app and is inert in a portal. */
+  business_process_id?: string;
+  business_process_name?: string;
   organizations?: { id: string; name: string }[];
 }
 
@@ -80,6 +87,12 @@ export interface ProcessNavigatorSource {
   loadCard?(processId: string): Promise<Record<string, unknown>>;
   reorderCards?(updates: { id: string; sortOrder: number }[]): Promise<void>;
   saveRowOrder?(order: string[]): Promise<void>;
+  /**
+   * Card-type colours for the link dots on the flow viewer, from the
+   * metamodel — the app supplies them; a portal has no metamodel session and
+   * leaves them unset, so the viewer falls back to the seeded set.
+   */
+  typeColors?: Partial<Record<LinkKind, string>>;
 }
 
 export type NavigatorViewMode = "house" | "matrix" | "dependencies";

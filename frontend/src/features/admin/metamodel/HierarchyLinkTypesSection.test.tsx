@@ -1,0 +1,163 @@
+/**
+ * Hierarchy link types as a section of the Relations tab (#1100 follow-up).
+ *
+ * It used to sit on the type drawer's main tab next to Subtypes. A parent→child
+ * link is a relationship, so it belongs with the relation types — and it now
+ * renders in both hosts from one component, which is what these cases pin.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import HierarchyLinkTypesSection from "./HierarchyLinkTypesSection";
+
+vi.mock("@/api/client", () => ({
+  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+}));
+
+vi.mock("./HierarchyLabelsDialog", () => ({
+  default: ({ open, cardType }: { open: boolean; cardType: { key: string } | null }) =>
+    open ? <div data-testid="labels-dialog">{cardType?.key}</div> : null,
+}));
+
+const ORG = {
+  key: "Organization",
+  label: "Organization",
+  icon: "corporate_fare",
+  color: "#2889ff",
+  has_hierarchy: true,
+  hierarchy_labels: [
+    { key: "commercial", label: "Commercial", color: "#2889ff" },
+    { key: "sales", label: "Sales", color: "#33cc58" },
+  ],
+} as never;
+
+/** Hierarchical but not yet configured — still listed, or the feature is undiscoverable. */
+const CAPABILITY = {
+  key: "BusinessCapability",
+  label: "Business Capability",
+  icon: "account_tree",
+  color: "#003399",
+  has_hierarchy: true,
+  hierarchy_labels: [],
+} as never;
+
+/** Flat type — never appears. */
+const INTERFACE = {
+  key: "Interface",
+  label: "Interface",
+  icon: "sync_alt",
+  color: "#02afa4",
+  has_hierarchy: false,
+} as never;
+
+const TYPES = [ORG, CAPABILITY, INTERFACE];
+
+beforeEach(() => vi.clearAllMocks());
+
+describe("HierarchyLinkTypesSection", () => {
+  it("lists every hierarchical type on the general tab, configured or not", () => {
+    render(<HierarchyLinkTypesSection types={TYPES} onRefresh={vi.fn()} />);
+    expect(screen.getByText("Organization")).toBeInTheDocument();
+    expect(screen.getByText("Business Capability")).toBeInTheDocument();
+    // An empty vocabulary still gets a row — hiding it would leave the feature
+    // reachable only by someone who already knew it existed.
+    expect(screen.getByText("No link types defined")).toBeInTheDocument();
+  });
+
+  it("summarises a vocabulary as a count, never as one chip per value", () => {
+    render(<HierarchyLinkTypesSection types={TYPES} onRefresh={vi.fn()} />);
+    // The relation cards below collapse their values the same way; only the
+    // editor shows them. Listing them here was also unbounded.
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.queryByText("Commercial")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sales")).not.toBeInTheDocument();
+  });
+
+  it("carries the names in the chip's tooltip", async () => {
+    const user = userEvent.setup();
+    render(<HierarchyLinkTypesSection types={TYPES} onRefresh={vi.fn()} />);
+    await user.hover(screen.getByText("2"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Commercial, Sales");
+  });
+
+  it("stays one chip at fifty link types", () => {
+    // The case that prompted this: a per-value chip made the row grow without
+    // bound. Fails loudly if anyone re-inlines the list.
+    const many = {
+      ...(ORG as unknown as Record<string, unknown>),
+      hierarchy_labels: Array.from({ length: 50 }, (_, i) => ({
+        key: `k${i}`,
+        label: `Link ${i}`,
+      })),
+    } as never;
+    render(<HierarchyLinkTypesSection types={[many]} onRefresh={vi.fn()} />);
+    expect(screen.getByText("50")).toBeInTheDocument();
+    expect(screen.queryByText("Link 0")).not.toBeInTheDocument();
+  });
+
+  it("carries no heading on the landscape tab — the sub-tab is the heading", () => {
+    render(<HierarchyLinkTypesSection types={TYPES} onRefresh={vi.fn()} />);
+    // Repeating the sub-tab's own label inside it is the duplication
+    // `RelationTypesPanel` avoids by carrying no title of its own.
+    expect(screen.queryByText("Hierarchy link types")).not.toBeInTheDocument();
+    // The prose is not here either: `HierarchyLabelsDialog` renders it, the way
+    // `RelationTypeValuesDialog` carries the relation-values one.
+    expect(screen.queryByText(/Label each parent-child link/i)).not.toBeInTheDocument();
+  });
+
+  it("collapses to a single heading row in the drawer", () => {
+    const { container } = render(
+      <HierarchyLinkTypesSection types={TYPES} scopeTypeKey="Organization" onRefresh={vi.fn()} />,
+    );
+    // The drawer IS the card type, so a per-type card has an empty left half
+    // and leaves its count and button floating at the right of a blank box.
+    // Title, count and action go on one line instead.
+    expect(container.querySelector(".MuiCard-root")).toBeNull();
+    expect(screen.getByText("Hierarchy link types")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit link types" })).toBeInTheDocument();
+  });
+
+  it("still uses cards on the landscape tab", () => {
+    const { container } = render(
+      <HierarchyLinkTypesSection types={TYPES} onRefresh={vi.fn()} />,
+    );
+    // There each row needs its type identity on the left, so the card earns
+    // its place — two hierarchical types, two cards.
+    expect(container.querySelectorAll(".MuiCard-root")).toHaveLength(2);
+  });
+
+  it("never lists a non-hierarchical type", () => {
+    render(<HierarchyLinkTypesSection types={TYPES} onRefresh={vi.fn()} />);
+    expect(screen.queryByText("Interface")).not.toBeInTheDocument();
+  });
+
+  it("shows only the scoped type in the drawer", () => {
+    render(
+      <HierarchyLinkTypesSection types={TYPES} scopeTypeKey="Organization" onRefresh={vi.fn()} />,
+    );
+    // One row, and in the drawer it carries no type-name prefix — the count
+    // chip is the row's content.
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.queryByText("Business Capability")).not.toBeInTheDocument();
+    expect(screen.queryByText("No link types defined")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing for a non-hierarchical scoped type", () => {
+    const { container } = render(
+      <HierarchyLinkTypesSection types={TYPES} scopeTypeKey="Interface" onRefresh={vi.fn()} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("opens the editor for the row's own card type", async () => {
+    const user = userEvent.setup();
+    render(<HierarchyLinkTypesSection types={TYPES} onRefresh={vi.fn()} />);
+
+    const row = screen.getByText("Business Capability").closest("div")
+      ?.parentElement as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: /edit link types/i }));
+    // The dialog must receive the type whose row was clicked, not the first one.
+    expect(await screen.findByTestId("labels-dialog")).toHaveTextContent("BusinessCapability");
+  });
+});

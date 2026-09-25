@@ -63,6 +63,7 @@ vi.mock("@/features/cards/sections", async () => {
   };
 });
 
+import Box from "@mui/material/Box";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { registerExtension, resetExtensionHost, UI_SDK_VERSION } from "@/lib/extensionHost";
 import type { Card } from "@/types";
@@ -169,5 +170,83 @@ describe("CardDetailContent extension field visibility", () => {
     await waitFor(() => expect(screen.queryByText("Indicators")).not.toBeInTheDocument());
     expect(screen.queryByText("Indicator A")).not.toBeInTheDocument();
     expect(screen.queryByText("Indicator B")).not.toBeInTheDocument();
+  });
+});
+
+describe("CardDetailContent extension header slot", () => {
+  const Chip = ({ label }: { label: string }) => <span>{label}</span>;
+
+  it("lays several contributions out in one row", async () => {
+    registerExtension("one", {
+      key: "one",
+      sdkVersion: UI_SDK_VERSION,
+      slots: [
+        { slot: "card.detail.header", id: "a", component: () => <Chip label="chip-a" /> },
+      ],
+    });
+    registerExtension("two", {
+      key: "two",
+      sdkVersion: UI_SDK_VERSION,
+      slots: [
+        { slot: "card.detail.header", id: "b", component: () => <Chip label="chip-b" /> },
+      ],
+    });
+    renderContent();
+    const chipA = await screen.findByText("chip-a");
+    const chipB = screen.getByText("chip-b");
+    const row = screen.getByTestId("card-header-slot");
+    // Both live in the SAME container, and that container is a flex row — the
+    // thing that stops two extensions' chips stacking on separate lines.
+    expect(row).toContainElement(chipA);
+    expect(row).toContainElement(chipB);
+    expect(row).toHaveStyle({ display: "flex" });
+  });
+
+  it("neutralises a contribution's own margin so old bundles still line up", async () => {
+    // `align-items: center` centres a flex item's MARGIN box, so a contribution
+    // that spaces itself — as every extension built before this row does —
+    // renders higher than a margin-less sibling. Measured in Chromium with the
+    // shapes actually installed (12px band / no margin / 8px band): three
+    // baselines 6px apart before this rule, one baseline after.
+    //
+    // jsdom has no layout engine and only a partial cascade — it does not apply
+    // a child-combinator rule to `getComputedStyle` — so what is checkable HERE
+    // is that the rule is emitted against the row's own class, doubled for
+    // specificity so it outranks the child's own emotion class. The layout
+    // consequence is proven in the browser, not here.
+    registerExtension("one", {
+      key: "one",
+      sdkVersion: UI_SDK_VERSION,
+      slots: [
+        {
+          slot: "card.detail.header",
+          id: "banded",
+          component: () => (
+            <Box data-testid="banded" sx={{ mb: 1.5 }}>
+              chip-a
+            </Box>
+          ),
+        },
+      ],
+    });
+    renderContent();
+    await screen.findByTestId("banded");
+    const row = screen.getByTestId("card-header-slot");
+    const rowClass = [...row.classList].find((c) => c.startsWith("css-"));
+    const css = [...document.querySelectorAll("style")].map((s) => s.textContent).join("");
+    // `.css-x.css-x>*{margin:0px}` — (0,2,0) beats the child's own (0,1,0),
+    // which a single `& > *` would only tie with and lose on source order.
+    expect(css).toContain(`.${rowClass}.${rowClass}>*{margin:0px;}`);
+  });
+
+  it("leaves the row empty when a contribution renders nothing", async () => {
+    registerExtension("one", {
+      key: "one",
+      sdkVersion: UI_SDK_VERSION,
+      slots: [{ slot: "card.detail.header", id: "a", component: () => null }],
+    });
+    renderContent();
+    // `&:empty` then hides the band, so an undecorated card keeps no stray margin.
+    await waitFor(() => expect(screen.getByTestId("card-header-slot")).toBeEmptyDOMElement());
   });
 });

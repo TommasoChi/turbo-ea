@@ -17,7 +17,6 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import TextField from "@mui/material/TextField";
 import Chip from "@mui/material/Chip";
-import LinearProgress from "@mui/material/LinearProgress";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -45,7 +44,10 @@ import InventoryFilterSidebar, {
   LIFECYCLE_PHASES,
   LOCKED_COLUMN_KEYS,
   LOGO_COLUMN_KEY,
+  EOL_COLUMN_KEY,
   EMPTY_VALUE,
+  eolColumnApplies,
+  hierarchyLabelColumnApplies,
   logoColumnApplies,
   normalizeRelationFilterKeys,
   normalizeSelectAttributeFilters,
@@ -72,19 +74,85 @@ import { exportToExcel, exportCurrentViewToExcel } from "./excelExport";
 import { dateColumnFilterDef } from "@/lib/dateColumnFilter";
 import RelationCellPopover from "./RelationCellPopover";
 import ExtFieldCell from "./ExtFieldCell";
+import LinkifiedText from "@/components/LinkifiedText";
+import MuiLink from "@mui/material/Link";
+import { isLinkableHref } from "@/lib/linkify";
+import { PercentBar, percentValue } from "@/components/PercentBar";
+
+/**
+ * A `percentage` attribute column: the same bar card detail draws, and the
+ * export carries the caption it is labelled with. Shared by the single-type
+ * and common-fields branches below so the two cannot drift.
+ */
+const percentageColumnDef = {
+  valueFormatter: (p: { value?: unknown }) =>
+    p.value === null || p.value === undefined || p.value === ""
+      ? ""
+      : `${percentValue(Number(p.value))}%`,
+  cellRenderer: (p: { value: unknown }) =>
+    p.value === null || p.value === undefined || p.value === "" ? null : (
+      <PercentBar value={Number(p.value)} width={72} height={6} />
+    ),
+} as const;
+
+/**
+ * A free-text column (`description`, a `text` / `multiline_text` attribute)
+ * renders through the same linkifier card detail uses, so an address pasted
+ * into a description is a link in the grid too. The value stays a plain
+ * string — no `valueFormatter` needed, the export reads the raw text. A
+ * `url`-typed value is one whole link when it passes the scheme allowlist
+ * (mailto included), else plain text.
+ */
+const linkifiedCell = {
+  cellRenderer: (p: { value?: unknown }) =>
+    p.value === null || p.value === undefined || p.value === "" ? null : (
+      <LinkifiedText text={String(p.value)} />
+    ),
+} as const;
+const urlCell = {
+  cellRenderer: (p: { value?: unknown }) => {
+    if (p.value === null || p.value === undefined || p.value === "") return null;
+    const href = String(p.value);
+    if (!isLinkableHref(href)) return href;
+    return (
+      <MuiLink
+        href={href.trim()}
+        target="_blank"
+        rel="noopener noreferrer"
+        underline="hover"
+        onClick={(e) => {
+          e.stopPropagation();
+          // Second click of a double-click: edit the cell, don't open a
+          // second tab (same rule as LinkifiedText).
+          if (e.detail > 1) e.preventDefault();
+        }}
+      >
+        {href}
+      </MuiLink>
+    );
+  },
+} as const;
+const isFreeTextField = (type: string) => type === "text" || type === "multiline_text";
 import { useMetamodel } from "@/hooks/useMetamodel";
+import { canCreateAnyCardType, hasTypePermission } from "@/components/RequirePermission";
 import { useCardSearch } from "@/hooks/useCardSearch";
 import { useTypeLabel, useRelationLabel, useFieldLabel, useOptionLabel, useSubtypeLabel } from "@/hooks/useResolveLabel";
+import OptionChip from "@/components/OptionChip";
 import { readableTextColor } from "@/lib/color";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import { useIsRtl } from "@/hooks/useIsRtl";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { useCurrency } from "@/hooks/useCurrency";
+import { useCalculatedFields } from "@/hooks/useCalculatedFields";
 import { FieldEditor } from "@/features/cards/sections/cardDetailUtils";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useApiQuery } from "@/hooks/useApiQuery";
+import { EOL_STATUS_COLORS, EOL_STATUS_LABEL_KEYS, isEolType } from "@/lib/eol";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { api, ApiError, isAbortError } from "@/api/client";
+import { sideKey } from "@/lib/relationSort";
+import { buildRelationIndex } from "./relationIndex";
 import { APPROVAL_STATUS_COLORS } from "@/theme/tokens";
 import TagPicker from "@/components/TagPicker";
 import { useColumnFreeze } from "@/components/grid/useColumnFreeze";
@@ -111,7 +179,7 @@ import TagsCellEditor from "@/features/inventory/TagsCellEditor";
 import MultiSelectCellEditor from "@/features/inventory/MultiSelectCellEditor";
 import ParentCellEditor from "@/features/inventory/ParentCellEditor";
 import StakeholdersCellEditor from "@/features/inventory/StakeholdersCellEditor";
-import type { Card, CardListResponse, CardType, ColumnLayoutItem, FieldDef, FieldOption, RelatedCardRef, Relation, RelationType, StakeholderRef, StakeholderRoleOption, TagGroup, TagRef } from "@/types";
+import type { Card, CardListResponse, EolCardStatus, EolCardStatusResponse, CardType, ColumnLayoutItem, FieldDef, FieldOption, RelatedCardRef, Relation, RelationType, StakeholderRef, StakeholderRoleOption, TagGroup, TagRef } from "@/types";
 import { gridThemeDark, gridThemeLight } from "@/lib/agGridSetup";
 
 const DEFAULT_SIDEBAR_WIDTH = 300;
@@ -268,37 +336,6 @@ function buildDescendantIndex(items: Card[]): Map<string, string[]> {
   return index;
 }
 
-/**
- * Build a lookup: for each relation type, map cardId → array of related cards.
- * When the selected type is the source, we index by source_id and show targets.
- * When the selected type is the target, we index by target_id and show sources.
- *
- * The far end's **id** is kept, not just its name: the cell text needs the
- * name, but the context menu's Preview action needs to open the card, and
- * resolving a name back to an id is ambiguous the moment two cards share one.
- */
-function buildRelationIndex(
-  relations: Relation[],
-  relationType: RelationType,
-  selectedType: string
-): Map<string, RelatedCardRef[]> {
-  const index = new Map<string, RelatedCardRef[]>();
-  const isSource = relationType.source_type_key === selectedType;
-
-  for (const rel of relations) {
-    const myId = isSource ? rel.source_id : rel.target_id;
-    const other = isSource ? rel.target : rel.source;
-    if (!other?.name || !other.id) continue;
-    const ref: RelatedCardRef = { id: other.id, name: other.name, type: other.type };
-    const existing = index.get(myId);
-    if (existing) {
-      existing.push(ref);
-    } else {
-      index.set(myId, [ref]);
-    }
-  }
-  return index;
-}
 
 /** An inventory grid row: a card, or a member clone marked as group header. */
 type InventoryRow = GroupedRow<Card>;
@@ -317,6 +354,8 @@ function urlHasFilterParams(searchParams: URLSearchParams): boolean {
     searchParams.has("dq") ||
     searchParams.has("orphaned") ||
     searchParams.has("stale") ||
+    searchParams.has("eol") ||
+    searchParams.has("link") ||
     Array.from(searchParams.keys()).some((k) => k.startsWith("attr_") || k.startsWith("rel_"))
   );
 }
@@ -515,6 +554,7 @@ export function currentFieldValue(card: Card, field: string): unknown {
   }
   if (field.startsWith("attr_")) return (card.attributes ?? {})[field.slice("attr_".length)];
   if (field === "parent_id") return card.parent_id ?? null;
+  if (field === "parent_label") return card.parent_label ?? null;
   return (card as unknown as Record<string, unknown>)[field];
 }
 
@@ -719,6 +759,9 @@ function savePrefs(prefs: InventoryPrefs) {
 
 export default function InventoryPage() {
   const { t, i18n } = useTranslation(["inventory", "common"]);
+  // EOL status labels belong to the EOL report; the grid borrows them rather
+  // than keeping a second copy that can drift.
+  const { t: tReports } = useTranslation("reports");
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { formatDate, formatDateTime } = useDateFormat();
@@ -795,6 +838,8 @@ export default function InventoryPage() {
         mineScope: searchParams.get("mine") === "stakeholder" ? "stakeholder" : null,
         orphanedOnly: searchParams.get("orphaned") === "true",
         staleOnly: searchParams.get("stale") === "true",
+        eolStatuses: searchParams.getAll("eol"),
+        linkTypes: searchParams.getAll("link"),
       };
     }
 
@@ -816,6 +861,8 @@ export default function InventoryPage() {
         mineScope: saved.filters.mineScope ?? null,
         orphanedOnly: saved.filters.orphanedOnly || false,
         staleOnly: saved.filters.staleOnly || false,
+        eolStatuses: saved.filters.eolStatuses || [],
+        linkTypes: saved.filters.linkTypes || [],
       };
     }
 
@@ -833,6 +880,8 @@ export default function InventoryPage() {
       mineScope: null,
       orphanedOnly: false,
       staleOnly: false,
+      eolStatuses: [],
+      linkTypes: [],
     };
   });
   // Current filters, readable from the facet bindings' stable callbacks
@@ -1125,12 +1174,38 @@ export default function InventoryPage() {
   // related card type, and several relation types may share that pair.
   const [relEditRelTypes, setRelEditRelTypes] = useState<RelationType[]>([]);
 
-  // React to ?create=true search param
+  // Exactly one faceted type drives the per-type affordances below.
+  const facetedType = filters.types.length === 1 ? filters.types[0] : "";
+
+  // Per-card-type permission overrides (discussion #1068). With exactly one
+  // type faceted the affordances follow that type; with none or several, the
+  // Create button only needs *some* creatable type — the dialog's own picker
+  // then narrows it, and the server enforces the rest.
+  const canCreateAnyType = useMemo(() => canCreateAnyCardType(user, types), [types, user]);
+  const canCreateSelectedType = facetedType
+    ? hasTypePermission(user, "inventory.create", facetedType)
+    : canCreateAnyType;
+  // Grid edit mode writes to the faceted type, so it needs edit on that type.
+  // Without a single faceted type the rows span types and the server decides
+  // per card, which is the same posture as the archive/delete buttons below.
+  const canGridEditSelectedType = facetedType
+    ? hasTypePermission(user, "inventory.edit", facetedType)
+    : true;
+
+  // Leaving edit mode on when the user facets to a type they may not edit would
+  // offer editable cells whose every write 403s. The toggle is hidden in that
+  // state, so without this the mode would also be un-exitable.
   useEffect(() => {
-    if (searchParams.get("create") === "true") {
+    if (!canGridEditSelectedType) setGridEditMode(false);
+  }, [canGridEditSelectedType]);
+
+  // React to ?create=true search param. A deep link must not open a dialog for
+  // a type this role may not create — the button is hidden in that case too.
+  useEffect(() => {
+    if (searchParams.get("create") === "true" && canCreateSelectedType) {
       setCreateOpen(true);
     }
-  }, [searchParams]);
+  }, [searchParams, canCreateSelectedType]);
 
   // Sync ?search= URL param into filters when navigating to inventory from elsewhere (e.g. toolbar)
   useEffect(() => {
@@ -1142,7 +1217,14 @@ export default function InventoryPage() {
   }, [searchParams]);
 
   // Derive the single selected type for column rendering (only when exactly one type selected)
-  const selectedType = filters.types.length === 1 ? filters.types[0] : "";
+  const selectedType = facetedType;
+  // A field written by an active calculation is read-only everywhere card
+  // detail locks it; the grid and the mass-edit picker owe the same lock.
+  const { calculatedFields } = useCalculatedFields();
+  const calculatedKeys = useMemo(
+    () => new Set(selectedType ? calculatedFields[selectedType] ?? [] : []),
+    [calculatedFields, selectedType],
+  );
   const typeConfig = types.find((t) => t.key === selectedType);
 
   // --- Logo column -----------------------------------------------------------
@@ -1156,12 +1238,56 @@ export default function InventoryPage() {
   const logoColumnShown = logoColumnAvailable && selectedColumns.has(LOGO_COLUMN_KEY);
   // The backend authorises each write against the card, but the affordance is
   // gated here so a viewer is not offered an edit that can only 403.
-  const canEditLogos = !!(user?.permissions?.["*"] || user?.permissions?.["inventory.edit"]);
+  const canEditLogos = hasTypePermission(user, "inventory.edit", selectedType || null);
   // AG Grid measures each row once; toggling the column changes `rowHeight` but
   // leaves the rows already laid out at the old height until they are re-measured.
   useEffect(() => {
     gridRef.current?.api?.resetRowHeights();
   }, [logoColumnShown, gridReady]);
+
+  // --- End of life -----------------------------------------------------------
+  // The card stores only the endoflife.date link (or a manual date); the dates
+  // behind it are resolved server-side, so the column and facet need one call
+  // per selected type. Only for a SINGLE EOL-capable type: the endpoint is
+  // per-type, and a column of dates from two different populations answers
+  // nothing. Through `useApiQuery` rather than a bare `api.get` in an effect,
+  // so a slow response for the previous type cannot overwrite the current one
+  // (#882).
+  const eolTypeKey =
+    filters.types.length === 1 && isEolType(filters.types[0]) ? filters.types[0] : null;
+  const canViewEol = !!(user?.permissions?.["*"] || user?.permissions?.["eol.view"]);
+  const { data: eolStatusData, loading: eolLoading } = useApiQuery<EolCardStatusResponse>(
+    eolTypeKey && canViewEol ? `/eol/card-status?type=${encodeURIComponent(eolTypeKey)}` : null,
+  );
+  const eolStatusMap = eolStatusData?.items;
+  const eolOf = useCallback(
+    (card: Card): EolCardStatus | undefined => eolStatusMap?.[card.id],
+    [eolStatusMap],
+  );
+  // Same rule the column picker and the facet use, so all three appear and
+  // disappear together.
+  const eolColumnAvailable = canViewEol && eolColumnApplies(filters.types);
+
+  // --- Hierarchy link labels (#1100) -----------------------------------------
+  // The vocabulary a parent link is labelled from, and whether the column is
+  // offered at all. Same helper the column picker uses, so the checkbox and the
+  // column can never disagree.
+  const hierarchyLabelOptions = useMemo(
+    () => (filters.types.length === 1 ? typeConfig?.hierarchy_labels ?? [] : []),
+    [filters.types, typeConfig],
+  );
+  const hierarchyLabelColumnAvailable = hierarchyLabelColumnApplies(types, filters.types);
+  // Resolve a stored key to its localized label for filtering, sorting and
+  // export. An unknown key falls back to the raw value so a stale one stays
+  // visible and searchable rather than becoming an empty cell.
+  const hierarchyLabelText = useCallback(
+    (key: string | null | undefined): string => {
+      if (!key) return "";
+      const option = hierarchyLabelOptions.find((o) => o.key === key);
+      return option ? optLabel(option) : key;
+    },
+    [hierarchyLabelOptions, optLabel],
+  );
 
   // URL deep-links seed attribute filters as scalar strings (the URL block
   // above runs before the metamodel loads, so it can't know which fields are
@@ -1344,7 +1470,15 @@ export default function InventoryPage() {
   // matches nothing and silently empties the grid (#933 follow-up).
   useEffect(() => {
     if (!selectedType || relationTypes.length === 0) return;
-    const relTypeKeys = new Set(relationTypes.map((rt) => rt.key));
+    // Side keys too (`<key>__out` / `__in`): a persisted facet on one side of
+    // a self-referencing type must not be dropped as unresolvable.
+    const relTypeKeys = new Set(
+      relationTypes.flatMap((rt) =>
+        rt.source_type_key === rt.target_type_key
+          ? [rt.key, sideKey(rt, true), sideKey(rt, false)]
+          : [rt.key],
+      ),
+    );
     setFilters((prev) => {
       const relations = normalizeRelationFilterKeys(prev.relations, relTypeKeys, relTypeGroupMap);
       return relations === prev.relations ? prev : { ...prev, relations };
@@ -1565,7 +1699,15 @@ export default function InventoryPage() {
       for (const key of allRelTypeKeys) {
         const rt = relationTypes.find((r) => r.key === key);
         if (!rt) continue;
-        newMap.set(key, buildRelationIndex(byType.get(key) ?? [], rt, selectedType));
+        const bucket = byType.get(key) ?? [];
+        // The union drives the cell, Preview, export and the card-type deep
+        // link; a self-referencing type ALSO gets one index per side so the
+        // sidebar can offer "has site" and "is site of" as separate facets.
+        newMap.set(key, buildRelationIndex(bucket, rt, selectedType));
+        if (rt.source_type_key === rt.target_type_key) {
+          newMap.set(sideKey(rt, true), buildRelationIndex(bucket, rt, selectedType, "out"));
+          newMap.set(sideKey(rt, false), buildRelationIndex(bucket, rt, selectedType, "in"));
+        }
       }
       setRelationsMap(newMap);
       setRelationsLoading(false);
@@ -1614,6 +1756,24 @@ export default function InventoryPage() {
     // Lifecycle filter ("(empty)" matches cards with no/unstarted lifecycle)
     if (filters.lifecyclePhases.length > 0) {
       result = result.filter((card) => filters.lifecyclePhases.includes(getLifecyclePhase(card) || EMPTY_VALUE));
+    }
+
+    // End-of-life filter. "(empty)" matches cards with nothing recorded —
+    // absent from the resolved map is exactly that state, which is why the
+    // endpoint omits them rather than returning a null status.
+    if (filters.eolStatuses.length > 0) {
+      result = result.filter((card) =>
+        filters.eolStatuses.includes(eolOf(card)?.status ?? EMPTY_VALUE),
+      );
+    }
+
+    // Link type — the qualifier on this card's link to its parent (#1100).
+    // "(empty)" matches a child whose link carries no type, and a root, since
+    // neither has one recorded.
+    if ((filters.linkTypes?.length ?? 0) > 0) {
+      result = result.filter((card) =>
+        filters.linkTypes.includes(card.parent_label || EMPTY_VALUE),
+      );
     }
 
     // Data quality filter — disjoint bands, OR'd (see dataQualityBands.ts)
@@ -1736,7 +1896,7 @@ export default function InventoryPage() {
     }
 
     return result;
-  }, [data, filters.types, filters.subtypes, filters.lifecyclePhases, filters.dataQualityBands, filters.attributes, filters.relations, filters.tagIds, relationsMap, relTypeGroupMap, relatedRefsOf, tagGroups]);
+  }, [data, filters.types, filters.subtypes, filters.lifecyclePhases, filters.eolStatuses, eolOf, filters.linkTypes, filters.dataQualityBands, filters.attributes, filters.relations, filters.tagIds, relationsMap, relTypeGroupMap, relatedRefsOf, tagGroups]);
 
   // --- Grouped row data (shared hook — see components/grid/useRowGrouping) ---
   const grouping = useRowGrouping<Card>(gridRef, {
@@ -1813,8 +1973,11 @@ export default function InventoryPage() {
     ): Promise<{ needsReload: boolean }> => {
       if (field === "name" || field === "description") {
         await api.patch(`/cards/${card.id}`, { [field]: newValue });
-      } else if (field === "subtype") {
-        await api.patch(`/cards/${card.id}`, { subtype: (newValue as string) || null });
+      } else if (field === "subtype" || field === "alias") {
+        // An emptied cell clears the column. The grid and the card are the two
+        // places where that intent is unambiguous, which is exactly why the
+        // Excel importer treats an empty cell as "leave it alone" instead.
+        await api.patch(`/cards/${card.id}`, { [field]: (newValue as string) || null });
       } else if (field.startsWith("attr_")) {
         const key = field.replace("attr_", "");
         const fieldDef = typeConfig?.fields_schema
@@ -1829,6 +1992,12 @@ export default function InventoryPage() {
       } else if (field === "parent_id") {
         await api.patch(`/cards/${card.id}`, { parent_id: (newValue as string | null) ?? null });
         return { needsReload: true };
+      } else if (field === "parent_label") {
+        // Per card, never PATCH /cards/bulk — and unlike parent_id this moves
+        // no subtree, so nothing downstream needs reloading.
+        await api.patch(`/cards/${card.id}`, {
+          parent_label: (newValue as string | null) || null,
+        });
       } else if (field === "tags") {
         const oldIds = new Set<string>(((oldValue as TagRef[] | undefined) ?? []).map((v) => v.id));
         const newIds = new Set<string>(((newValue as TagRef[] | undefined) ?? []).map((v) => v.id));
@@ -1872,6 +2041,7 @@ export default function InventoryPage() {
   const cellEditFallback = useCallback(
     (field: string): string => {
       if (field === "parent_id") return t("gridEdit.parentFailed");
+      if (field === "parent_label") return t("gridEdit.parentLabelFailed");
       if (field.startsWith("attr_")) return t("gridEdit.attrFailed");
       return t("gridEdit.saveFailed");
     },
@@ -2151,6 +2321,12 @@ export default function InventoryPage() {
     // Collapse/expand is handled by the header renderer's own click handler.
     if ((e.data as InventoryRow | undefined)?.__group) return;
     if (gridEditMode || !e.data || e.event?.defaultPrevented) return;
+    // A click that landed on a link inside a cell (a URL in the description)
+    // is the link's. This is AG Grid's own row listener, native and fired
+    // before React's, so a `stopPropagation` in the cell renderer never
+    // reaches it — and `preventDefault` is not an option, it would cancel the
+    // navigation the link exists for.
+    if ((e.event?.target as Element | null)?.closest?.("a")) return;
     // Let the browser handle Ctrl/Cmd/Shift+Click and middle-click — they're
     // intended for "open in new tab/window" via the real anchor in the Name
     // cell. Re-firing programmatic navigation here would also navigate the
@@ -2196,7 +2372,7 @@ export default function InventoryPage() {
     if (typeConfig) {
       for (const section of typeConfig.fields_schema) {
         for (const field of section.fields) {
-          if (field.readonly) continue;
+          if (field.readonly || calculatedKeys.has(field.key)) continue;
           // Same gate the grid columns and the export use: a user without
           // costs.view must not be able to overwrite figures they cannot see.
           if (field.type === "cost" && !canViewCostsGlobally) continue;
@@ -2252,7 +2428,7 @@ export default function InventoryPage() {
       }
     }
     return fields;
-  }, [typeConfig, selectedType, relationTypes, visibleTypeKeys, types, t, fieldLabel, relLabel, typeLabel, canViewCostsGlobally]);
+  }, [typeConfig, selectedType, relationTypes, visibleTypeKeys, types, t, fieldLabel, relLabel, typeLabel, canViewCostsGlobally, calculatedKeys]);
 
   const currentMassField = massEditableFields.find((f) => f.key === massEditField);
 
@@ -2829,6 +3005,18 @@ export default function InventoryPage() {
         cellStyle: { fontFamily: "monospace", color: "var(--mui-palette-text-secondary)" },
       },
       {
+        // The card's other name (#1108). Editable and fill-downable like the
+        // Description column — `isInventoryFillable` needs no special case,
+        // since the column has a `field` to persist through.
+        colId: "core_alias",
+        field: "alias",
+        headerName: t("common:labels.alias"),
+        width: 160,
+        sortable: true,
+        editable: gridEditMode,
+        hide: !selectedColumns.has("core_alias"),
+      },
+      {
         colId: "core_path",
         headerName: t("columns.path"),
         flex: 1,
@@ -2878,6 +3066,53 @@ export default function InventoryPage() {
         valueFormatter: (p: { value?: string | null }) => parentNameOf(p.value),
         cellRenderer: (p: { value: string | null }) => parentNameOf(p.value),
       },
+      ...(hierarchyLabelColumnAvailable
+        ? [
+            {
+              // The label on each row's link to ITS parent (#1100) — its own
+              // column rather than a widening of core_parent, whose cell value
+              // is documented as the raw parent id and whose editor is a card
+              // picker. Keeping them apart also lets a user show one without
+              // the other.
+              colId: "core_parent_label",
+              field: "parent_label",
+              headerName: t("columns.parentLabel"),
+              width: 170,
+              sortable: true,
+              hide: !selectedColumns.has("core_parent_label"),
+              editable: gridEditMode && !!selectedType,
+              cellEditor: "agSelectCellEditor",
+              cellEditorParams: {
+                // The same filter the card-detail popover applies, so one
+                // vocabulary never offers two different choice sets.
+                values: ["", ...hierarchyLabelOptions.filter((o) => !o.hidden).map((o) => o.key)],
+                // The dropdown stores the key but must read as the label.
+                formatValue: (v: string) =>
+                  v ? optLabel(hierarchyLabelOptions.find((o) => o.key === v)) || v : "",
+              },
+              // The stored value is an option key, so the header text filter,
+              // the sort and the export all resolve it to the localized label
+              // first — otherwise each writes a raw slug (#887).
+              filterValueGetter: (p: { data?: Card }) =>
+                hierarchyLabelText(p.data?.parent_label),
+              comparator: (a: string | null, b: string | null) =>
+                hierarchyLabelText(a).localeCompare(hierarchyLabelText(b)),
+              valueFormatter: (p: { value?: string | null }) =>
+                hierarchyLabelText(p.value),
+              cellRenderer: (p: { value?: string | null }) => {
+                if (!p.value) return null;
+                const option = hierarchyLabelOptions.find((o) => o.key === p.value);
+                return (
+                  <OptionChip
+                    option={option}
+                    value={p.value}
+                    label={option ? optLabel(option) : undefined}
+                  />
+                );
+              },
+            },
+          ]
+        : []),
       {
         colId: "core_description",
         field: "description",
@@ -2886,6 +3121,7 @@ export default function InventoryPage() {
         minWidth: 200,
         editable: gridEditMode,
         hide: !selectedColumns.has("core_description"),
+        ...linkifiedCell,
       },
     ];
 
@@ -2946,6 +3182,58 @@ export default function InventoryPage() {
           return <LifecycleBadge lifecycle={lifecycle} />;
         },
       },
+      // End of life. The value is the resolved date, so sorting and the
+      // Excel export both work on a date rather than on a status word; the
+      // renderer adds the status colour, and the tooltip the provenance
+      // (product cycle, or a manually entered date).
+      ...(eolColumnAvailable
+        ? [
+            {
+              colId: EOL_COLUMN_KEY,
+              headerName: t("columns.eol"),
+              width: 160,
+              hide: !selectedColumns.has(EOL_COLUMN_KEY),
+              ...dateColumnFilterDef,
+              valueGetter: (p: { data?: Card }) =>
+                (p.data ? eolOf(p.data)?.eol_date : null) ?? "",
+              valueFormatter: (p: { value?: string }) => (p.value ? formatDate(p.value) : ""),
+              cellRenderer: (p: { data?: Card; value?: string }) => {
+                if (!p.data) return "";
+                const entry = eolOf(p.data);
+                // Absent while the statuses are still resolving means "not
+                // known yet", not "nothing recorded" — a dash either way, but
+                // the column must not claim a gap it has not confirmed.
+                if (!entry) return eolLoading ? "—" : "";
+                const color = EOL_STATUS_COLORS[entry.status];
+                const label = tReports(EOL_STATUS_LABEL_KEYS[entry.status]);
+                const title = [
+                  entry.source === "api"
+                    ? `${entry.eol_product} ${entry.eol_cycle}`
+                    : t("filter.eolManual"),
+                  entry.support_date ? `${t("columns.eolSupport")}: ${formatDate(entry.support_date)}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <Tooltip title={title}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          bgcolor: color,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span>{p.value ? formatDate(p.value) : label}</span>
+                    </Box>
+                  </Tooltip>
+                );
+              },
+            },
+          ]
+        : []),
       {
         colId: "core_approval_status",
         field: "approval_status",
@@ -2975,38 +3263,11 @@ export default function InventoryPage() {
         // The export carries the caption the bar is labelled with, not the raw
         // float — same rounding, same "missing reads as 0%".
         valueFormatter: (p: { value?: number }) => `${Math.round(p.value || 0)}%`,
-        cellRenderer: (p: { value: number }) => {
-          const v = Math.round(p.value || 0);
+        cellRenderer: (p: { value: number }) => (
           // Band colour, so the bar agrees with the sidebar chip that filters
           // it and with the Data Quality report's segments.
-          const color = bandColor(v);
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                width: "100%",
-                pr: 1,
-              }}
-            >
-              <LinearProgress
-                variant="determinate"
-                value={v}
-                sx={{
-                  flex: 1,
-                  height: 6,
-                  borderRadius: 3,
-                  bgcolor: "action.selected",
-                  "& .MuiLinearProgress-bar": { bgcolor: color, borderRadius: 3 },
-                }}
-              />
-              <Typography variant="caption" sx={{ minWidth: 32, textAlign: "right" }}>
-                {v}%
-              </Typography>
-            </Box>
-          );
-        },
+          <PercentBar value={p.value} color={bandColor(Math.round(p.value || 0))} width={72} height={6} />
+        ),
       },
       {
         colId: "core_tags",
@@ -3078,7 +3339,7 @@ export default function InventoryPage() {
             headerName: fieldLabel(field),
             width: 150,
             hide: !selectedColumns.has(colKey),
-            editable: gridEditMode && !field.readonly,
+            editable: gridEditMode && !field.readonly && !calculatedKeys.has(field.key),
             valueGetter: (p: { data: Card }) =>
               (p.data?.attributes || {})[field.key] ?? "",
             valueSetter: (p) => {
@@ -3130,11 +3391,20 @@ export default function InventoryPage() {
                   ),
                 }
               : {}),
+            ...(isFreeTextField(field.type) ? linkifiedCell : {}),
+            ...(field.type === "url" ? urlCell : {}),
             ...(field.type === "multiline_text"
               ? {
                   cellEditor: "agLargeTextCellEditor",
                   cellEditorPopup: true,
                   cellEditorParams: { rows: 8, cols: 60, maxLength: 100000 },
+                }
+              : {}),
+            ...(field.type === "percentage"
+              ? {
+                  ...percentageColumnDef,
+                  cellEditor: "agNumberCellEditor",
+                  cellEditorParams: { min: 0, max: 100, precision: 2 },
                 }
               : {}),
             ...(field.type === "date" ? dateColumnFilterDef : {}),
@@ -3192,6 +3462,9 @@ export default function InventoryPage() {
                 ),
               }
             : {}),
+          ...(isFreeTextField(field.type) ? linkifiedCell : {}),
+          ...(field.type === "url" ? urlCell : {}),
+          ...(field.type === "percentage" ? percentageColumnDef : {}),
           ...(field.type === "date" ? dateColumnFilterDef : {}),
           ...(field.type.startsWith("ext.")
             ? {
@@ -3429,7 +3702,7 @@ export default function InventoryPage() {
       : cols.filter((c) => c.colId !== LOGO_COLUMN_KEY);
 
     return gridColumnOrder.applyOrder(columnFreeze.applyFrozen(applicable));
-  }, [columnFreeze, gridColumnOrder, types, typeConfig, commonFields, gridEditMode, relevantRelTypes, relTypeObjGroupMap, relatedRefsOf, relationsLoading, selectedType, parentPaths, cardsById, parentNameOf, descendantIndex, filters.showArchived, selectedColumns, userNameMap, t, i18n.language, formatDate, formatDateTime, canViewCostsGlobally, canManageStakeholders, canEditLogos, logoColumnAvailable, openLogoMenu, tagGroups, stakeholderRoles, typeLabel]);
+  }, [columnFreeze, gridColumnOrder, types, typeConfig, commonFields, gridEditMode, relevantRelTypes, relTypeObjGroupMap, relatedRefsOf, relationsLoading, selectedType, parentPaths, cardsById, parentNameOf, descendantIndex, filters.showArchived, selectedColumns, userNameMap, t, i18n.language, formatDate, formatDateTime, canViewCostsGlobally, canManageStakeholders, canEditLogos, logoColumnAvailable, openLogoMenu, tagGroups, stakeholderRoles, typeLabel, eolColumnAvailable, eolOf, eolLoading, tReports, calculatedKeys]);
 
   // Feeds the Columns tab's "Column order" section: only the columns actually
   // on screen, built from the grid's own defs. On this page that matters twice
@@ -3741,6 +4014,8 @@ export default function InventoryPage() {
             relationsMap={relationsMap}
             tagGroups={tagGroups}
             canArchive={canArchive}
+            showEolFacet={eolColumnAvailable}
+            showLinkTypeFacet={hierarchyLabelColumnAvailable}
             canShareBookmarks={canShareBookmarks}
             canOdataBookmarks={canOdataBookmarks}
             currentUserId={user?.id}
@@ -3777,6 +4052,8 @@ export default function InventoryPage() {
           relationsMap={relationsMap}
           tagGroups={tagGroups}
           canArchive={canArchive}
+          showEolFacet={eolColumnAvailable}
+          showLinkTypeFacet={hierarchyLabelColumnAvailable}
           canShareBookmarks={canShareBookmarks}
           canOdataBookmarks={canOdataBookmarks}
           currentUserId={user?.id}
@@ -3855,11 +4132,13 @@ export default function InventoryPage() {
                   <MaterialSymbol icon="upload" size={20} />
                 </IconButton>
               </Tooltip>
-              <Tooltip title={t("common:actions.create")}>
-                <IconButton color="primary" onClick={() => setCreateOpen(true)} size="small">
-                  <MaterialSymbol icon="add" size={20} />
-                </IconButton>
-              </Tooltip>
+              {canCreateSelectedType && (
+                <Tooltip title={t("common:actions.create")}>
+                  <IconButton color="primary" onClick={() => setCreateOpen(true)} size="small">
+                    <MaterialSymbol icon="add" size={20} />
+                  </IconButton>
+                </Tooltip>
+              )}
             </>
           ) : (
             <>
@@ -3874,15 +4153,17 @@ export default function InventoryPage() {
                   {t("filter.clearColumnFilters")}
                 </Button>
               )}
-              <Button
-                variant={gridEditMode ? "contained" : "outlined"}
-                color={gridEditMode ? "primary" : "inherit"}
-                startIcon={<MaterialSymbol icon={gridEditMode ? "edit" : "edit_off"} size={18} />}
-                onClick={() => setGridEditMode((v) => !v)}
-                sx={{ textTransform: "none" }}
-              >
-                {gridEditMode ? t("toolbar.editing") : t("toolbar.gridEdit")}
-              </Button>
+              {canGridEditSelectedType && (
+                <Button
+                  variant={gridEditMode ? "contained" : "outlined"}
+                  color={gridEditMode ? "primary" : "inherit"}
+                  startIcon={<MaterialSymbol icon={gridEditMode ? "edit" : "edit_off"} size={18} />}
+                  onClick={() => setGridEditMode((v) => !v)}
+                  sx={{ textTransform: "none" }}
+                >
+                  {gridEditMode ? t("toolbar.editing") : t("toolbar.gridEdit")}
+                </Button>
+              )}
               <Button
                 variant="outlined"
                 color="inherit"
@@ -3903,14 +4184,16 @@ export default function InventoryPage() {
               >
                 {t("common:actions.import")}
               </Button>
-              <Button
-                variant="contained"
-                startIcon={<MaterialSymbol icon="add" size={18} />}
-                onClick={() => setCreateOpen(true)}
-                sx={{ textTransform: "none" }}
-              >
-                {t("common:actions.create")}
-              </Button>
+              {canCreateSelectedType && (
+                <Button
+                  variant="contained"
+                  startIcon={<MaterialSymbol icon="add" size={18} />}
+                  onClick={() => setCreateOpen(true)}
+                  sx={{ textTransform: "none" }}
+                >
+                  {t("common:actions.create")}
+                </Button>
+              )}
             </>
           )}
         </Box>

@@ -93,7 +93,11 @@
  * `CardMultiPicker` is the full card browser — type rail with live counts,
  * hierarchy, subtree-root semantics via `roots`, and a selection that
  * survives re-faceting and re-searching — for anything bigger than the
- * single-type scope control `CardScopeDialog` covers.
+ * single-type scope control `CardScopeDialog` covers. Since SDK 1.27
+ * `CardPicker` is the single-select card picker every core dropdown that
+ * selects ONE card is built on — browse on open, rank as you type, page in
+ * more as the list scrolls — so an extension dialog that links one card
+ * behaves exactly like core's instead of hand-rolling an Autocomplete.
  *
  * Since SDK 1.12 the preferred way to add a plug point is the GENERIC SLOT
  * registry, not a new named extension point. An extension declares
@@ -119,13 +123,11 @@ import ReactDOM from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
-// FORK-LOCAL ADDITION (2026-07-28, not yet proposed upstream) — flag at the
-// next `git fetch upstream && git merge upstream/main`: check whether
-// upstream has since added its own CardPicker exposure (or a different name
-// for the same idea) before assuming this import/sdk entry merges cleanly.
-import CardPicker from "@/components/CardPicker";
 import FilterSelect from "@/components/FilterSelect";
 import CardMultiPicker from "@/components/CardMultiPicker";
+import CardPicker from "@/components/CardPicker";
+import LinkifiedText from "@/components/LinkifiedText";
+import { sanitizeRichHtml } from "@/lib/richHtml";
 import CardScopeDialog, { dedupeScopeRoots } from "@/components/CardScopeDialog";
 import CardScopeFilter from "@/components/CardScopeFilter";
 import { applyScope, useCardScope } from "@/hooks/useCardScope";
@@ -181,25 +183,25 @@ import { PHASES, getPhaseLabels } from "@/lib/lifecyclePhases";
 import { buildGanttArrowPath } from "@/features/ppm/ganttArrowPath";
 import type { ArchitectureDecision, Card } from "@/types";
 
-export const UI_SDK_VERSION = "1.19";
+export const UI_SDK_VERSION = "1.19"; // fork: pinned (frozen). Upstream value is "1.30"; the surface is present without the constant following it.
 
 /**
  * Core nav groups an extension route may request placement into (instead of the
  * default top-level nav entry). Whitelisted on purpose so an extension can only
- * land in sanctioned menus (never admin/arbitrary ones); extend deliberately.
- * See `layouts/navItems.ts` for the current dropdown-capable nav items.
+ * land in sanctioned menus, never an arbitrary one; extend deliberately.
+ *
+ * `reports` and `grc` are top-bar dropdowns. `admin` (UI SDK 1.28) is the
+ * Admin section of the user menu and the mobile drawer — the home for an
+ * extension page that configures something rather than showing it. It is
+ * gated by the route's own `permission` only.
  *
  * "strategy_process" and "app_data" are fork-local legacy groups: this fork
- * used to have dropdown nav items with those keys, and installed extensions
- * (organization, value-chain, product-technology-what-if) were built against
- * them. Upstream's merge dropped the dead inline dropdowns that hosted them,
- * which took the extensions' nav entries down too — an unrecognised navGroup
- * is swallowed entirely (see AppLayout.tsx), not just un-dropdowned. Keeping
- * them whitelisted here (with no matching host item) makes AppLayout's
- * existing "host absent -> top-level fallback" path do the degrade for free,
- * so already-shipped extension bundles don't need to be rebuilt.
+ * has dropdown nav items with those keys (navItems.ts) and installed
+ * extensions (organization, value-chain, product-technology-what-if) were
+ * built against them. An unrecognised navGroup is swallowed entirely (see
+ * AppLayout.tsx), so they stay whitelisted here.
  */
-export const EXTENSION_NAV_GROUPS = ["reports", "grc", "strategy_process", "app_data"] as const;
+export const EXTENSION_NAV_GROUPS = ["reports", "grc", "admin", "strategy_process", "app_data"] as const;
 export type ExtensionNavGroup = (typeof EXTENSION_NAV_GROUPS)[number];
 
 /**
@@ -222,9 +224,10 @@ export interface ExtensionRouteContribution {
   permission?: string;
   component: React.ComponentType;
   // Optional placement hint: render this route's nav entry inside a core menu
-  // group (e.g. "reports") rather than as a top-level item. The route path and
-  // rendering are unchanged — only where the menu entry appears. Omit for the
-  // current top-level behaviour. An unrecognised value shows nowhere in the nav.
+  // group (e.g. "reports", or "admin" for the user menu's Admin section) rather
+  // than as a top-level item. The route path and rendering are unchanged — only
+  // where the menu entry appears. Omit for the current top-level behaviour. An
+  // unrecognised value shows nowhere in the nav.
   navGroup?: ExtensionNavGroup;
   // Optional placement hint for a TOP-LEVEL entry: where in the bar it sits.
   // `start` / `end` / `before:<anchor>` / `after:<anchor>`, anchors being the
@@ -427,7 +430,15 @@ export interface ExtensionFieldVisibilityProps {
  * (default 0, ties keep registration order).
  *
  * Slot locations core exposes today:
- *   - `card.detail.header`  (component) — CardDetailContent
+ *   - `card.detail.header`  (component) — CardDetailContent. Core renders the
+ *     contributions as ONE wrapping flex row (8px gap, hidden when empty), so
+ *     contribute an inline item (a Chip) with no outer margins of its own; a
+ *     contribution that needs its own line sets `flexBasis: "100%"`, and
+ *     `order` decides where it sits in the row. The row ZEROES a contribution's
+ *     own margins rather than trusting it not to set any: `align-items: center`
+ *     centres a flex item's margin box, so a bundle built before this row —
+ *     which spaces its own band — would otherwise render off the row's centre
+ *     line.
  *   - `risk.detail.panel`   (component) — RiskDetailPage
  *   - `adr.header`, `adr.signature.footer` (component) — ADREditor/ADRPreview
  *   - `notification.preferences.channels` (data) — one column per
@@ -437,6 +448,13 @@ export interface ExtensionFieldVisibilityProps {
  *     PATCH the backend would ignore.
  *   - `notification.preferences.footer` (component) — below the preferences
  *     table, context `{userId}`; where a channel shows its per-user link state.
+ *   - `notification.detail` (component) — inside the bell's notification
+ *     details dialog (opened for a notification sent with `detail=True` on the
+ *     backend notify bridge), context `{id, type, title, message, link, data,
+ *     cardId, createdAt}`. Rendered with `ownerExtKey = data.ext`, so only the
+ *     extension that SENT the notification contributes; target your own
+ *     declared type with `appliesTo` and never gate it with `permission` — the
+ *     recipients are ordinary users.
  */
 export interface ExtensionSlotContribution {
   slot: string;
@@ -523,6 +541,7 @@ export interface RegisteredExtensionNavGroup {
 
 interface UiManifestEntry {
   key: string;
+  name: string;
   version: string;
   entry: string;
   entitlement_state: string;
@@ -534,6 +553,9 @@ interface UiManifestEntry {
 
 let _registered: RegisteredExtension[] = [];
 let _loadErrors: Record<string, string> = {};
+// Display names from the UI manifest, keyed by extension key — so the bell
+// can say who sent a notification without a second request.
+let _displayNames: Record<string, string> = {};
 const _listeners = new Set<() => void>();
 let _loadStarted = false;
 // Cached, stable snapshots — recomputed lazily and invalidated on every
@@ -1069,9 +1091,14 @@ export function useExtensionSlots(slot: string): RegisteredSlot[] {
 export function ExtensionSlot({
   name,
   context,
+  ownerExtKey,
 }: {
   name: string;
   context?: Record<string, unknown>;
+  /** When set, only this extension's contributions render — for a location
+   *  that belongs to one extension's own data (its notification's details),
+   *  where a second extension must not inject into the first's content. */
+  ownerExtKey?: string;
 }) {
   const slots = useExtensionSlots(name);
   const { user } = useAuthContext();
@@ -1081,6 +1108,7 @@ export function ExtensionSlot({
       {slots.map(({ extKey, contribution }) => {
         const Component = contribution.component;
         if (!Component) return null; // data slot — rendered by its own core consumer
+        if (ownerExtKey !== undefined && extKey !== ownerExtKey) return null;
         if (
           contribution.permission &&
           !hasPermission(user?.permissions, contribution.permission)
@@ -1107,6 +1135,7 @@ export function ExtensionSlot({
 export function resetExtensionHost(): void {
   _registered = [];
   _loadErrors = {};
+  _displayNames = {};
   _loadStarted = false;
   _fieldTypesCache = null;
   _slotsCache = null;
@@ -1168,17 +1197,6 @@ export function initExtensionHost(): void {
       DependencyGraph: ExtensionDependencyGraph,
       DiagramViewer: ExtensionDiagramViewer,
       FilterSelect,
-      // FORK-LOCAL ADDITION (2026-07-28, SDK 1.15, not yet proposed
-      // upstream — see the import comment above for the merge-time flag).
-      // The core's own single-select card picker (CardPicker.tsx, built on
-      // useCardSearch — browse-on-open, filter-as-you-type, infinite
-      // scroll), for an extension that needs to let the user pick an
-      // existing card the same way every core "link a card" field does.
-      // No lazy-wrap needed: CardPicker only imports MUI + useCardSearch
-      // (a thin api.get wrapper), no large code-split feature graph like
-      // CardDetailSidePanel/ProcessDetailSidePanel below — same static-
-      // import treatment as FilterSelect just above.
-      CardPicker,
       CardDetailSidePanel: ExtensionCardDetailSidePanel,
       // SDK 1.14 — the BPM process-detail drawer (Overview/Steps/Flow/Apps/
       // Data tabs, same visual language as ProcessNavigator's own drawer on
@@ -1283,6 +1301,19 @@ export function initExtensionHost(): void {
       // for when the user picks across types, or when the caller doesn't know
       // in advance which type they want. MUI-only leaf, so a static import.
       CardMultiPicker,
+      // SDK 1.27 — the single-select card picker (CLAUDE.md: *always use
+      // CardPicker*). Same engine as the multi picker, for the dialog that
+      // links ONE card. MUI-only leaf, so a static import.
+      CardPicker,
+      // SDK 1.29 — free text and stored HTML. `LinkifiedText` renders a
+      // user-typed string with its http(s) addresses as new-tab links (a
+      // fragment, so it sits inside the caller's own Typography);
+      // `sanitizeRichHtml` is the one sanitiser for stored rich text — it
+      // autolinks bare URLs and stamps every anchor target/rel. An extension
+      // that renders a description or a rich-text field must not rebuild
+      // either, or its links will behave differently from core's.
+      LinkifiedText,
+      sanitizeRichHtml,
       // SDK 1.15 — the whole report-scoping kit, so an extension report gets
       // "narrow this to a few cards and everything under them" with the same
       // saved-report round-trip and stale-id handling core reports have.
@@ -1305,6 +1336,13 @@ export function initExtensionHost(): void {
       // extension grid offers the same right-click / long-press cell menu
       // core grids have (Show matching · Filter out · Copy, plus
       // page-specific row actions via `extraItems` — the AdrGrid pattern).
+      // Since SDK 1.30 it also resolves `useDragFill`, so an extension grid
+      // with editable cells offers the Inventory's Excel-style fill-down
+      // under the same five invariants (write-then-reload through the page's
+      // own per-cell primitive, one wrapper ref borrowed from
+      // `useColumnFreeze`, never a bulk endpoint). It rides the same chunk —
+      // MUI plus `import type` from ag-grid — so nothing joins the eager
+      // bundle.
       loadAgGrid: () =>
         Promise.all([
           import("ag-grid-react"),
@@ -1312,13 +1350,15 @@ export function initExtensionHost(): void {
           import("@/components/grid/useColumnFreeze"),
           import("@/components/grid/useColumnOrder"),
           import("@/components/grid/useCellContextMenu"),
-        ]).then(([agReact, setup, freeze, order, cellMenu]) => ({
+          import("@/components/grid/useDragFill"),
+        ]).then(([agReact, setup, freeze, order, cellMenu, dragFill]) => ({
           AgGridReact: agReact.AgGridReact,
           gridThemeLight: setup.gridThemeLight,
           gridThemeDark: setup.gridThemeDark,
           useColumnFreeze: freeze.useColumnFreeze,
           useColumnOrder: order.useColumnOrder,
           useCellContextMenu: cellMenu.useCellContextMenu,
+          useDragFill: dragFill.useDragFill,
         })),
       CreateCardDialog: ExtensionCreateCardDialog,
       // SDK 1.21 — timeline + dependency-view + filter-sidebar reuse.
@@ -1377,6 +1417,27 @@ export function initExtensionHost(): void {
           exportReportToXlsx: module.exportReportToXlsx,
           extractSheetsFromDOM: module.extractSheetsFromDOM,
         })),
+      // SDK 1.30 — the spreadsheet engine an extension GRID needs, as
+      // distinct from the report exporters above: `exportCurrentViewToExcel`
+      // / `buildCurrentViewWorkbook` are the Inventory's own WYSIWYG "export
+      // what is on screen" (rows and displayed columns read off the grid
+      // API), the two readers are the leaf `lib/spreadsheet.ts` lifted out
+      // of the card importer, and `xlsx` is the vendored library itself (the
+      // `loadRecharts` posture for a bare heavy dependency) so a caller can
+      // append its own machine-readable sheet to the workbook core built.
+      // An extension must never bundle a spreadsheet library of its own.
+      loadSpreadsheet: () =>
+        Promise.all([
+          import("xlsx"),
+          import("@/features/inventory/excelExport"),
+          import("@/lib/spreadsheet"),
+        ]).then(([xlsx, exp, sheet]) => ({
+          xlsx,
+          exportCurrentViewToExcel: exp.exportCurrentViewToExcel,
+          buildCurrentViewWorkbook: exp.buildCurrentViewWorkbook,
+          parseWorkbook: sheet.parseWorkbook,
+          readWorkbookSheets: sheet.readWorkbookSheets,
+        })),
     },
     register: registerExtension,
   };
@@ -1397,6 +1458,9 @@ export async function loadUiExtensions(): Promise<void> {
   } catch {
     // Backend older than the extension store, or transient failure — no UI extensions.
     return;
+  }
+  for (const entry of manifest) {
+    if (entry.name) _displayNames = { ..._displayNames, [entry.key]: entry.name };
   }
   await Promise.all(
     manifest.map(async (entry) => {
@@ -1472,6 +1536,42 @@ export function getExtensionNavGroups(): RegisteredExtensionNavGroup[] {
     }
   }
   return out.sort((a, b) => (a.group.order ?? 0) - (b.group.order ?? 0));
+}
+
+/**
+ * The display name the UI manifest reported for an extension, or its key when
+ * the manifest carried none (a backend older than 2.128.0, or a bundle that
+ * never loaded). Test helper `setExtensionDisplayName` seeds it.
+ */
+export function getExtensionDisplayName(key: string): string {
+  return _displayNames[key] ?? key;
+}
+
+/** Test helper — what `loadUiExtensions` records from the manifest. */
+export function setExtensionDisplayName(key: string, name: string): void {
+  _displayNames = { ..._displayNames, [key]: name };
+}
+
+/**
+ * Whether the viewer may open an extension page at `path` (an `/ext/<key>/…`
+ * link a notification or a todo carries). Fails CLOSED: no registered route
+ * matches ⇒ false — the bundle is not loaded or not entitled, so the page
+ * would be "not found" — and a route that declares a `permission` needs the
+ * viewer to hold it. Query string and hash are ignored; a route matches its
+ * own path or a `/`-boundary prefix of it (`/ext/x` covers `/ext/x/runs`).
+ */
+export function canOpenExtensionPath(
+  path: string,
+  perms: Record<string, boolean> | undefined,
+): boolean {
+  const pathname = path.split(/[?#]/, 1)[0] ?? "";
+  if (!pathname.startsWith("/ext/")) return false;
+  for (const { route } of getExtensionRoutes()) {
+    const base = route.path.replace(/\/+$/, "");
+    if (pathname !== base && !pathname.startsWith(`${base}/`)) continue;
+    return route.permission ? hasPermission(perms, route.permission) : true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------

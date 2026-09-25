@@ -20,6 +20,7 @@ import DialogContentText from "@mui/material/DialogContentText";
 import DialogActions from "@mui/material/DialogActions";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
+import { fetchCardsByIds } from "@/api/cardsByIds";
 import InsertCardsDialog from "./InsertCardsDialog";
 import type { PickedCard } from "@/components/CardMultiPicker";
 import CreateOnDiagramDialog from "./CreateOnDiagramDialog";
@@ -75,6 +76,10 @@ import {
   convertShapeToPendingCard,
   convertShapeToContainer,
   drillDownInto,
+  resolveMenuCardCell,
+  fitMenuToBand,
+  visibleBand,
+  enableMenuTouchScroll,
   rollUpInto,
   isInsideContainer,
   findExistingCardCellId,
@@ -105,7 +110,8 @@ import type {
   RelationFlowDirection,
   RemovedRelationTombstone,
 } from "./drawio-shapes";
-import { groupRelationsByOtherCard, pruneDeletedRelations } from "./expandChildren";
+import { edgeIncoming, groupRelationsByOtherCard, pruneDeletedRelations } from "./expandChildren";
+import { relationCreatePayload } from "./relationSync";
 import ExpandMenu from "./ExpandMenu";
 import type { ExpandMenuPick, ExpandMenuTarget } from "./ExpandMenu";
 import ColorBySelector from "./ColorBySelector";
@@ -115,7 +121,7 @@ import {
   colorKeyForCard,
   describeView,
   normaliseViewSource,
-  NO_VALUE,
+  buildLegend,
   type ViewResolvers,
   type ViewSource,
 } from "./viewSource";
@@ -123,6 +129,8 @@ import type { LegendSection } from "./DiagramViewLegend";
 import DiagramViewLegend from "./DiagramViewLegend";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import { useMetamodel } from "@/hooks/useMetamodel";
+import { runsAgainstType } from "@/lib/relationSort";
+import { usePageSubject } from "@/hooks/usePageTitle";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import {
   relationLabel,
@@ -240,7 +248,8 @@ interface DrawIOMessage {
     | "relinkCell"
     | "convertCell"
     | "containerizeCell"
-    | "detachCell";
+    | "detachCell"
+    | "popupMenu";
   xml?: string;
   data?: string;
   libraries?: string;
@@ -250,6 +259,8 @@ interface DrawIOMessage {
   y?: number;
   cardId?: string;
   cellId?: string;
+  /** `popupMenu` only: whether DrawIO's right-click menu is now open. */
+  open?: boolean;
   edgeCellId?: string;
   sourceCardId?: string;
   targetCardId?: string;
@@ -397,6 +408,32 @@ function bootstrapDrawIO(iframe: HTMLIFrameElement) {
       }
 
       /* ---------- Right-click context menu ---------- */
+      // Fit the menu to the visible screen before DrawIO positions it, so a
+      // menu taller than a tablet in landscape scrolls instead of being
+      // cropped (see visibleBand / fitMenuToBand). The host is told when it opens and
+      // closes: the colour legend floats over the canvas in the parent page
+      // and would otherwise cover the menu's last rows.
+      const popupHandler = graph.popupMenuHandler;
+      if (popupHandler && typeof popupHandler.showMenu === "function") {
+        const origShowMenu = popupHandler.showMenu;
+        popupHandler.showMenu = function (...args: unknown[]) {
+          fitMenuToBand(this.div, visibleBand(win), 8, false);
+          enableMenuTouchScroll(this.div);
+          win.parent.postMessage(JSON.stringify({ event: "popupMenu", open: true }), "*");
+          const result = origShowMenu.apply(this, args);
+          // DrawIO fits the menu to the frame in a deferred callback; this one
+          // is queued after it, so the on-screen band gets the last word.
+          win.setTimeout(() => fitMenuToBand(this.div, visibleBand(win)), 0);
+          return result;
+        };
+      }
+      if (popupHandler && typeof popupHandler.hideMenu === "function") {
+        const origHideMenu = popupHandler.hideMenu;
+        popupHandler.hideMenu = function (...args: unknown[]) {
+          win.parent.postMessage(JSON.stringify({ event: "popupMenu", open: false }), "*");
+          return origHideMenu.apply(this, args);
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const menus = ui.menus as any;
       if (menus?.createPopupMenu) {
@@ -426,12 +463,14 @@ function bootstrapDrawIO(iframe: HTMLIFrameElement) {
           );
 
           // If the right-click landed on (or inside) a card cell, surface
-          // the card-details shortcut. Walk up so clicks on inner labels
-          // still resolve to the card.
-          let cardCell = cell;
-          while (cardCell && !cardCell.value?.getAttribute?.("cardId")) {
-            cardCell = cardCell.parent;
-          }
+          // the card-details shortcut — including the open body of a
+          // drilled-down container, which DrawIO does not hit-test.
+          const cardCell = resolveMenuCardCell(cell, () =>
+            graph.getSwimlaneAt(
+              mxEvent.getClientX(evt) - offset.left + container.scrollLeft,
+              mxEvent.getClientY(evt) - offset.top + container.scrollTop,
+            ),
+          );
           const cardId = cardCell?.value?.getAttribute?.("cardId");
           const isPending = cardCell?.value?.getAttribute?.("pending") === "1";
           const isSyncedCard =
@@ -617,6 +656,7 @@ export default function DiagramEditor() {
   }, [user?.permissions]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [diagram, setDiagram] = useState<DiagramData | null>(null);
+  usePageSubject(diagram?.name);
   // Effects that must run once per diagram open key on the id, never the
   // diagram object — `saveDiagram` calls `setDiagram`, so an object dep
   // re-fires after every save (discussion #905).
@@ -811,6 +851,9 @@ export default function DiagramEditor() {
     [],
   );
   const [viewAppliedCount, setViewAppliedCount] = useState(0);
+  // DrawIO's right-click menu lives inside the iframe; while it is open the
+  // legend (which floats over the canvas from this page) steps aside.
+  const [popupMenuOpen, setPopupMenuOpen] = useState(false);
   // Relation verbs ("provides", "consumes", …) hidden on this diagram. Saved
   // with the diagram, so the read-only viewer and any published embed show
   // exactly what the author arranged. A ref mirrors it because the edge-style
@@ -1126,17 +1169,15 @@ export default function DiagramEditor() {
    *  `incoming` still decides which end carries the arrowhead, and when the
    *  relation carries a `flowDirection` attribute that takes over, so an
    *  Application that *consumes* an Interface is distinguishable from one that
-   *  *provides* it without opening the link (discussion #905). */
+   *  *provides* it without opening the link (discussion #905). `incoming` is
+   *  read on the relation type's axis (`edgeIncoming`), so a row stored the
+   *  other way round still puts the arrowhead where its flow says (#1140). */
   const relationEdgeMeta = useCallback(
-    (
-      relationTypeKey: string,
-      incoming: boolean,
-      attributes?: RelationAttributes,
-    ) => {
-      const rt = relTypesRef.current.find((x) => x.key === relationTypeKey);
+    (rel: Relation, expandedCardId: string) => {
+      const rt = relTypesRef.current.find((x) => x.key === rel.type);
       return {
-        incoming,
-        flow: relationFlowFor(rt, attributes),
+        incoming: edgeIncoming(rel, expandedCardId, rt),
+        flow: relationFlowFor(rt, rel.attributes as RelationAttributes | undefined),
         relationLabel: rt ? relationLabel(rt, i18n.language) : "",
       };
     },
@@ -1179,15 +1220,11 @@ export default function DiagramEditor() {
                 icon: ct?.icon,
                 relationType: primary.type,
                 relationId: primary.id,
-                ...relationEdgeMeta(
-                  primary.type,
-                  primary.target_id === cardId,
-                  primary.attributes,
-                ),
+                ...relationEdgeMeta(primary, cardId),
                 extraRelations: extras.map((r) => ({
                   relationType: r.type,
                   relationId: r.id,
-                  ...relationEdgeMeta(r.type, r.target_id === cardId, r.attributes),
+                  ...relationEdgeMeta(r, cardId),
                 })),
               };
             },
@@ -1328,15 +1365,11 @@ export default function DiagramEditor() {
             icon: iconForType(other.type),
             relationType: primary.type,
             relationId: primary.id,
-            ...relationEdgeMeta(
-              primary.type,
-              primary.target_id === target.cardId,
-              primary.attributes,
-            ),
+            ...relationEdgeMeta(primary, target.cardId),
             extraRelations: extras.map((r) => ({
               relationType: r.type,
               relationId: r.id,
-              ...relationEdgeMeta(r.type, r.target_id === target.cardId, r.attributes),
+              ...relationEdgeMeta(r, target.cardId),
             })),
           }));
           if (children.length === 0) {
@@ -1611,15 +1644,11 @@ export default function DiagramEditor() {
                 icon: ct?.icon,
                 relationType: primary.type,
                 relationId: primary.id,
-                ...relationEdgeMeta(
-                  primary.type,
-                  primary.target_id === cardId,
-                  primary.attributes,
-                ),
+                ...relationEdgeMeta(primary, cardId),
                 extraRelations: extras.map((r) => ({
                   relationType: r.type,
                   relationId: r.id,
-                  ...relationEdgeMeta(r.type, r.target_id === cardId, r.attributes),
+                  ...relationEdgeMeta(r, cardId),
                 })),
               };
             },
@@ -2479,18 +2508,10 @@ export default function DiagramEditor() {
           return;
         }
 
-        const stashedAttrs = pendingEdgeAttributesRef.current.get(edgeCellId);
-        const payload: Record<string, unknown> = {
-          type: rel.relationType,
-          // A relation picked in its reverse direction runs target -> source
-          // even though the edge points the other way.
-          source_id: rel.reversed ? rel.targetCardId : rel.sourceCardId,
-          target_id: rel.reversed ? rel.sourceCardId : rel.targetCardId,
-        };
-        if (stashedAttrs && Object.keys(stashedAttrs).length > 0) {
-          payload.attributes = stashedAttrs;
-        }
-        const created = await api.post<Relation>("/relations", payload);
+        const created = await api.post<Relation>(
+          "/relations",
+          relationCreatePayload(rel, pendingEdgeAttributesRef.current.get(edgeCellId)),
+        );
         pendingEdgeAttributesRef.current.delete(edgeCellId);
 
         markEdgeSynced(
@@ -2564,11 +2585,13 @@ export default function DiagramEditor() {
           continue; // skip if endpoints still pending
         }
         try {
-          const created = await api.post<Relation>("/relations", {
-            type: r.relationType,
-            source_id: r.reversed ? r.targetCardId : r.sourceCardId,
-            target_id: r.reversed ? r.sourceCardId : r.targetCardId,
-          });
+          // Same body as a single-edge sync, attributes chosen in the picker
+          // included — Sync all used to drop them (#1140).
+          const created = await api.post<Relation>(
+            "/relations",
+            relationCreatePayload(r, pendingEdgeAttributesRef.current.get(r.edgeCellId)),
+          );
+          pendingEdgeAttributesRef.current.delete(r.edgeCellId);
           markEdgeSynced(
             frame,
             r.edgeCellId,
@@ -2760,6 +2783,12 @@ export default function DiagramEditor() {
               relationFlowFor(
                 relTypesRef.current.find((x) => x.key === relationTypeKey),
                 attributes as RelationAttributes | undefined,
+              ),
+            (relation) =>
+              runsAgainstType(
+                relTypesRef.current.find((x) => x.key === relation.type),
+                relation.source?.type,
+                relation.target?.type,
               ),
           );
           setStaleItems(items);
@@ -3026,6 +3055,10 @@ export default function DiagramEditor() {
 
         case "detachCell":
           if (msg.cellId) handleDetachRequest(msg.cellId);
+          break;
+
+        case "popupMenu":
+          setPopupMenuOpen(msg.open === true);
           break;
 
         default:
@@ -3317,15 +3350,9 @@ export default function DiagramEditor() {
 
   const refreshCardDisplay = useCallback(
     async (frame: HTMLIFrameElement, ids: string[], wantLabels: boolean) => {
-      const params = new URLSearchParams({ ids: ids.join(",") });
-      const resp = await api.get<{ items: Card[] }>(
-        `/cards?${params.toString()}`,
-      );
-      applyCardLabels(
-        frame,
-        wantLabels ? buildLinesByCardId(resp.items) : new Map(),
-      );
-      applyLogosFromCards(frame, resp.items);
+      const items = await fetchCardsByIds(ids);
+      applyCardLabels(frame, wantLabels ? buildLinesByCardId(items) : new Map());
+      applyLogosFromCards(frame, items);
     },
     [buildLinesByCardId, applyLogosFromCards],
   );
@@ -3344,10 +3371,11 @@ export default function DiagramEditor() {
     setActiveTypeKeys(Array.from(snapshot.types));
   }, [collectCanvasCards]);
 
-  /** Recompute and apply the active view to the canvas. Pulls a batch
-   *  card payload via /cards?ids=... so a single round-trip recolors
-   *  every cell AND re-renders its detail lines — deliberately one fetch,
-   *  not two, since both need the same full card records. */
+  /** Recompute and apply the active view to the canvas. Pulls one batched
+   *  card payload (`fetchCardsByIds`, chunked so a big canvas cannot exceed
+   *  the proxy's request-line limit — #1093) that both recolors every cell
+   *  AND re-renders its detail lines — deliberately one fetch, not two,
+   *  since both need the same full card records. */
   const applyView = useCallback(async () => {
     const frame = iframeRef.current;
     if (!frame) return;
@@ -3396,52 +3424,39 @@ export default function DiagramEditor() {
 
     try {
       await viewReq.run(async ({ signal, isCurrent }) => {
-        const params = new URLSearchParams({ ids: snapshot.ids.join(",") });
-        const resp = await api.get<{ items: Card[] }>(
-          `/cards?${params.toString()}`,
-          { signal },
-        );
+        const items = await fetchCardsByIds(snapshot.ids, { signal });
         // Nothing above this line touched the graph. A rejected fetch must not
         // leave the canvas half-reset while the toolbar advertises new rules —
         // and the 5s autosave would snapshot exactly that.
         if (!isCurrent()) return;
 
-        const cardById = new Map(resp.items.map((c) => [c.id, c] as const));
+        const cardById = new Map(items.map((c) => [c.id, c] as const));
         const colorByCardId = new Map<string, string>();
-        const seenKeys = new Set<string>();
-        let coloured = 0;
+        const onCanvas: Card[] = [];
         for (const id of snapshot.ids) {
           const c = cardById.get(id);
           if (!c) continue;
+          onCanvas.push(c);
           const key = colorKeyForCard(view, c);
           if (key == null) continue; // no rule covers this card — leave it alone
           const entry = colorMap.get(key);
           if (!entry) continue;
           colorByCardId.set(id, entry.color);
-          seenKeys.add(key);
-          if (entry.value !== NO_VALUE) coloured += 1;
         }
 
         if (!isCurrent()) return;
         const { painted } = applyViewToGraph(frame, colorByCardId, restore);
-        applyCardLabels(frame, buildLinesByCardId(resp.items));
-        applyLogosFromCards(frame, resp.items);
+        applyCardLabels(frame, buildLinesByCardId(items));
+        applyLogosFromCards(frame, items);
 
-        // One legend section per rule. The "no value" swatch only appears where
-        // a card on this canvas actually has no value — a permanent grey swatch
-        // in every section would be noise.
-        setViewLegendSections(
-          described.sections.map((sec) => ({
-            key: sec.key,
-            title: sec.title,
-            entries: Array.from(colorMap.values()).filter(
-              (e) =>
-                e.typeKey === sec.typeKey &&
-                e.fieldKey === sec.fieldKey &&
-                (e.value !== NO_VALUE || seenKeys.has(e.key)),
-            ),
-          })),
+        // One legend section per rule — shared with the read-only viewer.
+        const { sections, coloured } = buildLegend(
+          view,
+          fsTypesRef.current,
+          onCanvas,
+          viewResolvers,
         );
+        setViewLegendSections(sections);
         // Cells a rule actually coloured — not "cells touched", which used to
         // report the number greyed out whenever nothing matched.
         setViewAppliedCount(coloured > 0 ? coloured : painted);
@@ -3840,7 +3855,7 @@ export default function DiagramEditor() {
             }}
             title={t("editor.title")}
           />
-          {viewLegendSections.length > 0 && (
+          {viewLegendSections.length > 0 && !popupMenuOpen && (
             <DiagramViewLegend
               sections={viewLegendSections}
               appliedCount={viewAppliedCount}

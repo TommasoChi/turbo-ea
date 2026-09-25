@@ -194,6 +194,30 @@ Always include `startIcon={<MaterialSymbol icon="…" size={iconSize.sm} />}` ra
 - `size="small"` is reserved for **dense toolbars** and inline cell editors — not for dialog forms.
 - Stack fields with `<Stack spacing={2}>` or `<Box display="flex" flexDirection="column" gap={2}>`.
 
+**Field labels are static.** The theme (`buildTheme`, `src/theme/index.ts`) floats every `InputLabel`
+(`shrink`) and keeps every outlined notch open (`OutlinedInput.notched`), so a label always sits on the
+field's border — empty or filled, focused or not — and the outline never has to re-open after mount.
+The rules that follow from that, each of which shipped as a bug before it was written down:
+
+- **Never pin `shrink` / `notched` per field**, and never derive a label position from field state
+  (`shrink={value !== ""}`). The theme is the single owner; `src/theme/staticLabels.test.tsx` fails the
+  build on any per-field pin. The one sanctioned opt-out is a literal `slotProps={{ inputLabel: { shrink: false } }}`
+  with a comment saying why.
+- **A hand-composed `<FormControl><InputLabel>…<Select>` / `<OutlinedInput>` still passes `label`** — the
+  outline's `<legend>` is sized by that text, so a missing `label` draws the border through the floated label.
+- **`placeholder` is the affordance for "what goes here"**, not the label: with static labels the placeholder
+  is visible on an empty field, so write it as a hint (`e.g. acme/platform`), never as a repeat of the label.
+- `displayEmpty` on a `Select` is fine on its own now — the "All / None" placeholder renders under a label
+  that is already on the border.
+
+Why: MUI opens the notch by switching the `<legend>` from `max-width: 0.01px` to `100%`, and WebKit
+(Safari, iOS) does not re-lay out a percentage `max-width` on a legend inside a fieldset in some flex
+layouts — the multiline input root and a `Stack` parent. Any label that floated *after* mount (a value
+arriving from the server, the first keystroke, a focus) therefore rendered with the border through it
+([mui/material-ui#44988](https://github.com/mui/material-ui/issues/44988),
+[#46891](https://github.com/mui/material-ui/issues/46891); fix PR #48566 unmerged). With nothing left to
+transition, the bug has nothing to act on. Extensions inherit this through core's `ThemeProvider`.
+
 **Mandatory (required) metamodel fields** follow one pattern everywhere (reference: card detail + Create Card dialog):
 
 - **Edit contexts** mark them with MUI's own asterisk via the `required` prop on the control (`TextField required`, `FormControl required`) — never a hand-rolled `*` string inside an input label.
@@ -337,6 +361,8 @@ Always render status through one of these:
 | --- | --- |
 | Page-level load | `<CircularProgress/>` centered in a `min-height` Box |
 | Inline / top-of-section progress | `<LinearProgress/>` |
+| A value out of 100 (a `percentage` field, the data-quality score) | `<PercentBar/>` (`components/PercentBar.tsx`) — the bar + `NN%` pair; pass `color` only when the number is a verdict (data quality's band colour), never for a plain quantity |
+| Editing a value out of 100 | `<PercentageInput/>` (`components/PercentageInput.tsx`) — 5 % slider beside a free number box, 0–100 |
 | Empty list | Centered `<Typography variant="body2" color="text.secondary">` |
 | Recoverable error | `<Alert severity="error">` |
 
@@ -395,6 +421,7 @@ Layer order is invariant. Layer color = `LAYER_COLORS[layer]` from `theme/tokens
 | Shape | Rounded rectangle, 200 × 72 px (`LDV_NODE_W`, `LDV_NODE_H` in `layeredDependencyLayout.ts`) |
 | Color | Card type color from the metamodel (`CARD_TYPE_COLORS` / type record) |
 | Label | Card name (top, semibold) + card-type label (bottom, italic) |
+| Type icon | The metamodel icon, 16 px in the type color, top-left — moved beside the lifecycle dot when a logo takes that corner. Class `ldv-type-icon`, which image export strips (the glyph is a font ligature `html-to-image` cannot embed) |
 | Border — existing | 1.5 px solid, type color |
 | Border — proposed | 2 px dashed, type color, plus a green **NEW** badge top-right |
 | Border - added | 2 px dashed, type color, plus a localized **NEW** badge |
@@ -431,6 +458,15 @@ The view ships with a top-bar toolbar and is directly manipulable:
 - **Export** renders the whole graph (not just the visible viewport) to **PNG** or **SVG** via `html-to-image` + `getViewportForBounds`.
 - **Background** cycles dots → grid → none. Default is **dots**.
 - **Card display** menu: toggle the type label, toggle a lifecycle-status dot (`getCurrentPhase`), toggle **hierarchy markers** (a small chevron on a card that has a parent / children not currently on the diagram — purely informational, computed from `parent_id` + a consumer-supplied `hasChildren` flag, and disappears once the parent/child is revealed), and pick extra attribute fields. The first two chosen fields render on the card body; the full set (plus type and lifecycle) appears in the card's hover tooltip. Settings persist to `localStorage` (`tea.ldv.display.*`). Note the split of concerns: the **top-bar Card display menu controls what's drawn on cards**; the **bottom-left toolbar controls exploration** (Highlight / Expand / Reveal parent / Reveal children).
+- **Card types** menu (the funnel, left of Card display): which card types the view draws at all — scope, as distinct from what a card *says* (Card display) and how things are *drawn* (View options). One row per type ON the canvas, in metamodel order, each with the type's own glyph in its own colour and its card count; untick to hide. The list is built from the graph **before** the filter, so a hidden type stays listed with the count that ticking it would restore, and the button's badge counts only hidden types actually present. The centred card is never hidden, whatever its type (`filterHiddenTypes`), and the empty state carries its own **Show all** — the toolbar is not rendered there, so without it a reader who hid everything would have no way back. Persisted as `hiddenTypeKeys`.
+- **Aggregate relations** (View options, first row of the Relations group): a *level*, not a switch — **Off / By layer / By card type / By subtype** ([#1117](https://github.com/vincentmakes/turbo-ea/discussions/1117) asks for "card domain, card type, subtype etc."). Above Off, the cards are clustered into **`ldvCluster`** boxes headed with the group's glyph, label and count, and **two boxes are joined by exactly ONE line**, merged on the unordered pair of endpoints and carrying `data.count`. Six rules are load-bearing:
+  - **The four layer lanes are dropped while aggregating** — the one place in the view where they are not drawn. A lane fixes a box's row from its cards' layer, before anything is known about what the box connects to, so boxes that talk to each other land at opposite ends and their connectors run the height of the canvas and back; the same 17 lines then read as a thicket. Freed, one `layoutGroup` pass over the virtual graph puts connected boxes side by side (measured on the demo landscape: total line length down ~21%). Layer identity is not lost — it is what **By layer** groups on, and every box carries its card type's colour and glyph. This is the documented exception to "don't reorder the four layers" below, and it applies to aggregate mode only.
+  - **The centred card is never clustered** — it is the subject of the diagram, and boxing it would merge away the very lines the reader came for. TurboLens passes no `centerId`, so everything is clustered there.
+  - **Relations between two cards of one box stay individual lines** inside it; merging them would draw a connector from a box to itself.
+  - **One line per pair, whatever the types or directions** — a pair joined by three verbs drawn as three lines is the dense picture the reader turned this on to escape ([#1117](https://github.com/vincentmakes/turbo-ea/discussions/1117)). The verb survives on the line only while it stands for a single relation type (naming one of several would be a claim about the others); the count is always there, the tooltip names every verb behind it, and relations running both ways get an arrowhead at each end.
+  - **A connector must read as ONE line, or the merge is invisible.** The data rule above held on the demo landscape from the first cut and the screenshot still showed bundles, because four rendering choices each turned one line into what looks like several: (1) dagre was fed the pairs alphabetically (`lo → hi`), so the centred card had nine connectors on one side and two of them shared a handle slot — two lines leaving the same point of a card *is* a duplicate to the eye; the virtual edges are now oriented the way they are drawn (`forward`), so what points into the centre ranks above it and what it points to ranks below, and `spreadOverflow` moves the sixth-plus connector on a side to the left/right handles before staggering `pathOffset`; (2) a 1.2 px dotted idle stroke is what the eye reads as "several thin lines", so a connector is always **solid** with a width of `1.6 + min(2.8, log2(count))` px; (3) the count was 10 px text in the verb's bracket, so it is now a filled **pill** in the line's colour, with the verb beside it only while the line stands for a single relation type; (4) the card router's 12 px clearance and 12 px corridor separation are right for 1 px lines between cards and wrong beside a 400 px box, where two connectors 12 px apart along its edge read as one bundle — `routeLdvEdges` takes a `ChannelSpacing` (`ldvChannels.ts`) and aggregate mode passes `CONNECTOR_CLEARANCE` / `CONNECTOR_SEP` (28 / 22), with dagre's `ranksep` / `nodesep` derived from the same two numbers so a gap has room for the lines that will run through it. Boxes and the centred card stay obstacles: routing "around nothing" was tried and put lines straight through the centre card, which read as two lines between the boxes either side of it. `ldvAggregate.test.ts` runs every level over the demo fixture and pins pair uniqueness, conservation (`Σ count` + inside lines = relations) and that no two connectors of one node share both a handle and a `pathOffset`.
+  - **A box is laid out and routed as a virtual card** — `layoutGroup` inside a lane, `alignLanesX` across lanes, `routeLdvEdges` for every line. Those engines take a `SizeLookup` (`ldvHandles.ts`) and ask each node how big it is instead of assuming 200×80; omit it and every node is a card, exactly as before. A second router was tried first and is the thing to avoid: it meant a second set of rules for ports, obstruction and label placement, and two sets drift. Two size-dependent traps the card case hid, both of which shipped as overlapping boxes: `transposeRow` swaps two x positions outright, which only preserves separation between equally wide nodes, and `alignLanesX` bucketed rows by top-edge y, which puts two boxes of different heights on one rank into different rows and so never keeps them apart.
+  The count rides on `data.count`, never inside `relLabel` — the label's 24-char cap would eat it, and hiding the verbs must still leave the count. **A box drags like a lane**: `buildDisplayNodes` flips `draggable` on for `ldvCluster` exactly as for `ldvGroup`, its cards ride along as its React Flow children (clamped by `extent: "parent"`), the connectors degrade to smoothstep when their stored bends go stale, and positions are not persisted — the same bargain the lanes strike. **Create diagram works while aggregating, with a caveat said first** (`LdvExportAggregatedDialog`, shown before the name prompt): the export (`collectDiagramInputs`, `ldvDiagramExport.ts`, a pure function over the LIVE nodes so a dragged box exports where it was put) turns each box into a DrawIO swimlane container (`DiagramGroupInput`) with its cards as real mxGraph children at their RELATIVE positions, stamped `groupChild="1"` — the third container-child marker `isContainerChild` accepts, so the editor's fixed-height, capped-detail-rows, never-a-paste and detach rules all apply to them and the cards stay fully live (`cardId` on every one; perspectives, logos and sync walk the flat cell map). Each merged connector becomes a **decoration** edge (`DiagramConnectorInput`): a bare `<mxCell>` with no `<object>`, no `relationType`, no `relationId`, no `pending`, so `scanDiagramItems` falls through every branch, the stale check never sees it and deleting it asks nothing; its label carries the count and `relationEdgeStyle({ weight })` thickens the stroke and boxes the label. Lines drawn inside a box export as ordinary relation lines. A line standing for N relations cannot be re-linked later, which is exactly what the dialog says. Anything resolving a node's absolute position must walk the whole parent chain (`absolutePosition`), not one level.
 - **Bottom-left `Controls` are split into two groups** by a divider rule: a **view group** (**Fullscreen**, then zoom +/-, **Re-center**, **Reset view**) and an **exploration group** (Highlight / Expand / Reveal parent / Reveal children). Reset and Fullscreen live here, not in the top bar. The whole panel is hand-ordered: default zoom + fitView are disabled (`showZoom={false} showFitView={false}`) and every button is a custom `ControlButton`, so Fullscreen can sit first and the fitView frame icon (too like Fullscreen) is swapped for a map-pin. The divider is a full-width inline-styled `<div>` — a filled light-grey band with thin top/bottom rules (an earlier bare 1px line with margins let the canvas show through and read as a glitch).
   - **Fullscreen** (`fullscreen` / `fullscreen_exit`, first button): toggles fullscreen on the view container.
   - **Re-center** (`location_on` map-pin): custom `fitView()` button — the stock frame icon read too much like the Fullscreen button.
@@ -460,10 +496,10 @@ These are presentation/interaction concerns layered in the component — they do
 ✅ Do
 - Use the same view component everywhere a dependency graph is shown — consistency across Card Detail, Reports, and TurboLens is the whole point.
 - Mark proposed/uncommitted cards with the dashed border + **NEW** badge so users can distinguish them at a glance.
-- Use the relation type's `forward_label` for edges. If the relation has no label, fall back to the type key.
+- Use the relation type's `forward_label` for edges. If the relation has no label, fall back to the type key. This is §3.13's rule applied to an edge — the verb, always.
 
 ❌ Don't
-- Don't introduce a fifth layer or reorder the four. Layer identity is part of the standard.
+- Don't introduce a fifth layer or reorder the four. Layer identity is part of the standard. The single exception is aggregate mode, which drops the lanes entirely so the boxes can be placed by what they connect to (see **Aggregate relations** above); it is not a licence to reorder them anywhere else.
 - Don't reuse this view for runtime / deployment / sequence diagrams — it is a *dependency* view of the EA metamodel, not a behavioural diagram.
 - Don't substitute another graph library (vis.js, Cytoscape, mermaid) for the Layered Dependency View. Mermaid is still fine for one-off illustrative diagrams (e.g. ArchitectureDiagram in TurboLens reports), but the canonical interactive dependency view is React Flow + `layeredDependencyLayout`.
 
@@ -601,12 +637,93 @@ Every user-visible string must use a translation key. See `CLAUDE.md` for the fu
 4. If it's a status hue, also wire it into the MUI palette in `src/theme/index.ts`.
 5. Confirm WCAG AA contrast against `#ffffff` and the dark `#1e1e1e` paper.
 
+### 3.13 Naming a Relation Type in the UI
+
+A relation type is named by its **verb**, read from the side under view —
+`useRelationLabel()` / `relationLabel(rt, locale, reverse)` (`hooks/useResolveLabel.ts`),
+with `reverse=true` when the card under view sits at the target end. That holds anywhere the
+type appears **alongside other relation types**: the inventory's filter facets and mass-edit
+picker, `RelationCellPopover` sections, card detail's Relations groups, the Survey Builder's
+relation list and the survey forms downstream of it, portals (admin and viewer), the
+calculation token catalogue, the Portfolio / Capability Map / Matrix report facets and
+legends, the diagram relation picker, and §3.10's edge labels.
+
+The reason is **parallel structure**, not taste: those lists are heterogeneous, and a verb is
+the only part of speech every relation type has. Swap one row to a noun and it reads as a
+different kind of thing than its neighbours — you cannot turn *uses* into a noun to match it.
+The model is Jira's inward/outward link labels, which our `label` / `reverse_label` pair
+mirrors exactly.
+
+**The one sanctioned exception is card detail's Lineage section**
+(`features/cards/sections/SuccessorsSection.tsx`), which heads its two sub-lists
+**Predecessors** and **Successors** (`cards:successors.*`). It earns the nouns because it is
+a *dedicated* section holding one relation type: there is nothing to be non-parallel with, the
+headings name two collections of cards rather than enumerating types, and the nouns are the
+domain vocabulary EA practitioners bring from LeanIX. Lineage is excluded from six lists so it
+cannot appear twice — card-detail Relations, Add Relations dialog, Descendant relations
+drawer, Metamodel admin Relations tab, Metamodel graph, Type detail drawer
+(`lib/successorRelation.ts`). It is **not** excluded anywhere else, which is exactly why the
+verb has to work in a mixed list.
+
+✅ Do
+- Resolve the verb per **row/side**, never from the type's static `source_type_key ===
+  cardTypeKey` test — that is true at both ends of a self-referencing type.
+- Lead with the related **card type** and use the verb as a disambiguator where the surface
+  already does (inventory facets: `Application · succeeds`).
+
+❌ Don't
+- Don't map a relation type to a noun in a list of relation types, however well the noun reads
+  on its own. A survey row labelled *Successors* beside one labelled *uses* was #1091's
+  second-guess fix and was reverted for this reason.
+- Don't invent a second name for a relation type in one surface. If a verb reads badly, fix it
+  in the metamodel — the verb is admin-editable and there is one definition.
+
+### 3.14 Free Text and Links
+
+A description, a comment, a note, a status report, a survey message — anything a person
+typed — is rendered read-only through **`LinkifiedText`** (`components/LinkifiedText.tsx`),
+which turns every `http://` / `https://` address into an MUI `Link` that opens in a new tab
+(`target="_blank" rel="noopener noreferrer"`, `underline="hover"`, `wordBreak: "break-all"`).
+It renders a **fragment** — text nodes and links, never a wrapper — so the call site keeps
+its own `Typography` / `<li>` / `Alert` (variant, colour, `pre-wrap`, `noWrap`) and the swap
+is one line: `{text}` → `<LinkifiedText text={text} />`. The tokenizer is the pure
+`splitLinks` in `lib/linkify.ts`; it never produces HTML, so there is no injection surface.
+
+Stored **rich text** (ADR and SoAW sections, a portal's card description) goes through
+**`sanitizeRichHtml`** (`lib/richHtml.ts`) — never a bare `DOMPurify.sanitize`, which drops
+`target` and leaves every anchor same-tab. The wrapper autolinks bare URLs in text nodes,
+sanitises last so stored and generated anchors share one policy, stamps `target`/`rel` on
+every anchor whose href is `http`, `https` or `mailto`, and strips any other href. It runs on
+a private DOMPurify instance so the SVG-thumbnail sanitisers never inherit the hook.
+
+Detection in prose is **`http(s)://` only** — no bare `www.`, no bare e-mails — the same
+allowlist the `url` field type enforces, chosen for zero false positives. `mailto:` is
+accepted as an *href* (a `url`-typed value, a stored anchor) but never detected in text.
+
+✅ Do
+- Route every read-only rendering of user text through `LinkifiedText`, including AG Grid
+  cells (`InventoryPage`'s `linkifiedCell`) and `ListItemText` primaries.
+- Render a `url`-typed value as ONE whole link (its scheme may be `mailto:`), not through the
+  tokenizer.
+- Guard a native row-click handler with `closest("a")`: AG Grid's `onRowClicked` fires before
+  React's `stopPropagation` can run, and `preventDefault` would cancel the link itself.
+
+❌ Don't
+- Don't linkify a truncated or line-clamped preview (a 100-character notification teaser, a
+  nowrap grid summary): a cut URL is a broken link. The full text is one click away.
+- Don't linkify model-generated text (TurboLens summaries): a URL the model emitted is not one
+  the user chose to share.
+- Don't pin `underline` or `color` on a `MuiLink` theme default to get this look — the
+  component carries its own; ~30 unrelated bare `<Link>`s would change.
+
 ---
 
 ## 8. Related Files
 
 - [`src/theme/tokens.ts`](./src/theme/tokens.ts) — design tokens
 - [`src/theme/index.ts`](./src/theme/index.ts) — `buildTheme()` and re-exports
+- [`src/components/LinkifiedText.tsx`](./src/components/LinkifiedText.tsx) — free text with clickable addresses (§3.14)
+- [`src/lib/richHtml.ts`](./src/lib/richHtml.ts) — the one sanitiser for stored rich text (§3.14)
 - [`src/components/MaterialSymbol.tsx`](./src/components/MaterialSymbol.tsx)
 - [`src/features/reports/MetricCard.tsx`](./src/features/reports/MetricCard.tsx)
 - [`src/features/reports/ReportShell.tsx`](./src/features/reports/ReportShell.tsx)

@@ -12,12 +12,26 @@ instance IDs, installing, updating and trials — see
 
 ## Available extensions
 
+### Strategy, Planning & Transformation
+
 | Extension | What it does | Licence |
 |-----------|--------------|---------|
 | [Digital Autonomy Assessment](digital-autonomy.md) | Scores every application against the Utrecht University Digital Autonomy Assessment Framework — 22 weighted indicators, an automatic 1–10 autonomy score, and a risk/mitigation quadrant report | **Free** |
 | [EA Value Tracker](value-savings.md) | Turns Architecture Decision Records into an auditable financial ledger: categorized savings claims, four-eyes realization approval, and a value dashboard | Commercial |
+| [Roadmap Studio](roadmap-studio.md) | Plans alternative futures of the landscape as what-if scenarios, steps through transition plateaus, compares them on cost and end-of-life exposure, and takes them through review and a review-board decision | Commercial |
+| [Automations](automations.md) | Runs governance rules built from dropdowns — when a card, relation or todo changes or a schedule fires, if conditions hold, then set fields, tags and roles, create todos, raise risks, file draft decisions, notify people or call a webhook — every run an audit batch with Rollback | Commercial |
+
+### Integrations
+
+| Extension | What it does | Licence |
+|-----------|--------------|---------|
 | [Jira Todo Sync](jira-todos.md) | Keeps Turbo EA todos and a Jira Cloud project aligned in both directions — status, summary, due date and assignee | Commercial |
 | [Slack Notifications](slack-notify.md) | Delivers each person's Turbo EA notifications as a Slack direct message, with per-user, per-type opt-in | Commercial |
+
+### Regulations
+
+| Extension | What it does | Licence |
+|-----------|--------------|---------|
 | [DORA Register of Information](dora-roi.md) | Maintains the EU DORA Art. 28 Register of Information on your existing cards and exports the official xBRL-CSV submission package | Commercial |
 
 ## What every extension has in common

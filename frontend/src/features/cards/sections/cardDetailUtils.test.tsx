@@ -271,3 +271,57 @@ describe("mandatory-field helpers", () => {
     expect(missingRequiredFields(undefined, null, {})).toEqual([]);
   });
 });
+
+
+describe("percentage field type", () => {
+  const progress: FieldDef = { key: "progress", label: "Progress", type: "percentage" };
+
+  it("FieldValue draws a bar and the rounded number", () => {
+    render(<FieldValue field={progress} value={42.4} />);
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "42");
+    expect(screen.getByText("42%")).toBeInTheDocument();
+  });
+
+  it("FieldValue shows a dash for a blank", () => {
+    render(<FieldValue field={progress} value={null} />);
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+
+  it("FieldEditor offers a slider and a number box that write the same value", () => {
+    const onChange = vi.fn();
+    render(<FieldEditor field={progress} value={20} onChange={onChange} />);
+    expect(screen.getByRole("slider")).toHaveAttribute("aria-valuenow", "20");
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "65" } });
+    expect(onChange).toHaveBeenLastCalledWith(65);
+  });
+});
+
+describe("links in free text (FieldValue)", () => {
+  const notes: FieldDef = { key: "notes", label: "Notes", type: "multiline_text" };
+  const plain: FieldDef = { key: "plain", label: "Plain", type: "text" };
+  const site: FieldDef = { key: "site", label: "Site", type: "url" };
+
+  it("turns an address in a multi-line field into a new-tab link and keeps pre-wrap", () => {
+    render(<FieldValue field={notes} value={"see https://a.io/doc.\nnext line"} />);
+    const link = screen.getByRole("link", { name: "https://a.io/doc" });
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+    expect(screen.getByText(/next line/)).toHaveStyle({ whiteSpace: "pre-wrap" });
+  });
+
+  it("links a plain text field too, and never a javascript: scheme", () => {
+    render(<FieldValue field={plain} value="go https://b.io now" />);
+    expect(screen.getByRole("link")).toHaveAttribute("href", "https://b.io");
+    const { container } = render(<FieldValue field={plain} value="javascript:alert(1)" />);
+    expect(container.querySelector("a")).toBeNull();
+  });
+
+  it("renders a url-typed value as one link, mailto included", () => {
+    render(<FieldValue field={site} value="mailto:ops@a.io" />);
+    expect(screen.getByRole("link", { name: "mailto:ops@a.io" })).toHaveAttribute(
+      "href",
+      "mailto:ops@a.io",
+    );
+  });
+});

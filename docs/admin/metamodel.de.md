@@ -52,7 +52,7 @@ Felder definieren die benutzerdefinierten Attribute, die auf Karten dieses Typs 
 |-------------|-------------|
 | **Schlüssel** | Eindeutiger Feldbezeichner |
 | **Bezeichnung** | Anzeigename |
-| **Typ** | text, multiline_text, number, cost, boolean, date, url, single_select oder multiple_select |
+| **Typ** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select oder multiple_select. Ein Prozentsatz ist eine Zahl von 0 bis 100, die als Fortschrittsbalken dargestellt und mit einem Schieberegler oder durch exakte Eingabe bearbeitet wird |
 | **Optionen** | Für Auswahlfelder: die verfügbaren Auswahlmöglichkeiten mit Bezeichnungen und optionalen Farben |
 | **Pflichtfeld** | Ob das Feld verpflichtend ist — siehe die Durchsetzungsregeln unten |
 | **Datenqualität** | Der Beitrag jedes Felds zum Wert wird im Bereich **Datenqualität** verwaltet (siehe unten) |
@@ -133,12 +133,34 @@ Rollen lassen sich auf zwei Arten entfernen:
 
 Der Schlüssel einer Rolle lässt sich korrigieren, solange **niemand die Rolle innehat** — Umfragen, die sie verwenden, folgen der Umbenennung automatisch, und auch die einzige Rolle eines Typs lässt sich umbenennen, da die Rolle dabei erhalten bleibt. Sobald jemand die Rolle innehat, ist der Schlüssel gesperrt und das Feld erklärt warum. Rollen, die vor dieser Konvention angelegt wurden, behalten ihren bestehenden Schlüssel und funktionieren weiterhin; geprüft wird nur ein neuer oder geänderter Schlüssel.
 
+#### Berechtigungen
+
+Kartentypen können einschränken, was jede Anwendungsrolle mit ihren Karten tun darf. Öffnen Sie die Registerkarte **Berechtigungen** im Typ-Bereich, um eine Matrix aus Rollen und den vier Kartenaktionen zu erhalten — **Erstellen**, **Bearbeiten**, **Archivieren** und **Löschen**.
+
+![Kartentyp-Berechtigungen](../assets/img/de/85_admin_kartentyp_berechtigungen.png)
+
+Jede Zelle hat drei Zustände:
+
+- **Erben** (Standard) — die systemweite Berechtigung der Rolle entscheidet. Das Symbol zeigt an, welche das derzeit ist.
+- **Erlauben** — die Rolle darf diese Aktion für Karten dieses Typs ausführen, auch wenn ihr die Berechtigung global fehlt.
+- **Verweigern** — die Rolle darf diese Aktion für Karten dieses Typs nicht ausführen, auch wenn sie die Berechtigung global besitzt.
+
+So können Sie festlegen: «Jeder darf Anwendungen erstellen, aber nur das zentrale Team erstellt Organisationen und Initiativen» — ohne für jeden Kartentyp eine eigene Rolle zu erfinden. Wird **Erstellen** für einen Typ verweigert, verschwindet dieser auch aus dem Erstellungsdialog, dem Diagrammeditor und dem Tabellenimport.
+
+Einige Regeln sind wichtig:
+
+- **Administratoren werden nie eingeschränkt.** Die Administratorzeile ist gesperrt.
+- **Stakeholder-Rollen gelten weiterhin.** Wird einer Rolle **Bearbeiten** für einen Typ verweigert, entfällt nur ihre systemweite Berechtigung, nicht die Befugnis als zugewiesene:r Eigentümer:in einer einzelnen Karte. Siehe [Benutzer & Rollen](users.md).
+- **Massenbearbeitung folgt einer Verweigerung, nicht einer Erlaubnis.** Ein Typ, der **Bearbeiten** verweigert, blockiert auch Massenbearbeitungen; eine Erlaubnis erteilt nicht die separate Massenbearbeitungsberechtigung.
+- Änderungen wirken für andere Benutzer beim nächsten Neuladen der Anwendung.
+
 #### Übersetzungen
 
 Klicken Sie auf die Schaltfläche **Übersetzen** in der Symbolleiste des Typ-Drawers, um den **Übersetzungsdialog** zu öffnen. Hier können Sie Übersetzungen für alle Metamodell-Bezeichnungen in jeder unterstützten Sprache angeben:
 
 - **Typbezeichnung** — Der Anzeigename des Kartentyps
 - **Untertypen** — Bezeichnungen für jeden Untertyp
+- **Hierarchie-Verbindungstypen** — Bezeichnungen für jeden Hierarchie-Verbindungstyp
 - **Sektionen** — Abschnittsüberschriften auf der Kartendetailseite
 - **Felder** — Feldbezeichnungen und Auswahloptionsbezeichnungen
 - **Stakeholder-Rollen** — Rollennamen, die in der Stakeholder-Zuweisungs-UI angezeigt werden
@@ -165,15 +187,29 @@ Beziehungstypen definieren die zulässigen Verbindungen zwischen Kartentypen. Je
 
 Klicken Sie auf **+ Neuer Beziehungstyp**, um eine Beziehung zu erstellen, oder klicken Sie auf einen bestehenden, um dessen Bezeichnungen und Attribute zu bearbeiten.
 
+Jede Beziehungszeile trägt außerdem die Schalter **Sichtbar** und **Pflichtfeld** für *jedes* ihrer beiden Enden, benannt nach dem Kartentyp, für den sie gelten: Sichtbar entscheidet, ob die Beziehung auf der Kartendetailseite dieses Typs erscheint, Pflichtfeld, ob sie ausgefüllt werden muss. Ein Beziehungstyp, dessen beide Enden derselbe Kartentyp sind, erhält je Richtung ein eigenes Schalterpaar, sodass die eingehende Seite getrennt von der ausgehenden konfiguriert werden kann.
+
 Die Felder **Bezeichnung** und **Umgekehrte Bezeichnung** werden in der Sprache erfasst, die Sie gerade verwenden — die Feldbeschriftung zeigt an, welche (zum Beispiel *Bezeichnung (Deutsch)*). Beim Umbenennen einer Beziehung wird diese Sprache überall aktualisiert, wo das Verb erscheint: im Abschnitt **Beziehungen** einer Karte, in den Beziehungsspalten des Inventars, in Berichten, Portalen und Diagrammen. Andere Sprachen behalten ihre eigene Formulierung, bis Sie sie übersetzen.
 
-Mit **Übersetzungen verwalten** oben im Reiter Beziehungstypen übersetzen Sie die Verben aller Beziehungen in einem Durchgang in jede aktivierte Sprache. Wählen Sie einen Sprachreiter, tragen Sie die Formulierung neben dem englischen Original ein und speichern Sie — der Zähler auf jedem Reiter zeigt, wie viele Verben in dieser Sprache noch fehlen. Englisch erscheint hier nicht, denn es ist die Formulierung an der Beziehung selbst; ein nicht übersetztes Verb fällt darauf zurück.
+Mit **Übersetzungen verwalten** oben im Reiter Beziehungen, über dessen Untertabs, übersetzen Sie die Verben aller Beziehungen in einem Durchgang in jede aktivierte Sprache. Wählen Sie einen Sprachreiter, tragen Sie die Formulierung neben dem englischen Original ein und speichern Sie — der Zähler auf jedem Reiter zeigt, wie viele Verben in dieser Sprache noch fehlen. Englisch erscheint hier nicht, denn es ist die Formulierung an der Beziehung selbst; ein nicht übersetztes Verb fällt darauf zurück. Derselbe Dialog enthält einen eigenen Abschnitt **Hierarchische Verbindungstypen** mit dem Vokabular jedes hierarchischen Kartentyps, sodass Verben und Verbindungstypen in einem Durchgang übersetzt werden.
+
+### Hierarchie-Verbindungstypen
+
+Für einen Kartentyp mit aktivierter Hierarchie können Sie **Verbindungstypen** definieren — ein kurzes Vokabular, das jede Eltern-Kind-Verbindung benennt. In einem Organisationsbaum lässt sich so eine Tochtergesellschaft als *Vertrieb* und eine andere als *Verkauf* kennzeichnen, ohne einen zweiten Beziehungstyp anzulegen.
+
+1. Öffnen Sie auf dem Tab **Beziehungen** den Untertab **Hierarchische Verbindungstypen** — dort ist jeder Kartentyp mit aktivierter Hierarchie aufgeführt. (Der erste Untertab, **Beziehungstypen**, ist die gewöhnliche Beziehungsliste.) Der Tab **Beziehungen** eines Kartentyps zeigt dasselbe als eine einzelne Zeile oben, auf diesen Typ beschränkt.
+2. Klicken Sie auf **Verbindungstypen bearbeiten** und fügen Sie pro Bezeichnung einen Eintrag mit Schlüssel, Namen und Farbe hinzu.
+3. Übersetzen Sie die Namen über die Schaltfläche **Übersetzen**, wie jede andere Metamodell-Bezeichnung.
+
+Bearbeiter wählen den Verbindungstyp anschließend im Abschnitt **Hierarchie** der Karte oder in der Spalte **Verbindungstyp** des Inventars. Die Bezeichnung gehört zur untergeordneten Karte und entfällt automatisch, sobald diese auf die oberste Ebene verschoben wird.
+
+Das Entfernen eines Verbindungstyps überschreibt **nicht** die Karten, die ihn bereits verwenden: Sie behalten den gespeicherten Wert und zeigen ihn als unbekannten Verbindungstyp an, bis ihn jemand ändert — ein versehentliches Entfernen geht also nicht mit Datenverlust einher. Der Dialog nennt vor dem Bestätigen die Anzahl der betroffenen Karten.
 
 ### Beziehungsattribute
 
 Manche Beziehungen tragen zusätzliche Attribute, die Sie an jeder einzelnen Verknüpfung statt am Beziehungstyp festlegen. Beispielsweise hat die integrierte Beziehung **Organisation → Anwendung** („nutzt") ein Attribut **Nutzungstyp** — setzen Sie es je Verknüpfung auf **Eigentümer**, **Benutzer** oder **Stakeholder**. So können Sie eine Anwendung, die einer Organisation *gehört* und von anderen *genutzt* wird, über einen einzigen Beziehungstyp abbilden. Der gewählte Wert erscheint als farbiger Chip im Abschnitt **Beziehungen** der Karte; legen Sie ihn beim Hinzufügen der Beziehung fest oder später über das Bearbeiten-Symbol in der Beziehungszeile.
 
-Sie können auch **mehrere Beziehungstypen zwischen demselben Paar von Kartentypen** anlegen — etwa eine Organisation, die eine Anwendung *besitzt*, neben einer, die sie *nutzt*. Bevorzugen Sie ein Attribut, wenn Sie Varianten einer einzigen Beziehung beschreiben (das behält eine Spalte im Inventar und eine Linie im Diagramm); legen Sie einen zweiten Beziehungstyp an, wenn die Beziehungen wirklich verschieden sind und eigene Verben, eigene Attribute oder eigene Filter verdienen. Trägt ein Paar mehrere Beziehungstypen, zeigt das Inventar weiterhin eine einzige Spalte für den verbundenen Kartentyp; beim Öffnen dieser Zelle erhalten Sie je Beziehungstyp einen eigenen Abschnitt. Auf einer Karte behält jeder Beziehungstyp seinen eigenen Abschnitt: Abschnitte, die auf denselben Kartentyp zeigen, stehen beieinander, und eine Karte, die Sie über mehr als einen davon verknüpft haben, wird in jedem ihrer Abschnitte mit *Auch …* gekennzeichnet.
+Sie können auch **mehrere Beziehungstypen zwischen demselben Paar von Kartentypen** anlegen — etwa eine Organisation, die eine Anwendung *besitzt*, neben einer, die sie *nutzt*. Bevorzugen Sie ein Attribut, wenn Sie Varianten einer einzigen Beziehung beschreiben (das behält eine Spalte im Inventar und eine Linie im Diagramm); legen Sie einen zweiten Beziehungstyp an, wenn die Beziehungen wirklich verschieden sind und eigene Verben, eigene Attribute oder eigene Filter verdienen. Trägt ein Paar mehrere Beziehungstypen, zeigt das Inventar weiterhin eine einzige Spalte für den verbundenen Kartentyp; beim Öffnen dieser Zelle erhalten Sie je Beziehungstyp einen eigenen Abschnitt. Auf einer Karte behält jeder Beziehungstyp seinen eigenen Abschnitt: Abschnitte, die auf denselben Kartentyp zeigen, stehen beieinander, und eine Karte, die Sie über mehr als einen davon verknüpft haben, wird in jedem ihrer Abschnitte mit *Auch …* gekennzeichnet. Ein Beziehungstyp, dessen beide Enden derselbe Kartentyp sind — eine Organisation, die *Standort hat* einer anderen Organisation —, zeigt auf einer Karte *beide* Verben als zwei Abschnitte und im Inventar als zwei Filterzeilen und zwei Editor-Abschnitte; geben Sie einem solchen Typ eine umgekehrte Beschriftung, sonst lesen sich beide Abschnitte gleich.
 
 Trägt ein Paar mehrere Beziehungstypen, können Berichte, Portale und Umfragen einen bestimmten auswählen: Der Portfolio-Bericht bietet eine Gruppierungsachse und einen Filter je Beziehung, die Capability Map einen Filter je Beziehung, Portalfilter und Beziehungsabschnitte werden mit ihrem Verb beschriftet, und der Filter **bezogen auf** einer Umfrage erhält eine Auswahl **Über Beziehung**. Keine Auswahl bedeutet weiterhin „über eine beliebige davon verbunden“.
 

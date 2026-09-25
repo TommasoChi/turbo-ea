@@ -10,14 +10,16 @@ L'**Inventario** è il cuore di Turbo EA. Qui sono elencate tutte le **card** (c
 
 Il pannello laterale sinistro consente di **filtrare** le card secondo diversi criteri:
 
-- **Ricerca** — Ricerca libera per testo nel nome delle card, già dalla prima lettera. Le corrispondenze migliori compaiono per prime: nomi esatti, poi quelli che iniziano con quanto digitato, poi quelli in cui inizia una parola, poi il resto. Ogni campo di ricerca in Turbo EA ordina così — la ricerca globale (**Ctrl+K** / **⌘K**), ogni selettore di card, il registro dei rischi, le decisioni e i portali pubblicati — a meno che non abbiate scelto un ordinamento vostro, che ha sempre la precedenza
-- **Tipi** — Filtra per uno o più tipi di card: Objective, Platform, Initiative, Organization, Business Capability, Business Context, Business Process, Application, Interface, Data Object, IT Component, Tech Category, Provider, System
+- **Ricerca** — Ricerca libera per testo nel nome delle card, già dalla prima lettera. Le corrispondenze migliori compaiono per prime: nomi esatti, poi quelli che iniziano con quanto digitato, poi quelli in cui inizia una parola, poi il resto. Ogni campo di ricerca in Turbo EA ordina così — la ricerca globale (**Ctrl+K** / **⌘K**), ogni selettore di card, il registro dei rischi, le decisioni e i portali pubblicati — a meno che non abbiate scelto un ordinamento vostro, che ha sempre la precedenza. Vengono cercati anche l'**alias** della card e la sua descrizione, così una card si ritrova con il nome realmente usato nella vostra organizzazione — e un alias che corrisponde esattamente conta quanto un nome che corrisponde esattamente
+- **Tipi** — Filtra per uno o più tipi di card, raggruppati in base al livello di architettura a cui appartiene ciascun tipo: Strategy & Transformation (Objective, Platform, Initiative), Business Architecture (Organization, Business Capability, Business Context, Business Process), Application & Data (Application, Interface, Data Object) e Technical Architecture (IT Component, Tech Category, Provider). Un tipo che l'amministratore colloca in un livello proprio riceve la sua intestazione dopo quei quattro, e ogni tipo senza livello impostato è elencato per ultimo sotto **Non categorizzato**
 - **Sottotipi** — Quando un tipo è selezionato, filtra ulteriormente per sottotipo (es. Application -> Business Application, Microservice, AI Agent, Deployment)
 - **Stato di approvazione** — Draft, Approved, Broken o Rejected
 - **Ciclo di vita** — Filtra per fase del ciclo di vita: Plan, Phase In, Active, Phase Out, End of Life
 - **Qualità dei dati** — Filtro per fascia (selezione multipla): Completo (≥80%), Parziale (40-79%), Minimo (sotto il 40%). Sono le fasce del [report Qualità dei dati](reports.md#data-quality-report): un clic su un segmento di barra porta qui.
 - **Orfane** — Solo schede senza alcuna relazione, in entrambe le direzioni. Valutato lato server, quindi funziona anche senza un tipo selezionato.
 - **Obsolete** — Solo schede non aggiornate negli ultimi 90 giorni. Entrambe rispecchiano i riquadri del [report Qualità dei dati](reports.md#data-quality-report): un clic su un riquadro porta qui.
+- **Fine vita** — Per applicazioni e componenti IT, filtra in base allo stato di supporto che Turbo EA ricava dal [collegamento EOL](../admin/eol.md) di ogni scheda: Fine vita, In avvicinamento, Supportato o Sconosciuto. **(vuoto)** elenca le schede per cui non è stato registrato nulla. La colonna **Fine vita** corrispondente mostra la data accanto a un pallino di stato e viene ordinata ed esportata come data.
+- **Tipo di collegamento** — Quando è selezionato un solo tipo di scheda gerarchico e un amministratore ha definito dei [tipi di collegamento](../admin/metamodel.md) per esso, filtra in base al tipo del collegamento di ogni scheda verso la scheda superiore — per esempio le filiali *commerciali* anziché *vendite*. **(vuoto)** elenca le schede il cui collegamento non porta alcun tipo, e le schede di primo livello, poiché per nessuna delle due è registrato qualcosa. La colonna **Tipo di collegamento** corrispondente mostra il valore come chip colorato ed è modificabile in modalità di modifica della griglia.
 - **Tag** — Filtra per tag di qualsiasi gruppo di tag
 - **Relazioni** — Filtra per card correlate attraverso i tipi di relazione
 - **Attributi personalizzati** — Filtra per valori nei campi personalizzati (ricerca testuale, opzioni di selezione)
@@ -66,6 +68,8 @@ La colonna **Percorso** mostra la gerarchia della scheda (per es. «Nord America
 
 La colonna **Logo** mostra il logo proprio della scheda, oppure la sua icona di tipo quando non ne è stato impostato alcuno, così da poter scorrere un panorama per marchio di prodotto anziché per nome. È offerta solo per i tipi di scheda che consentono i loghi (di serie, Applicazione e Componente IT), è disattivata per impostazione predefinita e rende le righe più alte finché è visibile, affinché i marchi restino leggibili. Se potete modificare la scheda, passate il mouse sulla cella del logo e fate clic per caricare, sostituire, scegliere un'icona di marchio o rimuovere il logo senza lasciare la griglia — lo stesso menu della pagina della scheda. I loghi sono deliberatamente esclusi dal riempimento verso il basso e dalla modifica di massa: un marchio per scheda, impostato con intenzione.
 
+La colonna **Alias** mostra l'altro nome della card — quello interno con cui la vostra organizzazione la chiama. È disattivata per impostazione predefinita, perché la maggior parte dei panorami non ne contiene alcuno: attivatela nella scheda **Colonne**. Si modifica in cella in modalità di modifica della griglia e si riempie verso il basso come ogni altra colonna di testo, e viaggia con l'esportazione e l'importazione Excel, così un elenco di alias può essere caricato in un solo passaggio.
+
 Ogni categoria ha una casella di controllo **Seleziona tutto** per attivare o disattivare rapidamente tutte le colonne di quel gruppo. Un campo di ricerca in alto consente di trovare colonne specifiche per nome. Il badge su ogni intestazione di sezione mostra quante colonne di quel gruppo sono attualmente visibili.
 
 Quando un tipo di scheda viene selezionato per la prima volta, **tutte le colonne di attributi e relazioni sono abilitate per impostazione predefinita**. È possibile deselezionare le colonne non necessarie. Un pulsante **Ripristina** in fondo alla scheda «Colonne» ripristina la selezione predefinita delle colonne.
@@ -83,7 +87,8 @@ L'inventario utilizza una tabella dati **AG Grid** con funzionalità avanzate:
 | **Tipo** | Tipo di card con icona colorata |
 | **Nome** | Nome del componente (cliccate per aprire il dettaglio della card) |
 | **Logo** | Il logo proprio della scheda, o la sua icona di tipo quando non ne ha. Disattivata per impostazione predefinita — attivatela nella scheda Colonne; fate clic su una cella per cambiarlo |
-| **Descrizione** | Breve descrizione |
+| **Alias** | L'altro nome della scheda. Disattivata per impostazione predefinita — attivatela nella scheda Colonne; considerata da ogni casella di ricerca |
+| **Descrizione** | Breve descrizione — un indirizzo web al suo interno è un link cliccabile |
 | **Ciclo di vita** | Stato attuale del ciclo di vita |
 | **Stato di approvazione** | Badge dello stato di revisione |
 | **Qualità dei dati** | Percentuale di completezza con anello visivo |
@@ -129,6 +134,8 @@ Il menu a discesa **Campo** raggruppa ciò che è possibile modificare:
 - **Attributi** — qualsiasi campo modificabile definito per il tipo di scheda selezionato
 - **Relazioni** — una voce per ogni tipo di relazione e direzione (ad esempio *è eseguito su → Componente IT*)
 
+![Finestra Modifica massiva](../assets/img/it/98_inventario_modifica_massiva.png)
+
 Tag, relazioni e padre offrono ciascuno un interruttore **aggiungi / rimuovi**, così da estendere o ridurre i valori esistenti invece di sostituirli.
 
 Il controllo del valore si adatta al tipo di campo: un campo a selezione multipla mostra le sue opzioni con caselle di spunta, un campo sì/no un interruttore, un campo data un selettore di data. Lasciando il valore vuoto il campo viene svuotato su tutte le schede selezionate. I campi calcolati da una formula e i campi di costo che non sei autorizzato a vedere non vengono proposti.
@@ -151,6 +158,8 @@ Una scheda porta con sé le proprie schede figlie e le schede approvate tornano 
 ## Raggruppare l'inventario { #group-by }
 
 Fai clic su **Raggruppa per** nella barra degli strumenti (accanto al conteggio degli elementi) per organizzare la griglia in gruppi comprimibili. La fase del ciclo di vita e lo stato di approvazione sono sempre disponibili; filtrando la griglia su un solo tipo di scheda si aggiungono il suo sottotipo e tutti gli attributi a selezione singola.
+
+![Inventario raggruppato per modello TIME](../assets/img/it/98a_inventario_raggruppamento.png)
 
 - Le schede senza valore nel campo scelto finiscono nel gruppo **Non impostato**, in cima all'elenco: il punto di partenza naturale per classificare le schede in sospeso.
 - Fai clic sull'intestazione di un gruppo per comprimerlo o espanderlo. L'intestazione mostra il numero di schede del gruppo.
@@ -210,7 +219,9 @@ Le importazioni ed esportazioni dell'inventario usano una **cartella di lavoro E
 ### Struttura della cartella di lavoro
 
 - **Un foglio per ogni tipo di scheda** (Application, Business Capability, IT Component, …) con le colonne principali, le colonne `attr_<campo>`, le colonne di ciclo di vita le colonne di relazione `rel:<tipo_di_relazione>` e le colonne stakeholder `stakeholder:<chiave_ruolo>`.
-- **Un foglio `Relations`** per i tipi di relazione che portano attributi (costo, descrizione, …). Le relazioni semplici restano in linea sul foglio della scheda di origine.
+- **Un foglio `Relations`** con i **valori** che le relazioni portano — una riga per relazione il cui tipo ha valori da impostare.
+
+La divisione è semplice e senza eccezioni: **il foglio delle schede dice quali schede sono collegate; il foglio `Relations` dice cosa contengono quei collegamenti.** Ogni tipo di relazione ha una colonna `rel:` sul foglio del tipo da cui parte, che porti valori o meno.
 - **Un foglio `_Meta`** con la versione del formato della cartella di lavoro.
 
 ### Identificazione senza GUID
@@ -223,7 +234,7 @@ Poiché le schede sono identificate per nome + percorso, **due schede dello stes
 
 ### Celle di relazione in linea
 
-Ogni colonna `rel:<tipo_di_relazione>` esprime le relazioni in uscita come elenco **separato da punti e virgola** (per esempio `NexaCore ERP; BillingApp`). Punto e virgola invece di virgola perché i nomi delle schede contengono spesso virgole (`Acme, Inc.`). All'interno di un nome, `/` e `\` vengono fatti precedere dall'escape `\/` e `\\` — l'esportatore lo gestisce automaticamente (es. `SAP S/4HANA` → `SAP S\/4HANA`). Le celle sono **dichiarative**: il loro contenuto sostituisce l'insieme delle relazioni in uscita di quel tipo dalla sorgente. Rimuovere un target elimina la relazione corrispondente; svuotare la cella le elimina tutte. Per retrocompatibilità, anche le celle separate da virgole (formato precedente) vengono accettate.
+Ogni colonna `rel:<tipo_di_relazione>` esprime le relazioni in uscita come elenco **separato da punti e virgola** (per esempio `NexaCore ERP; BillingApp`). Punto e virgola invece di virgola perché i nomi delle schede contengono spesso virgole (`Acme, Inc.`). All'interno di un nome, `/` e `\` vengono fatti precedere dall'escape `\/` e `\\` — l'esportatore lo gestisce automaticamente (es. `SAP S/4HANA` → `SAP S\/4HANA`). Le celle sono **dichiarative**: il loro contenuto sostituisce l'insieme delle relazioni in uscita di quel tipo dalla sorgente. Rimuovere un target elimina la relazione corrispondente; svuotare la cella le elimina tutte. Per retrocompatibilità, anche le celle separate da virgole (formato precedente) vengono accettate. C'è una colonna per ogni tipo di relazione che parte dal tipo di scheda del foglio — **tutti**, compresi quelli che portano valori. Le destinazioni sono in ordine alfabetico, così riesportare un panorama invariato produce un file identico.
 
 ### Celle stakeholder
 
@@ -235,11 +246,23 @@ Su ogni foglio di schede, le colonne `stakeholder:<chiave_ruolo>` contengono gli
 
 ### Foglio `Relations`
 
-Per relazioni con attributi, usate il foglio dedicato con le colonne `relation_type`, `source_ref`, `target_ref`, `action` (predefinito `upsert`, in alternativa `delete`), `attr_<campo>` e `description`.
+Una relazione può portare valori propri — un *tipo di utilizzo* su un collegamento `Organization` → `Application`, un costo annuo, o una descrizione libera. Una cella `rel:` è un elenco di nomi senza spazio per questi valori, che vivono quindi sul foglio `Relations`, una riga per relazione, con le colonne `relation_type`, `source_type`, `source_ref`, `target_type`, `target_ref`, `attr_<campo>` e `description`.
+
+Il foglio contiene le relazioni il cui tipo ha effettivamente valori — le altre non hanno nulla da compilare e vivono interamente sui fogli delle schede. Sono incluse anche le relazioni che puntano *verso* una scheda esportata; `source_ref` e `target_ref` indicano il verso. Le colonne `attr_<campo>` sono quelle dei tipi di relazione presenti in questa cartella di lavoro. L'ordinamento è per scheda di origine, poi tipo di relazione, poi destinazione.
+
+**Questo foglio imposta solo valori. Non crea né rimuove mai una relazione** — è compito del foglio delle schede: **eliminare una riga non elimina nulla**; modificarne i valori sostituisce ciò che la relazione contiene; e una riga che nomina due schede non collegate viene segnalata nell'anteprima e saltata — collegatele nella colonna `rel:`, anche nello stesso import.
+
+Le cartelle di lavoro più vecchie hanno una colonna `action`. Viene ignorata; una riga con `action = delete` viene segnalata e saltata. Se il foglio delle schede e il foglio `Relations` si contraddicono, **prevale la rimozione**.
+
+Il foglio elenca **tutte le relazioni delle schede esportate**, che il loro tipo porti o meno valori al momento — quindi un tipo di relazione a cui avete appena dato un valore ha già la sua riga. Sono incluse anche le relazioni che puntano *verso* una scheda esportata; `source_ref` e `target_ref` indicano il verso. Le colonne `attr_<campo>` sono quelle dei tipi di relazione presenti in questa cartella di lavoro, non di tutti quelli definiti nell'istanza.
+
+Un tipo di relazione che porta valori **non ha una colonna `rel:`** — un elenco di nomi non può contenerli; si modifica su questo foglio. Se il foglio delle schede e il foglio `Relations` si contraddicono, **prevale la rimozione**, e l'anteprima lo segnala.
 
 ### Importare
 
 Cliccate su **Importa** nella barra degli strumenti, rilasciate la cartella di lavoro e verificate l'anteprima prima di applicare. Vedrete sia le schede da creare / aggiornare sia le relazioni da aggiungere / rimuovere. Gli errori (per esempio, un target ambiguo con i suoi percorsi candidati) bloccano l'applicazione.
+
+![Finestra Importa schede](../assets/img/it/98b_inventario_importazione.png)
 
 Alcune precisazioni sull'importazione:
 

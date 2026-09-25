@@ -31,6 +31,10 @@ import { AuthProvider } from "@/hooks/AuthContext";
 import type { User } from "@/types";
 import {
   ExtensionBoundary,
+  ExtensionSlot,
+  canOpenExtensionPath,
+  getExtensionDisplayName,
+  setExtensionDisplayName,
   EXTENSION_NAV_GROUPS,
   ExtensionDependencyGraph,
   ExtensionSlot,
@@ -188,6 +192,13 @@ describe("extensionHost", () => {
     // SDK 1.24 — the full card browser, for anything wider than the
     // single-type scope control CardScopeDialog covers.
     expect(sdk.CardMultiPicker).toBeDefined();
+    // SDK 1.27 — the single-select card picker, for a dialog that links
+    // ONE card without hand-rolling an Autocomplete.
+    expect(sdk.CardPicker).toBeDefined();
+    // SDK 1.29 — the linkifier and the one stored-HTML sanitiser, so an
+    // extension's free text and rich text link the way core's do.
+    expect(sdk.LinkifiedText).toBeDefined();
+    expect(typeof sdk.sanitizeRichHtml).toBe("function");
     // SDK 1.21 — timeline + dependency-view loaders and the filter-sidebar
     // primitives. Without these an extension timeline/graph/sidebar can only
     // be a drifting lookalike of core's.
@@ -254,6 +265,24 @@ describe("extensionHost", () => {
     expect(typeof loaded.useColumnOrder).toBe("function");
     // SDK 1.22 — the shared cell context-menu hook rides it too.
     expect(typeof loaded.useCellContextMenu).toBe("function");
+    // SDK 1.30 — the drag-fill hook, so an extension grid with editable
+    // cells offers the Inventory's fill-down instead of a lookalike.
+    expect(typeof loaded.useDragFill).toBe("function");
+  });
+
+  it("loadSpreadsheet resolves core's current-view Excel export and workbook readers", async () => {
+    initExtensionHost();
+    const sdk = window.TurboEA?.sdk as Record<string, unknown>;
+    const loaded =
+      (await (sdk.loadSpreadsheet as () => Promise<Record<string, unknown>>)()) ?? {};
+    expect(typeof loaded.exportCurrentViewToExcel).toBe("function");
+    expect(typeof loaded.buildCurrentViewWorkbook).toBe("function");
+    expect(typeof loaded.parseWorkbook).toBe("function");
+    expect(typeof loaded.readWorkbookSheets).toBe("function");
+    // The vendored library itself, for appending a machine sheet.
+    const xlsx = loaded.xlsx as Record<string, unknown>;
+    expect(xlsx).toBeDefined();
+    expect(typeof (xlsx.utils as Record<string, unknown>).json_to_sheet).toBe("function");
   });
 
   it("loadDocxTemplater resolves all three classes from core's code-split chunk", async () => {
@@ -609,20 +638,19 @@ describe("extensionHost", () => {
   });
 
   it("pins the current UI SDK version", () => {
-    // Fork note: UI_SDK_VERSION is pinned at 1.19 (frozen — see CLAUDE.md's
-    // SDK surface section). Upstream has since moved this to 1.26; the new
-    // surface merged in below is present without the constant following it.
+    // Fork note: UI_SDK_VERSION is pinned at 1.19 (frozen — see CLAUDE.md). Upstream
+    // has since moved this to 1.30; the new surface is present without the constant.
     expect(UI_SDK_VERSION).toBe("1.19");
   });
 
   it("whitelists the nav groups an extension route may request", () => {
-    // A route can only land in a sanctioned core menu — never admin or an
-    // arbitrary one. Extend deliberately; this pins the current set.
+    // A route can only land in a sanctioned core menu — never an arbitrary
+    // one. `admin` is the user menu's Admin section, not a top-bar dropdown;
     // "strategy_process"/"app_data" are fork-local legacy groups kept so
-    // already-shipped extensions (organization, value-chain,
-    // product-technology-what-if) degrade to a top-level nav entry instead
-    // of vanishing — see the comment on EXTENSION_NAV_GROUPS.
-    expect([...EXTENSION_NAV_GROUPS]).toEqual(["reports", "grc", "strategy_process", "app_data"]);
+    // already-shipped extensions still find their host item.
+    expect([...EXTENSION_NAV_GROUPS]).toEqual([
+      "reports", "grc", "admin", "strategy_process", "app_data",
+    ]);
   });
 
   it("returns routes for the grc nav group independently of reports", () => {
@@ -759,3 +787,88 @@ describe("extensionHost", () => {
     expect(screen.getByText(/kaboom/)).toBeInTheDocument();
   });
 });
+
+describe("notification details (SDK 1.11 host helpers)", () => {
+  it("canOpenExtensionPath fails closed without a matching route", () => {
+    resetExtensionHost();
+    expect(canOpenExtensionPath("/ext/rules?tab=runs", { "*": true })).toBe(false);
+    expect(canOpenExtensionPath("/cards/c1", { "*": true })).toBe(false);
+  });
+
+  it("canOpenExtensionPath honours the route's permission and ignores query/hash", () => {
+    resetExtensionHost();
+    registerExtension("rules", {
+      key: "rules",
+      sdkVersion: UI_SDK_VERSION,
+      routes: [
+        {
+          id: "r",
+          path: "/ext/rules",
+          label: "R",
+          permission: "ext.rules.view",
+          component: () => null,
+        },
+      ],
+    });
+    expect(canOpenExtensionPath("/ext/rules?tab=runs#x", { "ext.rules.view": true })).toBe(true);
+    expect(canOpenExtensionPath("/ext/rules/runs/1", { "ext.rules.view": true })).toBe(true);
+    expect(canOpenExtensionPath("/ext/rules", { "*": true })).toBe(true);
+    expect(canOpenExtensionPath("/ext/rules", {})).toBe(false);
+    expect(canOpenExtensionPath("/ext/rules", undefined)).toBe(false);
+    // A prefix match needs a "/" boundary: /ext/rulesX is not /ext/rules.
+    expect(canOpenExtensionPath("/ext/rulesX", { "*": true })).toBe(false);
+  });
+
+  it("canOpenExtensionPath allows an ungated route to anyone", () => {
+    resetExtensionHost();
+    registerExtension("rules", {
+      key: "rules",
+      sdkVersion: UI_SDK_VERSION,
+      routes: [{ id: "open", path: "/ext/rules/public", label: "P", component: () => null }],
+    });
+    expect(canOpenExtensionPath("/ext/rules/public", {})).toBe(true);
+  });
+
+  it("getExtensionDisplayName falls back to the key until the manifest names it", () => {
+    resetExtensionHost();
+    expect(getExtensionDisplayName("rules")).toBe("rules");
+    setExtensionDisplayName("rules", "Rules Engine");
+    expect(getExtensionDisplayName("rules")).toBe("Rules Engine");
+    resetExtensionHost();
+    expect(getExtensionDisplayName("rules")).toBe("rules");
+  });
+
+  it("loadUiExtensions records the display names the manifest carries", async () => {
+    resetExtensionHost();
+    mockGet.mockResolvedValueOnce([
+      { key: "rules", name: "Rules Engine", version: "1.0.0", entry: "/nope.js", entitlement_state: "active" },
+    ]);
+    await loadUiExtensions();
+    expect(getExtensionDisplayName("rules")).toBe("Rules Engine");
+  });
+
+  it("ExtensionSlot with ownerExtKey renders only that extension's contributions", () => {
+    resetExtensionHost();
+    const Mine = () => <div>mine</div>;
+    const Theirs = () => <div>theirs</div>;
+    registerExtension("a", {
+      key: "a",
+      sdkVersion: UI_SDK_VERSION,
+      slots: [{ slot: "notification.detail", id: "x", component: Mine }],
+    });
+    registerExtension("b", {
+      key: "b",
+      sdkVersion: UI_SDK_VERSION,
+      slots: [{ slot: "notification.detail", id: "y", component: Theirs }],
+    });
+    const user = { permissions: {} } as unknown as User;
+    render(
+      <AuthProvider user={user} refreshUser={async () => {}}>
+        <ExtensionSlot name="notification.detail" ownerExtKey="a" context={{}} />
+      </AuthProvider>,
+    );
+    expect(screen.getByText("mine")).toBeInTheDocument();
+    expect(screen.queryByText("theirs")).toBeNull();
+  });
+});
+

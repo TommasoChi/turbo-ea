@@ -29,6 +29,12 @@ Upload et brugerdefineret logo, der vises i den øverste navigationslinje. Under
 
 Vælg baggrunds- og tekstfarve for den øverste navigationslinje. Den valgte stil gælder for **alle brugere** af instansen, på både desktop og mobil (inklusive den mobile sidemenu). Vælg en af de syv kuraterede forudindstillinger — Marineblå (standard), Lys, Koksgrå, Skifer, Blå, Skovgrøn eller Blomme — eller vælg **Brugerdefineret** for frit at angive baggrunds- og tekstfarve med farvevælgerne. En live-forhåndsvisning viser, hvordan navigationslinjen vil se ud, før du gemmer, og en advarsel vises, når kontrasten mellem tekst og baggrund er for lav (under WCAG AA). Klik på **Nulstil til standard** for at vende tilbage til standardstilen.
 
+### Applikationstitel
+
+Angiv det navn, denne instans er kendt under. Det erstatter «Turbo EA» i browserfanen, på login-siden og i de e-mails, instansen sender.
+
+Browserfanen viser den side, du er på, foran — `Inventar | Turbo EA` i inventaret, `SAP S/4HANA | Turbo EA` på et kort, `GRC · Risiko | Turbo EA` på en side åbnet på en bestemt fane — så en række åbne faner forbliver læsbar. Forsiden og login-siden viser kun titlen.
+
 ### Favicon
 
 Upload et brugerdefineret browserikon (favicon). Ændringen træder i kraft ved næste sideindlæsning. Klik på **Nulstil** for at vende tilbage til standardikonet.
@@ -59,7 +65,7 @@ Mindst ét sprog skal forblive aktiveret til enhver tid.
 
 ### Regnskabsårets start
 
-Vælg den måned, der starter din organisations regnskabsår (januar til december). Denne indstilling påvirker, hvordan **budgetlinjer** i PPM-modulet grupperes efter regnskabsår. For eksempel, hvis regnskabsåret starter i april, tilhører en budgetlinje dateret juni 2026 regnskabsåret 2026-2027.
+Vælg den måned, der starter din organisations regnskabsår (januar til december). Denne indstilling påvirker, hvordan **budgetlinjer** i PPM-modulet grupperes efter regnskabsår. For eksempel, hvis regnskabsåret starter i april, tilhører en budgetlinje dateret juni 2026 regnskabsåret 2026-2027. Den afgør også, hvilket regnskabsår [Omkostningsrapporten](../guide/reports.md) viser.
 
 Standarden er **januar** (kalenderår = regnskabsår).
 
@@ -84,6 +90,8 @@ Turbo EA sender invitations-e-mails, undersøgelsesnotifikationer, nulstillinger
     Microsoft 365 deaktiverer grundlæggende SMTP-godkendelse (ikke tilgængelig for nye lejere, fjernes for eksisterende i løbet af 2026–2027), og Google Workspace deaktiverede den i marts 2025. Brug en af OAuth-metoderne nedenfor til disse platforme i stedet for en postkasseadgangskode.
 
 ### Afsendelsesmetoder
+
+![E-mail-afsendelse med listen over afsendelsesmetoder](../assets/img/da/95a_admin_settings_email.png)
 
 | Metode | Hvornår skal den bruges |
 |--------|--------------------------|
@@ -132,6 +140,8 @@ Når du har konfigureret en metode, skal du klikke på **Send test-e-mail** for 
     E-mail er valgfri. Hvis ingen metode er konfigureret, springer funktioner, der sender e-mails, leveringen over uden fejl.
 
 ## BPM-modul
+
+![Modulkontakter under Indstillinger → Generelt](../assets/img/da/95_admin_settings_modules.png)
 
 Slå **Business Process Management**-modulet til eller fra. Når det er deaktiveret:
 

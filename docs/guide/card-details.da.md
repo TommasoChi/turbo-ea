@@ -10,6 +10,7 @@ Toppen af kortet viser:
 
 - **Type-ikon og etikette** — Farvekodet korttype-indikator
 - **Kortnavn** — Redigerbar inline
+- **Alias** — Kortets andet navn, vist under titlen når det er sat. Blyanten ved titlen ændrer navn og alias samtidig. Alias matches af alle søgefelter, så et kort kan findes med det navn, din organisation faktisk bruger.
 - **Undertype** — Sekundær klassifikation (hvis relevant)
 - **Godkendelsesstatus-badge** — Draft, Approved, Broken eller Rejected
 - **AI suggest-knap** — Klik for at generere en beskrivelse med AI (synlig når AI er aktiveret for denne korttype, og brugeren har redigeringstilladelse)
@@ -61,7 +62,7 @@ Kort kan gå gennem en godkendelses­cyklus:
 | **Broken** | Var godkendt, men er blevet redigeret siden — kræver gen-gennemgang |
 | **Rejected** | Gennemgået og afvist, kræver rettelser |
 
-Når et godkendt kort redigeres, ændres dets status automatisk til **Broken** for at angive, at det kræver gen-gennemgang.
+Når et godkendt kort redigeres, ændres dets status automatisk til **Broken** for at angive, at det kræver gen-gennemgang. Arkivering af et korts overordnede kort har samme virkning på de godkendte underordnede kort, det flytter i hierarkiet. Alle med en interessentrolle på kortet får besked — bortset fra den, der foretog ændringen — og skiftet registreres på kortets fane **Historik**. Én handling, der bryder flere kort, for eksempel en masseredigering, sender hver person én samlet besked i stedet for én pr. kort.
 
 ## Detalje-fane (hoved)
 
@@ -70,7 +71,8 @@ Detalje-fanen er organiseret i **sektioner**, der kan omarrangeres og konfigurer
 ### Beskrivelses-sektion
 
 - **Description** — Rich text-beskrivelse af komponenten. Understøtter AI-forslagsfunktionen til automatisk generering
-- **Yderligere beskrivelsesfelter** — Nogle korttyper inkluderer ekstra felter i beskrivelses-sektionen (f.eks. alias, ekstern ID)
+- **Yderligere beskrivelsesfelter** — En administrator kan placere et vilkårligt af korttypens egne felter i beskrivelses-sektionen, så den kan bære flere felter end selve beskrivelsen
+- **Links** — En webadresse (`http://` eller `https://`) skrevet i beskrivelsen, i et vilkårligt tekstfelt, en kommentar eller en opgave bliver til et link, der åbner i en ny fane
 
 ### Livscyklus-sektion
 
@@ -85,6 +87,8 @@ Livscyklus-modellen sporer en komponent gennem fem faser:
 | **End of Life** | Ikke længere i brug eller understøttet |
 
 Hver fase har en **datovælger**, så du kan registrere, hvornår komponenten er trådt eller vil træde ind i den fase. En visuel tidslinje-bjælke viser komponentens position i sin livscyklus.
+
+Hvis en fase er dateret efter en fase, der burde komme efter den — for eksempel **Phase Out** efter **End of Life** — vises et advarselsikon ved siden af datoen, og den samme advarsel vises under feltet under redigering. Det er kun et hint: datoerne kan stadig gemmes, som de er indtastet.
 
 ### Brugerdefinerede egenskabs-sektioner
 
@@ -109,6 +113,7 @@ For korttyper der understøtter hierarki (f.eks. Organization, Business Capabili
 - **Parent** — Kortets forælder i hierarkiet (klik for at navigere)
 - **Children** — Liste over barnekort (klik på et for at navigere)
 - **Hierarki-brødkrumme** — Viser den fulde sti fra rod til aktuelt kort
+- **Forbindelsestype** — Når en administrator har konfigureret forbindelsestyper for denne korttype, kan hver forælder-barn-forbindelse få en etiket — for eksempel ét datterselskab, der er *kommercielt*, og et andet, der står for *salg*. Etiketten hører til barnekortet: forælderkortet viser den ud for hvert barn, og barnekortet ud for sin forælder. Fjernes et kort, eller flyttes det til øverste niveau, ryddes etiketten, og ændringen registreres under fanen **Historik**.
 
 ### Relations-sektion
 
@@ -140,7 +145,7 @@ Anvend tags fra de konfigurerede [tag-grupper](../admin/tags.md). Afhængigt af 
 
 **Resources**-fanen konsoliderer al understøttende materiale for et kort:
 
-- **Filvedhæftninger** — Upload og administrer filer (PDF, DOCX, XLSX, billeder, op til 10 MB). Når du uploader, skal du vælge en **dokumentkategori** fra: Architecture, Security, Compliance, Operations, Meeting Notes, Design eller Other. Kategorien vises som en chip ved siden af hver fil.
+- **Filvedhæftninger** — Upload og administrer filer (dokumenter, regneark, præsentationer, OpenDocument- og ældre Office-filer, billeder, arkiver, Outlook- og e-mailbeskeder, CSV, Markdown, JSON og XML — op til 20 MB). Når du uploader, skal du vælge en **dokumentkategori** fra: Architecture, Security, Compliance, Operations, Meeting Notes, Design eller Other. Kategorien vises som en chip ved siden af hver fil.
 - **Dokumentlinks** — URL-baserede dokumentreferencer. Når du tilføjer et link, skal du vælge en **linktype** fra: Documentation, Security, Compliance, Architecture, Operations, Support eller Other. Linktypen vises som en chip ved siden af hvert link, og ikonet skifter baseret på den valgte type.
 - **Diagrams** — Link eksisterende [diagrammer](diagrams.md) til dette kort. Linkede diagrammer vises som miniature-forhåndsvisninger, som du kan klikke på for at åbne i diagramredaktøren. Brug knappen **Link Diagram** til at søge efter og vedhæfte et eksisterende diagram, eller klik på afkoblingsikonet for at fjerne tilknytningen.
 
@@ -159,6 +164,7 @@ Hvis kortet er linket til et [endoflife.date](https://endoflife.date/)-produkt (
 - **Tilføj kommentarer** — Efterlad noter, spørgsmål eller beslutninger om komponenten
 - **Trådede svar** — Svar på specifikke kommentarer for at oprette samtaletråde
 - **Tidsstempler** — Se hvornår hver kommentar blev sendt og af hvem
+- **Links** — En webadresse i en kommentar kan klikkes på og åbner i en ny fane
 
 ## Todos-fane
 

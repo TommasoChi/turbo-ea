@@ -10,14 +10,16 @@ Das **Inventar** ist das Herzstück von Turbo EA. Hier werden alle **Karten** (K
 
 Das linke Seitenpanel ermöglicht es Ihnen, Karten nach verschiedenen Kriterien zu **filtern**:
 
-- **Suche** — Freitextsuche über Kartennamen, schon ab dem ersten Buchstaben. Die besten Treffer stehen oben: exakte Namen, dann Namen, die mit Ihrer Eingabe beginnen, dann Namen, in denen sie ein Wort beginnt, dann der Rest. Jedes Suchfeld in Turbo EA sortiert so — die globale Suche (**Strg+K** / **⌘K**), jede Kartenauswahl, das Risikoregister, Entscheidungen und veröffentlichte Portale — sofern Sie keine eigene Sortierung gewählt haben, die immer Vorrang hat
-- **Typen** — Filtern nach einem oder mehreren Kartentypen: Ziel, Plattform, Initiative, Organisation, Geschäftsfähigkeit, Geschäftskontext, Geschäftsprozess, Anwendung, Schnittstelle, Datenobjekt, IT-Komponente, Technologiekategorie, Anbieter, System
+- **Suche** — Freitextsuche über Kartennamen, schon ab dem ersten Buchstaben. Die besten Treffer stehen oben: exakte Namen, dann Namen, die mit Ihrer Eingabe beginnen, dann Namen, in denen sie ein Wort beginnt, dann der Rest. Jedes Suchfeld in Turbo EA sortiert so — die globale Suche (**Strg+K** / **⌘K**), jede Kartenauswahl, das Risikoregister, Entscheidungen und veröffentlichte Portale — sofern Sie keine eigene Sortierung gewählt haben, die immer Vorrang hat. Auch der **Alias** einer Karte und ihre Beschreibung werden durchsucht, sodass eine Karte über den in Ihrer Organisation tatsächlich verwendeten Namen gefunden wird — ein exakt passender Alias zählt dabei so hoch wie ein exakt passender Name
+- **Typen** — Filtern nach einem oder mehreren Kartentypen, gruppiert nach der Architekturebene, zu der der jeweilige Typ gehört: Strategie & Transformation (Ziel, Plattform, Initiative), Geschäftsarchitektur (Organisation, Geschäftsfähigkeit, Geschäftskontext, Geschäftsprozess), Anwendung & Daten (Anwendung, Schnittstelle, Datenobjekt) und Technische Architektur (IT-Komponente, Technologiekategorie, Anbieter). Ein Typ, den Ihre Administration in eine eigene Ebene einordnet, erhält nach diesen vier eine eigene Überschrift, und jeder Typ ohne Ebene wird zuletzt unter **Nicht kategorisiert** aufgeführt
 - **Subtypen** — Wenn ein Typ ausgewählt ist, können Sie weiter nach Subtyp filtern (z.B. Anwendung -> Geschäftsanwendung, Microservice, AI Agent, Deployment)
 - **Genehmigungsstatus** — Entwurf, Genehmigt, Ungültig oder Abgelehnt
 - **Lebenszyklus** — Filtern nach Lebenszyklusphase: Planung, Einführung, Aktiv, Auslauf, Lebensende
 - **Datenqualität** — Filtern nach Band (Mehrfachauswahl): Vollständig (≥80%), Teilweise (40–79%), Minimal (unter 40%). Dieselben Bänder wie im [Datenqualitätsbericht](reports.md#data-quality-report) — ein Klick auf ein Balkensegment dort führt hierher.
 - **Verwaist** — Nur Karten ohne Beziehung in beide Richtungen. Serverseitig ausgewertet und daher auch ohne ausgewählten Kartentyp nutzbar.
 - **Veraltet** — Nur Karten, die seit 90 Tagen nicht aktualisiert wurden. Beide entsprechen den KPI-Kacheln des [Datenqualitätsberichts](reports.md#data-quality-report) — ein Klick auf eine Kachel führt hierher.
+- **Lebensende** — Für Anwendungen und IT-Komponenten nach dem Support-Status filtern, den Turbo EA aus der [EOL-Verknüpfung](../admin/eol.md) der Karte ermittelt: Lebensende, Bevorstehend, Unterstützt oder Unbekannt. **(leer)** listet die Karten, für die überhaupt nichts erfasst ist. Die zugehörige Spalte **Lebensende** zeigt das Datum neben einem Statuspunkt und wird als Datum sortiert und exportiert.
+- **Verbindungstyp** — Wenn ein einzelner hierarchischer Kartentyp ausgewählt ist und eine Administratorin [Verbindungstypen](../admin/metamodel.md) dafür definiert hat, filtern Sie nach der Art der Verbindung jeder Karte zu ihrer übergeordneten Karte — etwa die Tochtergesellschaften, die *kommerziell* statt *Vertrieb* sind. **(leer)** listet die Karten, deren Verbindung keinen Typ trägt, sowie die obersten Karten, da für beide nichts erfasst ist. Die zugehörige Spalte **Verbindungstyp** zeigt den Wert als farbigen Chip und ist im Bearbeitungsmodus des Rasters editierbar.
 - **Tags** — Filtern nach Tags aus beliebigen Tag-Gruppen
 - **Beziehungen** — Filtern nach verwandten Karten über Beziehungstypen
 - **Benutzerdefinierte Attribute** — Filtern nach Werten in benutzerdefinierten Feldern (Textsuche, Auswahloptionen)
@@ -66,6 +68,8 @@ Die Spalte **Pfad** zeigt den Hierarchie-Pfad der Karte (z. B. `Nordamerika / Ve
 
 Die Spalte **Logo** zeigt das eigene Logo der Karte oder – wenn keines gesetzt ist – ihr Typsymbol, sodass sich eine Landschaft anhand der Produktmarken statt anhand der Namen überfliegen lässt. Sie wird nur für Kartentypen angeboten, die Logos erlauben (standardmäßig Anwendung und IT-Komponente), ist standardmäßig ausgeblendet und macht die Zeilen höher, solange sie eingeblendet ist, damit die Marken erkennbar bleiben. Wenn Sie die Karte bearbeiten dürfen, fahren Sie mit der Maus über die Logo-Zelle und klicken Sie darauf, um das Logo hochzuladen, zu ersetzen, ein Markensymbol auszuwählen oder es zu entfernen — ohne das Raster zu verlassen und mit demselben Menü wie auf der Kartenseite. Logos sind bewusst vom Ausfüllen nach unten und von der Massenbearbeitung ausgenommen: eine Marke pro Karte, bewusst gesetzt.
 
+Die Spalte **Alias** zeigt den zweiten Namen einer Karte — den internen, unter dem Ihre Organisation sie führt. Sie ist standardmäßig ausgeblendet, da die meisten Landschaften keine Aliasse enthalten: einschalten lässt sie sich in der Registerkarte **Spalten**. Sie ist im Raster-Bearbeitungsmodus direkt bearbeitbar, lässt sich wie jede andere Textspalte nach unten ausfüllen und wird von Excel-Export und -Import mitgeführt, sodass eine Liste von Aliassen in einem Durchgang geladen werden kann.
+
 Jede Kategorie hat ein Kontrollkästchen **Alle auswählen**, um alle Spalten in dieser Gruppe schnell umzuschalten. Ein Suchfeld oben ermöglicht es, bestimmte Spalten nach Namen zu finden. Das Badge in jeder Abschnittsüberschrift zeigt an, wie viele Spalten aus dieser Gruppe derzeit sichtbar sind.
 
 Wenn ein Kartentyp zum ersten Mal ausgewählt wird, werden **alle Attribut- und Beziehungsspalten standardmäßig aktiviert**. Sie können dann nicht benötigte Spalten abwählen. Eine Schaltfläche **Zurücksetzen** am unteren Rand der Registerkarte «Spalten» stellt die Standard-Spaltenauswahl wieder her.
@@ -83,7 +87,8 @@ Das Inventar verwendet eine **AG Grid**-Datentabelle mit leistungsstarken Funkti
 | **Typ** | Kartentyp mit farbcodiertem Symbol |
 | **Name** | Komponentenname (klicken zum Öffnen der Kartendetails) |
 | **Logo** | Das eigene Logo der Karte oder ihr Typsymbol, wenn keines vorhanden ist. Standardmäßig ausgeblendet — in der Registerkarte «Spalten» aktivieren; zum Ändern auf die Zelle klicken |
-| **Beschreibung** | Kurzbeschreibung |
+| **Alias** | Der zweite Name der Karte. Standardmäßig ausgeblendet — in der Registerkarte «Spalten» aktivieren; wird von jedem Suchfeld berücksichtigt |
+| **Beschreibung** | Kurzbeschreibung — eine darin enthaltene Webadresse ist ein anklickbarer Link |
 | **Lebenszyklus** | Aktueller Lebenszyklusstatus |
 | **Genehmigungsstatus** | Badge des Prüfstatus |
 | **Datenqualität** | Vollständigkeitsprozentsatz mit visuellem Ring |
@@ -129,6 +134,8 @@ Das Dropdown **Feld** gruppiert die Änderungsmöglichkeiten:
 - **Attribute** — jedes bearbeitbare Feld des ausgewählten Kartentyps
 - **Beziehungen** — ein Eintrag je Beziehungstyp und Richtung (zum Beispiel *läuft auf → IT-Komponente*)
 
+![Dialog Massenbearbeitung](../assets/img/de/98_inventar_massenbearbeitung.png)
+
 Tags, Beziehungen und das übergeordnete Element bieten jeweils einen Umschalter **Hinzufügen / Entfernen**, sodass Sie vorhandene Werte ergänzen oder reduzieren, statt sie zu ersetzen.
 
 Das Eingabeelement richtet sich nach dem Feldtyp: Ein Mehrfachauswahlfeld zeigt seine Optionen mit Kontrollkästchen, ein Ja/Nein-Feld einen Schalter, ein Datumsfeld eine Datumsauswahl. Bleibt der Wert leer, wird das Feld auf allen ausgewählten Karten geleert. Per Formel berechnete Felder sowie Kostenfelder, für die Ihnen die Leseberechtigung fehlt, werden nicht angeboten.
@@ -151,6 +158,8 @@ Eine Karte nimmt ihre untergeordneten Elemente mit, und freigegebene Karten fall
 ## Inventar gruppieren { #group-by }
 
 Klicken Sie in der Symbolleiste auf **Gruppieren nach** (neben der Trefferanzahl), um das Raster in ein- und ausklappbare Gruppen zu gliedern. Lebenszyklusphase und Genehmigungsstatus sind immer verfügbar; ist das Raster auf einen einzelnen Kartentyp gefiltert, kommen dessen Untertyp und alle Einfachauswahl-Attribute hinzu.
+
+![Inventar gruppiert nach TIME-Modell](../assets/img/de/98a_inventar_gruppierung.png)
 
 - Karten ohne Wert im gewählten Feld landen in einer Gruppe **Nicht gesetzt** ganz oben — dem natürlichen Sammelbecken für noch nicht klassifizierte Karten.
 - Ein Klick auf eine Gruppenüberschrift klappt die Gruppe ein oder aus. Die Überschrift zeigt die Anzahl der Karten der Gruppe.
@@ -210,7 +219,9 @@ Inventar-Exporte und -Importe nutzen eine **mehrblättrige Excel-Arbeitsmappe**,
 ### Aufbau der Arbeitsmappe
 
 - **Ein Blatt pro Kartentyp** (Application, Business Capability, IT Component, …) mit Kernspalten, `attr_<feld>`-Spalten, Lebenszyklusspalten und `rel:<beziehungstyp>`-Beziehungsspalten sowie `stakeholder:<rollen_key>`-Stakeholder-Spalten.
-- **Ein `Relations`-Blatt** für Beziehungstypen, die Attribute tragen (z. B. Kosten, Beschreibung). Einfache Beziehungen werden inline auf dem Kartenblatt abgebildet.
+- **Ein `Relations`-Blatt** mit den **Werten**, die Beziehungen tragen — eine Zeile je Beziehung, deren Typ Werte besitzt.
+
+Die Aufteilung ist einfach und kennt keine Ausnahme: **Das Kartenblatt sagt, welche Karten verknüpft sind; das `Relations`-Blatt sagt, was diese Verknüpfungen enthalten.** Jeder Beziehungstyp erhält eine `rel:`-Spalte auf dem Kartenblatt seines Ausgangstyps — ob er Werte trägt oder nicht.
 - **Ein `_Meta`-Blatt** mit der Formatversion der Arbeitsmappe.
 
 ### Karten ohne GUIDs identifizieren
@@ -223,7 +234,7 @@ Da Karten über Name + Pfad identifiziert werden, **dürfen zwei Karten desselbe
 
 ### Inline-Beziehungszellen
 
-Auf jedem Kartenblatt drücken `rel:<beziehungstyp>`-Spalten ausgehende Beziehungen als **semikolongetrennte** Zielreferenzen aus (z. B. `NexaCore ERP; BillingApp`). Semikolons statt Kommas, weil Kartennamen häufig Kommas enthalten (etwa `Acme, Inc.`). `/` und `\` innerhalb eines Namens werden als `\/` bzw. `\\` maskiert — der Exporter erledigt das automatisch (z. B. `SAP S/4HANA` → `SAP S\/4HANA`). Zellen sind **deklarativ**: Der Inhalt ersetzt die vollständige Menge ausgehender Beziehungen dieses Typs vom Quellobjekt. Wird ein Ziel aus der Liste entfernt, wird die Beziehung gelöscht; eine leere Zelle löscht alle. Aus Kompatibilitätsgründen werden auch kommagetrennte Zellen (älteres Format) akzeptiert.
+Auf jedem Kartenblatt drücken `rel:<beziehungstyp>`-Spalten ausgehende Beziehungen als **semikolongetrennte** Zielreferenzen aus (z. B. `NexaCore ERP; BillingApp`). Semikolons statt Kommas, weil Kartennamen häufig Kommas enthalten (etwa `Acme, Inc.`). `/` und `\` innerhalb eines Namens werden als `\/` bzw. `\\` maskiert — der Exporter erledigt das automatisch (z. B. `SAP S/4HANA` → `SAP S\/4HANA`). Zellen sind **deklarativ**: Der Inhalt ersetzt die vollständige Menge ausgehender Beziehungen dieses Typs vom Quellobjekt. Wird ein Ziel aus der Liste entfernt, wird die Beziehung gelöscht; eine leere Zelle löscht alle. Aus Kompatibilitätsgründen werden auch kommagetrennte Zellen (älteres Format) akzeptiert. Es gibt eine Spalte je Beziehungstyp, der vom Kartentyp des Blattes ausgeht — **alle**, auch solche mit Werten. Die Ziele sind alphabetisch sortiert, sodass ein erneuter Export einer unveränderten Landschaft eine identische Datei ergibt.
 
 ### Stakeholder-Zellen
 
@@ -235,11 +246,23 @@ Auf jedem Kartenblatt enthalten `stakeholder:<rollen_key>`-Spalten die den Stake
 
 ### `Relations`-Blatt
 
-Für Beziehungen mit Attributen (z. B. jährliche Kosten) verwenden Sie das dedizierte `Relations`-Blatt mit den Spalten `relation_type`, `source_ref`, `target_ref`, `action` (Standard `upsert`, alternativ `delete`), `attr_<feld>` und `description`.
+Eine Beziehung kann eigene Werte tragen — einen *Nutzungstyp* an einer `Organization` → `Application`-Verknüpfung, jährliche Kosten oder eine freie Beschreibung. Eine `rel:`-Zelle ist eine Namensliste ohne Platz dafür, also stehen diese Werte auf dem `Relations`-Blatt, eine Zeile je Beziehung, mit den Spalten `relation_type`, `source_type`, `source_ref`, `target_type`, `target_ref`, `attr_<feld>` und `description`.
+
+Das Blatt enthält die Beziehungen, deren Typ tatsächlich Werte besitzt — bei allen anderen gibt es nichts einzutragen, sie leben ausschließlich auf den Kartenblättern. Auch Beziehungen, die *auf* eine exportierte Karte zeigen, sind enthalten; `source_ref` und `target_ref` geben die Richtung an. Die `attr_<feld>`-Spalten sind die der Beziehungstypen dieser Arbeitsmappe. Sortiert wird nach Quellkarte, dann Beziehungstyp, dann Ziel.
+
+**Dieses Blatt setzt nur Werte. Es erzeugt und entfernt niemals eine Beziehung** — das ist Sache des Kartenblatts: Das **Löschen einer Zeile löscht nichts**; das Bearbeiten der Werte ersetzt, was die Beziehung enthält; und eine Zeile für zwei nicht verknüpfte Karten wird in der Vorschau gemeldet und übersprungen — verknüpfen Sie sie in der `rel:`-Spalte, gern im selben Import.
+
+Ältere Arbeitsmappen enthalten eine `action`-Spalte. Sie wird ignoriert; eine Zeile mit `action = delete` wird gemeldet und übersprungen. Widersprechen sich Kartenblatt und `Relations`-Blatt, **gewinnt das Entfernen**.
+
+Das Blatt listet **jede Beziehung der exportierten Karten**, unabhängig davon, ob ihr Typ derzeit Werte trägt — ein gerade mit einem Wert versehener Beziehungstyp hat dort also bereits seine Zeile. Auch Beziehungen, die *auf* eine exportierte Karte zeigen, sind enthalten; `source_ref` und `target_ref` geben die Richtung an. Die `attr_<feld>`-Spalten sind die der Beziehungstypen dieser Arbeitsmappe, nicht aller im System definierten.
+
+Ein Beziehungstyp, der Werte trägt, hat **keine `rel:`-Spalte** — dafür ist in einer Namensliste kein Platz; er wird auf diesem Blatt bearbeitet. Widersprechen sich Kartenblatt und `Relations`-Blatt, **gewinnt das Entfernen**, und die Vorschau weist darauf hin.
 
 ### Importieren
 
 Klicken Sie in der Werkzeugleiste auf **Import**, ziehen Sie die Arbeitsmappe in den Dialog und prüfen Sie die Vorschau, bevor Sie anwenden. Sie sehen sowohl die zu erzeugenden/aktualisierenden Karten als auch die hinzuzufügenden/zu entfernenden Beziehungen. Fehler (z. B. mehrdeutige Beziehungsziele mit Kandidatenpfaden) blockieren das Anwenden.
+
+![Dialog Karten importieren](../assets/img/de/98b_inventar_import.png)
 
 Ein paar Hinweise zum Importieren:
 

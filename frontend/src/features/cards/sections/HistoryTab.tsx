@@ -3,6 +3,7 @@ import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Link from "@mui/material/Link";
 import Typography from "@mui/material/Typography";
+import LinkifiedText from "@/components/LinkifiedText";
 import { alpha, useTheme } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import { Link as RouterLink } from "react-router";
@@ -95,9 +96,22 @@ function getFieldLabels(t: (key: string) => string): Record<string, string> {
     subtype: t("common:labels.subtype"),
     lifecycle: t("history.fields.lifecycle"),
     parent_id: t("common:labels.parent"),
+    parent_label: t("history.fields.parentLabel"),
     alias: t("history.fields.alias"),
     external_id: t("history.fields.externalId"),
     approval_status: t("history.fields.approvalStatus"),
+  };
+}
+
+// Approval status is stored as the raw enum, so a history row would otherwise
+// read "APPROVED → BROKEN". These are the same four labels the approval badge
+// and the Inventory render, so the tab agrees with the rest of the card.
+function getApprovalStatusLabels(t: (key: string) => string): Record<string, string> {
+  return {
+    DRAFT: t("common:status.draft"),
+    APPROVED: t("common:status.approved"),
+    REJECTED: t("common:status.rejected"),
+    BROKEN: t("common:status.broken"),
   };
 }
 
@@ -252,7 +266,7 @@ function EventDetail({ data, eventType, fallbackSummary, typeIconFor, t }: Event
         )}
         {reason && (
           <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
-            {t("history.withdrawalReason")}: {reason}
+            {t("history.withdrawalReason")}: <LinkifiedText text={reason} />
           </Typography>
         )}
       </Box>
@@ -265,7 +279,7 @@ function EventDetail({ data, eventType, fallbackSummary, typeIconFor, t }: Event
 function PlainSummary({ text }: { text: string }) {
   return (
     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-      {text}
+      <LinkifiedText text={text} />
     </Typography>
   );
 }
@@ -300,6 +314,7 @@ function parseChanges(
   fieldLabels: Record<string, string>,
   phaseLabels: Record<string, string>,
   attrLabels: Record<string, string>,
+  statusLabels: Record<string, string>,
 ): ChangeRow[] {
   const rows: ChangeRow[] = [];
   for (const [field, change] of Object.entries(changes)) {
@@ -328,6 +343,14 @@ function parseChanges(
           rows.push({ field: phaseLabels[key] || key, oldVal: fmtVal(oldL[key], phaseLabels), newVal: fmtVal(newL[key], phaseLabels) });
         }
       }
+    } else if (field === "approval_status") {
+      // Fall back to the raw value so a status this build has not heard of
+      // still renders, rather than blanking the row.
+      rows.push({
+        field: resolveFieldLabel(field, fieldLabels, phaseLabels, attrLabels),
+        oldVal: statusLabels[String(c.old)] ?? fmtVal(c.old, phaseLabels),
+        newVal: statusLabels[String(c.new)] ?? fmtVal(c.new, phaseLabels),
+      });
     } else {
       rows.push({
         field: resolveFieldLabel(field, fieldLabels, phaseLabels, attrLabels),
@@ -346,6 +369,7 @@ function HistoryTab({ fsId, cardType }: { fsId: string; cardType?: string }) {
   const eventMeta = getEventMeta(t);
   const fieldLabels = getFieldLabels(t);
   const phaseLabels = getPhaseLabels(t);
+  const statusLabels = getApprovalStatusLabels(t);
   const { getType } = useMetamodel();
   const fieldLabel = useFieldLabel();
   // Build a `{attributeKey: localizedLabel}` map for the card's type so
@@ -381,7 +405,9 @@ function HistoryTab({ fsId, cardType }: { fsId: string; cardType?: string }) {
       {events.map((e) => {
         const meta = eventMeta[e.event_type] || { label: e.event_type, icon: "info", color: "#9e9e9e" };
         const changes = e.data?.changes as Record<string, unknown> | undefined;
-        const rows = changes ? parseChanges(changes, fieldLabels, phaseLabels, attrLabels) : [];
+        const rows = changes
+          ? parseChanges(changes, fieldLabels, phaseLabels, attrLabels, statusLabels)
+          : [];
         const summary = typeof e.data?.summary === "string" ? (e.data.summary as string) : null;
 
         return (

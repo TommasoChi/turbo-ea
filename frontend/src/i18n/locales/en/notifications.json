@@ -4,6 +4,10 @@
   "noNotifications": "No notifications",
   "opensExternally": "Opens in a new tab",
   "opensReleaseNotes": "Opens the release notes",
+  "opensDetails": "Opens the details",
+  "detail.sentBy": "Sent by {{extension}}",
+  "detail.openCard": "Open card",
+  "detail.open": "Open",
   "releaseNotes.title": "{{app}} {{version}} is available",
   "releaseNotes.titleFallback": "Release notes",
   "releaseNotes.running": "You are running {{version}}",
@@ -11,6 +15,7 @@
   "releaseNotes.empty": "No release notes were published for this version.",
   "releaseNotes.loadFailed": "Could not load the release notes",
   "releaseNotes.installedTitle": "What's new in {{app}} {{version}}",
+  "releaseNotes.extensionTitle": "What's new in {{name}} {{version}}",
   "releaseNotes.updatedFrom": "Updated from {{version}}",
   "releaseNotes.alreadyInstalled": "Already installed",
   "releaseNotes.unavailableForVersion": "Release notes for {{version}} are not available on this instance.",
@@ -46,5 +51,7 @@
   "preferences.appUpdateAvailable": "Update Available",
   "preferences.appUpdated": "App Updated",
   "preferences.extensionAvailable": "New Extension Available",
-  "preferences.extensionUpdateAvailable": "Extension Update Available"
+  "preferences.extensionUpdateAvailable": "Extension Update Available",
+  "preferences.extensionUpdated": "Extension Updated",
+  "preferences.extensionNotice": "Extension Notice"
 }

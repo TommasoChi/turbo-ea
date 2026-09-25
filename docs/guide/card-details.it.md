@@ -10,6 +10,7 @@ La parte superiore della card mostra:
 
 - **Icona e etichetta del tipo** — Indicatore del tipo di card con codice colore
 - **Nome della card** — Modificabile in linea
+- **Alias** — L'altro nome della card, mostrato sotto il titolo quando è impostato. La matita di modifica del titolo consente di cambiare nome e alias insieme. Gli alias sono considerati da ogni casella di ricerca, così una card si ritrova con il nome realmente usato nella vostra organizzazione.
 - **Sottotipo** — Classificazione secondaria (se applicabile)
 - **Badge dello stato di approvazione** — Draft, Approved, Broken o Rejected
 - **Pulsante suggerimento AI** — Cliccate per generare una descrizione con AI (visibile quando l'AI è abilitata per questo tipo di card e l'utente ha il permesso di modifica)
@@ -64,7 +65,7 @@ Le card possono attraversare un ciclo di approvazione:
 | **Broken** | Era approvato, ma è stato modificato da allora — necessita una nuova revisione |
 | **Rejected** | Revisionato e rifiutato, necessita correzioni |
 
-Quando una card approvata viene modificata, il suo stato cambia automaticamente in **Broken** per indicare che necessita una nuova revisione.
+Quando una card approvata viene modificata, il suo stato cambia automaticamente in **Broken** per indicare che necessita una nuova revisione. L'archiviazione della card padre ha lo stesso effetto sulle card figlie approvate che vengono spostate nella gerarchia. Tutte le persone con un ruolo di stakeholder sulla card vengono avvisate — tranne chi ha effettuato la modifica — e il cambiamento viene registrato nella scheda **Cronologia** della card. Un'azione che interrompe più card, come una modifica di massa, invia a ciascuno un unico riepilogo anziché una notifica per card.
 
 ## Scheda Dettaglio (Principale)
 
@@ -73,7 +74,8 @@ La scheda dettaglio è organizzata in **sezioni** che possono essere riordinate 
 ### Sezione Descrizione
 
 - **Descrizione** — Descrizione in testo ricco del componente. Supporta la funzionalità di suggerimento AI per la generazione automatica
-- **Campi descrizione aggiuntivi** — Alcuni tipi di card includono campi extra nella sezione descrizione (es. alias, ID esterno)
+- **Campi descrizione aggiuntivi** — Un amministratore può assegnare qualsiasi campo proprio di un tipo di card alla sezione descrizione, che può quindi contenere campi ulteriori oltre alla descrizione stessa
+- **Link** — Un indirizzo web (`http://` o `https://`) inserito nella descrizione, in qualsiasi campo di testo, in un commento o in un'attività diventa un link che si apre in una nuova scheda
 
 ### Sezione Ciclo di vita
 
@@ -88,6 +90,8 @@ Il modello del ciclo di vita traccia un componente attraverso cinque fasi:
 | **End of Life** | Non più in uso o supportato |
 
 Ogni fase ha un **selettore di data** per registrare quando il componente è entrato o entrerà in quella fase. Una barra temporale visiva mostra la posizione del componente nel suo ciclo di vita.
+
+Se una fase ha una data successiva a quella di una fase che dovrebbe seguirla — ad esempio **Phase Out** dopo **End of Life** — accanto a quella data compare un'icona di avviso, e lo stesso avviso è mostrato sotto il campo durante la modifica. È solo un'indicazione: le date possono comunque essere salvate così come sono state inserite.
 
 ### Sezioni attributi personalizzati
 
@@ -112,6 +116,7 @@ Per i tipi di card che supportano la gerarchia (es. Organization, Business Capab
 - **Genitore** — Il genitore della card nella gerarchia (cliccate per navigare)
 - **Figli** — Elenco delle card figlie (cliccate su qualsiasi per navigare)
 - **Breadcrumb gerarchico** — Mostra il percorso completo dalla radice alla card corrente
+- **Tipo di collegamento** — Quando un amministratore ha configurato i tipi di collegamento per questo tipo di card, ogni collegamento padre-figlio può essere etichettato — ad esempio una controllata *commerciale* e un'altra di *vendita*. L'etichetta appartiene alla card figlia: la card padre la mostra accanto a ogni figlia, e la card figlia accanto al proprio padre. Rimuovere una card o spostarla al livello superiore ne cancella l'etichetta, e la modifica viene registrata nella scheda **Cronologia**.
 
 ### Sezione Relazioni
 
@@ -143,7 +148,7 @@ Applicate tag dai [gruppi di tag](../admin/tags.md) configurati. A seconda della
 
 La scheda **Risorse** consolida tutti i materiali di supporto per una card:
 
-- **Allegati file** — Caricate e gestite file (PDF, DOCX, XLSX, immagini, fino a 10 MB). Durante il caricamento, selezionate una **categoria documento** tra: Architettura, Sicurezza, Conformità, Operazioni, Note di riunione, Design o Altro. La categoria viene visualizzata come chip accanto a ogni file.
+- **Allegati file** — Caricate e gestite file (documenti, fogli di calcolo, presentazioni, file OpenDocument e Office legacy, immagini, archivi, messaggi Outlook ed e-mail, CSV, Markdown, JSON e XML — fino a 20 MB). Durante il caricamento, selezionate una **categoria documento** tra: Architettura, Sicurezza, Conformità, Operazioni, Note di riunione, Design o Altro. La categoria viene visualizzata come chip accanto a ogni file.
 - **Link ai documenti** — Riferimenti a documenti basati su URL. Quando aggiungete un link, selezionate un **tipo di link** tra: Documentazione, Sicurezza, Conformità, Architettura, Operazioni, Supporto o Altro. Il tipo di link viene visualizzato come chip accanto a ogni link e l'icona cambia in base al tipo selezionato.
 - **Diagrammi** — Collegate [diagrammi](diagrams.it.md) esistenti a questa card. I diagrammi collegati vengono visualizzati come anteprime in miniatura che potete cliccare per aprire nell'editor di diagrammi. Usate il pulsante **Collega diagramma** per cercare e allegare un diagramma esistente, oppure cliccate sull'icona di scollegamento per rimuovere l'associazione.
 
@@ -162,6 +167,7 @@ Se la card è collegata a un prodotto [endoflife.date]( (tramite [Amministrazion
 - **Aggiungi commenti** — Lasciate note, domande o decisioni sul componente
 - **Risposte con thread** — Rispondete a commenti specifici per creare conversazioni con thread
 - **Timestamp** — Visualizzate quando ogni commento è stato pubblicato e da chi
+- **Link** — Un indirizzo web in un commento è cliccabile e si apre in una nuova scheda
 
 ## Scheda Todo
 

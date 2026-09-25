@@ -26,6 +26,14 @@ Cliccate su qualsiasi notifica per navigare direttamente alla card o al document
 | **SoAW firmato** | Un SoAW che state seguendo riceve una firma |
 | **Richiesta sondaggio** | Un sondaggio che richiede la vostra risposta viene inviato |
 
+**Stato di approvazione modificato** copre anche il caso automatico. Una card
+approvata passa a **Interrotto** non appena qualcuno la modifica, oppure quando
+l'archiviazione della card padre la sposta nella gerarchia: venite avvisati in
+entrambi i casi e la modifica viene registrata nella scheda **Cronologia** della
+card. Quando una sola azione interrompe più card contemporaneamente, come una
+modifica di massa, ricevete un unico riepilogo anziché una notifica per card.
+
+
 ## Consegna in tempo reale
 
 Le notifiche vengono consegnate in tempo reale utilizzando Server-Sent Events (SSE). Non è necessario aggiornare la pagina — le nuove notifiche appaiono automaticamente e il conteggio del badge si aggiorna istantaneamente.
@@ -55,3 +63,5 @@ ci finisce. Quelle colonne partono sempre **disattivate**. Disattivare
 l'estensione o lasciar scadere la sua licenza nasconde la colonna e mette in
 pausa il recapito, ma conserva tutte le vostre scelte: tornano con
 l'estensione. [Slack Notifications](../extensions/slack-notify.md) è una di queste estensioni.
+
+Un'estensione può anche dichiarare tipi di notifica propri — ad esempio **Notifiche delle automazioni** —, che compaiono qui come righe a sé (in-app attivo, e-mail disattivata per impostazione predefinita), così da regolarle separatamente dalla riga generica **Avviso estensione**. Se l'estensione viene disattivata o la sua licenza scade, le sue righe scompaiono finché non torna; le scelte fatte restano. Alcune notifiche di estensioni aprono i loro **dettagli** nell'applicazione al clic invece di portarti a una pagina: il messaggio completo, più i pulsanti per aprire la scheda collegata o la pagina dell'estensione quando sei autorizzato.

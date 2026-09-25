@@ -19,16 +19,174 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import { useTranslation } from "react-i18next";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Popover from "@mui/material/Popover";
+import Tooltip from "@mui/material/Tooltip";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import CardPicker, { type CardOption } from "@/components/CardPicker";
+import OptionChip from "@/components/OptionChip";
 import { useMetamodel } from "@/hooks/useMetamodel";
-import { useTypeLabel } from "@/hooks/useResolveLabel";
+import { hasTypePermission } from "@/components/RequirePermission";
+import { useAuthContext } from "@/hooks/AuthContext";
+import { useOptionLabel, useTypeLabel } from "@/hooks/useResolveLabel";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
 import { api } from "@/api/client";
-import type { Card, HierarchyData } from "@/types";
+import type { Card, FieldOption, HierarchyData } from "@/types";
 
 // ── Section: Hierarchy ───────────────────────────────────────────
 const LEVEL_COLORS = ["#1565c0", "#42a5f5", "#90caf9", "#bbdefb", "#e3f2fd"];
+
+/**
+ * The link type on one parent→child edge (discussion #1100).
+ *
+ * Deliberately built as a copy of how card detail's **Relations** section edits
+ * a relation's attributes (`RelationAttrsPopover` + the `single_select` branch
+ * of `RelationAttributesEditor`): a dense `OptionChip` for the value, a `label`
+ * IconButton that is outlined-dashed while nothing is set, and a popover
+ * holding a draft that commits on Save. The two are the same kind of thing — a
+ * per-link value drawn from a metamodel vocabulary — and sit a few centimetres
+ * apart on the same page, so they read as one treatment rather than two.
+ *
+ * One component at both ends on purpose: the parent line edits the card under
+ * view, each child row edits that child, and the two affordances must not
+ * drift. Which card is patched is the caller's business, not this component's.
+ *
+ * `onChange` absent means read-only: the chip still renders (a viewer can see
+ * the value), only the affordance goes — same as a relation row.
+ */
+function HierarchyLinkLabel({
+  value,
+  options,
+  onChange,
+  idPrefix,
+}: {
+  value: string | null | undefined;
+  options: FieldOption[];
+  onChange?: (next: string | null) => Promise<void>;
+  /** Makes the select's `labelId` unique per row, so each has its own name. */
+  idPrefix: string;
+}) {
+  const { t } = useTranslation(["cards", "common"]);
+  const optLabel = useOptionLabel();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [draft, setDraft] = useState<string>(value ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const option = options.find((o) => o.key === value);
+  const resolved = option ? optLabel(option) : value || "";
+  const open = Boolean(anchor);
+
+  // Reopening must show what is stored, not what a cancelled edit left behind.
+  useEffect(() => {
+    if (open) {
+      setDraft(value ?? "");
+      setError("");
+    }
+  }, [open, value]);
+
+  const handleSave = async () => {
+    if (!onChange) return;
+    setSaving(true);
+    setError("");
+    try {
+      await onChange(draft || null);
+      setAnchor(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("hierarchy.errors.setLinkLabel"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // A value already set stays offered even if the option is now hidden, so
+  // editing a card never silently rewrites its label.
+  const selectable = options.filter((o) => !o.hidden || o.key === draft);
+  // …and a value whose option an admin has DELETED is offered too, as its raw
+  // key. Without it the Select has no item matching `draft`, so MUI renders an
+  // empty control and warns out-of-range — the popover would say "nothing set"
+  // while the chip beside it shows the stored value. `OptionChip` keeps such a
+  // value visible; the editor has to agree.
+  const unknown = draft && !options.some((o) => o.key === draft) ? draft : null;
+  const labelId = `hierarchy-link-type-${idPrefix}`;
+
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+      {value && (
+        <OptionChip dense option={option} value={value} label={option ? resolved : undefined} />
+      )}
+      {onChange && (
+        <Tooltip title={value ? resolved : t("hierarchy.editLinkType")}>
+          <IconButton
+            size="small"
+            onClick={(e) => setAnchor(e.currentTarget)}
+            sx={{
+              color: value ? "primary.main" : "text.disabled",
+              border: value ? "none" : "1px dashed",
+              borderColor: "divider",
+              borderRadius: 1,
+              px: 0.5,
+            }}
+          >
+            <MaterialSymbol icon="label" size={20} />
+          </IconButton>
+        </Tooltip>
+      )}
+      <Popover
+        open={open}
+        anchorEl={anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        slotProps={{ paper: { sx: { p: 2, minWidth: 280 } } }}
+      >
+        <Typography variant="caption" fontWeight={600} sx={{ display: "block", mb: 1 }}>
+          {t("hierarchy.linkType")}
+        </Typography>
+        {error && (
+          <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError("")}>
+            {error}
+          </Alert>
+        )}
+        <FormControl size="small" fullWidth disabled={saving}>
+          <InputLabel id={labelId}>{t("hierarchy.linkType")}</InputLabel>
+          <Select
+            labelId={labelId}
+            value={draft}
+            label={t("hierarchy.linkType")}
+            onChange={(e) => setDraft(e.target.value as string)}
+          >
+            <MenuItem value="">
+              <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                {t("hierarchy.noLinkLabel")}
+              </Typography>
+            </MenuItem>
+            {selectable.map((o) => (
+              <MenuItem key={o.key} value={o.key}>
+                {optLabel(o)}
+              </MenuItem>
+            ))}
+            {unknown && (
+              <MenuItem value={unknown}>
+                {t("utils.unknownOption", { key: unknown })}
+              </MenuItem>
+            )}
+          </Select>
+        </FormControl>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 1.5 }}>
+          <Button size="small" onClick={() => setAnchor(null)} disabled={saving}>
+            {t("common:actions.cancel")}
+          </Button>
+          <Button size="small" variant="contained" onClick={handleSave} disabled={saving}>
+            {t("common:actions.save")}
+          </Button>
+        </Box>
+      </Popover>
+    </Box>
+  );
+}
 
 function HierarchySection({
   card,
@@ -61,6 +219,10 @@ function HierarchySection({
 
   // Inline create state
   const [createMode, setCreateMode] = useState<"parent" | "child" | null>(null);
+  // Quick-create makes a card of this card's own type, so it needs create
+  // permission on that type (discussion #1068).
+  const { user } = useAuthContext();
+  const canCreateOwnType = hasTypePermission(user, "inventory.create", card.type);
   const [createName, setCreateName] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState("");
@@ -121,6 +283,19 @@ function HierarchySection({
     loadHierarchy();
   };
 
+  // The link label is set on the CHILD of each edge, so the parent line patches
+  // this card and a child row patches that child — the same asymmetry
+  // `handleSetParent` and `handleAddChild` already encode. `onUpdate()` is
+  // called only for this card's own label, because only then does the `card`
+  // prop the rest of the page renders from go stale.
+  const setLinkLabel = async (cardId: string, next: string | null) => {
+    // Errors propagate to the popover, which shows them next to the control
+    // the user is holding open — the section-level alert would be off-screen.
+    await api.patch(`/cards/${cardId}`, { parent_label: next });
+    loadHierarchy();
+    if (cardId === card.id) onUpdate();
+  };
+
   const handleQuickCreate = async () => {
     if (!createName.trim()) return;
     setCreateLoading(true);
@@ -147,6 +322,11 @@ function HierarchySection({
   };
 
   if (!typeConfig?.has_hierarchy) return null;
+
+  // No configured vocabulary ⇒ the whole affordance is absent and the section
+  // renders exactly as it did before the feature existed.
+  const linkLabels = typeConfig.hierarchy_labels ?? [];
+  const showLinkLabels = linkLabels.length > 0;
 
   const level = hierarchy?.level ?? 1;
   const levelColor = LEVEL_COLORS[Math.min(level - 1, LEVEL_COLORS.length - 1)];
@@ -216,7 +396,7 @@ function HierarchySection({
                 </Typography>
               </Box>
               {hierarchy.ancestors.length > 0 ? (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, pr: 2 }}>
                   <Chip
                     size="small"
                     label={hierarchy.ancestors[hierarchy.ancestors.length - 1].name}
@@ -231,8 +411,21 @@ function HierarchySection({
                   )}
                   {canEdit && (
                     <IconButton size="small" onClick={handleRemoveParent} title={t("hierarchy.removeParent")}>
-                      <MaterialSymbol icon="link_off" size={16} color="#f44336" />
+                      <MaterialSymbol icon="link_off" size={16} />
                     </IconButton>
+                  )}
+                  {/* This card's OWN label for the link above it — read from
+                      `hierarchy.parent_label`, never from the last ancestor
+                      node, whose label describes the edge one level higher. */}
+                  {showLinkLabels && (
+                    <Box sx={{ ml: "auto" }}>
+                      <HierarchyLinkLabel
+                        value={hierarchy.parent_label}
+                        options={linkLabels}
+                        onChange={canEdit ? (next) => setLinkLabel(card.id, next) : undefined}
+                        idPrefix="parent"
+                      />
+                    </Box>
                   )}
                 </Box>
               ) : (
@@ -274,14 +467,16 @@ function HierarchySection({
                       sx={{ mt: 1 }}
                       label={t("hierarchy.search", { type: typeLabel(typeConfig) || card.type })}
                     />
-                    <Button
-                      size="small"
-                      sx={{ mt: 1 }}
-                      startIcon={<MaterialSymbol icon="add" size={16} />}
-                      onClick={() => { setCreateMode("parent"); setCreateName(parentSearch); }}
-                    >
-                      {t("hierarchy.createNew", { type: typeLabel(typeConfig) || card.type })}
-                    </Button>
+                    {canCreateOwnType && (
+                      <Button
+                        size="small"
+                        sx={{ mt: 1 }}
+                        startIcon={<MaterialSymbol icon="add" size={16} />}
+                        onClick={() => { setCreateMode("parent"); setCreateName(parentSearch); }}
+                      >
+                        {t("hierarchy.createNew", { type: typeLabel(typeConfig) || card.type })}
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <Box sx={{ mt: 1, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1, bgcolor: "action.hover" }}>
@@ -322,25 +517,50 @@ function HierarchySection({
                 <Chip size="small" label={hierarchy.children.length} sx={{ height: 18, fontSize: "0.65rem" }} />
               </Box>
               {hierarchy.children.length > 0 ? (
-                <List dense disablePadding>
+                <List dense disablePadding sx={{ px: 0.5 }}>
                   {hierarchy.children.map((child) => (
                     <ListItem
                       key={child.id}
+                      // Only the link type is pinned to the row's right edge.
+                      // Unlink sits beside the name instead, as it does on the
+                      // Parent row above: removing a child is the frequent
+                      // action and belongs next to the thing it acts on, while
+                      // a link type is rare — most installs configure none.
+                      //
+                      // `undefined`, not an empty Box, when there is no
+                      // vocabulary: MUI adds its right-padding reserve whenever
+                      // `secondaryAction` is set, which would indent every row
+                      // on every install that never opted in.
                       secondaryAction={
-                        canEdit ? (
+                        showLinkLabels ? (
+                          /* The child's own label — the edge from this card
+                             down to it. Editing patches the CHILD. */
+                          <HierarchyLinkLabel
+                            value={child.parent_label}
+                            options={linkLabels}
+                            onChange={canEdit ? (next) => setLinkLabel(child.id, next) : undefined}
+                            idPrefix={child.id}
+                          />
+                        ) : undefined
+                      }
+                      sx={{ py: 0.25 }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Box
+                          component="div"
+                          onClick={() => navigate(`/cards/${child.id}`)}
+                          sx={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 1, "&:hover": { textDecoration: "underline" } }}
+                        >
+                          <MaterialSymbol icon={typeConfig?.icon || "category"} size={16} color={typeConfig?.color} />
+                          <ListItemText primary={child.name} />
+                        </Box>
+                        {/* A sibling of the clickable name, never a child of
+                            it — inside, unlinking would also navigate. */}
+                        {canEdit && (
                           <IconButton size="small" onClick={() => handleRemoveChild(child.id)} title={t("hierarchy.removeChild")}>
                             <MaterialSymbol icon="link_off" size={16} />
                           </IconButton>
-                        ) : undefined
-                      }
-                    >
-                      <Box
-                        component="div"
-                        onClick={() => navigate(`/cards/${child.id}`)}
-                        sx={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 1, "&:hover": { textDecoration: "underline" } }}
-                      >
-                        <MaterialSymbol icon={typeConfig?.icon || "category"} size={16} color={typeConfig?.color} />
-                        <ListItemText primary={child.name} />
+                        )}
                       </Box>
                     </ListItem>
                   ))}
@@ -384,14 +604,16 @@ function HierarchySection({
                       sx={{ mt: 1 }}
                       label={t("hierarchy.search", { type: typeLabel(typeConfig) || card.type })}
                     />
-                    <Button
-                      size="small"
-                      sx={{ mt: 1 }}
-                      startIcon={<MaterialSymbol icon="add" size={16} />}
-                      onClick={() => { setCreateMode("child"); setCreateName(childSearch); }}
-                    >
-                      {t("hierarchy.createNew", { type: typeLabel(typeConfig) || card.type })}
-                    </Button>
+                    {canCreateOwnType && (
+                      <Button
+                        size="small"
+                        sx={{ mt: 1 }}
+                        startIcon={<MaterialSymbol icon="add" size={16} />}
+                        onClick={() => { setCreateMode("child"); setCreateName(childSearch); }}
+                      >
+                        {t("hierarchy.createNew", { type: typeLabel(typeConfig) || card.type })}
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <Box sx={{ mt: 1, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1, bgcolor: "action.hover" }}>

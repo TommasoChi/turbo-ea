@@ -15,7 +15,12 @@ Two things are announced, as two separate notification types so an
 administrator can mute store announcements without also muting update alerts:
 
 * ``extension_available`` — an extension we have never seen in the catalogue
-  before, and which is not installed.
+  before, and which is not installed. A **service** listing (a catalogue item
+  with nothing to install) is announced through the same type: it is new in the
+  same store, an administrator acts on it in the same place, and a separate
+  type would be one more switch to find in the preferences for something that
+  arrives a few times a year. Only the wording differs — a service is never
+  called an extension.
 * ``extension_update_available`` — an installed extension whose catalogue
   version is strictly newer than the installed one.
 
@@ -56,7 +61,7 @@ from app.models.extension import Extension
 from app.services.catalogue_common import now_iso
 from app.services.extensions.store_catalog import fetch_store_catalog_safe, store_update_available
 from app.services.notification_recipients import users_with_permission
-from app.services.notification_service import create_notification
+from app.services.notification_service import deliver_notification_batch
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +92,9 @@ class NewExtension:
     key: str
     name: str
     version: str
+    #: A catalogue item with nothing to install (a support subscription).
+    #: Carried so the digest can name it correctly; it changes no branch.
+    service: bool = False
 
 
 @dataclass(frozen=True)
@@ -103,6 +111,25 @@ class StoreChanges:
 
     new: list[NewExtension]
     updates: list[ExtensionUpdate]
+
+    def __bool__(self) -> bool:
+        return bool(self.new or self.updates)
+
+
+@dataclass(frozen=True)
+class StoreDigests:
+    """Recipient payloads ready for ``deliver_notification_batch``.
+
+    Delivery is deliberately *not* done while the settings session is open: it
+    ends in an SMTP handshake per emailed administrator, and a background job
+    must never hold a connection across that (CLAUDE.md; guarded by
+    ``tests/services/test_db_session_holding.py``). ``record_result`` therefore
+    does the database work and hands the digests back, and the caller delivers
+    them after committing.
+    """
+
+    new: list[dict]
+    updates: list[dict]
 
     def __bool__(self) -> bool:
         return bool(self.new or self.updates)
@@ -176,7 +203,14 @@ def classify(
         # Not installed: news only the first time we ever see the key, and only
         # once this instance has seen a catalogue at all.
         if seeded and key not in known_keys:
-            new.append(NewExtension(key=key, name=name, version=version))
+            new.append(
+                NewExtension(
+                    key=key,
+                    name=name,
+                    version=version,
+                    service=item.get("service") is True,
+                )
+            )
 
     return StoreChanges(new=new, updates=updates)
 
@@ -191,15 +225,32 @@ def _names(entries: Sequence[NewExtension] | Sequence[ExtensionUpdate]) -> str:
     return f"{names[0]}, {names[1]} and {len(names) - 2} more"
 
 
+def _new_nouns(new: list[NewExtension]) -> tuple[str, str]:
+    """``(singular, plural)`` for what was published.
+
+    A service is not an extension, and a digest that calls it one is wrong on
+    the one line an administrator reads. All services, all extensions, or a
+    mix of both — the mixed case needs a word that covers both, and "listing"
+    is what the store itself calls a catalogue entry.
+    """
+    kinds = {entry.service for entry in new}
+    if kinds == {True}:
+        return "service", "services"
+    if kinds == {False}:
+        return "extension", "extensions"
+    return "listing", "listings"
+
+
 def _new_summary(new: list[NewExtension]) -> tuple[str, str]:
+    singular, plural = _new_nouns(new)
     if len(new) == 1:
         item = new[0]
         return (
             f"{item.name} is available in the extension store",
-            "A new extension was published. Open the store to take a look.",
+            f"A new {singular} was published. Open the store to take a look.",
         )
     return (
-        f"{len(new)} new extensions in the extension store",
+        f"{len(new)} new {plural} in the extension store",
         f"{_names(new)}. Open the store to take a look.",
     )
 
@@ -257,11 +308,14 @@ async def record_result(
     *,
     items: list[dict] | None,
     error: str | None,
-) -> int:
-    """Persist the probe result and notify administrators about what changed.
+) -> StoreDigests:
+    """Persist the probe result and build the digests administrators should get.
 
-    Returns the number of notifications created. Does **not** commit — the
-    caller owns the session and knows what else it has pending.
+    Returns what still needs delivering rather than delivering it: sending ends
+    in an SMTP round-trip per emailed administrator, and this session is open
+    and holding a pooled connection. The caller commits, then delivers, then
+    stamps the count with ``record_notified``. Does **not** commit — the caller
+    owns the session and knows what else it has pending.
     """
     row = await _settings_row(db)
     if row is None:
@@ -274,7 +328,7 @@ async def record_result(
     state["checkedAt"] = now_iso()
     state["error"] = error
 
-    created = 0
+    digests = StoreDigests(new=[], updates=[])
     if items is not None:
         installed = await installed_versions(db)
         # Both come back out of JSONB, so they are only the right shape by
@@ -297,7 +351,7 @@ async def record_result(
 
         if changes:
             recipients = await users_with_permission(db, ADMIN_PERMISSION)
-            created += await _notify(db, recipients, changes)
+            digests = _build_digests(recipients, changes)
 
         # Stamped even when every administrator has muted the types: as far as
         # this instance is concerned the catalogue has been seen, and tomorrow's
@@ -317,61 +371,107 @@ async def record_result(
         # "checked, nothing was new" instead of only "checked".
         state["lastNew"] = len(changes.new)
         state["lastUpdates"] = len(changes.updates)
-        state["lastNotified"] = created
+        # Nothing has been delivered yet — ``record_notified`` overwrites this
+        # once the send is done. Left at 0 when delivery never happens, which
+        # is the honest reading of "how many people did we reach".
+        state["lastNotified"] = 0
 
     general[STATE_SETTING] = state
     # Reassign rather than mutate — SQLAlchemy does not track in-place JSONB edits.
     row.general_settings = general
-    return created
+    return digests
 
 
-async def _notify(db: AsyncSession, recipients: list[uuid.UUID], changes: StoreChanges) -> int:
-    """One digest per type per recipient — never one row per extension."""
+async def record_notified(db: AsyncSession, count: int) -> None:
+    """Stamp how many administrators the last run actually reached.
+
+    Split from ``record_result`` because the answer is only known after
+    delivery, which happens with no session held. Touches one key and nothing
+    else, so it cannot clobber state a concurrent run wrote. Does **not**
+    commit.
+    """
+    row = await _settings_row(db)
+    if row is None:
+        return
+    general = dict(row.general_settings or {})
+    state = dict(general.get(STATE_SETTING) or {})
+    state["lastNotified"] = count
+    general[STATE_SETTING] = state
+    row.general_settings = general
+
+
+def _build_digests(recipients: Sequence[uuid.UUID], changes: StoreChanges) -> StoreDigests:
+    """One digest per type per recipient — never one row per extension.
+
+    Pure: no session, no I/O. Title, message and payload are identical for
+    every administrator, so each is built once and fanned out. The payload is
+    copied per recipient so two rows can never share a dict identity.
+    """
+    new_rows: list[dict] = []
+    update_rows: list[dict] = []
+
+    if changes.new:
+        title, message = _new_summary(changes.new)
+        payload = {
+            "count": len(changes.new),
+            "extensions": [
+                {"key": e.key, "name": e.name, "version": e.version}
+                for e in changes.new[:MAX_LISTED_ITEMS]
+            ],
+        }
+        new_rows = [
+            {
+                "user_id": user_id,
+                "title": title,
+                "message": message,
+                "link": STORE_LINK,
+                "data": dict(payload),
+            }
+            for user_id in recipients
+        ]
+
+    if changes.updates:
+        title, message = _update_summary(changes.updates)
+        payload = {
+            "count": len(changes.updates),
+            "extensions": [
+                {
+                    "key": e.key,
+                    "name": e.name,
+                    "installed_version": e.installed_version,
+                    "store_version": e.store_version,
+                }
+                for e in changes.updates[:MAX_LISTED_ITEMS]
+            ],
+        }
+        update_rows = [
+            {
+                "user_id": user_id,
+                "title": title,
+                "message": message,
+                "link": STORE_LINK,
+                "data": dict(payload),
+            }
+            for user_id in recipients
+        ]
+
+    return StoreDigests(new=new_rows, updates=update_rows)
+
+
+async def deliver_digests(digests: StoreDigests) -> int:
+    """Send the digests with no session held. Returns rows actually created.
+
+    One batch per notification type: ``deliver_notification_batch`` takes a
+    single type, and the two are separately mutable so a recipient may want one
+    and not the other.
+    """
     created = 0
-    for user_id in recipients:
-        if changes.new:
-            title, message = _new_summary(changes.new)
-            notif = await create_notification(
-                db,
-                user_id=user_id,
-                notif_type=NEW_NOTIFICATION_TYPE,
-                title=title,
-                message=message,
-                link=STORE_LINK,
-                data={
-                    "count": len(changes.new),
-                    "extensions": [
-                        {"key": e.key, "name": e.name, "version": e.version}
-                        for e in changes.new[:MAX_LISTED_ITEMS]
-                    ],
-                },
-            )
-            if notif:
-                created += 1
-        if changes.updates:
-            title, message = _update_summary(changes.updates)
-            notif = await create_notification(
-                db,
-                user_id=user_id,
-                notif_type=UPDATE_NOTIFICATION_TYPE,
-                title=title,
-                message=message,
-                link=STORE_LINK,
-                data={
-                    "count": len(changes.updates),
-                    "extensions": [
-                        {
-                            "key": e.key,
-                            "name": e.name,
-                            "installed_version": e.installed_version,
-                            "store_version": e.store_version,
-                        }
-                        for e in changes.updates[:MAX_LISTED_ITEMS]
-                    ],
-                },
-            )
-            if notif:
-                created += 1
+    if digests.new:
+        created += await deliver_notification_batch(digests.new, notif_type=NEW_NOTIFICATION_TYPE)
+    if digests.updates:
+        created += await deliver_notification_batch(
+            digests.updates, notif_type=UPDATE_NOTIFICATION_TYPE
+        )
     return created
 
 
@@ -424,8 +524,18 @@ async def run_extension_store_check() -> dict:
     items, error = await fetch_store_catalog_safe(base_url)
 
     async with async_session() as db:
-        created = await record_result(db, items=items, error=error)
+        digests = await record_result(db, items=items, error=error)
         await db.commit()
+
+    # Delivery holds no session: it ends in an SMTP connect/TLS/auth handshake
+    # per emailed administrator, and this is a write transaction on a pool of
+    # DB_POOL_SIZE + DB_MAX_OVERFLOW.
+    created = await deliver_digests(digests)
+
+    async with async_session() as db:
+        if created:
+            await record_notified(db, created)
+            await db.commit()
         status = await read_status(db)
 
     if created:

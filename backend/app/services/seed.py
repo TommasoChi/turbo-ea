@@ -1187,7 +1187,7 @@ TYPES = [
                     "pt": "Informações do objetivo",
                     "zh": "目标信息",
                     "ru": "Информация о цели",
-                    "da": "Mål",
+                    "da": "Målinformation",
                     "ar": "معلومات الهدف",
                 },
                 "fields": [
@@ -1251,7 +1251,7 @@ TYPES = [
                             "pt": "Tipo de objetivo",
                             "zh": "目标类型",
                             "ru": "Тип цели",
-                            "da": "Operationel",
+                            "da": "Måltype",
                             "ar": "نوع الهدف",
                         },
                     },
@@ -1301,7 +1301,7 @@ TYPES = [
                 "pt": "Objetivo",
                 "zh": "目标",
                 "ru": "Цель",
-                "da": "Fremskridt (%)",
+                "da": "Mål",
                 "ar": "هدف",
             },
             "description": {
@@ -1372,7 +1372,7 @@ TYPES = [
                     "pt": "Informações da plataforma",
                     "zh": "平台信息",
                     "ru": "Информация о платформе",
-                    "da": "Teknisk",
+                    "da": "Platformsinformation",
                     "ar": "معلومات المنصّة",
                 },
                 "fields": [
@@ -1423,7 +1423,7 @@ TYPES = [
                             "pt": "Tipo de plataforma",
                             "zh": "平台类型",
                             "ru": "Тип платформы",
-                            "da": "Teknisk",
+                            "da": "Platformstype",
                             "ar": "نوع المنصّة",
                         },
                     },
@@ -1439,7 +1439,7 @@ TYPES = [
                 "pt": "Plataforma",
                 "zh": "平台",
                 "ru": "Платформа",
-                "da": "Teknisk",
+                "da": "Platform",
                 "ar": "منصّة",
             },
             "description": {
@@ -1542,7 +1542,7 @@ TYPES = [
                     "pt": "Informações da iniciativa",
                     "zh": "举措信息",
                     "ru": "Информация об инициативе",
-                    "da": "Epic",
+                    "da": "Initiativinformation",
                     "ar": "معلومات المبادرة",
                 },
                 "fields": [
@@ -1627,7 +1627,7 @@ TYPES = [
                             "pt": "Valor de negócio",
                             "zh": "业务价值",
                             "ru": "Бизнес-ценность",
-                            "da": "Lav",
+                            "da": "Forretningsværdi",
                             "ar": "القيمة التجارية",
                         },
                     },
@@ -1694,7 +1694,7 @@ TYPES = [
                             "pt": "Esforço",
                             "zh": "工作量",
                             "ru": "Трудозатраты",
-                            "da": "Lav",
+                            "da": "Indsats",
                             "ar": "الجهد",
                         },
                     },
@@ -1710,7 +1710,7 @@ TYPES = [
                     "pt": "Custos e cronograma",
                     "zh": "成本与时间表",
                     "ru": "Стоимость и сроки",
-                    "da": "Lav",
+                    "da": "Omkostninger & tidsplan",
                     "ar": "التكلفة والجدول الزمني",
                 },
                 "fields": [
@@ -1847,7 +1847,7 @@ TYPES = [
                 "pt": "Iniciativa",
                 "zh": "举措",
                 "ru": "Инициатива",
-                "da": "Observatør",
+                "da": "Initiativ",
                 "ar": "مبادرة",
             },
             "description": {
@@ -1966,7 +1966,7 @@ TYPES = [
                     "pt": "Informações da organização",
                     "zh": "组织信息",
                     "ru": "Информация об организации",
-                    "da": "Kunde",
+                    "da": "Organisationsinformation",
                     "ar": "معلومات المؤسسة",
                 },
                 "fields": [
@@ -2016,7 +2016,7 @@ TYPES = [
                 "pt": "Organização",
                 "zh": "组织",
                 "ru": "Организация",
-                "da": "Lokation",
+                "da": "Organisation",
                 "ar": "مؤسسة",
             },
             "description": {
@@ -2053,7 +2053,7 @@ TYPES = [
                     "pt": "Informações da capacidade",
                     "zh": "能力信息",
                     "ru": "Информация о возможности",
-                    "da": "Forretningskompetence",
+                    "da": "Kompetenceinformation",
                     "ar": "معلومات القدرة",
                 },
                 "fields": [
@@ -2169,7 +2169,7 @@ TYPES = [
                             "pt": "Nível de capacidade",
                             "zh": "能力级别",
                             "ru": "Уровень возможности",
-                            "da": "Niveau 5",
+                            "da": "Kompetenceniveau",
                             "ar": "مستوى القدرة",
                         },
                     },
@@ -2202,7 +2202,7 @@ TYPES = [
                     "pt": "Avaliação BPM",
                     "zh": "BPM评估",
                     "ru": "Оценка BPM",
-                    "da": "Kernekompetence",
+                    "da": "BPM-vurdering",
                     "ar": "تقييم BPM",
                 },
                 "fields": [
@@ -2285,7 +2285,7 @@ TYPES = [
                             "pt": "Importância estratégica",
                             "zh": "战略重要性",
                             "ru": "Стратегическая значимость",
-                            "da": "Kritisk",
+                            "da": "Strategisk betydning",
                             "ar": "الأهمية الاستراتيجية",
                         },
                     },
@@ -2319,7 +2319,7 @@ TYPES = [
                 "pt": "Capacidade de negócio",
                 "zh": "业务能力",
                 "ru": "Бизнес-возможность",
-                "da": "Kompetencemodenhed",
+                "da": "Forretningskompetence",
                 "ar": "قدرة تجارية",
             },
             "description": {
@@ -2437,7 +2437,7 @@ TYPES = [
                     "pt": "Informações do contexto de negócio",
                     "zh": "业务上下文信息",
                     "ru": "Информация о бизнес-контексте",
-                    "da": "ESG-kompetence",
+                    "da": "Forretningskontekstinformation",
                     "ar": "معلومات السياق التجاري",
                 },
                 "fields": [
@@ -2520,7 +2520,7 @@ TYPES = [
                             "pt": "Maturidade",
                             "zh": "成熟度",
                             "ru": "Зрелость",
-                            "da": "Optimeret",
+                            "da": "Modenhed",
                             "ar": "مستوى النضج",
                         },
                     },
@@ -2536,7 +2536,7 @@ TYPES = [
                 "pt": "Contexto de negócio",
                 "zh": "业务上下文",
                 "ru": "Бизнес-контекст",
-                "da": "Optimeret",
+                "da": "Forretningskontekst",
                 "ar": "سياق تجاري",
             },
             "description": {
@@ -2640,7 +2640,7 @@ TYPES = [
                     "pt": "Classificação do processo",
                     "zh": "流程分类",
                     "ru": "Классификация процесса",
-                    "da": "Procesvariant",
+                    "da": "Procesklassifikation",
                     "ar": "تصنيف العملية",
                 },
                 "fields": [
@@ -2729,7 +2729,7 @@ TYPES = [
                     "pt": "Detalhes operacionais",
                     "zh": "运营详情",
                     "ru": "Операционные детали",
-                    "da": "Risikoniveau",
+                    "da": "Driftsdetaljer",
                     "ar": "التفاصيل التشغيلية",
                 },
                 "fields": [
@@ -2850,7 +2850,7 @@ TYPES = [
                 "pt": "Processo de negócio",
                 "zh": "业务流程",
                 "ru": "Бизнес-процесс",
-                "da": "Observatør",
+                "da": "Forretningsproces",
                 "ar": "عملية تجارية",
             },
             "description": {
@@ -3180,7 +3180,7 @@ TYPES = [
                 "pt": "Aplicação",
                 "zh": "应用程序",
                 "ru": "Приложение",
-                "da": "Produktnavn",
+                "da": "Applikation",
                 "ar": "تطبيق",
             },
             "description": {
@@ -3267,7 +3267,7 @@ TYPES = [
                     "pt": "Informações da interface",
                     "zh": "接口信息",
                     "ru": "Информация об интерфейсе",
-                    "da": "MCP-server",
+                    "da": "Grænsefladeinformation",
                     "ar": "معلومات الواجهة",
                 },
                 "fields": [
@@ -3335,7 +3335,7 @@ TYPES = [
                 "pt": "Interface",
                 "zh": "接口",
                 "ru": "Интерфейс",
-                "da": "Protokol",
+                "da": "Grænseflade",
                 "ar": "واجهة",
             },
             "description": {
@@ -3373,7 +3373,7 @@ TYPES = [
                     "pt": "Informações de dados",
                     "zh": "数据信息",
                     "ru": "Информация о данных",
-                    "da": "Dataobjekt",
+                    "da": "Datainformation",
                     "ar": "معلومات البيانات",
                 },
                 "fields": [
@@ -3441,7 +3441,7 @@ TYPES = [
                 "pt": "Objeto de dados",
                 "zh": "数据对象",
                 "ru": "Объект данных",
-                "da": "Indeholder personoplysninger",
+                "da": "Dataobjekt",
                 "ar": "كائن بيانات",
             },
             "description": {
@@ -3594,7 +3594,7 @@ TYPES = [
                     "pt": "Informações do componente",
                     "zh": "组件信息",
                     "ru": "Информация о компоненте",
-                    "da": "AI-model",
+                    "da": "Komponentinformation",
                     "ar": "معلومات المكوّن",
                 },
                 "fields": [
@@ -3680,7 +3680,7 @@ TYPES = [
                     "pt": "Custos",
                     "zh": "成本",
                     "ru": "Стоимость",
-                    "da": "Har AI-funktioner",
+                    "da": "Omkostninger",
                     "ar": "التكلفة",
                 },
                 "fields": [
@@ -3730,7 +3730,7 @@ TYPES = [
                 "pt": "Componente de TI",
                 "zh": "IT组件",
                 "ru": "ИТ-компонент",
-                "da": "Licenstype",
+                "da": "IT-komponent",
                 "ar": "مكوّن تقني",
             },
             "description": {
@@ -3803,7 +3803,7 @@ TYPES = [
                     "pt": "Informações do fornecedor",
                     "zh": "供应商信息",
                     "ru": "Информация о поставщике",
-                    "da": "Udbyder",
+                    "da": "Udbyderinformation",
                     "ar": "معلومات المزوّد",
                 },
                 "fields": [
@@ -3867,7 +3867,7 @@ TYPES = [
                             "pt": "Tipo de fornecedor",
                             "zh": "供应商类型",
                             "ru": "Тип поставщика",
-                            "da": "Intern udbyder",
+                            "da": "Udbydertype",
                             "ar": "نوع المزوّد",
                         },
                     },
@@ -3917,7 +3917,7 @@ TYPES = [
                 "pt": "Fornecedor",
                 "zh": "供应商",
                 "ru": "Поставщик",
-                "da": "Kontraktslutdato",
+                "da": "Udbyder",
                 "ar": "مزوّد",
             },
             "description": {
@@ -4036,6 +4036,71 @@ def _mark_builtin_attributes_schema(schema: list[dict]) -> list[dict]:
         for opt in field.get("options", []) or []:
             opt["built_in"] = True
     return out
+
+
+# ── Lineage (successor) relation types ─────────────────────────────────
+# One self-referencing relation type per card type that supports lineage. The
+# direction convention is **source succeeds target**: in a row (A, X), A comes
+# AFTER X — which is why card detail lists X's *Successors* as the rows where X
+# is the target (`SuccessorsSection.tsx`).
+#
+# The reverse verb therefore has to read "is succeeded by". It used to read
+# "is preceded by", which means the same thing as "succeeds" — so both
+# directions read identically wherever a relation verb is shown, and the survey
+# builder offered two rows nobody could tell apart (#1091).
+#
+# These constants are the ONE definition: the seven entries in `RELATIONS`
+# below are built from them, and `app/api/v1/metamodel.py` imports them for the
+# relation type it auto-provisions when an admin enables "Supports Lineage".
+# Seven hand-copied literals is how the wrong verb survived in seven places.
+SUCCESSOR_LABEL = "succeeds"
+SUCCESSOR_REVERSE_LABEL = "is succeeded by"
+# No "en" entry here on purpose — `_inject_english_translations_relation` is the
+# single place English is stamped into a relation type's translations.
+SUCCESSOR_TRANSLATIONS: dict = {
+    "label": {
+        "de": "folgt auf",
+        "fr": "succède à",
+        "es": "sucede a",
+        "it": "succede a",
+        "pt": "sucede a",
+        "zh": "继承",
+        "ru": "следует за",
+        "da": "efterfølger",
+        "ar": "يخلف",
+    },
+    "reverse_label": {
+        "de": "wird abgelöst durch",
+        "fr": "a pour successeur",
+        "es": "es sucedido por",
+        "it": "ha come successore",
+        "pt": "é sucedido por",
+        "zh": "被继承",
+        "ru": "предшествует",
+        "da": "efterfølges af",
+        "ar": "يُخلَف بواسطة",
+    },
+}
+
+
+def _successor_relation(key: str, type_key: str, sort_order: int) -> dict:
+    """One card type's lineage relation type.
+
+    ``translations`` is deep-copied per entry because
+    ``_inject_english_translations_relation`` mutates it IN PLACE at seed time
+    and ``seed_metamodel`` assigns the very same dict onto the row — a shared
+    object would be corrupted process-wide.
+    """
+    return {
+        "key": key,
+        "label": SUCCESSOR_LABEL,
+        "reverse_label": SUCCESSOR_REVERSE_LABEL,
+        "source_type_key": type_key,
+        "target_type_key": type_key,
+        "cardinality": "n:m",
+        "sort_order": sort_order,
+        "translations": copy.deepcopy(SUCCESSOR_TRANSLATIONS),
+    }
 
 
 RELATIONS = [
@@ -4528,7 +4593,7 @@ RELATIONS = [
                 "pt": "utiliza",
                 "zh": "使用",
                 "ru": "использует",
-                "da": "Brugstype",
+                "da": "bruger",
                 "ar": "نوع الاستخدام",
             },
             "reverse_label": {
@@ -4603,7 +4668,7 @@ RELATIONS = [
                 "pt": "suporta",
                 "zh": "支持",
                 "ru": "поддерживает",
-                "da": "Supporttype",
+                "da": "understøtter",
                 "ar": "نوع الدعم",
             },
             "reverse_label": {
@@ -4709,7 +4774,7 @@ RELATIONS = [
                 "pt": "CRUD",
                 "zh": "CRUD",
                 "ru": "CRUD",
-                "da": "Slet",
+                "da": "CRUD",
                 "ar": "CRUD",
             },
             "reverse_label": {
@@ -4745,7 +4810,7 @@ RELATIONS = [
                 "pt": "utiliza",
                 "zh": "使用",
                 "ru": "использует",
-                "da": "Årlig omkostning",
+                "da": "bruger",
                 "ar": "يستخدم",
             },
             "reverse_label": {
@@ -4779,7 +4844,7 @@ RELATIONS = [
                 "pt": "pertence a",
                 "zh": "属于",
                 "ru": "принадлежит",
-                "da": "Ressourceklassifikation",
+                "da": "tilhører",
                 "ar": "ينتمي إلى",
             },
             "reverse_label": {
@@ -5055,7 +5120,7 @@ RELATIONS = [
                 "pt": "suporta",
                 "zh": "支持",
                 "ru": "поддерживает",
-                "da": "Supporttype",
+                "da": "understøtter",
                 "ar": "نوع الدعم",
             },
             "reverse_label": {
@@ -5141,7 +5206,7 @@ RELATIONS = [
                 "pt": "utiliza",
                 "zh": "使用",
                 "ru": "использует",
-                "da": "Slet",
+                "da": "bruger",
                 "ar": "يستخدم",
             },
             "reverse_label": {
@@ -5220,6 +5285,39 @@ RELATIONS = [
                 "ru": "от него зависит",
                 "da": "der afhænges af",
                 "ar": "يُعتمَد عليه بواسطة",
+            },
+        },
+    },
+    {
+        "key": "relProcessCalls",
+        "label": "calls",
+        "reverse_label": "is called by",
+        "source_type_key": "BusinessProcess",
+        "target_type_key": "BusinessProcess",
+        "cardinality": "n:m",
+        "sort_order": 47,
+        "translations": {
+            "label": {
+                "de": "ruft auf",
+                "fr": "appelle",
+                "es": "invoca",
+                "it": "richiama",
+                "pt": "invoca",
+                "zh": "调用",
+                "ru": "вызывает",
+                "da": "kalder",
+                "ar": "يستدعي",
+            },
+            "reverse_label": {
+                "de": "wird aufgerufen von",
+                "fr": "est appelé par",
+                "es": "es invocado por",
+                "it": "è richiamato da",
+                "pt": "é invocado por",
+                "zh": "被调用",
+                "ru": "вызывается",
+                "da": "kaldes af",
+                "ar": "يُستدعى بواسطة",
             },
         },
     },
@@ -5356,237 +5454,14 @@ RELATIONS = [
         },
     },
     # ── Successor / Predecessor (self-referencing, per card type) ───
-    {
-        "key": "relAppSuccessor",
-        "label": "succeeds",
-        "reverse_label": "is preceded by",
-        "source_type_key": "Application",
-        "target_type_key": "Application",
-        "cardinality": "n:m",
-        "sort_order": 40,
-        "translations": {
-            "label": {
-                "de": "folgt auf",
-                "fr": "succède à",
-                "es": "sucede a",
-                "it": "succede a",
-                "pt": "sucede a",
-                "zh": "继承",
-                "ru": "предшествует",
-                "da": "efterfølger",
-                "ar": "يخلف",
-            },
-            "reverse_label": {
-                "de": "wird abgelöst durch",
-                "fr": "est précédé par",
-                "es": "es precedido por",
-                "it": "è preceduto da",
-                "pt": "é precedido por",
-                "zh": "被继承",
-                "ru": "следует за",
-                "da": "efterfølges af",
-                "ar": "مسبوق بـ",
-            },
-        },
-    },
-    {
-        "key": "relITCSuccessor",
-        "label": "succeeds",
-        "reverse_label": "is preceded by",
-        "source_type_key": "ITComponent",
-        "target_type_key": "ITComponent",
-        "cardinality": "n:m",
-        "sort_order": 41,
-        "translations": {
-            "label": {
-                "de": "folgt auf",
-                "fr": "succède à",
-                "es": "sucede a",
-                "it": "succede a",
-                "pt": "sucede a",
-                "zh": "继承",
-                "ru": "предшествует",
-                "da": "efterfølger",
-                "ar": "يخلف",
-            },
-            "reverse_label": {
-                "de": "wird abgelöst durch",
-                "fr": "est précédé par",
-                "es": "es precedido por",
-                "it": "è preceduto da",
-                "pt": "é precedido por",
-                "zh": "被继承",
-                "ru": "следует за",
-                "da": "efterfølges af",
-                "ar": "مسبوق بـ",
-            },
-        },
-    },
-    {
-        "key": "relInitiativeSuccessor",
-        "label": "succeeds",
-        "reverse_label": "is preceded by",
-        "source_type_key": "Initiative",
-        "target_type_key": "Initiative",
-        "cardinality": "n:m",
-        "sort_order": 42,
-        "translations": {
-            "label": {
-                "de": "folgt auf",
-                "fr": "succède à",
-                "es": "sucede a",
-                "it": "succede a",
-                "pt": "sucede a",
-                "zh": "继承",
-                "ru": "предшествует",
-                "da": "efterfølger",
-                "ar": "يخلف",
-            },
-            "reverse_label": {
-                "de": "wird abgelöst durch",
-                "fr": "est précédé par",
-                "es": "es precedido por",
-                "it": "è preceduto da",
-                "pt": "é precedido por",
-                "zh": "被继承",
-                "ru": "следует за",
-                "da": "efterfølges af",
-                "ar": "مسبوق بـ",
-            },
-        },
-    },
-    {
-        "key": "relPlatformSuccessor",
-        "label": "succeeds",
-        "reverse_label": "is preceded by",
-        "source_type_key": "Platform",
-        "target_type_key": "Platform",
-        "cardinality": "n:m",
-        "sort_order": 43,
-        "translations": {
-            "label": {
-                "de": "folgt auf",
-                "fr": "succède à",
-                "es": "sucede a",
-                "it": "succede a",
-                "pt": "sucede a",
-                "zh": "继承",
-                "ru": "предшествует",
-                "da": "efterfølger",
-                "ar": "يخلف",
-            },
-            "reverse_label": {
-                "de": "wird abgelöst durch",
-                "fr": "est précédé par",
-                "es": "es precedido por",
-                "it": "è preceduto da",
-                "pt": "é precedido por",
-                "zh": "被继承",
-                "ru": "следует за",
-                "da": "efterfølges af",
-                "ar": "مسبوق بـ",
-            },
-        },
-    },
-    {
-        "key": "relProcessSuccessor",
-        "label": "succeeds",
-        "reverse_label": "is preceded by",
-        "source_type_key": "BusinessProcess",
-        "target_type_key": "BusinessProcess",
-        "cardinality": "n:m",
-        "sort_order": 44,
-        "translations": {
-            "label": {
-                "de": "folgt auf",
-                "fr": "succède à",
-                "es": "sucede a",
-                "it": "succede a",
-                "pt": "sucede a",
-                "zh": "继承",
-                "ru": "предшествует",
-                "da": "efterfølger",
-                "ar": "يخلف",
-            },
-            "reverse_label": {
-                "de": "wird abgelöst durch",
-                "fr": "est précédé par",
-                "es": "es precedido por",
-                "it": "è preceduto da",
-                "pt": "é precedido por",
-                "zh": "被继承",
-                "ru": "следует за",
-                "da": "efterfølges af",
-                "ar": "مسبوق بـ",
-            },
-        },
-    },
-    {
-        "key": "relInterfaceSuccessor",
-        "label": "succeeds",
-        "reverse_label": "is preceded by",
-        "source_type_key": "Interface",
-        "target_type_key": "Interface",
-        "cardinality": "n:m",
-        "sort_order": 45,
-        "translations": {
-            "label": {
-                "de": "folgt auf",
-                "fr": "succède à",
-                "es": "sucede a",
-                "it": "succede a",
-                "pt": "sucede a",
-                "zh": "继承",
-                "ru": "предшествует",
-                "da": "efterfølger",
-                "ar": "يخلف",
-            },
-            "reverse_label": {
-                "de": "wird abgelöst durch",
-                "fr": "est précédé par",
-                "es": "es precedido por",
-                "it": "è preceduto da",
-                "pt": "é precedido por",
-                "zh": "被继承",
-                "ru": "следует за",
-                "da": "efterfølges af",
-                "ar": "مسبوق بـ",
-            },
-        },
-    },
-    {
-        "key": "relDataObjectSuccessor",
-        "label": "succeeds",
-        "reverse_label": "is preceded by",
-        "source_type_key": "DataObject",
-        "target_type_key": "DataObject",
-        "cardinality": "n:m",
-        "sort_order": 46,
-        "translations": {
-            "label": {
-                "de": "folgt auf",
-                "fr": "succède à",
-                "es": "sucede a",
-                "it": "succede a",
-                "pt": "sucede a",
-                "zh": "继承",
-                "ru": "предшествует",
-                "da": "efterfølger",
-                "ar": "يخلف",
-            },
-            "reverse_label": {
-                "de": "wird abgelöst durch",
-                "fr": "est précédé par",
-                "es": "es precedido por",
-                "it": "è preceduto da",
-                "pt": "é precedido por",
-                "zh": "被继承",
-                "ru": "следует за",
-                "da": "efterfølges af",
-                "ar": "مسبوق بـ",
-            },
-        },
-    },
+    # Built by ``_successor_relation`` — see the constants above ``RELATIONS``.
+    _successor_relation("relAppSuccessor", "Application", 40),
+    _successor_relation("relITCSuccessor", "ITComponent", 41),
+    _successor_relation("relInitiativeSuccessor", "Initiative", 42),
+    _successor_relation("relPlatformSuccessor", "Platform", 43),
+    _successor_relation("relProcessSuccessor", "BusinessProcess", 44),
+    _successor_relation("relInterfaceSuccessor", "Interface", 45),
+    _successor_relation("relDataObjectSuccessor", "DataObject", 46),
 ]
 
 

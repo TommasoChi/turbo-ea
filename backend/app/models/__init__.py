@@ -7,6 +7,7 @@ from app.models.calculation import Calculation
 from app.models.card import Card
 from app.models.card_logo import CardLogo
 from app.models.card_type import CardType
+from app.models.catalogue_cache import CatalogueCache
 from app.models.comment import Comment
 from app.models.compliance_regulation import ComplianceRegulation
 from app.models.diagram import Diagram
@@ -38,6 +39,7 @@ from app.models.process_assessment import ProcessAssessment
 from app.models.process_diagram import ProcessDiagram
 from app.models.process_element import ProcessElement, ProcessElementOrganization
 from app.models.process_flow_version import ProcessFlowVersion
+from app.models.process_message_flow import ProcessMessageFlow
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.resource_type import ResourceType
@@ -119,6 +121,7 @@ __all__ = [
     "DiagramGroup",
     "diagram_group_members",
     "SoAW",
+    "CatalogueCache",
     "KpiSnapshot",
     "IdentityMap",
     "Migration",
@@ -147,6 +150,7 @@ __all__ = [
     "ProcessAssessment",
     "ProcessElementOrganization",
     "ProcessFlowVersion",
+    "ProcessMessageFlow",
     "SsoInvitation",
     "WebPortal",
     "SnowConnection",

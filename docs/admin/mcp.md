@@ -86,6 +86,8 @@ This is required for the OAuth flow that authenticates users when they connect f
 3. Toggle the switch to **enable** MCP.
 4. The UI will show the MCP Server URL and setup instructions to share with your team.
 
+![MCP Integration section on the AI settings tab](../assets/img/en/95b_admin_settings_mcp.png)
+
 !!! warning
     The toggle is disabled if SSO is not configured. Set up SSO first.
 
@@ -274,7 +276,7 @@ The server exposes 19 write tools, each annotated as **additive** (creates or ex
 | `upsert_relations_bulk` | Create or delete relations between cards. Source / target / type are validated against the metamodel. Deletion is refused unless the operator opts in (see guardrails). |
 | `archive_cards` | Soft-delete cards. Recoverable — archived cards can be restored for 30 days before auto-purge. |
 | `update_diagram` | Replace a diagram's DrawIO XML, name, or card links. |
-| `rollback_batch` | Reverse the writes performed under a previous mutation batch. |
+| `rollback_batch` | Reverse the writes performed under a previous mutation batch — card, relation, risk, stakeholder-role, tag and draft-decision writes; todos and notifications are left in place. |
 | `clear_card_logos` | Remove the custom logo from cards, falling them back to their card-type icon. Recoverable — set it again to restore. |
 
 ### Artifact upload

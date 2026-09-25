@@ -54,7 +54,7 @@ Desenhe suas perguntas. Cada pergunta pode ser:
 
 ### Relações
 
-Além dos atributos, uma pesquisa também pode pedir aos respondentes que mantenham as **relações** de um cartão atualizadas. Na etapa **Campos**, a seção **Relações** lista todas as relações que o tipo de cartão de destino pode ter, em ambas as direções (por exemplo, para uma Aplicação: *suporta → Componente de TI* e *usada por ← Organização*). Para cada uma que você escolher, selecione uma ação:
+Além dos atributos, uma pesquisa também pode pedir aos respondentes que mantenham as **relações** de um cartão atualizadas. Na etapa **Campos**, a seção **Relações** lista todas as relações que o tipo de cartão de destino pode ter, em ambas as direções (por exemplo, para uma Aplicação: *suporta → Componente de TI* e *usada por ← Organização*). Um tipo de cartão que suporta linhagem aparece aqui como qualquer outra relação, em ambas as direções e sob os seus próprios verbos: para uma Aplicação, *sucede a* recolhe os cartões que substituiu e *é sucedido por* os que a substituem. Os lados que um administrador ocultou no tipo de cartão não são oferecidos. Para cada uma que você escolher, selecione uma ação:
 
 - **Manter** — O respondente vê os cartões atualmente vinculados e pode adicionar ou remover vínculos usando um seletor de busca.
 - **Confirmar** — O respondente apenas reconhece que os vínculos atuais estão corretos, ou desliga a alternância para propor alterações.
@@ -77,6 +77,8 @@ Uma vez que sua pesquisa está no status **Ativa**:
 !!! note "Um cartão precisa de alguém a quem perguntar"
 
     Um cartão só é inquirido se pelo menos uma pessoa detiver nele uma das **funções de parte interessada selecionadas**. Os cartões que correspondem aos seus filtros mas não têm essa parte interessada são ignorados; o passo **Pré-visualizar e enviar** indica quantos são, para que possa atribuir responsáveis.
+
+Um inquérito também pode ser criado e enviado por uma extensão instalada — por exemplo, uma regra agendada que pede aos responsáveis de cada cartão que cumpre uma condição que o completem. Esse inquérito não mostra autor, os seus campos são os que o tipo de cartão define e comporta-se como qualquer outro: é aqui que o fecha e aplica as suas respostas. Reverter a execução da extensão em **Admin → Registo de auditoria** fecha o inquérito e retira os pedidos a que ninguém tinha ainda respondido.
 
 ## Visualizando Resultados
 
