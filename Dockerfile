@@ -108,6 +108,8 @@ COPY frontend/package.json frontend/package-lock.json frontend/xlsx-0.20.3.tgz .
 RUN npm ci
 COPY VERSION ./VERSION
 COPY frontend/ ./
+# The Vite/tsc build outgrows Node's default heap in a container.
+ENV NODE_OPTIONS=--max-old-space-size=6144
 RUN npm run build
 
 
