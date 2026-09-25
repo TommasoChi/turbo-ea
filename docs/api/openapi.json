@@ -22384,6 +22384,60 @@
         ]
       }
     },
+    "/api/v1/cards/{card_id}/display-attributes": {
+      "get": {
+        "description": "Return only the selected, schema-declared display values for one Card.",
+        "operationId": "get_display_attributes_api_v1_cards__card_id__display_attributes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fields",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Fields",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Display Attributes",
+        "tags": [
+          "cards"
+        ]
+      }
+    },
     "/api/v1/cards/{card_id}/documents": {
       "get": {
         "operationId": "list_documents_api_v1_cards__card_id__documents_get",
