@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
-import { LdvNode } from "./LayeredDependencyView";
+import { LdvNode, hostingTypePresentation } from "./LayeredDependencyView";
 import type { LdvNodeData } from "./layeredDependencyLayout";
 import { STATUS_COLORS, TIMELINE_COLORS } from "@/theme";
 
@@ -275,5 +275,47 @@ describe("LdvNode type icon placement", () => {
     // floating in from the edge for no reason.
     renderNode({ logoUrl: "/api/v1/cards/app-1/logo?v=1", lifecyclePhase: null });
     expect(parseFloat(iconPos().right)).toBeLessThan(18);
+  });
+});
+
+describe("LdvNode hosting type icon", () => {
+  it.each([
+    ["cloudSaaS", "Cloud (SaaS)", "cloud"],
+    ["cloudPaaS", "Cloud (PaaS)", "cloud"],
+    ["cloudIaaS", "Cloud (IaaS)", "cloud"],
+    ["onPremise", "On-Premises", "dns"],
+    ["externalService", "External Service", "handshake"],
+  ])("maps %s to the requested icon", (value, label, icon) => {
+    expect(hostingTypePresentation(value, label)).toEqual({ icon, tooltip: label });
+  });
+
+  it("does not map an absent or unrecognised hosting type", () => {
+    expect(hostingTypePresentation(undefined, "")).toBeUndefined();
+    expect(hostingTypePresentation("hybrid", "Hybrid")).toBeUndefined();
+  });
+
+  it("renders the hosting icon after the type icon with the value tooltip", async () => {
+    renderNode({ hostingType: { icon: "cloud", tooltip: "Cloud (SaaS)" } });
+    const typeIcon = document.querySelector(".ldv-type-icon");
+    const hostingIcon = document.querySelector(".ldv-hosting-type-icon");
+    expect(hostingIcon).toHaveAttribute("aria-label", "Cloud (SaaS)");
+    expect(typeIcon?.compareDocumentPosition(hostingIcon!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    fireEvent.mouseOver(hostingIcon!);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Cloud (SaaS)");
+  });
+
+  it("does not render a hosting icon when the node has no mapped hosting type", () => {
+    renderNode();
+    expect(document.querySelector(".ldv-hosting-type-icon")).toBeNull();
+  });
+
+  it("never renders hosting type as a textual detail line", () => {
+    renderNode({
+      extraLines: [
+        { fieldKey: "hostingType", label: "Hosting Type", value: "On-Premises" },
+      ],
+    });
+    expect(screen.queryByText("Hosting Type:")).toBeNull();
+    expect(screen.queryByText("On-Premises")).toBeNull();
   });
 });

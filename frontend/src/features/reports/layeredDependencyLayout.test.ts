@@ -144,6 +144,47 @@ describe("buildLdvFlow", () => {
     expect(result.nodes.find((node) => node.id === "data")?.parentId).toBe("group:data_object");
   });
 
+  it("uses the widest group dimension without changing content heights in uniform mode", () => {
+    const result = buildLdvFlow(
+      [
+        { id: "app", name: "Portal", type: "Application" },
+        { id: "it-1", name: "Storage", type: "ITComponent" },
+        { id: "it-2", name: "Search", type: "ITComponent" },
+        { id: "it-3", name: "Archive", type: "ITComponent" },
+        { id: "it-4", name: "Gateway", type: "ITComponent" },
+        { id: "data", name: "Invoice", type: "DataObject" },
+      ],
+      [],
+      TYPES,
+      undefined,
+      {
+        typeGroups: { Application: "application", DataObject: "data_object" },
+        groupSizeMode: "uniform",
+      },
+    );
+
+    const groups = result.nodes.filter((node) => node.type === "ldvGroup");
+    expect(new Set(groups.map((node) => node.style?.width)).size).toBe(1);
+    expect(new Set(groups.map((node) => node.style?.height)).size).toBeGreaterThan(1);
+    expect(result.nodes.filter((node) => node.type === "ldvNode")).toHaveLength(6);
+  });
+
+  it("keeps content-sized groups when groupSizeMode is omitted", () => {
+    const result = buildLdvFlow(
+      [
+        { id: "app", name: "Portal", type: "Application" },
+        { id: "it-1", name: "Storage", type: "ITComponent" },
+        { id: "it-2", name: "Search", type: "ITComponent" },
+        { id: "it-3", name: "Archive", type: "ITComponent" },
+      ],
+      [],
+      TYPES,
+    );
+
+    const groups = result.nodes.filter((node) => node.type === "ldvGroup");
+    expect(new Set(groups.map((node) => node.style?.width)).size).toBeGreaterThan(1);
+  });
+
   it("marks edges with a retired endpoint as severed, in either direction", () => {
     const nodes: GNode[] = [
       { id: "gone", name: "Gone", type: "Application", changeState: "retired" },
@@ -158,6 +199,32 @@ describe("buildLdvFlow", () => {
     const severedFlags = result.edges.map((e) => (e.data as { severed?: boolean }).severed);
     expect(severedFlags).toContain(true);
     expect(severedFlags).toContain(false);
+  });
+
+  it("marks an explicitly removed extension edge as severed", () => {
+    const nodes: GNode[] = [
+      { id: "app", name: "Application", type: "Application" },
+      { id: "itc", name: "Legacy component", type: "ITComponent" },
+    ];
+    const result = buildLdvFlow(nodes, [{
+      source: "app", target: "itc", type: "relAppToITC", changeKind: "removed",
+    }], TYPES);
+
+    expect((result.edges[0].data as { severed?: boolean }).severed).toBe(true);
+    expect((result.edges[0].data as { isRemoved?: boolean }).isRemoved).toBe(true);
+  });
+
+  it("forwards an explicitly added extension edge to the renderer", () => {
+    const nodes: GNode[] = [
+      { id: "app", name: "Application", type: "Application" },
+      { id: "itc", name: "New component", type: "ITComponent" },
+    ];
+    const result = buildLdvFlow(nodes, [{
+      source: "app", target: "itc", type: "relAppToITC", changeKind: "added",
+    }], TYPES);
+
+    expect((result.edges[0].data as { isAdded?: boolean }).isAdded).toBe(true);
+    expect((result.edges[0].data as { severed?: boolean }).severed).toBe(false);
   });
 
   it("clears the verb the edge component actually renders", () => {

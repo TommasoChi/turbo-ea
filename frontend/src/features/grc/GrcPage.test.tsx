@@ -42,9 +42,9 @@ function renderAt(path: string) {
 }
 
 describe("GrcPage", () => {
-  it("renders the GRC page title and three top-level tabs", async () => {
+  it("renders the IT Governance page title and three top-level tabs", async () => {
     renderAt("/grc");
-    expect(await screen.findByRole("heading", { name: /GRC/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /IT Governance/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Governance/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Risk/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Compliance/i })).toBeInTheDocument();

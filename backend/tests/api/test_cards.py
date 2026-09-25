@@ -164,6 +164,83 @@ class TestGetCard:
         assert response.status_code == 404
 
 
+class TestCardDisplayAttributes:
+    async def test_returns_selected_hosting_type_for_it_component(self, client, db, cards_env):
+        admin = cards_env["admin"]
+        await create_card_type(
+            db,
+            key="ITComponent",
+            label="IT Component",
+            fields_schema=[
+                {
+                    "section": "Deployment",
+                    "fields": [
+                        {
+                            "key": "hostingType",
+                            "label": "Hosting Type",
+                            "type": "single_select",
+                            "options": [{"key": "onPremise", "label": "On-premise"}],
+                        }
+                    ],
+                }
+            ],
+        )
+        card = await create_card(
+            db,
+            card_type="ITComponent",
+            name="Hosted database",
+            user_id=admin.id,
+            attributes={"hostingType": "onPremise"},
+        )
+
+        response = await client.get(
+            f"/api/v1/cards/{card.id}/display-attributes?fields=hostingType",
+            headers=auth_headers(admin),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"attributes": {"hostingType": "onPremise"}}
+
+    async def test_returns_only_selected_schema_attributes(self, client, db, cards_env):
+        admin = cards_env["admin"]
+        card = await create_card(
+            db,
+            card_type="Application",
+            name="Displayable App",
+            user_id=admin.id,
+            attributes={
+                "riskLevel": "low",
+                "website": "https://example.test",
+                "internal": "hidden",
+            },
+        )
+
+        response = await client.get(
+            f"/api/v1/cards/{card.id}/display-attributes?fields=riskLevel",
+            headers=auth_headers(admin),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"attributes": {"riskLevel": "low"}}
+
+    async def test_rejects_attribute_outside_the_card_schema(self, client, db, cards_env):
+        admin = cards_env["admin"]
+        card = await create_card(
+            db,
+            card_type="Application",
+            name="Protected App",
+            user_id=admin.id,
+            attributes={"internal": "hidden"},
+        )
+
+        response = await client.get(
+            f"/api/v1/cards/{card.id}/display-attributes?fields=internal",
+            headers=auth_headers(admin),
+        )
+
+        assert response.status_code == 422
+
+
 class TestPpmViewCardRead:
     """ppm.view alone must open an Initiative card (#1043) — and nothing else."""
 

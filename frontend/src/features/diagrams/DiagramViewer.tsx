@@ -40,6 +40,16 @@ interface DiagramData {
   data: { xml?: string; thumbnail?: string };
 }
 
+export interface DiagramViewerProps {
+  /**
+   * When supplied by an embedding consumer, render this diagram rather than
+   * reading its identity from the Core route.
+   */
+  diagramId?: string;
+  /** Render inside a host page without the route-level back affordance. */
+  embedded?: boolean;
+}
+
 const EMPTY_DIAGRAM =
   '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>';
 
@@ -89,9 +99,10 @@ function listenForCardClicks(onCardClick: (cardId: string) => void) {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export default function DiagramViewer() {
+export default function DiagramViewer({ diagramId, embedded = false }: DiagramViewerProps) {
   const { t } = useTranslation(["diagrams", "common"]);
-  const { id } = useParams<{ id: string }>();
+  const { id: routeDiagramId } = useParams<{ id: string }>();
+  const id = diagramId ?? routeDiagramId;
   const navigate = useNavigate();
   const { user } = useAuthContext();
 
@@ -192,7 +203,7 @@ export default function DiagramViewer() {
   }, [id, t]);
 
   /* ---------- Render ---------- */
-  if (!id) return <Navigate to="/diagrams" replace />;
+  if (!id) return embedded ? null : <Navigate to="/diagrams" replace />;
 
   if (loading) {
     return (
@@ -212,11 +223,11 @@ export default function DiagramViewer() {
     <Box
       sx={{
         // See DiagramEditor.tsx for the rationale — same iPad Safari fix.
-        height: "calc(100vh - 64px)",
-        "@supports (height: 100dvh)": {
+        height: embedded ? 560 : "calc(100vh - 64px)",
+        "@supports (height: 100dvh)": embedded ? undefined : {
           height: "calc(100dvh - 64px)",
         },
-        m: -3,
+        m: embedded ? 0 : -3,
         display: "flex",
         flexDirection: "column",
       }}
@@ -234,9 +245,11 @@ export default function DiagramViewer() {
           minHeight: 48,
         }}
       >
-        <IconButton size="small" onClick={() => navigate("/diagrams")}>
-          <MaterialSymbol icon="arrow_back" size={20} />
-        </IconButton>
+        {!embedded && (
+          <IconButton size="small" onClick={() => navigate("/diagrams")}>
+            <MaterialSymbol icon="arrow_back" size={20} />
+          </IconButton>
+        )}
         <Typography variant="subtitle1" fontWeight={600} noWrap sx={{ flex: 1 }}>
           {diagram.name}
         </Typography>

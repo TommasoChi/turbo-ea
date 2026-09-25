@@ -1946,3 +1946,25 @@ All container images are built from one `/Dockerfile` at the repo root using mul
 - `/*` → SPA fallback to `index.html`
 - Security headers on all responses
 - Static assets → 1-year cache with `immutable`
+
+
+## Eccezione frontend SDK DiagramViewer — 2026-09-08
+
+È autorizzata l’estensione additiva del frontend SDK per esporre alle estensioni
+un viewer Core read-only di diagrammi esistenti tramite `DiagramViewer`.
+
+Sono consentite esclusivamente modifiche a:
+
+- `frontend/src/features/diagrams/DiagramViewer.tsx`;
+- `frontend/src/lib/extensionHost.tsx`;
+- i test frontend direttamente pertinenti.
+
+La capability riceve un `diagramId`, richiede `diagrams.view` per la lettura e
+mostra l’azione di modifica solo con `diagrams.manage`. Non deve introdurre
+scritture a Card, relazioni, diagrammi, database, backend o nuove versioni SDK.
+
+Sono autorizzati: test frontend mirati, `npm run build` del solo frontend,
+costruzione dell’immagine Docker frontend e deploy/ripartenza del solo servizio
+frontend in `turbo-ea-aruba`.
+
+L’eccezione non autorizza modifiche, build, test o deploy del backend Core.

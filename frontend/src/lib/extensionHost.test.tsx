@@ -119,6 +119,22 @@ describe("extensionHost", () => {
     expect(UI_SDK_VERSION).toBe("1.19");
   });
 
+  it("forwards uniform group sizing without changing UI SDK version", async () => {
+    render(
+      <ExtensionDependencyGraph
+        nodes={[]}
+        edges={[]}
+        layerOverrides={{ groupSizeMode: "uniform" }}
+      />,
+    );
+
+    expect(await screen.findByTestId("extension-dependency-graph")).toHaveAttribute(
+      "data-layer-overrides",
+      JSON.stringify({ groupSizeMode: "uniform" }),
+    );
+    expect(UI_SDK_VERSION).toBe("1.19");
+  });
+
   it("exposes the SDK 1.6–1.8 report/dashboard surface", () => {
     initExtensionHost();
     const sdk = window.TurboEA?.sdk as Record<string, unknown>;
@@ -156,6 +172,9 @@ describe("extensionHost", () => {
     expect(sdk.CardScopeFilter).toBeDefined();
     expect(typeof sdk.useCardScope).toBe("function");
     expect(typeof sdk.applyScope).toBe("function");
+    // Additive diagram viewer: extensions can render a shared Core diagram
+    // rather than rebuilding a read-only approximation from their snapshot.
+    expect(sdk.DiagramViewer).toBeDefined();
     // SDK 1.17 — data-grid loader + create-card dialog
     expect(typeof sdk.loadAgGrid).toBe("function");
     expect(sdk.CreateCardDialog).toBeDefined();

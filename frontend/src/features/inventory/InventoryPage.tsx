@@ -53,6 +53,7 @@ import InventoryFilterSidebar, {
   tagsToFilterText,
   type Filters,
 } from "./InventoryFilterSidebar";
+import CardLogoAvatar from "@/components/CardLogoAvatar";
 import CardLogoMenu from "@/components/CardLogoMenu";
 import LogoCell, {
   INVENTORY_LOGO_ROW_HEIGHT,
@@ -2716,6 +2717,7 @@ export default function InventoryPage() {
           : (p: { data?: Card; value: string }) => {
               if (!p.data) return p.value ?? "";
               const id = p.data.id;
+              const rowType = types.find((x) => x.key === p.data!.type);
               return (
                 <Box
                   sx={{
@@ -2725,6 +2727,17 @@ export default function InventoryPage() {
                     width: "100%",
                   }}
                 >
+                  {rowType && (
+                    <CardLogoAvatar
+                      cardId={id}
+                      logoUpdatedAt={p.data.logo_updated_at}
+                      typeIcon={rowType.icon}
+                      typeColor={rowType.color}
+                      size={22}
+                      radius={1}
+                      badge={false}
+                    />
+                  )}
                   <Tooltip title={t("actions.previewCard")}>
                     <IconButton
                       size="small"

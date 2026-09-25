@@ -1028,6 +1028,45 @@ async def get_card(
     return await _card_response_with_cost_check(db, user, card)
 
 
+def _schema_attribute_keys(fields_schema: list[dict] | None) -> set[str]:
+    """Flatten CardType sections without exposing undeclared JSON attributes."""
+    keys: set[str] = set()
+    for section_or_field in fields_schema or []:
+        if not isinstance(section_or_field, dict):
+            continue
+        candidates = section_or_field.get("fields", [section_or_field])
+        if not isinstance(candidates, list):
+            continue
+        for field in candidates:
+            if isinstance(field, dict) and isinstance(field.get("key"), str):
+                keys.add(field["key"])
+    return keys
+
+
+@router.get("/{card_id}/display-attributes")
+async def get_display_attributes(
+    card_id: str,
+    fields: list[str] = Query(default=[]),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Return only the selected, schema-declared display values for one Card."""
+    card_uuid = uuid.UUID(card_id)
+    await _require_card_read(db, user, card_uuid)
+    card = await db.get(Card, card_uuid)
+    if card is None:
+        raise HTTPException(404, "Card not found")
+
+    requested = tuple(dict.fromkeys(key.strip() for key in fields if key.strip()))
+    card_type = await db.scalar(select(CardType).where(CardType.key == card.type))
+    allowed = _schema_attribute_keys(card_type.fields_schema if card_type is not None else None)
+    if not set(requested).issubset(allowed):
+        raise HTTPException(422, "Display attributes must be declared by the Card type")
+
+    attributes = dict(card.attributes or {})
+    return {"attributes": {key: attributes[key] for key in requested if key in attributes}}
+
+
 @router.get("/{card_id}/hierarchy")
 async def get_hierarchy(
     card_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)

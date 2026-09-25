@@ -75,6 +75,8 @@ export interface GEdge {
   reverse_label?: string;
   description?: string;
   attributes?: Record<string, unknown>;
+  /** Consumer-supplied scenario marker. `removed` renders as a severed red edge. */
+  changeKind?: DependencyChangeKind;
 }
 
 /**
@@ -136,6 +138,13 @@ export function filterEndOfLifeNodes(
 /*  Custom node data                                                   */
 /* ------------------------------------------------------------------ */
 
+/** Visual treatment for the optional hosting-type marker on a card. */
+export interface HostingTypePresentation {
+  icon: "cloud" | "dns" | "handshake";
+  /** The resolved (and therefore localised) hosting-type label. */
+  tooltip: string;
+}
+
 export interface LdvNodeData {
   name: string;
   typeKey: string;
@@ -159,6 +168,8 @@ export interface LdvNodeData {
   isCenter?: boolean;
   /** A card the reader expanded, pulling its relations onto the canvas. */
   isExpanded?: boolean;
+  /** Present only when `hostingType` is selected in Show on Card and recognised. */
+  hostingType?: HostingTypePresentation;
   [key: string]: unknown;
 }
 
@@ -186,6 +197,10 @@ export interface LdvEdgeData {
   /** One endpoint is retired at the viewed date: this dependency is being
    *  severed by the transformation. Rendered in the error colour. */
   severed?: boolean;
+  /** A consumer explicitly removes this relation in its TO-BE projection. */
+  isRemoved?: boolean;
+  /** A consumer explicitly adds this relation in its TO-BE projection. */
+  isAdded?: boolean;
   description?: string;
   connectedToHovered?: boolean;
   isHovered?: boolean;
@@ -250,6 +265,8 @@ export interface LayerOverrides {
   typeGroups?: Record<string, string>;
   groupOrder?: string[];
   groupLabels?: Record<string, string>;
+  /** Keeps every rendered layer container at the largest content-based width. */
+  groupSizeMode?: "content" | "uniform";
 }
 
 /** Padding inside each group boundary */
@@ -785,6 +802,13 @@ export function buildLdvFlow(
     laneGx = groupLayouts.map((gl) => Math.round((maxGroupW - gl.groupW) / 2));
   }
 
+  if (layerOverrides?.groupSizeMode === "uniform") {
+    const maxWidth = Math.max(...groupLayouts.map((group) => group.groupW));
+    groupLayouts.forEach((group) => {
+      group.groupW = maxWidth;
+    });
+  }
+
   // Pass 2: place groups vertically at their aligned (or centred) x
   const rfNodes: Node[] = [];
   let yOffset = 0;
@@ -918,6 +942,8 @@ export function buildLdvFlow(
       description: e.description,
       flipped,
       flowDirection: readFlowDir(e.attributes),
+      isRemoved: e.changeKind === "removed",
+      isAdded: e.changeKind === "added",
     };
   });
 
@@ -975,9 +1001,12 @@ export function buildLdvFlow(
     //  - reverse: arrow at source end only — data flows target → source
     //  - bidirectional: arrows on both ends
     //  - unset: keep the historical default (markerEnd only)
-    const severed =
-      changeStateById.get(e.source) === "retired" || changeStateById.get(e.target) === "retired";
-    const arrow = { type: "arrowclosed" as const, color: severed ? "#d32f2f" : "#888" };
+    const severed = e.isRemoved
+      || changeStateById.get(e.source) === "retired" || changeStateById.get(e.target) === "retired";
+    const arrow = {
+      type: "arrowclosed" as const,
+      color: severed ? "#d32f2f" : e.isAdded ? "#2e7d32" : "#888",
+    };
     const markerStart =
       e.flowDirection === "reverse" || e.flowDirection === "bidirectional" ? arrow : undefined;
     const markerEnd =
@@ -996,6 +1025,8 @@ export function buildLdvFlow(
         flowDirection: e.flowDirection,
         description: e.description,
         severed,
+        isRemoved: e.isRemoved,
+        isAdded: e.isAdded,
         pathOffset: routes[i].pathOffset,
         minOffset: routes[i].minOffset,
         labelT: routes[i].labelT,

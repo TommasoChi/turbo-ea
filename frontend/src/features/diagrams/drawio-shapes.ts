@@ -4903,6 +4903,19 @@ export interface DiagramCardInput {
   y: number;
   w: number;
   h: number;
+  marker?: "MODIFY" | "REMOVE";
+}
+
+export interface DiagramFreeformInput {
+  id: string;
+  name: string;
+  type: string;
+  changeKind: "NEW";
+  color: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 /** A relation edge between two cards on a generated diagram. */
@@ -4952,6 +4965,7 @@ export function buildLdvDiagramXml(
   cards: DiagramCardInput[],
   rels: DiagramRelInput[],
   layers: DiagramLayerInput[],
+  freeforms: DiagramFreeformInput[] = [],
 ): string {
   const r = (n: number) => Math.round(n);
   const parts: string[] = [];
@@ -4989,7 +5003,7 @@ export function buildLdvDiagramXml(
   cards.forEach((c, i) => {
     const cellId = `card-${i}-${c.cardId.slice(0, 8)}`;
     cellIdByCard.set(c.cardId, cellId);
-    const { style, label } = buildCardCellData({
+    const { style: baseStyle, label: baseLabel } = buildCardCellData({
       cardId: c.cardId,
       cardType: c.cardType,
       name: c.name,
@@ -5006,6 +5020,13 @@ export function buildLdvDiagramXml(
     // Two escaping layers, in this order: `composeCardLabel` escaped for HTML
     // (it is rendered under `html=1`), `escapeXml` now escapes for the XML
     // attribute. Reverse them and every `&` in a card name renders as `&amp;`.
+    const marker = c.marker
+      ? `<div style="font-size:10px;font-weight:700;color:${c.marker === "REMOVE" ? "#B3261E" : "#9A6700"}">${c.marker}</div>`
+      : "";
+    const style = c.marker
+      ? `${baseStyle};strokeColor=${c.marker === "REMOVE" ? "#B3261E" : "#F9A825"};strokeWidth=3;`
+      : baseStyle;
+    const label = marker ? `${marker}${baseLabel}` : baseLabel;
     parts.push(
       `<object id="${escapeXml(cellId)}" label="${escapeXml(label)}" ` +
         `cardName="${escapeXml(c.name)}" ` +
@@ -5016,6 +5037,19 @@ export function buildLdvDiagramXml(
         `<mxCell style="${escapeXml(style)}" vertex="1" parent="1">` +
         `<mxGeometry x="${r(c.x)}" y="${r(c.y)}" width="${r(c.w)}" height="${r(h)}" ` +
         `as="geometry"/></mxCell></object>`,
+    );
+  });
+
+  freeforms.forEach((shape, i) => {
+    const cellId = `new-${i}-${shape.id.slice(0, 8)}`;
+    cellIdByCard.set(shape.id, cellId);
+    const label = `<div style="font-size:10px;font-weight:700;color:#1B5E20">NEW</div><div style="font-weight:700">${escapeHtml(shape.name)}</div><div style="font-size:11px;color:#4F5B50">${escapeHtml(shape.type)}</div>`;
+    const style = "rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;strokeWidth=3;fontColor=#1B5E20;align=center;verticalAlign=middle;";
+    parts.push(
+      `<object id="${escapeXml(cellId)}" label="${escapeXml(label)}" scenarioChange="NEW">` +
+      `<mxCell style="${escapeXml(style)}" vertex="1" parent="1">` +
+      `<mxGeometry x="${r(shape.x)}" y="${r(shape.y)}" width="${r(shape.w)}" height="${r(shape.h)}" as="geometry"/>` +
+      `</mxCell></object>`,
     );
   });
 

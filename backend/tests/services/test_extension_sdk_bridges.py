@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -389,9 +390,15 @@ async def test_dependency_subgraph_projects_visible_bfs_without_database_fixture
     )
     context = build_request_context("technology-what-if", db, _bridge_actor())
 
-    with patch(
-        "app.services.extensions.bridges.PermissionService.check_permission",
-        new=AsyncMock(return_value=True),
+    with (
+        patch(
+            "app.services.extensions.bridges.PermissionService.check_permission",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "app.services.extensions.bridges.logo_updated_map",
+            new=AsyncMock(return_value={}),
+        ),
     ):
         graph = await _read_dependency_graph(context, root.id)
 
@@ -406,6 +413,81 @@ async def test_dependency_subgraph_projects_visible_bfs_without_database_fixture
     assert root_node.attributes == {"technology": "PostgreSQL", "version": "14"}
     assert graph.edges[1].attributes == {"usageType": "runtime"}
     assert db.execute.await_count == 6
+
+
+async def test_dependency_subgraph_projects_native_card_logo_timestamp_without_blob_access():
+    root = _card(card_type="ITComponent", name="SAP")
+    db = SimpleNamespace(
+        execute=AsyncMock(side_effect=[_query_result(scalar=root), _query_result(rows=[])])
+    )
+    context = build_request_context("technology-what-if", db, _bridge_actor())
+    timestamp = datetime(2026, 9, 8, 9, 30, tzinfo=timezone.utc)
+
+    with (
+        patch(
+            "app.services.extensions.bridges.PermissionService.check_permission",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "app.services.extensions.bridges.logo_updated_map",
+            new=AsyncMock(return_value={root.id: timestamp}),
+        ) as logos,
+    ):
+        graph = await _read_dependency_graph(context, root.id, max_depth=1)
+
+    assert graph.nodes[0].logo_updated_at == timestamp.isoformat()
+    logos.assert_awaited_once_with(db, [root])
+
+
+async def test_diagram_artifact_bridge_creates_grouped_editable_diagram(db):
+    await create_role(db, key="admin", permissions={"*": True})
+    actor = await create_user(db, role="admin")
+    await create_card_type(db, key="Application", label="Application")
+    card = await create_card(db, card_type="Application", name="SAP", user_id=actor.id)
+    context = build_request_context("technology-what-if", db, actor)
+
+    group = await context.diagrams.create_group("Cloud Backup")
+    diagram = await context.diagrams.create_diagram(
+        "Cloud Backup — AS-IS",
+        {"xml": "<mxGraphModel/>"},
+        (card.id,),
+        group.id,
+    )
+
+    assert diagram.name == "Cloud Backup — AS-IS"
+    assert diagram.card_ids == (card.id,)
+    assert diagram.group_ids == (group.id,)
+
+
+async def test_diagram_artifact_bridge_deletes_managed_diagram_idempotently(db):
+    await create_role(db, key="admin", permissions={"*": True})
+    actor = await create_user(db, role="admin")
+    context = build_request_context("technology-what-if", db, actor)
+    group = await context.diagrams.create_group("Cloud Backup")
+    diagram = await context.diagrams.create_diagram(
+        "Cloud Backup — Scenario A",
+        {"xml": "<mxGraphModel/>"},
+        (),
+        group.id,
+    )
+
+    assert await context.diagrams.delete_diagram(diagram.id) is True
+    assert await context.diagrams.get_diagram(diagram.id) is None
+    assert await context.diagrams.delete_diagram(diagram.id) is False
+
+
+def test_extension_context_exposes_public_diagram_artifact_gateway():
+    context = build_request_context(
+        "technology-what-if",
+        SimpleNamespace(),
+        _bridge_actor(),
+    )
+
+    assert callable(context.diagrams.create_group)
+    assert callable(context.diagrams.create_diagram)
+    assert callable(context.diagrams.rename_group)
+    assert callable(context.diagrams.rename_diagram)
+    assert callable(context.diagrams.delete_diagram)
 
 
 async def test_dependency_subgraph_marks_permission_filtered_neighbor_partial_without_db():
@@ -433,9 +515,15 @@ async def test_dependency_subgraph_marks_permission_filtered_neighbor_partial_wi
     )
     context = build_request_context("technology-what-if", db, _bridge_actor())
 
-    with patch(
-        "app.services.extensions.bridges.PermissionService.check_permission",
-        new=AsyncMock(side_effect=[True, False]),
+    with (
+        patch(
+            "app.services.extensions.bridges.PermissionService.check_permission",
+            new=AsyncMock(side_effect=[True, False]),
+        ),
+        patch(
+            "app.services.extensions.bridges.logo_updated_map",
+            new=AsyncMock(return_value={}),
+        ),
     ):
         graph = await _read_dependency_graph(context, root.id)
 
@@ -658,6 +746,36 @@ async def test_resolve_cards_validates_subtype_and_filters_snapshot_attributes(d
         assert exc.code == "reference_subtype_mismatch"
     else:
         raise AssertionError("A subtype mismatch must fail closed")
+
+
+@pytest.mark.asyncio
+async def test_resolve_cards_returns_only_explicitly_selected_metamodel_display_attributes(db):
+    await create_role(db, key="admin", permissions={"*": True})
+    actor = await create_user(db, role="admin")
+    await create_card_type(
+        db,
+        key="ITComponent",
+        label="IT Component",
+        fields_schema=[{"key": "hostType", "label": "Host type", "type": "text"}],
+    )
+    card = await create_card(
+        db,
+        card_type="ITComponent",
+        name="Database",
+        user_id=actor.id,
+        attributes={"hostType": "Managed service", "secret": "not-displayable"},
+    )
+    context = build_request_context("product-technology-what-if", db, actor)
+
+    selected = await context.core_query.resolve_cards(
+        [CardRef(id=card.id, expected_type="ITComponent", display_attribute_keys=("hostType",))]
+    )
+
+    assert selected[0].attributes == {"hostType": "Managed service"}
+    with pytest.raises(ExtensionBridgeError, match="display attributes"):
+        await context.core_query.resolve_cards(
+            [CardRef(id=card.id, expected_type="ITComponent", display_attribute_keys=("secret",))]
+        )
 
 
 async def test_core_query_gateway_fails_closed_without_inventory_permission(db):
@@ -1254,7 +1372,7 @@ async def test_core_query_reads_visible_direct_card_hierarchy_for_inventory_type
 
 
 def test_dependency_query_allowlists_include_architecture_data_and_interface_cards():
-    assert {"DataObject", "Interface"} <= bridges._DEPENDENCY_CARD_TYPES
+    assert {"DataObject", "Interface", "BusinessProcess"} <= bridges._DEPENDENCY_CARD_TYPES
     assert {
         "relAppToDataObj",
         "relITCToDataObj",
@@ -1262,7 +1380,78 @@ def test_dependency_query_allowlists_include_architecture_data_and_interface_car
         "relAppToInterface",
         "relInterfaceToDataObj",
         "relInterfaceToITC",
+        "relProcessToBizCtx",
+        "relProcessToApp",
+        "relProcessToITC",
+        "relProcessToDataObj",
     } <= bridges._DEPENDENCY_RELATION_TYPES
+
+
+async def test_dependency_subgraph_accepts_business_process_to_it_component_relation(db):
+    await create_role(db, key="admin", permissions={"*": True})
+    actor = await create_user(db, role="admin")
+    await create_card_type(db, key="BusinessProcess", label="Business Process")
+    await create_card_type(db, key="ITComponent", label="IT Component")
+    process = await create_card(
+        db,
+        card_type="BusinessProcess",
+        subtype="process",
+        name="Gestione fatture",
+        user_id=actor.id,
+    )
+    component = await create_card(
+        db, card_type="ITComponent", name="Archivio fatture", user_id=actor.id
+    )
+    await create_relation_type(
+        db,
+        key="relProcessToITC",
+        source_type_key="BusinessProcess",
+        target_type_key="ITComponent",
+    )
+    await create_relation(
+        db, type_key="relProcessToITC", source_id=process.id, target_id=component.id
+    )
+    context = build_request_context("product-technology-what-if", db, actor)
+
+    graph = await context.core_query.read_dependency_subgraph(
+        process.id,
+        allowed_card_types=("BusinessProcess", "ITComponent"),
+        allowed_relation_types=("relProcessToITC",),
+        max_depth=1,
+    )
+
+    assert {node.id for node in graph.nodes} == {process.id, component.id}
+    assert [(edge.source_id, edge.target_id, edge.type) for edge in graph.edges] == [
+        (process.id, component.id, "relProcessToITC"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_core_query_lists_visible_runtime_card_type_definitions(db):
+    await create_role(db, key="admin", permissions={"*": True})
+    actor = await create_user(db, role="admin")
+    await create_card_type(
+        db,
+        key="ITComponent",
+        label="IT Component",
+        subtypes=[
+            {"key": "database", "label": "Database"},
+            {"key": "runtime", "label": "Runtime"},
+        ],
+    )
+    await create_card_type(
+        db,
+        key="HiddenType",
+        label="Hidden",
+        is_hidden=True,
+    )
+    context = build_request_context("product-technology-what-if", db, actor)
+
+    definitions = await context.core_query.list_card_type_definitions(("ITComponent", "HiddenType"))
+
+    assert [(item.key, item.label, item.subtypes) for item in definitions] == [
+        ("ITComponent", "IT Component", (("database", "Database"), ("runtime", "Runtime"))),
+    ]
 
 
 async def _organization_links_context(db):

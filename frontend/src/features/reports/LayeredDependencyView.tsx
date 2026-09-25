@@ -78,6 +78,7 @@ import type { CardType } from "@/types";
 import {
   buildLdvDiagramXml,
   type DiagramCardInput,
+  type DiagramFreeformInput,
   type DiagramRelInput,
   type DiagramLayerInput,
 } from "@/features/diagrams/drawio-shapes";
@@ -92,6 +93,7 @@ import {
   type DependencyChangeKind,
   type GEdge,
   type LdvNodeData,
+  type HostingTypePresentation,
   type LdvGroupData,
   type LdvEdgeData,
   type LayerOverrides,
@@ -105,6 +107,9 @@ import LinkChangeIcon from "./LinkChangeIcon";
 import { isPresentAtDate } from "./timelineRange";
 import type { TimelineChange } from "./timelineRange";
 import { STATUS_COLORS, TIMELINE_COLORS } from "@/theme/tokens";
+
+/** A display line can retain its attribute identity for renderer-only rules. */
+type LdvDisplayLine = DisplayLine & { fieldKey?: string };
 
 /* ------------------------------------------------------------------ */
 /*  Card display settings (persisted, shared store)                    */
@@ -176,6 +181,13 @@ const LOGO_INSET = 4;
 const DOT_INSET = 6;
 const DOT_BOX = 9 + 1.5 * 2;
 const TYPE_ICON_RIGHT_BESIDE_DOT = DOT_INSET + DOT_BOX + 3;
+const CARD_CHROME_ICON_GAP = 6;
+const CARD_CHROME_ICON_WIDTH = 16;
+const TYPE_ICON_RIGHT_BESIDE_HOSTING =
+  TYPE_ICON_RIGHT_BESIDE_DOT + CARD_CHROME_ICON_WIDTH + CARD_CHROME_ICON_GAP;
+const TYPE_ICON_RIGHT_WITHOUT_DOT_BESIDE_HOSTING =
+  DOT_INSET + CARD_CHROME_ICON_WIDTH + CARD_CHROME_ICON_GAP;
+const HOSTING_ICON_LEFT = 6 + CARD_CHROME_ICON_WIDTH + CARD_CHROME_ICON_GAP;
 
 /**
  * Where the card's text starts when a logo is present: clear of the top band
@@ -212,6 +224,31 @@ const HANDLE_POSITIONS = {
 // Shared with every other card-type color consumer — see lib/color.ts for the
 // luminance-gating rationale. Re-exported for existing importers.
 export { readableTypeColor };
+
+const HOSTING_TYPE_ICONS: Record<string, HostingTypePresentation["icon"]> = {
+  cloudSaaS: "cloud",
+  "Cloud (SaaS)": "cloud",
+  cloudPaaS: "cloud",
+  "Cloud (PaaS)": "cloud",
+  cloudIaaS: "cloud",
+  "Cloud (IaaS)": "cloud",
+  onPremise: "dns",
+  "On-Premise": "dns",
+  "On-Premises": "dns",
+  externalService: "handshake",
+  "External Service": "handshake",
+};
+
+/** Resolve the optional hosting marker from a persisted value or its label. */
+export function hostingTypePresentation(
+  rawValue: unknown,
+  resolvedLabel: string,
+): HostingTypePresentation | undefined {
+  if (!resolvedLabel || resolvedLabel === EMPTY_VALUE) return undefined;
+  const key = String(rawValue ?? "").trim();
+  const icon = HOSTING_TYPE_ICONS[key] ?? HOSTING_TYPE_ICONS[resolvedLabel];
+  return icon ? { icon, tooltip: resolvedLabel } : undefined;
+}
 
 export interface ChangeKindPresentation {
   badgeKey: string | null;
@@ -310,10 +347,13 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
   const logoSrc = (data.logoUrl as string | undefined) ?? null;
   const logoUrl = logoSrc && logoFailed !== logoSrc ? logoSrc : null;
   const handleLogoError = useCallback(() => setLogoFailed(logoSrc), [logoSrc]);
+  const hostingType = data.hostingType;
 
   // Display extensions injected by the parent (see rfNodes memo)
   const lifecyclePhase = (data.lifecyclePhase as string | null | undefined) ?? null;
-  const extraLines = (data.extraLines as DisplayLine[] | undefined) ?? [];
+  const extraLines = ((data.extraLines as LdvDisplayLine[] | undefined) ?? []).filter(
+    (line) => line.fieldKey !== "hostingType",
+  );
   const showType = data.showType !== false;
   const detailText = (data.detailText as string | undefined) ?? data.name;
   const dotColor = lifecyclePhase ? PHASE_DOT[lifecyclePhase] ?? "#9e9e9e" : null;
@@ -563,12 +603,43 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
             pointerEvents: "none",
             top: 5,
             ...(logoUrl
-              ? { right: dotColor ? TYPE_ICON_RIGHT_BESIDE_DOT : DOT_INSET }
+              ? {
+                  right: hostingType
+                    ? dotColor
+                      ? TYPE_ICON_RIGHT_BESIDE_HOSTING
+                      : TYPE_ICON_RIGHT_WITHOUT_DOT_BESIDE_HOSTING
+                    : dotColor
+                      ? TYPE_ICON_RIGHT_BESIDE_DOT
+                      : DOT_INSET,
+                }
               : { left: 6 }),
           }}
         >
           <MaterialSymbol icon={data.typeIcon} size={16} color={accent} />
         </Box>
+      )}
+      {/* Hosting type is an optional card detail, not a second card type.  It
+          follows the card type in the chrome row and retains the resolved
+          field value as an accessible MUI tooltip. */}
+      {hostingType && (
+        <Tooltip title={hostingType.tooltip} arrow>
+          <Box
+            className="ldv-hosting-type-icon"
+            aria-label={hostingType.tooltip}
+            sx={{
+              position: "absolute",
+              display: "flex",
+              lineHeight: 0,
+              opacity: 0.9,
+              top: 5,
+              ...(logoUrl
+                ? { right: dotColor ? TYPE_ICON_RIGHT_BESIDE_DOT : DOT_INSET }
+                : { left: HOSTING_ICON_LEFT }),
+            }}
+          >
+            <MaterialSymbol icon={hostingType.icon} size={16} color={accent} />
+          </Box>
+        </Tooltip>
       )}
       {/* Lifecycle status dot (top-right corner). Its size and inset are the
           constants the type icon measures itself against, so moving one moves
@@ -951,8 +1022,11 @@ const LdvEdgeComponent = memo(
     // colour even while hovered — the highlight bumps its width instead, so
     // "this dependency is going away" never reads as a healthy blue link.
     const severed = edgeData?.severed === true;
-    const baseColor = severed ? STATUS_COLORS.error : isDark ? "#aaa" : "#777";
-    const hoverColor = severed ? STATUS_COLORS.error : isDark ? "#4fc3f7" : "#1976d2";
+    const removed = edgeData?.isRemoved === true;
+    const added = edgeData?.isAdded === true;
+    const changeColor = severed ? STATUS_COLORS.error : added ? STATUS_COLORS.success : undefined;
+    const baseColor = changeColor ?? (isDark ? "#aaa" : "#777");
+    const hoverColor = changeColor ?? (isDark ? "#4fc3f7" : "#1976d2");
     const color = active ? hoverColor : baseColor;
 
     const rawOffset = edgeData?.pathOffset ?? 20;
@@ -1040,12 +1114,12 @@ const LdvEdgeComponent = memo(
     const label = edgeData?.relLabel || "";
     const labelT = edgeData?.labelT ?? 0.5;
     const labelBg = isDark ? "#121212" : "#ffffff";
-    const labelColor = active
+    const labelColor = changeColor ?? (active
       ? (isDark ? "#4fc3f7" : "#1976d2")
-      : (isDark ? "#aaa" : "#666");
-    const labelBorder = active
+      : (isDark ? "#aaa" : "#666"));
+    const labelBorder = changeColor ?? (active
       ? (isDark ? "#4fc3f7" : "#1976d2")
-      : (isDark ? "#444" : "#ccc");
+      : (isDark ? "#444" : "#ccc"));
 
     // Node + group-label bounding boxes for label-overlap avoidance, computed
     // once in the parent and shared via context (see LdvObstaclesContext).
@@ -1060,7 +1134,7 @@ const LdvEdgeComponent = memo(
     const displayLabel = label.length > maxChars
       ? label.slice(0, maxChars - 1) + "\u2026"
       : label;
-    const labelW = displayLabel.length * 6.5 + 16 + (flowDir ? 17 : 0);
+    const labelW = displayLabel.length * 6.5 + 16 + (flowDir ? 17 : 0) + ((removed || added) ? 50 : 0);
     const labelH = 20;
     const margin = 6;
 
@@ -1163,6 +1237,14 @@ const LdvEdgeComponent = memo(
               }}
             >
               {flowDir && <LdvDirectionArrow dir={flowDir} />}
+              {removed && <span style={{
+                background: STATUS_COLORS.error, color: "#fff", borderRadius: 3,
+                fontSize: 9, fontWeight: 700, lineHeight: "14px", padding: "0 3px",
+              }}>REMOVE</span>}
+              {added && <span style={{
+                background: STATUS_COLORS.success, color: "#fff", borderRadius: 3,
+                fontSize: 9, fontWeight: 700, lineHeight: "14px", padding: "0 3px",
+              }}>NEW</span>}
               <span>{displayLabel}</span>
             </div>
           </EdgeLabelRenderer>
@@ -1241,8 +1323,54 @@ interface Props {
   /** When true, show the "Create diagram" toolbar action (gated on `diagrams.manage`
    *  by the parent). Only enable in consumers whose nodes are real inventory cards. */
   canCreateDiagram?: boolean;
+  onCreateDiagram?: (draft: {
+    name: string;
+    data: Record<string, unknown>;
+    cardIds: string[];
+  }) => Promise<{ id: string }>;
+  managedDiagramId?: string | null;
   /** Optional consumer-scoped remapping of DependencyGraph groups. */
   layerOverrides?: LayerOverrides;
+}
+
+/**
+ * Keep a card-detail response inside the graph's presentation boundary.  The
+ * graph never renders or retains an attribute which the reader did not choose
+ * in Show on Card.
+ */
+export function pickSelectedDisplayAttributes(
+  attributes: Record<string, unknown> | undefined,
+  selectedKeys: readonly string[],
+): Record<string, unknown> {
+  if (!attributes || !selectedKeys.length) return {};
+  return Object.fromEntries(
+    selectedKeys
+      .filter((key) => Object.prototype.hasOwnProperty.call(attributes, key))
+      .map((key) => [key, attributes[key]]),
+  );
+}
+
+/**
+ * The display-attributes endpoint validates a request against one Card type.
+ * A shared Show on Card choice must therefore be narrowed before requesting a
+ * particular node: `hostingType` is valid for an IT Component, for example,
+ * but is not automatically an Application attribute.
+ */
+export function declaredDisplayFieldKeys(
+  selectedKeys: readonly string[],
+  cardType: Pick<CardType, "fields_schema"> | undefined,
+): string[] {
+  const declared = new Set<string>();
+  for (const sectionOrField of cardType?.fields_schema ?? []) {
+    const fields = sectionOrField.fields ?? [sectionOrField];
+    for (const field of fields) declared.add(field.key);
+  }
+  return selectedKeys.filter((key) => declared.has(key));
+}
+
+/** `hostingType` is represented by its dedicated icon and tooltip, not a row. */
+export function visibleCardDetailFieldKeys(selectedKeys: readonly string[]): string[] {
+  return selectedKeys.filter((key) => key !== "hostingType");
 }
 
 /* ------------------------------------------------------------------ */
@@ -1271,6 +1399,8 @@ function LayeredDependencyInner({
   pulseCards,
   openInReportHref,
   canCreateDiagram,
+  onCreateDiagram,
+  managedDiagramId,
   layerOverrides,
 }: Props) {
   const { t } = useTranslation(["reports", "common"]);
@@ -1282,6 +1412,51 @@ function LayeredDependencyInner({
 
   /* ---- Card display settings (persisted, shared with the card-detail section) ---- */
   const [settings, updateSettings] = useLdvSettings();
+  const [selectedDisplayAttributes, setSelectedDisplayAttributes] = useState<
+    Map<string, Record<string, unknown>>
+  >(new Map());
+
+  const selectedDisplayKeys = useMemo(
+    () => Array.from(new Set(settings.extraFields)).filter(Boolean),
+    [settings.extraFields],
+  );
+  const selectedDisplayKeySignature = selectedDisplayKeys.join("\u0000");
+  const cardTypeByKey = useMemo(() => new Map(types.map((type) => [type.key, type])), [types]);
+
+  // Extension graphs intentionally carry only their small snapshot projection.
+  // When the user opts into extra lines, resolve the visible cards through the
+  // native, permission-checked Card endpoint and immediately retain only those
+  // selected lines in this component's local state.
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedDisplayKeys.length) {
+      setSelectedDisplayAttributes(new Map());
+      return () => { cancelled = true; };
+    }
+    void Promise.all(
+      rawNodes.map(async (node) => {
+        const requestedKeys = declaredDisplayFieldKeys(
+          selectedDisplayKeys,
+          cardTypeByKey.get(node.type),
+        );
+        if (!requestedKeys.length) return [node.id, {}] as const;
+        try {
+          const params = new URLSearchParams();
+          for (const key of requestedKeys) params.append("fields", key);
+          const card = await api.get<{ attributes?: Record<string, unknown> }>(
+            `/cards/${node.id}/display-attributes?${params.toString()}`,
+          );
+          return [node.id, pickSelectedDisplayAttributes(card.attributes, requestedKeys)] as const;
+        } catch {
+          // Keep the original snapshot when a card is no longer visible.
+          return [node.id, {}] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setSelectedDisplayAttributes(new Map(entries));
+    });
+    return () => { cancelled = true; };
+  }, [rawNodes, selectedDisplayKeySignature, cardTypeByKey]);
 
   /* ---- Hide end-of-life related cards unless toggled on (centre always kept) ---- */
   const { nodes, edges } = useMemo(
@@ -1320,7 +1495,19 @@ function LayeredDependencyInner({
   );
 
   /* ---- Original card data (attributes/lifecycle) by id + field catalogue ---- */
-  const gnodeById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  const gnodeById = useMemo(
+    () => new Map(nodes.map((n) => [
+      n.id,
+      {
+        ...n,
+        attributes: {
+          ...(n.attributes ?? {}),
+          ...(selectedDisplayAttributes.get(n.id) ?? {}),
+        },
+      },
+    ])),
+    [nodes, selectedDisplayAttributes],
+  );
 
   // Minimalistic hierarchy markers: per card, whether it has a parent / children
   // that are NOT currently on the diagram (so the marker points to something the
@@ -1487,7 +1674,11 @@ function LayeredDependencyInner({
         // ligatures that html-to-image renders as their raw icon name (e.g.
         // "apps"). The card keeps its colour, label and lifecycle dot.
         filter: (node: HTMLElement) =>
-          !(node.classList && node.classList.contains("ldv-type-icon")),
+          !(
+            node.classList &&
+            (node.classList.contains("ldv-type-icon") ||
+              node.classList.contains("ldv-hosting-type-icon"))
+          ),
         // Card logos are real same-origin <img>s, so html-to-image inlines them
         // and they export properly. Should one fail to fetch, this 1×1
         // transparent GIF is what lands in its place — a broken-image glyph
@@ -1563,19 +1754,28 @@ function LayeredDependencyInner({
       };
 
       const cards: DiagramCardInput[] = [];
+      const freeforms: DiagramFreeformInput[] = [];
       const layers: DiagramLayerInput[] = [];
       const included = new Set<string>();
       for (const n of live) {
         if (n.type === "ldvNode") {
           const d = n.data as LdvNodeData;
-          if (d.proposed || d.changeKind) continue; // TO-BE nodes may not have inventory ids
           const p = absOf(n);
-          cards.push({
-            cardId: n.id,
-            cardType: d.typeKey,
-            name: d.name,
-            color: d.typeColor,
-            icon: d.typeIcon,
+          if (d.proposed || d.changeKind === "added") {
+            freeforms.push({
+              id: n.id, name: d.name, type: d.typeLabel || d.typeKey,
+              changeKind: "NEW", color: d.typeColor,
+              x: p.x, y: p.y,
+              w: (n.style?.width as number) ?? LDV_NODE_W,
+              h: (n.style?.height as number) ?? LDV_NODE_H,
+            });
+          } else {
+            cards.push({
+              cardId: n.id,
+              cardType: d.typeKey,
+              name: d.name,
+              color: d.typeColor,
+              icon: d.typeIcon,
             // Carry across exactly what the reader is looking at. `extraLines`
             // already holds the subtype row and the picked attribute rows,
             // resolved and formatted; the type row is rendered separately on an
@@ -1586,11 +1786,13 @@ function LayeredDependencyInner({
                 : []),
               ...((d.extraLines as DisplayLine[] | undefined) ?? []),
             ],
-            x: p.x,
-            y: p.y,
-            w: (n.style?.width as number) ?? LDV_NODE_W,
-            h: (n.style?.height as number) ?? LDV_NODE_H,
-          });
+              x: p.x,
+              y: p.y,
+              w: (n.style?.width as number) ?? LDV_NODE_W,
+              h: (n.style?.height as number) ?? LDV_NODE_H,
+              marker: d.changeKind === "modified" ? "MODIFY" : d.changeKind === "removed" ? "REMOVE" : undefined,
+            });
+          }
           included.add(n.id);
         } else if (n.type === "ldvGroup") {
           const d = n.data as LdvGroupData;
@@ -1634,20 +1836,24 @@ function LayeredDependencyInner({
         });
       }
 
-      if (cards.length === 0) {
+      if (cards.length + freeforms.length === 0) {
         setCreateError(true);
         setCreating(false);
         return;
       }
 
-      const xml = buildLdvDiagramXml(cards, rels, layers);
-      const created = await api.post<{ id: string }>("/diagrams", {
+      const xml = buildLdvDiagramXml(cards, rels, layers, freeforms);
+      const payload = {
         name,
         // Seed the diagram's own display settings from the report's, so the
         // editor's card-display dropdown opens pre-set to what was on screen
         // and a later re-apply reproduces the same rows.
         data: { xml, cardLabels: toCardLabels(settings) },
-      });
+        cardIds: cards.map((card) => card.cardId),
+      };
+      const created = onCreateDiagram
+        ? await onCreateDiagram(payload)
+        : await api.post<{ id: string }>("/diagrams", payload);
       setCreateOpen(false);
       navigate(`/diagrams/${created.id}/edit`);
     } catch {
@@ -1655,7 +1861,7 @@ function LayeredDependencyInner({
     } finally {
       setCreating(false);
     }
-  }, [createName, creating, getNodes, rfEdges, navigate, settings, t]);
+  }, [createName, creating, getNodes, rfEdges, navigate, onCreateDiagram, settings, t]);
 
   // ReactFlow's `fitView` prop only fits on the initial render. When the parent
   // navigates to a new centre, the new graph is laid out at different coordinates
@@ -1740,7 +1946,7 @@ function LayeredDependencyInner({
       const phase = settings.showLifecycle ? getCurrentPhase(g?.lifecycle, asOfMs) : null;
 
       // Resolve every chosen extra field to a label/value line (skips empties).
-      const lines: DisplayLine[] = [];
+      const lines: LdvDisplayLine[] = [];
       const subtypeKey = (n.data as LdvNodeData).subtypeKey;
       if (settings.showSubtype && subtypeKey) {
         lines.push({
@@ -1748,11 +1954,11 @@ function LayeredDependencyInner({
           value: subtypeLabel((n.data as LdvNodeData).typeKey, subtypeKey),
         });
       }
-      for (const fk of settings.extraFields) {
+      for (const fk of visibleCardDetailFieldKeys(settings.extraFields)) {
         const meta = fieldMetaByKey.get(fk);
         const value = formatVal(g?.attributes?.[fk], meta);
         if (value === EMPTY_VALUE) continue;
-        lines.push({ label: meta ? fieldLabel(meta) : fk, value });
+        lines.push({ fieldKey: fk, label: meta ? fieldLabel(meta) : fk, value });
       }
 
       // Plain-text tooltip (native title) with the full detail set.
@@ -1783,6 +1989,14 @@ function LayeredDependencyInner({
           settings.showCardLogos && g?.logo_updated_at
             ? cardLogoUrl(n.id, g.logo_updated_at)
             : null,
+        // Keep the marker governed by Show on Card, and use exactly the same
+        // metadata formatter as the visible field line for its tooltip.
+        hostingType: settings.extraFields.includes("hostingType")
+          ? hostingTypePresentation(
+              g?.attributes?.hostingType,
+              formatVal(g?.attributes?.hostingType, fieldMetaByKey.get("hostingType")),
+            )
+          : undefined,
       };
     },
     [
@@ -2123,9 +2337,9 @@ function LayeredDependencyInner({
             </IconButton>
           </Tooltip>
           {canCreateDiagram && (
-            <Tooltip title={t("dependency.createDiagram")} arrow>
-              <IconButton size="small" onClick={openCreateDialog}>
-                <MaterialSymbol icon="note_add" size={19} />
+            <Tooltip title={managedDiagramId ? "Open diagram" : t("dependency.createDiagram")} arrow>
+              <IconButton size="small" onClick={managedDiagramId ? () => navigate(`/diagrams/${managedDiagramId}/edit`) : openCreateDialog}>
+                <MaterialSymbol icon={managedDiagramId ? "open_in_new" : "note_add"} size={19} />
               </IconButton>
             </Tooltip>
           )}

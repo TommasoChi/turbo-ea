@@ -227,6 +227,10 @@ def test_sdk_1_5_exposes_read_only_direct_card_hierarchy_contract():
     assert sdk.DependencySubgraph.__dataclass_params__.frozen is True
 
 
+def test_sdk_1_5_exposes_read_only_runtime_card_type_definitions():
+    assert callable(getattr(sdk.CoreQueryGateway, "list_card_type_definitions", None))
+
+
 def test_dependency_subgraph_is_an_immutable_tuple_projection():
     graph = sdk.DependencySubgraph(root_id=UUID(int=1), nodes=(), edges=(), partial=False)
 

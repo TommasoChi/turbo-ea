@@ -12,6 +12,9 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
+from app.models.card_type import CardType
+from app.models.diagram import Diagram, diagram_cards
+from app.models.diagram_group import DiagramGroup, diagram_group_members
 from app.models.document import Document
 from app.models.event import Event
 from app.models.file_attachment import FileAttachment
@@ -21,15 +24,20 @@ from app.models.relation_type import RelationType
 from app.models.stakeholder import Stakeholder
 from app.models.user import User
 from app.schemas.common import DocumentCreate
+from app.services.card_logo_service import logo_updated_map
 from app.services.event_bus import event_bus
 from app.services.extensions.sdk import (
     ApplicationCandidate,
     AuditEvent,
     CardHierarchy,
     CardRef,
+    CardTypeDefinition,
     DependencyEdge,
     DependencyNode,
     DependencySubgraph,
+    DiagramArtifactGateway,
+    DiagramGroupRef,
+    DiagramRef,
     ExtensionActor,
     ExtensionBridgeError,
     ExtensionRequestContext,
@@ -66,6 +74,7 @@ _DEPENDENCY_CARD_TYPES = frozenset(
         "ITComponent",
         "Interface",
         "DataObject",
+        "BusinessProcess",
     }
 )
 _DEPENDENCY_RELATION_TYPES = frozenset(
@@ -81,6 +90,10 @@ _DEPENDENCY_RELATION_TYPES = frozenset(
         "relAppToInterface",
         "relInterfaceToDataObj",
         "relInterfaceToITC",
+        "relProcessToBizCtx",
+        "relProcessToApp",
+        "relProcessToITC",
+        "relProcessToDataObj",
     }
 )
 _DEPENDENCY_CARD_ATTRIBUTE_KEYS = frozenset(
@@ -104,6 +117,40 @@ class _CoreQueryBridge:
     def __init__(self, db: AsyncSession, user: Any) -> None:
         self._db = db
         self._user = user
+
+    async def list_card_type_definitions(
+        self,
+        type_keys: Sequence[str],
+    ) -> tuple[CardTypeDefinition, ...]:
+        requested = tuple(dict.fromkeys(str(key) for key in type_keys if str(key)))
+        if not requested:
+            return ()
+        rows = (
+            (
+                await self._db.execute(
+                    select(CardType)
+                    .where(CardType.key.in_(requested), CardType.is_hidden == False)  # noqa: E712
+                    .order_by(CardType.sort_order.asc(), CardType.key.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        definitions = []
+        for card_type in rows:
+            subtypes = tuple(
+                (str(item["key"]), str(item.get("label") or item["key"]))
+                for item in (card_type.subtypes or [])
+                if isinstance(item, dict) and isinstance(item.get("key"), str)
+            )
+            definitions.append(
+                CardTypeDefinition(
+                    key=card_type.key,
+                    label=card_type.label,
+                    subtypes=subtypes,
+                )
+            )
+        return tuple(definitions)
 
     async def _require_card(
         self,
@@ -233,6 +280,8 @@ class _CoreQueryBridge:
     def _dependency_node(
         card: Card,
         attribute_keys: tuple[str, ...],
+        *,
+        logo_updated_at: str | None = None,
     ) -> DependencyNode:
         source_attributes = dict(card.attributes or {})
         attributes = {
@@ -251,6 +300,7 @@ class _CoreQueryBridge:
             lifecycle=dict(card.lifecycle or {}),
             attributes=attributes,
             parent_id=card.parent_id,
+            logo_updated_at=logo_updated_at,
         )
 
     @staticmethod
@@ -432,6 +482,18 @@ class _CoreQueryBridge:
                     visited.add(other.id)
                     frontier.append((other, depth + 1))
 
+        logo_updates = await logo_updated_map(self._db, list(visible_cards.values()))
+        nodes = {
+            card_id: self._dependency_node(
+                card,
+                card_attributes,
+                logo_updated_at=(
+                    logo_updates[card_id].isoformat() if card_id in logo_updates else None
+                ),
+            )
+            for card_id, card in visible_cards.items()
+        }
+
         return DependencySubgraph(
             root_id=root.id,
             nodes=tuple(
@@ -496,25 +558,25 @@ class _CoreQueryBridge:
             )
 
         partial = False
-        parent: DependencyNode | None = None
+        parent_card: Card | None = None
         if root.parent_id is not None:
-            parent_card = (
+            candidate_parent = (
                 await self._db.execute(
                     select(Card).where(Card.id == root.parent_id, Card.status == "ACTIVE")
                 )
             ).scalar_one_or_none()
             if (
-                parent_card is None
-                or parent_card.type not in card_types
-                or not self._dependency_subtype_is_allowed(parent_card)
+                candidate_parent is None
+                or candidate_parent.type not in card_types
+                or not self._dependency_subtype_is_allowed(candidate_parent)
             ):
                 partial = True
             elif not await PermissionService.check_permission(
-                self._db, self._user, "inventory.view", parent_card.id, "card.view"
+                self._db, self._user, "inventory.view", candidate_parent.id, "card.view"
             ):
                 partial = True
             else:
-                parent = self._dependency_node(parent_card, card_attributes)
+                parent_card = candidate_parent
 
         child_rows = (
             (
@@ -527,7 +589,7 @@ class _CoreQueryBridge:
             .scalars()
             .all()
         )
-        children: list[DependencyNode] = []
+        visible_children: list[Card] = []
         for child in child_rows:
             if child.type not in card_types or not self._dependency_subtype_is_allowed(child):
                 partial = True
@@ -537,12 +599,26 @@ class _CoreQueryBridge:
             ):
                 partial = True
                 continue
-            children.append(self._dependency_node(child, card_attributes))
+            visible_children.append(child)
+
+        hierarchy_cards = [root]
+        if parent_card is not None:
+            hierarchy_cards.append(parent_card)
+        hierarchy_cards.extend(visible_children)
+        logo_updates = await logo_updated_map(self._db, hierarchy_cards)
+
+        def node_with_logo(card: Card) -> DependencyNode:
+            updated_at = logo_updates.get(card.id)
+            return self._dependency_node(
+                card,
+                card_attributes,
+                logo_updated_at=updated_at.isoformat() if updated_at else None,
+            )
 
         return CardHierarchy(
-            root=self._dependency_node(root, card_attributes),
-            parent=parent,
-            children=tuple(children),
+            root=node_with_logo(root),
+            parent=node_with_logo(parent_card) if parent_card is not None else None,
+            children=tuple(node_with_logo(child) for child in visible_children),
             partial=partial,
         )
 
@@ -1464,6 +1540,136 @@ class _NotificationBridge:
         return receipts
 
 
+class _DiagramArtifactBridge(DiagramArtifactGateway):
+    """Transaction-scoped, permission-gated Core diagram artifact bridge."""
+
+    def __init__(self, db: AsyncSession, user: User) -> None:
+        self._db = db
+        self._user = user
+
+    async def _require_manage(self) -> None:
+        await PermissionService.require_permission(self._db, self._user, "diagrams.manage")
+
+    @staticmethod
+    def _group_ref(group: DiagramGroup) -> DiagramGroupRef:
+        return DiagramGroupRef(id=group.id, name=group.name)
+
+    async def _diagram_ref(self, diagram: Diagram) -> DiagramRef:
+        cards = await self._db.execute(
+            select(diagram_cards.c.card_id).where(diagram_cards.c.diagram_id == diagram.id)
+        )
+        groups = await self._db.execute(
+            select(diagram_group_members.c.group_id).where(
+                diagram_group_members.c.diagram_id == diagram.id
+            )
+        )
+        return DiagramRef(
+            id=diagram.id,
+            name=diagram.name,
+            card_ids=tuple(row[0] for row in cards.all()),
+            group_ids=tuple(row[0] for row in groups.all()),
+        )
+
+    async def get_group(self, group_id: UUID) -> DiagramGroupRef | None:
+        await self._require_manage()
+        group = await self._db.get(DiagramGroup, group_id)
+        return self._group_ref(group) if group is not None else None
+
+    async def create_group(self, name: str) -> DiagramGroupRef:
+        await self._require_manage()
+        normalized = name.strip()
+        if not normalized:
+            raise ExtensionBridgeError("invalid_diagram_group", "Diagram group name is required")
+        group = DiagramGroup(name=normalized, created_by=self._user.id)
+        self._db.add(group)
+        await self._db.flush()
+        return self._group_ref(group)
+
+    async def rename_group(self, group_id: UUID, name: str) -> DiagramGroupRef:
+        await self._require_manage()
+        normalized = name.strip()
+        if not normalized:
+            raise ExtensionBridgeError("invalid_diagram_group", "Diagram group name is required")
+        group = await self._db.get(DiagramGroup, group_id)
+        if group is None:
+            raise ExtensionBridgeError("diagram_group_not_found", "Diagram group was not found")
+        group.name = normalized
+        await self._db.flush()
+        return self._group_ref(group)
+
+    async def get_diagram(self, diagram_id: UUID) -> DiagramRef | None:
+        await self._require_manage()
+        diagram = await self._db.get(Diagram, diagram_id)
+        return await self._diagram_ref(diagram) if diagram is not None else None
+
+    async def create_diagram(
+        self,
+        name: str,
+        data: dict[str, Any],
+        card_ids: tuple[UUID, ...],
+        group_id: UUID,
+    ) -> DiagramRef:
+        await self._require_manage()
+        normalized = name.strip()
+        if not normalized:
+            raise ExtensionBridgeError("invalid_diagram", "Diagram name is required")
+        if await self._db.get(DiagramGroup, group_id) is None:
+            raise ExtensionBridgeError("diagram_group_not_found", "Diagram group was not found")
+        unique_card_ids = tuple(dict.fromkeys(card_ids))
+        if unique_card_ids:
+            visible = (
+                (
+                    await self._db.execute(
+                        select(Card.id).where(Card.id.in_(unique_card_ids), Card.status == "ACTIVE")
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if set(visible) != set(unique_card_ids):
+                raise ExtensionBridgeError("diagram_card_not_found", "A diagram Card was not found")
+            for card_id in unique_card_ids:
+                if not await PermissionService.check_permission(
+                    self._db, self._user, "inventory.view", card_id, "card.view"
+                ):
+                    raise ExtensionBridgeError(
+                        "permission_denied", "The current actor cannot view a diagram Card"
+                    )
+        diagram = Diagram(name=normalized, data=dict(data), created_by=self._user.id)
+        self._db.add(diagram)
+        await self._db.flush()
+        if unique_card_ids:
+            await self._db.execute(
+                diagram_cards.insert(),
+                [{"diagram_id": diagram.id, "card_id": card_id} for card_id in unique_card_ids],
+            )
+        await self._db.execute(
+            diagram_group_members.insert().values(diagram_id=diagram.id, group_id=group_id)
+        )
+        return await self._diagram_ref(diagram)
+
+    async def rename_diagram(self, diagram_id: UUID, name: str) -> DiagramRef:
+        await self._require_manage()
+        normalized = name.strip()
+        if not normalized:
+            raise ExtensionBridgeError("invalid_diagram", "Diagram name is required")
+        diagram = await self._db.get(Diagram, diagram_id)
+        if diagram is None:
+            raise ExtensionBridgeError("diagram_not_found", "Diagram was not found")
+        diagram.name = normalized
+        await self._db.flush()
+        return await self._diagram_ref(diagram)
+
+    async def delete_diagram(self, diagram_id: UUID) -> bool:
+        await self._require_manage()
+        diagram = await self._db.get(Diagram, diagram_id)
+        if diagram is None:
+            return False
+        await self._db.delete(diagram)
+        await self._db.flush()
+        return True
+
+
 def build_request_context(
     key: str,
     db: AsyncSession,
@@ -1483,4 +1689,5 @@ def build_request_context(
         permissions=_PermissionBridge(db, user),
         resources=_ResourceBridge(key, db, user, audit),
         notifications=_NotificationBridge(key, db, user),
+        diagrams=_DiagramArtifactBridge(db, user),
     )

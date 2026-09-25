@@ -224,6 +224,9 @@ class DependencyNode:
     lifecycle: dict[str, Any]
     attributes: dict[str, Any]
     parent_id: UUID | None = None
+    # Read-only cache validator for the native Card logo endpoint. The bridge
+    # omits it when the Card has no logo or its type does not permit logos.
+    logo_updated_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -330,8 +333,22 @@ class OrganizationLinks:
     partial: bool
 
 
+@dataclass(frozen=True)
+class CardTypeDefinition:
+    """Read-only runtime metamodel projection for extension forms."""
+
+    key: str
+    label: str
+    subtypes: tuple[tuple[str, str], ...]
+
+
 @runtime_checkable
 class CoreQueryGateway(Protocol):
+    async def list_card_type_definitions(
+        self,
+        type_keys: Sequence[str],
+    ) -> Sequence[CardTypeDefinition]: ...
+
     async def resolve_cards(
         self,
         refs: Sequence[CardRef],
@@ -497,6 +514,39 @@ class NotificationPublisher(Protocol):
 
 
 @dataclass(frozen=True)
+class DiagramGroupRef:
+    id: UUID
+    name: str
+
+
+@dataclass(frozen=True)
+class DiagramRef:
+    id: UUID
+    name: str
+    card_ids: tuple[UUID, ...]
+    group_ids: tuple[UUID, ...]
+
+
+@runtime_checkable
+class DiagramArtifactGateway(Protocol):
+    """Authorized Core diagram/group operations for extension-owned workflows."""
+
+    async def get_group(self, group_id: UUID) -> DiagramGroupRef | None: ...
+    async def create_group(self, name: str) -> DiagramGroupRef: ...
+    async def rename_group(self, group_id: UUID, name: str) -> DiagramGroupRef: ...
+    async def get_diagram(self, diagram_id: UUID) -> DiagramRef | None: ...
+    async def create_diagram(
+        self,
+        name: str,
+        data: dict[str, Any],
+        card_ids: tuple[UUID, ...],
+        group_id: UUID,
+    ) -> DiagramRef: ...
+    async def rename_diagram(self, diagram_id: UUID, name: str) -> DiagramRef: ...
+    async def delete_diagram(self, diagram_id: UUID) -> bool: ...
+
+
+@dataclass(frozen=True)
 class ExtensionActor:
     id: UUID
     email: str
@@ -513,6 +563,7 @@ class ExtensionRequestContext:
     permissions: PermissionGateway
     resources: ResourceGateway
     notifications: NotificationPublisher
+    diagrams: DiagramArtifactGateway
 
 
 def extension_context(

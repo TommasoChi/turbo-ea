@@ -17,6 +17,8 @@ const ComplianceTab = lazy(() => import("./compliance/ComplianceTab"));
 
 const TAB_KEYS = ["governance", "risk", "compliance"] as const;
 type TabKey = (typeof TAB_KEYS)[number];
+// ponytail: risk/compliance tabs hidden per user request, routes/state kept intact
+const VISIBLE_TAB_KEYS = ["governance", "risk", "compliance"] as const;
 
 const STORAGE_KEY = "turboea.grc.tab";
 
@@ -111,7 +113,7 @@ export default function GrcPage() {
           </Typography>
         </Box>
         <Tabs value={tab} onChange={handleChange} variant="scrollable" scrollButtons="auto">
-          {TAB_KEYS.map((key) => (
+          {VISIBLE_TAB_KEYS.map((key) => (
             <Tab
               key={key}
               value={key}

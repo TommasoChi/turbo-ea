@@ -1,10 +1,10 @@
 {
   "page": {
-    "title": "GRC",
+    "title": "IT Governance",
     "subtitle": "Управление, Риск и Соответствие"
   },
   "tabs": {
-    "governance": "Управление",
+    "governance": "EA Governance",
     "risk": "Риск",
     "compliance": "Соответствие"
   },

@@ -59,6 +59,10 @@ export interface OrientedEdge {
   flipped: boolean;
   /** flowDirection re-oriented to the relation's metamodel source→target axis */
   flowDirection?: "bidirectional" | "forward" | "reverse";
+  /** A consumer explicitly removes this relation in its TO-BE projection. */
+  isRemoved?: boolean;
+  /** A consumer explicitly adds this relation in its TO-BE projection. */
+  isAdded?: boolean;
 }
 
 export interface LdvRoute {

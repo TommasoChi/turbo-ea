@@ -712,6 +712,7 @@ export function useExtensionFieldVisibilityProviders(): RegisteredFieldVisibilit
 const LazyCardDetailSidePanel = React.lazy(() => import("@/components/CardDetailSidePanel"));
 const LazyReportShell = React.lazy(() => import("@/features/reports/ReportShell"));
 const LazyDependencyGraph = React.lazy(() => import("@/features/reports/LayeredDependencyView"));
+const LazyDiagramViewer = React.lazy(() => import("@/features/diagrams/DiagramViewer"));
 // SDK 1.14 — same lazy-wrapper treatment as CardDetailSidePanel: this panel
 // pulls DrawerSteps/DrawerFlow from features/bpm/ProcessNavigator.tsx (a
 // large, code-split BPM feature file), so a static import here would drag
@@ -767,6 +768,22 @@ export function ExtensionReportShell(props: ReportShellProps) {
   );
 }
 
+export interface DiagramViewerProps {
+  diagramId: string;
+}
+
+/**
+ * Public, read-only embedding of a Core diagram. The Core API enforces
+ * `diagrams.view`; the embedded toolbar shows Edit only to `diagrams.manage`.
+ */
+export function ExtensionDiagramViewer(props: DiagramViewerProps) {
+  return (
+    <React.Suspense fallback={null}>
+      <LazyDiagramViewer diagramId={props.diagramId} embedded />
+    </React.Suspense>
+  );
+}
+
 export interface DependencyGraphProps {
   nodes: GNode[];
   edges: GEdge[];
@@ -783,6 +800,12 @@ export interface DependencyGraphProps {
   onPrev?: () => void;
   onNext?: () => void;
   canCreateDiagram?: boolean;
+  onCreateDiagram?: (draft: {
+    name: string;
+    data: Record<string, unknown>;
+    cardIds: string[];
+  }) => Promise<{ id: string }>;
+  managedDiagramId?: string | null;
   layerOverrides?: LayerOverrides;
 }
 
@@ -811,6 +834,8 @@ export function ExtensionDependencyGraph(props: DependencyGraphProps) {
         onPrev={props.onPrev}
         onNext={props.onNext}
         canCreateDiagram={props.canCreateDiagram ?? false}
+        onCreateDiagram={props.onCreateDiagram}
+        managedDiagramId={props.managedDiagramId}
         layerOverrides={props.layerOverrides}
       />
     </React.Suspense>
@@ -1141,6 +1166,7 @@ export function initExtensionHost(): void {
       ReportShell: ExtensionReportShell,
       // SDK 1.19 ? native permission-shaped Layered Dependency View wrapper.
       DependencyGraph: ExtensionDependencyGraph,
+      DiagramViewer: ExtensionDiagramViewer,
       FilterSelect,
       // FORK-LOCAL ADDITION (2026-07-28, SDK 1.15, not yet proposed
       // upstream — see the import comment above for the merge-time flag).

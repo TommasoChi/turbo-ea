@@ -425,11 +425,11 @@ describe("AppLayout — extension nav placement", () => {
 
     expect(screen.queryByRole("link", { name: /Gov Register/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /GRC/i }));
+    await user.click(screen.getByRole("button", { name: /IT Governance/i }));
     const item = await screen.findByRole("menuitem", { name: /Gov Register/i });
     expect(item).toHaveAttribute("href", "/ext/gov-ext/register");
     // GRC is a page, not just a menu — becoming a dropdown must not lose it.
-    expect(screen.getByRole("menuitem", { name: /GRC/i })).toHaveAttribute("href", "/grc");
+    expect(screen.getByRole("menuitem", { name: /IT Governance/i })).toHaveAttribute("href", "/grc");
   });
 
   it("opens each group's own children — not the first group's", async () => {
@@ -460,7 +460,7 @@ describe("AppLayout — extension nav placement", () => {
     const user = userEvent.setup();
     renderLayout();
 
-    await user.click(screen.getByRole("button", { name: /GRC/i }));
+    await user.click(screen.getByRole("button", { name: /IT Governance/i }));
     expect(await screen.findByRole("menuitem", { name: /Grouped Register/i })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /Grouped Report/i })).not.toBeInTheDocument();
   });
@@ -516,7 +516,7 @@ describe("AppLayout — extension nav placement", () => {
     // GRC is enabled, but this role cannot open it.
     renderLayout(viewerUser);
 
-    expect(screen.queryByRole("button", { name: /^GRC$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^IT Governance$/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Gov Register/i })).toHaveAttribute(
       "href",
       "/ext/gov-ext/register",

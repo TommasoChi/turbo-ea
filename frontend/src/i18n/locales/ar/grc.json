@@ -1,10 +1,10 @@
 {
   "page": {
-    "title": "GRC",
+    "title": "IT Governance",
     "subtitle": "الحوكمة وإدارة المخاطر والامتثال"
   },
   "tabs": {
-    "governance": "الحوكمة",
+    "governance": "EA Governance",
     "risk": "المخاطر",
     "compliance": "الامتثال"
   },
