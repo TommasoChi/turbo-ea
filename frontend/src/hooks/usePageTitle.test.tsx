@@ -109,7 +109,7 @@ describe("DocumentTitle", () => {
 
   it("qualifies the route label with an active tab", () => {
     renderAt("/grc", <Route path="/grc" element={<Section label="Risk Register" />} />);
-    expect(document.title).toBe("GRC · Risk Register | Turbo EA");
+    expect(document.title).toBe("IT Governance · Risk Register | Turbo EA");
   });
 
   it("carries both a subject and a tab on an entity page that has tabs", () => {

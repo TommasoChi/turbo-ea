@@ -250,16 +250,12 @@ def test_dependency_subgraph_is_an_immutable_tuple_projection():
 
 
 def test_sdk_minor_newer_truth_table():
+    # Fork note: SDK_VERSION is pinned at 1.5, so "newer" starts at 1.6
+    # (upstream's constant is 1.15 and its own table starts at 1.16).
     # Newer minor on the same major → warn (still loads).
+    assert sdk.sdk_minor_newer("1.6")
     assert sdk.sdk_minor_newer("1.16")
     # Same or older minor → no warning.
-    assert not sdk.sdk_minor_newer("1.15")
-    assert not sdk.sdk_minor_newer("1.14")
-    assert not sdk.sdk_minor_newer("1.13")
-    assert not sdk.sdk_minor_newer("1.12")
-    assert not sdk.sdk_minor_newer("1.11")
-    assert not sdk.sdk_minor_newer("1.10")
-    assert not sdk.sdk_minor_newer("1.8")
     assert not sdk.sdk_minor_newer("1.5")
     assert not sdk.sdk_minor_newer("1.4")
     assert not sdk.sdk_minor_newer("1.3")
