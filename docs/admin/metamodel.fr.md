@@ -147,6 +147,8 @@ Chaque cellule a trois états :
 
 Cela permet de dire « tout le monde peut créer des applications, mais seule l'équipe centrale crée les organisations et les initiatives » sans inventer un rôle par type de fiche. Refuser **Créer** sur un type le retire aussi de la boîte de dialogue de création, de l'éditeur de diagrammes et de l'importateur de feuilles de calcul.
 
+**Limiter une autorisation ou un refus à des sous-types spécifiques.** Pour un type qui a des sous-types, dès qu'une cellule est réglée sur Autoriser ou Refuser, un petit bouton de réglage (🎛) apparaît à côté. Cliquer sur ce bouton ouvre la liste des sous-types du type : si aucun n'est sélectionné, l'autorisation continue de s'appliquer à tous les sous-types comme auparavant ; si un ou plusieurs sont sélectionnés, elle ne s'applique qu'à ceux-ci — une fiche d'un sous-type différent du même type est traitée comme si cette cellule n'avait aucune autorisation, et retombe sur l'autorisation habituelle du rôle. Cela permet de dire « les membres peuvent modifier toutes les applications sauf les agents IA » plutôt que de refuser **Modifier** sur tout le type Application.
+
 Quelques règles à connaître :
 
 - **Les administrateurs ne sont jamais restreints.** La ligne administrateur est verrouillée.

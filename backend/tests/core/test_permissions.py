@@ -493,10 +493,14 @@ class TestTypeScopedPermissions:
 class TestValidateTypeRolePermissions:
     ROLES = {"admin", "member", "viewer"}
     WILDCARD = {"admin"}
+    SUBTYPES = {"microservice", "ai_agent"}
 
-    def _validate(self, raw):
+    def _validate(self, raw, known_subtype_keys=frozenset()):
         return validate_type_role_permissions(
-            raw, known_role_keys=self.ROLES, wildcard_role_keys=self.WILDCARD
+            raw,
+            known_role_keys=self.ROLES,
+            wildcard_role_keys=self.WILDCARD,
+            known_subtype_keys=known_subtype_keys,
         )
 
     def test_none_is_empty(self):
@@ -542,3 +546,47 @@ class TestValidateTypeRolePermissions:
     def test_non_dict_cells_rejected(self):
         with pytest.raises(ValueError, match="must be an object"):
             self._validate({"member": True})
+
+    # -- subtype-scoped cells --
+
+    def test_scoped_cell_round_trips(self):
+        raw = {"member": {"inventory.edit": {"value": False, "subtypes": ["microservice"]}}}
+        assert self._validate(raw, self.SUBTYPES) == raw
+
+    def test_scoped_cell_unknown_subtype_rejected(self):
+        raw = {"member": {"inventory.edit": {"value": False, "subtypes": ["nope"]}}}
+        with pytest.raises(ValueError, match="unknown subtype 'nope'"):
+            self._validate(raw, self.SUBTYPES)
+
+    def test_scoped_cell_on_type_with_no_subtypes_rejected(self):
+        raw = {"member": {"inventory.edit": {"value": False, "subtypes": ["microservice"]}}}
+        with pytest.raises(ValueError, match="unknown subtype"):
+            self._validate(raw)  # known_subtype_keys defaults to empty
+
+    def test_scoped_cell_empty_subtypes_list_rejected(self):
+        raw = {"member": {"inventory.edit": {"value": False, "subtypes": []}}}
+        with pytest.raises(ValueError, match="non-empty list"):
+            self._validate(raw, self.SUBTYPES)
+
+    def test_scoped_cell_non_bool_value_rejected(self):
+        raw = {"member": {"inventory.edit": {"value": "nope", "subtypes": ["microservice"]}}}
+        with pytest.raises(ValueError, match="must be a boolean"):
+            self._validate(raw, self.SUBTYPES)
+
+    def test_scoped_cell_missing_key_rejected(self):
+        raw = {"member": {"inventory.edit": {"value": False}}}
+        with pytest.raises(ValueError, match="exactly 'value' and 'subtypes'"):
+            self._validate(raw, self.SUBTYPES)
+
+    def test_scoped_cell_extra_key_rejected(self):
+        raw = {
+            "member": {"inventory.edit": {"value": False, "subtypes": ["microservice"], "extra": 1}}
+        }
+        with pytest.raises(ValueError, match="exactly 'value' and 'subtypes'"):
+            self._validate(raw, self.SUBTYPES)
+
+    def test_plain_bool_cell_unaffected_by_subtype_knowledge(self):
+        # A bool cell is unscoped ("All subtypes") and never checked against
+        # known_subtype_keys — the regression guard for the common case.
+        raw = {"member": {"inventory.edit": True}}
+        assert self._validate(raw, self.SUBTYPES) == raw

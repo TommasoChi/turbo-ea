@@ -167,12 +167,16 @@ _TYPE_PERMISSION_ORDER: tuple[str, ...] = (
 )
 
 
-async def _validated_role_permissions(db: AsyncSession, raw: object) -> dict:
+async def _validated_role_permissions(
+    db: AsyncSession, raw: object, *, subtypes: list[dict] | None = None
+) -> dict:
     """Validate a ``role_permissions`` payload against the live role list.
 
     Role keys must exist (archived ones are fine — their overrides are inert
     but a round-trip of a stored map must not start failing), and a wildcard
-    role can never be overridden.
+    role can never be overridden. ``subtypes`` is the type's own subtype list
+    (the request body's for a new type, the already-updated ``CardType`` row's
+    for an existing one) — it validates any subtype-scoped cell.
     """
     rows = await db.execute(select(Role.key, Role.permissions))
     known: set[str] = set()
@@ -181,9 +185,13 @@ async def _validated_role_permissions(db: AsyncSession, raw: object) -> dict:
         known.add(role_key)
         if (perms or {}).get("*"):
             wildcard.add(role_key)
+    known_subtype_keys = {s["key"] for s in (subtypes or [])}
     try:
         return validate_type_role_permissions(
-            raw, known_role_keys=known, wildcard_role_keys=wildcard
+            raw,
+            known_role_keys=known,
+            wildcard_role_keys=wildcard,
+            known_subtype_keys=known_subtype_keys,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -562,7 +570,8 @@ async def get_type_permissions(
             }
         )
 
-    return {"actions": actions, "roles": roles}
+    subtypes = [{"key": s["key"], "label": s.get("label", s["key"])} for s in (t.subtypes or [])]
+    return {"actions": actions, "roles": roles, "subtypes": subtypes}
 
 
 @router.get("/types/{key}/field-usage")
@@ -850,7 +859,9 @@ async def create_type(
         reference_config = card_reference.validate_reference_config(body.get("reference_config"))
     except card_reference.ReferenceConfigError as exc:
         raise HTTPException(400, str(exc)) from exc
-    role_permissions = await _validated_role_permissions(db, body.get("role_permissions"))
+    role_permissions = await _validated_role_permissions(
+        db, body.get("role_permissions"), subtypes=body.get("subtypes", [])
+    )
     t = CardType(
         key=body["key"],
         label=body["label"],
@@ -1023,7 +1034,9 @@ async def update_type(
     # Deliberately outside the generic `updatable` loop: the payload is
     # validated against the live role list, and a wildcard role is refused.
     if "role_permissions" in body:
-        t.role_permissions = await _validated_role_permissions(db, body["role_permissions"])
+        t.role_permissions = await _validated_role_permissions(
+            db, body["role_permissions"], subtypes=t.subtypes
+        )
 
     await db.commit()
     await db.refresh(t)

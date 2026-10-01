@@ -16,9 +16,13 @@ import IconButton from "@mui/material/IconButton";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
 import Paper from "@mui/material/Paper";
+import Popover from "@mui/material/Popover";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import FormGroup from "@mui/material/FormGroup";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
-import type { CardTypePermissionMatrix } from "@/types";
+import type { CardTypePermissionCell, CardTypePermissionMatrix } from "@/types";
 
 /**
  * Per-card-type RBAC overrides (discussion #1068).
@@ -31,12 +35,16 @@ import type { CardTypePermissionMatrix } from "@/types";
  * Only overridden cells are sent; an action switched back to inherit is
  * deleted from the payload rather than stored as its inherited value, so a
  * later change to the role itself keeps flowing through.
+ *
+ * A cell that is allow/deny may also carry a subtype scope — see
+ * `CardTypePermissionCell` — rendered as a small "tune" icon button next to
+ * the ToggleButtonGroup, only when the type actually has subtypes.
  */
 
 type CellState = "inherit" | "allow" | "deny";
 
-/** The draft map mirrors the wire shape: `{roleKey: {permission: boolean}}`. */
-type Draft = Record<string, Record<string, boolean>>;
+/** The draft map mirrors the wire shape: `{roleKey: {permission: cell}}`. */
+type Draft = Record<string, Record<string, CardTypePermissionCell>>;
 
 interface CardTypePermissionsPanelProps {
   typeKey: string;
@@ -55,10 +63,20 @@ function toDraft(matrix: CardTypePermissionMatrix): Draft {
   return draft;
 }
 
+function cellValue(cell: CardTypePermissionCell): boolean {
+  return typeof cell === "object" ? cell.value : cell;
+}
+
 function cellState(draft: Draft, roleKey: string, action: string): CellState {
   const cell = draft[roleKey]?.[action];
   if (cell === undefined) return "inherit";
-  return cell ? "allow" : "deny";
+  return cellValue(cell) ? "allow" : "deny";
+}
+
+/** `[]` for an unscoped cell ("All subtypes") or when there's no cell at all. */
+function cellSubtypes(draft: Draft, roleKey: string, action: string): string[] {
+  const cell = draft[roleKey]?.[action];
+  return typeof cell === "object" ? cell.subtypes : [];
 }
 
 export default function CardTypePermissionsPanel({
@@ -73,6 +91,11 @@ export default function CardTypePermissionsPanel({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [scopeAnchor, setScopeAnchor] = useState<{
+    el: HTMLElement;
+    roleKey: string;
+    action: string;
+  } | null>(null);
 
   const fetchMatrix = useCallback(async () => {
     setLoading(true);
@@ -83,9 +106,7 @@ export default function CardTypePermissionsPanel({
       setMatrix(data);
       setDraft(toDraft(data));
     } catch (e: unknown) {
-      onError(
-        e instanceof Error ? e.message : t("metamodel.permissionsPanel.failedToFetch")
-      );
+      onError(e instanceof Error ? e.message : t("metamodel.permissionsPanel.failedToFetch"));
     } finally {
       setLoading(false);
     }
@@ -113,11 +134,29 @@ export default function CardTypePermissionsPanel({
       if (state === "inherit") {
         delete next[roleKey][action];
       } else {
-        next[roleKey][action] = state === "allow";
+        // Flipping allow<->deny keeps an existing subtype scope — the admin
+        // picked those subtypes on purpose, switching the verdict shouldn't
+        // silently widen it back to "All".
+        const existing = prev[roleKey]?.[action];
+        const value = state === "allow";
+        next[roleKey][action] = typeof existing === "object" ? { ...existing, value } : value;
       }
       // An empty override map means "inherit everything", which is the same
       // statement as having no entry at all — and is what the API stores.
       if (Object.keys(next[roleKey]).length === 0) delete next[roleKey];
+      return next;
+    });
+  };
+
+  const setCellSubtypes = (roleKey: string, action: string, subtypes: string[]) => {
+    setSaved(false);
+    setDraft((prev) => {
+      const current = prev[roleKey]?.[action];
+      if (current === undefined) return prev;
+      const value = cellValue(current);
+      const next: Draft = { ...prev, [roleKey]: { ...prev[roleKey] } };
+      // No subtypes selected collapses back to a plain bool ("All subtypes").
+      next[roleKey][action] = subtypes.length > 0 ? { value, subtypes } : value;
       return next;
     });
   };
@@ -140,8 +179,7 @@ export default function CardTypePermissionsPanel({
       setSaved(true);
       onSaved?.();
     } catch (e: unknown) {
-      const message =
-        e instanceof Error ? e.message : t("metamodel.permissionsPanel.failedToSave");
+      const message = e instanceof Error ? e.message : t("metamodel.permissionsPanel.failedToSave");
       setSaveError(message);
       onError(message);
     } finally {
@@ -239,58 +277,97 @@ export default function CardTypePermissionsPanel({
 
                     const state = cellState(draft, role.key, action.key);
                     const inherited = !!role.inherited[action.key];
+                    const scopedSubtypes = cellSubtypes(draft, role.key, action.key);
+                    const showScopeControl = state !== "inherit" && matrix.subtypes.length > 0;
                     return (
                       <TableCell key={action.key} align="center" sx={{ px: 0.5 }}>
-                        <ToggleButtonGroup
-                          exclusive
-                          size="small"
-                          value={state}
-                          onChange={(_, v) => {
-                            if (v) setCell(role.key, action.key, v as CellState);
-                          }}
-                          aria-label={`${role.label} ${actionLabel(action.key)}`}
-                        >
-                          <ToggleButton
-                            value="inherit"
-                            aria-label={t("metamodel.permissionsPanel.inherit")}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+                          <ToggleButtonGroup
+                            exclusive
+                            size="small"
+                            value={state}
+                            onChange={(_, v) => {
+                              if (v) setCell(role.key, action.key, v as CellState);
+                            }}
+                            aria-label={`${role.label} ${actionLabel(action.key)}`}
                           >
-                            <Tooltip
-                              title={t(
-                                inherited
-                                  ? "metamodel.permissionsPanel.inheritedAllowed"
-                                  : "metamodel.permissionsPanel.inheritedDenied"
-                              )}
+                            <ToggleButton
+                              value="inherit"
+                              aria-label={t("metamodel.permissionsPanel.inherit")}
                             >
-                              <span style={{ display: "flex" }}>
+                              <Tooltip
+                                title={t(
+                                  inherited
+                                    ? "metamodel.permissionsPanel.inheritedAllowed"
+                                    : "metamodel.permissionsPanel.inheritedDenied"
+                                )}
+                              >
+                                <span style={{ display: "flex" }}>
+                                  <MaterialSymbol
+                                    icon={inherited ? "check" : "close"}
+                                    size={16}
+                                    color={inherited ? "#2e7d32" : "#9e9e9e"}
+                                  />
+                                </span>
+                              </Tooltip>
+                            </ToggleButton>
+                            <ToggleButton
+                              value="allow"
+                              aria-label={t("metamodel.permissionsPanel.allow")}
+                            >
+                              <Tooltip title={t("metamodel.permissionsPanel.allow")}>
+                                <span style={{ display: "flex" }}>
+                                  <MaterialSymbol icon="check_circle" size={16} color="#2e7d32" />
+                                </span>
+                              </Tooltip>
+                            </ToggleButton>
+                            <ToggleButton
+                              value="deny"
+                              aria-label={t("metamodel.permissionsPanel.deny")}
+                            >
+                              <Tooltip title={t("metamodel.permissionsPanel.deny")}>
+                                <span style={{ display: "flex" }}>
+                                  <MaterialSymbol icon="block" size={16} color="#c62828" />
+                                </span>
+                              </Tooltip>
+                            </ToggleButton>
+                          </ToggleButtonGroup>
+                          {showScopeControl && (
+                            <Tooltip
+                              title={
+                                scopedSubtypes.length > 0
+                                  ? t("metamodel.permissionsPanel.scope.scopedTooltip", {
+                                      subtypes: scopedSubtypes
+                                        .map(
+                                          (key) =>
+                                            matrix.subtypes.find((s) => s.key === key)?.label ??
+                                            key
+                                        )
+                                        .join(", "),
+                                    })
+                                  : t("metamodel.permissionsPanel.scope.allTooltip")
+                              }
+                            >
+                              <IconButton
+                                size="small"
+                                onClick={(e) =>
+                                  setScopeAnchor({
+                                    el: e.currentTarget,
+                                    roleKey: role.key,
+                                    action: action.key,
+                                  })
+                                }
+                                aria-label={t("metamodel.permissionsPanel.scope.button")}
+                              >
                                 <MaterialSymbol
-                                  icon={inherited ? "check" : "close"}
+                                  icon="tune"
                                   size={16}
-                                  color={inherited ? "#2e7d32" : "#9e9e9e"}
+                                  color={scopedSubtypes.length > 0 ? "#1976d2" : "#9e9e9e"}
                                 />
-                              </span>
+                              </IconButton>
                             </Tooltip>
-                          </ToggleButton>
-                          <ToggleButton
-                            value="allow"
-                            aria-label={t("metamodel.permissionsPanel.allow")}
-                          >
-                            <Tooltip title={t("metamodel.permissionsPanel.allow")}>
-                              <span style={{ display: "flex" }}>
-                                <MaterialSymbol icon="check_circle" size={16} color="#2e7d32" />
-                              </span>
-                            </Tooltip>
-                          </ToggleButton>
-                          <ToggleButton
-                            value="deny"
-                            aria-label={t("metamodel.permissionsPanel.deny")}
-                          >
-                            <Tooltip title={t("metamodel.permissionsPanel.deny")}>
-                              <span style={{ display: "flex" }}>
-                                <MaterialSymbol icon="block" size={16} color="#c62828" />
-                              </span>
-                            </Tooltip>
-                          </ToggleButton>
-                        </ToggleButtonGroup>
+                          )}
+                        </Box>
                       </TableCell>
                     );
                   })}
@@ -334,6 +411,49 @@ export default function CardTypePermissionsPanel({
           {t("common:actions.cancel")}
         </Button>
       </Box>
+
+      <Popover
+        open={!!scopeAnchor}
+        anchorEl={scopeAnchor?.el}
+        onClose={() => setScopeAnchor(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      >
+        <Box sx={{ p: 2, minWidth: 220 }}>
+          <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+            {t("metamodel.permissionsPanel.scope.title")}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+            {t("metamodel.permissionsPanel.scope.hint")}
+          </Typography>
+          <FormGroup>
+            {matrix.subtypes.map((subtype) => {
+              const current = scopeAnchor
+                ? cellSubtypes(draft, scopeAnchor.roleKey, scopeAnchor.action)
+                : [];
+              const checked = current.includes(subtype.key);
+              return (
+                <FormControlLabel
+                  key={subtype.key}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={checked}
+                      onChange={(_, isChecked) => {
+                        if (!scopeAnchor) return;
+                        const next = isChecked
+                          ? [...current, subtype.key]
+                          : current.filter((k) => k !== subtype.key);
+                        setCellSubtypes(scopeAnchor.roleKey, scopeAnchor.action, next);
+                      }}
+                    />
+                  }
+                  label={subtype.label}
+                />
+              );
+            })}
+          </FormGroup>
+        </Box>
+      </Popover>
     </Box>
   );
 }

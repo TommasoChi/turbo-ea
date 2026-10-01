@@ -593,7 +593,7 @@ async def create_card(
     # Per-card-type overrides apply here: the role's global `inventory.create`
     # can be denied for this type, or granted where the role lacks it.
     await PermissionService.require_permission(
-        db, user, "inventory.create", card_type_key=body.type
+        db, user, "inventory.create", card_type_key=body.type, subtype=body.subtype
     )
     card = await card_write_service.create_card(
         db,
@@ -657,21 +657,24 @@ async def bulk_create_cards(
     """
     rows = list(body.cards)
 
-    # A batch may span card types, and `inventory.create` is overridable per
-    # type — so the check runs once per *distinct* type rather than once for
-    # the request. Denied types are named so a spreadsheet importer can tell
-    # the user which sheet to drop, and this runs before anything is built so
-    # an unauthorised batch creates nothing.
-    denied_types: list[str] = []
-    for type_key in sorted({r.type for r in rows}):
+    # A batch may span card types (and subtypes), and `inventory.create` is
+    # overridable per type/subtype — so the check runs once per *distinct*
+    # (type, subtype) pair rather than once for the request. Denied pairs are
+    # named so a spreadsheet importer can tell the user which sheet/rows to
+    # drop, and this runs before anything is built so an unauthorised batch
+    # creates nothing.
+    denied_pairs: list[str] = []
+    for type_key, subtype in sorted(
+        {(r.type, r.subtype) for r in rows}, key=lambda p: (p[0], p[1] or "")
+    ):
         if not await PermissionService.has_app_permission(
-            db, user, "inventory.create", card_type_key=type_key
+            db, user, "inventory.create", card_type_key=type_key, subtype=subtype
         ):
-            denied_types.append(type_key)
-    if denied_types:
+            denied_pairs.append(f"{type_key}/{subtype}" if subtype else type_key)
+    if denied_pairs:
         raise HTTPException(
             403,
-            "Not enough permissions to create cards of type: " + ", ".join(denied_types),
+            "Not enough permissions to create cards of type: " + ", ".join(denied_pairs),
         )
 
     # `row_index` is used as a dict key throughout this handler (parent
@@ -1567,7 +1570,9 @@ async def bulk_update(
         {
             card.type
             for card in sheets
-            if await PermissionService.is_type_denied(db, user, "inventory.edit", card.type)
+            if await PermissionService.is_type_denied(
+                db, user, "inventory.edit", card.type, subtype=card.subtype
+            )
         }
     )
     if denied_types:
@@ -2467,14 +2472,26 @@ async def _ensure_permission_on_each(
 ) -> None:
     if not card_ids:
         return
-    # One query for every card's type, so the per-type override lookup inside
-    # `check_permission` does not re-read each row.
-    type_rows = await db.execute(select(Card.id, Card.type).where(Card.id.in_(card_ids)))
-    type_by_id = {row_id: row_type for row_id, row_type in type_rows.all()}
+    # One query for every card's type and subtype, so the per-type/subtype
+    # override lookup inside `check_permission` does not re-read each row.
+    type_rows = await db.execute(
+        select(Card.id, Card.type, Card.subtype).where(Card.id.in_(card_ids))
+    )
+    type_by_id: dict[uuid.UUID, str] = {}
+    subtype_by_id: dict[uuid.UUID, str | None] = {}
+    for row_id, row_type, row_subtype in type_rows.all():
+        type_by_id[row_id] = row_type
+        subtype_by_id[row_id] = row_subtype
     denied: list[str] = []
     for cid in card_ids:
         if not await PermissionService.check_permission(
-            db, user, app_perm, cid, card_perm, card_type_key=type_by_id.get(cid)
+            db,
+            user,
+            app_perm,
+            cid,
+            card_perm,
+            card_type_key=type_by_id.get(cid),
+            subtype=subtype_by_id.get(cid),
         ):
             denied.append(str(cid))
             if len(denied) >= 5:

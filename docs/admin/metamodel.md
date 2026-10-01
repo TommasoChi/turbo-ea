@@ -149,6 +149,8 @@ Every cell has three states:
 
 This is what lets you say "anyone may create Applications, but only the central team creates Organizations and Initiatives" without inventing a role per card type. Denying **Create** on a type also removes it from the create dialog, the diagram editor and the spreadsheet importer, so users are not offered an action that would only fail.
 
+**Scoping an Allow or Deny to specific subtypes.** For a type that has subtypes, once a cell is set to Allow or Deny a small tune (🎛) button appears next to it. Clicking it opens a list of the type's subtypes: leave none checked and the override still applies to every subtype, exactly as before; check one or more and the override applies only to those — a card of a different subtype of the same type is treated as if that cell had no override at all, falling back to the role's ordinary permission. This is what lets you say "Members may edit every Application except AI Agents" instead of denying **Edit** on Application altogether.
+
 A few rules are worth knowing:
 
 - **Administrators are never restricted.** The admin row is locked, and an admin keeps full access to every card type.

@@ -147,6 +147,8 @@ Cada célula tem três estados:
 
 Isto permite dizer «qualquer pessoa pode criar Aplicações, mas apenas a equipa central cria Organizações e Iniciativas» sem inventar um papel por tipo de cartão. Negar **Criar** num tipo também o retira da caixa de diálogo de criação, do editor de diagramas e do importador de folhas de cálculo.
 
+**Limitar uma permissão ou negação a subtipos específicos.** Para um tipo que tem subtipos, quando uma célula é definida como Permitir ou Negar aparece um pequeno botão de ajuste (🎛) ao lado. Ao clicar abre-se a lista de subtipos do tipo: se nenhum for selecionado, a permissão continua a aplicar-se a todos os subtipos, como antes; se um ou mais forem selecionados, aplica-se apenas a esses — um cartão de um subtipo diferente do mesmo tipo é tratado como se essa célula não tivesse qualquer permissão, voltando à permissão habitual do papel. Isto permite dizer «os Membros podem editar qualquer Aplicação exceto os AI Agent» em vez de negar **Editar** em todo o tipo Aplicação.
+
 Algumas regras a conhecer:
 
 - **Os administradores nunca são restringidos.** A linha do administrador está bloqueada.

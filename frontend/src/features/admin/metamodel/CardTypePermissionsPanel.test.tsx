@@ -70,6 +70,7 @@ const MATRIX = {
       overrides: { "inventory.create": true },
     },
   ],
+  subtypes: [],
 };
 
 function rowFor(label: string) {
@@ -221,5 +222,98 @@ describe("CardTypePermissionsPanel", () => {
     await user.click(screen.getByRole("button", { name: /save/i }));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
+  });
+});
+
+describe("CardTypePermissionsPanel — subtype scoping", () => {
+  const MATRIX_WITH_SUBTYPES = {
+    ...MATRIX,
+    roles: MATRIX.roles.map((r) =>
+      r.key === "member" ? { ...r, overrides: { "inventory.edit": false } } : r,
+    ),
+    subtypes: [
+      { key: "microservice", label: "Microservice" },
+      { key: "ai_agent", label: "AI Agent" },
+    ],
+  };
+
+  it("shows no scope control when the type has no subtypes", async () => {
+    const user = userEvent.setup();
+    render(<CardTypePermissionsPanel typeKey="Application" onError={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Member")).toBeInTheDocument());
+
+    await setCell(user, "Member", "create", "Deny");
+
+    const cell = rowFor("Member").querySelectorAll("td")[COLUMN.create] as HTMLElement;
+    expect(
+      within(cell).queryByRole("button", { name: "Limit to specific subtypes" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the scope control once a cell leaves inherit, when the type has subtypes", async () => {
+    apiMock.get.mockResolvedValue(structuredClone(MATRIX_WITH_SUBTYPES));
+    render(<CardTypePermissionsPanel typeKey="Application" onError={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Member")).toBeInTheDocument());
+
+    const cell = rowFor("Member").querySelectorAll("td")[COLUMN.edit] as HTMLElement;
+    expect(
+      within(cell).getByRole("button", { name: "Limit to specific subtypes" }),
+    ).toBeInTheDocument();
+  });
+
+  it("scoping a deny to one subtype sends the {value, subtypes} shape", async () => {
+    apiMock.get.mockResolvedValue(structuredClone(MATRIX_WITH_SUBTYPES));
+    const user = userEvent.setup();
+    render(<CardTypePermissionsPanel typeKey="Application" onError={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Member")).toBeInTheDocument());
+
+    const cell = rowFor("Member").querySelectorAll("td")[COLUMN.edit] as HTMLElement;
+    await user.click(within(cell).getByRole("button", { name: "Limit to specific subtypes" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Microservice" }));
+    // MUI's Popover (built on Modal) marks background siblings aria-hidden
+    // while open, hiding the Save button from the accessibility tree —
+    // close it first, same as a real user clicking away.
+    await user.keyboard("{Escape}");
+
+    await user.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(apiMock.patch).toHaveBeenCalled());
+    expect(apiMock.patch).toHaveBeenCalledWith("/metamodel/types/Application", {
+      role_permissions: {
+        viewer: { "inventory.create": true },
+        member: {
+          "inventory.edit": { value: false, subtypes: ["microservice"] },
+        },
+      },
+    });
+  });
+
+  it("clearing every checked subtype collapses the cell back to a plain bool", async () => {
+    apiMock.get.mockResolvedValue(structuredClone(MATRIX_WITH_SUBTYPES));
+    const user = userEvent.setup();
+    render(<CardTypePermissionsPanel typeKey="Application" onError={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Member")).toBeInTheDocument());
+
+    const cell = rowFor("Member").querySelectorAll("td")[COLUMN.edit] as HTMLElement;
+    await user.click(within(cell).getByRole("button", { name: "Limit to specific subtypes" }));
+    const checkbox = await screen.findByRole("checkbox", { name: "Microservice" });
+    await user.click(checkbox); // scope to microservice
+    await user.click(checkbox); // then clear it again
+    await user.keyboard("{Escape}");
+    // Wait out the Popover's exit transition — otherwise the still-animating
+    // backdrop can intercept the Save click.
+    await waitFor(() =>
+      expect(screen.queryByRole("checkbox", { name: "Microservice" })).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(apiMock.patch).toHaveBeenCalled());
+    expect(apiMock.patch).toHaveBeenCalledWith("/metamodel/types/Application", {
+      role_permissions: {
+        viewer: { "inventory.create": true },
+        member: { "inventory.edit": false },
+      },
+    });
   });
 });

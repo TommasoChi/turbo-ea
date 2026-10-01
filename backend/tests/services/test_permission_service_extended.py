@@ -519,6 +519,170 @@ class TestCheckPermissionWithOverrides:
         )
 
 
+@pytest.fixture
+async def subtype_env(db, type_override_env):
+    """`type_override_env` plus two Application subtypes and one card of each."""
+    from sqlalchemy import select
+
+    from app.models.card_type import CardType
+
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    ct.subtypes = [
+        {"key": "microservice", "label": "Microservice"},
+        {"key": "ai_agent", "label": "AI Agent"},
+    ]
+    await db.flush()
+    admin_id = type_override_env["admin"].id
+    micro_card = await create_card(
+        db, card_type="Application", subtype="microservice", name="Micro", user_id=admin_id
+    )
+    agent_card = await create_card(
+        db, card_type="Application", subtype="ai_agent", name="Agent", user_id=admin_id
+    )
+    return {**type_override_env, "micro_card": micro_card, "agent_card": agent_card}
+
+
+class TestSubtypeScopedOverrides:
+    """A `role_permissions` cell may scope its grant/deny to specific subtypes."""
+
+    async def test_scoped_deny_applies_only_to_the_matching_subtype(self, db, subtype_env):
+        member = subtype_env["member"]
+        await _set_overrides(
+            db,
+            "Application",
+            {"member": {"inventory.edit": {"value": False, "subtypes": ["microservice"]}}},
+        )
+
+        assert (
+            await PermissionService.has_app_permission(
+                db, member, "inventory.edit", card_type_key="Application", subtype="microservice"
+            )
+            is False
+        )
+
+    async def test_scoped_deny_falls_through_on_a_different_subtype(self, db, subtype_env):
+        member = subtype_env["member"]
+        await _set_overrides(
+            db,
+            "Application",
+            {"member": {"inventory.edit": {"value": False, "subtypes": ["microservice"]}}},
+        )
+
+        # "ai_agent" is not in the scope list, so this cell doesn't apply —
+        # falls through to the role's global `inventory.edit` grant (True).
+        assert (
+            await PermissionService.has_app_permission(
+                db, member, "inventory.edit", card_type_key="Application", subtype="ai_agent"
+            )
+            is True
+        )
+
+    async def test_scoped_allow_grants_only_the_matching_subtype(self, db, subtype_env):
+        viewer = subtype_env["viewer"]
+        await _set_overrides(
+            db,
+            "Application",
+            {"viewer": {"inventory.create": {"value": True, "subtypes": ["ai_agent"]}}},
+        )
+
+        assert (
+            await PermissionService.has_app_permission(
+                db, viewer, "inventory.create", card_type_key="Application", subtype="ai_agent"
+            )
+            is True
+        )
+        assert (
+            await PermissionService.has_app_permission(
+                db,
+                viewer,
+                "inventory.create",
+                card_type_key="Application",
+                subtype="microservice",
+            )
+            is False
+        )
+
+    async def test_unscoped_bool_cell_still_applies_to_every_subtype(self, db, subtype_env):
+        # Regression guard: a plain bool cell ("All subtypes") must keep
+        # working exactly as before the scoping feature existed.
+        member = subtype_env["member"]
+        await _set_overrides(db, "Application", {"member": {"inventory.edit": False}})
+
+        for subtype in ("microservice", "ai_agent", None):
+            assert (
+                await PermissionService.has_app_permission(
+                    db, member, "inventory.edit", card_type_key="Application", subtype=subtype
+                )
+                is False
+            )
+
+    async def test_check_permission_resolves_subtype_from_card_id_for_free(self, db, subtype_env):
+        """A caller passing only `card_id` (no explicit subtype) still gets scoping."""
+        member = subtype_env["member"]
+        micro_card = subtype_env["micro_card"]
+        agent_card = subtype_env["agent_card"]
+        await _set_overrides(
+            db,
+            "Application",
+            {"member": {"inventory.edit": {"value": False, "subtypes": ["microservice"]}}},
+        )
+
+        assert (
+            await PermissionService.check_permission(
+                db, member, "inventory.edit", micro_card.id, "card.edit"
+            )
+            is False
+        )
+        assert (
+            await PermissionService.check_permission(
+                db, member, "inventory.edit", agent_card.id, "card.edit"
+            )
+            is True
+        )
+
+    async def test_is_type_denied_honours_subtype_scope(self, db, subtype_env):
+        member = subtype_env["member"]
+        await _set_overrides(
+            db,
+            "Application",
+            {"member": {"inventory.edit": {"value": False, "subtypes": ["microservice"]}}},
+        )
+
+        assert (
+            await PermissionService.is_type_denied(
+                db, member, "inventory.edit", "Application", subtype="microservice"
+            )
+            is True
+        )
+        assert (
+            await PermissionService.is_type_denied(
+                db, member, "inventory.edit", "Application", subtype="ai_agent"
+            )
+            is False
+        )
+
+    async def test_effective_permissions_reflect_scoped_deny_on_matching_card_only(
+        self, db, subtype_env
+    ):
+        member = subtype_env["member"]
+        micro_card = subtype_env["micro_card"]
+        agent_card = subtype_env["agent_card"]
+        await _set_overrides(
+            db,
+            "Application",
+            {"member": {"inventory.edit": {"value": False, "subtypes": ["microservice"]}}},
+        )
+
+        micro_perms = await PermissionService.get_effective_card_permissions(
+            db, member, micro_card.id
+        )
+        agent_perms = await PermissionService.get_effective_card_permissions(
+            db, member, agent_card.id
+        )
+        assert micro_perms["effective"]["can_edit"] is False
+        assert agent_perms["effective"]["can_edit"] is True
+
+
 class TestIsTypeDenied:
     """Only an explicit False counts — a missing global grant is not a deny."""
 

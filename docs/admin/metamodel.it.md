@@ -147,6 +147,8 @@ Ogni cella ha tre stati:
 
 Questo consente di dire «chiunque può creare Applicazioni, ma solo il team centrale crea Organizzazioni e Iniziative» senza inventare un ruolo per ogni tipo di scheda. Negare **Crea** su un tipo lo rimuove anche dalla finestra di creazione, dall'editor dei diagrammi e dall'importatore di fogli di calcolo.
 
+**Limitare un Consenti o un Nega a sottotipi specifici.** Per un tipo che ha sottotipi, quando una cella è impostata su Consenti o Nega appare un piccolo pulsante (🎛) accanto ad essa. Cliccandolo si apre l'elenco dei sottotipi del tipo: se non ne selezioni nessuno, l'autorizzazione continua ad applicarsi a tutti i sottotipi, come prima; selezionandone uno o più, l'autorizzazione si applica solo a quelli — una scheda di un sottotipo diverso dello stesso tipo viene trattata come se quella cella non avesse alcuna autorizzazione, tornando al permesso ordinario del ruolo. Questo consente di dire «i Membri possono modificare ogni Applicazione eccetto gli AI Agent» invece di negare **Modifica** sull'intero tipo Applicazione.
+
 Alcune regole da conoscere:
 
 - **Gli amministratori non sono mai limitati.** La riga dell'amministratore è bloccata.

@@ -147,6 +147,8 @@ Cada celda tiene tres estados:
 
 Esto permite decir «cualquiera puede crear aplicaciones, pero solo el equipo central crea organizaciones e iniciativas» sin inventar un rol por tipo de tarjeta. Denegar **Crear** en un tipo también lo retira del diálogo de creación, del editor de diagramas y del importador de hojas de cálculo.
 
+**Limitar un permiso o una denegación a subtipos específicos.** Para un tipo que tiene subtipos, en cuanto una celda se pone en Permitir o Denegar aparece un pequeño botón de ajuste (🎛) junto a ella. Al hacer clic se abre la lista de subtipos del tipo: si no se marca ninguno, el permiso sigue aplicándose a todos los subtipos como antes; si se marcan uno o más, se aplica solo a esos — una tarjeta de un subtipo distinto del mismo tipo se trata como si esa celda no tuviera ningún permiso, volviendo al permiso habitual del rol. Esto permite decir «los miembros pueden editar cualquier Aplicación salvo los AI Agent» en lugar de denegar **Editar** en todo el tipo Aplicación.
+
 Algunas reglas que conviene conocer:
 
 - **Los administradores nunca están restringidos.** La fila de administrador está bloqueada.

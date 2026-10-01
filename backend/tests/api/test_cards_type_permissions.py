@@ -37,6 +37,13 @@ async def set_overrides(db, type_key: str, overrides: dict) -> None:
     PermissionService.invalidate_type_permission_cache(type_key)
 
 
+async def set_subtypes(db, type_key: str, subtypes: list[dict]) -> None:
+    """Write a type's subtype list (test setup for subtype-scoped overrides)."""
+    ct = (await db.execute(select(CardType).where(CardType.key == type_key))).scalar_one()
+    ct.subtypes = subtypes
+    await db.flush()
+
+
 @pytest.fixture
 async def env(db):
     await create_role(db, key="admin", label="Admin", permissions={"*": True})
@@ -265,6 +272,152 @@ class TestBulkUpdateGate:
             "/api/v1/cards/bulk",
             json={"ids": [str(card.id)], "updates": {"description": "x"}},
             headers=auth_headers(env["viewer"]),
+        )
+        assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Subtype-scoped role_permissions cells
+# ---------------------------------------------------------------------------
+
+APP_SUBTYPES = [
+    {"key": "microservice", "label": "Microservice"},
+    {"key": "ai_agent", "label": "AI Agent"},
+]
+
+
+class TestSubtypeScopedGate:
+    """A `role_permissions` cell may scope its grant/deny to specific subtypes."""
+
+    async def test_create_denied_only_for_the_scoped_subtype(self, client, db, env):
+        await set_subtypes(db, "Application", APP_SUBTYPES)
+        await set_overrides(
+            db,
+            "Application",
+            {"member": {"inventory.create": {"value": False, "subtypes": ["microservice"]}}},
+        )
+
+        denied = await client.post(
+            "/api/v1/cards",
+            json={"type": "Application", "subtype": "microservice", "name": "Blocked"},
+            headers=auth_headers(env["member"]),
+        )
+        assert denied.status_code == 403
+
+        allowed = await client.post(
+            "/api/v1/cards",
+            json={"type": "Application", "subtype": "ai_agent", "name": "Allowed"},
+            headers=auth_headers(env["member"]),
+        )
+        assert allowed.status_code == 201
+
+    async def test_edit_denied_only_for_the_scoped_subtype(self, client, db, env):
+        await set_subtypes(db, "Application", APP_SUBTYPES)
+        micro = await create_card(
+            db,
+            card_type="Application",
+            subtype="microservice",
+            name="Micro",
+            user_id=env["admin"].id,
+        )
+        agent = await create_card(
+            db, card_type="Application", subtype="ai_agent", name="Agent", user_id=env["admin"].id
+        )
+        await set_overrides(
+            db,
+            "Application",
+            {"member": {"inventory.edit": {"value": False, "subtypes": ["microservice"]}}},
+        )
+
+        denied = await client.patch(
+            f"/api/v1/cards/{micro.id}", json={"name": "x"}, headers=auth_headers(env["member"])
+        )
+        assert denied.status_code == 403
+
+        allowed = await client.patch(
+            f"/api/v1/cards/{agent.id}", json={"name": "x"}, headers=auth_headers(env["member"])
+        )
+        assert allowed.status_code == 200
+
+    async def test_bulk_create_spans_two_subtypes_with_different_grants(self, client, db, env):
+        await set_subtypes(db, "Application", APP_SUBTYPES)
+        await set_overrides(
+            db,
+            "Application",
+            {"member": {"inventory.create": {"value": False, "subtypes": ["microservice"]}}},
+        )
+
+        response = await client.post(
+            "/api/v1/cards/bulk-create",
+            json={
+                "cards": [
+                    {
+                        "row_index": 1,
+                        "type": "Application",
+                        "subtype": "microservice",
+                        "name": "Denied",
+                    },
+                    {
+                        "row_index": 2,
+                        "type": "Application",
+                        "subtype": "ai_agent",
+                        "name": "Fine",
+                    },
+                ]
+            },
+            headers=auth_headers(env["member"]),
+        )
+        assert response.status_code == 403
+        assert "microservice" in response.json()["detail"]
+
+    async def test_archive_denied_only_for_the_scoped_subtype(self, client, db, env):
+        """Exercises `_ensure_permission_on_each`'s subtype wiring via the bulk-archive route."""
+        await set_subtypes(db, "Application", APP_SUBTYPES)
+        micro = await create_card(
+            db,
+            card_type="Application",
+            subtype="microservice",
+            name="Micro",
+            user_id=env["admin"].id,
+        )
+        agent = await create_card(
+            db, card_type="Application", subtype="ai_agent", name="Agent", user_id=env["admin"].id
+        )
+        await set_overrides(
+            db,
+            "Application",
+            {"member": {"inventory.archive": {"value": False, "subtypes": ["microservice"]}}},
+        )
+
+        response = await client.post(
+            "/api/v1/cards/bulk-archive",
+            json={"card_ids": [str(micro.id), str(agent.id)]},
+            headers=auth_headers(env["member"]),
+        )
+        assert response.status_code == 403
+
+        # The un-scoped subtype alone still archives fine.
+        response = await client.post(
+            "/api/v1/cards/bulk-archive",
+            json={"card_ids": [str(agent.id)]},
+            headers=auth_headers(env["member"]),
+        )
+        assert response.status_code == 200
+
+    async def test_unscoped_override_still_applies_to_every_subtype(self, client, db, env):
+        """Regression guard: a plain bool cell ("All subtypes") is unaffected by scoping."""
+        await set_subtypes(db, "Application", APP_SUBTYPES)
+        micro = await create_card(
+            db,
+            card_type="Application",
+            subtype="microservice",
+            name="Micro",
+            user_id=env["admin"].id,
+        )
+        await set_overrides(db, "Application", {"member": {"inventory.edit": False}})
+
+        response = await client.patch(
+            f"/api/v1/cards/{micro.id}", json={"name": "x"}, headers=auth_headers(env["member"])
         )
         assert response.status_code == 403
 

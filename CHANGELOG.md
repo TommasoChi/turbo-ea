@@ -5,6 +5,12 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.151.0] - 2026-10-01
+
+### Added
+
+- **A card-type permission override can now be scoped to specific subtypes.** On the Permissions tab of a card type (Admin → Metamodel), once a role's Create/Edit/Archive/Delete cell is set to Allow or Deny, a new "tune" button next to it opens a picker for the type's subtypes. Leaving none selected keeps the override applied to every subtype ("All", the previous behaviour, unchanged); picking one or more scopes the grant or denial to only those subtypes — a card of a different subtype falls back to the role's ordinary permission, exactly as if no override existed for it. Available wherever the existing per-type override already applied: creating, editing, archiving, deleting and bulk operations, including through the MCP server's write tools.
+
 ## [2.150.0] - 2026-09-24
 
 ### Added

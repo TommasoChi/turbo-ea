@@ -104,6 +104,7 @@ class PermissionService:
         permission: str,
         *,
         card_type_key: str | None = None,
+        subtype: str | None = None,
     ) -> bool:
         """Check if user's app-level role grants the given permission.
 
@@ -128,12 +129,20 @@ class PermissionService:
         if card_type_key and permission in TYPE_SCOPED_APP_PERMISSIONS:
             overrides = await PermissionService.load_type_role_permissions(db, card_type_key)
             cell = overrides.get(role_key, {}).get(permission)
-            if cell is not None:
-                return bool(cell)
+            resolved = PermissionService._resolve_override_cell(cell, subtype)
+            if resolved is not None:
+                return resolved
         return bool(perms.get(permission, False))
 
     @staticmethod
-    async def is_type_denied(db: AsyncSession, user: User, permission: str, type_key: str) -> bool:
+    async def is_type_denied(
+        db: AsyncSession,
+        user: User,
+        permission: str,
+        type_key: str,
+        *,
+        subtype: str | None = None,
+    ) -> bool:
         """True when the card type *explicitly* denies this role the permission.
 
         Distinct from ``not has_app_permission(...)``: this returns True only
@@ -151,7 +160,8 @@ class PermissionService:
         if permission not in TYPE_SCOPED_APP_PERMISSIONS:
             return False
         overrides = await PermissionService.load_type_role_permissions(db, type_key)
-        return overrides.get(role_key, {}).get(permission) is False
+        cell = overrides.get(role_key, {}).get(permission)
+        return PermissionService._resolve_override_cell(cell, subtype) is False
 
     @staticmethod
     async def type_permissions_for_role(db: AsyncSession, role_key: str) -> dict[str, dict]:
@@ -170,14 +180,43 @@ class PermissionService:
         for type_key, overrides in rows.all():
             cells = (overrides or {}).get(role_key)
             if cells:
-                out[type_key] = dict(cells)
+                # This summary has no subtype context (no specific card in
+                # play), so a subtype-scoped cell can't be answered definitely
+                # here — omit it, same as "not overridden" at this coarse
+                # level. The real check at create/edit/archive/delete time
+                # still applies the scoped rule correctly.
+                unscoped = {k: v for k, v in cells.items() if not isinstance(v, dict)}
+                if unscoped:
+                    out[type_key] = unscoped
         return out
 
     @staticmethod
-    async def _card_type_key(db: AsyncSession, card_id: UUID) -> str | None:
-        """Resolve a card's type key (used to apply per-type overrides)."""
-        result = await db.execute(select(Card.type).where(Card.id == card_id))
-        return result.scalar_one_or_none()
+    async def _card_type_and_subtype(
+        db: AsyncSession, card_id: UUID
+    ) -> tuple[str | None, str | None]:
+        """Resolve a card's type and subtype keys (used to apply per-type/subtype overrides)."""
+        result = await db.execute(select(Card.type, Card.subtype).where(Card.id == card_id))
+        row = result.one_or_none()
+        return (row.type, row.subtype) if row else (None, None)
+
+    @staticmethod
+    def _resolve_override_cell(cell: object, subtype: str | None) -> bool | None:
+        """Resolve one stored ``role_permissions`` cell against a card's subtype.
+
+        Returns ``None`` when the cell doesn't apply — the caller must then
+        fall through to the role's landscape-wide permission, identical to a
+        missing cell. A plain ``bool`` cell always applies (unscoped, "All
+        subtypes"). A ``{"value": bool, "subtypes": [...]}`` cell applies only
+        when ``subtype`` is in that list.
+        """
+        if cell is None:
+            return None
+        if isinstance(cell, dict):
+            scoped = cell.get("subtypes")
+            if scoped and subtype not in scoped:
+                return None
+            return bool(cell.get("value", False))
+        return bool(cell)
 
     @staticmethod
     async def has_card_permission(
@@ -201,7 +240,7 @@ class PermissionService:
             )
         )
         if type_key is None:
-            type_key = await PermissionService._card_type_key(db, card_id)
+            type_key, _ = await PermissionService._card_type_and_subtype(db, card_id)
         if not type_key:
             return False
 
@@ -236,23 +275,27 @@ class PermissionService:
         card_permission: str | None = None,
         *,
         card_type_key: str | None = None,
+        subtype: str | None = None,
     ) -> bool:
         """Combined check: returns True if app-level OR card-level grants access.
 
-        The app-level branch is per-card-type aware. When ``card_id`` is given
-        the type is resolved once here and reused for both branches, so an
-        existing caller passing only ``card_id`` picks up the type overrides
-        without any change at the call site. A caller that already knows the
-        type (creation, where no card exists yet) passes ``card_type_key``.
+        The app-level branch is per-card-type and per-subtype aware. When
+        ``card_id`` is given and neither ``card_type_key`` nor ``subtype`` is
+        supplied, both are resolved once here and reused for both branches, so
+        an existing caller passing only ``card_id`` picks up type AND subtype
+        overrides without any change at the call site. A caller that already
+        knows the type (creation, where no card exists yet, or a batch that
+        pre-resolved types itself) passes ``card_type_key``/``subtype``
+        explicitly instead.
 
         Stakeholder grants are untouched by overrides: a type-level deny takes
         away the *landscape-wide* grant, never the authority someone holds as
         the owner of one specific card.
         """
         if card_id and card_type_key is None:
-            card_type_key = await PermissionService._card_type_key(db, card_id)
+            card_type_key, subtype = await PermissionService._card_type_and_subtype(db, card_id)
         if await PermissionService.has_app_permission(
-            db, user, app_permission, card_type_key=card_type_key
+            db, user, app_permission, card_type_key=card_type_key, subtype=subtype
         ):
             return True
         if card_id and card_permission:
@@ -270,10 +313,17 @@ class PermissionService:
         card_permission: str | None = None,
         *,
         card_type_key: str | None = None,
+        subtype: str | None = None,
     ) -> None:
         """Raise 403 if permission check fails."""
         if not await PermissionService.check_permission(
-            db, user, app_permission, card_id, card_permission, card_type_key=card_type_key
+            db,
+            user,
+            app_permission,
+            card_id,
+            card_permission,
+            card_type_key=card_type_key,
+            subtype=subtype,
         ):
             raise HTTPException(403, "Insufficient permissions")
 
@@ -334,8 +384,8 @@ class PermissionService:
         role_data = await PermissionService.load_role(db, _effective_role(user))
         app_perms = role_data.get("permissions", {}) if role_data else {}
 
-        # Get card type
-        type_key = await PermissionService._card_type_key(db, card_id)
+        # Get card type and subtype
+        type_key, subtype = await PermissionService._card_type_and_subtype(db, card_id)
 
         # Per-card-type overrides for this role. These shape the *app-level*
         # half of the effective permissions below; without this the buttons on
@@ -375,11 +425,13 @@ class PermissionService:
         is_admin = app_perms.get("*", False)
 
         def _app(key: str) -> bool:
-            """The role's app-level grant for ``key``, after per-type overrides."""
+            """The role's app-level grant for ``key``, after per-type/subtype overrides."""
             if key in TYPE_SCOPED_APP_PERMISSIONS:
-                cell = role_overrides.get(key)
-                if cell is not None:
-                    return bool(cell)
+                resolved = PermissionService._resolve_override_cell(
+                    role_overrides.get(key), subtype
+                )
+                if resolved is not None:
+                    return resolved
             return bool(app_perms.get(key, False))
 
         effective = {

@@ -419,17 +419,23 @@ def validate_type_role_permissions(
     *,
     known_role_keys: set[str],
     wildcard_role_keys: set[str],
-) -> dict[str, dict[str, bool]]:
+    known_subtype_keys: set[str] = frozenset(),
+) -> dict[str, dict[str, bool | dict]]:
     """Validate and normalise a ``card_types.role_permissions`` map.
 
-    Shape: ``{role_key: {app_permission: bool}}``. Only *explicitly overridden*
-    cells are stored — an absent key means "inherit the role's global grant",
-    which is why empty inner dicts are dropped rather than persisted.
+    Shape: ``{role_key: {app_permission: cell}}`` where ``cell`` is either a
+    plain ``bool`` (unscoped — applies to every subtype of the type, "All") or
+    ``{"value": bool, "subtypes": [subtype_key, ...]}`` (applies only to those
+    subtypes; a card of a different subtype falls through as if the cell were
+    absent). Only *explicitly overridden* cells are stored — an absent key
+    means "inherit the role's global grant", which is why empty inner dicts
+    are dropped rather than persisted.
 
     Raises ``ValueError`` (route layer converts to 400) when the payload names
     an unknown role, a wildcard role (admin can never be overridden — that is
     the escape hatch that keeps an instance recoverable), a permission outside
-    ``TYPE_SCOPED_APP_PERMISSIONS``, or a non-boolean value.
+    ``TYPE_SCOPED_APP_PERMISSIONS``, a scoped cell naming a subtype the type
+    doesn't have, or a malformed value.
 
     Archived roles are accepted: their overrides are inert but a round-trip of
     a stored map must never start failing because a role was archived.
@@ -439,7 +445,7 @@ def validate_type_role_permissions(
     if not isinstance(raw, dict):
         raise ValueError("role_permissions must be an object")
 
-    out: dict[str, dict[str, bool]] = {}
+    out: dict[str, dict[str, bool | dict]] = {}
     for role_key, cells in raw.items():
         if not isinstance(role_key, str):
             raise ValueError("role_permissions keys must be role keys")
@@ -452,21 +458,56 @@ def validate_type_role_permissions(
         if not isinstance(cells, dict):
             raise ValueError(f"role_permissions['{role_key}'] must be an object")
 
-        clean: dict[str, bool] = {}
+        clean: dict[str, bool | dict] = {}
         for perm_key, value in cells.items():
             if perm_key not in TYPE_SCOPED_APP_PERMISSIONS:
                 raise ValueError(
                     f"Permission '{perm_key}' cannot be set per card type "
                     f"(allowed: {', '.join(sorted(TYPE_SCOPED_APP_PERMISSIONS))})"
                 )
-            if not isinstance(value, bool):
-                raise ValueError(f"role_permissions['{role_key}']['{perm_key}'] must be a boolean")
-            clean[perm_key] = value
+            clean[perm_key] = _validate_role_permission_cell(
+                value, role_key=role_key, perm_key=perm_key, known_subtype_keys=known_subtype_keys
+            )
 
         # An empty override map is the same as no entry at all.
         if clean:
             out[role_key] = clean
     return out
+
+
+def _validate_role_permission_cell(
+    value: object, *, role_key: str, perm_key: str, known_subtype_keys: set[str]
+) -> bool | dict:
+    """Validate one ``role_permissions[role][permission]`` cell (bool or scoped dict)."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, dict):
+        if set(value.keys()) != {"value", "subtypes"}:
+            raise ValueError(
+                f"role_permissions['{role_key}']['{perm_key}'] must have exactly "
+                "'value' and 'subtypes' keys"
+            )
+        cell_value = value["value"]
+        if not isinstance(cell_value, bool):
+            raise ValueError(
+                f"role_permissions['{role_key}']['{perm_key}']['value'] must be a boolean"
+            )
+        subtypes = value["subtypes"]
+        if not isinstance(subtypes, list) or not subtypes:
+            raise ValueError(
+                f"role_permissions['{role_key}']['{perm_key}']['subtypes'] must be a non-empty list"
+            )
+        for subtype_key in subtypes:
+            if subtype_key not in known_subtype_keys:
+                raise ValueError(
+                    f"role_permissions['{role_key}']['{perm_key}'] names unknown "
+                    f"subtype '{subtype_key}'"
+                )
+        return {"value": cell_value, "subtypes": list(subtypes)}
+    raise ValueError(
+        f"role_permissions['{role_key}']['{perm_key}'] must be a boolean or "
+        "a {{value, subtypes}} object"
+    )
 
 
 # ---------------------------------------------------------------------------

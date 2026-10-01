@@ -147,6 +147,8 @@ Jede Zelle hat drei Zustände:
 
 So können Sie festlegen: «Jeder darf Anwendungen erstellen, aber nur das zentrale Team erstellt Organisationen und Initiativen» — ohne für jeden Kartentyp eine eigene Rolle zu erfinden. Wird **Erstellen** für einen Typ verweigert, verschwindet dieser auch aus dem Erstellungsdialog, dem Diagrammeditor und dem Tabellenimport.
 
+**Ein Erlauben oder Verweigern auf bestimmte Subtypen beschränken.** Hat ein Typ Subtypen, erscheint neben einer auf Erlauben oder Verweigern gesetzten Zelle ein kleiner Regler-Button (🎛). Ein Klick öffnet die Liste der Subtypen des Typs: Ist keiner markiert, gilt die Berechtigung weiterhin für alle Subtypen wie bisher; sind einer oder mehrere markiert, gilt sie nur für diese — eine Karte eines anderen Subtyps desselben Typs wird behandelt, als hätte diese Zelle keine Berechtigung, und fällt auf die gewöhnliche Berechtigung der Rolle zurück. So lässt sich festlegen: «Mitglieder dürfen jede Anwendung bearbeiten, außer KI-Agenten», statt **Bearbeiten** für den gesamten Typ Anwendung zu verweigern.
+
 Einige Regeln sind wichtig:
 
 - **Administratoren werden nie eingeschränkt.** Die Administratorzeile ist gesperrt.

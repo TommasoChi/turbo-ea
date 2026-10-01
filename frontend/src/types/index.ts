@@ -303,6 +303,16 @@ export interface CardType {
 /** One row of the card-type permission matrix (`GET /metamodel/types/{key}/permissions`).
  *  `inherited` is what the role grants landscape-wide; `overrides` is what this
  *  type stores. A permission missing from `overrides` inherits. */
+/** A scoped override cell: applies only to the listed subtypes of the type;
+ *  a card of a different subtype falls through as if the cell were absent.
+ *  An unscoped cell is a plain `boolean` instead ("All subtypes"). */
+export interface CardTypePermissionScopedCell {
+  value: boolean;
+  subtypes: string[];
+}
+
+export type CardTypePermissionCell = boolean | CardTypePermissionScopedCell;
+
 export interface CardTypePermissionRole {
   key: string;
   label: string;
@@ -311,13 +321,16 @@ export interface CardTypePermissionRole {
   /** Admin (`{"*": true}`) — never overridable, rendered locked. */
   is_wildcard: boolean;
   inherited: Record<string, boolean>;
-  overrides: Record<string, boolean>;
+  overrides: Record<string, CardTypePermissionCell>;
 }
 
 export interface CardTypePermissionMatrix {
   /** The four overridable actions, in display order, with their registry descriptions. */
   actions: { key: string; description: string }[];
   roles: CardTypePermissionRole[];
+  /** The type's own subtypes, for the per-cell scope selector. Empty when the
+   *  type has none — the selector never renders in that case. */
+  subtypes: { key: string; label: string }[];
 }
 
 /** Per-type human-readable card ID config (discussion #811). When enabled

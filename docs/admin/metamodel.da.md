@@ -147,6 +147,8 @@ Hver celle har tre tilstande:
 
 Det gør det muligt at sige «alle må oprette applikationer, men kun det centrale team opretter organisationer og initiativer» uden at opfinde en rolle pr. korttype. At nægte **Opret** på en type fjerner den også fra oprettelsesdialogen, diagrameditoren og regnearksimporten.
 
+**Afgræns en tilladelse eller et afslag til specifikke undertyper.** For en type med undertyper vises en lille justeringsknap (🎛) ved siden af en celle, så snart den sættes til Tillad eller Nægt. Et klik åbner listen over typens undertyper: er ingen markeret, gælder tilladelsen stadig for alle undertyper som før; er en eller flere markeret, gælder den kun for dem — et kort af en anden undertype af samme type behandles, som havde cellen ingen tilladelse, og falder tilbage til rollens almindelige tilladelse. Det gør det muligt at sige «medlemmer kan redigere alle applikationer undtagen AI-agenter» i stedet for at nægte **Rediger** for hele typen Applikation.
+
 Nogle regler er værd at kende:
 
 - **Administratorer begrænses aldrig.** Administratorrækken er låst.
