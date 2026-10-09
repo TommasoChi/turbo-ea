@@ -6,7 +6,7 @@ import { saveAs } from "file-saver";
 import { registerExtension, resetExtensionHost, UI_SDK_VERSION } from "@/lib/extensionHost";
 import type { ArchitectureDecision } from "@/types";
 
-import { exportAdrsToDocx } from "./adrExport";
+import { adrDocxCover, exportAdrsToDocx } from "./adrExport";
 
 const mockSaveAs = saveAs as ReturnType<typeof vi.fn>;
 
@@ -77,5 +77,26 @@ describe("exportAdrsToDocx — extension sections", () => {
     warn.mockRestore();
     // The export still completed and saved despite the extension throwing.
     expect(mockSaveAs).toHaveBeenCalledTimes(1);
+  });
+
+  it("a single decision gets the SoAW cover: document type over its name, no count, no date", () => {
+    expect(adrDocxCover([adr()])).toEqual({
+      title: "Architecture Decision Record",
+      subtitle: "ADR-0001 — Adopt event bus",
+      generatedOn: null,
+    });
+  });
+
+  it("several decisions keep the collection cover with the count and date", () => {
+    const cover = adrDocxCover([adr(), adr({ id: "adr-2", reference_number: "ADR-0002" })]);
+    expect(cover.title).toBe("Architecture Decision Records");
+    expect(cover.subtitle).toBe("2 decisions");
+    expect(cover.generatedOn).toMatch(/^Generated on /);
+  });
+
+  it("names a single-decision export after its reference (the preview/editor Word button)", async () => {
+    await exportAdrsToDocx([adr()]);
+    const filename = String(mockSaveAs.mock.calls[0][1]);
+    expect(filename).toMatch(/^ADR-0001_\d{4}-\d{2}-\d{2}_\d{4}\.docx$/);
   });
 });

@@ -7,11 +7,17 @@ import "@/lib/agGridSetup";
 import { installAgGridScrollbarProbe } from "./agGridScrollbarProbe";
 import { installMatchMedia, setViewportWidth } from "./matchMedia";
 
-installMatchMedia();
-// Must run before any grid mounts: it is what lets AG Grid cache its scrollbar
-// measurement instead of re-probing `document` from a timer that can outlive
-// the test environment. See the module for the full account.
-installAgGridScrollbarProbe();
+// The scripts/ tests run under `@vitest-environment node` (they exercise the
+// coverage tooling CI runs, not the page), so nothing below may assume a DOM.
+const hasDom = typeof window !== "undefined";
+
+if (hasDom) {
+  installMatchMedia();
+  // Must run before any grid mounts: it is what lets AG Grid cache its scrollbar
+  // measurement instead of re-probing `document` from a timer that can outlive
+  // the test environment. See the module for the full account.
+  installAgGridScrollbarProbe();
+}
 
 // Node 22+ defines its own global `localStorage` accessor (backed by
 // --localstorage-file, gated behind an experimental flag) that shadows
@@ -60,6 +66,7 @@ Object.defineProperty(globalThis, "localStorage", {
 // Provide a minimal sessionStorage for tests (jsdom includes one, but
 // this ensures it's always clean between test files).
 beforeEach(() => {
+  if (!hasDom) return;
   sessionStorage.clear();
   localStorage.clear();
   // Desktop by default, so every pre-existing test keeps seeing exactly what

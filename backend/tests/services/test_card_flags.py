@@ -44,6 +44,11 @@ def test_a_card_touched_earlier_on_the_cutoff_day_is_not_stale():
     assert day_before < cutoff
 
 
+def test_a_naive_now_reads_as_utc():
+    naive = datetime(2026, 8, 25, 13, 0)
+    assert staleness_cutoff(30, "days", now=naive) == datetime(2026, 7, 26, tzinfo=timezone.utc)
+
+
 @pytest.mark.parametrize("unit", STALENESS_UNITS)
 def test_cutoff_is_midnight_not_the_current_time_of_day(unit):
     """The builder shows the admin a date, so the query must use one. A cutoff
@@ -194,3 +199,77 @@ def test_stale_cutoff_matches_the_documented_threshold():
         )
         < 60
     )
+
+
+# ---------------------------------------------------------------------------
+# The boundary instant: "before the cutoff" is strict, in SQL as in prose
+# ---------------------------------------------------------------------------
+
+
+class _Frozen(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return NOW
+
+
+async def _cards_matching(db, condition, *stamps):
+    from sqlalchemy import select
+
+    from app.models.card import Card
+    from tests.conftest import create_card, create_card_type
+
+    await create_card_type(db, key="Application", label="Application")
+    by_id = {}
+    for i, stamp in enumerate(stamps):
+        card = await create_card(db, card_type="Application", name=f"Card {i}")
+        card.updated_at = stamp
+        await db.flush()
+        by_id[card.id] = i
+    rows = (await db.execute(select(Card.id).where(condition))).scalars().all()
+    return sorted(by_id[r] for r in rows if r in by_id)
+
+
+async def test_a_card_exactly_at_the_stale_cutoff_is_not_stale(db, monkeypatch):
+    import app.services.card_flags as card_flags
+
+    monkeypatch.setattr(card_flags, "datetime", _Frozen)
+    cutoff = NOW - timedelta(days=STALE_AFTER_DAYS)
+    matched = await _cards_matching(
+        db, card_flags.stale_condition(), cutoff, cutoff - timedelta(seconds=1)
+    )
+    assert matched == [1]
+
+
+async def test_a_card_exactly_at_the_survey_cutoff_does_not_match(db, monkeypatch):
+    import app.services.card_flags as card_flags
+
+    monkeypatch.setattr(card_flags, "datetime", _Frozen)
+    condition = not_updated_condition({"not_updated_for": {"value": 30, "unit": "days"}})
+    midnight = datetime(2026, 7, 26, tzinfo=timezone.utc)
+    matched = await _cards_matching(db, condition, midnight, midnight - timedelta(seconds=1))
+    assert matched == [1]
+
+
+def test_an_unknown_eol_bucket_names_itself():
+    from app.services.card_flags import eol_bucket_condition
+
+    with pytest.raises(ValueError) as exc:
+        eol_bucket_condition("nope")
+    assert str(exc.value) == "Unknown EOL bucket: nope"
+
+
+class _UtcOnlyClock(datetime):
+    """UTC already says 1 October; the host's local clock still says 30 September."""
+
+    @classmethod
+    def now(cls, tz=None):
+        if tz is timezone.utc:
+            return datetime(2025, 10, 1, 0, 30, tzinfo=timezone.utc)
+        return datetime(2025, 9, 30, 20, 30)
+
+
+def test_without_a_now_the_cutoff_counts_from_today_in_utc(monkeypatch):
+    from app.services import card_flags
+
+    monkeypatch.setattr(card_flags, "datetime", _UtcOnlyClock)
+    assert staleness_cutoff(30, "days") == datetime(2025, 9, 1, tzinfo=timezone.utc)

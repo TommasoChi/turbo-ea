@@ -80,6 +80,12 @@ RELATION_MAPPING: dict[str, str] = {
     "interfaceITComponentRelation": "relInterfaceToITC",
     "relInterfaceSuccessor": "relInterfaceSuccessor",
     "interfaceSuccessorRelation": "relInterfaceSuccessor",
+    # --- Data Object lineage ---
+    # Both spellings were in ``FLIP_DIRECTION`` but neither was routed
+    # here, so a data-object successor row landed as a conflict; the
+    # exporter's round-trip guard surfaced it.
+    "relDataObjectSuccessor": "relDataObjectSuccessor",
+    "dataObjectSuccessorRelation": "relDataObjectSuccessor",
     # --- Initiative connections (LeanIX "Project" → TEA "Initiative") ---
     "relProjectToObjective": "relInitiativeToObjective",
     "projectObjectiveRelation": "relInitiativeToObjective",
@@ -258,3 +264,108 @@ SUBSCRIPTION_ROLE_MAPPING: dict[str, str] = {
 # must never surface as a relation. The adapter exposes this set so the
 # staging pipeline can skip them when iterating relations.
 HIERARCHY_RELATIONS: frozenset[str] = frozenset({"relToParent", "relToChild"})
+
+
+# ---------------------------------------------------------------------------
+# Export side — Turbo EA → LeanIX
+# ---------------------------------------------------------------------------
+#
+# The importer's tables above are many-to-one (``Process`` and
+# ``BusinessProcess`` both land on ``BusinessProcess``; ``Project`` and
+# ``Initiative`` both land on ``Initiative``), so the exporter cannot
+# invert them mechanically. These explicit tables pick LeanIX's default
+# technical names. ``test_migration_leanix_ldif_exporter.py`` pins that
+# every export value routes back to its own key through the import
+# tables, so the two directions cannot drift apart.
+
+# Turbo EA card-type key → LeanIX fact-sheet type name.
+EXPORT_TYPE_MAPPING: dict[str, str] = {
+    "Application": "Application",
+    "ITComponent": "ITComponent",
+    "BusinessCapability": "BusinessCapability",
+    "BusinessContext": "BusinessContext",
+    "BusinessProcess": "Process",
+    "DataObject": "DataObject",
+    "Interface": "Interface",
+    "Initiative": "Project",
+    "Provider": "Provider",
+    "TechCategory": "TechCategory",
+    "Platform": "Platform",
+    "Objective": "Objective",
+    "Organization": "UserGroup",
+}
+
+
+# Turbo EA relation-type key → LeanIX relation name in the form the
+# Integration API and GraphQL use (``rel<From>To<To>``). One entry per
+# seeded relation type; a relation type absent here (an admin-created
+# one, or ``relProcessCalls`` which LeanIX does not model) is exported
+# under its own Turbo EA key, which LeanIX accepts once the same
+# relation exists in its meta model. Every value is also a key of
+# ``RELATION_MAPPING`` routing back to the same Turbo EA key, so the
+# two directions cannot drift.
+EXPORT_RELATION_API_MAPPING: dict[str, str] = {
+    "relAppToBC": "relApplicationToBusinessCapability",
+    "relAppToBizCtx": "relApplicationToBusinessContext",
+    "relAppToInterface": "relApplicationToInterface",
+    "relAppToDataObj": "relApplicationToDataObject",
+    "relAppToITC": "relApplicationToITComponent",
+    "relAppSuccessor": "relApplicationSuccessor",
+    "relITCToTechCat": "relITComponentToTechCategory",
+    "relITCToPlatform": "relITComponentToPlatform",
+    "relITCSuccessor": "relITComponentSuccessor",
+    "relInterfaceToDataObj": "relInterfaceToDataObject",
+    "relInterfaceToITC": "relInterfaceToITComponent",
+    "relInterfaceSuccessor": "relInterfaceSuccessor",
+    "relInitiativeToObjective": "relProjectToObjective",
+    "relInitiativeToBC": "relProjectToBusinessCapability",
+    "relInitiativeToApp": "relProjectToApplication",
+    "relInitiativeToITC": "relProjectToITComponent",
+    "relInitiativeToInterface": "relProjectToInterface",
+    "relInitiativeToDataObj": "relProjectToDataObject",
+    "relInitiativeToPlatform": "relProjectToPlatform",
+    "relInitiativeSuccessor": "relInitiativeSuccessor",
+    "relObjectiveToBC": "relObjectiveToBusinessCapability",
+    "relPlatformToObjective": "relPlatformToObjective",
+    "relPlatformToApp": "relPlatformToApplication",
+    "relPlatformToITC": "relPlatformToITComponent",
+    "relPlatformSuccessor": "relPlatformSuccessor",
+    "relProviderToApp": "relProviderToApplication",
+    "relProviderToITC": "relProviderToITComponent",
+    "relProviderToInitiative": "relProviderToProject",
+    "relBizCtxToBC": "relBusinessContextToBusinessCapability",
+    "relProcessToBC": "relProcessToBusinessCapability",
+    "relProcessToApp": "relProcessToApplication",
+    "relProcessToDataObj": "relProcessToDataObject",
+    "relProcessToITC": "relProcessToITComponent",
+    "relProcessDependency": "relProcessDependency",
+    "relProcessToOrg": "relProcessToOrganization",
+    "relProcessToInitiative": "relProcessToProject",
+    "relProcessToObjective": "relProcessToObjective",
+    "relProcessToBizCtx": "relProcessToBusinessContext",
+    "relProcessSuccessor": "relProcessSuccessor",
+    "relOrgToApp": "relUserGroupToApplication",
+    "relOrgToBizCtx": "relUserGroupToBusinessContext",
+    "relOrgToITC": "relUserGroupToITComponent",
+    "relOrgToInitiative": "relUserGroupToProject",
+    "relOrgToObjective": "relUserGroupToObjective",
+    "relDataObjectSuccessor": "relDataObjectSuccessor",
+}
+
+
+# Turbo EA relation-type keys whose endpoints are swapped on export —
+# the mirror of ``FLIP_DIRECTION``. Turbo EA stores a lineage edge as
+# "source succeeds target"; LeanIX reads the same relation as "from has
+# successor to" (from = the older fact sheet), so the exporter writes
+# ``from = target, to = source``.
+EXPORT_FLIP_DIRECTION: frozenset[str] = frozenset(
+    {
+        "relAppSuccessor",
+        "relITCSuccessor",
+        "relInterfaceSuccessor",
+        "relInitiativeSuccessor",
+        "relPlatformSuccessor",
+        "relProcessSuccessor",
+        "relDataObjectSuccessor",
+    }
+)

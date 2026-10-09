@@ -98,6 +98,8 @@ Quando cliccate **Crea rischio** su un riscontro non conforme (vedi [TurboLens](
 
 Il pulsante **Esporta** del Registro dei Rischi scrive un `.xlsx` a due fogli: il foglio 1 è la griglia di rischi filtrata, il foglio 2 una riga per ciclo di ciascuna attività di ciascun rischio nello stesso filtro, inclusi tempo di preavviso e timestamp di attivazione. Usatelo per dossier di audit o per stakeholder senza accesso a Turbo EA. Ogni riga di attività nel pannello di dettaglio dispone inoltre del proprio pulsante **Esporta cronologia** per una cartella di lavoro per attività.
 
+Un singolo rischio può anche essere stampato dalla sua pagina di dettaglio: **PDF** (accanto a **Elimina**) apre un dossier pronto per la stampa — identificazione, valutazione iniziale e residua, attività di mitigazione con i cicli più recenti, schede interessate, workflow e motivazione dell'accettazione — in una nuova scheda, pronto per *Salva come PDF* del browser.
+
 ### Importazione {: #import }
 
 Il pulsante **Importa** accanto a «Esporta» carica rischi in blocco da un file `.xlsx`. Fai clic su **Scarica modello** per ottenere una cartella di lavoro iniziale con le intestazioni corrette, inserisci un rischio per riga e caricala. Una riga il cui `reference` corrisponde a un rischio esistente viene **saltata** (l'importatore non aggiorna mai i rischi esistenti), così la reimportazione di un registro esportato in precedenza è idempotente; ogni altra riga crea un rischio **completamente nuovo** con un riferimento `R-NNNNNN` generato automaticamente. L'anteprima indica quante righe verranno saltate prima della conferma.
@@ -112,7 +114,7 @@ Sia la Panoramica Sicurezza di TurboLens sia la pagina del Registro dei Rischi m
 
 ## Griglia del registro
 
-Il registro è un AG Grid che segue gli standard della pagina [Inventario](inventory.md): colonne ordinabili, filtrabili e ridimensionabili con preferenze utente persistite (colonne visibili, ordinamento, stato della sidebar). Il pulsante **+ Nuovo rischio** in barra strumenti apre il dialogo di creazione manuale. Il pulsante **Esporta** della barra strumenti scrive un `.xlsx` a due fogli con la griglia di rischi filtrata nel foglio 1 e una riga per ciclo di attività di mitigazione nel foglio 2 — vedi [Attività di mitigazione → Esportazione](#export) per il formato delle colonne.
+Il registro è un AG Grid che segue gli standard della pagina [Inventario](inventory.md): colonne ordinabili, filtrabili e ridimensionabili con preferenze utente persistite (colonne visibili, ordinamento, stato della sidebar). Il pulsante **+ Nuovo rischio** in barra strumenti apre il dialogo di creazione manuale. Il pulsante **Esporta** della barra strumenti scrive un `.xlsx` a due fogli con la griglia di rischi filtrata nel foglio 1 e una riga per ciclo di attività di mitigazione nel foglio 2 — vedi [Attività di mitigazione → Esportazione](#export) per il formato delle colonne. Una colonna **Origine** indica se un rischio è stato inserito a mano, promosso da un rilievo di conformità o creato da un'estensione, e segue il filtro Origine della sidebar.
 
 ### Filtrare per schede interessate
 

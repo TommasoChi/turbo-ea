@@ -98,6 +98,8 @@ Quand vous cliquez sur **Créer un risque** sur un constat non conforme (voir [T
 
 Le bouton **Exporter** du Registre des risques écrit un `.xlsx` à deux feuilles : la feuille 1 est la grille de risques filtrée, la feuille 2 est une ligne par cycle pour chaque tâche de chaque risque dans le même filtre, incluant le délai de préavis et l'horodatage d'activation. Utilisez-le pour les dossiers d'audit ou pour les parties prenantes sans compte Turbo EA. Chaque ligne de tâche dans le panneau de détail dispose aussi de son propre bouton **Exporter l'historique** pour un classeur par tâche.
 
+Un risque isolé peut aussi être imprimé depuis sa page de détail : **PDF** (à côté de **Supprimer**) ouvre un dossier prêt à imprimer — identification, évaluation initiale et résiduelle, tâches de mitigation avec leurs derniers cycles, fiches affectées, workflow et justification de l'acceptation — dans un nouvel onglet, prêt pour *Enregistrer au format PDF* du navigateur.
+
 ### Importation {: #import }
 
 Le bouton **Importer** à côté d'« Exporter » charge des risques en masse depuis un fichier `.xlsx`. Cliquez sur **Télécharger le modèle** pour obtenir un classeur de départ avec les bons en-têtes, renseignez un risque par ligne, puis téléchargez-le. Une ligne dont la `reference` correspond à un risque existant est **ignorée** (l'importateur ne met jamais à jour de risques existants), de sorte que la réimportation d'un registre précédemment exporté est idempotente ; chaque autre ligne crée un risque **entièrement nouveau** avec une référence `R-NNNNNN` générée automatiquement. L'aperçu indique combien de lignes seront ignorées avant que vous ne confirmiez.
@@ -112,7 +114,7 @@ La Vue d'ensemble Sécurité de TurboLens comme la page du Registre des risques 
 
 ## Grille du registre
 
-Le registre est une grille AG Grid qui reprend les standards de la page [Inventaire](inventory.md) : colonnes triables, filtrables et redimensionnables avec préférences utilisateur persistées (colonnes visibles, ordre de tri, état de la barre latérale). Un bouton **+ Nouveau risque** dans la barre d'outils ouvre le dialogue de création manuelle. Le bouton **Exporter** de la barre d'outils écrit un `.xlsx` à deux feuilles avec la grille de risques filtrée sur la feuille 1 et une ligne par cycle de tâche de mitigation sur la feuille 2 — voir [Tâches de mitigation → Export](#export) pour le format des colonnes.
+Le registre est une grille AG Grid qui reprend les standards de la page [Inventaire](inventory.md) : colonnes triables, filtrables et redimensionnables avec préférences utilisateur persistées (colonnes visibles, ordre de tri, état de la barre latérale). Un bouton **+ Nouveau risque** dans la barre d'outils ouvre le dialogue de création manuelle. Le bouton **Exporter** de la barre d'outils écrit un `.xlsx` à deux feuilles avec la grille de risques filtrée sur la feuille 1 et une ligne par cycle de tâche de mitigation sur la feuille 2 — voir [Tâches de mitigation → Export](#export) pour le format des colonnes. Une colonne **Source** indique si un risque a été saisi à la main, promu depuis un constat de conformité ou créé par une extension, et suit le filtre Source de la barre latérale.
 
 ### Filtrer par fiches concernées
 

@@ -21,6 +21,7 @@ vi.mock("@/api/client", () => ({ api: apiMock }));
 
 const MATRIX = {
   actions: [
+    { key: "inventory.view", description: "View card lists and detail pages" },
     { key: "inventory.create", description: "Create new cards" },
     { key: "inventory.edit", description: "Edit any card" },
     { key: "inventory.archive", description: "Archive and restore cards" },
@@ -34,6 +35,7 @@ const MATRIX = {
       is_system: true,
       is_wildcard: true,
       inherited: {
+        "inventory.view": true,
         "inventory.create": true,
         "inventory.edit": true,
         "inventory.archive": true,
@@ -48,6 +50,7 @@ const MATRIX = {
       is_system: false,
       is_wildcard: false,
       inherited: {
+        "inventory.view": true,
         "inventory.create": true,
         "inventory.edit": true,
         "inventory.archive": true,
@@ -62,6 +65,7 @@ const MATRIX = {
       is_system: false,
       is_wildcard: false,
       inherited: {
+        "inventory.view": true,
         "inventory.create": false,
         "inventory.edit": false,
         "inventory.archive": false,
@@ -77,8 +81,8 @@ function rowFor(label: string) {
   return screen.getByText(label).closest("tr") as HTMLElement;
 }
 
-/** Column order: role, create, edit, archive, delete, reset. */
-const COLUMN = { create: 1, edit: 2, archive: 3, delete: 4 } as const;
+/** Column order: role, view, create, edit, archive, delete, reset. */
+const COLUMN = { view: 1, create: 2, edit: 3, archive: 4, delete: 5 } as const;
 
 /** Click one tri-state option in a role row's action cell. */
 async function setCell(
@@ -105,7 +109,8 @@ describe("CardTypePermissionsPanel", () => {
     expect(apiMock.get).toHaveBeenCalledWith("/metamodel/types/Application/permissions");
     expect(screen.getByText("Admin")).toBeInTheDocument();
     expect(screen.getByText("Viewer")).toBeInTheDocument();
-    // Four actions, each rendered as a header cell.
+    // Five actions, View first, each rendered as a header cell.
+    expect(screen.getByText("View")).toBeInTheDocument();
     expect(screen.getByText("Create")).toBeInTheDocument();
     expect(screen.getByText("Delete")).toBeInTheDocument();
   });
@@ -223,6 +228,37 @@ describe("CardTypePermissionsPanel", () => {
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
+
+  it("locks the other actions of a role whose View is denied, keeping their stored cells", async () => {
+    const user = userEvent.setup();
+    render(<CardTypePermissionsPanel typeKey="Application" onError={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Viewer")).toBeInTheDocument());
+
+    await setCell(user, "Viewer", "view", "Deny");
+
+    const cells = rowFor("Viewer").querySelectorAll("td");
+    for (const action of ["create", "edit", "archive", "delete"] as const) {
+      const cell = cells[COLUMN[action]] as HTMLElement;
+      expect(within(cell).queryAllByRole("button")).toHaveLength(0);
+      expect(
+        within(cell).getByLabelText("Denied because this role may not view cards of this type"),
+      ).toBeInTheDocument();
+    }
+    // The View column itself stays editable.
+    expect(
+      within(cells[COLUMN.view] as HTMLElement).getAllByRole("button").length,
+    ).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(apiMock.patch).toHaveBeenCalled());
+    // The viewer's Create allow is kept, not dropped: lifting the View deny
+    // brings it back.
+    expect(apiMock.patch).toHaveBeenCalledWith("/metamodel/types/Application", {
+      role_permissions: {
+        viewer: { "inventory.create": true, "inventory.view": false },
+      },
+    });
+  });
 });
 
 describe("CardTypePermissionsPanel — subtype scoping", () => {
@@ -235,6 +271,16 @@ describe("CardTypePermissionsPanel — subtype scoping", () => {
       { key: "microservice", label: "Microservice" },
       { key: "ai_agent", label: "AI Agent" },
     ],
+  };
+
+  /** The same type with Member's Edit deny already limited to one subtype. */
+  const MATRIX_SCOPED = {
+    ...MATRIX_WITH_SUBTYPES,
+    roles: MATRIX_WITH_SUBTYPES.roles.map((r) =>
+      r.key === "member"
+        ? { ...r, overrides: { "inventory.edit": { value: false, subtypes: ["microservice"] } } }
+        : r,
+    ),
   };
 
   it("shows no scope control when the type has no subtypes", async () => {
@@ -289,7 +335,10 @@ describe("CardTypePermissionsPanel — subtype scoping", () => {
   });
 
   it("clearing every checked subtype collapses the cell back to a plain bool", async () => {
-    apiMock.get.mockResolvedValue(structuredClone(MATRIX_WITH_SUBTYPES));
+    // Starts from a cell that is *already* scoped, so clearing it is a real
+    // change: unscoping a cell that was unscoped to begin with leaves the
+    // form untouched and Save rightly stays disabled.
+    apiMock.get.mockResolvedValue(structuredClone(MATRIX_SCOPED));
     const user = userEvent.setup();
     render(<CardTypePermissionsPanel typeKey="Application" onError={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Member")).toBeInTheDocument());
@@ -297,8 +346,7 @@ describe("CardTypePermissionsPanel — subtype scoping", () => {
     const cell = rowFor("Member").querySelectorAll("td")[COLUMN.edit] as HTMLElement;
     await user.click(within(cell).getByRole("button", { name: "Limit to specific subtypes" }));
     const checkbox = await screen.findByRole("checkbox", { name: "Microservice" });
-    await user.click(checkbox); // scope to microservice
-    await user.click(checkbox); // then clear it again
+    await user.click(checkbox); // clear the only checked subtype
     await user.keyboard("{Escape}");
     // Wait out the Popover's exit transition — otherwise the still-animating
     // backdrop can intercept the Save click.

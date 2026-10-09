@@ -48,7 +48,7 @@ In LeanIX, open **Administration → Export → Full Snapshot**. This produces a
 
     The mapping is per-migration and can be edited any time the status is `parsed` or `previewed`. Source-platform core columns the adapter routes directly into Turbo EA standard slots (e.g. LeanIX `name`, `displayName`, `description`, `status`, `category → subtype`, `lifecycle:*`, `qualitySeal`, `completion`) are listed at the top of the tab in a read-only info banner — those have no mapping decision to make.
 
-4. **Apply** when you are satisfied. The apply pipeline runs 12 dependency-ordered passes (metamodel types → metamodel fields → metamodel relation types → users → cards → tag groups → tags → card-tag links → relations → subscriptions → documents → comments) inside individual savepoints — one failing row does not poison the rest of the import. Status moves through `applying → applied` (or `failed` if errors cross the safety threshold).
+4. **Apply** when you are satisfied. The apply pipeline runs 12 dependency-ordered passes (metamodel types → metamodel fields → metamodel relation types → users → cards → tag groups → tags → card-tag links → relations → subscriptions → documents → comments); a row the pipeline cannot place is recorded with its reason and does not stop the rest of the import. Status moves through `applying → applied` (or `failed` if errors cross the safety threshold).
 
     If the parsed snapshot contains any **conflict** rows, a warning banner appears above the staging tabs (with clickable chips that jump to the affected tab) and clicking **Apply** opens a confirmation dialog spelling out which kinds carry conflicts. You have to explicitly acknowledge that the conflicted rows will be skipped before the apply runs. The post-apply *Apply result* shows a dedicated *conflicts* chip alongside *created / updated / skipped / errors* — conflicts are not silent skips, they're a first-class outcome the admin sees in the migration history.
 
@@ -85,9 +85,24 @@ The snapshot does not carry these — the importer surfaces what is missing in t
 - **Audit history** prior to the import — Turbo EA's history starts at the apply timestamp.
 - **Diagrams / poster views / dashboards / saved searches / notification preferences / API tokens / webhooks** — no equivalent in Turbo EA, or no analog in the snapshot.
 
+## Exporting to SAP LeanIX
+
+The same page also runs in reverse. **Export workspace** (next to **New migration**) downloads the current workspace as a **LeanIX Integration API bundle** — a `.zip` you load through **Administration → Integration API** in LeanIX. LeanIX cannot import its own *Full Snapshot* workbook (SAP restores snapshots on request), so the Integration API is the one bulk import a LeanIX administrator can run alone.
+
+The bundle contains:
+
+- **`ldif.json`** — the data in the LeanIX Data Interchange Format: one item per card (the fact-sheet type named the LeanIX way — `Process` for Business Process, `Project` for Initiative, `UserGroup` for Organization — with name, description, subtype, lifecycle phases, every attribute, tags, stakeholders as subscriptions and document links) and one item per relation under LeanIX's relation names (`relApplicationToITComponent`, …). The hierarchy becomes `relToParent`; lineage relations are written in LeanIX's direction. The Turbo EA card id is stored as the fact sheet's external id, so running the bundle twice updates rather than duplicates.
+- **`processors.json`** — the processor configuration generated for exactly this export: one fact-sheet processor per type writing only the fields the cards carry, one relation processor per relation type, plus tag, subscription and resource processors. The processing mode is *partial*: nothing in the target workspace is deleted, and an update keeps LeanIX's value when the exported card has none.
+- **`comments.json`** — comments, which the Integration API cannot import, kept for reference.
+- **`README.md`** — the load steps (browser and REST), the types and relations in the export, and what to adjust.
+
+To load it: create a processor configuration in **Administration → Integration API** with the connector details from the README, paste `processors.json` as the configuration and `ldif.json` as the input, click **Test run** to see every problem without writing anything, then **Run**. LeanIX reports any field, subtype, relation type or user its workspace does not have — add it there or remove that entry from `processors.json`. Types created in Turbo EA are exported under their own key and need the same type in the LeanIX meta model first.
+
+Archived cards are left out unless **Include archived cards** is ticked. The export is gated by `admin.export_workspace`, the same permission as the workspace bundle export, because the file is the whole landscape.
+
 ## Re-running an import
 
-Idempotency is built in. The `migration_identity_map` table records the source-side → Turbo EA UUID for every entity that has been imported (keyed by `(source_id, entity_kind, source_type)` so the same external id can legitimately exist in imports from two different sources). A re-upload of the same snapshot (or an updated snapshot from the same workspace) detects existing entities and writes `update` / `skip` staged rows rather than duplicate `create`s. The card's `external_id` carries the source-side id (LeanIX `factSheetId`, Ardoq component id, …) so the link survives even if the identity map is wiped.
+Idempotency is built in. The `migration_identity_map` table records the source-side → Turbo EA UUID for every entity that has been imported (keyed by `(source_id, entity_kind, source_type)` so the same external id can legitimately exist in imports from two different sources). A re-upload of the same snapshot (or an updated snapshot from the same workspace) detects existing entities and writes `update` / `skip` staged rows rather than duplicate `create`s. The card's `external_id` carries the source-side id (LeanIX `factSheetId`, Ardoq component id, …) so the link survives even if the identity map is wiped. Documents and comments are matched the same way — on the source's own id, or on the card plus URL (author plus text for a comment) when the identity map was wiped — so a re-import never adds a second copy.
 
 If you need to redo an import (e.g. you bulk-deleted the imported cards in the UI and want to land them fresh), use the trash icon on the migration row to delete it, then re-upload. `applied` migrations are deletable; doing so releases the `(file_hash, source_type)` idempotency lock so the same snapshot can be uploaded again. Dangling `migration_identity_map` rows that point at cards that no longer exist are auto-pruned on the next staging pass, so a manual cleanup of the identity map is never required.
 

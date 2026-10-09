@@ -31,6 +31,7 @@ from app.core.permissions import (
     VIEWER_PERMISSIONS,
     migrate_legacy_app_permissions,
     strip_legacy_card_permissions,
+    type_cell_decision,
     validate_type_role_permissions,
 )
 
@@ -470,18 +471,18 @@ class TestTypeScopedPermissions:
     def test_all_type_scoped_keys_are_real_app_keys(self):
         assert TYPE_SCOPED_APP_PERMISSIONS <= ALL_APP_PERMISSION_KEYS
 
-    def test_type_scoped_keys_are_the_four_write_actions(self):
+    def test_type_scoped_keys_are_view_and_the_four_write_actions(self):
         assert TYPE_SCOPED_APP_PERMISSIONS == {
+            "inventory.view",
             "inventory.create",
             "inventory.edit",
             "inventory.archive",
             "inventory.delete",
         }
 
-    def test_view_is_not_type_scoped(self):
-        # Hiding a type from a role would have to reach every list, report and
-        # graph endpoint — deliberately out of scope for the override map.
-        assert "inventory.view" not in TYPE_SCOPED_APP_PERMISSIONS
+    def test_export_and_bulk_edit_stay_global(self):
+        assert "inventory.export" not in TYPE_SCOPED_APP_PERMISSIONS
+        assert "inventory.bulk_edit" not in TYPE_SCOPED_APP_PERMISSIONS
 
     def test_adds_no_new_permission_keys(self):
         # The override map reuses existing keys, so every default role dict
@@ -529,7 +530,12 @@ class TestValidateTypeRolePermissions:
 
     def test_non_type_scoped_permission_rejected(self):
         with pytest.raises(ValueError, match="cannot be set per card type"):
-            self._validate({"member": {"inventory.view": False}})
+            self._validate({"member": {"inventory.export": False}})
+
+    def test_view_cell_accepted(self):
+        assert self._validate({"member": {"inventory.view": False}}) == {
+            "member": {"inventory.view": False}
+        }
 
     def test_unknown_permission_rejected(self):
         with pytest.raises(ValueError, match="cannot be set per card type"):
@@ -590,3 +596,88 @@ class TestValidateTypeRolePermissions:
         # known_subtype_keys — the regression guard for the common case.
         raw = {"member": {"inventory.edit": True}}
         assert self._validate(raw, self.SUBTYPES) == raw
+
+
+SCOPED_DENY = {"value": False, "subtypes": ["microservice"]}
+SCOPED_ALLOW = {"value": True, "subtypes": ["microservice"]}
+
+
+class TestTypeCellDecision:
+    """The one rule every per-type checker shares (backend and frontend)."""
+
+    @pytest.mark.parametrize(
+        ("cells", "permission", "expected"),
+        [
+            # Nothing stored: inherit.
+            ({}, "inventory.edit", None),
+            (None, "inventory.view", None),
+            # A stored cell decides its own permission, either way.
+            ({"inventory.edit": False}, "inventory.edit", False),
+            ({"inventory.edit": True}, "inventory.edit", True),
+            ({"inventory.view": True}, "inventory.view", True),
+            ({"inventory.view": False}, "inventory.view", False),
+            # A cell never decides another permission...
+            ({"inventory.create": False}, "inventory.edit", None),
+            ({"inventory.view": True}, "inventory.edit", None),
+            # ...except an explicit View deny, which takes everything.
+            ({"inventory.view": False}, "inventory.edit", False),
+            ({"inventory.view": False, "inventory.edit": True}, "inventory.edit", False),
+            ({"inventory.view": False}, "comments.create", False),
+            ({"inventory.view": False}, "ppm.view", False),
+            # A non-scoped permission is never decided by an ordinary cell.
+            ({"inventory.edit": True}, "comments.create", None),
+        ],
+    )
+    def test_decision_table(self, cells, permission, expected):
+        assert type_cell_decision(cells, permission) is expected
+
+    @pytest.mark.parametrize(
+        ("cells", "permission", "subtype", "expected"),
+        [
+            # A scoped cell decides only for the subtypes it names...
+            ({"inventory.edit": SCOPED_DENY}, "inventory.edit", "microservice", False),
+            ({"inventory.edit": SCOPED_ALLOW}, "inventory.edit", "microservice", True),
+            # ...and is not an answer for any other subtype, nor for a caller
+            # that has no subtype in hand (a summary, a create dialog).
+            ({"inventory.edit": SCOPED_DENY}, "inventory.edit", "aiAgent", None),
+            ({"inventory.edit": SCOPED_DENY}, "inventory.edit", None, None),
+            # The View-deny override is scoped the same way: it cannot strip
+            # authority over the subtypes it does not name.
+            ({"inventory.view": SCOPED_DENY}, "inventory.edit", "microservice", False),
+            ({"inventory.view": SCOPED_DENY}, "inventory.edit", "aiAgent", None),
+            ({"inventory.view": SCOPED_DENY}, "ppm.view", "microservice", False),
+            # An unscoped bool cell ignores the subtype entirely (regression
+            # guard for the common case).
+            ({"inventory.edit": False}, "inventory.edit", "microservice", False),
+            ({"inventory.view": False}, "inventory.edit", "aiAgent", False),
+        ],
+    )
+    def test_decision_table_with_subtypes(self, cells, permission, subtype, expected):
+        assert type_cell_decision(cells, permission, subtype) is expected
+
+
+class TestValidationMessages:
+    """The messages reach the admin verbatim (the route turns them into a 400)."""
+
+    def _refusal(self, raw) -> str:
+        with pytest.raises(ValueError) as exc:
+            validate_type_role_permissions(
+                raw, known_role_keys={"admin", "member"}, wildcard_role_keys={"admin"}
+            )
+        return str(exc.value)
+
+    def test_not_an_object(self):
+        assert self._refusal(["member"]) == "role_permissions must be an object"
+
+    def test_a_key_that_is_not_a_role_key(self):
+        assert self._refusal({7: {}}) == "role_permissions keys must be role keys"
+
+    def test_a_permission_outside_the_type_scoped_set(self):
+        message = self._refusal({"member": {"admin.users": False}})
+        allowed = ", ".join(sorted(TYPE_SCOPED_APP_PERMISSIONS))
+        assert message.endswith(f"(allowed: {allowed})")
+
+
+def test_nothing_to_migrate_returns_the_very_same_map():
+    perms = {"inventory.view": True}
+    assert migrate_legacy_app_permissions(perms) is perms

@@ -30,6 +30,8 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import LinkifiedText from "@/components/LinkifiedText";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api, ApiError } from "@/api/client";
@@ -40,6 +42,7 @@ import {
   severityChipColor,
 } from "@/features/turbolens/utils";
 import ComplianceLifecycleTimeline from "./ComplianceLifecycleTimeline";
+import { printFinding } from "./findingPrint";
 
 interface Props {
   finding: TurboLensComplianceFinding | null;
@@ -79,10 +82,20 @@ export default function FindingDetailDrawer({
   const { t } = useTranslation("admin");
   const { t: tCards } = useTranslation("cards");
   const { t: tRisks } = useTranslation("grc");
+  // The PDF button reads like the SoAW's, so it borrows the SoAW labels.
+  const { t: tDelivery } = useTranslation("delivery");
   const { byKey: regulationsByKey } = useComplianceRegulations();
+  const theme = useTheme();
+  const compact = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [saving, setSaving] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // DB label first, then the built-in i18n label, then the raw key — the same
+  // resolution the subtitle always used, shared with the PDF export.
+  const regulationLabel = (f: TurboLensComplianceFinding) =>
+    regulationsByKey[f.regulation]?.label ??
+    t(`compliance_regulation_${f.regulation}`, { defaultValue: f.regulation });
   // Accept-with-rationale lives here so every consumer of the drawer (the
   // GRC scanner and the per-card Compliance tab) collects the required
   // review note the same way — see ComplianceLifecycleTimeline.transition().
@@ -138,9 +151,27 @@ export default function FindingDetailDrawer({
             <Typography variant="h6" fontWeight={700} sx={{ pr: 1 }}>
               {finding.regulation_article || tCards("compliance.drawer.untitled")}
             </Typography>
-            <IconButton onClick={onClose} size="small" aria-label="Close">
-              <MaterialSymbol icon="close" />
-            </IconButton>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              {compact ? (
+                <Tooltip title={tDelivery("editor.exportPdf")}>
+                  <IconButton onClick={() => printFinding(finding, regulationLabel(finding))}>
+                    <MaterialSymbol icon="picture_as_pdf" size={20} />
+                  </IconButton>
+                </Tooltip>
+              ) : (
+                <Button
+                  size="small"
+                  startIcon={<MaterialSymbol icon="picture_as_pdf" size={18} />}
+                  sx={{ textTransform: "none" }}
+                  onClick={() => printFinding(finding, regulationLabel(finding))}
+                >
+                  {tDelivery("editor.pdf")}
+                </Button>
+              )}
+              <IconButton onClick={onClose} size="small" aria-label="Close">
+                <MaterialSymbol icon="close" />
+              </IconButton>
+            </Stack>
           </Stack>
 
           {/* Lifecycle timeline */}
@@ -178,10 +209,7 @@ export default function FindingDetailDrawer({
 
           {/* Subtitle: regulation + card */}
           <Typography variant="subtitle2" color="text.secondary">
-            {regulationsByKey[finding.regulation]?.label ??
-              t(`compliance_regulation_${finding.regulation}`, {
-                defaultValue: finding.regulation,
-              })}
+            {regulationLabel(finding)}
             {finding.card_name && finding.card_id ? ` · ${finding.card_name}` : ""}
           </Typography>
 

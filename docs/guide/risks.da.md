@@ -101,6 +101,8 @@ Når du klikker på **Create risk** på et ikke-overholdt fund (se [TurboLens](t
 
 Risikoregistrets **Export**-knap skriver et to-arks `.xlsx`: ark 1 er det filtrerede risikogitter, ark 2 er én række pr. cyklus på tværs af hver opgave på hver risiko i samme filter-sæt, inklusive lead-time og aktiverings-tidsstempler. Brug det til audit-pakker eller til overdragelse til interessenter, der ikke har et Turbo EA-login. Hver opgaverække i detaljepanelet har også sin egen **Export history**-knap til en pr.-opgave-projektmappe.
 
+En enkelt risiko kan også udskrives fra dens detaljeside: **PDF** (ved siden af **Slet**) åbner et printklart dossier — identifikation, indledende og residual vurdering, afbødningsopgaver med deres seneste cyklusser, berørte kort, workflow og begrundelse for accept — i en ny fane, klar til browserens *Gem som PDF*.
+
 ### Import {: #import }
 
 Knappen **Importér** ved siden af «Eksportér» indlæser risici i massevis fra en `.xlsx`-fil. Klik på **Download skabelon** for at få en startmappe med de rigtige overskrifter, udfyld én risiko pr. række, og upload den. En række, hvis `reference` matcher en eksisterende risiko, **springes over** (importen opdaterer aldrig eksisterende risici), så genimport af et tidligere eksporteret register er idempotent; hver anden række opretter en **helt ny** risiko med en automatisk genereret reference `R-NNNNNN`. Eksemplet viser, hvor mange rækker der springes over, før du bekræfter.
@@ -115,7 +117,7 @@ Både TurboLens Security Overview og Risikoregister-siden gengiver et 4×4 sands
 
 ## Register-gitter
 
-Registret er et AG Grid, der spejler [Inventar](inventory.md)-standarderne: sorterbare, filterbare, størrelses-justerbare kolonner med vedvarende pr.-bruger-præferencer (synlige kolonner, sorteringsrækkefølge, sidepanel-tilstand). En værktøjslinje **+ New risk** åbner dialogen til manuel oprettelse. Værktøjslinjens **Export**-knap skriver et to-arks `.xlsx` med det filtrerede risikogitter på ark 1 og én række pr. afhjælpningsopgave-cyklus på ark 2 — se [Afhjælpningsopgaver → Eksport](#export) for kolonneformen.
+Registret er et AG Grid, der spejler [Inventar](inventory.md)-standarderne: sorterbare, filterbare, størrelses-justerbare kolonner med vedvarende pr.-bruger-præferencer (synlige kolonner, sorteringsrækkefølge, sidepanel-tilstand). En værktøjslinje **+ New risk** åbner dialogen til manuel oprettelse. Værktøjslinjens **Export**-knap skriver et to-arks `.xlsx` med det filtrerede risikogitter på ark 1 og én række pr. afhjælpningsopgave-cyklus på ark 2 — se [Afhjælpningsopgaver → Eksport](#export) for kolonneformen. En **Kilde**-kolonne viser, om en risiko er indtastet manuelt, hævet fra et compliance-fund eller oprettet af en udvidelse, og den følger sidepanelets Kilde-filter.
 
 ### Filtrering efter berørte kort
 

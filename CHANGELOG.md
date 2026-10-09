@@ -5,11 +5,224 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.151.0] - 2026-10-01
+## [2.158.0] - 2026-10-09
 
 ### Added
 
 - **A card-type permission override can now be scoped to specific subtypes.** On the Permissions tab of a card type (Admin → Metamodel), once a role's Create/Edit/Archive/Delete cell is set to Allow or Deny, a new "tune" button next to it opens a picker for the type's subtypes. Leaving none selected keeps the override applied to every subtype ("All", the previous behaviour, unchanged); picking one or more scopes the grant or denial to only those subtypes — a card of a different subtype falls back to the role's ordinary permission, exactly as if no override existed for it. Available wherever the existing per-type override already applied: creating, editing, archiving, deleting and bulk operations, including through the MCP server's write tools.
+
+### Changed
+
+- Merged upstream 2.157.5. The subtype scope above now composes with the upstream **View** action: an unscoped View deny still takes every permission on the type away, while a View deny scoped to some subtypes decides only for those — cards of the other subtypes keep the role's ordinary permissions.
+
+## [2.157.5] - 2026-10-09
+
+### Fixed
+- Admin pages (tags, regulations, resource types, EOL mass linking, extensions, Survey Builder): a failed save, toggle or load is shown instead of silently dropped.
+- Admin pages: clicking Save, Create or Next twice no longer sends the request twice, so Survey Builder can no longer create a second survey or skip a step.
+- Tags: group and tag names and descriptions are saved trimmed.
+- Extensions: the license dialog opens empty each time, a discarded install stays discarded, and a purchase confirmed past the apply gate applies the license it was blocked on.
+- Survey Builder: a reopened draft keeps its "Via relation" narrowing, and a draft whose card type was removed says so instead of showing a blank select.
+- EOL mass linking: the version picker never offers the previous product's cycles.
+- Relation-type values: a stored custom value without a label no longer crashes the dialog. A custom value that has a translation in the current language but no label takes that translation as its label when the dialog opens, so it can be saved; switching the interface language while the dialog is open keeps the edits made in it.
+- Survey Builder: Back is disabled while Next is saving, so a Back click can no longer be undone by the save landing a moment later.
+- Survey Builder: after switching the interface language, a failed save, preview or load reports its error in the new language rather than the previous one, and opening another survey from the one on screen never shows the first survey's fields when its reply lands late.
+- Relation-type values: clicking Save twice quickly sends the change once.
+
+### Changed
+- Extensions: the page intro now describes the in-product Store alongside the file-based install flow, in every language.
+
+## [2.157.4] - 2026-10-08
+
+### Security
+- A public web portal now sends visitors only what its page shows. A field or built-in property (description, lifecycle, tags, stakeholders, data quality, approval status) switched off in both the list and the detail view, and a relation type that is not switched on, no longer reach the visitor's browser, and filtering or sorting on them is ignored.
+- A public web portal no longer publishes the names of archived cards a portal card is related to.
+- A portal's relation filter lists only cards reachable through the relation types the portal shows.
+- Printing a process flow escapes the process and approver names, and sanitises the stored diagram image it falls back to, so markup in them can no longer run in the print window.
+
+### Fixed
+- Saving a new decision, duplicating one or creating a new revision shows its confirmation once and right away, instead of showing it, losing it while the new decision loads and showing it again.
+
+## [2.157.3] - 2026-10-08
+
+### Security
+- A workspace import no longer writes credentials a hand-edited bundle carries — an SSO client secret, AI API key, mail credential, extension secret or encrypted value from another instance; the target instance keeps its own.
+
+### Fixed
+- A card a workspace import refuses for exceeding the hierarchy depth limit is no longer imported anyway, and a row the database rejects no longer makes the rest of the import fail with it.
+- Creating, editing, bulk-editing or filtering cards with a malformed parent id now returns a validation error instead of a server error, and an empty parent id on an edit clears the parent.
+- The plain-text version of the password reset and account setup emails greets the user by their name as written, instead of with HTML escapes such as `&#x27;`.
+
+## [2.157.2] - 2026-10-05
+
+### Fixed
+- The NexaTech demo data no longer shows the Partner Extranet application phasing out after its end-of-life date when the demo is seeded between October and December.
+
+## [2.157.1] - 2026-10-03
+
+### Changed
+- Upgraded the bundled DrawIO editor from v31.4.1 to v31.5.3.
+- Upgraded `bpmn-js` from 18.27.0 to 18.31.0.
+
+## [2.157.0] - 2026-10-03
+
+### Added
+
+- **A Source column on the Risk Register** shows whether a risk was entered by hand, promoted from a compliance finding or filed by an extension. It can be hidden from the Columns tab, follows the sidebar's Source filter, and lands in the Excel export.
+
+### Changed
+
+- **Automated test coverage now stands at 93% of the backend and 70% of the frontend.**
+
+### Fixed
+- A change in the card layout editor that the server rejects now shows an error at the top of the editor instead of failing silently and leaving the stale layout on screen.
+- Pressing Escape to dismiss the formula editor's suggestion list no longer closes the whole calculation dialog and discards the form.
+- Typing `.` right after accepting a formula suggestion (for example `data`) now opens the field list at once instead of swallowing the keystroke.
+
+- **A risk filed by an extension shows its source as *Extension* on its detail page, in its PDF, under the register's Source filter and in the new Source column.** The API coerced every source outside `manual` / `compliance` to `manual`, so such a risk read as hand-entered and the filter's *Extension* option never matched it.
+- **Re-importing an updated platform export no longer duplicates documents and comments.** The migration importer inserted every staged document and comment unconditionally, so each re-import of a LeanIX export added another copy of every link and every comment on the cards it refreshed. Both are now matched on the source's own id (and on the card plus URL, or the author plus text, when the identity map was wiped) and updated or skipped instead; a renamed document keeps its one entry.
+- **A platform migration no longer creates a user from a malformed email address.** A subscription whose address the preview had already flagged as malformed (an unsplit `a@x.com;b@x.com` cell, a display name) was still turned into a deactivated user at apply time; the row is now counted as a conflict and skipped, as the preview says.
+- **Archived entities imported with *Also import archived entities* land archived.** They were created as live cards whatever the source said; they now carry the archived status, and an existing card is never archived by a re-import.
+- **A migrated custom field whose key already exists on the target card type is not added again.** The *Imported from* section only checked itself for duplicates, so a custom field sharing a key with a field in another section gave the type two fields reading one value.
+- **ServiceNow sync runs record their counts.** The created / updated / skipped / deleted / error counts of a pull and every count of a push were kept in memory only, so the Sync runs list showed `fetched` alone for a pull and zeros for a push, however much had been synced.
+- **Editing a ServiceNow mapping's field list returns the list just saved.** The response to the save, and the dialog it refreshed, still showed the rows it had just replaced until the page was reloaded.
+- **A TurboLens vendor analysis no longer fails when the model's answer is cut off.** A truncated batch whose only complete entry was the first one was read as a single object instead of a list and the run ended with an error; the parser now follows the shape the answer opened with, and both the vendor analysis and the vendor resolution read an answer that is a single object as one entry instead of failing.
+- **The Architecture AI no longer proposes a capability link twice.** When the model had already linked a new application to one of the capabilities chosen in the Business Requirements step, the guardrail that makes every new application support a capability added the same link again, and committing the proposal created the relation twice.
+- **A compliance scan keeps a card the user marked as not AI-bearing out of scope.** The EU AI Act detector accepted any card id in the model's answer, so a card deliberately left out of the question could be put back in scope by the model naming it anyway, and a made-up id could fail the whole scan; it now only takes answers about the cards it asked about.
+- **Removing a line the diagram's stale check flagged no longer asks whether to delete its relation.** The relation had already been deleted in the inventory; the editor consumed its own suppression on the first report of the removal and DrawIO's change diff reported the same removal a second time, so the *delete this relation?* confirmation came up for a relation that no longer existed. Every removal is now reported once. The re-parent check the editor schedules after a drag also no longer runs once the editor has been closed.
+- **A custom Statement of Architecture Work section placed after a hidden or empty template section is no longer dropped from the preview, the PDF and the Word export.** The editor listed it under its anchor while the exports skipped the anchor and the section with it; it now prints at the anchor's position whether or not the template section does. The preview's signature cards also fall back to the document's approval date when a signatory row carries none, as the PDF footer already did.
+- **Starting a new TurboLens analysis or compliance scan while an earlier run's status request was still in flight no longer stops the new run's progress polling.** A late reply for the superseded run is ignored instead of ending the loop and reporting the new run as finished.
+- **The compliance regulations list survives a failed refresh.** Saving a regulation re-fetches the list; when that request failed, the page showed no regulations at all until it was reloaded instead of keeping the ones it had.
+- **Extension-granted metamodel authoring no longer stays hidden for the whole session after one failed status read.** A transient error on the extension status request at boot was remembered as *no grants*; the next page that needs the answer now asks again.
+- **The two messages shown when a TurboLens analysis or compliance scan fails, or its status cannot be fetched, are translated.** They were English in every language.
+- **Importing an Excel sheet whose card ids are written in upper case updates the cards instead of creating copies.** A UUID is case-insensitive, but the importer matched ids character for character, so a workbook edited in a tool that upper-cases them reported every card as unknown and created a duplicate of each.
+- **The Excel importer rejects a row whose parent path is its own card, and a row with an invalid lifecycle date no longer counts as a card to create.** The self-parent check compared two paths that could never be equal, so such a row went through as an update that would have made the card its own parent; the date error was reported but the row stayed in the preview's create count.
+- **A report export to Excel no longer hangs when two tables share a heading of 31 characters or more.** Excel caps a sheet name at 31 characters; the second sheet's name was suffixed and cut back to the same 31 characters, forever. The name is now shortened to make room for the suffix.
+- **Numbers in a report export are read the way the page shows them.** A right-aligned cell holding `n/a` exported as 0, an accounting negative `(500)` lost its sign, and a thousands separator or decimal comma written by a German or French locale was mis-read; the exporter now parses with the locale's own separators and keeps text that holds no number as text.
+- **A paginated PowerPoint export falls back to one slide when the browser offers no 2D canvas, instead of failing.**
+- **The Risk Register and a risk's detail page match the viewer's rights.** A user holding only `risks.view` saw Create and Import on the register and an enabled Delete button, editable fields and the workflow buttons on a risk, and only the server's refusal stopped the write; those controls are now hidden or disabled without `risks.manage`, while an assignee can still complete their own mitigation occurrence. The compliance scanner likewise hands its grid the viewer's `compliance.manage` right instead of assuming it, so a viewer no longer sees Create, Delete, the bulk decisions or an enabled scan button.
+- **The Risk Register's search box no longer re-queries on every keystroke, and a reply for an earlier search can no longer overwrite the current one.** The search is sent after a short pause, and a late reply for a superseded filter set is dropped.
+- **The Risk Register's *Average level* tile is translated.** It showed the level's key (`critical`) instead of its label.
+- **A risk that cannot be read, and a status change the workflow refuses, are reported in the user's language.** Both messages were English in every language; the compliance findings' CSV export headers and its Yes / No cells are translated too.
+- **A survey's number or cost box stays empty after it is cleared.** Clearing it stored *no value*, which the box read as *untouched* and filled back with the current value, so the next digit typed was appended to the old number.
+- **Opening a survey response the server has nothing for shows *not found* instead of a raw error.**
+- **A new Statement of Architecture Work shows its Preview and Request-signatures buttons as soon as it is saved.** The editor only rewrote the address bar, so the page kept its new-document header and the two buttons stayed hidden until a reload.
+- **A ServiceNow field mapping typed as a Turbo EA field path is saved as that path.** Once the typed text matched a known field, the row's picker rewrote its text to `path — Label` and that label was saved as the path, so an `attributes.*` mapping pointed at an attribute that does not exist; picking from the list was unaffected.
+- **A reference-catalogue import that fails part-way reports what landed.** When a later batch failed, the error replaced the summary of the batches already created, and the catalogue was not reloaded, so the created cards still read as missing until the page was refreshed.
+- **Clearing a card type's description in the metamodel admin saves the empty value.** The save sent nothing for an emptied description, so the previous text came back.
+- **A survey's results page shows the server's error when the survey cannot be loaded** instead of reporting it as not found.
+- **The Resources and Audit log admin pages drop a reply that arrives for a filter you have since changed**, so a slow page of results can no longer replace the page you asked for last.
+
+## [2.156.1] - 2026-10-01
+
+### Fixed
+
+- **A card whose name contains a comma survives an Excel export and re-import as a relation target.** A relation cell holding a single target such as `This is X, it does Y` was read as two targets, `This is X` and `it does Y`, so the import stopped with two "doesn't match any card" errors; a comma is now never a separator in an exported workbook, a `;` inside a card name is escaped, and the `tags` column uses `; ` too so a tag named `Acme, Inc.` round-trips. Older workbooks and hand-built sheets still import ([#1171](https://github.com/vincentmakes/turbo-ea/issues/1171)).
+
+## [2.156.0] - 2026-10-01
+
+### Added
+
+- **Document links on a card's Resources tab can be edited.** A pencil icon next to each link opens the same dialog used to add one, with the name, URL and link type pre-filled; the change is recorded in the card's History tab and the dashboard activity feed, and a save that changes nothing records nothing ([#1166](https://github.com/vincentmakes/turbo-ea/issues/1166)).
+- **A file attachment can be replaced in place, renamed and re-categorised.** The replace icon next to a file uploads a new version into the same entry under the same checks as an upload (and is unavailable while uploads are switched off); the entry is then dated and attributed to the person who replaced it, and the version it superseded survives only in the card's History. The pencil icon changes the file's name — the extension must stay the same — or its category. Both are recorded in History and the dashboard activity feed ([#1166](https://github.com/vincentmakes/turbo-ea/issues/1166)).
+
+### Fixed
+
+- **Adding a document link no longer fails with a bare "Failed to link".** A URL without `http://`, `https://` or `mailto:` is flagged under the field as you type, with Add disabled until it is fixed, and a rejection the server does return is shown inside the dialog with its reason rather than behind it ([#1166](https://github.com/vincentmakes/turbo-ea/issues/1166)). The report blamed a preceding delete; the delete was innocent.
+- **An empty or whitespace-only URL on a document link is stored as no URL** instead of being refused.
+- **Unlinking a diagram from a card's Resources tab no longer opens that diagram**, including when the confirmation is cancelled ([#1166](https://github.com/vincentmakes/turbo-ea/issues/1166)).
+
+## [2.155.1] - 2026-09-30
+
+### Added
+
+- **A Code Scanning Retire workflow** deletes one scan configuration (tool + category) from the Actions tab so GitHub closes the alerts nothing will ever clear again, such as the 75 filed by the ollama image before 2.155.0 stopped publishing it. It refuses a category a workflow still produces and asks for the category typed twice.
+
+## [2.155.0] - 2026-09-30
+
+### Removed
+
+- **The `ollama` image is no longer published.** `docker-compose.yml` pulls upstream's own `ollama/ollama` image, pinned to a release tag that Dependabot keeps current. Models already pulled stay where they are (`ollama_models` volume, same path). Turbo EA published a patched copy for 2.154.0 to 2.154.2 only: it added nothing but a non-root user, and in exchange the project was signing, gating and re-scanning a binary it cannot rebuild, which filled the Security tab with 75 upstream-toolchain findings on its first day.
+
+### Changed
+
+- **The bundled Ollama container runs as upstream ships it.** Root inside the container, because upstream's image has no models directory for Docker to seed a volume from; capabilities are still dropped, no host port is published and only the backend talks to it.
+
+### Security
+
+- **Frontend dependencies moved past four advisories**: DOMPurify 3.4.16 (GHSA-p98j-92pf-mc4p), js-yaml 5.4.2 (GHSA-r3ph-w7gj-g6xm) and both copies of brace-expansion (GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p).
+
+### Fixed
+
+- **The backend dependency audit carried a stale ignore** for a PyJWT advisory that stopped applying five releases ago; it is removed, so the audit runs with no exceptions.
+- **The Code Scanning Report also lists recent analyses** (tool, category, results, processing errors), the data behind the Security tab's tool-status page, so a configuration reported as failed can be read from a run.
+
+## [2.154.2] - 2026-09-30
+
+### Fixed
+
+- **The weekly dynamic scan records its verdict.** The ZAP exit code was lost to the shell's exit-on-error mode, which skipped the signed-in pass and reported both passes as missing. The one remaining CSP finding is accepted with its reasons (`img-src https:` for Extension Store logos, `style-src 'unsafe-inline'` for MUI), and the policy's script directives are now pinned by a test so that acceptance cannot hide a real regression.
+- **Dependabot keeps the Python base image on its 3.12 line.** A Python "minor" (3.12 → 3.14) is a new interpreter, and CI tests on 3.12, so it is a migration to decide on rather than a weekly bump; patch releases still come through, as they do for nginx.
+
+## [2.154.1] - 2026-09-30
+
+### Security
+
+- **The `Server` header no longer reveals the nginx version**, on the edge and on the frontend server.
+- **Every Content-Security-Policy now names `frame-ancestors`.** The app and API policies say `'self'`, matching the existing frame protection; the embed paths keep the operator's allowlist.
+
+### Fixed
+
+- **The weekly dynamic scan can go green.** It now runs ZAP from its container directly: both passes always run, the reports are uploaded as artifacts and shown in the run summary, and one verdict step fails the job on an unaccepted alert. The scan can also be dispatched against the `main` tag to check a fix before it is released. The five alerts the first run raised by design are accepted in the rules file with their reasons.
+- **The edge nginx no longer executes words from its own comments at start-up.** Backticks inside the generated configuration ran as commands and printed `add_header: not found` in the boot log.
+- **Dependabot opens its pull requests again.** The configuration named labels the repository does not have, and Dependabot refuses a PR whose label is missing. Base-image bumps are also limited to minor and patch versions, and nginx to patches so it stays on its stable line; a new major of Python or Node is a migration to decide on, not a weekly bump.
+
+## [2.154.0] - 2026-09-30
+
+### Security
+
+- **A vulnerable dependency now blocks a pull request.** The two dependency audits (pip-audit for the backend, audit-ci for the frontend) used to run as informational checks; they fail the PR now, and an advisory with no upstream fix is accepted only with a written, dated reason.
+- **Every commit is scanned for leaked credentials.** A gitleaks job runs on every pull request and push, with the same release as a pre-commit hook, and a finding lands in the repository's Security tab.
+- **The bundled Ollama image is now built, signed, attested and scanned like the other five.** It joins the publish matrix, is pinned to an Ollama release instead of `latest`, is verified with cosign, Trivy-gated on publish and rescanned daily, and runs with the same dropped capabilities as every other service in the compose file.
+- **The published stack is probed weekly with OWASP ZAP.** The signed images are booted with demo data and scanned passively, anonymously and as an administrator, for header, cookie and content-security-policy weaknesses; accepted alerts are listed with a reason and anything else fails the run.
+- **The example `SECRET_KEY` shipped in `.env.example` is refused outside development**, like the two code defaults it sat next to, so a copied-but-unedited file can no longer start a production instance with a well-known signing key.
+
+### Changed
+
+- **Dependabot opens base-image bump PRs.** Pinned Docker bases (nginx, PostgreSQL, Python, Node, Ollama) get one grouped weekly pull request when a newer tag exists; the docker entry had been configured for security-only updates, which do not exist for container images, so it never opened anything.
+
+### Fixed
+
+- **`docker compose --profile ai` works with a pinned `TURBO_EA_TAG`.** The `ollama:<version>` tag the compose file asks for is now published with every release; only `latest` existed before.
+
+## [2.153.0] - 2026-09-30
+
+### Added
+
+- **Print or export a single decision, risk or compliance finding.** The same **PDF** and **Word** buttons the Statement of Architecture Work has: an Architecture Decision Record's preview has **PDF**, its editor has **PDF** and, until the decision is signed, **Word**; a risk's detail page and the compliance finding drawer each have **PDF**. The PDF opens the SoAW's print-ready pop-up — the document type over the record's name, a Document Information table, the record's sections and linked cards, and for a signed decision the signature block with the approver and print date in the footer — ready for the browser's *Save as PDF*. A single decision's Word file now opens like the SoAW's, with the decision named under the title instead of a "1 decision" count and a generation date.
+
+## [2.152.0] - 2026-09-29
+
+### Added
+
+- **Export the workspace to SAP LeanIX.** Admin → Settings → Migration → Platform migration has an **Export workspace** button that downloads the whole inventory as a LeanIX **Integration API bundle**: a `.zip` with the data in LeanIX's LDIF format, the processor configuration that imports it, and a README with the steps for Administration → Integration API. LeanIX cannot import its own snapshot workbook, so this is the format a LeanIX administrator can load alone. Cards become fact sheets named the LeanIX way (*Process*, *Project*, *UserGroup*, …) with their subtype, lifecycle, attributes, tags, stakeholders as subscriptions and document links; relations use LeanIX's relation names, hierarchy becomes `relToParent`, lineage links are written in LeanIX's direction, and the card id is kept as the fact sheet's external id so a second run updates instead of duplicating. Archived cards can be included on request. Gated by the workspace-export permission.
+
+### Fixed
+
+- **LeanIX imports now map data-object lineage.** `dataObjectSuccessorRelation` rows landed as conflicts because the relation was missing from the import mapping; they now create *succeeds* links between Data Objects like the other lineage relations.
+
+## [2.151.0] - 2026-09-28
+
+### Added
+
+- **Card types can be hidden from a role.** The Permissions tab of a card type (Admin → Metamodel) has a fifth action, **View**. Denying it makes that type's cards disappear for the role everywhere — inventory, search, counts, exports, relations and hierarchy on other cards, every report and chart, the dashboard, and the lists in BPM, PPM, GRC, decisions, diagrams and TurboLens — and opening one from a link shows *not found*. Allowing it lets a role that cannot browse the inventory see the cards of that one type. People still see the individual cards they hold a stakeholder role on.
+- **A View deny also denies creating, editing, archiving and deleting cards of that type.** The panel shows those cells locked while View is denied, and keeps their settings for when it is not.
+- **Editing the cards linked to a decision, a diagram or a process step leaves links to cards you cannot see in place**, so someone a type is hidden from cannot remove those links by accident.
+- **The TurboLens Architecture AI needs to see the whole landscape**, so it is unavailable to a role from which a card type is hidden.
+
+### Security
+
+- **The per-role permission matrix of each card type is now returned to metamodel administrators only.** Other users no longer receive it with the card type list.
 
 ## [2.150.0] - 2026-09-24
 

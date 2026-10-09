@@ -21,16 +21,7 @@ import {
   type TemplateSectionDef,
 } from "./soawTemplate";
 import type { SoAWDocumentInfo, SoAWVersionEntry, SoAWSectionData, SoAWSignatory } from "@/types";
-
-/** Escape a string for safe interpolation into HTML. */
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+import { escapeHtml, printDocument } from "@/lib/printDocument";
 
 // ─── constants (matching PDF styles) ─────────────────────────────────────────
 
@@ -366,9 +357,14 @@ export async function exportToDocx(
   let currentPart: string | null = null;
 
   const addSectionContent = (def: TemplateSectionDef, data: SoAWSectionData) => {
-    if (data.hidden) return;
-    if (isSectionEmpty(def, data)) return;
+    if (!data.hidden && !isSectionEmpty(def, data)) addTemplateSection(def, data);
+    // A custom section is anchored on a template section's *position*, so it
+    // prints whether or not that section did — the editor lists it there
+    // either way, and a hidden anchor used to take it down with it.
+    addCustomSectionsAfter(def);
+  };
 
+  const addTemplateSection = (def: TemplateSectionDef, data: SoAWSectionData) => {
     // Part header
     if (def.part !== currentPart) {
       currentPart = def.part;
@@ -450,8 +446,9 @@ export async function exportToDocx(
     }
 
     children.push(new Paragraph({ spacing: { after: SPACING_AFTER_TABLE } }));
+  };
 
-    // Insert custom sections after this template section
+  const addCustomSectionsAfter = (def: TemplateSectionDef) => {
     for (const cs of customSections) {
       if (cs.insertAfter === def.id) {
         children.push(
@@ -584,7 +581,7 @@ export const PREVIEW_CSS = `
     .soaw-signatures .sig-grid { grid-template-columns: 1fr 1fr; }
     .soaw-signatures .sig-card.approved { border-color: #66bb6a; background: #f1f8e9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     @page { @bottom-center { content: element(soaw-footer); } margin-bottom: 60px; }
-    .soaw-print-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8pt; color: #888; border-top: 1px solid #ccc; padding-top: 4px; }
+    .soaw-print-footer, .doc-print-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8pt; color: #888; border-top: 1px solid #ccc; padding-top: 4px; }
   }
 `;
 
@@ -614,7 +611,7 @@ export function buildPreviewBody(
   customSections: { id: string; title: string; content: string; insertAfter: string }[],
   revisionNumber?: number,
   signatories?: SoAWSignatory[],
-  _signedAt?: string | null,
+  signedAt?: string | null,
 ): string {
   const t = (key: string, opts?: Record<string, unknown>) => String(i18n.t(`delivery:${key}`, opts as never));
   let html = "";
@@ -659,9 +656,13 @@ export function buildPreviewBody(
   let currentPart = "";
 
   const renderSection = (def: TemplateSectionDef, data: SoAWSectionData) => {
-    if (data.hidden) return;
-    if (isSectionEmpty(def, data)) return;
+    if (!data.hidden && !isSectionEmpty(def, data)) renderTemplateSection(def, data);
+    // Anchored on the template section's position, printed whether or not
+    // that section was — same rule as the Word export.
+    renderCustomSectionsAfter(def);
+  };
 
+  const renderTemplateSection = (def: TemplateSectionDef, data: SoAWSectionData) => {
     if (def.part !== currentPart) {
       currentPart = def.part;
       const partLabel = def.part === "I" ? (t("export.partI")) : (t("export.partII"));
@@ -696,8 +697,9 @@ export function buildPreviewBody(
       }
       html += `</table>`;
     }
+  };
 
-    // Custom sections after this
+  const renderCustomSectionsAfter = (def: TemplateSectionDef) => {
     const customBadge = t("export.custom");
     for (const cs of customSections) {
       if (cs.insertAfter === def.id) {
@@ -738,8 +740,11 @@ export function buildPreviewBody(
       html += `<div class="sig-status ${isSig ? "approved" : "pending"}">${isSig ? `&#10003; ${sigApproved}` : `&#9711; ${sigPending}`}</div>`;
       html += `<div class="sig-name">${escapeHtml(sig.display_name)}</div>`;
       if (sig.email) html += `<div class="sig-detail">${escapeHtml(sig.email)}</div>`;
-      if (isSig && sig.signed_at) {
-        const signedLabel = t("export.signed", { date: new Date(sig.signed_at).toLocaleString() });
+      // A signatory's own stamp first; the document-level one (what the PDF
+      // footer prints) when the row carries none.
+      const signedWhen = sig.signed_at || (isSig ? signedAt : null);
+      if (isSig && signedWhen) {
+        const signedLabel = t("export.signed", { date: new Date(signedWhen).toLocaleString() });
         html += `<div class="sig-detail">${signedLabel}</div>`;
       }
       html += `</div>`;
@@ -763,34 +768,25 @@ export function exportToPdf(
   signedAt?: string | null,
 ) {
   const t = (key: string, opts?: Record<string, unknown>) => String(i18n.t(`delivery:${key}`, opts as never));
-  const w = window.open("", "_blank");
-  if (!w) {
-    alert(t("export.popupBlocked"));
-    return;
-  }
-
   const body = buildPreviewBody(name, docInfo, versionHistory, sections, customSections, revisionNumber, signatories, signedAt);
 
-  // Build footer for signed documents
-  let footerHtml = "";
+  // Footer for signed documents
+  const parts: string[] = [];
   if (signatories && signatories.length > 0) {
     const approver = signatories.find((s) => s.status === "signed");
     const approvalDate = signedAt ? new Date(signedAt).toLocaleDateString() : (approver?.signed_at ? new Date(approver.signed_at).toLocaleDateString() : "");
     const printDate = new Date().toLocaleDateString();
-    const parts: string[] = [];
     if (approver) parts.push(t("export.approvedBy", { name: approver.display_name }));
     if (approvalDate) parts.push(t("export.dateOfApproval", { date: approvalDate }));
     parts.push(t("export.printed", { date: printDate }));
-    footerHtml = `<div class="soaw-print-footer">${parts.join("  &middot;  ")}</div>`;
   }
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>${escapeHtml(name || "SoAW")}</title>
-<style>${PREVIEW_CSS}</style></head><body class="soaw-preview">${body}${footerHtml}</body></html>`;
-
-  w.document.write(html);
-  w.document.close();
-
-  // Give the browser a moment to render, then open print dialog
-  setTimeout(() => w.print(), 400);
+  // Shared pop-up print path (window, sanitiser, print dialog): lib/printDocument.ts
+  printDocument({
+    title: name || "SoAW",
+    bodyHtml: body,
+    footerParts: parts,
+    bodyClass: "soaw-preview",
+    css: PREVIEW_CSS,
+  });
 }

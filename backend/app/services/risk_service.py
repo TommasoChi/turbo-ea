@@ -16,7 +16,7 @@ import logging
 import re
 import uuid
 from datetime import date, datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,6 +70,9 @@ _LEVEL_MATRIX: dict[str, dict[str, str]] = {
     "medium": {"critical": "high", "high": "high", "medium": "medium", "low": "low"},
     "low": {"critical": "medium", "high": "medium", "medium": "low", "low": "low"},
 }
+
+if TYPE_CHECKING:
+    from app.services.card_read_scope import CardReadScope
 
 
 def derive_level(probability: str | None, impact: str | None) -> str | None:
@@ -534,13 +537,20 @@ async def promote_compliance_finding(
 # ---------------------------------------------------------------------------
 
 
-async def risk_to_dict(db: AsyncSession, risk: Risk) -> dict[str, Any]:
-    """Flatten a Risk + joined card summaries + owner display name."""
+async def risk_to_dict(
+    db: AsyncSession, risk: Risk, *, read_scope: CardReadScope | None = None
+) -> dict[str, Any]:
+    """Flatten a Risk + joined card summaries + owner display name.
+
+    ``read_scope`` (route callers) leaves out linked cards hidden from the
+    reader; the extension bridge passes none and keeps its system-level view.
+    """
     # Load linked cards (id + name + type + role).
     card_rows = await db.execute(
         select(RiskCard.card_id, RiskCard.role, Card.name, Card.type)
         .join(Card, Card.id == RiskCard.card_id)
         .where(RiskCard.risk_id == risk.id)
+        .where(*(read_scope.where(Card, mode="module") if read_scope is not None else ()))
     )
     cards = [
         {
@@ -570,8 +580,10 @@ async def risk_to_dict(db: AsyncSession, risk: Risk) -> dict[str, Any]:
         # pre-release 'ppm' source) to 'manual' instead of letting one
         # legacy row fail response validation and 500 the entire list.
         # Migration 127 rewrites such rows; this guards anything it missed.
+        # 'extension' is in the vocabulary (SDK 1.9 risks bridge) — it used
+        # to be coerced too, so a risk an extension filed read as manual.
         "source_type": risk.source_type
-        if risk.source_type in ("manual", "compliance")
+        if risk.source_type in ("manual", "compliance", "extension")
         else "manual",
         "source_ref": risk.source_ref,
         "initial_probability": risk.initial_probability,

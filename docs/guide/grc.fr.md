@@ -100,6 +100,8 @@ Ouvrez un ADR signé et cliquez sur **Réviser** pour créer un nouveau brouillo
 
 Cliquez sur l'icône d'aperçu pour afficher une version en lecture seule et formatée de l'ADR — utile pour la revue avant signature.
 
+Depuis l'aperçu, cliquez sur **PDF** pour ouvrir une copie prête à imprimer dans un nouvel onglet — métadonnées, les quatre sections, fiches liées, sections d'extension et bloc de signatures, avec l'approbateur et la date d'impression en pied de page. L'éditeur propose le même bouton **PDF** ainsi que **Word**, qui télécharge la décision au format `.docx` tant qu'elle n'est pas signée ; les deux exportent l'état courant de l'éditeur, modifications non enregistrées comprises.
+
 ## Risque
 
 ![GRC — Registre des risques](../assets/img/fr/53_grc_registre_risques.png)

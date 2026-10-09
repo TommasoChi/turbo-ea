@@ -113,12 +113,12 @@ ENV NODE_OPTIONS=--max-old-space-size=6144
 RUN npm run build
 
 
-FROM alpine/git:v2.47.2 AS drawio
+FROM alpine/git:v2.54.0 AS drawio
 
-RUN git clone --depth 1 --branch v31.4.1 https://github.com/jgraph/drawio.git /drawio
+RUN git clone --depth 1 --branch v31.5.3 https://github.com/jgraph/drawio.git /drawio
 
 
-FROM nginx:1.30.3-alpine AS frontend
+FROM nginx:1.30.5-alpine AS frontend
 
 ARG APP_UID
 ARG APP_GID
@@ -160,7 +160,7 @@ EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]
 
 
-FROM nginx:1.30.3-alpine AS nginx
+FROM nginx:1.30.5-alpine AS nginx
 
 ARG APP_UID
 ARG APP_GID
@@ -294,6 +294,7 @@ case "$tls_enabled" in
     listen ${http_port};
 ${nginx_http_ipv6_line}
     server_name ${NGINX_SERVER_NAME};
+    server_tokens off;
     return 301 https://\$host:${NGINX_TLS_HOST_PORT}\$request_uri;
 }"
         export NGINX_HTTPS_SERVER_BLOCK="server {
@@ -301,6 +302,7 @@ ${nginx_http_ipv6_line}
 ${nginx_https_ipv6_line}
     http2 on;
     server_name ${NGINX_SERVER_NAME};
+    server_tokens off;
     # Attachments are capped at 20 MB by the backend
     # (services/attachment_validation.py); the extra megabyte lets a slightly
     # oversized upload reach it, so the user gets its readable 400 instead of
@@ -380,7 +382,7 @@ ${nginx_https_ipv6_line}
         add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
         add_header X-XSS-Protection \"1; mode=block\" always;
         add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
-        add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'\" always;
+        add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'\" always;
     }
 
     # OAuth 2.1 discovery (RFC 9728 / RFC 8414). Standard MCP clients fetch these
@@ -441,12 +443,12 @@ ${nginx_https_ipv6_line}
 
     # ---- Published-diagram embedding -------------------------------------
     # These three paths are the ONLY ones that may be framed by another site.
-    # `add_header` in a location replaces the inherited set, so each re-declares
+    # add_header in a location replaces the inherited set, so each re-declares
     # the full header block minus X-Frame-Options (which has no allowlist form)
     # and carries frame-ancestors instead.
-    # Never add Cross-Origin-Opener-Policy to `location /`: an SSO-gated
+    # Never add Cross-Origin-Opener-Policy to 'location /': an SSO-gated
     # embedded diagram signs in through a popup whose /auth/callback page
-    # relays the result to `window.opener`, and COOP would sever that link
+    # relays the result to window.opener, and COOP would sever that link
     # (#1126).
 
     # The public embed page itself.
@@ -473,6 +475,7 @@ ${nginx_https_ipv6_line}
         proxy_set_header X-Forwarded-Proto ${NGINX_FORWARDED_PROTO};
         add_header X-Content-Type-Options \"nosniff\" always;
         add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
         add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
         add_header Content-Security-Policy \"frame-ancestors ${NGINX_EMBED_FRAME_ANCESTORS}\" always;
     }
@@ -487,6 +490,8 @@ ${nginx_https_ipv6_line}
         add_header X-Robots-Tag \"noindex, nofollow\" always;
         add_header Cache-Control \"no-store, no-transform\" always;
         add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
         add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
         add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors ${NGINX_EMBED_FRAME_ANCESTORS}\" always;
     }
@@ -498,15 +503,26 @@ ${nginx_https_ipv6_line}
         add_header Cache-Control \"no-store, no-transform\" always;
         add_header X-Frame-Options \"SAMEORIGIN\" always;
         add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
         add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
         add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'\" always;
     }
 
+    # add_header in a location replaces the inherited set, so this block
+    # re-declares the response-level security headers; without them every
+    # DrawIO script, stylesheet and image left the edge with none (ZAP 10021
+    # and 10063 in the 2026-09-30 DAST run). X-Frame-Options and the CSP are
+    # page-level and live on /drawio/index.html above.
     location ^~ /drawio/ {
         proxy_pass \$frontend_upstream\$request_uri;
         proxy_set_header Host \$host;
         add_header X-Robots-Tag \"noindex, nofollow\" always;
         add_header Cache-Control \"no-cache, no-transform\" always;
+        add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
+        add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
     }
 
     location / {
@@ -520,7 +536,7 @@ ${nginx_https_ipv6_line}
         add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
         add_header X-XSS-Protection \"1; mode=block\" always;
         add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
-        add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'\" always;
+        add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'\" always;
     }
 }"
         ;;
@@ -529,6 +545,7 @@ ${nginx_https_ipv6_line}
     listen ${http_port};
 ${nginx_http_ipv6_line}
     server_name ${NGINX_SERVER_NAME};
+    server_tokens off;
     # Attachments are capped at 20 MB by the backend
     # (services/attachment_validation.py); the extra megabyte lets a slightly
     # oversized upload reach it, so the user gets its readable 400 instead of
@@ -603,7 +620,7 @@ ${nginx_http_ipv6_line}
         add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
         add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
         add_header X-XSS-Protection \"1; mode=block\" always;
-        add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'\" always;
+        add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'\" always;
     }
 
     # OAuth 2.1 discovery (RFC 9728 / RFC 8414). Standard MCP clients fetch these
@@ -664,12 +681,12 @@ ${nginx_http_ipv6_line}
 
     # ---- Published-diagram embedding -------------------------------------
     # These three paths are the ONLY ones that may be framed by another site.
-    # `add_header` in a location replaces the inherited set, so each re-declares
+    # add_header in a location replaces the inherited set, so each re-declares
     # the full header block minus X-Frame-Options (which has no allowlist form)
     # and carries frame-ancestors instead.
-    # Never add Cross-Origin-Opener-Policy to `location /`: an SSO-gated
+    # Never add Cross-Origin-Opener-Policy to 'location /': an SSO-gated
     # embedded diagram signs in through a popup whose /auth/callback page
-    # relays the result to `window.opener`, and COOP would sever that link
+    # relays the result to window.opener, and COOP would sever that link
     # (#1126).
 
     # The public embed page itself.
@@ -696,6 +713,7 @@ ${nginx_http_ipv6_line}
         proxy_set_header X-Forwarded-Proto ${NGINX_FORWARDED_PROTO};
         add_header X-Content-Type-Options \"nosniff\" always;
         add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
         add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
         add_header Content-Security-Policy \"frame-ancestors ${NGINX_EMBED_FRAME_ANCESTORS}\" always;
     }
@@ -710,6 +728,8 @@ ${nginx_http_ipv6_line}
         add_header X-Robots-Tag \"noindex, nofollow\" always;
         add_header Cache-Control \"no-store, no-transform\" always;
         add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
         add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
         add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors ${NGINX_EMBED_FRAME_ANCESTORS}\" always;
     }
@@ -721,14 +741,24 @@ ${nginx_http_ipv6_line}
         add_header Cache-Control \"no-store, no-transform\" always;
         add_header X-Frame-Options \"SAMEORIGIN\" always;
         add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
         add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'\" always;
     }
 
+    # add_header in a location replaces the inherited set, so this block
+    # re-declares the response-level security headers; without them every
+    # DrawIO script, stylesheet and image left the edge with none (ZAP 10021
+    # and 10063 in the 2026-09-30 DAST run). X-Frame-Options and the CSP are
+    # page-level and live on /drawio/index.html above.
     location ^~ /drawio/ {
         proxy_pass \$frontend_upstream\$request_uri;
         proxy_set_header Host \$host;
         add_header X-Robots-Tag \"noindex, nofollow\" always;
         add_header Cache-Control \"no-cache, no-transform\" always;
+        add_header X-Content-Type-Options \"nosniff\" always;
+        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
     }
 
     location / {
@@ -741,7 +771,7 @@ ${nginx_http_ipv6_line}
         add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
         add_header Permissions-Policy \"camera=(), microphone=(), geolocation=()\" always;
         add_header X-XSS-Protection \"1; mode=block\" always;
-        add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'\" always;
+        add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'\" always;
     }
 }"
         export NGINX_HTTPS_SERVER_BLOCK=''
@@ -770,21 +800,9 @@ EXPOSE 8080
 CMD ["/usr/local/bin/turboea-nginx-entrypoint"]
 
 
-FROM ollama/ollama:latest AS ollama
-
-ARG APP_UID
-ARG APP_GID
-
-USER root
-
-ENV OLLAMA_MODELS=/models
-
-RUN mkdir -p /models && \
-    chown -R ${APP_UID}:${APP_GID} /models
-
-USER ${APP_UID}:${APP_GID}
-
-
+# Pinned to a release tag (never `:latest`): the tag is what Dependabot's
+# docker entry bumps, what the Trivy gate in docker-publish.yml scans, and
+# what cosign signs — a moving tag has none of the three.
 FROM python:3.12-alpine AS mcp-server
 
 ARG APP_UID

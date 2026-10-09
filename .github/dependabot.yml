@@ -4,9 +4,14 @@
 #   - pip & npm: version updates disabled (open-pull-requests-limit: 0).
 #     Dependabot *security* updates still create PRs automatically — that
 #     feature is controlled by the repo's Security settings, not this file.
+#   - docker: version updates ENABLED (grouped, weekly) — see the entry
+#     for why the security-only posture cannot work for container bases.
 #   - GitHub Actions: monthly version updates kept enabled. Pinning actions
 #     to current versions is a supply-chain security best practice.
 
+# Labels: every label named below must already exist in the repository, or
+# Dependabot refuses to open the PR ("The following labels could not be
+# found"). Only `dependencies`, `security` and `frontend` exist today.
 version: 2
 updates:
   # Python (pip) — security updates only
@@ -20,7 +25,6 @@ updates:
     labels:
       - "dependencies"
       - "security"
-      - "backend"
     open-pull-requests-limit: 0
 
   # npm — security updates only
@@ -37,24 +41,71 @@ updates:
       - "frontend"
     open-pull-requests-limit: 0
 
-  # Docker base images — security updates only
+  # Docker base images — VERSION updates, grouped into one weekly PR
   # Covers every `FROM` line in the root Dockerfile (nginx, python, postgres,
-  # node, alpine/git, ollama). Version update PRs are disabled; security PRs
-  # bypass this limit (controlled by the repo's Security settings).
-  # Why this exists: CVE-2026-42945 ("NGINX Rift") shipped in nginx 1.30.0,
-  # and we'd been on the moving `nginx:alpine` tag — no signal until the
-  # daily image scan caught it. Pinning + Dependabot Docker closes that gap.
+  # node, alpine/git). Unlike pip and npm, this ecosystem has NO
+  # security-update path: the GitHub Advisory Database carries no container
+  # advisories, so with `open-pull-requests-limit: 0` (as it stood until
+  # 2.154.0) Dependabot could never open a docker PR at all. Version bumps
+  # of the pinned tags are the only signal it can give, and a pinned tag
+  # with no bump signal is exactly the situation this entry was created to
+  # end: CVE-2026-42945 ("NGINX Rift") shipped in nginx 1.30.0 while we
+  # were on the moving `nginx:alpine` tag — no signal until the daily image
+  # scan caught it. A base bump PR still has to pass the Trivy gate in
+  # docker-publish.yml like any other change.
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    # A new MAJOR of a base (python 3.12 → 3.14, node 24 → 26) is a migration
+    # decided by a person, not a weekly bump: the first grouped PR proposed
+    # exactly that for three bases at once. Minor and patch tags — the
+    # NGINX-Rift class of fix — still come through every week.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # nginx numbers its stable line even (1.30.x) and mainline odd
+      # (1.31.x), so a "minor" bump moves off the stable line. Patches only;
+      # a line change is a deliberate edit.
+      - dependency-name: "nginx"
+        update-types: ["version-update:semver-minor"]
+      # Python's "minor" IS its runtime generation: 3.12 → 3.14 is a semver
+      # minor to Dependabot but a new interpreter to us, and CI tests on the
+      # 3.12 line (`python-version: "3.12"` in ci.yml), so the image and the
+      # tests must move together, by hand. Patches (3.12.x) still flow.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-minor"]
+    groups:
+      # One PR for all base images rather than one per FROM line.
+      docker-bases:
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore(deps)"
     labels:
       - "dependencies"
       - "security"
-      - "docker"
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
+
+  # Docker Compose — the one image compose pulls that this repo does not
+  # build: the optional Ollama container is upstream's own `ollama/ollama`,
+  # pinned to a release tag in docker-compose.yml since 2.155.0 (the thin
+  # patched image of 2.154.x was dropped). This entry is what keeps that
+  # pin moving. The `ghcr.io/vincentmakes/turbo-ea/*:${TURBO_EA_TAG}` lines
+  # carry a variable tag Dependabot cannot resolve, so it leaves them alone.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "security"
+    open-pull-requests-limit: 1
 
   # GitHub Actions — keep CI actions up to date (supply-chain security)
   - package-ecosystem: "github-actions"
@@ -70,5 +121,4 @@ updates:
       prefix: "chore(ci)"
     labels:
       - "dependencies"
-      - "ci"
     open-pull-requests-limit: 3

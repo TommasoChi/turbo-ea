@@ -22,7 +22,7 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Snackbar from "@mui/material/Snackbar";
 import { api } from "@/api/client";
 import { useAuth } from "@/hooks/useAuth";
-import { hasTypePermission } from "@/components/RequirePermission";
+import { canReadType, hasTypePermission } from "@/components/RequirePermission";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import CatalogueBrowser from "./CatalogueBrowser";
 import type {
@@ -57,6 +57,9 @@ export default function CataloguePage({ config }: Props) {
   // The importer creates cards of exactly one type, so the per-card-type
   // override for that type decides (discussion #1068).
   const canCreate = hasTypePermission(user, "inventory.create", config.inventoryCardType);
+  // The catalogue marks which entries already exist as cards of this type, so
+  // a role denied View on it may not open the page (the API refuses it too).
+  const canRead = canReadType(user, config.inventoryCardType);
   const canManageUpdates = can("admin.metamodel");
 
   const [payload, setPayload] = useState<CataloguePayload | null>(null);
@@ -212,15 +215,26 @@ export default function CataloguePage({ config }: Props) {
           : baseMsg,
       );
       // Retain whatever did land so the user can see partial results in the
-      // dialog and still navigate to the inventory.
+      // dialog and still navigate to the inventory — and reload, so the tree
+      // marks those entries as existing. The selection is kept: the failed
+      // batch can be retried, and the server skips what already exists.
       if (aggregate.created.length > 0 || aggregate.relinked.length > 0) {
         setImportResult(aggregate);
+        await reload();
       }
     } finally {
       setImporting(false);
       setImportProgress(null);
     }
   };
+
+  if (!canRead) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="warning">{t("common:accessDenied.body")}</Alert>
+      </Box>
+    );
+  }
 
   if (loading) {
     return (
@@ -379,6 +393,12 @@ export default function CataloguePage({ config }: Props) {
           {importResult ? t(`cards:${ns}.importDoneTitle`) : t(`cards:${ns}.importConfirmTitle`)}
         </DialogTitle>
         <DialogContent>
+          {/* Shown with or without a result: a partial failure has both. */}
+          {importError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {importError}
+            </Alert>
+          )}
           {!importResult && (
             <>
               <Typography variant="body2" sx={{ mb: 1 }}>
@@ -401,11 +421,6 @@ export default function CataloguePage({ config }: Props) {
                     sx={{ mt: 0.5 }}
                   />
                 </Box>
-              )}
-              {importError && (
-                <Alert severity="error" sx={{ mt: 2 }}>
-                  {importError}
-                </Alert>
               )}
             </>
           )}

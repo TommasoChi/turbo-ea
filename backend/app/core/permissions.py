@@ -396,22 +396,84 @@ CARD_TO_APP_PERMISSION_MAP: dict[str, str] = {v: k for k, v in APP_TO_CARD_PERMI
 # ---------------------------------------------------------------------------
 # Per-card-type permission overrides
 # ---------------------------------------------------------------------------
-# A card type may override these four app-level permissions per role, so an
-# admin can say "members may not create Organizations" or "viewers may create
-# Initiatives" without minting a role per type. Deliberately a *subset* of
-# ``inventory.*`` and NOT new permission keys: the override map reuses the keys
-# below, so ``ALL_APP_PERMISSION_KEYS`` and every default role dict are
-# untouched. ``inventory.view`` is excluded on purpose — hiding a type from a
-# role would have to reach every list, report, relation and graph endpoint,
-# which is a different feature.
+# A card type may override these five app-level permissions per role, so an
+# admin can say "members may not create Organizations", "viewers may create
+# Initiatives" or "viewers may not see Initiatives at all" without minting a
+# role per type. Deliberately a *subset* of ``inventory.*`` and NOT new
+# permission keys: the override map reuses the keys below, so
+# ``ALL_APP_PERMISSION_KEYS`` and every default role dict are untouched.
+#
+# ``inventory.view`` is the odd one out. A View cell does not only decide one
+# action: an explicit View *deny* means the role holds no landscape-wide
+# authority over cards of that type at all (see ``type_cell_decision``), and
+# every read surface — lists, reports, relations, graphs, linked-card chips —
+# omits those cards through ``app.services.card_read_scope``. A stakeholder's
+# own card-level grants on one specific card are never affected.
 TYPE_SCOPED_APP_PERMISSIONS: frozenset[str] = frozenset(
     {
+        "inventory.view",
         "inventory.create",
         "inventory.edit",
         "inventory.archive",
         "inventory.delete",
     }
 )
+
+VIEW_PERMISSION = "inventory.view"
+
+
+def resolve_cell(cell: object, subtype: str | None = None) -> bool | None:
+    """Resolve one stored ``role_permissions`` cell against a card's subtype.
+
+    Returns ``None`` when the cell does not apply — the caller must then fall
+    through to the role's landscape-wide grant, identical to a missing cell.
+    A plain ``bool`` cell always applies (unscoped, "All subtypes"). A
+    ``{"value": bool, "subtypes": [...]}`` cell applies only when ``subtype``
+    is one of those listed; for any other subtype it is not an answer at all,
+    rather than a deny.
+    """
+    if cell is None:
+        return None
+    if isinstance(cell, dict):
+        scoped = cell.get("subtypes")
+        if scoped and subtype not in scoped:
+            return None
+        return bool(cell.get("value", False))
+    return bool(cell)
+
+
+def type_cell_decision(
+    cells: dict | None, permission: str, subtype: str | None = None
+) -> bool | None:
+    """What one role's override cells on one card type say about ``permission``.
+
+    Returns ``False`` / ``True`` when the cells decide, ``None`` to inherit the
+    role's landscape-wide grant. The single rule every checker shares —
+    ``PermissionService.has_app_permission``, ``is_type_denied``,
+    ``get_effective_card_permissions`` and the frontend ``hasTypePermission``
+    mirror it — so they can never disagree about a type.
+
+    An explicit View deny wins over everything: a role that may not see a
+    type's cards can hold no landscape-wide authority over them either, so it
+    answers ``False`` for *any* permission, not only the four write actions.
+    Only an explicit ``False`` does this — a role that merely lacks the global
+    ``inventory.view`` keeps whatever else it holds, exactly as before.
+
+    Both the View cell and the requested permission's cell are read through
+    ``resolve_cell``, so a *subtype-scoped* cell decides only for the subtypes
+    it names. That is what keeps the two features orthogonal: a View deny
+    scoped to one subtype cannot silently strip authority over the rest of the
+    type, and a caller with no subtype in hand (a summary, a create dialog
+    before a subtype is picked) sees a scoped cell as "not an answer".
+    """
+    cells = cells or {}
+    if resolve_cell(cells.get(VIEW_PERMISSION), subtype) is False:
+        return False
+    if permission in TYPE_SCOPED_APP_PERMISSIONS:
+        decision = resolve_cell(cells.get(permission), subtype)
+        if decision is not None:
+            return decision
+    return None
 
 
 def validate_type_role_permissions(

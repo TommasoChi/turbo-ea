@@ -100,6 +100,8 @@ Aprite un ADR firmato e cliccate su **Revisiona** per creare una nuova bozza bas
 
 Cliccate sull'icona di anteprima per visualizzare una versione in sola lettura e formattata dell'ADR — utile per la revisione prima della firma.
 
+Dall'anteprima, fate clic su **PDF** per aprire una copia pronta per la stampa in una nuova scheda — metadati, le quattro sezioni, schede collegate, sezioni delle estensioni e blocco firme, con approvatore e data di stampa a piè di pagina. L'editor ha lo stesso pulsante **PDF** più **Word**, che scarica la decisione come `.docx` finché non è firmata; entrambi esportano lo stato corrente dell'editor, modifiche non salvate comprese.
+
 ## Rischio
 
 ![GRC — Registro dei rischi](../assets/img/it/53_grc_registro_rischi.png)

@@ -984,8 +984,12 @@ async def resolve_archive_delete_set(
     child_strategy: str | None,
     related_card_ids: list[str],
     cascade_all_related: bool,
+    read_scope=None,
 ) -> tuple[list[uuid.UUID], list[uuid.UUID], list[uuid.UUID]]:
     """Resolve (descendants, related_card_ids, full_affected_excluding_primary).
+
+    ``read_scope`` (a ``CardReadScope``, route callers only) keeps
+    ``cascade_all_related`` to the peers the user can see.
 
     - descendants: empty unless `child_strategy == "cascade"`.
     - related_card_ids: deduped, primary-stripped, descendant-stripped.
@@ -1000,7 +1004,8 @@ async def resolve_archive_delete_set(
     for raw in related_card_ids:
         try:
             rid = uuid.UUID(raw)
-        except (TypeError, ValueError) as exc:
+        # A non-str reaches ``str.replace`` inside ``uuid.UUID``: AttributeError.
+        except (AttributeError, TypeError, ValueError) as exc:
             raise HTTPException(422, f"Invalid related_card_ids entry: {raw!r}") from exc
         if rid == primary.id or rid in seen_related:
             continue
@@ -1008,7 +1013,7 @@ async def resolve_archive_delete_set(
         requested_related.append(rid)
 
     if cascade_all_related:
-        for peer_id in await card_lifecycle.expand_cascade_all_related(db, primary.id):
+        for peer_id in await card_lifecycle.expand_cascade_all_related(db, primary.id, read_scope):
             if peer_id == primary.id or peer_id in seen_related:
                 continue
             seen_related.add(peer_id)

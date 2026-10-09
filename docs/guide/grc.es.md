@@ -100,6 +100,8 @@ Abra un ADR firmado y haga clic en **Revisar** para crear un nuevo borrador basa
 
 Haga clic en el icono de vista previa para ver una versión de solo lectura y formateada del ADR — útil para revisión antes de firmar.
 
+Desde la vista previa, haga clic en **PDF** para abrir una copia lista para imprimir en una pestaña nueva — metadatos, las cuatro secciones, tarjetas vinculadas, secciones de extensiones y el bloque de firmas, con el aprobador y la fecha de impresión en el pie. El editor tiene el mismo botón **PDF** más **Word**, que descarga la decisión como `.docx` mientras no esté firmada; ambos exportan el estado actual del editor, incluidos los cambios sin guardar.
+
 ## Riesgo
 
 ![GRC — Registro de riesgos](../assets/img/es/53_grc_registro_riesgos.png)

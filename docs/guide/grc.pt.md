@@ -100,6 +100,8 @@ Abra um ADR assinado e clique em **Revisar** para criar um novo rascunho baseado
 
 Clique no ícone de pré-visualização para ver uma versão somente leitura e formatada do ADR — útil para revisão antes de assinar.
 
+Na pré-visualização, clique em **PDF** para abrir uma cópia pronta para impressão em uma nova aba — metadados, as quatro seções, cartões vinculados, seções de extensões e o bloco de assinaturas, com o aprovador e a data de impressão no rodapé. O editor tem o mesmo botão **PDF** mais **Word**, que baixa a decisão como `.docx` enquanto ela não estiver assinada; ambos exportam o estado atual do editor, incluindo alterações não salvas.
+
 ## Risco
 
 ![GRC — Registro de riscos](../assets/img/pt/53_grc_registo_riscos.png)

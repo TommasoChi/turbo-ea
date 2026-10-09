@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import TYPE_SCOPED_APP_PERMISSIONS
+from app.core.permissions import type_cell_decision
 from app.models.card import Card
 from app.models.card_type import CardType
 from app.models.role import Role
@@ -20,7 +20,7 @@ from app.models.user import User
 from app.services.event_bus import request_impersonation
 
 
-def _effective_role(user: User) -> str:
+def effective_role_key(user: User) -> str:
     """Return the role key to use for app-level permission checks.
 
     When the request's JWT carries an ``impersonated_role`` claim the
@@ -40,6 +40,10 @@ def _effective_role(user: User) -> str:
     return user.role
 
 
+# Kept for the many call sites (and tests) that predate the public name.
+_effective_role = effective_role_key
+
+
 class PermissionService:
     """Centralized permission checking. All route handlers should use this."""
 
@@ -52,6 +56,11 @@ class PermissionService:
 
     # Per-card-type role overrides: type_key → (role_permissions_dict, timestamp)
     _type_perm_cache: dict[str, tuple[dict, float]] = {}
+
+    # Every card type's overrides at once: (type_key → role_permissions, timestamp).
+    # Read by the card read scope (which needs all of a role's cells per request)
+    # and by ``type_permissions_for_role``. Cleared by any type invalidation.
+    _all_type_perm_cache: tuple[dict[str, dict], float] | None = None
 
     @staticmethod
     async def load_role(db: AsyncSession, role_key: str) -> dict | None:
@@ -93,9 +102,26 @@ class PermissionService:
 
         result = await db.execute(select(CardType.role_permissions).where(CardType.key == type_key))
         raw = result.scalar_one_or_none()
-        overrides = dict(raw) if raw else {}
+        overrides: dict[str, dict] = dict(raw) if raw else {}
         PermissionService._type_perm_cache[type_key] = (overrides, now)
         return overrides
+
+    @staticmethod
+    async def load_all_type_role_permissions(db: AsyncSession) -> dict[str, dict]:
+        """Every card type's per-role overrides, ``{type_key: {role_key: cells}}``.
+
+        One query, cached like the per-type map. Types with no overrides are
+        included with an empty dict so a caller can tell "no cells" from
+        "unknown type".
+        """
+        now = time.time()
+        cached = PermissionService._all_type_perm_cache
+        if cached and (now - cached[1]) < PermissionService.CACHE_TTL:
+            return cached[0]
+        rows = await db.execute(select(CardType.key, CardType.role_permissions))
+        out = {key: dict(overrides or {}) for key, overrides in rows.all()}
+        PermissionService._all_type_perm_cache = (out, now)
+        return out
 
     @staticmethod
     async def has_app_permission(
@@ -112,26 +138,27 @@ class PermissionService:
         session is honoured — an admin impersonating "member" gets the
         member role's permission set here, not the admin wildcard.
 
-        When ``card_type_key`` is given and the permission is one of the four
-        type-scoped inventory permissions, the card type's per-role override
-        decides: an explicit ``False`` denies a role its global grant, an
-        explicit ``True`` grants what the role lacks globally, and an absent
-        cell inherits. The admin wildcard short-circuits *before* the override
-        lookup, so a wildcard role can never be locked out of a type.
+        When ``card_type_key`` is given, the card type's per-role override cells
+        are consulted through ``type_cell_decision``: an explicit View deny
+        takes away *every* landscape-wide permission on that type (a role that
+        may not see a type's cards holds no authority over them), a stored cell
+        for one of the five type-scoped inventory permissions decides that
+        permission either way, and an absent cell inherits. The admin wildcard
+        short-circuits *before* the override lookup, so a wildcard role can
+        never be locked out of a type.
         """
-        role_key = _effective_role(user)
+        role_key = effective_role_key(user)
         role_data = await PermissionService.load_role(db, role_key)
         if not role_data:
             return False
         perms = role_data.get("permissions", {})
         if perms.get("*"):
             return True
-        if card_type_key and permission in TYPE_SCOPED_APP_PERMISSIONS:
+        if card_type_key:
             overrides = await PermissionService.load_type_role_permissions(db, card_type_key)
-            cell = overrides.get(role_key, {}).get(permission)
-            resolved = PermissionService._resolve_override_cell(cell, subtype)
-            if resolved is not None:
-                return resolved
+            decision = type_cell_decision(overrides.get(role_key), permission, subtype)
+            if decision is not None:
+                return decision
         return bool(perms.get(permission, False))
 
     @staticmethod
@@ -149,19 +176,17 @@ class PermissionService:
         for a stored ``False`` cell, never for a role that simply lacks the
         global grant. Bulk edit uses it so that a type-level deny blocks the
         type while a type-level allow grants nothing extra — see
-        ``bulk_update`` in ``api/v1/cards.py``.
+        ``bulk_update`` in ``api/v1/cards.py``. An explicit View deny counts as
+        a deny of every permission on the type (``type_cell_decision``).
         """
-        role_key = _effective_role(user)
+        role_key = effective_role_key(user)
         role_data = await PermissionService.load_role(db, role_key)
         if not role_data:
             return False
         if role_data.get("permissions", {}).get("*"):
             return False
-        if permission not in TYPE_SCOPED_APP_PERMISSIONS:
-            return False
         overrides = await PermissionService.load_type_role_permissions(db, type_key)
-        cell = overrides.get(role_key, {}).get(permission)
-        return PermissionService._resolve_override_cell(cell, subtype) is False
+        return type_cell_decision(overrides.get(role_key), permission, subtype) is False
 
     @staticmethod
     async def type_permissions_for_role(db: AsyncSession, role_key: str) -> dict[str, dict]:
@@ -175,9 +200,9 @@ class PermissionService:
         role_data = await PermissionService.load_role(db, role_key)
         if not role_data or role_data.get("permissions", {}).get("*"):
             return {}
-        rows = await db.execute(select(CardType.key, CardType.role_permissions))
+        all_overrides = await PermissionService.load_all_type_role_permissions(db)
         out: dict[str, dict] = {}
-        for type_key, overrides in rows.all():
+        for type_key, overrides in all_overrides.items():
             cells = (overrides or {}).get(role_key)
             if cells:
                 # This summary has no subtype context (no specific card in
@@ -198,25 +223,6 @@ class PermissionService:
         result = await db.execute(select(Card.type, Card.subtype).where(Card.id == card_id))
         row = result.one_or_none()
         return (row.type, row.subtype) if row else (None, None)
-
-    @staticmethod
-    def _resolve_override_cell(cell: object, subtype: str | None) -> bool | None:
-        """Resolve one stored ``role_permissions`` cell against a card's subtype.
-
-        Returns ``None`` when the cell doesn't apply — the caller must then
-        fall through to the role's landscape-wide permission, identical to a
-        missing cell. A plain ``bool`` cell always applies (unscoped, "All
-        subtypes"). A ``{"value": bool, "subtypes": [...]}`` cell applies only
-        when ``subtype`` is in that list.
-        """
-        if cell is None:
-            return None
-        if isinstance(cell, dict):
-            scoped = cell.get("subtypes")
-            if scoped and subtype not in scoped:
-                return None
-            return bool(cell.get("value", False))
-        return bool(cell)
 
     @staticmethod
     async def has_card_permission(
@@ -245,26 +251,37 @@ class PermissionService:
             return False
 
         for (role_key,) in stakeholder_result.all():
-            # Check cache first
-            now = time.time()
-            cache_key = (type_key, role_key)
-            cached = PermissionService._srd_cache.get(cache_key)
-            if cached and (now - cached[1]) < PermissionService.CACHE_TTL:
-                perms = cached[0]
-            else:
-                srd = await db.execute(
-                    select(StakeholderRoleDefinition.permissions).where(
-                        StakeholderRoleDefinition.card_type_key == type_key,
-                        StakeholderRoleDefinition.key == role_key,
-                        StakeholderRoleDefinition.is_archived == False,  # noqa: E712
-                    )
-                )
-                perms = srd.scalar_one_or_none()
-                PermissionService._srd_cache[cache_key] = (perms, now)
-
+            perms = await PermissionService.stakeholder_role_permissions(db, type_key, role_key)
             if perms and perms.get(permission, False):
                 return True
         return False
+
+    @staticmethod
+    async def stakeholder_role_permissions(
+        db: AsyncSession, type_key: str, role_key: str
+    ) -> dict | None:
+        """The card-level permission map of one stakeholder role on one type.
+
+        ``None`` when the role is not defined for the type or is archived — an
+        archived role grants nothing. Cached per ``(type, role)``; the card read
+        scope reads through this too, so "which stakeholder roles grant
+        ``card.view``" has exactly one answer.
+        """
+        now = time.time()
+        cache_key = (type_key, role_key)
+        cached = PermissionService._srd_cache.get(cache_key)
+        if cached and (now - cached[1]) < PermissionService.CACHE_TTL:
+            return cached[0]
+        srd = await db.execute(
+            select(StakeholderRoleDefinition.permissions).where(
+                StakeholderRoleDefinition.card_type_key == type_key,
+                StakeholderRoleDefinition.key == role_key,
+                StakeholderRoleDefinition.is_archived == False,  # noqa: E712
+            )
+        )
+        perms = srd.scalar_one_or_none()
+        PermissionService._srd_cache[cache_key] = (perms, now)
+        return perms
 
     @staticmethod
     async def check_permission(
@@ -408,14 +425,7 @@ class PermissionService:
         card_level: dict[str, bool] = {}
         if type_key:
             for role_key in stakeholder_roles:
-                srd = await db.execute(
-                    select(StakeholderRoleDefinition.permissions).where(
-                        StakeholderRoleDefinition.card_type_key == type_key,
-                        StakeholderRoleDefinition.key == role_key,
-                        StakeholderRoleDefinition.is_archived == False,  # noqa: E712
-                    )
-                )
-                perms = srd.scalar_one_or_none()
+                perms = await PermissionService.stakeholder_role_permissions(db, type_key, role_key)
                 if perms:
                     for k, v in perms.items():
                         if v:
@@ -425,19 +435,22 @@ class PermissionService:
         is_admin = app_perms.get("*", False)
 
         def _app(key: str) -> bool:
-            """The role's app-level grant for ``key``, after per-type/subtype overrides."""
-            if key in TYPE_SCOPED_APP_PERMISSIONS:
-                resolved = PermissionService._resolve_override_cell(
-                    role_overrides.get(key), subtype
-                )
-                if resolved is not None:
-                    return resolved
+            """The role's app-level grant for ``key``, after per-type/subtype overrides.
+
+            Same rule as ``has_app_permission`` (``type_cell_decision``): an
+            explicit View deny on this type takes every app-level grant away,
+            a stored cell decides its own permission, anything else inherits.
+            The card's own ``subtype`` is passed, so a subtype-scoped cell is
+            applied here exactly as on the write paths — otherwise card detail
+            would show buttons the write path then refuses.
+            """
+            decision = type_cell_decision(role_overrides, key, subtype)
+            if decision is not None:
+                return decision
             return bool(app_perms.get(key, False))
 
         effective = {
-            "can_view": is_admin
-            or app_perms.get("inventory.view", False)
-            or card_level.get("card.view", False),
+            "can_view": is_admin or _app("inventory.view") or card_level.get("card.view", False),
             "can_edit": is_admin or _app("inventory.edit") or card_level.get("card.edit", False),
             "can_archive": is_admin
             or _app("inventory.archive")
@@ -446,44 +459,40 @@ class PermissionService:
             or _app("inventory.delete")
             or card_level.get("card.delete", False),
             "can_approval_status": is_admin
-            or app_perms.get("inventory.approval_status", False)
+            or _app("inventory.approval_status")
             or card_level.get("card.approval_status", False),
             "can_manage_stakeholders": is_admin
-            or app_perms.get("stakeholders.manage", False)
+            or _app("stakeholders.manage")
             or card_level.get("card.manage_stakeholders", False),
             "can_manage_relations": is_admin
-            or app_perms.get("relations.manage", False)
+            or _app("relations.manage")
             or card_level.get("card.manage_relations", False),
             "can_manage_documents": is_admin
-            or app_perms.get("documents.manage", False)
+            or _app("documents.manage")
             or card_level.get("card.manage_documents", False),
             "can_manage_comments": is_admin
-            or app_perms.get("comments.manage", False)
+            or _app("comments.manage")
             or card_level.get("card.manage_comments", False),
             "can_create_comments": is_admin
-            or app_perms.get("comments.create", False)
+            or _app("comments.create")
             or card_level.get("card.create_comments", False),
-            "can_bpm_edit": is_admin
-            or app_perms.get("bpm.edit", False)
-            or card_level.get("card.bpm_edit", False),
+            "can_bpm_edit": is_admin or _app("bpm.edit") or card_level.get("card.bpm_edit", False),
             "can_bpm_manage_drafts": is_admin
-            or app_perms.get("bpm.manage_drafts", False)
+            or _app("bpm.manage_drafts")
             or card_level.get("card.bpm_manage_drafts", False),
             "can_bpm_approve": is_admin
-            or app_perms.get("bpm.approve_flows", False)
+            or _app("bpm.approve_flows")
             or card_level.get("card.bpm_approve", False),
             "can_bpm_withdraw": is_admin
-            or app_perms.get("bpm.withdraw_flows", False)
+            or _app("bpm.withdraw_flows")
             or card_level.get("card.bpm_withdraw", False),
             "can_manage_adr_links": is_admin
-            or app_perms.get("adr.manage", False)
+            or _app("adr.manage")
             or card_level.get("card.manage_adr_links", False),
             "can_manage_diagram_links": is_admin
-            or app_perms.get("diagrams.manage", False)
+            or _app("diagrams.manage")
             or card_level.get("card.manage_diagram_links", False),
-            "can_view_costs": is_admin
-            or app_perms.get("costs.view", False)
-            or len(stakeholder_roles) > 0,
+            "can_view_costs": is_admin or _app("costs.view") or len(stakeholder_roles) > 0,
         }
 
         return {
@@ -506,7 +515,12 @@ class PermissionService:
 
     @staticmethod
     def invalidate_type_permission_cache(type_key: str | None = None) -> None:
-        """Invalidate the per-card-type role-override cache."""
+        """Invalidate the per-card-type role-override caches.
+
+        The all-types map is always dropped, whatever ``type_key`` names: it
+        holds every type's cells, so one type's edit makes all of it stale.
+        """
+        PermissionService._all_type_perm_cache = None
         if type_key:
             PermissionService._type_perm_cache.pop(type_key, None)
         else:

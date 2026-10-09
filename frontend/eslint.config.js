@@ -5,7 +5,8 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  // .stryker-tmp is StrykerJS's sandbox (instrumented copies of src/), reports/ its output.
+  { ignores: ["dist", ".stryker-tmp", "reports"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -46,5 +47,11 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  {
+    // The browser smoke suite runs under Node (Playwright), not in the page;
+    // so do the coverage scripts and their tests.
+    files: ["e2e/**/*.ts", "playwright.config.ts", "scripts/**/*.ts"],
+    languageOptions: { globals: { ...globals.node } },
   },
 );

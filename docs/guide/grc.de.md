@@ -100,6 +100,8 @@ Ein unterschriebenes ADR öffnen und **Überarbeiten** klicken, um einen neuen E
 
 Klick auf das Vorschau-Symbol für eine schreibgeschützte, formatierte Ansicht des ADR — nützlich vor der Unterschrift.
 
+Klicken Sie in der Vorschau auf **PDF**, um eine druckfertige Kopie in einem neuen Tab zu öffnen — Metadaten, die vier Abschnitte, verknüpfte Karten, Erweiterungsabschnitte und der Unterschriftenblock, mit Genehmiger und Druckdatum in der Fußzeile. Der Editor hat dieselbe **PDF**-Schaltfläche sowie **Word**, das die Entscheidung bis zu ihrer Unterschrift als `.docx` herunterlädt; beide exportieren den aktuellen Stand des Editors, ungespeicherte Änderungen eingeschlossen.
+
 ## Risk
 
 ![GRC — Risikoregister](../assets/img/de/53_grc_risikoregister.png)

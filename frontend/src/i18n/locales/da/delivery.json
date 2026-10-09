@@ -353,6 +353,7 @@
   "adr.filter.noSignatories": "Ingen underskrivere tilgængelige",
   "adr.confirm.delete": "Slet denne arkitekturbeslutning?",
   "adr.export.title": "Arkitekturbeslutningsregister",
+  "adr.export.documentTitle": "Arkitekturbeslutning",
   "adr.export.subtitle_one": "{{count}} beslutning",
   "adr.export.subtitle_other": "{{count}} beslutninger",
   "adr.export.generatedOn": "Genereret den {{date}}",

@@ -31,15 +31,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The `ollama` target is intentionally excluded — it adds only a thin
-        # non-root patch on top of `ollama/ollama:latest` (mkdir + chown +
-        # USER), so rebuilding multi-arch on every main push is wasteful.
-        # Republish manually when upstream changes meaningfully:
-        #   docker buildx build --platform linux/amd64,linux/arm64 \
-        #     --target ollama \
-        #     -t ghcr.io/vincentmakes/turbo-ea/ollama:latest \
-        #     -t ghcr.io/vincentmakes/turbo-ea/ollama:0.70.0 \
-        #     --push .
+        # Every image docker-compose.yml pulls from GHCR. The optional Ollama
+        # container is not one of them: compose pins upstream's own
+        # `ollama/ollama` tag (2.155.0). Turbo EA published a thin non-root
+        # patch over it in 2.154.0 to 2.154.2 and stopped — the patch added
+        # nothing but a user, and in exchange this workflow was signing,
+        # gating and re-scanning a Go binary the repo cannot rebuild (75
+        # upstream-toolchain alerts on day one). Keep this list identical to
+        # security-scan-published.yml and trivy-reconcile.yml —
+        # backend/tests/services/test_publish_image_matrix.py pins the three.
         image: [db, backend, frontend, nginx, mcp-server]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -54,10 +54,10 @@ jobs:
         run: echo "lower=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -91,7 +91,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: Dockerfile
@@ -215,7 +215,7 @@ jobs:
       # "Path does not exist" error that buries the real build failure.
       - name: Upload Trivy SARIF to Security tab
         if: always() && hashFiles(format('trivy-{0}.sarif', matrix.image)) != ''
-        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: trivy-${{ matrix.image }}
@@ -256,7 +256,7 @@ jobs:
 
       - name: Upload Docker Scout SARIF to Security tab
         if: always() && hashFiles(format('scout-{0}.sarif', matrix.image)) != ''
-        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           sarif_file: scout-${{ matrix.image }}.sarif
           category: scout-${{ matrix.image }}

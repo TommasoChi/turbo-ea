@@ -47,6 +47,9 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
     "pytest-xdist>=3.5.0",
+    # Mutation testing. Pinned exactly: scripts/mutation/mutmut_scope.py reads
+    # its `results` / `show` output, so a bump is a deliberate, tested change.
+    "mutmut==3.8.0",
     "httpx>=0.28.0",
     "ruff>=0.8.0",
     "pip-audit>=2.7.0",
@@ -82,13 +85,30 @@ select = ["E", "F", "I", "N", "W"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 addopts = "-q"
+# Never collect the copy of the suite mutmut keeps under mutants/.
+testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["app"]
-omit = ["app/services/seed*.py"]
+# The metamodel seed and the demo datasets are data, not logic; seed_markers.py
+# is logic and stays measured.
+omit = ["app/services/seed.py", "app/services/seed_demo*.py"]
+# Async SQLAlchemy runs every query on a greenlet. Without this, coverage.py
+# stops tracing a request handler at its first `await db.execute()` and reports
+# the rest of the function as never run — the suite measured 62% that way and
+# 81% with the same tests once greenlets were traced (comments.py: 52% → 94%).
+concurrency = ["greenlet", "thread"]
+# CI measures the suite as shards on separate runners and combines the data
+# files afterwards; relative paths keep the combine independent of where each
+# runner checked the repository out.
+relative_files = true
 
 [tool.coverage.report]
-fail_under = 40
+# A floor just under the measured total, raised whenever a PR lifts it. CI
+# fails the Backend Integration Tests job when the suite drops below it — the
+# aggregate over the shard jobs, which each run with `--cov-fail-under=0`; the
+# floor only means something on the combined data.
+fail_under = 91
 show_missing = true
 skip_covered = true
 
@@ -132,3 +152,17 @@ module = [
     "app.api.v1.web_portals",
 ]
 ignore_errors = true
+
+
+# Mutation testing (CLAUDE.md, Testing Conventions, gate 3). Always run through
+# scripts/mutation/mutmut_scope.py: it builds the shadow root the copied tests
+# need to find the repository (scripts/mutation/shadow_root.py) and passes the
+# mutant-name patterns that scope a run. Scope is never set with `only_mutate`:
+# it is not part of mutmut's config fingerprint, so changing it keeps stale
+# test-to-function stats and newly scoped functions read "no tests".
+[tool.mutmut]
+source_paths = ["app"]
+pytest_add_cli_args_test_selection = ["tests/"]
+pytest_add_cli_args = ["-p", "no:cacheprovider"]
+# Data, not logic — the same files [tool.coverage.run] omits.
+do_not_mutate = ["app/services/seed.py", "app/services/seed_demo*.py"]

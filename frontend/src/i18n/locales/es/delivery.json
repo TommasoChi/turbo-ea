@@ -353,6 +353,7 @@
   "adr.filter.noSignatories": "No hay firmantes disponibles",
   "adr.confirm.delete": "¿Eliminar esta decisión de arquitectura?",
   "adr.export.title": "Decisiones de arquitectura",
+  "adr.export.documentTitle": "Registro de decisión de arquitectura",
   "adr.export.subtitle_one": "{{count}} decisión",
   "adr.export.subtitle_other": "{{count}} decisiones",
   "adr.export.generatedOn": "Generado el {{date}}",

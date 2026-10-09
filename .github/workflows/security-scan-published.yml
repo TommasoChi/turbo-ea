@@ -44,6 +44,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Same list as docker-publish.yml and trivy-reconcile.yml (pinned by
+        # backend/tests/services/test_publish_image_matrix.py).
         image: [db, backend, frontend, nginx, mcp-server]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,7 +74,7 @@ jobs:
 
       - name: Upload Trivy SARIF to Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: daily-trivy-${{ matrix.image }}
@@ -110,7 +112,7 @@ jobs:
 
       - name: Upload Docker Scout SARIF to Security tab
         if: always() && hashFiles(format('scout-{0}.sarif', matrix.image)) != ''
-        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           sarif_file: scout-${{ matrix.image }}.sarif
           category: daily-scout-${{ matrix.image }}
@@ -198,6 +200,6 @@ jobs:
             echo
             echo "A published image carries a HIGH/CRITICAL that upstream has already fixed,"
             echo "so \`docker-publish.yml\` was dispatched on \`main\`. That path is"
-            echo "\`no-cache: true\` and retags \`:latest\`, so every runtime stage re-runs"
+            echo "\`no-cache: true\` and retags \`:latest\`, so every Alpine runtime stage re-runs"
             echo "\`apk upgrade --no-cache\` against live Alpine repos."
           } >> "$GITHUB_STEP_SUMMARY"

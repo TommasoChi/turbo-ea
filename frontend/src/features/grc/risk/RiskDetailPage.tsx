@@ -22,6 +22,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import Divider from "@mui/material/Divider";
 import FormControl from "@mui/material/FormControl";
+import IconButton from "@mui/material/IconButton";
 import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
@@ -32,14 +33,20 @@ import StepButton from "@mui/material/StepButton";
 import Stepper from "@mui/material/Stepper";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import Tooltip from "@mui/material/Tooltip";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import LinkifiedText from "@/components/LinkifiedText";
 import CardPicker from "@/components/CardPicker";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import StakeholderHoverCard from "@/components/StakeholderHoverCard";
 import { DateField } from "@/components/DateField";
 import { api, ApiError } from "@/api/client";
+import { useAuthContext } from "@/hooks/AuthContext";
+import { hasPermission } from "@/components/RequirePermission";
 import { usePageSubject } from "@/hooks/usePageTitle";
 import type {
+  MitigationTask,
   Risk,
   RiskCategory,
   RiskImpact,
@@ -47,6 +54,8 @@ import type {
   RiskStatus,
 } from "@/types";
 import { ExtensionSlot } from "@/lib/extensionHost";
+import { openPrintWindow } from "@/lib/printDocument";
+import { printRisk } from "./riskPrint";
 import AffectedCardsList from "./AffectedCardsList";
 import RiskMatrix from "./RiskMatrix";
 import MitigationTasksPanel, {
@@ -175,9 +184,18 @@ const SIDE_ACTIONS: Record<RiskStatus, SideAction[]> = {
 export default function RiskDetailPage() {
   const { t } = useTranslation("grc");
   const { t: tCommon } = useTranslation("common");
+  // The PDF button reads like the SoAW's, so it borrows the SoAW labels.
+  const { t: tDelivery } = useTranslation("delivery");
+  const theme = useTheme();
+  const compact = useMediaQuery(theme.breakpoints.down("sm"));
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuthContext();
+  // Every write on this page goes through `risks.manage`. A viewer still
+  // sees the whole record, read-only; the mitigation panel keeps its own
+  // carve-out for an assignee completing their own occurrence.
+  const canManage = hasPermission(user?.permissions, "risks.manage");
 
   const [risk, setRisk] = useState<Risk | null>(null);
   usePageSubject(risk ? `${risk.reference} ${risk.title}` : null);
@@ -287,6 +305,20 @@ export default function RiskDetailPage() {
     }
   };
 
+  const exportPdf = async () => {
+    if (!risk) return;
+    // Open before the await, or a pop-up blocker eats the window (Safari/Firefox).
+    const win = openPrintWindow();
+    if (!win) return;
+    try {
+      const tasks = await api.get<MitigationTask[]>(`/risks/${risk.id}/mitigation-tasks`);
+      printRisk(risk, tasks, win);
+    } catch (e) {
+      win.close();
+      setError(e instanceof ApiError ? e.message : String(e));
+    }
+  };
+
   const deleteRisk = async () => {
     if (!risk) return;
     const confirmMsg = t("risks.confirmDelete", { reference: risk.reference });
@@ -315,7 +347,10 @@ export default function RiskDetailPage() {
     const allowed = ALLOWED_TRANSITIONS[risk.status as RiskStatus];
     if (!allowed?.has(target)) {
       setError(
-        `${risk.status.replace(/_/g, " ")} → ${target.replace(/_/g, " ")} not allowed`,
+        t("risks.action.transitionNotAllowed", {
+          from: t(`risks.status.${risk.status}`),
+          to: t(`risks.status.${target}`),
+        }),
       );
       return;
     }
@@ -340,7 +375,7 @@ export default function RiskDetailPage() {
     );
   }
   if (!risk) {
-    return <Alert severity="warning">Not found.</Alert>;
+    return <Alert severity="warning">{tCommon("errors.notFound")}</Alert>;
   }
 
   const inlineMatrix = (probability: RiskProbability, impact: RiskImpact) => {
@@ -363,7 +398,7 @@ export default function RiskDetailPage() {
   // **Reopen** side action stays enabled so users can recover from a
   // premature closure.
   const isClosed = risk.status === "closed";
-  const lockInput = saving || isClosed;
+  const lockInput = saving || isClosed || !canManage;
   // Already-linked cards are dropped from the picker so the list only ever
   // offers something that would actually change the risk.
   const linkedCardIds = risk.cards.map((c) => c.card_id);
@@ -421,15 +456,33 @@ export default function RiskDetailPage() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Button
-            variant="outlined"
-            color="error"
-            size="small"
-            onClick={deleteRisk}
-            startIcon={<MaterialSymbol icon="delete" size={16} />}
-          >
-            {t("risks.deleteRisk")}
-          </Button>
+          {compact ? (
+            <Tooltip title={tDelivery("editor.exportPdf")}>
+              <IconButton onClick={exportPdf}>
+                <MaterialSymbol icon="picture_as_pdf" size={20} />
+              </IconButton>
+            </Tooltip>
+          ) : (
+            <Button
+              size="small"
+              startIcon={<MaterialSymbol icon="picture_as_pdf" size={18} />}
+              sx={{ textTransform: "none" }}
+              onClick={exportPdf}
+            >
+              {tDelivery("editor.pdf")}
+            </Button>
+          )}
+          {canManage && (
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              onClick={deleteRisk}
+              startIcon={<MaterialSymbol icon="delete" size={16} />}
+            >
+              {t("risks.deleteRisk")}
+            </Button>
+          )}
         </Stack>
       </Stack>
 
@@ -449,14 +502,16 @@ export default function RiskDetailPage() {
           icon={<MaterialSymbol icon="lock" size={18} />}
           sx={{ mb: 2 }}
           action={
-            <Button
-              size="small"
-              color="primary"
-              onClick={() => tryTransition("in_progress")}
-              startIcon={<MaterialSymbol icon="replay" size={16} />}
-            >
-              {t("risks.action.reopen")}
-            </Button>
+            canManage ? (
+              <Button
+                size="small"
+                color="primary"
+                onClick={() => tryTransition("in_progress")}
+                startIcon={<MaterialSymbol icon="replay" size={16} />}
+              >
+                {t("risks.action.reopen")}
+              </Button>
+            ) : undefined
           }
         >
           {t("risks.closed.readOnlyBanner")}
@@ -570,7 +625,7 @@ export default function RiskDetailPage() {
               ) : (
                 <AffectedCardsList
                   cards={risk.cards}
-                  onUnlink={isClosed ? undefined : unlinkCard}
+                  onUnlink={isClosed || !canManage ? undefined : unlinkCard}
                 />
               )}
               {/* Shared CardPicker: browses on open, pages in more on scroll,
@@ -658,6 +713,7 @@ export default function RiskDetailPage() {
           riskId={risk.id}
           riskReference={risk.reference}
           riskClosed={isClosed}
+          canManage={canManage}
           users={users}
           currentUserId={currentUserId}
           onSummaryChange={setTaskSummary}
@@ -792,7 +848,7 @@ export default function RiskDetailPage() {
                   <Step key={s} completed={STATUS_STEPS.indexOf(s) < statusStepIndex}>
                     <StepButton
                       onClick={() => tryTransition(s)}
-                      disabled={!allowed || saving}
+                      disabled={!allowed || saving || !canManage}
                     >
                       {t(`risks.status.${s}`)}
                     </StepButton>
@@ -820,7 +876,7 @@ export default function RiskDetailPage() {
                     variant="contained"
                     color="primary"
                     onClick={() => tryTransition(step.target)}
-                    disabled={saving}
+                    disabled={saving || !canManage}
                     startIcon={<MaterialSymbol icon={step.icon} size={18} />}
                     endIcon={<MaterialSymbol icon="arrow_forward" size={16} />}
                   >
@@ -846,7 +902,7 @@ export default function RiskDetailPage() {
                   variant={side.variant ?? "outlined"}
                   color={side.color}
                   onClick={() => tryTransition(side.target)}
-                  disabled={saving}
+                  disabled={saving || !canManage}
                   startIcon={<MaterialSymbol icon={side.icon} size={16} />}
                 >
                   {t(`risks.action.${side.labelKey}`)}

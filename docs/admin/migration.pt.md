@@ -38,7 +38,7 @@ No LeanIX, abra **Administration → Export → Full Snapshot**. Isso produz uma
 
     O mapeamento é por migração e pode ser editado enquanto o status for `parsed` ou `previewed`. As colunas-base da plataforma de origem que o adaptador roteia diretamente para os slots padrão do Turbo EA (ex.: LeanIX `name`, `displayName`, `description`, `status`, `category → subtype`, `lifecycle:*`, `qualitySeal`, `completion`) são listadas no topo da aba em um banner informativo somente-leitura — não há decisão de mapeamento a tomar.
 
-4. **Aplicar** quando estiver satisfeito. O pipeline de apply executa 12 passagens ordenadas por dependências (tipos do metamodelo → campos do metamodelo → tipos de relação do metamodelo → usuários → cards → grupos de tags → tags → vínculos card-tag → relações → assinaturas → documentos → comentários) em savepoints individuais — uma linha com falha não envenena o restante do import. O status avança de `applying → applied` (ou `failed` se os erros cruzarem o limite de segurança).
+4. **Aplicar** quando estiver satisfeito. O pipeline de apply executa 12 passagens ordenadas por dependências (tipos do metamodelo → campos do metamodelo → tipos de relação do metamodelo → usuários → cards → grupos de tags → tags → vínculos card-tag → relações → assinaturas → documentos → comentários); uma linha que o pipeline não consegue posicionar é registrada com o motivo e não interrompe o restante do import. O status avança de `applying → applied` (ou `failed` se os erros cruzarem o limite de segurança).
 
     Se o snapshot analisado contiver linhas em **conflict**, um banner de aviso aparece acima das abas de staging (com chips clicáveis que saltam para a aba afetada) e clicar em **Aplicar** abre um diálogo de confirmação detalhando quais tipos carregam conflitos. Você precisa reconhecer explicitamente que as linhas em conflito serão ignoradas antes do apply executar. O *Resultado do apply* posterior mostra um chip *conflitos* dedicado ao lado de *criados / atualizados / ignorados / erros* — conflitos não são skips silenciosos, são um resultado de primeira ordem visível no histórico de migração.
 
@@ -75,9 +75,24 @@ O snapshot não carrega estes itens — o importador sinaliza o faltante na colu
 - **Histórico de auditoria** anterior ao import — o histórico do Turbo EA começa no timestamp do apply.
 - **Diagramas / pôsteres / dashboards / buscas salvas / preferências de notificação / tokens de API / webhooks** — sem equivalente no Turbo EA, ou sem análogo no snapshot.
 
+## Exportar para o SAP LeanIX
+
+A mesma página também funciona no sentido inverso. **Exportar espaço de trabalho** (ao lado de **Nova migração**) transfere o espaço de trabalho atual como um **pacote da Integration API do LeanIX** – um `.zip` que se carrega no LeanIX em **Administração → Integration API**. O LeanIX não consegue importar o seu próprio livro *Full Snapshot* (a SAP repõe snapshots a pedido); a Integration API é a única importação em massa que um administrador LeanIX pode executar sozinho.
+
+O pacote contém:
+
+- **`ldif.json`** – os dados no formato LeanIX Data Interchange Format: um elemento por cartão (tipo de fact sheet com o nome do LeanIX – `Process` para Processo de negócio, `Project` para Iniciativa, `UserGroup` para Organização – com nome, descrição, subtipo, fases do ciclo de vida, todos os atributos, etiquetas, partes interessadas como subscrições e ligações a documentos) e um elemento por relação com os nomes de relação do LeanIX (`relApplicationToITComponent`, …). A hierarquia torna-se `relToParent`; as relações de sucessão são escritas na direção do LeanIX. O id do cartão Turbo EA é guardado como id externo do fact sheet, pelo que uma segunda execução atualiza em vez de duplicar.
+- **`processors.json`** – a configuração de processadores gerada para esta exportação: um processador de fact sheets por tipo que escreve apenas os campos presentes, um processador de relações por tipo de relação, além de processadores para etiquetas, subscrições e recursos. O modo de processamento é *partial*: nada é eliminado no espaço de trabalho de destino e uma atualização mantém o valor do LeanIX quando o cartão exportado não tem nenhum.
+- **`comments.json`** – os comentários, que a Integration API não consegue importar, guardados para referência.
+- **`README.md`** – os passos de carregamento (navegador e REST), os tipos e relações exportados e o que ajustar.
+
+Para o carregar: crie uma configuração de processadores em **Administração → Integration API** com os dados do conector indicados no README, cole `processors.json` como configuração e `ldif.json` como entrada, clique em **Test run** para ver todos os problemas sem escrever nada e depois em **Run**. O LeanIX assinala qualquer campo, subtipo, tipo de relação ou utilizador que o seu espaço de trabalho não tenha – crie-o lá ou remova essa entrada de `processors.json`. Os tipos criados no Turbo EA são exportados com a sua própria chave e precisam primeiro do mesmo tipo no metamodelo do LeanIX.
+
+Os cartões arquivados ficam de fora, salvo se **Incluir cartões arquivados** estiver assinalado. A exportação está protegida por `admin.export_workspace` – a mesma permissão da exportação do pacote do espaço de trabalho, porque o ficheiro é toda a paisagem.
+
 ## Reexecução de um import
 
-A idempotência é embutida. A tabela `migration_identity_map` registra a correspondência UUID LeanIX → Turbo EA para cada entidade importada. Um re-upload do mesmo snapshot (ou de um snapshot atualizado do mesmo workspace) detecta entidades existentes e escreve linhas staged `update`/`skip` em vez de duplicar `create`. O `external_id` do card carrega o `factSheetId` do LeanIX, então o vínculo sobrevive mesmo se a identity map for limpa.
+A idempotência é embutida. A tabela `migration_identity_map` registra a correspondência UUID LeanIX → Turbo EA para cada entidade importada. Um re-upload do mesmo snapshot (ou de um snapshot atualizado do mesmo workspace) detecta entidades existentes e escreve linhas staged `update`/`skip` em vez de duplicar `create`. O `external_id` do card carrega o `factSheetId` do LeanIX, então o vínculo sobrevive mesmo se a identity map for limpa. Documentos e comentários são casados da mesma forma — pelo id da própria origem ou, se a identity map foi limpa, pelo card mais a URL (autor mais texto para um comentário) —, então uma reimportação nunca adiciona uma segunda cópia.
 
 Se precisar refazer um import (ex.: deletou em massa os cards importados pela UI e quer reinseri-los), use o ícone lixeira na linha da migração para apagá-la, e então recarregue. Migrações `applied` são deletáveis; isso libera o lock de idempotência por hash de arquivo, permitindo recarregar o mesmo snapshot. Linhas órfãs em `migration_identity_map` apontando para cards inexistentes são automaticamente podadas na próxima passagem de staging — limpeza manual da identity map nunca é necessária.
 
