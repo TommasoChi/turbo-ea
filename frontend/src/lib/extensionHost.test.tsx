@@ -161,8 +161,8 @@ describe("extensionHost", () => {
     // SDK 1.9 — theme-aware chart chrome
     expect(typeof sdk.useChartTheme).toBe("function");
     expect(typeof sdk.useThumbnailCapture).toBe("function");
-    // SDK 1.14 — docx template-population loader
-    expect(typeof sdk.loadDocxTemplater).toBe("function");
+    // SDK 1.14 — docx document-builder loader
+    expect(typeof sdk.loadDocx).toBe("function");
     // SDK 1.14 — imperative html-to-image loader
     expect(typeof sdk.loadHtmlToImage).toBe("function");
     // SDK 1.14 — BPM process-detail drawer
@@ -285,13 +285,12 @@ describe("extensionHost", () => {
     expect(typeof (xlsx.utils as Record<string, unknown>).json_to_sheet).toBe("function");
   });
 
-  it("loadDocxTemplater resolves all three classes from core's code-split chunk", async () => {
+  it("loadDocx resolves the document builder from core's code-split chunk", async () => {
     initExtensionHost();
-    const sdk = window.TurboEA?.sdk as { loadDocxTemplater: () => Promise<Record<string, unknown>> };
-    const { Docxtemplater, PizZip, ImageModule } = await sdk.loadDocxTemplater();
-    expect(typeof Docxtemplater).toBe("function");
-    expect(typeof PizZip).toBe("function");
-    expect(typeof ImageModule).toBe("function");
+    const sdk = window.TurboEA?.sdk as { loadDocx: () => Promise<Record<string, unknown>> };
+    const { Document, Paragraph, TextRun, ImageRun, Packer } = await sdk.loadDocx();
+    for (const cls of [Document, Paragraph, TextRun, ImageRun]) expect(typeof cls).toBe("function");
+    expect(typeof (Packer as Record<string, unknown>).toBlob).toBe("function");
   });
 
   it("loadHtmlToImage resolves toPng from core's code-split chunk", async () => {

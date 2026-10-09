@@ -40,19 +40,15 @@
  * `loadHtmlToImage` exposes that same lazy html-to-image loader directly
  * (not wrapped in a hook) for callers that need to capture an arbitrary DOM
  * node chosen imperatively at call time. Also since SDK 1.14
- * `loadDocxTemplater` async-loads `docxtemplater` + `pizzip` from core's
- * code-split chunk — for POPULATING an extension's own .docx TEMPLATE file
- * (a bundled asset the extension fetches itself via GET /ext-assets/...)
- * with data client-side; distinct from core's own `docx` dependency, which
- * BUILDS a document from scratch (used by the SoAW/ADR exporters) — same
- * "reuse the host's copy of a heavy library" rule as `loadRecharts`.
- * `loadDocxTemplater` also resolves `ImageModule` (from `docxtemplater-image`,
- * the MIT-licensed maintained fork of docxtemplater's free image module —
- * deliberately NOT `docxtemplater-image-module-free` itself, whose pinned
- * `xmldom` dependency carries a critical XML-injection advisory; the fork
- * depends on the maintained `@xmldom/xmldom` instead) so an extension can
- * fill a `{%%tag}`/`{%tag}` block/inline image placeholder in its template
- * without adding its own copy of either module. Also
+ * `loadDocx` async-loads core's own `docx` — the library the SoAW and ADR
+ * exporters already build their documents with — so an extension writes a
+ * Word file from code (`Document`, `Paragraph`, `TextRun`, `ImageRun`,
+ * `Packer`) instead of shipping a template and a second library to fill it.
+ * Same "reuse the host's copy of a heavy library" rule as `loadRecharts`.
+ * It replaced `loadDocxTemplater` (docxtemplater + pizzip +
+ * docxtemplater-image): the template approach moved the document's layout
+ * into a binary asset nobody could diff, needed its own EMU arithmetic for
+ * images, and pinned three dependencies core itself never used. Also
  * since SDK 1.14, `sdk.ProcessDetailSidePanel` ({processId, open, onClose})
  * is a self-contained BPM process-detail drawer — Overview/Steps/Flow/Apps/
  * Data tabs, same visual language as ProcessNavigator's own drawer on /bpm —
@@ -1258,38 +1254,22 @@ export function initExtensionHost(): void {
       // `viewer.saveSVG()`, then rasterized with loadHtmlToImage for
       // embedding in a docxtemplater-image tag.
       loadBpmnViewer: () => import("bpmn-js/lib/NavigatedViewer").then((m) => ({ NavigatedViewer: m.default })),
-      // SDK 1.14 — lazy loader for docxtemplater + pizzip, so an extension
-      // can fill a real .docx TEMPLATE (its own, shipped as a bundled
-      // asset and fetched via GET /ext-assets/...) with data, entirely
-      // client-side — same "reuse core's code-split chunk, never bundle
-      // your own copy" rule as loadRecharts. Deliberately NOT the same
-      // thing as core's own `docx` dependency (which BUILDS a document
-      // from scratch, used by the SoAW/ADR exporters) — docxtemplater
-      // POPULATES an existing, admin-designed template file, a different
-      // use case with a different library. Note the template's OWN tag
-      // syntax is single-brace (`{tag}`, `{#loop}...{/loop}`, `{%tag}`/
-      // `{%%tag}` for images) — docxtemplater's default delimiters, NOT
-      // Mustache-style `{{tag}}` (confirmed the hard way: `{{tag}}` parses
-      // as a nested/duplicate open tag and throws a "Multi error" listing
-      // one or two bogus errors per tag). Returns the classes ready to use:
-      // `new PizZip(templateArrayBuffer)`, then — for a template with an
-      // image placeholder — `new Docxtemplater(zip, { paragraphLoop: true,
-      // linebreaks: true, modules: [new ImageModule(imageOpts)] })`. Pass
-      // `modules` in the CONSTRUCTOR, not via a later `.attachModule()`
-      // call — this installed version uses docxtemplater's v4 constructor,
-      // which throws ("should not be called manually") if `.attachModule()`
-      // is called after construction; verified against the actual installed
-      // version, not assumed from docs. Omit `modules` entirely for a
-      // text-only template.
-      loadDocxTemplater: async () => {
-        const [{ default: Docxtemplater }, { default: PizZip }, { default: ImageModule }] =
-          await Promise.all([
-            import("docxtemplater"),
-            import("pizzip"),
-            import("docxtemplater-image"),
-          ]);
-        return { Docxtemplater, PizZip, ImageModule };
-      },
+      // SDK 1.14 — lazy loader for `docx`, core's own document builder (the
+      // SoAW and ADR exporters use it directly), so an extension can write a
+      // Word file client-side without bundling a second copy — the same
+      // "reuse core's code-split chunk" rule as loadRecharts. Returns the
+      // whole module: `Document`, `Paragraph`, `TextRun`, `ImageRun`,
+      // `HeadingLevel`, `AlignmentType`, `Packer`, … Build the document,
+      // then `await Packer.toBlob(doc)`.
+      //
+      // Replaced `loadDocxTemplater` (docxtemplater + pizzip +
+      // docxtemplater-image), which FILLED a template file instead of
+      // building one. Three dependencies core itself never used, a layout
+      // living in a binary asset no review could read, and an image API that
+      // wrote getSize()'s numbers straight into the OOXML as EMU, leaving
+      // every caller to convert from pixels by hand. `ImageRun` takes the
+      // bytes and a `transformation: { width, height }` in PIXELS.
+      loadDocx: () => import("docx"),
       // SDK 1.14 — the shared card scope picker. An extension report that
       // wants "narrow this to a few cards (and everything under them)" gets
       // core's behaviour — browse-on-open, tree, ancestor-wins dedupe — rather

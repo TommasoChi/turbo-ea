@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Extensions that write a Word file now build it with core's own `docx` library.** The UI SDK's `loadDocxTemplater` is replaced by `loadDocx`, which hands over the same document builder the SoAW and ADR exports already use. The three dependencies the old loader needed (`docxtemplater`, `pizzip`, `docxtemplater-image`) are gone from the frontend, and an extension no longer ships a binary `.docx` template alongside its code.
 - Merged upstream 2.157.5. The subtype scope above now composes with the upstream **View** action: an unscoped View deny still takes every permission on the type away, while a View deny scoped to some subtypes decides only for those — cards of the other subtypes keep the role's ordinary permissions.
 
 ## [2.157.5] - 2026-10-09
