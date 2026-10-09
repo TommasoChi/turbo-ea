@@ -481,7 +481,7 @@ def validate_type_role_permissions(
     *,
     known_role_keys: set[str],
     wildcard_role_keys: set[str],
-    known_subtype_keys: set[str] = frozenset(),
+    known_subtype_keys: frozenset[str] | set[str] = frozenset(),
 ) -> dict[str, dict[str, bool | dict]]:
     """Validate and normalise a ``card_types.role_permissions`` map.
 
@@ -538,7 +538,7 @@ def validate_type_role_permissions(
 
 
 def _validate_role_permission_cell(
-    value: object, *, role_key: str, perm_key: str, known_subtype_keys: set[str]
+    value: object, *, role_key: str, perm_key: str, known_subtype_keys: frozenset[str] | set[str]
 ) -> bool | dict:
     """Validate one ``role_permissions[role][permission]`` cell (bool or scoped dict)."""
     if isinstance(value, bool):

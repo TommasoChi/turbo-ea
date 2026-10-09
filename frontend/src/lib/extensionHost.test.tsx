@@ -37,7 +37,6 @@ import {
   setExtensionDisplayName,
   EXTENSION_NAV_GROUPS,
   ExtensionDependencyGraph,
-  ExtensionSlot,
   getExtensionAdrExportSections,
   getExtensionAdrGridColumns,
   getExtensionAdrPanels,

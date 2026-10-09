@@ -306,7 +306,10 @@ async def download_file_attachment(
     if not attachment:
         raise HTTPException(404, "File attachment not found")
     # An attachment of a card hidden from the caller does not exist for them.
-    await require_card_readable(db, user, attachment.card_id, mode="module")
+    # A generic-entity attachment (card_id NULL, see the model's CHECK) hangs off
+    # no card, so there is no card read to scope — its own gate is the owner's.
+    if attachment.card_id is not None:
+        await require_card_readable(db, user, attachment.card_id, mode="module")
 
     # RFC 6266 / RFC 5987: HTTP header values must be Latin-1 encodable, so a
     # raw filename with non-Latin-1 characters (Cyrillic, CJK, emoji, ...) would

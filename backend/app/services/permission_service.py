@@ -225,6 +225,12 @@ class PermissionService:
         return (row.type, row.subtype) if row else (None, None)
 
     @staticmethod
+    async def _card_type_key(db: AsyncSession, card_id: UUID) -> str | None:
+        """Resolve a card's type key alone, for a caller that needs no subtype."""
+        type_key, _ = await PermissionService._card_type_and_subtype(db, card_id)
+        return type_key
+
+    @staticmethod
     async def has_card_permission(
         db: AsyncSession,
         user: User,

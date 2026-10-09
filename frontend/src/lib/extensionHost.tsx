@@ -129,7 +129,7 @@ import CardScopeFilter from "@/components/CardScopeFilter";
 import { applyScope, useCardScope } from "@/hooks/useCardScope";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { hasPermission } from "@/components/RequirePermission";
-import { useAuthContext } from "@/hooks/AuthContext";
+import { useAuthContext, useOptionalAuthUser } from "@/hooks/AuthContext";
 import UserMultiSelect from "@/components/UserMultiSelect";
 import MetricCard from "@/features/reports/MetricCard";
 import ReportLegend from "@/features/reports/ReportLegend";
@@ -1097,7 +1097,9 @@ export function ExtensionSlot({
   ownerExtKey?: string;
 }) {
   const slots = useExtensionSlots(name);
-  const { user } = useAuthContext();
+  // Optional on purpose: a slot must never crash the host, and core renders
+  // some of these locations in tests and on pages outside the AuthProvider.
+  const user = useOptionalAuthUser();
   const typeKey = context?.cardType ?? context?.type;
   return (
     <>
