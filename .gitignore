@@ -93,6 +93,10 @@ archive/
 
 #Local Claude
 .claude/
+AGENTS.md
+
+# graphify: output locale dello strumento, non codice del fork
+graphify-out/
 
 # Terraform (deploy/terraform): provider binaries, state and personal tfvars.
 # The .terraform.lock.hcl files ARE committed.
