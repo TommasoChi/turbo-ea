@@ -172,7 +172,7 @@ jobs:
 
       - name: Verify signature with the documented minimum client
         env:
-          IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.image }}
+          IMAGE: ghcr.io/${{ steps.repo.outputs.lower }}/${{ matrix.image }}
           DIGEST: ${{ steps.build.outputs.digest }}
           IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/docker-publish.yml@${{ github.ref }}
         run: |

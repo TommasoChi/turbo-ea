@@ -87,7 +87,7 @@ jobs:
         id: push
         if: ${{ !inputs.sign_only_version }}
         run: |
-          helm push "dist/turbo-ea-${{ steps.version.outputs.version }}.tgz" "$OCI_REPO" 2>&1 | tee push.log
+          helm push "dist/turbo-ea-${{ steps.version.outputs.version }}.tgz" "${OCI_REPO,,}" 2>&1 | tee push.log
           digest="$(sed -n 's/^Digest: //p' push.log | tr -d '[:space:]')"
           if [ -z "$digest" ]; then
             echo "::error::helm push printed no digest"
@@ -107,6 +107,7 @@ jobs:
           SIGN_ONLY_VERSION: ${{ inputs.sign_only_version }}
           DIGEST: ${{ steps.push.outputs.digest }}
         run: |
+          CHART_REF="${CHART_REF,,}" # an OCI reference is lowercase; a fork owner may not be
           if [ -n "$SIGN_ONLY_VERSION" ]; then
             echo "ref=${CHART_REF}:${SIGN_ONLY_VERSION}" >> "$GITHUB_OUTPUT"
           else
