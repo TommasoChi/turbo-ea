@@ -53,6 +53,10 @@ UNMAPPED_PARAMS = {
     "initiative_id": "PPM — no Initiative seeded",
     "install_id": "extension admin",
     "mapping_id": "ServiceNow admin",
+    "organization_id": (
+        "BPM reverse lookup — no Organization seeded; its scope is covered by "
+        "tests/api/test_bpm_element_organizations.py::TestProcessesByOrganization"
+    ),
     "migration_id": "migration admin",
     "portal_id": "portal admin",
     "process_id": "BPM — no process seeded",

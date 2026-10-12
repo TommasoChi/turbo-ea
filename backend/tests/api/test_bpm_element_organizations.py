@@ -14,8 +14,10 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 
+from app.models.card_type import CardType
 from app.models.process_element import ProcessElement, ProcessElementOrganization
 from app.models.relation import Relation
+from app.services.permission_service import PermissionService
 from tests.conftest import (
     auth_headers,
     create_card,
@@ -366,6 +368,14 @@ class TestDraftOrganizationPreLinking:
         assert {o["name"] for o in quote["organizations"]} == {"Sales"}
 
 
+async def _deny_view(db, type_key: str, role_key: str) -> None:
+    """Switch off the per-card-type View cell for one role."""
+    ct = (await db.execute(select(CardType).where(CardType.key == type_key))).scalar_one()
+    ct.role_permissions = {role_key: {"inventory.view": False}}
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+
+
 class TestProcessesByOrganization:
     """GET /bpm/organizations/{organization_id}/processes — the reverse of
     list_elements' `organizations` field: given an Organization, which
@@ -430,5 +440,32 @@ class TestProcessesByOrganization:
         resp = await client.get(
             f"/api/v1/bpm/organizations/{org_env['app'].id}/processes",
             headers=auth_headers(org_env["admin"]),
+        )
+        assert resp.status_code == 404
+
+    async def test_a_process_the_reader_may_not_see_is_omitted(self, client, db, org_env):
+        """The answer names cards, so it owes the card read scope: a View deny
+        on BusinessProcess removes the row rather than leaking its name."""
+        process, elem, sales = org_env["process"], org_env["elem"], org_env["org_sales"]
+        await client.put(
+            f"/api/v1/bpm/processes/{process.id}/elements/{elem.id}",
+            json={"organization_ids": [str(sales.id)]},
+            headers=auth_headers(org_env["admin"]),
+        )
+        await _deny_view(db, "BusinessProcess", "viewer")
+
+        resp = await client.get(
+            f"/api/v1/bpm/organizations/{sales.id}/processes",
+            headers=auth_headers(org_env["viewer"]),
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+        assert "Order to Cash" not in resp.text
+
+    async def test_an_organization_the_reader_may_not_see_is_404(self, client, db, org_env):
+        await _deny_view(db, "Organization", "viewer")
+        resp = await client.get(
+            f"/api/v1/bpm/organizations/{org_env['org_sales'].id}/processes",
+            headers=auth_headers(org_env["viewer"]),
         )
         assert resp.status_code == 404

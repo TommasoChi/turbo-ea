@@ -129,7 +129,7 @@ import CardScopeFilter from "@/components/CardScopeFilter";
 import { applyScope, useCardScope } from "@/hooks/useCardScope";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { hasPermission } from "@/components/RequirePermission";
-import { useAuthContext, useOptionalAuthUser } from "@/hooks/AuthContext";
+import { useAuthContext } from "@/hooks/AuthContext";
 import UserMultiSelect from "@/components/UserMultiSelect";
 import MetricCard from "@/features/reports/MetricCard";
 import ReportLegend from "@/features/reports/ReportLegend";
@@ -177,7 +177,7 @@ import { FilterCheckboxList, FilterSectionHeader } from "@/components/FilterSide
 import LifecycleSection from "@/features/cards/sections/LifecycleSection";
 import { PHASES, getPhaseLabels } from "@/lib/lifecyclePhases";
 import { buildGanttArrowPath } from "@/features/ppm/ganttArrowPath";
-import type { ArchitectureDecision, Card } from "@/types";
+import type { ArchitectureDecision, Card, User } from "@/types";
 
 export const UI_SDK_VERSION = "1.19"; // fork: pinned (frozen). Upstream value is "1.30"; the surface is present without the constant following it.
 
@@ -1084,6 +1084,23 @@ export function useExtensionSlots(slot: string): RegisteredSlot[] {
  * (a `build` instead of a `component`) are not rendered here — their core
  * consumer calls `getExtensionSlots(name)` and renders the data itself.
  */
+/** The signed-in user, or null when there is no `<AuthProvider>` above us.
+ *
+ *  A slot must never crash its host, and core renders some slot locations
+ *  outside the provider — a component under test, a public page. The `try` is
+ *  what also keeps a test that mocks `@/hooks/AuthContext` with nothing but
+ *  `useAuthContext` working: a slot is added to a core component without
+ *  touching that component's tests, and this is what makes that true.
+ *  `useContext` has already run by the time the wrapper throws, so the hook
+ *  order is the same on every render either way. */
+function useSlotUser(): User | null {
+  try {
+    return useAuthContext().user;
+  } catch {
+    return null;
+  }
+}
+
 export function ExtensionSlot({
   name,
   context,
@@ -1097,9 +1114,7 @@ export function ExtensionSlot({
   ownerExtKey?: string;
 }) {
   const slots = useExtensionSlots(name);
-  // Optional on purpose: a slot must never crash the host, and core renders
-  // some of these locations in tests and on pages outside the AuthProvider.
-  const user = useOptionalAuthUser();
+  const user = useSlotUser();
   const typeKey = context?.cardType ?? context?.type;
   return (
     <>

@@ -446,7 +446,11 @@ async def list_processes_by_organization(
             Card.status == "ACTIVE",
         )
     )
-    if not org_result.scalar_one_or_none():
+    # An Organization the reader may not see does not exist for them, and
+    # neither does a process named in the answer.
+    read_scope = await CardReadScope.load(db, user)
+    org = org_result.scalar_one_or_none()
+    if org is None or not read_scope.readable(org.id, org.type, mode="module"):
         raise HTTPException(404, "Organization not found")
 
     elements_result = await db.execute(
@@ -464,7 +468,11 @@ async def list_processes_by_organization(
 
     process_ids = {e.process_id for e in elements}
     processes_result = await db.execute(
-        select(Card).where(Card.id.in_(process_ids), Card.status == "ACTIVE")
+        select(Card).where(
+            Card.id.in_(process_ids),
+            Card.status == "ACTIVE",
+            *read_scope.where(Card, mode="module"),
+        )
     )
     processes_by_id = {p.id: p for p in processes_result.scalars().all()}
 

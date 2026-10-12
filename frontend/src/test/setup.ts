@@ -20,48 +20,78 @@ if (hasDom) {
 }
 
 // Node 22+ defines its own global `localStorage` accessor (backed by
-// --localstorage-file, gated behind an experimental flag) that shadows
-// jsdom's simulated window.localStorage on the shared global object and
-// resolves to `undefined` when the flag isn't passed — breaking any test
-// that touches `localStorage` directly with
-// "TypeError: Cannot read properties of undefined (reading 'clear')" or
-// similar. Both our fork and upstream ship byte-identical vitest config
-// here, so this isn't a project gap, it's a Node-version artifact on
-// whichever machine runs the suite. Polyfill with a real in-memory Storage
-// implementation so tests are correct regardless of the host Node version.
-class MemoryStorage implements Storage {
-  private store = new Map<string, string>();
-
-  get length(): number {
-    return this.store.size;
-  }
-
-  clear(): void {
-    this.store.clear();
-  }
-
-  getItem(key: string): string | null {
-    return this.store.has(key) ? this.store.get(key)! : null;
-  }
-
-  key(index: number): string | null {
-    return Array.from(this.store.keys())[index] ?? null;
-  }
-
-  removeItem(key: string): void {
-    this.store.delete(key);
-  }
-
-  setItem(key: string, value: string): void {
-    this.store.set(key, String(value));
+// --localstorage-file, behind an experimental flag) that shadows jsdom's on
+// the shared global object and reads as `undefined` without the flag, so any
+// test touching `localStorage` dies with "Cannot read properties of undefined
+// (reading 'clear')". Our fork and upstream ship byte-identical vitest config,
+// so this is a Node-version artifact on whichever machine runs the suite, not
+// a project gap. Where jsdom's own storage is intact, leave it alone.
+function nativeLocalStorageWorks(): boolean {
+  try {
+    const ls = (globalThis as { localStorage?: Storage }).localStorage;
+    if (!ls) return false;
+    ls.setItem("__probe__", "1");
+    const ok = ls.getItem("__probe__") === "1";
+    ls.removeItem("__probe__");
+    return ok;
+  } catch {
+    return false;
   }
 }
 
-Object.defineProperty(globalThis, "localStorage", {
-  value: new MemoryStorage(),
-  writable: true,
-  configurable: true,
-});
+/** A working in-memory `localStorage`, reachable through `Storage.prototype`.
+ *
+ *  Where it puts its methods is the whole difficulty. They cannot sit on a
+ *  prototype of the shim's own: that shadows `Storage.prototype`, and a test
+ *  spying on `Storage.prototype.setItem` — the only place a write can be
+ *  observed — would then record nothing while the write really happened. They
+ *  cannot simply replace `Storage.prototype`'s either: that object is what
+ *  `sessionStorage` inherits from, and tests make its methods throw on
+ *  purpose. So the methods go on `Storage.prototype` and dispatch on the
+ *  receiver — the shim gets ours, everything else the original. */
+function installLocalStorageShim(): void {
+  const proto = (globalThis as { Storage?: { prototype: Storage } }).Storage?.prototype;
+  const store = new Map<string, string>();
+  const impl: Record<string, (...args: never[]) => unknown> = {
+    getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+    setItem: (key: string, value: string) => void store.set(key, String(value)),
+    removeItem: (key: string) => void store.delete(key),
+    clear: () => store.clear(),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+  } as Record<string, (...args: never[]) => unknown>;
+
+  const shim = (proto ? Object.create(proto) : {}) as Storage;
+  if (proto) {
+    for (const [name, mine] of Object.entries(impl)) {
+      const original = (proto as unknown as Record<string, unknown>)[name] as
+        | ((...args: unknown[]) => unknown)
+        | undefined;
+      Object.defineProperty(proto, name, {
+        value: function (this: Storage, ...args: unknown[]) {
+          if (this === shim) return (mine as (...a: unknown[]) => unknown)(...args);
+          return original?.apply(this, args);
+        },
+        writable: true,
+        configurable: true,
+      });
+    }
+  } else {
+    Object.assign(shim, impl);
+  }
+  // Own property: `Storage.prototype.length` is non-configurable on Node's own
+  // class, and nothing in the suite reads it off the prototype.
+  Object.defineProperty(shim, "length", { get: () => store.size, configurable: true });
+  Object.defineProperty(globalThis, "localStorage", {
+    value: shim,
+    writable: true,
+    configurable: true,
+  });
+}
+
+// DOM suites only: a `node`-environment test has no business with web storage.
+if (hasDom && !nativeLocalStorageWorks()) {
+  installLocalStorageShim();
+}
 
 // Provide a minimal sessionStorage for tests (jsdom includes one, but
 // this ensures it's always clean between test files).
