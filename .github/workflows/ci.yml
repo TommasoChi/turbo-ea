@@ -727,12 +727,16 @@ jobs:
     # coverage alone. It finishes minutes before the unit shards, so the
     # critical path is unchanged.
     if: needs.changes.outputs.e2e == 'true'
-    # Pinned, not `ubuntu-latest`: `playwright install --with-deps` installs
-    # Chromium's system libraries from a per-release apt list, and a runner
-    # image Playwright does not know yet fails that step. `ubuntu-latest`
-    # moves to Ubuntu 26 on 2026-10-19 (actions/runner-images#14748); move
-    # this pin once the pinned @playwright/test lists the new release.
-    runs-on: ubuntu-24.04
+    # Pinned to a named release, not `ubuntu-latest`: `playwright install
+    # --with-deps` installs Chromium's system libraries from a per-release apt
+    # list compiled into Playwright, so a runner image it does not know yet
+    # fails that step. The alias moving on its own is exactly the risk, which
+    # is why this stays pinned rather than following `ubuntu-latest` back once
+    # that becomes Ubuntu 26 on 2026-10-19 (actions/runner-images#14748).
+    # Moved off 24.04 because @playwright/test 1.64.0 lists ubuntu26.04 in its
+    # native-deps table; move it again only after checking the same for the
+    # next release, and keep the pin.
+    runs-on: ubuntu-26.04
     timeout-minutes: 25
     services:
       postgres:
