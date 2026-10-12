@@ -110,6 +110,10 @@
       "@babel/core": "~8.0.0"
     },
     "image-size": "$image-size",
-    "qs": ">=6.15.4"
+    "qs": ">=6.15.4",
+    "eslint": { "brace-expansion": ">=1.1.21 <2" },
+    "@eslint/eslintrc": { "brace-expansion": ">=1.1.21 <2" },
+    "@eslint/config-array": { "brace-expansion": ">=1.1.21 <2" },
+    "@typescript-eslint/typescript-estree": { "brace-expansion": ">=2.1.7 <3" }
   }
 }
