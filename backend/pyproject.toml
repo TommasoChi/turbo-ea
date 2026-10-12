@@ -108,7 +108,7 @@ relative_files = true
 # fails the Backend Integration Tests job when the suite drops below it — the
 # aggregate over the shard jobs, which each run with `--cov-fail-under=0`; the
 # floor only means something on the combined data.
-fail_under = 91
+fail_under = 93
 show_missing = true
 skip_covered = true
 
