@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Survey Builder: Back is disabled while Next is saving, so a Back click can no longer be undone by the save landing a moment later.
 - Survey Builder: after switching the interface language, a failed save, preview or load reports its error in the new language rather than the previous one, and opening another survey from the one on screen never shows the first survey's fields when its reply lands late.
 - Relation-type values: clicking Save twice quickly sends the change once.
+- A malformed card id in a `/cards/{id}` path (anything that is not a UUID) now answers 404 instead of 500 — the id is parsed through a shared helper that treats a syntactically invalid id as "not found", which also keeps every such route's response uniform.
 
 ### Changed
 - Extensions: the page intro now describes the in-product Store alongside the file-based install flow, in every language.

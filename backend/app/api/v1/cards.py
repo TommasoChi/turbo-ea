@@ -12,7 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, parse_uuid
 from app.database import get_db
 from app.models.card import Card
 from app.models.card_type import CardType
@@ -1106,10 +1106,10 @@ async def cards_counts(
 async def get_card(
     card_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    await _require_card_read(db, user, uuid.UUID(card_id))
+    await _require_card_read(db, user, parse_uuid(card_id))
     result = await db.execute(
         select(Card)
-        .where(Card.id == uuid.UUID(card_id))
+        .where(Card.id == parse_uuid(card_id))
         .options(
             selectinload(Card.tags).selectinload(Tag.group),
             selectinload(Card.stakeholders).selectinload(Stakeholder.user),
@@ -1144,7 +1144,7 @@ async def get_display_attributes(
     user: User = Depends(get_current_user),
 ):
     """Return only the selected, schema-declared display values for one Card."""
-    card_uuid = uuid.UUID(card_id)
+    card_uuid = parse_uuid(card_id)
     await _require_card_read(db, user, card_uuid)
     card = await db.get(Card, card_uuid)
     if card is None:
@@ -1175,7 +1175,7 @@ async def get_hierarchy(
       hung off the last ancestor node, whose ``parent_label`` would be that
       ancestor's link to *its* parent one level further up.
     """
-    uid = uuid.UUID(card_id)
+    uid = parse_uuid(card_id)
     await _require_card_read(db, user, uid)
     read_scope = await CardReadScope.load(db, user)
     result = await db.execute(select(Card).where(Card.id == uid))
@@ -1253,7 +1253,7 @@ async def relation_summary(
     "incoming" rows: card is the relation target — i.e. its `reverse_label`
     relations.
     """
-    uid = uuid.UUID(card_id)
+    uid = parse_uuid(card_id)
     await _require_card_read(db, user, uid)
     card = await db.get(Card, uid)
     if not card:
@@ -1517,7 +1517,7 @@ async def descendant_relation_summary(
     Powers the "+N in sub-items" chip on the Relations section. Returns an
     empty list for leaf cards and for non-hierarchical types.
     """
-    uid = uuid.UUID(card_id)
+    uid = parse_uuid(card_id)
     await _require_card_read(db, user, uid)
     card = await db.get(Card, uid)
     if not card:
@@ -1559,7 +1559,7 @@ async def descendant_relations(
     card reachable through two sub-capabilities appears once with two `via`
     entries. Read-only by design — there is no matching write route.
     """
-    uid = uuid.UUID(card_id)
+    uid = parse_uuid(card_id)
     await _require_card_read(db, user, uid)
     card = await db.get(Card, uid)
     if not card:
@@ -2390,7 +2390,7 @@ async def update_card(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    card_uuid = uuid.UUID(card_id)
+    card_uuid = parse_uuid(card_id)
     if not await PermissionService.check_permission(
         db, user, "inventory.edit", card_uuid, "card.edit"
     ):
@@ -2472,7 +2472,7 @@ async def get_archive_impact(
     linked via a `relations` row. Hidden card-types are filtered out, mirroring
     the relations list endpoint at `/api/v1/relations`.
     """
-    uid = uuid.UUID(card_id)
+    uid = parse_uuid(card_id)
     await _require_card_read(db, user, uid)
     res = await db.execute(select(Card).where(Card.id == uid))
     primary = res.scalar_one_or_none()
@@ -2643,7 +2643,7 @@ async def archive_card(
 
     Permission check runs against every affected card; first denial aborts.
     """
-    card_uuid = uuid.UUID(card_id)
+    card_uuid = parse_uuid(card_id)
     if not await PermissionService.check_permission(
         db, user, "inventory.archive", card_uuid, "card.archive"
     ):
@@ -2718,7 +2718,7 @@ async def get_restore_impact(
     Cards whose `affected_*_ids` come back from that event but were already
     individually restored are filtered out.
     """
-    uid = uuid.UUID(card_id)
+    uid = parse_uuid(card_id)
     await _require_card_read(db, user, uid)
     res = await db.execute(select(Card).where(Card.id == uid))
     primary = res.scalar_one_or_none()
@@ -2756,7 +2756,7 @@ async def restore_card(
     resolve to non-archived cards are skipped silently. Only one
     `card.restored` event is emitted per card actually flipped.
     """
-    card_uuid = uuid.UUID(card_id)
+    card_uuid = parse_uuid(card_id)
     if not await PermissionService.check_permission(
         db, user, "inventory.archive", card_uuid, "card.archive"
     ):
@@ -2848,7 +2848,7 @@ async def delete_card(
 
     Returns 409 if the primary has direct children and `child_strategy` is None.
     """
-    card_uuid = uuid.UUID(card_id)
+    card_uuid = parse_uuid(card_id)
     if not await PermissionService.check_permission(
         db, user, "inventory.delete", card_uuid, "card.delete"
     ):
@@ -3009,7 +3009,7 @@ async def get_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
-    await _require_card_read(db, user, uuid.UUID(card_id))
+    await _require_card_read(db, user, parse_uuid(card_id))
     # A relation event names its peer; drop the ones whose peer is hidden from
     # the caller, so History does not list a card the Relations section omits.
     read_scope = await CardReadScope.load(db, user)
@@ -3018,7 +3018,7 @@ async def get_history(
     )
     q = (
         select(Event)
-        .where(Event.card_id == uuid.UUID(card_id))
+        .where(Event.card_id == parse_uuid(card_id))
         .where(*(() if peer_ok is None else (peer_ok,)))
         .options(selectinload(Event.user))
         .order_by(Event.created_at.desc())
@@ -3048,7 +3048,7 @@ async def update_approval_status(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    card_uuid = uuid.UUID(card_id)
+    card_uuid = parse_uuid(card_id)
     if not await PermissionService.check_permission(
         db, user, "inventory.approval_status", card_uuid, "card.approval_status"
     ):
@@ -3103,9 +3103,9 @@ async def my_permissions(
     user: User = Depends(get_current_user),
 ):
     """Return the current user's effective permissions on a specific card."""
-    await require_card_readable(db, user, uuid.UUID(card_id), mode="module")
+    await require_card_readable(db, user, parse_uuid(card_id), mode="module")
 
-    return await PermissionService.get_effective_card_permissions(db, user, uuid.UUID(card_id))
+    return await PermissionService.get_effective_card_permissions(db, user, parse_uuid(card_id))
 
 
 @router.get("/export/json")

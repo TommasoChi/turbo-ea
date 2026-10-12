@@ -11,6 +11,21 @@ from app.database import get_db
 from app.models.user import User
 
 
+def parse_uuid(value: str, *, detail: str = "Not found") -> uuid.UUID:
+    """Parse a path-parameter id, mapping a malformed one to 404.
+
+    Routes declare their id path params as ``str`` and parse them in the body,
+    so an id that is not a valid UUID made ``uuid.UUID()`` raise an unhandled
+    ``ValueError`` that surfaced as a 500. A syntactically invalid id names no
+    resource, so 404 keeps every ``/{id}`` route's response uniform (and never
+    confirms existence), matching ``require_card_readable``'s posture.
+    """
+    try:
+        return uuid.UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(status_code=404, detail=detail) from None
+
+
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
