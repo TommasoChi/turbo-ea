@@ -5,6 +5,21 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.158.13] - 2026-10-13
+
+A fork release, not an upstream one. It takes the next patch number because
+`v2.158.12` is already upstream's own tag and the release pipelines require the
+tag to equal `VERSION`; a fourth component (`2.158.12.3`) was tried first and
+rejected — `helm package` refuses a non-SemVer chart version.
+
+### Changed
+
+- The fork is realigned to upstream 2.158.12. Everything upstream shipped up to
+  that version is included, with the fork's own additions preserved on top: the
+  Layered Dependency View's layer overrides, its extra card-detail display
+  fields, the hosting-type icon on a card, and the added/removed colouring of
+  dependency edges on a timeline.
+
 ## [2.158.12] - 2026-10-10
 
 ### Added
