@@ -14,11 +14,13 @@ import difflib
 import fnmatch
 import importlib
 import json
+import os
 import subprocess
 import sys
 import textwrap
 import time
 import tomllib
+import zlib
 from pathlib import Path
 
 import pytest
@@ -29,6 +31,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 changed_lines = importlib.import_module("changed_lines")
 gate = importlib.import_module("gate")
+harness = importlib.import_module("harness")
 mutmut_scope = importlib.import_module("mutmut_scope")
 stryker_scope = importlib.import_module("stryker_scope")
 shadow_root = importlib.import_module("shadow_root")
@@ -301,6 +304,142 @@ class TestGate:
         now = [rec("killed", line=1), rec("survived", line=2)]
         assert any("x.py" in line for line in gate.regressions(now, before))
         assert gate.regressions(before, before) == []
+        assert gate.dropped_files(now, before) == [("backend/app/x.py", 100.0, 50.0)]
+        assert gate.regressions(now, before)[-1] == "| `backend/app/x.py` | 100.0% | 50.0% |"
+
+    def test_status_summarises_a_complete_suite_in_one_line(self):
+        records = [rec("killed", line=n) for n in range(1, 11)] + [rec("survived", line=11)]
+        records += [rec("killed", file="backend/app/critical.py", line=n) for n in (1, 2)]
+        (line,) = gate.status(records, "backend", FLOORS, previous=records)
+        assert line.startswith("- **backend**: 92.3% of 13 mutants killed; floor 50% — pass.")
+        assert "Critical modules: 1 of 1 at or above floor." in line
+        assert line.endswith("No file's score fell since the previous run.")
+
+    def test_status_reports_baseline_progress_and_modules_still_to_measure(self):
+        records = [
+            rec("killed", line=1),
+            rec("pending", line=2),
+            rec("pending", line=3),
+            rec("killed", file="backend/app/critical.py", line=1),
+            rec("pending", file="backend/app/critical.py", line=2),
+        ]
+        (line,) = gate.status(records, "backend", FLOORS, allow_pending=True)
+        assert "baseline 40% measured (3 mutants left for the next run)" in line
+        assert "100.0% of those measured killed; the 50% floor applies once complete" in line
+        assert "Critical modules: 0 of 1 at or above floor; 1 still to measure." in line
+        assert "previous run" not in line  # nothing to compare with yet
+
+    def test_status_names_a_breached_module_and_the_files_that_fell(self):
+        before = [
+            rec("killed", line=1),
+            rec("killed", line=2),
+            rec("killed", file="backend/app/critical.py", line=1),
+        ]
+        now = [
+            rec("killed", line=1),
+            rec("survived", line=2),
+            rec("survived", file="backend/app/critical.py", line=1),
+        ]
+        (line,) = gate.status(now, "backend", FLOORS, previous=before)
+        assert "33.3% of 3 mutants killed; floor 50% — **FAIL**." in line
+        assert (
+            "0 of 1 at or above floor; below floor: `backend/app/critical.py` (0.0% < 80%)." in line
+        )
+        assert line.endswith(
+            "Score fell since the previous run: `backend/app/critical.py` (100.0% → 0.0%), "
+            "`backend/app/x.py` (100.0% → 50.0%)."
+        )
+
+    def test_status_flags_a_floored_module_nothing_measured(self):
+        (line,) = gate.status([rec("killed")], "backend", FLOORS)
+        assert "not measured (check): `backend/app/critical.py`" in line
+        (line,) = gate.status([rec("killed", file="mcp-server/x.py")], "mcp", FLOORS)
+        assert "Critical modules: none floored." in line
+
+    def test_status_treats_an_unfinished_run_as_incomplete_without_allow_pending(self):
+        (line,) = gate.status([rec("killed"), rec("pending", line=2)], "backend", FLOORS)
+        assert "**incomplete run**: 1 mutant(s) were never tested; 1 of the 1 tested" in line
+
+    @staticmethod
+    def unmeasured(file):
+        return rec("pending", file=file, line=None, raw=gate.UNMEASURED_FILE, function=None)
+
+    def test_a_file_no_chunk_has_measured_counts_as_a_file(self):
+        # Nightly run 31 read "98126 of 98279 mutants measured (100%)" with
+        # 153 whole files still unmeasured: each file's one placeholder record
+        # was counted as one mutant.
+        records = [
+            rec("killed", line=1),
+            rec("survived", line=2),
+            rec("pending", line=3, raw="not checked"),
+            self.unmeasured("backend/app/y.py"),
+            self.unmeasured("backend/app/critical.py"),
+        ]
+        text = "\n".join(gate.judge(records, "backend", "suite", FLOORS, True).lines)
+        assert (
+            "Baseline in progress: 2 mutants measured; 2 files not measured yet and "
+            "1 mutant still to test, left for the next run. 50.0% of those measured "
+            "were killed."
+        ) in text
+        assert "of 5 mutants" not in text
+        assert "| `backend/app/critical.py` | n/a so far | 80% | not measured yet |" in text
+        (line,) = gate.status(records, "backend", FLOORS, allow_pending=True)
+        assert (
+            "baseline in progress (2 files not measured yet, 1 mutant still to test); "
+            "50.0% of those measured killed"
+        ) in line
+        assert "Critical modules: 0 of 1 at or above floor; 1 still to measure." in line
+
+    def test_only_unmeasured_files_left(self):
+        records = [rec("killed", line=1), self.unmeasured("backend/app/y.py")]
+        text = "\n".join(gate.judge(records, "backend", "suite", FLOORS, True).lines)
+        assert "Baseline in progress: 1 mutant measured; 1 file not measured yet, left" in text
+        (line,) = gate.status(records, "backend", FLOORS, allow_pending=True)
+        assert "baseline in progress (1 file not measured yet);" in line
+
+    def test_a_module_with_mutants_left_reports_them(self):
+        records = [
+            rec("survived", file="backend/app/critical.py"),
+            rec("pending", file="backend/app/critical.py", line=2, raw="not checked"),
+        ]
+        text = "\n".join(gate.judge(records, "backend", "suite", FLOORS, True).lines)
+        assert "| `backend/app/critical.py` | 0.0% so far | 80% | 1 still to measure |" in text
+
+    def test_a_nearly_finished_baseline_never_reads_100_percent(self):
+        records = [rec("killed", line=n) for n in range(1, 1000)]
+        records.append(rec("pending", line=1000, raw="not checked"))
+        text = "\n".join(gate.judge(records, "backend", "suite", FLOORS, True).lines)
+        assert "999 of 1000 mutants measured (99%)" in text
+        (line,) = gate.status(records, "backend", FLOORS, allow_pending=True)
+        assert "baseline 99% measured (1 mutant left for the next run)" in line
+
+    def test_stryker_writes_the_placeholder_gate_counts(self):
+        assert stryker_scope.UNMEASURED_FILE is gate.UNMEASURED_FILE
+
+    def test_main_writes_the_status_file_for_suite_scope_only(self, tmp_path):
+        records = [rec("killed"), rec("killed", file="backend/app/critical.py")]
+        path = write(tmp_path, "r.json", records)
+        status = tmp_path / "status.md"
+        args = ["--records", str(path), "--floors", str(floors_file(tmp_path))]
+        assert (
+            gate.main(["--suite", "backend", "--scope", "suite", "--status", str(status), *args])
+            == 0
+        )
+        assert status.read_text().startswith(
+            "- **backend**: 100.0% of 2 mutants killed; floor 50% — pass."
+        )
+        # appended, one line per suite, as the nightly calls it three times
+        assert (
+            gate.main(["--suite", "backend", "--scope", "suite", "--status", str(status), *args])
+            == 0
+        )
+        assert status.read_text().count("- **backend**") == 2
+        status.unlink()
+        assert (
+            gate.main(["--suite", "backend", "--scope", "diff", "--status", str(status), *args])
+            == 0
+        )
+        assert not status.exists()
 
     @pytest.mark.parametrize(
         "patch",
@@ -758,6 +897,49 @@ class TestMutmutRunAndCollect:
         assert mutmut_scope.run("backend", {"backend/app/x.py": [[8, 8]]}, 2, suite_repo) == 2
         assert len(calls) == 1
 
+    def test_a_pr_relinks_the_functions_of_the_mutants_it_names(self, suite_repo, monkeypatch):
+        calls, seen = [], []
+        self.fake_mutmut(monkeypatch, calls, on_generate=write_generated)
+        monkeypatch.setattr(
+            mutmut_scope,
+            "relink_untested",
+            lambda d, functions, files: seen.append((len(calls), functions, files)) or set(),
+        )
+        assert mutmut_scope.run("backend", {"backend/app/x.py": [[8, 8]]}, 2, suite_repo) == 0
+        # after generating, before testing, with every mutable file to find callers in
+        assert seen == [(1, {"app.x.x_plain"}, ["app/x.py"])]
+        assert len(calls) == 2
+
+    def test_a_shard_names_a_no_tests_function_again_once_relinked(
+        self, suite_repo, monkeypatch, capsys
+    ):
+        """No test was linked to ``plain`` when mutmut collected them: its
+        module's tests are collected again and its mutants named."""
+        calls = []
+
+        def stats(directory):
+            (directory / "mutants").mkdir(exist_ok=True)
+            (directory / "mutants" / "mutmut-stats.json").write_text(
+                json.dumps(
+                    {
+                        "tests_by_mangled_function_name": {
+                            "app.x.xǁThingǁmethod": ["tests/test_x.py::test_method"]
+                        },
+                        "duration_by_test": {"tests/test_x.py::test_method": 0.5},
+                        "function_hashes": {"app.x.x_plain": "h1"},
+                    }
+                )
+            )
+
+        meta = {"app.x.x_plain__mutmut_1": 33, "app.x.xǁThingǁmethod__mutmut_1": 1}
+        self.fake_mutmut(monkeypatch, calls, meta=meta, on_generate=stats)
+        assert mutmut_scope.run("backend", None, 2, suite_repo, shard="1/1", budget=5) == 0
+        assert calls[-1][0] == ("run", "--max-children", "2", "app.x.x_plain__mutmut_*")
+        directory = suite_repo / "backend"
+        data = json.loads((directory / "mutants" / "mutmut-stats.json").read_text())
+        assert data["duration_by_test"] == {}
+        assert "1 test(s) to collect again" in capsys.readouterr().out
+
     def test_run_and_collect_pick_the_same_mutants(self, suite_repo, monkeypatch):
         write_generated(suite_repo / "backend")
         changed = {"backend/app/x.py": [[8, 10], [23, 23]]}
@@ -809,6 +991,66 @@ class TestMutmutRunAndCollect:
             mutmut_scope, "mutmut", lambda *a, **k: subprocess.CompletedProcess(a, 1, "boom", "")
         )
         assert mutmut_scope.run("backend", None, 2, suite_repo) == 1
+
+    @staticmethod
+    def failing_clean_test(monkeypatch, stdout: str):
+        """A shard never generated before (so it names whole files) whose run
+        then ends non-zero with ``stdout`` — mutmut's clean test failing."""
+
+        def fake(d, *a, stream=False, budget=None):
+            if a[-1] == mutmut_scope._GENERATE_ONLY:
+                err = f"AssertionError: {mutmut_scope._NOTHING_MATCHES}"
+                return subprocess.CompletedProcess(a, 1, "", err)
+            return subprocess.CompletedProcess(a, 1, stdout, "")
+
+        monkeypatch.setattr(mutmut_scope, "mutmut", fake)
+
+    def test_a_failed_clean_test_names_its_tests_and_still_fails(
+        self, suite_repo, monkeypatch, capsys
+    ):
+        self.failing_clean_test(
+            monkeypatch,
+            "collected 3 items\n"
+            "FAILED tests/test_a.py::test_x - AssertionError: assert 1 == 2\n"
+            "ERROR tests/test_b.py - ImportError: no module named z\n"
+            "1 failed, 1 error in 2.0s\n",
+        )
+        out = suite_repo / "harness.json"
+        code = mutmut_scope.run("backend", None, 2, suite_repo, shard="1/1", harness_path=out)
+        assert code == 1
+        printed = capsys.readouterr().out
+        assert (
+            "::error::backend shard 1/1: mutmut's clean test failed on unmutated code; "
+            "this run measured nothing"
+        ) in printed
+        assert (
+            "::error::backend shard 1/1: failed on unmutated code in mutmut's clean test: "
+            "tests/test_a.py::test_x — AssertionError: assert 1 == 2"
+        ) in printed
+        entries = json.loads(out.read_text())
+        assert [(e["kind"], e["test"], e["chunk"]) for e in entries] == [
+            ("test", "tests/test_a.py::test_x", None),
+            ("error", "tests/test_b.py", None),
+        ]
+        assert entries[1]["message"] == "ImportError: no module named z"
+
+    def test_a_run_that_dies_without_a_failed_test_is_named_too(
+        self, suite_repo, monkeypatch, capsys
+    ):
+        self.failing_clean_test(monkeypatch, "Segmentation fault\n")
+        out = suite_repo / "harness.json"
+        assert mutmut_scope.run("backend", None, 2, suite_repo, shard="1/1", harness_path=out) == 1
+        [entry] = json.loads(out.read_text())
+        assert entry["kind"] == "error" and entry["test"] == ""
+        assert entry["message"] == "mutmut exited 1 before any verdict; see the step log"
+        assert "::error::backend shard 1/1: failed on unmutated code" in capsys.readouterr().out
+
+    def test_a_budget_stop_writes_no_harness_file(self, tmp_path, monkeypatch):
+        stand_in = "import time; print('started', flush=True); time.sleep(60)"
+        monkeypatch.setattr(mutmut_scope, "MUTMUT", [sys.executable, "-c", stand_in])
+        result = mutmut_scope.mutmut(tmp_path, stream=True, budget=0.02)
+        assert result.returncode == 0  # so ``run`` never reaches the harness report
+        assert harness.pytest_failures(result.stdout) == []
 
     def test_collect_keeps_only_mutants_on_changed_lines(self, suite_repo, monkeypatch):
         on_line = mutmut_style_diff(SOURCE, 6, 10, 8, "if a < b:", "if a <= b:")
@@ -983,6 +1225,260 @@ class TestReopenSurvivors:
         assert mutmut_scope.tests_digest(suite) != first
 
 
+RELINK_SVC = textwrap.dedent(
+    """\
+    def route_like(x):
+        return helper(x) + 1
+
+
+    def helper(x):
+        return inner(x)
+
+
+    def inner(x):
+        return x * 2
+
+
+    def lonely(x):
+        return x
+
+
+    class Box:
+        def open(self):
+            return self.unpack()
+
+        def unpack(self):
+            return 1
+
+
+    @decorator
+    def handler():
+        return lonely(1)
+    """
+)
+RELINK_OTHER = textwrap.dedent(
+    """\
+    from app import svc
+
+
+    def uses(x):
+        return svc.helper(x)
+
+
+    def alone():
+        return 0
+    """
+)
+
+
+class TestRelinkUntested:
+    """mutmut records a test's functions once, the first time it sees the
+    test: a helper extracted from code the existing tests run scored "no
+    tests" on every mutant, in the PR job and every night after (#1222's
+    ``_require_cardinality_room``, 2026-10-09)."""
+
+    TESTS_BY_FUNCTION = {
+        "app.svc.x_route_like": ["tests/test_svc.py::test_route"],
+        "app.svc.xǁBoxǁopen": ["tests/test_box.py::test_open"],
+        "app.other.x_uses": ["tests/test_misc.py::test_uses"],
+    }
+    DURATIONS = {
+        "tests/test_svc.py::test_route": 0.1,
+        "tests/test_box.py::test_open": 0.1,
+        "tests/test_misc.py::test_uses": 0.1,
+        "tests/test_unrelated.py::test_x": 0.1,
+    }
+    FILES = ["app/other.py", "app/svc.py"]
+
+    @pytest.fixture
+    def suite(self, tmp_path):
+        suite = tmp_path / "suite"
+        (suite / "app").mkdir(parents=True)
+        (suite / "app" / "svc.py").write_text(RELINK_SVC)
+        (suite / "app" / "other.py").write_text(RELINK_OTHER)
+        (suite / "mutants").mkdir()
+        self.write_stats(suite, dict(self.DURATIONS), {})
+        return suite
+
+    def write_stats(self, suite, durations, hashes):
+        (suite / "mutants" / "mutmut-stats.json").write_text(
+            json.dumps(
+                {
+                    "tests_by_mangled_function_name": self.TESTS_BY_FUNCTION,
+                    "duration_by_test": durations,
+                    "function_hashes": hashes,
+                }
+            )
+        )
+
+    @staticmethod
+    def durations(suite):
+        stats = json.loads((suite / "mutants" / "mutmut-stats.json").read_text())
+        return set(stats["duration_by_test"])
+
+    def relink(self, suite, *functions):
+        return mutmut_scope.relink_untested(suite, set(functions), self.FILES)
+
+    def test_the_tests_of_its_callers_are_collected_again(self, suite):
+        """Called by name in one module and as ``svc.helper`` in another."""
+        assert self.relink(suite, "app.svc.x_helper") == {"app.svc.x_helper"}
+        assert self.durations(suite) == {
+            "tests/test_box.py::test_open",
+            "tests/test_unrelated.py::test_x",
+        }
+
+    def test_callers_with_no_tests_of_their_own_are_gone_through(self, suite):
+        assert self.relink(suite, "app.svc.x_inner") == {"app.svc.x_inner"}
+        assert self.durations(suite) == {
+            "tests/test_box.py::test_open",
+            "tests/test_unrelated.py::test_x",
+        }
+
+    def test_the_depth_bounds_the_walk_up_the_callers(self, suite):
+        stats = json.loads((suite / "mutants" / "mutmut-stats.json").read_text())
+        index = mutmut_scope.call_index(suite, self.FILES)
+        tests = stats["tests_by_mangled_function_name"]
+        assert mutmut_scope.caller_tests("app.svc.x_inner", index, tests, depth=1) == set()
+        assert mutmut_scope.caller_tests("app.svc.x_inner", index, tests, depth=2) == {
+            "tests/test_svc.py::test_route",
+            "tests/test_misc.py::test_uses",
+        }
+
+    def test_a_method_is_found_through_self(self, suite):
+        assert self.relink(suite, "app.svc.xǁBoxǁunpack") == {"app.svc.xǁBoxǁunpack"}
+        assert "tests/test_box.py::test_open" not in self.durations(suite)
+
+    def test_its_module_s_tests_count_with_its_callers(self, suite):
+        """``unpack`` is called by ``open`` and may be reached from a handler
+        mutmut never links: the tests named after its module run too."""
+        assert self.relink(suite, "app.svc.xǁBoxǁunpack") == {"app.svc.xǁBoxǁunpack"}
+        assert self.durations(suite) == {
+            "tests/test_misc.py::test_uses",
+            "tests/test_unrelated.py::test_x",
+        }
+
+    def test_no_caller_still_finds_the_tests_named_after_its_module(self, suite):
+        """``lonely``'s only caller is a decorated handler, which mutmut
+        neither mutates nor links to a test."""
+        assert self.relink(suite, "app.svc.x_lonely") == {"app.svc.x_lonely"}
+        assert self.durations(suite) == set(self.DURATIONS) - {"tests/test_svc.py::test_route"}
+
+    def test_without_tests_named_after_it_the_whole_module_s_tests(self, suite):
+        assert self.relink(suite, "app.other.x_alone") == {"app.other.x_alone"}
+        assert self.durations(suite) == set(self.DURATIONS) - {"tests/test_misc.py::test_uses"}
+
+    def test_a_function_already_linked_to_a_test_is_left_alone(self, suite):
+        before = (suite / "mutants" / "mutmut-stats.json").read_text()
+        assert self.relink(suite, "app.svc.x_route_like") == set()
+        assert (suite / "mutants" / "mutmut-stats.json").read_text() == before
+        assert not (suite / "mutants" / mutmut_scope.RELINKED).exists()
+
+    def test_a_function_is_tried_once_per_version_of_its_code(self, suite):
+        self.write_stats(suite, dict(self.DURATIONS), {"app.svc.x_lonely": "h1"})
+        assert self.relink(suite, "app.svc.x_lonely") == {"app.svc.x_lonely"}
+        tried = json.loads((suite / "mutants" / mutmut_scope.RELINKED).read_text())
+        assert tried == {"app.svc.x_lonely": "h1"}
+        # mutmut collected the tests again and still linked none to it
+        self.write_stats(suite, dict(self.DURATIONS), {"app.svc.x_lonely": "h1"})
+        assert self.relink(suite, "app.svc.x_lonely") == set()
+        assert self.durations(suite) == set(self.DURATIONS)
+        # its code changed: worth another try
+        self.write_stats(suite, dict(self.DURATIONS), {"app.svc.x_lonely": "h2"})
+        assert self.relink(suite, "app.svc.x_lonely") == {"app.svc.x_lonely"}
+
+    def test_a_function_nothing_can_reach_is_remembered_too(self, suite):
+        (suite / "app" / "solo.py").write_text("def solo():\n    return 1\n")
+        assert mutmut_scope.relink_untested(suite, {"app.solo.x_solo"}, ["app/solo.py"]) == set()
+        assert self.durations(suite) == set(self.DURATIONS)
+        tried = json.loads((suite / "mutants" / mutmut_scope.RELINKED).read_text())
+        assert tried == {"app.solo.x_solo": None}
+
+    def test_no_stats_means_nothing_to_relink(self, tmp_path):
+        suite = tmp_path / "suite"
+        (suite / "mutants").mkdir(parents=True)
+        assert mutmut_scope.relink_untested(suite, {"app.svc.x_helper"}, []) == set()
+
+    def test_the_index_resolves_what_each_function_refers_to(self, suite):
+        index = mutmut_scope.call_index(suite, [*self.FILES, "app/missing.py"])
+        assert "app.svc.x_handler" not in index  # decorated: never mutated
+        assert index["app.svc.x_route_like"] == {"app.svc.x_helper"}
+        assert index["app.svc.xǁBoxǁopen"] == {"app.svc.xǁBoxǁunpack"}
+        assert index["app.other.x_uses"] == {"app.svc.x_helper"}
+
+    def test_an_attribute_of_any_other_object_is_no_call(self, suite):
+        """``d.get`` is not a call of every new function named ``get``: that
+        would collect half the suite again for one helper."""
+        (suite / "app" / "other.py").write_text(
+            RELINK_OTHER + "\n\ndef reads(d):\n    return d.get('k'), d.helper\n"
+        )
+        index = mutmut_scope.call_index(suite, self.FILES)
+        assert index["app.other.x_reads"] == set()
+
+    def test_imports_resolve_wherever_they_sit(self, tmp_path):
+        suite = tmp_path / "suite"
+        (suite / "pkg" / "sub").mkdir(parents=True)
+        (suite / "pkg" / "sub" / "__init__.py").write_text(
+            "from .leaf import fn as alias\n\n\ndef top():\n    return alias()\n"
+        )
+        (suite / "pkg" / "sub" / "mod.py").write_text(
+            textwrap.dedent(
+                """\
+                import pkg.other
+                import pkg.third as third
+                from ..base import Base
+
+
+                def local():
+                    from . import leaf
+
+                    return leaf.fn(), pkg.other.go(), third.run(), Base.make()
+                """
+            )
+        )
+        (suite / "pkg" / "sub" / "leaf.py").write_text("def fn():\n    return 1\n")
+        (suite / "pkg" / "other.py").write_text("def go():\n    return 1\n")
+        (suite / "pkg" / "third.py").write_text("def run():\n    return 1\n")
+        (suite / "pkg" / "base.py").write_text(
+            "class Base:\n    @classmethod\n    def make(cls):\n        return cls()\n"
+        )
+        files = [
+            "pkg/base.py",
+            "pkg/other.py",
+            "pkg/sub/__init__.py",
+            "pkg/sub/leaf.py",
+            "pkg/sub/mod.py",
+            "pkg/third.py",
+        ]
+        index = mutmut_scope.call_index(suite, files)
+        assert index["pkg.sub.x_top"] == {"pkg.sub.leaf.x_fn"}
+        assert index["pkg.sub.mod.x_local"] == {
+            "pkg.sub.leaf.x_fn",
+            "pkg.other.x_go",
+            "pkg.third.x_run",
+            "pkg.base.xǁBaseǁmake",
+        }
+
+    def test_untested_functions_and_resetting_their_no_tests_verdicts(self, tmp_path):
+        verdicts = {
+            "app.x.x_plain__mutmut_1": 33,
+            "app.x.x_plain__mutmut_2": 1,
+            "app.x.x_other__mutmut_1": None,
+            "app.x.x_kept__mutmut_1": 33,
+            "app.x.x_done__mutmut_1": 0,
+        }
+        suite = survivors_suite(tmp_path, verdicts, {}, {})
+        assert mutmut_scope.untested_functions(suite, ["app/x.py", "app/y.py"]) == {
+            "app.x.x_plain",
+            "app.x.x_other",
+            "app.x.x_kept",
+        }
+        reset = mutmut_scope.reset_no_tests(
+            suite, ["app/x.py", "app/y.py"], {"app.x.x_plain", "app.x.x_other"}
+        )
+        assert reset == 1
+        assert verdicts_of(suite) == {**verdicts, "app.x.x_plain__mutmut_1": None}
+
+
 class TestTestsChangedSince:
     @staticmethod
     def git(cwd, *args):
@@ -1110,6 +1606,30 @@ class TestStrykerScope:
         assert stryker_scope.chunk_of("src/lib/a.ts") == stryker_scope.chunk_of("src/lib/a.ts")
         assert 0 <= stryker_scope.chunk_of("src/lib/a.ts") < stryker_scope.CHUNKS
 
+    def test_one_shard_chunks_by_the_plain_path_hash(self):
+        # With one shard the chunk is crc32(path) % CHUNKS, so the single-shard
+        # tests and any state built that way keep their meaning.
+        for path in ("src/lib/a.ts", "src/features/x/Y.tsx", "scripts/merge-lcov.mjs"):
+            crc = zlib.crc32(path.encode("utf-8"))
+            assert stryker_scope.chunk_of(path, 16) == crc % 16
+            assert stryker_scope.chunk_of(path, 16, shards=1) == crc % 16
+            assert stryker_scope.shard_of(path, 1, 16) == 1
+
+    def test_a_global_chunk_belongs_to_one_shard_and_one_chunk(self):
+        # crc32("src/lib/a.ts") % (8 * 16) is the global chunk g; it is chunk
+        # g // 8 of shard g % 8 + 1.
+        path = "src/lib/a.ts"
+        g = zlib.crc32(path.encode("utf-8")) % 128
+        assert stryker_scope.shard_of(path, 8, 16) == g % 8 + 1
+        assert stryker_scope.chunk_of(path, 16, shards=8) == g // 8
+        assert 0 <= stryker_scope.chunk_of(path, 16, shards=8) < 16
+
+    def test_shard_strings_are_validated(self):
+        assert stryker_scope.parse_shard("3/8") == (3, 8)
+        for bad in ("0/8", "9/8", "1/0"):
+            with pytest.raises(ValueError, match="1 <= K <= N"):
+                stryker_scope.parse_shard(bad)
+
     def test_globs(self):
         regex = stryker_scope.glob_to_regex("src/**/*.{ts,tsx}")
         assert regex.match("src/a.ts") and regex.match("src/x/y/b.tsx")
@@ -1155,15 +1675,204 @@ class TestShadowRoot:
             assert source in shadow_root.mutmut_owned(REPO / suite)
 
 
+# ── harness: the tests that failed on unmutated code ────────────────────────
+
+STRYKER_FAILED_BLOCK = (
+    "\x1b[32m21:14:02 (1234) INFO DryRunExecutor\x1b[39m Starting initial test run "
+    '(vitest test runner with "perTest" coverage analysis). This may take a while.\n'
+    "\x1b[91m21:14:03 (1234) ERROR DryRunExecutor\x1b[39m One or more tests failed in the "
+    "initial test run:\n"
+    "\tPpmProjectDetail switching initiatives mounts a fresh cost tab\n"
+    "\t\texpected 1 to be 2\n"
+    "\tCardDetail shows a plain subtype label\n"
+    "\t\tUnable to find an element with the text: Business Application.\n"
+    "Ignored nodes: comments, script, style\n"
+    "<body>\n"
+    "\x1b[91m21:14:03 (1234) ERROR Stryker\x1b[39m There were failed tests in the initial "
+    "test run.\n"
+    "ConfigError: There were failed tests in the initial test run.\n"
+)
+
+
+class TestHarness:
+    def test_a_stryker_block_yields_one_entry_per_test(self):
+        found = harness.stryker_dry_run_failures(STRYKER_FAILED_BLOCK)
+        assert found == [
+            {
+                "kind": "test",
+                "test": "PpmProjectDetail switching initiatives mounts a fresh cost tab",
+                "message": "expected 1 to be 2",
+            },
+            {
+                "kind": "test",
+                "test": "CardDetail shows a plain subtype label",
+                # the message's own extra lines carry no tab and still belong to it
+                "message": "Unable to find an element with the text: Business Application.\n"
+                "Ignored nodes: comments, script, style\n<body>",
+            },
+        ]
+
+    def test_the_other_initial_run_outcomes(self):
+        errored = (
+            "21:14:03 (1) ERROR DryRunExecutor One or more tests resulted in an error:\n"
+            "\tTest runner crashed. Tried twice to restart it without any luck.\n"
+            "21:14:03 (1) ERROR Stryker Unexpected error occurred while running Stryker\n"
+        )
+        assert harness.stryker_dry_run_failures(errored) == [
+            {
+                "kind": "error",
+                "test": "",
+                "message": "Test runner crashed. Tried twice to restart it without any luck.",
+            }
+        ]
+        timed_out = "21:14:03 (1) ERROR DryRunExecutor Initial test run timed out!\n"
+        assert harness.stryker_dry_run_failures(timed_out) == [
+            {"kind": "timeout", "test": "", "message": harness.TIMED_OUT}
+        ]
+        assert harness.stryker_dry_run_failures("21:14:03 (1) INFO Stryker Done in 3 s\n") == []
+        assert harness.stryker_dry_run_failures("") == []
+
+    def test_pytest_summary_lines(self):
+        output = (
+            "tests/test_a.py::test_x FAILED\n"
+            "PASSED tests/test_d.py::test_ok\n"
+            "\x1b[31mFAILED\x1b[0m tests/test_a.py::test_x - AssertionError: 1 != 2\n"
+            "ERROR tests/test_b.py - ImportError: no module\n"
+            "FAILED tests/test_c.py::test_p[a b - c]\n"
+            "FAILED tests/test_a.py::test_x - AssertionError: 1 != 2\n"
+            "1 failed in 0.1s\n"
+        )
+        assert harness.pytest_failures(output) == [
+            {
+                "kind": "test",
+                "test": "tests/test_a.py::test_x",
+                "message": "AssertionError: 1 != 2",
+            },
+            {"kind": "error", "test": "tests/test_b.py", "message": "ImportError: no module"},
+            {"kind": "test", "test": "tests/test_c.py::test_p[a b - c]", "message": ""},
+        ]
+
+    def test_an_annotation_is_one_escaped_line(self, capsys):
+        e = harness.entry("frontend", "3/8", 7, "test", "Page renders", "line one\nline %two\r")
+        harness.annotate(e, "Stryker's initial test run")
+        lines = capsys.readouterr().out.splitlines()
+        assert lines == [
+            "::error::frontend shard 3/8 chunk 7: failed on unmutated code in Stryker's "
+            "initial test run: Page renders — line one"
+        ]
+        e = harness.entry("backend", None, None, "error", "", "mutmut exited 1 %")
+        harness.annotate(e, "mutmut's clean test")
+        assert capsys.readouterr().out == (
+            "::error::backend: failed on unmutated code in mutmut's clean test: "
+            "(initial test run error) — mutmut exited 1 %25\n"
+        )
+
+    def test_entry_refuses_an_unknown_kind(self):
+        with pytest.raises(ValueError):
+            harness.entry("frontend", "1/1", 0, "flaky", "t", "m")
+
+    def test_append_extends_the_file_both_halves_write(self, tmp_path):
+        path = tmp_path / "h.json"
+        harness.append(path, [])
+        assert not path.exists()
+        first = harness.entry("frontend", "1/8", 2, "test", "t", "m", ["src/a.ts"])
+        harness.append(path, [first])
+        harness.append(path, [harness.entry("frontend", "1/8", 2, "test", "t", "m again")])
+        entries = json.loads(path.read_text())
+        assert [e["message"] for e in entries] == ["m", "m again"]
+        assert entries[0]["files"] == ["src/a.ts"]
+
+    def test_render_counts_repeats_and_names_the_reproduction(self):
+        assert harness.render([]) == []
+        entries = [
+            harness.entry(
+                "frontend", "3/8", 7, "test", "Page | renders", "expected 1\nto be 2", ["src/p.ts"]
+            ),
+            harness.entry(
+                "frontend", "3/8", 7, "test", "Page | renders", "expected 1 to be 2", ["src/p.ts"]
+            ),
+            harness.entry(
+                "backend", "5/6", None, "test", "tests/test_a.py::test_x", "AssertionError"
+            ),
+            harness.entry("backend", "5/6", None, "error", "", "mutmut exited 1"),
+        ]
+        text = "\n".join(harness.render(entries))
+        assert text.startswith("## Tests that failed on unmutated code under the harness")
+        assert "3 test(s) failed" in text
+        assert "| backend | 5/6 | – | `(initial test run error)` | mutmut exited 1 | 1× |" in text
+        assert "| backend | 5/6 | – | `tests/test_a.py::test_x` | AssertionError | 1× |" in text
+        assert (
+            "| frontend | 3/8 | 7 | `Page \\| renders` | expected 1 "
+            "(reproduce: `make mutation-frontend FILE=src/p.ts`) | 2× |"
+        ) in text
+        assert "Fix the race the same day" in text
+
+    def test_report_writes_the_output_only_when_something_failed(self, tmp_path, capsys):
+        d = tmp_path / "harness"
+        summary, out = tmp_path / "summary.md", tmp_path / "harness.md"
+        assert (
+            harness.main(
+                ["report", "--dir", str(d), "--summary", str(summary), "--output", str(out)]
+            )
+            == 0
+        )
+        assert not out.exists() and not summary.exists()
+        assert "No test failed on unmutated code" in capsys.readouterr().out
+        d.mkdir()
+        harness.append(
+            d / "mutation-harness-frontend-3.json",
+            [harness.entry("frontend", "3/8", 7, "test", "Page renders", "expected 1 to be 2")],
+        )
+        harness.append(
+            d / "mutation-harness-backend-5.json",
+            [harness.entry("backend", "5/6", None, "test", "tests/test_a.py::test_x", "boom")],
+        )
+        assert (
+            harness.main(
+                ["report", "--dir", str(d), "--summary", str(summary), "--output", str(out)]
+            )
+            == 0
+        )
+        printed = capsys.readouterr().out
+        assert "::warning::2 test failure(s) on unmutated code under the harness" in printed
+        assert out.read_text() == summary.read_text()
+        assert (
+            "`Page renders`" in out.read_text() and "`tests/test_a.py::test_x`" in out.read_text()
+        )
+        (d / "mutation-harness-mcp-1.json").write_text("not json")
+        assert harness.main(["report", "--dir", str(d)]) == 2
+        (d / "mutation-harness-mcp-1.json").write_text('[{"kind": "flaky", "test": "t"}]')
+        assert harness.main(["report", "--dir", str(d)]) == 2
+
+
 # ── stryker nightly: resumable chunks ───────────────────────────────────────
 
 FAKE_STRYKER = """
 import json, pathlib, sys, time
 args = sys.argv[1:]
 files = args[args.index("--mutate") + 1].split(",")
+if any("partial" in f for f in files):
+    # what Stryker does when stopped mid-run: save what it has tested so far
+    # to the incremental file, which the next run of the chunk resumes from
+    inc = pathlib.Path(args[args.index("--incrementalFile") + 1])
+    saved = json.loads(inc.read_text()) if inc.exists() else {"files": {}}
+    entry = saved["files"].setdefault(files[0], {"source": "x\\n", "mutants": []})
+    entry["mutants"].append({"id": str(len(entry["mutants"])), "status": "Killed"})
+    inc.write_text(json.dumps(saved))
+    time.sleep(60)
 if any("slow" in f for f in files):
     time.sleep(60)
 if any("broken" in f for f in files):
+    # Stryker 10's initial-run failure, coloured prefix and all
+    print("\\x1b[91m21:14:03 (1234) ERROR DryRunExecutor\\x1b[39m One or more tests failed"
+          " in the initial test run:")
+    print("\\tPage renders the thing")
+    print("\\t\\texpected 1 to be 2")
+    print("\\x1b[91m21:14:03 (1234) ERROR Stryker\\x1b[39m There were failed tests in the"
+          " initial test run.")
+    sys.exit(1)
+if any("crash" in f for f in files):
+    print("Error: ENOENT")
     sys.exit(1)
 report = {"files": {f: {"source": "x\\n", "mutants": [
     {"id": "1", "mutatorName": "M", "replacement": "y", "status": "Killed",
@@ -1192,7 +1901,108 @@ def frontend_repo(tmp_path, monkeypatch):
     return fe, config
 
 
+class TestStrykerStableDeal:
+    """A file keeps its shard and chunk whatever happens to other files.
+
+    The size-balanced deal this replaced moved most frontend files to another
+    shard every night, where each was scored from whatever old report that
+    shard's cache held (436 of 528 files moved between two nightly runs).
+    """
+
+    @staticmethod
+    def _deal(fe, config, shards=4):
+        return {
+            rel: (k, stryker_scope.chunk_of(rel, shards=shards))
+            for k in range(1, shards + 1)
+            for rel in stryker_scope.shard_files(f"{k}/{shards}", fe, config)
+        }
+
+    def test_growing_one_file_and_adding_another_moves_no_file(self, frontend_repo):
+        fe, config = frontend_repo
+        for name in ("e", "f", "g", "h", "i", "j"):
+            (fe / "src" / f"{name}.ts").write_text("export const x = 1;\n")
+        before = self._deal(fe, config)
+        (fe / "src" / "a.ts").write_text("export const x = 1;\n" * 500)
+        (fe / "src" / "new.ts").write_text("export const y = 2;\n")
+        after = self._deal(fe, config)
+        assert {rel: after[rel] for rel in before} == before
+        assert after["src/new.ts"] == (
+            stryker_scope.shard_of("src/new.ts", 4),
+            stryker_scope.chunk_of("src/new.ts", shards=4),
+        )
+
+    def test_shards_partition_the_files(self, frontend_repo):
+        fe, config = frontend_repo
+        for name in ("e", "f", "g", "h"):
+            (fe / "src" / f"{name}.ts").write_text("export const x = 1;\n")
+        dealt = [stryker_scope.shard_files(f"{k}/3", fe, config) for k in (1, 2, 3)]
+        every = stryker_scope.mutable_files(fe, config)
+        assert sorted(f for files in dealt for f in files) == every
+        for k, files in enumerate(dealt, start=1):
+            assert all(stryker_scope.shard_of(f, 3) == k for f in files)
+
+    def test_shard_chunks_groups_a_shard_by_chunk(self, frontend_repo):
+        fe, config = frontend_repo
+        groups = stryker_scope.shard_chunks("1/1", fe, config)
+        assert sorted(f for files in groups.values() for f in files) == [
+            f"src/{n}.ts" for n in ("a", "b", "c", "d")
+        ]
+        for chunk, files in groups.items():
+            assert all(stryker_scope.chunk_of(f) == chunk for f in files)
+
+
 class TestStrykerNightly:
+    def test_a_chunk_report_speaks_only_for_its_own_files(self, frontend_repo, tmp_path):
+        # Stryker's incremental mode copies the old mutants of a file that left
+        # the run into the new report. Such an entry must not score the file:
+        # here src/a.ts is "carried" into the report of a chunk that does not
+        # hold it, with a verdict its own chunk never produced.
+        fe, config = frontend_repo
+        state = tmp_path / "state"
+        assert stryker_scope.nightly("1/1", 30, state, fe, config) == 0
+        own = stryker_scope.chunk_of("src/a.ts")
+        other = 1 - own
+        report_path = state / f"chunk-1-{other}.mutation.json"
+        report = json.loads(report_path.read_text())
+        report["files"]["src/a.ts"] = {
+            "source": "x\n",
+            "mutants": [
+                {
+                    "id": "src/a.ts@1:1-1:2\nM: y",
+                    "mutatorName": "M",
+                    "replacement": "y",
+                    "status": "NoCoverage",
+                    "location": {
+                        "start": {"line": 1, "column": 1},
+                        "end": {"line": 1, "column": 2},
+                    },
+                }
+            ],
+        }
+        report_path.write_text(json.dumps(report))
+        # make the carrying report the newest, so only the filter can stop it
+        os.utime(report_path, (time.time() + 60, time.time() + 60))
+        records = stryker_scope.collect_state(state, "1/1", fe, config)
+        a = [r for r in records if r["file"] == "frontend/src/a.ts"]
+        assert [(r["status"], r["raw_status"]) for r in a] == [("killed", "Killed")]
+
+    def test_a_file_only_a_foreign_chunk_reports_is_pending(self, frontend_repo, tmp_path):
+        fe, config = frontend_repo
+        state = tmp_path / "state"
+        own = stryker_scope.chunk_of("src/a.ts")
+        other = 1 - own
+        assert stryker_scope.nightly("1/1", 30, state, fe, config) == 0
+        (state / f"chunk-1-{own}.mutation.json").unlink()
+        report_path = state / f"chunk-1-{other}.mutation.json"
+        report = json.loads(report_path.read_text())
+        report["files"]["src/a.ts"] = {"source": "x\n", "mutants": []}
+        report_path.write_text(json.dumps(report))
+        records = stryker_scope.collect_state(state, "1/1", fe, config)
+        a = [r for r in records if r["file"] == "frontend/src/a.ts"]
+        assert [(r["status"], r["raw_status"]) for r in a] == [
+            ("pending", "not measured yet (whole file)")
+        ]
+
     def test_every_chunk_runs_and_collect_merges_them(self, frontend_repo, tmp_path):
         fe, config = frontend_repo
         state = tmp_path / "state"
@@ -1229,6 +2039,67 @@ class TestStrykerNightly:
         assert stryker_scope.nightly("1/1", 30, state, fe, config) == 1
         assert list(state.glob("*.mutation.json"))  # the other chunk still landed
 
+    def test_a_failing_chunk_names_the_test_its_initial_run_failed_on(
+        self, frontend_repo, tmp_path, capsys
+    ):
+        """The name used to sit thousands of lines deep in Stryker's output."""
+        fe, config = frontend_repo
+        (fe / "src" / "broken.ts").write_text("x\n")
+        state = tmp_path / "state"
+        out = tmp_path / "harness.json"
+        assert stryker_scope.nightly("1/1", 30, state, fe, config, harness_path=out) == 1
+        printed = capsys.readouterr().out
+        chunk = stryker_scope.chunk_of("src/broken.ts", 2)
+        size = len(
+            [
+                f
+                for f in stryker_scope.shard_files("1/1", fe, config)
+                if stryker_scope.chunk_of(f, 2) == chunk
+            ]
+        )
+        assert (
+            f"chunk {chunk} ({size} files): failed — initial test run: Page renders the thing"
+            in (printed)
+        )
+        assert (
+            "::error::frontend shard 1/1 chunk "
+            f"{chunk}: failed on unmutated code in Stryker's initial test run: "
+            "Page renders the thing — expected 1 to be 2"
+        ) in printed
+        [entry] = json.loads(out.read_text())
+        assert entry["suite"] == "frontend" and entry["shard"] == "1/1"
+        assert entry["chunk"] == chunk and entry["kind"] == "test"
+        assert entry["test"] == "Page renders the thing"
+        assert entry["message"] == "expected 1 to be 2"
+        assert "src/broken.ts" in entry["files"] and len(entry["files"]) == size
+        assert entry["at"].endswith("Z")
+
+    def test_a_chunk_stryker_itself_failed_is_still_named(self, frontend_repo, tmp_path, capsys):
+        fe, config = frontend_repo
+        (fe / "src" / "crash.ts").write_text("x\n")
+        state = tmp_path / "state"
+        out = tmp_path / "harness.json"
+        assert stryker_scope.nightly("1/1", 30, state, fe, config, harness_path=out) == 1
+        chunk = stryker_scope.chunk_of("src/crash.ts", 2)
+        size = len(
+            [
+                f
+                for f in stryker_scope.shard_files("1/1", fe, config)
+                if stryker_scope.chunk_of(f, 2) == chunk
+            ]
+        )
+        assert f"chunk {chunk} ({size} files): failed\n" in capsys.readouterr().out
+        [entry] = json.loads(out.read_text())
+        assert entry["kind"] == "unknown" and entry["test"] == ""
+        assert "see the step log" in entry["message"]
+
+    def test_a_good_chunk_writes_no_harness_file(self, frontend_repo, tmp_path):
+        fe, config = frontend_repo
+        out = tmp_path / "harness.json"
+        state = tmp_path / "state"
+        assert stryker_scope.nightly("1/1", 30, state, fe, config, harness_path=out) == 0
+        assert not out.exists()
+
     def test_the_budget_stops_a_chunk_and_keeps_its_previous_report(
         self, frontend_repo, tmp_path, monkeypatch, capsys
     ):
@@ -1246,10 +2117,113 @@ class TestStrykerNightly:
         assert stryker_scope.nightly("1/1", 0.02, state, fe, config) == 0
         assert time.monotonic() - started < 30  # stopped, not waited out
         assert previous.read_text() == '{"files": {}}'
-        # it had the whole budget and still did not finish: say so
-        assert "cannot finish within one budget" in capsys.readouterr().out
+        # it had the whole budget and measured nothing it can keep: say so
+        assert "cannot finish within one budget: it measured nothing new" in capsys.readouterr().out
         # and it is not marked as measured from today's inputs
         assert not (state / "chunk-1-0.inputs").exists()
+
+    def test_a_chunk_cut_after_saving_progress_resumes_without_a_warning(
+        self, frontend_repo, tmp_path, monkeypatch, capsys
+    ):
+        # Nightly run 31 warned "raise CHUNKS" for a chunk that had reached 90%:
+        # Stryker saves a partial incremental report when stopped, and the next
+        # half resumed it. Raising CHUNKS re-deals every file and throws that
+        # progress away, so a chunk that grows is not one to warn about.
+        fe, config = frontend_repo
+        for name in ("a", "b", "c", "d"):
+            (fe / "src" / f"{name}.ts").unlink()
+        (fe / "src" / "partial.ts").write_text("x\n")
+        monkeypatch.setattr(stryker_scope, "CHUNKS", 1)
+        monkeypatch.setattr(stryker_scope, "MIN_CHUNK_SECONDS", 0)
+        state = tmp_path / "state"
+        assert stryker_scope.nightly("1/1", 0.02, state, fe, config) == 0
+        out = capsys.readouterr().out
+        assert "1 mutant(s) measured so far, 1 in this run; the next run resumes" in out
+        assert "cannot finish" not in out
+        assert stryker_scope.nightly("1/1", 0.02, state, fe, config) == 0
+        out = capsys.readouterr().out
+        assert "2 mutant(s) measured so far, 1 in this run" in out
+        assert "cannot finish" not in out
+        # still unfinished, so never marked as measured from these inputs
+        assert not (state / "chunk-1-0.inputs").exists()
+        assert not (state / "chunk-1-0.mutation.json").exists()
+
+    def test_a_cut_chunk_that_saved_nothing_new_still_warns(
+        self, frontend_repo, tmp_path, monkeypatch, capsys
+    ):
+        # A partial report that only repeats what the last run kept is not
+        # progress: the chunk would be cut at the same point every night.
+        fe, config = frontend_repo
+        for name in ("a", "b", "c", "d"):
+            (fe / "src" / f"{name}.ts").unlink()
+        (fe / "src" / "slow.ts").write_text("x\n")
+        monkeypatch.setattr(stryker_scope, "CHUNKS", 1)
+        monkeypatch.setattr(stryker_scope, "MIN_CHUNK_SECONDS", 0)
+        state = tmp_path / "state"
+        state.mkdir()
+        kept = {"files": {"src/slow.ts": {"mutants": [{"id": "1", "status": "Killed"}]}}}
+        (state / "chunk-1-0.incremental.json").write_text(json.dumps(kept))
+        assert stryker_scope.nightly("1/1", 0.02, state, fe, config) == 0
+        out = capsys.readouterr().out
+        assert "cannot finish within one budget: it measured nothing new" in out
+        assert "measured so far" not in out
+
+    def test_a_chunk_cut_late_in_the_budget_does_not_warn(
+        self, frontend_repo, tmp_path, monkeypatch, capsys
+    ):
+        # It started with little of the budget left; that says nothing about
+        # whether it fits in a whole one.
+        fe, config = frontend_repo
+        for name in ("a", "b", "c", "d"):
+            (fe / "src" / f"{name}.ts").unlink()
+        (fe / "src" / "slow.ts").write_text("x\n")
+        monkeypatch.setattr(stryker_scope, "CHUNKS", 1)
+        monkeypatch.setattr(stryker_scope, "MIN_CHUNK_SECONDS", 0)
+        ticks = iter([0.0, 0.2 * 60])  # the deadline is set, then 20% of a minute passed
+
+        def clock():
+            return next(ticks, time.monotonic())
+
+        assert stryker_scope.nightly("1/1", 0.2, tmp_path / "state", fe, config, clock=clock) == 0
+        out = capsys.readouterr().out
+        assert "Budget spent mid-chunk" in out
+        assert "cannot finish" not in out
+
+
+class TestStrykerResultsIn:
+    def test_counts_the_mutants_with_a_verdict(self, tmp_path):
+        path = tmp_path / "inc.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "files": {
+                        "a.ts": {
+                            "mutants": [
+                                {"status": "Killed"},
+                                {"status": "Survived"},
+                                {"status": "Pending"},
+                                {"id": "no status"},
+                            ]
+                        },
+                        "b.ts": {"mutants": [{"status": "NoCoverage"}]},
+                        "c.ts": {},
+                    },
+                    "testFiles": {"a.test.ts": {"tests": [{"status": "Killed"}]}},
+                }
+            )
+        )
+        assert stryker_scope._results_in(path) == 3
+
+    @pytest.mark.parametrize(
+        "content",
+        [None, "", "not json", "[]", '{"files": []}', '{"files": {"a.ts": []}}'],
+        ids=["missing", "empty", "garbage", "list", "files-list", "entry-list"],
+    )
+    def test_anything_unreadable_holds_nothing(self, tmp_path, content):
+        path = tmp_path / "inc.json"
+        if content is not None:
+            path.write_text(content)
+        assert stryker_scope._results_in(path) == 0
 
 
 class TestStrykerNightlySkipsUnchangedChunks:

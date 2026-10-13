@@ -41,16 +41,20 @@ import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  buildTree,
-  findNode,
   DrawerOverview,
   DrawerSteps,
   DrawerFlow,
   DrawerApps,
   DrawerData,
+} from "@/features/bpm/ProcessNavigator";
+// Upstream lifted the tree state/helpers into their own tested module
+// (processNavigatorState); the Drawer components stay in ProcessNavigator.
+import {
+  buildTree,
+  findNode,
   type ProcItem,
   type ProcNode,
-} from "@/features/bpm/ProcessNavigator";
+} from "@/features/bpm/processNavigatorState";
 import { useProcessTypeOptions } from "@/features/bpm/useProcessTypeOptions";
 import {
   FULL_CAPABILITIES,

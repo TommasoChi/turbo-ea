@@ -102,6 +102,7 @@ from app.services.card_write_service import (
     _max_descendant_depth,  # noqa: F401
     _recalc_changed_descendants,
     _sync_hierarchy_levels,
+    _validate_cost_attributes,
     _validate_hierarchy_label,
     _validate_percentage_attributes,
     _validate_strict_attributes,
@@ -829,7 +830,7 @@ async def bulk_create_cards(
     # sharing a prefix stay contiguous, each seeded once via a global scan.
     # Rolled-back rows leave gaps, which is acceptable by design.
     _ref_types: dict[str, CardType | None] = {}
-    _ref_next: dict[str, int] = {}
+    allocator = card_reference.ReferenceAllocator()
 
     # Fields schemas for every type in the batch, fetched once. The select-option
     # check below runs per row, so it must not repeat a query per row the way
@@ -849,18 +850,7 @@ async def bulk_create_cards(
             _ref_types[row.type] = (
                 await db.execute(select(CardType).where(CardType.key == row.type))
             ).scalar_one_or_none()
-        ct = _ref_types[row.type]
-        if ct is None or card_reference.get_mode(ct) != "auto":
-            return
-        cfg = ct.reference_config or {}
-        prefix = str(cfg.get("prefix", "") or "")
-        start = int(cfg.get("start", card_reference.DEFAULT_START))
-        padding = int(cfg.get("padding", card_reference.DEFAULT_PADDING))
-        if prefix not in _ref_next:
-            _ref_next[prefix] = await card_reference.scan_highest_for_prefix(db, prefix, start)
-        n = _ref_next[prefix] + 1
-        _ref_next[prefix] = n
-        card.reference = card_reference.format_reference(prefix, padding, n)
+        await allocator.assign(db, card, _ref_types[row.type])
 
     for row_idx in order:
         r = rows_by_index[row_idx]
@@ -873,6 +863,7 @@ async def bulk_create_cards(
         try:
             await _validate_url_attributes(db, r.type, r.attributes or {})
             await _validate_percentage_attributes(db, r.type, r.attributes or {})
+            await _validate_cost_attributes(db, r.type, r.attributes or {})
             _check_select_options(r.type, schemas_by_type.get(r.type), r.attributes or {}, {})
 
             # Resolve parent_id.
@@ -1682,6 +1673,7 @@ async def bulk_update(
             seen_types.add(card.type)
             await _validate_url_attributes(db, card.type, updates["attributes"])
             await _validate_percentage_attributes(db, card.type, updates["attributes"])
+            await _validate_cost_attributes(db, card.type, updates["attributes"])
             if strict_attrs:
                 await _validate_strict_attributes(db, card.type, updates["attributes"])
     # Preserve cost-typed keys for any card the user may not see costs on —

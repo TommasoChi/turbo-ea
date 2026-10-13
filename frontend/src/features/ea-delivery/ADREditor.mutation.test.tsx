@@ -513,9 +513,13 @@ describe("ADREditor — signatures", () => {
 // Which actions each status offers
 // ---------------------------------------------------------------------------
 
-/** The Recall button, by its visible label: its accessible name is the tooltip today
- *  (WCAG 2.5.3 label-in-name), which is a bug the tests must not depend on. */
-const recallButton = () => screen.getByText("Recall Signatures").closest("button") as HTMLButtonElement;
+/** The Recall button, by its visible label — which is also its accessible name
+ *  (WCAG 2.5.3 label-in-name); the tooltip only describes it. */
+const recallButton = () => {
+  const button = screen.getByText("Recall Signatures").closest("button") as HTMLButtonElement;
+  expect(button).toHaveAccessibleName("undo Recall Signatures");
+  return button;
+};
 
 describe("ADREditor — actions by status", () => {
   it("a draft never offers Recall, Sign or Reject, even with a pending signatory listed", async () => {
@@ -596,7 +600,9 @@ describe("ADREditor — workflow actions", () => {
     await user.click(screen.getByRole("button", { name: /New Revision/ }));
     const toast = await screen.findByText("New revision created");
     await waitFor(() => expect(location()).toBe("/ea-delivery/adr/adr-rev"));
-    expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    // The spinner follows the URL by an effect, so wait for it rather than read
+    // it in the same tick (a loaded runner showed the old decision there still).
+    expect(await screen.findByRole("progressbar")).toBeInTheDocument();
     expect(toast).toBeInTheDocument();
 
     reload.resolve({ ...signed, id: "adr-rev" });
