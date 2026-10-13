@@ -24,6 +24,11 @@ jobs:
         run: |
           set -euo pipefail
           ALLOWED=(
+            # Fork maintainer. Upstream's allowlist names only its own
+            # maintainer, so on this fork every PR by the owner was auto-closed
+            # seconds after opening (and a closed PR stops firing the
+            # `pull_request` events CI runs on).
+            "TommasoChi"
             "vincentmakes"
             "dependabot[bot]"
             "claude[bot]"
