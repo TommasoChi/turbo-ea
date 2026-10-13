@@ -61,9 +61,16 @@ regexes = [
 # private halves are not in this repo. Only this fork's dev key trips the
 # entropy rule; the upstream keys beside it do not, so just this one value is
 # listed, by exact value as every allowlist here is.
+#
+# "my-key" is a throwaway Ed25519 *public* key used in a module docstring/fixture
+# whose private half was never committed (see the comment beside it); it only
+# trips the entropy rule, same as the dev key above.
 [[allowlists]]
-description = "backend/app/core/extension_signing.py — baked-in vendor public key"
+description = "backend/app/core/extension_signing.py — baked-in vendor public key + fixture key"
 condition = "AND"
 paths = ['''^backend/app/core/extension_signing\.py$''']
 regexTarget = "secret"
-regexes = ['''^LodtbHz\+wQuQy3JVFL1h4ZfHpMeQLng5U2pkQtRC4t8=$''']
+regexes = [
+  '''^LodtbHz\+wQuQy3JVFL1h4ZfHpMeQLng5U2pkQtRC4t8=$''',
+  '''^Q32e1zLz7O3kVl17hz5LXCzbaYcHTcGtU23JtfsKqSc=$''',
+]

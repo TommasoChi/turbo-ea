@@ -338,15 +338,21 @@ async def test_a_role_stored_with_null_permissions_grants_nothing(db, world):
 
 @pytest.fixture
 def type_lookups(monkeypatch):
-    """Count ``_card_type_key`` calls, still answering from the database."""
+    """Count ``_card_type_and_subtype`` calls, still answering from the database.
+
+    ``check_permission`` resolves the card's type and subtype once (type+subtype
+    overrides are both per-type/subtype aware) and threads the type key into the
+    stakeholder branch, so this single resolver is what "looked up once for both
+    branches" now counts.
+    """
     calls: list[uuid.UUID | None] = []
-    real = PermissionService._card_type_key
+    real = PermissionService._card_type_and_subtype
 
     async def counted(db, card_id):
         calls.append(card_id)
         return await real(db, card_id)
 
-    monkeypatch.setattr(PermissionService, "_card_type_key", staticmethod(counted))
+    monkeypatch.setattr(PermissionService, "_card_type_and_subtype", staticmethod(counted))
     return calls
 
 

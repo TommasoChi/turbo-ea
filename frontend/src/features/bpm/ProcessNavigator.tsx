@@ -1296,12 +1296,14 @@ export function DrawerFlow({
 /*  Fullscreen Flow Preview Dialog                                     */
 /* ================================================================== */
 
-function FlowPreviewDialog({
+export function FlowPreviewDialog({
   node,
   onClose,
   onNavigate,
 }: {
-  node: ProcNode;
+  // Only id/name are read, so a lightweight caller (ProcessFlowPreview) can
+  // reuse this dialog without materialising a full ProcNode tree.
+  node: Pick<ProcNode, "id" | "name">;
   onClose: () => void;
   onNavigate: (path: string) => void;
 }) {
