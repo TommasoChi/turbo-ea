@@ -35,6 +35,7 @@ import { useNavigate } from "react-router";
 import { api } from "@/api/client";
 import { readableTypeColor, tint as washColor } from "@/lib/color";
 import {
+  aliasLine,
   buildFieldCatalog,
   EMPTY_VALUE,
   formatFieldValue,
@@ -76,7 +77,7 @@ import "@xyflow/react/dist/style.css";
 import { useTypeLabel, useFieldLabel } from "@/hooks/useResolveLabel";
 import { useCardSubtypeLabel } from "@/hooks/useCardSubtypeLabel";
 import { useMetamodel } from "@/hooks/useMetamodel";
-import { useLdvSettings, toCardLabels, type LdvBackgroundStyle } from "./ldvDisplaySettings";
+import { useLdvSettings, toCardLabels } from "./ldvDisplaySettings";
 import type { CardType } from "@/types";
 import { buildLdvDiagramXml } from "@/features/diagrams/drawio-shapes";
 import { collectDiagramInputs } from "./ldvDiagramExport";
@@ -124,24 +125,37 @@ import LinkChangeIcon from "./LinkChangeIcon";
 import { isPresentAtDate } from "./timelineRange";
 import type { TimelineChange } from "./timelineRange";
 import { STATUS_COLORS, TIMELINE_COLORS } from "@/theme/tokens";
+import {
+  cardBorder,
+  cardClickAction,
+  cardTint as tintOf,
+  changeAccent,
+  changeBadge,
+  countByType,
+  DOT_INSET,
+  edgeColors,
+  edgeIsActive,
+  edgeLabelWidth,
+  edgeStrokeWidth,
+  exportFileName,
+  handleOffset,
+  handleStyle,
+  hidesCardsOnView,
+  movedBeyondClick,
+  nameLineClamp,
+  nextBackground,
+  paintOrder,
+  phaseDotColor,
+  placeEdgeLabel,
+  safeTypeColor,
+  touchesHovered,
+  truncateEdgeLabel,
+  TYPE_ICON_RIGHT_BESIDE_DOT,
+  type InteractionMode,
+} from "./ldvViewModel";
 
 /** A display line can retain its attribute identity for renderer-only rules. */
 type LdvDisplayLine = DisplayLine & { fieldKey?: string };
-
-/* ------------------------------------------------------------------ */
-/*  Card display settings (persisted, shared store)                    */
-/* ------------------------------------------------------------------ */
-
-type BackgroundStyle = LdvBackgroundStyle;
-
-/** Lifecycle-phase → dot colour (hex, theme-independent). Mirrors LifecycleBadge. */
-const PHASE_DOT: Record<string, string> = {
-  plan: "#9e9e9e",
-  phaseIn: "#1976d2",
-  active: "#2e7d32",
-  phaseOut: "#ed6c02",
-  endOfLife: "#d32f2f",
-};
 
 /* Obstacle boxes (cards + group-label strips) that edge labels must avoid.
    Computed once per render in the parent (`computeObstacles`, ldvObstacles.ts)
@@ -164,17 +178,12 @@ const LOGO_SIZE = 22;
 const LOGO_INSET = 4;
 
 /**
- * Where the type icon sits when a logo has taken the top-left corner: on the
- * card's top edge, immediately LEFT of the lifecycle dot.
- *
- * The dot is 9px wide with a 1.5px border, inset 6px from the right, so this
- * clears it by 3px. Computed rather than written as a literal so the two can
- * never drift apart — and applied only when a dot is actually drawn, since
- * reserving room for one that isn't there would leave the icon floating.
+ * Where the type icon sits when a hosting marker also occupies the card's top
+ * edge: shifted left of the hosting icon (which itself sits left of, or in place
+ * of, the lifecycle dot). `DOT_INSET` / `TYPE_ICON_RIGHT_BESIDE_DOT` come from
+ * ldvViewModel; these derive the hosting-icon offsets from them so the two can
+ * never drift apart.
  */
-const DOT_INSET = 6;
-const DOT_BOX = 9 + 1.5 * 2;
-const TYPE_ICON_RIGHT_BESIDE_DOT = DOT_INSET + DOT_BOX + 3;
 const CARD_CHROME_ICON_GAP = 6;
 const CARD_CHROME_ICON_WIDTH = 16;
 const TYPE_ICON_RIGHT_BESIDE_HOSTING =
@@ -309,7 +318,7 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
   const isDark = theme.palette.mode === "dark";
   // Fall back to a neutral grey if the type colour isn't a #rrggbb hex, so the
   // tint maths below can't produce rgb(NaN,…).
-  const color = /^#[0-9a-fA-F]{6}$/.test(data.typeColor) ? data.typeColor : "#9e9e9e";
+  const color = safeTypeColor(data.typeColor);
   // Lightened version for borders and caption text — keeps darker
   // card-type colors (BusinessCapability navy, DataObject purple, etc.)
   // readable against the dark-theme paper.
@@ -317,16 +326,12 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
   const changeKind = data.changeKind ?? (data.proposed ? "added" : undefined);
   const changePresentation = changeKindPresentation(changeKind, accent);
 
-  // Light tint for background
-  const r = parseInt(color.slice(1, 3), 16);
-  const g = parseInt(color.slice(3, 5), 16);
-  const b = parseInt(color.slice(5, 7), 16);
   // The card's tint. In dark mode this used to BE the background — a 12% wash
   // with nothing behind it, so the canvas grid and every edge crossing under a
   // card showed straight through. The tint is now layered over an opaque
   // `background.paper` (see `sx` below), which is what light mode already did
   // by mixing toward white rather than going translucent.
-  const tint = isDark ? `rgba(${r},${g},${b},0.22)` : `rgba(${r},${g},${b},0.12)`;
+  const cardTint = tintOf(color, isDark, data.proposed === true);
 
   // The whole name. It used to be cut at 26 characters here, in JavaScript,
   // before CSS ever saw it \u2014 which is why a long name stayed truncated however
@@ -344,13 +349,14 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
   const hostingType = data.hostingType;
 
   // Display extensions injected by the parent (see rfNodes memo)
-  const lifecyclePhase = (data.lifecyclePhase as string | null | undefined) ?? null;
-  const extraLines = ((data.extraLines as LdvDisplayLine[] | undefined) ?? []).filter(
-    (line) => line.fieldKey !== "hostingType",
-  );
+  const lifecyclePhase =
+    (data.lifecyclePhase as string | null | undefined) ?? null;
+  const extraLines = (
+    (data.extraLines as LdvDisplayLine[] | undefined) ?? []
+  ).filter((line) => line.fieldKey !== "hostingType");
   const showType = data.showType !== false;
   const detailText = (data.detailText as string | undefined) ?? data.name;
-  const dotColor = lifecyclePhase ? PHASE_DOT[lifecyclePhase] ?? "#9e9e9e" : null;
+  const dotColor = phaseDotColor(lifecyclePhase);
   // Minimalistic hierarchy affordances: a hidden parent (above) / hidden
   // children (below) the card can surface via the Reveal toolbar tools.
   const hiddenParent = data.hiddenParent === true;
@@ -363,14 +369,7 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
   // or leaves is the timeline's job to say, not the diagram's. Only a card drawn
   // despite not being there is decorated: ghosted and badged.
   const present = isPresentAtDate(changeState);
-  const cardTint = data.proposed ? `rgba(${r},${g},${b},0.06)` : tint;
-
-  const changeColor =
-    changeState === "arriving" || changeState === "planned"
-      ? TIMELINE_COLORS.future
-      : changeState === "retired"
-        ? STATUS_COLORS.error
-        : null;
+  const changeColor = changeAccent(changeState);
   // Stays put while a neighbour comes or goes at the mark being stood on. Only
   // ever set on a card that is not itself changing there, so these never share a
   // corner with a state badge.
@@ -378,26 +377,12 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
   const lostLink = data.lostLink === true;
   // The NEW badge owns the top-edge slot when both would render (TurboLens
   // proposed cards never carry changeState today, but precedence is explicit).
-  const futureOnTop = changeState === "planned" && !data.proposed;
+  const badge = changeBadge(changeState, present, data.proposed === true);
 
-  const usedSet = useMemo(() => new Set(data.usedHandles ?? []), [data.usedHandles]);
-  const hs = (id: string, extra?: React.CSSProperties) => {
-    // Mirrored handles (ts-N, bt-N) share visibility with their base (t-N, b-N)
-    const baseId = id.startsWith("ts-")
-      ? "t-" + id.slice(3)
-      : id.startsWith("bt-")
-        ? "b-" + id.slice(3)
-        : id;
-    const isUsed = usedSet.has(id) || usedSet.has(baseId);
-    return {
-      background: isUsed ? color : "transparent",
-      width: 5,
-      height: 5,
-      border: "none",
-      opacity: isUsed ? 1 : 0,
-      ...extra,
-    } as const;
-  };
+  const usedSet = useMemo(
+    () => new Set(data.usedHandles ?? []),
+    [data.usedHandles],
+  );
 
   /* ---- Click + long-press via pointer events ---- */
   /* React Flow v12 swallows click events on custom nodes, but pointer
@@ -444,7 +429,7 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
     (e: React.PointerEvent) => {
       const d = downPos.current;
       if (!d) return;
-      if (Math.abs(e.clientX - d.x) > 5 || Math.abs(e.clientY - d.y) > 5) {
+      if (movedBeyondClick(d, { x: e.clientX, y: e.clientY })) {
         clearTimer();
         downPos.current = null;
       }
@@ -463,7 +448,7 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
       const d = downPos.current;
       downPos.current = null;
       if (!d) return;
-      if (Math.abs(e.clientX - d.x) > 5 || Math.abs(e.clientY - d.y) > 5) return;
+      if (movedBeyondClick(d, { x: e.clientX, y: e.clientY })) return;
       // Stop propagation so React Flow doesn't also fire its own click handler
       e.stopPropagation();
       if (onClick && nodeId) onClick(nodeId, d.shift);
@@ -507,13 +492,12 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
         // An arriving card is here, so it keeps a solid border and wears the
         // future accent as its only cue — the quiet hint that it is new. Dashes
         // are reserved for cards that are NOT in this date's landscape.
-        border: changeColor
-          ? present
-            ? `2px solid ${changeColor}`
-            : `2px dashed ${changeColor}`
-          : data.proposed
-            ? `2px dashed ${accent}`
-            : `1.5px solid ${accent}`,
+        border: cardBorder(
+          changeColor,
+          present,
+          data.proposed === true,
+          accent,
+        ),
         // Opaque base + the tint as a layer on top: a card is a solid object,
         // and anything showing through it reads as a rendering fault rather
         // than as depth. `background-image` composites over `background-color`,
@@ -721,20 +705,24 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
           landscape. Planned cards take the prominent top-edge slot (unless a NEW
           badge holds it); retired cards keep bottom-right. An arriving card is
           simply here, so it carries no badge. */}
-      {changeState && changeColor && !present && (
-        <Box sx={{
-          position: "absolute",
-          ...(futureOnTop ? { top: -8, left: 8 } : { bottom: -8, right: 8 }),
-          bgcolor: changeColor, color: "#fff",
-          fontSize: 9, fontWeight: 700, lineHeight: 1,
-          px: 0.7, py: 0.25, borderRadius: "4px",
-          textTransform: "uppercase", letterSpacing: 0.5,
-        }}>
-          {t(
-            changeState === "planned"
-              ? "dependency.plannedBadge"
-              : "dependency.retiredBadge",
-          )}
+      {badge && changeColor && (
+        <Box
+          sx={{
+            position: "absolute",
+            ...(badge.onTop ? { top: -8, left: 8 } : { bottom: -8, right: 8 }),
+            bgcolor: changeColor,
+            color: "#fff",
+            fontSize: 9,
+            fontWeight: 700,
+            lineHeight: 1,
+            px: 0.7,
+            py: 0.25,
+            borderRadius: "4px",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          {t(badge.labelKey)}
         </Box>
       )}
       {/* What the mark does to this card's connections: blue where one is gained,
@@ -754,12 +742,20 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
           }}
         >
           {gainedLink && (
-            <Box component="span" title={t("dependency.gainedConnection")} sx={{ display: "flex" }}>
+            <Box
+              component="span"
+              title={t("dependency.gainedConnection")}
+              sx={{ display: "flex" }}
+            >
               <LinkChangeIcon kind="gained" color={TIMELINE_COLORS.goLive} />
             </Box>
           )}
           {lostLink && (
-            <Box component="span" title={t("dependency.lostConnection")} sx={{ display: "flex" }}>
+            <Box
+              component="span"
+              title={t("dependency.lostConnection")}
+              sx={{ display: "flex" }}
+            >
               <LinkChangeIcon kind="lost" color={STATUS_COLORS.error} />
             </Box>
           )}
@@ -805,12 +801,7 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
           type={spec.kind}
           position={HANDLE_POSITIONS[spec.side]}
           id={spec.id}
-          style={hs(
-            spec.id,
-            spec.side === "top" || spec.side === "bottom"
-              ? { left: `${spec.frac * 100}%` }
-              : undefined,
-          )}
+          style={handleStyle(spec.id, usedSet, color, handleOffset(spec))}
         />
       ))}
       {/* The card's text, centred on the CARD and using its whole width — the
@@ -820,7 +811,9 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
       <Box
         sx={{
           width: "100%",
-          textDecoration: changePresentation.strikeThrough ? "line-through" : undefined,
+          textDecoration: changePresentation.strikeThrough
+            ? "line-through"
+            : undefined,
           mt: logoUrl ? `${TEXT_TOP_WITH_LOGO}px` : 0,
           display: "flex",
           flexDirection: "column",
@@ -843,7 +836,7 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
             // normally, one when the reader has switched on two extra fields.
             // Without this a full card spills past its own border, which
             // nothing clips (the badges deliberately overhang it).
-            WebkitLineClamp: extraLines.length > 1 ? 1 : 2,
+            WebkitLineClamp: nameLineClamp(extraLines.length),
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
             wordBreak: "break-word",
@@ -885,7 +878,10 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
               whiteSpace: "nowrap",
             }}
           >
-            [{typeLabel({ key: data.typeKey, label: data.typeLabel }) || data.typeLabel}]
+            [
+            {typeLabel({ key: data.typeKey, label: data.typeLabel }) ||
+              data.typeLabel}
+            ]
           </Typography>
         ) : null}
       </Box>
@@ -972,22 +968,24 @@ LdvDirectionArrow.displayName = "LdvDirectionArrow";
  * `skipFonts: true`, so a font ligature would leak through as its raw icon
  * name). Same rationale as `LdvDirectionArrow`.
  */
-const LdvChevron = memo(({ dir, color }: { dir: "up" | "down"; color: string }) => (
-  <svg
-    width={14}
-    height={8}
-    viewBox="0 0 14 8"
-    fill="none"
-    stroke={color}
-    strokeWidth={1.6}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{ flexShrink: 0 }}
-    aria-hidden
-  >
-    <polyline points={dir === "up" ? "1,6 7,2 13,6" : "1,2 7,6 13,2"} />
-  </svg>
-));
+const LdvChevron = memo(
+  ({ dir, color }: { dir: "up" | "down"; color: string }) => (
+    <svg
+      width={14}
+      height={8}
+      viewBox="0 0 14 8"
+      fill="none"
+      stroke={color}
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+      aria-hidden
+    >
+      <polyline points={dir === "up" ? "1,6 7,2 13,6" : "1,2 7,6 13,2"} />
+    </svg>
+  ),
+);
 LdvChevron.displayName = "LdvChevron";
 const LdvEdgeComponent = memo(
   ({
@@ -1004,13 +1002,9 @@ const LdvEdgeComponent = memo(
   }: EdgeProps) => {
     const theme = useTheme();
     const edgeData = data as LdvEdgeData | undefined;
-    const connectedToHovered = edgeData?.connectedToHovered ?? false;
     // Use parent-managed hover state to prevent stale highlights when
     // React Flow reorders SVG elements (local useState would go stale).
-    const isHovered = edgeData?.isHovered === true;
-    const active = edgeData?.highlightMode
-      ? connectedToHovered
-      : isHovered || connectedToHovered;
+    const active = edgeIsActive(edgeData ?? {});
     const isDark = theme.palette.mode === "dark";
     // A severed edge (one endpoint retired at the viewed date) keeps the error
     // colour even while hovered — the highlight bumps its width instead, so
@@ -1018,10 +1012,12 @@ const LdvEdgeComponent = memo(
     const severed = edgeData?.severed === true;
     const removed = edgeData?.isRemoved === true;
     const added = edgeData?.isAdded === true;
-    const changeColor = severed ? STATUS_COLORS.error : added ? STATUS_COLORS.success : undefined;
-    const baseColor = changeColor ?? (isDark ? "#aaa" : "#777");
-    const hoverColor = changeColor ?? (isDark ? "#4fc3f7" : "#1976d2");
-    const color = active ? hoverColor : baseColor;
+    const colors = edgeColors(active, severed, isDark);
+    // An added dependency is tinted success-green; a severed/retired edge keeps
+    // the error colour `edgeColors` already returns for `severed`. A removed
+    // edge keeps the normal stroke and carries a strike-through badge instead.
+    const changeColor = added ? STATUS_COLORS.success : undefined;
+    const color = changeColor ?? colors.stroke;
 
     // Channel-routed edges carry an orthogonal waypoint polyline that dodges
     // the rows of cards between their endpoints; `liveWaypointPolyline` honours
@@ -1050,8 +1046,12 @@ const LdvEdgeComponent = memo(
         targetY,
       );
       [path, lx, ly] = getSmoothStepPath({
-        sourceX, sourceY, targetX, targetY,
-        sourcePosition, targetPosition,
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition,
+        targetPosition,
         borderRadius: 8,
         offset,
         ...(centerY !== undefined ? { centerY } : {}),
@@ -1060,13 +1060,6 @@ const LdvEdgeComponent = memo(
 
     const label = edgeData?.relLabel || "";
     const labelT = edgeData?.labelT ?? 0.5;
-    const labelBg = isDark ? "#121212" : "#ffffff";
-    const labelColor = changeColor ?? (active
-      ? (isDark ? "#4fc3f7" : "#1976d2")
-      : (isDark ? "#aaa" : "#666"));
-    const labelBorder = changeColor ?? (active
-      ? (isDark ? "#4fc3f7" : "#1976d2")
-      : (isDark ? "#444" : "#ccc"));
 
     // Node + group-label bounding boxes for label-overlap avoidance, computed
     // once in the parent and shared via context (see LdvObstaclesContext).
@@ -1074,7 +1067,9 @@ const LdvEdgeComponent = memo(
 
     // Find a label position along the path that doesn't overlap any node
     const pathRef = useRef<SVGPathElement>(null);
-    const [labelPos, setLabelPos] = useState<{ x: number; y: number } | null>(null);
+    const [labelPos, setLabelPos] = useState<{ x: number; y: number } | null>(
+      null,
+    );
 
     const flowDir = edgeData?.flowDirection;
     // Aggregate mode: how many relations this one connector stands for. Its own
@@ -1082,14 +1077,12 @@ const LdvEdgeComponent = memo(
     // verb, and with the verbs hidden the count is all the line has left to say.
     const mergedCount = edgeData?.count;
     const countText = mergedCount !== undefined ? String(mergedCount) : "";
-    const maxChars = 24;
-    const displayLabel = label.length > maxChars
-      ? label.slice(0, maxChars - 1) + "\u2026"
-      : label;
+    const displayLabel = truncateEdgeLabel(label);
     // A connector's count is a filled pill beside the verb, wider than the
     // bracketed text it replaces.
+    // Upstream's base width plus room for the fork's NEW / removed badge.
     const labelW =
-      displayLabel.length * 6.5 + 16 + (flowDir ? 17 : 0) + (countText ? countText.length * 7 + 14 : 0) +
+      edgeLabelWidth(displayLabel, Boolean(flowDir), countText) +
       (removed || added ? 50 : 0);
     // A connector standing for N relations is ONE heavy solid line, never the
     // dotted idle style — a 1.2 px dotted line is what the eye reads as several
@@ -1097,57 +1090,25 @@ const LdvEdgeComponent = memo(
     // replace. Width grows with the count so "one heavy line = many relations"
     // reads at fit-to-screen, as in the #1117 sketch.
     const isConnector = mergedCount !== undefined;
-    const connectorWidth = isConnector
-      ? 1.6 + Math.min(2.8, Math.log2(Math.max(1, mergedCount)))
-      : 0;
-    const labelH = 20;
-    const margin = 6;
 
     useEffect(() => {
       const el = pathRef.current;
       if (!el || (!label && !countText)) return;
       el.setAttribute("d", path);
       const total = el.getTotalLength();
-
-      // Check if a point overlaps any node
-      const overlaps = (px: number, py: number) => {
-        const lx1 = px - labelW / 2 - margin;
-        const lx2 = px + labelW / 2 + margin;
-        const ly1 = py - labelH / 2 - margin;
-        const ly2 = py + labelH / 2 + margin;
-        for (const b of obstacleBounds) {
-          if (lx1 < b.x2 && lx2 > b.x1 && ly1 < b.y2 && ly2 > b.y1) return true;
-        }
-        return false;
-      };
-
-      // Try the preferred position first
-      const preferred = el.getPointAtLength(total * labelT);
-      if (!overlaps(preferred.x, preferred.y)) {
-        setLabelPos({ x: preferred.x, y: preferred.y });
-        return;
-      }
-
-      // Sample 20 positions along the path, find the one closest to labelT
-      // that doesn't overlap any node. Skip the ends (near source/target nodes).
-      let bestPt: { x: number; y: number } | null = null;
-      let bestDist = Infinity;
-      const steps = 20;
-      for (let i = 1; i < steps; i++) {
-        const t = i / steps;
-        if (t < 0.08 || t > 0.92) continue; // skip near endpoints
+      const at = (t: number) => {
         const pt = el.getPointAtLength(total * t);
-        if (!overlaps(pt.x, pt.y)) {
-          const dist = Math.abs(t - labelT);
-          if (dist < bestDist) {
-            bestDist = dist;
-            bestPt = { x: pt.x, y: pt.y };
-          }
-        }
-      }
-
-      setLabelPos(bestPt ?? { x: preferred.x, y: preferred.y });
-    }, [path, labelT, label, countText, obstacleBounds, labelW, labelH]);
+        return { x: pt.x, y: pt.y };
+      };
+      setLabelPos(
+        placeEdgeLabel(
+          at,
+          labelT,
+          { width: labelW, height: 20, margin: 6 },
+          obstacleBounds,
+        ),
+      );
+    }, [path, labelT, label, countText, obstacleBounds, labelW]);
 
     const finalLx = labelPos?.x ?? lx;
     const finalLy = labelPos?.y ?? ly;
@@ -1181,13 +1142,7 @@ const LdvEdgeComponent = memo(
           markerStart={markerStart}
           style={{
             stroke: color,
-            strokeWidth: isConnector
-              ? active
-                ? connectorWidth + 0.8
-                : connectorWidth
-              : active
-                ? 2
-                : 1.2,
+            strokeWidth: edgeStrokeWidth(mergedCount, active),
             ...(isConnector
               ? ldvEdgeStroke("solid", { active, severed })
               : ldvEdgeStroke(edgeData?.lineStyle, { active, severed })),
@@ -1203,10 +1158,10 @@ const LdvEdgeComponent = memo(
                 pointerEvents: "none",
                 fontSize: 10,
                 fontFamily: "inherit",
-                color: labelColor,
-                background: labelBg,
+                color: colors.label,
+                background: colors.labelBackground,
                 opacity: active ? 1 : 0.8,
-                border: `1px solid ${labelBorder}`,
+                border: `1px solid ${colors.labelBorder}`,
                 borderRadius: 4,
                 padding: "2px 6px",
                 whiteSpace: "nowrap",
@@ -1218,14 +1173,36 @@ const LdvEdgeComponent = memo(
               }}
             >
               {flowDir && <LdvDirectionArrow dir={flowDir} />}
-              {removed && <span style={{
-                background: STATUS_COLORS.error, color: "#fff", borderRadius: 3,
-                fontSize: 9, fontWeight: 700, lineHeight: "14px", padding: "0 3px",
-              }}>REMOVE</span>}
-              {added && <span style={{
-                background: STATUS_COLORS.success, color: "#fff", borderRadius: 3,
-                fontSize: 9, fontWeight: 700, lineHeight: "14px", padding: "0 3px",
-              }}>NEW</span>}
+              {removed && (
+                <span
+                  style={{
+                    background: STATUS_COLORS.error,
+                    color: "#fff",
+                    borderRadius: 3,
+                    fontSize: 9,
+                    fontWeight: 700,
+                    lineHeight: "14px",
+                    padding: "0 3px",
+                  }}
+                >
+                  REMOVE
+                </span>
+              )}
+              {added && (
+                <span
+                  style={{
+                    background: STATUS_COLORS.success,
+                    color: "#fff",
+                    borderRadius: 3,
+                    fontSize: 9,
+                    fontWeight: 700,
+                    lineHeight: "14px",
+                    padding: "0 3px",
+                  }}
+                >
+                  NEW
+                </span>
+              )}
               {displayLabel && <span>{displayLabel}</span>}
               {isConnector && (
                 // The count as a filled pill in the line's own colour: the one
@@ -1372,7 +1349,9 @@ export function declaredDisplayFieldKeys(
 }
 
 /** `hostingType` is represented by its dedicated icon and tooltip, not a row. */
-export function visibleCardDetailFieldKeys(selectedKeys: readonly string[]): string[] {
+export function visibleCardDetailFieldKeys(
+  selectedKeys: readonly string[],
+): string[] {
   return selectedKeys.filter((key) => key !== "hostingType");
 }
 
@@ -1424,7 +1403,10 @@ function LayeredDependencyInner({
     [settings.extraFields],
   );
   const selectedDisplayKeySignature = selectedDisplayKeys.join("\u0000");
-  const cardTypeByKey = useMemo(() => new Map(types.map((type) => [type.key, type])), [types]);
+  const cardTypeByKey = useMemo(
+    () => new Map(types.map((type) => [type.key, type])),
+    [types],
+  );
 
   // Extension graphs intentionally carry only their small snapshot projection.
   // When the user opts into extra lines, resolve the visible cards through the
@@ -1434,7 +1416,9 @@ function LayeredDependencyInner({
     let cancelled = false;
     if (!selectedDisplayKeys.length) {
       setSelectedDisplayAttributes(new Map());
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+      };
     }
     void Promise.all(
       rawNodes.map(async (node) => {
@@ -1449,7 +1433,10 @@ function LayeredDependencyInner({
           const card = await api.get<{ attributes?: Record<string, unknown> }>(
             `/cards/${node.id}/display-attributes?${params.toString()}`,
           );
-          return [node.id, pickSelectedDisplayAttributes(card.attributes, requestedKeys)] as const;
+          return [
+            node.id,
+            pickSelectedDisplayAttributes(card.attributes, requestedKeys),
+          ] as const;
         } catch {
           // Keep the original snapshot when a card is no longer visible.
           return [node.id, {}] as const;
@@ -1458,7 +1445,9 @@ function LayeredDependencyInner({
     ).then((entries) => {
       if (!cancelled) setSelectedDisplayAttributes(new Map(entries));
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [rawNodes, selectedDisplayKeySignature, cardTypeByKey]);
 
   const { relationTypes } = useMetamodel();
@@ -1490,11 +1479,10 @@ function LayeredDependencyInner({
   /* ---- Card types on the view, counted BEFORE the type filter ----
      The Card types menu lists these, so a type the reader has switched off is
      still listed, with the number of cards ticking it would bring back. */
-  const typeCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const n of lifecycleFiltered.nodes) m.set(n.type, (m.get(n.type) ?? 0) + 1);
-    return m;
-  }, [lifecycleFiltered.nodes]);
+  const typeCounts = useMemo(
+    () => countByType(lifecycleFiltered.nodes),
+    [lifecycleFiltered.nodes],
+  );
 
   const hiddenTypes = useMemo(
     () => new Set(settings.hiddenTypeKeys),
@@ -1507,7 +1495,12 @@ function LayeredDependencyInner({
      applies once here and nothing else has to know about it. */
   const { nodes, edges } = useMemo(
     () =>
-      filterHiddenTypes(lifecycleFiltered.nodes, lifecycleFiltered.edges, hiddenTypes, centerId),
+      filterHiddenTypes(
+        lifecycleFiltered.nodes,
+        lifecycleFiltered.edges,
+        hiddenTypes,
+        centerId,
+      ),
     [lifecycleFiltered, hiddenTypes, centerId],
   );
 
@@ -1538,7 +1531,10 @@ function LayeredDependencyInner({
         (n) => t("dependency.aggregateMore", { count: n }),
       );
     }
-    return { ...buildLdvFlow(nodes, edges, types, resolver, layerOverrides), memberOf: undefined };
+    return {
+      ...buildLdvFlow(nodes, edges, types, resolver, layerOverrides),
+      memberOf: undefined,
+    };
   }, [
     nodes,
     edges,
@@ -1553,16 +1549,19 @@ function LayeredDependencyInner({
 
   /* ---- Original card data (attributes/lifecycle) by id + field catalogue ---- */
   const gnodeById = useMemo(
-    () => new Map(nodes.map((n) => [
-      n.id,
-      {
-        ...n,
-        attributes: {
-          ...(n.attributes ?? {}),
-          ...(selectedDisplayAttributes.get(n.id) ?? {}),
-        },
-      },
-    ])),
+    () =>
+      new Map(
+        nodes.map((n) => [
+          n.id,
+          {
+            ...n,
+            attributes: {
+              ...(n.attributes ?? {}),
+              ...(selectedDisplayAttributes.get(n.id) ?? {}),
+            },
+          },
+        ]),
+      ),
     [nodes, selectedDisplayAttributes],
   );
 
@@ -1573,7 +1572,11 @@ function LayeredDependencyInner({
   const hierarchyMarkers = useMemo(
     // Markers are affordances for the Reveal tools — only surface them where the
     // consumer wires those tools up (the static TurboLens views don't).
-    () => computeHierarchyMarkers(nodes, settings.showHierarchyMarkers && !!onNodeReveal),
+    () =>
+      computeHierarchyMarkers(
+        nodes,
+        settings.showHierarchyMarkers && !!onNodeReveal,
+      ),
     [nodes, settings.showHierarchyMarkers, onNodeReveal],
   );
 
@@ -1616,7 +1619,8 @@ function LayeredDependencyInner({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
-    const h = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
+    const h = () =>
+      setIsFullscreen(document.fullscreenElement === containerRef.current);
     document.addEventListener("fullscreenchange", h);
     return () => document.removeEventListener("fullscreenchange", h);
   }, []);
@@ -1626,14 +1630,14 @@ function LayeredDependencyInner({
   }, []);
 
   /* ---- Toolbar menus ---- */
-  const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
+  const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(
+    null,
+  );
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
 
-  /* ---- Background style cycle (lines → dots → none) ---- */
+  /* ---- Background style cycle (dots → lines → none) ---- */
   const cycleBackground = useCallback(() => {
-    const order: BackgroundStyle[] = ["dots", "lines", "none"];
-    const idx = order.indexOf(settings.background);
-    updateSettings({ background: order[(idx + 1) % order.length] });
+    updateSettings({ background: nextBackground(settings.background) });
   }, [settings.background, updateSettings]);
 
   /* ---- Full view reset: clears exploration (expand + reveals) via the
@@ -1646,7 +1650,10 @@ function LayeredDependencyInner({
 
   /* ---- Re-fit after entering/leaving fullscreen ---- */
   useEffect(() => {
-    const handle = window.setTimeout(() => fitView({ padding: 0.15, duration: 200 }), 150);
+    const handle = window.setTimeout(
+      () => fitView({ padding: 0.15, duration: 200 }),
+      150,
+    );
     return () => window.clearTimeout(handle);
   }, [isFullscreen, fitView]);
 
@@ -1659,7 +1666,9 @@ function LayeredDependencyInner({
       // Flatten child coordinates to absolute so bounds cover the whole graph.
       const byId = new Map(exportNodes.map((n) => [n.id, n]));
       const absNodes = exportNodes.map((n) =>
-        n.parentId ? { ...n, parentId: undefined, position: absolutePosition(n, byId) } : n,
+        n.parentId
+          ? { ...n, parentId: undefined, position: absolutePosition(n, byId) }
+          : n,
       );
       const bounds = getNodesBounds(absNodes);
       const pad = 48;
@@ -1672,11 +1681,22 @@ function LayeredDependencyInner({
       // "Load failed" error (desktop Chrome/FF allow far more). So we pick
       // device-aware caps and fit the FINAL canvas inside both a per-dimension
       // and a total-area budget. Desktop output is unchanged for normal diagrams.
-      const { imageWidth, imageHeight, pixelRatio } = exportImageSize(bounds, pad, {
-        isAppleMobile: isAppleMobileDevice(navigator),
-        devicePixelRatio: window.devicePixelRatio,
-      });
-      const vp = getViewportForBounds(bounds, imageWidth, imageHeight, 0.2, 4, 0.06);
+      const { imageWidth, imageHeight, pixelRatio } = exportImageSize(
+        bounds,
+        pad,
+        {
+          isAppleMobile: isAppleMobileDevice(navigator),
+          devicePixelRatio: window.devicePixelRatio,
+        },
+      );
+      const vp = getViewportForBounds(
+        bounds,
+        imageWidth,
+        imageHeight,
+        0.2,
+        4,
+        0.06,
+      );
       const viewportEl = containerRef.current?.querySelector(
         ".react-flow__viewport",
       ) as HTMLElement | null;
@@ -1715,7 +1735,7 @@ function LayeredDependencyInner({
           transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`,
         },
       };
-      const fname = `${(centerName || "dependency").replace(/[^\w.-]+/g, "_")}.${format}`;
+      const fname = exportFileName(centerName, format);
       try {
         // Download via a Blob (not a data URL): file-saver honours the filename
         // for Blobs through URL.createObjectURL, so the .png/.svg extension is
@@ -1730,7 +1750,9 @@ function LayeredDependencyInner({
           // builds `data:image/svg+xml;charset=utf-8,<encodeURIComponent(svg)>`,
           // and fetch() on a data URL is itself a known iOS "Load failed" source.
           const dataUrl = await toSvg(viewportEl, opts);
-          const svgText = decodeURIComponent(dataUrl.slice(dataUrl.indexOf(",") + 1));
+          const svgText = decodeURIComponent(
+            dataUrl.slice(dataUrl.indexOf(",") + 1),
+          );
           blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
         }
         if (!blob || blob.size === 0) return; // rasterisation produced nothing — don't save a bad file
@@ -1761,7 +1783,9 @@ function LayeredDependencyInner({
     setCreateConfirmOpen(false);
     setCreateError(false);
     setCreateName(
-      t("dependency.createDiagramDefaultName", { name: centerName || t("dependency.title") }),
+      t("dependency.createDiagramDefaultName", {
+        name: centerName || t("dependency.title"),
+      }),
     );
     setCreateOpen(true);
   }, [centerName, t]);
@@ -1778,18 +1802,19 @@ function LayeredDependencyInner({
     setCreateError(false);
     try {
       // Live nodes, so a dragged box or card exports where the reader put it.
-      const { cards, rels, layers, groups, connectors, freeforms } = collectDiagramInputs(
-        getNodes(),
-        rfEdges,
-        settings.showType
-          ? {
-              typeRow: (d) => ({
-                label: t("dependency.typeLabel"),
-                value: d.typeLabel || d.typeKey,
-              }),
-            }
-          : {},
-      );
+      const { cards, rels, layers, groups, connectors, freeforms } =
+        collectDiagramInputs(
+          getNodes(),
+          rfEdges,
+          settings.showType
+            ? {
+                typeRow: (d) => ({
+                  label: t("dependency.typeLabel"),
+                  value: d.typeLabel || d.typeKey,
+                }),
+              }
+            : {},
+        );
 
       if (cards.length + freeforms.length === 0) {
         setCreateError(true);
@@ -1797,7 +1822,14 @@ function LayeredDependencyInner({
         return;
       }
 
-      const xml = buildLdvDiagramXml(cards, rels, layers, groups, connectors, freeforms);
+      const xml = buildLdvDiagramXml(
+        cards,
+        rels,
+        layers,
+        groups,
+        connectors,
+        freeforms,
+      );
       const payload = {
         name,
         // Seed the diagram's own display settings from the report's, so the
@@ -1816,7 +1848,16 @@ function LayeredDependencyInner({
     } finally {
       setCreating(false);
     }
-  }, [createName, creating, getNodes, rfEdges, navigate, onCreateDiagram, settings, t]);
+  }, [
+    createName,
+    creating,
+    getNodes,
+    rfEdges,
+    navigate,
+    onCreateDiagram,
+    settings,
+    t,
+  ]);
 
   // ReactFlow's `fitView` prop only fits on the initial render. When the parent
   // navigates to a new centre, the new graph is laid out at different coordinates
@@ -1841,7 +1882,6 @@ function LayeredDependencyInner({
 
   // Interaction mode: "normal" (default), "highlight" (sticky hover),
   // "expand" (add all neighbours), "parents"/"children" (add hierarchy parent/children)
-  type InteractionMode = "normal" | "highlight" | "expand" | "parents" | "children";
   const [mode, setMode] = useState<InteractionMode>("normal");
   // Ref so the node-level click callback always reads the latest mode
   const modeRef = useRef<InteractionMode>(mode);
@@ -1857,19 +1897,24 @@ function LayeredDependencyInner({
   // uses modeRef so the callback always reads the latest mode.
   const handleLdvNodeClick = useCallback(
     (nodeId: string, shiftKey: boolean) => {
-      const currentMode = modeRef.current;
-      if (currentMode === "highlight") {
-        if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
+      const action = cardClickAction(modeRef.current, shiftKey, {
+        expand: Boolean(onNodeExpand),
+        reveal: Boolean(onNodeReveal),
+        recentre: Boolean(onNodeShiftClick),
+      });
+      if (action.kind === "toggleHighlight") {
+        if (leaveTimer.current) {
+          clearTimeout(leaveTimer.current);
+          leaveTimer.current = null;
+        }
         setHoveredNode((prev) => (prev === nodeId ? null : nodeId));
-      } else if (currentMode === "expand" && onNodeExpand) {
-        onNodeExpand(nodeId);
-      } else if (currentMode === "parents" && onNodeReveal) {
-        onNodeReveal(nodeId, "parents");
-      } else if (currentMode === "children" && onNodeReveal) {
-        onNodeReveal(nodeId, "children");
-      } else if (shiftKey && onNodeShiftClick) {
+      } else if (action.kind === "expand") {
+        onNodeExpand?.(nodeId);
+      } else if (action.kind === "reveal") {
+        onNodeReveal?.(nodeId, action.direction);
+      } else if (action.kind === "recentre") {
         setHoveredNode(null);
-        onNodeShiftClick(nodeId);
+        onNodeShiftClick?.(nodeId);
       } else {
         setHoveredNode(null);
         onNodeClick(nodeId);
@@ -1898,7 +1943,9 @@ function LayeredDependencyInner({
   const cardDisplayData = useCallback(
     (n: Node) => {
       const g = gnodeById.get(n.id);
-      const phase = settings.showLifecycle ? getCurrentPhase(g?.lifecycle, asOfMs) : null;
+      const phase = settings.showLifecycle
+        ? getCurrentPhase(g?.lifecycle, asOfMs)
+        : null;
 
       // Resolve every chosen extra field to a label/value line (skips empties).
       const lines: LdvDisplayLine[] = [];
@@ -1909,18 +1956,32 @@ function LayeredDependencyInner({
           value: subtypeLabel((n.data as LdvNodeData).typeKey, subtypeKey),
         });
       }
+      if (settings.showAlias) {
+        const line = aliasLine(g?.alias, t("common:labels.alias"));
+        if (line) lines.push(line);
+      }
       for (const fk of visibleCardDetailFieldKeys(settings.extraFields)) {
         const meta = fieldMetaByKey.get(fk);
         const value = formatVal(g?.attributes?.[fk], meta);
         if (value === EMPTY_VALUE) continue;
-        lines.push({ fieldKey: fk, label: meta ? fieldLabel(meta) : fk, value });
+        lines.push({
+          fieldKey: fk,
+          label: meta ? fieldLabel(meta) : fk,
+          value,
+        });
       }
 
       // Plain-text tooltip (native title) with the full detail set.
-      const typeLabelText = (n.data as LdvNodeData).typeLabel || (n.data as LdvNodeData).typeKey;
-      const detailParts = [g?.name ?? (n.data as LdvNodeData).name, `[${typeLabelText}]`];
+      const typeLabelText =
+        (n.data as LdvNodeData).typeLabel || (n.data as LdvNodeData).typeKey;
+      const detailParts = [
+        g?.name ?? (n.data as LdvNodeData).name,
+        `[${typeLabelText}]`,
+      ];
       if (phase)
-        detailParts.push(`${t("dependency.lifecycleLabel")}: ${t(`common:lifecycle.${phase}`)}`);
+        detailParts.push(
+          `${t("dependency.lifecycleLabel")}: ${t(`common:lifecycle.${phase}`)}`,
+        );
       for (const l of lines) detailParts.push(`${l.label}: ${l.value}`);
 
       const marker = hierarchyMarkers.get(n.id);
@@ -1949,7 +2010,10 @@ function LayeredDependencyInner({
         hostingType: settings.extraFields.includes("hostingType")
           ? hostingTypePresentation(
               g?.attributes?.hostingType,
-              formatVal(g?.attributes?.hostingType, fieldMetaByKey.get("hostingType")),
+              formatVal(
+                g?.attributes?.hostingType,
+                fieldMetaByKey.get("hostingType"),
+              ),
             )
           : undefined,
       };
@@ -1964,6 +2028,7 @@ function LayeredDependencyInner({
       settings.showLifecycle,
       settings.showType,
       settings.showSubtype,
+      settings.showAlias,
       settings.extraFields,
       subtypeLabel,
       fieldMetaByKey,
@@ -1981,7 +2046,8 @@ function LayeredDependencyInner({
     (): Node[] =>
       builtNodes.map((n) => {
         if (n.type !== "ldvNode") {
-          if (n.type === "ldvGroup" || n.type === "ldvCluster") return { ...n, draggable: true };
+          if (n.type === "ldvGroup" || n.type === "ldvCluster")
+            return { ...n, draggable: true };
           return n;
         }
         return {
@@ -1996,7 +2062,13 @@ function LayeredDependencyInner({
           },
         };
       }),
-    [builtNodes, handleLdvNodeClick, onNodeShiftClick, handleLongPress, cardDisplayData],
+    [
+      builtNodes,
+      handleLdvNodeClick,
+      onNodeShiftClick,
+      handleLongPress,
+      cardDisplayData,
+    ],
   );
   buildNodesRef.current = buildDisplayNodes;
 
@@ -2020,7 +2092,9 @@ function LayeredDependencyInner({
     }
     setNodes((prev) =>
       prev.map((n) =>
-        n.type === "ldvNode" ? { ...n, data: { ...n.data, ...cardDisplayData(n) } } : n,
+        n.type === "ldvNode"
+          ? { ...n, data: { ...n.data, ...cardDisplayData(n) } }
+          : n,
       ),
     );
   }, [cardDisplayData, setNodes]);
@@ -2032,21 +2106,27 @@ function LayeredDependencyInner({
 
   // Bring hovered edge to front by reordering
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
-  const handleEdgeMouseEnter = useCallback((_: React.MouseEvent, edge: Edge) => {
-    setHoveredEdge(edge.id);
-  }, []);
+  const handleEdgeMouseEnter = useCallback(
+    (_: React.MouseEvent, edge: Edge) => {
+      setHoveredEdge(edge.id);
+    },
+    [],
+  );
   const handleEdgeMouseLeave = useCallback(() => {
     setHoveredEdge(null);
   }, []);
 
   // Stable per-edge hover callbacks (memoised map to avoid re-creating on each render)
-  const edgeHoverCbs = useRef(new Map<string, { onHover: () => void; onLeave: () => void }>());
+  const edgeHoverCbs = useRef(
+    new Map<string, { onHover: () => void; onLeave: () => void }>(),
+  );
   const getEdgeHoverCbs = useCallback((edgeId: string) => {
     let cbs = edgeHoverCbs.current.get(edgeId);
     if (!cbs) {
       cbs = {
         onHover: () => setHoveredEdge(edgeId),
-        onLeave: () => setHoveredEdge((prev) => (prev === edgeId ? null : prev)),
+        onLeave: () =>
+          setHoveredEdge((prev) => (prev === edgeId ? null : prev)),
       };
       edgeHoverCbs.current.set(edgeId, cbs);
     }
@@ -2064,22 +2144,31 @@ function LayeredDependencyInner({
   // Highlight all connections when hovering a card node
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
-    if (modeRef.current !== "normal") return; // hover only in normal mode
-    // A type box highlights too: hovering it is how a reader asks "what does
-    // everything in here connect to?".
-    if (node.type === "ldvNode" || node.type === "ldvCluster") {
-      if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
-      setHoveredNode(node.id);
-    }
-  }, []);
+  const handleNodeMouseEnter = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (modeRef.current !== "normal") return; // hover only in normal mode
+      // A type box highlights too: hovering it is how a reader asks "what does
+      // everything in here connect to?".
+      if (node.type === "ldvNode" || node.type === "ldvCluster") {
+        if (leaveTimer.current) {
+          clearTimeout(leaveTimer.current);
+          leaveTimer.current = null;
+        }
+        setHoveredNode(node.id);
+      }
+    },
+    [],
+  );
   const handleNodeMouseLeave = useCallback(() => {
     if (modeRef.current !== "normal") return; // hover only in normal mode
     leaveTimer.current = setTimeout(() => setHoveredNode(null), 0);
   }, []);
 
   /** Cluster id → the cards inside it, for highlighting a whole box. */
-  const clusterMembers = useMemo(() => clusterMembersOf(builtNodes), [builtNodes]);
+  const clusterMembers = useMemo(
+    () => clusterMembersOf(builtNodes),
+    [builtNodes],
+  );
 
   // Set of nodes connected to the hovered node (for dimming others) — read
   // off each line's card-level `members`, see hoveredNeighborsOf.
@@ -2090,22 +2179,25 @@ function LayeredDependencyInner({
 
   // Inject hover state + callbacks into edges + reorder for z-index
   const orderedEdges = useMemo(() => {
-    const base = settings.showRelationLabels ? rfEdges : stripEdgeLabels(rfEdges);
-    let result = base.map((e) => {
+    const base = settings.showRelationLabels
+      ? rfEdges
+      : stripEdgeLabels(rfEdges);
+    const result = base.map((e) => {
       const cbs = getEdgeHoverCbs(e.id);
       return {
         ...e,
         data: {
           ...e.data,
-          connectedToHovered: hoveredNode
-            ? e.source === hoveredNode ||
-              e.target === hoveredNode ||
-              // A connector stays lit when the hovered card is one of the
-              // relations it merged, not just when a whole box is hovered.
-              ((e.data as LdvEdgeData | undefined)?.members ?? []).some(
-                (m) => m.source === hoveredNode || m.target === hoveredNode,
-              )
-            : false,
+          // A connector stays lit when the hovered card is one of the
+          // relations it merged, not just when a whole box is hovered.
+          connectedToHovered: touchesHovered(
+            {
+              source: e.source,
+              target: e.target,
+              data: e.data as LdvEdgeData | undefined,
+            },
+            hoveredNode,
+          ),
           isHovered: e.id === hoveredEdge,
           highlightMode,
           lineStyle: settings.edgeLineStyle,
@@ -2114,16 +2206,7 @@ function LayeredDependencyInner({
         },
       };
     });
-    if (hoveredEdge) {
-      const rest = result.filter((e) => e.id !== hoveredEdge);
-      const h = result.find((e) => e.id === hoveredEdge);
-      result = h ? [...rest, h] : result;
-    } else if (hoveredNode) {
-      const notConn = result.filter((e) => !e.data.connectedToHovered);
-      const conn = result.filter((e) => e.data.connectedToHovered);
-      result = [...notConn, ...conn];
-    }
-    return result;
+    return paintOrder(result, hoveredEdge, hoveredNode);
   }, [
     rfEdges,
     hoveredEdge,
@@ -2135,11 +2218,17 @@ function LayeredDependencyInner({
   ]);
 
   // CSS-based dimming avoids recreating node objects (which causes flickering)
-  const hoverStyle = useMemo(() => hoverDimStyle(hoveredNeighbors), [hoveredNeighbors]);
+  const hoverStyle = useMemo(
+    () => hoverDimStyle(hoveredNeighbors),
+    [hoveredNeighbors],
+  );
 
   // Spotlight for a clicked transition mark. Built as CSS keyed on node id,
   // exactly like `hoverStyle` above (see ldvHighlight.ts).
-  const pulseStyle = useMemo(() => pulseSpotlightStyle(pulseCards), [pulseCards]);
+  const pulseStyle = useMemo(
+    () => pulseSpotlightStyle(pulseCards),
+    [pulseCards],
+  );
 
   // Obstacle boxes for edge-label placement — computed once here and shared
   // with every edge via context (each edge no longer walks the node list).
@@ -2149,10 +2238,15 @@ function LayeredDependencyInner({
     // This early return renders no toolbar, so a reader who hid every type on
     // the canvas would have no way back to the button that hid them. Offer the
     // escape hatch here whenever the filter is what emptied the view.
-    const hidSomething = [...hiddenTypes].some((k) => typeCounts.has(k));
+    const hidSomething = hidesCardsOnView(hiddenTypes, typeCounts);
     return (
-      <Paper variant="outlined" sx={{ p: 6, textAlign: "center", borderRadius: 2 }}>
-        <Typography color="text.disabled">{t("dependency.ldvNoData")}</Typography>
+      <Paper
+        variant="outlined"
+        sx={{ p: 6, textAlign: "center", borderRadius: 2 }}
+      >
+        <Typography color="text.disabled">
+          {t("dependency.ldvNoData")}
+        </Typography>
         {hidSomething && (
           <Button
             size="small"
@@ -2169,517 +2263,603 @@ function LayeredDependencyInner({
 
   return (
     <LdvObstaclesContext.Provider value={obstacles}>
-    <Paper
-      ref={containerRef}
-      variant="outlined"
-      sx={{
-        borderRadius: 2,
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        bgcolor: "background.paper",
-      }}
-    >
-      {/* Navigation bar */}
-      <Box
+      <Paper
+        ref={containerRef}
+        variant="outlined"
         sx={{
+          borderRadius: 2,
+          overflow: "hidden",
           display: "flex",
-          alignItems: "center",
-          gap: 1,
-          px: 1.5,
-          py: 0.5,
-          borderBottom: "1px solid",
-          borderColor: "divider",
-          minHeight: 40,
-          flexShrink: 0,
+          flexDirection: "column",
+          height: "100%",
+          bgcolor: "background.paper",
         }}
       >
-        <Tooltip title={t("dependency.home")} arrow>
-          <IconButton size="small" onClick={onHome}>
-            <MaterialSymbol icon="home" size={20} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title={t("dependency.previousCard")} arrow>
-          <span>
-            <IconButton size="small" disabled={!hasPrev} onClick={onPrev}>
-              <MaterialSymbol icon="chevron_left" size={20} />
+        {/* Navigation bar */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            px: 1.5,
+            py: 0.5,
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            minHeight: 40,
+            flexShrink: 0,
+          }}
+        >
+          <Tooltip title={t("dependency.home")} arrow>
+            <IconButton size="small" onClick={onHome}>
+              <MaterialSymbol icon="home" size={20} />
             </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title={t("dependency.nextCard")} arrow>
-          <span>
-            <IconButton size="small" disabled={!hasNext} onClick={onNext}>
-              <MaterialSymbol icon="chevron_right" size={20} />
-            </IconButton>
-          </span>
-        </Tooltip>
-        {centerName && (
-          <Typography
-            variant="body2"
-            /* minWidth 0 is load-bearing: without it a flex item's min-width
+          </Tooltip>
+          <Tooltip title={t("dependency.previousCard")} arrow>
+            <span>
+              <IconButton size="small" disabled={!hasPrev} onClick={onPrev}>
+                <MaterialSymbol icon="chevron_left" size={20} />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={t("dependency.nextCard")} arrow>
+            <span>
+              <IconButton size="small" disabled={!hasNext} onClick={onNext}>
+                <MaterialSymbol icon="chevron_right" size={20} />
+              </IconButton>
+            </span>
+          </Tooltip>
+          {centerName && (
+            <Typography
+              variant="body2"
+              /* minWidth 0 is load-bearing: without it a flex item's min-width
                resolves to its content, so a long card name pushes the button
                cluster off a narrow bar instead of ellipsing. */
-            sx={{
-              fontWeight: 600,
-              ml: 0.5,
-              minWidth: 0,
-              flexShrink: 1,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {centerName}
-          </Typography>
-        )}
-        <Box
-          sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 0.25, flexShrink: 0 }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              color: "text.disabled",
-              whiteSpace: "nowrap",
-              fontSize: "0.68rem",
-              mr: 0.5,
-              display: { xs: "none", md: "block" },
-            }}
-          >
-            {t("dependency.shiftClickHint")}
-          </Typography>
-          <LdvTypeFilter
-            types={types}
-            typeCounts={typeCounts}
-            hiddenTypeKeys={settings.hiddenTypeKeys}
-            onChange={(hiddenTypeKeys) => updateSettings({ hiddenTypeKeys })}
-            container={isFullscreen ? containerRef.current : undefined}
-          />
-          <LdvShowOnCard
-            types={types}
-            activeTypeKeys={activeTypeKeys}
-            settings={settings}
-            update={updateSettings}
-            container={isFullscreen ? containerRef.current : undefined}
-          />
-          <Tooltip title={t("dependency.viewSettings")} arrow>
-            <IconButton size="small" onClick={(e) => setSettingsAnchor(e.currentTarget)}>
-              <MaterialSymbol icon="tune" size={19} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip
-            title={t("dependency.backgroundStyle", {
-              style: t(`dependency.background_${settings.background}`),
-            })}
-            arrow
-          >
-            <IconButton size="small" onClick={cycleBackground}>
-              <MaterialSymbol
-                icon={
-                  settings.background === "none"
-                    ? "grid_off"
-                    : settings.background === "dots"
-                      ? "grain"
-                      : "grid_on"
-                }
-                size={19}
-              />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={t("dependency.exportImage")} arrow>
-            <IconButton size="small" onClick={(e) => setExportAnchor(e.currentTarget)}>
-              <MaterialSymbol icon="download" size={19} />
-            </IconButton>
-          </Tooltip>
-          {canCreateDiagram && (
-            <Tooltip title={managedDiagramId ? "Open diagram" : t("dependency.createDiagram")} arrow>
-              <IconButton size="small" onClick={managedDiagramId ? () => navigate(`/diagrams/${managedDiagramId}/edit`) : openCreateDialog}>
-                <MaterialSymbol icon={managedDiagramId ? "open_in_new" : "note_add"} size={19} />
-              </IconButton>
-            </Tooltip>
+              sx={{
+                fontWeight: 600,
+                ml: 0.5,
+                minWidth: 0,
+                flexShrink: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {centerName}
+            </Typography>
           )}
-          {openInReportHref && (
-            <Tooltip title={t("dependency.openInReport")} arrow>
-              {/* A real anchor, not window.open: middle-click, cmd-click and
-                  "copy link address" all have to work on a link. */}
+          <Box
+            sx={{
+              ml: "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: 0.25,
+              flexShrink: 0,
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.disabled",
+                whiteSpace: "nowrap",
+                fontSize: "0.68rem",
+                mr: 0.5,
+                display: { xs: "none", md: "block" },
+              }}
+            >
+              {t("dependency.shiftClickHint")}
+            </Typography>
+            <LdvTypeFilter
+              types={types}
+              typeCounts={typeCounts}
+              hiddenTypeKeys={settings.hiddenTypeKeys}
+              onChange={(hiddenTypeKeys) => updateSettings({ hiddenTypeKeys })}
+              container={isFullscreen ? containerRef.current : undefined}
+            />
+            <LdvShowOnCard
+              types={types}
+              activeTypeKeys={activeTypeKeys}
+              settings={settings}
+              update={updateSettings}
+              container={isFullscreen ? containerRef.current : undefined}
+            />
+            <Tooltip title={t("dependency.viewSettings")} arrow>
               <IconButton
                 size="small"
-                component="a"
-                href={openInReportHref}
-                target="_blank"
-                rel="noopener"
-                aria-label={t("dependency.openInReport")}
+                onClick={(e) => setSettingsAnchor(e.currentTarget)}
               >
-                <MaterialSymbol icon="open_in_new" size={19} />
+                <MaterialSymbol icon="tune" size={19} />
               </IconButton>
             </Tooltip>
-          )}
+            <Tooltip
+              title={t("dependency.backgroundStyle", {
+                style: t(`dependency.background_${settings.background}`),
+              })}
+              arrow
+            >
+              <IconButton size="small" onClick={cycleBackground}>
+                <MaterialSymbol
+                  icon={
+                    settings.background === "none"
+                      ? "grid_off"
+                      : settings.background === "dots"
+                        ? "grain"
+                        : "grid_on"
+                  }
+                  size={19}
+                />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={t("dependency.exportImage")} arrow>
+              <IconButton
+                size="small"
+                onClick={(e) => setExportAnchor(e.currentTarget)}
+              >
+                <MaterialSymbol icon="download" size={19} />
+              </IconButton>
+            </Tooltip>
+            {canCreateDiagram && (
+              <Tooltip
+                title={
+                  managedDiagramId
+                    ? "Open diagram"
+                    : t("dependency.createDiagram")
+                }
+                arrow
+              >
+                <IconButton
+                  size="small"
+                  onClick={
+                    managedDiagramId
+                      ? () => navigate(`/diagrams/${managedDiagramId}/edit`)
+                      : openCreateDialog
+                  }
+                >
+                  <MaterialSymbol
+                    icon={managedDiagramId ? "open_in_new" : "note_add"}
+                    size={19}
+                  />
+                </IconButton>
+              </Tooltip>
+            )}
+            {openInReportHref && (
+              <Tooltip title={t("dependency.openInReport")} arrow>
+                {/* A real anchor, not window.open: middle-click, cmd-click and
+                  "copy link address" all have to work on a link. */}
+                <IconButton
+                  size="small"
+                  component="a"
+                  href={openInReportHref}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={t("dependency.openInReport")}
+                >
+                  <MaterialSymbol icon="open_in_new" size={19} />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
         </Box>
-      </Box>
-      <Box
-        sx={{ flex: 1, minHeight: 0 }}
-        className={
-          [hoveredNode ? "ldv-hover-active" : "", pulseStyle ? "ldv-pulse-active" : ""]
-            .filter(Boolean)
-            .join(" ") || undefined
-        }
-      >
-        {hoverStyle && <style>{hoverStyle}</style>}
-        {pulseStyle && <style>{pulseStyle}</style>}
-        <ReactFlow
-          nodes={flowNodes}
-          edges={orderedEdges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
-          onPaneClick={handlePaneClick}
-          onNodeMouseEnter={handleNodeMouseEnter}
-          onNodeMouseLeave={handleNodeMouseLeave}
-          onEdgeMouseEnter={handleEdgeMouseEnter}
-          onEdgeMouseLeave={handleEdgeMouseLeave}
-          fitView
-          fitViewOptions={{ padding: 0.15 }}
-          minZoom={0.2}
-          maxZoom={2}
-          proOptions={{ hideAttribution: true }}
-          nodesDraggable
-          nodesConnectable={false}
-          edgesReconnectable={false}
-          elementsSelectable={false}
-          colorMode={theme.palette.mode}
+        <Box
+          sx={{ flex: 1, minHeight: 0 }}
+          className={
+            [
+              hoveredNode ? "ldv-hover-active" : "",
+              pulseStyle ? "ldv-pulse-active" : "",
+            ]
+              .filter(Boolean)
+              .join(" ") || undefined
+          }
         >
-          {settings.background !== "none" && (
-            // Dots replicate the original pre-toolbar background exactly
-            // (`gap={16} size={1}`, React Flow's default theme-aware dot colour).
-            // Lines are the new alternative and use a faint custom colour.
-            <Background
-              variant={
-                settings.background === "dots" ? BackgroundVariant.Dots : BackgroundVariant.Lines
-              }
-              gap={settings.background === "dots" ? 16 : 28}
-              size={1}
-              color={
-                settings.background === "dots"
-                  ? undefined
-                  : theme.palette.mode === "dark"
-                    ? "#2a2a2a"
-                    : "#e9ebee"
-              }
-            />
-          )}
-          {/* Default zoom + fitView controls are disabled so we can order the
+          {hoverStyle && <style>{hoverStyle}</style>}
+          {pulseStyle && <style>{pulseStyle}</style>}
+          <ReactFlow
+            nodes={flowNodes}
+            edges={orderedEdges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onNodesChange={onNodesChange}
+            onPaneClick={handlePaneClick}
+            onNodeMouseEnter={handleNodeMouseEnter}
+            onNodeMouseLeave={handleNodeMouseLeave}
+            onEdgeMouseEnter={handleEdgeMouseEnter}
+            onEdgeMouseLeave={handleEdgeMouseLeave}
+            fitView
+            fitViewOptions={{ padding: 0.15 }}
+            minZoom={0.2}
+            maxZoom={2}
+            proOptions={{ hideAttribution: true }}
+            nodesDraggable
+            nodesConnectable={false}
+            edgesReconnectable={false}
+            elementsSelectable={false}
+            colorMode={theme.palette.mode}
+          >
+            {settings.background !== "none" && (
+              // Dots replicate the original pre-toolbar background exactly
+              // (`gap={16} size={1}`, React Flow's default theme-aware dot colour).
+              // Lines are the new alternative and use a faint custom colour.
+              <Background
+                variant={
+                  settings.background === "dots"
+                    ? BackgroundVariant.Dots
+                    : BackgroundVariant.Lines
+                }
+                gap={settings.background === "dots" ? 16 : 28}
+                size={1}
+                color={
+                  settings.background === "dots"
+                    ? undefined
+                    : theme.palette.mode === "dark"
+                      ? "#2a2a2a"
+                      : "#e9ebee"
+                }
+              />
+            )}
+            {/* Default zoom + fitView controls are disabled so we can order the
               whole navigation group ourselves (fullscreen first) and swap the
               fitView frame icon — which looked too much like Fullscreen — for a
               map-pin re-center button. */}
-          <Controls showInteractive={false} showZoom={false} showFitView={false}>
-            {/* --- Navigation / view group: fullscreen, zoom, recenter, reset --- */}
-            <ControlButton
-              title={isFullscreen ? t("dependency.exitFullscreen") : t("dependency.fullscreen")}
-              onClick={toggleFullscreen}
+            <Controls
+              showInteractive={false}
+              showZoom={false}
+              showFitView={false}
             >
-              <MaterialSymbol icon={isFullscreen ? "fullscreen_exit" : "fullscreen"} size={18} />
-            </ControlButton>
-            <ControlButton title={t("dependency.zoomIn")} onClick={() => zoomIn({ duration: 200 })}>
-              <MaterialSymbol icon="add" size={18} />
-            </ControlButton>
-            <ControlButton
-              title={t("dependency.zoomOut")}
-              onClick={() => zoomOut({ duration: 200 })}
-            >
-              <MaterialSymbol icon="remove" size={18} />
-            </ControlButton>
-            <ControlButton
-              title={t("dependency.recenter")}
-              onClick={() => fitView({ padding: 0.15, duration: 300 })}
-            >
-              <MaterialSymbol icon="location_on" size={18} />
-            </ControlButton>
-            <ControlButton title={t("dependency.resetView")} onClick={resetView}>
-              <MaterialSymbol icon="restart_alt" size={18} />
-            </ControlButton>
-            {/* Divider between the view and exploration groups. A full-width
+              {/* --- Navigation / view group: fullscreen, zoom, recenter, reset --- */}
+              <ControlButton
+                title={
+                  isFullscreen
+                    ? t("dependency.exitFullscreen")
+                    : t("dependency.fullscreen")
+                }
+                onClick={toggleFullscreen}
+              >
+                <MaterialSymbol
+                  icon={isFullscreen ? "fullscreen_exit" : "fullscreen"}
+                  size={18}
+                />
+              </ControlButton>
+              <ControlButton
+                title={t("dependency.zoomIn")}
+                onClick={() => zoomIn({ duration: 200 })}
+              >
+                <MaterialSymbol icon="add" size={18} />
+              </ControlButton>
+              <ControlButton
+                title={t("dependency.zoomOut")}
+                onClick={() => zoomOut({ duration: 200 })}
+              >
+                <MaterialSymbol icon="remove" size={18} />
+              </ControlButton>
+              <ControlButton
+                title={t("dependency.recenter")}
+                onClick={() => fitView({ padding: 0.15, duration: 300 })}
+              >
+                <MaterialSymbol icon="location_on" size={18} />
+              </ControlButton>
+              <ControlButton
+                title={t("dependency.resetView")}
+                onClick={resetView}
+              >
+                <MaterialSymbol icon="restart_alt" size={18} />
+              </ControlButton>
+              {/* Divider between the view and exploration groups. A full-width
                 filled band (no horizontal margin, so the canvas never shows
                 through) with thin top/bottom rules — reads as a clean section
                 break rather than a transparent gap. */}
-            <div
-              aria-hidden
-              style={{
-                height: 6,
-                background: theme.palette.mode === "dark" ? "#2b2b2b" : "#eceef0",
-                borderTop: `1px solid ${theme.palette.mode === "dark" ? "#444" : "#d7dade"}`,
-                borderBottom: `1px solid ${theme.palette.mode === "dark" ? "#444" : "#d7dade"}`,
-              }}
-            />
-            {/* --- Exploration group: highlight, expand, reveal parent/children --- */}
-            <ControlButton
-              title={t("dependency.highlightMode")}
-              onClick={() => {
-                setMode((m) => {
-                  if (m === "highlight") {
-                    setHoveredNode(null);
-                    return "normal";
-                  }
-                  return "highlight";
-                });
-              }}
-              style={{
-                background: highlightMode ? theme.palette.primary.main : undefined,
-                color: highlightMode ? theme.palette.primary.contrastText : undefined,
-              }}
-            >
-              <MaterialSymbol icon="highlight" size={18} />
-            </ControlButton>
-            <ControlButton
-              title={t("dependency.expandMode")}
-              onClick={() => {
-                setMode((m) => {
-                  if (m === "expand") {
-                    if (onExpandReset) onExpandReset();
-                    return "normal";
-                  }
-                  return "expand";
-                });
-              }}
-              style={{
-                background: expandMode ? theme.palette.primary.main : undefined,
-                color: expandMode ? theme.palette.primary.contrastText : undefined,
-              }}
-            >
-              <MaterialSymbol icon="alt_route" size={18} />
-            </ControlButton>
-            {onNodeReveal && (
-              <>
-                <ControlButton
-                  title={t("dependency.revealParentsMode")}
-                  onClick={() => {
-                    // Toggling off only stops click-to-reveal — revealed cards
-                    // stay so parents + children can be layered in one view.
-                    // They clear on re-center (see consumer center-change reset).
-                    setMode((m) => (m === "parents" ? "normal" : "parents"));
-                  }}
-                  style={{
-                    background: parentsMode ? theme.palette.primary.main : undefined,
-                    color: parentsMode ? theme.palette.primary.contrastText : undefined,
-                  }}
-                >
-                  <MaterialSymbol icon="move_up" size={18} />
-                </ControlButton>
-                <ControlButton
-                  title={t("dependency.revealChildrenMode")}
-                  onClick={() => {
-                    setMode((m) => (m === "children" ? "normal" : "children"));
-                  }}
-                  style={{
-                    background: childrenMode ? theme.palette.primary.main : undefined,
-                    color: childrenMode ? theme.palette.primary.contrastText : undefined,
-                  }}
-                >
-                  <MaterialSymbol icon="move_down" size={18} />
-                </ControlButton>
-              </>
-            )}
-          </Controls>
-        </ReactFlow>
-      </Box>
-      <Box sx={{ px: 1.5, py: 0.75, textAlign: "right" }}>
-        <Chip
-          size="small"
-          label={t("dependency.stats", {
-            nodes: nodes.length,
-            relations: edges.length,
-          })}
-          variant="outlined"
-        />
-      </Box>
-
-      {/* Export menu */}
-      <Menu
-        anchorEl={exportAnchor}
-        open={Boolean(exportAnchor)}
-        onClose={() => setExportAnchor(null)}
-        container={isFullscreen ? containerRef.current : undefined}
-      >
-        <MenuItem onClick={() => exportImage("png")}>
-          <ListItemIcon>
-            <MaterialSymbol icon="image" size={18} />
-          </ListItemIcon>
-          <ListItemText>{t("dependency.exportPng")}</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={() => exportImage("svg")}>
-          <ListItemIcon>
-            <MaterialSymbol icon="shape_line" size={18} />
-          </ListItemIcon>
-          <ListItemText>{t("dependency.exportSvg")}</ListItemText>
-        </MenuItem>
-      </Menu>
-
-      {/* Create-diagram: the aggregated-view caveat, then the name */}
-      <LdvExportAggregatedDialog
-        open={createConfirmOpen}
-        onClose={() => setCreateConfirmOpen(false)}
-        onContinue={openCreateNameDialog}
-        container={isFullscreen ? containerRef.current : undefined}
-      />
-      <Dialog
-        open={createOpen}
-        onClose={() => !creating && setCreateOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        disableRestoreFocus
-        container={isFullscreen ? containerRef.current : undefined}
-      >
-        <DialogTitle>{t("dependency.createDiagramTitle")}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t("dependency.createDiagramHint")}
-          </Typography>
-          <TextField
-            autoFocus
-            fullWidth
+              <div
+                aria-hidden
+                style={{
+                  height: 6,
+                  background:
+                    theme.palette.mode === "dark" ? "#2b2b2b" : "#eceef0",
+                  borderTop: `1px solid ${theme.palette.mode === "dark" ? "#444" : "#d7dade"}`,
+                  borderBottom: `1px solid ${theme.palette.mode === "dark" ? "#444" : "#d7dade"}`,
+                }}
+              />
+              {/* --- Exploration group: highlight, expand, reveal parent/children --- */}
+              <ControlButton
+                title={t("dependency.highlightMode")}
+                onClick={() => {
+                  setMode((m) => {
+                    if (m === "highlight") {
+                      setHoveredNode(null);
+                      return "normal";
+                    }
+                    return "highlight";
+                  });
+                }}
+                style={{
+                  background: highlightMode
+                    ? theme.palette.primary.main
+                    : undefined,
+                  color: highlightMode
+                    ? theme.palette.primary.contrastText
+                    : undefined,
+                }}
+              >
+                <MaterialSymbol icon="highlight" size={18} />
+              </ControlButton>
+              <ControlButton
+                title={t("dependency.expandMode")}
+                onClick={() => {
+                  setMode((m) => {
+                    if (m === "expand") {
+                      if (onExpandReset) onExpandReset();
+                      return "normal";
+                    }
+                    return "expand";
+                  });
+                }}
+                style={{
+                  background: expandMode
+                    ? theme.palette.primary.main
+                    : undefined,
+                  color: expandMode
+                    ? theme.palette.primary.contrastText
+                    : undefined,
+                }}
+              >
+                <MaterialSymbol icon="alt_route" size={18} />
+              </ControlButton>
+              {onNodeReveal && (
+                <>
+                  <ControlButton
+                    title={t("dependency.revealParentsMode")}
+                    onClick={() => {
+                      // Toggling off only stops click-to-reveal — revealed cards
+                      // stay so parents + children can be layered in one view.
+                      // They clear on re-center (see consumer center-change reset).
+                      setMode((m) => (m === "parents" ? "normal" : "parents"));
+                    }}
+                    style={{
+                      background: parentsMode
+                        ? theme.palette.primary.main
+                        : undefined,
+                      color: parentsMode
+                        ? theme.palette.primary.contrastText
+                        : undefined,
+                    }}
+                  >
+                    <MaterialSymbol icon="move_up" size={18} />
+                  </ControlButton>
+                  <ControlButton
+                    title={t("dependency.revealChildrenMode")}
+                    onClick={() => {
+                      setMode((m) =>
+                        m === "children" ? "normal" : "children",
+                      );
+                    }}
+                    style={{
+                      background: childrenMode
+                        ? theme.palette.primary.main
+                        : undefined,
+                      color: childrenMode
+                        ? theme.palette.primary.contrastText
+                        : undefined,
+                    }}
+                  >
+                    <MaterialSymbol icon="move_down" size={18} />
+                  </ControlButton>
+                </>
+              )}
+            </Controls>
+          </ReactFlow>
+        </Box>
+        <Box sx={{ px: 1.5, py: 0.75, textAlign: "right" }}>
+          <Chip
             size="small"
-            label={t("dependency.createDiagramNameLabel")}
-            value={createName}
-            onChange={(e) => setCreateName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submitCreateDiagram();
-            }}
-            error={createError}
-            helperText={createError ? t("dependency.createDiagramError") : undefined}
-            disabled={creating}
+            label={t("dependency.stats", {
+              nodes: nodes.length,
+              relations: edges.length,
+            })}
+            variant="outlined"
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateOpen(false)} disabled={creating}>
-            {t("common:actions.cancel")}
-          </Button>
-          <Button
-            variant="contained"
-            onClick={submitCreateDiagram}
-            disabled={creating || !createName.trim()}
-            startIcon={creating ? <CircularProgress size={16} color="inherit" /> : undefined}
-          >
-            {t("dependency.createDiagramSubmit")}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </Box>
 
-      {/* View options — everything that does NOT change the text printed on a
+        {/* Export menu */}
+        <Menu
+          anchorEl={exportAnchor}
+          open={Boolean(exportAnchor)}
+          onClose={() => setExportAnchor(null)}
+          container={isFullscreen ? containerRef.current : undefined}
+        >
+          <MenuItem onClick={() => exportImage("png")}>
+            <ListItemIcon>
+              <MaterialSymbol icon="image" size={18} />
+            </ListItemIcon>
+            <ListItemText>{t("dependency.exportPng")}</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => exportImage("svg")}>
+            <ListItemIcon>
+              <MaterialSymbol icon="shape_line" size={18} />
+            </ListItemIcon>
+            <ListItemText>{t("dependency.exportSvg")}</ListItemText>
+          </MenuItem>
+        </Menu>
+
+        {/* Create-diagram: the aggregated-view caveat, then the name */}
+        <LdvExportAggregatedDialog
+          open={createConfirmOpen}
+          onClose={() => setCreateConfirmOpen(false)}
+          onContinue={openCreateNameDialog}
+          container={isFullscreen ? containerRef.current : undefined}
+        />
+        <Dialog
+          open={createOpen}
+          onClose={() => !creating && setCreateOpen(false)}
+          maxWidth="xs"
+          fullWidth
+          disableRestoreFocus
+          container={isFullscreen ? containerRef.current : undefined}
+        >
+          <DialogTitle>{t("dependency.createDiagramTitle")}</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {t("dependency.createDiagramHint")}
+            </Typography>
+            <TextField
+              autoFocus
+              fullWidth
+              size="small"
+              label={t("dependency.createDiagramNameLabel")}
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitCreateDiagram();
+              }}
+              error={createError}
+              helperText={
+                createError ? t("dependency.createDiagramError") : undefined
+              }
+              disabled={creating}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setCreateOpen(false)} disabled={creating}>
+              {t("common:actions.cancel")}
+            </Button>
+            <Button
+              variant="contained"
+              onClick={submitCreateDiagram}
+              disabled={creating || !createName.trim()}
+              startIcon={
+                creating ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : undefined
+              }
+            >
+              {t("dependency.createDiagramSubmit")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* View options — everything that does NOT change the text printed on a
           card. What a card says lives in the Show-on-card button instead, so no
           setting has two controls. These four are the ones carrying a hint
           caption, which a one-line tick row cannot host. */}
-      <Popover
-        anchorEl={settingsAnchor}
-        open={Boolean(settingsAnchor)}
-        onClose={() => setSettingsAnchor(null)}
-        container={isFullscreen ? containerRef.current : undefined}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-        slotProps={{ paper: { sx: { p: 2, width: 320, maxWidth: "90vw" } } }}
-      >
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
-          {t("dependency.viewSettings")}
-        </Typography>
-        {(
-          [
-            {
-              group: "cards",
-              key: "showCardLogos",
-              label: t("dependency.showCardLogos"),
-              hint: t("dependency.showCardLogosHint"),
-            },
-            {
-              group: "cards",
-              key: "showHierarchyMarkers",
-              label: t("dependency.showHierarchyMarkers"),
-              hint: t("dependency.showHierarchyMarkersHint"),
-            },
-            {
-              group: "cards",
-              key: "showEndOfLife",
-              label: t("dependency.showEndOfLife"),
-              hint: t("dependency.showEndOfLifeHint"),
-            },
-            {
-              group: "relations",
-              key: "showRelationLabels",
-              label: t("dependency.showRelationLabels"),
-              hint: t("dependency.showRelationLabelsHint"),
-            },
-            {
-              group: "relations",
-              key: "showRelationValues",
-              label: t("dependency.showRelationValues"),
-              hint: t("dependency.showRelationValuesHint"),
-            },
-          ] as const
-        ).map((row, i, rows) => (
-          <Box key={row.key}>
-            {/* Heading whenever the group changes — the switches split into
+        <Popover
+          anchorEl={settingsAnchor}
+          open={Boolean(settingsAnchor)}
+          onClose={() => setSettingsAnchor(null)}
+          container={isFullscreen ? containerRef.current : undefined}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+          transformOrigin={{ vertical: "top", horizontal: "right" }}
+          slotProps={{ paper: { sx: { p: 2, width: 320, maxWidth: "90vw" } } }}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+            {t("dependency.viewSettings")}
+          </Typography>
+          {(
+            [
+              {
+                group: "cards",
+                key: "showCardLogos",
+                label: t("dependency.showCardLogos"),
+                hint: t("dependency.showCardLogosHint"),
+              },
+              {
+                group: "cards",
+                key: "showHierarchyMarkers",
+                label: t("dependency.showHierarchyMarkers"),
+                hint: t("dependency.showHierarchyMarkersHint"),
+              },
+              {
+                group: "cards",
+                key: "showEndOfLife",
+                label: t("dependency.showEndOfLife"),
+                hint: t("dependency.showEndOfLifeHint"),
+              },
+              {
+                group: "relations",
+                key: "showRelationLabels",
+                label: t("dependency.showRelationLabels"),
+                hint: t("dependency.showRelationLabelsHint"),
+              },
+              {
+                group: "relations",
+                key: "showRelationValues",
+                label: t("dependency.showRelationValues"),
+                hint: t("dependency.showRelationValuesHint"),
+              },
+            ] as const
+          ).map((row, i, rows) => (
+            <Box key={row.key}>
+              {/* Heading whenever the group changes — the switches split into
                 what applies to a card and what applies to a relation, which
                 read as one undifferentiated run without it. */}
-            {(i === 0 || rows[i - 1].group !== row.group) && (
-              <>
-                <MenuSectionHeader
-                  px={0}
-                  icon={row.group === "relations" ? "linear_scale" : "credit_card"}
-                  label={
-                    row.group === "relations"
-                      ? t("dependency.groupRelations")
-                      : t("dependency.groupCards")
-                  }
-                />
-                {/* First in the Relations group: it decides what a line IS —
+              {(i === 0 || rows[i - 1].group !== row.group) && (
+                <>
+                  <MenuSectionHeader
+                    px={0}
+                    icon={
+                      row.group === "relations" ? "linear_scale" : "credit_card"
+                    }
+                    label={
+                      row.group === "relations"
+                        ? t("dependency.groupRelations")
+                        : t("dependency.groupCards")
+                    }
+                  />
+                  {/* First in the Relations group: it decides what a line IS —
                     one relation, or a merged connector standing for many — and
                     the switches below then say how that line is drawn. A union,
                     so like Line style it cannot join the run of switch rows. */}
-                {row.group === "relations" && (
-                  <LdvAggregateSelect
-                    value={settings.aggregateBy}
-                    onChange={(aggregateBy) => updateSettings({ aggregateBy })}
-                  />
-                )}
-              </>
-            )}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "hint" in row && row.hint ? "flex-start" : "center",
-              justifyContent: "space-between",
-              gap: 2,
-              py: 0.5,
-            }}
-          >
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="body2">{row.label}</Typography>
-              {"hint" in row && row.hint && (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "block", lineHeight: 1.35, mt: 0.25 }}
-                >
-                  {row.hint}
-                </Typography>
+                  {row.group === "relations" && (
+                    <LdvAggregateSelect
+                      value={settings.aggregateBy}
+                      onChange={(aggregateBy) =>
+                        updateSettings({ aggregateBy })
+                      }
+                    />
+                  )}
+                </>
               )}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems:
+                    "hint" in row && row.hint ? "flex-start" : "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                  py: 0.5,
+                }}
+              >
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2">{row.label}</Typography>
+                  {"hint" in row && row.hint && (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", lineHeight: 1.35, mt: 0.25 }}
+                    >
+                      {row.hint}
+                    </Typography>
+                  )}
+                </Box>
+                <Switch
+                  size="small"
+                  checked={settings[row.key]}
+                  onChange={(e) =>
+                    updateSettings({ [row.key]: e.target.checked })
+                  }
+                  inputProps={{ "aria-label": row.label }}
+                  sx={{
+                    flexShrink: 0,
+                    mt: "hint" in row && row.hint ? "2px" : 0,
+                  }}
+                />
+              </Box>
             </Box>
-            <Switch
-              size="small"
-              checked={settings[row.key]}
-              onChange={(e) => updateSettings({ [row.key]: e.target.checked })}
-              inputProps={{ "aria-label": row.label }}
-              sx={{ flexShrink: 0, mt: "hint" in row && row.hint ? "2px" : 0 }}
-            />
-          </Box>
-          </Box>
-        ))}
-        {/* Line style is a union, not a boolean, so it cannot join the switch
+          ))}
+          {/* Line style is a union, not a boolean, so it cannot join the switch
             rows above. It sits last in the Relations group: it describes how a
             relation is drawn, next to what a relation says. */}
-        <LdvLineStyleSelect
-          value={settings.edgeLineStyle}
-          onChange={(edgeLineStyle) => updateSettings({ edgeLineStyle })}
-        />
-      </Popover>
-    </Paper>
+          <LdvLineStyleSelect
+            value={settings.edgeLineStyle}
+            onChange={(edgeLineStyle) => updateSettings({ edgeLineStyle })}
+          />
+        </Popover>
+      </Paper>
     </LdvObstaclesContext.Provider>
   );
 }

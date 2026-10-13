@@ -215,18 +215,19 @@ class TestMigrationApply:
 
 
 # ---------------------------------------------------------------------------
-# Recurrence guard: no module constructs a Relation without orienting it.
+# Recurrence guard: no module constructs a Relation — directly, or staged
+# through card_write_service.add_relation, which takes the ends as given —
+# without orienting it.
 # ---------------------------------------------------------------------------
 
 _APP = Path(__file__).resolve().parents[2] / "app"
-_CONSTRUCTOR = re.compile(r"\bRelation\(")
+_CONSTRUCTOR = re.compile(r"\b(?:Relation|add_relation)\(")
 
 # Modules whose relations run in a direction fixed by the code itself — the
 # relation type is chosen to match the ends, so there is nothing to turn.
 _FIXED_DIRECTION = {
     "services/element_relation_sync.py": "a process always links out to its elements' cards",
-    "services/process_catalogue_service.py": "catalogue imports link in the type's own direction",
-    "services/value_stream_catalogue_service.py": "catalogue imports use the type's direction",
+    "services/catalogue_common.py": "catalogue imports pass each type's own direction",
     "services/seed_demo.py": "demo data; test_seed_demo.py checks it against the metamodel",
     "services/seed_demo_bpm.py": "demo data; test_seed_demo.py checks it against the metamodel",
 }
@@ -247,6 +248,14 @@ def _constructors() -> dict[str, str]:
     return found
 
 
+def test_the_scan_sees_a_relation_staged_through_the_shared_helper():
+    # add_relation builds the row from the ids it is handed, so a caller that
+    # skipped orientation would carry no "Relation(" of its own to be caught by.
+    assert _CONSTRUCTOR.search("rel = card_write_service.add_relation(\n")
+    assert _CONSTRUCTOR.search("rel = Relation(type=key)")
+    assert not _CONSTRUCTOR.search("find_relation(db)")
+
+
 def test_every_relation_writer_orients():
     unguarded = [
         rel
@@ -256,8 +265,9 @@ def test_every_relation_writer_orients():
         and "relation_orientation" not in text
     ]
     assert not unguarded, (
-        "These modules construct a Relation without turning its ends into the "
-        "relation type's direction — call app.services.relation_orientation "
+        "These modules construct a Relation (or stage one through add_relation) "
+        "without turning its ends into the relation type's direction — call "
+        "app.services.relation_orientation "
         f"before inserting, or list the module here with the reason: {unguarded}"
     )
 

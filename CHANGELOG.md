@@ -5,17 +5,215 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.158.0] - 2026-10-09
+## [2.158.12] - 2026-10-10
 
 ### Added
 
-- **A card-type permission override can now be scoped to specific subtypes.** On the Permissions tab of a card type (Admin → Metamodel), once a role's Create/Edit/Archive/Delete cell is set to Allow or Deny, a new "tune" button next to it opens a picker for the type's subtypes. Leaving none selected keeps the override applied to every subtype ("All", the previous behaviour, unchanged); picking one or more scopes the grant or denial to only those subtypes — a card of a different subtype falls back to the role's ordinary permission, exactly as if no override existed for it. Available wherever the existing per-type override already applied: creating, editing, archiving, deleting and bulk operations, including through the MCP server's write tools.
+- **A card-type permission override can now be scoped to specific subtypes.** On the Permissions tab of a card type (Admin → Metamodel), once a role's Create/Edit/Archive/Delete cell is set to Allow or Deny, a new "tune" button next to it opens a picker for the type's subtypes. Leaving none selected keeps the override applied to every subtype ("All", the previous behaviour, unchanged); picking one or more scopes the grant or denial to only those subtypes — a card of a different subtype falls back to the role's ordinary permission. Available wherever the existing per-type override already applied, including through the MCP server's write tools.
+
+### Fixed
+
+- A malformed card id in a `/cards/{id}` path (anything that is not a UUID) now answers 404 instead of 500 — the id is parsed through a shared helper that treats a syntactically invalid id as "not found", which also keeps every such route's response uniform.
+- **The BPM reverse lookup of an Organization's processes now honours the per-card-type View permission.** `GET /bpm/organizations/{id}/processes` answers with card names, so it applies the same card read scope as every other surface: an Organization a role may not see answers 404, and a BusinessProcess it may not see drops out of the list instead of being named. Previously the endpoint was gated on `bpm.view` alone.
 
 ### Changed
 
 - **Extensions that write a Word file now build it with core's own `docx` library.** The UI SDK's `loadDocxTemplater` is replaced by `loadDocx`, which hands over the same document builder the SoAW and ADR exports already use. The three dependencies the old loader needed (`docxtemplater`, `pizzip`, `docxtemplater-image`) are gone from the frontend, and an extension no longer ships a binary `.docx` template alongside its code.
-- **The BPM reverse lookup of an Organization's processes now honours the per-card-type View permission.** `GET /bpm/organizations/{id}/processes` answers with card names, so it applies the same card read scope as every other surface: an Organization a role may not see answers 404, and a BusinessProcess it may not see drops out of the list instead of being named. Previously the endpoint was gated on `bpm.view` alone.
-- Merged upstream 2.157.5. The subtype scope above now composes with the upstream **View** action: an unscoped View deny still takes every permission on the type away, while a View deny scoped to some subtypes decides only for those — cards of the other subtypes keep the role's ordinary permissions.
+
+### Changed
+- Internal clean-up of the Layered Dependency View (the Dependencies report, a card's dependency section and TurboLens assessments): the rules that decide how its cards and lines look and behave moved into a module with tests of its own, and its two layouts now build arrowheads and line routing with one shared helper; nothing a user sees changes.
+
+## [2.158.11] - 2026-10-10
+
+### Fixed
+- Admin → Resources: the link from a file or link to its card opens the card's **Resources** tab; it opened the Card tab.
+- Card detail: the open tab stays open when a tab before it (ADRs, Risks, Compliance) appears or disappears as its count loads; the selection used to move to the neighbouring tab.
+- Reference catalogues: imported cards now record their creation in History, get their level in your hierarchy, a reference number when the type uses automatic references and a data-quality score; an entry whose name another card already uses at the same level is reported instead of creating a duplicate, and the capability level of a card imported without its parent follows your hierarchy.
+- Reference catalogues: checking for or fetching a catalogue update no longer keeps a database connection out of the pool while PyPI answers.
+- Reference catalogues: a catalogue update from the online store reports a release published without a wheel as such instead of failing with a generic fetch error.
+- Value Stream Catalogue: the import is gated by the Create permission on Business Context cards, the type it creates.
+
+### Changed
+- Internal clean-up of card detail and its History tab: the rules that decide the tab strip, the section order and the history rows moved into modules with tests of their own, and the Card Layout editor takes its section order from the same function as the card.
+
+## [2.158.10] - 2026-10-10
+
+### Fixed
+- Reference catalogues: an entry whose name another entry of the same catalogue shares (a stage that appears in two value streams, a capability or process repeated in two branches) is no longer taken for the card already imported under that name. Importing the second branch used to skip the entry and move the existing card under the new branch.
+- Reference catalogues: re-parenting an existing card during a catalogue import is now recorded on the card's History tab.
+- Capability Catalogue: an outdated cached catalogue no longer lends its macro capabilities to the newer catalogue bundled with Turbo EA, and the update check reports the bundled catalogue as the active source when the cached one is older.
+- Extensions: a scheduled job whose cron expression can never fire (such as 31 February), or whose interval is zero or negative, is skipped at startup with an error instead of retrying without pause and filling the log.
+
+### Changed
+- Internal clean-up of the three reference catalogues and the extension job scheduler: duplicated import code moved into shared, tested helpers.
+
+## [2.158.9] - 2026-10-10
+
+### Changed
+- Internal clean-up of the PPM portfolio board, in the app and on a web portal: the rules that decide what it shows moved into a module with tests of its own; nothing a user sees changes.
+
+## [2.158.8] - 2026-10-10
+
+### Fixed
+- Admin dashboard: **Approval pipeline by type** and **Stakeholder coverage by type** name each card type in the user's language, as the rest of the app does; they showed the English name whatever the language.
+- Workspace dashboard: when **My Open Todos**, **My Pending Surveys** or **Recent activity on my cards** cannot load, the section shows its empty state instead of leaving an unhandled error behind in the browser.
+
+## [2.158.7] - 2026-10-10
+
+### Fixed
+- MCP server: a sign-in whose PKCE code verifier contains a character outside the RFC 7636 alphabet — a non-ASCII one among them — is refused with the standard `invalid_grant` answer; a non-ASCII verifier used to end in a server error.
+
+### Changed
+- MCP server: an unused internal helper is removed and the stdio mode starts its token refresh more simply; nothing a user sees changes.
+
+## [2.158.6] - 2026-10-09
+
+### Changed
+- The three reference catalogues (capabilities, processes, value streams) now choose between the bundled and the downloaded catalogue in one shared place, so they cannot drift apart again.
+- Surveys: a **not equals** attribute filter now also reaches cards where that field is empty, so "Risk not equals Low" means every card whose risk is not Low. It used to leave out cards with no value at all.
+
+### Fixed
+- Value Stream Catalogue: after the catalogue is updated from the online store, a catalogue fetched before translations were cached with it is shown in your language again, as the Capability and Process catalogues already were, instead of in English.
+- Workspace transfer: a card's reference number (such as `APP-0042`) now travels with it. The export left the column empty, so cards imported into another instance arrived without their original reference.
+- API: saving a bookmark's sharing through `PATCH /bookmarks/{id}` returns the share list it just saved. The response repeated the previous list; the app itself reloads the list, so the screen was always right.
+
+## [2.158.5] - 2026-10-09
+
+### Changed
+- TurboLens Architecture AI: an older, unused way of generating the target architecture was removed; the wizard already used the capability-mapping step.
+
+### Fixed
+- TurboLens Architecture AI: when the model gave a proposed card the id of an existing card, the relations of a different proposal could be moved onto the wrong existing card in the target architecture. Each relation now stays on the card it was drawn to.
+- Bundled Ollama (`AI_AUTO_CONFIGURE=true`): the configured model is now downloaded at startup even when another size of the same model is installed. With `gemma3:27b` present, `gemma3:4b` was taken as already available and never pulled, so AI suggestions failed until it was pulled by hand.
+- The **Compliance scan finished** notification opens GRC → Compliance, where the findings are. It still pointed at a TurboLens tab that no longer exists and opened the TurboLens dashboard.
+
+## [2.158.4] - 2026-10-09
+
+### Changed
+- Workspace import, platform migration, audit-log rollback, file uploads, card writes, process step ordering, extension job schedules, fiscal years, card health flags and relation direction: unreachable branches and duplicated checks removed, with no change to what any of them does.
+- Bulk relation changes (the spreadsheet import's relations, the MCP relation tool) now find, create and update a relation through the same code as a single relation edit, so the two cannot drift apart.
+- Internal clean-up of the link, rich-text, route-permission, drag-fill and portfolio-report helpers: checks that could never change an answer are gone; nothing a user sees changes.
+- Internal clean-up of the Process Navigator, the Matrix report, the project Gantt and the public portal: the rules that decide what each one shows moved into modules with tests of their own; nothing a user sees changes.
+
+## [2.158.3] - 2026-10-09
+
+### Changed
+- Sign-in, single sign-on, trusted-proxy sign-in and published-resource access: redundant checks removed and one cookie definition shared by setting and clearing the session cookie, with no change to who can sign in or what they reach. An identity provider's error details are now read from any JSON object it returns, whatever content type it declares.
+
+## [2.158.2] - 2026-10-09
+
+### Changed
+- Calculated fields, permission checks and the card read scope: unreachable branches and unused parameters removed, with no change to what a formula computes or what a role may see or do.
+
+## [2.158.1] - 2026-10-09
+
+### Fixed
+- A page that finished loading just after the card types arrived for another part of the screen could show no card types until it was reloaded — most visibly an empty Type list in the diagram editor's **Create New Card**. Every part of the page now gets the types however the loading interleaves.
+
+## [2.158.0] - 2026-10-09
+
+### Added
+- Diagrams and Dependencies report: **Show on card** can now show each card's alias as an "Alias" line under its name — on DrawIO card shapes, on Layered Dependency View nodes and in their tooltip — and the choice travels with **Create diagram**. Cards without an alias look exactly as before.
+
+### Fixed
+- Diagram editor: the description typed when creating a new card on the canvas is saved with the card when it is pushed to the inventory, by **Sync** and **Sync all** alike; it used to be dropped (#1210).
+
+## [2.157.11] - 2026-10-09
+
+### Security
+- A very long numeric-looking value in a cost or number field no longer stalls the server or a report. Checking such a value took time that grew with the square of its length, so one save carrying tens of thousands of digits could hold up every other request for a minute; the check now takes time in proportion to the length and accepts exactly the same values.
+
+## [2.157.10] - 2026-10-09
+
+### Fixed
+- PPM: a failed save keeps its dialog open with the reason, saves send one request however fast they are clicked, and a failed load or delete says so. An initiative with no work packages shows "No work packages yet" on its Overview tab again instead of a 0% ring.
+- PPM: switching initiatives never shows the previous initiative's budget lines, budget figures read "—" rather than $0 while they load, and the spend charts wait for the budget.
+- PPM: the Description label is translated, and the edit and delete buttons and the Category and Status pickers have names.
+- Process flow and process navigator: failed loads show their error instead of an empty state (a failed reload of the process map keeps the map on screen and says so above it), the error re-words itself on a language switch without fetching again, and an `?open=` link opens its process once the map has loaded.
+- Public portals: counts read "12 Application" and the filter's first option "All Application" — the type's own label, never a guessed plural ("Business Capabilitys") — and changing a portal's slug no longer runs the old slug's sign-in. A search or filter answered out of order can no longer put the previous query's cards or error on screen.
+- Dashboard: a failed favourites or overview load shows its error, and a failed removal no longer dismisses the Undo of another removed card.
+- Diagram expand menu: switching to another card starts with no ticks and none of the previous card's children, and an empty child list says so instead of spinning.
+- App layout: a nav group stays highlighted on a sub-page of one of its entries, and the extension-license banner disappears when the user loses the permission.
+- Principles catalogue: no "0 of 0" caption before the catalogue loads, and a failed first load no longer reads "No principles match your search".
+- Excel import: an attribute whose key starts with "lifecycle_" or "stakeholder_" is no longer relabelled as a lifecycle or stakeholder column.
+- Process flow: a failed load of the published flow's or a draft's elements says so instead of leaving out the elements table or saying the draft has none, a draft link that saved but could not be re-read keeps its table and says the refresh failed, and an action that fails without a message says so in the user's language.
+- Process navigator: the process drawer names the approval status and the lifecycle phases in the user's language and shows lifecycle dates in the workspace date format, a failed steps load is reported in the user's language, and the flow viewer picks up recoloured card types once the metamodel has loaded.
+- Public portals: a relation filter whose options fail to load is simply left out, instead of raising an unhandled error in the page.
+- PPM: the status reports' edit and delete buttons have names, and a failed report delete says why instead of failing silently.
+- PPM: switching initiatives no longer shows the previous initiative's name, status reports, costs and risks while the next one loads, and neither a late reply for the previous initiative nor a refresh it started (such as a report delete that answers after the switch) can replace the new one's.
+- PPM: switching initiatives closes an open budget or cost dialog, so its save can no longer land on the other initiative, and clears a failed delete's message.
+
+### Changed
+- PPM: the health and risk-band colours come from the shared RAG palette, so amber and neutral are a shade different from before and match the rest of the app.
+
+## [2.157.9] - 2026-10-09
+
+### Fixed
+- Reports: a failed load shows an error instead of a spinner that never ends, on the capability map, matrix and EOL reports.
+- Portfolio report: grouping by a relation type lists each card only under the cards it reaches through that type, AI insights read lifecycle phases at the travelled date, and a saved relation-subtype filter survives opening the report.
+- Capability map: a restored metric the map no longer offers falls back to the application count, a heatmap of all-negative values is scaled from its real range, and the relation filter only matches the card type picked.
+- Matrix report: a saved report opens with its sorts, depths, filters and scopes, and Transpose keeps both scopes.
+- Lifecycle report: a saved date range is restored, and the Type column shows and sorts by the type's label. Dates in the table and bar tooltips now show the full date in the workspace format (they showed month and year), and the phases sort in lifecycle order rather than alphabetically.
+- EOL report: a card without EOL data is named by itself, never "null null", and dates follow the workspace date format.
+- Cost report: a saved cost field and cost sources are restored, and the tooltip shows its "% of total" figure again.
+- Cost report, cost treemap, capability heatmap and process map: a cost stored as text (an Excel import, an integration, an older client) no longer makes the report fail to load; numeric text counts as the number it spells and anything else counts as nothing, and the process map's own roll-up reads it the same way. Processes in a looping parent chain stay on the map.
+- Cards: a cost or number field refuses a value that is not a number (text that is not a number, true/false) with a validation error instead of storing it, and numeric text such as "1200" is stored as the number.
+- Dependency report: the tree-card tooltip counts its connections with correct plurals, and a retired or upcoming card keeps its outline.
+- EOL report: the countdown beside an end-of-life date ("40 days ago", "3 months", "2.2 years") is in the UI language with its correct plural forms, not English abbreviations.
+- Cost and Lifecycle reports: a saved report that names another card type now opens with its scope, as the Matrix does.
+
+### Changed
+- Portfolio report: the Group by menu offers one entry per relation type, so a card can be grouped by the cards it reaches through a specific relationship; a saved report that already named one shows it in the select.
+
+## [2.157.8] - 2026-10-09
+
+### Fixed
+- Mitigation tasks, decisions and SoAWs: a failed save keeps its dialog open with the reason and what was typed, instead of closing as if it had saved.
+- Decisions and SoAWs: clicking Save, Sign, Duplicate, New revision or Enter twice no longer sends the request twice (the action buttons are disabled while one runs), and a failed card link no longer creates a second decision.
+- Decisions: the From / To date filters follow the day a decision is shown under (the local calendar day), so both ends include the whole day whatever offset the stored timestamp carries, and a missing decision says so rather than "SoAW not found".
+- Initiative tree: it is a tree for assistive tech — one tab stop, the arrow keys move between rows, Left and Right fold and unfold a branch, Home and End jump to the ends and Shift+F marks a favourite — instead of a column of buttons with buttons inside them; a custom status shows its own label and colour, with readable text on the status chip whatever colour the option carries.
+- EA Delivery: a new SoAW or diagram is never tied to an initiative id that matches no initiative.
+- Todos: two quick toggles no longer undo each other, and a list that is loading or failed to load shows a spinner or the error instead of "No todos found".
+- French: linked cards are « fiches », not « cartes ».
+- Mitigation tasks: pressing Escape or clicking outside while a task or a cycle is still saving no longer closes the dialog, so a failed save is shown instead of being lost.
+- Mitigation tasks: the Complete / Skip cycle dialog shows the due date in the workspace date format instead of a raw ISO date.
+
+## [2.157.7] - 2026-10-09
+
+### Fixed
+- Card detail: a failed load of todos, lineage, hierarchy or relations now says what failed instead of showing an empty list or a progress bar that never ends, with a Retry button, and a failed delete, unlink, EOL link or Provider link says so.
+- Card detail: approve, reject or reset failing for a reason other than missing mandatory items now says why, and deleting a card with unsaved edits leaves the page instead of stranding you on a deleted card.
+- Card detail: a supported EOL cycle no longer reads "Yes (EOL)" in red, and the approval-blocked list names relation types by their verb, from the side the card is on.
+- Card detail: a failed logo or subtype save shows its error beside the card instead of replacing the whole page.
+- Card detail: a reload of the todos, hierarchy, relations, lineage or Provider that lands after a newer one no longer overwrites the newer list, and the approval details of the card shown before never carry over to the next card.
+- Create card: what was typed stays while the dialog closes, a failed or not-yet-run EOL search no longer reads "No EOL matches found", and an AI suggestion asked for an earlier type or session no longer lands in the form.
+- Provider field: relinking a card to another Provider keeps its current Provider if the new link fails.
+- Metamodel translation dialog: it edits the language its selected tab shows, even when the enabled languages arrive after it opened.
+- Card logo: a brand icon that cannot be set closes the icon picker, so its error is no longer hidden behind it.
+- Provider field: when linking another Provider fails, the vendor text goes back to what it said instead of naming a Provider the card did not get.
+- Provider field: when the new Provider is linked but the old one cannot be unlinked, the field says so and shows the new Provider, and the card's relations are refreshed to show both.
+- Create card: an AI suggestion asked for an earlier name or subtype no longer lands in the form.
+- Create card: screen readers announce the Type, Subtype and required select pickers by their labels.
+- Card detail: the Lineage section shows its progress bar while it loads, instead of "No predecessors." and "No successors.", when the metamodel arrives after the card.
+- Card detail: the Relations header shows no count until the relations have loaded, instead of 0.
+
+## [2.157.6] - 2026-10-09
+
+### Fixed
+- TurboLens: a failed load of vendors, resolution or duplicates shows the error instead of "Run an analysis".
+- TurboLens: an integration drawn right to left within one layer is now drawn at all, and one drawn bottom-to-top or right-to-left keeps its arrowhead on its real target instead of pointing at the wrong component. (An integration the AI marks bidirectional would get arrowheads at both ends; the analysis prompt does not currently emit that value.)
+- TurboLens: every counted modernization opportunity is listed, and the "unknown" type filter shows the untyped entries.
+- TurboLens Architect: a question with no usable options can be answered in free text, so the round can always be submitted, and an assessment resumed by link reads as saved.
+- TurboLens: the diagram badges, counts and assessment viewer messages are translated, with plurals.
+- TurboLens: a duplicate cluster's status and a modernization opportunity's priority and effort are shown in the user's language instead of as raw values, and an opportunity without a priority shows the priority of the group it is listed under.
+- TurboLens Resolution: the vendor type filter lists its types in the alphabetical order of the names shown, not of the internal keys.
+- TurboLens Resolution: "Products / Modules" counts only products and modules, no longer platforms and untyped entries.
+- TurboLens: opening another assessment no longer keeps showing the previous one's title in the browser tab while it loads or when it cannot be loaded.
+- TurboLens Architect: a proposed relation missing an end is no longer listed under the name of an unrelated proposed card; like the diagram, the list leaves it out.
+- TurboLens Architect: the Create Initiative dialog no longer lists, counts or sends a proposed relation missing an end, so it shows the same relations as the target architecture, and it no longer fails to open when the AI proposes a new card without an id.
+- TurboLens Architect: the integration effort of a recommended product or dependency option is shown in the user's language instead of as the raw value.
+- TurboLens Architect: the Create Initiative dialog names each new card's type by its label instead of its internal key.
+- TurboLens Architect: committing an assessment no longer fails when the AI proposed a card without an id, and a relation with an unset end is never attached to an existing card whose id came back empty.
 
 ## [2.157.5] - 2026-10-09
 
@@ -30,7 +228,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Survey Builder: Back is disabled while Next is saving, so a Back click can no longer be undone by the save landing a moment later.
 - Survey Builder: after switching the interface language, a failed save, preview or load reports its error in the new language rather than the previous one, and opening another survey from the one on screen never shows the first survey's fields when its reply lands late.
 - Relation-type values: clicking Save twice quickly sends the change once.
-- A malformed card id in a `/cards/{id}` path (anything that is not a UUID) now answers 404 instead of 500 — the id is parsed through a shared helper that treats a syntactically invalid id as "not found", which also keeps every such route's response uniform.
 
 ### Changed
 - Extensions: the page intro now describes the in-product Store alongside the file-based install flow, in every language.
@@ -2068,22 +2265,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [2.23.4] - 2026-07-23
 
-### Added
-- **New "Element-IT Component Map" and "Element-Data Object Map" reports** (BPM → Reports). Mirroring the existing Element-Application Map, they show which BPMN steps use which IT components / data objects, grouped by IT component / data object, with the element type, its process, and its lane — so you can see exactly where an IT component or data object is touched across the process landscape. All three element maps are now documented in the BPM guide.
-
 ### Fixed
-- **Columns no longer drift out of alignment between groups on the Element-Application/IT Component/Data Object Map reports.** Each group rendered its own table, and MUI's default `table-layout: auto` sized every table's columns independently from its own content — so "Type"/"Process"/"Lane" landed in different horizontal positions from one group to the next. Fixed column widths (`table-layout: fixed`) now keep all groups aligned.
 - **SSO login with Okta (and other strict OIDC providers) no longer fails with `invalid_request`** (#860). The login flow now sends the OAuth `state` parameter on the authorize request — Okta mandates it — and the callback validates the echoed value against the one stored before redirecting, adding standard CSRF protection to sign-in. Providers that already worked (Microsoft Entra ID, Google, Authentik, Keycloak, …) are unaffected: echoing `state` is mandatory OAuth 2.0 behavior.
-
-## [2.24.1] - 2026-07-22
-
-### Fixed
-- **Linking an Organization to a process step no longer auto-creates a process-level "is owned by" relation.** `relProcessToOrg` represents process-level ownership/governance — a different concept from "this organization participates in one step" — so, unlike Application/Data Object/IT Component (neutral "uses/references" relations, still synced), Organization element-links are never synced up to the process level.
-
-## [2.24.0] - 2026-07-22
-
-### Added
-- **Individual BPMN process steps can now be linked to Organization cards** (Process Flow → Process Steps & Elements). Unlike Application/Data Object/IT Component (one value per step), a single step can involve more than one organizational actor, so Organization is a many-to-many link — the new "Organization" column shows a compact chip summary per step and opens a popover to add/remove links, matching the interaction Inventory already uses for its relation columns.
 
 ## [2.23.3] - 2026-07-22
 

@@ -52,6 +52,7 @@ import ElementTypeChip from "./ElementTypeChip";
 import MessageFlowsTable from "./MessageFlowsTable";
 import { isArtefactType } from "./elementTypes";
 import { api } from "@/api/client";
+import { failureMessage, wordFailure } from "@/lib/failureMessage";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { ExtensionSlot } from "@/lib/extensionHost";
 import { escapeHtml } from "@/lib/printDocument";
@@ -97,17 +98,24 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
   // Published
   const [published, setPublished] = useState<ProcessFlowVersion | null>(null);
   const [loadingPub, setLoadingPub] = useState(true);
+  // A failed permissions / published load: shown instead of "nothing published".
+  const [loadError, setLoadError] = useState("");
 
-  // Drafts
+  // Drafts — loading until the first load has run, so the empty state never
+  // flashes before it.
   const [drafts, setDrafts] = useState<ProcessFlowVersion[]>([]);
-  const [loadingDrafts, setLoadingDrafts] = useState(false);
+  const [loadingDrafts, setLoadingDrafts] = useState(true);
+  const [draftsError, setDraftsError] = useState("");
 
   // Archived
   const [archived, setArchived] = useState<ProcessFlowVersion[]>([]);
-  const [loadingArchived, setLoadingArchived] = useState(false);
+  const [loadingArchived, setLoadingArchived] = useState(true);
+  const [archivedError, setArchivedError] = useState("");
 
   // Process elements (steps / lanes table for published view)
   const [elements, setElements] = useState<ProcessElement[]>([]);
+  // A failed elements load: shown in place of the table, never as "no table".
+  const [elementsError, setElementsError] = useState("");
 
   // Draft preview state
   const [expandedDraft, setExpandedDraft] = useState<string | null>(null);
@@ -120,6 +128,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
   // Draft elements (pre-linking before publish)
   const [draftElements, setDraftElements] = useState<Record<string, ProcessElement[]>>({});
   const [draftElementsLoading, setDraftElementsLoading] = useState<Record<string, boolean>>({});
+  const [draftElementsError, setDraftElementsError] = useState<Record<string, string>>({});
 
   // Dialog states
   const [showTemplateChooser, setShowTemplateChooser] = useState(false);
@@ -140,11 +149,17 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
   // Load permissions, published version, elements, and eagerly load drafts
   const loadInitial = useCallback(async () => {
     setLoadingPub(true);
+    setLoadError("");
+    setElementsError("");
     try {
       const [permsData, pubData, elemData] = await Promise.all([
         api.get<ProcessFlowPermissions>(`/bpm/processes/${processId}/flow/permissions`),
         api.get<ProcessFlowVersion | null>(`/bpm/processes/${processId}/flow/published`),
-        api.get<ProcessElement[]>(`/bpm/processes/${processId}/elements`).catch(() => [] as ProcessElement[]),
+        // A failed elements read still shows the flow; the table says it failed.
+        api.get<ProcessElement[]>(`/bpm/processes/${processId}/elements`).catch((err: unknown) => {
+          setElementsError(failureMessage(err, "common:errors.generic"));
+          return [] as ProcessElement[];
+        }),
       ]);
       setPerms(permsData);
       setPublished(pubData);
@@ -161,8 +176,9 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
           setDrafts([]);
         }
       }
-    } catch {
+    } catch (err) {
       setPublished(null);
+      setLoadError(failureMessage(err, "common:errors.generic"));
     } finally {
       setLoadingPub(false);
     }
@@ -171,13 +187,15 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
   const loadDrafts = useCallback(async () => {
     if (!perms.can_view_drafts) return;
     setLoadingDrafts(true);
+    setDraftsError("");
     try {
       const data = await api.get<ProcessFlowVersion[]>(
         `/bpm/processes/${processId}/flow/drafts`
       );
       setDrafts(data);
-    } catch {
+    } catch (err) {
       setDrafts([]);
+      setDraftsError(failureMessage(err, "common:errors.generic"));
     } finally {
       setLoadingDrafts(false);
     }
@@ -186,13 +204,15 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
   const loadArchived = useCallback(async () => {
     if (!perms.can_view_drafts) return;
     setLoadingArchived(true);
+    setArchivedError("");
     try {
       const data = await api.get<ProcessFlowVersion[]>(
         `/bpm/processes/${processId}/flow/archived`
       );
       setArchived(data);
-    } catch {
+    } catch (err) {
       setArchived([]);
+      setArchivedError(failureMessage(err, "common:errors.generic"));
     } finally {
       setLoadingArchived(false);
     }
@@ -212,9 +232,13 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
   const handleElementUpdate = async (elementId: string, updates: Record<string, unknown>) => {
     try {
       await api.put(`/bpm/processes/${processId}/elements/${elementId}`, updates);
-      const elemData = await api.get<ProcessElement[]>(`/bpm/processes/${processId}/elements`).catch(() => [] as ProcessElement[]);
-      setElements(elemData);
-      setSnack(t("flowTab.elementUpdated"));
+      try {
+        setElements(await api.get<ProcessElement[]>(`/bpm/processes/${processId}/elements`));
+        setSnack(t("flowTab.elementUpdated"));
+      } catch {
+        // The write landed; only the re-read failed. Keep the table on screen.
+        setSnack(t("flowTab.elementUpdatedRefreshFailed"));
+      }
     } catch {
       setSnack(t("flowTab.elementUpdateFailed"));
     }
@@ -265,6 +289,14 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
     }
   };
 
+  // Every confirm dialog opens without the previous one's error: the error
+  // renders only inside the dialog, so clearing it on open is enough.
+  const openConfirm = (type: "submit" | "approve" | "reject" | "delete", version: ProcessFlowVersion) => {
+    setActionError("");
+    setConfirmAction({ type, version });
+  };
+  const closeConfirm = () => setConfirmAction(null);
+
   const handleAction = async () => {
     if (!confirmAction) return;
     setActionError("");
@@ -292,7 +324,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
       loadDrafts();
       loadArchived();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Action failed");
+      setActionError(err instanceof Error ? err.message : t("flowTab.actionFailed"));
     }
   };
 
@@ -335,13 +367,17 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
 
   const loadDraftElements = async (draftId: string) => {
     setDraftElementsLoading((prev) => ({ ...prev, [draftId]: true }));
+    setDraftElementsError((prev) => ({ ...prev, [draftId]: "" }));
     try {
       const elems = await api.get<ProcessElement[]>(
         `/bpm/processes/${processId}/flow/versions/${draftId}/draft-elements`
       );
       setDraftElements((prev) => ({ ...prev, [draftId]: elems }));
-    } catch {
-      setDraftElements((prev) => ({ ...prev, [draftId]: [] }));
+    } catch (err) {
+      setDraftElementsError((prev) => ({
+        ...prev,
+        [draftId]: err instanceof Error ? err.message : t("common:errors.generic"),
+      }));
     } finally {
       setDraftElementsLoading((prev) => ({ ...prev, [draftId]: false }));
     }
@@ -354,8 +390,17 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
         updates
       );
       // Reload draft elements to get resolved names
-      await loadDraftElements(draftId);
-      setSnack(t("flowTab.draftElementLinkUpdated"));
+      try {
+        const elems = await api.get<ProcessElement[]>(
+          `/bpm/processes/${processId}/flow/versions/${draftId}/draft-elements`
+        );
+        setDraftElements((prev) => ({ ...prev, [draftId]: elems }));
+        setSnack(t("flowTab.draftElementLinkUpdated"));
+      } catch {
+        // The write landed; only the re-read failed. Keep the table on screen,
+        // as the published table does.
+        setSnack(t("flowTab.elementUpdatedRefreshFailed"));
+      }
     } catch {
       setSnack(t("flowTab.draftElementLinkFailed"));
     }
@@ -378,8 +423,8 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
         console.error("Failed to load draft detail:", err);
       }
     }
-    // Load draft elements
-    if (!draftElements[draftId]) {
+    // Load draft elements — again when the last attempt failed
+    if (!draftElements[draftId] || draftElementsError[draftId]) {
       loadDraftElements(draftId);
     }
   };
@@ -586,6 +631,8 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
   ) => {
     const orgs = element.organizations || [];
     const isEditing = editingCell?.elementId === elementId && editingCell?.field === "organization";
+    // The card type's display name; the column header until the metamodel loads.
+    const orgTypeName = typeLabelOf(getType("Organization")) || t("flowTab.organization");
 
     if (isEditing) {
       // Picking a card adds it to the step's organizations (M:N).
@@ -605,7 +652,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
           enabled={isEditing}
           autoFocus
           sx={{ minWidth: 160 }}
-          placeholder={t("flowTab.searchCardType", { type: "Organization" })}
+          placeholder={t("flowTab.searchCardType", { type: orgTypeName })}
         />
       );
     }
@@ -633,7 +680,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
         ) : (
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <MaterialSymbol icon="add_link" size={14} color="#bbb" />
-            <Typography variant="caption" color="text.disabled">{t("flowTab.linkCardType", { type: "Organization" })}</Typography>
+            <Typography variant="caption" color="text.disabled">{t("flowTab.linkCardType", { type: orgTypeName })}</Typography>
           </Box>
         )}
       </Box>
@@ -808,6 +855,9 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
         <Typography color="text.secondary">{t("flowTab.loadingPublished")}</Typography>
       );
     }
+    if (loadError) {
+      return <Alert severity="error">{wordFailure(loadError, t)}</Alert>;
+    }
     if (!published) {
       const hasDrafts = drafts.length > 0;
       return (
@@ -938,7 +988,14 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
         )}
 
         {/* Editable process elements table */}
-        {renderElementsTable(elements, handleElementUpdate)}
+        {elementsError ? (
+          // Stryker disable next-line ObjectLiteral: spacing is presentation
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {wordFailure(elementsError, t)}
+          </Alert>
+        ) : (
+          renderElementsTable(elements, handleElementUpdate)
+        )}
 
         {/* Messages exchanged between pools, each linkable to an Interface card */}
         <MessageFlowsTable
@@ -984,7 +1041,9 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
           </Box>
         )}
 
-        {drafts.length === 0 ? (
+        {draftsError ? (
+          <Alert severity="error">{wordFailure(draftsError, t)}</Alert>
+        ) : drafts.length === 0 ? (
           <Box sx={{ textAlign: "center", py: 3 }}>
             <Typography color="text.secondary">{t("flowTab.noDrafts")}</Typography>
           </Box>
@@ -1067,9 +1126,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
                           size="small"
                           variant="contained"
                           color="primary"
-                          onClick={() =>
-                            setConfirmAction({ type: "submit", version: d })
-                          }
+                          onClick={() => openConfirm("submit", d)}
                         >
                           {t("common:actions.submit")}
                         </Button>
@@ -1079,9 +1136,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
                           size="small"
                           variant="outlined"
                           color="error"
-                          onClick={() =>
-                            setConfirmAction({ type: "delete", version: d })
-                          }
+                          onClick={() => openConfirm("delete", d)}
                         >
                           {t("common:actions.delete")}
                         </Button>
@@ -1095,9 +1150,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
                           size="small"
                           variant="contained"
                           color="success"
-                          onClick={() =>
-                            setConfirmAction({ type: "approve", version: d })
-                          }
+                          onClick={() => openConfirm("approve", d)}
                         >
                           {t("common:actions.approve")}
                         </Button>
@@ -1107,9 +1160,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
                           size="small"
                           variant="outlined"
                           color="error"
-                          onClick={() =>
-                            setConfirmAction({ type: "reject", version: d })
-                          }
+                          onClick={() => openConfirm("reject", d)}
                         >
                           {t("common:actions.reject")}
                         </Button>
@@ -1147,6 +1198,11 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
                     {/* Draft element pre-linking table */}
                     {draftElementsLoading[d.id] ? (
                       <Typography color="text.secondary" sx={{ mt: 2 }}>{t("flowTab.loadingElements")}</Typography>
+                    ) : draftElementsError[d.id] ? (
+                      // Stryker disable next-line ObjectLiteral: spacing is presentation
+                      <Alert severity="error" sx={{ mt: 2 }}>
+                        {draftElementsError[d.id]}
+                      </Alert>
                     ) : draftElements[d.id] && draftElements[d.id].length > 0 ? (
                       renderElementsTable(
                         draftElements[d.id],
@@ -1183,6 +1239,10 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
       return (
         <Typography color="text.secondary">{t("flowTab.loadingArchived")}</Typography>
       );
+    }
+
+    if (archivedError) {
+      return <Alert severity="error">{wordFailure(archivedError, t)}</Alert>;
     }
 
     if (archived.length === 0) {
@@ -1451,7 +1511,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
     if (!confirmAction) return null;
     const labels = actionLabels[confirmAction.type];
     return (
-      <Dialog open onClose={() => setConfirmAction(null)}>
+      <Dialog open onClose={closeConfirm}>
         <DialogTitle>{labels.title}</DialogTitle>
         <DialogContent>
           <DialogContentText>{labels.description}</DialogContentText>
@@ -1465,7 +1525,7 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmAction(null)}>{t("common:actions.cancel")}</Button>
+          <Button onClick={closeConfirm}>{t("common:actions.cancel")}</Button>
           <Button
             variant="contained"
             color={labels.color}
@@ -1480,10 +1540,19 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
 
   // ── Main render ──────────────────────────────────────────────────────
 
+  // Drafts and Archived exist only with draft access. Until the permissions are
+  // known no tab is selected (rather than one that may not exist); once they
+  // deny it, Published is the only tab there is.
+  const shownTab: number | false = perms.can_view_drafts
+    ? subTab
+    : subTab !== 0 && loadingPub
+      ? false
+      : 0;
+
   return (
     <Box>
       <Tabs
-        value={subTab}
+        value={shownTab}
         onChange={(_, v) => setSubTab(v)}
         sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}
       >
@@ -1492,9 +1561,9 @@ export default function ProcessFlowTab({ processId, processName, initialSubTab }
         {perms.can_view_drafts && <Tab label={t("common:status.archived")} />}
       </Tabs>
 
-      {subTab === 0 && renderPublished()}
-      {subTab === 1 && perms.can_view_drafts && renderDrafts()}
-      {subTab === 2 && perms.can_view_drafts && renderArchived()}
+      {shownTab === 0 && renderPublished()}
+      {shownTab === 1 && renderDrafts()}
+      {shownTab === 2 && renderArchived()}
 
       {renderFullScreenDialog()}
       {renderConfirmDialog()}

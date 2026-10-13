@@ -13,6 +13,7 @@ fixture so the suite never needs the real wheel installed.
 from __future__ import annotations
 
 import types
+import uuid
 from typing import Any
 
 import pytest
@@ -21,7 +22,7 @@ from sqlalchemy import select
 from app.models.card import Card
 from app.models.relation import Relation
 from app.services import catalogue_common as common
-from tests.conftest import create_card, create_user
+from tests.conftest import create_card, create_card_type, create_user
 
 # ---------------------------------------------------------------------------
 # Fake catalogue
@@ -292,3 +293,188 @@ async def test_import_persists_framework_refs_and_attributes(db, monkeypatch):
         {"framework": "APQC-PCF", "external_id": "10.0", "version": "8.0", "url": None}
     ]
     assert row.attributes["realizesCapabilityIds"] == ["BC-1"]
+
+
+# ---------------------------------------------------------------------------
+# A newer catalogue cached from the store
+# ---------------------------------------------------------------------------
+
+
+async def _cache_processes(db, svc, **extra):
+    await common.set_cached_remote(
+        db,
+        {
+            svc.SETTINGS_KEY: {
+                "data": [dict(_FAKE_PROCESSES[0], name="Acquire Assets v9")],
+                "catalogue_version": "9.0.0",
+                "generated_at": "2026-10-01T00:00:00Z",
+                "fetched_at": "2026-10-02T00:00:00Z",
+                **extra,
+            }
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_newer_cached_catalogue_is_served_and_described(db, monkeypatch):
+    _install_fake_pkg(monkeypatch)
+    from app.services import process_catalogue_service as svc
+
+    await _cache_processes(db, svc, process_count=7)
+    payload = await svc.get_catalogue_payload(db)
+    assert [p["name"] for p in payload["processes"]] == ["Acquire Assets v9"]
+    assert payload["version"] == {
+        "catalogue_version": "9.0.0",
+        "schema_version": "",  # the cache stored none
+        "generated_at": "2026-10-01T00:00:00Z",
+        "process_count": 7,
+        "source": "remote",
+        "fetched_at": "2026-10-02T00:00:00Z",
+        "bundled_version": "2.0.0",
+        "available_locales": ["en"],
+        "active_locale": "en",
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_cached_catalogue_is_served_in_the_requested_language(db, monkeypatch):
+    _install_fake_pkg(monkeypatch)
+    from app.services import process_catalogue_service as svc
+
+    await _cache_processes(db, svc, i18n={"fr": {"BP-100": {"name": "Acquérir des actifs"}}})
+    payload = await svc.get_catalogue_payload(db, locale="fr")
+    assert [p["name"] for p in payload["processes"]] == ["Acquérir des actifs"]
+    assert payload["version"]["active_locale"] == "fr"
+    assert payload["version"]["available_locales"] == ["en", "fr"]
+
+
+@pytest.mark.asyncio
+async def test_a_cache_without_a_version_is_ignored(db, monkeypatch):
+    _install_fake_pkg(monkeypatch)
+    from app.services import process_catalogue_service as svc
+
+    await common.set_cached_remote(
+        db, {svc.SETTINGS_KEY: {"data": [dict(_FAKE_PROCESSES[0], name="Unversioned")]}}
+    )
+    payload = await svc.get_catalogue_payload(db)
+    assert payload["version"]["source"] == "bundled"
+    assert "Unversioned" not in {p["name"] for p in payload["processes"]}
+
+
+@pytest.mark.asyncio
+async def test_imported_process_attributes_and_subtype(db, monkeypatch):
+    _install_fake_pkg(monkeypatch)
+    from app.services import process_catalogue_service as svc
+
+    procs = [
+        {
+            "id": "BP-9.1.1.1",
+            "name": "Log the claim",
+            "level": 4,
+            "parent_id": None,
+            "description": "An activity",
+            "aliases": ["Claim intake"],
+            "industry": "Insurance",
+            "references": ["https://example.invalid/apqc"],
+            "framework_refs": [{"framework": "APQC-PCF", "external_id": "9.1.1.1"}],
+            "realizes_capability_ids": ["BC-404"],
+            "in_scope": ["Phone"],
+            "out_of_scope": ["Fraud"],
+            "deprecated": True,
+        }
+    ]
+    monkeypatch.setattr(common, "load_bundled_processes_raw", lambda: list(procs))
+    user = await create_user(db, email="proc-attrs@x.com")
+    result = await svc.import_processes(db, user=user, catalogue_ids=["BP-9.1.1.1"])
+    # BC-404 has no card, so no relation is created for it
+    assert result["auto_relations_created"] == 0
+    card_id = result["created"][0]["card_id"]
+    card = (await db.execute(select(Card).where(Card.id == uuid.UUID(card_id)))).scalar_one()
+    attrs = dict(card.attributes)
+    assert isinstance(attrs.pop("catalogueImportedAt"), str)
+    assert attrs == {
+        "catalogueId": "BP-9.1.1.1",
+        "catalogueVersion": "2.0.0",
+        "processLevel": "L4",
+        "aliases": ["Claim intake"],
+        "industry": "Insurance",
+        "references": ["https://example.invalid/apqc"],
+        "frameworkRefs": [{"framework": "APQC-PCF", "external_id": "9.1.1.1"}],
+        "realizesCapabilityIds": ["BC-404"],
+        "inScope": ["Phone"],
+        "outOfScope": ["Fraud"],
+        "deprecated": True,
+    }
+    # APQC L4 ("Activity") has no subtype of its own and lands as a process
+    assert card.subtype == "process"
+
+
+@pytest.mark.asyncio
+async def test_imported_processes_record_their_creation_and_level(db, monkeypatch):
+    _install_fake_pkg(monkeypatch)
+    from app.models.event import Event
+    from app.services import process_catalogue_service as svc
+
+    await create_card_type(db, key="BusinessProcess", label="Business Process", has_hierarchy=True)
+    user = await create_user(db, email="proc-path@x.com")
+    result = await svc.import_processes(db, user=user, catalogue_ids=["BP-100", "BP-100.10"])
+
+    assert [c["catalogue_id"] for c in result["created"]] == ["BP-100", "BP-100.10"]
+    assert result["failed"] == []
+    for level, created in enumerate(result["created"], start=1):
+        card = (
+            await db.execute(select(Card).where(Card.id == uuid.UUID(created["card_id"])))
+        ).scalar_one()
+        assert card.attributes["hierarchyLevel"] == level
+        events = (await db.execute(select(Event).where(Event.card_id == card.id))).scalars().all()
+        assert [(e.event_type, e.user_id) for e in events] == [("card.created", user.id)]
+
+
+def test_bundled_payload_counts_from_the_package_constant(monkeypatch):
+    # The wheel's PROCESS_COUNT is the count shown; a wheel without one counts the list.
+    _install_fake_pkg(monkeypatch)
+    from app.services import process_catalogue_service as svc
+
+    monkeypatch.setattr(svc.catalogue_pkg, "PROCESS_COUNT", 77)
+    assert svc._bundled_payload()[1]["process_count"] == 77
+    monkeypatch.delattr(svc.catalogue_pkg, "PROCESS_COUNT")
+    assert svc._bundled_payload()[1]["process_count"] == len(_FAKE_PROCESSES)
+
+
+@pytest.mark.asyncio
+async def test_a_refused_process_and_the_entries_below_it_are_reported(db, monkeypatch):
+    """Two catalogue entries sharing a name never match a card by name (#1241),
+    so importing the second where a card of that name already sits at root is
+    refused by the write path — reported, not created — and its children are
+    reported with it instead of landing as root cards."""
+    _install_fake_pkg(monkeypatch)
+    from app.services import process_catalogue_service as svc
+
+    base = _FAKE_PROCESSES[0]
+    procs = [
+        dict(base, id="BP-200", name="Shared Process", parent_id=None, realizes_capability_ids=[]),
+        dict(base, id="BP-201", name="Shared Process", parent_id=None, realizes_capability_ids=[]),
+        dict(
+            base,
+            id="BP-201.10",
+            name="Under 201",
+            level=2,
+            parent_id="BP-201",
+            realizes_capability_ids=[],
+        ),
+    ]
+    monkeypatch.setattr(common, "load_bundled_processes_raw", lambda: list(procs))
+    user = await create_user(db, email="refused-proc@x.com")
+    mine = await create_card(
+        db, card_type="BusinessProcess", name="Shared Process", user_id=user.id
+    )
+
+    result = await svc.import_processes(db, user=user, catalogue_ids=["BP-201", "BP-201.10"])
+
+    assert result["created"] == []
+    assert result["skipped"] == []
+    assert [f["catalogue_id"] for f in result["failed"]] == ["BP-201", "BP-201.10"]
+    assert "Shared Process" in result["failed"][0]["reason"]
+    assert result["failed"][1]["reason"] == "parent not imported"
+    rows = (await db.execute(select(Card).where(Card.type == "BusinessProcess"))).scalars().all()
+    assert [(r.id, r.attributes.get("catalogueId")) for r in rows] == [(mine.id, None)]

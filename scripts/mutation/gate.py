@@ -28,7 +28,9 @@ Scopes:
           (the nightly, which builds the baseline over several time-boxed runs)
           an untested mutant is progress rather than an error: it is left out
           of the score, and a floor applies only once everything it covers
-          has been measured.
+          has been measured. ``--status`` appends the suite's one-line
+          status (score against floor or baseline progress, critical
+          modules, files whose score fell), which leads the nightly's issue.
 
 Exit 0 pass, 1 below a floor, 2 incomplete or unusable input.
 """
@@ -48,6 +50,10 @@ DEFAULT_FLOORS = HERE / "floors.toml"
 SUITES = ("backend", "frontend", "mcp")
 STATUSES = ("killed", "survived", "excluded", "pending")
 SUMMARY_SURVIVOR_LIMIT = 50
+#: The one record stryker_scope writes for a file no chunk has measured yet. It
+#: stands for every mutant of that file, a number nobody knows until it runs, so
+#: it is counted as a file and never as one mutant.
+UNMEASURED_FILE = "not measured yet (whole file)"
 
 
 @dataclass
@@ -130,6 +136,25 @@ def fmt(score: float | None) -> str:
     return "n/a" if score is None else f"{score:.1f}%"
 
 
+def unmeasured_file(record: dict) -> bool:
+    return record["status"] == "pending" and record.get("raw_status") == UNMEASURED_FILE
+
+
+def remaining(records: list[dict], total: Tally) -> tuple[int, int]:
+    """``(mutants still to test, files not measured yet)`` of a partial run."""
+    files = sum(1 for record in records if unmeasured_file(record))
+    return total.pending - files, files
+
+
+def share_measured(measured: int, mutants_left: int) -> int:
+    # Floored, so a baseline with anything left never reads 100%.
+    return int(100 * measured / (measured + mutants_left)) if measured + mutants_left else 0
+
+
+def plural(count: int, word: str) -> str:
+    return f"{count} {word}" if count == 1 else f"{count} {word}s"
+
+
 def judge(
     records: list[dict], suite: str, scope: str, floors: dict, allow_pending: bool = False
 ) -> Verdict:
@@ -168,12 +193,26 @@ def judge(
         floor = floors["suite"][suite]
         measured = total.scored + total.excluded
         if partial:
-            share = 100.0 * measured / (measured + total.pending)
+            mutants_left, files_left = remaining(records, total)
+            if files_left:
+                # How many mutants an unmeasured file holds is unknown, so
+                # there is no share to give.
+                left = [plural(files_left, "file") + " not measured yet"]
+                if mutants_left:
+                    left.append(plural(mutants_left, "mutant") + " still to test")
+                head = (
+                    f"Baseline in progress: {plural(measured, 'mutant')} measured; "
+                    f"{' and '.join(left)}, left for the next run."
+                )
+            else:
+                head = (
+                    f"Baseline in progress: {measured} of {measured + mutants_left} mutants "
+                    f"measured ({share_measured(measured, mutants_left)}%); the rest resume "
+                    "on the next run."
+                )
             lines.append(
-                f"Baseline in progress: {measured} of {measured + total.pending} mutants "
-                f"measured ({share:.0f}%); the rest resume on the next run. "
-                f"{fmt(total.score)} of those measured were killed. The {floor}% suite "
-                "floor applies once the baseline is complete."
+                f"{head} {fmt(total.score)} of those measured were killed. The {floor}% "
+                "suite floor applies once the baseline is complete."
             )
         else:
             passed = total.score is None or total.score >= floor
@@ -195,9 +234,14 @@ def judge(
                 passed = passed and partial
                 continue
             if t.pending:
+                todo = (
+                    "not measured yet"
+                    if t.scored + t.excluded == 0
+                    and any(unmeasured_file(r) for r in records if r["file"] == module)
+                    else f"{t.pending} still to measure"
+                )
                 module_rows.append(
-                    f"| `{module}` | {fmt(t.score)} so far | {module_floor}% | "
-                    f"{t.pending} still to measure |"
+                    f"| `{module}` | {fmt(t.score)} so far | {module_floor}% | {todo} |"
                 )
                 continue
             ok = t.score is None or t.score >= module_floor
@@ -279,8 +323,10 @@ def backlog(records: list[dict], suite: str, floors: dict) -> list[str]:
     return out
 
 
-def regressions(records: list[dict], previous: list[dict], threshold: float = 0.5) -> list[str]:
-    """Files whose score fell since the previous full run."""
+def dropped_files(
+    records: list[dict], previous: list[dict], threshold: float = 0.5
+) -> list[tuple[str, float, float]]:
+    """``(path, before, now)`` for every file whose score fell since the previous full run."""
     now, before = per_file(records), per_file(previous)
     out = []
     for path in sorted(now):
@@ -288,8 +334,17 @@ def regressions(records: list[dict], previous: list[dict], threshold: float = 0.
         if old is None or old.score is None or now[path].score is None:
             continue
         if now[path].score < old.score - threshold:
-            out.append(f"| `{path}` | {fmt(old.score)} | {fmt(now[path].score)} |")
-    if not out:
+            out.append((path, old.score, now[path].score))
+    return out
+
+
+def regressions(records: list[dict], previous: list[dict], threshold: float = 0.5) -> list[str]:
+    """Files whose score fell since the previous full run."""
+    rows = [
+        f"| `{path}` | {fmt(before)} | {fmt(now)} |"
+        for path, before, now in dropped_files(records, previous, threshold)
+    ]
+    if not rows:
         return []
     return [
         "",
@@ -297,8 +352,94 @@ def regressions(records: list[dict], previous: list[dict], threshold: float = 0.
         "",
         "| File | Before | Now |",
         "|---|---|---|",
-        *out,
+        *rows,
     ]
+
+
+def status(
+    records: list[dict],
+    suite: str,
+    floors: dict,
+    previous: list[dict] | None = None,
+    allow_pending: bool = False,
+) -> list[str]:
+    """One Markdown bullet that answers "is anything wrong" for a suite's full run.
+
+    The nightly's issue opens with these, before any module is named: the
+    score against the suite floor (or how far the baseline has got), the
+    critical modules at, below or still short of their floor, and the files
+    whose score fell since the previous run. Same arithmetic and thresholds
+    as ``judge``, compressed to a line.
+    """
+    total = tally(records)
+    floor = floors["suite"][suite]
+    measured = total.scored + total.excluded
+    partial = allow_pending and total.pending > 0
+    if total.pending and not partial:
+        head = (
+            f"**incomplete run**: {total.pending} mutant(s) were never tested; "
+            f"{total.killed} of the {total.scored} tested were killed"
+        )
+    elif partial:
+        mutants_left, files_left = remaining(records, total)
+        if files_left:
+            left = [plural(files_left, "file") + " not measured yet"]
+            if mutants_left:
+                left.append(plural(mutants_left, "mutant") + " still to test")
+            progress = f"baseline in progress ({', '.join(left)})"
+        else:
+            progress = (
+                f"baseline {share_measured(measured, mutants_left)}% measured "
+                f"({plural(mutants_left, 'mutant')} left for the next run)"
+            )
+        head = (
+            f"{progress}; {fmt(total.score)} of those measured killed; the {floor}% floor "
+            "applies once complete"
+        )
+    else:
+        ok = total.score is None or total.score >= floor
+        head = (
+            f"{fmt(total.score)} of {total.scored} mutants killed; floor {floor}% — "
+            f"{'pass' if ok else '**FAIL**'}"
+        )
+
+    files = per_file(records)
+    modules = [m for m in sorted(floors.get("modules", {})) if suite_of(m) == suite]
+    ok_count, pending_count, failing, unmeasured = 0, 0, [], []
+    for module in modules:
+        t = files.get(module, Tally())
+        module_floor = floors["modules"][module]
+        if t.scored + t.excluded + t.pending == 0:
+            unmeasured.append(f"`{module}`")
+        elif t.pending:
+            pending_count += 1
+        elif t.score is None or t.score >= module_floor:
+            ok_count += 1
+        else:
+            failing.append(f"`{module}` ({fmt(t.score)} < {module_floor}%)")
+    if modules:
+        parts = [f"{ok_count} of {len(modules)} at or above floor"]
+        if failing:
+            parts.append("below floor: " + ", ".join(failing))
+        if pending_count:
+            parts.append(f"{pending_count} still to measure")
+        if unmeasured:
+            parts.append("not measured (check): " + ", ".join(unmeasured))
+        modules_line = "; ".join(parts)
+    else:
+        modules_line = "none floored"
+
+    line = f"- **{suite}**: {head}. Critical modules: {modules_line}."
+    if previous:
+        dropped = dropped_files(records, previous)
+        if dropped:
+            line += " Score fell since the previous run: " + ", ".join(
+                f"`{path}` ({fmt(before)} → {fmt(now)})" for path, before, now in dropped
+            )
+            line += "."
+        else:
+            line += " No file's score fell since the previous run."
+    return [line]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -311,6 +452,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--floors", type=Path, default=DEFAULT_FLOORS)
     parser.add_argument("--summary", type=Path, help="append the markdown report here")
     parser.add_argument("--survivors", type=Path, help="write the full survivor list here")
+    parser.add_argument(
+        "--status",
+        type=Path,
+        help="suite scope: append the one-line status (score, modules, drops) here",
+    )
     parser.add_argument(
         "--previous", type=Path, nargs="*", default=[], help="records of the previous full run"
     )
@@ -333,6 +479,7 @@ def main(argv: list[str] | None = None) -> int:
 
     verdict = judge(records, args.suite, args.scope, floors, args.allow_pending)
     report = list(verdict.lines)
+    previous: list[dict] = []
     if args.scope == "diff":
         survivors = survivor_lines(records, SUMMARY_SURVIVOR_LIMIT)
         if survivors:
@@ -351,6 +498,10 @@ def main(argv: list[str] | None = None) -> int:
         body = backlog(records, args.suite, floors) if args.scope == "suite" else []
         body = body or survivor_lines(records)
         args.survivors.write_text("\n".join(body) + "\n", encoding="utf-8")
+    if args.status and args.scope == "suite":
+        lines = status(records, args.suite, floors, previous, args.allow_pending)
+        with args.status.open("a", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
 
     if verdict.incomplete:
         print("::error::mutation run incomplete")

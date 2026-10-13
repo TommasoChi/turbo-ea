@@ -129,7 +129,11 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   >([]);
   const canManageExtensions = !!user.permissions?.["*"] || !!user.permissions?.["admin.manage_extensions"];
   useEffect(() => {
-    if (!canManageExtensions) return;
+    if (!canManageExtensions) {
+      // Lost the permission (e.g. "View as role…"): a banner already shown goes too.
+      setLicenseAttention([]);
+      return;
+    }
     let cancelled = false;
     api
       .get<{ key: string; version: string; entitlement_state: string }[]>("/extensions/status")
@@ -479,10 +483,6 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     }
   }, []);
 
-  useEffect(() => {
-    fetchBadgeCounts();
-  }, [fetchBadgeCounts]);
-
   // Debounced badge refresh — coalesces rapid SSE events into one API call
   const badgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedBadgeRefresh = useCallback(() => {
@@ -514,7 +514,8 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     debouncedBadgeRefresh,
   );
 
-  // Also refresh when navigating (covers completing a todo, responding to a survey)
+  // Read on load, and again on every navigation (covers completing a todo,
+  // responding to a survey).
   useEffect(() => {
     fetchBadgeCounts();
   }, [location.pathname, fetchBadgeCounts]);
@@ -533,8 +534,9 @@ export default function AppLayout({ children, user, onLogout }: Props) {
 
   const isActive = (path?: string) =>
     !!(path && (location.pathname === path || (path !== "/" && location.pathname.startsWith(path))));
-  const isGroupActive = (children?: { path: string }[]) =>
-    !!children?.some((c) => location.pathname === c.path);
+  // A group is active whenever one of its entries is — same prefix match.
+  const isGroupActive = (children: { path: string }[]) =>
+    children.some((c) => isActive(c.path));
 
   // A nav label may carry a literal "\n" (e.g. "Organization &\nProcess" —
   // a long group label that wraps to two lines in the top-bar dropdown

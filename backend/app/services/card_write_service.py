@@ -33,12 +33,13 @@ Contract notes:
 
 from __future__ import annotations
 
+import math
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
 from fastapi import BackgroundTasks, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -49,6 +50,7 @@ from app.models.relation_type import RelationType
 from app.services import card_approval, card_lifecycle, card_reference, notification_service
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_uniqueness import check_sibling_name_unique
+from app.services.cost_value import is_numeric_text
 from app.services.data_quality import calc_data_quality
 from app.services.event_bus import event_bus
 from app.services.hierarchy import HIERARCHY_LEVEL_KEY
@@ -93,12 +95,8 @@ async def _get_ppm_exclusions(db: AsyncSession, card: Card) -> set[str]:
     """Return field keys that PPM manages for this card (skip in calculations)."""
     if card.type != "Initiative":
         return set()
-    has_budget = await db.scalar(
-        select(func.count(PpmBudgetLine.id)).where(PpmBudgetLine.initiative_id == card.id)
-    )
-    has_costs = await db.scalar(
-        select(func.count(PpmCostLine.id)).where(PpmCostLine.initiative_id == card.id)
-    )
+    has_budget = await db.scalar(select(exists().where(PpmBudgetLine.initiative_id == card.id)))
+    has_costs = await db.scalar(select(exists().where(PpmCostLine.initiative_id == card.id)))
     excluded: set[str] = set()
     if has_budget:
         excluded.add("costBudget")
@@ -191,6 +189,46 @@ async def _validate_percentage_attributes(
             continue
         if isinstance(val, bool) or not isinstance(val, (int, float)) or not 0 <= val <= 100:
             raise HTTPException(422, f"Field '{key}' must be a number between 0 and 100")
+
+
+async def _validate_cost_attributes(db: AsyncSession, card_type: str, attributes: dict) -> None:
+    """Validate that a ``cost`` or ``number`` attribute holds a number, coercing numeric text.
+
+    The readers (``cost_value``) tolerate text so a report never fails on a
+    value an older client or an import stored, but a write is where the bad
+    value can still be refused: a bool, a non-finite number or text that is
+    not a plain decimal is a 422. Numeric text (``"1200"``, the one shape an
+    integration can plausibly send) is stored as the number it spells, in
+    place, so the row never carries a string a reader has to re-parse.
+    """
+    if not attributes:
+        return
+    result = await db.execute(select(CardType.fields_schema).where(CardType.key == card_type))
+    schema = result.scalar_one_or_none()
+    if not schema:
+        return
+    numeric_keys: set[str] = set()
+    for section in schema:
+        for field in section.get("fields", []):
+            if field.get("type") in ("cost", "number"):
+                numeric_keys.add(field["key"])
+    for key in numeric_keys:
+        val = attributes.get(key)
+        if val is None or val == "":
+            continue
+        if isinstance(val, bool):
+            raise HTTPException(422, f"Field '{key}' must be a number")
+        if isinstance(val, (int, float)):
+            if not math.isfinite(val):
+                raise HTTPException(422, f"Field '{key}' must be a number")
+            continue
+        if is_numeric_text(val):
+            num = float(val)
+            if not math.isfinite(num):
+                raise HTTPException(422, f"Field '{key}' must be a number")
+            attributes[key] = int(num) if num.is_integer() else num
+            continue
+        raise HTTPException(422, f"Field '{key}' must be a number")
 
 
 def _is_empty_attr(val: object) -> bool:
@@ -394,10 +432,11 @@ async def _validate_hierarchy_label(
 ) -> None:
     """Fetch the type's vocabulary and run the hierarchy-label check against it."""
     if not new_label or new_label == old_label:
-        return
+        return  # clearing or keeping the label passes, and needs no query
     result = await db.execute(select(CardType.hierarchy_labels).where(CardType.key == card_type))
     vocabulary = result.scalar_one_or_none()
-    _check_hierarchy_label(card_type, vocabulary, new_label, old_label, has_parent)
+    # The label changed (an unchanged one returned above), so no old label excuses it.
+    _check_hierarchy_label(card_type, vocabulary, new_label, None, has_parent)
 
 
 async def _validate_strict_attributes(db: AsyncSession, card_type: str, attributes: dict) -> None:
@@ -453,11 +492,7 @@ async def _max_descendant_depth(db: AsyncSession, card_id: uuid.UUID) -> int:
     child_ids = [row[0] for row in children_result.all()]
     if not child_ids:
         return 0
-    max_depth = 0
-    for cid in child_ids:
-        d = await _max_descendant_depth(db, cid)
-        max_depth = max(max_depth, d + 1)
-    return max_depth
+    return 1 + max([await _max_descendant_depth(db, cid) for cid in child_ids])
 
 
 async def _walk_ancestor_chain(
@@ -476,7 +511,6 @@ async def _walk_ancestor_chain(
     root_is_macro = False
     current_id = start_id
     seen: set[uuid.UUID] = set(exclude)
-    last_attrs: dict | None = None
     while current_id and current_id not in seen:
         seen.add(current_id)
         depth += 1
@@ -486,12 +520,9 @@ async def _walk_ancestor_chain(
             break
         parent_id, attrs = row[0], row[1]
         if parent_id is None:
-            last_attrs = attrs
+            level = (attrs or {}).get("capabilityLevel")
+            root_is_macro = level == MACRO_CAPABILITY_LEVEL_KEY
         current_id = parent_id
-    if last_attrs is not None and (last_attrs or {}).get("capabilityLevel") == (
-        MACRO_CAPABILITY_LEVEL_KEY
-    ):
-        root_is_macro = True
     return depth, root_is_macro
 
 
@@ -611,24 +642,17 @@ async def _sync_hierarchy_node(
     depth, root_is_macro = await _walk_ancestor_chain(db, card.parent_id, exclude={card.id})
     attrs = dict(card.attributes or {})
     before = dict(attrs)
-    dirty = False
 
     if hier:
-        raw_level = depth + 1  # NOT macro-aware, NOT capped
-        if attrs.get(HIERARCHY_LEVEL_KEY) != raw_level:
-            attrs[HIERARCHY_LEVEL_KEY] = raw_level
-            dirty = True
+        attrs[HIERARCHY_LEVEL_KEY] = depth + 1  # NOT macro-aware, NOT capped
 
     if is_bizcap:
         # Macros are pinned — keep "Macro", never recompute their capabilityLevel.
         if attrs.get("capabilityLevel") != MACRO_CAPABILITY_LEVEL_KEY:
             logical_depth = max(depth - 1, 0) if root_is_macro else depth
-            level_key = f"L{min(logical_depth + 1, 5)}"
-            if attrs.get("capabilityLevel") != level_key:
-                attrs["capabilityLevel"] = level_key
-                dirty = True
+            attrs["capabilityLevel"] = f"L{min(logical_depth + 1, 5)}"
 
-    if dirty:
+    if attrs != before:
         card.attributes = attrs
         changed.append(card)
         if previous is not None:
@@ -716,11 +740,18 @@ async def create_card(
     alias: str | None = None,
     strict_attributes: bool = False,
     dry_run: bool = False,
+    reference_allocator: card_reference.ReferenceAllocator | None = None,
 ) -> Card:
     """Create one card with full validation and side effects; returns the
-    flushed (uncommitted) row. Caller owns permission checks + the commit."""
+    flushed (uncommitted) row. Caller owns permission checks + the commit.
+
+    ``reference_allocator`` lets a batch (the reference-catalogue imports)
+    number its cards with one global scan per prefix instead of one per
+    card; without it the reference is allocated exactly as before.
+    """
     await _validate_url_attributes(db, type_key, attributes or {})
     await _validate_percentage_attributes(db, type_key, attributes or {})
+    await _validate_cost_attributes(db, type_key, attributes or {})
     await _validate_select_attributes(db, type_key, attributes or {}, {})
     await _validate_hierarchy_label(
         db, type_key, parent_label, None, has_parent=parent_id is not None
@@ -750,7 +781,10 @@ async def create_card(
     card_type_row = (
         await db.execute(select(CardType).where(CardType.key == type_key))
     ).scalar_one_or_none()
-    await _assign_reference_on_create(db, card, card_type_row)
+    if reference_allocator is not None:
+        await reference_allocator.assign(db, card, card_type_row)
+    else:
+        await _assign_reference_on_create(db, card, card_type_row)
 
     # Guard: hierarchy depth limit for BusinessCapability
     if card.parent_id:
@@ -804,6 +838,7 @@ async def update_card(
     if "attributes" in updates and updates["attributes"]:
         await _validate_url_attributes(db, card.type, updates["attributes"])
         await _validate_percentage_attributes(db, card.type, updates["attributes"])
+        await _validate_cost_attributes(db, card.type, updates["attributes"])
         if strict_attributes:
             await _validate_strict_attributes(db, card.type, updates["attributes"])
 
@@ -1022,15 +1057,8 @@ async def resolve_archive_delete_set(
     descendant_set = set(descendants)
     kept_related = [rid for rid in requested_related if rid not in descendant_set]
 
-    full_set: list[uuid.UUID] = []
-    seen_full: set[uuid.UUID] = set()
-    for cid in [*descendants, *kept_related]:
-        if cid in seen_full:
-            continue
-        seen_full.add(cid)
-        full_set.append(cid)
-
-    return descendants, kept_related, full_set
+    # Both lists are duplicate-free and disjoint, so together they are the set.
+    return descendants, kept_related, [*descendants, *kept_related]
 
 
 async def archive_card_set(
@@ -1078,7 +1106,7 @@ async def archive_card_set(
     to_flip_ids = [primary.id, *full_affected]
     flip_res = await db.execute(
         select(Card)
-        .where(Card.id.in_(to_flip_ids), Card.status == "ACTIVE")
+        .where(Card.id.in_(to_flip_ids))  # archive_cards_in_place skips the archived
         .options(
             selectinload(Card.tags).selectinload(Tag.group),
             selectinload(Card.stakeholders).selectinload(Stakeholder.user),
@@ -1235,6 +1263,63 @@ async def _emit_relation_events(
     )
 
 
+async def find_relation(
+    db: AsyncSession, type_key: str, source_id: uuid.UUID, target_id: uuid.UUID
+) -> Relation | None:
+    """The ``(type, source, target)`` row every relation write is idempotent on.
+
+    The ends must already be in the relation type's direction.
+    """
+    return (
+        await db.execute(
+            select(Relation).where(
+                Relation.type == type_key,
+                Relation.source_id == source_id,
+                Relation.target_id == target_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+def add_relation(
+    db: AsyncSession,
+    *,
+    type_key: str,
+    source_id: uuid.UUID,
+    target_id: uuid.UUID,
+    attributes: dict | None,
+    description: str | None,
+) -> Relation:
+    """Stage a new relation row in the session (not flushed)."""
+    rel = Relation(
+        type=type_key,
+        source_id=source_id,
+        target_id=target_id,
+        attributes=attributes or {},
+        description=description,
+    )
+    db.add(rel)
+    return rel
+
+
+def merge_relation_fields(
+    rel: Relation, *, attributes: dict | None, description: str | None
+) -> list[str]:
+    """Overwrite what the caller supplied on an existing relation.
+
+    ``None`` leaves a field alone; ``attributes`` replaces the whole dict.
+    Returns the fields whose value changed, in a fixed order.
+    """
+    changed: list[str] = []
+    if attributes is not None and attributes != (rel.attributes or {}):
+        rel.attributes = attributes
+        changed.append("attributes")
+    if description is not None and description != rel.description:
+        rel.description = description
+        changed.append("description")
+    return changed
+
+
 async def upsert_relation(
     db: AsyncSession,
     actor: WriteActor,
@@ -1256,33 +1341,21 @@ async def upsert_relation(
     (``relation_orientation``), so a request sent the other way round merges
     into the existing row instead of forking a backwards one (#1140)."""
     source_id, target_id = await orient_endpoints(db, type_key, source_id, target_id)
-    existing = await db.execute(
-        select(Relation).where(
-            Relation.type == type_key,
-            Relation.source_id == source_id,
-            Relation.target_id == target_id,
-        )
-    )
-    rel = existing.scalar_one_or_none()
+    rel = await find_relation(db, type_key, source_id, target_id)
     reused = rel is not None
     changed: list[str] = []
 
     if rel is None:
-        rel = Relation(
-            type=type_key,
+        rel = add_relation(
+            db,
+            type_key=type_key,
             source_id=source_id,
             target_id=target_id,
-            attributes=attributes or {},
+            attributes=attributes,
             description=description,
         )
-        db.add(rel)
     else:
-        if attributes is not None and attributes != (rel.attributes or {}):
-            rel.attributes = attributes
-            changed.append("attributes")
-        if description is not None and description != rel.description:
-            rel.description = description
-            changed.append("description")
+        changed = merge_relation_fields(rel, attributes=attributes, description=description)
     await db.flush()
 
     # Run calculated fields for both source and target cards, then rescore.
