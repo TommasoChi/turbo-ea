@@ -1108,7 +1108,13 @@ jobs:
     # Stryker's single-threaded dry run alone may take up to its
     # dryRunTimeoutMinutes (60, stryker.config.json) on a widely imported
     # module; the mutants need room after it, as in backend-mutation.
-    timeout-minutes: 150
+    #
+    # 330, not 150: an upstream-merge PR changes hundreds of files at once, so
+    # the diff gate's mutation scope is the whole upstream delta rather than one
+    # feature's worth of lines, and 150 ran out mid-run (2h30m cap hit on the
+    # 2.158.12 merge). 330 leaves headroom under GitHub's hard 360-minute job
+    # ceiling, beyond which no timeout-minutes value can help.
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
