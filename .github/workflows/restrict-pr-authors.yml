@@ -24,12 +24,12 @@ jobs:
         run: |
           set -euo pipefail
           ALLOWED=(
-            # Fork maintainer. Upstream's allowlist names only its own
-            # maintainer, so on this fork every PR by the owner was auto-closed
-            # seconds after opening (and a closed PR stops firing the
-            # `pull_request` events CI runs on).
+            # This fork's maintainer. Upstream's allowlist named only its own
+            # maintainer, so here every PR by the owner was auto-closed seconds
+            # after opening — and a closed PR stops firing the `pull_request`
+            # events CI runs on, so pushes went silently unchecked. Upstream's
+            # maintainer is dropped: they do not open PRs against this fork.
             "TommasoChi"
-            "vincentmakes"
             "dependabot[bot]"
             "claude[bot]"
             "claude-code[bot]"
