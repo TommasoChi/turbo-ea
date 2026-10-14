@@ -10,6 +10,7 @@ the category card's own `attributes.processType`.
 
 from __future__ import annotations
 
+import unicodedata
 import uuid
 from collections.abc import Iterable
 from typing import Any
@@ -41,6 +42,18 @@ def _num(value: Any, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _name_key(name: str) -> tuple[str, str]:
+    """Name sort key approximating the original `localeCompare`.
+
+    ponytail: stdlib approximation — case- and accent-insensitive primary
+    order, raw name as the final tie-break. NOT full ICU collation (digit and
+    punctuation weighting, language-specific rules). Swap in a collation
+    library only if a visibly wrong ordering is reported.
+    """
+    decomposed = unicodedata.normalize("NFD", name.casefold())
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch)), name
 
 
 def _children_by_parent(cards: Iterable[Any]) -> dict[uuid.UUID, list[Any]]:
@@ -101,19 +114,18 @@ def split_cross_cutting(leaves: Iterable[Any]) -> tuple[list[Any], list[Any]]:
     """
     cross = [leaf for leaf in leaves if is_flag_true((leaf.attributes or {}).get("isCross"))]
     sequence = [leaf for leaf in leaves if not is_flag_true((leaf.attributes or {}).get("isCross"))]
-    cross.sort(key=lambda c: (_num((c.attributes or {}).get("levelOrder"), _FAR_LAST), c.name))
+    cross.sort(
+        key=lambda c: (_num((c.attributes or {}).get("levelOrder"), _FAR_LAST), _name_key(c.name))
+    )
     return cross, sequence
 
 
-def _rest_sort_key(card: Any) -> tuple[float, str]:
+def _rest_sort_key(card: Any) -> tuple[float, tuple[str, str]]:
     attrs = card.attributes or {}
     raw = attrs.get("sortOrder")
     if raw is None:
         raw = attrs.get("stageOrder")
-    # ponytail: code-point name ordering, not locale collation — the original
-    # used localeCompare. Swap in a collation key if accented names ever sort
-    # visibly wrong for a user.
-    return (_num(raw, _FAR_LAST), card.name)
+    return (_num(raw, _FAR_LAST), _name_key(card.name))
 
 
 def order_leaves(leaves: list[Any], successor_rels: Iterable[Any]) -> list[Any]:
@@ -187,14 +199,14 @@ def assign_process_level_rows(process_levels: list[dict]) -> tuple[dict[uuid.UUI
     Rows are relative: levels 5 and 10 with nothing between them produce rows
     0 and 1. Processes with no level land together in one trailing row.
     """
-    distinct = sorted({p["level_order"] for p in process_levels if p["level_order"] is not None})
+    levels = [p.get("level_order") for p in process_levels]
+    # Raw values stay the keys (like the JS Set/Map); only the ORDER is numeric.
+    distinct = sorted({lvl for lvl in levels if lvl is not None}, key=lambda v: _num(v, _FAR_LAST))
     row_of_level = {level: i for i, level in enumerate(distinct)}
     unleveled_row = len(distinct)
-    has_unleveled = any(p["level_order"] is None for p in process_levels)
+    has_unleveled = any(lvl is None for lvl in levels)
     row_of_process_id = {
-        p["process_id"]: row_of_level.get(p["level_order"], unleveled_row)
-        if p["level_order"] is not None
-        else unleveled_row
-        for p in process_levels
+        p["process_id"]: unleveled_row if lvl is None else row_of_level[lvl]
+        for p, lvl in zip(process_levels, levels, strict=True)
     }
     return row_of_process_id, len(distinct) + (1 if has_unleveled else 0)

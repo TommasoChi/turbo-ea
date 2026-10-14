@@ -789,3 +789,72 @@ def test_level_rows_level_zero_is_a_real_level_not_unleveled():
     rows, count = assign_process_level_rows([{"process_id": a, "level_order": 0}])
     assert rows == {a: 0}
     assert count == 1
+
+
+# --- Fix round 1: localeCompare-like name order and numeric level order ---
+
+_NAMES = ["Banana", "apple", "Èvasione", "Fatture"]
+
+
+def test_order_leaves_names_sort_case_and_accent_insensitively():
+    leaves = [C(n) for n in _NAMES]
+    assert names(order_leaves(leaves, [])) == ["apple", "Banana", "Èvasione", "Fatture"]
+
+
+def test_split_cross_cutting_names_sort_case_and_accent_insensitively():
+    leaves = [C(n, attributes={"isCross": True, "levelOrder": 1}) for n in _NAMES]
+    cross, _ = split_cross_cutting(leaves)
+    assert names(cross) == ["apple", "Banana", "Èvasione", "Fatture"]
+
+
+def test_order_leaves_names_equal_ignoring_case_and_accents_tie_break_on_raw_name():
+    cafe, accented = C("Cafe"), C("Café")
+    assert names(order_leaves([accented, cafe], [])) == ["Cafe", "Café"]
+    assert names(order_leaves([cafe, accented], [])) == ["Cafe", "Café"]
+
+
+def test_split_cross_cutting_names_equal_ignoring_case_and_accents_tie_break_on_raw_name():
+    attrs = {"isCross": True}
+    cafe, accented = C("Cafe", attributes=dict(attrs)), C("Café", attributes=dict(attrs))
+    cross, _ = split_cross_cutting([accented, cafe])
+    assert names(cross) == ["Cafe", "Café"]
+
+
+def test_order_leaves_sort_order_still_beats_name():
+    late_name = C("Zeta", attributes={"sortOrder": 1})
+    early_name = C("apple", attributes={"sortOrder": 2})
+    assert names(order_leaves([early_name, late_name], [])) == ["Zeta", "apple"]
+
+
+def test_split_cross_cutting_level_order_still_beats_name():
+    z = C("Zeta", attributes={"isCross": True, "levelOrder": 1})
+    a = C("apple", attributes={"isCross": True, "levelOrder": 2})
+    cross, _ = split_cross_cutting([a, z])
+    assert names(cross) == ["Zeta", "apple"]
+
+
+def test_level_rows_all_string_levels_order_numerically():
+    a, b = uuid.uuid4(), uuid.uuid4()
+    rows, count = assign_process_level_rows(
+        [{"process_id": a, "level_order": "10"}, {"process_id": b, "level_order": "9"}]
+    )
+    assert rows == {a: 1, b: 0}
+    assert count == 2
+
+
+def test_level_rows_mixed_int_and_string_levels_do_not_raise():
+    a, b = uuid.uuid4(), uuid.uuid4()
+    rows, count = assign_process_level_rows(
+        [{"process_id": a, "level_order": 2}, {"process_id": b, "level_order": "1"}]
+    )
+    assert rows == {a: 1, b: 0}
+    assert count == 2
+
+
+def test_level_rows_missing_level_order_key_counts_as_unleveled():
+    a, b = uuid.uuid4(), uuid.uuid4()
+    rows, count = assign_process_level_rows(
+        [{"process_id": a, "level_order": 1}, {"process_id": b}]
+    )
+    assert rows == {a: 0, b: 1}
+    assert count == 2
