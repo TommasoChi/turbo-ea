@@ -66,6 +66,7 @@ APP_PERMISSIONS: dict[str, dict] = {
             "bpm.approve_flows": "Approve or reject submitted BPMN flow versions",
             "bpm.withdraw_flows": "Withdraw (unpublish) a published BPMN flow version",
             "bpm.assessments": "Create, edit, and delete process assessments",
+            "bpm.value_chain": "View the value chain and value stream maps",
         },
     },
     "ppm": {
@@ -607,6 +608,7 @@ BPM_ADMIN_PERMISSIONS: dict[str, bool] = {
     # Off even for BPM Admin — an admin must grant it deliberately.
     "bpm.withdraw_flows": False,
     "bpm.assessments": True,
+    "bpm.value_chain": True,
     "ppm.view": True,
     "ppm.manage": True,
     "reports.ea_dashboard": True,
@@ -687,6 +689,7 @@ MEMBER_PERMISSIONS: dict[str, bool] = {
     "bpm.approve_flows": False,
     "bpm.withdraw_flows": False,
     "bpm.assessments": True,
+    "bpm.value_chain": True,
     "ppm.view": True,
     "ppm.manage": True,
     "reports.ea_dashboard": True,
@@ -767,6 +770,7 @@ VIEWER_PERMISSIONS: dict[str, bool] = {
     "bpm.approve_flows": False,
     "bpm.withdraw_flows": False,
     "bpm.assessments": False,
+    "bpm.value_chain": True,
     "ppm.view": True,
     "ppm.manage": False,
     "reports.ea_dashboard": True,
