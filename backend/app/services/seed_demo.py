@@ -1205,6 +1205,53 @@ BUSINESS_CONTEXTS = [
         subtype="businessProduct",
         desc="Consumer smart home hub with Matter, Thread and Zigbee support.",
     ),
+    # Value Chain page demo: one Core level-1 stream, three ordered stages and one
+    # cross-cutting stream (hierarchyLevel is normally set by the card API).
+    _fs(
+        "bctx_vc_p2c",
+        "BusinessContext",
+        "Product to Customer",
+        subtype="valueStream",
+        desc="Core value chain taking a NexaTech sensor or gateway from engineering "
+        "to a supported installation at the customer.",
+        attrs={"maturity": "managed", "hierarchyLevel": 1, "isCore": True},
+    ),
+    _fs(
+        "bctx_vc_engineer",
+        "BusinessContext",
+        "Engineer Product",
+        parent="bctx_vc_p2c",
+        subtype="valueStream",
+        desc="Mechanical, electronic and firmware design through validated release.",
+        attrs={"maturity": "managed", "hierarchyLevel": 2, "sortOrder": 1},
+    ),
+    _fs(
+        "bctx_vc_build",
+        "BusinessContext",
+        "Build & Verify",
+        parent="bctx_vc_p2c",
+        subtype="valueStream",
+        desc="SMT assembly, final assembly and end-of-line verification in Stuttgart.",
+        attrs={"maturity": "optimized", "hierarchyLevel": 2, "sortOrder": 2},
+    ),
+    _fs(
+        "bctx_vc_deliver",
+        "BusinessContext",
+        "Deliver & Support",
+        parent="bctx_vc_p2c",
+        subtype="valueStream",
+        desc="Shipping, commissioning and ongoing technical support of the installed base.",
+        attrs={"maturity": "defined", "hierarchyLevel": 2, "sortOrder": 3},
+    ),
+    _fs(
+        "bctx_vc_quality",
+        "BusinessContext",
+        "Quality & Compliance Assurance",
+        parent="bctx_vc_p2c",
+        subtype="valueStream",
+        desc="Cross-cutting quality gates and regulatory compliance spanning the whole chain.",
+        attrs={"maturity": "managed", "hierarchyLevel": 2, "isCross": True, "levelOrder": 1},
+    ),
 ]
 
 # ── Applications ──────────────────────────────────────────────────
@@ -3584,6 +3631,23 @@ OBJECTIVES = [
             "progress": 35,
         },
     ),
+    _fs(
+        "obj_vc_release_gate",
+        "Objective",
+        "Production Release Gate",
+        subtype="valueGate",
+        desc="A product design is released to volume production only after validation "
+        "and certification sign-off.",
+        attrs={"objectiveType": "tactical", "targetDate": "2027-03-31", "progress": 60},
+    ),
+    _fs(
+        "obj_vc_lead_time",
+        "Objective",
+        "Cut Order-to-Installation Lead Time",
+        subtype="businessGoal",
+        desc="Shorten the time from product release to a commissioned installation by 20%.",
+        attrs={"objectiveType": "strategic", "targetDate": "2027-12-31", "progress": 30},
+    ),
 ]
 
 
@@ -4768,6 +4832,17 @@ RELATIONS = [
     _rel("relBizCtxToBC", "bctx_design_review", "bc_elec_design"),
     _rel("relBizCtxToBC", "bctx_regulatory_sub", "bc_regulatory"),
     _rel("relBizCtxToBC", "bctx_regulatory_sub", "bc_certification"),
+    # ── Value Chain demo (Product to Customer) ──────────────────
+    _rel("relBusinessContextSuccessor", "bctx_vc_build", "bctx_vc_engineer"),
+    _rel("relBizCtxToBC", "bctx_vc_engineer", "bc_eng_design"),
+    _rel("relBizCtxToBC", "bctx_vc_engineer", "bc_mech_design"),
+    _rel("relBizCtxToBC", "bctx_vc_build", "bc_prod_execution"),
+    _rel("relBizCtxToBC", "bctx_vc_build", "bc_test_cal"),
+    _rel("relBizCtxToBC", "bctx_vc_deliver", "bc_logistics"),
+    _rel("relBizCtxToBC", "bctx_vc_deliver", "bc_tech_support"),
+    _rel("relBizCtxToBC", "bctx_vc_quality", "bc_quality"),
+    _rel("relObjectiveToBizCtx", "obj_vc_release_gate", "bctx_vc_build"),
+    _rel("relObjectiveToBizCtx", "obj_vc_lead_time", "bctx_vc_p2c"),
     # ── PLM Modernisation transformation story ────────────────────
     # Windchill's dependency surface: what the retirement severs.
     _rel("relAppSuccessor", "app_teamcenter", "app_ptc_windchill"),
