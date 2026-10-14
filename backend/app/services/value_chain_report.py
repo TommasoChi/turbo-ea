@@ -210,3 +210,121 @@ def assign_process_level_rows(process_levels: list[dict]) -> tuple[dict[uuid.UUI
         for p, lvl in zip(process_levels, levels, strict=True)
     }
     return row_of_process_id, len(distinct) + (1 if has_unleveled else 0)
+
+
+# --- Aggregate payload for GET /reports/value-chain ---------------------------
+
+
+def _is_hierarchy_level_one(value: Any) -> bool:
+    """The original compared with `=== 1`: a number, never `true` or `"1"`."""
+    return not isinstance(value, bool) and isinstance(value, (int, float)) and value == 1
+
+
+def _house_item(card: Any) -> dict:
+    return {"id": str(card.id), "name": card.name}
+
+
+def build_chain_payload(
+    categories: Iterable[Any],
+    contexts: Iterable[Any],
+    objectives: Iterable[Any],
+    process_to_ctx_rels: Iterable[Any],
+    objective_rels: Iterable[Any],
+    successor_rels: Iterable[Any],
+) -> dict:
+    """Band/box model plus the Core "house" for the Value Chain page.
+
+    Port of the data side of the extension's `ValueChainReport.mjs` and
+    `buildBandModel`. Inputs are card/relation rows already filtered by status,
+    archive and read scope; `categories` is EVERY BusinessProcess card, not
+    only the category ones, because the counts walk the whole tree.
+
+    A relation counts only when both of its endpoints are in the given card
+    lists: the relation queries are not scoped, the card queries are, so a
+    relation to a filtered-out card must not produce a phantom count.
+    """
+    processes = list(categories)
+    contexts = list(contexts)
+    objectives = list(objectives)
+    successor_rels = list(successor_rels)
+
+    process_by_id = {p.id: p for p in processes}
+    context_ids = {c.id for c in contexts}
+    gate_ids = {o.id for o in objectives if o.subtype == "valueGate"}
+    parent_ids = {p.parent_id for p in processes if p.parent_id is not None}
+
+    targets_of: dict[uuid.UUID, set[uuid.UUID]] = {}
+    sources_of: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for rel in process_to_ctx_rels:
+        if rel.source_id in process_by_id and rel.target_id in context_ids:
+            targets_of.setdefault(rel.source_id, set()).add(rel.target_id)
+            sources_of.setdefault(rel.target_id, set()).add(rel.source_id)
+
+    gates_at: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for rel in objective_rels:
+        if rel.source_id in gate_ids and rel.target_id in context_ids:
+            gates_at.setdefault(rel.target_id, set()).add(rel.source_id)
+
+    def box(card: Any) -> dict:
+        # Value streams are the LEAVES under each linked BusinessContext: a
+        # linked card may be a container higher up the stream hierarchy.
+        leaves: set[uuid.UUID] = set()
+        for target_id in targets_of.get(card.id, ()):
+            leaves.update(collect_leaf_ids(contexts, target_id))
+        gates: set[uuid.UUID] = set()
+        for leaf_id in leaves:
+            gates |= gates_at.get(leaf_id, set())
+        return {
+            "id": str(card.id),
+            "name": card.name,
+            "has_children": card.id in parent_ids,
+            "group_count": len(collect_descendants_by_subtype(processes, card.id, "group")),
+            "process_count": len(collect_descendants_by_subtype(processes, card.id, "process")),
+            "value_stream_count": len(leaves),
+            "value_gate_count": len(gates),
+            "process_type": band_key_for((card.attributes or {}).get("processType")),
+        }
+
+    def by_name(cards: Iterable[Any]) -> list[Any]:
+        # The id tie-break keeps same-name cards in a stable order across calls.
+        return sorted(cards, key=lambda c: (_name_key(c.name), str(c.id)))
+
+    boxes_by_band: dict[str, list[dict]] = {key: [] for key in BAND_KEYS}
+    for card in by_name(p for p in processes if p.subtype == "category"):
+        built = box(card)
+        boxes_by_band[built["process_type"]].append(built)
+
+    # Level 1 needs BOTH "no parent" and hierarchyLevel 1: the two signals
+    # disagree on live data and the intersection is the deliberate choice.
+    level_one = order_leaves(
+        [
+            c
+            for c in contexts
+            if c.subtype == "valueStream"
+            and c.parent_id is None
+            and _is_hierarchy_level_one((c.attributes or {}).get("hierarchyLevel"))
+            and is_flag_true((c.attributes or {}).get("isCore"))
+        ],
+        successor_rels,
+    )
+    children = _children_by_parent(contexts)
+    level_two: dict[str, list[dict]] = {}
+    level_three: dict[str, list[dict]] = {}
+    for root in level_one:
+        key = str(root.id)
+        level_two[key] = [
+            _house_item(c) for c in order_leaves(children.get(root.id, []), successor_rels)
+        ]
+        # Processes linked straight to the level-1 card, not to a level-2 child.
+        level_three[key] = [
+            box(p) for p in by_name(process_by_id[pid] for pid in sources_of.get(root.id, ()))
+        ]
+
+    return {
+        "bands": [{"key": key, "boxes": boxes_by_band[key]} for key in BAND_KEYS],
+        "core_house": {
+            "level_one": [_house_item(c) for c in level_one],
+            "level_two": level_two,
+            "level_three": level_three,
+        },
+    }

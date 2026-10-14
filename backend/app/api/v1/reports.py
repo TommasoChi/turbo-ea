@@ -58,6 +58,7 @@ from app.services.kpi_snapshot_service import (
 )
 from app.services.lifecycle import current_lifecycle_phase, is_live_in_fiscal_year
 from app.services.permission_service import PermissionService
+from app.services.value_chain_report import build_chain_payload
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -2752,3 +2753,47 @@ async def eol_report(
             "manual": manual_count,
         },
     }
+
+
+@router.get("/value-chain")
+async def value_chain(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Band/box model for the Value Chain page, layout already resolved.
+
+    One query per card type and one per relation type: the page used to fan
+    out a /relations call per category box and per core value stream, which
+    is what this replaces. All logic lives in ``build_chain_payload``.
+    """
+    await PermissionService.require_permission(db, user, "bpm.value_chain")
+    # Module mode: this report is gated on its own module permission
+    # (bpm.value_chain), not on inventory.view, so only an explicit per-type
+    # View deny subtracts cards - same rule as every other /reports/* surface.
+    read_scope = await CardReadScope.load(db, user)
+
+    async def _cards(type_key: str) -> list[Card]:
+        result = await db.execute(
+            select(Card).where(
+                Card.type == type_key,
+                Card.status == "ACTIVE",
+                Card.archived_at.is_(None),
+                *read_scope.where(Card, mode="module"),
+            )
+        )
+        return list(result.scalars().all())
+
+    # Relations are not scoped here: the builder counts a relation only when
+    # both endpoints are among the scoped cards above.
+    async def _rels(type_key: str) -> list[Relation]:
+        result = await db.execute(select(Relation).where(Relation.type == type_key))
+        return list(result.scalars().all())
+
+    return build_chain_payload(
+        categories=await _cards("BusinessProcess"),
+        contexts=await _cards("BusinessContext"),
+        objectives=await _cards("Objective"),
+        process_to_ctx_rels=await _rels("relProcessToBizCtx"),
+        objective_rels=await _rels("relObjectiveToBizCtx"),
+        successor_rels=await _rels("relBusinessContextSuccessor"),
+    )
