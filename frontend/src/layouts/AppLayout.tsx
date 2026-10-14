@@ -46,6 +46,7 @@ import { useGrcEnabled } from "@/hooks/useGrcEnabled";
 import { useSponsorButtonEnabled } from "@/hooks/useSponsorButtonEnabled";
 import { usePpmEnabled } from "@/hooks/usePpmEnabled";
 import { useTurboLensReady } from "@/hooks/useTurboLensReady";
+import { useValueChainEnabled } from "@/hooks/useValueChainEnabled";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import { useAppTitle } from "@/hooks/useAppTitle";
 import { useNavbarStyle } from "@/hooks/useNavbarStyle";
@@ -95,6 +96,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   const isCompact = useMediaQuery("(max-width:1023px)");
   const isCondensed = useMediaQuery("(max-width:1279px)");
   const { bpmEnabled } = useBpmEnabled();
+  const { valueChainEnabled } = useValueChainEnabled();
   const { ppmEnabled } = usePpmEnabled();
   const { grcEnabled } = useGrcEnabled();
   const { sponsorButtonEnabled } = useSponsorButtonEnabled();
@@ -175,13 +177,20 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   // Resolve nav item labels via i18n and filter based on BPM/PPM/TurboLens/permissions
   const navItems = useMemo(() => {
     let items = NAV_ITEM_DEFS as NavItemDef[];
-    // bpm lives as a static child of the strategy_process dropdown, not a
-    // top-level entry — strip it from there rather than filtering a
-    // top-level "bpm" labelKey that no longer exists.
-    if (!bpmEnabled) {
+    // bpm and valueChain live as static children of the strategy_process
+    // dropdown. `valueChainEnabled` already folds BPM in, so one pass removes
+    // each child exactly when its own effective flag is off.
+    if (!bpmEnabled || !valueChainEnabled) {
       items = items.map((item) =>
         item.labelKey === "strategy_process"
-          ? { ...item, children: (item.children ?? []).filter((c) => c.labelKey !== "bpm") }
+          ? {
+              ...item,
+              children: (item.children ?? []).filter(
+                (c) =>
+                  !(c.labelKey === "bpm" && !bpmEnabled) &&
+                  !(c.labelKey === "valueChain" && !valueChainEnabled),
+              ),
+            }
           : item,
       );
     }
@@ -352,7 +361,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       .filter((item) => hasNavPerm(item))
       .map(resolve)
       .filter((item) => item.path || item.children);
-  }, [bpmEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, user, t]);
+  }, [bpmEnabled, valueChainEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, user, t]);
 
   // Resolve admin item labels via i18n and filter based on permissions.
   // Extension routes that requested the "admin" nav group follow the core

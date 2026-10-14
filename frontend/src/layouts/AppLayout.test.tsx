@@ -27,6 +27,10 @@ vi.mock("@/hooks/useBpmEnabled", () => ({
   useBpmEnabled: vi.fn(),
 }));
 
+vi.mock("@/hooks/useValueChainEnabled", () => ({
+  useValueChainEnabled: vi.fn(),
+}));
+
 vi.mock("@/hooks/useEventStream", () => ({
   useEventStream: vi.fn(),
 }));
@@ -50,6 +54,7 @@ import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useBpmEnabled } from "@/hooks/useBpmEnabled";
 import { useGrcEnabled } from "@/hooks/useGrcEnabled";
+import { useValueChainEnabled } from "@/hooks/useValueChainEnabled";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -68,6 +73,13 @@ beforeEach(() => {
   });
 
   vi.mocked(useBpmEnabled).mockReturnValue({ bpmEnabled: true, loading: false });
+
+  vi.mocked(useValueChainEnabled).mockReturnValue({
+    valueChainEnabled: true,
+    valueChainRawEnabled: true,
+    valueChainLoaded: true,
+    invalidateValueChain: vi.fn(),
+  });
 
   vi.mocked(useGrcEnabled).mockReturnValue({
     grcEnabled: true,
