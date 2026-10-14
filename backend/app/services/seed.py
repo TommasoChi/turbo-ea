@@ -5961,10 +5961,19 @@ async def seed_metamodel(db: AsyncSession) -> None:
                     else:
                         updated_schema.append(sec)
 
-                # Add new sections that don't exist yet
-                new_sections = [s for s in seed_schema if s["section"] not in current_sections]
-                if new_sections:
-                    updated_schema = updated_schema + new_sections
+                # Add new sections that don't exist yet, minus any field whose key
+                # already lives in another section (an admin may have created the
+                # field by hand before the seed shipped it): a key twice in
+                # fields_schema binds two inputs to one attribute.
+                present = {f.get("key") for s in updated_schema for f in s.get("fields", [])}
+                for s in seed_schema:
+                    if s["section"] in current_sections:
+                        continue
+                    fields = [f for f in s.get("fields", []) if f.get("key") not in present]
+                    if len(fields) == len(s.get("fields", [])):
+                        updated_schema.append(s)
+                    elif fields:
+                        updated_schema.append({**s, "fields": fields})
 
                 existing.fields_schema = updated_schema
             continue

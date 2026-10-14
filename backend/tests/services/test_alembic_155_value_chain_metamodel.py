@@ -3,7 +3,9 @@ install, and must be safe to re-run and safe on a hand-customised metamodel."""
 
 from __future__ import annotations
 
+import copy
 import importlib.util
+from collections import Counter
 from pathlib import Path
 
 from sqlalchemy import delete
@@ -129,12 +131,14 @@ async def test_relation_types_insert_runs_on_a_real_db_and_is_idempotent(db):
     assert all(r[2] == [] for r in rows)
 
 
-async def _seed_old_install(db, *, bizctx_schema):
+async def _seed_old_install(db, *, bizctx_schema, process_schema=None):
     """Replace the three card types with what an install before 155 holds."""
+    if process_schema is None:
+        process_schema = [{"section": "General", "fields": [{"key": "name"}]}]
     await db.execute(delete(CardType).where(CardType.key.in_(_TYPES)))
     for key, schema, subtypes in (
         ("BusinessContext", bizctx_schema, []),
-        ("BusinessProcess", [{"section": "General", "fields": [{"key": "name"}]}], []),
+        ("BusinessProcess", process_schema, []),
         ("Objective", [], [{"key": "valueGate", "label": "Gate"}]),
     ):
         db.add(
@@ -209,3 +213,84 @@ async def test_upgrade_body_keeps_a_hand_made_field_in_another_section(db):
     assert schema[0]["fields"] == [hand_made]
     assert [f["key"] for f in schema[1]["fields"]] == ["isCross", "sortOrder", "levelOrder"]
     assert sum(f["key"] == "isCore" for s in schema for f in s["fields"]) == 1
+
+
+# The backend runs ``seed_metamodel`` on every start, right after the migrations.
+# On an install whose Value Chain fields live in a section with another name,
+# 155 adds nothing — and the seed must not then append its own "Value Chain"
+# section, or every key would appear twice in ``fields_schema``.
+
+_VC_KEYS = ("isCore", "isCross", "sortOrder", "levelOrder")
+_HAND_MADE_BC = [
+    {"key": "isCore", "label": "Core", "type": "text", "weight": 3},
+    {"key": "isCross", "label": "Cross", "type": "boolean"},
+    {"key": "sortOrder", "label": "Order", "type": "text"},
+    {"key": "levelOrder", "label": "Level", "type": "number", "weight": 1},
+]
+_HAND_MADE_BP = [{"key": "levelOrder", "label": "Mine", "type": "text"}]
+
+
+def _key_counts(schema):
+    return Counter(f["key"] for s in schema for f in s.get("fields", []))
+
+
+async def _migrate_then_start(db):
+    conn = await db.connection()
+    await conn.run_sync(mig._apply)
+    db.expire_all()  # the migration wrote card_types behind the session's back
+    await seed.seed_metamodel(db)
+    await db.flush()
+    rows = await _read_card_types(conn)
+    return rows["BusinessContext"][0], rows["BusinessProcess"][0]
+
+
+async def _install_with_hand_made_fields(db):
+    await _seed_old_install(
+        db,
+        bizctx_schema=[{"section": "Custom", "fields": copy.deepcopy(_HAND_MADE_BC)}],
+        process_schema=[{"section": "Custom", "fields": copy.deepcopy(_HAND_MADE_BP)}],
+    )
+
+
+async def test_startup_seed_keeps_each_key_once_when_they_live_in_another_section(db):
+    await _install_with_hand_made_fields(db)
+    bc_schema, bp_schema = await _migrate_then_start(db)
+
+    bc_counts = _key_counts(bc_schema)
+    assert [bc_counts[k] for k in _VC_KEYS] == [1, 1, 1, 1]
+    assert _key_counts(bp_schema)["levelOrder"] == 1
+    assert "Value Chain" not in [s["section"] for s in bc_schema]
+    assert "Value Chain" not in [s["section"] for s in bp_schema]
+    bc_custom = next(s for s in bc_schema if s["section"] == "Custom")
+    bp_custom = next(s for s in bp_schema if s["section"] == "Custom")
+    assert bc_custom["fields"] == _HAND_MADE_BC
+    assert bp_custom["fields"] == _HAND_MADE_BP
+    # Sections without overlap are still appended from the seed.
+    assert "Business Context Information" in [s["section"] for s in bc_schema]
+    assert "Process Classification" in [s["section"] for s in bp_schema]
+
+
+async def test_startup_seed_still_adds_the_value_chain_section_when_keys_are_absent(db):
+    await _seed_old_install(db, bizctx_schema=[{"section": "General", "fields": [{"key": "name"}]}])
+    db.expire_all()
+    await seed.seed_metamodel(db)
+    await db.flush()
+    rows = await _read_card_types(await db.connection())
+    bc_schema, bp_schema = rows["BusinessContext"][0], rows["BusinessProcess"][0]
+
+    bc_vc = next(s for s in bc_schema if s["section"] == "Value Chain")
+    assert [f["key"] for f in bc_vc["fields"]] == list(_VC_KEYS)
+    assert [f["type"] for f in bc_vc["fields"]] == ["boolean", "boolean", "number", "number"]
+    assert [_key_counts(bc_schema)[k] for k in _VC_KEYS] == [1, 1, 1, 1]
+    bp_vc = next(s for s in bp_schema if s["section"] == "Value Chain")
+    assert [f["key"] for f in bp_vc["fields"]] == ["levelOrder"]
+
+
+async def test_startup_seed_is_idempotent_on_a_hand_made_install(db):
+    await _install_with_hand_made_fields(db)
+    first = await _migrate_then_start(db)
+    db.expire_all()
+    await seed.seed_metamodel(db)
+    await db.flush()
+    rows = await _read_card_types(await db.connection())
+    assert (rows["BusinessContext"][0], rows["BusinessProcess"][0]) == first
