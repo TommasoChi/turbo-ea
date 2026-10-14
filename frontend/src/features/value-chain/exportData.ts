@@ -28,6 +28,10 @@ export interface StreamExportLabels {
   group: string;
   description: string;
   subtypes: Record<string, string>;
+  /** Objective-type option key -> display label. */
+  objectiveTypes: Record<string, string>;
+  /** Shown for a null, empty or unmapped subtype / objective type: raw keys never reach the sheet. */
+  notSet: string;
 }
 
 const MAX_SHEET_NAME = 31; // Excel limit
@@ -92,7 +96,7 @@ function streamSheets(root: ValueStreamRoot, labels: StreamExportLabels): KindSh
       columns: [text("name", labels.name), text("subtype", labels.subtype), num("row", labels.row), num("steps", labels.steps)],
       rows: Object.values(root.processes).map((p) => ({
         name: p.name,
-        subtype: p.subtype ? (labels.subtypes[p.subtype] ?? p.subtype) : "",
+        subtype: (p.subtype && labels.subtypes[p.subtype]) || labels.notSet,
         row: p.id in root.row_of_process ? root.row_of_process[p.id] + 1 : "",
         steps: p.element_count,
       })),
@@ -100,7 +104,11 @@ function streamSheets(root: ValueStreamRoot, labels: StreamExportLabels): KindSh
     {
       kind: labels.gates,
       columns: [text("name", labels.name), text("leaf", labels.leaf), text("type", labels.type)],
-      rows: root.gates.map((g) => ({ name: g.name, leaf: leafOf(g.leaf_id), type: g.objective_type ?? "" })),
+      rows: root.gates.map((g) => ({
+        name: g.name,
+        leaf: leafOf(g.leaf_id),
+        type: (g.objective_type && labels.objectiveTypes[g.objective_type]) || labels.notSet,
+      })),
     },
     {
       kind: labels.capabilities,

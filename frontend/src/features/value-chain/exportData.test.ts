@@ -30,6 +30,8 @@ const streamLabels: StreamExportLabels = {
   group: "Group",
   description: "Description",
   subtypes: { group: "Process group", process: "Process" },
+  objectiveTypes: { strategic: "Strategic objective", operational: "Operational objective" },
+  notSet: "Not set",
 };
 
 describe("chainExportData", () => {
@@ -142,15 +144,18 @@ describe("streamExportData", () => {
     ]);
   });
 
-  it("falls back to the raw or empty subtype when there is no translation", () => {
-    const r = makeStreamRoot({
-      processes: {
-        p1: { id: "p1", name: "One", subtype: "weird", element_count: 1, color_attributes: {}, related: [] },
-        p2: { id: "p2", name: "Two", subtype: null, element_count: 1, color_attributes: {}, related: [] },
-      },
+  it("shows the not-set label, never the raw key, for an unmapped, null or empty subtype", () => {
+    const p = (id: string, subtype: string | null) => ({
+      id,
+      name: id,
+      subtype,
+      element_count: 1,
+      color_attributes: {},
+      related: [],
     });
+    const r = makeStreamRoot({ processes: { p1: p("p1", "weird"), p2: p("p2", null), p3: p("p3", ""), p4: p("p4", "group") } });
     const rows = streamExportData([r], "t", streamLabels, null).sheets[1].rows;
-    expect(rows.map((x) => x.subtype)).toEqual(["weird", ""]);
+    expect(rows.map((x) => x.subtype)).toEqual(["Not set", "Not set", "Not set", "Process group"]);
   });
 
   it("lists gates with leaf name and objective type, resolving cross leaves too", () => {
@@ -161,9 +166,19 @@ describe("streamExportData", () => {
       ["type", "Type"],
     ]);
     expect(s.rows).toEqual([
-      { name: "Budget approved", leaf: "Attract", type: "strategic" },
-      { name: "Quarterly review", leaf: "Plan and monitor", type: "" },
+      { name: "Budget approved", leaf: "Attract", type: "Strategic objective" },
+      { name: "Quarterly review", leaf: "Plan and monitor", type: "Not set" },
     ]);
+  });
+
+  it("shows the label for a known objective type and not-set for unknown, null or empty ones", () => {
+    const g = (id: string, objective_type: string | null) => ({ id, name: id, leaf_id: "a", objective_type });
+    const r = makeStreamRoot({
+      gates: [g("known", "operational"), g("unknown", "mystery"), g("none", null), g("empty", "")],
+    });
+    const rows = streamExportData([r], "t", streamLabels, null).sheets.find((s) => s.name.endsWith("Gates"))!.rows;
+    expect(rows.map((x) => x.type)).toEqual(["Operational objective", "Not set", "Not set", "Not set"]);
+    expect(JSON.stringify(rows)).not.toContain("mystery");
   });
 
   it("leaves the leaf blank when a gate or capability points to an unknown leaf", () => {
@@ -172,7 +187,7 @@ describe("streamExportData", () => {
       capabilities: [{ id: "c", name: "C", leaf_id: "nope", group_id: "x", group_name: "X" }],
     });
     const out = streamExportData([r], "t", streamLabels, null).sheets;
-    expect(out.find((s) => s.name.endsWith("Gates"))!.rows).toEqual([{ name: "G", leaf: "", type: "" }]);
+    expect(out.find((s) => s.name.endsWith("Gates"))!.rows).toEqual([{ name: "G", leaf: "", type: "Not set" }]);
     expect(out.find((s) => s.name.endsWith("Capabilities"))!.rows).toEqual([{ name: "C", group: "X", leaf: "" }]);
   });
 
