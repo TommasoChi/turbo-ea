@@ -6,6 +6,9 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+from sqlalchemy import delete
+
+from app.models.card_type import CardType
 from app.services import seed
 
 _MIG_PATH = (
@@ -124,3 +127,85 @@ async def test_relation_types_insert_runs_on_a_real_db_and_is_idempotent(db):
     assert [r[0] for r in rows] == ["relBusinessContextSuccessor", "relObjectiveToBizCtx"]
     assert all(r[1] is True for r in rows)
     assert all(r[2] == [] for r in rows)
+
+
+async def _seed_old_install(db, *, bizctx_schema):
+    """Replace the three card types with what an install before 155 holds."""
+    await db.execute(delete(CardType).where(CardType.key.in_(_TYPES)))
+    for key, schema, subtypes in (
+        ("BusinessContext", bizctx_schema, []),
+        ("BusinessProcess", [{"section": "General", "fields": [{"key": "name"}]}], []),
+        ("Objective", [], [{"key": "valueGate", "label": "Gate"}]),
+    ):
+        db.add(
+            CardType(
+                key=key,
+                label=key,
+                fields_schema=schema,
+                subtypes=subtypes,
+                has_successors=False,
+            )
+        )
+    await db.flush()
+
+
+_TYPES = ("BusinessContext", "BusinessProcess", "Objective")
+
+
+async def _read_card_types(conn):
+    rows = (
+        await conn.exec_driver_sql(
+            "SELECT key, fields_schema, subtypes, has_successors FROM card_types "
+            "WHERE key IN ('BusinessContext','BusinessProcess','Objective') ORDER BY key"
+        )
+    ).all()
+    return {r[0]: (r[1], r[2], r[3]) for r in rows}
+
+
+async def test_upgrade_body_applies_to_card_types_and_is_idempotent(db):
+    await _seed_old_install(db, bizctx_schema=[{"section": "General", "fields": [{"key": "name"}]}])
+    conn = await db.connection()
+    await conn.run_sync(mig._apply)
+    first = await _read_card_types(conn)
+    await conn.run_sync(mig._apply)
+    assert await _read_card_types(conn) == first
+
+    bc_schema, bc_subtypes, bc_succ = first["BusinessContext"]
+    assert [s["section"] for s in bc_schema] == ["General", "Value Chain"]
+    assert bc_schema[0]["fields"] == [{"key": "name"}]
+    assert bc_schema[1] == {**mig.SECTION_DEF, "fields": mig.BIZCTX_FIELDS}
+    assert bc_succ is True
+
+    bp_schema, _, bp_succ = first["BusinessProcess"]
+    assert [s["section"] for s in bp_schema] == ["General", "Value Chain"]
+    assert bp_schema[1]["fields"] == mig.PROCESS_FIELDS
+    assert bp_succ is False  # only BusinessContext is switched on by 155
+
+    _, obj_subtypes, _ = first["Objective"]
+    assert [s["key"] for s in obj_subtypes] == ["valueGate", "businessGoal"]
+    assert obj_subtypes[0] == {"key": "valueGate", "label": "Gate"}
+    assert obj_subtypes[1] == mig.OBJECTIVE_SUBTYPES[1]
+
+    keys = (
+        await conn.exec_driver_sql(
+            "SELECT key FROM relation_types "
+            "WHERE key IN ('relObjectiveToBizCtx','relBusinessContextSuccessor') ORDER BY key"
+        )
+    ).all()
+    assert [k[0] for k in keys] == ["relBusinessContextSuccessor", "relObjectiveToBizCtx"]
+
+
+async def test_upgrade_body_keeps_a_hand_made_field_in_another_section(db):
+    hand_made = {"key": "isCore", "label": "Hand made", "type": "text", "weight": 3}
+    await _seed_old_install(db, bizctx_schema=[{"section": "Custom", "fields": [dict(hand_made)]}])
+    conn = await db.connection()
+    await conn.run_sync(mig._apply)
+    first = await _read_card_types(conn)
+    await conn.run_sync(mig._apply)
+    assert await _read_card_types(conn) == first
+
+    schema = first["BusinessContext"][0]
+    assert [s["section"] for s in schema] == ["Custom", "Value Chain"]
+    assert schema[0]["fields"] == [hand_made]
+    assert [f["key"] for f in schema[1]["fields"]] == ["isCross", "sortOrder", "levelOrder"]
+    assert sum(f["key"] == "isCore" for s in schema for f in s["fields"]) == 1

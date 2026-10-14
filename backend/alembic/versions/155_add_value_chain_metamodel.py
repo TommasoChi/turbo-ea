@@ -300,8 +300,7 @@ def _insert_relation_types(conn) -> None:
         )
 
 
-def upgrade() -> None:
-    conn = op.get_bind()
+def _apply(conn) -> None:
     _update_fields(conn, "BusinessContext", BIZCTX_FIELDS)
     _update_fields(conn, "BusinessProcess", PROCESS_FIELDS)
 
@@ -319,6 +318,10 @@ def upgrade() -> None:
         sa.text("UPDATE card_types SET has_successors = true WHERE key = 'BusinessContext'")
     )
     _insert_relation_types(conn)
+
+
+def upgrade() -> None:
+    _apply(op.get_bind())
 
 
 def downgrade() -> None:
