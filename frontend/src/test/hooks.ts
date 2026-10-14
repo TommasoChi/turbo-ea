@@ -37,6 +37,7 @@ export const hookState = {
   ppm: { ppmEnabled: true, ppmLoaded: true },
   grc: { grcEnabled: true, grcLoaded: true },
   bpm: { bpmEnabled: true, bpmLoaded: true },
+  valueChain: { valueChainEnabled: true, valueChainRawEnabled: true, valueChainLoaded: true },
   turboLens: {
     turboLensReady: true,
     turboLensAiConfigured: true,
@@ -60,6 +61,7 @@ export const hookState = {
     this.ppm = { ppmEnabled: true, ppmLoaded: true };
     this.grc = { grcEnabled: true, grcLoaded: true };
     this.bpm = { bpmEnabled: true, bpmLoaded: true };
+    this.valueChain = { valueChainEnabled: true, valueChainRawEnabled: true, valueChainLoaded: true };
     this.turboLens = {
       turboLensReady: true,
       turboLensAiConfigured: true,
@@ -180,6 +182,17 @@ export async function useBpmEnabledModule() {
     ...actual,
     invalidateBpmEnabled: vi.fn(),
     useBpmEnabled: () => ({ ...hookState.bpm, invalidateBpm: vi.fn() }),
+  };
+}
+
+export async function useValueChainEnabledModule() {
+  const actual = await vi.importActual<typeof import("@/hooks/useValueChainEnabled")>(
+    "@/hooks/useValueChainEnabled",
+  );
+  return {
+    ...actual,
+    invalidateValueChainEnabled: vi.fn(),
+    useValueChainEnabled: () => ({ ...hookState.valueChain, invalidateValueChain: vi.fn() }),
   };
 }
 
