@@ -311,6 +311,7 @@
   "iconPicker.categories.statusIndicators": "Статус и индикаторы",
   "iconPicker.categories.miscellaneous": "Разное",
   "modules.bpm": "BPM",
+  "modules.valuechain": "Цепочка создания ценности",
   "modules.ppm": "PPM",
   "modules.grc": "GRC",
   "modules.turbolens": "TurboLens",
