@@ -3,10 +3,35 @@
 The key was created by hand on an instance and breaks the core naming
 convention (relXxxToYyy). `relations.type` is a denormalised copy of
 relation_types.key with no FK constraint, and the key is also stored inside
-saved-report configs, bookmark filters, survey filters, portal configs,
-diagram payloads and calculation formulas — so each of those is swept too. A
-textual REPLACE is safe here because the old key is a distinctive string that
-collides with no other key (pinned by a test).
+saved-report configs, bookmark filters, survey filters, survey questions
+(`surveys.fields` holds `rel:<key>:outgoing` field keys and a
+`relation_type_key`) and their responses (keyed by the same field key), portal
+configs, diagram payloads and calculation formulas — so each of those is swept
+too. A textual REPLACE is safe here because the old key is a distinctive string
+that collides with no other key (pinned by a test); it keeps a question's field
+key and its responses' keys in sync.
+
+What actually happens on upgrade. Migration 155 inserted the seeded
+`relObjectiveToBizCtx` with ON CONFLICT DO NOTHING, and the old key never
+conflicts with it, so every database reaching 156 holds BOTH rows. The hand-made
+row is therefore DROPPED and its relations re-pointed to the seeded row; the
+seeded row's labels, translations and flags win. Because that discards the
+hand-made row, `_check_compatible` runs first and refuses (RuntimeError, nothing
+written) when the two rows disagree on orientation (source/target type; a
+silent inversion otherwise, cf. migration 153) or carry different non-empty
+attributes_schema. A hand-made attributes_schema is copied onto the seeded row
+when that one is empty, so relation attribute values stay editable. Renaming the
+hand-made row in place only happens on a database where the seeded row is
+absent.
+
+`built_in` promotions (the surviving relObjectiveToBizCtx and
+relBusinessContextSuccessor) are unconditional.
+
+Downgrade limits: it cannot resurrect the dropped hand-made row's metadata (the
+seeded row is renamed back and marked custom instead); it does not demote
+relBusinessContextSuccessor; and on an install that never had the old key it
+would turn the seeded built-in relObjectiveToBizCtx into a custom-looking
+ObjectiveToBusinessContext.
 
 Revision ID: 156
 Revises: 155
@@ -15,6 +40,7 @@ Create Date: 2026-10-14
 
 from __future__ import annotations
 
+import json
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -33,6 +59,8 @@ JSONB_TARGETS = [
     ("saved_reports", "config"),
     ("bookmarks", "filters"),
     ("surveys", "target_filters"),
+    ("surveys", "fields"),
+    ("survey_responses", "responses"),
     ("web_portals", "filters"),
     ("web_portals", "card_config"),
     ("diagrams", "data"),
@@ -61,9 +89,56 @@ def _replace_everywhere(conn, old: str, new: str) -> None:
         )
 
 
+def _check_compatible(conn, old: str, new: str) -> list | None:
+    """Refuse, before anything is written, a merge that would lose or invert
+    meaning. Returns the attributes_schema to copy onto the surviving row, or
+    None. Does nothing unless BOTH rows exist."""
+    rows = {
+        r.key: r
+        for r in conn.execute(
+            sa.text(
+                "SELECT key, source_type_key, target_type_key, attributes_schema "
+                "FROM relation_types WHERE key IN (:old, :new)"
+            ),
+            {"old": old, "new": new},
+        )
+    }
+    if old not in rows or new not in rows:
+        return None
+    hand, seeded = rows[old], rows[new]
+    if (hand.source_type_key, hand.target_type_key) != (
+        seeded.source_type_key,
+        seeded.target_type_key,
+    ):
+        raise RuntimeError(
+            f"Cannot merge relation type {old!r} into {new!r}: orientation differs "
+            f"({old}: {hand.source_type_key} -> {hand.target_type_key}; "
+            f"{new}: {seeded.source_type_key} -> {seeded.target_type_key}). Re-pointing its "
+            "relations would invert their meaning. Fix or delete the hand-made type first."
+        )
+    hand_attrs = hand.attributes_schema or []
+    seeded_attrs = seeded.attributes_schema or []
+    if hand_attrs and seeded_attrs and hand_attrs != seeded_attrs:
+        raise RuntimeError(
+            f"Cannot merge relation type {old!r} into {new!r}: their attributes_schema "
+            f"differ and both are non-empty ({old}: {hand_attrs!r}; {new}: {seeded_attrs!r}). "
+            "Reconcile them by hand first."
+        )
+    return hand_attrs if hand_attrs and not seeded_attrs else None
+
+
 def _sweep(conn, old: str, new: str) -> None:
-    # The seeded relation type may already exist (155 inserted it); in that
-    # case the hand-made row is dropped and its relations re-pointed.
+    # All checks come before the first write, so a refusal leaves the DB untouched.
+    attrs_to_copy = _check_compatible(conn, old, new)
+    if attrs_to_copy is not None:
+        conn.execute(
+            sa.text(
+                "UPDATE relation_types SET attributes_schema = CAST(:a AS jsonb) WHERE key = :new"
+            ),
+            {"a": json.dumps(attrs_to_copy), "new": new},
+        )
+    # The seeded relation type normally exists already (155 inserted it); then
+    # the hand-made row is dropped and its relations re-pointed.
     conn.execute(
         sa.text(
             "DELETE FROM relation_types WHERE key = :old AND EXISTS "
