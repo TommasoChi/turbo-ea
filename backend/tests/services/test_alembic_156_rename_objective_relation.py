@@ -437,6 +437,65 @@ async def test_sweep_refuses_when_only_one_endpoint_differs(db, field):
     assert await _snapshot(conn) == before
 
 
+# A DIFFERENT custom key that merely contains the old one: the textual REPLACE
+# would rewrite it inside JSONB/formulas while its relation_types/relations rows
+# stay as they are, so the sweep must refuse before writing anything.
+_COLLIDING = "relObjectiveToBusinessContextV2"
+
+
+async def _colliding_state(conn) -> tuple[list, list]:
+    types = (
+        await conn.exec_driver_sql(
+            f"SELECT key, label FROM relation_types WHERE key = '{_COLLIDING}'"
+        )
+    ).all()
+    rels = (
+        await conn.exec_driver_sql(
+            f"SELECT type, source_id, target_id FROM relations WHERE type = '{_COLLIDING}'"
+        )
+    ).all()
+    return [tuple(r) for r in types], [tuple(r) for r in rels]
+
+
+async def _add_colliding_relation(db):
+    obj = await create_card(db, card_type="Objective", name="Other gate")
+    ctx = await create_card(db, card_type="BusinessContext", name="Other stream")
+    await create_relation(db, type_key=_COLLIDING, source_id=obj.id, target_id=ctx.id)
+
+
+async def _assert_refused_untouched(conn):
+    before = await _snapshot(conn)
+    before_colliding = await _colliding_state(conn)
+    n_types = await _count(conn, "relation_types")
+    n_relations = await _count(conn, "relations")
+
+    with pytest.raises(RuntimeError) as exc:
+        await conn.run_sync(lambda c: mig._sweep(c, OLD, NEW))
+
+    msg = str(exc.value)
+    assert _COLLIDING in msg and OLD in msg
+    assert await _snapshot(conn) == before  # nothing written
+    assert await _colliding_state(conn) == before_colliding
+    assert await _count(conn, "relation_types") == n_types
+    assert await _count(conn, "relations") == n_relations
+
+
+async def test_sweep_refuses_a_custom_relation_type_whose_key_contains_the_old_key(db):
+    conn = await _setup_real_path(db)
+    await _make_type(db, _COLLIDING, "custom")
+    await _add_colliding_relation(db)
+    await _assert_refused_untouched(conn)
+
+
+async def test_sweep_refuses_relations_whose_type_contains_the_old_key(db):
+    """No relation_types row, only orphan relations - and on the in-place
+    rename branch, where _check_compatible has no pair of rows to compare."""
+    conn = await _setup_old_install(db)
+    await _add_colliding_relation(db)
+    assert (await _colliding_state(conn))[0] == []
+    await _assert_refused_untouched(conn)
+
+
 _ATTRS = [{"key": "weight", "label": "Weight", "type": "number"}]
 
 

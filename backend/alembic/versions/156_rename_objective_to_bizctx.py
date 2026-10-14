@@ -8,8 +8,10 @@ saved-report configs, bookmark filters, survey filters, survey questions
 `relation_type_key`) and their responses (keyed by the same field key), portal
 configs, diagram payloads and calculation formulas — so each of those is swept
 too. A textual REPLACE is safe here because the old key is a distinctive string
-that collides with no other key (pinned by a test); it keeps a question's field
-key and its responses' keys in sync.
+that collides with no seeded key (pinned by a test); it keeps a question's field
+key and its responses' keys in sync. A custom key that merely CONTAINS the old
+key would be rewritten inside those payloads while its own rows stay unchanged,
+so `_check_compatible` refuses (RuntimeError, nothing written) when one exists.
 
 What actually happens on upgrade. Migration 155 inserted the seeded
 `relObjectiveToBizCtx` with ON CONFLICT DO NOTHING, and the old key never
@@ -92,7 +94,31 @@ def _replace_everywhere(conn, old: str, new: str) -> None:
 def _check_compatible(conn, old: str, new: str) -> list | None:
     """Refuse, before anything is written, a merge that would lose or invert
     meaning. Returns the attributes_schema to copy onto the surviving row, or
-    None. Does nothing unless BOTH rows exist."""
+    None. The row comparison runs only when BOTH rows exist; the substring
+    guard always runs."""
+    like = {"like": f"%{old}%", "old": old, "new": new}
+    colliding = [
+        *conn.execute(
+            sa.text(
+                "SELECT key FROM relation_types WHERE key LIKE :like AND key NOT IN (:old, :new)"
+            ),
+            like,
+        ).scalars(),
+        *conn.execute(
+            sa.text(
+                "SELECT DISTINCT type FROM relations "
+                "WHERE type LIKE :like AND type NOT IN (:old, :new)"
+            ),
+            like,
+        ).scalars(),
+    ]
+    if colliding:
+        raise RuntimeError(
+            f"Cannot rename relation type {old!r} to {new!r}: other keys contain it "
+            f"({sorted(set(colliding))!r}). The textual sweep would rewrite them inside "
+            "saved reports, filters and formulas while their own rows stay unchanged. "
+            "Rename those keys first."
+        )
     rows = {
         r.key: r
         for r in conn.execute(
