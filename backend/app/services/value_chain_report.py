@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import unicodedata
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 BAND_KEYS: tuple[str, ...] = ("management", "core", "support", "not_set")
@@ -66,11 +66,19 @@ def _children_by_parent(cards: Iterable[Any]) -> dict[uuid.UUID, list[Any]]:
 
 
 def collect_descendants_by_subtype(
-    cards: Iterable[Any], root_id: uuid.UUID, subtypes: str | Iterable[str]
+    cards: Iterable[Any],
+    root_id: uuid.UUID,
+    subtypes: str | Iterable[str],
+    children: dict[uuid.UUID, list[Any]] | None = None,
 ) -> list[Any]:
-    """Every descendant with one of `subtypes`, at any depth."""
+    """Every descendant with one of `subtypes`, at any depth.
+
+    `children` is a prebuilt `_children_by_parent(cards)` map, for callers that
+    walk many roots of the same card list.
+    """
     wanted = {subtypes} if isinstance(subtypes, str) else set(subtypes)
-    children = _children_by_parent(cards)
+    if children is None:
+        children = _children_by_parent(cards)
     found: list[Any] = []
     stack = [root_id]
     seen: set[uuid.UUID] = set()
@@ -86,9 +94,14 @@ def collect_descendants_by_subtype(
     return found
 
 
-def collect_leaf_ids(cards: Iterable[Any], root_id: uuid.UUID) -> list[uuid.UUID]:
+def collect_leaf_ids(
+    cards: Iterable[Any],
+    root_id: uuid.UUID,
+    children: dict[uuid.UUID, list[Any]] | None = None,
+) -> list[uuid.UUID]:
     """Leaf ids of the subtree at `root_id`, including `root_id` when childless."""
-    children = _children_by_parent(cards)
+    if children is None:
+        children = _children_by_parent(cards)
     leaves: list[uuid.UUID] = []
     stack = [root_id]
     seen: set[uuid.UUID] = set()
@@ -328,3 +341,307 @@ def build_chain_payload(
             "level_three": level_three,
         },
     }
+
+
+# --- Aggregate payload for GET /reports/value-chain/{category_id} -------------
+
+# `?related=` values: the page's "Show Related" combo.
+STREAM_RELATED_MODES: tuple[str, ...] = ("none", "applications", "dataObjects", "organization")
+
+# BusinessProcess single_select fields the page's "Color by" combo offers. The
+# payload carries the raw option keys; colours come from the field schema.
+PROCESS_COLOR_ATTRIBUTES: tuple[str, ...] = (
+    "processType",
+    "maturity",
+    "automationLevel",
+    "riskLevel",
+)
+
+# What a card linked to a leaf drags in below it: its process/variant
+# descendants at any depth, never nested groups.
+_STEP_SUBTYPES: tuple[str, ...] = ("process", "variant")
+
+
+def _by_name(cards: Iterable[Any]) -> list[Any]:
+    # The id tie-break keeps same-name cards in a stable order across calls.
+    return sorted(cards, key=lambda c: (_name_key(c.name), str(c.id)))
+
+
+def _process_tree(processes: list[Any]) -> list[tuple[Any, list[Any]]]:
+    """Two-level tree over ONE leaf's own process list (`buildProcessTree`).
+
+    A card is a container only when another card of the SAME list has it as
+    parent; everything else is a standalone top-level item. Both levels are
+    ordered by name.
+    """
+    ids = {p.id for p in processes}
+    children_of: dict[uuid.UUID, list[Any]] = {}
+    top: list[Any] = []
+    for p in processes:
+        if p.parent_id is not None and p.parent_id in ids:
+            children_of.setdefault(p.parent_id, []).append(p)
+        else:
+            top.append(p)
+    return [(p, _by_name(children_of.get(p.id, []))) for p in _by_name(top)]
+
+
+def _tree_item(node: tuple[Any, list[Any]]) -> dict:
+    card, kids = node
+    return {"id": str(card.id), "children": [str(k.id) for k in kids]}
+
+
+def build_stream_payload(
+    category_id: uuid.UUID,
+    processes: Iterable[Any],
+    contexts: Iterable[Any],
+    capabilities: Iterable[Any],
+    objectives: Iterable[Any],
+    process_to_ctx_rels: Iterable[Any],
+    ctx_to_cap_rels: Iterable[Any],
+    objective_rels: Iterable[Any],
+    successor_rels: Iterable[Any],
+    element_counts: Mapping[uuid.UUID, int],
+    related_cards: Iterable[Any] = (),
+    related_links: Iterable[tuple[uuid.UUID, uuid.UUID]] = (),
+) -> dict:
+    """Four-band Value Stream map for one process category, layout resolved.
+
+    Port of the data side of the extension's `ValueStreamPage.mjs`: the roots
+    (value streams the category realizes), their leaves split into
+    cross-cutting and ordered sequence, each leaf's process list (the
+    `leafData` effect), the contiguous spans and level rows of the Business
+    Process band, value gates and capabilities per leaf, and business goals
+    per root.
+
+    Inputs are card/relation rows already filtered by status, archive and read
+    scope. `element_counts` maps a process id to its BPMN step count;
+    `related_links` are `(process id, card id)` pairs from those steps for the
+    requested `?related=` mode, resolved against `related_cards`. A relation
+    or link counts only when both of its ends are in the given card lists.
+    """
+    processes = list(processes)
+    # The page read contexts from /cards, which sorts by name: the leaf walk
+    # (and so the chain-start order in `order_leaves`) follows that order.
+    contexts = _by_name(contexts)
+    successor_rels = list(successor_rels)
+
+    process_by_id = {p.id: p for p in processes}
+    ctx_by_id = {c.id: c for c in contexts}
+    cap_by_id = {c.id: c for c in capabilities}
+    objective_by_id = {o.id: o for o in objectives}
+    related_by_id = {c.id: c for c in related_cards}
+    ctx_children = _children_by_parent(contexts)
+    process_children = _children_by_parent(processes)
+
+    # relProcessToBizCtx, both directions: a leaf's direct sources, and every
+    # context a process card is itself linked to (its "own" placements).
+    sources_of: dict[uuid.UUID, set[uuid.UUID]] = {}
+    targets_of: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for rel in process_to_ctx_rels:
+        if rel.source_id in process_by_id and rel.target_id in ctx_by_id:
+            sources_of.setdefault(rel.target_id, set()).add(rel.source_id)
+            targets_of.setdefault(rel.source_id, set()).add(rel.target_id)
+
+    caps_at: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for rel in ctx_to_cap_rels:
+        if rel.source_id in ctx_by_id and rel.target_id in cap_by_id:
+            caps_at.setdefault(rel.source_id, set()).add(rel.target_id)
+
+    # One relation type carries both: valueGate on a leaf, businessGoal on a root.
+    gates_at: dict[uuid.UUID, set[uuid.UUID]] = {}
+    goals_at: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for rel in objective_rels:
+        objective = objective_by_id.get(rel.source_id)
+        if objective is None or rel.target_id not in ctx_by_id:
+            continue
+        if objective.subtype == "valueGate":
+            gates_at.setdefault(rel.target_id, set()).add(rel.source_id)
+        elif objective.subtype == "businessGoal":
+            goals_at.setdefault(rel.target_id, set()).add(rel.source_id)
+
+    related_of: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for process_id, card_id in related_links:
+        if card_id in related_by_id:
+            related_of.setdefault(process_id, set()).add(card_id)
+
+    steps_cache: dict[uuid.UUID, list[Any]] = {}
+    leaf_cache: dict[uuid.UUID, list[Any]] = {}
+
+    def steps_under(card_id: uuid.UUID) -> list[Any]:
+        if card_id not in steps_cache:
+            steps_cache[card_id] = collect_descendants_by_subtype(
+                processes, card_id, _STEP_SUBTYPES, children=process_children
+            )
+        return steps_cache[card_id]
+
+    def leaf_processes(leaf_id: uuid.UUID) -> list[Any]:
+        """Every card linked to the leaf plus its process/variant descendants.
+
+        A descendant with its OWN link(s) elsewhere, none to this leaf, is
+        claimed by those and skipped here. A group then left with no child in
+        the list and no BPMN step of its own contributes nothing and is dropped.
+        """
+        if leaf_id in leaf_cache:
+            return leaf_cache[leaf_id]
+        found: dict[uuid.UUID, Any] = {}
+        for source_id in sources_of.get(leaf_id, ()):
+            found[source_id] = process_by_id[source_id]
+            for step in steps_under(source_id):
+                own = targets_of.get(step.id)
+                if own and leaf_id not in own:
+                    continue
+                found[step.id] = step
+        has_child_here = {p.parent_id for p in found.values() if p.parent_id != p.id}
+        kept = [
+            p
+            for p in found.values()
+            if p.subtype != "group" or element_counts.get(p.id, 0) > 0 or p.id in has_child_here
+        ]
+        leaf_cache[leaf_id] = _by_name(kept)
+        return leaf_cache[leaf_id]
+
+    def process_info(card: Any) -> dict:
+        attrs = card.attributes or {}
+        return {
+            "id": str(card.id),
+            "name": card.name,
+            "subtype": card.subtype,
+            "element_count": element_counts.get(card.id, 0),
+            "color_attributes": {key: attrs.get(key) for key in PROCESS_COLOR_ATTRIBUTES},
+            "related": [
+                {"id": str(c.id), "name": c.name}
+                for c in _by_name(related_by_id[i] for i in related_of.get(card.id, ()))
+            ],
+        }
+
+    def build_root(root: Any) -> dict:
+        leaves = [ctx_by_id[i] for i in collect_leaf_ids(contexts, root.id, children=ctx_children)]
+        cross, sequence = split_cross_cutting(leaves)
+        ordered = order_leaves(sequence, successor_rels)
+        # Cross-cutting leaves get no column, but their gates, capabilities
+        # and processes still count.
+        countable = ordered + cross
+
+        def stream(leaf: Any) -> dict:
+            # The page grouped a run of leaves under their immediate parent;
+            # none when that parent is the root itself.
+            parent_id = None if leaf.parent_id == root.id else leaf.parent_id
+            parent = ctx_by_id.get(parent_id) if parent_id is not None else None
+            return {
+                "id": str(leaf.id),
+                "name": leaf.name,
+                "parent_id": str(parent_id) if parent_id is not None else None,
+                "parent_name": parent.name if parent is not None else None,
+            }
+
+        trees = {leaf.id: _process_tree(leaf_processes(leaf.id)) for leaf in ordered}
+        # Span-eligible: STANDALONE items only. A container (an item with
+        # children in the leaf's own list, typically a group) renders per leaf.
+        standalone = {
+            leaf_id: [card.id for card, kids in tree if not kids] for leaf_id, tree in trees.items()
+        }
+        ordered_ids = [leaf.id for leaf in ordered]
+        spans, singles = group_contiguous_process_spans(ordered_ids, standalone)
+        spanned = {span["process_id"] for span in spans}
+
+        # One item per distinct process across ALL cross-cutting leaves.
+        cross_items: dict[uuid.UUID, tuple[Any, list[Any]]] = {}
+        for leaf in cross:
+            for node in _process_tree(leaf_processes(leaf.id)):
+                cross_items.setdefault(node[0].id, node)
+
+        # Rows over the DISTINCT top-level items anywhere in the band.
+        band_ids = dict.fromkeys(
+            [
+                *(span["process_id"] for span in spans),
+                *cross_items,
+                *(card.id for tree in trees.values() for card, _ in tree),
+            ]
+        )
+        row_of, row_count = assign_process_level_rows(
+            [
+                {
+                    "process_id": pid,
+                    "level_order": (process_by_id[pid].attributes or {}).get("levelOrder"),
+                }
+                for pid in band_ids
+            ]
+        )
+
+        processes_out: dict[str, dict] = {}
+        for leaf in countable:
+            for card in leaf_processes(leaf.id):
+                if str(card.id) not in processes_out:
+                    processes_out[str(card.id)] = process_info(card)
+
+        gates = [
+            {
+                "id": str(o.id),
+                "name": o.name,
+                "leaf_id": str(leaf.id),
+                "objective_type": (o.attributes or {}).get("objectiveType"),
+            }
+            for leaf in countable
+            for o in _by_name(objective_by_id[i] for i in gates_at.get(leaf.id, ()))
+        ]
+
+        caps = []
+        for leaf in countable:
+            for cap in _by_name(cap_by_id[i] for i in caps_at.get(leaf.id, ())):
+                # Grouped under the IMMEDIATE parent; a capability whose parent
+                # is not visible (or that has none) groups under itself.
+                group = cap_by_id.get(cap.parent_id) if cap.parent_id is not None else None
+                group = group or cap
+                caps.append(
+                    {
+                        "id": str(cap.id),
+                        "name": cap.name,
+                        "leaf_id": str(leaf.id),
+                        "group_id": str(group.id),
+                        "group_name": group.name,
+                    }
+                )
+
+        return {
+            "id": str(root.id),
+            "name": root.name,
+            "sequence": [stream(leaf) for leaf in ordered],
+            "cross": [stream(leaf) for leaf in cross],
+            "spans": [
+                {
+                    "process_id": str(span["process_id"]),
+                    "start_index": span["start_index"],
+                    "end_index": span["end_index"],
+                    "leaf_ids": [str(i) for i in span["leaf_ids"]],
+                }
+                for span in spans
+            ],
+            "singles": [
+                {
+                    "process_id": str(single["process_id"]),
+                    "leaf_id": str(single["leaf_id"]),
+                    "index": single["index"],
+                }
+                for single in singles
+            ],
+            # Per sequence leaf: what renders in its own column, i.e. its tree
+            # minus anything already drawn as a span.
+            "leaf_processes": {
+                str(leaf_id): [_tree_item(node) for node in tree if node[0].id not in spanned]
+                for leaf_id, tree in trees.items()
+            },
+            "cross_processes": [_tree_item(node) for node in cross_items.values()],
+            "row_count": row_count,
+            "row_of_process": {str(pid): row for pid, row in row_of.items()},
+            "process_count": sum(len(leaf_processes(leaf.id)) for leaf in countable),
+            "processes": processes_out,
+            "gates": gates,
+            "capabilities": caps,
+            "goals": [
+                {"id": str(o.id), "name": o.name, "description": o.description}
+                for o in _by_name(objective_by_id[i] for i in goals_at.get(root.id, ()))
+            ],
+        }
+
+    roots = _by_name(ctx_by_id[i] for i in targets_of.get(category_id, ()))
+    return {"roots": [build_root(root) for root in roots]}
