@@ -366,6 +366,11 @@ async def test_core_house_orders_level_two_and_lists_level_three(client, db, cha
             "process_type": "core",
         }
     ]
+    # Every part of the schema filled (level one/two/three): it accepts the
+    # live payload and loses nothing.
+    from app.schemas.value_chain import ValueChainResponse
+
+    assert ValueChainResponse.model_validate(resp.json()).model_dump() == resp.json()
 
 
 async def test_a_card_with_two_successors_follows_the_newest_relation(client, db, chain_env):

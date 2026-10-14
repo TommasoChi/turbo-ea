@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.models.card_type import CardType
 from app.models.process_element import ProcessElement, ProcessElementOrganization
+from app.schemas.value_chain import ValueStreamResponse
 from app.services.permission_service import PermissionService
 from tests.conftest import (
     auth_headers,
@@ -148,6 +149,11 @@ async def sales_flow(db, admin):
     return {"cat": cat, "root": root, "quote": quote, "invoice": invoice, "process": process}
 
 
+def assert_schema_round_trip(resp):
+    """The documented schema accepts the live payload and loses nothing."""
+    assert ValueStreamResponse.model_validate(resp.json()).model_dump() == resp.json()
+
+
 def root_of(resp):
     assert resp.status_code == 200, resp.text
     roots = resp.json()["roots"]
@@ -277,6 +283,7 @@ async def test_cross_cutting_stream_is_separated_from_the_sequence(client, db, s
     assert [s["name"] for s in root_payload["sequence"]] == ["Quote", "Invoice"]
     assert str(quote.id) in [s["id"] for s in root_payload["sequence"]]
     assert str(invoice.id) in [s["id"] for s in root_payload["sequence"]]
+    assert_schema_round_trip(resp)
 
 
 async def test_contiguous_process_renders_as_one_span(client, db, stream_env):
@@ -336,6 +343,7 @@ async def test_contiguous_process_renders_as_one_span(client, db, stream_env):
     ]
     assert root_payload["singles"] == []
     assert root_payload["row_count"] == 1
+    assert_schema_round_trip(resp)
 
 
 async def test_the_full_payload_for_a_small_flow(client, db, stream_env):
@@ -433,11 +441,10 @@ async def test_the_full_payload_for_a_small_flow(client, db, stream_env):
             }
         ]
     }
+    assert_schema_round_trip(resp)
 
 
 async def test_response_matches_the_documented_schema(client, db, stream_env):
-    from app.schemas.value_chain import ValueStreamResponse
-
     admin = stream_env["admin"]
     env = await sales_flow(db, admin)
     app = await create_card(db, card_type="Application", name="CRM", user_id=admin.id)
@@ -446,8 +453,7 @@ async def test_response_matches_the_documented_schema(client, db, stream_env):
         f"{URL}/{env['cat'].id}?related=applications", headers=auth_headers(admin)
     )
     assert resp.status_code == 200
-    parsed = ValueStreamResponse.model_validate(resp.json())
-    assert parsed.model_dump() == resp.json()
+    assert_schema_round_trip(resp)
 
 
 # --- related modes -----------------------------------------------------------
