@@ -611,6 +611,37 @@ async def get_capability_heatmap(metric: str = "app_count") -> str:
 
 
 @mcp.tool(annotations=_READ_ANNOT)
+async def get_value_chain(category_id: str | None = None, related: str | None = None) -> str:
+    """Value chain: bands and boxes, or one category's value stream map.
+
+    Without category_id, returns the whole value chain (bands, boxes, core
+    house). With category_id, returns that process category's value stream
+    map. Needs the `bpm.value_chain` permission.
+
+    Args:
+        category_id: UUID of a process category to drill into.
+        related: Only with category_id — also return 'applications',
+            'dataObjects' or 'organization' linked to each process. Items are
+            returned only if the user also holds the BPM `bpm.view`
+            permission; otherwise the lists are empty.
+    """
+    token = await _get_current_token()
+    if not token:
+        return "Error: Not authenticated. Please reconnect."
+    if related and not category_id:
+        return "Error: 'related' needs a category_id."
+    client = TurboEAClient(token)
+    if category_id:
+        data = await client.get(
+            f"/reports/value-chain/{category_id}",
+            params=_compact({"related": related}),
+        )
+    else:
+        data = await client.get("/reports/value-chain")
+    return _fmt(data)
+
+
+@mcp.tool(annotations=_READ_ANNOT)
 async def get_data_quality_report() -> str:
     """Per-card-type data quality / completeness breakdown — surfaces
     which inventory rows have missing required fields."""
