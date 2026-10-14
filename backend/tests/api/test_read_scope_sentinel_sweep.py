@@ -49,6 +49,13 @@ UNMAPPED_PARAMS = {
     "attachment_id": "no attachment seeded (the list route is covered)",
     "batch_id": "mutation ledger is admin audit data",
     "calc_id": "admin",
+    "category_id": (
+        "Value Chain drill-down — no process category seeded; the list route /reports/value-chain "
+        "stays in the sweep, and the hidden-category 404 and denied related items are covered by "
+        "tests/api/test_reports_value_stream.py::"
+        "test_a_category_hidden_by_the_read_scope_is_404 and "
+        "::test_a_denied_related_type_yields_no_related_items"
+    ),
     "conn_id": "ServiceNow admin",
     "initiative_id": "PPM — no Initiative seeded",
     "install_id": "extension admin",
