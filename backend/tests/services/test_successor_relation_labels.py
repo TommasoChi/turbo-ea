@@ -48,6 +48,7 @@ def test_every_card_type_with_lineage_has_one_relation_type():
         "relProcessSuccessor",
         "relInterfaceSuccessor",
         "relDataObjectSuccessor",
+        "relBusinessContextSuccessor",
     }
 
 

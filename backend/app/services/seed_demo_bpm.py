@@ -760,6 +760,43 @@ PROCESSES = [
         },
         lifecycle={"active": "2020-01-01"},
     ),
+    # ── Core > Product Delivery (Group) — Value Chain page demo ──
+    _fs(
+        "bp_grp_vc_delivery",
+        "Product Delivery",
+        parent="bp_cat_core",
+        subtype="group",
+        desc="Processes that move a released product to a commissioned installation.",
+        attrs={"processType": "core", "maturity": "managed"},
+        lifecycle={"active": "2020-01-01"},
+    ),
+    _fs(
+        "bp_vc_release",
+        "Product Release & Launch",
+        parent="bp_grp_vc_delivery",
+        subtype="process",
+        desc="Release a validated design to production and launch it to the market.",
+        attrs={"processType": "core", "maturity": "managed", "levelOrder": 1},
+        lifecycle={"active": "2020-01-01"},
+    ),
+    _fs(
+        "bp_vc_commissioning",
+        "Installation & Commissioning",
+        parent="bp_grp_vc_delivery",
+        subtype="process",
+        desc="Install, configure and hand over devices at the customer site.",
+        attrs={"processType": "core", "maturity": "defined", "levelOrder": 2},
+        lifecycle={"active": "2020-01-01"},
+    ),
+    _fs(
+        "bp_vc_compliance",
+        "Compliance Audit",
+        parent="bp_grp_vc_delivery",
+        subtype="process",
+        desc="Periodic internal audit of quality and regulatory compliance across the chain.",
+        attrs={"processType": "core", "maturity": "managed", "levelOrder": 1},
+        lifecycle={"active": "2020-01-01"},
+    ),
 ]
 
 
@@ -1311,6 +1348,12 @@ _BPM_RELATION_SPECS = [
     ("relProcessToBizCtx", "bp_design_review", "Design Review Process"),
     ("relProcessToBizCtx", "bp_ecm", "Engineering Change Management"),
     ("relProcessToBizCtx", "bp_regulatory_submission", "Regulatory Submission Process"),
+    # Value Chain page demo: category -> Core root, processes -> leaves
+    ("relProcessToBizCtx", "bp_cat_core", "Product to Customer"),
+    ("relProcessToBizCtx", "bp_vc_release", "Engineer Product"),
+    ("relProcessToBizCtx", "bp_vc_release", "Build & Verify"),
+    ("relProcessToBizCtx", "bp_vc_commissioning", "Deliver & Support"),
+    ("relProcessToBizCtx", "bp_vc_compliance", "Quality & Compliance Assurance"),
     # ── Process → IT Component (relProcessToITC) ─────────────────
     ("relProcessToITC", "bp_smt_assembly", "Dell PowerEdge R760"),
     ("relProcessToITC", "bp_device_provisioning", "Azure Kubernetes Service"),

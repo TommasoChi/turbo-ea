@@ -1174,7 +1174,40 @@ TYPES = [
         "color": "#c7527d",
         "category": "Strategy & Transformation",
         "has_hierarchy": False,
-        "subtypes": [],
+        "subtypes": [
+            {
+                "key": "valueGate",
+                "label": "Value Gate",
+                "translations": {
+                    "de": "Value Gate",
+                    "fr": "Jalon de valeur",
+                    "es": "Hito de valor",
+                    "it": "Value Gate",
+                    "pt": "Marco de valor",
+                    "zh": "价值关卡",
+                    "ru": "Контрольная точка ценности",
+                    "da": "Værdiport",
+                    "ar": "بوابة القيمة",
+                },
+                "hidden_fields": [],
+            },
+            {
+                "key": "businessGoal",
+                "label": "Business Goal",
+                "translations": {
+                    "de": "Geschäftsziel",
+                    "fr": "Objectif métier",
+                    "es": "Objetivo de negocio",
+                    "it": "Obiettivo di business",
+                    "pt": "Objetivo de negócio",
+                    "zh": "业务目标",
+                    "ru": "Бизнес-цель",
+                    "da": "Forretningsmål",
+                    "ar": "هدف العمل",
+                },
+                "hidden_fields": [],
+            },
+        ],
         "sort_order": 0,
         "fields_schema": [
             {
@@ -2343,6 +2376,7 @@ TYPES = [
         "color": "#fe6690",
         "category": "Business Architecture",
         "has_hierarchy": True,
+        "has_successors": True,
         "subtypes": [
             {
                 "key": "process",
@@ -2522,6 +2556,90 @@ TYPES = [
                             "ru": "Зрелость",
                             "da": "Modenhed",
                             "ar": "مستوى النضج",
+                        },
+                    },
+                ],
+            },
+            {
+                "section": "Value Chain",
+                "translations": {
+                    "de": "Wertschöpfungskette",
+                    "fr": "Chaîne de valeur",
+                    "es": "Cadena de valor",
+                    "it": "Catena del valore",
+                    "pt": "Cadeia de valor",
+                    "zh": "价值链",
+                    "ru": "Цепочка создания ценности",
+                    "da": "Værdikæde",
+                    "ar": "سلسلة القيمة",
+                },
+                "fields": [
+                    {
+                        "key": "isCore",
+                        "label": "Is Core",
+                        "type": "boolean",
+                        "weight": 0,
+                        "translations": {
+                            "de": "Ist Kern",
+                            "fr": "Est cœur de métier",
+                            "es": "Es nuclear",
+                            "it": "È core",
+                            "pt": "É central",
+                            "zh": "是否核心",
+                            "ru": "Основной",
+                            "da": "Er kerne",
+                            "ar": "أساسي",
+                        },
+                    },
+                    {
+                        "key": "isCross",
+                        "label": "Is Cross-Cutting",
+                        "type": "boolean",
+                        "weight": 0,
+                        "translations": {
+                            "de": "Ist übergreifend",
+                            "fr": "Est transversal",
+                            "es": "Es transversal",
+                            "it": "È trasversale",
+                            "pt": "É transversal",
+                            "zh": "是否横向",
+                            "ru": "Сквозной",
+                            "da": "Er tværgående",
+                            "ar": "شامل",
+                        },
+                    },
+                    {
+                        "key": "sortOrder",
+                        "label": "Sort Order",
+                        "type": "number",
+                        "weight": 0,
+                        "translations": {
+                            "de": "Sortierreihenfolge",
+                            "fr": "Ordre de tri",
+                            "es": "Orden de clasificación",
+                            "it": "Ordine di visualizzazione",
+                            "pt": "Ordem de classificação",
+                            "zh": "排序顺序",
+                            "ru": "Порядок сортировки",
+                            "da": "Sorteringsrækkefølge",
+                            "ar": "ترتيب الفرز",
+                        },
+                    },
+                    {
+                        "key": "levelOrder",
+                        "label": "Level Order",
+                        "type": "number",
+                        "weight": 0,
+                        "translations": {
+                            "de": "Ebenenreihenfolge",
+                            "fr": "Ordre de niveau",
+                            "es": "Orden de nivel",
+                            "it": "Ordine di livello",
+                            "pt": "Ordem de nível",
+                            "zh": "层级顺序",
+                            "ru": "Порядок уровней",
+                            "da": "Niveaurækkefølge",
+                            "ar": "ترتيب المستوى",
                         },
                     },
                 ],
@@ -2783,6 +2901,39 @@ TYPES = [
                             "ru": "Регуляторная значимость",
                             "da": "Regulatorisk relevans",
                             "ar": "الصلة التنظيمية",
+                        },
+                    },
+                ],
+            },
+            {
+                "section": "Value Chain",
+                "translations": {
+                    "de": "Wertschöpfungskette",
+                    "fr": "Chaîne de valeur",
+                    "es": "Cadena de valor",
+                    "it": "Catena del valore",
+                    "pt": "Cadeia de valor",
+                    "zh": "价值链",
+                    "ru": "Цепочка создания ценности",
+                    "da": "Værdikæde",
+                    "ar": "سلسلة القيمة",
+                },
+                "fields": [
+                    {
+                        "key": "levelOrder",
+                        "label": "Level Order",
+                        "type": "number",
+                        "weight": 0,
+                        "translations": {
+                            "de": "Ebenenreihenfolge",
+                            "fr": "Ordre de niveau",
+                            "es": "Orden de nivel",
+                            "it": "Ordine di livello",
+                            "pt": "Ordem de nível",
+                            "zh": "层级顺序",
+                            "ru": "Порядок уровней",
+                            "da": "Niveaurækkefølge",
+                            "ar": "ترتيب المستوى",
                         },
                     },
                 ],
@@ -5453,6 +5604,39 @@ RELATIONS = [
             },
         },
     },
+    {
+        "key": "relObjectiveToBizCtx",
+        "label": "is goal for",
+        "reverse_label": "has goal",
+        "source_type_key": "Objective",
+        "target_type_key": "BusinessContext",
+        "cardinality": "n:m",
+        "sort_order": 48,
+        "translations": {
+            "label": {
+                "de": "ist Ziel für",
+                "fr": "est un objectif pour",
+                "es": "es objetivo de",
+                "it": "è obiettivo per",
+                "pt": "é objetivo para",
+                "zh": "是其目标",
+                "ru": "является целью для",
+                "da": "er mål for",
+                "ar": "هدف لـ",
+            },
+            "reverse_label": {
+                "de": "hat Ziel",
+                "fr": "a pour objectif",
+                "es": "tiene objetivo",
+                "it": "ha obiettivo",
+                "pt": "tem objetivo",
+                "zh": "具有目标",
+                "ru": "имеет цель",
+                "da": "har mål",
+                "ar": "له هدف",
+            },
+        },
+    },
     # ── Successor / Predecessor (self-referencing, per card type) ───
     # Built by ``_successor_relation`` — see the constants above ``RELATIONS``.
     _successor_relation("relAppSuccessor", "Application", 40),
@@ -5462,6 +5646,7 @@ RELATIONS = [
     _successor_relation("relProcessSuccessor", "BusinessProcess", 44),
     _successor_relation("relInterfaceSuccessor", "Interface", 45),
     _successor_relation("relDataObjectSuccessor", "DataObject", 46),
+    _successor_relation("relBusinessContextSuccessor", "BusinessContext", 49),
 ]
 
 
@@ -5776,10 +5961,19 @@ async def seed_metamodel(db: AsyncSession) -> None:
                     else:
                         updated_schema.append(sec)
 
-                # Add new sections that don't exist yet
-                new_sections = [s for s in seed_schema if s["section"] not in current_sections]
-                if new_sections:
-                    updated_schema = updated_schema + new_sections
+                # Add new sections that don't exist yet, minus any field whose key
+                # already lives in another section (an admin may have created the
+                # field by hand before the seed shipped it): a key twice in
+                # fields_schema binds two inputs to one attribute.
+                present = {f.get("key") for s in updated_schema for f in s.get("fields", [])}
+                for s in seed_schema:
+                    if s["section"] in current_sections:
+                        continue
+                    fields = [f for f in s.get("fields", []) if f.get("key") not in present]
+                    if len(fields) == len(s.get("fields", [])):
+                        updated_schema.append(s)
+                    elif fields:
+                        updated_schema.append({**s, "fields": fields})
 
                 existing.fields_schema = updated_schema
             continue

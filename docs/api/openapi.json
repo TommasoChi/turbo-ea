@@ -16171,6 +16171,19 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "ValueChainEnabledPayload": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ValueChainEnabledPayload",
+        "type": "object"
+      },
       "VendorAnalysisOut": {
         "properties": {
           "analysed_at": {
@@ -32967,6 +32980,77 @@
         ]
       }
     },
+    "/api/v1/reports/value-chain": {
+      "get": {
+        "description": "Band/box model for the Value Chain page, layout already resolved.\n\nOne query per card type and one per relation type: the page used to fan\nout a /relations call per category box and per core value stream, which\nis what this replaces. All logic lives in ``build_chain_payload``.",
+        "operationId": "value_chain_api_v1_reports_value_chain_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Value Chain",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/value-chain/{category_id}": {
+      "get": {
+        "description": "Four-band Value Stream map of one process category (the drill-down).\n\nOne query per card type and one per relation type for the whole\nlandscape: the page used to issue /relations calls per root and per leaf\nand one /bpm/.../elements call per process. All logic lives in\n``build_stream_payload``.",
+        "operationId": "value_stream_api_v1_reports_value_chain__category_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "category_id",
+            "required": true,
+            "schema": {
+              "title": "Category Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "related",
+            "required": false,
+            "schema": {
+              "default": "none",
+              "title": "Related",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Value Stream",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/api/v1/resources": {
       "get": {
         "description": "Every file attachment and document link in the repository, paginated.\n\nReturns the ``{items, total, page, page_size}`` envelope used by the\nother paginated read endpoints. Binary payloads are never included \u2014\nfetch a file from ``GET /file-attachments/{id}/download``.",
@@ -37853,6 +37937,64 @@
           }
         },
         "summary": "Get Update Status",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/value-chain-enabled": {
+      "get": {
+        "description": "Public endpoint \u2014 returns the raw Value Chain module flag.\n\nDeliberately NOT combined with ``bpmEnabled``: the Settings page must show\nthe switch's own position even while BPM is off. The conjunction is a\nfrontend concern.",
+        "operationId": "get_value_chain_enabled_api_v1_settings_value_chain_enabled_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Value Chain Enabled",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Admin endpoint \u2014 enable or disable the Value Chain module.",
+        "operationId": "update_value_chain_enabled_api_v1_settings_value_chain_enabled_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValueChainEnabledPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Value Chain Enabled",
         "tags": [
           "settings"
         ]

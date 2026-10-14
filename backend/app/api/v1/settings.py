@@ -232,6 +232,7 @@ async def get_bootstrap(db: AsyncSession = Depends(get_db)):
         "navbar_bg": general.get("navbarBg", DEFAULT_NAVBAR_BG),
         "navbar_fg": general.get("navbarFg", DEFAULT_NAVBAR_FG),
         "bpm_enabled": general.get("bpmEnabled", True),
+        "value_chain_enabled": general.get("valueChainEnabled", True),
         "bpm_require_separate_approver": general.get("bpmRequireSeparateApprover", False),
         "ppm_enabled": general.get("ppmEnabled", False),
         "turbolens_enabled": general.get("turboLensEnabled", True),
@@ -646,6 +647,42 @@ async def update_bpm_enabled(
 
     await db.commit()
 
+    return {"ok": True}
+
+
+class ValueChainEnabledPayload(BaseModel):
+    enabled: bool
+
+
+@router.get("/value-chain-enabled")
+async def get_value_chain_enabled(db: AsyncSession = Depends(get_db)):
+    """Public endpoint — returns the raw Value Chain module flag.
+
+    Deliberately NOT combined with ``bpmEnabled``: the Settings page must show
+    the switch's own position even while BPM is off. The conjunction is a
+    frontend concern.
+    """
+    result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
+    row = result.scalar_one_or_none()
+    general = (row.general_settings if row else None) or {}
+    return {"enabled": general.get("valueChainEnabled", True)}
+
+
+@router.patch("/value-chain-enabled")
+async def update_value_chain_enabled(
+    body: ValueChainEnabledPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Admin endpoint — enable or disable the Value Chain module."""
+    await PermissionService.require_permission(db, user, "admin.settings")
+
+    row = await _get_or_create_row(db)
+    general = dict(row.general_settings or {})
+    general["valueChainEnabled"] = body.enabled
+    row.general_settings = general
+
+    await db.commit()
     return {"ok": True}
 
 

@@ -77,6 +77,10 @@ for _t in META_TYPES:
     for section in _t.get("fields_schema", []):
         for f in section.get("fields", []):
             fields[f["key"]] = f
+    # The card API injects (and stores) a readonly hierarchyLevel on hierarchical
+    # types; it is not in the seed's fields_schema, but demo cards may carry it.
+    if _t.get("has_hierarchy"):
+        fields.setdefault("hierarchyLevel", {"key": "hierarchyLevel", "type": "number"})
     _fields_by_type[_t["key"]] = fields
 
 _select_options_by_field: dict[str, set[str]] = {}

@@ -16,6 +16,7 @@ from app.database import get_db
 from app.models.card import Card
 from app.models.card_type import CardType
 from app.models.event import Event
+from app.models.process_element import ProcessElement, ProcessElementOrganization
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.sso_invitation import SsoInvitation
@@ -58,6 +59,13 @@ from app.services.kpi_snapshot_service import (
 )
 from app.services.lifecycle import current_lifecycle_phase, is_live_in_fiscal_year
 from app.services.permission_service import PermissionService
+from app.services.value_chain_report import (
+    STREAM_RELATED_CARD_TYPE,
+    STREAM_RELATED_MODES,
+    build_chain_payload,
+    build_stream_payload,
+    find_visible_category,
+)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -2752,3 +2760,129 @@ async def eol_report(
             "manual": manual_count,
         },
     }
+
+
+async def _value_chain_cards(
+    db: AsyncSession, read_scope: CardReadScope, type_key: str
+) -> list[Card]:
+    """ACTIVE, unarchived cards of one type that the reader may see.
+
+    Module mode: the value chain reports are gated on their own module
+    permission (bpm.value_chain), not on inventory.view, so only an explicit
+    per-type View deny subtracts cards - same rule as every other /reports/*
+    surface.
+    """
+    result = await db.execute(
+        select(Card).where(
+            Card.type == type_key,
+            Card.status == "ACTIVE",
+            Card.archived_at.is_(None),
+            *read_scope.where(Card, mode="module"),
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def _value_chain_rels(db: AsyncSession, type_key: str) -> list[Relation]:
+    # Relations are not scoped here: the builders count a relation only when
+    # both endpoints are among the scoped cards.
+    # Ordered: where a card has two successors `order_leaves` keeps the last
+    # row, so the newest relation wins instead of the heap order.
+    result = await db.execute(
+        select(Relation).where(Relation.type == type_key).order_by(Relation.created_at, Relation.id)
+    )
+    return list(result.scalars().all())
+
+
+@router.get("/value-chain")
+async def value_chain(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Band/box model for the Value Chain page, layout already resolved.
+
+    One query per card type and one per relation type: the page used to fan
+    out a /relations call per category box and per core value stream, which
+    is what this replaces. All logic lives in ``build_chain_payload``.
+    """
+    await PermissionService.require_permission(db, user, "bpm.value_chain")
+    read_scope = await CardReadScope.load(db, user)
+    return build_chain_payload(
+        categories=await _value_chain_cards(db, read_scope, "BusinessProcess"),
+        contexts=await _value_chain_cards(db, read_scope, "BusinessContext"),
+        objectives=await _value_chain_cards(db, read_scope, "Objective"),
+        process_to_ctx_rels=await _value_chain_rels(db, "relProcessToBizCtx"),
+        objective_rels=await _value_chain_rels(db, "relObjectiveToBizCtx"),
+        successor_rels=await _value_chain_rels(db, "relBusinessContextSuccessor"),
+    )
+
+
+@router.get("/value-chain/{category_id}")
+async def value_stream(
+    category_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    related: str = Query("none"),
+):
+    """Four-band Value Stream map of one process category (the drill-down).
+
+    One query per card type and one per relation type for the whole
+    landscape: the page used to issue /relations calls per root and per leaf
+    and one /bpm/.../elements call per process. All logic lives in
+    ``build_stream_payload``.
+    """
+    await PermissionService.require_permission(db, user, "bpm.value_chain")
+    if related not in STREAM_RELATED_MODES:
+        raise HTTPException(400, f"Invalid related: {related!r}")
+    read_scope = await CardReadScope.load(db, user)
+
+    processes = await _value_chain_cards(db, read_scope, "BusinessProcess")
+    wanted = find_visible_category(processes, category_id)
+    if wanted is None:
+        raise HTTPException(404, "Process category not found")
+
+    # BPMN steps carry the element counts and the related items. The page
+    # read them through an endpoint gated on bpm.view and showed nothing when
+    # that failed, so without bpm.view there are no steps.
+    element_counts: dict[uuid.UUID, int] = {}
+    related_cards: list[Card] = []
+    related_links: list[tuple[uuid.UUID, uuid.UUID]] = []
+    if await PermissionService.has_app_permission(db, user, "bpm.view"):
+        counts = await db.execute(
+            select(ProcessElement.process_id, func.count()).group_by(ProcessElement.process_id)
+        )
+        element_counts = {pid: n for pid, n in counts.all()}
+        if related != "none":
+            related_cards = await _value_chain_cards(
+                db, read_scope, STREAM_RELATED_CARD_TYPE[related]
+            )
+            if related == "organization":
+                links = select(
+                    ProcessElement.process_id, ProcessElementOrganization.organization_id
+                ).join(
+                    ProcessElementOrganization,
+                    ProcessElementOrganization.element_id == ProcessElement.id,
+                )
+            else:
+                column = (
+                    ProcessElement.application_id
+                    if related == "applications"
+                    else ProcessElement.data_object_id
+                )
+                links = select(ProcessElement.process_id, column).where(column.is_not(None))
+            related_links = [(pid, cid) for pid, cid in (await db.execute(links)).all()]
+
+    return build_stream_payload(
+        category_id=wanted,
+        processes=processes,
+        contexts=await _value_chain_cards(db, read_scope, "BusinessContext"),
+        capabilities=await _value_chain_cards(db, read_scope, "BusinessCapability"),
+        objectives=await _value_chain_cards(db, read_scope, "Objective"),
+        process_to_ctx_rels=await _value_chain_rels(db, "relProcessToBizCtx"),
+        ctx_to_cap_rels=await _value_chain_rels(db, "relBizCtxToBC"),
+        objective_rels=await _value_chain_rels(db, "relObjectiveToBizCtx"),
+        successor_rels=await _value_chain_rels(db, "relBusinessContextSuccessor"),
+        element_counts=element_counts,
+        related_cards=related_cards,
+        related_links=related_links,
+    )

@@ -5,6 +5,16 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.159.0] - 2026-10-14
+
+### Added
+
+- **Value Chain and Value Stream maps are now part of the product's backend.** They have their own read-only permission (`bpm.value_chain`), an on/off switch (`valueChainEnabled`, on by default), the report endpoints `GET /reports/value-chain` and `GET /reports/value-chain/{category_id}`, and an MCP tool, `get_value_chain`.
+
+### Changed
+
+- **Admins: migration 156 renames the relation type `ObjectiveToBusinessContext` to `relObjectiveToBizCtx`** and updates every saved report, bookmark, survey, portal, diagram and calculation that names it. It refuses to run if the hand-made type has a different orientation or conflicting attributes, or if another relation key contains the old one, so take a database backup first. Roles that can see BPM, or held the old extension permission, receive `bpm.value_chain`; migration 154 removes `ext.value-chain.view` from every role, so the standalone Value Chain extension stops working after this upgrade and must be uninstalled.
+
 ## [2.158.13] - 2026-10-13
 
 A fork release, not an upstream one. It takes the next patch number because
