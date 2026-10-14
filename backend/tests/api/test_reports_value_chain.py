@@ -408,8 +408,9 @@ async def test_the_report_endpoint_still_answers_with_the_module_off(client, db,
     """Module gating is a frontend concern in this codebase - app/api/v1/bpm.py does not
     check bpmEnabled either. Pinned so nobody adds a divergent check."""
     admin = chain_env["admin"]
-    await client.patch(
-        "/api/v1/settings/value-chain-enabled", json={"enabled": False}, headers=auth_headers(admin)
-    )
+    flag_url = "/api/v1/settings/value-chain-enabled"
+    off = await client.patch(flag_url, json={"enabled": False}, headers=auth_headers(admin))
+    assert off.status_code == 200
+    assert (await client.get(flag_url)).json() == {"enabled": False}
     resp = await client.get("/api/v1/reports/value-chain", headers=auth_headers(admin))
     assert resp.status_code == 200
