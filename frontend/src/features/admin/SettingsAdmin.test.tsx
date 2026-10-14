@@ -29,6 +29,7 @@ const h = vi.hoisted(() => ({
   invalidateSponsorButtonEnabled: vi.fn(),
   invalidateArchiveRetentionDays: vi.fn(),
   invalidateLoginBranding: vi.fn(),
+  invalidateValueChainEnabled: vi.fn(),
   localesInvalidate: vi.fn(),
   /** Stable array — the page keys an effect on its identity. */
   enabledLocales: [] as string[],
@@ -69,6 +70,12 @@ vi.mock("@/hooks/useLoginBranding", async () => {
     "@/hooks/useLoginBranding",
   );
   return { ...actual, invalidateLoginBranding: h.invalidateLoginBranding };
+});
+vi.mock("@/hooks/useValueChainEnabled", async () => {
+  const actual = await vi.importActual<typeof import("@/hooks/useValueChainEnabled")>(
+    "@/hooks/useValueChainEnabled",
+  );
+  return { ...actual, invalidateValueChainEnabled: h.invalidateValueChainEnabled };
 });
 vi.mock("@/hooks/useNavbarStyle", async () => {
   const actual = await vi.importActual<typeof import("@/hooks/useNavbarStyle")>(
@@ -129,6 +136,7 @@ const BOOTSTRAP = {
   app_title: "Acme EA",
   bpm_enabled: true,
   bpm_require_separate_approver: false,
+  value_chain_enabled: true,
   ppm_enabled: false,
   grc_enabled: true,
   sponsor_button_enabled: true,
@@ -466,6 +474,54 @@ describe("SettingsAdmin — module toggles", () => {
     );
     await screen.findByText(t("settings.bpm.separateApproverSaved"));
     expect(mockApi.callsOf("patch", "/settings/bpm-separate-approver")[0].body).toEqual({ enabled: true });
+  });
+
+  it("shows the Value Chain switch inside the BPM Module block, on by default", async () => {
+    await renderGeneral();
+    const card = section(t("settings.bpm.title"));
+    expect(card.getByRole("checkbox", { name: t("settings.valueChain.visible") })).toBeChecked();
+    expect(card.getByText(t("settings.valueChain.description"))).toBeInTheDocument();
+  });
+
+  it("defaults the Value Chain switch to on when an older backend omits the flag", async () => {
+    const legacy: Partial<typeof BOOTSTRAP> = { ...BOOTSTRAP };
+    delete legacy.value_chain_enabled;
+    mockApi.on("get", "/settings/bootstrap", legacy);
+    await renderGeneral();
+    expect(
+      section(t("settings.bpm.title")).getByRole("checkbox", { name: t("settings.valueChain.visible") }),
+    ).toBeChecked();
+  });
+
+  it("PATCHes the Value Chain switch, broadcasts and confirms", async () => {
+    const { user } = await renderGeneral();
+    mockApi.on("patch", "/settings/value-chain-enabled", {});
+    const card = section(t("settings.bpm.title"));
+    await user.click(card.getByRole("checkbox", { name: t("settings.valueChain.visible") }));
+    await screen.findByText(t("settings.valueChain.disabledSuccess"));
+    expect(mockApi.callsOf("patch", "/settings/value-chain-enabled")[0].body).toEqual({ enabled: false });
+    expect(h.invalidateValueChainEnabled).toHaveBeenCalledWith(false);
+    expect(card.getByRole("checkbox", { name: t("settings.valueChain.hidden") })).not.toBeChecked();
+  });
+
+  it("disables the Value Chain switch, and says why, while BPM is off — but still shows its own position", async () => {
+    scriptLoad({ bootstrap: { bpm_enabled: false, value_chain_enabled: true } });
+    await renderGeneral();
+    const card = section(t("settings.bpm.title"));
+    const sw = card.getByRole("checkbox", { name: t("settings.valueChain.visible") });
+    expect(sw).toBeDisabled();
+    expect(sw).toBeChecked();
+    expect(card.getByText(t("settings.valueChain.requiresBpm"))).toBeInTheDocument();
+  });
+
+  it("keeps the Value Chain switch where it was and shows the error when the PATCH fails", async () => {
+    const { user } = await renderGeneral();
+    mockApi.fail("patch", "/settings/value-chain-enabled", 500);
+    const card = section(t("settings.bpm.title"));
+    await user.click(card.getByRole("checkbox", { name: t("settings.valueChain.visible") }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("PATCH /settings/value-chain-enabled failed");
+    expect(card.getByRole("checkbox", { name: t("settings.valueChain.visible") })).toBeChecked();
+    expect(h.invalidateValueChainEnabled).not.toHaveBeenCalled();
   });
 
   it("turns PPM on", async () => {

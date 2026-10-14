@@ -32,6 +32,7 @@ import {
 } from "@/hooks/useDateFormat";
 import { invalidateAppTitle, DEFAULT_APP_TITLE } from "@/hooks/useAppTitle";
 import { invalidateGrcEnabled } from "@/hooks/useGrcEnabled";
+import { invalidateValueChainEnabled } from "@/hooks/useValueChainEnabled";
 import { invalidateSponsorButtonEnabled } from "@/hooks/useSponsorButtonEnabled";
 import SponsorshipDialog from "@/components/SponsorshipDialog";
 import { brand } from "@/theme";
@@ -153,6 +154,8 @@ interface GeneralSettingsBootstrap {
   app_title: string;
   bpm_enabled: boolean;
   bpm_require_separate_approver: boolean;
+  /** Absent on a backend that predates the Value Chain module. */
+  value_chain_enabled?: boolean;
   ppm_enabled: boolean;
   grc_enabled: boolean;
   sponsor_button_enabled: boolean;
@@ -245,6 +248,8 @@ function GeneralTab() {
   // BPM toggle state
   const [bpmEnabled, setBpmEnabled] = useState(true);
   const [savingBpm, setSavingBpm] = useState(false);
+  const [valueChainEnabled, setValueChainEnabled] = useState(true);
+  const [savingValueChain, setSavingValueChain] = useState(false);
   const [requireSeparateApprover, setRequireSeparateApprover] = useState(false);
   const [savingSeparateApprover, setSavingSeparateApprover] = useState(false);
 
@@ -354,6 +359,7 @@ function GeneralTab() {
         setSelectedCurrency(general.currency);
         setBpmEnabled(general.bpm_enabled);
         setRequireSeparateApprover(Boolean(general.bpm_require_separate_approver));
+        setValueChainEnabled(general.value_chain_enabled ?? true);
         setPpmEnabled(general.ppm_enabled);
         setGrcEnabled(general.grc_enabled);
         setSponsorButtonEnabled(general.sponsor_button_enabled);
@@ -525,6 +531,23 @@ function GeneralTab() {
       setError(e instanceof Error ? e.message : t("common:errors.generic"));
     } finally {
       setSavingBpm(false);
+    }
+  };
+
+  const handleValueChainToggle = async (enabled: boolean) => {
+    setSavingValueChain(true);
+    setError("");
+    try {
+      await api.patch("/settings/value-chain-enabled", { enabled });
+      setValueChainEnabled(enabled);
+      invalidateValueChainEnabled(enabled);
+      setSnack(
+        enabled ? t("settings.valueChain.enabledSuccess") : t("settings.valueChain.disabledSuccess"),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("common:errors.generic"));
+    } finally {
+      setSavingValueChain(false);
     }
   };
 
@@ -1442,6 +1465,28 @@ function GeneralTab() {
         <Typography variant="caption" color="text.secondary" display="block">
           {t("settings.bpm.separateApproverHint")}
         </Typography>
+
+        {/* Value Chain is a view over BPM data, so it lives in this block and is
+            locked while BPM is off; the switch still shows its own stored position. */}
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+          {t("settings.valueChain.title")}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+          {bpmEnabled ? t("settings.valueChain.description") : t("settings.valueChain.requiresBpm")}
+        </Typography>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={valueChainEnabled}
+              onChange={(e) => handleValueChainToggle(e.target.checked)}
+              disabled={savingValueChain || !bpmEnabled}
+            />
+          }
+          label={
+            valueChainEnabled ? t("settings.valueChain.visible") : t("settings.valueChain.hidden")
+          }
+        />
       </Paper>
 
       {/* PPM Module Toggle */}
