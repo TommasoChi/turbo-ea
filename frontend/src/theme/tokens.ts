@@ -279,6 +279,20 @@ export const typography = {
   h3: { fontSize: "1.25rem", fontWeight: 600 },
 } as const;
 
+// ── Value Chain bands (Value Chain report) ──────────────────────────────
+
+// A fixed 4-colour palette for the process-type bands — NOT admin-editable
+// (unlike card-type colours). Each value carries white text at ≥ 4.5:1; use
+// `readableTypeColor(color, isDark)` when the colour is an accent (bar, icon)
+// on the theme paper.
+export const VALUE_CHAIN_BAND_COLORS = {
+  management: "#00796b",
+  core: brand.primary,
+  support: "#8e24aa",
+  not_set: "#757575",
+} as const;
+export type ValueChainBandColorKey = keyof typeof VALUE_CHAIN_BAND_COLORS;
+
 // ── Type exports ────────────────────────────────────────────────────────
 
 export type StatusKey = keyof typeof STATUS_COLORS;
