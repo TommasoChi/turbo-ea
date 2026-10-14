@@ -348,8 +348,18 @@ def build_chain_payload(
 
 # --- Aggregate payload for GET /reports/value-chain/{category_id} -------------
 
-# `?related=` values: the page's "Show Related" combo.
-STREAM_RELATED_MODES: tuple[str, ...] = ("none", "applications", "dataObjects", "organization")
+# `?related=` values (the page's "Show Related" combo) -> card type of the
+# linked cards. The page read these from each process's BPMN steps
+# (GET /bpm/processes/{id}/elements), not from process-level relations:
+# Organization is per-step participation, not the relProcessToOrg ownership
+# relation. One map, so a mode cannot be valid and still miss its card type.
+STREAM_RELATED_CARD_TYPE: dict[str, str | None] = {
+    "none": None,
+    "applications": "Application",
+    "dataObjects": "DataObject",
+    "organization": "Organization",
+}
+STREAM_RELATED_MODES: tuple[str, ...] = tuple(STREAM_RELATED_CARD_TYPE)
 
 # BusinessProcess single_select fields the page's "Color by" combo offers. The
 # payload carries the raw option keys; colours come from the field schema.
@@ -363,6 +373,21 @@ PROCESS_COLOR_ATTRIBUTES: tuple[str, ...] = (
 # What a card linked to a leaf drags in below it: its process/variant
 # descendants at any depth, never nested groups.
 _STEP_SUBTYPES: tuple[str, ...] = ("process", "variant")
+
+
+def find_visible_category(processes: Iterable[Any], category_id: str) -> uuid.UUID | None:
+    """The id of the category card `category_id` names, or None (the route's 404).
+
+    `processes` are the reader's visible BusinessProcess cards, so a card the
+    reader may not see is "not found", never "forbidden".
+    """
+    try:
+        wanted = uuid.UUID(category_id)
+    except ValueError:
+        return None
+    if any(p.id == wanted and p.subtype == "category" for p in processes):
+        return wanted
+    return None
 
 
 def _process_tree(processes: list[Any]) -> list[tuple[Any, list[Any]]]:

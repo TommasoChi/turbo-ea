@@ -60,9 +60,11 @@ from app.services.kpi_snapshot_service import (
 from app.services.lifecycle import current_lifecycle_phase, is_live_in_fiscal_year
 from app.services.permission_service import PermissionService
 from app.services.value_chain_report import (
+    STREAM_RELATED_CARD_TYPE,
     STREAM_RELATED_MODES,
     build_chain_payload,
     build_stream_payload,
+    find_visible_category,
 )
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -2815,17 +2817,6 @@ async def value_chain(
     )
 
 
-# `?related=` mode -> card type of the linked cards. The page read these from
-# each process's BPMN steps (GET /bpm/processes/{id}/elements), not from
-# process-level relations: Organization is per-step participation, not the
-# relProcessToOrg ownership relation.
-_RELATED_CARD_TYPE = {
-    "applications": "Application",
-    "dataObjects": "DataObject",
-    "organization": "Organization",
-}
-
-
 @router.get("/value-chain/{category_id}")
 async def value_stream(
     category_id: str,
@@ -2846,12 +2837,8 @@ async def value_stream(
     read_scope = await CardReadScope.load(db, user)
 
     processes = await _value_chain_cards(db, read_scope, "BusinessProcess")
-    try:
-        wanted = uuid.UUID(category_id)
-    except ValueError:
-        wanted = None
-    # A card the reader may not see is not in `processes`: 404, never 403.
-    if not any(p.id == wanted and p.subtype == "category" for p in processes):
+    wanted = find_visible_category(processes, category_id)
+    if wanted is None:
         raise HTTPException(404, "Process category not found")
 
     # BPMN steps carry the element counts and the related items. The page
@@ -2866,7 +2853,9 @@ async def value_stream(
         )
         element_counts = {pid: n for pid, n in counts.all()}
         if related != "none":
-            related_cards = await _value_chain_cards(db, read_scope, _RELATED_CARD_TYPE[related])
+            related_cards = await _value_chain_cards(
+                db, read_scope, STREAM_RELATED_CARD_TYPE[related]
+            )
             if related == "organization":
                 links = select(
                     ProcessElement.process_id, ProcessElementOrganization.organization_id

@@ -11,7 +11,12 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
-from app.services.value_chain_report import build_stream_payload
+from app.services.value_chain_report import (
+    STREAM_RELATED_CARD_TYPE,
+    STREAM_RELATED_MODES,
+    build_stream_payload,
+    find_visible_category,
+)
 
 
 @dataclass
@@ -710,3 +715,37 @@ def test_two_roots_are_built_independently():
     assert alpha["process_count"] == 0
     assert beta["row_of_process"] == {s(p): 0}
     assert beta["process_count"] == 1
+
+
+# --- Request helpers the drill-down route calls -------------------------------
+
+
+def test_every_related_mode_maps_to_its_card_type():
+    """One map drives both the 400 check and the card-type lookup: a mode in
+    one and not the other used to be a KeyError (500)."""
+    assert STREAM_RELATED_CARD_TYPE == {
+        "none": None,
+        "applications": "Application",
+        "dataObjects": "DataObject",
+        "organization": "Organization",
+    }
+    assert STREAM_RELATED_MODES == ("none", "applications", "dataObjects", "organization")
+
+
+def test_find_visible_category_returns_the_id_of_a_visible_category():
+    category = C("Sales", subtype="category")
+    group = C("Group", subtype="group")
+    processes = [group, category]
+    assert find_visible_category(processes, str(category.id)) == category.id
+    # Upper-case and brace forms parse like the route's uuid.UUID() did.
+    assert find_visible_category(processes, str(category.id).upper()) == category.id
+
+
+def test_find_visible_category_is_none_for_anything_else():
+    category = C("Sales", subtype="category")
+    group = C("Group", subtype="group")
+    processes = [group, category]
+    assert find_visible_category(processes, str(group.id)) is None  # not a category
+    assert find_visible_category(processes, str(uuid.uuid4())) is None  # not visible
+    assert find_visible_category(processes, "not-a-uuid") is None
+    assert find_visible_category([], str(category.id)) is None
