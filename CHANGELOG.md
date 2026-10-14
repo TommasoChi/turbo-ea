@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **Admins: migration 156 renames the relation type `ObjectiveToBusinessContext` to `relObjectiveToBizCtx`** and updates every saved report, bookmark, survey, portal, diagram and calculation that names it. It refuses to run if the hand-made type has a different orientation or conflicting attributes, so take a database backup first. Roles that can see BPM, or held the old extension permission, receive `bpm.value_chain`.
+- **Admins: migration 156 renames the relation type `ObjectiveToBusinessContext` to `relObjectiveToBizCtx`** and updates every saved report, bookmark, survey, portal, diagram and calculation that names it. It refuses to run if the hand-made type has a different orientation or conflicting attributes, or if another relation key contains the old one, so take a database backup first. Roles that can see BPM, or held the old extension permission, receive `bpm.value_chain`; migration 154 removes `ext.value-chain.view` from every role, so the standalone Value Chain extension stops working after this upgrade and must be uninstalled.
 
 ## [2.158.13] - 2026-10-13
 
