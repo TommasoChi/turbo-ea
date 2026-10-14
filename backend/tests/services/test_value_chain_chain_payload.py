@@ -506,3 +506,37 @@ def test_successor_relations_may_be_a_one_shot_iterable():
         "Zeta",
         "Alpha",
     ]
+
+
+def test_several_chains_start_in_name_order_whatever_the_input_order():
+    """The page read contexts from /cards, sorted by name, so with two chains
+    the one whose first card sorts first leads - not whichever the database
+    returned first. Same rule as the stream builder."""
+    delta, echo = core_root("Delta"), core_root("Echo")
+    bravo, charlie = core_root("Bravo"), core_root("Charlie")
+    root = core_root("Alpha root")
+    kilo, lima = vs("Kilo", root), vs("Lima", root)
+    golf, hotel = vs("Golf", root), vs("Hotel", root)
+    house = payload(
+        # Input order is the reverse of name order, chain by chain.
+        contexts=[delta, echo, bravo, charlie, root, kilo, lima, golf, hotel],
+        successor_rels=[
+            R(echo.id, delta.id),
+            R(charlie.id, bravo.id),
+            R(lima.id, kilo.id),
+            R(hotel.id, golf.id),
+        ],
+    )["core_house"]
+    assert [s["name"] for s in house["level_one"]] == [
+        "Bravo",
+        "Charlie",
+        "Delta",
+        "Echo",
+        "Alpha root",
+    ]
+    assert [c["name"] for c in house["level_two"][str(root.id)]] == [
+        "Golf",
+        "Hotel",
+        "Kilo",
+        "Lima",
+    ]

@@ -2784,7 +2784,11 @@ async def _value_chain_cards(
 async def _value_chain_rels(db: AsyncSession, type_key: str) -> list[Relation]:
     # Relations are not scoped here: the builders count a relation only when
     # both endpoints are among the scoped cards.
-    result = await db.execute(select(Relation).where(Relation.type == type_key))
+    # Ordered: where a card has two successors `order_leaves` keeps the last
+    # row, so the newest relation wins instead of the heap order.
+    result = await db.execute(
+        select(Relation).where(Relation.type == type_key).order_by(Relation.created_at, Relation.id)
+    )
     return list(result.scalars().all())
 
 

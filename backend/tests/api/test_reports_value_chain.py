@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models.card_type import CardType
+from app.models.relation import Relation
 from app.services.permission_service import PermissionService
 from tests.conftest import (
     auth_headers,
@@ -364,6 +365,42 @@ async def test_core_house_orders_level_two_and_lists_level_three(client, db, cha
             "value_gate_count": 0,
             "process_type": "core",
         }
+    ]
+
+
+async def test_a_card_with_two_successors_follows_the_newest_relation(client, db, chain_env):
+    """`order_leaves` keeps the last successor row per card, so the rows come
+    ordered by creation: the newest relation wins, whatever the heap order."""
+    admin = chain_env["admin"]
+    core = {"hierarchyLevel": 1, "isCore": True}
+    names = ("Alpha", "Bravo", "Charlie")
+    alpha, bravo, charlie = [
+        await create_card(
+            db,
+            card_type="BusinessContext",
+            name=name,
+            user_id=admin.id,
+            subtype="valueStream",
+            attributes=dict(core),
+        )
+        for name in names
+    ]
+    # Inserted newest first, so an unordered scan returns the older row last.
+    for source, day in ((charlie, 2), (bravo, 1)):
+        db.add(
+            Relation(
+                type="relBusinessContextSuccessor",
+                source_id=source.id,
+                target_id=alpha.id,
+                created_at=datetime(2026, 1, day, tzinfo=timezone.utc),
+            )
+        )
+        await db.flush()
+    resp = await client.get(URL, headers=auth_headers(admin))
+    assert [s["name"] for s in resp.json()["core_house"]["level_one"]] == [
+        "Alpha",
+        "Charlie",
+        "Bravo",
     ]
 
 

@@ -56,6 +56,11 @@ def _name_key(name: str) -> tuple[str, str]:
     return "".join(ch for ch in decomposed if not unicodedata.combining(ch)), name
 
 
+def _by_name(cards: Iterable[Any]) -> list[Any]:
+    # The id tie-break keeps same-name cards in a stable order across calls.
+    return sorted(cards, key=lambda c: (_name_key(c.name), str(c.id)))
+
+
 def _children_by_parent(cards: Iterable[Any]) -> dict[uuid.UUID, list[Any]]:
     out: dict[uuid.UUID, list[Any]] = {}
     for card in cards:
@@ -257,7 +262,9 @@ def build_chain_payload(
     relation to a filtered-out card must not produce a phantom count.
     """
     processes = list(categories)
-    contexts = list(contexts)
+    # The page read contexts from /cards, which sorts by name: the chain starts
+    # in `order_leaves` (level one, level two) follow that order.
+    contexts = _by_name(contexts)
     objectives = list(objectives)
     successor_rels = list(successor_rels)
 
@@ -298,12 +305,8 @@ def build_chain_payload(
             "process_type": band_key_for((card.attributes or {}).get("processType")),
         }
 
-    def by_name(cards: Iterable[Any]) -> list[Any]:
-        # The id tie-break keeps same-name cards in a stable order across calls.
-        return sorted(cards, key=lambda c: (_name_key(c.name), str(c.id)))
-
     boxes_by_band: dict[str, list[dict]] = {key: [] for key in BAND_KEYS}
-    for card in by_name(p for p in processes if p.subtype == "category"):
+    for card in _by_name(p for p in processes if p.subtype == "category"):
         built = box(card)
         boxes_by_band[built["process_type"]].append(built)
 
@@ -330,7 +333,7 @@ def build_chain_payload(
         ]
         # Processes linked straight to the level-1 card, not to a level-2 child.
         level_three[key] = [
-            box(p) for p in by_name(process_by_id[pid] for pid in sources_of.get(root.id, ()))
+            box(p) for p in _by_name(process_by_id[pid] for pid in sources_of.get(root.id, ()))
         ]
 
     return {
@@ -360,11 +363,6 @@ PROCESS_COLOR_ATTRIBUTES: tuple[str, ...] = (
 # What a card linked to a leaf drags in below it: its process/variant
 # descendants at any depth, never nested groups.
 _STEP_SUBTYPES: tuple[str, ...] = ("process", "variant")
-
-
-def _by_name(cards: Iterable[Any]) -> list[Any]:
-    # The id tie-break keeps same-name cards in a stable order across calls.
-    return sorted(cards, key=lambda c: (_name_key(c.name), str(c.id)))
 
 
 def _process_tree(processes: list[Any]) -> list[tuple[Any, list[Any]]]:
