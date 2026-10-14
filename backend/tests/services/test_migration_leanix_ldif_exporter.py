@@ -87,7 +87,9 @@ class TestMappingConsistency:
         from app.services.seed import RELATIONS
 
         seeded = {r["key"] for r in RELATIONS}
-        missing = seeded - set(EXPORT_RELATION_API_MAPPING) - {"relProcessCalls"}
+        # No LeanIX counterpart exists for these Turbo EA-only relation types.
+        turbo_only = {"relProcessCalls", "relObjectiveToBizCtx", "relBusinessContextSuccessor"}
+        missing = seeded - set(EXPORT_RELATION_API_MAPPING) - turbo_only
         assert not missing, missing
 
 
