@@ -48,6 +48,7 @@ const NAMESPACES = [
   "ppm",
   "notifications",
   "validation",
+  "valuechain",
 ] as const;
 
 const NS_SET = new Set<string>(NAMESPACES);
@@ -81,7 +82,7 @@ const MIN_LITERAL_CALLS = 4_000;
 /**
  * Resolve through i18next itself rather than a hand-rolled bundle walk. Two
  * reasons: it is the same code path that decides at runtime whether the user
- * sees a string or a raw key, and 12 of the 14 namespaces use flat dotted keys
+ * sees a string or a raw key, and 13 of the 15 namespaces use flat dotted keys
  * while `grc` and `ppm` nest some of theirs under real objects (`soaw.*`,
  * `governance.*`, `tabs.*`). A `bundle[key] !== undefined` check reports 34
  * phantom misses on those two; `exists()` handles both shapes.

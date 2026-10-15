@@ -2679,3 +2679,108 @@ export type PublicDiagramLegend =
       rules: Array<{ type_key: string; field_key: string; has_missing: boolean }>;
       types: CardType[];
     };
+
+// ── Value Chain (GET /reports/value-chain, /reports/value-chain/{id}) ───────
+export type ValueChainBandKey = "management" | "core" | "support" | "not_set";
+
+export interface ValueChainBox {
+  id: string;
+  name: string;
+  has_children: boolean;
+  group_count: number;
+  process_count: number;
+  value_stream_count: number;
+  value_gate_count: number;
+  process_type: ValueChainBandKey;
+}
+export interface ValueChainBand {
+  key: ValueChainBandKey;
+  boxes: ValueChainBox[];
+}
+export interface ValueChainHouseStream {
+  id: string;
+  name: string;
+}
+export interface ValueChainCoreHouse {
+  level_one: ValueChainHouseStream[];
+  level_two: Record<string, ValueChainHouseStream[]>;
+  level_three: Record<string, ValueChainBox[]>;
+}
+export interface ValueChainResponse {
+  bands: ValueChainBand[];
+  core_house: ValueChainCoreHouse;
+}
+
+export type StreamRelatedMode = "none" | "applications" | "dataObjects" | "organization";
+export interface ValueStreamLeaf {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  parent_name: string | null;
+}
+export interface ValueStreamSpan {
+  process_id: string;
+  start_index: number;
+  end_index: number;
+  leaf_ids: string[];
+}
+export interface ValueStreamSingle {
+  process_id: string;
+  leaf_id: string;
+  index: number;
+}
+export interface ValueStreamTreeItem {
+  id: string;
+  /** Child process ids, ordered by name. */
+  children: string[];
+}
+export interface ValueStreamRelatedItem {
+  id: string;
+  name: string;
+}
+export interface ValueStreamProcess {
+  id: string;
+  name: string;
+  subtype: string | null;
+  element_count: number;
+  color_attributes: Record<string, string | null>;
+  related: ValueStreamRelatedItem[];
+}
+export interface ValueStreamGate {
+  id: string;
+  name: string;
+  leaf_id: string;
+  objective_type: string | null;
+}
+export interface ValueStreamCapability {
+  id: string;
+  name: string;
+  leaf_id: string;
+  group_id: string;
+  group_name: string;
+}
+export interface ValueStreamGoal {
+  id: string;
+  name: string;
+  description: string | null;
+}
+export interface ValueStreamRoot {
+  id: string;
+  name: string;
+  sequence: ValueStreamLeaf[];
+  cross: ValueStreamLeaf[];
+  spans: ValueStreamSpan[];
+  singles: ValueStreamSingle[];
+  leaf_processes: Record<string, ValueStreamTreeItem[]>;
+  cross_processes: ValueStreamTreeItem[];
+  row_count: number;
+  row_of_process: Record<string, number>;
+  process_count: number;
+  processes: Record<string, ValueStreamProcess>;
+  gates: ValueStreamGate[];
+  capabilities: ValueStreamCapability[];
+  goals: ValueStreamGoal[];
+}
+export interface ValueStreamResponse {
+  roots: ValueStreamRoot[];
+}

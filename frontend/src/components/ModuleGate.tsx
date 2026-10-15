@@ -1,6 +1,6 @@
 /**
  * ModuleGate — wraps a route element for an optional module (BPM, PPM,
- * TurboLens) and renders a friendly "module disabled" placeholder when the
+ * TurboLens, GRC, Value Chain) and renders a friendly "module disabled" placeholder when the
  * admin has turned the module off, instead of letting the page load and
  * issue API calls that would fail or render an empty shell.
  */
@@ -17,8 +17,9 @@ import { useBpmEnabled } from "@/hooks/useBpmEnabled";
 import { useGrcEnabled } from "@/hooks/useGrcEnabled";
 import { usePpmEnabled } from "@/hooks/usePpmEnabled";
 import { useTurboLensReady } from "@/hooks/useTurboLensReady";
+import { useValueChainEnabled } from "@/hooks/useValueChainEnabled";
 
-type ModuleKey = "bpm" | "ppm" | "turbolens" | "grc";
+type ModuleKey = "bpm" | "ppm" | "turbolens" | "grc" | "valuechain";
 
 interface Props {
   module: ModuleKey;
@@ -30,6 +31,8 @@ const SETTINGS_TAB: Record<ModuleKey, string> = {
   ppm: "/admin/settings?tab=ppm",
   turbolens: "/admin/settings?tab=turbolens",
   grc: "/admin/settings",
+  // The Value Chain switch lives in the BPM settings tab.
+  valuechain: "/admin/settings?tab=bpm",
 };
 
 const MODULE_ICON: Record<ModuleKey, string> = {
@@ -37,6 +40,7 @@ const MODULE_ICON: Record<ModuleKey, string> = {
   ppm: "rocket_launch",
   turbolens: "psychology",
   grc: "policy",
+  valuechain: "conveyor_belt",
 };
 
 export default function ModuleGate({ module, children }: Props) {
@@ -46,6 +50,7 @@ export default function ModuleGate({ module, children }: Props) {
   const { ppmEnabled, ppmLoaded } = usePpmEnabled();
   const { turboLensEnabled, turboLensLoaded } = useTurboLensReady();
   const { grcEnabled, grcLoaded } = useGrcEnabled();
+  const { valueChainEnabled, valueChainLoaded } = useValueChainEnabled();
 
   const enabled =
     module === "bpm"
@@ -54,7 +59,9 @@ export default function ModuleGate({ module, children }: Props) {
         ? ppmEnabled
         : module === "grc"
           ? grcEnabled
-          : turboLensEnabled;
+          : module === "valuechain"
+            ? valueChainEnabled
+            : turboLensEnabled;
   const loaded =
     module === "bpm"
       ? bpmLoaded
@@ -62,7 +69,9 @@ export default function ModuleGate({ module, children }: Props) {
         ? ppmLoaded
         : module === "grc"
           ? grcLoaded
-          : turboLensLoaded;
+          : module === "valuechain"
+            ? valueChainLoaded
+            : turboLensLoaded;
 
   // Wait for the first fetch to resolve before deciding — prevents the
   // disabled placeholder from flashing while the status request is in flight.

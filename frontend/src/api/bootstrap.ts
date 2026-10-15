@@ -23,6 +23,7 @@ import {
 import { invalidateAppTitle } from "@/hooks/useAppTitle";
 import { invalidateCurrency } from "@/hooks/useCurrency";
 import { invalidateBpmEnabled } from "@/hooks/useBpmEnabled";
+import { invalidateValueChainEnabled } from "@/hooks/useValueChainEnabled";
 import { invalidateComplianceRegulations } from "@/hooks/useComplianceRegulations";
 import { invalidateResourceTypes } from "@/hooks/useResourceTypes";
 import { invalidateGrcEnabled } from "@/hooks/useGrcEnabled";
@@ -44,6 +45,8 @@ type BootstrapResponse = {
   navbar_bg: string;
   navbar_fg: string;
   bpm_enabled: boolean;
+  /** Optional: an older backend does not send it. */
+  value_chain_enabled?: boolean;
   ppm_enabled: boolean;
   turbolens_enabled: boolean;
   grc_enabled: boolean;
@@ -91,6 +94,9 @@ export function primeBootstrap(): Promise<void> {
       invalidateNavbarStyle({ bg: r.navbar_bg, fg: r.navbar_fg });
 
       invalidateBpmEnabled(r.bpm_enabled);
+      if (typeof r.value_chain_enabled === "boolean") {
+        invalidateValueChainEnabled(r.value_chain_enabled);
+      }
       invalidatePpmEnabled(r.ppm_enabled);
       invalidateGrcEnabled(r.grc_enabled);
       invalidateSponsorButtonEnabled(r.sponsor_button_enabled);

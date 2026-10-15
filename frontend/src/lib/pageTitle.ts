@@ -55,6 +55,8 @@ export const ROUTE_TITLES: RouteTitle[] = [
   // neither loads the process card, so this route keeps the static label rather
   // than paying a `GET /cards/{id}` for a tab title.
   { path: "/bpm/processes/:id/flow", titleKey: "pageTitles.processFlow" },
+  { path: "/value-chain", titleKey: "valueChain" },
+  { path: "/value-chain/value-stream", titleKey: "valueChain" },
   { path: "/ppm", titleKey: "ppm" },
   { path: "/ppm/:id", titleKey: "ppm" },
   { path: "/grc", titleKey: "grc" },

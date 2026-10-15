@@ -79,6 +79,8 @@ const ValueStreamCataloguePage = lazy(
 const PrinciplesCataloguePage = lazy(
   () => import("@/features/principles-catalogue/PrinciplesCataloguePage"),
 );
+const ValueChainPage = lazy(() => import("@/features/value-chain/ValueChainPage"));
+const ValueStreamPage = lazy(() => import("@/features/value-chain/ValueStreamPage"));
 
 /** Preserve the :id when redirecting /ea-delivery/risks/:id → /grc/risks/:id. */
 function LegacyRiskDetailRedirect() {
@@ -182,6 +184,8 @@ function AppRoutes() {
                 <Route path="/reports/saved" element={<SavedReportsPage />} />
                 <Route path="/bpm" element={<ModuleGate module="bpm"><BpmDashboard /></ModuleGate>} />
                 <Route path="/bpm/processes/:id/flow" element={<ModuleGate module="bpm"><ProcessFlowEditorPage /></ModuleGate>} />
+                <Route path="/value-chain" element={<ModuleGate module="valuechain"><ValueChainPage /></ModuleGate>} />
+                <Route path="/value-chain/value-stream" element={<ModuleGate module="valuechain"><ValueStreamPage /></ModuleGate>} />
                 <Route path="/ppm" element={<ModuleGate module="ppm"><PpmHome /></ModuleGate>} />
                 <Route path="/ppm/:id" element={<ModuleGate module="ppm"><PpmProjectDetail /></ModuleGate>} />
                 <Route path="/diagrams" element={<DiagramsPage />} />

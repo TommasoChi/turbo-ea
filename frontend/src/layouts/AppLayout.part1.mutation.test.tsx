@@ -20,6 +20,7 @@ import { MemoryRouter, useLocation, useNavigate } from "react-router";
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
 vi.mock("@/hooks/useMetamodel", () => import("@/test/hooks").then((m) => m.useMetamodelModule()));
 vi.mock("@/hooks/useBpmEnabled", () => import("@/test/hooks").then((m) => m.useBpmEnabledModule()));
+vi.mock("@/hooks/useValueChainEnabled", () => import("@/test/hooks").then((m) => m.useValueChainEnabledModule()));
 vi.mock("@/hooks/useGrcEnabled", () => import("@/test/hooks").then((m) => m.useGrcEnabledModule()));
 vi.mock("@/hooks/usePpmEnabled", () => import("@/test/hooks").then((m) => m.usePpmEnabledModule()));
 vi.mock("@/hooks/useTurboLensReady", () =>

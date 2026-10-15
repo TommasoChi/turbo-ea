@@ -37,6 +37,7 @@ export const hookState = {
   ppm: { ppmEnabled: true, ppmLoaded: true },
   grc: { grcEnabled: true, grcLoaded: true },
   bpm: { bpmEnabled: true, bpmLoaded: true },
+  valueChain: { valueChainEnabled: true, valueChainRawEnabled: true, valueChainLoaded: true },
   turboLens: {
     turboLensReady: true,
     turboLensAiConfigured: true,
@@ -60,6 +61,7 @@ export const hookState = {
     this.ppm = { ppmEnabled: true, ppmLoaded: true };
     this.grc = { grcEnabled: true, grcLoaded: true };
     this.bpm = { bpmEnabled: true, bpmLoaded: true };
+    this.valueChain = { valueChainEnabled: true, valueChainRawEnabled: true, valueChainLoaded: true };
     this.turboLens = {
       turboLensReady: true,
       turboLensAiConfigured: true,
@@ -180,6 +182,24 @@ export async function useBpmEnabledModule() {
     ...actual,
     invalidateBpmEnabled: vi.fn(),
     useBpmEnabled: () => ({ ...hookState.bpm, invalidateBpm: vi.fn() }),
+  };
+}
+
+export async function useValueChainEnabledModule() {
+  const actual = await vi.importActual<typeof import("@/hooks/useValueChainEnabled")>(
+    "@/hooks/useValueChainEnabled",
+  );
+  return {
+    ...actual,
+    invalidateValueChainEnabled: vi.fn(),
+    // Mirrors the real hook: the effective flag/loaded fold in BPM (the Value
+    // Chain is off whenever BPM is), the raw flag does not.
+    useValueChainEnabled: () => ({
+      ...hookState.valueChain,
+      valueChainEnabled: hookState.bpm.bpmEnabled && hookState.valueChain.valueChainEnabled,
+      valueChainLoaded: hookState.bpm.bpmLoaded && hookState.valueChain.valueChainLoaded,
+      invalidateValueChain: vi.fn(),
+    }),
   };
 }
 

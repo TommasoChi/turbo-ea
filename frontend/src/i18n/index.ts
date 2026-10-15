@@ -17,6 +17,7 @@ import deliveryEn from "./locales/en/delivery.json";
 import grcEn from "./locales/en/grc.json";
 import notificationsEn from "./locales/en/notifications.json";
 import validationEn from "./locales/en/validation.json";
+import valuechainEn from "./locales/en/valuechain.json";
 
 // French
 import commonFr from "./locales/fr/common.json";
@@ -33,6 +34,7 @@ import deliveryFr from "./locales/fr/delivery.json";
 import grcFr from "./locales/fr/grc.json";
 import notificationsFr from "./locales/fr/notifications.json";
 import validationFr from "./locales/fr/validation.json";
+import valuechainFr from "./locales/fr/valuechain.json";
 
 // Spanish
 import commonEs from "./locales/es/common.json";
@@ -49,6 +51,7 @@ import deliveryEs from "./locales/es/delivery.json";
 import grcEs from "./locales/es/grc.json";
 import notificationsEs from "./locales/es/notifications.json";
 import validationEs from "./locales/es/validation.json";
+import valuechainEs from "./locales/es/valuechain.json";
 
 // Italian
 import commonIt from "./locales/it/common.json";
@@ -65,6 +68,7 @@ import deliveryIt from "./locales/it/delivery.json";
 import grcIt from "./locales/it/grc.json";
 import notificationsIt from "./locales/it/notifications.json";
 import validationIt from "./locales/it/validation.json";
+import valuechainIt from "./locales/it/valuechain.json";
 
 // Portuguese
 import commonPt from "./locales/pt/common.json";
@@ -81,6 +85,7 @@ import deliveryPt from "./locales/pt/delivery.json";
 import grcPt from "./locales/pt/grc.json";
 import notificationsPt from "./locales/pt/notifications.json";
 import validationPt from "./locales/pt/validation.json";
+import valuechainPt from "./locales/pt/valuechain.json";
 
 // Chinese
 import commonZh from "./locales/zh/common.json";
@@ -97,6 +102,7 @@ import deliveryZh from "./locales/zh/delivery.json";
 import grcZh from "./locales/zh/grc.json";
 import notificationsZh from "./locales/zh/notifications.json";
 import validationZh from "./locales/zh/validation.json";
+import valuechainZh from "./locales/zh/valuechain.json";
 
 // German
 import commonDe from "./locales/de/common.json";
@@ -113,6 +119,7 @@ import deliveryDe from "./locales/de/delivery.json";
 import grcDe from "./locales/de/grc.json";
 import notificationsDe from "./locales/de/notifications.json";
 import validationDe from "./locales/de/validation.json";
+import valuechainDe from "./locales/de/valuechain.json";
 
 // Danish
 import commonDa from "./locales/da/common.json";
@@ -129,6 +136,7 @@ import deliveryDa from "./locales/da/delivery.json";
 import grcDa from "./locales/da/grc.json";
 import notificationsDa from "./locales/da/notifications.json";
 import validationDa from "./locales/da/validation.json";
+import valuechainDa from "./locales/da/valuechain.json";
 
 // Russian
 import commonRu from "./locales/ru/common.json";
@@ -145,6 +153,7 @@ import deliveryRu from "./locales/ru/delivery.json";
 import grcRu from "./locales/ru/grc.json";
 import notificationsRu from "./locales/ru/notifications.json";
 import validationRu from "./locales/ru/validation.json";
+import valuechainRu from "./locales/ru/valuechain.json";
 
 // Arabic
 import commonAr from "./locales/ar/common.json";
@@ -161,6 +170,7 @@ import deliveryAr from "./locales/ar/delivery.json";
 import grcAr from "./locales/ar/grc.json";
 import notificationsAr from "./locales/ar/notifications.json";
 import validationAr from "./locales/ar/validation.json";
+import valuechainAr from "./locales/ar/valuechain.json";
 
 export const SUPPORTED_LOCALES = [
   "en",
@@ -227,6 +237,8 @@ i18n
         grc: grcEn,
         notifications: notificationsEn,
         validation: validationEn,
+
+        valuechain: valuechainEn,
       },
       fr: {
         common: commonFr,
@@ -243,6 +255,8 @@ i18n
         grc: grcFr,
         notifications: notificationsFr,
         validation: validationFr,
+
+        valuechain: valuechainFr,
       },
       es: {
         common: commonEs,
@@ -259,6 +273,8 @@ i18n
         grc: grcEs,
         notifications: notificationsEs,
         validation: validationEs,
+
+        valuechain: valuechainEs,
       },
       it: {
         common: commonIt,
@@ -275,6 +291,8 @@ i18n
         grc: grcIt,
         notifications: notificationsIt,
         validation: validationIt,
+
+        valuechain: valuechainIt,
       },
       pt: {
         common: commonPt,
@@ -291,6 +309,8 @@ i18n
         grc: grcPt,
         notifications: notificationsPt,
         validation: validationPt,
+
+        valuechain: valuechainPt,
       },
       zh: {
         common: commonZh,
@@ -307,6 +327,8 @@ i18n
         grc: grcZh,
         notifications: notificationsZh,
         validation: validationZh,
+
+        valuechain: valuechainZh,
       },
       de: {
         common: commonDe,
@@ -323,6 +345,8 @@ i18n
         grc: grcDe,
         notifications: notificationsDe,
         validation: validationDe,
+
+        valuechain: valuechainDe,
       },
       ru: {
         common: commonRu,
@@ -339,6 +363,8 @@ i18n
         grc: grcRu,
         notifications: notificationsRu,
         validation: validationRu,
+
+        valuechain: valuechainRu,
       },
       da: {
         common: commonDa,
@@ -355,6 +381,8 @@ i18n
         grc: grcDa,
         notifications: notificationsDa,
         validation: validationDa,
+
+        valuechain: valuechainDa,
       },
       ar: {
         common: commonAr,
@@ -371,6 +399,8 @@ i18n
         grc: grcAr,
         notifications: notificationsAr,
         validation: validationAr,
+
+        valuechain: valuechainAr,
       },
     },
     fallbackLng: "en",

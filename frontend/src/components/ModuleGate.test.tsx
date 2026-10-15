@@ -9,11 +9,12 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 
 type Flags = { enabled: boolean; loaded: boolean };
-const flags: Record<"bpm" | "ppm" | "turbolens" | "grc", Flags> = {
+const flags: Record<"bpm" | "ppm" | "turbolens" | "grc" | "valuechain", Flags> = {
   bpm: { enabled: true, loaded: true },
   ppm: { enabled: true, loaded: true },
   turbolens: { enabled: true, loaded: true },
   grc: { enabled: true, loaded: true },
+  valuechain: { enabled: true, loaded: true },
 };
 
 vi.mock("@/hooks/useBpmEnabled", () => ({
@@ -31,11 +32,17 @@ vi.mock("@/hooks/useTurboLensReady", () => ({
 vi.mock("@/hooks/useGrcEnabled", () => ({
   useGrcEnabled: () => ({ grcEnabled: flags.grc.enabled, grcLoaded: flags.grc.loaded }),
 }));
+vi.mock("@/hooks/useValueChainEnabled", () => ({
+  useValueChainEnabled: () => ({
+    valueChainEnabled: flags.valuechain.enabled,
+    valueChainLoaded: flags.valuechain.loaded,
+  }),
+}));
 
 import ModuleGate from "./ModuleGate";
 
 type Module = keyof typeof flags;
-const MODULES: Module[] = ["bpm", "ppm", "turbolens", "grc"];
+const MODULES: Module[] = ["bpm", "ppm", "turbolens", "grc", "valuechain"];
 
 function Where() {
   const { pathname, search } = useLocation();
@@ -94,6 +101,7 @@ describe("ModuleGate", () => {
     ["ppm", "PPM", "/admin/settings?tab=ppm"],
     ["turbolens", "TurboLens", "/admin/settings?tab=turbolens"],
     ["grc", "GRC", "/admin/settings"],
+    ["valuechain", "Value Chain", "/admin/settings?tab=bpm"],
   ] as const)("names %s and opens its settings when it is off", async (module, label, settings) => {
     flags[module] = { enabled: false, loaded: true };
     const user = renderGate(module);
@@ -106,6 +114,13 @@ describe("ModuleGate", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Open settings/ }));
     expect(screen.getByTestId("where")).toHaveTextContent(settings);
+  });
+
+  it("renders the page when valuechain is on, whatever the BPM flag says", () => {
+    // The hook already folds BPM into valueChainEnabled; the gate reads only it.
+    flags.bpm = { enabled: false, loaded: true };
+    renderGate("valuechain");
+    expect(screen.getByText("the module page")).toBeInTheDocument();
   });
 
   it("goes back to the dashboard", async () => {

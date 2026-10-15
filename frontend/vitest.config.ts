@@ -48,16 +48,16 @@ export default defineConfig({
         ["lcov", { projectRoot: path.resolve(__dirname, "..") }],
         "json-summary",
       ],
-      // Floors just under the measured totals (lines 86.4, statements 85.1,
-      // branches 80.1, functions 83.3 on 2026-10-08). Raise them in any PR
+      // Floors just under the measured totals (lines 88.8, statements 87.6,
+      // branches 83.0, functions 85.4 on 2026-10-15). Raise them in any PR
       // that lifts the number; never lower them. The published figure (unit
       // + browser suite, lines only) has its own floor in package.json,
       // config.coverageFloorMergedLines, read by scripts/merge-lcov.mjs.
       thresholds: {
-        lines: 85,
-        statements: 84,
-        branches: 79,
-        functions: 82,
+        lines: 87,
+        statements: 86,
+        branches: 81,
+        functions: 84,
       },
     },
   },

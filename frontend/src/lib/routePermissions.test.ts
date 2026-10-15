@@ -40,6 +40,7 @@ const KNOWN_PERMISSIONS = new Set([
   "bpm.assessments",
   "bpm.edit",
   "bpm.manage_drafts",
+  "bpm.value_chain",
   "bpm.view",
   "bpm.withdraw_flows",
   "bookmarks.manage",
@@ -140,6 +141,15 @@ describe("canAccessPath", () => {
   it("grants exactly what the user holds", () => {
     expect(canAccessPath({ "ppm.view": true }, "/ppm")).toBe(true);
     expect(canAccessPath({ "ppm.view": true }, "/bpm")).toBe(false);
+  });
+
+  it("gates the value chain pages on bpm.value_chain, independent of bpm.view", () => {
+    for (const p of ["/value-chain", "/value-chain/value-stream"]) {
+      expect(canAccessPath({ "bpm.value_chain": true }, p)).toBe(true);
+      expect(canAccessPath({ "bpm.view": true }, p)).toBe(false);
+      expect(canAccessPath({}, p)).toBe(false);
+      expect(canAccessPath({ "*": true }, p)).toBe(true);
+    }
   });
 
 });
