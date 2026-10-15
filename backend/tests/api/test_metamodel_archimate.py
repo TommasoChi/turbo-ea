@@ -90,7 +90,7 @@ async def test_subtype_mapping_is_validated_and_kept(client, env):
         {**s, "archimate_type": "Nope"} if s["key"] == "software" else s for s in itc["subtypes"]
     ]
     r = await client.patch("/api/v1/metamodel/types/ITComponent", json={"subtypes": bad}, headers=h)
-    assert r.status_code == 422
+    assert r.status_code == 422 and "Nope" in r.json()["detail"]
 
 
 async def test_relation_mapping_rejects_unknown_relationship_and_access(client, env):
@@ -98,13 +98,13 @@ async def test_relation_mapping_rejects_unknown_relationship_and_access(client, 
     r = await client.patch(
         "/api/v1/metamodel/relation-types/relAppToITC", json={"archimate_type": "Wibble"}, headers=h
     )
-    assert r.status_code == 422
+    assert r.status_code == 422 and "Wibble" in r.json()["detail"]
     r = await client.patch(
         "/api/v1/metamodel/relation-types/relAppToDataObj",
         json={"archimate_access": "Maybe"},
         headers=h,
     )
-    assert r.status_code == 422
+    assert r.status_code == 422 and "Maybe" in r.json()["detail"]
     r = await client.patch(
         "/api/v1/metamodel/relation-types/relAppToDataObj",
         json={"archimate_access": "ReadWrite"},
@@ -119,7 +119,7 @@ async def test_relation_reversed_must_be_bool(client, env):
         json={"archimate_reversed": "yes"},
         headers=auth_headers(env["admin"]),
     )
-    assert r.status_code == 422
+    assert r.status_code == 422 and "yes" in r.json()["detail"]
 
 
 async def test_viewer_cannot_remap(client, env):
@@ -129,3 +129,93 @@ async def test_viewer_cannot_remap(client, env):
         headers=auth_headers(env["viewer"]),
     )
     assert r.status_code == 403
+
+
+@pytest.mark.parametrize("bad", [["x"], {}, 5, True])
+async def test_non_string_names_are_422_not_500(client, env, bad):
+    h = auth_headers(env["admin"])
+    r = await client.patch(
+        "/api/v1/metamodel/types/Application", json={"archimate_type": bad}, headers=h
+    )
+    assert r.status_code == 422 and repr(bad) in r.json()["detail"]
+    r = await client.patch(
+        "/api/v1/metamodel/types/ITComponent",
+        json={"subtypes": [{"key": "x", "archimate_type": bad}]},
+        headers=h,
+    )
+    assert r.status_code == 422
+    r = await client.patch(
+        "/api/v1/metamodel/relation-types/relAppToITC", json={"archimate_type": bad}, headers=h
+    )
+    assert r.status_code == 422 and repr(bad) in r.json()["detail"]
+    r = await client.patch(
+        "/api/v1/metamodel/relation-types/relAppToDataObj",
+        json={"archimate_access": bad},
+        headers=h,
+    )
+    assert r.status_code == 422
+
+
+async def test_access_crud_is_accepted(client, env):
+    r = await client.patch(
+        "/api/v1/metamodel/relation-types/relAppToDataObj",
+        json={"archimate_access": "crud"},
+        headers=auth_headers(env["admin"]),
+    )
+    assert r.status_code == 200 and r.json()["archimate_access"] == "crud"
+
+
+async def test_reversed_flag_persists(client, env):
+    h = auth_headers(env["admin"])
+    url = "/api/v1/metamodel/relation-types/relAppToITC"
+    for flag in (False, True):
+        r = await client.patch(url, json={"archimate_reversed": flag}, headers=h)
+        assert r.status_code == 200 and r.json()["archimate_reversed"] is flag
+        got = (await client.get(url, headers=h)).json()
+        assert got["archimate_reversed"] is flag
+
+
+async def test_relation_type_can_be_remapped_and_cleared(client, env):
+    h = auth_headers(env["admin"])
+    url = "/api/v1/metamodel/relation-types/relAppToITC"
+    r = await client.patch(url, json={"archimate_type": "Realization"}, headers=h)
+    assert r.status_code == 200 and r.json()["archimate_type"] == "Realization"
+    r = await client.patch(url, json={"archimate_type": None}, headers=h)
+    assert r.status_code == 200 and r.json()["archimate_type"] is None
+
+
+async def test_create_type_validates_and_stores_mapping(client, env):
+    h = auth_headers(env["admin"])
+    base = {"key": "NewT", "label": "New T"}
+    r = await client.post(
+        "/api/v1/metamodel/types", json={**base, "archimate_type": "Banana"}, headers=h
+    )
+    assert r.status_code == 422 and "Banana" in r.json()["detail"]
+    r = await client.post(
+        "/api/v1/metamodel/types",
+        json={**base, "subtypes": [{"key": "s", "label": "S", "archimate_type": "Nope"}]},
+        headers=h,
+    )
+    assert r.status_code == 422 and "Nope" in r.json()["detail"]
+    r = await client.post(
+        "/api/v1/metamodel/types", json={**base, "archimate_type": "Node"}, headers=h
+    )
+    assert r.status_code == 201 and r.json()["archimate_type"] == "Node"
+
+
+async def test_create_relation_type_validates_and_stores_mapping(client, env):
+    h = auth_headers(env["admin"])
+    base = {
+        "key": "relNew",
+        "label": "uses",
+        "source_type_key": "Application",
+        "target_type_key": "ITComponent",
+    }
+    url = "/api/v1/metamodel/relation-types"
+    r = await client.post(url, json={**base, "archimate_type": "Wibble"}, headers=h)
+    assert r.status_code == 422 and "Wibble" in r.json()["detail"]
+    r = await client.post(
+        url, json={**base, "archimate_type": "Serving", "archimate_reversed": True}, headers=h
+    )
+    assert r.status_code == 201
+    assert (r.json()["archimate_type"], r.json()["archimate_reversed"]) == ("Serving", True)
