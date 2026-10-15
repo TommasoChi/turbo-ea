@@ -2,6 +2,7 @@ import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
 import Typography from "@mui/material/Typography";
 import type { ValueStreamCapability } from "@/types";
+import { FOCUS_RING } from "./focusRing";
 import GroupHeader from "./GroupHeader";
 import { useStreamContext } from "./StreamContext";
 import { COL_W, groupByLeaf, type StreamGeometry } from "./valueStreamLayout";
@@ -23,7 +24,7 @@ function CapabilityBox({ cap, width }: { cap: ValueStreamCapability; width?: num
         bgcolor: "background.paper",
         color: "text.primary",
         "&:hover": { bgcolor: "action.hover" },
-        "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 },
+        ...FOCUS_RING,
       }}
     >
       <Typography

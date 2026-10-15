@@ -20,9 +20,14 @@
  *   only while expanded. The brief's `item` prop is dropped: `process.id` is the same id.
  * - `RelatedChips({ items, related })`: chips coloured by the related card type -> `openCard`;
  *   nothing when `related === "none"` or `items` is empty.
- * - `ProcessColorByFields()`: no props; the "Color by" and "Show related" selects.
+ * - `ProcessColorByFields()`: no props; the "Color by" and "Show related" selects. No grid
+ *   placement of its own: the page wraps it in a full-width cell (`gridColumn: "1 / -1"`) on
+ *   `gridRow: starts.process + 1`, with some padding-top for the selects' floating labels.
  * - `ProcessLegend()`: no props; colour-by entries + "Not set", plus the related type; nothing
- *   when both selects are "none".
+ *   when both selects are "none". No grid placement of its own: the page wraps it in a full-width
+ *   cell (`gridColumn: "1 / -1"`) on `gridRow: starts.process + 2 + Math.max(1, root.row_count)`,
+ *   right after the last level row.
+ * - While the process band is collapsed the page renders none of these (boxes, selects, legend).
  */
 import type { KeyboardEvent, ReactNode } from "react";
 import Box from "@mui/material/Box";
@@ -39,6 +44,7 @@ import { readableTextColor } from "@/lib/color";
 import { iconSize, STATUS_COLORS } from "@/theme/tokens";
 import type { StreamRelatedMode, ValueStreamProcess, ValueStreamRelatedItem, ValueStreamRoot } from "@/types";
 import CollapseToggle from "./CollapseToggle";
+import { FOCUS_RING_ON_FILL } from "./focusRing";
 import { useStreamContext } from "./StreamContext";
 import { PROCESS_COLOR_ATTRS, type ProcessColorBy } from "./valueChainModel";
 import type { ProcessPlacement } from "./valueStreamLayout";
@@ -47,8 +53,6 @@ const SUBTYPES = ["category", "group", "process", "variant"];
 const RELATED_MODES: StreamRelatedMode[] = ["none", "applications", "dataObjects", "organization"];
 const RELATED_TYPE = { applications: "application", dataObjects: "dataObject", organization: "organization" } as const;
 
-/** Inset so an ancestor's `overflow: hidden` cannot clip it. */
-const FOCUS_RING = { "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 } };
 const CLAMP_2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } as const;
 const SMALL_CHIP = { height: 20, color: "inherit", borderColor: "currentColor", "& .MuiChip-icon": { color: "inherit" } };
 
@@ -86,7 +90,7 @@ function FlowControls({ process }: { process: ValueStreamProcess }) {
           e.stopPropagation();
           openFlow(process.id);
         }}
-        sx={{ p: 0.25, color: "inherit", ...FOCUS_RING }}
+        sx={{ p: 0.25, color: "inherit", ...FOCUS_RING_ON_FILL }}
       >
         <MaterialSymbol icon="schema" size={iconSize.xs} />
       </IconButton>
@@ -124,7 +128,7 @@ export function ProcessLeafBox({ process, color }: { process: ValueStreamProcess
           alignItems: "center",
           bgcolor: color,
           color: readableTextColor(color),
-          ...FOCUS_RING,
+          ...FOCUS_RING_ON_FILL,
         }}
       >
         <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3, ...CLAMP_2 }}>
@@ -195,7 +199,7 @@ export function ProcessContainerBox({
           tabIndex={0}
           onKeyDown={onActivateKey(open)}
           variant="body2"
-          sx={{ fontWeight: 700, lineHeight: 1.3, ...CLAMP_2, ...FOCUS_RING }}
+          sx={{ fontWeight: 700, lineHeight: 1.3, ...CLAMP_2, ...FOCUS_RING_ON_FILL }}
         >
           {process.name}
         </Typography>
@@ -246,7 +250,15 @@ export function RelatedChips({ items, related }: { items: ValueStreamRelatedItem
           size="small"
           label={r.name}
           onClick={() => openCard(r.id)}
-          sx={{ height: 20, bgcolor: color, color: text, "&:hover": { bgcolor: color, opacity: 0.85 }, ...FOCUS_RING }}
+          sx={{
+            height: 20,
+            bgcolor: color,
+            color: text,
+            "&:hover": { bgcolor: color, opacity: 0.85 },
+            // MUI's own focus fill would turn translucent grey under the readable text.
+            "&.Mui-focusVisible": { bgcolor: color },
+            ...FOCUS_RING_ON_FILL,
+          }}
         />
       ))}
     </Box>

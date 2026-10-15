@@ -49,6 +49,19 @@ const button = (name: string) => screen.getByRole("button", { name });
 const card = (id: string) => document.querySelector(`[data-process="${id}"]`) as HTMLElement;
 /** The chip's own label (its textContent also holds the icon's ligature name). */
 const chipLabel = (chip: HTMLElement) => chip.querySelector(".MuiChip-label");
+/** Background of the element's last `.Mui-focusVisible` stylesheet rule (MUI's own, unless sx overrides it). */
+function focusVisibleBackground(el: HTMLElement): string {
+  const classes = Array.from(el.classList).filter((c) => c.startsWith("css-"));
+  const rules = Array.from(document.styleSheets)
+    .flatMap((sheet) => Array.from(sheet.cssRules))
+    .filter((r): r is CSSStyleRule => "selectorText" in r)
+    .filter(
+      (r) =>
+        classes.some((c) => r.selectorText.includes(`.${c}.Mui-focusVisible`)) &&
+        r.style.getPropertyValue("background-color") !== "",
+    );
+  return rules.at(-1)?.style.getPropertyValue("background-color") ?? "";
+}
 const viewFlow = () => t("actions.viewFlow");
 const paleProcessType = { ...TEST_TYPES, businessProcess: { ...TEST_TYPES.businessProcess, color: PALE_HEX } };
 
@@ -165,6 +178,11 @@ describe("ProcessBoxes", () => {
     await user.click(button("Workday"));
     expect(ctx.openCard).toHaveBeenCalledWith("app1");
     expect(ctx.openProcess).not.toHaveBeenCalled();
+  });
+
+  it("(5) keeps a related chip's fill on keyboard focus", () => {
+    renderBoxes(makeStreamRoot(), { related: "applications" });
+    expect(focusVisibleBackground(button("Workday"))).toBe("#01579b");
   });
 
   it("(5) uses the organization and data-object colours, readable on a pale fill", () => {

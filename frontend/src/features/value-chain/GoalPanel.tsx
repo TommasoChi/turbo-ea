@@ -8,10 +8,8 @@ import { readableTextColor } from "@/lib/color";
 import { iconSize } from "@/theme/tokens";
 import type { ValueStreamGoal } from "@/types";
 import CollapseToggle from "./CollapseToggle";
+import { FOCUS_RING_ON_FILL } from "./focusRing";
 import { useStreamContext } from "./StreamContext";
-
-/** Inset so the goal block's `overflow: hidden` cannot clip it. */
-const FOCUS_RING = { "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 } };
 
 /**
  * The Business Goal panel of one root, as TWO grid items: a blank separator strip
@@ -132,7 +130,7 @@ export default function GoalPanel({
                         }
                       }}
                       variant="body2"
-                      sx={{ flex: 1, fontWeight: 700, lineHeight: 1.2, ...FOCUS_RING }}
+                      sx={{ flex: 1, fontWeight: 700, lineHeight: 1.2, ...FOCUS_RING_ON_FILL }}
                     >
                       {goal.name}
                     </Typography>
@@ -145,7 +143,7 @@ export default function GoalPanel({
                           e.stopPropagation();
                           setHiddenDescriptions((prev) => ({ ...prev, [goal.id]: !prev[goal.id] }));
                         }}
-                        sx={{ p: 0.25, color: "inherit", flexShrink: 0, ...FOCUS_RING }}
+                        sx={{ p: 0.25, color: "inherit", flexShrink: 0, ...FOCUS_RING_ON_FILL }}
                       >
                         <MaterialSymbol icon={hidden ? "expand_more" : "expand_less"} size={iconSize.xs} />
                       </IconButton>
