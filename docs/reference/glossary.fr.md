@@ -73,6 +73,9 @@
 | **Référence de risque** | Identifiant monotone lisible (`R-000123`) attribué à la création d'un risque. Il reste visible sur les boutons de constats promus (**Ouvrir le risque R-000123**) et dans la description du Todo lié au propriétaire |
 | **TOGAF** | The Open Group Architecture Framework -- une méthodologie EA largement utilisée. La fonctionnalité SoAW de Turbo EA est alignée sur TOGAF |
 | **Rapport de statut** | Un rapport PPM mensuel suivant la santé du projet via des indicateurs RAG pour le calendrier, les coûts et le périmètre |
+| **Chaîne de valeur** | La page en lecture seule sous Org&Process qui regroupe les catégories de processus en bandes Management, Cœur de métier et Support et dessine les flux de valeur cœur de métier comme une maison entre la demande du client et sa satisfaction. Voir [Chaîne de valeur et cartes de flux de valeur](../guide/value-chain.md) |
+| **Jalon de valeur** | Une fiche Objectif de sous-type *Jalon de valeur* : un point de contrôle qu'un flux de valeur doit franchir. Les jalons de valeur sont dessinés sous forme de pastilles dans la bande supérieure de la carte du flux de valeur |
+| **Flux de valeur** | Une fiche Contexte métier de sous-type *Chaîne de valeur* : une séquence d'étapes de bout en bout qui apporte de la valeur à un client. Les étapes sont ses flux de valeur enfants, ordonnés par la relation *succède à*. La carte du flux de valeur dessine un flux avec les jalons, processus et capacités qui le sous-tendent |
 | **Portail web** | Une vue publique en lecture seule de fiches sélectionnées accessible sans authentification via une URL unique |
 | **Structure de Découpage du Travail (WBS)** | Une décomposition hiérarchique du périmètre du projet en lots de travaux |
 | **Lot de travaux** | Un regroupement logique de tâches dans un calendrier Gantt avec ses propres dates de début/fin et pourcentage d'achèvement |

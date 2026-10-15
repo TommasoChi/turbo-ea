@@ -150,6 +150,14 @@ Slå **Business Process Management**-modulet til eller fra. Når det er deaktive
 
 Dette er nyttigt for organisationer, der ikke bruger BPM og ønsker en renere navigationsoplevelse.
 
+### Værdikædekort
+
+Under BPM-kontakten viser eller skjuler **Værdikædekort er synlige for brugere** siderne [Værdikæde og værdistrømskort](../guide/value-chain.md) under **Org&Process**. Den er slået til som standard.
+
+- Når den slås fra, skjules menupunktet og de to sider. Der ændres ingen data.
+- Kontakten afhænger af BPM: så længe BPM-modulet er slået fra, er kontakten for værdikæden deaktiveret, og siderne forbliver skjulte, uanset hvor den står.
+- Hvem der må åbne siderne, er et særskilt spørgsmål: det styres af tilladelsen `bpm.value_chain` under [Brugere og roller](users.md).
+
 ### Kræv en separat godkender
 
 Slået fra som standard. Når den er slået til, kan den, der indsender en revision af et procesflow, ikke selv godkende den — funktionsadskillelse, sådan som kvalitetssystemer som GxP og ISO 9001 forventer.

@@ -73,6 +73,9 @@
 | **Risikoreference** | En monotonisk menneskeligt læsbar identifikator (`R-000123`) tildelt ved risikooprettelse. Den forbliver synlig i forfremmet-fund-knapper (**Åbn risiko R-000123**) og i ejerens linkede opgavebeskrivelse |
 | **TOGAF** | The Open Group Architecture Framework — en bredt anvendt EA-metodologi. Turbo EA's SoAW-funktion er tilpasset TOGAF |
 | **Statusrapport** | En månedlig PPM-rapport, der sporer projekttilstand via RAG-indikatorer for tidsplan, omkostninger og omfang sammen med opnåede resultater og næste trin |
+| **Værdikæde** | Den skrivebeskyttede side under Org&Process, der grupperer proceskategorier i bånd for ledelse, kerne og støtte og tegner kerneværdistrømmene som et hus mellem kundens behov og kundens tilfredshed. Se [Værdikæde og værdistrømskort](../guide/value-chain.md) |
+| **Værdigate** | Et Mål-kort af undertypen *Værdiport*: et kontrolpunkt, som en værdistrøm skal passere. Værdigates tegnes som piller i det øverste bånd af værdistrømskortet |
+| **Værdistrøm** | Et Forretningskontekst-kort af undertypen *Værdistrøm*: en gennemgående række af etaper, der leverer værdi til en kunde. Etaperne er dens underordnede værdistrømme, ordnet af relationen *efterfølger*. Værdistrømskortet tegner én værdistrøm med de værdigates, processer og kompetencer, der ligger bag |
 | **Webportal** | En offentlig, skrivebeskyttet visning af udvalgte kort tilgængelig uden godkendelse via en unik URL |
 | **Work Breakdown Structure (WBS)** | En hierarkisk nedbrydning af projektomfang i arbejdspakker, hver med start-/slutdatoer og fuldførelsessporing. Bruges i PPM Gantt-diagrammet |
 | **Arbejdspakke** | En logisk gruppering af opgaver inden for en Gantt-tidslinje, der har sin egen startdato, slutdato og fuldførelsesprocent |

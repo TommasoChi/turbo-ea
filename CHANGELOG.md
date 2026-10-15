@@ -5,11 +5,12 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.159.0] - 2026-10-14
+## [2.159.0] - 2026-10-15
 
 ### Added
 
-- **Value Chain and Value Stream maps are now part of the product's backend.** They have their own read-only permission (`bpm.value_chain`), an on/off switch (`valueChainEnabled`, on by default), the report endpoints `GET /reports/value-chain` and `GET /reports/value-chain/{category_id}`, and an MCP tool, `get_value_chain`.
+- **Value Chain and Value Stream maps are now part of the product.** They used to ship as a standalone extension. The **Value Chain** page (Org&Process → Value Chain) groups the process categories into Management, Core and Support bands and draws the core value streams as a house; opening a category shows its **Value Stream Map** with the value gates, value streams, business processes and business capabilities side by side, a business-goal panel, colouring by process type, maturity, automation or risk, and the applications, data objects or organisation linked through the process flows. Both pages export to Word, Excel, PowerPoint and PDF, are keyboard operable, and are translated into all ten languages. See the new guide page *Value Chain and Value Stream Maps*.
+- **Backend for the maps.** A read-only permission (`bpm.value_chain`), an on/off switch (`valueChainEnabled`, on by default, in Admin → Settings → BPM Module and only effective while BPM is on), the report endpoints `GET /reports/value-chain` and `GET /reports/value-chain/{category_id}`, and an MCP tool, `get_value_chain`.
 
 ### Changed
 

@@ -76,6 +76,9 @@ export const CARD_LOOKUPS = {
   sampleApp: { name: "SAP S/4HANA", type: "Application" },
   sampleInitiative: { name: "SAP S/4HANA Migration", type: "Initiative" },
   sampleProcess: { name: "Order to Cash", type: "BusinessProcess" },
+  // A process category (subtype Category) that the demo value streams hang off —
+  // the Value Stream Map opens from a category (`?category=<id>`).
+  sampleProcessCategory: { name: "Core Business Processes", type: "BusinessProcess" },
   // An L1 capability whose sub-capabilities carry the relations — used for the
   // "+N in sub-items" roll-up shots. Chosen because its descendants span two
   // application subtypes, so the drawer shows real grouping rather than one
@@ -2130,12 +2133,14 @@ export const DOC_PAGES: PageDef[] = [
     waitFor: ".MuiPaper-root",
     actions: [
       { type: "wait", ms: 800 },
-      // Centre the PPM toggle so BPM sits above it and GRC below.
+      // Start at the BPM block (it now carries the Value Chain switch and is
+      // taller), so PPM and GRC follow it in the same frame.
       {
         type: "scroll",
-        target: i18nLabels("admin:settings.ppm.title")
+        target: i18nLabels("admin:settings.bpm.title")
           .map((l) => `h6:has-text("${hasTextArg(l)}")`)
           .join(", "),
+        align: "start",
       },
       { type: "wait", ms: 400 },
     ],
@@ -2443,6 +2448,49 @@ export const DOC_PAGES: PageDef[] = [
       pt: "99b_diagrama_visualizacao_legenda",
       zh: "99b_diagram_viewer_legend",
       ru: "99b_diagramma_prosmotr_legenda",
+    },
+  },
+  {
+    id: "100_value_chain",
+    route: "/value-chain",
+    waitFor: ".MuiPaper-root",
+    actions: [{ type: "wait", ms: 1200 }],
+    filenames: {
+      en: "100_value_chain",
+      de: "100_wertschoepfungskette",
+      fr: "100_chaine_de_valeur",
+      es: "100_cadena_de_valor",
+      it: "100_catena_del_valore",
+      pt: "100_cadeia_de_valor",
+      zh: "100_value_chain",
+      ru: "100_value_chain",
+    },
+  },
+  {
+    id: "101_value_stream_map",
+    route: "/value-chain/value-stream?category={{cardId:sampleProcessCategory}}",
+    waitFor: ".MuiPaper-root",
+    actions: [
+      { type: "wait", ms: 1200 },
+      // The value gate band starts folded; open it so the gate pills show.
+      {
+        type: "click",
+        selector: i18nLabels("valuechain:actions.expand")
+          .map((l) => `button[aria-label="${hasTextArg(l)}"]`)
+          .join(", "),
+        nth: 0,
+      },
+      { type: "wait", ms: 600 },
+    ],
+    filenames: {
+      en: "101_value_stream_map",
+      de: "101_wertstromkarte",
+      fr: "101_carte_flux_de_valeur",
+      es: "101_mapa_flujo_de_valor",
+      it: "101_mappa_flusso_di_valore",
+      pt: "101_mapa_fluxo_de_valor",
+      zh: "101_value_stream_map",
+      ru: "101_value_stream_map",
     },
   },
 

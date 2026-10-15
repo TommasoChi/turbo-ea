@@ -73,6 +73,9 @@
 | **Referência do Risco** | Identificador monótono legível (`R-000123`) atribuído na criação do risco. Mantém-se visível nos botões de achados promovidos (**Abrir risco R-000123**) e na descrição do Todo ligado ao proprietário |
 | **TOGAF** | The Open Group Architecture Framework — uma metodologia de EA amplamente utilizada. O recurso SoAW do Turbo EA é alinhado com o TOGAF |
 | **Relatório de status** | Um relatório PPM mensal que rastreia a saúde do projeto via indicadores RAG para cronograma, custos e escopo |
+| **Cadeia de valor** | A página somente leitura em Org&Process que agrupa as categorias de processos em faixas de gestão, principais e de suporte e desenha os fluxos de valor principais como uma casa entre a solicitação do cliente e a satisfação dele. Veja [Cadeia de valor e mapas de fluxo de valor](../guide/value-chain.md) |
+| **Portão de valor** | Um card de Objetivo do subtipo *Marco de valor*: um ponto de controle que um fluxo de valor precisa atravessar. Os portões de valor são desenhados como pílulas na faixa superior do mapa do fluxo de valor |
+| **Fluxo de valor** | Um card de Contexto de negócio do subtipo *Cadeia de valor*: uma sequência de etapas de ponta a ponta que entrega valor a um cliente. As etapas são seus fluxos de valor filhos, ordenados pela relação *sucede a*. O mapa do fluxo de valor desenha um fluxo com os portões, processos e capacidades por trás dele |
 | **Portal Web** | Uma visualização pública e somente leitura de cards selecionados, acessível sem autenticação por meio de uma URL única |
 | **Estrutura Analítica do Projeto (EAP / WBS)** | Uma decomposição hierárquica do escopo do projeto em pacotes de trabalho |
 | **Pacote de trabalho** | Um agrupamento lógico de tarefas dentro de um cronograma Gantt com suas próprias datas de início/fim e porcentagem de conclusão |

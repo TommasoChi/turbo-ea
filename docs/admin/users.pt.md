@@ -120,7 +120,7 @@ A aba de **Papéis** permite gerenciar papéis em nível de aplicação. Cada pa
 | **Membro** | Criar, editar e gerenciar cards, relacionamentos e comentários. Sem acesso admin |
 | **Visualizador** | Acesso somente leitura em todas as áreas |
 
-Papéis personalizados podem ser criados com controle granular de permissões sobre inventário, relacionamentos, partes interessadas, comentários, documentos, diagramas, BPM, relatórios e mais.
+Papéis personalizados podem ser criados com controle granular de permissões sobre inventário, relacionamentos, partes interessadas, comentários, documentos, diagramas, BPM, relatórios e mais. O grupo BPM inclui uma permissão somente leitura, `bpm.value_chain`, para as páginas [Cadeia de valor e mapas de fluxo de valor](../guide/value-chain.md).
 
 As permissões aplicam-se à barra de endereços tanto quanto ao menu. Uma página que uma função não pode abrir mostra o aviso **Acesso negado** com uma ligação de volta ao painel, quer se chegue pela navegação, por um marcador ou por uma ligação partilhada — ocultar uma entrada de menu e bloquear a página são sempre a mesma decisão.
 

@@ -120,7 +120,7 @@ L'onglet **Rôles** permet de gérer les rôles au niveau de l'application. Chaq
 | **Membre** | Créer, modifier et gérer les fiches, relations et commentaires. Pas d'accès administrateur |
 | **Lecteur** | Accès en lecture seule dans tous les domaines |
 
-Des rôles personnalisés peuvent être créés avec un contrôle granulaire des permissions sur l'inventaire, les relations, les parties prenantes, les commentaires, les documents, les diagrammes, le BPM, les rapports, et plus encore.
+Des rôles personnalisés peuvent être créés avec un contrôle granulaire des permissions sur l'inventaire, les relations, les parties prenantes, les commentaires, les documents, les diagrammes, le BPM, les rapports, et plus encore. Le groupe BPM comprend une permission en lecture seule, `bpm.value_chain`, pour les pages [Chaîne de valeur et cartes de flux de valeur](../guide/value-chain.md).
 
 Les autorisations s'appliquent à la barre d'adresse comme au menu. Une page qu'un rôle ne peut pas ouvrir affiche la mention **Accès refusé** avec un lien vers le tableau de bord, qu'elle soit atteinte depuis la navigation, un favori ou un lien partagé — masquer une entrée de menu et bloquer la page sont donc toujours la même décision.
 

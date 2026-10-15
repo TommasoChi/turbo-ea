@@ -220,6 +220,7 @@ MCP 服务器提供 **51 个工具**，分为两组：**32 个读取工具** 用
 | `get_cost_treemap` | 成本树形图，可选按相关类型分组 |
 | `get_capability_heatmap` | 业务能力的层次热图 |
 | `get_data_quality_report` | 按卡片类型的完整度分布 |
+| `get_value_chain` | 价值链的条带和方框；传入 `category_id` 则返回某个流程类别的价值流地图；可选参数 `related`（`applications`、`dataObjects`、`organization`）会附带相关项目。需要权限 `bpm.value_chain` |
 
 **卡片上下文**
 

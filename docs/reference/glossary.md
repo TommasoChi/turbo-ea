@@ -73,6 +73,9 @@
 | **Risk Reference** | A monotonic human-readable identifier (`R-000123`) assigned on risk creation. It stays visible in promoted-finding buttons (**Open risk R-000123**) and in the owner's linked Todo description |
 | **TOGAF** | The Open Group Architecture Framework — a widely used EA methodology. Turbo EA's SoAW feature aligns with TOGAF |
 | **Status Report** | A monthly PPM report tracking project health via RAG indicators for schedule, cost, and scope, along with accomplishments and next steps |
+| **Value Chain** | The read-only page under Org&Process that groups process categories into Management, Core and Support bands and draws the core value streams as a house between the customer request and the customer's satisfaction. See [Value Chain and Value Stream Maps](../guide/value-chain.md) |
+| **Value Gate** | An Objective card of the *Value gate* subtype: a checkpoint a value stream must pass. Value gates are drawn as pills in the top band of the Value Stream Map |
+| **Value Stream** | A Business Context card of the *Value stream* subtype: an end-to-end sequence of stages that delivers value to a customer. Stages are its child value streams, ordered by the *succeeds* relation. The Value Stream Map draws one value stream with the gates, processes and capabilities behind it |
 | **Web Portal** | A public, read-only view of selected cards accessible without authentication via a unique URL |
 | **Work Breakdown Structure (WBS)** | A hierarchical decomposition of project scope into work packages, each with start/end dates and completion tracking. Used in the PPM Gantt chart |
 | **Work Package** | A logical grouping of tasks within a Gantt timeline that has its own start date, end date, and completion percentage |

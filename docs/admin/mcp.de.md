@@ -220,6 +220,7 @@ Der Server stellt 32 Lese-Werkzeuge in acht Gruppen bereit.
 | `get_cost_treemap` | Treemap der Kosten, optional gruppiert nach verwandtem Typ |
 | `get_capability_heatmap` | Hierarchische Business-Capability-Heatmap |
 | `get_data_quality_report` | Vollständigkeits-Aufschlüsselung pro Kartentyp |
+| `get_value_chain` | Bänder und Kästen der Wertschöpfungskette oder, mit `category_id`, die Wertstromkarte einer Prozesskategorie; optional ergänzt `related` (`applications`, `dataObjects`, `organization`) verknüpfte Elemente. Erfordert die Berechtigung `bpm.value_chain` |
 
 **Karten-Kontext**
 

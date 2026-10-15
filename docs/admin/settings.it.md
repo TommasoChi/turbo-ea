@@ -150,6 +150,14 @@ Attivate/disattivate il modulo **Business Process Management**. Quando disabilit
 
 Questo è utile per le organizzazioni che non utilizzano il BPM e desiderano un'esperienza di navigazione più pulita.
 
+### Mappe della catena del valore
+
+Sotto l'interruttore BPM, **Le mappe della catena del valore sono visibili agli utenti** mostra o nasconde le pagine [Catena del valore e mappe dei flussi di valore](../guide/value-chain.md) sotto **Org&Process**. È attivo per impostazione predefinita.
+
+- Disattivandolo si nascondono la voce di menu e le due pagine. Nessun dato viene modificato.
+- L'interruttore dipende dal BPM: finché il modulo BPM è disattivato, l'interruttore della catena del valore è disabilitato e le pagine restano nascoste, qualunque sia la sua posizione.
+- Chi può aprire le pagine è una questione separata: la controlla il permesso `bpm.value_chain` in [Utenti e ruoli](users.md).
+
 ### Richiedi un approvatore distinto
 
 Disattivo per impostazione predefinita. Quando è attivo, chi invia una revisione di un flusso di processo non può essere chi la approva: separazione dei compiti, come previsto da sistemi qualità quali GxP e ISO 9001.

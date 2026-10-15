@@ -73,6 +73,9 @@
 | **Risiko-Referenz** | Eine monoton steigende, menschlich lesbare Kennung (`R-000123`), die beim Anlegen eines Risikos vergeben wird. Sie bleibt auf Schaltflächen überführter Befunde sichtbar (**Risiko R-000123 öffnen**) und in der Beschreibung des verknüpften Todos des Eigentümers |
 | **TOGAF** | The Open Group Architecture Framework — eine weit verbreitete EA-Methodik. Die SoAW-Funktion von Turbo EA orientiert sich an TOGAF |
 | **Statusbericht** | Ein monatlicher PPM-Bericht, der die Projektgesundheit über RAG-Indikatoren für Zeitplan, Kosten und Umfang verfolgt |
+| **Wertschöpfungskette** | Die schreibgeschützte Seite unter Org&Process, die Prozesskategorien in Management-, Kern- und Unterstützungsbänder gruppiert und die Kernwertströme als Haus zwischen Kundenanforderung und Kundenzufriedenheit zeichnet. Siehe [Wertschöpfungskette und Wertstromkarten](../guide/value-chain.md) |
+| **Value Gate** | Eine Ziel-Karte des Untertyps *Value Gate*: ein Kontrollpunkt, den ein Wertstrom passieren muss. Value Gates werden als Pillen im obersten Band der Wertstromkarte gezeichnet |
+| **Wertstrom** | Eine Geschäftskontext-Karte des Untertyps *Wertstrom*: eine durchgängige Abfolge von Stufen, die einem Kunden Wert liefert. Die Stufen sind seine untergeordneten Wertströme, geordnet durch die Beziehung *folgt auf*. Die Wertstromkarte zeichnet einen Wertstrom mit den Value Gates, Prozessen und Fähigkeiten dahinter |
 | **Web-Portal** | Eine öffentliche, schreibgeschützte Ansicht ausgewählter Karten, zugänglich ohne Authentifizierung über eine eindeutige URL |
 | **Projektstrukturplan (PSP / WBS)** | Eine hierarchische Zerlegung des Projektumfangs in Arbeitspakete mit Start-/Enddaten und Fortschrittsverfolgung |
 | **Arbeitspaket** | Eine logische Gruppierung von Aufgaben innerhalb eines Gantt-Zeitplans mit eigenen Start-/Enddaten und Fertigstellungsgrad |

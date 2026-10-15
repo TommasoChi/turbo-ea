@@ -150,6 +150,14 @@ Toggle the **Business Process Management** module on or off. When disabled:
 
 This is useful for organizations that do not use BPM and want a cleaner navigation experience.
 
+### Value Chain maps
+
+Under the BPM switch, **Value Chain maps are visible to users** shows or hides the [Value Chain and Value Stream Map](../guide/value-chain.md) pages under **Org&Process**. It is on by default.
+
+- Turning it off hides the menu entry and the two pages. No data is touched.
+- The switch depends on BPM: while the BPM module is off, the Value Chain switch is disabled and the pages stay hidden, whatever its position.
+- Who may open the pages is a separate matter: it is controlled by the permission **View the value chain and value stream maps** (`bpm.value_chain`) in [Users & Roles](users.md).
+
 ### Require a separate approver
 
 Off by default. When enabled, the person who submits a process flow revision cannot be the one who approves it — segregation of duties, as quality systems such as GxP and ISO 9001 expect.

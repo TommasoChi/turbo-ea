@@ -73,6 +73,9 @@
 | **Riferimento del rischio** | Identificativo monotono e leggibile (`R-000123`) assegnato alla creazione di un rischio. Resta visibile sui pulsanti delle evidenze promosse (**Apri rischio R-000123**) e nella descrizione del Todo collegato al proprietario |
 | **TOGAF** | The Open Group Architecture Framework — una metodologia EA ampiamente utilizzata. La funzionalità SoAW di Turbo EA è allineata a TOGAF |
 | **Report di stato** | Un report PPM mensile che monitora la salute del progetto tramite indicatori RAG per calendario, costi e ambito |
+| **Catena del valore** | La pagina in sola lettura sotto Org&Process che raggruppa le categorie di processi in fasce di gestione, core e supporto e disegna i flussi di valore core come una casa tra la richiesta del cliente e la sua soddisfazione. Vedi [Catena del valore e mappe dei flussi di valore](../guide/value-chain.md) |
+| **Value Gate** | Una card Obiettivo del sottotipo *Value Gate*: un punto di controllo che un flusso di valore deve superare. I value gate sono disegnati come pillole nella fascia superiore della mappa del flusso di valore |
+| **Flusso di valore** | Una card Contesto aziendale del sottotipo *Flusso di valore*: una sequenza di fasi end-to-end che porta valore a un cliente. Le fasi sono i suoi flussi di valore figli, ordinati dalla relazione *succede a*. La mappa del flusso di valore disegna un flusso con i value gate, i processi e le capacità che ci sono dietro |
 | **Portale web** | Una vista pubblica di sola lettura di card selezionate accessibile senza autenticazione tramite un URL univoco |
 | **Struttura di Scomposizione del Lavoro (WBS)** | Una scomposizione gerarchica dell'ambito del progetto in pacchetti di lavoro |
 | **Pacchetto di lavoro** | Un raggruppamento logico di attività all'interno di un calendario Gantt con proprie date di inizio/fine e percentuale di completamento |

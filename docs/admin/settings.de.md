@@ -150,6 +150,14 @@ Schalten Sie das **Business Process Management**-Modul ein oder aus. Wenn deakti
 
 Dies ist nützlich für Organisationen, die BPM nicht nutzen und eine übersichtlichere Navigation wünschen.
 
+### Wertschöpfungsketten-Karten
+
+Unter dem BPM-Schalter blendet **Wertschöpfungsketten-Karten sind für Benutzer sichtbar** die Seiten [Wertschöpfungskette und Wertstromkarten](../guide/value-chain.md) unter **Org&Process** ein oder aus. Er ist standardmäßig eingeschaltet.
+
+- Beim Ausschalten verschwinden der Menüeintrag und die beiden Seiten. Es werden keine Daten verändert.
+- Der Schalter hängt von BPM ab: Solange das BPM-Modul ausgeschaltet ist, ist der Schalter für die Wertschöpfungskette deaktiviert und die Seiten bleiben unabhängig von seiner Stellung ausgeblendet.
+- Wer die Seiten öffnen darf, ist davon getrennt: Das steuert die Berechtigung `bpm.value_chain` unter [Benutzer und Rollen](users.md).
+
 ### Getrennten Freigebenden verlangen
 
 Standardmäßig deaktiviert. Ist die Option aktiv, darf die Person, die eine Revision eines Prozessablaufs einreicht, diese nicht selbst freigeben — Funktionstrennung, wie sie Qualitätssysteme wie GxP und ISO 9001 erwarten.
