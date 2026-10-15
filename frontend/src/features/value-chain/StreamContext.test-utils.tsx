@@ -16,7 +16,7 @@ const vcType = (key: string, color: string, icon: string, label: string) => ({ k
 
 export const TEST_TYPES: ValueChainTypes = {
   businessProcess: vcType("BusinessProcess", "#2e7d32", "route", "Business process"),
-  businessContext: vcType("BusinessContext", "#fbc02d", "conveyor_belt", "Value stream"),
+  businessContext: vcType("BusinessContext", "#fff59d", "conveyor_belt", "Value stream"),
   objective: vcType("Objective", "#0d47a1", "flag", "Objective"),
   businessCapability: vcType("BusinessCapability", "#6a1b9a", "hub", "Business capability"),
   application: vcType("Application", "#01579b", "apps", "Application"),
