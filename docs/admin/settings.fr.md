@@ -150,6 +150,14 @@ Activez ou désactivez le module **Gestion des processus métier**. Lorsqu'il es
 
 Ceci est utile pour les organisations qui n'utilisent pas le BPM et souhaitent une expérience de navigation plus épurée.
 
+### Cartes de la chaîne de valeur
+
+Sous l'interrupteur BPM, **Les cartes de la chaîne de valeur sont visibles pour les utilisateurs** affiche ou masque les pages [Chaîne de valeur et cartes de flux de valeur](../guide/value-chain.md) sous **Org&Process**. Il est activé par défaut.
+
+- Le désactiver masque l'entrée de menu et les deux pages. Aucune donnée n'est modifiée.
+- L'interrupteur dépend du BPM : tant que le module BPM est désactivé, l'interrupteur de la chaîne de valeur est désactivé et les pages restent masquées, quelle que soit sa position.
+- Savoir qui peut ouvrir les pages est une question distincte : c'est la permission `bpm.value_chain` qui le contrôle, dans [Utilisateurs et rôles](users.md).
+
 ### Exiger un approbateur distinct
 
 Désactivé par défaut. Lorsque l'option est active, la personne qui soumet une révision d'un flux de processus ne peut pas être celle qui l'approuve — séparation des tâches, telle que l'attendent les systèmes qualité comme les BPx et l'ISO 9001.

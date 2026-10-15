@@ -120,7 +120,7 @@ Der **Rollen**-Tab ermöglicht die Verwaltung anwendungsweiter Rollen. Jede Roll
 | **Mitglied** | Karten, Beziehungen und Kommentare erstellen, bearbeiten und verwalten. Kein Administratorzugriff |
 | **Betrachter** | Schreibgeschützter Zugriff über alle Bereiche |
 
-Benutzerdefinierte Rollen können mit granularer Berechtigungssteuerung über Inventar, Beziehungen, Stakeholder, Kommentare, Dokumente, Diagramme, BPM, Berichte und mehr erstellt werden.
+Benutzerdefinierte Rollen können mit granularer Berechtigungssteuerung über Inventar, Beziehungen, Stakeholder, Kommentare, Dokumente, Diagramme, BPM, Berichte und mehr erstellt werden. Die Gruppe BPM enthält eine schreibgeschützte Berechtigung, `bpm.value_chain`, für die Seiten [Wertschöpfungskette und Wertstromkarten](../guide/value-chain.md).
 
 Berechtigungen gelten für die Adressleiste ebenso wie für das Menü. Eine Seite, die eine Rolle nicht öffnen darf, zeigt den Hinweis **Zugriff verweigert** mit einem Link zurück zum Dashboard — unabhängig davon, ob sie über die Navigation, ein Lesezeichen oder einen geteilten Link aufgerufen wird. Einen Menüeintrag auszublenden und die Seite zu sperren ist damit immer dieselbe Entscheidung.
 

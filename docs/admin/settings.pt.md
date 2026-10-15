@@ -150,6 +150,14 @@ Alterne o módulo de **Business Process Management** ligado ou desligado. Quando
 
 Isso é útil para organizações que não usam BPM e desejam uma experiência de navegação mais limpa.
 
+### Mapas da cadeia de valor
+
+Abaixo do interruptor do BPM, **Os mapas da cadeia de valor estão visíveis para os usuários** mostra ou oculta as páginas [Cadeia de valor e mapas de fluxo de valor](../guide/value-chain.md) em **Org&Process**. Ele vem ativado por padrão.
+
+- Desativá-lo oculta a entrada de menu e as duas páginas. Nenhum dado é alterado.
+- O interruptor depende do BPM: enquanto o módulo BPM estiver desativado, o interruptor da cadeia de valor fica desabilitado e as páginas permanecem ocultas, seja qual for a posição dele.
+- Quem pode abrir as páginas é outra questão: ela é controlada pela permissão `bpm.value_chain` em [Usuários e papéis](users.md).
+
 ### Exigir um aprovador distinto
 
 Desativado por predefinição. Quando ativado, quem submete uma revisão de um fluxo de processo não pode ser quem a aprova — segregação de funções, tal como esperam sistemas de qualidade como BPx e ISO 9001.

@@ -220,6 +220,7 @@ pip install ./mcp-server
 | `get_cost_treemap` | مخطط شجري لتكلفة البطاقات، مع إمكانية التجميع حسب نوع مرتبط |
 | `get_capability_heatmap` | خريطة حرارية هرمية لقدرات الأعمال |
 | `get_data_quality_report` | تفصيل اكتمال البيانات لكل نوع بطاقة |
+| `get_value_chain` | نطاقات سلسلة القيمة ومربعاتها، أو خريطة تدفق القيمة لفئة عمليات واحدة عند تمرير `category_id`؛ ويضيف المعامل الاختياري `related` (`applications` و`dataObjects` و`organization`) العناصر المرتبطة. يتطلب الإذن `bpm.value_chain` |
 
 **سياق البطاقة**
 

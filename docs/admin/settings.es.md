@@ -150,6 +150,14 @@ Active o desactive el módulo de **Gestión de Procesos de Negocio** (BPM). Cuan
 
 Esto es útil para organizaciones que no utilizan BPM y desean una experiencia de navegación más limpia.
 
+### Mapas de la cadena de valor
+
+Bajo el interruptor de BPM, **Los mapas de la cadena de valor son visibles para los usuarios** muestra u oculta las páginas [Cadena de valor y mapas de flujo de valor](../guide/value-chain.md) en **Org&Process**. Está activado por defecto.
+
+- Al desactivarlo se ocultan la entrada de menú y las dos páginas. No se modifica ningún dato.
+- El interruptor depende de BPM: mientras el módulo BPM esté desactivado, el interruptor de la cadena de valor está deshabilitado y las páginas permanecen ocultas, sea cual sea su posición.
+- Quién puede abrir las páginas es una cuestión aparte: lo controla el permiso `bpm.value_chain` en [Usuarios y roles](users.md).
+
 ### Exigir un aprobador distinto
 
 Desactivado de forma predeterminada. Cuando se activa, quien envía una revisión de un flujo de proceso no puede ser quien la aprueba: segregación de funciones, tal como esperan sistemas de calidad como GxP e ISO 9001.

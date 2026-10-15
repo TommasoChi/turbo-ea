@@ -120,7 +120,7 @@ La pestaña **Roles** permite gestionar los roles a nivel de aplicación. Cada r
 | **Miembro** | Crear, editar y gestionar fichas, relaciones y comentarios. Sin acceso de administración |
 | **Visor** | Acceso de solo lectura en todas las áreas |
 
-Se pueden crear roles personalizados con control granular de permisos sobre inventario, relaciones, partes interesadas, comentarios, documentos, diagramas, BPM, informes y más.
+Se pueden crear roles personalizados con control granular de permisos sobre inventario, relaciones, partes interesadas, comentarios, documentos, diagramas, BPM, informes y más. El grupo BPM incluye un permiso de solo lectura, `bpm.value_chain`, para las páginas [Cadena de valor y mapas de flujo de valor](../guide/value-chain.md).
 
 Los permisos se aplican tanto a la barra de direcciones como al menú. Una página que un rol no puede abrir muestra el aviso **Acceso denegado** con un enlace de vuelta al panel, tanto si se llega desde la navegación como desde un marcador o un enlace compartido: ocultar una entrada de menú y bloquear la página son siempre la misma decisión.
 

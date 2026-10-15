@@ -220,6 +220,7 @@ Serveren eksponerer 32 læseværktøjer grupperet i otte klynger.
 | `get_cost_treemap` | Treemap over kortomkostninger, valgfrit grupperet efter en relateret type |
 | `get_capability_heatmap` | Hierarkisk business-capability-heatmap |
 | `get_data_quality_report` | Per-korttype-fuldførelsesopdeling |
+| `get_value_chain` | Værdikædens bånd og felter eller, med `category_id`, værdistrømskortet for én proceskategori; den valgfri parameter `related` (`applications`, `dataObjects`, `organization`) tilføjer tilknyttede elementer. Kræver tilladelsen `bpm.value_chain` |
 
 **Kortkontekst**
 

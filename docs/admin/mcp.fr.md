@@ -220,6 +220,7 @@ Le serveur expose 32 outils de lecture, regroupés en huit clusters.
 | `get_cost_treemap` | Treemap des coûts, optionnellement groupé par un type lié |
 | `get_capability_heatmap` | Heatmap hiérarchique des capacités métier |
 | `get_data_quality_report` | Ventilation de la complétude par type de fiche |
+| `get_value_chain` | Bandes et cases de la chaîne de valeur ou, avec `category_id`, la carte du flux de valeur d'une catégorie de processus ; l'option `related` (`applications`, `dataObjects`, `organization`) ajoute les éléments liés. Nécessite la permission `bpm.value_chain` |
 
 **Contexte de fiche**
 
