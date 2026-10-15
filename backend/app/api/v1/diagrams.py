@@ -104,6 +104,9 @@ async def _load_published_diagram(slug: str, db: AsyncSession) -> Diagram:
         select(Diagram).where(
             Diagram.public_slug == slug,
             Diagram.is_published.is_(True),
+            # Defence in depth: an ArchiMate row never serves publicly, even
+            # if it arrives published (e.g. via a workspace import).
+            Diagram.kind == "drawio",
         )
     )
     d = result.scalar_one_or_none()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
 from tests.conftest import auth_headers, create_card, create_card_type, create_role, create_user
@@ -134,3 +136,35 @@ async def test_drawio_diagrams_still_publish(client, env):
     d = (await _create(client, env, name="draw", data={"xml": "<m/>"})).json()["id"]
     r = await client.post(f"/api/v1/diagrams/{d}/publish", json={}, headers=h)
     assert r.status_code == 200 and r.json()["is_published"] is True
+
+
+async def test_unknown_kind_on_patch_is_rejected(client, env):
+    h = auth_headers(env["admin"])
+    d = (await _create(client, env, name="draw", data={"xml": "<m/>"})).json()["id"]
+    r = await client.patch(f"/api/v1/diagrams/{d}", json={"kind": "visio"}, headers=h)
+    assert r.status_code == 422
+
+
+async def test_group_diagram_count_ignores_archimate_diagrams(client, env):
+    h = auth_headers(env["admin"])
+    g = (await client.post("/api/v1/diagram-groups", json={"name": "G"}, headers=h)).json()["id"]
+    d = (await _create(client, env, name="draw", data={"xml": "<m/>"})).json()["id"]
+    a = (await _create(client, env, name="arch", kind="archimate", data=AM)).json()["id"]
+    for did in (d, a):
+        r = await client.put(f"/api/v1/diagrams/{did}/groups", json={"group_ids": [g]}, headers=h)
+        assert r.status_code == 200
+    groups = (await client.get("/api/v1/diagram-groups", headers=h)).json()
+    assert [x["diagram_count"] for x in groups if x["id"] == g] == [1]
+    r = await client.patch(f"/api/v1/diagram-groups/{g}", json={"name": "G2"}, headers=h)
+    assert r.json()["diagram_count"] == 1
+
+
+async def test_published_archimate_row_never_serves_publicly(client, env, db):
+    from app.models.diagram import Diagram
+
+    a = (await _create(client, env, name="arch", kind="archimate", data=AM)).json()["id"]
+    row = await db.get(Diagram, uuid.UUID(a))
+    row.is_published, row.public_slug = True, "arch-slug"
+    await db.commit()
+    assert (await client.get("/api/v1/diagrams/public/arch-slug")).status_code == 404
+    assert (await client.get("/api/v1/diagrams/public/arch-slug/gate")).status_code == 404
