@@ -129,6 +129,17 @@ Section spacing is `mb: 2`. Inline element gap is `gap: 1` or `gap: 1.5`.
 
 Default page header is `<Typography variant="h5">`. Use `variant="h6"` for in-card headers, `variant="subtitle2"` for tile labels.
 
+### 2.10 Value Chain bands
+
+| Band (process type) | Token | Hex | Use |
+| --- | --- | --- | --- |
+| Management | `VALUE_CHAIN_BAND_COLORS.management` | `#00796b` | Management process band of the Value Chain report |
+| Core | `VALUE_CHAIN_BAND_COLORS.core` | `#1976d2` (= `brand.primary`) | Core process band of the Value Chain report |
+| Support | `VALUE_CHAIN_BAND_COLORS.support` | `#8e24aa` | Support process band of the Value Chain report |
+| Not set | `VALUE_CHAIN_BAND_COLORS.not_set` | `#757575` | Processes without a process type |
+
+Text on a band fill = `readableTextColor`, accents = `readableTypeColor`.
+
 ---
 
 ## 3. Layout Patterns
@@ -727,6 +738,7 @@ accepted as an *href* (a `url`-typed value, a stored anchor) but never detected 
 - [`src/components/MaterialSymbol.tsx`](./src/components/MaterialSymbol.tsx)
 - [`src/features/reports/MetricCard.tsx`](./src/features/reports/MetricCard.tsx)
 - [`src/features/reports/ReportShell.tsx`](./src/features/reports/ReportShell.tsx)
+- [`src/features/value-chain/`](./src/features/value-chain/) — Value Chain report (bands use §2.10)
 - [`src/components/ApprovalStatusBadge.tsx`](./src/components/ApprovalStatusBadge.tsx)
 - [`src/components/LifecycleBadge.tsx`](./src/components/LifecycleBadge.tsx)
 - Project conventions: [`../CLAUDE.md`](../CLAUDE.md), [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
