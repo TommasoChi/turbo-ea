@@ -63,6 +63,31 @@ def _validate_color(body: dict) -> None:
         raise HTTPException(400, "color must be a hex value in #rrggbb format")
 
 
+def _validate_archimate(body: dict, *, relation: bool = False) -> None:
+    """422 for names that are not in the ArchiMate 3.1 XSD enumerations."""
+    from app.services.archimate import taxonomy as tx
+
+    def bad(label: str, value: object) -> HTTPException:
+        return HTTPException(422, f"Unknown {label}: {value!r}")
+
+    value = body.get("archimate_type")
+    if value is not None:
+        allowed = tx.RELATIONSHIP_TYPES if relation else tx.ALL_ELEMENT_TYPES
+        if value not in allowed:
+            raise bad(
+                "ArchiMate relationship type" if relation else "ArchiMate element type", value
+            )
+    access = body.get("archimate_access")
+    if access is not None and access != "crud" and access not in tx.ACCESS_TYPES:
+        raise bad("ArchiMate access type", access)
+    if "archimate_reversed" in body and not isinstance(body["archimate_reversed"], bool):
+        raise HTTPException(422, "archimate_reversed must be a boolean")
+    for sub in body.get("subtypes") or []:
+        v = sub.get("archimate_type") if isinstance(sub, dict) else None
+        if v is not None and v not in tx.ALL_ELEMENT_TYPES:
+            raise bad("ArchiMate element type", v)
+
+
 def _scoring_signature(fields_schema: list | None, section_config: dict | None) -> dict:
     """Capture the data-quality-relevant config of a card type.
 
@@ -231,6 +256,7 @@ def _serialize_type(t: CardType, *, include_role_permissions: bool = True) -> di
         # Seed default for built-in types (None for custom types) — powers the
         # admin "reset to default color" affordance.
         "default_color": DEFAULT_TYPE_COLORS.get(t.key),
+        "archimate_type": t.archimate_type,
     }
     if not include_role_permissions:
         out.pop("role_permissions", None)
@@ -255,6 +281,9 @@ def _serialize_relation_type(r: RelationType) -> dict:
         "source_mandatory": r.source_mandatory,
         "target_visible": r.target_visible,
         "target_mandatory": r.target_mandatory,
+        "archimate_type": r.archimate_type,
+        "archimate_access": r.archimate_access,
+        "archimate_reversed": r.archimate_reversed,
     }
 
 
@@ -916,6 +945,7 @@ async def update_type(
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
     _validate_color(body)
+    _validate_archimate(body)
     result = await db.execute(select(CardType).where(CardType.key == key))
     t = result.scalar_one_or_none()
     if not t:
@@ -985,6 +1015,7 @@ async def update_type(
         "sort_order",
         "is_hidden",
         "translations",
+        "archimate_type",
     ]
     for field in updatable:
         if field in body:
@@ -1336,6 +1367,7 @@ async def update_relation_type(
     key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
+    _validate_archimate(body, relation=True)
     result = await db.execute(select(RelationType).where(RelationType.key == key))
     r = result.scalar_one_or_none()
     if not r:
@@ -1376,6 +1408,9 @@ async def update_relation_type(
         "source_mandatory",
         "target_visible",
         "target_mandatory",
+        "archimate_type",
+        "archimate_access",
+        "archimate_reversed",
     ]
     for field in updatable:
         if field not in body:
