@@ -5783,7 +5783,11 @@ def _with_archimate(types: list[dict]) -> list[dict]:
 def _relation_archimate(key: str) -> dict:
     """RelationType columns carrying the default ArchiMate mapping for ``key``."""
     d = _archimate.RELATION_DEFAULTS.get(key)
-    if d is None and key.startswith("rel") and key.endswith("Successor"):
+    if (
+        d is None
+        and key.startswith(_archimate.SUCCESSOR_KEYS_PREFIX)
+        and key.endswith(_archimate.SUCCESSOR_KEYS_SUFFIX)
+    ):
         d = _archimate.SUCCESSOR_DEFAULT
     if d is None:
         return {}
