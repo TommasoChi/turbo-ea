@@ -65,7 +65,7 @@ SUBTYPE_DEFAULTS = {
 }
 
 RELATION_DEFAULTS = {
-    "relObjectiveToBC": {"type": "Influence"},
+    "relObjectiveToBC": {"type": "Association"},
     "relPlatformToObjective": {"type": "Influence"},
     "relPlatformToApp": {"type": "Aggregation"},
     "relPlatformToITC": {"type": "Aggregation"},
@@ -83,7 +83,7 @@ RELATION_DEFAULTS = {
     "relOrgToITC": {"type": "Association"},
     "relAppToBC": {"type": "Realization"},
     "relAppToBizCtx": {"type": "Association"},
-    "relAppToInterface": {"type": "Assignment"},
+    "relAppToInterface": {"type": "Association"},
     "relAppToDataObj": {"type": "Access", "access": "crud"},
     "relAppToITC": {"type": "Serving", "reversed": True},
     "relITCToTechCat": {"type": "Aggregation", "reversed": True},
@@ -105,7 +105,7 @@ RELATION_DEFAULTS = {
     "relProcessToObjective": {"type": "Influence"},
     "relProcessToBizCtx": {"type": "Realization"},
     "relObjectiveToBizCtx": {"type": "Association"},
-    "relBusinessContextSuccessor": {"type": "Triggering"},
+    "relBusinessContextSuccessor": {"type": "Triggering", "reversed": True},
 }
 SUCCESSOR_DEFAULT = {"type": "Association"}
 
