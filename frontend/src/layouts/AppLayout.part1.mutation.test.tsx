@@ -332,8 +332,44 @@ describe("AppLayout — the bar follows the module flags and ROUTE_PERMISSIONS",
     expect(menuHrefs()).toEqual([...CORE_REPORTS, "/reports/saved"]);
   });
 
-  it("promotes EA Delivery into PPM's slot, between BPM and Diagrams, when PPM is off", () => {
+  it("puts EA Governance under IT Governance, after the GRC page, when PPM is off", async () => {
     hookState.ppm = { ppmEnabled: false, ppmLoaded: true };
+    const user = userEvent.setup();
+    render(<Layout />);
+    // No top-level EA Delivery any more: the GRC link became a dropdown.
+    expect(navEntries()).toEqual([
+      "/",
+      "/inventory",
+      REPORTS_BUTTON,
+      ORG_PROCESS_BUTTON,
+      "/diagrams",
+      "[policyIT Governanceexpand_more]",
+      "/todos",
+    ]);
+    expect(screen.queryByRole("link", { name: /EA Delivery/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /IT Governance/ }));
+    await screen.findAllByRole("menuitem");
+    // The group's own page stays reachable as the first entry.
+    expect(menuHrefs()).toEqual(["/grc", "/reports/ea-delivery"]);
+    const governance = screen.getByRole("menuitem", { name: /EA Governance/ });
+    expect(within(governance).getByText("architecture")).toBeInTheDocument();
+  });
+
+  it("keeps extension GRC routes after EA Governance, with the GRC page still first", async () => {
+    hookState.ppm = { ppmEnabled: false, ppmLoaded: true };
+    registerRoutes(extRoute("register", "Gov Register", { navGroup: "grc" }));
+    const user = userEvent.setup();
+    render(<Layout />);
+
+    await user.click(screen.getByRole("button", { name: /IT Governance/ }));
+    await screen.findAllByRole("menuitem");
+    expect(menuHrefs()).toEqual(["/grc", "/reports/ea-delivery", "/ext/test-ext/register"]);
+  });
+
+  it("promotes EA Delivery into PPM's slot, between BPM and Diagrams, when PPM and GRC are off", () => {
+    hookState.ppm = { ppmEnabled: false, ppmLoaded: true };
+    hookState.grc = { grcEnabled: false, grcLoaded: true };
     render(<Layout />);
     expect(navEntries()).toEqual([
       "/",
@@ -342,11 +378,31 @@ describe("AppLayout — the bar follows the module flags and ROUTE_PERMISSIONS",
       ORG_PROCESS_BUTTON,
       "/reports/ea-delivery",
       "/diagrams",
-      "/grc",
       "/todos",
     ]);
     const delivery = screen.getByRole("link", { name: /EA Delivery/ });
     expect(within(delivery).getByText("architecture")).toBeInTheDocument();
+  });
+
+  it("falls back to a top-level EA Delivery for a role that cannot see IT Governance", () => {
+    hookState.ppm = { ppmEnabled: false, ppmLoaded: true };
+    // soaw.view opens EA Delivery; grc.view (the group's own page) is missing,
+    // so a group that hid itself would swallow the entry.
+    render(<Layout user={userWithPerms("inventory.view", "soaw.view", "diagrams.view")} />);
+    const entries = navEntries();
+    expect(entries).toContain("/reports/ea-delivery");
+    expect(entries).not.toContain("[policyIT Governanceexpand_more]");
+    expect(entries).not.toContain("/grc");
+    expect(screen.getByRole("link", { name: /EA Delivery/ })).toHaveAttribute(
+      "href",
+      "/reports/ea-delivery",
+    );
+  });
+
+  it("leaves IT Governance a plain link when PPM is on", () => {
+    render(<Layout />);
+    expect(navEntries()).toEqual(CORE_BAR);
+    expect(screen.queryByText(/EA Governance/)).not.toBeInTheDocument();
   });
 
   it("drops only GRC when GRC is off", () => {

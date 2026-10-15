@@ -238,8 +238,9 @@ describe("AppLayout — banners", () => {
 });
 
 describe("AppLayout — module toggles reshape the bar", () => {
-  it("promotes EA Delivery to a top-level item, before Diagrams, when PPM is off", () => {
+  it("promotes EA Delivery to a top-level item, before Diagrams, when PPM and GRC are off", () => {
     hookState.ppm = { ppmEnabled: false, ppmLoaded: true };
+    hookState.grc = { grcEnabled: false, grcLoaded: true };
     renderLayout();
 
     const delivery = screen.getByRole("link", { name: /EA Delivery/ });

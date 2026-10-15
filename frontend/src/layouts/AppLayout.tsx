@@ -197,20 +197,6 @@ export default function AppLayout({ children, user, onLogout }: Props) {
     if (!ppmEnabled) items = items.filter((item) => item.labelKey !== "ppm");
     if (!grcEnabled) items = items.filter((item) => item.labelKey !== "grc");
 
-    // When PPM is disabled, EA Delivery has no parent tab to live under —
-    // promote it to a top-level nav item, sitting in PPM's old slot (between
-    // BPM and Diagrams) so the surface stays reachable from the top menu.
-    if (!ppmEnabled) {
-      const eaDeliveryItem: NavItemDef = {
-        labelKey: "delivery",
-        icon: "architecture",
-        path: "/reports/ea-delivery",
-      };
-      const diagramsIdx = items.findIndex((i) => i.labelKey === "diagrams");
-      const insertAt = diagramsIdx >= 0 ? diagramsIdx : items.length;
-      items = [...items.slice(0, insertAt), eaDeliveryItem, ...items.slice(insertAt)];
-    }
-
     // Append single TurboLens entry to Reports dropdown when AI is configured
     if (turboLensReady && can("turbolens.view")) {
       items = items.map((item) =>
@@ -243,6 +229,39 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       if (def.path) return hasPerm(permissionForPath(def.path));
       return true;
     };
+
+    // When PPM is disabled, EA Delivery has no parent tab to live under, so it
+    // needs a place in the bar. It goes under IT Governance as "EA Governance"
+    // (the group's own page seeded as the first entry — a group with children
+    // renders as a dropdown). If that group is not on screen for this user —
+    // GRC is off or they lack its permission — the group would swallow the
+    // entry, so it falls back to a top-level item in PPM's old slot (between
+    // BPM and Diagrams) and stays reachable.
+    if (!ppmEnabled) {
+      const grcHost = items.find((i) => i.labelKey === "grc");
+      if (grcHost && hasNavPerm(grcHost)) {
+        items = items.map((item) =>
+          item.labelKey === "grc"
+            ? {
+                ...item,
+                children: [
+                  { labelKey: item.labelKey, icon: item.icon, path: "/grc" },
+                  { labelKey: "eaGovernance", icon: "architecture", path: "/reports/ea-delivery" },
+                ],
+              }
+            : item,
+        );
+      } else {
+        const eaDeliveryItem: NavItemDef = {
+          labelKey: "delivery",
+          icon: "architecture",
+          path: "/reports/ea-delivery",
+        };
+        const diagramsIdx = items.findIndex((i) => i.labelKey === "diagrams");
+        const insertAt = diagramsIdx >= 0 ? diagramsIdx : items.length;
+        items = [...items.slice(0, insertAt), eaDeliveryItem, ...items.slice(insertAt)];
+      }
+    }
 
     // Inject extension routes that requested a core nav group as children of
     // that group's menu (desktop dropdown + mobile drawer both read `children`).

@@ -5,6 +5,12 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.159.1] - 2026-10-16
+
+### Changed
+
+- **With PPM off, EA Delivery now sits under IT Governance as "EA Governance".** The top bar used to promote EA Delivery to an entry of its own whenever PPM was disabled; it now joins the IT Governance menu (the GRC page stays its first entry, extension pages follow). If GRC is off, or a role cannot open IT Governance, EA Delivery still appears as a top-level entry, so nobody loses the page. With PPM on nothing changes: EA Delivery remains a tab of PPM. URLs are unchanged.
+
 ## [2.159.0] - 2026-10-15
 
 ### Added
