@@ -116,6 +116,32 @@ async def test_relation_backfill_sets_type_reversed_and_access(db):
     assert rows["relCustom"] == (None, False, None)
 
 
+async def test_relation_backfill_keeps_admin_values_and_is_idempotent(db):
+    conn = await db.connection()
+    await conn.exec_driver_sql("DELETE FROM relation_types")
+    await conn.execute(
+        text(
+            f"INSERT INTO relation_types (id, key, label, source_type_key, target_type_key, "
+            f"built_in, archimate_type, archimate_reversed, archimate_access, {_RT_COLS}) VALUES "
+            f"(gen_random_uuid(), 'relAppToITC', 'uses', 'Application', 'ITComponent', "
+            f"true, 'Flow', false, NULL, {_RT_VALS}), "
+            f"(gen_random_uuid(), 'relAppToDataObj', 'CRUD', 'Application', 'DataObject', "
+            f"true, NULL, false, NULL, {_RT_VALS})"
+        )
+    )
+    select = (
+        "SELECT key, archimate_type, archimate_reversed, archimate_access "
+        "FROM relation_types ORDER BY key"
+    )
+    await conn.run_sync(mig._backfill_relation_types)
+    first = (await conn.exec_driver_sql(select)).all()
+    # the admin's Flow is not replaced by the default Serving/reversed
+    assert {r[0]: r[1:] for r in first}["relAppToITC"] == ("Flow", False, None)
+    assert {r[0]: r[1:] for r in first}["relAppToDataObj"] == ("Access", False, "crud")
+    await conn.run_sync(mig._backfill_relation_types)
+    assert (await conn.exec_driver_sql(select)).all() == first
+
+
 async def test_successor_relations_default_to_association(db):
     conn = await db.connection()
     await conn.exec_driver_sql("DELETE FROM relation_types")

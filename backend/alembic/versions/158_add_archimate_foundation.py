@@ -161,19 +161,28 @@ def _backfill_relation_types(conn) -> None:
 
 
 def upgrade() -> None:
-    op.add_column("card_types", sa.Column("archimate_type", sa.String(64), nullable=True))
-    op.add_column("relation_types", sa.Column("archimate_type", sa.String(64), nullable=True))
-    op.add_column("relation_types", sa.Column("archimate_access", sa.String(16), nullable=True))
-    op.add_column(
+    from sqlalchemy import inspect as sa_inspect
+
+    conn = op.get_bind()
+    inspector = sa_inspect(conn)
+
+    def add_column(table: str, column: sa.Column) -> None:
+        if column.name not in [c["name"] for c in inspector.get_columns(table)]:
+            op.add_column(table, column)
+
+    add_column("card_types", sa.Column("archimate_type", sa.String(64), nullable=True))
+    add_column("relation_types", sa.Column("archimate_type", sa.String(64), nullable=True))
+    add_column("relation_types", sa.Column("archimate_access", sa.String(16), nullable=True))
+    add_column(
         "relation_types",
         sa.Column("archimate_reversed", sa.Boolean(), nullable=False, server_default="false"),
     )
-    op.add_column(
+    add_column(
         "diagrams",
         sa.Column("kind", sa.String(20), nullable=False, server_default="drawio"),
     )
-    op.create_index("ix_diagrams_kind", "diagrams", ["kind"])
-    conn = op.get_bind()
+    if "ix_diagrams_kind" not in [i["name"] for i in inspector.get_indexes("diagrams")]:
+        op.create_index("ix_diagrams_kind", "diagrams", ["kind"])
     _backfill_card_types(conn)
     _backfill_relation_types(conn)
 

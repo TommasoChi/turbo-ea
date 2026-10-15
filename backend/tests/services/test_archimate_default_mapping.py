@@ -30,11 +30,11 @@ def test_every_subtype_default_names_a_real_subtype():
 
 def test_every_relation_has_a_default_or_is_a_successor():
     seeded = {r["key"] for r in RELATIONS}
-    # a successor relation may carry an explicit override (relBusinessContextSuccessor)
-    assert {k for k in seeded if not k.endswith(dm.SUCCESSOR_KEYS_SUFFIX)} <= set(
-        dm.RELATION_DEFAULTS
-    )
-    assert set(dm.RELATION_DEFAULTS) <= seeded
+    non_successor = {k for k in seeded if not k.endswith(dm.SUCCESSOR_KEYS_SUFFIX)}
+    assert non_successor <= set(dm.RELATION_DEFAULTS)
+    # the only successor relation allowed to override the Association default
+    assert set(dm.RELATION_DEFAULTS) - non_successor == {"relBusinessContextSuccessor"}
+    assert "relBusinessContextSuccessor" in seeded
 
 
 def test_access_defaults_say_how_to_derive_the_access_type():
@@ -46,3 +46,4 @@ def test_the_migration_embeds_exactly_the_module_defaults():
     assert mig.CARD_TYPE_DEFAULTS == dm.CARD_TYPE_DEFAULTS
     assert mig.SUBTYPE_DEFAULTS == dm.SUBTYPE_DEFAULTS
     assert mig.RELATION_DEFAULTS == dm.RELATION_DEFAULTS
+    assert mig.SUCCESSOR_DEFAULT == dm.SUCCESSOR_DEFAULT
