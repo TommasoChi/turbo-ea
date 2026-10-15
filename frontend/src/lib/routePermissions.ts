@@ -69,6 +69,8 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // see this at all" outranks "this is switched off".
   { path: "/bpm", permission: "bpm.view" },
   { path: "/bpm/processes/:id/flow", permission: "bpm.view" },
+  { path: "/value-chain", permission: "bpm.value_chain" },
+  { path: "/value-chain/value-stream", permission: "bpm.value_chain" },
   { path: "/ppm", permission: "ppm.view" },
   { path: "/ppm/:id", permission: "ppm.view" },
   { path: "/grc", permission: "grc.view" },

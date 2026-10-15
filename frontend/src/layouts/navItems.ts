@@ -66,8 +66,13 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
     // either without the other. The group is hidden entirely if permission
     // filtering leaves it with zero children. bpm's own permission is
     // derived from ROUTE_PERMISSIONS via its path, same as every other
-    // route-carrying entry — no explicit `permission` needed here.
-    children: [{ labelKey: "bpm", icon: "route", path: "/bpm" }],
+    // route-carrying entry — no explicit `permission` needed here. Value
+    // Chain is a second static child on the same terms (bpm.value_chain,
+    // derived from its path; AppLayout drops it when its module is off).
+    children: [
+      { labelKey: "bpm", icon: "route", path: "/bpm" },
+      { labelKey: "valueChain", icon: "conveyor_belt", path: "/value-chain" },
+    ],
   },
   { labelKey: "app_data", icon: "apps", children: [] },
   { labelKey: "ppm", icon: "view_timeline", path: "/ppm" },

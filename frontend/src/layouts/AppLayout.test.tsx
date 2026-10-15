@@ -117,6 +117,18 @@ const viewerUser = {
 
 const onLogout = vi.fn();
 
+// The real `useValueChainEnabled` folds BPM into its effective flag (Value
+// Chain is off whenever BPM is); this file mocks the two hooks separately, so a
+// BPM-off test has to say so for the Value Chain mock too.
+function bpmOffFoldsIntoValueChain() {
+  vi.mocked(useValueChainEnabled).mockReturnValue({
+    valueChainEnabled: false,
+    valueChainRawEnabled: true,
+    valueChainLoaded: true,
+    invalidateValueChain: vi.fn(),
+  });
+}
+
 function renderLayout(
   user = adminUser,
   initialPath = "/",
@@ -175,9 +187,60 @@ describe("AppLayout", () => {
 
   it("hides BPM when the module is disabled, and hides Org&Process entirely with no extension installed", () => {
     vi.mocked(useBpmEnabled).mockReturnValue({ bpmEnabled: false, loading: false });
+    bpmOffFoldsIntoValueChain();
     renderLayout();
 
     expect(screen.queryByRole("button", { name: /org&process/i })).not.toBeInTheDocument();
+  });
+
+  describe("Value Chain nav entry", () => {
+    const withPerms = (permissions: Record<string, boolean>) => ({ ...viewerUser, permissions });
+    const openOrgProcess = async (u: ReturnType<typeof userEvent.setup>) =>
+      u.click(screen.getByRole("button", { name: /org&process/i }));
+
+    it("lists Value Chain (with BPM) for a user holding both permissions", async () => {
+      const user = userEvent.setup();
+      renderLayout(withPerms({ "bpm.view": true, "bpm.value_chain": true }));
+
+      await openOrgProcess(user);
+      expect(await screen.findByRole("menuitem", { name: /value chain/i })).toHaveAttribute(
+        "href",
+        "/value-chain",
+      );
+      expect(screen.getByRole("menuitem", { name: /bpm/i })).toBeInTheDocument();
+    });
+
+    it("keeps BPM but drops Value Chain when only the Value Chain module is off", async () => {
+      vi.mocked(useValueChainEnabled).mockReturnValue({
+        valueChainEnabled: false,
+        valueChainRawEnabled: true,
+        valueChainLoaded: true,
+        invalidateValueChain: vi.fn(),
+      });
+      const user = userEvent.setup();
+      renderLayout(withPerms({ "bpm.view": true, "bpm.value_chain": true }));
+
+      await openOrgProcess(user);
+      expect(await screen.findByRole("menuitem", { name: /bpm/i })).toBeInTheDocument();
+      expect(screen.queryByRole("menuitem", { name: /value chain/i })).not.toBeInTheDocument();
+    });
+
+    it("hides the whole group when BPM is off and the user only has bpm.value_chain", () => {
+      vi.mocked(useBpmEnabled).mockReturnValue({ bpmEnabled: false, loading: false });
+      bpmOffFoldsIntoValueChain();
+      renderLayout(withPerms({ "bpm.value_chain": true }));
+
+      expect(screen.queryByRole("button", { name: /org&process/i })).not.toBeInTheDocument();
+    });
+
+    it("shows BPM only to a user with bpm.view but not bpm.value_chain", async () => {
+      const user = userEvent.setup();
+      renderLayout(withPerms({ "bpm.view": true }));
+
+      await openOrgProcess(user);
+      expect(await screen.findByRole("menuitem", { name: /bpm/i })).toBeInTheDocument();
+      expect(screen.queryByRole("menuitem", { name: /value chain/i })).not.toBeInTheDocument();
+    });
   });
 
   it("hides nav items based on permissions", () => {

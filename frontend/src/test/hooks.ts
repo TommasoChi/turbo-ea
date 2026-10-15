@@ -192,7 +192,14 @@ export async function useValueChainEnabledModule() {
   return {
     ...actual,
     invalidateValueChainEnabled: vi.fn(),
-    useValueChainEnabled: () => ({ ...hookState.valueChain, invalidateValueChain: vi.fn() }),
+    // Mirrors the real hook: the effective flag/loaded fold in BPM (the Value
+    // Chain is off whenever BPM is), the raw flag does not.
+    useValueChainEnabled: () => ({
+      ...hookState.valueChain,
+      valueChainEnabled: hookState.bpm.bpmEnabled && hookState.valueChain.valueChainEnabled,
+      valueChainLoaded: hookState.bpm.bpmLoaded && hookState.valueChain.valueChainLoaded,
+      invalidateValueChain: vi.fn(),
+    }),
   };
 }
 
