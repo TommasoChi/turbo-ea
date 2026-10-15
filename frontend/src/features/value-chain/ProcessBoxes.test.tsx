@@ -75,7 +75,7 @@ describe("ProcessBoxes", () => {
     expect(solo.querySelector(".MuiChip-root")).toBeNull();
     expect(within(solo).getByText(t("stream.subtype.process"))).toBeInTheDocument();
     const span = card("p-span");
-    expect(chipLabel(within(span).getByLabelText(t("stream.steps", { count: 1 })))).toHaveTextContent(/^1$/);
+    expect(chipLabel(within(span).getByRole("img", { name: t("stream.steps", { count: 1 }) }))).toHaveTextContent(/^1$/);
     expect(within(span).getByRole("button", { name: viewFlow() })).toBeInTheDocument();
   });
 
@@ -90,7 +90,7 @@ describe("ProcessBoxes", () => {
     expect(ctx.openProcess).toHaveBeenCalledTimes(1);
 
     const group = card("p-group");
-    expect(chipLabel(within(group).getByLabelText(t("stream.steps", { count: 9 })))).toHaveTextContent(/^9$/);
+    expect(chipLabel(within(group).getByRole("img", { name: t("stream.steps", { count: 9 }) }))).toHaveTextContent(/^9$/);
     await user.click(within(group).getAllByRole("button", { name: viewFlow() })[0]);
     expect(ctx.openFlow).toHaveBeenLastCalledWith("p-group");
     expect(ctx.openProcess).toHaveBeenCalledTimes(1);
@@ -118,7 +118,7 @@ describe("ProcessBoxes", () => {
     expect(button("Workday")).toBeInTheDocument();
     expect(screen.queryByText("Screen CVs")).toBeNull();
     expect(screen.queryByText("CV store")).toBeNull();
-    expect(within(card("p-group")).getByLabelText(t("stream.children", { count: 1 }))).toHaveTextContent(/^1$/);
+    expect(within(card("p-group")).getByRole("img", { name: t("stream.children", { count: 1 }) })).toHaveTextContent(/^1$/);
     expect(within(card("p-group")).getByText(t("stream.subtype.group"))).toBeInTheDocument();
     await user.click(button(t("actions.expand")));
     expect(onToggleGroup).toHaveBeenCalledTimes(1);
@@ -160,16 +160,40 @@ describe("ProcessBoxes", () => {
     expect(container.innerHTML).not.toContain("zzz-unknown");
   });
 
-  it("captions known subtypes and falls back to Process for unknown or null ones", () => {
+  it("captions a subtype with its context label and shows no caption for an unknown or null one", () => {
     const root = makeStreamRoot();
     root.processes["p-solo"].subtype = "variant";
     root.processes["p-span"].subtype = "weird-subtype";
     root.processes["p-cross"].subtype = null;
-    const { container } = renderBoxes(root);
-    expect(within(card("p-solo")).getByText(t("stream.subtype.variant"))).toBeInTheDocument();
-    expect(within(card("p-span")).getByText(t("stream.subtype.process"))).toBeInTheDocument();
-    expect(within(card("p-cross")).getByText(t("stream.subtype.process"))).toBeInTheDocument();
+    root.processes["p-child"].subtype = "toString"; // an Object.prototype key is not a label either
+    const { container } = renderBoxes(root, {
+      subtypeLabels: { group: "Gruppo", process: "Processo", variant: "Variante", custom: "Su misura" },
+    });
+    expect(within(card("p-solo")).getByText("Variante")).toBeInTheDocument();
+    expect(within(card("p-group")).getByText("Gruppo")).toBeInTheDocument();
+    for (const id of ["p-span", "p-cross", "p-child"]) {
+      expect(card(id).querySelector(".MuiTypography-caption")).toBeNull();
+    }
     expect(container.innerHTML).not.toContain("weird-subtype");
+    expect(container.innerHTML).not.toContain("toString");
+    expect(screen.queryByText(t("stream.subtype.process"))).toBeNull();
+  });
+
+  it("pluralises the step and child counts in Russian", async () => {
+    await i18n.changeLanguage("ru");
+    try {
+      const root = makeStreamRoot({
+        leaf_processes: { a: [{ id: "p-group", children: ["p-child", "p-solo"] }], b: [], c: [] },
+      });
+      root.processes["p-span"].element_count = 2;
+      root.processes["p-group"].element_count = 5;
+      renderBoxes(root);
+      expect(screen.getByRole("img", { name: "2 шага" })).toBeInTheDocument();
+      expect(screen.getByRole("img", { name: "5 шагов" })).toBeInTheDocument();
+      expect(screen.getByRole("img", { name: "2 дочерних процесса" })).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("(5) colours related chips by the related type and opens their card", async () => {
@@ -213,7 +237,7 @@ describe("ProcessBoxes", () => {
     expect(screen.getAllByText("Interview")).toHaveLength(1);
     expect(button("Screen CVs")).toBeInTheDocument();
     expect(button("Post job ad")).toBeInTheDocument();
-    expect(within(card("p-group")).getByLabelText(t("stream.children", { count: 1 }))).toBeInTheDocument();
+    expect(within(card("p-group")).getByRole("img", { name: t("stream.children", { count: 1 }) })).toBeInTheDocument();
     expect(document.querySelectorAll("[data-process]")).toHaveLength(5);
   });
 

@@ -1,7 +1,8 @@
 /**
  * Test helper for the Value Stream band components: a complete, hook-free
  * `StreamContextValue` (fixed fake card types, fixture colour scales, `vi.fn()`
- * handlers) and `renderWithStream(ui, overrides)` that mounts `ui` under it.
+ * handlers) and `renderWithStream(ui, overrides)` that mounts `ui` under it; plus
+ * `focusVisibleOutline(el)` for the Value Chain focus-ring tests.
  * Hex literals are allowed here (test-only file). Lives under `src/test/` so it stays out
  * of the mutation and coverage scopes.
  */
@@ -54,12 +55,36 @@ export function makeStreamContext(overrides: Partial<StreamContextValue> = {}): 
       objectiveType: "Objective kind",
       processAttrs: { processType: "Process kind", maturity: "", automationLevel: "", riskLevel: "" },
     },
+    // The page's translated defaults (en).
+    subtypeLabels: { category: "Process category", group: "Process group", process: "Process", variant: "Process variant" },
     openCard: vi.fn(),
     openProcess: vi.fn(),
     openFlow: vi.fn(),
     ...overrides,
   };
 }
+
+/**
+ * The outline of the element's own `:focus-visible` stylesheet rule (emotion `css-*` class),
+ * or `null` when it has none: jsdom never matches `:focus-visible`, so the rule is read directly.
+ */
+export function focusVisibleOutline(el: Element) {
+  const classes = Array.from(el.classList).filter((c) => c.startsWith("css-"));
+  const rule = Array.from(document.styleSheets)
+    .flatMap((sheet) => Array.from(sheet.cssRules))
+    .filter((r): r is CSSStyleRule => "selectorText" in r)
+    .filter((r) => classes.some((c) => r.selectorText.includes(`.${c}:focus-visible`)))
+    .at(-1);
+  if (!rule) return null;
+  const v = (p: string) => rule.style.getPropertyValue(p);
+  return { outline: v("outline"), outlineColor: v("outline-color"), outlineOffset: v("outline-offset") };
+}
+
+/** `focusVisibleOutline` of `FOCUS_RING_ON_FILL` / `FOCUS_RING_INSET`. */
+export const RING_ON_FILL = { outline: "2px solid", outlineColor: "currentColor", outlineOffset: "-2px" };
+export const RING_INSET = { ...RING_ON_FILL, outlineOffset: "-4px" };
+/** `FOCUS_RING` under MUI's default theme (`primary.main`), which `renderWithProviders` uses. */
+export const RING_PAPER = { ...RING_ON_FILL, outlineColor: "#1976d2" };
 
 export function renderWithStream(ui: ReactElement, overrides: Partial<StreamContextValue> = {}) {
   const ctx = makeStreamContext(overrides);

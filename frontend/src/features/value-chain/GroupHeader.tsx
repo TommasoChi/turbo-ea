@@ -3,6 +3,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import { readableTextColor } from "@/lib/color";
 import CollapseToggle from "./CollapseToggle";
+import { FOCUS_RING_ON_FILL, onActivateKey } from "./focusRing";
 
 interface Props {
   color: string;
@@ -31,18 +32,14 @@ export default function GroupHeader({ color, name, collapsed, onToggle, onOpen, 
       <CollapseToggle collapsed={collapsed} onToggle={onToggle} color={text} />
       <Typography
         variant="subtitle2"
+        component="span"
         {...(onOpen && {
           role: "button",
           tabIndex: 0,
           onClick: onOpen,
-          onKeyDown: (e: React.KeyboardEvent) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              onOpen();
-            }
-          },
+          onKeyDown: onActivateKey(onOpen),
         })}
-        sx={{ flex: 1, textAlign: "center", cursor: onOpen ? "pointer" : undefined }}
+        sx={{ flex: 1, textAlign: "center", ...(onOpen && { cursor: "pointer", ...FOCUS_RING_ON_FILL }) }}
       >
         {name}
       </Typography>

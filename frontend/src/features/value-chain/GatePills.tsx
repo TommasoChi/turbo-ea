@@ -9,6 +9,7 @@ import { readableTextColor } from "@/lib/color";
 import { STATUS_COLORS } from "@/theme/tokens";
 import type { ValueStreamGate } from "@/types";
 import ReportLegend from "@/features/reports/ReportLegend";
+import { FOCUS_RING_ON_FILL } from "./focusRing";
 import { useStreamContext } from "./StreamContext";
 import type { GateColorBy } from "./valueChainModel";
 import { COL_W, GATE_H, groupByLeaf, type StreamGeometry } from "./valueStreamLayout";
@@ -28,6 +29,7 @@ function GatePill({ gate, width }: { gate: ValueStreamGate; width?: number }) {
         bgcolor: color,
         color: readableTextColor(color),
         "&:hover": { opacity: 0.85 },
+        ...FOCUS_RING_ON_FILL,
       }}
     >
       <Typography

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useIsRtl } from "@/hooks/useIsRtl";
 import { readableTextColor } from "@/lib/color";
 import type { ValueChainCoreHouse } from "@/types";
+import { FOCUS_RING, FOCUS_RING_INSET, onActivateKey } from "./focusRing";
 import ProcessCategoryBox from "./ProcessCategoryBox";
 import { chevronClipPath, pentagonClipPath } from "./shapes";
 import { CHEVRON_H } from "./valueStreamLayout";
@@ -16,7 +17,10 @@ interface Props {
   onDrill: (id: string) => void;
 }
 
-/** Core band as a three-tier house: level-one chevrons, level-two boxes, level-three categories. */
+/**
+ * Core band as a three-tier house: level-one chevrons, level-two boxes, level-three categories.
+ * Chevrons and level-two boxes are `role="button"`: click/Enter/Space -> `onOpenCard(id)`.
+ */
 export default function CoreHouse({ house, color, onOpenCard, onDrill }: Props) {
   const { t } = useTranslation("valuechain");
   const rtl = useIsRtl();
@@ -81,7 +85,10 @@ export default function CoreHouse({ house, color, onOpenCard, onDrill }: Props) 
           return (
             <Fragment key={l1.id}>
               <Box
+                role="button"
+                tabIndex={0}
                 onClick={() => onOpenCard(l1.id)}
+                onKeyDown={onActivateKey(() => onOpenCard(l1.id))}
                 sx={{
                   gridColumn: column,
                   gridRow: 1,
@@ -95,6 +102,7 @@ export default function CoreHouse({ house, color, onOpenCard, onDrill }: Props) 
                   px: 2.5,
                   cursor: "pointer",
                   "&:hover": { opacity: 0.9 },
+                  ...FOCUS_RING_INSET,
                 }}
               >
                 <Typography
@@ -120,7 +128,10 @@ export default function CoreHouse({ house, color, onOpenCard, onDrill }: Props) 
                   {levelTwo.map((l2) => (
                     <Box
                       key={l2.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => onOpenCard(l2.id)}
+                      onKeyDown={onActivateKey(() => onOpenCard(l2.id))}
                       sx={{
                         bgcolor: "background.paper",
                         border: 1,
@@ -130,6 +141,7 @@ export default function CoreHouse({ house, color, onOpenCard, onDrill }: Props) 
                         py: 1,
                         cursor: "pointer",
                         "&:hover": { boxShadow: 1 },
+                        ...FOCUS_RING,
                       }}
                     >
                       <Typography variant="caption" sx={{ display: "block", textAlign: "center" }}>

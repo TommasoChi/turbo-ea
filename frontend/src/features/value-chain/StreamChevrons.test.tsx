@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
@@ -7,7 +7,7 @@ import { makeStreamRoot } from "@/test/fixtures/valueChain";
 import { hookState } from "@/test/hooks";
 import type { ValueStreamLeaf } from "@/types";
 import { chevronClipPath } from "./shapes";
-import { renderWithStream } from "@/test/valueStreamContext";
+import { focusVisibleOutline, renderWithStream, RING_INSET } from "@/test/valueStreamContext";
 import StreamChevrons from "./StreamChevrons";
 import { buildGeometry } from "./valueStreamLayout";
 
@@ -152,6 +152,22 @@ describe("StreamChevrons", () => {
     await user.click(screen.getByRole("button", { name: "Recruit" }));
     expect(ctx.openCard).toHaveBeenLastCalledWith("g1");
     expect(ctx.openCard).toHaveBeenCalledTimes(4);
+  });
+
+  it("prevents the default of Enter and Space on a chevron and the group title", () => {
+    const { ctx } = renderChevrons();
+    for (const name of ["Attract", "Recruit"]) {
+      expect(fireEvent.keyDown(chevron(name), { key: "Enter" })).toBe(false);
+      expect(fireEvent.keyDown(chevron(name), { key: " " })).toBe(false);
+      expect(fireEvent.keyDown(chevron(name), { key: "a" })).toBe(true);
+    }
+    expect(ctx.openCard.mock.calls).toEqual([["a"], ["a"], ["g1"], ["g1"]]);
+  });
+
+  it("draws the keyboard focus ring inside the clipped chevron", () => {
+    renderChevrons();
+    expect(focusVisibleOutline(chevron("Attract"))).toEqual(RING_INSET);
+    expect(focusVisibleOutline(chevron("Plan and monitor"))).toEqual(RING_INSET);
   });
 
   it("stacks the cross-cutting leaves full width on the row above the sequence", () => {

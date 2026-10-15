@@ -20,6 +20,8 @@ export interface StreamContextValue {
   processScales: Record<ProcessAttr, ColorScale>;
   /** Localized metamodel field labels; an empty string means "use the translated fallback". */
   fieldLabels: { objectiveType: string; processAttrs: Record<ProcessAttr, string> };
+  /** BusinessProcess subtype key -> display label (metamodel label over the translated default). */
+  subtypeLabels: Record<string, string>;
   openCard(id: string): void;
   openProcess(id: string): void;
   openFlow(id: string): void;

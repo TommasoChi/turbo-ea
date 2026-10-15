@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useIsRtl } from "@/hooks/useIsRtl";
 import { readableTextColor } from "@/lib/color";
 import type { ValueStreamLeaf } from "@/types";
+import { FOCUS_RING_INSET } from "./focusRing";
 import GroupHeader from "./GroupHeader";
 import { chevronClipPath } from "./shapes";
 import { useStreamContext } from "./StreamContext";
@@ -60,6 +61,7 @@ export function Chevron({ leaf, connector }: { leaf: ValueStreamLeaf; connector:
           cursor: "pointer",
           zIndex: 1,
           "&:hover": { opacity: 0.85 },
+          ...FOCUS_RING_INSET,
         }}
       >
         <Typography

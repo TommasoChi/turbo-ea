@@ -1,9 +1,10 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
 import { renderWithProviders } from "@/test/render";
 import { hookState } from "@/test/hooks";
+import { focusVisibleOutline, RING_ON_FILL } from "@/test/valueStreamContext";
 import { CARD_TYPE_COLORS } from "@/theme/tokens";
 import type { ValueChainBox } from "@/types";
 import ProcessCategoryBox from "./ProcessCategoryBox";
@@ -84,7 +85,19 @@ describe("ProcessCategoryBox", () => {
 
   it("has no drill-down button for a leaf box", () => {
     renderBox({ has_children: false });
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: t("box.drillDown", { name: "Lead-to-Order" }) })).toBeNull();
+    expect(screen.queryByText("+")).toBeNull();
+  });
+
+  it("opens the card from the focusable header with Enter and Space, preventing the default", () => {
+    const { onOpenCard } = renderBox();
+    const header = screen.getByRole("button", { name: "Lead-to-Order" });
+    expect(header).toHaveAttribute("tabindex", "0");
+    expect(fireEvent.keyDown(header, { key: "Enter" })).toBe(false);
+    expect(fireEvent.keyDown(header, { key: " " })).toBe(false);
+    expect(fireEvent.keyDown(header, { key: "a" })).toBe(true);
+    expect(onOpenCard.mock.calls).toEqual([["b1"], ["b1"]]);
+    expect(focusVisibleOutline(header)).toEqual(RING_ON_FILL);
   });
 
   it("uses dark header text on a light header colour and light text on a dark one", () => {

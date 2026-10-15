@@ -1,8 +1,9 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
 import { renderWithProviders } from "@/test/render";
+import { focusVisibleOutline, RING_ON_FILL } from "@/test/valueStreamContext";
 import GroupHeader from "./GroupHeader";
 
 const t = i18n.getFixedT("en", "valuechain");
@@ -34,6 +35,20 @@ describe("GroupHeader", () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
     await user.keyboard(" ");
     expect(onOpen).toHaveBeenCalledTimes(2);
+    expect(fireEvent.keyDown(name, { key: "Enter" })).toBe(false);
+    expect(fireEvent.keyDown(name, { key: " " })).toBe(false);
+    expect(fireEvent.keyDown(name, { key: "a" })).toBe(true);
+    expect(onOpen).toHaveBeenCalledTimes(4);
+  });
+
+  it("renders the clickable name as a span, not a heading, with a focus ring in its text colour", () => {
+    renderWithProviders(
+      <GroupHeader color={DARK} name="Order to cash" collapsed={false} onToggle={() => {}} onOpen={() => {}} />,
+    );
+    const name = screen.getByRole("button", { name: "Order to cash" });
+    expect(name.tagName).toBe("SPAN");
+    expect(screen.queryByRole("heading")).toBeNull();
+    expect(focusVisibleOutline(name)).toEqual(RING_ON_FILL);
   });
 
   it("has no button for the name without onOpen, only the toggle", () => {
@@ -41,6 +56,7 @@ describe("GroupHeader", () => {
     expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(screen.getByRole("button")).toHaveAccessibleName(t("actions.collapse"));
     expect(screen.getByText("Order to cash")).not.toHaveAttribute("tabindex");
+    expect(focusVisibleOutline(screen.getByText("Order to cash"))).toBeNull();
   });
 
   it("toggles via the collapse button, once, without opening", async () => {

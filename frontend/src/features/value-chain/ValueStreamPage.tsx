@@ -14,7 +14,7 @@ import ProcessFlowPreview from "@/components/ProcessFlowPreview";
 import ReportShell from "@/features/reports/ReportShell";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { useMetamodel } from "@/hooks/useMetamodel";
-import { useFieldLabel, useOptionLabel } from "@/hooks/useResolveLabel";
+import { useFieldLabel, useOptionLabel, useSubtypeLabel } from "@/hooks/useResolveLabel";
 import { iconSize } from "@/theme/tokens";
 import type { StreamRelatedMode, ValueStreamResponse, ValueStreamRoot } from "@/types";
 import { streamExportData } from "./exportData";
@@ -40,8 +40,6 @@ interface Props {
   exportWord?: (input: WordExportInput) => Promise<void>;
 }
 
-const SUBTYPES = ["category", "group", "process", "variant"];
-
 /** `/value-chain/value-stream?category=ID`: the Value Stream map of every root linked to a process category. */
 export default function ValueStreamPage({ exportWord = exportValueStreamToWord }: Props) {
   const { t, i18n } = useTranslation("valuechain");
@@ -52,6 +50,7 @@ export default function ValueStreamPage({ exportWord = exportValueStreamToWord }
   const { types: metamodelTypes } = useMetamodel();
   const fieldLabel = useFieldLabel();
   const optionLabel = useOptionLabel();
+  const subtypeLabel = useSubtypeLabel();
   const [related, setRelated] = useState<StreamRelatedMode>("none");
   const stream = useApiQuery<ValueStreamResponse>(
     categoryId ? `/reports/value-chain/${encodeURIComponent(categoryId)}?related=${related}` : null,
@@ -73,6 +72,15 @@ export default function ValueStreamPage({ exportWord = exportValueStreamToWord }
       (typeof PROCESS_COLOR_ATTRS)[number],
       T
     >;
+  // The four seeded subtypes' translated defaults, overridden by the metamodel's own (renamed,
+  // translated or added) BusinessProcess subtypes.
+  const subtypeLabels: Record<string, string> = {
+    category: t("stream.subtype.category"),
+    group: t("stream.subtype.group"),
+    process: t("stream.subtype.process"),
+    variant: t("stream.subtype.variant"),
+    ...Object.fromEntries((businessProcess?.subtypes ?? []).map((s) => [s.key, subtypeLabel(s)])),
+  };
 
   const ctx: StreamContextValue = {
     types,
@@ -95,6 +103,7 @@ export default function ValueStreamPage({ exportWord = exportValueStreamToWord }
       objectiveType: fieldLabel(fieldOf(objective, "objectiveType")),
       processAttrs: perAttr((attr) => fieldLabel(fieldOf(businessProcess, attr))),
     },
+    subtypeLabels,
     openCard: setCardId,
     openProcess: setProcessId,
     openFlow: setFlowId,
@@ -124,7 +133,7 @@ export default function ValueStreamPage({ exportWord = exportValueStreamToWord }
         type: t("col.type"),
         group: t("col.group"),
         description: t("col.description"),
-        subtypes: Object.fromEntries(SUBTYPES.map((s) => [s, t(`stream.subtype.${s}`)])),
+        subtypes: subtypeLabels,
         objectiveTypes: Object.fromEntries(
           fieldOptionsOf(objective, "objectiveType").map((o) => [o.key, optionLabel(o)]),
         ),

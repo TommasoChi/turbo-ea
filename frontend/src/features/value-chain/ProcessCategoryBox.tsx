@@ -8,6 +8,7 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import { readableTextColor } from "@/lib/color";
 import { iconSize } from "@/theme/tokens";
 import type { ValueChainBox } from "@/types";
+import { FOCUS_RING_ON_FILL, onActivateKey } from "./focusRing";
 import { useValueChainTypes, type VcType } from "./useValueChainTypes";
 
 interface Props {
@@ -17,7 +18,10 @@ interface Props {
   onDrill: (id: string) => void;
 }
 
-/** Process category: coloured name header, four count rows, optional drill-down. */
+/**
+ * Process category: coloured name header (`role="button"`, click/Enter/Space -> `onOpenCard`),
+ * four count rows (mouse-only: they repeat the header action), optional drill-down.
+ */
 export default function ProcessCategoryBox({ box, headerColor, onOpenCard, onDrill }: Props) {
   const { t } = useTranslation("valuechain");
   const theme = useTheme();
@@ -68,7 +72,10 @@ export default function ProcessCategoryBox({ box, headerColor, onOpenCard, onDri
       }}
     >
       <Box
+        role="button"
+        tabIndex={0}
         onClick={open}
+        onKeyDown={onActivateKey(open)}
         sx={{
           bgcolor: headerColor,
           color: readableTextColor(headerColor),
@@ -77,6 +84,7 @@ export default function ProcessCategoryBox({ box, headerColor, onOpenCard, onDri
           textAlign: "center",
           cursor: "pointer",
           "&:hover": { opacity: 0.9 },
+          ...FOCUS_RING_ON_FILL,
         }}
       >
         <Typography variant="body2" fontWeight={700}>

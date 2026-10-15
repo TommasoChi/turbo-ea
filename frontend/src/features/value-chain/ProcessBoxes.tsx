@@ -13,6 +13,8 @@
  *   - `onToggleGroup(key)`: a container's collapse toggle was clicked.
  *   - Colour per box: `processColorBy === "none"` -> `types.businessProcess.color`, else
  *     `processScales[attr].colorOf(process.color_attributes[attr])` (each child its own value).
+ *   - Subtype caption per box: `subtypeLabels[process.subtype]`; no caption for a null or
+ *     unknown subtype (never the raw key).
  * - `ProcessLeafBox({ process, color })`: a single process card (click/Enter/Space ->
  *   `openProcess`; steps chip + "View flow" -> `openFlow` only when `element_count > 0`).
  * - `ProcessContainerBox({ process, color, collapsed, onToggle, ownChips, children })`: a process
@@ -29,7 +31,7 @@
  *   right after the last level row.
  * - While the process band is collapsed the page renders none of these (boxes, selects, legend).
  */
-import type { KeyboardEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
@@ -44,28 +46,20 @@ import { readableTextColor } from "@/lib/color";
 import { iconSize, STATUS_COLORS } from "@/theme/tokens";
 import type { StreamRelatedMode, ValueStreamProcess, ValueStreamRelatedItem, ValueStreamRoot } from "@/types";
 import CollapseToggle from "./CollapseToggle";
-import { FOCUS_RING_ON_FILL } from "./focusRing";
+import { FOCUS_RING_ON_FILL, onActivateKey } from "./focusRing";
 import { useStreamContext } from "./StreamContext";
 import { PROCESS_COLOR_ATTRS, type ProcessColorBy } from "./valueChainModel";
 import type { ProcessPlacement } from "./valueStreamLayout";
 
-const SUBTYPES = ["category", "group", "process", "variant"];
 const RELATED_MODES: StreamRelatedMode[] = ["none", "applications", "dataObjects", "organization"];
 const RELATED_TYPE = { applications: "application", dataObjects: "dataObject", organization: "organization" } as const;
 
 const CLAMP_2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } as const;
 const SMALL_CHIP = { height: 20, color: "inherit", borderColor: "currentColor", "& .MuiChip-icon": { color: "inherit" } };
 
-/** Enter/Space -> `fn`, default prevented: the keyboard twin of a `role="button"` click. */
-const onActivateKey = (fn: () => void) => (e: KeyboardEvent) => {
-  if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    fn();
-  }
-};
-
-const subtypeKey = (subtype: string | null) =>
-  `stream.subtype.${subtype && SUBTYPES.includes(subtype) ? subtype : "process"}`;
+/** The label of a known subtype; "" for a null or unknown one (never the raw key). */
+const captionOf = (labels: Record<string, string>, subtype: string | null) =>
+  subtype && Object.prototype.hasOwnProperty.call(labels, subtype) ? labels[subtype] : "";
 
 /** Step count + "View flow" (stops propagation so the box does not open too); nothing without steps. */
 function FlowControls({ process }: { process: ValueStreamProcess }) {
@@ -80,6 +74,7 @@ function FlowControls({ process }: { process: ValueStreamProcess }) {
         variant="outlined"
         icon={<MaterialSymbol icon="checklist" size={iconSize.xs} />}
         label={count}
+        role="img"
         aria-label={t("stream.steps", { count })}
         sx={SMALL_CHIP}
       />
@@ -99,9 +94,9 @@ function FlowControls({ process }: { process: ValueStreamProcess }) {
 }
 
 export function ProcessLeafBox({ process, color }: { process: ValueStreamProcess; color: string }) {
-  const { t } = useTranslation("valuechain");
-  const { openProcess } = useStreamContext();
+  const { openProcess, subtypeLabels } = useStreamContext();
   const open = () => openProcess(process.id);
+  const caption = captionOf(subtypeLabels, process.subtype);
   return (
     <Box
       data-process={process.id}
@@ -148,7 +143,7 @@ export function ProcessLeafBox({ process, color }: { process: ValueStreamProcess
           color: "text.secondary",
         }}
       >
-        <Typography variant="caption">{t(subtypeKey(process.subtype))}</Typography>
+        {caption && <Typography variant="caption">{caption}</Typography>}
         <Box sx={{ flex: 1 }} />
         <FlowControls process={process} />
       </Box>
@@ -172,9 +167,10 @@ export function ProcessContainerBox({
   children: ReactNode[];
 }) {
   const { t } = useTranslation("valuechain");
-  const { openProcess } = useStreamContext();
+  const { openProcess, subtypeLabels } = useStreamContext();
   const open = () => openProcess(process.id);
   const text = readableTextColor(color);
+  const caption = captionOf(subtypeLabels, process.subtype);
   return (
     <Box
       data-process={process.id}
@@ -204,15 +200,18 @@ export function ProcessContainerBox({
           {process.name}
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 20 }}>
-          <Typography variant="caption" sx={{ opacity: 0.85 }}>
-            {t(subtypeKey(process.subtype))}
-          </Typography>
+          {caption && (
+            <Typography variant="caption" sx={{ opacity: 0.85 }}>
+              {caption}
+            </Typography>
+          )}
           <Box sx={{ flex: 1 }} />
           <FlowControls process={process} />
           <Chip
             size="small"
             variant="outlined"
             label={children.length}
+            role="img"
             aria-label={t("stream.children", { count: children.length })}
             sx={SMALL_CHIP}
           />

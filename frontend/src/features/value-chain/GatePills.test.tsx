@@ -6,7 +6,7 @@ import { makeStreamRoot } from "@/test/fixtures/valueChain";
 import type { ValueStreamGate } from "@/types";
 import GatePills, { GateColorByField, GateLegend } from "./GatePills";
 import type { StreamContextValue } from "./StreamContext";
-import { renderWithStream } from "@/test/valueStreamContext";
+import { focusVisibleOutline, renderWithStream, RING_ON_FILL } from "@/test/valueStreamContext";
 import { buildGeometry } from "./valueStreamLayout";
 
 const t = i18n.getFixedT("en", "valuechain");
@@ -101,6 +101,11 @@ describe("GatePills", () => {
     await user.keyboard("{Enter}");
     expect(ctx.openCard).toHaveBeenLastCalledWith("g-a");
     expect(ctx.openCard).toHaveBeenCalledTimes(2);
+  });
+
+  it("draws a keyboard focus ring in the pill's text colour", () => {
+    renderPills();
+    expect(focusVisibleOutline(pill("Budget approved"))).toEqual(RING_ON_FILL);
   });
 });
 

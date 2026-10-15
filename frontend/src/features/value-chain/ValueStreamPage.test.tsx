@@ -3,7 +3,7 @@ import { useLocation } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
-import { makeCardType, makeField, makeOption, makeSection } from "@/test/fixtures/metamodel";
+import { makeCardType, makeField, makeOption, makeSection, makeSubtype } from "@/test/fixtures/metamodel";
 import { makeStreamRoot } from "@/test/fixtures/valueChain";
 import { hookState, withMetamodel } from "@/test/hooks";
 import { mockApi } from "@/test/apiMock";
@@ -382,6 +382,46 @@ describe("ValueStreamPage", () => {
         (k) => `Hire-to-Retire - ${t(k)}`,
       ),
     );
+  });
+
+  it("captions and exports the processes with the metamodel's subtype labels over the translated defaults", async () => {
+    withMetamodel([
+      METAMODEL[0],
+      {
+        ...METAMODEL[1],
+        subtypes: [
+          makeSubtype({ key: "process", label: "Prozess", translations: { en: "Process step" } }),
+          makeSubtype({ key: "custom", label: "Custom kind" }),
+        ],
+      },
+    ]);
+    const root = withoutRelated();
+    root.processes["p-cross"].subtype = "custom";
+    root.processes["p-solo"].subtype = "unseeded";
+    mockApi.on("get", NONE, response(root));
+    const { user, container } = renderPage();
+    await rootName();
+    const caption = (name: string) =>
+      screen.getByText(name).closest("[data-process]")!.querySelector(".MuiTypography-caption")?.textContent;
+    expect(caption("Interview")).toBe("Process step");
+    expect(caption("Sourcing")).toBe(t("stream.subtype.group"));
+    expect(caption("Reporting")).toBe("Custom kind");
+    expect(caption("Post job ad")).toBeUndefined();
+    expect(container.innerHTML).not.toContain("unseeded");
+
+    await user.click(screen.getByRole("button", { name: tr("shell.moreActions") }));
+    await user.click(await screen.findByText(tr("shell.exportXlsx")));
+    await waitFor(() => expect(exportXlsx).toHaveBeenCalledTimes(1));
+    const processes = exportXlsx.mock.calls[0][0].sheets.find(
+      (s: { name: string }) => s.name === `Hire-to-Retire - ${t("sheet.processes")}`,
+    );
+    expect(Object.fromEntries(processes.rows.map((r: { name: string; subtype: string }) => [r.name, r.subtype]))).toEqual({
+      Sourcing: t("stream.subtype.group"),
+      "Screen CVs": "Process step",
+      "Post job ad": t("legend.notSet"),
+      Interview: "Process step",
+      Reporting: "Custom kind",
+    });
   });
 
   describe("Save as Word", () => {

@@ -1,10 +1,11 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
 import { makeChainResponse } from "@/test/fixtures/valueChain";
 import { hookState } from "@/test/hooks";
 import { renderWithProviders } from "@/test/render";
+import { focusVisibleOutline, RING_INSET, RING_PAPER } from "@/test/valueStreamContext";
 import type { ValueChainCoreHouse } from "@/types";
 import CoreHouse from "./CoreHouse";
 import { chevronClipPath, pentagonClipPath } from "./shapes";
@@ -82,6 +83,24 @@ describe("CoreHouse", () => {
     await user.click(screen.getByRole("button", { name: t("box.drillDown", { name: "Lead-to-Order" }) }));
     expect(onDrill).toHaveBeenCalledTimes(1);
     expect(onDrill).toHaveBeenCalledWith("c1");
+  });
+
+  it("opens the level-one and level-two cards with Enter and Space, preventing the default", () => {
+    const { onOpenCard } = renderHouse();
+    for (const name of ["Sales", "Prospecting"]) {
+      const el = screen.getByRole("button", { name });
+      expect(el).toHaveAttribute("tabindex", "0");
+      expect(fireEvent.keyDown(el, { key: "Enter" })).toBe(false);
+      expect(fireEvent.keyDown(el, { key: " " })).toBe(false);
+      expect(fireEvent.keyDown(el, { key: "a" })).toBe(true);
+    }
+    expect(onOpenCard.mock.calls).toEqual([["l1a"], ["l1a"], ["l2a"], ["l2a"]]);
+  });
+
+  it("draws keyboard focus rings: inside the clipped chevron, primary on the level-two box", () => {
+    renderHouse();
+    expect(focusVisibleOutline(screen.getByRole("button", { name: "Sales" }))).toEqual(RING_INSET);
+    expect(focusVisibleOutline(screen.getByRole("button", { name: "Prospecting" }))).toEqual(RING_PAPER);
   });
 
   it("uses the left-to-right chevron and pentagon shapes by default", () => {
