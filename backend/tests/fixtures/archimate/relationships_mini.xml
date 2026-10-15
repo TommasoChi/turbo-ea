@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<relationships version="3.2">
+    <source concept="BusinessActor">
+        <target concept="BusinessProcess" relations="fiortv" />
+        <target concept="Junction" relations="fiot" />
+        <target concept="Relationship" relations="o" />
+    </source>
+    <source concept="Junction">
+        <target concept="BusinessActor" relations="ft" />
+    </source>
+</relationships>
