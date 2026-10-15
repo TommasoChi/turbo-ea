@@ -6,7 +6,7 @@ import i18n from "@/i18n";
 import { makeStreamRoot } from "@/test/fixtures/valueChain";
 import type { ValueStreamCapability } from "@/types";
 import CapabilityGroups from "./CapabilityGroups";
-import { renderWithStream } from "./StreamContext.test-utils";
+import { renderWithStream } from "@/test/valueStreamContext";
 import { buildGeometry } from "./valueStreamLayout";
 
 const t = i18n.getFixedT("en", "valuechain");

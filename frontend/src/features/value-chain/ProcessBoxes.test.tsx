@@ -6,7 +6,7 @@ import { makeStreamRoot } from "@/test/fixtures/valueChain";
 import type { ValueStreamRoot } from "@/types";
 import ProcessBoxes, { ProcessColorByFields, ProcessLegend } from "./ProcessBoxes";
 import type { StreamContextValue } from "./StreamContext";
-import { renderWithStream, TEST_TYPES } from "./StreamContext.test-utils";
+import { renderWithStream, TEST_TYPES } from "@/test/valueStreamContext";
 import { buildGeometry, planProcessPlacements } from "./valueStreamLayout";
 
 const t = i18n.getFixedT("en", "valuechain");

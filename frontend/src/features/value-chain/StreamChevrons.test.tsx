@@ -7,7 +7,7 @@ import { makeStreamRoot } from "@/test/fixtures/valueChain";
 import { hookState } from "@/test/hooks";
 import type { ValueStreamLeaf } from "@/types";
 import { chevronClipPath } from "./shapes";
-import { renderWithStream } from "./StreamContext.test-utils";
+import { renderWithStream } from "@/test/valueStreamContext";
 import StreamChevrons from "./StreamChevrons";
 import { buildGeometry } from "./valueStreamLayout";
 

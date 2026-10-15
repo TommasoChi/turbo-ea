@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { STATUS_COLORS } from "@/theme/tokens";
 import { useStreamContext } from "./StreamContext";
-import { makeStreamContext, renderWithStream } from "./StreamContext.test-utils";
+import { makeStreamContext, renderWithStream } from "@/test/valueStreamContext";
 
 function Probe() {
   const ctx = useStreamContext();

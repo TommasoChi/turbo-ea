@@ -2,15 +2,16 @@
  * Test helper for the Value Stream band components: a complete, hook-free
  * `StreamContextValue` (fixed fake card types, fixture colour scales, `vi.fn()`
  * handlers) and `renderWithStream(ui, overrides)` that mounts `ui` under it.
- * Hex literals are allowed here (test-only file).
+ * Hex literals are allowed here (test-only file). Lives under `src/test/` so it stays out
+ * of the mutation and coverage scopes.
  */
 import type { ReactElement } from "react";
 import { vi } from "vitest";
 
+import { StreamContext, type StreamContextValue } from "@/features/value-chain/StreamContext";
+import type { ValueChainTypes } from "@/features/value-chain/useValueChainTypes";
+import { buildColorScale, STREAM_BAND_KEYS } from "@/features/value-chain/valueChainModel";
 import { renderWithProviders } from "@/test/render";
-import { StreamContext, type StreamContextValue } from "./StreamContext";
-import type { ValueChainTypes } from "./useValueChainTypes";
-import { buildColorScale, STREAM_BAND_KEYS } from "./valueChainModel";
 
 const vcType = (key: string, color: string, icon: string, label: string) => ({ key, color, icon, label });
 

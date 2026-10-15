@@ -5,7 +5,7 @@ import i18n from "@/i18n";
 import type { ValueStreamGoal } from "@/types";
 import GoalPanel from "./GoalPanel";
 import type { StreamContextValue } from "./StreamContext";
-import { renderWithStream, TEST_TYPES } from "./StreamContext.test-utils";
+import { renderWithStream, TEST_TYPES } from "@/test/valueStreamContext";
 
 const t = i18n.getFixedT("en", "valuechain");
 const OBJECTIVE = "rgb(13, 71, 161)"; // TEST_TYPES.objective #0d47a1

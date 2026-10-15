@@ -6,7 +6,7 @@ import { makeStreamRoot } from "@/test/fixtures/valueChain";
 import type { ValueStreamGate } from "@/types";
 import GatePills, { GateColorByField, GateLegend } from "./GatePills";
 import type { StreamContextValue } from "./StreamContext";
-import { renderWithStream } from "./StreamContext.test-utils";
+import { renderWithStream } from "@/test/valueStreamContext";
 import { buildGeometry } from "./valueStreamLayout";
 
 const t = i18n.getFixedT("en", "valuechain");

@@ -6,7 +6,7 @@ import { makeStreamRoot } from "@/test/fixtures/valueChain";
 import { hookState } from "@/test/hooks";
 import type { ValueStreamRoot } from "@/types";
 import type { StreamContextValue } from "./StreamContext";
-import { renderWithStream } from "./StreamContext.test-utils";
+import { renderWithStream } from "@/test/valueStreamContext";
 import type { StreamBandKey } from "./valueChainModel";
 import ValueStreamRootView, { type ValueStreamRootViewProps } from "./ValueStreamRoot";
 
