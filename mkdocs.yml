@@ -86,6 +86,7 @@ plugins:
             Saved Reports: Informes guardados
             PPM: PPM
             BPM: BPM
+            Value Chain: Cadena de valor
             TurboLens AI: TurboLens IA
             Diagrams: Diagramas
             EA Delivery: Entrega EA
@@ -155,6 +156,7 @@ plugins:
             Saved Reports: Gespeicherte Berichte
             PPM: PPM
             BPM: BPM
+            Value Chain: Wertschöpfungskette
             TurboLens AI: TurboLens KI
             Diagrams: Diagramme
             EA Delivery: EA-Bereitstellung
@@ -224,6 +226,7 @@ plugins:
             Saved Reports: Rapports enregistrés
             PPM: PPM
             BPM: BPM
+            Value Chain: Chaîne de valeur
             TurboLens AI: TurboLens IA
             Diagrams: Diagrammes
             EA Delivery: Livraison EA
@@ -293,6 +296,7 @@ plugins:
             Saved Reports: Report salvati
             PPM: PPM
             BPM: BPM
+            Value Chain: Catena del valore
             TurboLens AI: TurboLens IA
             Diagrams: Diagrammi
             EA Delivery: Consegna EA
@@ -362,6 +366,7 @@ plugins:
             Saved Reports: Relatórios salvos
             PPM: PPM
             BPM: BPM
+            Value Chain: Cadeia de valor
             TurboLens AI: TurboLens IA
             Diagrams: Diagramas
             EA Delivery: Entrega EA
@@ -431,6 +436,7 @@ plugins:
             Saved Reports: 已保存的报告
             PPM: 项目组合管理
             BPM: 业务流程管理
+            Value Chain: 价值链
             TurboLens AI: TurboLens AI 智能
             Diagrams: 图表
             EA Delivery: EA 交付
@@ -500,6 +506,7 @@ plugins:
             Saved Reports: Сохранённые отчёты
             PPM: PPM
             BPM: BPM
+            Value Chain: Цепочка создания ценности
             TurboLens AI: TurboLens ИИ
             Diagrams: Диаграммы
             EA Delivery: Поставка EA
@@ -569,6 +576,7 @@ plugins:
             Saved Reports: Gemte rapporter
             PPM: PPM
             BPM: BPM
+            Value Chain: Værdikæde
             TurboLens AI: TurboLens AI
             Diagrams: Diagrammer
             EA Delivery: EA-levering
@@ -638,6 +646,7 @@ plugins:
             Saved Reports: التقارير المحفوظة
             PPM: PPM
             BPM: BPM
+            Value Chain: سلسلة القيمة
             TurboLens AI: TurboLens AI
             Diagrams: المخططات
             EA Delivery: تسليم هندسة المؤسسة
@@ -735,6 +744,7 @@ nav:
       - Modules:
           - PPM: guide/ppm.md
           - BPM: guide/bpm.md
+          - Value Chain: guide/value-chain.md
           - EA Delivery: guide/delivery.md
           - GRC:
               - Overview: guide/grc.md
