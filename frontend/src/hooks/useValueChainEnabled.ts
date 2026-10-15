@@ -23,8 +23,8 @@ export function invalidateValueChainEnabled(v: boolean) {
   _notify(v);
 }
 
+// Every caller has just seen (or set) `_cached === null`.
 function _fetch(): Promise<void> {
-  if (_cached !== null) return Promise.resolve();
   if (_inflight) return _inflight;
   _inflight = (async () => {
     try {

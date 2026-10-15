@@ -502,6 +502,7 @@ describe("SettingsAdmin — module toggles", () => {
     expect(mockApi.callsOf("patch", "/settings/value-chain-enabled")[0].body).toEqual({ enabled: false });
     expect(h.invalidateValueChainEnabled).toHaveBeenCalledWith(false);
     expect(card.getByRole("checkbox", { name: t("settings.valueChain.hidden") })).not.toBeChecked();
+    expect(card.getByRole("checkbox", { name: t("settings.valueChain.hidden") })).toBeEnabled();
   });
 
   it("disables the Value Chain switch, and says why, while BPM is off — but still shows its own position", async () => {
@@ -521,6 +522,7 @@ describe("SettingsAdmin — module toggles", () => {
     await user.click(card.getByRole("checkbox", { name: t("settings.valueChain.visible") }));
     expect(await screen.findByRole("alert")).toHaveTextContent("PATCH /settings/value-chain-enabled failed");
     expect(card.getByRole("checkbox", { name: t("settings.valueChain.visible") })).toBeChecked();
+    expect(card.getByRole("checkbox", { name: t("settings.valueChain.visible") })).toBeEnabled();
     expect(h.invalidateValueChainEnabled).not.toHaveBeenCalled();
   });
 

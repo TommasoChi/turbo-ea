@@ -291,7 +291,6 @@ export const VALUE_CHAIN_BAND_COLORS = {
   support: "#8e24aa",
   not_set: "#757575",
 } as const;
-export type ValueChainBandColorKey = keyof typeof VALUE_CHAIN_BAND_COLORS;
 
 // ── Type exports ────────────────────────────────────────────────────────
 

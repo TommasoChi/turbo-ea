@@ -227,9 +227,10 @@ describe("streamExportData", () => {
     expect(streamExportData([], "t", streamLabels, null).sheets).toEqual([]);
   });
 
-  it("does not throw when tree items reference processes missing from root.processes", () => {
-    const r = makeStreamRoot({ processes: {} });
-    expect(() => streamExportData([r], "t", streamLabels, null)).not.toThrow();
+  it("lists only the processes present in root.processes, whatever the tree items reference", () => {
+    const r = makeStreamRoot({ processes: { "p-solo": makeStreamRoot().processes["p-solo"] } });
+    const s = streamExportData([r], "t", streamLabels, null).sheets.find((x) => x.name.endsWith("Processes"))!;
+    expect(s.rows).toEqual([{ name: "Post job ad", subtype: "Process", row: 2, steps: 0 }]);
   });
 
   it("sanitises forbidden characters in the root name", () => {

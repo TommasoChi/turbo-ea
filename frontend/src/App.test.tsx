@@ -39,7 +39,7 @@ vi.mock("@/api/bootstrap", () => ({
   resetBootstrap: vi.fn(),
 }));
 
-// Module flags are irrelevant to most tests here â€” permission gating is what is
+// Module flags are irrelevant to most tests here — permission gating is what is
 // under test, and the real ModuleGate would otherwise sit on its loading
 // spinner forever. The value-chain tests flip `gate.real` to exercise it.
 const gate = vi.hoisted(() => ({ real: false }));

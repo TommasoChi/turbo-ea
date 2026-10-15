@@ -96,7 +96,8 @@ export default function ValueStreamRootView({ root, onExportWord, exporting, exp
         color="inherit"
         startIcon={<MaterialSymbol icon="description" size={iconSize.sm} />}
         disabled={exporting || exportDisabled}
-        onClick={() => nodeRef.current && onExportWord(root, nodeRef.current)}
+        // The button sits inside the ref'd box, so the ref is set whenever it can be clicked.
+        onClick={() => onExportWord(root, nodeRef.current!)}
         sx={FOCUS_RING_ON_FILL}
       >
         {exporting ? t("actions.savingWord") : t("actions.saveWord")}
