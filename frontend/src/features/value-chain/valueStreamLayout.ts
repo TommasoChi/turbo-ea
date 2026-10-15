@@ -50,7 +50,9 @@ export function buildGeometry(sequence: ValueStreamLeaf[]): StreamGeometry {
   }
   const colByLeafId: Record<string, number> = {};
   for (const run of runs) run.leaves.forEach((leaf, i) => (colByLeafId[leaf.id] = run.startCol + i));
-  return { runs, colByLeafId, totalSlots: col - 2, lastCol: col - 1 };
+  // The grid always reserves one slot track (`gridTemplateColumns` uses `totalSlots || 1`), so the
+  // last leaf column is at least 2 even without sequence leaves (a cross-only root).
+  return { runs, colByLeafId, totalSlots: col - 2, lastCol: Math.max(col - 1, 2) };
 }
 
 export function gridTemplateColumns(totalSlots: number, hasGoals: boolean): string {

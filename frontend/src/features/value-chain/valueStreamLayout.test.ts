@@ -103,7 +103,8 @@ describe("buildGeometry", () => {
   });
 
   it("handles an empty sequence", () => {
-    expect(buildGeometry([])).toEqual({ runs: [], colByLeafId: {}, totalSlots: 0, lastCol: 1 });
+    // The grid always reserves one slot track, so the last column is at least 2.
+    expect(buildGeometry([])).toEqual({ runs: [], colByLeafId: {}, totalSlots: 0, lastCol: 2 });
   });
 });
 
@@ -242,6 +243,13 @@ describe("planProcessPlacements", () => {
       leaf_processes: {},
     });
     expect(planProcessPlacements(r, geometry)[0].gridColumn).toBe("3 / 4");
+  });
+
+  it("stretches a cross-cutting process over the one reserved slot of a cross-only root", () => {
+    const r = makeStreamRoot({ sequence: [], spans: [], leaf_processes: {} });
+    expect(planProcessPlacements(r, buildGeometry(r.sequence))).toEqual([
+      { key: "cross-p-cross", items: [{ id: "p-cross", children: [] }], gridColumn: "2 / 3", row: 1 },
+    ]);
   });
 
   it("returns nothing for a root with no processes", () => {

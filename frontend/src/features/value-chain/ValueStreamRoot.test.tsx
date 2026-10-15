@@ -260,13 +260,38 @@ describe("ValueStreamRootView", () => {
       row_count: 0,
       row_of_process: { "p-cross": 0 },
     });
-    const { grid } = renderRoot(root);
-    expect(getComputedStyle(grid).gridTemplateColumns).toContain("repeat(1,");
-    expect(screen.getByRole("button", { name: "Plan and monitor" })).toBeInTheDocument();
+    const { grid, cell, cellsAt } = renderRoot(root);
+    expect(getComputedStyle(grid).gridTemplateColumns).toBe(
+      "minmax(0, 1fr) repeat(1, 210px) 20px minmax(min-content, 1fr)",
+    );
     expect(bandLabel("vs").nextElementSibling).toHaveTextContent("(0)");
     expect(emptyLabels()).toEqual([]);
+    // Tracks: 1 lead | 2 the reserved slot | 3 goal strip | 4 goal panel.
     // process band spans 3 + max(1, 0) rows: total 14.
-    expect(document.querySelector("[data-goal-panel]")).toHaveStyle({ gridRow: "1/15" });
+    expect(document.querySelector("[data-goal-strip]")).toHaveStyle({ gridRow: "1/15", gridColumn: "3" });
+    expect(document.querySelector("[data-goal-panel]")).toHaveStyle({ gridRow: "1/15", gridColumn: "4" });
+    expect(cellsAt("5")[0]).toHaveStyle({ gridColumn: "1/3" }); // vs band header
+    expect(cellsAt("6/span 3")[0]).toHaveStyle({ gridColumn: "1/3" }); // vs frame
+    expect(rootHeader().parentElement).toHaveStyle({ gridColumn: "1/3" });
+    expect(cell(screen.getByRole("button", { name: "Plan and monitor" }))).toHaveStyle({ gridRow: "7", gridColumn: "2/3" });
+    expect(document.querySelector('[data-placement="cross-p-cross"]')).toHaveStyle({ gridColumn: "2/3", gridRow: "11" });
+  });
+
+  it("(e) a cross-only root without goals spans the full width with its chevrons on the reserved slot", () => {
+    const root = makeStreamRoot({
+      sequence: [],
+      leaf_processes: {},
+      spans: [],
+      row_count: 0,
+      row_of_process: { "p-cross": 0 },
+      goals: [],
+    });
+    const { grid, cell, cellsAt } = renderRoot(root);
+    expect(getComputedStyle(grid).gridTemplateColumns).toBe("minmax(0, 1fr) repeat(1, 210px) minmax(0, 1fr)");
+    expect(document.querySelector("[data-goal-panel]")).toBeNull();
+    expect(cellsAt("5")[0]).toHaveStyle({ gridColumn: "1/-1" });
+    expect(rootHeader().parentElement).toHaveStyle({ gridColumn: "1/-1" });
+    expect(cell(screen.getByRole("button", { name: "Plan and monitor" }))).toHaveStyle({ gridColumn: "2/3" });
   });
 
   it("(f) orders the band headers and rows by bandOrder and moves a band through the context", async () => {
