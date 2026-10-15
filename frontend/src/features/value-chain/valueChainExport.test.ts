@@ -1,3 +1,4 @@
+import JSZip from "jszip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -185,6 +186,81 @@ describe("exportValueStreamToWord", () => {
     expect(blob.size).toBeGreaterThan(0);
     expect(revokeObjectURL).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:x");
+  });
+
+  describe("document content", () => {
+    const exportXml = async (goals: string[], processNames: string[]) => {
+      await exportValueStreamToWord({ node: makeNode(), rootName: "Hire <&> Retire", goals, processNames, labels: LABELS });
+      const blob = createObjectURL.mock.calls[0][0] as Blob;
+      // jsdom's Blob has no arrayBuffer()
+      const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(blob);
+      });
+      const zip = await JSZip.loadAsync(buffer);
+      return zip.file("word/document.xml")!.async("string");
+    };
+    /** The paragraphs of the document, in order. */
+    const paragraphs = (xml: string) => xml.match(/<w:p>.*?<\/w:p>|<w:p [^>]*>.*?<\/w:p>/gs) ?? [];
+    const paragraphWith = (xml: string, text: string) => {
+      const found = paragraphs(xml).filter((p) => p.includes(`>${text}</w:t>`));
+      expect(found).toHaveLength(1);
+      return found[0];
+    };
+
+    it("writes the title, the coloured subtitle and the centred, described picture", async () => {
+      const xml = await exportXml(["G1"], ["P1"]);
+      const title = paragraphWith(xml, "Hire &lt;&amp;&gt; Retire");
+      expect(title).toContain('<w:pStyle w:val="Title"/>');
+      const subtitle = paragraphWith(xml, LABELS.subtitle);
+      expect(subtitle).toContain('<w:color w:val="595959"/>');
+      expect(subtitle).not.toContain("w:pStyle");
+      const picture = paragraphs(xml).find((p) => p.includes("<w:drawing>"))!;
+      expect(picture).toContain('<w:jc w:val="center"/>');
+      expect(picture).toContain('descr="Hire-to-Retire value stream map"');
+      expect(picture).toContain('name="Hire &lt;&amp;&gt; Retire"');
+      expect(picture).toContain('title="Hire &lt;&amp;&gt; Retire"');
+      expect(picture).toContain('<a:ext cx="5715000" cy="2857500"/>'); // 1200x600 px fitted to 600x300 px, 9525 EMU per px
+      expect(title).not.toContain('<w:jc w:val="center"/>');
+    });
+
+    it("writes each section as a heading followed by a bullet per name", async () => {
+      const xml = await exportXml(["G1", "G2"], ["P1"]);
+      for (const heading of [LABELS.goalsHeading, LABELS.processesHeading]) {
+        expect(paragraphWith(xml, heading)).toContain('<w:pStyle w:val="Heading1"/>');
+      }
+      for (const name of ["G1", "G2", "P1"]) {
+        const bullet = paragraphWith(xml, name);
+        expect(bullet).toContain("<w:numPr>");
+        expect(bullet).toContain('<w:ilvl w:val="0"/>');
+        expect(bullet).toContain('<w:pStyle w:val="ListParagraph"/>');
+      }
+      expect(xml).not.toContain(LABELS.noGoals);
+      expect(xml).not.toContain(LABELS.noProcesses);
+      // headings and items keep their order: goals, then processes
+      const at = [LABELS.goalsHeading, ">G1<", ">G2<", LABELS.processesHeading, ">P1<"].map((s) => xml.indexOf(s));
+      expect(at.every((i) => i > 0)).toBe(true);
+      expect([...at].sort((a, b) => a - b)).toEqual(at);
+    });
+
+    it("writes an italic, non-bullet sentence under a heading whose list is empty", async () => {
+      const xml = await exportXml([], []);
+      for (const text of [LABELS.noGoals, LABELS.noProcesses]) {
+        const empty = paragraphWith(xml, text);
+        expect(empty).toContain("<w:i/>");
+        expect(empty).not.toContain("<w:numPr>");
+      }
+      expect(paragraphWith(xml, LABELS.goalsHeading)).toContain('<w:pStyle w:val="Heading1"/>');
+      expect(paragraphWith(xml, LABELS.processesHeading)).toContain('<w:pStyle w:val="Heading1"/>');
+    });
+
+    it("does not italicise a populated list", async () => {
+      const xml = await exportXml(["G1"], ["P1"]);
+      expect(paragraphWith(xml, "G1")).not.toContain("<w:i/>");
+      expect(paragraphWith(xml, "P1")).not.toContain("<w:i/>");
+    });
   });
 
   it("rejects with the translated snapshot error and downloads nothing when the capture is not a PNG", async () => {
