@@ -32,26 +32,19 @@ import {
   type ProcessColorBy,
   type StreamBandKey,
 } from "./valueChainModel";
+import { exportValueStreamToWord, type WordExportInput, type WordLabels } from "./valueChainExport";
 import ValueStreamRootView from "./ValueStreamRoot";
 
-/** What the page hands the Word export for one root (Task 10 adds the translated labels). */
-export interface WordExportRequest {
-  node: HTMLElement;
-  rootName: string;
-  goals: string[];
-  processNames: string[];
-}
-
 interface Props {
-  /** Word export of one root; without it no "Save as Word" button is shown. */
-  exportWord?: (input: WordExportRequest) => Promise<void>;
+  /** Word export of one root; replaceable in tests. */
+  exportWord?: (input: WordExportInput) => Promise<void>;
 }
 
 const SUBTYPES = ["category", "group", "process", "variant"];
 
 /** `/value-chain/value-stream?category=ID`: the Value Stream map of every root linked to a process category. */
-export default function ValueStreamPage({ exportWord }: Props) {
-  const { t } = useTranslation("valuechain");
+export default function ValueStreamPage({ exportWord = exportValueStreamToWord }: Props) {
+  const { t, i18n } = useTranslation("valuechain");
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const categoryId = params.get("category");
@@ -140,26 +133,39 @@ export default function ValueStreamPage({ exportWord }: Props) {
       chartRef.current,
     );
 
-  const onExportWord =
-    exportWord &&
-    (async (root: ValueStreamRoot, node: HTMLElement) => {
-      setExportingRoot(root.id);
-      setWordError(null);
-      try {
-        await exportWord({
-          node,
-          rootName: root.name,
-          goals: root.goals.map((g) => g.name),
-          processNames: Object.values(root.processes)
-            .map((p) => p.name)
-            .sort((a, b) => a.localeCompare(b)),
-        });
-      } catch (e) {
-        setWordError((e instanceof Error && e.message) || t("export.failed"));
-      } finally {
-        setExportingRoot(null);
-      }
-    });
+  const wordLabels = (rootName: string): WordLabels => ({
+    subtitle: t("export.subtitle", {
+      date: new Intl.DateTimeFormat(i18n.language, { dateStyle: "long" }).format(new Date()),
+    }),
+    goalsHeading: t("export.goals"),
+    processesHeading: t("export.processes"),
+    noGoals: t("export.noGoals"),
+    noProcesses: t("export.noProcesses"),
+    imageDescription: t("export.imageDescription", { name: rootName }),
+    snapshotFailed: t("export.snapshotFailed"),
+    failed: t("export.failed"),
+  });
+
+  const onExportWord = async (root: ValueStreamRoot, node: HTMLElement) => {
+    setExportingRoot(root.id);
+    setWordError(null);
+    try {
+      await exportWord({
+        node,
+        rootName: root.name,
+        goals: root.goals.map((g) => g.name),
+        // Sorted, not de-duplicated: two processes sharing a name are two processes.
+        processNames: Object.values(root.processes)
+          .map((p) => p.name)
+          .sort((a, b) => a.localeCompare(b)),
+        labels: wordLabels(root.name),
+      });
+    } catch (e) {
+      setWordError((e instanceof Error && e.message) || t("export.failed"));
+    } finally {
+      setExportingRoot(null);
+    }
+  };
 
   let content: ReactNode = null;
   if (!categoryId) content = <Alert severity="info">{t("stream.noCategory")}</Alert>;

@@ -10,7 +10,8 @@ import { mockApi } from "@/test/apiMock";
 import { renderWithProviders } from "@/test/render";
 import type { ValueStreamResponse, ValueStreamRoot } from "@/types";
 import { STREAM_BAND_ORDER_STORAGE_KEY } from "./valueChainModel";
-import ValueStreamPage, { type WordExportRequest } from "./ValueStreamPage";
+import { exportValueStreamToWord, type WordExportInput } from "./valueChainExport";
+import ValueStreamPage from "./ValueStreamPage";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
 vi.mock("@/hooks/useMetamodel", () => import("@/test/hooks").then((m) => m.useMetamodelModule()));
@@ -35,6 +36,10 @@ vi.mock("@/components/ProcessFlowPreview", () => ({
       {processId}
     </div>
   ),
+}));
+vi.mock("./valueChainExport", async (importActual) => ({
+  ...(await importActual<typeof import("./valueChainExport")>()),
+  exportValueStreamToWord: vi.fn(),
 }));
 const exportXlsx = vi.hoisted(() => vi.fn());
 vi.mock("@/features/reports/reportExport", async (importActual) => ({
@@ -101,7 +106,7 @@ function Where() {
   return <div data-testid="where">{pathname}</div>;
 }
 
-function renderPage(search = "?category=r-cat", exportWord?: (input: WordExportRequest) => Promise<void>) {
+function renderPage(search = "?category=r-cat", exportWord?: (input: WordExportInput) => Promise<void>) {
   return renderWithProviders(<ValueStreamPage exportWord={exportWord} />, {
     route: `/value-chain/value-stream${search}`,
     routes: [{ path: "/value-chain/value-stream" }, { path: "*", element: <Where /> }],
@@ -120,6 +125,7 @@ beforeEach(() => {
   hookState.reset();
   mockApi.reset();
   exportXlsx.mockReset();
+  vi.mocked(exportValueStreamToWord).mockReset();
   withMetamodel(METAMODEL);
   mockApi.on("get", NONE, response(withoutRelated()));
 });
@@ -381,10 +387,55 @@ describe("ValueStreamPage", () => {
   describe("Save as Word", () => {
     const TWO_ROOTS = response(withoutRelated(), withoutRelated(makeStreamRoot({ id: "r2", name: "Order-to-Cash" })));
 
-    it("is not offered without an export function", async () => {
-      renderPage();
+    it("is offered by default, wired to the real export", async () => {
+      vi.mocked(exportValueStreamToWord).mockResolvedValue();
+      const { user } = renderPage();
       await rootName();
-      expect(screen.queryByRole("button", { name: wordName("saveWord") })).toBeNull();
+      await user.click(screen.getByRole("button", { name: wordName("saveWord") }));
+      expect(exportValueStreamToWord).toHaveBeenCalledTimes(1);
+    });
+
+    it("hands the export the root's data and the translated labels", async () => {
+      vi.mocked(exportValueStreamToWord).mockResolvedValue();
+      vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 9, 15, 12) });
+      try {
+        const { user } = renderPage();
+        await rootName();
+        await user.click(screen.getByRole("button", { name: wordName("saveWord") }));
+      } finally {
+        vi.useRealTimers();
+      }
+      const input = vi.mocked(exportValueStreamToWord).mock.calls[0][0];
+      expect(input.rootName).toBe("Hire-to-Retire");
+      expect(input.goals).toEqual(["Improve talent management"]);
+      expect(input.labels).toEqual({
+        subtitle: "Value Stream Map – October 15, 2026",
+        goalsHeading: "Business goals",
+        processesHeading: "Business processes",
+        noGoals: "No business goal is linked to this value stream.",
+        noProcesses: "No business process is linked to this value stream.",
+        imageDescription: "Hire-to-Retire value stream map",
+        snapshotFailed: "Could not read the diagram snapshot.",
+        failed: "Failed to generate the Word document.",
+      });
+      expect(input.labels.subtitle).not.toContain("Hire-to-Retire");
+    });
+
+    it("keeps two processes that share a name", async () => {
+      const root = withoutRelated();
+      const [[id, process]] = Object.entries(root.processes);
+      mockApi.on(
+        "get",
+        NONE,
+        response({ ...root, processes: { ...root.processes, dup: { ...process, id: "dup", name: root.processes[id].name } } }),
+      );
+      vi.mocked(exportValueStreamToWord).mockResolvedValue();
+      const { user } = renderPage();
+      await rootName();
+      await user.click(screen.getByRole("button", { name: wordName("saveWord") }));
+      const names = vi.mocked(exportValueStreamToWord).mock.calls[0][0].processNames;
+      expect(names).toHaveLength(Object.keys(root.processes).length + 1);
+      expect(names.filter((n) => n === root.processes[id].name)).toHaveLength(2);
     });
 
     it("exports one root with its goals and sorted process names, disabling every button meanwhile", async () => {
@@ -397,7 +448,7 @@ describe("ValueStreamPage", () => {
       await user.click(second);
 
       expect(exportWord).toHaveBeenCalledTimes(1);
-      const input = (exportWord.mock.calls[0] as unknown as [WordExportRequest])[0];
+      const input = (exportWord.mock.calls[0] as unknown as [WordExportInput])[0];
       expect(input.rootName).toBe("Order-to-Cash");
       expect(input.goals).toEqual(["Improve talent management"]);
       expect(input.processNames).toEqual(["Interview", "Post job ad", "Reporting", "Screen CVs", "Sourcing"]);
@@ -432,7 +483,7 @@ describe("ValueStreamPage", () => {
     });
 
     it("falls back to the translated message for a non-Error or message-less rejection", async () => {
-      const exportWord = vi.fn<(input: WordExportRequest) => Promise<void>>();
+      const exportWord = vi.fn<(input: WordExportInput) => Promise<void>>();
       exportWord.mockRejectedValueOnce("nope").mockRejectedValueOnce(new Error(""));
       const { user } = renderPage("?category=r-cat", exportWord);
       await rootName();
