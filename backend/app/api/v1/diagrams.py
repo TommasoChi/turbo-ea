@@ -135,11 +135,31 @@ async def require_public_diagram(
     return d
 
 
+ARCHIMATE_FORMAT = "archimate-exchange-3.1"
+DIAGRAM_KINDS = ("drawio", "archimate")
+
+
+def check_kind_data(kind: str, data: dict | None) -> None:
+    """422 unless ``data`` has the shape its ``kind`` stores."""
+    is_archimate = isinstance(data, dict) and data.get("format") == ARCHIMATE_FORMAT
+    if kind == "archimate":
+        xml = data.get("xml") if isinstance(data, dict) else None
+        if not is_archimate or not isinstance(xml, str) or not xml.strip():
+            raise HTTPException(
+                422,
+                f"ArchiMate diagrams need data {{format: '{ARCHIMATE_FORMAT}', "
+                "xml: <Exchange XML>}",
+            )
+    elif is_archimate:
+        raise HTTPException(422, "ArchiMate data cannot be stored on a DrawIO diagram")
+
+
 class DiagramCreate(BaseModel):
     name: str
     description: str | None = None
     data: dict | None = None
     card_ids: list[str] | None = None
+    kind: str = "drawio"
 
 
 class DiagramUpdate(BaseModel):
@@ -147,6 +167,7 @@ class DiagramUpdate(BaseModel):
     description: str | None = None
     data: dict | None = None
     card_ids: list[str] | None = None
+    kind: str | None = None
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -252,12 +273,19 @@ async def list_diagrams(
     group_id: str | None = None,
     sort_by: str = "updated_at",
     sort_dir: str = "desc",
+    kind: str = "drawio",
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     await PermissionService.require_permission(db, user, "diagrams.view")
+    if kind != "all" and kind not in DIAGRAM_KINDS:
+        raise HTTPException(422, "kind must be 'drawio', 'archimate' or 'all'")
 
     stmt = select(Diagram)
+    if kind != "all":
+        # Default drawio: every existing consumer (Diagrams page, card
+        # Resources tab, MCP) keeps seeing only DrawIO diagrams.
+        stmt = stmt.where(Diagram.kind == kind)
     if card_id:
         # Filter: only diagrams linked to this card
         stmt = stmt.join(diagram_cards, diagram_cards.c.diagram_id == Diagram.id).where(
@@ -336,6 +364,7 @@ async def list_diagrams(
         {
             "id": str(d.id),
             "name": d.name,
+            "kind": d.kind,
             "description": d.description,
             "card_ids": id_map.get(str(d.id), []),
             "group_ids": group_map.get(str(d.id), []),
@@ -417,8 +446,12 @@ async def create_diagram(
     user: User = Depends(get_current_user),
 ):
     await PermissionService.require_permission(db, user, "diagrams.manage")
+    if body.kind not in DIAGRAM_KINDS:
+        raise HTTPException(422, "kind must be 'drawio' or 'archimate'")
+    check_kind_data(body.kind, body.data)
     d = Diagram(
         name=body.name,
+        kind=body.kind,
         description=body.description,
         data=body.data or {},
         created_by=user.id,
@@ -439,6 +472,7 @@ async def create_diagram(
     return {
         "id": str(d.id),
         "name": d.name,
+        "kind": d.kind,
         "card_ids": body.card_ids or [],
     }
 
@@ -546,6 +580,7 @@ async def get_diagram(
     return {
         "id": str(d.id),
         "name": d.name,
+        "kind": d.kind,
         "description": d.description,
         "data": d.data,
         "card_ids": linked_card_ids,
@@ -572,14 +607,19 @@ async def update_diagram(
     d = result.scalar_one_or_none()
     if not d:
         raise HTTPException(404, "Diagram not found")
+    if body.kind is not None and body.kind != d.kind:
+        raise HTTPException(422, "kind cannot be changed")
+    if body.data is not None:
+        check_kind_data(d.kind, body.data)
     if body.name is not None:
         d.name = body.name
     if body.description is not None:
         d.description = body.description
     if body.data is not None:
-        # Store the data and auto-extract card references into it
         new_data = dict(body.data)
-        new_data["card_refs"] = _extract_card_refs(new_data)
+        if d.kind == "drawio":
+            # Auto-extract card references (DrawIO cells) into the data
+            new_data["card_refs"] = _extract_card_refs(new_data)
         d.data = new_data
     if body.card_ids is not None:
         read_scope = await CardReadScope.load(db, user)
@@ -648,6 +688,8 @@ async def publish_diagram(
     d = result.scalar_one_or_none()
     if not d:
         raise HTTPException(404, "Diagram not found")
+    if d.kind != "drawio":
+        raise HTTPException(400, "ArchiMate diagrams cannot be published yet")
 
     mode = normalise_access_mode(body.access_mode)
     if body.access_mode not in ("public", "sso"):
