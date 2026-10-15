@@ -77,7 +77,13 @@ export async function exportValueStreamToWord({ node, rootName, goals, processNa
       cacheBust: true,
       pixelRatio: 1.5,
       backgroundColor: "#ffffff",
-      filter: (el) => !(el instanceof HTMLElement && el.dataset.exportIgnore),
+      // Material Symbols icons too, as reportExport does: their font ligature does not survive the
+      // capture, so they would show as raw glyph names ("expand_more", "arrow_upward").
+      filter: (el) =>
+        !(
+          el instanceof HTMLElement &&
+          (el.hasAttribute("data-export-ignore") || el.classList.contains("material-symbols-outlined"))
+        ),
     });
     return { png: pngDataUrlToBytes(dataUrl), size: fitToPage(rect.width, rect.height) };
   });

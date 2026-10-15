@@ -154,7 +154,7 @@ describe("exportValueStreamToWord", () => {
     vi.restoreAllMocks();
   });
 
-  it("captures the node as a white PNG, skipping export-ignored elements, and downloads a .docx", async () => {
+  it("captures the node as a white PNG, skipping export-ignored elements and icons, and downloads a .docx", async () => {
     const node = makeNode();
     await exportValueStreamToWord({
       node,
@@ -171,6 +171,13 @@ describe("exportValueStreamToWord", () => {
     const ignored = document.createElement("div");
     ignored.dataset.exportIgnore = "true";
     expect(options.filter(ignored)).toBe(false);
+    const ignoredEmpty = document.createElement("div");
+    ignoredEmpty.setAttribute("data-export-ignore", "");
+    expect(options.filter(ignoredEmpty)).toBe(false);
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined";
+    icon.textContent = "expand_more";
+    expect(options.filter(icon)).toBe(false);
     expect(options.filter(document.createElement("div"))).toBe(true);
     expect(options.filter(document.createTextNode("x"))).toBe(true);
 
