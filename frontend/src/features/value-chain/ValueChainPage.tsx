@@ -35,6 +35,7 @@ export default function ValueChainPage() {
   const chartRef = useRef<HTMLDivElement>(null);
 
   const rowOrder = rowOrderOverride ?? rowOrderQuery.data?.row_order ?? DEFAULT_CHAIN_ROW_ORDER;
+  const refetching = chain.loading && !!chain.data;
   const canReorder = hasPermission(user?.permissions, "admin.settings");
   const bands = useMemo(() => orderBands(chain.data?.bands ?? [], rowOrder), [chain.data, rowOrder]);
   // The shown order, so a band the saved order does not mention is still movable.
@@ -42,7 +43,6 @@ export default function ValueChainPage() {
 
   const moveBand = async (key: ValueChainBandKey, direction: "up" | "down") => {
     const next = moveKey<ValueChainBandKey>(movable, key, direction);
-    if (next.join() === movable.join()) return;
     const previous = rowOrderOverride;
     setReorderFailed(false);
     setRowOrderOverride(next);
@@ -84,22 +84,25 @@ export default function ValueChainPage() {
       maxWidth="100%"
       disableSavedReportsLink
       buildExportData={buildExportData}
+      // Outside the chart area, so the PPTX/PNG capture never includes them.
+      toolbar={
+        (refetching || chain.error || reorderFailed) && (
+          <Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1 }}>
+            {refetching && <LinearProgress />}
+            {chain.error && <Alert severity="error">{t("error.load")}</Alert>}
+            {reorderFailed && (
+              <Alert severity="warning" onClose={() => setReorderFailed(false)}>
+                {t("error.reorder")}
+              </Alert>
+            )}
+          </Box>
+        )
+      }
     >
       {chain.loading && !chain.data && (
         <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
           <CircularProgress />
         </Box>
-      )}
-      {chain.loading && chain.data && <LinearProgress sx={{ mb: 1 }} />}
-      {chain.error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {t("error.load")}
-        </Alert>
-      )}
-      {reorderFailed && (
-        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setReorderFailed(false)}>
-          {t("error.reorder")}
-        </Alert>
       )}
       {bands.map((band) => {
         const color = VALUE_CHAIN_BAND_COLORS[band.key];
@@ -111,7 +114,8 @@ export default function ValueChainPage() {
               color={color}
               icon={types.businessProcess.icon}
               label={t(`band.${band.key}`)}
-              count={band.boxes.length}
+              // The core band draws the house, so it counts the level-one streams it shows.
+              count={band.key === "core" && chain.data ? chain.data.core_house.level_one.length : band.boxes.length}
               collapsed={isCollapsed}
               onToggle={() => setCollapsed((c) => ({ ...c, [band.key]: !c[band.key] }))}
               reorder={

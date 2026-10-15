@@ -68,7 +68,9 @@ describe("ValueChainPage", () => {
     expect(await screen.findByText(t("band.core"))).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: t("page.chain.title") })).toBeInTheDocument();
     expect(bandOrder()).toEqual(labelsOf("core", "management", "support", "not_set"));
-    expect(screen.getByText(t("band.core")).nextElementSibling).toHaveTextContent("(1)");
+    // The core band shows the house: its two level-one streams, not its one category box.
+    expect(screen.getByText(t("band.core")).nextElementSibling).toHaveTextContent("(2)");
+    expect(screen.getByText(t("band.management")).nextElementSibling).toHaveTextContent("(1)");
     expect(screen.getByText(t("band.support")).nextElementSibling).toHaveTextContent("(2)");
     expect(screen.getByText(t("band.not_set")).nextElementSibling).toHaveTextContent("(0)");
   });
@@ -132,6 +134,8 @@ describe("ValueChainPage", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(t("error.reorder"));
     expect(alert).toHaveClass("MuiAlert-standardWarning");
+    expect(alert.closest(".report-chart-area")).toBeNull();
+    expect(alert.closest(".report-toolbar")).not.toBeNull();
     expect(bandOrder()).toEqual(labelsOf("core", "management", "support", "not_set"));
 
     await user.click(within(alert).getByRole("button"));
@@ -252,6 +256,7 @@ describe("ValueChainPage", () => {
     renderPage();
     expect(await screen.findByText(t("house.empty"))).toBeInTheDocument();
     expect(screen.getAllByText(t("empty.band"))).toHaveLength(1);
+    expect(screen.getByText(t("band.core")).nextElementSibling).toHaveTextContent("(0)");
   });
 
   it("shows a spinner while the first load is in flight", async () => {
@@ -267,6 +272,8 @@ describe("ValueChainPage", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(t("error.load"));
     expect(alert).toHaveClass("MuiAlert-standardError");
+    expect(alert.closest(".report-chart-area")).toBeNull();
+    expect(alert.closest(".report-toolbar")).not.toBeNull();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByText(t("band.core"))).not.toBeInTheDocument();
   });
