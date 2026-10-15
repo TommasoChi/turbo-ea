@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE foo [<!ENTITY x SYSTEM "file:///etc/passwd">]>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="id-model">
+  <name xml:lang="en">&x;</name>
+  <elements>
+    <element identifier="id-a" xsi:type="BusinessActor"><name xml:lang="en">&x;</name></element>
+  </elements>
+</model>
