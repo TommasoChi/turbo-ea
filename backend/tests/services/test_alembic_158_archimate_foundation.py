@@ -172,3 +172,36 @@ async def test_diagrams_default_to_the_drawio_kind(db):
         )
     )
     assert (await conn.exec_driver_sql("SELECT kind FROM diagrams")).scalar_one() == "drawio"
+
+
+async def test_backfill_leaves_unchanged_subtypes_alone(db):
+    """A type whose archimate_type is filled in but no subtype changes keeps its
+    `subtypes` as stored: NULL and non-list values are not rewritten to `[]`."""
+    conn = await db.connection()
+    await conn.exec_driver_sql("DELETE FROM card_types")
+    await conn.execute(
+        text(
+            "INSERT INTO card_types "
+            f"(id, key, label, subtypes, built_in, archimate_type, {_CT_COLS}) VALUES "
+            f"(gen_random_uuid(), 'Application', 'App', NULL, true, NULL, {_CT_VALS}), "
+            f"(gen_random_uuid(), 'BusinessCapability', 'BC', CAST(:obj AS jsonb), true, "
+            f"NULL, {_CT_VALS}), "
+            f"(gen_random_uuid(), 'Initiative', 'Init', CAST(:lst AS jsonb), true, "
+            f"NULL, {_CT_VALS})"
+        ),
+        {
+            "obj": json.dumps({"not": "a list"}),
+            "lst": json.dumps([{"key": "custom", "label": "Custom"}, "junk"]),
+        },
+    )
+    await conn.run_sync(mig._backfill_card_types)
+    rows = {
+        r[0]: r[1:]
+        for r in (
+            await conn.exec_driver_sql("SELECT key, archimate_type, subtypes FROM card_types")
+        ).all()
+    }
+    assert rows["Application"][0] == "ApplicationComponent" and rows["Application"][1] is None
+    assert rows["BusinessCapability"][1] == {"not": "a list"}
+    assert rows["Initiative"][1] == [{"key": "custom", "label": "Custom"}, "junk"]
+    assert all(v[0] is not None for v in rows.values())

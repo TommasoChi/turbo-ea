@@ -124,13 +124,17 @@ def _backfill_card_types(conn) -> None:
                     sub = {**sub, "archimate_type": wanted}
                     changed = True
             patched.append(sub)
-        if new_type != row.archimate_type or changed:
+        if new_type != row.archimate_type:
             conn.execute(
-                text(
-                    "UPDATE card_types SET archimate_type = :t, subtypes = CAST(:s AS jsonb) "
-                    "WHERE id = :id"
-                ),
-                {"t": new_type, "s": json.dumps(patched), "id": row.id},
+                text("UPDATE card_types SET archimate_type = :t WHERE id = :id"),
+                {"t": new_type, "id": row.id},
+            )
+        # Only rewrite `subtypes` when a subtype actually changed (NULL / non-list
+        # values and untouched lists stay byte-for-byte as they were).
+        if changed:
+            conn.execute(
+                text("UPDATE card_types SET subtypes = CAST(:s AS jsonb) WHERE id = :id"),
+                {"s": json.dumps(patched), "id": row.id},
             )
 
 
