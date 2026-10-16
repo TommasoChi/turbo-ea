@@ -168,3 +168,94 @@ async def test_published_archimate_row_never_serves_publicly(client, env, db):
     await db.commit()
     assert (await client.get("/api/v1/diagrams/public/arch-slug")).status_code == 404
     assert (await client.get("/api/v1/diagrams/public/arch-slug/gate")).status_code == 404
+
+
+# ── card_ids sync: purged and hidden cards ───────────────────────────────────
+
+
+@pytest.fixture
+async def cards_env(db):
+    from sqlalchemy import select
+
+    from app.core.permissions import MEMBER_PERMISSIONS
+    from app.models.card_type import CardType
+    from app.services.permission_service import PermissionService
+
+    await create_role(db, key="admin", label="Admin", permissions={"*": True})
+    await create_role(db, key="member", label="Member", permissions=MEMBER_PERMISSIONS)
+    await create_card_type(db, key="Application", label="Application")
+    await create_card_type(db, key="Initiative", label="Initiative")
+    ct = (await db.execute(select(CardType).where(CardType.key == "Initiative"))).scalar_one()
+    ct.role_permissions = {"member": {"inventory.view": False}}
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    return {
+        "admin": await create_user(db, email="a@t.com", role="admin"),
+        "member": await create_user(db, email="m@t.com", role="member"),
+        "app": await create_card(db, card_type="Application", name="App"),
+        "secret": await create_card(db, card_type="Initiative", name="Secret"),
+    }
+
+
+async def test_patch_drops_the_id_of_a_purged_card(client, cards_env, db):
+    """A hard-purged card's id lingers in the XML: saving must not 500 on the FK."""
+    h = auth_headers(cards_env["admin"])
+    app = cards_env["app"]
+    d = (
+        await client.post(
+            "/api/v1/diagrams",
+            json={"name": "d", "data": {"xml": "<m/>"}, "card_ids": [str(app.id)]},
+            headers=h,
+        )
+    ).json()["id"]
+    app_id = str(app.id)
+    await db.delete(app)
+    await db.commit()
+    r = await client.patch(f"/api/v1/diagrams/{d}", json={"card_ids": [app_id]}, headers=h)
+    assert r.status_code == 200 and r.json()["card_ids"] == []
+    assert (await client.get(f"/api/v1/diagrams/{d}", headers=h)).json()["card_ids"] == []
+
+
+async def test_create_drops_a_non_existent_card_id(client, cards_env):
+    h = auth_headers(cards_env["admin"])
+    ghost = str(uuid.uuid4())
+    r = await client.post(
+        "/api/v1/diagrams",
+        json={"name": "d", "data": {"xml": "<m/>"}, "card_ids": [ghost, str(cards_env["app"].id)]},
+        headers=h,
+    )
+    assert r.status_code == 201 and r.json()["card_ids"] == [str(cards_env["app"].id)]
+
+
+async def test_patch_keeps_an_already_linked_hidden_card(client, cards_env):
+    admin_h, member_h = auth_headers(cards_env["admin"]), auth_headers(cards_env["member"])
+    app, secret = str(cards_env["app"].id), str(cards_env["secret"].id)
+    d = (
+        await client.post(
+            "/api/v1/diagrams",
+            json={"name": "d", "data": {"xml": "<m/>"}, "card_ids": [app, secret]},
+            headers=admin_h,
+        )
+    ).json()["id"]
+    # The member's client only ever saw `app`, and the XML still references both.
+    r = await client.patch(
+        f"/api/v1/diagrams/{d}", json={"card_ids": [app, secret]}, headers=member_h
+    )
+    assert r.status_code == 200 and r.json()["card_ids"] == [app]
+    r = await client.patch(f"/api/v1/diagrams/{d}", json={"card_ids": [app]}, headers=member_h)
+    assert r.status_code == 200
+    got = (await client.get(f"/api/v1/diagrams/{d}", headers=admin_h)).json()
+    assert set(got["card_ids"]) == {app, secret}
+
+
+async def test_patch_refuses_a_new_link_to_a_hidden_card(client, cards_env):
+    admin_h, member_h = auth_headers(cards_env["admin"]), auth_headers(cards_env["member"])
+    d = (
+        await client.post(
+            "/api/v1/diagrams", json={"name": "d", "data": {"xml": "<m/>"}}, headers=admin_h
+        )
+    ).json()["id"]
+    r = await client.patch(
+        f"/api/v1/diagrams/{d}", json={"card_ids": [str(cards_env["secret"].id)]}, headers=member_h
+    )
+    assert r.status_code == 404

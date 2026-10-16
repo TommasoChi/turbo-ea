@@ -219,6 +219,18 @@ async def _readable_card_ids(db: AsyncSession, user: User, card_ids: list[str]) 
     return [c for c in card_ids if c in ok]
 
 
+async def _existing_card_ids(db: AsyncSession, ids: set[uuid.UUID]) -> set[uuid.UUID]:
+    """The subset of ``ids`` that still match a card.
+
+    A diagram's XML can outlive a hard-purged card; its id must not reach
+    ``diagram_cards`` (FK) — it is dropped, like a link to a deleted card.
+    """
+    if not ids:
+        return set()
+    rows = await db.execute(select(Card.id).where(Card.id.in_(ids)))
+    return {r[0] for r in rows.all()}
+
+
 async def _get_card_ids_bulk(db: AsyncSession) -> dict[str, list[str]]:
     """Return mapping of diagram_id -> [card_id, ...] for all diagrams."""
     result = await db.execute(select(diagram_cards))
@@ -482,13 +494,16 @@ async def create_diagram(
     db.add(d)
     await db.flush()  # get d.id
 
+    card_ids: list[str] = []
     if body.card_ids:
         read_scope = await CardReadScope.load(db, user)
-        if await read_scope.hidden_card_ids(
-            db, {uuid.UUID(c) for c in body.card_ids}, mode="module"
-        ):
+        wanted = {uuid.UUID(c) for c in body.card_ids}
+        if await read_scope.hidden_card_ids(db, wanted, mode="module"):
             raise HTTPException(404, "Card not found")
-        await _set_card_ids(db, d.id, body.card_ids)
+        # Ids of purged cards are dropped silently (as on PATCH).
+        existing = await _existing_card_ids(db, wanted)
+        card_ids = [c for c in body.card_ids if uuid.UUID(c) in existing]
+        await _set_card_ids(db, d.id, card_ids)
 
     await db.commit()
     await db.refresh(d)
@@ -496,7 +511,7 @@ async def create_diagram(
         "id": str(d.id),
         "name": d.name,
         "kind": d.kind,
-        "card_ids": body.card_ids or [],
+        "card_ids": card_ids,
     }
 
 
@@ -647,11 +662,15 @@ async def update_diagram(
         d.data = new_data
     if body.card_ids is not None:
         read_scope = await CardReadScope.load(db, user)
-        wanted = {uuid.UUID(c) for c in body.card_ids}
-        if await read_scope.hidden_card_ids(db, wanted, mode="module"):
-            raise HTTPException(404, "Card not found")
-        # The client was only shown the readable links — keep the hidden ones.
         current = {uuid.UUID(c) for c in await _get_card_ids(db, d.id)}
+        wanted = {uuid.UUID(c) for c in body.card_ids}
+        # Only a NEW link to a card the saver cannot see is refused: a link that
+        # is already there (hidden from them) is not theirs to re-authorise.
+        if await read_scope.hidden_card_ids(db, wanted - current, mode="module"):
+            raise HTTPException(404, "Card not found")
+        # Ids of purged cards (still in the XML) are dropped silently.
+        wanted = await _existing_card_ids(db, wanted)
+        # The client was only shown the readable links — keep the hidden ones.
         wanted |= await read_scope.hidden_card_ids(db, current, mode="module")
         await _set_card_ids(db, d.id, [str(c) for c in wanted])
     await db.commit()
