@@ -237,7 +237,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
         rememberCards(await fetchCardsByIds(linkedCardIds(m)));
       } catch (e) {
         // Links still work; only the names in the context pad are missing.
-        if (!unmountedRef.current) setSnack(reasonRef.current(e));
+        if (epoch === epochRef.current && !unmountedRef.current) setSnack(reasonRef.current(e));
       }
     },
     [rememberCards],
