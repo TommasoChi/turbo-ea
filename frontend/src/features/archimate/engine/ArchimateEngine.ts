@@ -10,7 +10,7 @@ import type Canvas from "diagram-js/lib/core/Canvas";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type Selection from "diagram-js/lib/features/selection/Selection";
-import type { Element } from "diagram-js/lib/model/Types";
+import type { Shape } from "diagram-js/lib/model/Types";
 import type ZoomScroll from "diagram-js/lib/navigation/zoomscroll/ZoomScroll";
 import type { Point } from "diagram-js/lib/util/Types";
 import { innerSVG } from "tiny-svg";
@@ -35,7 +35,7 @@ export class ArchimateEngine {
     this.container = opts.container;
     this.diagram = new Diagram({
       canvas: { container: opts.container },
-      modules: [...ARCHIMATE_MODULES, { editorBridge: ["value", opts.bridge] }],
+      modules: [...ARCHIMATE_MODULES, { bridge: ["value", opts.bridge] }],
     });
     // A clear (on load) is not a change; every executed, undone or redone command is.
     this.get<EventBus>("eventBus").on("commandStack.changed", (e: { trigger: string }) => {
@@ -70,8 +70,8 @@ export class ArchimateEngine {
     return structuredClone(reconcileModel(this.base, extractEdited(this.services(), this.base.views[0])));
   }
 
-  private shape(shapeId: string) {
-    const element = this.get<ElementRegistry>("elementRegistry").get(shapeId) as Element | undefined;
+  private shape(shapeId: string): Shape | undefined {
+    const element = this.get<ElementRegistry>("elementRegistry").get(shapeId) as Shape | undefined;
     return element && !element.waypoints && element.businessObject ? element : undefined;
   }
 

@@ -6,10 +6,11 @@ import type CommandHandler from "diagram-js/lib/command/CommandHandler";
 import type { Element } from "diagram-js/lib/model/Types";
 import { withCardId, type ModelElement, type ModelRelationship } from "../exchange/exchangeModel";
 
-export type PropertyUpdate =
-  | Partial<Pick<ModelElement, "name" | "documentation">>
-  | Partial<Pick<ModelRelationship, "name" | "accessType" | "isDirected">>
-  | { cardId: string | null };
+/** For a shape: element fields, or the card link (elements only carry cards). */
+export type ElementUpdate = Partial<Pick<ModelElement, "name" | "documentation">> | { cardId: string | null };
+/** For a connection. */
+export type RelationshipUpdate = Partial<Pick<ModelRelationship, "name" | "accessType" | "isDirected">>;
+export type PropertyUpdate = ElementUpdate | RelationshipUpdate;
 
 export interface UpdatePropertiesContext {
   element: Element;
@@ -31,6 +32,7 @@ export default class UpdatePropertiesHandler implements CommandHandler {
     const bo = element.businessObject as Record<string, unknown> & ModelElement;
     const fields: Record<string, unknown> = { ...properties };
     if ("cardId" in fields) {
+      if (element.waypoints) throw new Error("A card can only be linked to an element, not a relationship");
       fields.properties = withCardId(bo, fields.cardId as string | null).properties;
       delete fields.cardId;
     }

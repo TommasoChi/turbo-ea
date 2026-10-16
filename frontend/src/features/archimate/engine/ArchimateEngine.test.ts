@@ -11,6 +11,8 @@ import type { EditorBridge } from "./EditorBridge";
 beforeAll(installSvgStubs);
 
 const bridge = {} as EditorBridge;
+/** load() works on a copy: no edit may reach the shared fixture. */
+const PRISTINE = structuredClone(MODEL);
 
 function setup() {
   const container = document.createElement("div");
@@ -24,10 +26,9 @@ function setup() {
 
 describe("ArchimateEngine", () => {
   it("round-trips the loaded model unchanged, without touching the caller's object", () => {
-    const before = structuredClone(MODEL);
     const { engine, onChange } = setup();
     expect(engine.toModel()).toEqual(MODEL);
-    expect(MODEL).toEqual(before);
+    expect(MODEL).toEqual(PRISTINE);
     expect(onChange).not.toHaveBeenCalled();
     expect(engine.canUndo()).toBe(false);
   });
@@ -40,6 +41,7 @@ describe("ArchimateEngine", () => {
     expect(nodes.map((n) => [n.id, n.x, n.y])).toEqual([["id-n1", 10, 20], ["id-g1", 110, 120], ["id-n2", 140, 160]]);
     get<Modeling>("modeling").moveShape(shape("id-n1"), { x: 10, y: 20 });
     expect(engine.toModel().views[0].nodes[0]).toMatchObject({ x: 20, y: 40 });
+    expect(MODEL).toEqual(PRISTINE);
   });
 
   it("links a card and renames as undoable commands, notifying once per command", () => {
@@ -61,6 +63,7 @@ describe("ArchimateEngine", () => {
     model = engine.toModel();
     expect(model.elements.find((e) => e.id === "id-data")!.name).toBe("X");
     expect(onChange).toHaveBeenCalledTimes(1);
+    expect(MODEL).toEqual(PRISTINE);
     engine.undo();
     expect(engine.elementInfo("id-n2")!.name).toBe("Customer");
   });
@@ -95,7 +98,7 @@ describe("ArchimateEngine", () => {
 
   it("destroys the diagram once, emptying the container", () => {
     const { container, engine } = setup();
-    expect(container.children.length).toBeGreaterThan(0);
+    expect(container.children).toHaveLength(1); // diagram-js's own .djs-container
     engine.destroy();
     expect(container.children).toHaveLength(0);
     expect(() => engine.destroy()).not.toThrow();

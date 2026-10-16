@@ -63,6 +63,15 @@ describe("reconcileModel", () => {
     expect(out.relationships).toEqual([]);
   });
 
+  it("keeps a relationship whose connection was deleted from the first view but is drawn on another view", () => {
+    const r = rel("r", "a", "b");
+    const base = m({
+      elements: [a, b], relationships: [r],
+      views: [view("v1", ["a", "b"], [["r", "a", "b"]]), view("v2", ["a", "b"], [["r", "a", "b"]])],
+    });
+    expect(reconcileModel(base, edited(base, view("v1", ["a", "b"]))).relationships).toEqual([r]);
+  });
+
   it("keeps a never-drawn relationship only while both endpoints survive", () => {
     const base = m({
       elements: [a, b, c],

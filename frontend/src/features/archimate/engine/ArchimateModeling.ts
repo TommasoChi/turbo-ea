@@ -2,9 +2,9 @@
 import type CommandStack from "diagram-js/lib/command/CommandStack";
 import type EventBus from "diagram-js/lib/core/EventBus";
 import Modeling from "diagram-js/lib/features/modeling/Modeling";
-import type { Element } from "diagram-js/lib/model/Types";
+import type { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
-import UpdatePropertiesHandler, { type PropertyUpdate } from "./UpdatePropertiesHandler";
+import UpdatePropertiesHandler, { type ElementUpdate, type RelationshipUpdate } from "./UpdatePropertiesHandler";
 
 export default class ArchimateModeling extends Modeling {
   static $inject = ["eventBus", "elementFactory", "commandStack"];
@@ -21,8 +21,10 @@ export default class ArchimateModeling extends Modeling {
     } as unknown as ReturnType<Modeling["getHandlers"]>;
   }
 
-  /** One undoable command. */
-  updateProperties(element: Element, properties: PropertyUpdate): void {
+  /** One undoable command. A card link (`{ cardId }`) only goes on a shape. */
+  updateProperties(element: Shape, properties: ElementUpdate): void;
+  updateProperties(element: Connection, properties: RelationshipUpdate): void;
+  updateProperties(element: Element, properties: ElementUpdate | RelationshipUpdate): void {
     this.stack.execute("element.updateProperties", { element, properties });
   }
 }

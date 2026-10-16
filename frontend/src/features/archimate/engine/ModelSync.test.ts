@@ -45,12 +45,12 @@ describe("ModelSync", () => {
       relationship: "Assignment", waypoints: [{ x: 100, y: 100 }, { x: 300, y: 300 }, { x: 400, y: 100 }],
     }) as Connection;
     // (the docking rounds the intersection to whole pixels)
-    expect(Math.abs(conn.waypoints[0].y - 127.5)).toBeLessThanOrEqual(1);
+    expect(conn.waypoints[0]).toMatchObject({ x: 127, y: 127 });
     expect(conn.waypoints[1]).toEqual({ x: 300, y: 300 });
     modeling.moveShape(a, { x: 0, y: -50 });
     expect(conn.waypoints).toHaveLength(3);
     expect(conn.waypoints[1]).toMatchObject({ x: 300, y: 300 });
-    expect(Math.abs(conn.waypoints[0].y - 77.5)).toBeLessThanOrEqual(1);
+    expect(conn.waypoints[0]).toMatchObject({ x: 122, y: 77 });
   });
 
   it("removes the connections of a deleted shape", () => {
