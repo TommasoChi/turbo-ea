@@ -226,6 +226,7 @@ describe("ArchimateContextPadProvider, connection entries", () => {
   it("an Association offers directed and delete, and the toggle flips isDirected", () => {
     const { connection, entriesOf, click, bo, get } = connectWith("Association");
     expect(Object.keys(entriesOf(connection)).sort()).toEqual(["delete", "directed"]);
+    expect(entriesOf(connection)["directed"].title).toBe("L:directed");
     expect((entriesOf(connection)["directed"].className ?? "").includes("active")).toBe(false);
     click(entriesOf(connection), "directed", connection);
     expect(bo.isDirected).toBe(true);

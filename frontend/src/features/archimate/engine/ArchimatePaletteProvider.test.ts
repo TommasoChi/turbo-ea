@@ -103,14 +103,10 @@ describe("ArchimatePaletteProvider entries", () => {
     expect(lasso.activateSelection).toHaveBeenCalledWith(event);
   });
 
-  it("titles the tools from the bridge when it supplies them, else in English", () => {
-    const { entries, bridge, withFakes } = setup();
-    expect(entries["hand-tool"].title).toBe("Hand tool");
-    expect(entries["lasso-tool"].title).toBe("Lasso tool");
-    (bridge.labels as { tools?: { hand: string; lasso: string } }).tools = { hand: "Mano", lasso: "Lazo" };
-    const e = withFakes({}).getPaletteEntries();
-    expect(e["hand-tool"].title).toBe("Mano");
-    expect(e["lasso-tool"].title).toBe("Lazo");
+  it("titles the tools from the bridge labels", () => {
+    const { entries } = setup();
+    expect(entries["hand-tool"].title).toBe("L:hand");
+    expect(entries["lasso-tool"].title).toBe("L:lasso");
   });
 });
 

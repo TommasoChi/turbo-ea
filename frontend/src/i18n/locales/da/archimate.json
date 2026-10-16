@@ -1,0 +1,155 @@
+{
+  "title": "ArchiMate",
+  "trademark": "ArchiMate® er et registreret varemærke tilhørende The Open Group. Turbo EA tegner ArchiMate-notationen og er ikke certificeret af The Open Group.",
+  "layers": {
+    "strategy": "Strategi",
+    "business": "Forretning",
+    "application": "Applikation",
+    "technology": "Teknologi",
+    "physical": "Fysisk",
+    "motivation": "Motivation",
+    "implementation": "Implementering og migrering",
+    "other": "Andet"
+  },
+  "relationships": {
+    "Composition": "Komposition",
+    "Aggregation": "Aggregering",
+    "Assignment": "Tildeling",
+    "Realization": "Realisering",
+    "Serving": "Betjening",
+    "Access": "Adgang",
+    "Influence": "Påvirkning",
+    "Triggering": "Udløsning",
+    "Flow": "Flow",
+    "Specialization": "Specialisering",
+    "Association": "Association"
+  },
+  "access": {
+    "Access": "Adgang",
+    "Read": "Læs",
+    "Write": "Skriv",
+    "ReadWrite": "Læs/Skriv"
+  },
+  "context": {
+    "connect": "Tegn {{relationship}}",
+    "linkCard": "Knyt til et kort",
+    "createCard": "Opret et kort",
+    "openCard": "Åbn det tilknyttede kort",
+    "unlinkCard": "Fjern tilknytningen til kortet",
+    "delete": "Fjern fra diagrammet",
+    "unlinked": "Ikke knyttet til et kort",
+    "directed": "Rettet association"
+  },
+  "tools": {
+    "hand": "Håndværktøj",
+    "lasso": "Lassovalg"
+  },
+  "toolbar": {
+    "back": "Tilbage",
+    "undo": "Fortryd",
+    "redo": "Gentag",
+    "zoomIn": "Zoom ind",
+    "zoomOut": "Zoom ud",
+    "fit": "Tilpas til skærmen",
+    "save": "Gem",
+    "validate": "Kontrollér modellen",
+    "importXml": "Importér en Exchange-fil",
+    "exportXml": "Eksportér som Exchange-fil",
+    "exportSvg": "Eksportér som SVG",
+    "shortcuts": "Tastaturgenveje"
+  },
+  "status": {
+    "saved": "Gemt",
+    "saving": "Gemmer…",
+    "unsaved": "Ugemte ændringer"
+  },
+  "errors": {
+    "loadFailed": "Diagrammet kunne ikke indlæses.",
+    "notArchimate": "Dette er ikke et ArchiMate-diagram.",
+    "saveFailed": "Diagrammet kunne ikke gemmes: {{reason}}",
+    "retry": "Prøv igen",
+    "importFailed": "Filen kunne ikke importeres: {{reason}}",
+    "exchange": {
+      "dtd_forbidden": "Filen indeholder en DOCTYPE- eller entitetsdeklaration, hvilket ikke er tilladt.",
+      "xml_invalid": "Filen er ikke velformet XML.",
+      "wrong_root": "Filen er ikke en ArchiMate Exchange-model.",
+      "too_large": "Filen er større end 5 MB.",
+      "no_view": "Modellen har ingen visning at redigere.",
+      "unknown_element_type": "Ukendt elementtype i “{{ref}}”.",
+      "unknown_relationship_type": "Ukendt relationstype i “{{ref}}”.",
+      "dangling_reference": "“{{ref}}” peger på noget, der ikke findes.",
+      "duplicate_identifier": "Identifikatoren “{{ref}}” bruges to gange.",
+      "missing_identifier": "Et modelelement, en relation eller en diagramknude har ingen identifikator."
+    }
+  },
+  "validation": {
+    "title": "Modelkontrol",
+    "ok": "Ingen problemer fundet.",
+    "issueCount_one": "{{count}} problem fundet",
+    "issueCount_other": "{{count}} problemer fundet",
+    "codes": {
+      "too_large": "Modellen er større end 5 MB.",
+      "xml_invalid": "Modellen er ikke velformet XML.",
+      "dtd_forbidden": "DOCTYPE- og entitetsdeklarationer er ikke tilladt.",
+      "wrong_root": "Rodelementet er ikke en ArchiMate-model.",
+      "missing_identifier": "Et element, en relation eller en diagramknude har ingen identifikator.",
+      "unknown_element_type": "Ukendt elementtype: {{ref}}",
+      "unknown_relationship_type": "Ukendt relationstype: {{ref}}",
+      "unknown_access_type": "Ukendt adgangstype på {{ref}}",
+      "duplicate_identifier": "Dubleret identifikator: {{ref}}",
+      "dangling_source": "Relationen {{ref}} starter fra noget, der ikke findes.",
+      "dangling_target": "Relationen {{ref}} ender ved noget, der ikke findes.",
+      "relationship_not_allowed": "ArchiMate tillader ikke relationen {{ref}}: hverken mellem disse to elementer eller fra en relation til sig selv.",
+      "dangling_element_ref": "Diagramknuden {{ref}} viser et element, der ikke findes.",
+      "dangling_relationship_ref": "Diagramforbindelsen {{ref}} viser en relation, der ikke findes.",
+      "connection_endpoint_mismatch": "Diagramforbindelsen {{ref}} forbinder ikke knuderne i sin relation."
+    }
+  },
+  "import": {
+    "confirmTitle": "Erstat diagrammet?",
+    "confirmBody": "Import af en fil erstatter alt i dette diagram.",
+    "confirm": "Erstat",
+    "organizationsIgnored": "Filen indeholder mapper (organisationer); de beholdes ikke."
+  },
+  "linkDialog": {
+    "title": "Knyt til et kort",
+    "label": "Kort",
+    "hint": "Kort af typen: {{types}}"
+  },
+  "createCardDialog": {
+    "title": "Opret et kort",
+    "type": "Korttype",
+    "name": "Navn",
+    "submit": "Opret og knyt",
+    "failed": "Kortet kunne ikke oprettes: {{reason}}"
+  },
+  "shortcuts": {
+    "title": "Tastaturgenveje",
+    "undo": "Fortryd",
+    "redo": "Gentag",
+    "copy": "Kopiér",
+    "paste": "Indsæt",
+    "delete": "Slet",
+    "edit": "Omdøb",
+    "selectAll": "Markér alt",
+    "zoomIn": "Zoom ind",
+    "zoomOut": "Zoom ud",
+    "zoomFit": "Tilpas til skærmen"
+  },
+  "sandbox": {
+    "title": "ArchiMate-sandkasse",
+    "intro": "Prøv ArchiMate-editoren. Diagrammer, der oprettes her, gemmes som ArchiMate Exchange-filer og vises endnu ikke i menuen Diagrammer.",
+    "newDiagram": "Nyt ArchiMate-diagram",
+    "name": "Navn",
+    "create": "Opret",
+    "empty": "Ingen ArchiMate-diagrammer endnu.",
+    "open": "Åbn",
+    "delete": "Slet",
+    "deleteTitle": "Slet dette diagram?",
+    "deleteBody": "“{{name}}” bliver slettet. De kort, der er knyttet til det, berøres ikke.",
+    "deleted": "Diagram slettet",
+    "createFailed": "Diagrammet kunne ikke oprettes: {{reason}}",
+    "loadFailed": "Diagrammerne kunne ikke indlæses.",
+    "updated": "Opdateret {{date}}"
+  }
+}

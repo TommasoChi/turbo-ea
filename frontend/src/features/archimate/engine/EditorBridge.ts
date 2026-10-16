@@ -19,8 +19,10 @@ export interface EditorLabels {
   /** "Draw {{relationship}}" */
   connect: (relationship: string) => string;
   unlinked: string;
-  /** Palette tool titles; the palette falls back to English when the bridge has none. */
-  tools?: { hand: string; lasso: string };
+  /** Context-pad toggle title of an Association's `isDirected`. */
+  directed: string;
+  /** Palette tool titles. */
+  tools: { hand: string; lasso: string };
 }
 
 export interface EditorBridge {

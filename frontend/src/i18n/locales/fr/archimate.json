@@ -1,0 +1,155 @@
+{
+  "title": "ArchiMate",
+  "trademark": "ArchiMate® est une marque déposée de The Open Group. Turbo EA dessine la notation ArchiMate et n'est pas certifié par The Open Group.",
+  "layers": {
+    "strategy": "Stratégie",
+    "business": "Métier",
+    "application": "Application",
+    "technology": "Technologie",
+    "physical": "Physique",
+    "motivation": "Motivation",
+    "implementation": "Mise en œuvre et migration",
+    "other": "Autre"
+  },
+  "relationships": {
+    "Composition": "Composition",
+    "Aggregation": "Agrégation",
+    "Assignment": "Affectation",
+    "Realization": "Réalisation",
+    "Serving": "Service",
+    "Access": "Accès",
+    "Influence": "Influence",
+    "Triggering": "Déclenchement",
+    "Flow": "Flux",
+    "Specialization": "Spécialisation",
+    "Association": "Association"
+  },
+  "access": {
+    "Access": "Accès",
+    "Read": "Lecture",
+    "Write": "Écriture",
+    "ReadWrite": "Lecture/Écriture"
+  },
+  "context": {
+    "connect": "Tracer {{relationship}}",
+    "linkCard": "Lier à une fiche",
+    "createCard": "Créer une fiche",
+    "openCard": "Ouvrir la fiche liée",
+    "unlinkCard": "Délier la fiche",
+    "delete": "Retirer du diagramme",
+    "unlinked": "Non lié à une fiche",
+    "directed": "Association orientée"
+  },
+  "tools": {
+    "hand": "Outil main",
+    "lasso": "Sélection au lasso"
+  },
+  "toolbar": {
+    "back": "Retour",
+    "undo": "Annuler",
+    "redo": "Rétablir",
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "fit": "Ajuster à l'écran",
+    "save": "Enregistrer",
+    "validate": "Vérifier le modèle",
+    "importXml": "Importer un fichier Exchange",
+    "exportXml": "Exporter en fichier Exchange",
+    "exportSvg": "Exporter en SVG",
+    "shortcuts": "Raccourcis clavier"
+  },
+  "status": {
+    "saved": "Enregistré",
+    "saving": "Enregistrement…",
+    "unsaved": "Modifications non enregistrées"
+  },
+  "errors": {
+    "loadFailed": "Le diagramme n'a pas pu être chargé.",
+    "notArchimate": "Ceci n'est pas un diagramme ArchiMate.",
+    "saveFailed": "Le diagramme n'a pas pu être enregistré : {{reason}}",
+    "retry": "Réessayer",
+    "importFailed": "Le fichier n'a pas pu être importé : {{reason}}",
+    "exchange": {
+      "dtd_forbidden": "Le fichier contient une déclaration DOCTYPE ou d'entité, ce qui n'est pas autorisé.",
+      "xml_invalid": "Le fichier n'est pas un XML bien formé.",
+      "wrong_root": "Le fichier n'est pas un modèle ArchiMate Exchange.",
+      "too_large": "Le fichier dépasse 5 Mo.",
+      "no_view": "Le modèle ne contient aucune vue à modifier.",
+      "unknown_element_type": "Type d'élément inconnu dans « {{ref}} ».",
+      "unknown_relationship_type": "Type de relation inconnu dans « {{ref}} ».",
+      "dangling_reference": "« {{ref}} » pointe vers un élément qui n'existe pas.",
+      "duplicate_identifier": "L'identifiant « {{ref}} » est utilisé deux fois.",
+      "missing_identifier": "Un élément du modèle, une relation ou un nœud du diagramme n'a pas d'identifiant."
+    }
+  },
+  "validation": {
+    "title": "Vérification du modèle",
+    "ok": "Aucun problème détecté.",
+    "issueCount_one": "{{count}} problème détecté",
+    "issueCount_other": "{{count}} problèmes détectés",
+    "codes": {
+      "too_large": "Le modèle dépasse 5 Mo.",
+      "xml_invalid": "Le modèle n'est pas un XML bien formé.",
+      "dtd_forbidden": "Les déclarations DOCTYPE et d'entité ne sont pas autorisées.",
+      "wrong_root": "L'élément racine n'est pas un modèle ArchiMate.",
+      "missing_identifier": "Un élément, une relation ou un nœud du diagramme n'a pas d'identifiant.",
+      "unknown_element_type": "Type d'élément inconnu : {{ref}}",
+      "unknown_relationship_type": "Type de relation inconnu : {{ref}}",
+      "unknown_access_type": "Type d'accès inconnu sur {{ref}}",
+      "duplicate_identifier": "Identifiant en double : {{ref}}",
+      "dangling_source": "La relation {{ref}} part d'un élément qui n'existe pas.",
+      "dangling_target": "La relation {{ref}} aboutit à un élément qui n'existe pas.",
+      "relationship_not_allowed": "ArchiMate n'autorise pas la relation {{ref}} : ni entre ces deux éléments, ni d'une relation vers elle-même.",
+      "dangling_element_ref": "Le nœud de diagramme {{ref}} représente un élément qui n'existe pas.",
+      "dangling_relationship_ref": "La connexion de diagramme {{ref}} représente une relation qui n'existe pas.",
+      "connection_endpoint_mismatch": "La connexion de diagramme {{ref}} ne relie pas les nœuds de sa relation."
+    }
+  },
+  "import": {
+    "confirmTitle": "Remplacer le diagramme ?",
+    "confirmBody": "L'importation d'un fichier remplace tout le contenu de ce diagramme.",
+    "confirm": "Remplacer",
+    "organizationsIgnored": "Le fichier contient des dossiers (organisations) ; ils ne sont pas conservés."
+  },
+  "linkDialog": {
+    "title": "Lier à une fiche",
+    "label": "Fiche",
+    "hint": "Fiches de type : {{types}}"
+  },
+  "createCardDialog": {
+    "title": "Créer une fiche",
+    "type": "Type de fiche",
+    "name": "Nom",
+    "submit": "Créer et lier",
+    "failed": "La fiche n'a pas pu être créée : {{reason}}"
+  },
+  "shortcuts": {
+    "title": "Raccourcis clavier",
+    "undo": "Annuler",
+    "redo": "Rétablir",
+    "copy": "Copier",
+    "paste": "Coller",
+    "delete": "Supprimer",
+    "edit": "Renommer",
+    "selectAll": "Tout sélectionner",
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "zoomFit": "Ajuster à l'écran"
+  },
+  "sandbox": {
+    "title": "Bac à sable ArchiMate",
+    "intro": "Essayez l'éditeur ArchiMate. Les diagrammes créés ici sont stockés sous forme de fichiers ArchiMate Exchange et n'apparaissent pas encore dans le menu Diagrammes.",
+    "newDiagram": "Nouveau diagramme ArchiMate",
+    "name": "Nom",
+    "create": "Créer",
+    "empty": "Aucun diagramme ArchiMate pour le moment.",
+    "open": "Ouvrir",
+    "delete": "Supprimer",
+    "deleteTitle": "Supprimer ce diagramme ?",
+    "deleteBody": "« {{name}} » sera supprimé. Les fiches qui y sont liées ne sont pas modifiées.",
+    "deleted": "Diagramme supprimé",
+    "createFailed": "Le diagramme n'a pas pu être créé : {{reason}}",
+    "loadFailed": "Les diagrammes n'ont pas pu être chargés.",
+    "updated": "Mis à jour le {{date}}"
+  }
+}

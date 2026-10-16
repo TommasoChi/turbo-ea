@@ -16,6 +16,7 @@ import diagramsEn from "./locales/en/diagrams.json";
 import deliveryEn from "./locales/en/delivery.json";
 import grcEn from "./locales/en/grc.json";
 import notificationsEn from "./locales/en/notifications.json";
+import archimateEn from "./locales/en/archimate.json";
 import validationEn from "./locales/en/validation.json";
 import valuechainEn from "./locales/en/valuechain.json";
 
@@ -33,6 +34,7 @@ import diagramsFr from "./locales/fr/diagrams.json";
 import deliveryFr from "./locales/fr/delivery.json";
 import grcFr from "./locales/fr/grc.json";
 import notificationsFr from "./locales/fr/notifications.json";
+import archimateFr from "./locales/fr/archimate.json";
 import validationFr from "./locales/fr/validation.json";
 import valuechainFr from "./locales/fr/valuechain.json";
 
@@ -50,6 +52,7 @@ import diagramsEs from "./locales/es/diagrams.json";
 import deliveryEs from "./locales/es/delivery.json";
 import grcEs from "./locales/es/grc.json";
 import notificationsEs from "./locales/es/notifications.json";
+import archimateEs from "./locales/es/archimate.json";
 import validationEs from "./locales/es/validation.json";
 import valuechainEs from "./locales/es/valuechain.json";
 
@@ -67,6 +70,7 @@ import diagramsIt from "./locales/it/diagrams.json";
 import deliveryIt from "./locales/it/delivery.json";
 import grcIt from "./locales/it/grc.json";
 import notificationsIt from "./locales/it/notifications.json";
+import archimateIt from "./locales/it/archimate.json";
 import validationIt from "./locales/it/validation.json";
 import valuechainIt from "./locales/it/valuechain.json";
 
@@ -84,6 +88,7 @@ import diagramsPt from "./locales/pt/diagrams.json";
 import deliveryPt from "./locales/pt/delivery.json";
 import grcPt from "./locales/pt/grc.json";
 import notificationsPt from "./locales/pt/notifications.json";
+import archimatePt from "./locales/pt/archimate.json";
 import validationPt from "./locales/pt/validation.json";
 import valuechainPt from "./locales/pt/valuechain.json";
 
@@ -101,6 +106,7 @@ import diagramsZh from "./locales/zh/diagrams.json";
 import deliveryZh from "./locales/zh/delivery.json";
 import grcZh from "./locales/zh/grc.json";
 import notificationsZh from "./locales/zh/notifications.json";
+import archimateZh from "./locales/zh/archimate.json";
 import validationZh from "./locales/zh/validation.json";
 import valuechainZh from "./locales/zh/valuechain.json";
 
@@ -118,6 +124,7 @@ import diagramsDe from "./locales/de/diagrams.json";
 import deliveryDe from "./locales/de/delivery.json";
 import grcDe from "./locales/de/grc.json";
 import notificationsDe from "./locales/de/notifications.json";
+import archimateDe from "./locales/de/archimate.json";
 import validationDe from "./locales/de/validation.json";
 import valuechainDe from "./locales/de/valuechain.json";
 
@@ -135,6 +142,7 @@ import diagramsDa from "./locales/da/diagrams.json";
 import deliveryDa from "./locales/da/delivery.json";
 import grcDa from "./locales/da/grc.json";
 import notificationsDa from "./locales/da/notifications.json";
+import archimateDa from "./locales/da/archimate.json";
 import validationDa from "./locales/da/validation.json";
 import valuechainDa from "./locales/da/valuechain.json";
 
@@ -152,6 +160,7 @@ import diagramsRu from "./locales/ru/diagrams.json";
 import deliveryRu from "./locales/ru/delivery.json";
 import grcRu from "./locales/ru/grc.json";
 import notificationsRu from "./locales/ru/notifications.json";
+import archimateRu from "./locales/ru/archimate.json";
 import validationRu from "./locales/ru/validation.json";
 import valuechainRu from "./locales/ru/valuechain.json";
 
@@ -169,6 +178,7 @@ import diagramsAr from "./locales/ar/diagrams.json";
 import deliveryAr from "./locales/ar/delivery.json";
 import grcAr from "./locales/ar/grc.json";
 import notificationsAr from "./locales/ar/notifications.json";
+import archimateAr from "./locales/ar/archimate.json";
 import validationAr from "./locales/ar/validation.json";
 import valuechainAr from "./locales/ar/valuechain.json";
 
@@ -236,6 +246,7 @@ i18n
         delivery: deliveryEn,
         grc: grcEn,
         notifications: notificationsEn,
+        archimate: archimateEn,
         validation: validationEn,
 
         valuechain: valuechainEn,
@@ -254,6 +265,7 @@ i18n
         delivery: deliveryFr,
         grc: grcFr,
         notifications: notificationsFr,
+        archimate: archimateFr,
         validation: validationFr,
 
         valuechain: valuechainFr,
@@ -272,6 +284,7 @@ i18n
         delivery: deliveryEs,
         grc: grcEs,
         notifications: notificationsEs,
+        archimate: archimateEs,
         validation: validationEs,
 
         valuechain: valuechainEs,
@@ -290,6 +303,7 @@ i18n
         delivery: deliveryIt,
         grc: grcIt,
         notifications: notificationsIt,
+        archimate: archimateIt,
         validation: validationIt,
 
         valuechain: valuechainIt,
@@ -308,6 +322,7 @@ i18n
         delivery: deliveryPt,
         grc: grcPt,
         notifications: notificationsPt,
+        archimate: archimatePt,
         validation: validationPt,
 
         valuechain: valuechainPt,
@@ -326,6 +341,7 @@ i18n
         delivery: deliveryZh,
         grc: grcZh,
         notifications: notificationsZh,
+        archimate: archimateZh,
         validation: validationZh,
 
         valuechain: valuechainZh,
@@ -344,6 +360,7 @@ i18n
         delivery: deliveryDe,
         grc: grcDe,
         notifications: notificationsDe,
+        archimate: archimateDe,
         validation: validationDe,
 
         valuechain: valuechainDe,
@@ -362,6 +379,7 @@ i18n
         delivery: deliveryRu,
         grc: grcRu,
         notifications: notificationsRu,
+        archimate: archimateRu,
         validation: validationRu,
 
         valuechain: valuechainRu,
@@ -380,6 +398,7 @@ i18n
         delivery: deliveryDa,
         grc: grcDa,
         notifications: notificationsDa,
+        archimate: archimateDa,
         validation: validationDa,
 
         valuechain: valuechainDa,
@@ -398,6 +417,7 @@ i18n
         delivery: deliveryAr,
         grc: grcAr,
         notifications: notificationsAr,
+        archimate: archimateAr,
         validation: validationAr,
 
         valuechain: valuechainAr,

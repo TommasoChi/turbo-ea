@@ -117,7 +117,7 @@ export default class ArchimateContextPadProvider {
     if (rel.type === "Association") {
       entries["directed"] = {
         group: "access",
-        title: `${labels.relationships.Association} →`,
+        title: labels.directed,
         className: rel.isDirected ? "active" : undefined,
         html: SYMBOL("arrow_right_alt"),
         action: { click: () => this.modeling.updateProperties(connection, { isDirected: !rel.isDirected }) },

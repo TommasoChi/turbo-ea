@@ -79,11 +79,11 @@ export default class ArchimatePaletteProvider {
     const { elements, tools } = this.bridge.labels;
     const entries: PaletteEntries = {
       "hand-tool": {
-        group: "tools", title: tools?.hand ?? "Hand tool", html: `<div class="entry" draggable="true">${HAND_ICON}</div>`,
+        group: "tools", title: tools.hand, html: `<div class="entry" draggable="true">${HAND_ICON}</div>`,
         action: { click: (event) => this.handTool.activateHand(event as MouseEvent) },
       },
       "lasso-tool": {
-        group: "tools", title: tools?.lasso ?? "Lasso tool", html: `<div class="entry" draggable="true">${LASSO_ICON}</div>`,
+        group: "tools", title: tools.lasso, html: `<div class="entry" draggable="true">${LASSO_ICON}</div>`,
         action: { click: (event) => this.lassoTool.activateSelection(event as MouseEvent) },
       },
     };
