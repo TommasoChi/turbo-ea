@@ -123,6 +123,13 @@ describe("composeTitle", () => {
   });
 });
 
+/** Does the title key resolve to a real string (`ns:key` is looked up in that namespace)? */
+function titleKeyResolves(titleKey: string, navKeys: Record<string, string>): boolean {
+  return titleKey.includes(":")
+    ? i18n.exists(titleKey, { lng: "en", ns: "nav" })
+    : typeof navKeys[titleKey] === "string" && navKeys[titleKey].length > 0;
+}
+
 describe("parity", () => {
   /**
    * Every route declared in `App.tsx` — the authenticated table AND the
@@ -163,13 +170,18 @@ describe("parity", () => {
   it("only names keys the nav namespace (or the namespace they are prefixed with) defines", () => {
     const keys = en as Record<string, string>;
     for (const { path: routePath, titleKey } of ROUTE_TITLES) {
-      const resolved = titleKey.includes(":")
-        ? i18n.t(titleKey, { lng: "en", ns: "nav" })
-        : keys[titleKey];
-      expect(
-        typeof resolved === "string" && resolved.length > 0 && resolved !== titleKey,
-        `${routePath} names unknown nav key "${titleKey}"`,
-      ).toBe(true);
+      expect(titleKeyResolves(titleKey, keys), `${routePath} names unknown title key "${titleKey}"`).toBe(true);
     }
+  });
+
+  // i18n.t() of a missing prefixed key answers with the key minus its prefix, which looks like a
+  // translation: the guard above must use exists(), and must be able to fail.
+  it("rejects a mistyped title key, prefixed or not", () => {
+    const keys = en as Record<string, string>;
+    expect(i18n.exists("archimate:nope.nope", { lng: "en", ns: "nav" })).toBe(false);
+    expect(titleKeyResolves("archimate:sandbox.titel", keys)).toBe(false);
+    expect(titleKeyResolves("archimate:sandbox.title", keys)).toBe(true);
+    expect(titleKeyResolves("pageTitles.crad", keys)).toBe(false);
+    expect(titleKeyResolves("pageTitles.card", keys)).toBe(true);
   });
 });
