@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { useLocation, useNavigate, type NavigateFunction } from "react-router";
 import { ApiError } from "@/api/client";
+import i18n from "@/i18n";
 import { mockApi } from "@/test/apiMock";
 import { MODEL } from "@/test/archimateModel";
 import { renderWithProviders, wrapWithProviders } from "@/test/render";
@@ -397,7 +398,64 @@ describe("unsaved-changes guard", () => {
   });
 });
 
+describe("language switch", () => {
+  afterEach(() => i18n.changeLanguage("en"));
+
+  it("keeps the engine, the unsaved edit and the undo history", async () => {
+    await mount();
+    const first = engine();
+    act(() => first.setName(APP_SHAPE, "Edited"));
+    expect(screen.getByRole("status")).toHaveTextContent("Unsaved changes");
+    await act(async () => {
+      await i18n.changeLanguage("it");
+    });
+    expect(screen.getByRole("status")).not.toHaveTextContent("Unsaved changes"); // translated
+    expect(engine()).toBe(first); // onEngine was not called again
+    expect(first.toModel().elements.find((e) => e.id === "id-app")!.name).toBe("Edited");
+    expect(first.canUndo()).toBe(true);
+    expect(document.querySelectorAll(".djs-container")).toHaveLength(1);
+  });
+});
+
 describe("switching diagram", () => {
+  it("a save still in flight for the old diagram does not freeze the new one", async () => {
+    let release!: () => void;
+    mockApi.on("patch", "/diagrams/d1", () => new Promise((r) => (release = () => r({}))));
+    mockApi.on("get", "/diagrams/d2", doc(UNLINKED, { id: "d2", name: "B" }));
+    mockApi.on("patch", "/diagrams/d2", {});
+    const { user, rerender } = await mount();
+    act(() => engine().setName(APP_SHAPE, "X"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Saving…");
+    handle = null;
+    rerender(wrapWithProviders(tree("d2"), { theme: true }));
+    await waitFor(() => expect(handle).not.toBeNull());
+    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    await act(async () => release()); // the old save finishes late
+    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    vi.useFakeTimers();
+    act(() => engine().setName(APP_SHAPE, "Y"));
+    await advance(3000);
+    expect(mockApi.callsOf("patch", "/diagrams/d2")).toHaveLength(1);
+    expect(readExchange((mockApi.callsOf("patch", "/diagrams/d2")[0].body as { data: { xml: string } }).data.xml)
+      .elements.find((e) => e.id === "id-app")!.name).toBe("Y");
+    expect(mockApi.callsOf("patch", "/diagrams/d1")).toHaveLength(1);
+  });
+
+  it("a late card-name failure of the old diagram shows nothing on the new one", async () => {
+    let fail!: () => void;
+    mockApi.on("get", "/cards?ids=*", () => new Promise((_, rej) => (fail = () => rej(new Error("late")))));
+    mockApi.on("get", "/diagrams/d2", doc(UNLINKED, { id: "d2", name: "B" }));
+    const { rerender } = await mount(doc(MODEL));
+    handle = null;
+    rerender(wrapWithProviders(tree("d2"), { theme: true }));
+    await waitFor(() => expect(handle).not.toBeNull());
+    await act(async () => fail());
+    expect(screen.queryByText("late")).toBeNull();
+  });
+
   it("starts clean: no stale dirty state, error, timer or guard for the new diagram", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     mockApi.fail("patch", "/diagrams/d1", 500, "down");

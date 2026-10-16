@@ -126,6 +126,8 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
     setDirty(false);
+    setSaving(false);
+    savingRef.current = false; // a save still in flight for the old diagram must not block this one
     setSaveError(null);
     setHistory({ undo: false, redo: false });
     setImportError(null);
@@ -196,7 +198,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       // Stays dirty, and the error stays on screen until a save succeeds.
       if (current()) setSaveError(t("archimate:errors.saveFailed", { reason: reason(e) }));
     } finally {
-      savingRef.current = false;
+      if (epoch === epochRef.current) savingRef.current = false;
       if (current()) {
         setSaving(false);
         // A change that landed while saving re-arms the chain.
@@ -225,16 +227,20 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   onEngineRef.current = onEngine;
   const model = load.status === "ready" ? load.model : null;
 
+  // Stable identity: a language switch must never rebuild the engine (that would drop the edits).
+  const reasonRef = useRef(reason);
+  reasonRef.current = reason;
   const resolveNames = useCallback(
     async (m: ArchimateModel) => {
+      const epoch = epochRef.current;
       try {
         rememberCards(await fetchCardsByIds(linkedCardIds(m)));
       } catch (e) {
         // Links still work; only the names in the context pad are missing.
-        setSnack(reason(e));
+        if (!unmountedRef.current) setSnack(reasonRef.current(e));
       }
     },
-    [rememberCards, reason],
+    [rememberCards],
   );
 
   useEffect(() => {
