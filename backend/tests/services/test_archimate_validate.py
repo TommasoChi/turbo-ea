@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.services.archimate.validate import MAX_XML_BYTES, validate_exchange
+from app.services.archimate.validate import (
+    MAX_ECHO,
+    MAX_ISSUES,
+    MAX_XML_BYTES,
+    validate_exchange,
+)
 
 FX = Path(__file__).resolve().parents[1] / "fixtures" / "archimate"
 NS = 'xmlns="http://www.opengroup.org/xsd/archimate/3.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
@@ -148,18 +153,72 @@ def test_element_of_unknown_type_is_reported_once_not_as_dangling():
 def test_missing_xsi_type_and_identifier_do_not_crash():
     xml = _model('<element><name xml:lang="en">x</name></element>', '<relationship source="a"/>')
     assert [c for c, _ in codes(xml)] == [
+        "missing_identifier",
         "unknown_element_type",
+        "missing_identifier",
         "unknown_relationship_type",
         "dangling_source",
         "dangling_target",
     ]
 
 
-def test_deeply_nested_xml_never_raises():
-    deep = _model(views="<x>" * 50000 + "</x>" * 50000)
-    assert all(isinstance(i.code, str) for i in validate_exchange(deep))
+def test_deeply_nested_xml_is_valid_and_never_raises():
+    deep = f'<view identifier="v" xsi:type="Diagram">{"<node>" * 50000}{"</node>" * 50000}</view>'
+    assert validate_exchange(_model(views=deep)) == []
 
 
 def test_external_dtd_reference_is_rejected():
     xml = '<!DOCTYPE m SYSTEM "http://127.0.0.1:9/evil.dtd"><model xmlns="x"/>'
     assert codes(xml) == [("dtd_forbidden", None)]
+
+
+def test_size_cap_is_in_bytes_and_wins_over_everything_else():
+    multibyte = "<a>" + "é" * (MAX_XML_BYTES // 2 + 1) + "</a>"
+    assert len(multibyte) <= MAX_XML_BYTES < len(multibyte.encode("utf-8"))
+    assert codes(multibyte) == [("too_large", None)]
+    assert codes("<!DOCTYPE x>" + "<" * MAX_XML_BYTES) == [("too_large", None)]
+
+
+def test_missing_identifiers_are_issues():
+    el = '<element xsi:type="BusinessActor"/>'
+    assert codes(_model(el)) == [("missing_identifier", "BusinessActor")]
+    base = _el("a", "BusinessActor") + _el("b", "BusinessProcess")
+    rel = '<relationship xsi:type="Assignment" source="a" target="b"/>'
+    assert codes(_model(base, rel)) == [("missing_identifier", "Assignment")]
+
+
+def test_node_without_id_does_not_match_connection_without_endpoints():
+    base = _el("a", "BusinessActor") + _el("p", "BusinessProcess")
+    view = (
+        '<view identifier="v" xsi:type="Diagram">'
+        '<node xsi:type="Element" elementRef="a"/><node xsi:type="Element" elementRef="p"/>'
+        '<connection identifier="c" xsi:type="Relationship" relationshipRef="r"/></view>'
+    )
+    xml = _model(base, _rel("r", "Assignment", "a", "p"), view)
+    assert codes(xml) == [("connection_endpoint_mismatch", "c")]
+
+
+def test_output_is_capped():
+    bad = "".join(_rel(f"r{i}", "Wibble", "a", "a") for i in range(5000))
+    issues = validate_exchange(_model(_el("a", "BusinessActor"), bad))
+    assert len(issues) == MAX_ISSUES == 100
+
+
+def test_echoed_values_are_truncated():
+    [issue] = validate_exchange(_model(_el("a", "B" * 100_000)))
+    assert issue.code == "unknown_element_type" and len(issue.message) < 200
+    [issue] = validate_exchange(_model(_el("i" * 100_000, "Banana")))
+    assert issue.ref == "i" * MAX_ECHO
+
+
+def test_identifier_is_unique_across_the_whole_document():
+    node = '<node identifier="n" xsi:type="Element" elementRef="a"/>'
+    view = f'<view identifier="v" xsi:type="Diagram">{node}{node}</view>'
+    assert codes(_model(_el("a", "BusinessActor"), "", view)) == [("duplicate_identifier", "n")]
+    clash = '<view identifier="a" xsi:type="Diagram"/>'
+    assert codes(_model(_el("a", "BusinessActor"), "", clash)) == [("duplicate_identifier", "a")]
+
+
+def test_relationship_cannot_connect_to_itself():
+    xml = _model(_el("a", "BusinessActor"), _rel("r", "Association", "a", "r"))
+    assert codes(xml) == [("relationship_not_allowed", "r")]
