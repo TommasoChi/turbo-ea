@@ -5,6 +5,22 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.160.0] - 2026-10-16
+
+### Added
+
+- **ArchiMate module switch (`archimateEnabled`, off by default).** Admin → Settings has a new **ArchiMate diagrams** card with the on/off switch; the public `GET /settings/archimate-enabled` endpoint reports it. While the module is off, the ArchiMate pages show the standard "module disabled" placeholder.
+- **Turbo EA to ArchiMate mapping.** Migration 158 adds `card_types.archimate_type`, `relation_types.archimate_type` / `archimate_access` / `archimate_reversed` and `diagrams.kind` (`drawio` | `archimate`, default `drawio`), and fills in a default mapping for the built-in card and relation types. A value an admin has already set is never overwritten, a subtype that carries its own ArchiMate type keeps it, and the migration is idempotent and reversible. The metamodel API exposes and validates the mapping (element and relationship names are the Open Group Exchange 3.1 names, checked against the ArchiMate relationship table); the diagrams API accepts and filters by `kind` (default: DrawIO only), and ArchiMate diagrams stay out of group counts and public routes.
+- **ArchiMate editor, in an admin sandbox.** A modeler for ArchiMate 3.2 diagrams (layered palette, relationship context pad driven by the relationship table, nesting rules, label editing, keyboard shortcuts, copy and paste, explicit links to cards, Exchange XML import and export, "Check the model"). It lives at `/admin/archimate` (requires `admin.settings` and the module switched on), is loaded as a separate lazy chunk and is translated into ten languages. Dropping an element never creates a card and removing one never deletes a card, as in the DrawIO editor.
+- **Server-side validation: `POST /archimate/validate`.** Validates ArchiMate Exchange XML (DTD and entity declarations refused, bounded output, unique identifiers, known element, relationship and access types, endpoints that exist, relationships the table allows) and is applied to every write of an ArchiMate diagram.
+- **MCP tools** `get_archimate_mapping`, `create_archimate_diagram` and `update_archimate_diagram`, plus a `kind` filter on `list_diagrams` (`drawio` by default, `archimate` or `all`). The write tools default to a dry run and validate the XML on the server first.
+- **Documentation in ten languages.** A new guide page *ArchiMate Diagrams*, settings, metamodel and glossary entries, and the MCP tool reference.
+
+### Notes
+
+- The feature is **off by default**, the editor is an **administrator-only sandbox**, and ArchiMate diagrams are **not in the menu yet**: the Diagrams page and a card's Diagrams tab never list them, and they cannot be published or embedded. The admin mapping screen, viewpoint templates and the Diagrams menu entry are planned for the next releases.
+- The module switch is enforced by the interface; the backend routes and MCP tools do not check it.
+
 ## [2.159.0] - 2026-10-15
 
 ### Added
