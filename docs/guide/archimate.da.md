@@ -13,9 +13,9 @@
 
 ## Åbn sandkassen
 
-Mens modulet er slået til, viser kortet knappen **Åbn sandkassen**. Den fører til `/admin/archimate`, listen over dine ArchiMate-diagrammer, hvor du kan oprette, åbne og slette diagrammer. Kun administratorer kan åbne den.
+Mens modulet er slået til, viser kortet knappen **Åbn sandkassen**. Den fører til `/admin/archimate`, listen over dine ArchiMate-diagrammer, hvor du kan oprette, åbne og slette diagrammer. For at åbne den kræves tilladelsen `admin.settings` (som rollen Admin har som standard) og et slået-til modul.
 
-<!-- Planned screenshots (added with the screenshot capture): 102_archimate_sandbox, 103_archimate_editor -->
+<!-- Planned screenshot (added with the screenshot capture): 102_archimate_sandbox -->
 
 ## Dit første diagram
 

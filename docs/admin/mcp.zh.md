@@ -285,7 +285,7 @@ MCP 服务器提供 **55 个工具**，分为两组：**34 个读取工具** 用
 
 ### ArchiMate 图
 
-ArchiMate 图有自己的工具，与自由绘制（DrawIO）图的工具分开。`create_diagram` 和 `update_diagram` **仅适用于 DrawIO**：服务器会在这两个工具中拒绝 ArchiMate 图，而 `create_archimate_diagram` / `update_archimate_diagram` 会拒绝 DrawIO 图。`list_diagrams` 和 `get_diagram` 两种图都支持，带有 `kind` 筛选和字段（`drawio`、`archimate`）。
+ArchiMate 图有自己的工具，与自由绘制（DrawIO）图的工具分开。`create_diagram` 和 `update_diagram` **仅适用于 DrawIO**：服务器会在这两个工具中拒绝 ArchiMate 图，而 `update_archimate_diagram` 会拒绝 DrawIO 图。`list_diagrams` 和 `get_diagram` 两种图都支持，带有 `kind` 筛选和字段（`drawio`、`archimate`）。
 
 先调用 `get_archimate_mapping`，让模型知道每种卡片类型对应哪个 ArchiMate 元素，再发送 Open Group Exchange Format XML。演练会在服务器上校验该 XML，并返回 `valid` 和 `issues`，不保存任何内容。提示示例：
 

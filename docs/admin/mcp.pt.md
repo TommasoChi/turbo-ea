@@ -285,7 +285,7 @@ O servidor expõe 21 ferramentas de escrita, cada uma anotada como **aditiva** (
 
 ### Diagramas ArchiMate
 
-Os diagramas ArchiMate têm ferramentas próprias, separadas das dos diagramas de desenho livre (DrawIO). `create_diagram` e `update_diagram` são **apenas para DrawIO**: o servidor recusa aí um diagrama ArchiMate, e `create_archimate_diagram` / `update_archimate_diagram` recusam um diagrama DrawIO. `list_diagrams` e `get_diagram` servem ambos, com o filtro e o campo `kind` (`drawio`, `archimate`).
+Os diagramas ArchiMate têm ferramentas próprias, separadas das dos diagramas de desenho livre (DrawIO). `create_diagram` e `update_diagram` são **apenas para DrawIO**: o servidor recusa aí um diagrama ArchiMate, e `update_archimate_diagram` recusa um diagrama DrawIO. `list_diagrams` e `get_diagram` servem ambos, com o filtro e o campo `kind` (`drawio`, `archimate`).
 
 Chame primeiro `get_archimate_mapping` para que o modelo saiba a que elemento ArchiMate corresponde cada tipo de card, e depois envie XML no formato Exchange da Open Group. A execução simulada valida-o no servidor e devolve `valid` e `issues` sem guardar nada. Exemplo de prompt:
 

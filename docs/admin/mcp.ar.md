@@ -285,7 +285,7 @@ pip install ./mcp-server
 
 ### مخططات ArchiMate
 
-لمخططات ArchiMate أدواتها الخاصة، المنفصلة عن أدوات المخططات الحرّة (DrawIO). الأداتان `create_diagram` و`update_diagram` **خاصتان بـ DrawIO فقط**: يرفض الخادم فيهما مخطط ArchiMate، بينما ترفض `create_archimate_diagram` / `update_archimate_diagram` مخطط DrawIO. أما `list_diagrams` و`get_diagram` فتخدمان النوعين معًا، عبر عامل التصفية والحقل `kind` (`drawio` و`archimate`).
+لمخططات ArchiMate أدواتها الخاصة، المنفصلة عن أدوات المخططات الحرّة (DrawIO). الأداتان `create_diagram` و`update_diagram` **خاصتان بـ DrawIO فقط**: يرفض الخادم فيهما مخطط ArchiMate، بينما ترفض `update_archimate_diagram` مخطط DrawIO. أما `list_diagrams` و`get_diagram` فتخدمان النوعين معًا، عبر عامل التصفية والحقل `kind` (`drawio` و`archimate`).
 
 استدعِ `get_archimate_mapping` أولًا ليعرف النموذج إلى أي عنصر ArchiMate يُعيَّن كل نوع بطاقة، ثم أرسل XML بصيغة Exchange لدى Open Group. يتحقق التشغيل التجريبي منه على الخادم ويعيد `valid` و`issues` دون حفظ أي شيء. مثال على الطلب:
 

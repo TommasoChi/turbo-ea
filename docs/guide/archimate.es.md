@@ -13,9 +13,9 @@ El editor **ArchiMate** dibuja diagramas [ArchiMate 3](https://pubs.opengroup.or
 
 ## Abrir el entorno de pruebas
 
-Mientras el módulo está activado, la tarjeta muestra el botón **Abrir el entorno de pruebas**. Lleva a `/admin/archimate`, la lista de sus diagramas ArchiMate, donde puede crear, abrir y eliminar diagramas. Solo los administradores pueden abrirlo.
+Mientras el módulo está activado, la tarjeta muestra el botón **Abrir el entorno de pruebas**. Lleva a `/admin/archimate`, la lista de sus diagramas ArchiMate, donde puede crear, abrir y eliminar diagramas. Para abrirlo hace falta el permiso `admin.settings` (que el rol Admin tiene de forma predeterminada) y el módulo activado.
 
-<!-- Planned screenshots (added with the screenshot capture): 102_archimate_sandbox, 103_archimate_editor -->
+<!-- Planned screenshot (added with the screenshot capture): 102_archimate_sandbox -->
 
 ## Su primer diagrama
 

@@ -13,9 +13,9 @@ Der **ArchiMate**-Editor zeichnet [ArchiMate-3](https://pubs.opengroup.org/archi
 
 ## Die Sandbox öffnen
 
-Solange das Modul aktiv ist, zeigt die Kachel die Schaltfläche **Sandbox öffnen**. Sie führt zu `/admin/archimate`, der Liste Ihrer ArchiMate-Diagramme, in der Sie Diagramme erstellen, öffnen und löschen können. Nur Administratoren können sie öffnen.
+Solange das Modul aktiv ist, zeigt die Kachel die Schaltfläche **Sandbox öffnen**. Sie führt zu `/admin/archimate`, der Liste Ihrer ArchiMate-Diagramme, in der Sie Diagramme erstellen, öffnen und löschen können. Zum Öffnen sind die Berechtigung `admin.settings` (standardmäßig bei der Rolle Admin) und das aktivierte Modul nötig.
 
-<!-- Planned screenshots (added with the screenshot capture): 102_archimate_sandbox, 103_archimate_editor -->
+<!-- Planned screenshot (added with the screenshot capture): 102_archimate_sandbox -->
 
 ## Ihr erstes Diagramm
 

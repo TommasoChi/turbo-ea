@@ -285,7 +285,7 @@ The server exposes 21 write tools, each annotated as **additive** (creates or ex
 
 ### ArchiMate diagrams
 
-ArchiMate diagrams have their own tools, separate from the free-draw (DrawIO) ones. `create_diagram` and `update_diagram` are **DrawIO-only**: the server refuses an ArchiMate diagram there, and `create_archimate_diagram` / `update_archimate_diagram` refuse a DrawIO one. `list_diagrams` and `get_diagram` serve both, with the `kind` filter and field (`drawio`, `archimate`).
+ArchiMate diagrams have their own tools, separate from the free-draw (DrawIO) ones. `create_diagram` and `update_diagram` are **DrawIO-only**: the server refuses an ArchiMate diagram there, and `update_archimate_diagram` refuses a DrawIO one. `list_diagrams` and `get_diagram` serve both, with the `kind` filter and field (`drawio`, `archimate`).
 
 Call `get_archimate_mapping` first so the model knows which ArchiMate element a card type maps to, then send Open Group Exchange Format XML. The dry run validates it on the server and returns `valid` and `issues` without saving anything. Example prompt:
 

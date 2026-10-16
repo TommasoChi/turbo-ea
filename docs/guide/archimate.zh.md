@@ -13,9 +13,9 @@
 
 ## 打开沙盒
 
-模块开启期间，卡片上会显示**打开沙盒**按钮。它通向 `/admin/archimate`，即您的 ArchiMate 图列表，可在其中创建、打开和删除图。只有管理员可以打开。
+模块开启期间，卡片上会显示**打开沙盒**按钮。它通向 `/admin/archimate`，即您的 ArchiMate 图列表，可在其中创建、打开和删除图。打开它需要 `admin.settings` 权限（Admin 角色默认拥有）并且模块已开启。
 
-<!-- Planned screenshots (added with the screenshot capture): 102_archimate_sandbox, 103_archimate_editor -->
+<!-- Planned screenshot (added with the screenshot capture): 102_archimate_sandbox -->
 
 ## 您的第一张图
 

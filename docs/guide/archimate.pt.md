@@ -13,9 +13,9 @@ O editor **ArchiMate** desenha diagramas [ArchiMate 3](https://pubs.opengroup.or
 
 ## Abrir a sandbox
 
-Enquanto o módulo estiver ativado, o cartão mostra o botão **Abrir a sandbox**. Leva a `/admin/archimate`, a lista dos seus diagramas ArchiMate, onde pode criar, abrir e eliminar diagramas. Só os administradores a podem abrir.
+Enquanto o módulo estiver ativado, o cartão mostra o botão **Abrir a sandbox**. Leva a `/admin/archimate`, a lista dos seus diagramas ArchiMate, onde pode criar, abrir e eliminar diagramas. Para a abrir é preciso a permissão `admin.settings` (que a função Admin tem por predefinição) e o módulo ativado.
 
-<!-- Planned screenshots (added with the screenshot capture): 102_archimate_sandbox, 103_archimate_editor -->
+<!-- Planned screenshot (added with the screenshot capture): 102_archimate_sandbox -->
 
 ## O seu primeiro diagrama
 

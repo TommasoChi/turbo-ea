@@ -188,8 +188,10 @@ Siehe den [GRC-Leitfaden](../guide/grc.md) für die vollständige Funktionsüber
 
 Die Karte **ArchiMate-Diagramme** schaltet das [ArchiMate](../guide/archimate.md)-Modul ein oder aus. Es ist **standardmäßig ausgeschaltet**.
 
-- Wenn es aktiviert ist, stehen die nur für Administratoren zugängliche Sandbox unter `/admin/archimate` und der ArchiMate-Editor zur Verfügung, und die Karte zeigt eine Schaltfläche **Sandbox öffnen**, die direkt zur Liste der ArchiMate-Diagramme führt.
+- Wenn es aktiviert ist, stehen die Sandbox unter `/admin/archimate` und der ArchiMate-Editor zur Verfügung, und die Karte zeigt eine Schaltfläche **Sandbox öffnen**, die direkt zur Liste der ArchiMate-Diagramme führt.
 - Wenn es deaktiviert ist, sind beide Seiten nicht erreichbar und zeigen jedem, der einen direkten Link verwendet, den Standard-Platzhalter „Modul deaktiviert“. Bereits gespeicherte Diagramme bleiben erhalten und erscheinen unverändert wieder, wenn das Modul erneut aktiviert wird.
+
+Zum Öffnen der Sandbox sind die Berechtigung `admin.settings` (standardmäßig bei der Rolle Admin) und das aktivierte Modul nötig. Der Schalter blendet nur die Benutzeroberfläche aus: Die REST-API und die MCP-Werkzeuge (`get_archimate_mapping`, `create_archimate_diagram`, `update_archimate_diagram`) bleiben auch bei deaktiviertem Modul aufrufbar.
 
 Wie Sie Diagramme zeichnen und austauschen, steht in der [ArchiMate-Anleitung](../guide/archimate.md).
 

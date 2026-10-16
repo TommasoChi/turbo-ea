@@ -39,7 +39,9 @@ waits up to two minutes for the answer, so a small local model on CPU
 placeholder until the module is switched on. The script calls
 `PATCH /settings/archimate-enabled` for you whenever a requested page lives under
 `/admin/archimate`, so it **changes the instance's settings** and leaves the module
-on afterwards. There is no editor shot yet: the harness has no step that creates an
+on afterwards. On a shared instance, restore the ArchiMate module setting yourself
+after capturing (Admin → Settings, or `PATCH /settings/archimate-enabled`); the
+script never switches it back off. There is no editor shot yet: the harness has no step that creates an
 ArchiMate diagram with elements.
 
 ### The diagram shots need DrawIO

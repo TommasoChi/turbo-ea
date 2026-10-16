@@ -285,7 +285,7 @@ Der Server stellt 21 Schreib-Werkzeuge bereit, jedes annotiert als **additiv** (
 
 ### ArchiMate-Diagramme
 
-ArchiMate-Diagramme haben eigene Werkzeuge, getrennt von denen für frei gestaltete (DrawIO-)Diagramme. `create_diagram` und `update_diagram` gelten **nur für DrawIO**: Der Server lehnt dort ein ArchiMate-Diagramm ab, und `create_archimate_diagram` / `update_archimate_diagram` lehnen ein DrawIO-Diagramm ab. `list_diagrams` und `get_diagram` bedienen beide, mit dem Filter und Feld `kind` (`drawio`, `archimate`).
+ArchiMate-Diagramme haben eigene Werkzeuge, getrennt von denen für frei gestaltete (DrawIO-)Diagramme. `create_diagram` und `update_diagram` gelten **nur für DrawIO**: Der Server lehnt dort ein ArchiMate-Diagramm ab, und `update_archimate_diagram` lehnt ein DrawIO-Diagramm ab. `list_diagrams` und `get_diagram` bedienen beide, mit dem Filter und Feld `kind` (`drawio`, `archimate`).
 
 Rufen Sie zuerst `get_archimate_mapping` auf, damit das Modell weiß, auf welches ArchiMate-Element ein Kartentyp abgebildet wird, und senden Sie dann XML im Open-Group-Exchange-Format. Der Trockenlauf validiert es auf dem Server und liefert `valid` und `issues`, ohne etwas zu speichern. Beispiel-Prompt:
 

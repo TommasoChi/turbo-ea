@@ -285,7 +285,7 @@ Serveren eksponerer 21 skriveværktøjer, hver annoteret som **additiv** (oprett
 
 ### ArchiMate-diagrammer
 
-ArchiMate-diagrammer har deres egne værktøjer, adskilt fra værktøjerne til fritformatede (DrawIO) diagrammer. `create_diagram` og `update_diagram` er **kun til DrawIO**: serveren afviser et ArchiMate-diagram dér, og `create_archimate_diagram` / `update_archimate_diagram` afviser et DrawIO-diagram. `list_diagrams` og `get_diagram` håndterer begge dele med filteret og feltet `kind` (`drawio`, `archimate`).
+ArchiMate-diagrammer har deres egne værktøjer, adskilt fra værktøjerne til fritformatede (DrawIO) diagrammer. `create_diagram` og `update_diagram` er **kun til DrawIO**: serveren afviser et ArchiMate-diagram dér, og `update_archimate_diagram` afviser et DrawIO-diagram. `list_diagrams` og `get_diagram` håndterer begge dele med filteret og feltet `kind` (`drawio`, `archimate`).
 
 Kald først `get_archimate_mapping`, så modellen ved, hvilket ArchiMate-element hver korttype svarer til, og send derefter XML i Open Groups Exchange-format. Dry run validerer den på serveren og returnerer `valid` og `issues`, uden at noget gemmes. Eksempel på prompt:
 

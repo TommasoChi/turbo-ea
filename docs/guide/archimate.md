@@ -13,9 +13,9 @@ The **ArchiMate** editor draws [ArchiMate 3](https://pubs.opengroup.org/architec
 
 ## Open the sandbox
 
-While the module is on, the card shows an **Open the sandbox** button. It leads to `/admin/archimate`, the list of your ArchiMate diagrams, where you can create, open and delete diagrams. Only administrators can open it.
+While the module is on, the card shows an **Open the sandbox** button. It leads to `/admin/archimate`, the list of your ArchiMate diagrams, where you can create, open and delete diagrams. Opening it requires the `admin.settings` permission (held by the Admin role by default) and the module switched on.
 
-<!-- Planned screenshots (added with the screenshot capture): 102_archimate_sandbox, 103_archimate_editor -->
+<!-- Planned screenshot (added with the screenshot capture): 102_archimate_sandbox -->
 
 ## Your first diagram
 

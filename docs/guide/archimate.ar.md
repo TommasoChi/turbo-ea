@@ -13,9 +13,9 @@
 
 ## فتح بيئة الاختبار
 
-ما دامت الوحدة قيد التشغيل، تعرض البطاقة زر **افتح بيئة الاختبار**. وهو يؤدي إلى `/admin/archimate`، قائمة مخططات ArchiMate الخاصة بك، حيث يمكنك إنشاء المخططات وفتحها وحذفها. لا يستطيع فتحها إلا المسؤولون.
+ما دامت الوحدة قيد التشغيل، تعرض البطاقة زر **افتح بيئة الاختبار**. وهو يؤدي إلى `/admin/archimate`، قائمة مخططات ArchiMate الخاصة بك، حيث يمكنك إنشاء المخططات وفتحها وحذفها. يتطلب فتحها صلاحية `admin.settings` (يملكها دور Admin افتراضيًا) وتشغيل الوحدة.
 
-<!-- Planned screenshots (added with the screenshot capture): 102_archimate_sandbox, 103_archimate_editor -->
+<!-- Planned screenshot (added with the screenshot capture): 102_archimate_sandbox -->
 
 ## مخططك الأول
 
