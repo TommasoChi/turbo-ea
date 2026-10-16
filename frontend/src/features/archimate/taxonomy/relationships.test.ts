@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describeSourceScan } from "@/test/sourceScan";
 import { ELEMENT_INFO, ELEMENT_TYPES } from "./elements";
 import {
   ACCESS_TYPES, RELATIONSHIP_TYPES, allowedRelationships, isRelationshipAllowed,
@@ -89,7 +90,7 @@ describe("ArchiMate relationship taxonomy", () => {
 const BACKEND_JSON = resolve(
   __dirname, "../../../../../backend/app/services/archimate/relation_table.json",
 );
-describe("relation table drift guard", () => {
+describeSourceScan("relation table drift guard", () => {
   it.skipIf(!existsSync(BACKEND_JSON))("backend relation_table.json equals RELATION_TABLE", () => {
     const backend = JSON.parse(readFileSync(BACKEND_JSON, "utf-8")).table;
     expect(backend).toEqual(RELATION_TABLE);

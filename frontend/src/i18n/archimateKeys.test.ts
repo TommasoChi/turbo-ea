@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describeSourceScan } from "@/test/sourceScan";
 
 import { EXCHANGE_ERROR_CODES } from "@/features/archimate/exchange/readExchange";
 
@@ -41,7 +42,7 @@ const SERVER_CODES = [
   "dangling_element_ref", "dangling_relationship_ref", "connection_endpoint_mismatch",
 ];
 
-describe("English archimate namespace", () => {
+describeSourceScan("English archimate namespace", () => {
   it("has only non-empty string leaves", () => {
     expect(Object.keys(enFlat).length).toBeGreaterThan(100);
     for (const [k, v] of Object.entries(enFlat)) expect(v, k).not.toBe("");
@@ -67,7 +68,7 @@ describe("English archimate namespace", () => {
   });
 });
 
-describe.each(LOCALES.filter((l) => l !== "en"))("archimate/%s", (locale) => {
+describeSourceScan.each(LOCALES.filter((l) => l !== "en"))("archimate/%s", (locale) => {
   const flat = flatten(load(locale));
   const base = (k: string) => k.replace(PLURAL, "");
   const enBases = new Set(Object.keys(enFlat).map(base));

@@ -144,13 +144,16 @@ describe("canAccessPath", () => {
   });
 
   it("keeps the ArchiMate sandbox out of the navigation (it is opened from Settings)", () => {
-    const paths = [...NAV_ITEM_DEFS, ...ADMIN_ITEM_DEFS].flatMap((def) => [
-      def.path,
-      ...(def.children ?? []).map((c) => c.path),
-    ]);
-    expect(paths.filter((p) => p?.includes("archimate"))).toEqual([]);
-    expect(paths).toContain("/admin/settings"); // the list really was read
-    // The menu is built from those defs; nothing in AppLayout links to the sandbox either.
+    const entries = [...NAV_ITEM_DEFS, ...ADMIN_ITEM_DEFS].flatMap((def) => [def, ...(def.children ?? [])]);
+    const named = entries.filter((e) =>
+      [e.labelKey, e.icon, "path" in e ? e.path : undefined].some((v) => v?.toLowerCase().includes("archimate")),
+    );
+    expect(named).toEqual([]);
+    expect(entries.map((e) => ("path" in e ? e.path : undefined))).toContain("/admin/settings"); // the list really was read
+  });
+
+  // The menu is built from those defs; nothing in AppLayout links to the sandbox either.
+  itSourceScan("does not mention the ArchiMate sandbox in AppLayout", () => {
     const layout = fs.readFileSync(path.resolve(__dirname, "../layouts/AppLayout.tsx"), "utf-8");
     expect(layout).not.toMatch(/archimate/i);
   });

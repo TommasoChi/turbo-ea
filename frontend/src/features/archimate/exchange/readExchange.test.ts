@@ -2,6 +2,7 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { MODEL } from "@/test/archimateModel";
+import { describeSourceScan } from "@/test/sourceScan";
 import { EXCHANGE_NS } from "./exchangeModel";
 import { writeExchange } from "./writeExchange";
 import {
@@ -381,7 +382,7 @@ describe("requireView", () => {
 
 // Keeps this reader and backend/app/services/archimate/validate.py from drifting: what the server's
 // fixtures call valid must be readable here. Skipped on a shallow checkout without the backend.
-describe("server parity", () => {
+describeSourceScan("server parity", () => {
   const FIXTURES = resolve(__dirname, "../../../../../backend/tests/fixtures/archimate");
   const VALID_MODEL = resolve(FIXTURES, "valid_model.xml");
   const valid = existsSync(FIXTURES) ? readdirSync(FIXTURES).filter((f) => /^valid_.*\.xml$/.test(f)) : [];
