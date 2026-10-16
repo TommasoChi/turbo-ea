@@ -1,0 +1,50 @@
+/**
+ * Theme for the diagram-js chrome around the ArchiMate canvas (palette, context pad, canvas, selection).
+ *
+ * diagram-js 15 builds its stylesheet on CSS custom properties, which `diagram-js.css` declares on
+ * `.bio-theme-parent` / `.djs-parent`; redefining them under the editor's own wrapper (more specific)
+ * re-themes light AND dark from `theme.palette`. The palette and context-pad entries are our own
+ * `html` strings (`.archimate-palette-entry`, `.archimate-cp-entry`), so they are styled directly.
+ * Shapes are NOT styled here: tiny-svg writes inline styles on them (ArchimateRenderer owns that, and
+ * keeps the text on ARCHIMATE_TEXT_COLOR).
+ */
+import type { SxProps, Theme } from "@mui/material/styles";
+
+export function archimateCanvasSx(theme: Theme): SxProps<Theme> {
+  const { palette } = theme;
+  const tokens = {
+    "--canvas-fill-color": palette.background.default,
+    "--palette-background-color": palette.background.paper,
+    "--palette-border-color": palette.divider,
+    "--palette-separator-color": palette.divider,
+    "--palette-entry-color": palette.text.primary,
+    "--palette-entry-hover-color": palette.primary.main,
+    "--palette-entry-selected-color": palette.primary.main,
+    "--palette-toggle-hover-background-color": palette.action.hover,
+    "--context-pad-entry-background-color": palette.background.paper,
+    "--context-pad-entry-hover-background-color": palette.action.hover,
+    "--accent-color": palette.primary.main,
+    "--element-selected-outline-stroke-color": palette.primary.main,
+    "--element-selected-outline-secondary-stroke-color": palette.primary.light,
+    "--bendpoint-fill-color": palette.primary.main,
+    "--bendpoint-stroke-color": palette.background.default,
+  };
+  return {
+    "& .bjs-powered-by": { display: "none" },
+    "& .bio-theme-parent, & .djs-parent": tokens,
+    "& .djs-container, & .djs-container svg": { backgroundColor: palette.background.default },
+    "& .djs-palette .entry, & .archimate-palette-entry": {
+      color: palette.text.primary,
+      "&:hover": { color: palette.primary.main, backgroundColor: palette.action.hover },
+      "&:focus-visible": { outline: `2px solid ${palette.primary.main}`, outlineOffset: -2 },
+    },
+    "& .djs-context-pad .entry, & .archimate-cp-entry": {
+      color: palette.text.primary,
+      backgroundColor: palette.background.paper,
+      border: `1px solid ${palette.divider}`,
+      "&:hover": { backgroundColor: palette.action.hover },
+    },
+    "& .archimate-cp-entry .material-symbols-outlined": { fontSize: 18, lineHeight: "inherit" },
+    "& .djs-element.selected .djs-outline, & .djs-selection-outline": { stroke: palette.primary.main },
+  };
+}
