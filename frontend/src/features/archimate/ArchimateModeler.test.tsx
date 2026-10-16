@@ -1,17 +1,18 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { act, screen, waitFor, within } from "@testing-library/react";
+import { useLocation, useNavigate, type NavigateFunction } from "react-router";
 import { ApiError } from "@/api/client";
 import { mockApi } from "@/test/apiMock";
 import { MODEL } from "@/test/archimateModel";
-import { renderWithProviders } from "@/test/render";
+import { renderWithProviders, wrapWithProviders } from "@/test/render";
 import { itSourceScan } from "@/test/sourceScan";
 import { installSvgStubs } from "@/test/svgStubs";
 import type { CardType } from "@/types";
 import ArchimateModeler from "./ArchimateModeler";
 import { downloadText } from "./download";
 import type { ArchimateEngine } from "./engine/ArchimateEngine";
-import { getCardId, type ArchimateModel } from "./exchange/exchangeModel";
+import { ARCHIMATE_FORMAT, getCardId, type ArchimateModel } from "./exchange/exchangeModel";
 import { readExchange } from "./exchange/readExchange";
 import { writeExchange } from "./exchange/writeExchange";
 
@@ -48,7 +49,6 @@ beforeAll(() => {
   }
 });
 
-const FORMAT = "archimate-exchange-3.1";
 const UNLINKED: ArchimateModel = structuredClone(MODEL);
 UNLINKED.elements[0].properties = [];
 UNLINKED.propertyDefinitions = [];
@@ -58,7 +58,7 @@ const doc = (model: ArchimateModel | string = UNLINKED, over: Record<string, unk
   id: "d1",
   kind: "archimate",
   name: "A",
-  data: { format: FORMAT, xml: typeof model === "string" ? model : writeExchange(model) },
+  data: { format: ARCHIMATE_FORMAT, xml: typeof model === "string" ? model : writeExchange(model) },
   card_ids: [],
   ...over,
 });
@@ -68,11 +68,18 @@ let handle: Handle | null = null;
 const engine = () => handle!.engine;
 const services = <T,>(name: string) => (engine() as unknown as { diagram: { get(n: string): T } }).diagram.get(name);
 
-async function mount(d: unknown = doc(), props: Partial<React.ComponentProps<typeof ArchimateModeler>> = {}) {
-  mockApi.on("get", "/diagrams/d1", d);
-  const view = renderWithProviders(
+/** Exposes the router (navigate + current path) to the tests. */
+let nav: { navigate: NavigateFunction; path: string };
+function NavProbe() {
+  nav = { navigate: useNavigate(), path: useLocation().pathname };
+  return null;
+}
+
+const tree = (diagramId = "d1", props: Partial<React.ComponentProps<typeof ArchimateModeler>> = {}) => (
+  <>
+    <NavProbe />
     <ArchimateModeler
-      diagramId="d1"
+      diagramId={diagramId}
       onEngine={(e) => {
         handle = {
           engine: e,
@@ -80,9 +87,13 @@ async function mount(d: unknown = doc(), props: Partial<React.ComponentProps<typ
         };
       }}
       {...props}
-    />,
-    { theme: true },
-  );
+    />
+  </>
+);
+
+async function mount(d: unknown = doc(), props: Partial<React.ComponentProps<typeof ArchimateModeler>> = {}) {
+  mockApi.on("get", "/diagrams/d1", d);
+  const view = renderWithProviders(tree("d1", props), { theme: true });
   await waitFor(() => expect(handle).not.toBeNull());
   return view;
 }
@@ -162,6 +173,14 @@ describe("loading", () => {
   });
 });
 
+describe("card names", () => {
+  it("tells the user when the linked cards' names could not be loaded", async () => {
+    mockApi.fail("get", "/cards?ids=*", 500, "names down");
+    await mount(doc(MODEL));
+    expect(await screen.findByText("names down")).toBeInTheDocument();
+  });
+});
+
 describe("autosave", () => {
   it("saves 3 s after a change with exactly the documented body, then shows Saved (API round trip)", async () => {
     await mount();
@@ -174,7 +193,7 @@ describe("autosave", () => {
     await advance(1);
     expect(mockApi.callsOf("patch")).toHaveLength(1);
     expect(Object.keys(lastPatchBody()).sort()).toEqual(["card_ids", "data"]);
-    expect(lastPatchBody().data.format).toBe(FORMAT);
+    expect(lastPatchBody().data.format).toBe(ARCHIMATE_FORMAT);
     expect(Object.keys(lastPatchBody().data)).toEqual(["format", "xml"]);
     const saved = readExchange(lastPatchBody().data.xml);
     expect(getCardId(saved.elements.find((e) => e.id === "id-app")!)).toBe("c1");
@@ -315,7 +334,8 @@ describe("beforeunload", () => {
 });
 
 describe("unmount", () => {
-  it("destroys the engine and cancels the pending autosave", async () => {
+  it("destroys the engine and cancels the pending autosave, without asking to leave", async () => {
+    const confirm = vi.spyOn(window, "confirm");
     const view = await mount();
     const destroy = vi.spyOn(engine(), "destroy");
     vi.useFakeTimers();
@@ -324,6 +344,84 @@ describe("unmount", () => {
     expect(destroy).toHaveBeenCalledTimes(1);
     await advance(10_000);
     expect(mockApi.callsOf("patch")).toHaveLength(0);
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+});
+
+describe("unsaved-changes guard", () => {
+  const CONFIRM = "You have unsaved changes. Leave without saving?";
+  afterEach(() => vi.restoreAllMocks());
+
+  it("asks before an in-app navigation while dirty, and declining keeps the page", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await mount();
+    act(() => engine().setName(APP_SHAPE, "X"));
+    act(() => nav.navigate("/elsewhere"));
+    expect(confirm).toHaveBeenCalledWith(CONFIRM);
+    expect(nav.path).toBe("/");
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it("lets the navigation through once the user accepts", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await mount();
+    act(() => engine().setName(APP_SHAPE, "X"));
+    act(() => nav.navigate("/elsewhere"));
+    expect(nav.path).toBe("/elsewhere");
+  });
+
+  it("does not ask while clean, including after a successful save", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { user } = await mount();
+    act(() => nav.navigate("/a"));
+    expect(nav.path).toBe("/a");
+    act(() => engine().setName(APP_SHAPE, "X"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved"));
+    act(() => nav.navigate("/b"));
+    expect(nav.path).toBe("/b");
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("is still active while a failed-save alert is showing", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    mockApi.fail("patch", "/diagrams/d1", 500, "down");
+    const { user } = await mount();
+    act(() => engine().setName(APP_SHAPE, "X"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("down");
+    act(() => nav.navigate("/elsewhere"));
+    expect(confirm).toHaveBeenCalledWith(CONFIRM);
+    expect(nav.path).toBe("/");
+  });
+});
+
+describe("switching diagram", () => {
+  it("starts clean: no stale dirty state, error, timer or guard for the new diagram", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    mockApi.fail("patch", "/diagrams/d1", 500, "down");
+    mockApi.on("get", "/diagrams/d2", doc(UNLINKED, { id: "d2", name: "B" }));
+    const view = await mount();
+    vi.useFakeTimers();
+    act(() => engine().setName(APP_SHAPE, "X"));
+    await advance(3000); // fails: the error alert and the dirty state are up
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    act(() => engine().setName(APP_SHAPE, "Y")); // re-arms a timer for d1
+    const patches = mockApi.callsOf("patch").length;
+    handle = null;
+    view.rerender(wrapWithProviders(tree("d2"), { theme: true }));
+    await advance(0);
+    await advance(0);
+    expect(handle).not.toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+    await advance(10_000);
+    expect(mockApi.callsOf("patch")).toHaveLength(patches); // the old timer never fires
+    act(() => nav.navigate("/elsewhere"));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(nav.path).toBe("/elsewhere");
+    confirm.mockRestore();
   });
 });
 
@@ -501,6 +599,15 @@ describe("link dialog", () => {
     expect(screen.queryByRole("dialog", { name: "Link to a card" })).toBeNull();
   });
 
+  it("opens nothing for an element no card type maps to (CardPicker would offer every type)", async () => {
+    await mount();
+    expect(engine().elementInfo("id-n2")!.type).toBe("DataObject");
+    act(() => handle!.bridge.openLinkPicker("id-n2"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByText(/^pick:/)).toBeNull();
+  });
+
   it("takes the card's name when the element has none", async () => {
     const unnamed = structuredClone(UNLINKED);
     unnamed.elements[0].name = "";
@@ -580,8 +687,10 @@ describe("source hygiene", () => {
     expect(sources).toEqual(expect.arrayContaining(["ArchimateModeler.tsx", "useArchimateBridge.ts", "saveError.ts"]));
   });
 
-  itSourceScan.each(sources)("%s has no empty catch block", (file) => {
-    expect(readFileSync(resolve(dir, file), "utf-8")).not.toMatch(/catch\s*(\([^)]*\))?\s*\{\s*\}/);
+  itSourceScan.each(sources)("%s has no empty (or comment-only) catch block", (file) => {
+    expect(readFileSync(resolve(dir, file), "utf-8")).not.toMatch(
+      /catch\s*(\([^)]*\))?\s*\{\s*(\/\/[^\n]*\s*|\/\*[\s\S]*?\*\/\s*)*\}/,
+    );
   });
 
   itSourceScan("creates a card only in CreateCardDialog", () => {

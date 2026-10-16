@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import {
-  CARD_ID_DEFINITION, emptyModel, getCardId, linkedCardIds, newIdentifier, withCardDefinition, withCardId,
+  ARCHIMATE_FORMAT, CARD_ID_DEFINITION, emptyModel, getCardId, linkedCardIds, newIdentifier, withCardDefinition, withCardId,
   type ModelElement,
 } from "./exchangeModel";
 
@@ -9,6 +9,10 @@ const element = (id: string, cardId: string | null): ModelElement =>
 
 describe("exchange model helpers", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("names the format the server stores for an ArchiMate diagram", () => {
+    expect(ARCHIMATE_FORMAT).toBe("archimate-exchange-3.1");
+  });
 
   it("identifiers are valid XML IDs and unique", () => {
     const ids = Array.from({ length: 50 }, () => newIdentifier());

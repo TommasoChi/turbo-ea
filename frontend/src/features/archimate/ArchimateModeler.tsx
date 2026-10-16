@@ -33,7 +33,7 @@ import { api } from "@/api/client";
 import { archimateCanvasSx } from "./archimateStyles";
 import { downloadText } from "./download";
 import { ArchimateEngine } from "./engine/ArchimateEngine";
-import { type ArchimateModel, linkedCardIds } from "./exchange/exchangeModel";
+import { ARCHIMATE_FORMAT, type ArchimateModel, linkedCardIds } from "./exchange/exchangeModel";
 import { ExchangeParseError, exchangeWarnings, readExchange, requireView } from "./exchange/readExchange";
 import { writeExchange } from "./exchange/writeExchange";
 import CreateCardDialog from "./CreateCardDialog";
@@ -41,13 +41,12 @@ import LinkCardDialog from "./LinkCardDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
 import ValidationDialog, { type ValidationIssue } from "./ValidationDialog";
 import { describeApiError } from "./saveError";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useArchimateBridge } from "./useArchimateBridge";
 
 import "diagram-js/assets/diagram-js.css";
 
 const AUTOSAVE_MS = 3000;
-/** What the server accepts for `kind: "archimate"` (backend ARCHIMATE_FORMAT). */
-const EXCHANGE_FORMAT = "archimate-exchange-3.1";
 
 export interface ArchimateModelerProps {
   diagramId: string;
@@ -78,7 +77,7 @@ function parse(xml: string): { model: ArchimateModel; warnings: string[] } {
 const fileName = (name: string) => name.replace(/[\\/:*?"<>|]+/g, "_").trim() || "diagram";
 
 export default function ArchimateModeler({ diagramId, onBack, onEngine }: ArchimateModelerProps) {
-  const { t } = useTranslation(["archimate", "common"]);
+  const { t } = useTranslation(["archimate", "common", "cards"]);
   const theme = useTheme();
   const { bridge, linkShapeId, createShapeId, closeDialogs, rememberCards } = useArchimateBridge();
 
@@ -90,6 +89,8 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const savingRef = useRef(false);
   /** Bumped by every change: a save only clears `dirty` when nothing changed while it ran. */
   const changeSeqRef = useRef(0);
+  /** Bumped when the diagram id changes: a save still in flight for the old diagram reports nothing. */
+  const epochRef = useRef(0);
 
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
@@ -120,6 +121,17 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   // ── Load ────────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
+    // A new diagram starts clean: nothing dirty, no error, no pending timer, dialog or import.
+    epochRef.current += 1;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    setDirty(false);
+    setSaveError(null);
+    setHistory({ undo: false, redo: false });
+    setImportError(null);
+    setPendingImport(null);
+    setIssues(null);
+    closeDialogs();
     setLoad({ status: "loading" });
     (async () => {
       let doc: DiagramDoc;
@@ -146,7 +158,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     return () => {
       cancelled = true;
     };
-    // parseFailure depends on the language only; a language switch must not reload the diagram.
+    // parseFailure and closeDialogs are stable per language/mount; neither must reload the diagram.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diagramId, reloadKey]);
 
@@ -169,21 +181,23 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     savingRef.current = true;
     setSaving(true);
     const seq = changeSeqRef.current;
+    const epoch = epochRef.current;
+    const current = () => !unmountedRef.current && epoch === epochRef.current;
     try {
       const model = engine.toModel();
       await api.patch(`/diagrams/${diagramId}`, {
-        data: { format: EXCHANGE_FORMAT, xml: writeExchange(model) },
+        data: { format: ARCHIMATE_FORMAT, xml: writeExchange(model) },
         card_ids: linkedCardIds(model),
       });
-      if (unmountedRef.current) return;
+      if (!current()) return;
       setSaveError(null);
       if (seq === changeSeqRef.current) setDirty(false);
     } catch (e) {
       // Stays dirty, and the error stays on screen until a save succeeds.
-      if (!unmountedRef.current) setSaveError(t("archimate:errors.saveFailed", { reason: reason(e) }));
+      if (current()) setSaveError(t("archimate:errors.saveFailed", { reason: reason(e) }));
     } finally {
       savingRef.current = false;
-      if (!unmountedRef.current) {
+      if (current()) {
         setSaving(false);
         // A change that landed while saving re-arms the chain.
         if (seq !== changeSeqRef.current) arm();
@@ -203,16 +217,8 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const markChangedRef = useRef(markChanged);
   markChangedRef.current = markChanged;
 
-  // Leaving the page with unsaved edits asks first; registered only while dirty.
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  // Leaving with unsaved (or failed-to-save) edits asks first: tab close, in-app navigation and Back.
+  useUnsavedChangesGuard(dirty, t("cards:detail.unsavedLeaveConfirm"));
 
   // ── Engine ──────────────────────────────────────────────────────────────
   const onEngineRef = useRef(onEngine);
@@ -223,11 +229,12 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     async (m: ArchimateModel) => {
       try {
         rememberCards(await fetchCardsByIds(linkedCardIds(m)));
-      } catch {
-        // Names stay unresolved: the context pad shows the link without a name, and links still work.
+      } catch (e) {
+        // Links still work; only the names in the context pad are missing.
+        setSnack(reason(e));
       }
     },
-    [rememberCards],
+    [rememberCards, reason],
   );
 
   useEffect(() => {
@@ -307,6 +314,8 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const shapeInfo = (shapeId: string | null) =>
     shapeId ? (engineRef.current?.elementInfo(shapeId) ?? null) : null;
   const linkInfo = shapeInfo(linkShapeId);
+  // No card type maps to this element: CardPicker would offer ALL types, so offer nothing.
+  const linkTypes = linkInfo ? bridge.cardTypesFor(linkInfo.type) : [];
   const createInfo = shapeInfo(createShapeId);
 
   const pickCard = (card: { id: string; name: string }) => {
@@ -452,10 +461,10 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
         {t("archimate:trademark")}
       </Typography>
 
-      {linkShapeId && linkInfo && (
+      {linkShapeId && linkTypes.length > 0 && (
         <LinkCardDialog
           open
-          cardTypes={bridge.cardTypesFor(linkInfo.type)}
+          cardTypes={linkTypes}
           onPick={pickCard}
           onClose={closeDialogs}
         />

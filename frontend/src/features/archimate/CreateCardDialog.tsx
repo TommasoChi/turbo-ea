@@ -49,7 +49,7 @@ export default function CreateCardDialog({ open, cardTypes, initialName, onCreat
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth disableRestoreFocus>
+    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="xs" fullWidth disableRestoreFocus>
       <DialogTitle>{t("archimate:createCardDialog.title")}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -75,7 +75,7 @@ export default function CreateCardDialog({ open, cardTypes, initialName, onCreat
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{t("common:actions.cancel")}</Button>
+        <Button onClick={onClose} disabled={busy}>{t("common:actions.cancel")}</Button>
         <Button variant="contained" onClick={submit} disabled={busy || !name.trim() || !selected}>
           {t("archimate:createCardDialog.submit")}
         </Button>

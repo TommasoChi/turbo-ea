@@ -49,6 +49,18 @@ describe("CreateCardDialog", () => {
     expect(screen.getByRole("button", { name: "Create and link" })).toBeEnabled();
   });
 
+  it("cannot be cancelled, by button or Escape, while the card is being created", async () => {
+    let release!: () => void;
+    mockApi.on("post", "/cards", () => new Promise((r) => (release = () => r({ id: "c9", name: "CRM", type: "Application" }))));
+    const { onCreated, onClose } = setup();
+    await userEvent.click(screen.getByRole("button", { name: "Create and link" }));
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+    release();
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ id: "c9", name: "CRM" }));
+  });
+
   it("cannot submit an empty name, and cancel makes no request", async () => {
     const { onClose } = setup({ initialName: "" });
     expect(screen.getByRole("button", { name: "Create and link" })).toBeDisabled();

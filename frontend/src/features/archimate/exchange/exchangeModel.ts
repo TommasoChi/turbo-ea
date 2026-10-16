@@ -3,6 +3,8 @@ import type { ElementType } from "../taxonomy/elements";
 import type { AccessType, RelationshipType } from "../taxonomy/relationships";
 
 export const EXCHANGE_NS = "http://www.opengroup.org/xsd/archimate/3.0/";
+/** `diagrams.data.format` of an ArchiMate diagram (backend ARCHIMATE_FORMAT). */
+export const ARCHIMATE_FORMAT = "archimate-exchange-3.1";
 export const CARD_ID_DEFINITION = "propid-turboea-cardId";
 export const CARD_ID_PROPERTY_NAME = "turboea:cardId";
 
