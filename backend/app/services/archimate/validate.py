@@ -104,7 +104,7 @@ def _check_relationships(
             continue
         if src in elements and tgt in elements:
             if {elements[src], elements[tgt]} <= ALL_ELEMENT_TYPES and not is_relationship_allowed(
-                elements[src], elements[tgt], rtype
+                elements[src], elements[tgt], rtype or ""
             ):
                 yield _issue(
                     "relationship_not_allowed",

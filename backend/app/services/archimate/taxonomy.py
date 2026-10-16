@@ -107,7 +107,8 @@ _TABLE_PATH = Path(__file__).with_name("relation_table.json")
 
 @lru_cache(maxsize=1)
 def _table() -> dict[str, dict[str, str]]:
-    return json.loads(_TABLE_PATH.read_text(encoding="utf-8"))["table"]
+    table: dict[str, dict[str, str]] = json.loads(_TABLE_PATH.read_text(encoding="utf-8"))["table"]
+    return table
 
 
 def allowed_relationships(source: str, target: str) -> frozenset[str]:
