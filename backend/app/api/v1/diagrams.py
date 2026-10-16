@@ -3,8 +3,10 @@ from __future__ import annotations
 import re
 import secrets
 import uuid
+from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +25,7 @@ from app.models.diagram import Diagram, diagram_cards
 from app.models.diagram_favorite import DiagramFavorite
 from app.models.diagram_group import diagram_group_members
 from app.models.user import User
+from app.services.archimate.validate import validate_exchange
 from app.services.card_read_scope import CardReadScope
 from app.services.diagram_legend import build_public_legend
 from app.services.permission_service import PermissionService
@@ -155,6 +158,22 @@ def check_kind_data(kind: str, data: dict | None) -> None:
             )
     elif is_archimate:
         raise HTTPException(422, "ArchiMate data cannot be stored on a DrawIO diagram")
+
+
+async def ensure_valid_archimate(kind: str, data: dict | None) -> None:
+    """422 with the validator's issues when an ArchiMate diagram's XML is not a valid model.
+
+    Call after ``check_kind_data`` (which guarantees ``data["xml"]`` is a str).
+    """
+    if kind != "archimate" or not isinstance(data, dict):
+        return
+    # CPU-bound parse: keep it off the event loop.
+    issues = await run_in_threadpool(validate_exchange, data["xml"])
+    if issues:
+        raise HTTPException(
+            422,
+            {"message": "Invalid ArchiMate model", "issues": [asdict(i) for i in issues]},
+        )
 
 
 class DiagramCreate(BaseModel):
@@ -452,6 +471,7 @@ async def create_diagram(
     if body.kind not in DIAGRAM_KINDS:
         raise HTTPException(422, "kind must be 'drawio' or 'archimate'")
     check_kind_data(body.kind, body.data)
+    await ensure_valid_archimate(body.kind, body.data)
     d = Diagram(
         name=body.name,
         kind=body.kind,
@@ -614,6 +634,7 @@ async def update_diagram(
         raise HTTPException(422, "kind cannot be changed")
     if body.data is not None:
         check_kind_data(d.kind, body.data)
+        await ensure_valid_archimate(d.kind, body.data)
     if body.name is not None:
         d.name = body.name
     if body.description is not None:

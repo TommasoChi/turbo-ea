@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     adr,
     ai_suggest,
+    archimate,
     auth,
     bookmarks,
     bpm,
@@ -67,6 +68,7 @@ api_router.include_router(bookmarks.router)
 api_router.include_router(saved_reports.router)
 api_router.include_router(reports.router)
 api_router.include_router(diagrams.router)
+api_router.include_router(archimate.router)
 api_router.include_router(diagram_groups.router)
 api_router.include_router(soaw.router)
 api_router.include_router(eol.router)
