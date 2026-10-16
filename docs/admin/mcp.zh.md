@@ -157,7 +157,7 @@ pip install ./mcp-server
 
 ## 可用功能
 
-MCP 服务器提供 **51 个工具**，分为两组：**32 个读取工具** 用于查询 EA 数据，**19 个写入工具**（14 个增量型、5 个破坏型）用于创建和维护卡片、关系、图表、风险、ADR 等——包括将 AI 工具上下文中的工件（电子表格、BPMN XML、DrawIO XML、文档、图像）转换为结构化的 EA 数据。每个工具都带有 MCP `ToolAnnotations`（只读 / 破坏性 / 幂等提示），以便连接器在其界面中呈现破坏性程度。
+MCP 服务器提供 **55 个工具**，分为两组：**34 个读取工具** 用于查询 EA 数据，**21 个写入工具**（15 个增量型、6 个破坏型）用于创建和维护卡片、关系、图表、风险、ADR 等——包括将 AI 工具上下文中的工件（电子表格、BPMN XML、DrawIO XML、文档、图像）转换为结构化的 EA 数据。每个工具都带有 MCP `ToolAnnotations`（只读 / 破坏性 / 幂等提示），以便连接器在其界面中呈现破坏性程度。
 
 ### 写入操作的演练安全机制
 
@@ -165,7 +165,7 @@ MCP 服务器提供 **51 个工具**，分为两组：**32 个读取工具** 用
 
 ### 读取工具
 
-服务器以八个集群提供 32 个读取工具。
+服务器以八个集群提供 34 个读取工具。
 
 **卡片与元模型**
 
@@ -236,8 +236,9 @@ MCP 服务器提供 **51 个工具**，分为两组：**32 个读取工具** 用
 
 | 工具 | 描述 |
 |------|------|
-| `list_diagrams` | 列出自由绘制的（DrawIO）图表，可选按某一卡片筛选 |
-| `get_diagram` | 按 id 获取单个图表，包含其 DrawIO XML |
+| `list_diagrams` | 列出图表，可选按某一卡片筛选；`kind` 选择自由绘制图（`drawio`，默认）、`archimate` 或 `all` |
+| `get_diagram` | 按 id 获取单个图表：其 `kind`，以及 `data.xml` 中的 DrawIO XML（ArchiMate 图则为 Exchange XML） |
+| `get_archimate_mapping` | Turbo EA 的卡片类型和关系类型如何映射到 ArchiMate 3.x 的元素类型和关系类型（绘制 ArchiMate 图之前先读取） |
 
 **审计与变更历史**
 
@@ -249,9 +250,9 @@ MCP 服务器提供 **51 个工具**，分为两组：**32 个读取工具** 用
 
 ### 写入工具
 
-服务器提供 19 个写入工具，每个都标注为**增量型**（创建或扩展数据）或**破坏型**（修改或删除现有数据），以便连接器给出相应的警示。
+服务器提供 21 个写入工具，每个都标注为**增量型**（创建或扩展数据）或**破坏型**（修改或删除现有数据），以便连接器给出相应的警示。
 
-**增量型（14 个）**
+**增量型（15 个）**
 
 | 工具 | 描述 |
 |------|------|
@@ -267,18 +268,30 @@ MCP 服务器提供 **51 个工具**，分为两组：**32 个读取工具** 用
 | `update_adr` | 更新 ADR（标题、章节、状态、关联卡片）。 |
 | `sign_adr` | 签署 ADR（需要 `adr.sign` 权限；否则返回一个界面深层链接，供在浏览器中签署）。 |
 | `create_diagram` | 创建一个自由形式的 DrawIO 图，可选链接到已有卡片。 |
+| `create_archimate_diagram` | 根据 Open Group Exchange Format XML 创建 ArchiMate 图，可选链接到已有卡片。演练（dry run）在服务器上校验模型，并返回 `valid` 和 `issues`，不会创建任何内容。 |
 | `import_bpmn` | 将 BPMN 2.0 XML 图保存到**已存在**的业务流程卡片上。如果没有匹配指定名称的卡片，工具会返回 `card_not_found` 错误，引导代理使用 `create_cards_bulk` — 这迫使先以完整的描述、子类型和属性显式创建卡片，而不是走捷径生成一张内容稀薄的卡片。 |
 | `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
-**破坏型（5 个）**
+**破坏型（6 个）**
 
 | 工具 | 描述 |
 |------|------|
 | `upsert_relations_bulk` | 创建或删除卡片之间的关系。源 / 目标 / 类型会与元模型进行校验。除非运营者显式启用，否则删除操作会被拒绝（见防护栏）。 |
 | `archive_cards` | 归档卡片（软删除）。可恢复——归档的卡片在自动清除前可在 30 天内还原。 |
 | `update_diagram` | 替换图表的 DrawIO XML、名称或卡片链接。 |
+| `update_archimate_diagram` | 替换 ArchiMate 图的 Exchange XML、名称或卡片链接。拒绝 DrawIO 图。演练会在服务器上校验新的 XML。 |
 | `rollback_batch` | 撤销先前某个变更批次下执行的写入。 |
 | `clear_card_logos` | Remove the custom logo from cards, falling them back to their card-type icon. Recoverable — set it again to restore. |
+
+### ArchiMate 图
+
+ArchiMate 图有自己的工具，与自由绘制（DrawIO）图的工具分开。`create_diagram` 和 `update_diagram` **仅适用于 DrawIO**：服务器会在这两个工具中拒绝 ArchiMate 图，而 `create_archimate_diagram` / `update_archimate_diagram` 会拒绝 DrawIO 图。`list_diagrams` 和 `get_diagram` 两种图都支持，带有 `kind` 筛选和字段（`drawio`、`archimate`）。
+
+先调用 `get_archimate_mapping`，让模型知道每种卡片类型对应哪个 ArchiMate 元素，再发送 Open Group Exchange Format XML。演练会在服务器上校验该 XML，并返回 `valid` 和 `issues`，不保存任何内容。提示示例：
+
+> 绘制 CRM 及其所有关联对象的 ArchiMate Application Cooperation 视图。
+
+编辑器方面的说明见 [ArchiMate 指南](../guide/archimate.md)。
 
 ### 工件上传
 
@@ -298,7 +311,7 @@ MCP 服务器提供 **51 个工具**，分为两组：**32 个读取工具** 用
 
 - **每次调用的大小上限。** MCP 写入工具强制施加比底层 Excel 导入端点小得多的上限：`create_cards_bulk` 为 200 行，`upsert_relations_bulk` 为 500 次操作。足以应对任何实际的单一工件上传，又小到可以快速扫描演练预览。
 - **默认不允许删除关系。** `upsert_relations_bulk` 拒绝 `action: "delete"` 操作——若要删除关系，请使用 Web 界面，那里的操作会以用户身份被记录。运营者可通过设置 `MCP_ALLOW_RELATION_DELETE=true` 启用此功能。
-- **紧急开关。** `MCP_WRITES_ENABLED=false` 可在无需重新部署代码的情况下关闭全部 19 个写入工具。32 个读取工具继续工作。
+- **紧急开关。** `MCP_WRITES_ENABLED=false` 可在无需重新部署代码的情况下关闭全部 21 个写入工具。34 个读取工具继续工作。
 - **徽标下载仅限白名单主机。** 内置图标包无法覆盖客户使用的每一款产品，而助手往往运行在无法访问外网的沙箱里，因此 `set_card_logos` 接受 `image_url`，由 MCP 服务器代为下载。仅限 `https`、仅限 `MCP_LOGO_FETCH_HOSTS` 中的主机、仅限公网地址，最多两次重定向（每次重新校验），最多以流式读取 1 MB，且字节必须带有真实的 PNG/JPEG/WebP/GIF 签名。下载发生在 MCP 边缘而非后端，随后图片经普通通道上传 —— 由大模型选定的 URL 永远不会抵达持有数据库的进程。`MCP_LOGO_FETCH_ENABLED=false` 可将其关闭。
 - **审计来源标记。** 来自 MCP 服务器的每个后端请求都携带 `X-Turbo-EA-Origin: mcp` 头。从这些请求发出的事件在审计日志载荷中被标记为 `origin: "mcp"`，以便管理员可以将 MCP 驱动的写入与 Web 界面操作分别从时间线中筛选出来。
 - **变更批次。** 每次 MCP 写入调用都会在任何写入发生之前打开一个变更批次；调用期间发出的每个事件都会被标记上批次 id。管理员（或 `get_change_history` 工具）可以凭一个 id 重建某次提交的完整逐事件差异，而 `rollback_batch` 可以将其撤销。超过 `MCP_BATCH_CONFIRMATION_THRESHOLD` 行的提交必须回传由先前演练签发的一次性 `confirm_token`（15 分钟有效期），因此大型提交总是先经过一次经审阅的预览。

@@ -157,7 +157,7 @@ In questa modalità, il server si autentica con email/password e rinnova il toke
 
 ## Funzionalità disponibili
 
-Il server MCP espone **51 strumenti** suddivisi in due gruppi: **32 strumenti di lettura** che interrogano i dati EA e **19 strumenti di scrittura** (14 additivi, 5 distruttivi) che creano e mantengono card, relazioni, diagrammi, rischi, ADR e altro ancora — inclusa la trasformazione degli artefatti che uno strumento di IA ha nel proprio contesto (fogli di calcolo, BPMN XML, DrawIO XML, documenti, immagini) in dati EA strutturati. Ogni strumento porta `ToolAnnotations` MCP (indicazioni di sola lettura / distruttivo / idempotente) in modo che i connettori possano evidenziare la distruttività nella loro interfaccia.
+Il server MCP espone **55 strumenti** suddivisi in due gruppi: **34 strumenti di lettura** che interrogano i dati EA e **21 strumenti di scrittura** (15 additivi, 6 distruttivi) che creano e mantengono card, relazioni, diagrammi, rischi, ADR e altro ancora — inclusa la trasformazione degli artefatti che uno strumento di IA ha nel proprio contesto (fogli di calcolo, BPMN XML, DrawIO XML, documenti, immagini) in dati EA strutturati. Ogni strumento porta `ToolAnnotations` MCP (indicazioni di sola lettura / distruttivo / idempotente) in modo che i connettori possano evidenziare la distruttività nella loro interfaccia.
 
 ### Sicurezza tramite esecuzione di prova nelle scritture
 
@@ -165,7 +165,7 @@ Ogni strumento di scrittura usa per impostazione predefinita **`dry_run=true`**.
 
 ### Strumenti di lettura
 
-Il server espone 32 strumenti di lettura raggruppati in otto cluster.
+Il server espone 34 strumenti di lettura raggruppati in otto cluster.
 
 **Card & metamodello**
 
@@ -236,8 +236,9 @@ Il server espone 32 strumenti di lettura raggruppati in otto cluster.
 
 | Strumento | Descrizione |
 |-----------|-------------|
-| `list_diagrams` | Elencare i diagrammi a disegno libero (DrawIO), con filtro opzionale su una card |
-| `get_diagram` | Recuperare un singolo diagramma tramite id, incluso il suo XML DrawIO |
+| `list_diagrams` | Elencare i diagrammi, con filtro opzionale su una card; `kind` seleziona i diagrammi a disegno libero (`drawio`, predefinito), `archimate` oppure `all` |
+| `get_diagram` | Recuperare un singolo diagramma tramite id: il suo `kind`, più l'XML DrawIO (o, per un diagramma ArchiMate, l'XML Exchange) in `data.xml` |
+| `get_archimate_mapping` | Come i tipi di card e di relazione di Turbo EA vengono mappati sui tipi di elemento e di relazione di ArchiMate 3.x (da leggere prima di disegnare un diagramma ArchiMate) |
 
 **Audit & cronologia delle modifiche**
 
@@ -249,9 +250,9 @@ Tutti gli strumenti rispettano l'RBAC dell'utente autenticato — un visualizzat
 
 ### Strumenti di scrittura
 
-Il server espone 19 strumenti di scrittura, ciascuno annotato come **additivo** (crea o estende dati) o **distruttivo** (modifica o rimuove dati esistenti), in modo che i connettori possano avvertire di conseguenza.
+Il server espone 21 strumenti di scrittura, ciascuno annotato come **additivo** (crea o estende dati) o **distruttivo** (modifica o rimuove dati esistenti), in modo che i connettori possano avvertire di conseguenza.
 
-**Additivi (14)**
+**Additivi (15)**
 
 | Strumento | Descrizione |
 |-----------|-------------|
@@ -267,18 +268,30 @@ Il server espone 19 strumenti di scrittura, ciascuno annotato come **additivo** 
 | `update_adr` | Aggiorna un ADR (titolo, sezioni, stato, card collegate). |
 | `sign_adr` | Firma un ADR (richiede il permesso `adr.sign`; altrimenti restituisce un deep-link all'interfaccia per firmare nel browser). |
 | `create_diagram` | Crea un diagramma DrawIO libero con collegamenti opzionali a card esistenti. |
+| `create_archimate_diagram` | Crea un diagramma ArchiMate da XML in formato Exchange dell'Open Group, con collegamenti opzionali a card esistenti. L'esecuzione di prova valida il modello sul server e riporta `valid` e `issues` senza creare nulla. |
 | `import_bpmn` | Salva un diagramma BPMN 2.0 XML su una card Processo di business **esistente**. Se nessuna card corrisponde al nome fornito, lo strumento restituisce un errore `card_not_found` che rimanda l'agente a `create_cards_bulk` — questo forza la creazione esplicita della card con descrizione, sottotipo e attributi prima, invece di una scorciatoia che produce una card scarna. |
 | `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
-**Distruttivi (5)**
+**Distruttivi (6)**
 
 | Strumento | Descrizione |
 |-----------|-------------|
 | `upsert_relations_bulk` | Crea o elimina relazioni tra card. Sorgente / destinazione / tipo sono validati contro il metamodello. L'eliminazione è rifiutata a meno che l'operatore non la abiliti esplicitamente (vedere le salvaguardie). |
 | `archive_cards` | Archivia le card (soft-delete). Recuperabile — le card archiviate possono essere ripristinate per 30 giorni prima dell'eliminazione automatica. |
 | `update_diagram` | Sostituisce l'XML DrawIO di un diagramma, il nome o i collegamenti alle card. |
+| `update_archimate_diagram` | Sostituisce l'XML Exchange, il nome o i collegamenti alle card di un diagramma ArchiMate. Rifiuta un diagramma DrawIO. L'esecuzione di prova valida il nuovo XML sul server. |
 | `rollback_batch` | Annulla le scritture eseguite in un precedente batch di mutazione. |
 | `clear_card_logos` | Remove the custom logo from cards, falling them back to their card-type icon. Recoverable — set it again to restore. |
+
+### Diagrammi ArchiMate
+
+I diagrammi ArchiMate hanno strumenti propri, distinti da quelli dei diagrammi a disegno libero (DrawIO). `create_diagram` e `update_diagram` sono **solo per DrawIO**: il server vi rifiuta un diagramma ArchiMate, e `create_archimate_diagram` / `update_archimate_diagram` rifiutano un diagramma DrawIO. `list_diagrams` e `get_diagram` servono entrambi, con il filtro e il campo `kind` (`drawio`, `archimate`).
+
+Chiamate prima `get_archimate_mapping` perché il modello sappia a quale elemento ArchiMate corrisponde ogni tipo di card, poi inviate XML in formato Exchange dell'Open Group. L'esecuzione di prova lo valida sul server e restituisce `valid` e `issues` senza salvare nulla. Esempio di prompt:
+
+> Disegna una vista ArchiMate Application Cooperation del CRM e di tutto ciò a cui è collegato.
+
+Il lato editor è descritto nella [guida ArchiMate](../guide/archimate.md).
 
 ### Caricamento di artefatti
 
@@ -298,7 +311,7 @@ Difesa in profondità sopra l'esecuzione di prova, in modo che un errore del LLM
 
 - **Limite di dimensione per chiamata.** Gli strumenti di scrittura MCP applicano un limite molto più piccolo rispetto agli endpoint sottostanti dell'importatore Excel: 200 righe per `create_cards_bulk`, 500 operazioni per `upsert_relations_bulk`. Sufficientemente grande per qualsiasi caricamento realistico di un singolo artefatto, sufficientemente piccolo perché un'anteprima di esecuzione di prova rimanga visionabile.
 - **Nessuna eliminazione di relazioni per impostazione predefinita.** `upsert_relations_bulk` rifiuta le operazioni `action: "delete"` — per rimuovere relazioni, utilizzare l'interfaccia web dove l'azione viene registrata sotto l'identità dell'utente. Gli operatori possono abilitarla impostando `MCP_ALLOW_RELATION_DELETE=true`.
-- **Interruttore di spegnimento.** `MCP_WRITES_ENABLED=false` disattiva tutti i 19 strumenti di scrittura senza ridistribuire codice. I 32 strumenti di lettura continuano a funzionare.
+- **Interruttore di spegnimento.** `MCP_WRITES_ENABLED=false` disattiva tutti i 21 strumenti di scrittura senza ridistribuire codice. I 34 strumenti di lettura continuano a funzionare.
 - **Il download dei loghi passa da una lista di host consentiti.** I pacchetti di icone inclusi non possono coprire ogni prodotto di un cliente, e un assistente è spesso isolato senza accesso al web: perciò `set_card_logos` accetta un `image_url` che il server MCP scarica. Solo `https`, solo gli host di `MCP_LOGO_FETCH_HOSTS`, solo indirizzi pubblici, al massimo due reindirizzamenti (ricontrollati ogni volta), al massimo 1 MB letto in streaming, e i byte devono portare una vera firma PNG/JPEG/WebP/GIF. Il download avviene al bordo MCP, mai nel backend, e l'immagine viene poi caricata per la via ordinaria: un URL scelto da un LLM non raggiunge mai il processo che detiene il database. `MCP_LOGO_FETCH_ENABLED=false` lo disattiva.
 - **Etichetta di origine per l'audit.** Ogni richiesta al backend dal server MCP porta un'intestazione `X-Turbo-EA-Origin: mcp`. Gli eventi emessi da queste richieste vengono etichettati con `origin: "mcp"` nel payload del log di audit, in modo che gli amministratori possano filtrare le scritture guidate da MCP fuori dalla timeline, separate dalle azioni dell'interfaccia web.
 - **Batch di mutazione.** Ogni chiamata di scrittura MCP apre un batch di mutazione prima di qualsiasi scrittura; ogni evento emesso durante la chiamata viene marcato con l'id del batch. Gli amministratori (o lo strumento `get_change_history`) possono ricostruire il diff completo per evento di un commit a partire da un singolo id, e `rollback_batch` può annullarlo. I commit che superano `MCP_BATCH_CONFIRMATION_THRESHOLD` righe devono restituire un `confirm_token` monouso emesso dalla precedente esecuzione di prova (TTL di 15 minuti), così un commit di grandi dimensioni segue sempre un'anteprima revisionata.

@@ -283,6 +283,16 @@ The server exposes 21 write tools, each annotated as **additive** (creates or ex
 | `rollback_batch` | Reverse the writes performed under a previous mutation batch — card, relation, risk, stakeholder-role, tag and draft-decision writes; todos and notifications are left in place. |
 | `clear_card_logos` | Remove the custom logo from cards, falling them back to their card-type icon. Recoverable — set it again to restore. |
 
+### ArchiMate diagrams
+
+ArchiMate diagrams have their own tools, separate from the free-draw (DrawIO) ones. `create_diagram` and `update_diagram` are **DrawIO-only**: the server refuses an ArchiMate diagram there, and `create_archimate_diagram` / `update_archimate_diagram` refuse a DrawIO one. `list_diagrams` and `get_diagram` serve both, with the `kind` filter and field (`drawio`, `archimate`).
+
+Call `get_archimate_mapping` first so the model knows which ArchiMate element a card type maps to, then send Open Group Exchange Format XML. The dry run validates it on the server and returns `valid` and `issues` without saving anything. Example prompt:
+
+> Draw an ArchiMate Application Cooperation view of the CRM and everything it connects to.
+
+See the [ArchiMate guide](../guide/archimate.md) for the editor side.
+
 ### Artifact upload
 
 A subset of the write tools (`create_cards_bulk`, `upsert_relations_bulk`, `create_diagram`, `import_bpmn`) lets an AI agent turn artifacts into structured EA data. The agent reads the source file from its own context (multimodal vision, file attachments), extracts structured rows, and calls these tools. The MCP server itself never parses files — it expects already-structured input.
@@ -301,7 +311,7 @@ Defense in depth on top of dry-run, so an LLM mishap can't cause mass damage:
 
 - **Per-call size caps.** The MCP write tools enforce a much smaller cap than the underlying Excel-importer endpoints: 200 rows for `create_cards_bulk`, 500 ops for `upsert_relations_bulk`. Big enough for any realistic single artifact upload, small enough that a dry-run preview is still scannable.
 - **No relation deletion by default.** `upsert_relations_bulk` refuses `action: "delete"` ops — to remove relations, use the web UI where the action is captured under the user's identity. Operators can opt in by setting `MCP_ALLOW_RELATION_DELETE=true`.
-- **Kill switch.** `MCP_WRITES_ENABLED=false` turns off all 21 write tools without redeploying code. The 33 read tools keep working.
+- **Kill switch.** `MCP_WRITES_ENABLED=false` turns off all 21 write tools without redeploying code. The 34 read tools keep working.
 - **Logo fetching is allowlisted.** The built-in icon packs cannot cover every product a customer runs, and an assistant is often sandboxed with no route to the web, so `set_card_logos` accepts an `image_url` and the MCP server fetches it. Only `https`, only the hosts in `MCP_LOGO_FETCH_HOSTS`, only a public address, at most two redirects (each re-checked), at most 1 MB read as a stream, and the bytes must carry a real PNG/JPEG/WebP/GIF signature. The fetch happens at the MCP edge, never in the backend, and the image is then uploaded through the ordinary route — so a URL chosen by an LLM never reaches the process holding the database. `MCP_LOGO_FETCH_ENABLED=false` switches it off.
 - **Audit origin tag.** Every backend request from the MCP server carries an `X-Turbo-EA-Origin: mcp` header. Events emitted from those requests are tagged `origin: "mcp"` in the audit-log payload, so admins can filter MCP-driven writes out of the timeline distinct from web-UI actions.
 - **Mutation batches.** Every MCP write call opens a mutation batch before any writes; every event emitted during the call is stamped with the batch id. Admins (or the `get_change_history` tool) can reconstruct the full per-event diff of a commit from one id, and `rollback_batch` can reverse it. Commits above `MCP_BATCH_CONFIRMATION_THRESHOLD` rows must echo back a one-shot `confirm_token` issued by the prior dry-run (15-minute TTL), so a large commit always follows a reviewed preview.
