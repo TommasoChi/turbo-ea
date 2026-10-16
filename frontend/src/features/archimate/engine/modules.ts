@@ -26,6 +26,7 @@ import MoveCanvasModule from "diagram-js/lib/navigation/movecanvas";
 import ZoomScrollModule from "diagram-js/lib/navigation/zoomscroll";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 import ArchimateModeling from "./ArchimateModeling";
+import ArchimateRenderer from "./ArchimateRenderer";
 import ModelSync, { ArchimateLayouter } from "./ModelSync";
 
 /** Overrides diagram-js's own factory, modeling and layouter: it must load after ModelingModule. */
@@ -37,6 +38,12 @@ const ArchimateCoreModule: ModuleDeclaration = {
   layouter: ["type", ArchimateLayouter],
   connectionDocking: ["type", CroppingConnectionDocking],
   modelSync: ["type", ModelSync],
+};
+
+/** Draws the notation; it also supplies the outlines connection cropping uses (priority above the default renderer). */
+const ArchimateRendererModule: ModuleDeclaration = {
+  __init__: ["archimateRenderer"],
+  archimateRenderer: ["type", ArchimateRenderer],
 };
 
 export const ARCHIMATE_BASE_MODULES: ModuleDeclaration[] = [
@@ -61,4 +68,4 @@ export const ARCHIMATE_BASE_MODULES: ModuleDeclaration[] = [
   GridSnappingModule,
 ];
 
-export const ARCHIMATE_MODULES: ModuleDeclaration[] = [...ARCHIMATE_BASE_MODULES];
+export const ARCHIMATE_MODULES: ModuleDeclaration[] = [...ARCHIMATE_BASE_MODULES, ArchimateRendererModule];

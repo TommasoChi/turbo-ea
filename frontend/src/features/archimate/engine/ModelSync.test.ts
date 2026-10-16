@@ -3,23 +3,24 @@ import type CommandStack from "diagram-js/lib/command/CommandStack";
 import type Canvas from "diagram-js/lib/core/Canvas";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type { Connection, Shape } from "diagram-js/lib/model/Types";
+import type { ElementType } from "../taxonomy/elements";
 import { installSvgStubs } from "@/test/svgStubs";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import type ArchimateModeling from "./ArchimateModeling";
-import { ARCHIMATE_BASE_MODULES } from "./modules";
+import { ARCHIMATE_MODULES } from "./modules";
 
 beforeAll(installSvgStubs);
 
 function setup() {
   const container = document.createElement("div");
-  const diagram = new Diagram({ canvas: { container }, modules: ARCHIMATE_BASE_MODULES });
+  const diagram = new Diagram({ canvas: { container }, modules: ARCHIMATE_MODULES });
   const modeling = diagram.get<ArchimateModeling>("modeling");
   const factory = diagram.get<ArchimateElementFactory>("elementFactory");
   const root = diagram.get<Canvas>("canvas").getRootElement();
-  const add = (x: number) =>
-    modeling.createShape(factory.createShape({ elementType: "BusinessActor" }), { x, y: 100 }, root) as Shape;
+  const add = (x: number, elementType: ElementType = "BusinessActor") =>
+    modeling.createShape(factory.createShape({ elementType }), { x, y: 100 }, root) as Shape;
   return {
-    modeling, a: add(100), b: add(400), c: add(700),
+    modeling, add, a: add(100), b: add(400), c: add(700),
     registry: diagram.get<ElementRegistry>("elementRegistry"),
     commandStack: diagram.get<CommandStack>("commandStack"),
   };
@@ -51,6 +52,19 @@ describe("ModelSync", () => {
     expect(conn.waypoints).toHaveLength(3);
     expect(conn.waypoints[1]).toMatchObject({ x: 300, y: 300 });
     expect(conn.waypoints[0]).toMatchObject({ x: 122, y: 77 });
+  });
+
+  it("crops at the real outline of the shape: an ellipse is cut earlier than its box", () => {
+    const { modeling, add, b } = setup();
+    const goal = add(1000, "Goal"); // 120 x 55 around (1000, 100)
+    const conn = modeling.connect(goal, b, {
+      relationship: "Influence", waypoints: [{ x: 1000, y: 100 }, { x: 1200, y: 300 }, { x: 400, y: 100 }],
+    }) as Connection;
+    // on the diagonal the ellipse x^2/60^2 + y^2/27.5^2 = 1 is met 25 px from the centre (the box would give 27.5)
+    const [{ x, y }] = conn.waypoints;
+    expect(x - 1000).toBeCloseTo(25, 0);
+    expect(y - 100).toBeCloseTo(25, 0);
+    expect(x - 1000).toBeLessThan(27);
   });
 
   it("removes the connections of a deleted shape", () => {

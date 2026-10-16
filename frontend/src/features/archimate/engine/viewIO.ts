@@ -43,8 +43,11 @@ export function importView(services: ViewServices, model: ArchimateModel, view: 
     visiting.add(node.id);
     const parentNode = node.parent ? nodes.get(node.parent) : undefined;
     const parent = (parentNode && addNode(parentNode)) || root;
-    const { id, x, y, width, height } = node;
-    const shape = elementFactory.createShape({ id, businessObject: element, x, y, width, height, fromModel: true });
+    const { id, x, y, width, height, style } = node;
+    // the style (a custom fill from the file) is read by the renderer
+    const shape = elementFactory.createShape({
+      id, businessObject: element, x, y, width, height, fromModel: true, ...(style ? { style } : {}),
+    });
     canvas.addShape(shape, parent);
     drawn.set(id, shape);
     return shape;

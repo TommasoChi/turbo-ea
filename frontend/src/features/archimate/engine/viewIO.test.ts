@@ -77,6 +77,8 @@ describe("extractEdited", () => {
     model.views[0].documentation = "View doc";
     model.views[0].nodes[0].style = { fillColor: { r: 1, g: 2, b: 3 } };
     importView(s, model, model.views[0]);
+    expect((s.elementRegistry.get(model.views[0].nodes[0].id) as Shape & { style?: unknown }).style).toEqual({ fillColor: { r: 1, g: 2, b: 3 } });
+    expect((s.elementRegistry.get(model.views[0].nodes[1].id) as Shape & { style?: unknown }).style).toBeUndefined();
     const out = extractEdited(s, model.views[0]);
     expect(out.view).toEqual(model.views[0]);
     expect(out.elements.map((e) => e.id)).toEqual(["id-app", "id-group", "id-data"]);
