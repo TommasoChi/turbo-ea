@@ -1,0 +1,63 @@
+import Diagram from "diagram-js";
+import type CommandStack from "diagram-js/lib/command/CommandStack";
+import type Canvas from "diagram-js/lib/core/Canvas";
+import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
+import type { Connection, Shape } from "diagram-js/lib/model/Types";
+import { installSvgStubs } from "@/test/svgStubs";
+import type ArchimateElementFactory from "./ArchimateElementFactory";
+import type ArchimateModeling from "./ArchimateModeling";
+import { ARCHIMATE_BASE_MODULES } from "./modules";
+
+beforeAll(installSvgStubs);
+
+function setup() {
+  const container = document.createElement("div");
+  const diagram = new Diagram({ canvas: { container }, modules: ARCHIMATE_BASE_MODULES });
+  const modeling = diagram.get<ArchimateModeling>("modeling");
+  const factory = diagram.get<ArchimateElementFactory>("elementFactory");
+  const root = diagram.get<Canvas>("canvas").getRootElement();
+  const add = (x: number) =>
+    modeling.createShape(factory.createShape({ elementType: "BusinessActor" }), { x, y: 100 }, root) as Shape;
+  return {
+    modeling, a: add(100), b: add(400), c: add(700),
+    registry: diagram.get<ElementRegistry>("elementRegistry"),
+    commandStack: diagram.get<CommandStack>("commandStack"),
+  };
+}
+
+describe("ModelSync", () => {
+  it("keeps the relationship endpoints equal to the connected elements", () => {
+    const { modeling, a, b, c, commandStack } = setup();
+    const conn = modeling.connect(a, b, { relationship: "Assignment" }) as Connection;
+    expect(conn.businessObject).toMatchObject({ type: "Assignment", source: a.businessObject.id, target: b.businessObject.id });
+    modeling.reconnectEnd(conn, c, { x: 760, y: 127 });
+    expect(conn.businessObject.target).toBe(c.businessObject.id);
+    commandStack.undo();
+    expect(conn.businessObject.target).toBe(b.businessObject.id);
+    commandStack.redo();
+    expect(conn.businessObject.target).toBe(c.businessObject.id);
+  });
+
+  it("crops a new connection at the outlines and keeps its bendpoints when an end moves", () => {
+    const { modeling, a, b } = setup();
+    // a is centred on (100, 100): 120 x 55, so its bottom edge is y = 127.5.
+    const conn = modeling.connect(a, b, {
+      relationship: "Assignment", waypoints: [{ x: 100, y: 100 }, { x: 300, y: 300 }, { x: 400, y: 100 }],
+    }) as Connection;
+    // (the docking rounds the intersection to whole pixels)
+    expect(Math.abs(conn.waypoints[0].y - 127.5)).toBeLessThanOrEqual(1);
+    expect(conn.waypoints[1]).toEqual({ x: 300, y: 300 });
+    modeling.moveShape(a, { x: 0, y: -50 });
+    expect(conn.waypoints).toHaveLength(3);
+    expect(conn.waypoints[1]).toMatchObject({ x: 300, y: 300 });
+    expect(Math.abs(conn.waypoints[0].y - 77.5)).toBeLessThanOrEqual(1);
+  });
+
+  it("removes the connections of a deleted shape", () => {
+    const { modeling, a, b, registry } = setup();
+    const conn = modeling.connect(a, b, { relationship: "Assignment" }) as Connection;
+    modeling.removeElements([a]);
+    expect(registry.get(conn.id)).toBeUndefined();
+    expect(registry.get(b.id)).toBe(b);
+  });
+});
