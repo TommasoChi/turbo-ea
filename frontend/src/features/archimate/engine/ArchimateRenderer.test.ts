@@ -76,8 +76,9 @@ describe("ArchimateRenderer: shapes", () => {
     ) as Shape;
     const badge = gfx(shape).querySelector("circle.archimate-linked-badge");
     expect(badge).not.toBeNull();
-    expect(Number(badge!.getAttribute("cx"))).toBeGreaterThan(100);
-    expect(Number(badge!.getAttribute("cy"))).toBeGreaterThan(40);
+    expect(badge!.getAttribute("cx")).toBe("114"); // 120 - radius 4 - 2
+    expect(badge!.getAttribute("cy")).toBe("49"); // 55 - radius 4 - 2
+    expect(badge!.getAttribute("r")).toBe("4");
     expect(css(badge!, "fill")).toBe(ARCHIMATE_LAYER_COLORS.application.stroke);
     expect(gfx(add("ApplicationComponent")).querySelector("circle.archimate-linked-badge")).toBeNull();
   });
@@ -87,10 +88,16 @@ describe("ArchimateRenderer: shapes", () => {
     const max = Math.floor((120 - 16) / 6);
     const name = "Customer relationship management platform for the whole enterprise group worldwide";
     const lines = NAME_LINES(gfx(add("BusinessActor", {}, name)));
-    expect(lines).toHaveLength(3);
+    expect(lines).toEqual(["Customer", "relationship", "management…"]);
     for (const line of lines) expect(line!.length).toBeLessThanOrEqual(max);
     expect(lines[2]!.endsWith("…")).toBe(true);
     expect(NAME_LINES(gfx(add("BusinessActor", {}, "Short name")))).toEqual(["Short name"]);
+  });
+
+  it("draws a named element too narrow for any text (a 15x15 junction) without hanging", () => {
+    const { add, gfx } = setup();
+    const lines = NAME_LINES(gfx(add("AndJunction", {}, "Join")));
+    expect(lines).toEqual(["J", "o", "…"]);
   });
 
   it("keeps the glyph of an ellipse inside its curve and draws none on a junction", () => {
@@ -189,6 +196,23 @@ describe("ArchimateRenderer: connections", () => {
     expect(css(p, "marker-end")).toBeFalsy();
   });
 
+  it("draws an Access without accessType as Write (the XSD default), and keeps the data unchanged", () => {
+    const { modeling, a, b, gfx } = twoElements();
+    const conn = modeling.connect(a, b, { relationship: "Access" }) as Connection;
+    const p = gfx(conn).querySelector("path.archimate-line")!;
+    expect(css(p, "marker-start")).toContain("arrow-open");
+    expect(css(p, "marker-end")).toBeFalsy();
+    expect(conn.businessObject).not.toHaveProperty("accessType");
+    const plain = modeling.connect(a, b, { relationship: "Access", accessType: "Access" }) as Connection;
+    const q = gfx(plain).querySelector("path.archimate-line")!;
+    expect(css(q, "marker-start")).toBeFalsy();
+    expect(css(q, "marker-end")).toBeFalsy();
+    const read = modeling.connect(a, b, { relationship: "Access", accessType: "Read" }) as Connection;
+    const r = gfx(read).querySelector("path.archimate-line")!;
+    expect(css(r, "marker-start")).toBeFalsy();
+    expect(css(r, "marker-end")).toContain("arrow-open");
+  });
+
   it("uses the access type of an Access connection", () => {
     const { modeling, a, b, gfx } = twoElements();
     const conn = modeling.connect(a, b, { relationship: "Access", accessType: "ReadWrite" }) as Connection;
@@ -238,5 +262,8 @@ describe("wrapText", () => {
     expect(wrapText("aaaa bbbb cccc dddd", 4)).toEqual(["aaaa", "bbbb", "ccc…"]);
     expect(wrapText("aaaa bbbb cccc dd", 5, 2)).toEqual(["aaaa", "bbbb…"]);
     expect(wrapText("  ", 5)).toEqual([]);
+    expect(wrapText("abc", 0)).toEqual(["a", "b", "c"]);
+    expect(wrapText("abc", -3)).toEqual(["a", "b", "c"]);
+    expect(wrapText("abcd", 0)).toEqual(["a", "b", "…"]); // one char per line leaves no room for the ellipsis
   });
 });

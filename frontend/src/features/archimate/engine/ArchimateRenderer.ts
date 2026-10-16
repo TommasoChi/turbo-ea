@@ -27,6 +27,7 @@ const LINK_BADGE_RADIUS = 4;
 
 /** Greedy word wrap into at most `maxLines` lines of `maxChars`; a longer word is cut, the overflow ends in "…". */
 export function wrapText(text: string, maxChars: number, maxLines = MAX_LINES): string[] {
+  maxChars = Math.max(1, maxChars); // a shape narrower than the padding (a junction) still gets one char per line
   const lines: string[] = [];
   let line = "";
   for (let word of text.split(/\s+/).filter(Boolean)) {
@@ -127,7 +128,8 @@ export default class ArchimateRenderer extends BaseRenderer {
   drawConnection(visuals: SVGElement, connection: Connection): SVGElement {
     const bo = connection.businessObject as ModelRelationship;
     const { dashArray, sourceMarker, targetMarker } = connectionStyle(bo.type, {
-      accessType: bo.accessType, isDirected: bo.isDirected,
+      // the XSD default of a missing accessType is Write; drawing only, the model keeps it absent
+      accessType: bo.accessType ?? (bo.type === "Access" ? "Write" : undefined), isDirected: bo.isDirected,
     });
     const line = svgCreate("path");
     svgAttr(line, {
