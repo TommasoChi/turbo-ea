@@ -9,12 +9,13 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 
 type Flags = { enabled: boolean; loaded: boolean };
-const flags: Record<"bpm" | "ppm" | "turbolens" | "grc" | "valuechain", Flags> = {
+const flags: Record<"bpm" | "ppm" | "turbolens" | "grc" | "valuechain" | "archimate", Flags> = {
   bpm: { enabled: true, loaded: true },
   ppm: { enabled: true, loaded: true },
   turbolens: { enabled: true, loaded: true },
   grc: { enabled: true, loaded: true },
   valuechain: { enabled: true, loaded: true },
+  archimate: { enabled: true, loaded: true },
 };
 
 vi.mock("@/hooks/useBpmEnabled", () => ({
@@ -38,11 +39,17 @@ vi.mock("@/hooks/useValueChainEnabled", () => ({
     valueChainLoaded: flags.valuechain.loaded,
   }),
 }));
+vi.mock("@/hooks/useArchimateEnabled", () => ({
+  useArchimateEnabled: () => ({
+    archimateEnabled: flags.archimate.enabled,
+    archimateLoaded: flags.archimate.loaded,
+  }),
+}));
 
 import ModuleGate from "./ModuleGate";
 
 type Module = keyof typeof flags;
-const MODULES: Module[] = ["bpm", "ppm", "turbolens", "grc", "valuechain"];
+const MODULES: Module[] = ["bpm", "ppm", "turbolens", "grc", "valuechain", "archimate"];
 
 function Where() {
   const { pathname, search } = useLocation();
@@ -102,6 +109,7 @@ describe("ModuleGate", () => {
     ["turbolens", "TurboLens", "/admin/settings?tab=turbolens"],
     ["grc", "GRC", "/admin/settings"],
     ["valuechain", "Value Chain", "/admin/settings?tab=bpm"],
+    ["archimate", "ArchiMate", "/admin/settings"],
   ] as const)("names %s and opens its settings when it is off", async (module, label, settings) => {
     flags[module] = { enabled: false, loaded: true };
     const user = renderGate(module);
