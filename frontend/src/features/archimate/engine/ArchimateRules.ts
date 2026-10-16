@@ -11,7 +11,7 @@ import { ELEMENT_INFO, type ElementType } from "../taxonomy/elements";
 import { isRelationshipAllowed, type AccessType, type RelationshipType } from "../taxonomy/relationships";
 import type { RelationshipTool } from "./RelationshipTool";
 
-/** The smallest a shape may be resized to (applied through the resize `minDimensions`). */
+/** The smallest a shape may be resized to (applied to every resize through the context `minDimensions`). */
 export const MIN_SIZE = { width: 30, height: 20 } as const;
 
 const CONNECTORS: readonly ElementType[] = ["AndJunction", "OrJunction"];
@@ -55,6 +55,10 @@ export default class ArchimateRules extends RuleProvider {
 
   constructor(eventBus: EventBus, private readonly relationshipTool: RelationshipTool) {
     super(eventBus); // calls init(); the rules below only read relationshipTool once they run
+    // Resize reads minDimensions from the context at resize.start (as bpmn-js's ResizeBehavior sets it).
+    eventBus.on("resize.start", 1500, ({ context }: { context: { minDimensions?: typeof MIN_SIZE } }) => {
+      context.minDimensions = MIN_SIZE;
+    });
   }
 
   init(): void {
@@ -82,7 +86,10 @@ export default class ArchimateRules extends RuleProvider {
     // No target: a keyboard move, which keeps the parent.
     this.addRule("elements.move", 1500, ({ target }: { target?: Element }) => !target || canDrop(target));
 
-    this.addRule("shape.resize", 1500, ({ shape }: { shape: Element }) => !CONNECTORS.includes(elementTypeOf(shape)!));
+    this.addRule("shape.resize", 1500, ({ shape }: { shape: Element }) => {
+      const type = elementTypeOf(shape);
+      return type === undefined || !CONNECTORS.includes(type);
+    });
     this.addRule(["elements.delete", "connection.start"], 1500, () => true);
   }
 }

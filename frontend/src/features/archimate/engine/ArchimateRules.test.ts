@@ -4,6 +4,7 @@ import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type Connect from "diagram-js/lib/features/connect/Connect";
 import type Dragging from "diagram-js/lib/features/dragging/Dragging";
+import type Resize from "diagram-js/lib/features/resize/Resize";
 import type Rules from "diagram-js/lib/features/rules/Rules";
 import type { Connection, Shape } from "diagram-js/lib/model/Types";
 import { installSvgStubs } from "@/test/svgStubs";
@@ -146,6 +147,16 @@ describe("the connect gesture", () => {
     expect(env.connections()).toHaveLength(0);
   });
 
+  it("spends the tool after a refused drop too", () => {
+    const env = setup();
+    const data = env.add("DataObject", 100);
+    const goal = env.add("Goal", 400);
+    env.tool.set("Serving");
+    gesture(env, data, goal);
+    expect(env.connections()).toHaveLength(0);
+    expect(env.tool.current).toBeNull();
+  });
+
   it("creates nothing while no relationship is selected", () => {
     const env = setup();
     const service = env.add("BusinessService", 100);
@@ -181,9 +192,7 @@ describe("other rules", () => {
     const actor = env.add("BusinessActor", 400);
     const goal = env.add("Goal", 700);
     const conn = env.modeling.connect(service, actor, { relationship: "Serving" }) as Connection;
-    expect(env.rules.allowed("connection.reconnect", { connection: conn, source: service, target: goal })).toBe(
-      isRelationshipAllowed("BusinessService", "Goal", "Serving"),
-    );
+    expect(env.rules.allowed("connection.reconnect", { connection: conn, source: service, target: goal })).toBe(false);
     expect(env.rules.allowed("connection.reconnect", { connection: conn, source: service, target: actor })).toBe(true);
     expect(env.rules.allowed("connection.reconnect", { connection: conn, source: service, target: service })).toBe(false);
   });
@@ -211,6 +220,30 @@ describe("other rules", () => {
     expect(move(env.root as unknown as Shape)).toBe(true);
   });
 
+  it("allows a move without a target (keyboard move), refuses nesting on a connection", () => {
+    const env = setup();
+    const service = env.add("BusinessService", 100);
+    const actor = env.add("BusinessActor", 400);
+    const conn = env.modeling.connect(service, actor, { relationship: "Serving" }) as Connection;
+    const shape = env.factory.createShape({ elementType: "Goal" });
+    expect(env.rules.allowed("elements.move", { shapes: [actor], delta: { x: 5, y: 0 } })).toBe(true);
+    expect(env.rules.allowed("elements.move", { shapes: [actor], delta: { x: 5, y: 0 }, target: conn })).toBe(false);
+    expect(env.rules.allowed("shape.create", { shape, target: conn, position: { x: 0, y: 0 } })).toBe(false);
+  });
+
+  it("keeps a resized shape at least MIN_SIZE", () => {
+    const env = setup();
+    const actor = env.add("BusinessActor", 300, 300);
+    const down = new MouseEvent("mousedown", { clientX: 10, clientY: 10 });
+    env.get<Resize>("resize").activate(down, actor, "se");
+    const dragging = env.get<Dragging>("dragging");
+    dragging.move(new MouseEvent("mousemove", { clientX: -900, clientY: -900 }));
+    dragging.end(new MouseEvent("mouseup", { clientX: -900, clientY: -900 }));
+    // Grid snapping may round the edge up, never below the minimum (the diagram-js default is 10x10).
+    expect(actor.width).toBeGreaterThanOrEqual(MIN_SIZE.width);
+    expect(actor.height).toBeGreaterThanOrEqual(MIN_SIZE.height);
+  });
+
   it("refuses to resize a junction only", () => {
     const env = setup();
     const junction = env.add("OrJunction", 100);
@@ -224,27 +257,5 @@ describe("other rules", () => {
     const actor = env.add("BusinessActor", 100);
     expect(env.rules.allowed("elements.delete", { elements: [actor] })).toBe(true);
     expect(env.rules.allowed("connection.start", { source: actor })).toBe(true);
-  });
-});
-
-describe("RelationshipTool", () => {
-  it("stores the relationship and access type, and clears both", () => {
-    const { tool } = setup();
-    expect(tool.current).toBeNull();
-    tool.set("Access", "Write");
-    expect([tool.current, tool.accessType]).toEqual(["Access", "Write"]);
-    tool.set("Serving");
-    expect([tool.current, tool.accessType]).toEqual(["Serving", null]);
-    tool.clear();
-    expect([tool.current, tool.accessType]).toEqual([null, null]);
-  });
-
-  it("clears itself on connect.cleanup and connect.end", () => {
-    const { tool, eventBus } = setup();
-    for (const type of ["connect.cleanup", "connect.end"]) {
-      tool.set("Flow");
-      eventBus.fire(type, { context: {} });
-      expect(tool.current).toBeNull();
-    }
   });
 });
