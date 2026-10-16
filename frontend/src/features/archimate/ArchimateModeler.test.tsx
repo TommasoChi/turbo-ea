@@ -747,7 +747,8 @@ describe("source hygiene", () => {
 
   itSourceScan.each(sources)("%s has no empty (or comment-only) catch block", (file) => {
     expect(readFileSync(resolve(dir, file), "utf-8")).not.toMatch(
-      /catch\s*(\([^)]*\))?\s*\{\s*(\/\/[^\n]*\s*|\/\*[\s\S]*?\*\/\s*)*\}/,
+      // Every alternative starts with a distinct character and ends at a fixed delimiter: one way to match, no ReDoS.
+      /catch\s*(?:\([^)]*\)\s*)?\{(?:\s|\/\/[^\n]*(?=\n|$)|\/\*(?:[^*]|\*(?!\/))*\*\/)*\}/,
     );
   });
 
