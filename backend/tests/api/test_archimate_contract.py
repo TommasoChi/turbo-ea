@@ -27,8 +27,8 @@ async def admin(db):
 
 
 def _xml() -> str:
-    # The writer emits LF only; a Windows autocrlf checkout is normalised back to that.
-    return FIXTURE.read_bytes().decode("utf-8").replace("\r\n", "\n")
+    # .gitattributes pins the fixture to LF, so these are the writer's bytes on every checkout.
+    return FIXTURE.read_bytes().decode("utf-8")
 
 
 def test_fixture_passes_the_server_validator():

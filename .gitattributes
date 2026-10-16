@@ -3,3 +3,5 @@
 # and breaks it inside the Linux container ("interpreter not found").
 Dockerfile text eol=lf
 *.sh text eol=lf
+# The ArchiMate contract fixture is compared byte for byte with the frontend writer's LF-only output.
+backend/tests/fixtures/archimate/*.xml text eol=lf
