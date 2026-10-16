@@ -20,6 +20,7 @@ import MoveModule from "diagram-js/lib/features/move";
 import OutlineModule from "diagram-js/lib/features/outline";
 import OverlaysModule from "diagram-js/lib/features/overlays";
 import ResizeModule from "diagram-js/lib/features/resize";
+import RulesModule from "diagram-js/lib/features/rules";
 import SnappingModule from "diagram-js/lib/features/snapping";
 import CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionDocking";
 import MoveCanvasModule from "diagram-js/lib/navigation/movecanvas";
@@ -27,7 +28,9 @@ import ZoomScrollModule from "diagram-js/lib/navigation/zoomscroll";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 import ArchimateModeling from "./ArchimateModeling";
 import ArchimateRenderer from "./ArchimateRenderer";
+import ArchimateRules from "./ArchimateRules";
 import ModelSync, { ArchimateLayouter } from "./ModelSync";
+import { RelationshipTool } from "./RelationshipTool";
 
 /** Overrides diagram-js's own factory, modeling and layouter: it must load after ModelingModule. */
 const ArchimateCoreModule: ModuleDeclaration = {
@@ -44,6 +47,14 @@ const ArchimateCoreModule: ModuleDeclaration = {
 const ArchimateRendererModule: ModuleDeclaration = {
   __init__: ["archimateRenderer"],
   archimateRenderer: ["type", ArchimateRenderer],
+};
+
+/** The relation-matrix and nesting rules, and the tool that says which relationship the next connect draws. */
+const ArchimateRulesModule: ModuleDeclaration = {
+  __depends__: [RulesModule],
+  __init__: ["archimateRules"],
+  relationshipTool: ["type", RelationshipTool],
+  archimateRules: ["type", ArchimateRules],
 };
 
 export const ARCHIMATE_BASE_MODULES: ModuleDeclaration[] = [
@@ -68,4 +79,4 @@ export const ARCHIMATE_BASE_MODULES: ModuleDeclaration[] = [
   GridSnappingModule,
 ];
 
-export const ARCHIMATE_MODULES: ModuleDeclaration[] = [...ARCHIMATE_BASE_MODULES, ArchimateRendererModule];
+export const ARCHIMATE_MODULES: ModuleDeclaration[] = [...ARCHIMATE_BASE_MODULES, ArchimateRendererModule, ArchimateRulesModule];
