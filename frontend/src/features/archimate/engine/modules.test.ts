@@ -1,8 +1,10 @@
 import Diagram from "diagram-js";
 import CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionDocking";
+import { withBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 import ArchimateModeling from "./ArchimateModeling";
+import ArchimatePaletteProvider from "./ArchimatePaletteProvider";
 import ArchimateRenderer from "./ArchimateRenderer";
 import ArchimateRules from "./ArchimateRules";
 import { ArchimateLayouter } from "./ModelSync";
@@ -20,12 +22,13 @@ describe("engine modules", () => {
     expect(diagram.get("connectionDocking")).toBeInstanceOf(CroppingConnectionDocking);
   });
 
-  it("extend the base modules with the renderer and the rules (later engine parts extend ARCHIMATE_MODULES)", () => {
+  it("extend the base modules with the renderer, the rules and the palette (later engine parts extend ARCHIMATE_MODULES)", () => {
     expect(ARCHIMATE_MODULES.slice(0, ARCHIMATE_BASE_MODULES.length)).toEqual(ARCHIMATE_BASE_MODULES);
-    expect(ARCHIMATE_MODULES).toHaveLength(ARCHIMATE_BASE_MODULES.length + 2);
-    const diagram = new Diagram({ canvas: { container: document.createElement("div") }, modules: ARCHIMATE_MODULES });
+    expect(ARCHIMATE_MODULES).toHaveLength(ARCHIMATE_BASE_MODULES.length + 3);
+    const diagram = new Diagram({ canvas: { container: document.createElement("div") }, modules: withBridge() });
     expect(diagram.get("archimateRenderer")).toBeInstanceOf(ArchimateRenderer);
     expect(diagram.get("archimateRules")).toBeInstanceOf(ArchimateRules);
     expect(diagram.get("relationshipTool")).toBeInstanceOf(RelationshipTool);
+    expect(diagram.get("archimatePalette")).toBeInstanceOf(ArchimatePaletteProvider);
   });
 });

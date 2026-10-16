@@ -19,14 +19,17 @@ import ModelingModule from "diagram-js/lib/features/modeling";
 import MoveModule from "diagram-js/lib/features/move";
 import OutlineModule from "diagram-js/lib/features/outline";
 import OverlaysModule from "diagram-js/lib/features/overlays";
+import PaletteModule from "diagram-js/lib/features/palette";
 import ResizeModule from "diagram-js/lib/features/resize";
 import RulesModule from "diagram-js/lib/features/rules";
+import SelectionModule from "diagram-js/lib/features/selection";
 import SnappingModule from "diagram-js/lib/features/snapping";
 import CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionDocking";
 import MoveCanvasModule from "diagram-js/lib/navigation/movecanvas";
 import ZoomScrollModule from "diagram-js/lib/navigation/zoomscroll";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 import ArchimateModeling from "./ArchimateModeling";
+import ArchimatePaletteProvider from "./ArchimatePaletteProvider";
 import ArchimateRenderer from "./ArchimateRenderer";
 import ArchimateRules from "./ArchimateRules";
 import ModelSync, { ArchimateLayouter } from "./ModelSync";
@@ -57,6 +60,13 @@ const ArchimateRulesModule: ModuleDeclaration = {
   archimateRules: ["type", ArchimateRules],
 };
 
+/** The layered palette; it needs the engine's `bridge` value (titles come from the page's labels). */
+const ArchimatePaletteModule: ModuleDeclaration = {
+  __depends__: [PaletteModule, CreateModule, HandToolModule, LassoToolModule, SelectionModule],
+  __init__: ["archimatePalette"],
+  archimatePalette: ["type", ArchimatePaletteProvider],
+};
+
 export const ARCHIMATE_BASE_MODULES: ModuleDeclaration[] = [
   ModelingModule,
   ArchimateCoreModule,
@@ -79,4 +89,9 @@ export const ARCHIMATE_BASE_MODULES: ModuleDeclaration[] = [
   GridSnappingModule,
 ];
 
-export const ARCHIMATE_MODULES: ModuleDeclaration[] = [...ARCHIMATE_BASE_MODULES, ArchimateRendererModule, ArchimateRulesModule];
+export const ARCHIMATE_MODULES: ModuleDeclaration[] = [
+  ...ARCHIMATE_BASE_MODULES,
+  ArchimateRendererModule,
+  ArchimateRulesModule,
+  ArchimatePaletteModule,
+];

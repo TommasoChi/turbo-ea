@@ -4,6 +4,7 @@ import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type GraphicsFactory from "diagram-js/lib/core/GraphicsFactory";
 import type { Connection, Shape } from "diagram-js/lib/model/Types";
 import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
+import { withBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
 import { CARD_ID_DEFINITION, type ModelElement } from "../exchange/exchangeModel";
 import type { ElementType } from "../taxonomy/elements";
@@ -11,13 +12,12 @@ import type ArchimateElementFactory from "./ArchimateElementFactory";
 import type ArchimateModeling from "./ArchimateModeling";
 import { attr as svgAttr } from "tiny-svg";
 import { wrapText } from "./ArchimateRenderer";
-import { ARCHIMATE_MODULES } from "./modules";
 
 beforeAll(installSvgStubs);
 
 function setup() {
   const container = document.createElement("div");
-  const diagram = new Diagram({ canvas: { container }, modules: ARCHIMATE_MODULES });
+  const diagram = new Diagram({ canvas: { container }, modules: withBridge() });
   const factory = diagram.get<ArchimateElementFactory>("elementFactory");
   const modeling = diagram.get<ArchimateModeling>("modeling");
   const canvas = diagram.get<Canvas>("canvas");

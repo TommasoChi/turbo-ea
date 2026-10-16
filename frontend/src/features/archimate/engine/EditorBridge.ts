@@ -19,6 +19,8 @@ export interface EditorLabels {
   /** "Draw {{relationship}}" */
   connect: (relationship: string) => string;
   unlinked: string;
+  /** Palette tool titles; the palette falls back to English when the bridge has none. */
+  tools?: { hand: string; lasso: string };
 }
 
 export interface EditorBridge {

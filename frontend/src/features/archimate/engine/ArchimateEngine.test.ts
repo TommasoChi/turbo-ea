@@ -3,14 +3,14 @@ import type Selection from "diagram-js/lib/features/selection/Selection";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type { Shape } from "diagram-js/lib/model/Types";
 import { MODEL } from "@/test/archimateModel";
+import { makeBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
 import { CARD_ID_DEFINITION, getCardId, type ArchimateModel } from "../exchange/exchangeModel";
 import { ArchimateEngine } from "./ArchimateEngine";
-import type { EditorBridge } from "./EditorBridge";
 
 beforeAll(installSvgStubs);
 
-const bridge = {} as EditorBridge;
+const bridge = makeBridge();
 /** load() works on a copy: no edit may reach the shared fixture. */
 const PRISTINE = structuredClone(MODEL);
 

@@ -4,16 +4,16 @@ import type Canvas from "diagram-js/lib/core/Canvas";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type { Connection, Shape } from "diagram-js/lib/model/Types";
 import type { ElementType } from "../taxonomy/elements";
+import { withBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import type ArchimateModeling from "./ArchimateModeling";
-import { ARCHIMATE_MODULES } from "./modules";
 
 beforeAll(installSvgStubs);
 
 function setup() {
   const container = document.createElement("div");
-  const diagram = new Diagram({ canvas: { container }, modules: ARCHIMATE_MODULES });
+  const diagram = new Diagram({ canvas: { container }, modules: withBridge() });
   const modeling = diagram.get<ArchimateModeling>("modeling");
   const factory = diagram.get<ArchimateElementFactory>("elementFactory");
   const root = diagram.get<Canvas>("canvas").getRootElement();

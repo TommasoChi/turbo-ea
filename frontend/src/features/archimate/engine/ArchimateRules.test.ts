@@ -7,13 +7,13 @@ import type Dragging from "diagram-js/lib/features/dragging/Dragging";
 import type Resize from "diagram-js/lib/features/resize/Resize";
 import type Rules from "diagram-js/lib/features/rules/Rules";
 import type { Connection, Shape } from "diagram-js/lib/model/Types";
+import { withBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
 import type { ElementType } from "../taxonomy/elements";
 import { isRelationshipAllowed } from "../taxonomy/relationships";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import type ArchimateModeling from "./ArchimateModeling";
 import { canNestIn, connectionAttrs, MIN_SIZE } from "./ArchimateRules";
-import { ARCHIMATE_MODULES } from "./modules";
 import type { RelationshipTool } from "./RelationshipTool";
 
 beforeAll(() => {
@@ -71,7 +71,7 @@ describe("MIN_SIZE", () => {
 function setup() {
   const container = document.createElement("div");
   document.body.appendChild(container);
-  const diagram = new Diagram({ canvas: { container }, modules: ARCHIMATE_MODULES });
+  const diagram = new Diagram({ canvas: { container }, modules: withBridge() });
   const get = <T,>(name: string) => diagram.get<T>(name);
   const modeling = get<ArchimateModeling>("modeling");
   const factory = get<ElementFactoryLike>("elementFactory");
