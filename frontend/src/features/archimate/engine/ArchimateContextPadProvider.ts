@@ -26,8 +26,12 @@ export function hasTargetFor(type: ElementType, rel: RelationshipType): boolean 
   return ELEMENT_TYPES.some((target) => !isConnector(target) && isRelationshipAllowed(type, target, rel));
 }
 
-const ENTRY = (inner: string) => `<div class="entry archimate-cp-entry">${inner}</div>`;
-const SYMBOL = (name: string) => ENTRY(`<span class="material-symbols-outlined">${name}</span>`);
+const escapeAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+// `aria-label` mirrors the (translated) title: the entry is only an icon.
+const ENTRY = (inner: string, title: string) =>
+  `<div class="entry archimate-cp-entry" aria-label="${escapeAttr(title)}">${inner}</div>`;
+const SYMBOL = (name: string, title: string) =>
+  ENTRY(`<span class="material-symbols-outlined">${name}</span>`, title);
 
 export default class ArchimateContextPadProvider {
   static $inject = ["contextPad", "connect", "modeling", "relationshipTool", "bridge", "elementRegistry"];
@@ -65,11 +69,12 @@ export default class ArchimateContextPadProvider {
         this.relationshipTool.set(rel, rel === "Access" ? "Access" : undefined);
         this.connect.start(event as MouseEvent, el as Element);
       };
+      const title = labels.connect(labels.relationships[rel]);
       entries[`connect.${rel}`] = {
         group: "connect",
-        title: labels.connect(labels.relationships[rel]),
+        title,
         // An Access with no access type is drawn with no arrow head: the sample shows the common one.
-        html: ENTRY(relationshipSvg(rel, rel === "Access" ? "Write" : undefined)),
+        html: ENTRY(relationshipSvg(rel, rel === "Access" ? "Write" : undefined), title),
         action: { dragstart: start, click: start },
       };
     }
@@ -77,20 +82,20 @@ export default class ArchimateContextPadProvider {
       const cardId = getCardId(bo);
       if (cardId === null) {
         entries["link-card"] = {
-          group: "card", title: labels.linkCard, html: SYMBOL("add_link"),
+          group: "card", title: labels.linkCard, html: SYMBOL("link", labels.linkCard),
           action: { click: () => this.bridge.openLinkPicker(shape.id) },
         };
         entries["create-card"] = {
-          group: "card", title: labels.createCard, html: SYMBOL("link"),
+          group: "card", title: labels.createCard, html: SYMBOL("add_link", labels.createCard),
           action: { click: () => this.bridge.openCreateCard(shape.id) },
         };
       } else {
         entries["open-card"] = {
-          group: "card", title: labels.openCard, html: SYMBOL("open_in_new"),
+          group: "card", title: labels.openCard, html: SYMBOL("open_in_new", labels.openCard),
           action: { click: () => this.bridge.openCard(cardId) },
         };
         entries["unlink-card"] = {
-          group: "card", title: labels.unlinkCard, html: SYMBOL("link_off"),
+          group: "card", title: labels.unlinkCard, html: SYMBOL("link_off", labels.unlinkCard),
           action: { click: () => this.modeling.updateProperties(shape, { cardId: null }) },
         };
       }
@@ -109,7 +114,7 @@ export default class ArchimateContextPadProvider {
           group: "access",
           title: labels.access[accessType],
           className: accessType === current ? "active" : undefined,
-          html: ENTRY(relationshipSvg("Access", accessType)),
+          html: ENTRY(relationshipSvg("Access", accessType), labels.access[accessType]),
           action: { click: () => this.modeling.updateProperties(connection, { accessType }) },
         };
       }
@@ -119,7 +124,7 @@ export default class ArchimateContextPadProvider {
         group: "access",
         title: labels.directed,
         className: rel.isDirected ? "active" : undefined,
-        html: SYMBOL("arrow_right_alt"),
+        html: SYMBOL("arrow_right_alt", labels.directed),
         action: { click: () => this.modeling.updateProperties(connection, { isDirected: !rel.isDirected }) },
       };
     }
@@ -129,7 +134,7 @@ export default class ArchimateContextPadProvider {
 
   private deleteEntry(element: Element): ContextPadEntries[string] {
     return {
-      group: "edit", title: this.bridge.labels.delete, html: SYMBOL("delete"),
+      group: "edit", title: this.bridge.labels.delete, html: SYMBOL("delete", this.bridge.labels.delete),
       action: { click: () => this.remove(element) },
     };
   }

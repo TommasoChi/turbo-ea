@@ -86,7 +86,7 @@
     "title": "فحص النموذج",
     "ok": "لم يتم العثور على مشكلات.",
     "issueCount_zero": "لم يتم العثور على أي مشكلة",
-    "issueCount_one": "تم العثور على مشكلة واحدة",
+    "issueCount_one": "تم العثور على {{count}} مشكلة",
     "issueCount_two": "تم العثور على مشكلتين",
     "issueCount_few": "تم العثور على {{count}} مشكلات",
     "issueCount_many": "تم العثور على {{count}} مشكلة",

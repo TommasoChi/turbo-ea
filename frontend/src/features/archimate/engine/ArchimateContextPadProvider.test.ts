@@ -92,6 +92,34 @@ describe("ArchimateContextPadProvider, element entries", () => {
     }
   });
 
+  it("labels every entry for assistive tech with its title, and swaps no icons", () => {
+    const { add, entriesOf, bridge, modeling } = setup();
+    vi.mocked(bridge.cardTypesFor).mockReturnValue([{ key: "Application", label: "Application" }]);
+    const shape = add("ApplicationComponent");
+    const icon = (e: ContextPadEntries[string]) => /material-symbols-outlined">([a-z_]+)</.exec(String(e.html))?.[1];
+    const check = (entries: ContextPadEntries) => {
+      for (const e of Object.values(entries)) expect(e.html).toContain(`aria-label="${e.title}"`);
+    };
+    const unlinked = entriesOf(shape);
+    check(unlinked);
+    expect([icon(unlinked["link-card"]), icon(unlinked["create-card"])]).toEqual(["link", "add_link"]);
+    modeling.updateProperties(shape, { cardId: "c1" });
+    check(entriesOf(shape));
+  });
+
+  it("escapes a title with quotes in the aria-label", () => {
+    const { add, entriesOf, bridge } = setup();
+    const before = bridge.labels.delete; // the labels object is shared between tests
+    bridge.labels.delete = 'Remove "x" <now> & go';
+    try {
+      expect(entriesOf(add("BusinessActor"))["delete"].html).toContain(
+        'aria-label="Remove &quot;x&quot; &lt;now> &amp; go"',
+      );
+    } finally {
+      bridge.labels.delete = before;
+    }
+  });
+
   it("offers link/create for an unlinked element and open/unlink once linked", () => {
     const { add, entriesOf, bridge, modeling } = setup();
     vi.mocked(bridge.cardTypesFor).mockReturnValue([{ key: "Application", label: "Application" }]);
@@ -202,6 +230,7 @@ describe("ArchimateContextPadProvider, connection entries", () => {
       expect(entries[`access.${a}`].group).toBe("access");
       expect(entries[`access.${a}`].title).toBe(`L:${a}`);
       expect(entries[`access.${a}`].html).toContain("<svg");
+      expect(entries[`access.${a}`].html).toContain(`aria-label="L:${a}"`);
       expect((entries[`access.${a}`].className ?? "").includes("active")).toBe(a === (bo.accessType ?? "Access"));
     }
     expect(entries["delete"]).toBeDefined();
@@ -227,6 +256,7 @@ describe("ArchimateContextPadProvider, connection entries", () => {
     const { connection, entriesOf, click, bo, get } = connectWith("Association");
     expect(Object.keys(entriesOf(connection)).sort()).toEqual(["delete", "directed"]);
     expect(entriesOf(connection)["directed"].title).toBe("L:directed");
+    expect(entriesOf(connection)["directed"].html).toContain('aria-label="L:directed"');
     expect((entriesOf(connection)["directed"].className ?? "").includes("active")).toBe(false);
     click(entriesOf(connection), "directed", connection);
     expect(bo.isDirected).toBe(true);

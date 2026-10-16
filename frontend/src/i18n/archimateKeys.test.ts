@@ -34,6 +34,10 @@ const placeholders = (v: string) => [...v.matchAll(/\{\{(\w+)\}\}/g)].map((m) =>
 const en = load("en");
 const enFlat = flatten(en);
 
+/** Every issueCount variant that takes a number must show it; only ar `_zero`/`_two` may use a word instead. */
+const countless = (locale: string, k: string) => locale === "ar" && /_(zero|two)$/.test(k);
+const issueCountKeys = (flat: Record<string, string>) => Object.keys(flat).filter((k) => k.startsWith("validation.issueCount_"));
+
 /** The 14 codes of the server validator plus `missing_identifier` (backend/app/services/archimate/validate.py). */
 const SERVER_CODES = [
   "too_large", "xml_invalid", "dtd_forbidden", "wrong_root", "missing_identifier",
@@ -51,6 +55,11 @@ describeSourceScan("English archimate namespace", () => {
   it("has the issueCount plural pair", () => {
     expect(typeof (en.validation as Tree).issueCount_one).toBe("string");
     expect(typeof (en.validation as Tree).issueCount_other).toBe("string");
+  });
+
+  it("every issueCount variant contains {{count}}", () => {
+    expect(issueCountKeys(enFlat).sort()).toEqual(["validation.issueCount_one", "validation.issueCount_other"]);
+    for (const k of issueCountKeys(enFlat)) expect(enFlat[k], k).toContain("{{count}}");
   });
 
   it("has the engine's tools and directed labels", () => {
@@ -90,6 +99,12 @@ describeSourceScan.each(LOCALES.filter((l) => l !== "en"))("archimate/%s", (loca
     for (const k of Object.keys(enFlat).filter((x) => x.endsWith("_one"))) {
       for (const cat of required) expect(flat[`${base(k)}_${cat}`], `${base(k)}_${cat}`).toBeTypeOf("string");
     }
+  });
+
+  it("shows {{count}} in every issueCount variant that takes a number", () => {
+    const keys = issueCountKeys(flat);
+    expect(keys.length).toBeGreaterThanOrEqual(required.length);
+    for (const k of keys.filter((x) => !countless(locale, x))) expect(flat[k], `${locale} ${k}`).toContain("{{count}}");
   });
 
   it("keeps the {{placeholders}} of every non-plural key and of _other", () => {
