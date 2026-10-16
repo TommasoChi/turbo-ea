@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   CARD_ID_DEFINITION, emptyModel, getCardId, linkedCardIds, newIdentifier, withCardDefinition, withCardId,
   type ModelElement,
@@ -8,10 +8,19 @@ const element = (id: string, cardId: string | null): ModelElement =>
   withCardId({ id, type: "ApplicationComponent", name: id, properties: [] }, cardId);
 
 describe("exchange model helpers", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   it("identifiers are valid XML IDs and unique", () => {
     const ids = Array.from({ length: 50 }, () => newIdentifier());
     expect(new Set(ids).size).toBe(50);
     for (const id of ids) expect(id).toMatch(/^id-[0-9a-f-]{36}$/);
+  });
+
+  it("newIdentifier falls back to getRandomValues when crypto.randomUUID is unavailable", () => {
+    vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    const ids = Array.from({ length: 50 }, () => newIdentifier());
+    expect(new Set(ids).size).toBe(50);
+    for (const id of ids) expect(id).toMatch(/^id-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 
   it("newIdentifier accepts an injected generator", () => expect(newIdentifier(() => "abc")).toBe("id-abc"));

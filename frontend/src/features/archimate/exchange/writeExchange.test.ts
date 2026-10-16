@@ -45,9 +45,49 @@ describe("writeExchange", () => {
     expect(parse(writeExchange(m)).documentElement.firstElementChild!.textContent).toBe("xyz");
   });
 
-  it("escapes attribute values", () => {
-    const m: ArchimateModel = { ...MODEL, relationships: [{ ...MODEL.relationships[0], influenceModifier: '"<&>"' }] };
-    expect(parse(writeExchange(m)).getElementsByTagName("parsererror")).toHaveLength(0);
+  it("escapes attribute values and round-trips them", () => {
+    const hostile = "\"<&>\"'\n\tx";
+    const m: ArchimateModel = {
+      ...MODEL,
+      relationships: [{ id: "id-i", type: "Influence", source: "id-app", target: "id-node", influenceModifier: hostile, properties: [] }],
+    };
+    const out = writeExchange(m);
+    expect(out).toContain('modifier="&quot;&lt;&amp;&gt;&quot;&apos;&#10;&#9;x"');
+    const d = parse(out);
+    expect(d.getElementsByTagName("parsererror")).toHaveLength(0);
+    expect(byId(d, "relationship", "id-i").getAttribute("modifier")).toBe(hostile);
+  });
+
+  it("round-trips multi-line text byte-exact at any depth", () => {
+    const text = "line1\r\n  indented line\nline3\r\n\r\nend  ";
+    const m = structuredClone(MODEL);
+    m.elements[0].documentation = text;
+    m.elements[0].properties.push({ ref: "other", value: text });
+    m.views[0].documentation = text;
+    const d = parse(writeExchange(m));
+    const app = byId(d, "element", "id-app");
+    expect(all(app, "documentation")[0].textContent).toBe(text);
+    expect(all(app, "value").map((v) => v.textContent)).toEqual(["c1", text]);
+    expect(all(all(d, "view")[0], "documentation")[0].textContent).toBe(text);
+  });
+
+  it("drops lone surrogates but keeps valid pairs", () => {
+    const m: ArchimateModel = { ...MODEL, name: "a\uD800b\uDC00c😀" };
+    expect(parse(writeExchange(m)).documentElement.firstElementChild!.textContent).toBe("abc😀");
+  });
+
+  it("writes self-parented and cyclic nodes top-level instead of dropping or looping", () => {
+    const m = structuredClone(MODEL);
+    const [n1, g1, n2] = m.views[0].nodes;
+    n1.parent = "id-n1"; // self
+    g1.parent = "id-n2"; // cycle g1 <-> n2
+    n2.parent = "id-g1";
+    const d = parse(writeExchange(m));
+    expect(all(d, "node").map((n) => n.getAttribute("identifier")).sort()).toEqual(["id-g1", "id-n1", "id-n2"]);
+    const view = all(d, "view")[0];
+    expect(Array.from(view.children).filter((c) => c.localName === "node").map((c) => c.getAttribute("identifier"))).toEqual(["id-n1", "id-g1"]);
+    expect(byId(d, "node", "id-n2").parentElement).toBe(byId(d, "node", "id-g1"));
+    expect([byId(d, "node", "id-n1").getAttribute("x"), byId(d, "node", "id-g1").getAttribute("x")]).toEqual(["10", "100"]);
   });
 
   it("writes xsi:type and the type-specific relationship attributes", () => {
