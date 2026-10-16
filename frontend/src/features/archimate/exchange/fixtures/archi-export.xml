@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd"
+       identifier="id-archi-model">
+  <name xml:lang="en">Archi sample</name>
+  <documentation xml:lang="en">Exported by Archi</documentation>
+  <elements>
+    <element identifier="id-archi-actor" xsi:type="BusinessActor">
+      <name xml:lang="en">Customer</name>
+    </element>
+    <element identifier="id-archi-process" xsi:type="BusinessProcess">
+      <name xml:lang="en">Order handling</name>
+      <documentation xml:lang="en">Handles orders</documentation>
+      <properties>
+        <property propertyDefinitionRef="id-archi-propdef-owner">
+          <value xml:lang="en">Sales</value>
+        </property>
+      </properties>
+    </element>
+    <element identifier="id-archi-and" xsi:type="AndJunction"/>
+    <element identifier="id-archi-group" xsi:type="Grouping">
+      <name xml:lang="en">Zone</name>
+    </element>
+    <element identifier="id-archi-app" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Order portal</name>
+    </element>
+  </elements>
+  <relationships>
+    <relationship identifier="id-archi-r1" xsi:type="Assignment" source="id-archi-actor" target="id-archi-and"/>
+    <relationship identifier="id-archi-r2" xsi:type="Assignment" source="id-archi-and" target="id-archi-process"/>
+    <relationship identifier="id-archi-r3" xsi:type="Serving" source="id-archi-app" target="id-archi-process"/>
+  </relationships>
+  <organizations>
+    <item>
+      <label xml:lang="en">Business</label>
+      <item identifierRef="id-archi-actor"/>
+      <item identifierRef="id-archi-process"/>
+    </item>
+    <item>
+      <label xml:lang="en">Relations</label>
+      <item identifierRef="id-archi-r1"/>
+      <item identifierRef="id-archi-r2"/>
+      <item identifierRef="id-archi-r3"/>
+    </item>
+  </organizations>
+  <propertyDefinitions>
+    <propertyDefinition identifier="id-archi-propdef-owner" type="string">
+      <name xml:lang="en">owner</name>
+    </propertyDefinition>
+  </propertyDefinitions>
+  <views>
+    <diagrams>
+      <view identifier="id-archi-view" xsi:type="Diagram">
+        <name xml:lang="en">Overview</name>
+        <node identifier="id-archi-n1" xsi:type="Element" elementRef="id-archi-actor" x="10" y="10" w="120" h="55"/>
+        <node identifier="id-archi-n2" xsi:type="Element" elementRef="id-archi-and" x="170" y="30" w="15" h="15"/>
+        <node identifier="id-archi-n3" xsi:type="Element" elementRef="id-archi-process" x="230" y="10" w="120" h="55"/>
+        <node identifier="id-archi-n4" xsi:type="Element" elementRef="id-archi-group" x="100" y="100" w="300" h="160">
+          <style>
+            <fillColor r="255" g="0" b="0"/>
+            <lineColor r="92" g="92" b="92"/>
+            <font name="Segoe UI" size="9"/>
+          </style>
+          <node identifier="id-archi-n5" xsi:type="Element" elementRef="id-archi-app" x="20" y="30" w="120" h="55"/>
+        </node>
+        <connection identifier="id-archi-c1" xsi:type="Relationship" relationshipRef="id-archi-r1" source="id-archi-n1" target="id-archi-n2"/>
+        <connection identifier="id-archi-c2" xsi:type="Relationship" relationshipRef="id-archi-r2" source="id-archi-n2" target="id-archi-n3">
+          <style>
+            <lineColor r="0" g="0" b="0"/>
+          </style>
+          <bendpoint x="190" y="80"/>
+        </connection>
+        <connection identifier="id-archi-c3" xsi:type="Relationship" relationshipRef="id-archi-r3" source="id-archi-n5" target="id-archi-n3"/>
+      </view>
+    </diagrams>
+  </views>
+</model>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd"
+       identifier="id-multi-model">
+  <name xml:lang="en">Two views</name>
+  <elements>
+    <element identifier="id-multi-actor" xsi:type="BusinessActor"><name xml:lang="en">Customer</name></element>
+    <element identifier="id-multi-process" xsi:type="BusinessProcess"><name xml:lang="en">Order handling</name></element>
+  </elements>
+  <relationships>
+    <relationship identifier="id-multi-r1" xsi:type="Assignment" source="id-multi-actor" target="id-multi-process"/>
+  </relationships>
+  <views>
+    <diagrams>
+      <view identifier="id-multi-v1" xsi:type="Diagram">
+        <name xml:lang="en">First</name>
+        <node identifier="id-multi-n1" xsi:type="Element" elementRef="id-multi-actor" x="10" y="10" w="120" h="55"/>
+        <node identifier="id-multi-n2" xsi:type="Element" elementRef="id-multi-process" x="200" y="10" w="120" h="55"/>
+        <connection identifier="id-multi-c1" xsi:type="Relationship" relationshipRef="id-multi-r1" source="id-multi-n1" target="id-multi-n2"/>
+      </view>
+      <view identifier="id-multi-v2" xsi:type="Diagram">
+        <name xml:lang="en">Second</name>
+        <documentation xml:lang="en">Only the actor</documentation>
+        <node identifier="id-multi-n3" xsi:type="Element" elementRef="id-multi-actor" x="40" y="40" w="120" h="55"/>
+      </view>
+    </diagrams>
+  </views>
+</model>
