@@ -63,7 +63,10 @@ export default function ArchimateSandboxPage() {
         setLoadFailed(false);
       })
       .catch(() => {
-        if (current) setLoadFailed(true);
+        if (!current) return;
+        // Never show rows from before the failed reload next to its error: they may be stale.
+        setRows(null);
+        setLoadFailed(true);
       });
     return () => {
       current = false;

@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { useParams } from "react-router";
+import { ApiError } from "@/api/client";
 import i18n from "@/i18n";
 import { mockApi } from "@/test/apiMock";
 import { hookState } from "@/test/hooks";
@@ -217,5 +218,24 @@ describe("ArchimateSandboxPage", () => {
     await user.click(within(dialog).getByRole("button", { name: i18n.t("common:actions.cancel") }));
     // The dialog is still in the DOM (closing transition): its text must not have gone blank.
     expect(screen.getByText(t("sandbox.deleteBody", { name: "Landscape" }))).toBeInTheDocument();
+  });
+
+  it("drops the stale rows and shows the load error when the reload after a delete fails", async () => {
+    let reads = 0;
+    mockApi.on("get", "/diagrams?kind=archimate", () => {
+      if (++reads > 1) throw new ApiError("boom", 500, "boom");
+      return ROWS;
+    });
+    mockApi.on("delete", "/diagrams/d1", null);
+    const { user } = renderPage();
+    await screen.findByText("Landscape");
+    await user.click(screen.getByRole("button", { name: `${t("sandbox.delete")} Landscape` }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: t("sandbox.delete") }));
+
+    expect(await screen.findByText(t("sandbox.loadFailed"))).toBeInTheDocument();
+    expect(screen.getByText(t("sandbox.deleted"))).toBeInTheDocument();
+    expect(screen.queryByText("Landscape")).not.toBeInTheDocument();
+    expect(screen.queryByText("Target")).not.toBeInTheDocument();
+    expect(screen.queryByText(t("sandbox.empty"))).not.toBeInTheDocument();
   });
 });
