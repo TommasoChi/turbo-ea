@@ -1575,7 +1575,7 @@ function GeneralTab() {
       {/* ArchiMate Module Toggle */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="schema" size={22} color="#555" />
+          <MaterialSymbol icon="schema" size={22} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.archimate.title")}
           </Typography>

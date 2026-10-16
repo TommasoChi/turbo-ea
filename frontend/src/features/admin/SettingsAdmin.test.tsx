@@ -567,6 +567,14 @@ describe("SettingsAdmin — module toggles", () => {
     expect(card.getByRole("checkbox", { name: t("settings.archimate.hidden") })).not.toBeChecked();
   });
 
+  it("shows ArchiMate as disabled when the backend does not send the flag", async () => {
+    scriptLoad({ bootstrap: { archimate_enabled: undefined } });
+    await renderGeneral();
+    const card = section(t("settings.archimate.title"));
+    expect(card.getByText(t("settings.archimate.disabled"))).toBeInTheDocument();
+    expect(card.getByRole("checkbox", { name: t("settings.archimate.hidden") })).not.toBeChecked();
+  });
+
   it("turns ArchiMate on and broadcasts the flag", async () => {
     const { user } = await renderGeneral();
     mockApi.on("patch", "/settings/archimate-enabled", {});
