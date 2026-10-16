@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Suspense, lazy } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
@@ -205,6 +205,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 function GeneralTab() {
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation(["admin", "common"]);
   const currencyOptions = useMemo(
     () => CURRENCY_CODES.map((code) => ({ code, label: currencyOptionLabel(code, i18n.language) })),
@@ -1601,6 +1602,17 @@ function GeneralTab() {
           }
           label={archimateEnabled ? t("settings.archimate.visible") : t("settings.archimate.hidden")}
         />
+        {archimateEnabled && (
+          <Box sx={{ mt: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<MaterialSymbol icon="open_in_new" size={18} />}
+              onClick={() => navigate("/admin/archimate")}
+            >
+              {t("settings.archimate.openSandbox")}
+            </Button>
+          </Box>
+        )}
       </Paper>
 
       {/* Update check toggle */}

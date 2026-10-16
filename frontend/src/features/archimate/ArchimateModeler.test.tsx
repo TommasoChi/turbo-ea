@@ -753,7 +753,11 @@ describe("source hygiene", () => {
 
   itSourceScan("creates a card only in CreateCardDialog", () => {
     const posts = sources.filter((f) => /api\.post/.test(readFileSync(resolve(dir, f), "utf-8")));
-    expect(posts).toEqual(["ArchimateModeler.tsx", "CreateCardDialog.tsx"]);
+    // The sandbox page posts a new DIAGRAM (never a card).
+    expect(posts).toEqual(["ArchimateModeler.tsx", "ArchimateSandboxPage.tsx", "CreateCardDialog.tsx"]);
     expect(readFileSync(resolve(dir, "ArchimateModeler.tsx"), "utf-8")).not.toMatch(/["'`]\/cards["'`]/);
+    const sandbox = readFileSync(resolve(dir, "ArchimateSandboxPage.tsx"), "utf-8");
+    expect(sandbox).not.toMatch(/["'`]\/cards/);
+    expect(sandbox.match(/api\.post[^(]*\(\s*"([^"]+)"/g)).toEqual(['api.post<{ id: string }>("/diagrams"']);
   });
 });

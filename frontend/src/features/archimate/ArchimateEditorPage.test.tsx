@@ -6,8 +6,8 @@ import ArchimateEditorPage from "./ArchimateEditorPage";
 
 // The editor itself is covered by ArchimateModeler.test.tsx; here only the page's wiring is asserted.
 const mounts = vi.hoisted(() => ({ count: 0 }));
-vi.mock("./ArchimateModeler", () => ({
-  default: ({ diagramId, onBack }: { diagramId: string; onBack?: () => void }) => {
+vi.mock("./ArchimateModeler", () => {
+  function FakeModeler({ diagramId, onBack }: { diagramId: string; onBack?: () => void }) {
     const instance = useRef<number | null>(null);
     if (instance.current === null) instance.current = ++mounts.count;
     return (
@@ -17,8 +17,9 @@ vi.mock("./ArchimateModeler", () => ({
         <button onClick={onBack}>back</button>
       </div>
     );
-  },
-}));
+  }
+  return { default: FakeModeler };
+});
 
 function Where() {
   const nav = useNavigate();

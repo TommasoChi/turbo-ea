@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import i18n from "@/i18n";
 import en from "@/i18n/locales/en/nav.json";
 import { itSourceScan } from "@/test/sourceScan";
 
@@ -24,6 +25,15 @@ describe("titleKeyForPath", () => {
   it("resolves a concrete path", () => {
     expect(titleKeyForPath("/inventory")).toBe("inventory");
     expect(titleKeyForPath("/cards/abc-123")).toBe("pageTitles.card");
+  });
+
+  it("titles both ArchiMate sandbox routes from the archimate namespace", () => {
+    for (const p of ["/admin/archimate", "/admin/archimate/abc"]) {
+      const key = titleKeyForPath(p);
+      expect(key).toBe("archimate:sandbox.title");
+      // DocumentTitle resolves it with t = useTranslation("nav").t
+      expect(i18n.t(key!, { lng: "en", ns: "nav" })).toBe("ArchiMate sandbox");
+    }
   });
 
   it("prefers the more specific pattern", () => {
@@ -150,11 +160,14 @@ describe("parity", () => {
    * i18next renders an unknown key as the key itself, so a typo would ship a
    * tab reading «pageTitles.crad | Turbo EA» with nothing to catch it.
    */
-  it("only names keys the nav namespace actually defines", () => {
+  it("only names keys the nav namespace (or the namespace they are prefixed with) defines", () => {
     const keys = en as Record<string, string>;
     for (const { path: routePath, titleKey } of ROUTE_TITLES) {
+      const resolved = titleKey.includes(":")
+        ? i18n.t(titleKey, { lng: "en", ns: "nav" })
+        : keys[titleKey];
       expect(
-        typeof keys[titleKey] === "string" && keys[titleKey].length > 0,
+        typeof resolved === "string" && resolved.length > 0 && resolved !== titleKey,
         `${routePath} names unknown nav key "${titleKey}"`,
       ).toBe(true);
     }

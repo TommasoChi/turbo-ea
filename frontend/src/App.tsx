@@ -81,6 +81,8 @@ const PrinciplesCataloguePage = lazy(
 );
 const ValueChainPage = lazy(() => import("@/features/value-chain/ValueChainPage"));
 const ValueStreamPage = lazy(() => import("@/features/value-chain/ValueStreamPage"));
+const ArchimateSandboxPage = lazy(() => import("@/features/archimate/ArchimateSandboxPage"));
+const ArchimateEditorPage = lazy(() => import("@/features/archimate/ArchimateEditorPage"));
 
 /** Preserve the :id when redirecting /ea-delivery/risks/:id → /grc/risks/:id. */
 function LegacyRiskDetailRedirect() {
@@ -216,6 +218,8 @@ function AppRoutes() {
                 <Route path="/admin/eol" element={<Navigate to="/admin/settings?tab=eol" />} />
                 <Route path="/admin/web-portals" element={<Navigate to="/admin/settings?tab=web-portals" />} />
                 <Route path="/admin/servicenow" element={<Navigate to="/admin/settings?tab=servicenow" />} />
+                <Route path="/admin/archimate" element={<ModuleGate module="archimate"><ArchimateSandboxPage /></ModuleGate>} />
+                <Route path="/admin/archimate/:id" element={<ModuleGate module="archimate"><ArchimateEditorPage /></ModuleGate>} />
                 <Route path="/admin/extensions" element={<ExtensionsAdmin />} />
                 <Route path="/ext/*" element={<ExtensionRoutesOutlet />} />
                 <Route path="/admin/surveys" element={<SurveysAdmin />} />

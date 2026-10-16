@@ -143,6 +143,16 @@ describe("canAccessPath", () => {
     expect(canAccessPath({ "ppm.view": true }, "/bpm")).toBe(false);
   });
 
+  it("gates the ArchiMate sandbox pages on admin.settings", () => {
+    for (const p of ["/admin/archimate", "/admin/archimate/abc"]) {
+      expect(permissionForPath(p)).toBe("admin.settings");
+      expect(canAccessPath({ "admin.settings": true }, p)).toBe(true);
+      expect(canAccessPath({ "admin.users": true, "diagrams.manage": true }, p)).toBe(false);
+      expect(canAccessPath({}, p)).toBe(false);
+      expect(canAccessPath({ "*": true }, p)).toBe(true);
+    }
+  });
+
   it("gates the value chain pages on bpm.value_chain, independent of bpm.view", () => {
     for (const p of ["/value-chain", "/value-chain/value-stream"]) {
       expect(canAccessPath({ "bpm.value_chain": true }, p)).toBe(true);

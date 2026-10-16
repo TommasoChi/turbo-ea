@@ -19,7 +19,10 @@ import { matchRoutes } from "react-router";
 export interface RouteTitle {
   /** react-router path pattern — must match the one in `App.tsx` exactly. */
   path: string;
-  /** Key in the `nav` i18n namespace. */
+  /**
+   * Key in the `nav` i18n namespace, or `ns:key` for another one (i18next's namespace prefix) when
+   * the label belongs to a feature's own namespace, as the ArchiMate sandbox's does.
+   */
   titleKey: string;
 }
 
@@ -88,6 +91,11 @@ export const ROUTE_TITLES: RouteTitle[] = [
   { path: "/admin/surveys/new", titleKey: "admin.surveys" },
   { path: "/admin/surveys/:id/results", titleKey: "admin.surveys" },
   { path: "/admin/surveys/:id", titleKey: "admin.surveys" },
+
+  // The ArchiMate sandbox is reached from Admin → Settings, not from a menu; its label lives in the
+  // feature's own namespace.
+  { path: "/admin/archimate", titleKey: "archimate:sandbox.title" },
+  { path: "/admin/archimate/:id", titleKey: "archimate:sandbox.title" },
 
   // --- Extensions ---------------------------------------------------------
   // A contributed page's own name is not knowable here; the extension's route
