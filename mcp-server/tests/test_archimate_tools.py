@@ -18,6 +18,9 @@ def fake_token(monkeypatch):
     yield "test-token"
 
 
+_GET_ARCHIMATE = AsyncMock(return_value={"kind": "archimate", "name": "A", "data": {"xml": XML}})
+
+
 def _route_writes_through_batch(patch_response: dict):
     """POST/PATCH routers for a tool that runs inside ``mutation_batch``."""
     post_calls: list = []
@@ -313,9 +316,31 @@ class TestUpdateArchimateDiagram:
         assert out == "Error: diagram d1 is a DrawIO diagram; use update_diagram."
 
     @pytest.mark.asyncio
+    async def test_commit_refuses_a_drawio_diagram_without_opening_a_batch(self, fake_token):
+        get = AsyncMock(return_value={"kind": "drawio", "name": "D", "data": {"xml": "<m/>"}})
+        post, patch_, post_calls, patch_calls = _route_writes_through_batch({"id": "d1"})
+        with (
+            patch.object(server.TurboEAClient, "get", get),
+            patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=post)),
+            patch.object(server.TurboEAClient, "patch", AsyncMock(side_effect=patch_)),
+        ):
+            out = await server.update_archimate_diagram("d1", name="B", dry_run=False)
+        assert out == "Error: diagram d1 is a DrawIO diagram; use update_diagram."
+        get.assert_awaited_once_with("/diagrams/d1")
+        assert post_calls == [] and patch_calls == []
+
+    @pytest.mark.asyncio
+    async def test_update_diagram_dry_run_refuses_an_archimate_diagram(self, fake_token):
+        get = AsyncMock(return_value={"kind": "archimate", "name": "A", "data": {"xml": XML}})
+        with patch.object(server.TurboEAClient, "get", get):
+            out = await server.update_diagram("d1", name="B")
+        assert out == "Error: diagram d1 is an ArchiMate diagram; use update_archimate_diagram."
+
+    @pytest.mark.asyncio
     async def test_commit_patches_inside_a_mutation_batch_without_kind(self, fake_token):
         post, patch_, post_calls, patch_calls = _route_writes_through_batch({"id": "d1"})
         with (
+            patch.object(server.TurboEAClient, "get", _GET_ARCHIMATE),
             patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=post)),
             patch.object(server.TurboEAClient, "patch", AsyncMock(side_effect=patch_)),
         ):
@@ -349,6 +374,7 @@ class TestUpdateArchimateDiagram:
     async def test_commit_sends_only_the_fields_given(self, fake_token):
         post, patch_, _post_calls, patch_calls = _route_writes_through_batch({"id": "d1"})
         with (
+            patch.object(server.TurboEAClient, "get", _GET_ARCHIMATE),
             patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=post)),
             patch.object(server.TurboEAClient, "patch", AsyncMock(side_effect=patch_)),
         ):

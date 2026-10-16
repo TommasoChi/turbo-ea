@@ -1634,8 +1634,8 @@ async def update_diagram(
     """Update an existing DrawIO diagram. Only fields with non-empty values
     are sent; ``drawio_xml`` replaces the canvas verbatim.
 
-    DrawIO diagrams only — the server rejects ArchiMate diagrams here; use
-    update_archimate_diagram.
+    DrawIO diagrams only — for an ArchiMate diagram use
+    update_archimate_diagram (the dry run refuses an ArchiMate diagram).
 
     Args:
         diagram_id: Diagram UUID.
@@ -1668,6 +1668,11 @@ async def update_diagram(
         # current state and summarise what a commit would change.
         client = TurboEAClient(token)
         current = await client.get(f"/diagrams/{diagram_id}")
+        if isinstance(current, dict) and current.get("kind") == "archimate":
+            return (
+                f"Error: diagram {diagram_id} is an ArchiMate diagram; "
+                "use update_archimate_diagram."
+            )
         preview: dict = {
             "dry_run": True,
             "diagram_id": diagram_id,
@@ -1813,11 +1818,13 @@ async def update_archimate_diagram(
         payload["description"] = description
     if linked_card_ids is not None:
         payload["card_ids"] = list(linked_card_ids)
+    # One GET for both paths: a commit must refuse a DrawIO diagram like the dry
+    # run does (a name-only PATCH would otherwise go through), before any batch opens.
+    client = TurboEAClient(token)
+    current = await client.get(f"/diagrams/{diagram_id}")
+    if isinstance(current, dict) and current.get("kind") != "archimate":
+        return f"Error: diagram {diagram_id} is a DrawIO diagram; use update_diagram."
     if dry_run:
-        client = TurboEAClient(token)
-        current = await client.get(f"/diagrams/{diagram_id}")
-        if isinstance(current, dict) and current.get("kind") != "archimate":
-            return f"Error: diagram {diagram_id} is a DrawIO diagram; use update_diagram."
         preview: dict = {"dry_run": True, "diagram_id": diagram_id, "would_update": payload}
         if isinstance(current, dict):
             current_xml = (current.get("data") or {}).get("xml") or ""
