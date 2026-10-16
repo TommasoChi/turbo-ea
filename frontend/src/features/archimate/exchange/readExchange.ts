@@ -71,10 +71,12 @@ function identifierOf(e: Element, what: string): string {
 function intAttr(e: Element, attr: string, owner: string): number {
   const raw = e.getAttribute(attr);
   // Plain decimal integers only: no whitespace, fraction, hex or exponent.
-  if (raw === null || !/^-?\d+$/.test(raw)) {
+  const n = raw === null || !/^-?\d+$/.test(raw) ? NaN : Number(raw);
+  // A 400-digit string matches the pattern but becomes Infinity (or loses precision).
+  if (!Number.isSafeInteger(n)) {
     throw new ExchangeParseError("xml_invalid", `Attribute ${attr} of ${owner} is not an integer`, owner);
   }
-  return Number(raw);
+  return n;
 }
 
 function parseRoot(xml: string): Element {
@@ -87,6 +89,7 @@ function parseRoot(xml: string): Element {
   if (/<!\s*(?:DOCTYPE|ENTITY)/i.test(xml)) {
     throw new ExchangeParseError("dtd_forbidden", "DTDs and entities are not allowed");
   }
+  // lgtm[js/xss-through-dom] detached application/xml Document, DOCTYPE/ENTITY refused above, nothing is rendered as HTML
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.getElementsByTagName("parsererror").length > 0) {
     throw new ExchangeParseError("xml_invalid", "Malformed XML");

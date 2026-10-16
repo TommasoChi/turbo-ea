@@ -14,7 +14,7 @@ import ArchimateModeler from "./ArchimateModeler";
 import { downloadText } from "./download";
 import type { ArchimateEngine } from "./engine/ArchimateEngine";
 import { ARCHIMATE_FORMAT, getCardId, type ArchimateModel } from "./exchange/exchangeModel";
-import { readExchange } from "./exchange/readExchange";
+import { MAX_EXCHANGE_BYTES, readExchange } from "./exchange/readExchange";
 import { writeExchange } from "./exchange/writeExchange";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
@@ -638,6 +638,17 @@ describe("import", () => {
     expect(screen.getByRole("status", { hidden: true })).toHaveTextContent("Saved");
   });
 
+  it("refuses an oversized file before reading it", async () => {
+    const { user } = await mount();
+    const file = new File(["<model/>"], "big.xml", { type: "text/xml" });
+    Object.defineProperty(file, "size", { value: MAX_EXCHANGE_BYTES + 1 });
+    const read = vi.spyOn(file, "text");
+    await user.upload(screen.getByTestId("archimate-import-input"), file);
+    expect(await screen.findByText("The file could not be imported: The file is larger than 5 MB.")).toBeInTheDocument();
+    expect(read).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Replace the diagram?" })).toBeNull();
+  });
+
   it("warns about organizations of the imported file", async () => {
     const { user } = await mount();
     const xml = writeExchange(other).replace("</model>", "<organizations><label xml:lang=\"en\">F</label></organizations></model>");
@@ -739,7 +750,9 @@ describe("no card is created or deleted by editing", () => {
 
 describe("source hygiene", () => {
   const dir = __dirname;
-  const sources = readdirSync(dir).filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f));
+  const sources = readdirSync(dir)
+    .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+    .sort();
 
   itSourceScan("scans this feature's own files", () => {
     expect(sources).toEqual(expect.arrayContaining(["ArchimateModeler.tsx", "useArchimateBridge.ts", "saveError.ts"]));

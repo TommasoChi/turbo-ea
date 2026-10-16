@@ -9,15 +9,17 @@ const SCHEMA_LOCATION =
   "http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd";
 
 // XML 1.0 forbids these control characters and U+FFFE/U+FFFF, even escaped; a lone surrogate cannot be
-// encoded as UTF-8.
+// encoded as UTF-8. The second alternative matches a valid pair (kept by the replace callback), the third
+// any surrogate left over, i.e. a lone one: no lookbehind (unsupported before Safari 16.4).
 const ILLEGAL_XML =
   // eslint-disable-next-line no-control-regex
-  /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g;
+const keepPairs = (m: string) => (m.length === 2 ? m : "");
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
 
 /** Text content. A literal CR would be normalised to LF by parsers, so it is written as a character reference. */
 export function escapeXml(text: string): string {
-  return text.replace(ILLEGAL_XML, "").replace(/[&<>"']/g, (c) => ESCAPES[c]).replace(/\r/g, "&#13;");
+  return text.replace(ILLEGAL_XML, keepPairs).replace(/[&<>"']/g, (c) => ESCAPES[c]).replace(/\r/g, "&#13;");
 }
 
 // Attribute values also lose a literal tab/newline to whitespace normalisation.
@@ -71,7 +73,8 @@ function relationship(r: ModelRelationship): Xml {
 const propertyDefinition = (d: PropertyDefinition) =>
   el("propertyDefinition", { identifier: d.id, type: d.type }, [name(d.name)]);
 
-const rgb = (tag: string, c: Rgb) => el(tag, { r: int(c.r), g: int(c.g), b: int(c.b) });
+const channel = (n: number) => Math.min(255, Math.max(0, int(n)));
+const rgb = (tag: string, c: Rgb) => el(tag, { r: channel(c.r), g: channel(c.g), b: channel(c.b) });
 function style(s?: NodeStyle): Xml[] {
   if (!s || (!s.fillColor && !s.lineColor)) return [];
   return [el("style", {}, [...(s.fillColor ? [rgb("fillColor", s.fillColor)] : []), ...(s.lineColor ? [rgb("lineColor", s.lineColor)] : [])])];

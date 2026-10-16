@@ -76,6 +76,19 @@ describe("writeExchange", () => {
     expect(parse(writeExchange(m)).documentElement.firstElementChild!.textContent).toBe("abc😀");
   });
 
+  it("drops U+FFFE/U+FFFF and surrogates next to a pair without a lookbehind", () => {
+    const m: ArchimateModel = { ...MODEL, name: "x\uFFFEy\uFFFF\uD800\uD83D\uDE00\uDC00z" };
+    expect(parse(writeExchange(m)).documentElement.firstElementChild!.textContent).toBe("xy\u{1F600}z");
+  });
+
+  it("clamps the colour channels to 0..255", () => {
+    const m = structuredClone(MODEL);
+    m.views[0].nodes[0].style = { fillColor: { r: -4, g: 300.4, b: 127.6 } };
+    const n = byId(parse(writeExchange(m)), "node", "id-n1");
+    const fill = all(all(n, "style")[0], "fillColor")[0];
+    expect(["r", "g", "b"].map((k) => fill.getAttribute(k))).toEqual(["0", "255", "128"]);
+  });
+
   it("writes self-parented and cyclic nodes top-level instead of dropping or looping", () => {
     const m = structuredClone(MODEL);
     const [n1, g1, n2] = m.views[0].nodes;

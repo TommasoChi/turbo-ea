@@ -204,7 +204,7 @@ describe("readExchange: hostile and invalid input", () => {
 
   const nodeWith = (attrs: string) =>
     doc(elements(el("e1")) + views(view(`<node identifier="n1" xsi:type="Element" elementRef="e1" ${attrs}/>`)));
-  const bad = [" 5 ", "1.5", "0x1F", "1e3", "", "+5", "5px"].map((v) => [
+  const bad = [" 5 ", "1.5", "0x1F", "1e3", "", "+5", "5px", "9".repeat(400), "9007199254740993"].map((v) => [
     `non-integer x ${JSON.stringify(v)}`, nodeWith(`x="${v}" y="1" w="1" h="1"`),
   ] as const);
   it.each(bad)("%s", (_label, xml) => {

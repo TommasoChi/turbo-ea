@@ -34,7 +34,9 @@ import { archimateCanvasSx } from "./archimateStyles";
 import { downloadText } from "./download";
 import { ArchimateEngine } from "./engine/ArchimateEngine";
 import { ARCHIMATE_FORMAT, type ArchimateModel, linkedCardIds } from "./exchange/exchangeModel";
-import { ExchangeParseError, exchangeWarnings, readExchange, requireView } from "./exchange/readExchange";
+import {
+  ExchangeParseError, MAX_EXCHANGE_BYTES, exchangeWarnings, readExchange, requireView,
+} from "./exchange/readExchange";
 import { writeExchange } from "./exchange/writeExchange";
 import CreateCardDialog from "./CreateCardDialog";
 import LinkCardDialog from "./LinkCardDialog";
@@ -298,6 +300,11 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const onFileChosen = async (file: File | undefined) => {
     if (!file) return;
     setImportError(null);
+    // Refuse before reading: file.text() would load a huge file into memory first.
+    if (file.size > MAX_EXCHANGE_BYTES) {
+      setImportError(t("archimate:errors.importFailed", { reason: t("archimate:errors.exchange.too_large", { ref: "" }) }));
+      return;
+    }
     try {
       setPendingImport(parse(await file.text()));
     } catch (e) {
