@@ -5,16 +5,21 @@
  * pad, labels, keyboard) extend.
  */
 import type { ModuleDeclaration } from "didi";
+import type EventBus from "diagram-js/lib/core/EventBus";
 import AutoScrollModule from "diagram-js/lib/features/auto-scroll";
 import BendpointsModule from "diagram-js/lib/features/bendpoints";
 import ContextPadModule from "diagram-js/lib/features/context-pad";
 import ConnectModule from "diagram-js/lib/features/connect";
 import ConnectionPreviewModule from "diagram-js/lib/features/connection-preview";
+import CopyPasteModule from "diagram-js/lib/features/copy-paste";
 import CreateModule from "diagram-js/lib/features/create";
+import EditorActionsModule from "diagram-js/lib/features/editor-actions";
 import GridSnappingModule from "diagram-js/lib/features/grid-snapping";
 import HandToolModule from "diagram-js/lib/features/hand-tool";
 import HoverFixModule from "diagram-js/lib/features/hover-fix";
 import InteractionEventsModule from "diagram-js/lib/features/interaction-events";
+import KeyboardModule from "diagram-js/lib/features/keyboard";
+import KeyboardMoveSelectionModule from "diagram-js/lib/features/keyboard-move-selection";
 import LassoToolModule from "diagram-js/lib/features/lasso-tool";
 import ModelingModule from "diagram-js/lib/features/modeling";
 import MoveModule from "diagram-js/lib/features/move";
@@ -28,13 +33,17 @@ import SnappingModule from "diagram-js/lib/features/snapping";
 import CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionDocking";
 import MoveCanvasModule from "diagram-js/lib/navigation/movecanvas";
 import ZoomScrollModule from "diagram-js/lib/navigation/zoomscroll";
+import type { Element } from "diagram-js/lib/model/Types";
+import DirectEditingModule from "diagram-js-direct-editing";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 import ArchimateContextPadProvider from "./ArchimateContextPadProvider";
+import ArchimateLabelEditing from "./ArchimateLabelEditing";
 import ArchimateModeling from "./ArchimateModeling";
 import ArchimatePaletteProvider from "./ArchimatePaletteProvider";
 import ArchimateRenderer from "./ArchimateRenderer";
 import ArchimateRules from "./ArchimateRules";
 import ModelSync, { ArchimateLayouter } from "./ModelSync";
+import { ArchimateKeyboardBindings } from "./keyboardConfig";
 import { RelationshipTool } from "./RelationshipTool";
 
 /** Overrides diagram-js's own factory, modeling and layouter: it must load after ModelingModule. */
@@ -76,6 +85,22 @@ const ArchimateContextPadModule: ModuleDeclaration = {
   archimateContextPad: ["type", ArchimateContextPadProvider],
 };
 
+/** A copied element carries a deep clone of its business object; the factory gives the paste new ids and no card. */
+function copyBusinessObject(eventBus: EventBus): void {
+  eventBus.on("copyPaste.copyElement", ({ descriptor, element }: { descriptor: Record<string, unknown>; element: Element }) => {
+    if (element.businessObject) descriptor.businessObject = structuredClone(element.businessObject);
+  });
+}
+copyBusinessObject.$inject = ["eventBus"];
+
+/** Name editing, keyboard shortcuts (bound to the canvas) and copy/paste. */
+const ArchimateEditingModule: ModuleDeclaration = {
+  __depends__: [DirectEditingModule, CopyPasteModule, EditorActionsModule, KeyboardModule, KeyboardMoveSelectionModule],
+  __init__: ["archimateLabelEditing", "archimateKeyboardBindings", copyBusinessObject],
+  archimateLabelEditing: ["type", ArchimateLabelEditing],
+  archimateKeyboardBindings: ["type", ArchimateKeyboardBindings],
+};
+
 export const ARCHIMATE_BASE_MODULES: ModuleDeclaration[] = [
   ModelingModule,
   ArchimateCoreModule,
@@ -104,4 +129,5 @@ export const ARCHIMATE_MODULES: ModuleDeclaration[] = [
   ArchimateRulesModule,
   ArchimatePaletteModule,
   ArchimateContextPadModule,
+  ArchimateEditingModule,
 ];

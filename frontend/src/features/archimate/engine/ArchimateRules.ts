@@ -90,6 +90,6 @@ export default class ArchimateRules extends RuleProvider {
       const type = elementTypeOf(shape);
       return type === undefined || !CONNECTORS.includes(type);
     });
-    this.addRule(["elements.delete", "connection.start"], 1500, () => true);
+    this.addRule(["elements.delete", "connection.start", "element.copy"], 1500, () => true);
   }
 }
