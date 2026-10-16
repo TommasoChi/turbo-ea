@@ -181,9 +181,51 @@ describe("readExchange: hostile and invalid input", () => {
       elements(el("e1"), el("e2")) + relationships(rel("r1", "e1", "e2")) +
       views(view(node("n1", "e1") + node("n2", "e2"), "v1"), view(node("n3", "e1") + conn("c1", "r1", "n3", "n1"), "v2")),
     ), "dangling_reference", "c1"],
+    ["connection whose source node shows the wrong element", doc(
+      elements(el("e1"), el("e2"), el("e3")) + relationships(rel("r1", "e1", "e2")) +
+      views(view(node("n1", "e3") + node("n2", "e2") + conn("c1", "r1", "n1", "n2"))),
+    ), "dangling_reference", "c1"],
+    ["connection whose target node shows the wrong element", doc(
+      elements(el("e1"), el("e2"), el("e3")) + relationships(rel("r1", "e1", "e2")) +
+      views(view(node("n1", "e1") + node("n2", "e3") + conn("c1", "r1", "n1", "n2"))),
+    ), "dangling_reference", "c1"],
+    ["connection reversed against its relationship", doc(
+      elements(el("e1"), el("e2")) + relationships(rel("r1", "e1", "e2")) +
+      views(view(node("n1", "e1") + node("n2", "e2") + conn("c1", "r1", "n2", "n1"))),
+    ), "dangling_reference", "c1"],
+    ["connection whose source node was skipped as a label", doc(
+      elements(el("e1"), el("e2")) + relationships(rel("r1", "e1", "e2")) +
+      views(view('<node identifier="lab" xsi:type="Label" x="1" y="1" w="1" h="1"/>' + node("n2", "e2") + conn("c1", "r1", "lab", "n2"))),
+    ), "dangling_reference", "c1"],
     ["unknown accessType", doc(elements(el("e1"), el("e2")) + relationships('<relationship identifier="r1" xsi:type="Access" source="e1" target="e2" accessType="Banana"/>')), "xml_invalid", "r1"],
     ["non-numeric coordinates", doc(elements(el("e1")) + views(view('<node identifier="n1" xsi:type="Element" elementRef="e1" x="abc" y="1" w="1" h="1"/>'))), "xml_invalid", "n1"],
   ];
+
+  const nodeWith = (attrs: string) =>
+    doc(elements(el("e1")) + views(view(`<node identifier="n1" xsi:type="Element" elementRef="e1" ${attrs}/>`)));
+  const bad = [" 5 ", "1.5", "0x1F", "1e3", "", "+5", "5px"].map((v) => [
+    `non-integer x ${JSON.stringify(v)}`, nodeWith(`x="${v}" y="1" w="1" h="1"`),
+  ] as const);
+  it.each(bad)("%s", (_label, xml) => {
+    const error = failure(xml);
+    expect([error.code, error.ref]).toEqual(["xml_invalid", "n1"]);
+  });
+
+  it("accepts negative integers and rejects a missing attribute", () => {
+    expect(readExchange(nodeWith('x="-5" y="1" w="1" h="1"')).views[0].nodes[0].x).toBe(-5);
+    expect(failure(nodeWith('y="1" w="1" h="1"')).code).toBe("xml_invalid");
+  });
+
+  it.each(["256", "-1", "1.5", "red"])("rejects the colour channel %s", (v) => {
+    const xml = doc(elements(el("e1")) + views(view(node("n1", "e1", `<style><fillColor r="${v}" g="0" b="0"/></style>`))));
+    const error = failure(xml);
+    expect([error.code, error.ref]).toEqual(["xml_invalid", "n1"]);
+  });
+
+  it("accepts the colour channel bounds 0 and 255", () => {
+    const xml = doc(elements(el("e1")) + views(view(node("n1", "e1", '<style><lineColor r="0" g="255" b="0"/></style>'))));
+    expect(readExchange(xml).views[0].nodes[0].style).toEqual({ lineColor: { r: 0, g: 255, b: 0 } });
+  });
 
   it.each(cases)("%s", (_label, xml, code, ref) => {
     const error = failure(xml);
@@ -232,13 +274,9 @@ describe("readExchange: hostile and invalid input", () => {
     const nodes = Array.from({ length: depth }, (_, i) =>
       `<node identifier="n${i}" xsi:type="Element" elementRef="e1" x="1" y="1" w="10" h="10">`).join("");
     const xml = doc(elements(el("e1")) + views(view(nodes + "</node>".repeat(depth))));
-    try {
-      const m = readExchange(xml);
-      expect(m.views[0].nodes).toHaveLength(depth);
-      expect(m.views[0].nodes[depth - 1]).toMatchObject({ x: depth, y: depth, parent: `n${depth - 2}` });
-    } catch (e) {
-      expect(e).toBeInstanceOf(ExchangeParseError);
-    }
+    const m = readExchange(xml);
+    expect(m.views[0].nodes).toHaveLength(depth);
+    expect(m.views[0].nodes[depth - 1]).toMatchObject({ x: depth, y: depth, parent: `n${depth - 2}` });
   });
 
   it("truncates attacker-controlled identifiers echoed in errors", () => {
@@ -288,6 +326,15 @@ describe("readExchange: language pick", () => {
   it("prefers xml:lang=en over an earlier language", () => {
     const m = named('<name xml:lang="it">ciao</name><name xml:lang="en">hello</name>');
     expect(m.elements[0].name).toBe("hello");
+  });
+
+  it.each(["en-US", "EN-gb", "En"])("treats %s as English", (tag) => {
+    const m = named(`<name xml:lang="it">ciao</name><name xml:lang="${tag}">hello</name>`);
+    expect(m.elements[0].name).toBe("hello");
+  });
+
+  it("does not take a language that only starts with en", () => {
+    expect(named('<name xml:lang="it">ciao</name><name xml:lang="enx">no</name>').elements[0].name).toBe("ciao");
   });
 
   it("falls back to the first when there is no en", () => {

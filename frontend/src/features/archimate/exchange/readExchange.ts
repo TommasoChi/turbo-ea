@@ -2,10 +2,14 @@
  * Parses Open Group ArchiMate Exchange 3.x XML into an ArchimateModel (the exact inverse of writeExchange).
  *
  * The input is hostile by default. The checks mirror the server validator
- * (backend/app/services/archimate/validate.py) so the editor never accepts a file the server will refuse:
- * size on UTF-8 bytes and DOCTYPE/ENTITY on the raw string BEFORE the DOM parser sees anything, then
- * wrong root, unknown types, unresolved references and identifiers that are missing or not unique across
- * the WHOLE document (identifier is an xs:ID). Nothing but ExchangeParseError ever escapes.
+ * (backend/app/services/archimate/validate.py): size on UTF-8 bytes and DOCTYPE/ENTITY on the raw string
+ * BEFORE the DOM parser sees anything, then wrong root, unknown types, unresolved references, connection
+ * ends that do not match their relationship (reported as dangling_reference) and identifiers that are
+ * missing or not unique across the WHOLE document (identifier is an xs:ID). Nothing but ExchangeParseError
+ * ever escapes.
+ *
+ * NOT mirrored: the server's relationship_not_allowed (the ArchiMate relationship table, and a
+ * relationship connected to itself), so a file read here can still be refused by the server on save.
  *
  * Limitations (by design): `<organizations>` folders, labels/containers without an elementRef, plain
  * connections without a relationshipRef, fonts and other styling are ignored, and every property
@@ -53,7 +57,8 @@ const xsiType = (e: Element) => e.getAttributeNS(XSI_NS, "type");
 function localized(parent: Element, tag: string): string | undefined {
   const items = kids(parent, tag);
   if (!items.length) return undefined;
-  const en = items.find((i) => i.getAttributeNS(XML_NS, "lang") === "en");
+  // "en", "en-US", "EN-gb": any English variant.
+  const en = items.find((i) => (i.getAttributeNS(XML_NS, "lang") ?? "").toLowerCase().split("-")[0] === "en");
   return (en ?? items[0]).textContent ?? "";
 }
 
@@ -65,11 +70,11 @@ function identifierOf(e: Element, what: string): string {
 
 function intAttr(e: Element, attr: string, owner: string): number {
   const raw = e.getAttribute(attr);
-  const n = raw === null || raw.trim() === "" ? NaN : Number(raw);
-  if (!Number.isFinite(n)) {
-    throw new ExchangeParseError("xml_invalid", `Attribute ${attr} of ${owner} is not a number`, owner);
+  // Plain decimal integers only: no whitespace, fraction, hex or exponent.
+  if (raw === null || !/^-?\d+$/.test(raw)) {
+    throw new ExchangeParseError("xml_invalid", `Attribute ${attr} of ${owner} is not an integer`, owner);
   }
-  return n;
+  return Number(raw);
 }
 
 function parseRoot(xml: string): Element {
@@ -162,7 +167,11 @@ function readPropertyDefinitions(root: Element): PropertyDefinition[] {
 }
 
 function readColor(e: Element, owner: string): Rgb {
-  return { r: intAttr(e, "r", owner), g: intAttr(e, "g", owner), b: intAttr(e, "b", owner) };
+  const [r, g, b] = ["r", "g", "b"].map((c) => intAttr(e, c, owner));
+  if ([r, g, b].some((v) => v < 0 || v > 255)) {
+    throw new ExchangeParseError("xml_invalid", `Colour channel of ${owner} is outside 0..255`, owner);
+  }
+  return { r, g, b };
 }
 
 function readStyle(node: Element, owner: string): NodeStyle | undefined {
@@ -204,34 +213,43 @@ function readNodes(view: Element, elementIds: Set<string>): ViewNode[] {
 }
 
 function readConnections(
-  view: Element, nodeIds: Set<string>, relationshipIds: Set<string>,
+  view: Element, nodes: ViewNode[], relationshipEnds: Map<string, [string, string]>,
 ): ViewConnection[] {
   // Same as the server: connections are looked up anywhere inside the view.
   const raw = Array.from(view.getElementsByTagNameNS(EXCHANGE_NS, "connection"));
   const withRel = raw.filter((c) => c.getAttribute("relationshipRef") !== null);
-  const connectionIds = new Set(withRel.map((c) => c.getAttribute("identifier")).filter((i): i is string => !!i));
+  // What each diagram object shows (node -> its element, connection -> its relationship), like the server.
+  const shows = new Map(nodes.map((n) => [n.id, n.elementRef]));
+  for (const c of withRel) {
+    const cid = c.getAttribute("identifier");
+    if (cid) shows.set(cid, c.getAttribute("relationshipRef") as string);
+  }
   return withRel.map((c) => {
     const id = identifierOf(c, "Connection");
     const relationshipRef = c.getAttribute("relationshipRef") as string;
-    if (!relationshipIds.has(relationshipRef)) {
+    const ends = relationshipEnds.get(relationshipRef);
+    if (!ends) {
       throw new ExchangeParseError("dangling_reference", `relationshipRef ${relationshipRef.slice(0, MAX_ECHO)} not found`, id);
     }
     const [source, target] = [c.getAttribute("source") ?? "", c.getAttribute("target") ?? ""];
     for (const end of [source, target]) {
-      if (!nodeIds.has(end) && !connectionIds.has(end)) {
+      if (!shows.has(end)) {
         throw new ExchangeParseError("dangling_reference", `Connection endpoint ${end.slice(0, MAX_ECHO)} not found`, id);
       }
+    }
+    if (shows.get(source) !== ends[0] || shows.get(target) !== ends[1]) {
+      throw new ExchangeParseError("dangling_reference", `Connection ends do not match relationship ${relationshipRef.slice(0, MAX_ECHO)}`, id);
     }
     const bendpoints = kids(c, "bendpoint").map((b) => ({ x: intAttr(b, "x", id), y: intAttr(b, "y", id) }));
     return { id, relationshipRef, source, target, bendpoints };
   });
 }
 
-function readViews(root: Element, elementIds: Set<string>, relationshipIds: Set<string>): ModelView[] {
+function readViews(root: Element, elementIds: Set<string>, relationshipEnds: Map<string, [string, string]>): ModelView[] {
   return at(root, "views", "diagrams", "view").map((v) => {
     const id = identifierOf(v, "View");
     const nodes = readNodes(v, elementIds);
-    const connections = readConnections(v, new Set(nodes.map((n) => n.id)), relationshipIds);
+    const connections = readConnections(v, nodes, relationshipEnds);
     const out: ModelView = { id, name: localized(v, "name") ?? "", nodes, connections };
     const documentation = localized(v, "documentation");
     if (documentation !== undefined) out.documentation = documentation;
@@ -255,7 +273,7 @@ function read(xml: string): ArchimateModel {
     propertyDefinitions: readPropertyDefinitions(root),
     elements,
     relationships,
-    views: readViews(root, elementIds, relationshipIds),
+    views: readViews(root, elementIds, new Map(relationships.map((r) => [r.id, [r.source, r.target]]))),
   };
   const documentation = localized(root, "documentation");
   if (documentation !== undefined) model.documentation = documentation;
