@@ -1587,25 +1587,33 @@ async def assign_stakeholders(operations: list[dict], dry_run: bool = True) -> s
 
 
 @mcp.tool(annotations=_READ_ANNOT)
-async def list_diagrams(card_id: str = "") -> str:
-    """List free-draw diagrams, optionally filtered to one card.
+async def list_diagrams(card_id: str = "", kind: str = "drawio") -> str:
+    """List diagrams, optionally filtered to one card. Each row carries its ``kind``.
 
     Args:
         card_id: When set, returns only diagrams that link to this
             card.
+        kind: ``drawio`` (default, free-draw diagrams), ``archimate``
+            (ArchiMate diagrams) or ``all``.
     """
     token = await _get_current_token()
     if not token:
         return "Error: Not authenticated. Please reconnect."
     client = TurboEAClient(token)
-    params = {"card_id": card_id} if card_id else None
+    params = {"card_id": card_id, "kind": kind} if card_id else {"kind": kind}
     data = await client.get("/diagrams", params=params)
     return _fmt(data)
 
 
 @mcp.tool(annotations=_READ_ANNOT)
 async def get_diagram(diagram_id: str) -> str:
-    """Fetch a single diagram by id, including its DrawIO XML."""
+    """Fetch a single diagram by id.
+
+    The result carries the diagram's ``kind``: a ``drawio`` diagram includes
+    its DrawIO XML in ``data.xml``; an ``archimate`` diagram includes its
+    ArchiMate Exchange XML in ``data.xml`` (``data.format`` is
+    ``archimate-exchange-3.1``).
+    """
     token = await _get_current_token()
     if not token:
         return "Error: Not authenticated. Please reconnect."
@@ -1623,8 +1631,11 @@ async def update_diagram(
     linked_card_ids: list[str] | None = None,
     dry_run: bool = True,
 ) -> str:
-    """Update an existing diagram. Only fields with non-empty values
+    """Update an existing DrawIO diagram. Only fields with non-empty values
     are sent; ``drawio_xml`` replaces the canvas verbatim.
+
+    DrawIO diagrams only — the server rejects ArchiMate diagrams here; use
+    update_archimate_diagram.
 
     Args:
         diagram_id: Diagram UUID.
@@ -1676,6 +1687,154 @@ async def update_diagram(
     async with mutation_batch(
         token,
         tool_name="update_diagram",
+        row_count=1,
+        dry_run=False,
+    ) as batch:
+        client = batch.client()
+        data = await client.patch(f"/diagrams/{diagram_id}", json=payload)
+        if isinstance(data, dict):
+            data["batch_id"] = batch.batch_id
+            batch.summary = {"diagram_id": diagram_id}
+        return _fmt(data)
+
+
+# ── ArchiMate tools ─────────────────────────────────────────────────────────
+
+_ARCHIMATE_FORMAT = "archimate-exchange-3.1"
+
+# Mirrors ``ALL_ELEMENT_TYPES`` / ``RELATIONSHIP_TYPES`` in
+# backend/app/services/archimate/taxonomy.py (the 62 element names incl.
+# Grouping, Location and the two junctions; the 11 relationship types).
+ARCHIMATE_ELEMENT_TYPES: list[str] = [
+    "AndJunction", "ApplicationCollaboration", "ApplicationComponent", "ApplicationEvent",
+    "ApplicationFunction", "ApplicationInteraction", "ApplicationInterface", "ApplicationProcess",
+    "ApplicationService", "Artifact", "Assessment", "BusinessActor", "BusinessCollaboration",
+    "BusinessEvent", "BusinessFunction", "BusinessInteraction", "BusinessInterface",
+    "BusinessObject", "BusinessProcess", "BusinessRole", "BusinessService", "Capability",
+    "CommunicationNetwork", "Constraint", "Contract", "CourseOfAction", "DataObject", "Deliverable",
+    "Device", "DistributionNetwork", "Driver", "Equipment", "Facility", "Gap", "Goal", "Grouping",
+    "ImplementationEvent", "Location", "Material", "Meaning", "Node", "OrJunction", "Outcome",
+    "Path", "Plateau", "Principle", "Product", "Representation", "Requirement", "Resource",
+    "Stakeholder", "SystemSoftware", "TechnologyCollaboration", "TechnologyEvent",
+    "TechnologyFunction", "TechnologyInteraction", "TechnologyInterface", "TechnologyProcess",
+    "TechnologyService", "Value", "ValueStream", "WorkPackage",
+]
+
+ARCHIMATE_RELATIONSHIP_TYPES: list[str] = [
+    "Composition", "Aggregation", "Assignment", "Realization", "Serving", "Access", "Influence",
+    "Triggering", "Flow", "Specialization", "Association",
+]
+
+
+@mcp.tool(annotations=_READ_ANNOT)
+async def get_archimate_mapping() -> str:
+    """How Turbo EA types map to ArchiMate 3.x concepts (read before drawing a diagram).
+
+    Returns every card type with its ArchiMate element type and subtype overrides,
+    and every relation type with its ArchiMate relationship type, whether the
+    ArchiMate relationship runs target -> source (``reversed``) and, for Access,
+    the access type (``crud`` = derive it from the relation's CRUD flags).
+    ``notes`` lists the valid ArchiMate names.
+    """
+    token = await _get_current_token()
+    if not token:
+        return "Error: Not authenticated. Please reconnect."
+    client = TurboEAClient(token)
+    types = await client.get("/metamodel/types")
+    rels = await client.get("/metamodel/relation-types")
+    return _fmt(
+        {
+            "card_types": [
+                {
+                    "key": t["key"],
+                    "archimate_type": t.get("archimate_type"),
+                    "subtypes": {
+                        s["key"]: s.get("archimate_type") for s in t.get("subtypes") or []
+                    },
+                }
+                for t in types
+            ],
+            "relation_types": [
+                {
+                    "key": r["key"],
+                    "label": r["label"],
+                    "source": r["source_type_key"],
+                    "target": r["target_type_key"],
+                    "archimate_type": r.get("archimate_type"),
+                    "reversed": bool(r.get("archimate_reversed")),
+                    "access": r.get("archimate_access"),
+                }
+                for r in rels
+            ],
+            "notes": {
+                "element_types": ARCHIMATE_ELEMENT_TYPES,
+                "relationship_types": ARCHIMATE_RELATIONSHIP_TYPES,
+            },
+        }
+    )
+
+
+@mcp.tool(annotations=_WRITE_DESTRUCTIVE_ANNOT)
+async def update_archimate_diagram(
+    diagram_id: str,
+    exchange_xml: str = "",
+    name: str = "",
+    description: str = "",
+    linked_card_ids: list[str] | None = None,
+    dry_run: bool = True,
+) -> str:
+    """Update an existing ArchiMate diagram. Only fields with non-empty values
+    are sent; ``exchange_xml`` replaces the model verbatim.
+
+    ArchiMate diagrams only — for a DrawIO diagram use update_diagram.
+
+    Args:
+        diagram_id: Diagram UUID (must be an ``archimate`` diagram).
+        exchange_xml: New ArchiMate Open Group Exchange Format XML (omit to
+            leave unchanged).
+        name: New name (omit to leave unchanged).
+        description: New description (omit to leave unchanged).
+        linked_card_ids: Replacement link list (M:N).
+        dry_run: When True (default), nothing is written — the wrapper
+            fetches the current diagram, validates ``exchange_xml`` on the
+            server and returns a change preview with ``valid`` / ``issues``.
+    """
+    token = await _get_current_token()
+    if not token:
+        return "Error: Not authenticated. Please reconnect."
+    if (disabled := _writes_disabled_message()) is not None:
+        return disabled
+    payload: dict = {}
+    if exchange_xml:
+        payload["data"] = {"format": _ARCHIMATE_FORMAT, "xml": exchange_xml}
+    if name:
+        payload["name"] = name
+    if description:
+        payload["description"] = description
+    if linked_card_ids is not None:
+        payload["card_ids"] = list(linked_card_ids)
+    if dry_run:
+        client = TurboEAClient(token)
+        current = await client.get(f"/diagrams/{diagram_id}")
+        if isinstance(current, dict) and current.get("kind") != "archimate":
+            return f"Error: diagram {diagram_id} is a DrawIO diagram; use update_diagram."
+        preview: dict = {"dry_run": True, "diagram_id": diagram_id, "would_update": payload}
+        if isinstance(current, dict):
+            current_xml = (current.get("data") or {}).get("xml") or ""
+            preview["current"] = {
+                "name": current.get("name"),
+                "description": current.get("description"),
+                "card_ids": current.get("card_ids"),
+                "xml_chars": len(current_xml),
+            }
+        if exchange_xml:
+            verdict = await client.post("/archimate/validate", json={"xml": exchange_xml})
+            preview["valid"] = verdict["valid"]
+            preview["issues"] = verdict["issues"]
+        return _fmt(preview)
+    async with mutation_batch(
+        token,
+        tool_name="update_archimate_diagram",
         row_count=1,
         dry_run=False,
     ) as batch:
@@ -3392,6 +3551,9 @@ async def create_diagram(
 ) -> str:
     """Create a free-form DrawIO diagram, optionally linked to cards.
 
+    DrawIO diagrams only — the server rejects ArchiMate diagrams here; use
+    create_archimate_diagram.
+
     The agent is expected to provide complete DrawIO XML. Card references
     embedded as `cardId="<uuid>"` attributes on `<object>` elements are
     extracted by the backend and surface as visual links from the diagram
@@ -3446,6 +3608,69 @@ async def create_diagram(
         "card_ids": linked_card_ids,
     }
     data = await client.post("/diagrams", json=payload)
+    return _fmt(data)
+
+
+@mcp.tool(annotations=_WRITE_ADDITIVE_ANNOT)
+async def create_archimate_diagram(
+    name: str,
+    exchange_xml: str,
+    description: str = "",
+    linked_card_ids: list[str] | None = None,
+    dry_run: bool = True,
+) -> str:
+    """Create an ArchiMate diagram from ArchiMate Open Group Exchange Format XML.
+
+    Call get_archimate_mapping first to see how Turbo EA types map to ArchiMate
+    element and relationship types. The server validates the model (element and
+    relationship types, the relationship matrix, identifiers) and rejects an
+    invalid one on commit.
+
+    Args:
+        name: Diagram name.
+        exchange_xml: ArchiMate 3.x Exchange Format XML.
+        description: Optional description.
+        linked_card_ids: Optional list of card UUIDs to link to this
+            diagram (M:N).
+        dry_run: When True (default), the XML is validated on the server and
+            nothing is created; the result carries ``valid`` and ``issues``.
+            Call again with dry_run=False to actually create the diagram.
+
+    Returns: JSON with either the dry-run preview (``valid``, ``issues``) or
+    the created diagram.
+    """
+    token = await _get_current_token()
+    if not token:
+        return "Error: Not authenticated. Please reconnect."
+    if (disabled := _writes_disabled_message()) is not None:
+        return disabled
+    linked_card_ids = list(linked_card_ids or [])
+    client = TurboEAClient(token)
+    if dry_run:
+        verdict = await client.post("/archimate/validate", json={"xml": exchange_xml})
+        return _fmt(
+            {
+                "dry_run": True,
+                "valid": verdict["valid"],
+                "issues": verdict["issues"],
+                "would_create": {
+                    "name": name,
+                    "description": description,
+                    "linked_card_ids": linked_card_ids,
+                    "kind": "archimate",
+                },
+            }
+        )
+    data = await client.post(
+        "/diagrams",
+        json={
+            "name": name,
+            "description": description or None,
+            "kind": "archimate",
+            "data": {"format": _ARCHIMATE_FORMAT, "xml": exchange_xml},
+            "card_ids": linked_card_ids,
+        },
+    )
     return _fmt(data)
 
 
