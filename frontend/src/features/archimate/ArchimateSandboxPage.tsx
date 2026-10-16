@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
@@ -46,7 +47,9 @@ export default function ArchimateSandboxPage() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  // `toDelete` outlives the dialog's fade-out (the body keeps the diagram's name); `confirming` opens it.
   const [toDelete, setToDelete] = useState<DiagramRow | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [snack, setSnack] = useState("");
 
@@ -94,13 +97,24 @@ export default function ArchimateSandboxPage() {
     }
   }, [name, navigate, t]);
 
+  const askToDelete = (row: DiagramRow) => {
+    setToDelete(row);
+    setDeleteError(null);
+    setConfirming(true);
+  };
+
+  const cancelDelete = () => {
+    setConfirming(false);
+    setDeleteError(null);
+  };
+
   const remove = async () => {
     if (!toDelete) return;
     setBusy(true);
     setDeleteError(null);
     try {
       await api.delete(`/diagrams/${toDelete.id}`);
-      setToDelete(null);
+      setConfirming(false);
       setSnack(t("archimate:sandbox.deleted"));
       setReloads((n) => n + 1);
     } catch (e) {
@@ -127,6 +141,11 @@ export default function ArchimateSandboxPage() {
           {t("archimate:sandbox.loadFailed")}
         </Alert>
       )}
+      {!rows && !loadFailed && (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress />
+        </Box>
+      )}
       {rows && rows.length === 0 && (
         <Typography color="text.secondary">{t("archimate:sandbox.empty")}</Typography>
       )}
@@ -138,10 +157,20 @@ export default function ArchimateSandboxPage() {
               divider
               secondaryAction={
                 <Box sx={{ display: "flex", gap: 1 }}>
-                  <Button size="small" component={RouterLink} to={`/admin/archimate/${d.id}`}>
+                  <Button
+                    size="small"
+                    component={RouterLink}
+                    to={`/admin/archimate/${d.id}`}
+                    aria-label={`${t("archimate:sandbox.open")} ${d.name}`}
+                  >
                     {t("archimate:sandbox.open")}
                   </Button>
-                  <Button size="small" color="error" onClick={() => setToDelete(d)}>
+                  <Button
+                    size="small"
+                    color="error"
+                    onClick={() => askToDelete(d)}
+                    aria-label={`${t("archimate:sandbox.delete")} ${d.name}`}
+                  >
                     {t("archimate:sandbox.delete")}
                   </Button>
                 </Box>
@@ -196,7 +225,7 @@ export default function ArchimateSandboxPage() {
         </form>
       </Dialog>
 
-      <Dialog open={!!toDelete} onClose={busy ? undefined : () => setToDelete(null)}>
+      <Dialog open={confirming} onClose={busy ? undefined : cancelDelete}>
         <DialogTitle>{t("archimate:sandbox.deleteTitle")}</DialogTitle>
         <DialogContent>
           {deleteError && (
@@ -209,7 +238,7 @@ export default function ArchimateSandboxPage() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setToDelete(null)} disabled={busy}>
+          <Button onClick={cancelDelete} disabled={busy}>
             {t("common:actions.cancel")}
           </Button>
           <Button color="error" variant="contained" onClick={() => void remove()} disabled={busy}>

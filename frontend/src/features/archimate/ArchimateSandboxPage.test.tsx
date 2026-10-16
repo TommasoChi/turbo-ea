@@ -18,6 +18,9 @@ const ROWS = [
   { id: "d2", name: "Target", updated_at: "2026-06-02T12:00:00Z" },
 ];
 
+/** The diagram name of a list row (its ListItemText primary line). */
+const rowName = (row: HTMLElement) => row.querySelector(".MuiListItemText-primary")!.textContent ?? "";
+
 function Editor() {
   return <div>editor:{useParams().id}</div>;
 }
@@ -49,8 +52,8 @@ describe("ArchimateSandboxPage", () => {
     const first = (await screen.findByText("Landscape")).closest("li") as HTMLElement;
     const second = screen.getByText("Target").closest("li") as HTMLElement;
     expect(within(first).getByText(t("sandbox.updated", { date: "2026-05-01" }))).toBeInTheDocument();
-    expect(within(first).getByRole("link", { name: t("sandbox.open") })).toHaveAttribute("href", "/admin/archimate/d1");
-    expect(within(second).getByRole("link", { name: t("sandbox.open") })).toHaveAttribute("href", "/admin/archimate/d2");
+    expect(within(first).getByRole("link", { name: `${t("sandbox.open")} Landscape` })).toHaveAttribute("href", "/admin/archimate/d1");
+    expect(within(second).getByRole("link", { name: `${t("sandbox.open")} Target` })).toHaveAttribute("href", "/admin/archimate/d2");
     expect(screen.queryByText(t("sandbox.empty"))).not.toBeInTheDocument();
   });
 
@@ -119,7 +122,7 @@ describe("ArchimateSandboxPage", () => {
     });
     const { user } = renderPage();
     const row = (await screen.findByText("Landscape")).closest("li") as HTMLElement;
-    await user.click(within(row).getByRole("button", { name: t("sandbox.delete") }));
+    await user.click(within(row).getByRole("button", { name: `${t("sandbox.delete")} ${rowName(row)}` }));
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText(t("sandbox.deleteTitle"))).toBeInTheDocument();
@@ -137,7 +140,7 @@ describe("ArchimateSandboxPage", () => {
   it("does not delete when the confirmation is cancelled", async () => {
     const { user } = renderPage();
     const row = (await screen.findByText("Landscape")).closest("li") as HTMLElement;
-    await user.click(within(row).getByRole("button", { name: t("sandbox.delete") }));
+    await user.click(within(row).getByRole("button", { name: `${t("sandbox.delete")} ${rowName(row)}` }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: i18n.t("common:actions.cancel") }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -149,12 +152,70 @@ describe("ArchimateSandboxPage", () => {
     mockApi.fail("delete", "/diagrams/d2", 500, "database is down");
     const { user } = renderPage();
     const row = (await screen.findByText("Target")).closest("li") as HTMLElement;
-    await user.click(within(row).getByRole("button", { name: t("sandbox.delete") }));
+    await user.click(within(row).getByRole("button", { name: `${t("sandbox.delete")} ${rowName(row)}` }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: t("sandbox.delete") }));
 
     expect(await within(dialog).findByText("database is down")).toBeInTheDocument();
     expect(screen.queryByText(t("sandbox.deleted"))).not.toBeInTheDocument();
     expect(screen.getByText("Target")).toBeInTheDocument();
+  });
+
+  it("names the diagram in each row's Open and Delete buttons", async () => {
+    renderPage();
+    await screen.findByText("Landscape");
+    expect(screen.getByRole("link", { name: `${t("sandbox.open")} Target` })).toHaveAttribute("href", "/admin/archimate/d2");
+    expect(screen.getByRole("button", { name: `${t("sandbox.delete")} Landscape` })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `${t("sandbox.delete")} Target` })).toBeInTheDocument();
+  });
+
+  it("shows a progress indicator until the first list arrives, and no empty state meanwhile", async () => {
+    let release: (rows: typeof ROWS) => void = () => {};
+    mockApi.on("get", "/diagrams?kind=archimate", () => new Promise<typeof ROWS>((ok) => (release = ok)));
+    renderPage();
+    expect(await screen.findByRole("progressbar")).toBeInTheDocument();
+    expect(screen.queryByText(t("sandbox.empty"))).not.toBeInTheDocument();
+    release(ROWS);
+    expect(await screen.findByText("Landscape")).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+
+  it("drops a failed delete's error on Cancel, and when another row's Delete opens the dialog", async () => {
+    mockApi.fail("delete", /^\/diagrams\//, 500, "database is down");
+    const { user } = renderPage();
+    await screen.findByText("Landscape");
+    const del = (name: string) => screen.getByRole("button", { name: `${t("sandbox.delete")} ${name}` });
+
+    await user.click(del("Target"));
+    let dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: t("sandbox.delete") }));
+    expect(await within(dialog).findByText("database is down")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: i18n.t("common:actions.cancel") }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    // Same row again: no stale error.
+    await user.click(del("Target"));
+    dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByText("database is down")).not.toBeInTheDocument();
+
+    // Fail again, close with Cancel, open ANOTHER row: still no stale error.
+    await user.click(within(dialog).getByRole("button", { name: t("sandbox.delete") }));
+    expect(await within(dialog).findByText("database is down")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: i18n.t("common:actions.cancel") }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(del("Landscape"));
+    dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByText("database is down")).not.toBeInTheDocument();
+    expect(within(dialog).getByText(t("sandbox.deleteBody", { name: "Landscape" }))).toBeInTheDocument();
+  });
+
+  it("keeps the diagram's name in the confirmation while it fades out", async () => {
+    const { user } = renderPage();
+    await screen.findByText("Landscape");
+    await user.click(screen.getByRole("button", { name: `${t("sandbox.delete")} Landscape` }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: i18n.t("common:actions.cancel") }));
+    // The dialog is still in the DOM (closing transition): its text must not have gone blank.
+    expect(screen.getByText(t("sandbox.deleteBody", { name: "Landscape" }))).toBeInTheDocument();
   });
 });
