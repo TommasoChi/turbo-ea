@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  ELEMENT_INFO, ELEMENT_TYPES, LAYER_ORDER, elementsOfLayer, isElementType, layerOf,
+  ELEMENT_INFO, ELEMENT_TYPES, LAYER_ORDER, elementsOfLayer, isConnector, isElementType, layerOf,
 } from "./elements";
 
 const XSD = [
@@ -70,5 +70,9 @@ describe("ArchiMate element taxonomy", () => {
     expect(isElementType("node")).toBe(false);
     expect(isElementType(undefined)).toBe(false);
     expect(isElementType(7)).toBe(false);
+  });
+
+  it("isConnector is true for the two junctions only", () => {
+    expect(ELEMENT_TYPES.filter(isConnector)).toEqual(["AndJunction", "OrJunction"]);
   });
 });

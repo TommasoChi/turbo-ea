@@ -7,14 +7,17 @@ import type Create from "diagram-js/lib/features/create/Create";
 import type Dragging from "diagram-js/lib/features/dragging/Dragging";
 import type Keyboard from "diagram-js/lib/features/keyboard/Keyboard";
 import type Selection from "diagram-js/lib/features/selection/Selection";
-import type { Connection, Shape } from "diagram-js/lib/model/Types";
+import type { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import type DirectEditing from "diagram-js-direct-editing/lib/DirectEditing";
 import { makeBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
 import { CARD_ID_DEFINITION, getCardId, type ArchimateModel, type ModelElement } from "../exchange/exchangeModel";
+import type { ElementType } from "../taxonomy/elements";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import { ArchimateEngine } from "./ArchimateEngine";
 import type ArchimateLabelEditing from "./ArchimateLabelEditing";
+import { getLabelBounds } from "./ArchimateLabelEditing";
+import type ArchimateModeling from "./ArchimateModeling";
 
 beforeAll(() => {
   installSvgStubs();
@@ -58,7 +61,27 @@ function setup() {
     );
   const shapesOf = (type: string) =>
     registry.filter((e) => !(e as Connection).waypoints && (e.businessObject as ModelElement | undefined)?.type === type) as Shape[];
-  return { container, engine, get, registry, ceo, stack, provider, directEditing, activate, press, shapesOf };
+  const root = get<Canvas>("canvas").getRootElement();
+  /** The real Create + Dragging gesture the palette's mouse path starts, released over `over`. */
+  const drop = (elementType: ElementType, hints: object = {}, over: Element = root) => {
+    const dragging = get<Dragging>("dragging");
+    const shape = get<ArchimateElementFactory>("elementFactory").createShape({ elementType });
+    get<Create>("create").start(new MouseEvent("mousedown", { clientX: 10, clientY: 10 }), shape, { hints });
+    dragging.hover({ element: over, gfx: registry.getGraphics(over) });
+    dragging.move(new MouseEvent("mousemove", { clientX: 600, clientY: 400 }));
+    dragging.end(new MouseEvent("mouseup", { clientX: 600, clientY: 400 }));
+  };
+  /** Enter on a palette entry: the keyboard drop. */
+  const keyboardDrop = (elementType: ElementType) =>
+    container.querySelector<HTMLElement>(`[data-action="create.${elementType}"]`)!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  const add = (elementType: ElementType) =>
+    get<ArchimateModeling>("modeling").createShape(
+      get<ArchimateElementFactory>("elementFactory").createShape({ elementType }), { x: 700, y: 300 }, root,
+    ) as Shape;
+  return {
+    container, engine, get, registry, ceo, stack, provider, directEditing, activate, press, shapesOf, drop, keyboardDrop, add,
+  };
 }
 
 describe("ArchimateLabelEditing provider", () => {
@@ -76,6 +99,30 @@ describe("ArchimateLabelEditing provider", () => {
     expect(provider.activate(connection)).toEqual({
       text: "", bounds: { x: 40, y: 38, width: 120, height: 24 }, options: { autoResize: false },
     });
+  });
+
+  it("places the box in viewport coordinates at zoom 2 with a scrolled canvas", () => {
+    const { get, ceo, registry } = setup();
+    const canvas = get<Canvas>("canvas");
+    canvas.viewbox({ x: 50, y: 20, width: 400, height: 300 }); // the 800x600 container: scale 2
+    expect(canvas.viewbox().scale).toBe(2);
+    expect(getLabelBounds(canvas, ceo)).toEqual({ x: 100, y: 160, width: 240, height: 110 });
+    const connection = registry.get("c-1") as Connection;
+    // Odd count: the middle waypoint (100,60) -> viewport (100,80).
+    connection.waypoints = [{ x: 0, y: 0 }, { x: 100, y: 60 }, { x: 300, y: 100 }];
+    expect(getLabelBounds(canvas, connection)).toEqual({ x: 40, y: 68, width: 120, height: 24 });
+    // Even count: the middle segment's midpoint (150,60) -> viewport (200,80).
+    connection.waypoints = [{ x: 0, y: 0 }, { x: 100, y: 40 }, { x: 200, y: 80 }, { x: 300, y: 0 }];
+    expect(getLabelBounds(canvas, connection)).toEqual({ x: 140, y: 68, width: 120, height: 24 });
+  });
+
+  it("names a connection through the command stack (undo restores it)", () => {
+    const { provider, registry, engine } = setup();
+    const connection = registry.get("c-1") as Connection;
+    provider.update(connection, " holds ");
+    expect(connection.businessObject.name).toBe("holds");
+    engine.undo();
+    expect(connection.businessObject.name).toBeUndefined();
   });
 
   it("does not activate on the root", () => {
@@ -116,34 +163,49 @@ describe("ArchimateLabelEditing wiring", () => {
   });
 
   it("starts editing an element created from the palette (create.end), not a pasted one", () => {
-    const { get, registry, activate, shapesOf } = setup();
-    const root = get<Canvas>("canvas").getRootElement();
-    const dragging = get<Dragging>("dragging");
-    /** The real Create + Dragging gesture the palette's mouse path starts. */
-    const drop = (hints: object) => {
-      const shape = get<ArchimateElementFactory>("elementFactory").createShape({ elementType: "Node" });
-      get<Create>("create").start(new MouseEvent("mousedown", { clientX: 10, clientY: 10 }), shape, { hints });
-      dragging.hover({ element: root, gfx: registry.getGraphics(root) });
-      dragging.move(new MouseEvent("mousemove", { clientX: 600, clientY: 400 }));
-      dragging.end(new MouseEvent("mouseup", { clientX: 600, clientY: 400 }));
-    };
-    drop({});
+    const { drop, activate, shapesOf } = setup();
+    drop("Node");
     const [created] = shapesOf("Node");
     expect(created).toBeDefined();
     expect(activate).toHaveBeenCalledTimes(1);
     expect(activate).toHaveBeenCalledWith(created);
-    drop({ createElementsBehavior: false }); // what CopyPaste sets on a paste
+    drop("Node", { createElementsBehavior: false }); // what CopyPaste sets on a paste
     expect(shapesOf("Node")).toHaveLength(2);
     expect(activate).toHaveBeenCalledTimes(1);
   });
 
+  it("does not start editing when the drop is refused (canExecute false: released over a junction)", () => {
+    const { drop, add, activate, shapesOf, directEditing } = setup();
+    const junction = add("AndJunction");
+    drop("Node", {}, junction);
+    expect(shapesOf("Node")).toHaveLength(0);
+    expect(activate).not.toHaveBeenCalled();
+    expect(directEditing.isActive()).toBe(false);
+  });
+
   it("starts editing an element dropped with the palette keyboard", () => {
-    const { container, activate, shapesOf, directEditing } = setup();
-    container.querySelector<HTMLElement>('[data-action="create.Node"]')!
-      .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    const { keyboardDrop, activate, shapesOf, directEditing } = setup();
+    keyboardDrop("Node");
     const [created] = shapesOf("Node");
     expect(activate).toHaveBeenCalledWith(created);
     expect(directEditing.isActive(created)).toBe(true);
+  });
+
+  it("never opens an edit box on a junction (palette drop, keyboard drop, double-click, Enter)", () => {
+    const { provider, drop, keyboardDrop, shapesOf, get, press, directEditing } = setup();
+    drop("AndJunction");
+    expect(shapesOf("AndJunction")).toHaveLength(1);
+    expect(directEditing.isActive()).toBe(false);
+    keyboardDrop("OrJunction");
+    const [junction] = shapesOf("OrJunction");
+    expect(junction).toBeDefined();
+    expect(directEditing.isActive()).toBe(false);
+    expect(provider.activate(junction)).toBeNull();
+    get<EventBus>("eventBus").fire("element.dblclick", { element: junction });
+    expect(directEditing.isActive()).toBe(false);
+    get<Selection>("selection").select(junction);
+    press("Enter");
+    expect(directEditing.isActive()).toBe(false);
   });
 
   it("never starts editing on an import", () => {

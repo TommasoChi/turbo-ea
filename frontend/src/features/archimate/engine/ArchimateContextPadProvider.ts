@@ -11,21 +11,19 @@ import type ContextPad from "diagram-js/lib/features/context-pad/ContextPad";
 import type { ContextPadEntries } from "diagram-js/lib/features/context-pad/ContextPadProvider";
 import type { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import { getCardId, type ModelElement, type ModelRelationship } from "../exchange/exchangeModel";
-import { ELEMENT_TYPES, type ElementType } from "../taxonomy/elements";
+import { ELEMENT_TYPES, isConnector, type ElementType } from "../taxonomy/elements";
 import { ACCESS_TYPES, isRelationshipAllowed, RELATIONSHIP_TYPES, type RelationshipType } from "../taxonomy/relationships";
 import { relationshipSvg } from "./connectionStyle";
 import type { EditorBridge } from "./EditorBridge";
 import type ArchimateModeling from "./ArchimateModeling";
 import type { RelationshipTool } from "./RelationshipTool";
 
-const CONNECTORS: readonly ElementType[] = ["AndJunction", "OrJunction"];
-
 /**
  * Whether the matrix allows `rel` from `type` to at least one element type. Junctions don't count as
  * targets: the matrix lets nearly everything reach one, which would make every entry always show.
  */
 export function hasTargetFor(type: ElementType, rel: RelationshipType): boolean {
-  return ELEMENT_TYPES.some((target) => !CONNECTORS.includes(target) && isRelationshipAllowed(type, target, rel));
+  return ELEMENT_TYPES.some((target) => !isConnector(target) && isRelationshipAllowed(type, target, rel));
 }
 
 const ENTRY = (inner: string) => `<div class="entry archimate-cp-entry">${inner}</div>`;

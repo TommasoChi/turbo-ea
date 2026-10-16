@@ -7,21 +7,19 @@
 import RuleProvider from "diagram-js/lib/features/rules/RuleProvider";
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type { Element } from "diagram-js/lib/model/Types";
-import { ELEMENT_INFO, type ElementType } from "../taxonomy/elements";
+import { ELEMENT_INFO, isConnector, type ElementType } from "../taxonomy/elements";
 import { isRelationshipAllowed, type AccessType, type RelationshipType } from "../taxonomy/relationships";
 import type { RelationshipTool } from "./RelationshipTool";
 
 /** The smallest a shape may be resized to (applied to every resize through the context `minDimensions`). */
 export const MIN_SIZE = { width: 30, height: 20 } as const;
 
-const CONNECTORS: readonly ElementType[] = ["AndJunction", "OrJunction"];
-
 type ConnectionAttrs = { relationship: RelationshipType; accessType?: AccessType };
 type ConnectionElement = Element & { businessObject: { type: RelationshipType } };
 
 /** `null` is the canvas root. */
 export function canNestIn(parentType: ElementType | null): boolean {
-  return parentType === null || !CONNECTORS.includes(parentType);
+  return parentType === null || !isConnector(parentType);
 }
 
 export function connectionAttrs(
@@ -88,7 +86,7 @@ export default class ArchimateRules extends RuleProvider {
 
     this.addRule("shape.resize", 1500, ({ shape }: { shape: Element }) => {
       const type = elementTypeOf(shape);
-      return type === undefined || !CONNECTORS.includes(type);
+      return type === undefined || !isConnector(type);
     });
     this.addRule(["elements.delete", "connection.start", "element.copy"], 1500, () => true);
   }

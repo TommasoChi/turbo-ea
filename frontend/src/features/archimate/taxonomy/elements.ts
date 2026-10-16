@@ -62,6 +62,9 @@ const PASSIVE = new Set<string>([
 const COMPOSITE = new Set<string>(["Product", "Plateau", "Gap", "Grouping", "Location"]);
 const CONNECTOR = new Set<string>(["AndJunction", "OrJunction"]);
 
+/** A junction (And/Or): a 15px connector with no name, never a parent. */
+export const isConnector = (type: string): boolean => CONNECTOR.has(type);
+
 function aspectOf(type: string, layer: ArchimateLayer): ElementAspect {
   if (layer === "motivation") return "motivation";
   if (CONNECTOR.has(type)) return "connector";

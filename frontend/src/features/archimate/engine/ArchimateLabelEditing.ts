@@ -14,6 +14,7 @@ import type { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import type { Rect } from "diagram-js/lib/util/Types";
 import type DirectEditing from "diagram-js-direct-editing/lib/DirectEditing";
 import type { ModelElement, ModelRelationship } from "../exchange/exchangeModel";
+import { isConnector } from "../taxonomy/elements";
 import type ArchimateModeling from "./ArchimateModeling";
 import { ELEMENT_CREATED_EVENT } from "./ArchimatePaletteProvider";
 
@@ -78,9 +79,11 @@ export default class ArchimateLabelEditing {
     });
   }
 
+  /** A junction has no name (and is a 15px circle): it never opens an edit box. */
   activate(element: Element) {
     if (!isModelled(element)) return null;
     const bo = element.businessObject as ModelElement | ModelRelationship;
+    if (isConnector(bo.type)) return null;
     return { text: bo.name ?? "", bounds: getLabelBounds(this.canvas, element), options: { autoResize: false } };
   }
 
@@ -88,6 +91,7 @@ export default class ArchimateLabelEditing {
     const name = newText.trim();
     const bo = element.businessObject as ModelElement | ModelRelationship;
     if (name === (bo.name ?? "")) return;
-    this.modeling.updateProperties(element as Shape, { name });
+    if ((element as Connection).waypoints) this.modeling.updateProperties(element as Connection, { name });
+    else this.modeling.updateProperties(element as Shape, { name });
   }
 }
