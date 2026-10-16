@@ -245,6 +245,20 @@ Cliccate sull'icona **Gestisci valori di relazione** (etichetta) su una riga di 
 
 I valori integrati (Proprietario, Utente, Stakeholder, i valori della direzione del flusso…) sono **bloccati**: non possono essere rinominati, ricolorati o eliminati. Potete però **nascondere** un valore integrato in modo che non compaia più nel selettore sulle card — un valore già impostato resta visibile. I vostri valori sono completamente modificabili ed eliminabili.
 
+## Mappatura ArchiMate
+
+Perché l'[editor ArchiMate](../guide/archimate.md) possa collegare i diagrammi alle card, il metamodello porta una **mappatura** verso i concetti di ArchiMate 3. I campi sono visibili tramite l'API del metamodello (`/metamodel/types` e `/metamodel/relation-types`) e sono in **sola lettura nell'interfaccia di amministrazione**: la schermata per modificarli (**ARCHI MAP**) arriva nella prossima versione.
+
+| Su | Campo | Significato |
+|----|-------|---------|
+| **Tipo di card** | `archimate_type` | L'elemento ArchiMate con cui viene disegnata una card di questo tipo (per esempio `ApplicationComponent`). Vuoto significa nessuna mappatura: le sue card non possono essere collegate a un elemento |
+| **Sottotipo** | `archimate_type` | Sostituzione facoltativa dell'elemento del tipo di card per le card di questo sottotipo. Vuoto significa che il sottotipo usa la mappatura del tipo di card |
+| **Tipo di relazione** | `archimate_type` | La relazione ArchiMate (per esempio `Serving`, `Flow`, `Access`) |
+| **Tipo di relazione** | `archimate_reversed` | Indicatore di direzione. Se attivo, la relazione ArchiMate va dalla card di destinazione a quella di origine; «Organizzazione *usa* Applicazione» diventa così un *Serving* dall'applicazione all'organizzazione |
+| **Tipo di relazione** | `archimate_access` | Solo per `Access`: `Access`, `Read`, `Write`, `ReadWrite` oppure `crud` (il tipo di accesso segue gli indicatori Create/Read/Update/Delete della relazione stessa) |
+
+I nomi di elementi e relazioni sono quelli del formato di scambio dell'Open Group. I valori predefiniti provengono dal seed; le tabelle complete sono in [La mappatura](../guide/archimate.md#mapping).
+
 ## Calcoli
 
 I campi calcolati utilizzano formule definite dall'amministratore per calcolare automaticamente i valori quando le card vengono salvate. Vedi [Calcoli](calculations.md) per la guida completa.

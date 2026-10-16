@@ -245,6 +245,20 @@ ID 在全局范围内**唯一、只读，且永不重复使用或更改**。编�
 
 内置值（所有者、用户、利益相关者、流向值等）已**锁定**：无法重命名、改色或删除。但您可以**隐藏**某个内置值，使其不再出现在卡片的选择器中——已设置的值仍会显示。您自己的值则完全可编辑和删除。
 
+## ArchiMate 映射
+
+为了让 [ArchiMate 编辑器](../guide/archimate.md)能够把图与卡片关联起来，元模型带有一份指向 ArchiMate 3 概念的**映射**。这些字段可通过元模型 API（`/metamodel/types` 和 `/metamodel/relation-types`）看到，在管理界面中为**只读**：用于编辑它们的界面（**ARCHI MAP**）将在下一个版本推出。
+
+| 位置 | 字段 | 含义 |
+|----|-------|---------|
+| **卡片类型** | `archimate_type` | 该类型的卡片绘制成的 ArchiMate 元素（例如 `ApplicationComponent`）。为空表示没有映射：其卡片无法关联到元素 |
+| **子类型** | `archimate_type` | 对该子类型的卡片覆盖卡片类型元素的可选设置。为空表示子类型使用卡片类型的映射 |
+| **关系类型** | `archimate_type` | ArchiMate 关系（例如 `Serving`、`Flow`、`Access`） |
+| **关系类型** | `archimate_reversed` | 方向标志。设置后，ArchiMate 关系从目标卡片指向源卡片，因此“组织*使用*应用”表示从应用指向组织的 *Serving* |
+| **关系类型** | `archimate_access` | 仅用于 `Access`：`Access`、`Read`、`Write`、`ReadWrite` 或 `crud`（访问类型取决于该关系自身的 Create/Read/Update/Delete 标志） |
+
+元素和关系的名称采用 Open Group 交换格式中的名称。默认值来自 seed；完整的默认表见[映射](../guide/archimate.md#mapping)。
+
 ## 计算
 
 计算字段使用管理员定义的公式在卡片保存时自动计算值。请参阅[计算](calculations.md)获取完整指南。

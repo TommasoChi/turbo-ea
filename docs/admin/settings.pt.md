@@ -4,7 +4,7 @@ A página de **Configurações** em **Admin → Configurações** (`/admin/setti
 
 | Aba | URL | O que controla | Guia completo |
 |-----|-----|----------------|---------------|
-| **Geral** | `/admin/settings?tab=general` | Aparência (logo, favicon, moeda, formato de data, idiomas habilitados, ano fiscal), envio de e-mail, **alternâncias de módulos** (BPM, PPM, GRC, TurboLens, Sponsor button) | Esta página |
+| **Geral** | `/admin/settings?tab=general` | Aparência (logo, favicon, moeda, formato de data, idiomas habilitados, ano fiscal), envio de e-mail, **alternâncias de módulos** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Esta página |
 | **Autenticação** | `/admin/settings?tab=authentication` | Provedores SSO, registro, política de senha | [Autenticação e SSO](sso.md) |
 | **IA** | `/admin/settings?tab=ai` | Provedor LLM, modelo, backend de busca web, alternâncias de sugestão IA por tipo de card | [Capacidades de IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Vinculação em massa de produtos a entradas de endoflife.date | [Fim de vida (EOL)](eol.md) |
@@ -183,6 +183,15 @@ Alterne o módulo de **Governança, Risco e Conformidade** (GRC) ligado ou desli
 - Os riscos e os achados de conformidade permanecem no banco de dados — as permissões subjacentes `risks.*` e `compliance.*` continuam inalteradas, de modo que os dados são preservados e reaparecem sem alterações se o módulo for reativado
 
 Consulte o [guia do GRC](../guide/grc.md) para a referência completa de funcionalidades.
+
+## Módulo ArchiMate
+
+O cartão **Diagramas ArchiMate** ativa ou desativa o módulo [ArchiMate](../guide/archimate.md). Está **desativado por predefinição**.
+
+- Quando ativado, ficam disponíveis a sandbox reservada aos administradores em `/admin/archimate` e o editor ArchiMate, e o cartão mostra um botão **Abrir a sandbox** que leva diretamente à lista de diagramas ArchiMate.
+- Quando desativado, as duas páginas ficam inacessíveis e mostram o marcador padrão «módulo desativado» a quem chegar por um link direto. Os diagramas já guardados são mantidos e reaparecem inalterados se o módulo for reativado.
+
+Consulte o [guia do ArchiMate](../guide/archimate.md) para saber como desenhar e trocar diagramas.
 
 ## Notificações de atualização
 

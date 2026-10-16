@@ -245,6 +245,20 @@ Cliquez sur l'icône **Gérer les valeurs de relation** (étiquette) sur une lig
 
 Les valeurs intégrées (Propriétaire, Utilisateur, Partie prenante, les valeurs de sens du flux…) sont **verrouillées** : elles ne peuvent pas être renommées, recolorées ni supprimées. Vous pouvez toutefois **masquer** une valeur intégrée pour qu'elle n'apparaisse plus dans le sélecteur sur les fiches — une valeur déjà définie reste visible. Vos propres valeurs sont entièrement modifiables et supprimables.
 
+## Correspondance ArchiMate
+
+Pour que l'[éditeur ArchiMate](../guide/archimate.md) puisse lier les diagrammes aux fiches, le métamodèle porte une **correspondance** vers les concepts d'ArchiMate 3. Les champs sont visibles par l'API du métamodèle (`/metamodel/types` et `/metamodel/relation-types`) et sont en **lecture seule dans l'interface d'administration** : l'écran pour les modifier (**ARCHI MAP**) arrive dans la prochaine version.
+
+| Sur | Champ | Signification |
+|----|-------|---------|
+| **Type de fiche** | `archimate_type` | L'élément ArchiMate sous lequel une fiche de ce type est dessinée (par exemple `ApplicationComponent`). Vide signifie aucune correspondance : ses fiches ne peuvent pas être liées à un élément |
+| **Sous-type** | `archimate_type` | Remplacement facultatif de l'élément du type de fiche pour les fiches de ce sous-type. Vide signifie que le sous-type utilise la correspondance du type de fiche |
+| **Type de relation** | `archimate_type` | La relation ArchiMate (par exemple `Serving`, `Flow`, `Access`) |
+| **Type de relation** | `archimate_reversed` | Indicateur de sens. S'il est activé, la relation ArchiMate va de la fiche cible vers la fiche source ; « Organisation *utilise* Application » devient alors un *Serving* de l'application vers l'organisation |
+| **Type de relation** | `archimate_access` | Uniquement pour `Access` : `Access`, `Read`, `Write`, `ReadWrite` ou `crud` (le type d'accès suit les indicateurs Create/Read/Update/Delete de la relation elle-même) |
+
+Les noms d'éléments et de relations sont ceux du format d'échange de l'Open Group. Les valeurs par défaut proviennent du seed ; les tables complètes se trouvent dans [La correspondance](../guide/archimate.md#mapping).
+
 ## Calculs
 
 Les champs calculés utilisent des formules définies par l'administrateur pour calculer automatiquement des valeurs lorsque les fiches sont sauvegardées. Voir [Calculs](calculations.md) pour le guide complet.

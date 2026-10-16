@@ -5,6 +5,7 @@
 | **ADR (Architecture Decision Record)** | Un documento formale che registra una decisione architetturale importante, includendo contesto, motivazioni, conseguenze e alternative considerate. Gli ADR supportano un flusso di firma e una catena di revisioni |
 | **Anno fiscale** | Il periodo di 12 mesi utilizzato per il budget e la rendicontazione finanziaria. Configurabile tramite Admin > Impostazioni — il mese di inizio (da gennaio a dicembre) determina come vengono raggruppate le linee di budget PPM |
 | **Stato di approvazione** | Lo stato di revisione di una card: Draft, Approved, Broken o Rejected. Le card approvate cambiano in Broken quando vengono modificate |
+| **ArchiMate** | Il linguaggio di modellazione dell'Open Group per l'architettura aziendale (versione 3). Turbo EA disegna i diagrammi ArchiMate in una sandbox per amministratori e li salva come file Exchange. Vedi [Diagrammi ArchiMate](../guide/archimate.md) |
 | **Segnalibro / Vista salvata** | Una configurazione salvata di filtri, colonne e ordinamento nell'Inventario che può essere ricaricata con un clic |
 | **BPM** | Business Process Management — la disciplina della modellazione, analisi e miglioramento dei processi aziendali |
 | **BPMN** | Business Process Model and Notation — la notazione standard per la modellazione dei processi aziendali (versione 2.0) |
@@ -26,6 +27,7 @@
 | **DrawIO** | Lo strumento di disegno open-source integrato utilizzato per i diagrammi architetturali visivi |
 | **Enterprise Architecture (EA)** | La disciplina che organizza e documenta la struttura aziendale e tecnologica di un'organizzazione |
 | **EOL (End of Life)** | La data in cui un prodotto tecnologico perde il supporto del fornitore. Tracciato tramite l'integrazione con endoflife.date |
+| **Formato di scambio (Exchange format)** | Il formato XML dell'Open Group per spostare un modello ArchiMate tra strumenti (versione 3.1). Turbo EA salva in questo formato ogni diagramma ArchiMate e può importarlo ed esportarlo come file `.xml` |
 | **Extension (estensione)** | Un componente aggiuntivo firmato dal fornitore, installato da Admin → Estensioni, che aggiunge funzionalità specifiche del cliente (contenuti, integrazioni, pagine) senza modificare il core di Turbo EA. Richiede un diritto di licenza |
 | **Extension Bundle (.teax)** | Il file zip firmato in cui viene consegnata un'estensione. La firma Ed25519 viene verificata al caricamento e a ogni avvio del backend; i pacchetti non firmati o manomessi vengono rifiutati |
 | **Entitlement (diritto)** | Una riga di una licenza di estensione firmata: il diritto di eseguire una specifica estensione fino a una scadenza, seguita da un periodo di tolleranza prima della disattivazione dolce |
@@ -40,6 +42,7 @@
 | **xBRL-CSV** | Il formato di pacchetto di report leggibile da macchina che le autorità accettano per gli invii regolamentari come il registro delle informazioni DORA |
 | **Diagramma di Gantt** | Una linea temporale visiva con barre orizzontali che mostra il calendario, la durata e l'avanzamento del progetto |
 | **Initiative** | Un progetto o programma che comporta modifiche all'architettura |
+| **Livello (Layer)** | Un raggruppamento di primo livello degli elementi ArchiMate: Strategy, Business, Application, Technology, Physical, Motivation, Implementation & Migration. La palette ArchiMate è organizzata per livello e ogni livello ha un proprio colore nell'editor |
 | **Ciclo di vita** | Le cinque fasi attraverso cui passa un componente: Plan, Phase In, Active, Phase Out, End of Life |
 | **LLM** | Large Language Model — un modello AI che genera testo (es. Ollama, OpenAI, Anthropic Claude, Google Gemini) |
 | **MCP** | Model Context Protocol — uno standard aperto che consente agli strumenti IA (Claude, Copilot, Cursor) di connettersi a fonti dati esterne. Il server MCP integrato di Turbo EA fornisce accesso in sola lettura ai dati EA con RBAC per utente |
@@ -53,6 +56,7 @@
 | **Numero di riferimento** | Un identificatore sequenziale generato automaticamente per gli ADR (es. ADR-001, ADR-002) che fornisce un'etichetta univoca e leggibile |
 | **Todo ricorrente** | Un todo di card impostato per ripetersi secondo un calendario (ogni N giorni/settimane/mesi/anni). Completandolo viene creata la prossima occorrenza; le occorrenze lontane restano «pianificate» finché non si apre una finestra di anticipo, poi compaiono nella pagina Attività e notificano il responsabile |
 | **Relazione** | Una connessione tra due card che descrive come sono correlate (es. "utilizza", "dipende da", "funziona su") |
+| **Matrice delle relazioni** | La tabella della specifica ArchiMate che indica quali relazioni sono consentite tra due tipi di elemento. L'editor permette di disegnare solo una relazione che la matrice consente |
 | **Scheda Risorse** | Una scheda nella pagina di dettaglio della card che consolida Decisioni architetturali, file allegati e link ai documenti in un unico luogo |
 | **Revisione (ADR)** | Una nuova versione di un ADR firmato che eredita il contenuto e i collegamenti alle card dalla versione precedente, con un numero di revisione incrementato |
 | **Stato RAG** | Indicatore di salute Rosso-Ambra-Verde utilizzato nei report di stato PPM per calendario, costi e ambito |
@@ -76,6 +80,7 @@
 | **Catena del valore** | La pagina in sola lettura sotto Org&Process che raggruppa le categorie di processi in fasce di gestione, core e supporto e disegna i flussi di valore core come una casa tra la richiesta del cliente e la sua soddisfazione. Vedi [Catena del valore e mappe dei flussi di valore](../guide/value-chain.md) |
 | **Value Gate** | Una card Obiettivo del sottotipo *Value Gate*: un punto di controllo che un flusso di valore deve superare. I value gate sono disegnati come pillole nella fascia superiore della mappa del flusso di valore |
 | **Flusso di valore** | Una card Contesto aziendale del sottotipo *Flusso di valore*: una sequenza di fasi end-to-end che porta valore a un cliente. Le fasi sono i suoi flussi di valore figli, ordinati dalla relazione *succede a*. La mappa del flusso di valore disegna un flusso con i value gate, i processi e le capacità che ci sono dietro |
+| **Punto di vista (Viewpoint)** | In ArchiMate, una selezione predefinita di tipi di elemento e di relazione adatta a un pubblico o a una preoccupazione (per esempio Application Cooperation). In questa versione l'editor non offre il filtraggio per punto di vista |
 | **Portale web** | Una vista pubblica di sola lettura di card selezionate accessibile senza autenticazione tramite un URL univoco |
 | **Struttura di Scomposizione del Lavoro (WBS)** | Una scomposizione gerarchica dell'ambito del progetto in pacchetti di lavoro |
 | **Pacchetto di lavoro** | Un raggruppamento logico di attività all'interno di un calendario Gantt con proprie date di inizio/fine e percentuale di completamento |

@@ -245,6 +245,20 @@ Haga clic en el icono **Gestionar valores de relación** (etiqueta) en una fila 
 
 Los valores integrados (Propietario, Usuario, Parte interesada, los valores de dirección del flujo…) están **bloqueados**: no se pueden renombrar, recolorear ni eliminar. No obstante, puede **ocultar** un valor integrado para que ya no aparezca en el selector de las fichas; un valor ya establecido permanece visible. Sus propios valores son totalmente editables y se pueden eliminar.
 
+## Asignación de ArchiMate
+
+Para que el [editor ArchiMate](../guide/archimate.md) pueda vincular diagramas con fichas, el metamodelo incluye una **asignación** a conceptos de ArchiMate 3. Los campos son visibles a través de la API del metamodelo (`/metamodel/types` y `/metamodel/relation-types`) y son de **solo lectura en la interfaz de administración**: la pantalla para editarlos (**ARCHI MAP**) llegará en la próxima versión.
+
+| En | Campo | Significado |
+|----|-------|---------|
+| **Tipo de ficha** | `archimate_type` | El elemento ArchiMate con el que se dibuja una ficha de este tipo (por ejemplo `ApplicationComponent`). Vacío significa sin asignación: sus fichas no pueden vincularse a un elemento |
+| **Subtipo** | `archimate_type` | Sustitución opcional del elemento del tipo de ficha para las fichas de este subtipo. Vacío significa que el subtipo usa la asignación del tipo de ficha |
+| **Tipo de relación** | `archimate_type` | La relación ArchiMate (por ejemplo `Serving`, `Flow`, `Access`) |
+| **Tipo de relación** | `archimate_reversed` | Indicador de dirección. Si está activo, la relación ArchiMate va de la ficha de destino a la de origen, de modo que «Organización *usa* Aplicación» es un *Serving* de la aplicación a la organización |
+| **Tipo de relación** | `archimate_access` | Solo para `Access`: `Access`, `Read`, `Write`, `ReadWrite` o `crud` (el tipo de acceso sigue los indicadores Create/Read/Update/Delete de la propia relación) |
+
+Los nombres de elementos y relaciones son los del formato de intercambio de Open Group. Los valores predeterminados proceden del seed; las tablas completas están en [La asignación](../guide/archimate.md#mapping).
+
 ## Cálculos
 
 Los campos calculados usan fórmulas definidas por el administrador para calcular automáticamente valores cuando se guardan fichas. Ver [Cálculos](calculations.es.md) para la guía completa.

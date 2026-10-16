@@ -4,7 +4,7 @@ La pagina **Impostazioni** sotto **Admin → Impostazioni** (`/admin/settings`) 
 
 | Scheda | URL | Cosa controlla | Guida completa |
 |--------|-----|----------------|----------------|
-| **Generale** | `/admin/settings?tab=general` | Aspetto (logo, favicon, valuta, formato data, lingue abilitate, anno fiscale), invio email, **interruttori dei moduli** (BPM, PPM, GRC, TurboLens, Sponsor button) | Questa pagina |
+| **Generale** | `/admin/settings?tab=general` | Aspetto (logo, favicon, valuta, formato data, lingue abilitate, anno fiscale), invio email, **interruttori dei moduli** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Questa pagina |
 | **Autenticazione** | `/admin/settings?tab=authentication` | Provider SSO, registrazione, politica delle password | [Autenticazione & SSO](sso.md) |
 | **IA** | `/admin/settings?tab=ai` | Provider LLM, modello, backend di ricerca web, interruttori di suggerimento IA per tipo di card | [Funzionalità IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Collegamento in massa dei prodotti a voci di endoflife.date | [Fine vita (EOL)](eol.md) |
@@ -183,6 +183,15 @@ Attivate/disattivate il modulo **Governance, Rischio e Conformità** (GRC). Quan
 - I rischi e i finding di conformità rimangono nel database — i permessi sottostanti `risks.*` e `compliance.*` restano invariati, quindi i dati si conservano e ricompaiono invariati se il modulo viene riabilitato
 
 Consultate la [guida GRC](../guide/grc.md) per il riferimento completo delle funzionalità.
+
+## Modulo ArchiMate
+
+La scheda **Diagrammi ArchiMate** attiva o disattiva il modulo [ArchiMate](../guide/archimate.md). È **disattivato per impostazione predefinita**.
+
+- Quando è attivo, diventano disponibili la sandbox riservata agli amministratori su `/admin/archimate` e l'editor ArchiMate, e la scheda mostra un pulsante **Apri la sandbox** che porta direttamente all'elenco dei diagrammi ArchiMate.
+- Quando è disattivato, entrambe le pagine non sono raggiungibili e mostrano il placeholder standard «modulo disabilitato» a chi arriva da un link diretto. I diagrammi già salvati vengono conservati e ricompaiono invariati se il modulo viene riattivato.
+
+Consultate la [guida ArchiMate](../guide/archimate.md) per sapere come disegnare e scambiare i diagrammi.
 
 ## Notifiche di aggiornamento
 
