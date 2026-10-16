@@ -7,6 +7,7 @@
 import type { ModuleDeclaration } from "didi";
 import AutoScrollModule from "diagram-js/lib/features/auto-scroll";
 import BendpointsModule from "diagram-js/lib/features/bendpoints";
+import ContextPadModule from "diagram-js/lib/features/context-pad";
 import ConnectModule from "diagram-js/lib/features/connect";
 import ConnectionPreviewModule from "diagram-js/lib/features/connection-preview";
 import CreateModule from "diagram-js/lib/features/create";
@@ -28,6 +29,7 @@ import CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionD
 import MoveCanvasModule from "diagram-js/lib/navigation/movecanvas";
 import ZoomScrollModule from "diagram-js/lib/navigation/zoomscroll";
 import ArchimateElementFactory from "./ArchimateElementFactory";
+import ArchimateContextPadProvider from "./ArchimateContextPadProvider";
 import ArchimateModeling from "./ArchimateModeling";
 import ArchimatePaletteProvider from "./ArchimatePaletteProvider";
 import ArchimateRenderer from "./ArchimateRenderer";
@@ -67,6 +69,13 @@ const ArchimatePaletteModule: ModuleDeclaration = {
   archimatePalette: ["type", ArchimatePaletteProvider],
 };
 
+/** The context pad: relationships, card link and delete; it needs the `bridge` value too. */
+const ArchimateContextPadModule: ModuleDeclaration = {
+  __depends__: [ContextPadModule, ConnectModule, ArchimateRulesModule],
+  __init__: ["archimateContextPad"],
+  archimateContextPad: ["type", ArchimateContextPadProvider],
+};
+
 export const ARCHIMATE_BASE_MODULES: ModuleDeclaration[] = [
   ModelingModule,
   ArchimateCoreModule,
@@ -94,4 +103,5 @@ export const ARCHIMATE_MODULES: ModuleDeclaration[] = [
   ArchimateRendererModule,
   ArchimateRulesModule,
   ArchimatePaletteModule,
+  ArchimateContextPadModule,
 ];
