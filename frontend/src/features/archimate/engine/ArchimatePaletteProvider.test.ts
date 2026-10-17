@@ -7,7 +7,7 @@ import type Selection from "diagram-js/lib/features/selection/Selection";
 import type { Shape } from "diagram-js/lib/model/Types";
 import { makeBridge, withBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
-import { getCardId, type ModelElement } from "../exchange/exchangeModel";
+import { getCardId, isNoteObject, type ModelElement } from "../exchange/exchangeModel";
 import { ELEMENT_INFO, ELEMENT_TYPES, LAYER_ORDER, elementsOfLayer, type ElementType } from "../taxonomy/elements";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 import type ArchimateModeling from "./ArchimateModeling";
@@ -42,16 +42,30 @@ function setup() {
 }
 
 describe("ArchimatePaletteProvider entries", () => {
-  it("lists the two tools then every element: 2 + 62 = 64 entries, a separator and a name opening each layer", () => {
+  it("lists the two tools then every element plus the note: 2 + 62 + 1 = 65 entries, a separator and a name opening each layer", () => {
     const { entries } = setup();
     const keys = Object.keys(entries);
-    expect(keys.filter((k) => /^(hand|lasso|create)/.test(k))).toHaveLength(64);
+    expect(keys.filter((k) => /^(hand|lasso|create)/.test(k))).toHaveLength(65);
     expect(keys.slice(0, 2)).toEqual(["hand-tool", "lasso-tool"]);
     expect(keys.slice(2)).toEqual(
-      LAYER_ORDER.flatMap((l) => [`separator.${l}`, `label.${l}`, ...elementsOfLayer(l).map((t) => `create.${t}`)]),
+      LAYER_ORDER.flatMap((l) => [
+        `separator.${l}`, `label.${l}`, ...elementsOfLayer(l).map((t) => `create.${t}`),
+        ...(l === "other" ? ["create.note"] : []),
+      ]),
     );
     expect(entries["hand-tool"].group).toBe("tools");
     expect(entries["lasso-tool"].group).toBe("tools");
+  });
+
+  it("gives the note its own entry, in the other layer, tiled like an element but not one of them", () => {
+    const { entries, entry } = setup();
+    const note = entries["create.note"];
+    expect(note.group).toBe("other");
+    expect(note.title).toBe("L:note");
+    expect(note.html).toContain('data-archimate-type="Note"');
+    expect(note.html).toContain(`--archimate-tile: ${ARCHIMATE_LAYER_COLORS.other.fill}`);
+    const el = entry("create.note");
+    expect(el.getAttribute("aria-label")).toBe("L:note");
   });
 
   it("groups the entries tools first, then by layer in LAYER_ORDER, each element in its own layer", () => {
@@ -97,9 +111,9 @@ describe("ArchimatePaletteProvider entries", () => {
     for (const t of ELEMENT_TYPES) expect(entries[`create.${t}`].html).toMatch(/<svg[\s\S]*<\/svg>/);
   });
 
-  it("renders as 64 diagram-js .entry elements, each labelled by its title", () => {
+  it("renders as 65 diagram-js .entry elements, each labelled by its title", () => {
     const { container, entry } = setup();
-    expect(container.querySelectorAll(".djs-palette .entry")).toHaveLength(64);
+    expect(container.querySelectorAll(".djs-palette .entry")).toHaveLength(65);
     const actor = entry("create.BusinessActor");
     expect(actor.classList.contains("entry")).toBe(true);
     expect(actor.getAttribute("aria-label")).toBe("L:BusinessActor");
@@ -193,6 +207,17 @@ describe("palette keyboard path", () => {
     expect(shapesOf("Node")).toHaveLength(1);
     get<{ undo(): void }>("commandStack").undo();
     expect(shapesOf("Node")).toHaveLength(0);
+  });
+
+  it("Enter on the note entry drops a note, not an element, at the viewport centre", () => {
+    const { get, entry, press } = setup();
+    const canvas = get<Canvas>("canvas");
+    const { x, y, width, height } = canvas.viewbox();
+    press(entry("create.note"), "Enter");
+    const notes = get<ElementRegistry>("elementRegistry").filter((e) => isNoteObject(e.businessObject)) as Shape[];
+    expect(notes).toHaveLength(1);
+    expectCentredOn(notes[0], x + width / 2, y + height / 2);
+    expect(get<Selection>("selection").get()).toEqual(notes);
   });
 
   it("drops at the centre of the visible part after the canvas was scrolled", () => {

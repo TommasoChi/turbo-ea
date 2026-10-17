@@ -2,6 +2,7 @@
 import {
   EXCHANGE_NS, type ArchimateModel, type ExchangeProperty, type ModelElement, type ModelRelationship,
   type ModelView, type NodeStyle, type PropertyDefinition, type Rgb, type ViewConnection, type ViewNode,
+  type ViewNote,
 } from "./exchangeModel";
 
 const XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
@@ -100,12 +101,27 @@ function effectiveParents(nodes: ViewNode[]): Map<string, string | null> {
   return effective;
 }
 
+/** A note as a `Label` node (Open Group Exchange Format): no `elementRef`, its text in a `<label>`. */
+const labelNode = (n: ViewNote, origin: { x: number; y: number }): Xml =>
+  el(
+    "node",
+    { identifier: n.id, "xsi:type": "Label", x: int(n.x - origin.x), y: int(n.y - origin.y), w: int(n.width), h: int(n.height) },
+    [el("label", lang, [], n.text)],
+  );
+
 function view(v: ModelView): Xml {
   const parents = effectiveParents(v.nodes);
   const childrenOf = new Map<string | null, ViewNode[]>();
   for (const n of v.nodes) {
     const key = parents.get(n.id) ?? null;
     childrenOf.set(key, [...(childrenOf.get(key) ?? []), n]);
+  }
+  // A note nests only under a known element node (never under another note); else it is top-level.
+  const nodeIds = new Set(v.nodes.map((n) => n.id));
+  const notesOf = new Map<string | null, ViewNote[]>();
+  for (const note of v.notes) {
+    const key = note.parent && nodeIds.has(note.parent) ? note.parent : null;
+    notesOf.set(key, [...(notesOf.get(key) ?? []), note]);
   }
   // Child coordinates are relative to the parent's absolute origin.
   const node = (n: ViewNode, origin: { x: number; y: number }): Xml =>
@@ -115,7 +131,11 @@ function view(v: ModelView): Xml {
         identifier: n.id, "xsi:type": "Element", elementRef: n.elementRef,
         x: int(n.x - origin.x), y: int(n.y - origin.y), w: int(n.width), h: int(n.height),
       },
-      [...style(n.style), ...(childrenOf.get(n.id) ?? []).map((c) => node(c, n))],
+      [
+        ...style(n.style),
+        ...(childrenOf.get(n.id) ?? []).map((c) => node(c, n)),
+        ...(notesOf.get(n.id) ?? []).map((note) => labelNode(note, n)),
+      ],
     );
   const connection = (c: ViewConnection) =>
     el(
@@ -127,6 +147,7 @@ function view(v: ModelView): Xml {
     name(v.name),
     ...doc(v.documentation),
     ...(childrenOf.get(null) ?? []).map((n) => node(n, { x: 0, y: 0 })),
+    ...(notesOf.get(null) ?? []).map((note) => labelNode(note, { x: 0, y: 0 })),
     ...v.connections.map(connection),
   ]);
 }
@@ -139,6 +160,7 @@ export function writeExchange(model: ArchimateModel): string {
     [
       name(model.name),
       ...doc(model.documentation),
+      ...properties(model.properties ?? []),
       ...section("elements", model.elements.map(element)),
       ...section("relationships", model.relationships.map(relationship)),
       ...section("propertyDefinitions", model.propertyDefinitions.map(propertyDefinition)),

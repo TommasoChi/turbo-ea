@@ -21,12 +21,14 @@ import { writeExchange } from "./exchange/writeExchange";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
 vi.mock("./download", () => ({ downloadText: vi.fn() }));
+const CARD_TYPES: CardType[] = [
+  { key: "Application", label: "Application", archimate_type: "ApplicationComponent", subtypes: [], fields_schema: [] },
+  { key: "ITComponent", label: "IT Component", archimate_type: "Node", subtypes: [], fields_schema: [] },
+] as unknown as CardType[];
 vi.mock("@/hooks/useMetamodel", () => ({
   useMetamodel: () => ({
-    types: [
-      { key: "Application", label: "Application", archimate_type: "ApplicationComponent", subtypes: [] },
-      { key: "ITComponent", label: "IT Component", archimate_type: "Node", subtypes: [] },
-    ] as unknown as CardType[],
+    types: CARD_TYPES,
+    getType: (key: string) => CARD_TYPES.find((t) => t.key === key),
   }),
 }));
 vi.mock("@/components/CardPicker", () => ({
@@ -35,6 +37,14 @@ vi.mock("@/components/CardPicker", () => ({
       pick:{p.types.join(",")}
     </button>
   ),
+}));
+vi.mock("@/components/CardDetailSidePanel", () => ({
+  default: (p: { cardId: string | null; open: boolean; onClose: () => void }) =>
+    p.open ? (
+      <div role="dialog" aria-label={`card sheet: ${p.cardId}`}>
+        <button onClick={p.onClose}>close card sheet</button>
+      </div>
+    ) : null,
 }));
 
 beforeAll(() => {
@@ -807,6 +817,69 @@ describe("properties panel", () => {
     const saved = readExchange(lastPatchBody().data.xml);
     const def = saved.propertyDefinitions.find((d) => d.name === "owner")!;
     expect(saved.elements.find((e) => e.id === "id-app")!.properties).toEqual([{ ref: def.id, value: "Ann" }]);
+  });
+
+  it("renames the diagram and edits its description from the panel, as separate PATCH calls", async () => {
+    await mount({ ...doc(), description: "Old description" });
+    const user = userEvent.setup();
+    const name = (await screen.findAllByLabelText("Name"))[0];
+    await user.clear(name);
+    await user.type(name, "Renamed{Enter}");
+    await waitFor(() => expect(mockApi.callsOf("patch").at(-1)?.body).toEqual({ name: "Renamed" }));
+    expect(screen.getByRole("heading", { name: "Renamed" })).toBeInTheDocument();
+    const doc2 = screen.getByLabelText("Documentation");
+    expect(doc2).toHaveValue("Old description");
+    await user.clear(doc2);
+    await user.type(doc2, "New description");
+    await user.tab();
+    await waitFor(() => expect(mockApi.callsOf("patch").at(-1)?.body).toEqual({ description: "New description" }));
+    // Neither touches the autosaved Exchange XML.
+    expect(mockApi.callsOf("patch").every((c) => !("data" in (c.body as object)))).toBe(true);
+  });
+
+  it("shows the View placeholder only when nothing is selected", async () => {
+    await mount();
+    expect(screen.getByText("View")).toBeInTheDocument();
+    select(APP_SHAPE);
+    await screen.findByRole("heading", { name: "CRM <core>" });
+    expect(screen.queryByText("View")).toBeNull();
+  });
+
+  it("saves the diagram's own parameters through autosave, like an element's", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await mount();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(await screen.findByRole("button", { name: "Add a property" }));
+    const panel = within(screen.getByRole("complementary"));
+    await user.type(panel.getAllByLabelText("Name").at(-1)!, "owner");
+    await user.type(panel.getByLabelText("Value"), "EA team");
+    await user.tab();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    const saved = readExchange(lastPatchBody().data.xml);
+    const def = saved.propertyDefinitions.find((d) => d.name === "owner")!;
+    expect(saved.properties).toEqual([{ ref: def.id, value: "EA team" }]);
+    vi.useRealTimers();
+  });
+
+  it("shows the linked card's own summary, readonly, and its button opens the card sheet", async () => {
+    mockApi.on("get", "/cards/c1", {
+      id: "c1", type: "Application", name: "CRM", description: "Customer relations",
+      status: "ACTIVE", approval_status: "APPROVED", data_quality: 90, tags: [], stakeholders: [], attributes: {},
+    });
+    await mount(doc(MODEL));
+    const user = userEvent.setup();
+    select(APP_SHAPE);
+    const panel = within(await screen.findByRole("complementary"));
+    const openButton = await panel.findByRole("button", { name: "Open the linked card: CRM" });
+    expect(panel.getByText("Customer relations")).toBeInTheDocument();
+    expect(panel.queryByLabelText("Name")).toBeNull(); // the free-text Name field is gone; the card owns it
+    await user.click(openButton);
+    expect(screen.getByRole("dialog", { name: "card sheet: c1" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "close card sheet" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
 

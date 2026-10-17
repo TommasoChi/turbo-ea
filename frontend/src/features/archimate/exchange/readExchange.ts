@@ -11,13 +11,15 @@
  * NOT mirrored: the server's relationship_not_allowed (the ArchiMate relationship table, and a
  * relationship connected to itself), so a file read here can still be refused by the server on save.
  *
- * Limitations (by design): `<organizations>` folders, labels/containers without an elementRef, plain
- * connections without a relationshipRef, fonts and other styling are ignored, and every property
- * definition is read as a string.
+ * Limitations (by design): `<organizations>` folders, `Container` nodes (transparently skipped: their
+ * children are re-parented to the grandparent), plain connections without a relationshipRef, fonts and
+ * other styling are ignored, and every property definition is read as a string. A `Label` node (no
+ * elementRef) becomes a note.
  */
 import {
   EXCHANGE_NS, type ArchimateModel, type ExchangeProperty, type ModelElement, type ModelRelationship,
   type ModelView, type NodeStyle, type PropertyDefinition, type Rgb, type ViewConnection, type ViewNode,
+  type ViewNote,
 } from "./exchangeModel";
 import { isElementType } from "../taxonomy/elements";
 import { ACCESS_TYPES, isRelationshipType, type AccessType } from "../taxonomy/relationships";
@@ -189,8 +191,9 @@ function readStyle(node: Element, owner: string): NodeStyle | undefined {
 }
 
 /** Nested nodes are flattened with ABSOLUTE coordinates (iterative: nesting depth is attacker-controlled). */
-function readNodes(view: Element, elementIds: Set<string>): ViewNode[] {
+function readNodes(view: Element, elementIds: Set<string>): { nodes: ViewNode[]; notes: ViewNote[] } {
   const nodes: ViewNode[] = [];
+  const notes: ViewNote[] = [];
   type Frame = { el: Element; ox: number; oy: number; parent: string | null };
   const stack: Frame[] = kids(view, "node").reverse().map((el) => ({ el, ox: 0, oy: 0, parent: null }));
   for (let f = stack.pop(); f; f = stack.pop()) {
@@ -201,7 +204,6 @@ function readNodes(view: Element, elementIds: Set<string>): ViewNode[] {
     const height = intAttr(f.el, "h", id);
     const ref = f.el.getAttribute("elementRef");
     let parent = f.parent;
-    // A node without elementRef (label, container) is not an element: skipped, its children are re-parented.
     if (ref !== null) {
       if (!elementIds.has(ref)) throw new ExchangeParseError("dangling_reference", `elementRef ${ref.slice(0, MAX_ECHO)} not found`, id);
       const node: ViewNode = { id, elementRef: ref, x, y, width, height, parent: f.parent };
@@ -209,10 +211,15 @@ function readNodes(view: Element, elementIds: Set<string>): ViewNode[] {
       if (style) node.style = style;
       nodes.push(node);
       parent = id;
+    } else if (xsiType(f.el) === "Label") {
+      // A Label never has children of its own; the parent chain for siblings is unaffected.
+      notes.push({ id, text: localized(f.el, "label") ?? "", x, y, width, height, parent: f.parent });
     }
+    // Anything else without an elementRef (Container, or an unknown type) is transparently skipped:
+    // its children are re-parented to the grandparent.
     stack.push(...kids(f.el, "node").reverse().map((el) => ({ el, ox: x, oy: y, parent })));
   }
-  return nodes;
+  return { nodes, notes };
 }
 
 function readConnections(
@@ -251,9 +258,9 @@ function readConnections(
 function readViews(root: Element, elementIds: Set<string>, relationshipEnds: Map<string, [string, string]>): ModelView[] {
   return at(root, "views", "diagrams", "view").map((v) => {
     const id = identifierOf(v, "View");
-    const nodes = readNodes(v, elementIds);
+    const { nodes, notes } = readNodes(v, elementIds);
     const connections = readConnections(v, nodes, relationshipEnds);
-    const out: ModelView = { id, name: localized(v, "name") ?? "", nodes, connections };
+    const out: ModelView = { id, name: localized(v, "name") ?? "", nodes, connections, notes };
     const documentation = localized(v, "documentation");
     if (documentation !== undefined) out.documentation = documentation;
     return out;
@@ -274,6 +281,7 @@ function read(xml: string): ArchimateModel {
     id,
     name: localized(root, "name") ?? "",
     propertyDefinitions: readPropertyDefinitions(root),
+    properties: readProperties(root),
     elements,
     relationships,
     views: readViews(root, elementIds, new Map(relationships.map((r) => [r.id, [r.source, r.target]]))),

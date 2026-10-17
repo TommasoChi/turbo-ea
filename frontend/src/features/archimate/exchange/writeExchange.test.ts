@@ -219,3 +219,68 @@ describe("writeExchange", () => {
     expect(all(d, "view")).toHaveLength(1);
   });
 });
+
+describe("writeExchange: the model's own properties", () => {
+  it("writes a <properties> child of the model root, right after documentation, using the same propertyDefinitions", () => {
+    const m: ArchimateModel = {
+      ...structuredClone(MODEL),
+      properties: [{ ref: "propid-owner", value: "Team A" }],
+      propertyDefinitions: [...MODEL.propertyDefinitions, { id: "propid-owner", name: "owner", type: "string" }],
+    };
+    const root = parse(writeExchange(m)).documentElement;
+    expect(childNames(root)).toEqual(["name", "documentation", "properties", "elements", "relationships", "propertyDefinitions", "views"]);
+    const prop = root.querySelector(":scope > properties > property")!;
+    expect(prop.getAttribute("propertyDefinitionRef")).toBe("propid-owner");
+    expect(prop.querySelector("value")!.textContent).toBe("Team A");
+  });
+
+  it("writes nothing when the model has no properties of its own", () => {
+    expect(parse(writeExchange(MODEL)).documentElement.querySelector(":scope > properties")).toBeNull();
+  });
+});
+
+describe("writeExchange: notes", () => {
+  const note = (over: Partial<ArchimateModel["views"][0]["notes"][0]> = {}) => ({
+    id: "id-note1", text: "Ask the team", x: 500, y: 20, width: 140, height: 90, parent: null, ...over,
+  });
+
+  it("writes a top-level note as a Label node with no elementRef, its text in <label>", () => {
+    const m = structuredClone(MODEL);
+    m.views[0].notes = [note()];
+    const root = parse(writeExchange(m)).documentElement;
+    const view = all(root, "view")[0];
+    const label = Array.from(view.children).find((c) => c.getAttribute("identifier") === "id-note1")!;
+    expect(label.getAttributeNS(XSI, "type")).toBe("Label");
+    expect(label.getAttribute("elementRef")).toBeNull();
+    expect(["x", "y", "w", "h"].map((a) => label.getAttribute(a))).toEqual(["500", "20", "140", "90"]);
+    expect(childNames(label)).toEqual(["label"]);
+    expect(label.querySelector("label")!.textContent).toBe("Ask the team");
+    expect(label.querySelector("label")!.getAttribute("xml:lang")).toBe("en");
+  });
+
+  it("nests a note under its parent element node, coordinates relative to it", () => {
+    const m = structuredClone(MODEL);
+    m.views[0].notes = [note({ id: "id-note2", parent: "id-g1", x: 150, y: 160 })]; // id-g1 is at (100, 100)
+    const root = parse(writeExchange(m)).documentElement;
+    const group = Array.from(root.getElementsByTagNameNS(EXCHANGE_NS, "node")).find((n) => n.getAttribute("identifier") === "id-g1")!;
+    const nested = Array.from(group.children).find((c) => c.getAttribute("identifier") === "id-note2")!;
+    expect(nested.getAttributeNS(XSI, "type")).toBe("Label");
+    expect([nested.getAttribute("x"), nested.getAttribute("y")]).toEqual(["50", "60"]);
+  });
+
+  it("falls back to the view's top level when the parent is unknown or is another note", () => {
+    const m = structuredClone(MODEL);
+    m.views[0].notes = [note({ id: "id-note3", parent: "does-not-exist" }), note({ id: "id-note4", parent: "id-note3" })];
+    const root = parse(writeExchange(m)).documentElement;
+    const view = all(root, "view")[0];
+    const top = new Set(Array.from(view.children).map((c) => c.getAttribute("identifier")));
+    expect(top.has("id-note3")).toBe(true);
+    expect(top.has("id-note4")).toBe(true);
+  });
+
+  it("writes nothing extra when the view has no notes", () => {
+    expect(parse(writeExchange(MODEL)).documentElement.getElementsByTagNameNS(EXCHANGE_NS, "node")).toHaveLength(
+      MODEL.views[0].nodes.length,
+    );
+  });
+});

@@ -15,7 +15,7 @@ import type Modeling from "diagram-js/lib/features/modeling/Modeling";
 import type Palette from "diagram-js/lib/features/palette/Palette";
 import type { PaletteEntries } from "diagram-js/lib/features/palette/PaletteProvider";
 import type Selection from "diagram-js/lib/features/selection/Selection";
-import type { Root } from "diagram-js/lib/model/Types";
+import type { Root, Shape } from "diagram-js/lib/model/Types";
 import { ARCHIMATE_LAYER_COLORS } from "@/theme/tokens";
 import { elementsOfLayer, isElementType, LAYER_ORDER, type ElementType } from "../taxonomy/elements";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
@@ -45,11 +45,18 @@ const HAND_ICON = svgOf(
 );
 const LASSO_ICON = svgOf(ICON_SIZE, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 2"/>', TOOL_ATTRS);
 
+const GLYPH_ATTRS = Object.entries(GLYPH_STROKE).map(([k, v]) => `${k}="${v}"`).join(" ");
+
 /** The Grouping has no glyph of its own (it is a dashed frame): its palette icon is a dashed box. */
-const GROUPING_ICON = svgOf(
-  ICON_SIZE, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 1.5"/>',
-  Object.entries(GLYPH_STROKE).map(([k, v]) => `${k}="${v}"`).join(" "),
+const GROUPING_ICON = svgOf(ICON_SIZE, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 1.5"/>', GLYPH_ATTRS);
+
+/** Not an ArchiMate element (no `NOTATION` entry): a folded-corner sticky note with two text lines. */
+const NOTE_ICON = svgOf(
+  ICON_SIZE, '<path d="M2 2H11L14 5V14H2Z"/><path d="M11 2V5H14"/><line x1="4" y1="8" x2="10" y2="8"/><line x1="4" y1="11" x2="9" y2="11"/>',
+  GLYPH_ATTRS,
 );
+/** `data-archimate-type` of the Note entry: a sentinel, never a real `ElementType`. */
+const NOTE_TYPE = "Note";
 
 function entryIcon(type: ElementType): string {
   const glyph = NOTATION[type].glyph;
@@ -83,7 +90,7 @@ export default class ArchimatePaletteProvider {
   }
 
   getPaletteEntries(): PaletteEntries {
-    const { elements, tools, layers } = this.bridge.labels;
+    const { elements, tools, layers, note } = this.bridge.labels;
     const entries: PaletteEntries = {
       "hand-tool": {
         group: "tools", title: tools.hand, html: `<div class="entry" draggable="true">${HAND_ICON}</div>`,
@@ -114,6 +121,17 @@ export default class ArchimatePaletteProvider {
           action: { dragstart: createShape, click: createShape },
         };
       }
+      if (layer === "other") {
+        const createNote = (event: Event) => this.create.start(event, this.elementFactory.createShape({ isNote: true }));
+        entries["create.note"] = {
+          group: layer,
+          title: note,
+          html:
+            `<div class="entry ${ENTRY_CLASS}" ${TYPE_ATTR}="${NOTE_TYPE}" tabindex="0" role="button" draggable="true" ` +
+            `style="--archimate-tile: ${ARCHIMATE_LAYER_COLORS.other.fill}">${NOTE_ICON}</div>`,
+          action: { dragstart: createNote, click: createNote },
+        };
+      }
     }
     return entries;
   }
@@ -123,16 +141,21 @@ export default class ArchimatePaletteProvider {
     if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
     const entry = (event.target as Element | null)?.closest?.(`.${ENTRY_CLASS}`);
     const type = entry?.getAttribute(TYPE_ATTR);
+    if (type === NOTE_TYPE) {
+      event.preventDefault(); // Space would scroll the page
+      this.dropAtCentre(this.elementFactory.createShape({ isNote: true }));
+      return;
+    }
     if (!isElementType(type)) return;
-    event.preventDefault(); // Space would scroll the page
-    this.dropAtCentre(type);
+    event.preventDefault();
+    this.dropAtCentre(this.elementFactory.createShape({ elementType: type }));
   };
 
   /** A keyboard drop: through modeling (one undoable command), then selected and announced. */
-  private dropAtCentre(type: ElementType): void {
+  private dropAtCentre(template: Shape): void {
     const { x, y, width, height } = this.canvas.viewbox();
     const shape = this.modeling.createShape(
-      this.elementFactory.createShape({ elementType: type }),
+      template,
       { x: x + width / 2, y: y + height / 2 },
       this.canvas.getRootElement() as Root,
     );

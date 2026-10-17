@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import {
-  ARCHIMATE_FORMAT, CARD_ID_DEFINITION, emptyModel, getCardId, linkedCardIds, newIdentifier, withCardDefinition, withCardId,
-  type ModelElement,
+  ARCHIMATE_FORMAT, CARD_ID_DEFINITION, emptyModel, getCardId, isNoteObject, linkedCardIds, newIdentifier,
+  withCardDefinition, withCardId, type ModelElement,
 } from "./exchangeModel";
 
 const element = (id: string, cardId: string | null): ModelElement =>
@@ -31,9 +31,18 @@ describe("exchange model helpers", () => {
 
   it("emptyModel has one empty view carrying the model name", () => {
     const m = emptyModel("Landscape", () => "x");
-    expect(m).toMatchObject({ name: "Landscape", elements: [], relationships: [], propertyDefinitions: [] });
+    expect(m).toMatchObject({ name: "Landscape", elements: [], relationships: [], propertyDefinitions: [], properties: [] });
     expect(m.views).toHaveLength(1);
-    expect(m.views[0]).toMatchObject({ name: "Landscape", nodes: [], connections: [] });
+    expect(m.views[0]).toMatchObject({ name: "Landscape", nodes: [], connections: [], notes: [] });
+  });
+
+  it("isNoteObject recognises only a note's business object", () => {
+    expect(isNoteObject({ id: "n1", isNote: true, name: "x" })).toBe(true);
+    expect(isNoteObject({ id: "e1", type: "BusinessActor", name: "x", properties: [] })).toBe(false);
+    expect(isNoteObject({ isNote: false })).toBe(false);
+    expect(isNoteObject(null)).toBe(false);
+    expect(isNoteObject(undefined)).toBe(false);
+    expect(isNoteObject("isNote")).toBe(false);
   });
 
   it("withCardId sets, replaces and clears the property without touching others", () => {

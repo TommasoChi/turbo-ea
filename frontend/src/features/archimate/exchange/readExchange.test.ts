@@ -55,7 +55,7 @@ describe("readExchange: round trip", () => {
     styled.views[0].nodes[0].style = { fillColor: { r: 1, g: 2, b: 3 }, lineColor: { r: 4, g: 5, b: 6 } };
     styled.documentation = "line 1\nline 2\r\n  indented";
     expect(readExchange(writeExchange(styled))).toEqual(styled);
-    const empty = { id: "m", name: "", propertyDefinitions: [], elements: [], relationships: [], views: [] };
+    const empty = { id: "m", name: "", propertyDefinitions: [], properties: [], elements: [], relationships: [], views: [] };
     expect(readExchange(writeExchange(empty))).toEqual(empty);
   });
 
@@ -288,14 +288,14 @@ describe("readExchange: hostile and invalid input", () => {
 });
 
 describe("readExchange: structure", () => {
-  it("skips labels and plain connections, re-parenting a container's children", () => {
+  it("skips a container and plain connections, re-parenting the container's children", () => {
     const xml = doc(
       elements(el("e1"), el("e2")) + relationships(rel("r1", "e1", "e2")) +
       views(view(
-        '<node identifier="lab" xsi:type="Label" x="100" y="100" w="200" h="100">' +
+        '<node identifier="box" xsi:type="Container" x="100" y="100" w="200" h="100">' +
           node("n1", "e1") + "</node>" +
         node("n2", "e2") +
-        '<connection identifier="plain" xsi:type="Line" source="lab" target="n2"/>' +
+        '<connection identifier="plain" xsi:type="Line" source="box" target="n2"/>' +
         conn("c1", "r1", "n1", "n2"),
       )),
     );
@@ -303,6 +303,7 @@ describe("readExchange: structure", () => {
     expect(v.nodes.map((n) => n.id)).toEqual(["n1", "n2"]);
     expect(v.nodes[0]).toMatchObject({ x: 110, y: 110, parent: null });
     expect(v.connections.map((c) => c.id)).toEqual(["c1"]);
+    expect(v.notes).toEqual([]);
   });
 
   it("lets a connection end on another connection (relationship to relationship)", () => {
@@ -318,6 +319,53 @@ describe("readExchange: structure", () => {
     const xml = doc('<foo identifierRef="x"><bar/></foo>' + elements(el("e1")) + "<organizations/>");
     expect(readExchange(xml).elements).toHaveLength(1);
     expect(exchangeWarnings(xml)).toEqual(["organizations"]);
+  });
+});
+
+describe("readExchange: notes", () => {
+  const label = (id: string, text: string, inner = "") =>
+    `<node identifier="${id}" xsi:type="Label" x="500" y="20" w="140" h="90">` +
+    `<label xml:lang="en">${text}</label>${inner}</node>`;
+
+  it("reads a top-level Label node as a note, not an element", () => {
+    const xml = doc(elements(el("e1")) + views(view(node("n1", "e1") + label("note1", "Ask the team"))));
+    const v = readExchange(xml).views[0];
+    expect(v.nodes.map((n) => n.id)).toEqual(["n1"]);
+    expect(v.notes).toEqual([{ id: "note1", text: "Ask the team", x: 500, y: 20, width: 140, height: 90, parent: null }]);
+  });
+
+  it("nests a note under its parent element node, with absolute coordinates", () => {
+    const xml = doc(elements(el("e1")) + views(view(node("n1", "e1", label("note1", "In here")))));
+    const notes = readExchange(xml).views[0].notes;
+    // node("n1", "e1") is at (10, 10); the label's own x/y (500, 20) are relative to it.
+    expect(notes).toEqual([{ id: "note1", text: "In here", x: 510, y: 30, width: 140, height: 90, parent: "n1" }]);
+  });
+
+  it("a note with no <label> has empty text; a missing identifier still fails like any node", () => {
+    const xml = doc(elements(el("e1")) + views(view(node("n1", "e1") + '<node identifier="note1" xsi:type="Label" x="1" y="1" w="1" h="1"/>')));
+    expect(readExchange(xml).views[0].notes[0].text).toBe("");
+    const noId = doc(views(view('<node xsi:type="Label" x="1" y="1" w="1" h="1"><label>x</label></node>')));
+    expect(failure(noId).code).toBe("missing_identifier");
+  });
+
+  it("a note's sibling after it in document order keeps the same parent (a note never becomes one)", () => {
+    const xml = doc(
+      elements(el("e1"), el("e2")) +
+      views(view(node("box", "e1", label("note1", "x") + node("n2", "e2")))),
+    );
+    const v = readExchange(xml).views[0];
+    expect(v.nodes.map((n) => [n.id, n.parent])).toEqual([["box", null], ["n2", "box"]]);
+    expect(v.notes[0]).toMatchObject({ id: "note1", parent: "box" });
+  });
+
+  it("round-trips through writeExchange: a note nested in a Grouping, then a top-level one", () => {
+    const m = structuredClone(MODEL);
+    // Document order follows nesting, not list order: the Grouping's own note comes before the top-level one.
+    m.views[0].notes = [
+      { id: "id-note2", text: "Inside the group", x: 150, y: 160, width: 100, height: 60, parent: "id-g1" },
+      { id: "id-note1", text: "Top level", x: 500, y: 20, width: 140, height: 90, parent: null },
+    ];
+    expect(readExchange(writeExchange(m))).toEqual(m);
   });
 });
 

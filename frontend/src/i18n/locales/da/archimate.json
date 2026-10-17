@@ -44,6 +44,9 @@
     "hand": "Håndværktøj",
     "lasso": "Lassovalg"
   },
+  "note": {
+    "label": "Note"
+  },
   "toolbar": {
     "back": "Tilbage",
     "undo": "Fortryd",
@@ -71,9 +74,10 @@
     "propertyName": "Navn",
     "propertyValue": "Værdi",
     "removeProperty": "Fjern egenskaben",
-    "nothingSelected": "Vælg et element eller en relation for at se egenskaberne.",
     "multiple": "{{count}} elementer valgt",
-    "multipleHint": "Vælg ét element for at redigere det."
+    "multipleHint": "Vælg ét element for at redigere det.",
+    "view": "Visning",
+    "text": "Tekst"
   },
   "status": {
     "saved": "Gemt",

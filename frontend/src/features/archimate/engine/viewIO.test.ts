@@ -2,7 +2,7 @@ import Diagram from "diagram-js";
 import type { Connection, Shape } from "diagram-js/lib/model/Types";
 import { MODEL } from "@/test/archimateModel";
 import { installSvgStubs } from "@/test/svgStubs";
-import type { ArchimateModel } from "../exchange/exchangeModel";
+import { isNoteObject, type ArchimateModel } from "../exchange/exchangeModel";
 import { ARCHIMATE_BASE_MODULES } from "./modules";
 import { extractEdited, importView, type ViewServices } from "./viewIO";
 
@@ -39,7 +39,7 @@ describe("importView", () => {
   it("skips a node whose element is missing, and draws a connection that ends on a connection", () => {
     const s = services();
     const model: ArchimateModel = {
-      id: "id-m", name: "M", propertyDefinitions: [],
+      id: "id-m", name: "M", propertyDefinitions: [], properties: [],
       elements: ["a", "b", "c"].map((id) => ({ id, type: "BusinessActor", name: id, properties: [] })),
       relationships: [
         { id: "r1", type: "Association", source: "a", target: "b", properties: [] },
@@ -58,6 +58,7 @@ describe("importView", () => {
           { id: "c2", relationshipRef: "r2", source: "nc", target: "c1", bendpoints: [] },
           { id: "c1", relationshipRef: "r1", source: "na", target: "nb", bendpoints: [] },
         ],
+        notes: [],
       }],
     };
     importView(s, model, model.views[0]);
@@ -93,5 +94,60 @@ describe("extractEdited", () => {
     shape.x = 10.4;
     shape.y = 19.6;
     expect(extractEdited(s, model.views[0]).view.nodes[0]).toMatchObject({ x: 10, y: 20, parent: null });
+  });
+});
+
+describe("importView / extractEdited: notes", () => {
+  it("draws a top-level note and one nested under an element, never as an element", () => {
+    const s = services();
+    const model = structuredClone(MODEL);
+    model.views[0].notes = [
+      { id: "id-note1", text: "Top level", x: 500, y: 20, width: 140, height: 90, parent: null },
+      { id: "id-note2", text: "Inside the group", x: 150, y: 160, width: 100, height: 60, parent: "id-g1" },
+    ];
+    importView(s, model, model.views[0]);
+    const top = s.elementRegistry.get("id-note1") as Shape;
+    const nested = s.elementRegistry.get("id-note2") as Shape;
+    expect(top.parent).toBe(s.canvas.getRootElement());
+    expect(nested.parent).toBe(s.elementRegistry.get("id-g1"));
+    expect(top.businessObject).toEqual({ id: "id-note1", isNote: true, name: "Top level" });
+    expect(isNoteObject(top.businessObject)).toBe(true);
+    expect(s.elementRegistry.filter((e) => !e.waypoints && e.businessObject?.type)).toHaveLength(3); // the 3 ModelElement shapes only
+  });
+
+  it("falls back to the canvas root for a dangling parent", () => {
+    const s = services();
+    const model = structuredClone(MODEL);
+    model.views[0].notes = [{ id: "id-note1", text: "x", x: 0, y: 0, width: 10, height: 10, parent: "does-not-exist" }];
+    importView(s, model, model.views[0]);
+    expect((s.elementRegistry.get("id-note1") as Shape).parent).toBe(s.canvas.getRootElement());
+  });
+
+  it("extractEdited reads notes back, never into elements or nodes, geometry rounded", () => {
+    const s = services();
+    const model = structuredClone(MODEL);
+    model.views[0].notes = [{ id: "id-note1", text: "x", x: 500, y: 20, width: 140, height: 90, parent: "id-g1" }];
+    importView(s, model, model.views[0]);
+    const note = s.elementRegistry.get("id-note1") as Shape;
+    note.x = 500.4;
+    note.y = 19.6;
+    const out = extractEdited(s, model.views[0]);
+    expect(out.view.notes).toEqual([{ id: "id-note1", text: "x", x: 500, y: 20, width: 140, height: 90, parent: "id-g1" }]);
+    expect(out.elements.some((e) => e.id === "id-note1")).toBe(false);
+    expect(out.view.nodes.some((n) => n.id === "id-note1")).toBe(false);
+  });
+
+  it("keeps an existing note's position stable across saves (the base view's order), new ones last", () => {
+    const s = services();
+    const model = structuredClone(MODEL);
+    model.views[0].notes = [
+      { id: "id-note1", text: "first", x: 500, y: 20, width: 140, height: 90, parent: null },
+      { id: "id-note2", text: "second", x: 500, y: 200, width: 140, height: 90, parent: null },
+    ];
+    importView(s, model, model.views[0]);
+    const extra = s.elementFactory.createShape({ isNote: true, x: 10, y: 10, width: 10, height: 10 });
+    s.canvas.addShape(extra, s.canvas.getRootElement());
+    const ids = extractEdited(s, model.views[0]).view.notes.map((n) => n.id);
+    expect(ids).toEqual(["id-note1", "id-note2", extra.id]);
   });
 });

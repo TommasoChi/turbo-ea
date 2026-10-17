@@ -28,6 +28,7 @@ beforeAll(() => {
 const MODEL: ArchimateModel = {
   id: "m", name: "M",
   propertyDefinitions: [{ id: CARD_ID_DEFINITION, name: "turboea:cardId", type: "string" }],
+  properties: [],
   elements: [
     { id: "e-ceo", type: "BusinessActor", name: "CEO", properties: [{ ref: CARD_ID_DEFINITION, value: "c9" }] },
     { id: "e-role", type: "BusinessRole", name: "Chair", properties: [] },
@@ -40,6 +41,7 @@ const MODEL: ArchimateModel = {
       { id: "n-role", elementRef: "e-role", x: 400, y: 100, width: 120, height: 55, parent: null },
     ],
     connections: [{ id: "c-1", relationshipRef: "r1", source: "n-ceo", target: "n-role", bendpoints: [] }],
+    notes: [],
   }],
 };
 
@@ -79,8 +81,17 @@ function setup() {
     get<ArchimateModeling>("modeling").createShape(
       get<ArchimateElementFactory>("elementFactory").createShape({ elementType }), { x: 700, y: 300 }, root,
     ) as Shape;
+  const addNote = () =>
+    get<ArchimateModeling>("modeling").createShape(
+      get<ArchimateElementFactory>("elementFactory").createShape({ isNote: true }), { x: 700, y: 300 }, root,
+    ) as Shape;
+  /** Enter on the note palette entry: the keyboard drop. */
+  const keyboardDropNote = () =>
+    container.querySelector<HTMLElement>('[data-action="create.note"]')!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
   return {
-    container, engine, get, registry, ceo, stack, provider, directEditing, activate, press, shapesOf, drop, keyboardDrop, add,
+    container, engine, get, registry, ceo, stack, provider, directEditing, activate, press, shapesOf, drop, keyboardDrop,
+    add, addNote, keyboardDropNote,
   };
 }
 
@@ -151,6 +162,20 @@ describe("ArchimateLabelEditing provider", () => {
     provider.update(ceo, "");
     expect(ceo.businessObject.name).toBe("");
   });
+
+  it("activates on a note (its text, not gated by isConnector) and updates it, empty allowed", () => {
+    const { provider, addNote, engine } = setup();
+    const note = addNote(); // createShape centres a 140x90 note on (700, 300)
+    expect(provider.activate(note)).toEqual({
+      text: "", bounds: { x: 630, y: 255, width: 140, height: 90 }, options: { autoResize: false },
+    });
+    provider.update(note, "  Ask the team  ");
+    expect(note.businessObject.name).toBe("Ask the team");
+    provider.update(note, "   ");
+    expect(note.businessObject.name).toBe(""); // unlike an element, a note's own update() writes "" too
+    engine.undo();
+    expect(note.businessObject.name).toBe("Ask the team");
+  });
 });
 
 describe("ArchimateLabelEditing wiring", () => {
@@ -206,6 +231,15 @@ describe("ArchimateLabelEditing wiring", () => {
     get<Selection>("selection").select(junction);
     press("Enter");
     expect(directEditing.isActive()).toBe(false);
+  });
+
+  it("starts editing a note dropped from the palette keyboard, like an element", () => {
+    const { keyboardDropNote, activate, registry, directEditing } = setup();
+    keyboardDropNote();
+    const [created] = registry.filter((e) => (e.businessObject as { isNote?: boolean } | undefined)?.isNote === true);
+    expect(created).toBeDefined();
+    expect(activate).toHaveBeenCalledWith(created);
+    expect(directEditing.isActive(created)).toBe(true);
   });
 
   it("never starts editing on an import", () => {

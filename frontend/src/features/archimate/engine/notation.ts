@@ -182,6 +182,20 @@ export function bodyDetail(body: BodyShape, w: number, h: number): string | null
   return null;
 }
 
+const NOTE_FOLD = 16;
+
+/** A sticky note: a rectangle with its top-right corner folded down. Not part of `NOTATION` (not an ArchiMate type). */
+export function noteBodyPath(w: number, h: number): string {
+  const k = Math.min(NOTE_FOLD, w / 3, h / 3);
+  return polygon([[0, 0], [w - k, 0], [w, k], [w, h], [0, h]], w, h);
+}
+
+/** The folded corner's crease, open lines only (matches `bodyDetail`'s box3d convention). */
+export function noteBodyDetail(w: number, h: number): string {
+  const k = Math.min(NOTE_FOLD, w / 3, h / 3);
+  return `M${r2(w - k)} 0L${r2(w - k)} ${r2(k)}L${w} ${r2(k)}`;
+}
+
 /**
  * Moves a path made of M, H, V, L and Z (the commands `bodyPath` emits) by (dx, dy). Any other
  * command (relative ones, curves, arcs) throws, rather than being moved wrongly.

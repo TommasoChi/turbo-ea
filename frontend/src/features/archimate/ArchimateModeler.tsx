@@ -28,12 +28,14 @@ import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { fetchCardsByIds } from "@/api/cardsByIds";
 import { api } from "@/api/client";
+import type { Card } from "@/types";
 import { archimateCanvasSx } from "./archimateStyles";
 import { downloadText } from "./download";
-import { ArchimateEngine } from "./engine/ArchimateEngine";
+import { ArchimateEngine, type UserProperty } from "./engine/ArchimateEngine";
 import { ARCHIMATE_FORMAT, type ArchimateModel, linkedCardIds } from "./exchange/exchangeModel";
 import {
   ExchangeParseError, MAX_EXCHANGE_BYTES, exchangeWarnings, readExchange, requireView,
@@ -63,6 +65,7 @@ interface DiagramDoc {
   id: string;
   kind?: string;
   name: string;
+  description?: string | null;
   data?: { format?: string; xml?: string } | null;
 }
 
@@ -99,6 +102,9 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [name, setName] = useState("");
+  /** The diagram's own description (the DB column, not the ArchiMate model's documentation): the
+   *  panel's "Documentation" field when nothing is selected. */
+  const [description, setDescription] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -109,6 +115,11 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const [pendingImport, setPendingImport] = useState<{ model: ArchimateModel; warnings: string[] } | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // The card sheet drawer, opened from the panel's "Linked card" button.
+  const [cardSheetId, setCardSheetId] = useState<string | null>(null);
+  // The full card record behind the selected element's link, for the panel's readonly summary.
+  const [linkedCard, setLinkedCard] = useState<Card | null>(null);
+  const [linkedCardLoading, setLinkedCardLoading] = useState(false);
   // The properties panel: open by default on a wide screen; the toolbar button overrides that.
   const wide = useMediaQuery(theme.breakpoints.up("md"));
   const [panelPref, setPanelPref] = useState<boolean | null>(null);
@@ -146,6 +157,9 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     setImportError(null);
     setPendingImport(null);
     setIssues(null);
+    setCardSheetId(null);
+    setLinkedCard(null);
+    setLinkedCardLoading(false);
     closeDialogs();
     setLoad({ status: "loading" });
     (async () => {
@@ -164,6 +178,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       try {
         const parsed = parse(doc.data?.xml ?? "");
         setName(doc.name);
+        setDescription(doc.description ?? "");
         setWarnings(parsed.warnings);
         setLoad({ status: "ready", model: parsed.model });
       } catch (e) {
@@ -283,6 +298,53 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
+
+  // ── The selected element's linked card (the panel's readonly summary) ───
+  const selected = model ? (engineRef.current?.selectedItem() ?? null) : null;
+  const linkedCardId = selected?.kind === "element" ? selected.cardId : null;
+  useEffect(() => {
+    if (!linkedCardId) {
+      setLinkedCard(null);
+      setLinkedCardLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLinkedCard(null);
+    setLinkedCardLoading(true);
+    api
+      .get<Card>(`/cards/${linkedCardId}`)
+      .then((card) => {
+        if (!cancelled) setLinkedCard(card);
+      })
+      .catch(() => {
+        // The panel still shows the id/name it already has (from rememberCards).
+      })
+      .finally(() => {
+        if (!cancelled) setLinkedCardLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedCardId]);
+
+  // ── Diagram-level fields (name, description, parameters) ────────────────
+  const patchDiagram = async (body: { name?: string } | { description: string }) => {
+    try {
+      await api.patch(`/diagrams/${diagramId}`, body);
+      if ("name" in body && body.name !== undefined) setName(body.name);
+      if ("description" in body) setDescription(body.description);
+    } catch (e) {
+      setSnack(reason(e));
+    }
+  };
+  const onDiagramName = (v: string) => {
+    if (v.trim() && v !== name) void patchDiagram({ name: v });
+  };
+  const onDiagramDocumentation = (v: string) => {
+    if (v !== description) void patchDiagram({ description: v });
+  };
+  const diagramProperties = engineRef.current?.modelProperties() ?? [];
+  const onDiagramProperties = (props: UserProperty[]) => engineRef.current?.setModelProperties(props);
 
   // ── Toolbar actions ─────────────────────────────────────────────────────
   const validate = async () => {
@@ -493,17 +555,27 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
         <Box ref={containerRef} sx={{ flex: 1, minWidth: 0, minHeight: 0, ...archimateCanvasSx(theme) }} />
         {panelOpen && (
           <ArchimatePropertiesPanel
-            info={engineRef.current?.selectedItem() ?? null}
+            info={selected}
             selectedCount={engineRef.current?.selection().length ?? 0}
             diagramName={name}
+            diagramDescription={description}
+            diagramProperties={diagramProperties}
             labels={bridge.labels}
             cardName={bridge.cardName}
+            linkedCard={linkedCard}
+            linkedCardLoading={linkedCardLoading}
             onName={(id, v) => engineRef.current?.setName(id, v)}
             onDocumentation={(id, v) => engineRef.current?.setDocumentation(id, v)}
             onProperties={(id, p) => engineRef.current?.setUserProperties(id, p)}
+            onDiagramName={onDiagramName}
+            onDiagramDocumentation={onDiagramDocumentation}
+            onDiagramProperties={onDiagramProperties}
+            onOpenCardSheet={setCardSheetId}
           />
         )}
       </Box>
+
+      <CardDetailSidePanel cardId={cardSheetId} open={!!cardSheetId} onClose={() => setCardSheetId(null)} />
 
       <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 0.5 }}>
         {t("archimate:trademark")}

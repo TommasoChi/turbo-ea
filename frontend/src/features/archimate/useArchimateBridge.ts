@@ -50,6 +50,7 @@ export function useArchimateBridge(): ArchimateBridgeState {
     unlinked: t("context.unlinked"),
     directed: t("context.directed"),
     tools: { hand: t("tools.hand"), lasso: t("tools.lasso") },
+    note: t("note.label"),
   };
 
   // Everything the bridge reads, refreshed on every render.

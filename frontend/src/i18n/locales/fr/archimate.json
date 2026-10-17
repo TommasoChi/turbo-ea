@@ -44,6 +44,9 @@
     "hand": "Outil main",
     "lasso": "Sélection au lasso"
   },
+  "note": {
+    "label": "Note"
+  },
   "toolbar": {
     "back": "Retour",
     "undo": "Annuler",
@@ -71,9 +74,10 @@
     "propertyName": "Nom",
     "propertyValue": "Valeur",
     "removeProperty": "Supprimer la propriété",
-    "nothingSelected": "Sélectionnez un élément ou une relation pour voir ses propriétés.",
     "multiple": "{{count}} éléments sélectionnés",
-    "multipleHint": "Sélectionnez un seul élément pour le modifier."
+    "multipleHint": "Sélectionnez un seul élément pour le modifier.",
+    "view": "Vue",
+    "text": "Texte"
   },
   "status": {
     "saved": "Enregistré",

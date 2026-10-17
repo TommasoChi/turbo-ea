@@ -10,7 +10,7 @@ import type Connect from "diagram-js/lib/features/connect/Connect";
 import type ContextPad from "diagram-js/lib/features/context-pad/ContextPad";
 import type { ContextPadEntries } from "diagram-js/lib/features/context-pad/ContextPadProvider";
 import type { Connection, Element, Shape } from "diagram-js/lib/model/Types";
-import { getCardId, type ModelElement, type ModelRelationship } from "../exchange/exchangeModel";
+import { getCardId, isNoteObject, type ModelElement, type ModelRelationship } from "../exchange/exchangeModel";
 import { ELEMENT_TYPES, isConnector, type ElementType } from "../taxonomy/elements";
 import { ACCESS_TYPES, isRelationshipAllowed, RELATIONSHIP_TYPES, type RelationshipType } from "../taxonomy/relationships";
 import { relationshipSvg } from "./connectionStyle";
@@ -51,6 +51,8 @@ export default class ArchimateContextPadProvider {
   getContextPadEntries(element: Element): ContextPadEntries {
     const bo = (element as { businessObject?: ModelElement | ModelRelationship }).businessObject;
     if (!bo) return {};
+    // A note is not an ArchiMate element: no relationship, no card — only delete.
+    if (isNoteObject(bo)) return { delete: this.deleteEntry(element) };
     return (element as Connection).waypoints
       ? this.connectionEntries(element as Connection, bo as ModelRelationship)
       : this.shapeEntries(element as Shape, bo as ModelElement);

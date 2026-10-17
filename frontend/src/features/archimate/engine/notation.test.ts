@@ -1,6 +1,6 @@
 import { ELEMENT_TYPES, type ElementType } from "../taxonomy/elements";
 import { GLYPHS } from "./icons";
-import { NOTATION, bodyDetail, bodyPath, translatePath, type BodyShape } from "./notation";
+import { NOTATION, bodyDetail, bodyPath, noteBodyDetail, noteBodyPath, translatePath, type BodyShape } from "./notation";
 
 const BODIES: BodyShape[] = [
   "rect", "roundRect", "pill", "event", "box3d", "ellipse", "hexagon", "chamfer", "cloud", "wave", "grouping", "circle", "plain",
@@ -104,6 +104,29 @@ describe("bodyPath", () => {
     // an event has a notch in its left side: the left corners, then the notch point at mid-height
     expect(bodyPath("event", 120, 55)).toMatch(/^M0 0L/);
     expect(bodyPath("event", 120, 55)).toMatch(/L0 55L18\.33 27\.5Z$/);
+  });
+});
+
+describe("noteBodyPath / noteBodyDetail: a sticky note, not an ArchiMate type (not in NOTATION)", () => {
+  it("is a closed path starting with M, inside the box, with a folded top-right corner", () => {
+    const d = noteBodyPath(140, 90);
+    expect(d.startsWith("M0 0")).toBe(true);
+    expect(d.endsWith("Z")).toBe(true);
+    const v = numbers(d);
+    v.forEach((x, i) => expect(x).toBeLessThanOrEqual(i % 2 ? 90 : 140));
+    expect(d).not.toMatch(/NaN|undefined/);
+  });
+
+  it("the fold crease is an open line that stays inside a small shape too", () => {
+    const detail = noteBodyDetail(20, 15);
+    expect(detail.startsWith("M")).toBe(true);
+    expect(detail).not.toMatch(/NaN|undefined/);
+    const v = numbers(detail);
+    v.forEach((x, i) => expect(x).toBeLessThanOrEqual(i % 2 ? 15 : 20));
+  });
+
+  it("no ArchiMate element type uses it: Note is not a key of NOTATION", () => {
+    expect((NOTATION as Record<string, unknown>).Note).toBeUndefined();
   });
 });
 

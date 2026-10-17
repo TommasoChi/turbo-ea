@@ -25,6 +25,14 @@ export interface ViewNode {
   id: string; elementRef: string; x: number; y: number; width: number; height: number;
   parent: string | null; style?: NodeStyle;
 }
+/**
+ * A free-text annotation: not part of the ArchiMate model (no card, no relationships, no element
+ * type), written as a `Label` view node (Open Group Exchange Format, no `elementRef`). `parent` is
+ * another node's id (an element it visually sits inside), never another note's.
+ */
+export interface ViewNote {
+  id: string; text: string; x: number; y: number; width: number; height: number; parent: string | null;
+}
 export interface Point { x: number; y: number }
 /** source/target are ViewNode ids. */
 export interface ViewConnection {
@@ -32,10 +40,20 @@ export interface ViewConnection {
 }
 export interface ModelView {
   id: string; name: string; documentation?: string; nodes: ViewNode[]; connections: ViewConnection[];
+  notes: ViewNote[];
 }
 export interface ArchimateModel {
   id: string; name: string; documentation?: string; propertyDefinitions: PropertyDefinition[];
+  /** The model's own properties (the diagram's "parameters" in the properties panel). */
+  properties: ExchangeProperty[];
   elements: ModelElement[]; relationships: ModelRelationship[]; views: ModelView[];
+}
+
+/** The business object of a Note shape: never a `ModelElement` (no ArchiMate type, no card, no properties). */
+export interface NoteObject { id: string; isNote: true; name: string }
+
+export function isNoteObject(bo: unknown): bo is NoteObject {
+  return !!bo && typeof bo === "object" && (bo as { isNote?: unknown }).isNote === true;
 }
 
 /** "id-" + uuid: always a valid XML ID (an xs:ID cannot start with a digit). */
@@ -58,9 +76,10 @@ export function emptyModel(name: string, random?: () => string): ArchimateModel 
     id: newIdentifier(random),
     name,
     propertyDefinitions: [],
+    properties: [],
     elements: [],
     relationships: [],
-    views: [{ id: newIdentifier(random), name, nodes: [], connections: [] }],
+    views: [{ id: newIdentifier(random), name, nodes: [], connections: [], notes: [] }],
   };
 }
 

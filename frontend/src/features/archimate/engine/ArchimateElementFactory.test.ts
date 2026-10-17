@@ -1,4 +1,6 @@
-import { CARD_ID_DEFINITION, getCardId, type ModelElement, type ModelRelationship } from "../exchange/exchangeModel";
+import {
+  CARD_ID_DEFINITION, getCardId, type ModelElement, type ModelRelationship, type NoteObject,
+} from "../exchange/exchangeModel";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 
 describe("ArchimateElementFactory", () => {
@@ -49,5 +51,30 @@ describe("ArchimateElementFactory", () => {
     const connection = factory.createConnection({ id: "id-c", businessObject: rel, waypoints: [], fromModel: true });
     expect(connection.id).toBe("id-c");
     expect(connection.businessObject).toBe(rel);
+  });
+
+  it("creates a fresh note with its own default size, no ArchiMate type", () => {
+    const shape = factory.createShape({ isNote: true });
+    expect(shape).toMatchObject({ width: 140, height: 90 });
+    expect(shape.businessObject).toEqual({ id: expect.stringMatching(/^id-/), isNote: true, name: "" });
+    expect(shape.id).not.toBe(shape.businessObject.id);
+    const other = factory.createShape({ isNote: true });
+    expect(other.businessObject.id).not.toBe(shape.businessObject.id);
+  });
+
+  it("clones a pasted note with a new id and the same text, never a card concept", () => {
+    const bo: NoteObject = { id: "id-note-src", isNote: true, name: "Ask the team" };
+    const shape = factory.createShape({ id: "id-shape-src", businessObject: bo });
+    expect(shape.id).not.toBe("id-shape-src");
+    expect(shape.businessObject).toEqual({ id: expect.stringMatching(/^id-/), isNote: true, name: "Ask the team" });
+    expect(shape.businessObject.id).not.toBe("id-note-src");
+    expect(shape).toMatchObject({ width: 140, height: 90 });
+  });
+
+  it("keeps the id of an imported note", () => {
+    const bo: NoteObject = { id: "id-note", isNote: true, name: "x" };
+    const shape = factory.createShape({ id: "id-note", businessObject: bo, x: 5, y: 6, width: 140, height: 90, fromModel: true });
+    expect(shape).toMatchObject({ id: "id-note", x: 5, y: 6 });
+    expect(shape.businessObject).toBe(bo);
   });
 });

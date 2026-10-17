@@ -78,8 +78,10 @@ function setup() {
   const root = get<Canvas>("canvas").getRootElement();
   const add = (elementType: ElementType, x: number, y = 100) =>
     modeling.createShape(factory.createShape({ elementType }), { x, y }, root) as Shape;
+  const addNote = (x: number, y = 100) =>
+    modeling.createShape(factory.createShape({ isNote: true }), { x, y }, root) as Shape;
   return {
-    add, root, modeling, factory, get,
+    add, addNote, root, modeling, factory, get,
     rules: get<Rules>("rules"),
     tool: get<RelationshipTool>("relationshipTool"),
     eventBus: get<EventBus>("eventBus"),
@@ -257,5 +259,38 @@ describe("other rules", () => {
     const actor = env.add("BusinessActor", 100);
     expect(env.rules.allowed("elements.delete", { elements: [actor] })).toBe(true);
     expect(env.rules.allowed("connection.start", { source: actor })).toBe(true);
+  });
+});
+
+describe("a note: not an ArchiMate element, but a shape like any other", () => {
+  it("can never be a relationship's source or target, even to another note", () => {
+    const env = setup();
+    const note = env.addNote(100);
+    const actor = env.add("BusinessActor", 400);
+    env.tool.set("Association");
+    expect(env.rules.allowed("connection.create", { source: note, target: actor })).toBe(false);
+    expect(env.rules.allowed("connection.create", { source: actor, target: note })).toBe(false);
+    const other = env.addNote(700);
+    expect(env.rules.allowed("connection.create", { source: note, target: other })).toBe(false);
+  });
+
+  it("nothing nests inside it, but it nests inside the root and a Grouping like an element", () => {
+    const env = setup();
+    const note = env.addNote(100);
+    const group = env.add("Grouping", 400);
+    const shape = env.factory.createShape({ elementType: "BusinessActor" });
+    const at = { x: 0, y: 0 };
+    expect(env.rules.allowed("shape.create", { shape, target: note, position: at })).toBe(false);
+    expect(env.rules.allowed("shape.create", { shape: env.factory.createShape({ isNote: true }), target: group, position: at })).toBe(true);
+    expect(env.rules.allowed("shape.create", { shape: env.factory.createShape({ isNote: true }), target: env.root, position: at })).toBe(true);
+  });
+
+  it("is resizable, deletable and movable, like an element (never the junction exception)", () => {
+    const env = setup();
+    const note = env.addNote(100);
+    const group = env.add("Grouping", 400);
+    expect(env.rules.allowed("shape.resize", { shape: note })).toBe(true);
+    expect(env.rules.allowed("elements.delete", { elements: [note] })).toBe(true);
+    expect(env.rules.allowed("elements.move", { shapes: [note], delta: { x: 1, y: 1 }, target: group })).toBe(true);
   });
 });

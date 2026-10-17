@@ -7,6 +7,7 @@ import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
 import { withBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
 import { CARD_ID_DEFINITION, type ModelElement } from "../exchange/exchangeModel";
+import { noteBodyPath, translatePath } from "./notation";
 import type { ElementType } from "../taxonomy/elements";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import type ArchimateModeling from "./ArchimateModeling";
@@ -28,8 +29,12 @@ function setup() {
     const shape = modeling.createShape(factory.createShape({ elementType: type, name, ...attrs }), { x: (x += 300), y: 100 }, root);
     return shape as Shape;
   };
+  const addNote = (name = "") => {
+    const shape = modeling.createShape(factory.createShape({ isNote: true, name }), { x: (x += 300), y: 100 }, root);
+    return shape as Shape;
+  };
   const gfx = (e: Shape | Connection) => registry.getGraphics(e) as SVGGElement;
-  return { diagram, container, factory, modeling, canvas, registry, root, add, gfx };
+  return { diagram, container, factory, modeling, canvas, registry, root, add, addNote, gfx };
 }
 
 /** diagram-js's tiny-svg sets the CSS-property attributes (fill, stroke, markers...) as inline style. */
@@ -170,6 +175,39 @@ describe("ArchimateRenderer: shapes", () => {
     // every point lies on the circle
     for (let i = 0; i < xs.length; i++)
       expect(Math.hypot(xs[i] - (junction.x + 7.5), ys[i] - (junction.y + 7.5))).toBeCloseTo(7.5, 0);
+  });
+});
+
+describe("ArchimateRenderer: a note", () => {
+  it("draws the other layer's colours, a folded corner and the text left-aligned, no glyph or card badge", () => {
+    const { addNote, gfx } = setup();
+    const note = addNote("Ask the team");
+    const g = gfx(note);
+    const body = g.querySelector("path.archimate-body") as SVGPathElement;
+    expect(css(body, "fill")).toBe(ARCHIMATE_LAYER_COLORS.other.fill);
+    expect(css(body, "stroke")).toBe(ARCHIMATE_LAYER_COLORS.other.stroke);
+    expect(body.getAttribute("d")).toBe(noteBodyPath(note.width, note.height));
+    expect(g.querySelector("path.archimate-detail")).not.toBeNull();
+    const text = g.querySelector("text.archimate-name") as SVGTextElement;
+    expect(text.textContent).toBe("Ask the team");
+    expect(css(text, "text-anchor")).toBe("start");
+    expect(g.querySelector("g.archimate-glyph")).toBeNull();
+    expect(g.querySelector("circle.archimate-linked-badge")).toBeNull();
+  });
+
+  it("draws nothing for an empty note's text", () => {
+    const { addNote, gfx } = setup();
+    expect(gfx(addNote("")).querySelector("text.archimate-name")).toBeNull();
+  });
+
+  it("supplies its own folded-corner outline to connection cropping", () => {
+    const { addNote, diagram } = setup();
+    const note = addNote("x");
+    const factory = diagram.get<GraphicsFactory>("graphicsFactory");
+    const path = factory.getShapePath(note);
+    expect(path).toBe(translatePath(noteBodyPath(note.width, note.height), note.x, note.y));
+    expect(path.startsWith("M")).toBe(true);
+    expect(path).not.toMatch(/[CA]/);
   });
 });
 

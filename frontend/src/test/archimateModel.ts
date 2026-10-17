@@ -12,6 +12,7 @@ export const MODEL: ArchimateModel = {
   name: "A & B",
   documentation: "Fixture model",
   propertyDefinitions: [{ id: CARD_ID_DEFINITION, name: "turboea:cardId", type: "string" }],
+  properties: [],
   elements: [
     {
       id: "id-app", type: "ApplicationComponent", name: "CRM <core>", documentation: "The CRM",
@@ -47,6 +48,7 @@ export const MODEL: ArchimateModel = {
           bendpoints: [{ x: 70, y: 150 }, { x: 120, y: 160 }],
         },
       ],
+      notes: [],
     },
   ],
 };

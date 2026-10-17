@@ -12,9 +12,12 @@ import type {
   ModelElement,
   ModelRelationship,
   ModelView,
+  NoteObject,
   ViewConnection,
   ViewNode,
+  ViewNote,
 } from "../exchange/exchangeModel";
+import { isNoteObject } from "../exchange/exchangeModel";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import { cropConnection } from "./ModelSync";
 import type { EditedView } from "./reconcile";
@@ -54,6 +57,18 @@ export function importView(services: ViewServices, model: ArchimateModel, view: 
   };
   view.nodes.forEach(addNode);
 
+  // Notes nest only under an already-drawn element node (never under another note): a dangling or
+  // note-to-note parent falls back to the canvas root, same as a dangling element-node parent.
+  for (const note of view.notes) {
+    const parent = (note.parent && drawn.get(note.parent) as Shape | undefined) || root;
+    const bo: NoteObject = { id: note.id, isNote: true, name: note.text };
+    const shape = elementFactory.createShape({
+      id: note.id, businessObject: bo, x: note.x, y: note.y, width: note.width, height: note.height, fromModel: true,
+    });
+    canvas.addShape(shape, parent);
+    drawn.set(note.id, shape);
+  }
+
   // A connection may end on another connection: draw in passes until nothing more resolves.
   let pending = view.connections;
   for (let size = -1; size !== pending.length; ) {
@@ -78,11 +93,12 @@ export function importView(services: ViewServices, model: ArchimateModel, view: 
 export function extractEdited(services: ViewServices, baseView: ModelView): EditedView {
   const root = services.canvas.getRootElement();
   const drawn = services.elementRegistry.filter((e) => e !== root && !e.labelTarget) as Element[];
-  const order = new Map([...baseView.nodes, ...baseView.connections].map((x, i) => [x.id, i]));
+  const order = new Map([...baseView.nodes, ...baseView.connections, ...baseView.notes].map((x, i) => [x.id, i]));
   drawn.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
   const styles = new Map(baseView.nodes.map((n) => [n.id, n.style]));
 
   const nodes: ViewNode[] = [];
+  const notes: ViewNote[] = [];
   const connections: ViewConnection[] = [];
   const elements = new Map<string, ModelElement>();
   const relationships = new Map<string, ModelRelationship>();
@@ -96,11 +112,18 @@ export function extractEdited(services: ViewServices, baseView: ModelView): Edit
       });
     } else {
       const s = e as Shape;
+      const parent = s.parent && s.parent !== root ? s.parent.id : null;
+      if (isNoteObject(s.businessObject)) {
+        notes.push({
+          id: s.id, text: s.businessObject.name,
+          x: Math.round(s.x), y: Math.round(s.y), width: Math.round(s.width), height: Math.round(s.height), parent,
+        });
+        continue;
+      }
       elements.set(s.businessObject.id, s.businessObject);
       const node: ViewNode = {
         id: s.id, elementRef: s.businessObject.id,
-        x: Math.round(s.x), y: Math.round(s.y), width: Math.round(s.width), height: Math.round(s.height),
-        parent: s.parent && s.parent !== root ? s.parent.id : null,
+        x: Math.round(s.x), y: Math.round(s.y), width: Math.round(s.width), height: Math.round(s.height), parent,
       };
       const style = styles.get(s.id);
       if (style) node.style = style;
@@ -108,7 +131,7 @@ export function extractEdited(services: ViewServices, baseView: ModelView): Edit
     }
   }
   return {
-    view: { ...baseView, nodes, connections },
+    view: { ...baseView, nodes, connections, notes },
     elements: [...elements.values()],
     relationships: [...relationships.values()],
   };

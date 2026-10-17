@@ -44,6 +44,9 @@
     "hand": "أداة اليد",
     "lasso": "تحديد بالحبل"
   },
+  "note": {
+    "label": "ملاحظة"
+  },
   "toolbar": {
     "back": "رجوع",
     "undo": "تراجع",
@@ -71,9 +74,10 @@
     "propertyName": "الاسم",
     "propertyValue": "القيمة",
     "removeProperty": "إزالة الخاصية",
-    "nothingSelected": "اختر عنصرًا أو علاقة لعرض خصائصه.",
     "multiple": "تم تحديد {{count}} عناصر",
-    "multipleHint": "اختر عنصرًا واحدًا لتعديله."
+    "multipleHint": "اختر عنصرًا واحدًا لتعديله.",
+    "view": "العرض",
+    "text": "النص"
   },
   "status": {
     "saved": "تم الحفظ",

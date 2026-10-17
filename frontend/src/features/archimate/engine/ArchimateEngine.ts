@@ -15,7 +15,7 @@ import type ZoomScroll from "diagram-js/lib/navigation/zoomscroll/ZoomScroll";
 import type { Point } from "diagram-js/lib/util/Types";
 import { innerSVG } from "tiny-svg";
 import {
-  CARD_ID_DEFINITION, getCardId, newIdentifier,
+  CARD_ID_DEFINITION, getCardId, isNoteObject, newIdentifier,
   type ArchimateModel, type ExchangeProperty, type ModelElement,
 } from "../exchange/exchangeModel";
 import type { ElementType } from "../taxonomy/elements";
@@ -35,11 +35,15 @@ export interface EngineOptions {
 /** A property the user typed (the card link, stored as a property too, is not one of them). */
 export interface UserProperty { name: string; value: string }
 
-/** What the properties panel shows and edits: an element (a shape) or a relationship (a connection). */
+/**
+ * What the properties panel shows and edits: an element (a shape), a relationship (a connection) or a
+ * note (free text, no ArchiMate type — `type` is the literal `"Note"`, never a card, no documentation
+ * or properties of its own).
+ */
 export interface ItemInfo {
   id: string;
-  kind: "element" | "relationship";
-  type: ElementType | RelationshipType;
+  kind: "element" | "relationship" | "note";
+  type: ElementType | RelationshipType | "Note";
   name: string;
   documentation: string;
   cardId: string | null;
@@ -52,16 +56,19 @@ export class ArchimateEngine {
   /** The last loaded model (a private copy): what `toModel` reconciles the edited view into. */
   private base: ArchimateModel | null = null;
   private destroyed = false;
+  /** Also fired by `setModelProperties`, which bypasses the command stack (nothing to render). */
+  private readonly onChange: (() => void) | undefined;
 
   constructor(opts: EngineOptions) {
     this.container = opts.container;
+    this.onChange = opts.onChange;
     this.diagram = new Diagram({
       canvas: { container: opts.container },
       modules: [...ARCHIMATE_MODULES, { bridge: ["value", opts.bridge] }],
     });
     // A clear (on load) is not a change; every executed, undone or redone command is.
     this.get<EventBus>("eventBus").on("commandStack.changed", (e: { trigger: string }) => {
-      if (e.trigger !== "clear") opts.onChange?.();
+      if (e.trigger !== "clear") this.onChange?.();
     });
     this.get<EventBus>("eventBus").on("selection.changed", () => opts.onSelect?.());
   }
@@ -82,7 +89,7 @@ export class ArchimateEngine {
   /** Edits views[0]; adds an empty view (named after the model) when the model has none. */
   load(model: ArchimateModel): void {
     const base = structuredClone(model);
-    if (!base.views.length) base.views.push({ id: newIdentifier(), name: base.name, nodes: [], connections: [] });
+    if (!base.views.length) base.views.push({ id: newIdentifier(), name: base.name, nodes: [], connections: [], notes: [] });
     this.base = base;
     this.diagram.clear(); // also empties the command stack, without a change event
     importView(this.services(), base, base.views[0]);
@@ -125,18 +132,21 @@ export class ArchimateEngine {
     this.update(item, { name: next });
   }
 
+  /** A note has no documentation of its own (its text is its name): a no-op. */
   setDocumentation(id: string, text: string): void {
     const item = this.item(id);
+    if (!item || isNoteObject(item.businessObject)) return;
     const next = text.trim() === "" ? undefined : text;
-    if (!item || item.businessObject.documentation === next) return;
+    if (item.businessObject.documentation === next) return;
     this.update(item, { documentation: next });
   }
 
-  /** Replaces the user's properties; the card link is kept. Names are the keys (a repeated one keeps the last value). */
+  /** Replaces the user's properties; the card link is kept. Names are the keys (a repeated one keeps the last value).
+   *  A note never carries properties: a no-op. */
   setUserProperties(id: string, props: UserProperty[]): void {
     const item = this.item(id);
     const base = this.base;
-    if (!item || !base) return;
+    if (!item || !base || isNoteObject(item.businessObject)) return;
     const byName = new Map<string, string>();
     for (const { name, value } of props) if (name.trim()) byName.set(name.trim(), value);
     const wanted = [...byName].map(([name, value]) => ({ name, value }));
@@ -170,6 +180,12 @@ export class ArchimateEngine {
   itemInfo(id: string): ItemInfo | null {
     const item = this.item(id);
     if (!item) return null;
+    if (isNoteObject(item.businessObject)) {
+      return {
+        id, kind: "note", type: "Note", name: item.businessObject.name,
+        documentation: "", cardId: null, properties: [],
+      };
+    }
     const bo = item.businessObject as {
       type: ElementType | RelationshipType; name?: string; documentation?: string; properties: ExchangeProperty[];
     };
@@ -182,6 +198,33 @@ export class ArchimateEngine {
       cardId: item.waypoints ? null : getCardId(bo),
       properties: this.userProperties(bo),
     };
+  }
+
+  /** The model's own custom properties — the diagram's "parameters" in the properties panel. */
+  modelProperties(): UserProperty[] {
+    return this.userProperties({ properties: this.base?.properties ?? [] });
+  }
+
+  /**
+   * Replaces the model's own properties (not part of a view, so not a diagram-js command: no undo
+   * entry, but it still marks the diagram dirty).
+   */
+  setModelProperties(props: UserProperty[]): void {
+    const base = this.base;
+    if (!base) return;
+    const byName = new Map<string, string>();
+    for (const { name, value } of props) if (name.trim()) byName.set(name.trim(), value);
+    const wanted = [...byName].map(([name, value]) => ({ name, value }));
+    if (JSON.stringify(wanted) === JSON.stringify(this.modelProperties())) return;
+    base.properties = wanted.map(({ name, value }) => {
+      let def = base.propertyDefinitions.find((d) => d.id !== CARD_ID_DEFINITION && d.name === name);
+      if (!def) {
+        def = { id: `propid-${newIdentifier().slice(3)}`, name, type: "string" };
+        base.propertyDefinitions.push(def);
+      }
+      return { ref: def.id, value };
+    });
+    this.onChange?.();
   }
 
   /** `id` is the model element's id (the shape id is the view node's). */

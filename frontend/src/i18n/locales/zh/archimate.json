@@ -44,6 +44,9 @@
     "hand": "抓手工具",
     "lasso": "套索选择"
   },
+  "note": {
+    "label": "便签"
+  },
   "toolbar": {
     "back": "返回",
     "undo": "撤销",
@@ -71,9 +74,10 @@
     "propertyName": "名称",
     "propertyValue": "值",
     "removeProperty": "删除属性",
-    "nothingSelected": "选择一个元素或关系以查看其属性。",
     "multiple": "已选择 {{count}} 项",
-    "multipleHint": "请只选择一项进行编辑。"
+    "multipleHint": "请只选择一项进行编辑。",
+    "view": "视图",
+    "text": "文本"
   },
   "status": {
     "saved": "已保存",

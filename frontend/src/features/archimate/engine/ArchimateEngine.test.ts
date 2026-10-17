@@ -84,7 +84,7 @@ describe("ArchimateEngine", () => {
     const empty: ArchimateModel = { ...structuredClone(MODEL), views: [] };
     engine.load(empty);
     const out = engine.toModel();
-    expect(out.views).toEqual([{ id: expect.stringMatching(/^id-/), name: "A & B", nodes: [], connections: [] }]);
+    expect(out.views).toEqual([{ id: expect.stringMatching(/^id-/), name: "A & B", nodes: [], connections: [], notes: [] }]);
     // Never drawn, so never deleted.
     expect(out.elements).toEqual(MODEL.elements);
   });
@@ -198,5 +198,95 @@ describe("ArchimateEngine: the properties panel's view of the selection", () => 
     again.load(readExchange(writeExchange(engine.toModel())));
     expect(again.itemInfo("id-n1")!.properties).toEqual([{ name: "owner", value: "Ann & Bob" }]);
     expect(again.itemInfo("id-n1")!.cardId).toBe("c1");
+  });
+});
+
+describe("ArchimateEngine: a note", () => {
+  /** Drops a fresh note onto the canvas, for `get`'s own engine. */
+  function addNote(env: ReturnType<typeof setup>): Shape {
+    const modeling = env.get<Modeling>("modeling");
+    const factory = env.get<{ createShape(attrs: unknown): Shape }>("elementFactory");
+    const root = env.get<{ getRootElement(): unknown }>("canvas").getRootElement();
+    return modeling.createShape(factory.createShape({ isNote: true }), { x: 700, y: 300 }, root) as Shape;
+  }
+
+  it("itemInfo reports kind note, type Note, its text as name, no documentation, no card, no properties", () => {
+    const env = setup();
+    const note = addNote(env);
+    const info = env.engine.itemInfo(note.id)!;
+    expect(info).toEqual({ id: note.id, kind: "note", type: "Note", name: "", documentation: "", cardId: null, properties: [] });
+    env.engine.setName(note.id, "Ask the team");
+    expect(env.engine.itemInfo(note.id)!.name).toBe("Ask the team");
+    expect(env.engine.selectedItem()).toBeNull(); // nothing selected yet
+  });
+
+  it("setDocumentation and setUserProperties are a no-op on a note", () => {
+    const env = setup();
+    const note = addNote(env);
+    env.onChange.mockClear();
+    env.engine.setDocumentation(note.id, "Some text");
+    env.engine.setUserProperties(note.id, [{ name: "a", value: "b" }]);
+    expect(env.engine.itemInfo(note.id)).toMatchObject({ documentation: "", properties: [] });
+    expect(env.onChange).not.toHaveBeenCalled();
+  });
+
+  it("round-trips through the Exchange writer and reader, never written as an element", () => {
+    const env = setup();
+    const note = addNote(env);
+    env.engine.setName(note.id, "Ask the team");
+    const model = env.engine.toModel();
+    expect(model.elements.some((e) => e.id === note.id)).toBe(false);
+    expect(model.views[0].notes).toEqual([
+      expect.objectContaining({ id: note.id, text: "Ask the team" }),
+    ]);
+    const again = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    again.load(readExchange(writeExchange(model)));
+    expect(again.itemInfo(note.id)).toEqual({
+      id: note.id, kind: "note", type: "Note", name: "Ask the team", documentation: "", cardId: null, properties: [],
+    });
+  });
+});
+
+describe("ArchimateEngine: the model's own properties", () => {
+  it("reads [] when the model has none, and resolves names from propertyDefinitions", () => {
+    const { engine } = setup();
+    expect(engine.modelProperties()).toEqual([]);
+  });
+
+  it("sets, reuses definitions for repeated names and marks the diagram changed without a command", () => {
+    const { engine, onChange } = setup();
+    engine.setModelProperties([{ name: " owner ", value: "Team A" }, { name: "", value: "ignored" }]);
+    expect(engine.modelProperties()).toEqual([{ name: "owner", value: "Team A" }]);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const model = engine.toModel();
+    expect(model.properties).toHaveLength(1);
+    const def = model.propertyDefinitions.find((d) => d.name === "owner")!;
+    expect(def).toBeDefined();
+    expect(model.properties[0]).toEqual({ ref: def.id, value: "Team A" });
+
+    // unchanged: no further onChange
+    engine.setModelProperties([{ name: "owner", value: "Team A" }]);
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    // a second property reuses no definition name clash and both are kept
+    engine.setModelProperties([{ name: "owner", value: "Team A" }, { name: "tier", value: "1" }]);
+    expect(engine.toModel().propertyDefinitions.filter((d) => d.name === "owner")).toHaveLength(1);
+    expect(engine.modelProperties()).toEqual([{ name: "owner", value: "Team A" }, { name: "tier", value: "1" }]);
+  });
+
+  it("is not a diagram-js command: no undo entry, but toModel() reflects it", () => {
+    const { engine } = setup();
+    expect(engine.canUndo()).toBe(false);
+    engine.setModelProperties([{ name: "owner", value: "Team A" }]);
+    expect(engine.canUndo()).toBe(false);
+    expect(engine.toModel().properties).toEqual([{ ref: expect.stringMatching(/^propid-/), value: "Team A" }]);
+  });
+
+  it("round-trips through the Exchange writer and reader", () => {
+    const { engine } = setup();
+    engine.setModelProperties([{ name: "owner", value: "Team A & B" }]);
+    const again = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    again.load(readExchange(writeExchange(engine.toModel())));
+    expect(again.modelProperties()).toEqual([{ name: "owner", value: "Team A & B" }]);
   });
 });

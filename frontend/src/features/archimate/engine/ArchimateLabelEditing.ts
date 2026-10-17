@@ -13,7 +13,7 @@ import type Selection from "diagram-js/lib/features/selection/Selection";
 import type { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import type { Rect } from "diagram-js/lib/util/Types";
 import type DirectEditing from "diagram-js-direct-editing/lib/DirectEditing";
-import type { ModelElement, ModelRelationship } from "../exchange/exchangeModel";
+import { isNoteObject, type ModelElement, type ModelRelationship, type NoteObject } from "../exchange/exchangeModel";
 import { isConnector } from "../taxonomy/elements";
 import type ArchimateModeling from "./ArchimateModeling";
 import { ELEMENT_CREATED_EVENT } from "./ArchimatePaletteProvider";
@@ -79,17 +79,17 @@ export default class ArchimateLabelEditing {
     });
   }
 
-  /** A junction has no name (and is a 15px circle): it never opens an edit box. */
+  /** A junction has no name (and is a 15px circle): it never opens an edit box. A note always does. */
   activate(element: Element) {
     if (!isModelled(element)) return null;
-    const bo = element.businessObject as ModelElement | ModelRelationship;
-    if (isConnector(bo.type)) return null;
+    const bo = element.businessObject as ModelElement | ModelRelationship | NoteObject;
+    if (!isNoteObject(bo) && isConnector(bo.type)) return null;
     return { text: bo.name ?? "", bounds: getLabelBounds(this.canvas, element), options: { autoResize: false } };
   }
 
   update(element: Element, newText: string): void {
     const name = newText.trim();
-    const bo = element.businessObject as ModelElement | ModelRelationship;
+    const bo = element.businessObject as ModelElement | ModelRelationship | NoteObject;
     if (name === (bo.name ?? "")) return;
     if ((element as Connection).waypoints) this.modeling.updateProperties(element as Connection, { name });
     else this.modeling.updateProperties(element as Shape, { name });

@@ -9,12 +9,17 @@ import BaseRenderer from "diagram-js/lib/draw/BaseRenderer";
 import type { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import { append as svgAppend, attr as svgAttr, create as svgCreate, innerSVG, prepend as svgPrepend } from "tiny-svg";
 import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
-import { getCardId, type ModelElement, type ModelRelationship, type Rgb } from "../exchange/exchangeModel";
+import {
+  getCardId, isNoteObject, type ModelElement, type ModelRelationship, type NoteObject, type Rgb,
+} from "../exchange/exchangeModel";
 import { isElementType, layerOf } from "../taxonomy/elements";
 import { isRelationshipType } from "../taxonomy/relationships";
 import { connectionStyle, markerSvg, type MarkerId } from "./connectionStyle";
 import { GLYPH_STROKE, glyphMarkup } from "./icons";
-import { NOTATION, bodyDetail, bodyPath, translatePath } from "./notation";
+import { NOTATION, bodyDetail, bodyPath, noteBodyDetail, noteBodyPath, translatePath } from "./notation";
+
+/** A note draws in the "other" layer's colour: it is explicitly not an ArchiMate element. */
+const NOTE_COLORS = ARCHIMATE_LAYER_COLORS.other;
 
 const FONT_SIZE = 12;
 const LINE_HEIGHT = 14;
@@ -70,11 +75,13 @@ export default class ArchimateRenderer extends BaseRenderer {
   }
 
   canRender(element: Element): boolean {
-    const type = element.businessObject?.type;
-    return element.waypoints ? isRelationshipType(type) : isElementType(type);
+    const bo = element.businessObject;
+    if (element.waypoints) return isRelationshipType(bo?.type);
+    return isElementType(bo?.type) || isNoteObject(bo);
   }
 
   drawShape(visuals: SVGElement, shape: Shape): SVGElement {
+    if (isNoteObject(shape.businessObject)) return this.drawNote(visuals, shape, shape.businessObject);
     const bo = shape.businessObject as ModelElement;
     const { width, height } = shape;
     const { body, header, glyph } = NOTATION[bo.type];
@@ -131,6 +138,36 @@ export default class ArchimateRenderer extends BaseRenderer {
     return bodyEl;
   }
 
+  /** A sticky note: a folded-corner rectangle, its text left-aligned (names are centred, notes are not). */
+  private drawNote(visuals: SVGElement, shape: Shape, bo: NoteObject): SVGElement {
+    const { width, height } = shape;
+    const bodyEl = svgCreate("path");
+    svgAttr(bodyEl, {
+      class: "archimate-body", d: noteBodyPath(width, height),
+      fill: NOTE_COLORS.fill, stroke: NOTE_COLORS.stroke, "stroke-width": 1.5,
+    });
+    svgAppend(visuals, bodyEl);
+    const fold = svgCreate("path");
+    svgAttr(fold, { class: "archimate-detail", d: noteBodyDetail(width, height), fill: "none", stroke: NOTE_COLORS.stroke, "stroke-width": 1.5 });
+    svgAppend(visuals, fold);
+    if (bo.name) {
+      const lines = wrapText(bo.name, Math.floor((width - 16) / CHAR_WIDTH));
+      const text = svgCreate("text");
+      svgAttr(text, {
+        class: "archimate-name", x: 8, y: 8 + FONT_SIZE - 1, "text-anchor": "start", "font-size": FONT_SIZE,
+        "font-family": "Arial, sans-serif", fill: ARCHIMATE_TEXT_COLOR,
+      });
+      lines.forEach((line, i) => {
+        const span = svgCreate("tspan");
+        svgAttr(span, { x: 8, y: 8 + FONT_SIZE - 1 + i * LINE_HEIGHT });
+        span.textContent = line;
+        svgAppend(text, span);
+      });
+      svgAppend(visuals, text);
+    }
+    return bodyEl;
+  }
+
   drawConnection(visuals: SVGElement, connection: Connection): SVGElement {
     const bo = connection.businessObject as ModelRelationship;
     const { dashArray, sourceMarker, targetMarker } = connectionStyle(bo.type, {
@@ -158,6 +195,7 @@ export default class ArchimateRenderer extends BaseRenderer {
   }
 
   getShapePath(shape: Shape): string {
+    if (isNoteObject(shape.businessObject)) return translatePath(noteBodyPath(shape.width, shape.height), shape.x, shape.y);
     const { body } = NOTATION[(shape.businessObject as ModelElement).type];
     return translatePath(bodyPath(body, shape.width, shape.height), shape.x, shape.y);
   }

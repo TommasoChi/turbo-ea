@@ -33,10 +33,11 @@ function setup() {
   );
   const add = (elementType: ElementType, x = 100) =>
     modeling.createShape(factory.createShape({ elementType }), { x, y: 100 }, root) as Shape;
+  const addNote = (x = 100) => modeling.createShape(factory.createShape({ isNote: true }), { x, y: 100 }, root) as Shape;
   const entriesOf = (el: Shape | Connection) => provider.getContextPadEntries(el) as ContextPadEntries;
   const click = (entries: ContextPadEntries, key: string, el: Shape | Connection) =>
     (entries[key].action as Action).click(new MouseEvent("click"), el as never, false);
-  return { bridge, get, modeling, registry, connect, add, entriesOf, click, tool };
+  return { bridge, get, modeling, registry, connect, add, addNote, entriesOf, click, tool };
 }
 
 describe("hasTargetFor", () => {
@@ -45,6 +46,18 @@ describe("hasTargetFor", () => {
     expect(hasTargetFor("DataObject", "Assignment")).toBe(false); // only a junction accepts it: junctions don't count
     expect(hasTargetFor("BusinessActor", "Access")).toBe(true);
     for (const t of ELEMENT_TYPES) expect(hasTargetFor(t, "Association")).toBe(true);
+  });
+});
+
+describe("ArchimateContextPadProvider, a note", () => {
+  it("offers delete only: no relationship, no link/create/open card", () => {
+    const { addNote, entriesOf, modeling, click } = setup();
+    const note = addNote();
+    const entries = entriesOf(note);
+    expect(Object.keys(entries)).toEqual(["delete"]);
+    const spy = vi.spyOn(modeling, "removeElements");
+    click(entries, "delete", note);
+    expect(spy).toHaveBeenCalledWith([note]);
   });
 });
 

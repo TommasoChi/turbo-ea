@@ -23,6 +23,8 @@ export interface EditorLabels {
   directed: string;
   /** Palette tool titles. */
   tools: { hand: string; lasso: string };
+  /** The "Other" layer's free-text annotation: its palette title and the panel's heading fallback. */
+  note: string;
 }
 
 export interface EditorBridge {
