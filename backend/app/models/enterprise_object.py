@@ -37,6 +37,7 @@ class EnterpriseObjectCardMapping(Base, UUIDMixin, TimestampMixin):
             "enterprise_object_key",
             "card_type_key",
             "card_subtype_key",
+            name="uq_enterprise_object_card_mappings_eo_type_subtype",
             postgresql_nulls_not_distinct=True,
         ),
     )
