@@ -56,7 +56,24 @@
     "importXml": "Импортировать файл Exchange",
     "exportXml": "Экспортировать как файл Exchange",
     "exportSvg": "Экспортировать как SVG",
-    "shortcuts": "Сочетания клавиш"
+    "shortcuts": "Сочетания клавиш",
+    "togglePanel": "Показать или скрыть панель свойств"
+  },
+  "panel": {
+    "title": "Свойства",
+    "main": "Основное",
+    "name": "Название",
+    "documentation": "Документация",
+    "linkedCard": "Связанная карточка",
+    "properties": "Свойства",
+    "noProperties": "Нет свойств",
+    "addProperty": "Добавить свойство",
+    "propertyName": "Название",
+    "propertyValue": "Значение",
+    "removeProperty": "Удалить свойство",
+    "nothingSelected": "Выберите элемент или связь, чтобы увидеть свойства.",
+    "multiple": "Выбрано элементов: {{count}}",
+    "multipleHint": "Выберите один элемент, чтобы изменить его."
   },
   "status": {
     "saved": "Сохранено",

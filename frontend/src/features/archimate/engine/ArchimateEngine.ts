@@ -10,19 +10,41 @@ import type Canvas from "diagram-js/lib/core/Canvas";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type Selection from "diagram-js/lib/features/selection/Selection";
-import type { Shape } from "diagram-js/lib/model/Types";
+import type { Element, Shape } from "diagram-js/lib/model/Types";
 import type ZoomScroll from "diagram-js/lib/navigation/zoomscroll/ZoomScroll";
 import type { Point } from "diagram-js/lib/util/Types";
 import { innerSVG } from "tiny-svg";
-import { getCardId, newIdentifier, type ArchimateModel, type ModelElement } from "../exchange/exchangeModel";
+import {
+  CARD_ID_DEFINITION, getCardId, newIdentifier,
+  type ArchimateModel, type ExchangeProperty, type ModelElement,
+} from "../exchange/exchangeModel";
 import type { ElementType } from "../taxonomy/elements";
+import type { RelationshipType } from "../taxonomy/relationships";
 import type ArchimateModeling from "./ArchimateModeling";
 import type { EditorBridge } from "./EditorBridge";
 import { ARCHIMATE_MODULES } from "./modules";
 import { reconcileModel } from "./reconcile";
 import { extractEdited, importView, type ViewServices } from "./viewIO";
 
-export interface EngineOptions { container: HTMLElement; bridge: EditorBridge; onChange?: () => void }
+export interface EngineOptions {
+  container: HTMLElement; bridge: EditorBridge; onChange?: () => void;
+  /** The selection changed (a click, a lasso, a delete). */
+  onSelect?: () => void;
+}
+
+/** A property the user typed (the card link, stored as a property too, is not one of them). */
+export interface UserProperty { name: string; value: string }
+
+/** What the properties panel shows and edits: an element (a shape) or a relationship (a connection). */
+export interface ItemInfo {
+  id: string;
+  kind: "element" | "relationship";
+  type: ElementType | RelationshipType;
+  name: string;
+  documentation: string;
+  cardId: string | null;
+  properties: UserProperty[];
+}
 
 export class ArchimateEngine {
   private readonly diagram: Diagram;
@@ -41,6 +63,7 @@ export class ArchimateEngine {
     this.get<EventBus>("eventBus").on("commandStack.changed", (e: { trigger: string }) => {
       if (e.trigger !== "clear") opts.onChange?.();
     });
+    this.get<EventBus>("eventBus").on("selection.changed", () => opts.onSelect?.());
   }
 
   private get<T>(name: string): T {
@@ -81,11 +104,84 @@ export class ArchimateEngine {
     this.get<ArchimateModeling>("modeling").updateProperties(shape, { cardId });
   }
 
-  setName(shapeId: string, name: string): void {
-    const shape = this.shape(shapeId);
+  /** A shape (element) or a connection (relationship) that carries a model object. */
+  private item(id: string): Element | undefined {
+    const element = this.get<ElementRegistry>("elementRegistry").get(id) as Element | undefined;
+    return element?.businessObject ? element : undefined;
+  }
+
+  private update(item: Element, fields: Record<string, unknown>): void {
+    // one command, typed loosely: the fields are checked by the callers below
+    (this.get<ArchimateModeling>("modeling") as { updateProperties(e: Element, p: unknown): void }).updateProperties(item, fields);
+  }
+
+  setName(id: string, name: string): void {
+    const item = this.item(id);
     const trimmed = name.trim();
-    if (!shape || shape.businessObject.name === trimmed) return;
-    this.get<ArchimateModeling>("modeling").updateProperties(shape, { name: trimmed });
+    if (!item) return;
+    // an element always has a name (possibly empty); a relationship's name is optional
+    const next = item.waypoints && trimmed === "" ? undefined : trimmed;
+    if (item.businessObject.name === next) return;
+    this.update(item, { name: next });
+  }
+
+  setDocumentation(id: string, text: string): void {
+    const item = this.item(id);
+    const next = text.trim() === "" ? undefined : text;
+    if (!item || item.businessObject.documentation === next) return;
+    this.update(item, { documentation: next });
+  }
+
+  /** Replaces the user's properties; the card link is kept. Names are the keys (a repeated one keeps the last value). */
+  setUserProperties(id: string, props: UserProperty[]): void {
+    const item = this.item(id);
+    const base = this.base;
+    if (!item || !base) return;
+    const byName = new Map<string, string>();
+    for (const { name, value } of props) if (name.trim()) byName.set(name.trim(), value);
+    const wanted = [...byName].map(([name, value]) => ({ name, value }));
+    if (JSON.stringify(wanted) === JSON.stringify(this.userProperties(item.businessObject))) return;
+    const kept = (item.businessObject.properties as ExchangeProperty[]).filter((p) => p.ref === CARD_ID_DEFINITION);
+    const next: ExchangeProperty[] = wanted.map(({ name, value }) => {
+      let def = base.propertyDefinitions.find((d) => d.id !== CARD_ID_DEFINITION && d.name === name);
+      if (!def) {
+        def = { id: `propid-${newIdentifier().slice(3)}`, name, type: "string" };
+        base.propertyDefinitions.push(def);
+      }
+      return { ref: def.id, value };
+    });
+    this.update(item, { properties: [...kept, ...next] });
+  }
+
+  private userProperties(bo: { properties: ExchangeProperty[] }): UserProperty[] {
+    const defs = this.base?.propertyDefinitions ?? [];
+    return bo.properties
+      .filter((p) => p.ref !== CARD_ID_DEFINITION)
+      .map((p) => ({ name: defs.find((d) => d.id === p.ref)?.name ?? p.ref, value: p.value }));
+  }
+
+  /** The single selected element or relationship, for the properties panel; null for none or several. */
+  selectedItem(): ItemInfo | null {
+    const [only, ...rest] = this.get<Selection>("selection").get();
+    if (!only || rest.length) return null;
+    return this.itemInfo(only.id);
+  }
+
+  itemInfo(id: string): ItemInfo | null {
+    const item = this.item(id);
+    if (!item) return null;
+    const bo = item.businessObject as {
+      type: ElementType | RelationshipType; name?: string; documentation?: string; properties: ExchangeProperty[];
+    };
+    return {
+      id,
+      kind: item.waypoints ? "relationship" : "element",
+      type: bo.type,
+      name: bo.name ?? "",
+      documentation: bo.documentation ?? "",
+      cardId: item.waypoints ? null : getCardId(bo),
+      properties: this.userProperties(bo),
+    };
   }
 
   /** `id` is the model element's id (the shape id is the view node's). */

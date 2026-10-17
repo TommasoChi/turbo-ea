@@ -76,23 +76,21 @@ export const GLYPHS: Record<GlyphId, GlyphOp[]> = {
 
 const n = (v: number) => String(v);
 
-/** `fill` paints the closed shapes only (circle, rect, a path ending in Z); open lines stay unfilled. */
-function opMarkup(op: GlyphOp, fill?: string): string {
-  const paint = fill ? ` fill="${fill}"` : "";
+function opMarkup(op: GlyphOp): string {
   switch (op[0]) {
-    case "circle": return `<circle cx="${n(op[1])}" cy="${n(op[2])}" r="${n(op[3])}"${paint}/>`;
+    case "circle": return `<circle cx="${n(op[1])}" cy="${n(op[2])}" r="${n(op[3])}"/>`;
     case "line": return `<line x1="${n(op[1])}" y1="${n(op[2])}" x2="${n(op[3])}" y2="${n(op[4])}"/>`;
-    case "rect": return `<rect x="${n(op[1])}" y="${n(op[2])}" width="${n(op[3])}" height="${n(op[4])}"${paint}/>`;
+    case "rect": return `<rect x="${n(op[1])}" y="${n(op[2])}" width="${n(op[3])}" height="${n(op[4])}"/>`;
     case "polyline": return `<polyline points="${op[1].join(" ")}"/>`;
-    case "path": return `<path d="${op[1]}"${op[1].endsWith("Z") ? paint : ""}/>`;
+    case "path": return `<path d="${op[1]}"/>`;
   }
 }
 
-/** The glyph's drawing (no wrapper), for a parent that sets the stroke; `fill` colours its closed shapes. */
-export function glyphMarkup(id: GlyphId, fill?: string): string {
+/** The glyph's drawing (no wrapper), for a parent that sets the stroke. */
+export function glyphMarkup(id: GlyphId): string {
   const ops = GLYPHS[id];
   if (!ops) throw new Error(`unknown glyph ${id}`);
-  return ops.map((op) => opMarkup(op, fill)).join("");
+  return ops.map(opMarkup).join("");
 }
 
 /** Attributes the parent of a glyph needs: stroke only, round joins, the text colour. */
@@ -100,11 +98,11 @@ export const GLYPH_STROKE = {
   fill: "none", stroke: ARCHIMATE_TEXT_COLOR, "stroke-width": 1, "stroke-linecap": "round", "stroke-linejoin": "round",
 } as const;
 
-/** A standalone svg of the glyph, for the palette; `fill` is the layer colour of its closed shapes. */
-export function glyphSvg(id: GlyphId, size = 16, fill?: string): string {
+/** A standalone svg of the glyph, for the palette. */
+export function glyphSvg(id: GlyphId, size = 16): string {
   const attrs = Object.entries(GLYPH_STROKE).map(([k, v]) => `${k}="${v}"`).join(" ");
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 16 16" ${attrs}>` +
-    `${glyphMarkup(id, fill)}</svg>`
+    `${glyphMarkup(id)}</svg>`
   );
 }

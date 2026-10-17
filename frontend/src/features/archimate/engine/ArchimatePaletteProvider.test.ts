@@ -42,13 +42,13 @@ function setup() {
 }
 
 describe("ArchimatePaletteProvider entries", () => {
-  it("lists the two tools then every element: 2 + 62 = 64 entries, a separator opening each layer", () => {
+  it("lists the two tools then every element: 2 + 62 = 64 entries, a separator and a name opening each layer", () => {
     const { entries } = setup();
     const keys = Object.keys(entries);
-    expect(keys.filter((k) => !entries[k].separator)).toHaveLength(64);
+    expect(keys.filter((k) => /^(hand|lasso|create)/.test(k))).toHaveLength(64);
     expect(keys.slice(0, 2)).toEqual(["hand-tool", "lasso-tool"]);
     expect(keys.slice(2)).toEqual(
-      LAYER_ORDER.flatMap((l) => [`separator.${l}`, ...elementsOfLayer(l).map((t) => `create.${t}`)]),
+      LAYER_ORDER.flatMap((l) => [`separator.${l}`, `label.${l}`, ...elementsOfLayer(l).map((t) => `create.${t}`)]),
     );
     expect(entries["hand-tool"].group).toBe("tools");
     expect(entries["lasso-tool"].group).toBe("tools");
@@ -78,11 +78,18 @@ describe("ArchimatePaletteProvider entries", () => {
     expect(html).toContain('draggable="true"');
   });
 
-  it("paints the glyph's closed shapes in the colour of the element's layer", () => {
+  it("puts every element on a tile in the colour of its layer, whatever its glyph is made of", () => {
     const { entries } = setup();
-    expect(entries["create.BusinessActor"].html).toContain(`fill="${ARCHIMATE_LAYER_COLORS.business.fill}"`);
-    expect(entries["create.Goal"].html).toContain(`fill="${ARCHIMATE_LAYER_COLORS.motivation.fill}"`);
-    expect(entries["create.Node"].html).toContain(`fill="${ARCHIMATE_LAYER_COLORS.technology.fill}"`);
+    for (const t of ELEMENT_TYPES)
+      expect(entries[`create.${t}`].html).toContain(`--archimate-tile: ${ARCHIMATE_LAYER_COLORS[ELEMENT_INFO[t].layer].fill}`);
+  });
+
+  it("names each layer with a label that is not an entry (no title, no button role)", () => {
+    const { entries } = setup();
+    for (const l of LAYER_ORDER) {
+      expect(entries[`label.${l}`].html).toContain(`L:${l}`);
+      expect(entries[`label.${l}`].html).not.toContain("role=");
+    }
   });
 
   it("gives every element a glyph, including the types with no glyph of their own (plain box)", () => {

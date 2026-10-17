@@ -9,6 +9,7 @@
  * keeps the text on ARCHIMATE_TEXT_COLOR).
  */
 import type { SxProps, Theme } from "@mui/material/styles";
+import { ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
 
 export function archimateCanvasSx(theme: Theme): SxProps<Theme> {
   const { palette } = theme;
@@ -34,7 +35,17 @@ export function archimateCanvasSx(theme: Theme): SxProps<Theme> {
     "& .bio-theme-parent, & .djs-parent": tokens,
     "& .djs-container, & .djs-container svg": { backgroundColor: palette.background.default },
     // Compact palette: three columns of 22px entries, scrolling when the canvas is short.
-    "& .djs-palette, & .djs-palette.two-column.open": { width: 90, maxHeight: "calc(100% - 40px)", overflowY: "auto" },
+    "& .djs-palette, & .djs-palette.two-column.open": { width: 100, maxHeight: "calc(100% - 40px)", overflowX: "hidden", overflowY: "auto" },
+    "& .archimate-palette-label": {
+      clear: "both",
+      padding: "2px 4px 0",
+      fontSize: 10,
+      fontWeight: 600,
+      lineHeight: 1.3,
+      letterSpacing: 0.3,
+      textTransform: "uppercase",
+      color: palette.text.secondary,
+    },
     "& .djs-palette .entry, & .archimate-palette-entry": {
       width: 22,
       height: 22,
@@ -47,6 +58,13 @@ export function archimateCanvasSx(theme: Theme): SxProps<Theme> {
       color: palette.text.primary,
       "&:hover": { color: palette.primary.main, backgroundColor: palette.action.hover },
       "&:focus-visible": { outline: `2px solid ${palette.primary.main}`, outlineOffset: -2 },
+    },
+    // Every element entry sits on a tile in the colour of its layer (the inline `--archimate-tile`).
+    "& .archimate-palette-entry": {
+      backgroundColor: "var(--archimate-tile)",
+      color: ARCHIMATE_TEXT_COLOR,
+      border: `1px solid ${palette.divider}`,
+      "&:hover": { color: ARCHIMATE_TEXT_COLOR, filter: "brightness(0.93)", backgroundColor: "var(--archimate-tile)" },
     },
     "& .djs-context-pad .entry, & .archimate-cp-entry": {
       color: palette.text.primary,

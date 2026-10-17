@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { act, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { setViewportWidth } from "@/test/matchMedia";
 import { useLocation, useNavigate, type NavigateFunction } from "react-router";
 import { ApiError } from "@/api/client";
 import i18n from "@/i18n";
@@ -745,6 +747,66 @@ describe("no card is created or deleted by editing", () => {
     expect(mockApi.callsOf("post", "/cards")).toEqual([]);
     expect(mockApi.callsOf("delete")).toEqual([]);
     expect(mockApi.callsOf("patch", /^\/cards/)).toEqual([]);
+  });
+});
+
+describe("properties panel", () => {
+  const toggle = () => screen.getByRole("button", { name: "Show or hide the properties panel" });
+  const select = (shapeId: string) =>
+    act(() => {
+      const registry = services<{ get(id: string): unknown }>("elementRegistry");
+      services<{ select(e: unknown): void }>("selection").select(registry.get(shapeId));
+    });
+
+  it("is closed on a narrow screen, opens from the toolbar and follows the selection", async () => {
+    act(() => setViewportWidth(600));
+    await mount();
+    expect(screen.queryByRole("complementary")).toBeNull();
+    const user = userEvent.setup();
+    await user.click(toggle());
+    expect(within(screen.getByRole("complementary")).getByRole("heading", { name: "A" })).toBeInTheDocument();
+    select(APP_SHAPE);
+    expect(await within(screen.getByRole("complementary")).findByRole("heading", { name: "CRM <core>" })).toBeInTheDocument();
+    await user.click(toggle());
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("is open on a wide screen, and the toolbar closes it", async () => {
+    await mount();
+    expect(screen.getByRole("complementary")).toBeInTheDocument();
+    await userEvent.setup().click(toggle());
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("renames from the panel as one change that is saved with the diagram", async () => {
+    await mount();
+    const user = userEvent.setup();
+    select(APP_SHAPE);
+    const name = (await screen.findAllByLabelText("Name"))[0];
+    await user.clear(name);
+    await user.type(name, "Billing{Enter}");
+    expect(engine().itemInfo(APP_SHAPE)!.name).toBe("Billing");
+    expect(screen.getByRole("status")).toHaveTextContent("Unsaved changes");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    expect(readExchange(lastPatchBody().data.xml).elements.find((e) => e.id === "id-app")!.name).toBe("Billing");
+  });
+
+  it("saves a property typed in the panel with its definition", async () => {
+    await mount();
+    const user = userEvent.setup();
+    select(APP_SHAPE);
+    await user.click(await screen.findByRole("button", { name: "Add a property" }));
+    const panel = within(screen.getByRole("complementary")); // the palette has a "Value" entry too
+    const names = panel.getAllByLabelText("Name");
+    await user.type(names[names.length - 1], "owner");
+    await user.type(panel.getByLabelText("Value"), "Ann");
+    await user.tab();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    const saved = readExchange(lastPatchBody().data.xml);
+    const def = saved.propertyDefinitions.find((d) => d.name === "owner")!;
+    expect(saved.elements.find((e) => e.id === "id-app")!.properties).toEqual([{ ref: def.id, value: "Ann" }]);
   });
 });
 

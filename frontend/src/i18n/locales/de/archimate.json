@@ -56,7 +56,24 @@
     "importXml": "Exchange-Datei importieren",
     "exportXml": "Als Exchange-Datei exportieren",
     "exportSvg": "Als SVG exportieren",
-    "shortcuts": "Tastenkürzel"
+    "shortcuts": "Tastenkürzel",
+    "togglePanel": "Eigenschaftenbereich ein- oder ausblenden"
+  },
+  "panel": {
+    "title": "Eigenschaften",
+    "main": "Allgemein",
+    "name": "Name",
+    "documentation": "Dokumentation",
+    "linkedCard": "Verknüpfte Karte",
+    "properties": "Eigenschaften",
+    "noProperties": "Keine Eigenschaften",
+    "addProperty": "Eigenschaft hinzufügen",
+    "propertyName": "Name",
+    "propertyValue": "Wert",
+    "removeProperty": "Eigenschaft entfernen",
+    "nothingSelected": "Wählen Sie ein Element oder eine Beziehung, um die Eigenschaften zu sehen.",
+    "multiple": "{{count}} Elemente ausgewählt",
+    "multipleHint": "Wählen Sie ein einzelnes Element zum Bearbeiten."
   },
   "status": {
     "saved": "Gespeichert",

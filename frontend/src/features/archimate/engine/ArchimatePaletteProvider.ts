@@ -17,14 +17,18 @@ import type { PaletteEntries } from "diagram-js/lib/features/palette/PaletteProv
 import type Selection from "diagram-js/lib/features/selection/Selection";
 import type { Root } from "diagram-js/lib/model/Types";
 import { ARCHIMATE_LAYER_COLORS } from "@/theme/tokens";
-import { elementsOfLayer, isElementType, LAYER_ORDER, layerOf, type ElementType } from "../taxonomy/elements";
+import { elementsOfLayer, isElementType, LAYER_ORDER, type ElementType } from "../taxonomy/elements";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import type { EditorBridge } from "./EditorBridge";
 import { GLYPH_STROKE, glyphSvg } from "./icons";
 import { NOTATION } from "./notation";
 
 const ENTRY_CLASS = "archimate-palette-entry";
+const LABEL_CLASS = "archimate-palette-label";
 const TYPE_ATTR = "data-archimate-type";
+
+const escapeHtml = (text: string) =>
+  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** Fired after a keyboard drop, with `{ shape }` (the label editor starts editing it). */
 export const ELEMENT_CREATED_EVENT = "archimate.element.created";
@@ -42,17 +46,14 @@ const HAND_ICON = svgOf(
 const LASSO_ICON = svgOf(ICON_SIZE, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 2"/>', TOOL_ATTRS);
 
 /** The Grouping has no glyph of its own (it is a dashed frame): its palette icon is a dashed box. */
-const groupingIcon = (fill: string) =>
-  svgOf(
-    ICON_SIZE, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 1.5"/>',
-    Object.entries({ ...GLYPH_STROKE, fill }).map(([k, v]) => `${k}="${v}"`).join(" "),
-  );
+const GROUPING_ICON = svgOf(
+  ICON_SIZE, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 1.5"/>',
+  Object.entries(GLYPH_STROKE).map(([k, v]) => `${k}="${v}"`).join(" "),
+);
 
-/** The glyph, its closed shapes painted in the colour of the element's layer. */
 function entryIcon(type: ElementType): string {
   const glyph = NOTATION[type].glyph;
-  const { fill } = ARCHIMATE_LAYER_COLORS[layerOf(type)];
-  return glyph ? glyphSvg(glyph, ICON_SIZE, fill) : groupingIcon(fill);
+  return glyph ? glyphSvg(glyph, ICON_SIZE) : GROUPING_ICON;
 }
 
 export default class ArchimatePaletteProvider {
@@ -82,7 +83,7 @@ export default class ArchimatePaletteProvider {
   }
 
   getPaletteEntries(): PaletteEntries {
-    const { elements, tools } = this.bridge.labels;
+    const { elements, tools, layers } = this.bridge.labels;
     const entries: PaletteEntries = {
       "hand-tool": {
         group: "tools", title: tools.hand, html: `<div class="entry" draggable="true">${HAND_ICON}</div>`,
@@ -95,6 +96,11 @@ export default class ArchimatePaletteProvider {
     };
     for (const layer of LAYER_ORDER) {
       entries[`separator.${layer}`] = { group: layer, separator: true, action: {} };
+      entries[`label.${layer}`] = {
+        group: layer,
+        html: `<div class="${LABEL_CLASS}" aria-hidden="true">${escapeHtml(layers[layer])}</div>`,
+        action: {},
+      };
       for (const type of elementsOfLayer(layer)) {
         const createShape = (event: Event) =>
           this.create.start(event, this.elementFactory.createShape({ elementType: type }));
@@ -102,7 +108,8 @@ export default class ArchimatePaletteProvider {
           group: layer,
           title: elements[type],
           html:
-            `<div class="entry ${ENTRY_CLASS}" ${TYPE_ATTR}="${type}" tabindex="0" role="button" draggable="true">` +
+            `<div class="entry ${ENTRY_CLASS}" ${TYPE_ATTR}="${type}" tabindex="0" role="button" draggable="true" ` +
+            `style="--archimate-tile: ${ARCHIMATE_LAYER_COLORS[layer].fill}">` +
             `${entryIcon(type)}</div>`,
           action: { dragstart: createShape, click: createShape },
         };

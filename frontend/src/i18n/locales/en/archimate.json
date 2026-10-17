@@ -56,7 +56,24 @@
     "importXml": "Import an Exchange file",
     "exportXml": "Export as Exchange file",
     "exportSvg": "Export as SVG",
-    "shortcuts": "Keyboard shortcuts"
+    "shortcuts": "Keyboard shortcuts",
+    "togglePanel": "Show or hide the properties panel"
+  },
+  "panel": {
+    "title": "Properties",
+    "main": "Main",
+    "name": "Name",
+    "documentation": "Documentation",
+    "linkedCard": "Linked card",
+    "properties": "Properties",
+    "noProperties": "No properties",
+    "addProperty": "Add a property",
+    "propertyName": "Name",
+    "propertyValue": "Value",
+    "removeProperty": "Remove the property",
+    "nothingSelected": "Select an element or a relationship to see its properties.",
+    "multiple": "{{count}} items selected",
+    "multipleHint": "Select a single item to edit it."
   },
   "status": {
     "saved": "Saved",

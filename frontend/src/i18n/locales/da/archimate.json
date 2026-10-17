@@ -56,7 +56,24 @@
     "importXml": "Importér en Exchange-fil",
     "exportXml": "Eksportér som Exchange-fil",
     "exportSvg": "Eksportér som SVG",
-    "shortcuts": "Tastaturgenveje"
+    "shortcuts": "Tastaturgenveje",
+    "togglePanel": "Vis eller skjul egenskabspanelet"
+  },
+  "panel": {
+    "title": "Egenskaber",
+    "main": "Generelt",
+    "name": "Navn",
+    "documentation": "Dokumentation",
+    "linkedCard": "Tilknyttet kort",
+    "properties": "Egenskaber",
+    "noProperties": "Ingen egenskaber",
+    "addProperty": "Tilføj en egenskab",
+    "propertyName": "Navn",
+    "propertyValue": "Værdi",
+    "removeProperty": "Fjern egenskaben",
+    "nothingSelected": "Vælg et element eller en relation for at se egenskaberne.",
+    "multiple": "{{count}} elementer valgt",
+    "multipleHint": "Vælg ét element for at redigere det."
   },
   "status": {
     "saved": "Gemt",

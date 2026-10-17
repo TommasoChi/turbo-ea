@@ -56,7 +56,24 @@
     "importXml": "استيراد ملف Exchange",
     "exportXml": "تصدير كملف Exchange",
     "exportSvg": "تصدير بصيغة SVG",
-    "shortcuts": "اختصارات لوحة المفاتيح"
+    "shortcuts": "اختصارات لوحة المفاتيح",
+    "togglePanel": "إظهار لوحة الخصائص أو إخفاؤها"
+  },
+  "panel": {
+    "title": "الخصائص",
+    "main": "الأساسي",
+    "name": "الاسم",
+    "documentation": "التوثيق",
+    "linkedCard": "البطاقة المرتبطة",
+    "properties": "الخصائص",
+    "noProperties": "لا توجد خصائص",
+    "addProperty": "إضافة خاصية",
+    "propertyName": "الاسم",
+    "propertyValue": "القيمة",
+    "removeProperty": "إزالة الخاصية",
+    "nothingSelected": "اختر عنصرًا أو علاقة لعرض خصائصه.",
+    "multiple": "تم تحديد {{count}} عناصر",
+    "multipleHint": "اختر عنصرًا واحدًا لتعديله."
   },
   "status": {
     "saved": "تم الحفظ",

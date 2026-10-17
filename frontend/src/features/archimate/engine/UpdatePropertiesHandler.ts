@@ -7,9 +7,11 @@ import type { Element } from "diagram-js/lib/model/Types";
 import { withCardId, type ModelElement, type ModelRelationship } from "../exchange/exchangeModel";
 
 /** For a shape: element fields, or the card link (elements only carry cards). */
-export type ElementUpdate = Partial<Pick<ModelElement, "name" | "documentation">> | { cardId: string | null };
+export type ElementUpdate = Partial<Pick<ModelElement, "name" | "documentation" | "properties">> | { cardId: string | null };
 /** For a connection. */
-export type RelationshipUpdate = Partial<Pick<ModelRelationship, "name" | "accessType" | "isDirected">>;
+export type RelationshipUpdate = Partial<
+  Pick<ModelRelationship, "name" | "documentation" | "properties" | "accessType" | "isDirected">
+>;
 export type PropertyUpdate = ElementUpdate | RelationshipUpdate;
 
 export interface UpdatePropertiesContext {

@@ -6,6 +6,8 @@ import { MODEL } from "@/test/archimateModel";
 import { makeBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
 import { CARD_ID_DEFINITION, getCardId, type ArchimateModel } from "../exchange/exchangeModel";
+import { readExchange } from "../exchange/readExchange";
+import { writeExchange } from "../exchange/writeExchange";
 import { ArchimateEngine } from "./ArchimateEngine";
 
 beforeAll(installSvgStubs);
@@ -102,5 +104,99 @@ describe("ArchimateEngine", () => {
     engine.destroy();
     expect(container.children).toHaveLength(0);
     expect(() => engine.destroy()).not.toThrow();
+  });
+});
+
+describe("ArchimateEngine: the properties panel's view of the selection", () => {
+  it("describes an element and a relationship, and nothing for an unknown id", () => {
+    const { engine } = setup();
+    expect(engine.itemInfo("id-n1")).toEqual({
+      id: "id-n1", kind: "element", type: "ApplicationComponent", name: "CRM <core>", documentation: "The CRM",
+      cardId: "c1", properties: [],
+    });
+    expect(engine.itemInfo("id-c1")).toEqual({
+      id: "id-c1", kind: "relationship", type: "Access", name: "uses", documentation: "", cardId: null, properties: [],
+    });
+    expect(engine.itemInfo("nope")).toBeNull();
+  });
+
+  it("reports the single selected item, and nothing for none or several; the page hears every change", () => {
+    const container = document.createElement("div");
+    const onSelect = vi.fn();
+    const engine = new ArchimateEngine({ container, bridge, onSelect });
+    engine.load(MODEL);
+    const selection = (engine as unknown as { diagram: { get(n: string): Selection } }).diagram.get("selection");
+    const registry = (engine as unknown as { diagram: { get(n: string): ElementRegistry } }).diagram.get("elementRegistry");
+    expect(engine.selectedItem()).toBeNull();
+    onSelect.mockClear(); // loading clears the selection
+    selection.select(registry.get("id-n1") as Shape);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(engine.selectedItem()?.id).toBe("id-n1");
+    selection.select([registry.get("id-n1"), registry.get("id-n2")] as Shape[]);
+    expect(engine.selectedItem()).toBeNull();
+    expect(engine.selection()).toHaveLength(2);
+  });
+
+  it("edits the documentation as one undoable change, and an empty text removes it", () => {
+    const { engine, onChange } = setup();
+    engine.setDocumentation("id-n1", "The CRM"); // unchanged
+    expect(onChange).not.toHaveBeenCalled();
+    engine.setDocumentation("id-n2", "Customers");
+    expect(engine.toModel().elements.find((e) => e.id === "id-data")!.documentation).toBe("Customers");
+    engine.setDocumentation("id-n2", "   ");
+    expect(engine.toModel().elements.find((e) => e.id === "id-data")!.documentation).toBeUndefined();
+    expect(onChange).toHaveBeenCalledTimes(2);
+    engine.undo();
+    expect(engine.itemInfo("id-n2")!.documentation).toBe("Customers");
+    expect(engine.setDocumentation("nope", "x")).toBeUndefined();
+  });
+
+  it("names a relationship, and an empty name removes it (only an element always has one)", () => {
+    const { engine } = setup();
+    engine.setName("id-c1", " reads ");
+    expect(engine.toModel().relationships.find((r) => r.id === "id-rel-access")!.name).toBe("reads");
+    engine.setName("id-c1", "");
+    expect("name" in engine.toModel().relationships.find((r) => r.id === "id-rel-access")!).toBe(false);
+    engine.setName("id-n1", "");
+    expect(engine.toModel().elements.find((e) => e.id === "id-app")!.name).toBe("");
+  });
+
+  it("sets the user's properties: new names get a definition, the card link is kept, blank names are dropped", () => {
+    const { engine, onChange } = setup();
+    engine.setUserProperties("id-n1", [{ name: " owner ", value: "Ann" }, { name: "", value: "ignored" }, { name: "tier", value: "1" }]);
+    expect(engine.itemInfo("id-n1")!.properties).toEqual([{ name: "owner", value: "Ann" }, { name: "tier", value: "1" }]);
+    expect(engine.itemInfo("id-n1")!.cardId).toBe("c1");
+    let model = engine.toModel();
+    expect(model.propertyDefinitions.map((d) => d.name)).toEqual(["turboea:cardId", "owner", "tier"]);
+    expect(model.propertyDefinitions.every((d) => /^[A-Za-z][\w.-]*$/.test(d.id))).toBe(true);
+
+    // the same names reuse the definitions; a repeated name keeps the last value
+    engine.setUserProperties("id-n2", [{ name: "owner", value: "A" }, { name: "owner", value: "B" }]);
+    model = engine.toModel();
+    expect(model.propertyDefinitions).toHaveLength(3);
+    expect(engine.itemInfo("id-n2")!.properties).toEqual([{ name: "owner", value: "B" }]);
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    // unchanged: no command
+    engine.setUserProperties("id-n2", [{ name: "owner", value: "B" }]);
+    expect(onChange).toHaveBeenCalledTimes(2);
+    engine.undo();
+    expect(engine.itemInfo("id-n2")!.properties).toEqual([]);
+
+    // a relationship takes properties too, and none removes them
+    engine.setUserProperties("id-c1", [{ name: "since", value: "2020" }]);
+    expect(engine.itemInfo("id-c1")!.properties).toEqual([{ name: "since", value: "2020" }]);
+    engine.setUserProperties("id-c1", []);
+    expect(engine.itemInfo("id-c1")!.properties).toEqual([]);
+    expect(engine.setUserProperties("nope", [])).toBeUndefined();
+  });
+
+  it("round-trips the user's properties through the Exchange writer and reader", () => {
+    const { engine } = setup();
+    engine.setUserProperties("id-n1", [{ name: "owner", value: "Ann & Bob" }]);
+    const again = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    again.load(readExchange(writeExchange(engine.toModel())));
+    expect(again.itemInfo("id-n1")!.properties).toEqual([{ name: "owner", value: "Ann & Bob" }]);
+    expect(again.itemInfo("id-n1")!.cardId).toBe("c1");
   });
 });

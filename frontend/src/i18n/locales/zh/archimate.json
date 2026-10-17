@@ -56,7 +56,24 @@
     "importXml": "导入 Exchange 文件",
     "exportXml": "导出为 Exchange 文件",
     "exportSvg": "导出为 SVG",
-    "shortcuts": "键盘快捷键"
+    "shortcuts": "键盘快捷键",
+    "togglePanel": "显示或隐藏属性面板"
+  },
+  "panel": {
+    "title": "属性",
+    "main": "基本信息",
+    "name": "名称",
+    "documentation": "文档",
+    "linkedCard": "已关联的卡片",
+    "properties": "属性",
+    "noProperties": "没有属性",
+    "addProperty": "添加属性",
+    "propertyName": "名称",
+    "propertyValue": "值",
+    "removeProperty": "删除属性",
+    "nothingSelected": "选择一个元素或关系以查看其属性。",
+    "multiple": "已选择 {{count}} 项",
+    "multipleHint": "请只选择一项进行编辑。"
   },
   "status": {
     "saved": "已保存",

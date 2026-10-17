@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -38,6 +39,7 @@ import {
   ExchangeParseError, MAX_EXCHANGE_BYTES, exchangeWarnings, readExchange, requireView,
 } from "./exchange/readExchange";
 import { writeExchange } from "./exchange/writeExchange";
+import ArchimatePropertiesPanel from "./ArchimatePropertiesPanel";
 import CreateCardDialog from "./CreateCardDialog";
 import LinkCardDialog from "./LinkCardDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
@@ -107,6 +109,15 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const [pendingImport, setPendingImport] = useState<{ model: ArchimateModel; warnings: string[] } | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // The properties panel: open by default on a wide screen; the toolbar button overrides that.
+  const wide = useMediaQuery(theme.breakpoints.up("md"));
+  const [panelPref, setPanelPref] = useState<boolean | null>(null);
+  const panelOpen = panelPref ?? wide;
+  /** Bumped by a selection change or an edit: the panel reads the engine again. */
+  const [, setPanelTick] = useState(0);
+  const refreshPanel = () => setPanelTick((n) => n + 1);
+  const refreshPanelRef = useRef(refreshPanel);
+  refreshPanelRef.current = refreshPanel;
 
   const reason = useCallback(
     (e: unknown) => describeApiError(e, t("common:errors.generic")),
@@ -217,6 +228,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     if (engine) setHistory({ undo: engine.canUndo(), redo: engine.canRedo() });
     // While a save runs the timer is re-armed when it ends.
     if (!savingRef.current) arm();
+    refreshPanel();
   };
   const markChangedRef = useRef(markChanged);
   markChangedRef.current = markChanged;
@@ -248,7 +260,11 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   useEffect(() => {
     const container = containerRef.current;
     if (!model || !container) return;
-    const engine = new ArchimateEngine({ container, bridge, onChange: () => markChangedRef.current() });
+    const engine = new ArchimateEngine({
+      container, bridge,
+      onChange: () => markChangedRef.current(),
+      onSelect: () => refreshPanelRef.current(),
+    });
     engine.load(model);
     engineRef.current = engine;
     setHistory({ undo: false, redo: false });
@@ -430,6 +446,11 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
         {tool(t("archimate:toolbar.importXml"), "upload", () => fileInputRef.current?.click())}
         <Box sx={{ flex: 1 }} />
         {tool(t("archimate:toolbar.shortcuts"), "keyboard", () => setShortcutsOpen(true))}
+        {tool(
+          t("archimate:toolbar.togglePanel"),
+          panelOpen ? "right_panel_close" : "right_panel_open",
+          () => setPanelPref(!panelOpen),
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -468,7 +489,21 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
         </Alert>
       )}
 
-      <Box ref={containerRef} sx={{ flex: 1, minHeight: 0, ...archimateCanvasSx(theme) }} />
+      <Box sx={{ flex: 1, minHeight: 0, display: "flex" }}>
+        <Box ref={containerRef} sx={{ flex: 1, minWidth: 0, minHeight: 0, ...archimateCanvasSx(theme) }} />
+        {panelOpen && (
+          <ArchimatePropertiesPanel
+            info={engineRef.current?.selectedItem() ?? null}
+            selectedCount={engineRef.current?.selection().length ?? 0}
+            diagramName={name}
+            labels={bridge.labels}
+            cardName={bridge.cardName}
+            onName={(id, v) => engineRef.current?.setName(id, v)}
+            onDocumentation={(id, v) => engineRef.current?.setDocumentation(id, v)}
+            onProperties={(id, p) => engineRef.current?.setUserProperties(id, p)}
+          />
+        )}
+      </Box>
 
       <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 0.5 }}>
         {t("archimate:trademark")}
