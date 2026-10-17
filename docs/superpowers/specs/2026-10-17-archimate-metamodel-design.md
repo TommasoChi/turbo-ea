@@ -27,6 +27,10 @@ fluibile senza semplificare").
 
 - An editable n:m mapping between (card type, optional card subtype) and ArchiMate/Enterprise
   Object concepts, replacing today's 1:1 `CardType.archimate_type` / subtype-override columns.
+- An editable n:m mapping between a turbo-EA `RelationType` and the ArchiMate relationship(s) it
+  may be drawn as, replacing today's 1:1 `RelationType.archimate_type` column and
+  `default_mapping.py`'s `RELATION_DEFAULTS` dict, with one row flagged as the default used for
+  automatic diagram derivation.
 - A registry of "Enterprise Object" concepts (the rebranded term for an ArchiMate element type,
   standard or custom) with: unique key, name, icon, color, layer, a short child-friendly
   description, and a visibility flag.
@@ -97,7 +101,7 @@ left untouched. Lint/typecheck/touched-tests verified green.
 ### Admin surface: a new "Architecture Studio" tab
 
 In `frontend/src/features/admin/MetamodelAdmin.tsx`, a new top-level tab **"Architecture
-Studio"**, positioned immediately after "Relation Types" (today's tab index 1). It contains four
+Studio"**, positioned immediately after "Relation Types" (today's tab index 1). It contains five
 sub-tabs, built with the same nested `Tabs`/`Tab` + local `sub` state pattern already used by
 `RelationsTabContent.tsx`:
 
@@ -124,7 +128,12 @@ palette) sees it read-only.
 Visibility semantics mirror draw.io's shape-library toggle and today's `CardType.is_hidden`:
 hiding an Enterprise Object only removes it from the Architecture Studio palette going forward.
 Elements already drawn with that type on existing diagrams are completely unaffected — no
-warning, no degraded state, fully editable as before.
+warning, no degraded state, fully editable as before. **Seed default: all ~40 standard
+Enterprise Objects are visible**, matching today's palette exactly (no regression) — visibility
+is an independent admin action, unrelated to whether an object happens to have a card mapping.
+Whether an Enterprise Object has any card-mapping rows at all is optional and independent of its
+visibility, exactly as `CARD_TYPE_DEFAULTS` already leaves some card types unmapped
+(`"BusinessContext": None`) today — an unmapped object simply never offers "Link to card".
 
 **(b) Card mapping.** A flat many-to-many table: `(enterprise_object, card_type, card_subtype?)`.
 A row with `card_subtype = NULL` matches every card of that card type, regardless of subtype; a
@@ -153,10 +162,28 @@ spec (e.g., BusinessObject = Passive Structure, BusinessProcess = Behavior, Busi
 Active Structure), but a handful of edge cases need verification against the authoritative Open
 Group spec before being hardcoded, not guessed: Product, ValueStream, Plateau, Gap,
 Path/CommunicationNetwork, and the Strategy-layer elements (Resource, Capability,
-CourseOfAction). Composite/connector types (`Grouping`, `Location`, `AndJunction`, `OrJunction`)
-are not part of the aspect grid, consistent with their exclusion from `taxonomy.py`'s `LAYERS`.
+CourseOfAction).
 
 Custom Enterprise Objects must also be classified here — there is no default/skip option.
+
+**"Other" section.** `Grouping`, `Location`, `AndJunction`, `OrJunction` (ArchiMate's
+composite/connector types, already excluded from `taxonomy.py`'s `LAYERS`) sit in a 5th section
+at the end of the Framework Grid, outside the layer×aspect cells, alongside the existing `Note`
+pseudo-type from the foundation phase. Each has its own special handling, not the generic
+Enterprise Object treatment:
+
+- **Grouping** is the engine's parent/container mechanism (the same containment concept already
+  used for Notes). Fixed, not admin-editable.
+- **Location** does not map to a card type/subtype like other Enterprise Objects — it maps to
+  **location-type fields**, wherever they exist across any card type (today: `Organization`'s
+  `region` subtype; tomorrow, potentially a location field on `ITComponent` or others). This is a
+  genuinely different mapping mechanism from Card Mapping's (card type, card subtype) pairs — the
+  principle is decided, the concrete field-mapping mechanism is left to the builder (see below).
+- **AndJunction/OrJunction** are pure ArchiMate notation (splitting/merging connector lines with
+  AND/OR semantics, no business meaning of their own) — never mapped to a card.
+- **Generic custom objects under "Other"** (freeform concepts that don't fit the layer×aspect
+  grid at all) — raised but explicitly deferred to the backlog; needs more study before it's
+  speced.
 
 #### 3. Connection Rules
 
@@ -172,7 +199,27 @@ Named "Connection Rules" rather than "Relation Rules" specifically to avoid coll
 sibling top-level "Relation Types" tab (turbo-EA's own card-relationship types — a different
 concept).
 
-#### 4. Drawing Types
+#### 4. Relation Mapping
+
+A different thing from Connection Rules, though related. Connection Rules governs
+ArchiMate-to-ArchiMate legality (Enterprise Object × Enterprise Object, ~40×40, already
+implicit in `relation_table.json`). Relation Mapping governs turbo-EA's own vocabulary: for each
+`RelationType` (already scoped to one specific card-type pair/direction today, e.g.
+`relOrgToApp`), which ArchiMate relationship(s) it may be drawn as, plus the existing
+`reversed`/`access` flags. n:m — a `RelationType` may have several valid ArchiMate relationship
+rows — but exactly one row per `RelationType` is flagged `is_default`: the one
+`resolveRelation()` uses to auto-derive a diagram connection from the card graph when no human is
+choosing. The other rows stay valid (e.g. for future manual override) without being auto-picked.
+
+The relationship choices offered here must be **filtered by Connection Rules**: only ArchiMate
+relationship types that Connection Rules allows between the Enterprise Objects that the
+`RelationType`'s source/target card types map to (via Card Mapping) are selectable — Relation
+Mapping cannot configure a combination Connection Rules itself forbids.
+
+Replaces today's `RelationType.archimate_type`/`archimate_access`/`archimate_reversed` columns and
+`default_mapping.py`'s `RELATION_DEFAULTS` dict.
+
+#### 5. Drawing Types
 
 Parked (non-goal, see above). Name is final; scope is not — the user will provide concrete
 viewpoint examples before this sub-tab is designed. Conceptually: a named viewpoint (in the
@@ -196,21 +243,32 @@ Archi) loses that element's type semantics.
   Enterprise Object (a checklist over the 11 types), or does "Association only" stay permanent
   for every custom object? Parked mid-conversation; revisit before or during the Connection Rules
   implementation task.
+- Generic custom objects under the "Other" section (not fitting the layer×aspect grid at all) —
+  raised, explicitly deferred to the backlog pending further study.
+- The concrete field-mapping mechanism for `Location` (which fields count as "location-type",
+  across which card types, and how the bridge table/UI represents a field-level mapping instead
+  of a card-type-level one) — the principle is decided, the mechanism is not.
 - Drawing Types / viewpoints: entirely open pending the user's examples.
 
 ## What's left to the builder
 
 - Exact DB schema (tables/columns/migration) for: the Enterprise Object registry, the
-  `(enterprise_object, card_type, card_subtype?)` bridge table, the aspect classification, and
+  `(enterprise_object, card_type, card_subtype?)` bridge table, the aspect classification, the
+  `(relation_type, archimate_relationship, is_default)` bridge table for Relation Mapping, and
   (if built this phase) the per-object relationship-rule overrides — follow the existing
   `CardType`/`RelationType`/`archimate_type` column patterns already in
   `backend/app/models/card_type.py` and `backend/app/models/relation_type.py`.
   - Do not delete the existing Exchange Format XSD files in the project — they remain the
     reference for which keys count as "standard" vs. custom.
-- Seed data: migrate `default_mapping.py`'s `CARD_TYPE_DEFAULTS`/`SUBTYPE_DEFAULTS` into the new
-  bridge table as its initial rows; verify `test_archimate_default_mapping*.py` and
-  `test_seed_archimate_mapping.py` are updated/replaced consistently with the new model — do not
-  leave the old 1:1 columns and the new n:m table both live.
+- Seed data: migrate `default_mapping.py`'s `CARD_TYPE_DEFAULTS`/`SUBTYPE_DEFAULTS` into the Card
+  Mapping bridge table, and `RELATION_DEFAULTS` into the Relation Mapping bridge table (each
+  migrated row becomes `is_default = true`), as their initial rows; verify
+  `test_archimate_default_mapping*.py` and `test_seed_archimate_mapping.py` are updated/replaced
+  consistently with the new model — do not leave the old 1:1 columns and the new n:m tables both
+  live.
+- Registry rows for `Grouping`, `Location`, `AndJunction`, `OrJunction` (the "Other" section) —
+  these need Enterprise Object entries to serve as card-mapping targets even though they're
+  excluded from the layer×aspect grid proper; `Grouping`'s row must not be admin-editable.
 - The ~40 standard Enterprise Objects' child-friendly descriptions (≤20–30 words each) — draft
   all of them against the Open Group ArchiMate 3.2 spec's own definitions, simplified; seed as
   defaults, admin-editable.
@@ -219,8 +277,8 @@ Archi) loses that element's type semantics.
 - API endpoints for: CRUD on Enterprise Objects, CRUD on the card-mapping bridge table, read/edit
   of the aspect grid, read/edit of connection rules — follow the existing
   `/metamodel/types`/`/metamodel/relation-types` endpoint conventions.
-- Permission gating: the pencil/edit affordance on the description popover, and all four sub-tabs'
-  write actions, gated behind the same permission tier that already gates `CardType`/
+- Permission gating: the pencil/edit affordance on the description popover, and all five
+  sub-tabs' write actions, gated behind the same permission tier that already gates `CardType`/
   `RelationType` editing.
 - i18n: all new UI strings across the 10 existing locales, following the project's established
   process (seed English + ask-for-translation-review pattern already used elsewhere in this
