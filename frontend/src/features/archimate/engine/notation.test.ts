@@ -3,7 +3,7 @@ import { GLYPHS } from "./icons";
 import { NOTATION, bodyDetail, bodyPath, translatePath, type BodyShape } from "./notation";
 
 const BODIES: BodyShape[] = [
-  "rect", "roundRect", "pill", "event", "box3d", "ellipse", "parallelogram", "hexagon", "cylinder", "grouping", "circle", "plain",
+  "rect", "roundRect", "pill", "event", "box3d", "ellipse", "hexagon", "chamfer", "cloud", "wave", "grouping", "circle", "plain",
 ];
 const numbers = (d: string) => (d.match(/\d+(\.\d+)?/g) ?? []).map(Number);
 
@@ -28,9 +28,13 @@ describe("NOTATION", () => {
     ["BusinessEvent", "event", false],
     ["DataObject", "rect", true],
     ["Node", "box3d", false],
-    ["Stakeholder", "cylinder", false],
-    ["Goal", "ellipse", false],
-    ["Requirement", "parallelogram", false],
+    ["Stakeholder", "chamfer", false],
+    ["Goal", "chamfer", false],
+    ["Requirement", "chamfer", false],
+    ["Meaning", "cloud", false],
+    ["Value", "ellipse", false],
+    ["Deliverable", "wave", false],
+    ["Representation", "wave", false],
     ["Grouping", "grouping", false],
     ["AndJunction", "circle", false],
     ["Capability", "roundRect", false],
@@ -41,15 +45,15 @@ describe("NOTATION", () => {
   it("gives the header band only to the passive objects", () => {
     const withHeader = ELEMENT_TYPES.filter((t) => NOTATION[t].header);
     expect(withHeader.sort()).toEqual(
-      ["Artifact", "BusinessObject", "Contract", "DataObject", "Deliverable", "Material", "Representation"],
+      ["Artifact", "BusinessObject", "Contract", "DataObject", "Material"],
     );
   });
 
   it("keeps the other pinned decisions", () => {
     expect(NOTATION.ValueStream.body).toBe("pill");
-    expect(NOTATION.Principle.body).toBe("rect");
-    expect(NOTATION.Meaning.body).toBe("ellipse");
-    expect(NOTATION.Assessment.body).toBe("ellipse");
+    // ArchiMate 3: the motivation elements are rectangles with cut corners, except the Meaning (cloud) and the Value (ellipse)
+    for (const t of ["Stakeholder", "Driver", "Assessment", "Goal", "Outcome", "Principle", "Requirement", "Constraint"] as const)
+      expect(NOTATION[t].body).toBe("chamfer");
     expect(NOTATION.Location.body).toBe("rect");
     expect(NOTATION.OrJunction.body).toBe("circle");
     expect(NOTATION.Grouping.glyph).toBeNull();
@@ -90,7 +94,7 @@ describe("bodyPath", () => {
 
   it("draws the shape each name promises", () => {
     expect(bodyPath("box3d", 120, 55)).toBe("M0 10L10 0L120 0L120 45L110 55L0 55Z");
-    expect(bodyPath("parallelogram", 120, 55)).toBe("M15 0L120 0L105 55L0 55Z");
+    expect(bodyPath("chamfer", 120, 55)).toBe("M10 0L110 0L120 10L120 45L110 55L10 55L0 45L0 10Z");
     expect(bodyPath("hexagon", 120, 55)).toBe("M12 0L108 0L120 27.5L108 55L12 55L0 27.5Z");
     expect(bodyPath("grouping", 200, 120)).toBe("M0 0L60 0L60 18L200 18L200 120L0 120Z");
     // a pill is round at both ends: its leftmost x is 0 only at mid-height
@@ -103,10 +107,31 @@ describe("bodyPath", () => {
   });
 });
 
+describe("bodyPath: cloud and wave", () => {
+  it("a cloud stays inside its box and is a wide shape", () => {
+    const v = numbers(bodyPath("cloud", 120, 55));
+    const xs = v.filter((_, i) => i % 2 === 0);
+    const ys = v.filter((_, i) => i % 2 === 1);
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(120);
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(55);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(100);
+  });
+
+  it("a wave has a flat top and a bottom edge that rises and falls by the wave height", () => {
+    const d = bodyPath("wave", 120, 60);
+    expect(d.startsWith("M0 0L120 0L120 54")).toBe(true); // the right edge ends at h - a (a = 6)
+    const ys = numbers(d).filter((_, i) => i % 2 === 1);
+    expect(Math.max(...ys)).toBeCloseTo(60, 0);
+    expect(Math.min(...ys.slice(2))).toBeCloseTo(48, 0); // h - 2a
+  });
+});
+
 describe("bodyDetail", () => {
-  it("draws the box front and the cylinder cap, and nothing for the others", () => {
+  it("draws the box front, and nothing for the others", () => {
     expect(bodyDetail("box3d", 120, 55)).toBe("M0 10H110V55M110 10L120 0");
-    expect(bodyDetail("cylinder", 120, 55)).toMatch(/^M108 0L.*L108 55$/);
+    expect(bodyDetail("chamfer", 120, 55)).toBeNull();
     expect(bodyDetail("rect", 120, 55)).toBeNull();
     expect(bodyDetail("ellipse", 120, 55)).toBeNull();
   });

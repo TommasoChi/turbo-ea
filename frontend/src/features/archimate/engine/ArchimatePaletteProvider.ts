@@ -16,7 +16,8 @@ import type Palette from "diagram-js/lib/features/palette/Palette";
 import type { PaletteEntries } from "diagram-js/lib/features/palette/PaletteProvider";
 import type Selection from "diagram-js/lib/features/selection/Selection";
 import type { Root } from "diagram-js/lib/model/Types";
-import { elementsOfLayer, isElementType, LAYER_ORDER, type ElementType } from "../taxonomy/elements";
+import { ARCHIMATE_LAYER_COLORS } from "@/theme/tokens";
+import { elementsOfLayer, isElementType, LAYER_ORDER, layerOf, type ElementType } from "../taxonomy/elements";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import type { EditorBridge } from "./EditorBridge";
 import { GLYPH_STROKE, glyphSvg } from "./icons";
@@ -28,25 +29,30 @@ const TYPE_ATTR = "data-archimate-type";
 /** Fired after a keyboard drop, with `{ shape }` (the label editor starts editing it). */
 export const ELEMENT_CREATED_EVENT = "archimate.element.created";
 
+const ICON_SIZE = 18;
+
 const svgOf = (size: number, inner: string, attrs: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 16 16" ${attrs}>${inner}</svg>`;
 
 /** The tools' icons follow the palette's text colour. */
 const TOOL_ATTRS = 'fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"';
 const HAND_ICON = svgOf(
-  16, '<path d="M8 1V15M1 8H15M8 1L6 3M8 1L10 3M8 15L6 13M8 15L10 13M1 8L3 6M1 8L3 10M15 8L13 6M15 8L13 10"/>', TOOL_ATTRS,
+  ICON_SIZE, '<path d="M8 1V15M1 8H15M8 1L6 3M8 1L10 3M8 15L6 13M8 15L10 13M1 8L3 6M1 8L3 10M15 8L13 6M15 8L13 10"/>', TOOL_ATTRS,
 );
-const LASSO_ICON = svgOf(16, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 2"/>', TOOL_ATTRS);
+const LASSO_ICON = svgOf(ICON_SIZE, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 2"/>', TOOL_ATTRS);
 
 /** The Grouping has no glyph of its own (it is a dashed frame): its palette icon is a dashed box. */
-const GROUPING_ICON = svgOf(
-  16, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 1.5"/>',
-  Object.entries(GLYPH_STROKE).map(([k, v]) => `${k}="${v}"`).join(" "),
-);
+const groupingIcon = (fill: string) =>
+  svgOf(
+    ICON_SIZE, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 1.5"/>',
+    Object.entries({ ...GLYPH_STROKE, fill }).map(([k, v]) => `${k}="${v}"`).join(" "),
+  );
 
+/** The glyph, its closed shapes painted in the colour of the element's layer. */
 function entryIcon(type: ElementType): string {
   const glyph = NOTATION[type].glyph;
-  return glyph ? glyphSvg(glyph) : GROUPING_ICON;
+  const { fill } = ARCHIMATE_LAYER_COLORS[layerOf(type)];
+  return glyph ? glyphSvg(glyph, ICON_SIZE, fill) : groupingIcon(fill);
 }
 
 export default class ArchimatePaletteProvider {
@@ -88,6 +94,7 @@ export default class ArchimatePaletteProvider {
       },
     };
     for (const layer of LAYER_ORDER) {
+      entries[`separator.${layer}`] = { group: layer, separator: true, action: {} };
       for (const type of elementsOfLayer(layer)) {
         const createShape = (event: Event) =>
           this.create.start(event, this.elementFactory.createShape({ elementType: type }));

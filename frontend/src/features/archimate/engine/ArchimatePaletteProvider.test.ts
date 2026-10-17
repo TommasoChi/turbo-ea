@@ -11,6 +11,7 @@ import { getCardId, type ModelElement } from "../exchange/exchangeModel";
 import { ELEMENT_INFO, ELEMENT_TYPES, LAYER_ORDER, elementsOfLayer, type ElementType } from "../taxonomy/elements";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 import type ArchimateModeling from "./ArchimateModeling";
+import { ARCHIMATE_LAYER_COLORS } from "@/theme/tokens";
 import ArchimatePaletteProvider from "./ArchimatePaletteProvider";
 
 beforeAll(installSvgStubs);
@@ -41,12 +42,14 @@ function setup() {
 }
 
 describe("ArchimatePaletteProvider entries", () => {
-  it("lists the two tools then every element: 2 + 62 = 64 entries", () => {
+  it("lists the two tools then every element: 2 + 62 = 64 entries, a separator opening each layer", () => {
     const { entries } = setup();
     const keys = Object.keys(entries);
-    expect(keys).toHaveLength(64);
+    expect(keys.filter((k) => !entries[k].separator)).toHaveLength(64);
     expect(keys.slice(0, 2)).toEqual(["hand-tool", "lasso-tool"]);
-    expect(keys.slice(2)).toEqual(LAYER_ORDER.flatMap((l) => elementsOfLayer(l).map((t) => `create.${t}`)));
+    expect(keys.slice(2)).toEqual(
+      LAYER_ORDER.flatMap((l) => [`separator.${l}`, ...elementsOfLayer(l).map((t) => `create.${t}`)]),
+    );
     expect(entries["hand-tool"].group).toBe("tools");
     expect(entries["lasso-tool"].group).toBe("tools");
   });
@@ -73,6 +76,13 @@ describe("ArchimatePaletteProvider entries", () => {
     expect(html).toContain('tabindex="0"');
     expect(html).toContain('role="button"');
     expect(html).toContain('draggable="true"');
+  });
+
+  it("paints the glyph's closed shapes in the colour of the element's layer", () => {
+    const { entries } = setup();
+    expect(entries["create.BusinessActor"].html).toContain(`fill="${ARCHIMATE_LAYER_COLORS.business.fill}"`);
+    expect(entries["create.Goal"].html).toContain(`fill="${ARCHIMATE_LAYER_COLORS.motivation.fill}"`);
+    expect(entries["create.Node"].html).toContain(`fill="${ARCHIMATE_LAYER_COLORS.technology.fill}"`);
   });
 
   it("gives every element a glyph, including the types with no glyph of their own (plain box)", () => {

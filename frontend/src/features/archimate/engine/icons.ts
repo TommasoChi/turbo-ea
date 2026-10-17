@@ -55,7 +55,7 @@ export const GLYPHS: Record<GlyphId, GlyphOp[]> = {
   artifact: [["path", "M3 2H10L13 5V14H3Z"], ["polyline", [10, 2, 10, 5, 13, 5]]],
   material: [["polyline", [5, 3, 11, 3, 14, 8, 11, 13, 5, 13, 2, 8, 5, 3]], ["line", 6, 6, 10, 6], ["line", 6, 10, 10, 10]],
   // motivation
-  stakeholder: [["circle", 8, 5, 2.5], ["path", "M3 14C3 9.5 13 9.5 13 14"], ["line", 3, 14, 13, 14]],
+  stakeholder: [["path", "M5 4H11A3 4 0 0 1 11 12H5A3 4 0 0 1 5 4Z"], ["path", "M11 4A3 4 0 0 0 11 12"]],
   driver: [["circle", 8, 8, 6], ["line", 8, 2, 8, 14], ["line", 2, 8, 14, 8], ["line", 3.8, 3.8, 12.2, 12.2], ["line", 12.2, 3.8, 3.8, 12.2]],
   assessment: [["circle", 6.5, 6.5, 4], ["line", 9.5, 9.5, 14, 14]],
   goal: [["circle", 8, 8, 6], ["circle", 8, 8, 3], ["circle", 8, 8, 1]],
@@ -76,21 +76,23 @@ export const GLYPHS: Record<GlyphId, GlyphOp[]> = {
 
 const n = (v: number) => String(v);
 
-function opMarkup(op: GlyphOp): string {
+/** `fill` paints the closed shapes only (circle, rect, a path ending in Z); open lines stay unfilled. */
+function opMarkup(op: GlyphOp, fill?: string): string {
+  const paint = fill ? ` fill="${fill}"` : "";
   switch (op[0]) {
-    case "circle": return `<circle cx="${n(op[1])}" cy="${n(op[2])}" r="${n(op[3])}"/>`;
+    case "circle": return `<circle cx="${n(op[1])}" cy="${n(op[2])}" r="${n(op[3])}"${paint}/>`;
     case "line": return `<line x1="${n(op[1])}" y1="${n(op[2])}" x2="${n(op[3])}" y2="${n(op[4])}"/>`;
-    case "rect": return `<rect x="${n(op[1])}" y="${n(op[2])}" width="${n(op[3])}" height="${n(op[4])}"/>`;
+    case "rect": return `<rect x="${n(op[1])}" y="${n(op[2])}" width="${n(op[3])}" height="${n(op[4])}"${paint}/>`;
     case "polyline": return `<polyline points="${op[1].join(" ")}"/>`;
-    case "path": return `<path d="${op[1]}"/>`;
+    case "path": return `<path d="${op[1]}"${op[1].endsWith("Z") ? paint : ""}/>`;
   }
 }
 
-/** The glyph's drawing (no wrapper), for a parent that sets the stroke. */
-export function glyphMarkup(id: GlyphId): string {
+/** The glyph's drawing (no wrapper), for a parent that sets the stroke; `fill` colours its closed shapes. */
+export function glyphMarkup(id: GlyphId, fill?: string): string {
   const ops = GLYPHS[id];
   if (!ops) throw new Error(`unknown glyph ${id}`);
-  return ops.map(opMarkup).join("");
+  return ops.map((op) => opMarkup(op, fill)).join("");
 }
 
 /** Attributes the parent of a glyph needs: stroke only, round joins, the text colour. */
@@ -98,11 +100,11 @@ export const GLYPH_STROKE = {
   fill: "none", stroke: ARCHIMATE_TEXT_COLOR, "stroke-width": 1, "stroke-linecap": "round", "stroke-linejoin": "round",
 } as const;
 
-/** A standalone svg of the glyph, for the palette. */
-export function glyphSvg(id: GlyphId, size = 16): string {
+/** A standalone svg of the glyph, for the palette; `fill` is the layer colour of its closed shapes. */
+export function glyphSvg(id: GlyphId, size = 16, fill?: string): string {
   const attrs = Object.entries(GLYPH_STROKE).map(([k, v]) => `${k}="${v}"`).join(" ");
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 16 16" ${attrs}>` +
-    `${glyphMarkup(id)}</svg>`
+    `${glyphMarkup(id, fill)}</svg>`
   );
 }

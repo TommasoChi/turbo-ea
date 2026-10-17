@@ -9,8 +9,8 @@ import type { ElementType } from "../taxonomy/elements";
 import type { GlyphId } from "./icons";
 
 export type BodyShape =
-  | "rect" | "roundRect" | "pill" | "event" | "box3d" | "ellipse" | "parallelogram" | "hexagon"
-  | "cylinder" | "grouping" | "circle" | "plain";
+  | "rect" | "roundRect" | "pill" | "event" | "box3d" | "ellipse" | "hexagon"
+  | "chamfer" | "cloud" | "wave" | "grouping" | "circle" | "plain";
 export interface Notation { body: BodyShape; header: boolean /* passive objects: top band */; glyph: GlyphId | null }
 
 const n = (body: BodyShape, glyph: GlyphId | null, header = false): Notation => ({ body, header, glyph });
@@ -33,7 +33,7 @@ export const NOTATION: Record<ElementType, Notation> = {
   BusinessService: n("pill", "service"),
   BusinessObject: n("rect", "object", true),
   Contract: n("rect", "contract", true),
-  Representation: n("rect", "representation", true),
+  Representation: n("wave", "representation"),
   Product: n("rect", "product"),
   // application
   ApplicationComponent: n("rect", "component"),
@@ -65,19 +65,19 @@ export const NOTATION: Record<ElementType, Notation> = {
   DistributionNetwork: n("box3d", "distribution"),
   Material: n("rect", "material", true),
   // motivation
-  Stakeholder: n("cylinder", "stakeholder"),
-  Driver: n("ellipse", "driver"),
-  Assessment: n("ellipse", "assessment"),
-  Goal: n("ellipse", "goal"),
-  Outcome: n("ellipse", "outcome"),
-  Principle: n("rect", "principle"),
-  Requirement: n("parallelogram", "requirement"),
-  Constraint: n("parallelogram", "constraint"),
-  Meaning: n("ellipse", "meaning"),
+  Stakeholder: n("chamfer", "stakeholder"),
+  Driver: n("chamfer", "driver"),
+  Assessment: n("chamfer", "assessment"),
+  Goal: n("chamfer", "goal"),
+  Outcome: n("chamfer", "outcome"),
+  Principle: n("chamfer", "principle"),
+  Requirement: n("chamfer", "requirement"),
+  Constraint: n("chamfer", "constraint"),
+  Meaning: n("cloud", "meaning"),
   Value: n("ellipse", "value"),
   // implementation & migration
   WorkPackage: n("roundRect", "work-package"),
-  Deliverable: n("rect", "deliverable", true),
+  Deliverable: n("wave", "deliverable"),
   ImplementationEvent: n("event", "event"),
   Plateau: n("rect", "plateau"),
   Gap: n("ellipse", "gap"),
@@ -136,19 +136,34 @@ export function bodyPath(body: BodyShape, w: number, h: number): string {
     case "ellipse":
     case "circle":
       return polygon(arc(w / 2, h / 2, w / 2, h / 2, -90, 270, 48), w, h);
-    case "parallelogram": {
-      const s = Math.min(15, w / 4);
-      return polygon([[s, 0], [w, 0], [w - s, h], [0, h]], w, h);
+    case "chamfer": {
+      // a rectangle with its four corners cut off (the motivation elements)
+      const s = Math.min(10, w / 4, h / 4);
+      return polygon([[s, 0], [w - s, 0], [w, s], [w, h - s], [w - s, h], [s, h], [0, h - s], [0, s]], w, h);
+    }
+    case "cloud": {
+      // an ellipse with a scalloped edge: ten lobes
+      return polygon(
+        Array.from({ length: 120 }, (_, i): [number, number] => {
+          const a = (i / 120) * 2 * Math.PI;
+          const k = 0.86 + 0.14 * Math.abs(Math.sin(5 * a));
+          return [w / 2 + (w / 2) * k * Math.cos(a), h / 2 + (h / 2) * k * Math.sin(a)];
+        }),
+        w, h,
+      );
+    }
+    case "wave": {
+      // a rectangle whose bottom edge is a wave (representation, deliverable)
+      const a = Math.min(6, h / 6);
+      const bottom = Array.from({ length: 25 }, (_, i): [number, number] => {
+        const x = w - (w * i) / 24;
+        return [x, h - a + a * Math.sin((2 * Math.PI * x) / w)];
+      });
+      return polygon([[0, 0], [w, 0], ...bottom], w, h);
     }
     case "hexagon": {
       const s = Math.min(12, w / 4);
       return polygon([[s, 0], [w - s, 0], [w, h / 2], [w - s, h], [s, h], [0, h / 2]], w, h);
-    }
-    case "cylinder": {
-      const rx = Math.min(12, w / 4);
-      return polygon(
-        [...arc(w - rx, h / 2, rx, h / 2, -90, 90, 12), ...arc(rx, h / 2, rx, h / 2, 90, 270, 12)], w, h,
-      );
     }
     case "grouping": {
       const tw = Math.min(60, w / 2);
@@ -158,15 +173,11 @@ export function bodyPath(body: BodyShape, w: number, h: number): string {
   }
 }
 
-/** The inner lines that make a body look solid (box front, cylinder cap); null for the others. Open path, not filled. */
+/** The inner lines that make a body look solid (the box front); null for the others. Open path, not filled. */
 export function bodyDetail(body: BodyShape, w: number, h: number): string | null {
   if (body === "box3d") {
     const d = Math.min(BOX_DEPTH, w / 4, h / 4);
     return `M0 ${d}H${w - d}V${h}M${w - d} ${d}L${w} 0`;
-  }
-  if (body === "cylinder") {
-    const rx = Math.min(12, w / 4);
-    return `M${arc(w - rx, h / 2, rx, h / 2, -90, -270, 12).map(([x, y]) => `${r2(x)} ${r2(y)}`).join("L")}`;
   }
   return null;
 }

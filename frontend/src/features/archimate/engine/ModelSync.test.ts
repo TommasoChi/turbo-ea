@@ -56,8 +56,8 @@ describe("ModelSync", () => {
 
   it("crops at the real outline of the shape: an ellipse is cut earlier than its box", () => {
     const { modeling, add, b } = setup();
-    const goal = add(1000, "Goal"); // 120 x 55 around (1000, 100)
-    const conn = modeling.connect(goal, b, {
+    const value = add(1000, "Value"); // 120 x 55 around (1000, 100)
+    const conn = modeling.connect(value, b, {
       relationship: "Influence", waypoints: [{ x: 1000, y: 100 }, { x: 1200, y: 300 }, { x: 400, y: 100 }],
     }) as Connection;
     // on the diagonal the ellipse x^2/60^2 + y^2/27.5^2 = 1 is met 25 px from the centre (the box would give 27.5)

@@ -33,7 +33,17 @@ export function archimateCanvasSx(theme: Theme): SxProps<Theme> {
     "& .bjs-powered-by": { display: "none" },
     "& .bio-theme-parent, & .djs-parent": tokens,
     "& .djs-container, & .djs-container svg": { backgroundColor: palette.background.default },
+    // Compact palette: three columns of 22px entries, scrolling when the canvas is short.
+    "& .djs-palette, & .djs-palette.two-column.open": { width: 90, maxHeight: "calc(100% - 40px)", overflowY: "auto" },
     "& .djs-palette .entry, & .archimate-palette-entry": {
+      width: 22,
+      height: 22,
+      margin: "4px 0 0 4px",
+      lineHeight: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: "3px",
       color: palette.text.primary,
       "&:hover": { color: palette.primary.main, backgroundColor: palette.action.hover },
       "&:focus-visible": { outline: `2px solid ${palette.primary.main}`, outlineOffset: -2 },

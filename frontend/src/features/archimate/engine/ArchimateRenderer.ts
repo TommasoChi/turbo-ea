@@ -52,10 +52,15 @@ export function wrapText(text: string, maxChars: number, maxLines = MAX_LINES): 
 
 const rgb = ({ r, g, b }: Rgb) => `rgb(${r}, ${g}, ${b})`;
 
-/** Where the glyph sits: the top-right corner, pulled in on an ellipse so it stays inside the curve. */
-function glyphX(body: string, width: number): number {
-  return body === "ellipse" ? width - 20 - Math.round(width * 0.22) : width - 20;
+/** Where the glyph sits: the top-right corner, pulled in on an ellipse or a cut corner so it stays inside. */
+function glyphOrigin(body: string, width: number): { x: number; y: number } {
+  if (body === "ellipse") return { x: width - 20 - Math.round(width * 0.22), y: 4 };
+  if (body === "chamfer") return { x: width - 22, y: 5 };
+  return { x: width - 20, y: 4 };
 }
+
+/** The shape of these bodies is their own symbol (a junction is also too small): no glyph on the canvas. */
+const SHAPE_IS_THE_SYMBOL = new Set(["circle", "cloud", "wave"]);
 
 export default class ArchimateRenderer extends BaseRenderer {
   static $inject = ["eventBus", "canvas"];
@@ -98,10 +103,11 @@ export default class ArchimateRenderer extends BaseRenderer {
       });
       svgAppend(visuals, band);
     }
-    // A junction is too small for a glyph; the palette shows it.
-    if (glyph && body !== "circle") {
+    // The palette shows the glyph of a junction, a cloud and a wave; the canvas shows their shape.
+    if (glyph && !SHAPE_IS_THE_SYMBOL.has(body)) {
+      const origin = glyphOrigin(body, width);
       const g = svgCreate("g");
-      svgAttr(g, { class: "archimate-glyph", transform: `translate(${glyphX(body, width)}, 4)`, ...GLYPH_STROKE });
+      svgAttr(g, { class: "archimate-glyph", transform: `translate(${origin.x}, ${origin.y})`, ...GLYPH_STROKE });
       innerSVG(g, glyphMarkup(glyph));
       svgAppend(visuals, g);
     }

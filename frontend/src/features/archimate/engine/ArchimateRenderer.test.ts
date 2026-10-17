@@ -102,11 +102,18 @@ describe("ArchimateRenderer: shapes", () => {
 
   it("keeps the glyph of an ellipse inside its curve and draws none on a junction", () => {
     const { add, gfx } = setup();
-    expect(gfx(add("Goal")).querySelector("g.archimate-glyph")?.getAttribute("transform")).toBe("translate(74, 4)");
+    expect(gfx(add("Value")).querySelector("g.archimate-glyph")?.getAttribute("transform")).toBe("translate(74, 4)");
     const and = gfx(add("AndJunction"));
     expect(and.querySelector("g.archimate-glyph")).toBeNull();
     expect(css(and.querySelector("path.archimate-body"), "fill")).toBe(ARCHIMATE_TEXT_COLOR);
     expect(css(gfx(add("OrJunction")).querySelector("path.archimate-body"), "fill")).toBe("white");
+  });
+
+  it("pulls the glyph of a cut-corner shape in, and draws none where the shape is the symbol", () => {
+    const { add, gfx } = setup();
+    expect(gfx(add("Goal")).querySelector("g.archimate-glyph")?.getAttribute("transform")).toBe("translate(98, 5)");
+    for (const type of ["Meaning", "Deliverable", "Representation"] as const)
+      expect(gfx(add(type)).querySelector("g.archimate-glyph")).toBeNull();
   });
 
   it("dashes a Grouping and nothing else", () => {
@@ -141,11 +148,11 @@ describe("ArchimateRenderer: shapes", () => {
 
   it("supplies the real outline to connection cropping: an ellipse polygon, not its box", () => {
     const { add, diagram } = setup();
-    const goal = add("Goal");
+    const value = add("Value");
     const factory = diagram.get<GraphicsFactory>("graphicsFactory");
-    const box = factory.getShapePath(goal);
+    const box = factory.getShapePath(value);
     expect(box.startsWith("M")).toBe(true);
-    expect(box.startsWith(`M${goal.x + goal.width / 2} ${goal.y}`)).toBe(true);
+    expect(box.startsWith(`M${value.x + value.width / 2} ${value.y}`)).toBe(true);
     expect(box).not.toMatch(/[CAHV]/);
   });
 
