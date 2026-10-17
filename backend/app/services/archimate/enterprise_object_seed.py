@@ -8,8 +8,9 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enterprise_object import EnterpriseObject
+from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
 from app.services.archimate import taxonomy
+from app.services.archimate.default_mapping import CARD_TYPE_DEFAULTS, SUBTYPE_DEFAULTS
 
 # Hex values copied from frontend/src/theme/tokens.ts's ARCHIMATE_LAYER_COLORS
 # (the stroke half of each layer's fill/stroke pair -- the pastel fills are
@@ -459,3 +460,40 @@ async def seed_enterprise_objects(db: AsyncSession) -> None:
                 **values,
             )
         )
+
+
+async def seed_card_mappings(db: AsyncSession) -> None:
+    """Seed EnterpriseObjectCardMapping bridge rows from default_mapping.py's
+    ``CARD_TYPE_DEFAULTS`` (card type -> element type, or None for "no
+    mapping") and ``SUBTYPE_DEFAULTS`` (card type/subtype -> element type).
+
+    Idempotent: upserts on the (enterprise_object_key, card_type_key,
+    card_subtype_key) unique constraint -- a row that already exists is left
+    alone, a second run adds nothing new.
+    """
+    existing_result = await db.execute(select(EnterpriseObjectCardMapping))
+    existing = {
+        (m.enterprise_object_key, m.card_type_key, m.card_subtype_key)
+        for m in existing_result.scalars().all()
+    }
+
+    def _add(enterprise_object_key: str, card_type_key: str, card_subtype_key: str | None) -> None:
+        unique_key = (enterprise_object_key, card_type_key, card_subtype_key)
+        if unique_key in existing:
+            return
+        existing.add(unique_key)
+        db.add(
+            EnterpriseObjectCardMapping(
+                enterprise_object_key=enterprise_object_key,
+                card_type_key=card_type_key,
+                card_subtype_key=card_subtype_key,
+            )
+        )
+
+    for card_type_key, element_key in CARD_TYPE_DEFAULTS.items():
+        if element_key is None:  # "no mapping" -- no bridge row
+            continue
+        _add(element_key, card_type_key, None)
+
+    for (card_type_key, card_subtype_key), element_key in SUBTYPE_DEFAULTS.items():
+        _add(element_key, card_type_key, card_subtype_key)
