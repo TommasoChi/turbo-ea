@@ -40,9 +40,6 @@ async def test_enterprise_object_card_mapping_unique_constraint(db):
     db.add(EnterpriseObject(key="MappingTestEO", name="Mapping Test EO"))
     await db.flush()
 
-    # NULL subtype intentionally not used here: Postgres treats each NULL as
-    # distinct for uniqueness purposes, so a concrete subtype is needed to
-    # exercise the constraint.
     db.add(
         EnterpriseObjectCardMapping(
             enterprise_object_key="MappingTestEO",
@@ -59,6 +56,36 @@ async def test_enterprise_object_card_mapping_unique_constraint(db):
                     enterprise_object_key="MappingTestEO",
                     card_type_key="MappingTestType",
                     card_subtype_key="widget",
+                )
+            )
+            await db.flush()
+
+
+async def test_enterprise_object_card_mapping_unique_constraint_on_null_subtype(db):
+    """Postgres treats every NULL as distinct in a plain UNIQUE constraint, so
+    the constraint must be declared with ``postgresql_nulls_not_distinct=True``
+    or two "all subtypes" (card_subtype_key=NULL) rows for the same
+    (enterprise_object_key, card_type_key) pair would not collide."""
+    db.add(CardType(key="MappingTestType2", label="Mapping Test Type 2"))
+    db.add(EnterpriseObject(key="MappingTestEO2", name="Mapping Test EO 2"))
+    await db.flush()
+
+    db.add(
+        EnterpriseObjectCardMapping(
+            enterprise_object_key="MappingTestEO2",
+            card_type_key="MappingTestType2",
+            card_subtype_key=None,
+        )
+    )
+    await db.flush()
+
+    with pytest.raises(IntegrityError):
+        async with db.begin_nested():
+            db.add(
+                EnterpriseObjectCardMapping(
+                    enterprise_object_key="MappingTestEO2",
+                    card_type_key="MappingTestType2",
+                    card_subtype_key=None,
                 )
             )
             await db.flush()

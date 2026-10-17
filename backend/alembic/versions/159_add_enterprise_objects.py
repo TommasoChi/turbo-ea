@@ -75,11 +75,15 @@ def upgrade() -> None:
             sa.Column(
                 "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
             ),
+            # nulls_not_distinct: two "all subtypes" (card_subtype_key=NULL)
+            # rows for the same (enterprise_object_key, card_type_key) pair
+            # must collide too, not just the concrete-subtype rows.
             sa.UniqueConstraint(
                 "enterprise_object_key",
                 "card_type_key",
                 "card_subtype_key",
                 name="uq_enterprise_object_card_mappings_eo_type_subtype",
+                postgresql_nulls_not_distinct=True,
             ),
         )
 

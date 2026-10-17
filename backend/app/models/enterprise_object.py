@@ -30,7 +30,15 @@ class EnterpriseObjectCardMapping(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "enterprise_object_card_mappings"
     __table_args__ = (
-        UniqueConstraint("enterprise_object_key", "card_type_key", "card_subtype_key"),
+        # nulls_not_distinct: without it, Postgres treats every NULL
+        # card_subtype_key as distinct, so two "all subtypes" rows for the
+        # same (enterprise_object_key, card_type_key) pair would not collide.
+        UniqueConstraint(
+            "enterprise_object_key",
+            "card_type_key",
+            "card_subtype_key",
+            postgresql_nulls_not_distinct=True,
+        ),
     )
 
     enterprise_object_key: Mapped[str] = mapped_column(
