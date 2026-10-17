@@ -160,8 +160,8 @@
     "zoomFit": "По размеру экрана"
   },
   "sandbox": {
-    "title": "Песочница ArchiMate",
-    "intro": "Попробуйте редактор ArchiMate. Созданные здесь диаграммы хранятся как файлы ArchiMate Exchange и пока не отображаются в меню «Диаграммы».",
+    "title": "Architecture Studio",
+    "intro": "Попробуйте Architecture Studio. Созданные здесь диаграммы хранятся как файлы ArchiMate Exchange и пока не отображаются в меню «Диаграммы».",
     "newDiagram": "Новая диаграмма ArchiMate",
     "name": "Название",
     "create": "Создать",

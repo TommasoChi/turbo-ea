@@ -28,8 +28,11 @@ function Editor() {
 
 function renderPage() {
   return renderWithProviders(<ArchimateSandboxPage />, {
-    route: "/admin/archimate",
-    routes: [{ path: "/admin/archimate" }, { path: "/admin/archimate/:id", element: <Editor /> }],
+    route: "/admin/architectureStudio",
+    routes: [
+      { path: "/admin/architectureStudio" },
+      { path: "/admin/architectureStudio/:id", element: <Editor /> },
+    ],
   });
 }
 
@@ -53,8 +56,8 @@ describe("ArchimateSandboxPage", () => {
     const first = (await screen.findByText("Landscape")).closest("li") as HTMLElement;
     const second = screen.getByText("Target").closest("li") as HTMLElement;
     expect(within(first).getByText(t("sandbox.updated", { date: "2026-05-01" }))).toBeInTheDocument();
-    expect(within(first).getByRole("link", { name: `${t("sandbox.open")} Landscape` })).toHaveAttribute("href", "/admin/archimate/d1");
-    expect(within(second).getByRole("link", { name: `${t("sandbox.open")} Target` })).toHaveAttribute("href", "/admin/archimate/d2");
+    expect(within(first).getByRole("link", { name: `${t("sandbox.open")} Landscape` })).toHaveAttribute("href", "/admin/architectureStudio/d1");
+    expect(within(second).getByRole("link", { name: `${t("sandbox.open")} Target` })).toHaveAttribute("href", "/admin/architectureStudio/d2");
     expect(screen.queryByText(t("sandbox.empty"))).not.toBeInTheDocument();
   });
 
@@ -165,7 +168,7 @@ describe("ArchimateSandboxPage", () => {
   it("names the diagram in each row's Open and Delete buttons", async () => {
     renderPage();
     await screen.findByText("Landscape");
-    expect(screen.getByRole("link", { name: `${t("sandbox.open")} Target` })).toHaveAttribute("href", "/admin/archimate/d2");
+    expect(screen.getByRole("link", { name: `${t("sandbox.open")} Target` })).toHaveAttribute("href", "/admin/architectureStudio/d2");
     expect(screen.getByRole("button", { name: `${t("sandbox.delete")} Landscape` })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: `${t("sandbox.delete")} Target` })).toBeInTheDocument();
   });

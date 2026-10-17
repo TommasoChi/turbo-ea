@@ -109,7 +109,7 @@ describe("ModuleGate", () => {
     ["turbolens", "TurboLens", "/admin/settings?tab=turbolens"],
     ["grc", "GRC", "/admin/settings"],
     ["valuechain", "Value Chain", "/admin/settings?tab=bpm"],
-    ["archimate", "ArchiMate", "/admin/settings"],
+    ["archimate", "Architecture Studio", "/admin/settings"],
   ] as const)("names %s and opens its settings when it is off", async (module, label, settings) => {
     flags[module] = { enabled: false, loaded: true };
     const user = renderGate(module);

@@ -218,8 +218,8 @@ function AppRoutes() {
                 <Route path="/admin/eol" element={<Navigate to="/admin/settings?tab=eol" />} />
                 <Route path="/admin/web-portals" element={<Navigate to="/admin/settings?tab=web-portals" />} />
                 <Route path="/admin/servicenow" element={<Navigate to="/admin/settings?tab=servicenow" />} />
-                <Route path="/admin/archimate" element={<ModuleGate module="archimate"><ArchimateSandboxPage /></ModuleGate>} />
-                <Route path="/admin/archimate/:id" element={<ModuleGate module="archimate"><ArchimateEditorPage /></ModuleGate>} />
+                <Route path="/admin/architectureStudio" element={<ModuleGate module="archimate"><ArchimateSandboxPage /></ModuleGate>} />
+                <Route path="/admin/architectureStudio/:id" element={<ModuleGate module="archimate"><ArchimateEditorPage /></ModuleGate>} />
                 <Route path="/admin/extensions" element={<ExtensionsAdmin />} />
                 <Route path="/ext/*" element={<ExtensionRoutesOutlet />} />
                 <Route path="/admin/surveys" element={<SurveysAdmin />} />

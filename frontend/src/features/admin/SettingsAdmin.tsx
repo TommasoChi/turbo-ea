@@ -1607,7 +1607,7 @@ function GeneralTab() {
             <Button
               variant="outlined"
               startIcon={<MaterialSymbol icon="open_in_new" size={18} />}
-              onClick={() => navigate("/admin/archimate")}
+              onClick={() => navigate("/admin/architectureStudio")}
             >
               {t("settings.archimate.openSandbox")}
             </Button>

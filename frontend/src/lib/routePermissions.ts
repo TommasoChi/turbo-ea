@@ -97,9 +97,10 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   { path: "/admin/metamodel", permission: "admin.metamodel" },
   { path: "/admin/users", permission: "admin.users" },
   { path: "/admin/settings", permission: "admin.settings" },
-  // The ArchiMate sandbox is opened from the Settings card, so it needs what Settings needs.
-  { path: "/admin/archimate", permission: "admin.settings" },
-  { path: "/admin/archimate/:id", permission: "admin.settings" },
+  // Architecture Studio (the ArchiMate editor) is opened from the Settings card, so it needs what
+  // Settings needs.
+  { path: "/admin/architectureStudio", permission: "admin.settings" },
+  { path: "/admin/architectureStudio/:id", permission: "admin.settings" },
   { path: "/admin/eol", permission: "eol.manage" },
   { path: "/admin/web-portals", permission: "web_portals.manage" },
   { path: "/admin/servicenow", permission: "servicenow.manage" },

@@ -158,8 +158,8 @@
     "zoomFit": "Ajustar ao ecrã"
   },
   "sandbox": {
-    "title": "Sandbox ArchiMate",
-    "intro": "Experimente o editor ArchiMate. Os diagramas criados aqui são guardados como ficheiros ArchiMate Exchange e ainda não aparecem no menu Diagramas.",
+    "title": "Architecture Studio",
+    "intro": "Experimente Architecture Studio. Os diagramas criados aqui são guardados como ficheiros ArchiMate Exchange e ainda não aparecem no menu Diagramas.",
     "newDiagram": "Novo diagrama ArchiMate",
     "name": "Nome",
     "create": "Criar",

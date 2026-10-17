@@ -1,6 +1,6 @@
 /**
  * ArchimateEditorPage — full-page ArchiMate editor route.
- * Route: /admin/archimate/:id
+ * Route: /admin/architectureStudio/:id
  *
  * Keyed by the diagram id so the editor (a diagram-js instance with its own undo stack and dirty
  * state) is rebuilt, never reused, when the URL moves from one diagram to another.
@@ -14,5 +14,5 @@ export default function ArchimateEditorPage() {
 
   if (!id) return null;
 
-  return <ArchimateModeler key={id} diagramId={id} onBack={() => navigate("/admin/archimate")} />;
+  return <ArchimateModeler key={id} diagramId={id} onBack={() => navigate("/admin/architectureStudio")} />;
 }

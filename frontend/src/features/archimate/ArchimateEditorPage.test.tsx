@@ -26,7 +26,7 @@ function Where() {
   return (
     <>
       <span>at:{useLocation().pathname}</span>
-      <button onClick={() => nav("/admin/archimate/d2")}>go-d2</button>
+      <button onClick={() => nav("/admin/architectureStudio/d2")}>go-d2</button>
     </>
   );
 }
@@ -37,7 +37,10 @@ function renderPage() {
       <ArchimateEditorPage />
       <Where />
     </>,
-    { route: "/admin/archimate/d1", routes: [{ path: "/admin/archimate/:id" }, { path: "/admin/archimate" }] },
+    {
+      route: "/admin/architectureStudio/d1",
+      routes: [{ path: "/admin/architectureStudio/:id" }, { path: "/admin/architectureStudio" }],
+    },
   );
 }
 
@@ -54,7 +57,7 @@ describe("ArchimateEditorPage", () => {
   it("goes back to the sandbox list", async () => {
     const { user } = renderPage();
     await user.click(screen.getByRole("button", { name: "back" }));
-    expect(screen.getByText("at:/admin/archimate")).toBeInTheDocument();
+    expect(screen.getByText("at:/admin/architectureStudio")).toBeInTheDocument();
   });
 
   it("rebuilds the editor when the URL moves to another diagram", async () => {

@@ -162,8 +162,8 @@
     "zoomFit": "ملاءمة الشاشة"
   },
   "sandbox": {
-    "title": "بيئة تجريبية لـ ArchiMate",
-    "intro": "جرّب محرّر ArchiMate. تُحفظ المخططات المنشأة هنا كملفات ArchiMate Exchange ولا تظهر بعد في قائمة المخططات.",
+    "title": "Architecture Studio",
+    "intro": "جرّب Architecture Studio. تُحفظ المخططات المنشأة هنا كملفات ArchiMate Exchange ولا تظهر بعد في قائمة المخططات.",
     "newDiagram": "مخطط ArchiMate جديد",
     "name": "الاسم",
     "create": "إنشاء",

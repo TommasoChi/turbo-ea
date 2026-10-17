@@ -158,8 +158,8 @@
     "zoomFit": "Ajuster à l'écran"
   },
   "sandbox": {
-    "title": "Bac à sable ArchiMate",
-    "intro": "Essayez l'éditeur ArchiMate. Les diagrammes créés ici sont stockés sous forme de fichiers ArchiMate Exchange et n'apparaissent pas encore dans le menu Diagrammes.",
+    "title": "Architecture Studio",
+    "intro": "Essayez Architecture Studio. Les diagrammes créés ici sont stockés sous forme de fichiers ArchiMate Exchange et n'apparaissent pas encore dans le menu Diagrammes.",
     "newDiagram": "Nouveau diagramme ArchiMate",
     "name": "Nom",
     "create": "Créer",
