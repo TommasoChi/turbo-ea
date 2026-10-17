@@ -1,0 +1,176 @@
+{
+  "title": "ArchiMate",
+  "trademark": "ArchiMate® is a registered trademark of The Open Group. Turbo EA draws the ArchiMate notation and is not certified by The Open Group.",
+  "layers": {
+    "strategy": "Strategy",
+    "business": "Business",
+    "application": "Application",
+    "technology": "Technology",
+    "physical": "Physical",
+    "motivation": "Motivation",
+    "implementation": "Implementation & Migration",
+    "other": "Other"
+  },
+  "relationships": {
+    "Composition": "Composition",
+    "Aggregation": "Aggregation",
+    "Assignment": "Assignment",
+    "Realization": "Realization",
+    "Serving": "Serving",
+    "Access": "Access",
+    "Influence": "Influence",
+    "Triggering": "Triggering",
+    "Flow": "Flow",
+    "Specialization": "Specialization",
+    "Association": "Association"
+  },
+  "access": {
+    "Access": "Access",
+    "Read": "Read",
+    "Write": "Write",
+    "ReadWrite": "Read/Write"
+  },
+  "context": {
+    "connect": "Draw {{relationship}}",
+    "linkCard": "Link to a card",
+    "createCard": "Create a card",
+    "openCard": "Open the linked card",
+    "unlinkCard": "Unlink the card",
+    "delete": "Remove from the diagram",
+    "unlinked": "Not linked to a card",
+    "directed": "Directed association"
+  },
+  "tools": {
+    "hand": "Hand tool",
+    "lasso": "Lasso selection"
+  },
+  "note": {
+    "label": "Note"
+  },
+  "toolbar": {
+    "back": "Back",
+    "undo": "Undo",
+    "redo": "Redo",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to screen",
+    "save": "Save",
+    "validate": "Check the model",
+    "importXml": "Import an Exchange file",
+    "exportXml": "Export as Exchange file",
+    "exportSvg": "Export as SVG",
+    "shortcuts": "Keyboard shortcuts",
+    "togglePanel": "Show or hide the properties panel"
+  },
+  "panel": {
+    "title": "Properties",
+    "main": "Main",
+    "name": "Name",
+    "documentation": "Documentation",
+    "linkedCard": "Linked card",
+    "properties": "Properties",
+    "noProperties": "No properties",
+    "addProperty": "Add a property",
+    "propertyName": "Name",
+    "propertyValue": "Value",
+    "removeProperty": "Remove the property",
+    "multiple": "{{count}} items selected",
+    "multipleHint": "Select a single item to edit it.",
+    "view": "View",
+    "text": "Text"
+  },
+  "status": {
+    "saved": "Saved",
+    "saving": "Saving…",
+    "unsaved": "Unsaved changes"
+  },
+  "errors": {
+    "loadFailed": "The diagram could not be loaded.",
+    "notArchimate": "This is not an ArchiMate diagram.",
+    "saveFailed": "The diagram could not be saved: {{reason}}",
+    "retry": "Try again",
+    "importFailed": "The file could not be imported: {{reason}}",
+    "exchange": {
+      "dtd_forbidden": "The file contains a DOCTYPE or entity declaration, which is not allowed.",
+      "xml_invalid": "The file is not well-formed XML.",
+      "wrong_root": "The file is not an ArchiMate Exchange model.",
+      "too_large": "The file is larger than 5 MB.",
+      "no_view": "The model has no view to edit.",
+      "unknown_element_type": "Unknown element type in “{{ref}}”.",
+      "unknown_relationship_type": "Unknown relationship type in “{{ref}}”.",
+      "dangling_reference": "“{{ref}}” points to something that does not exist.",
+      "duplicate_identifier": "The identifier “{{ref}}” is used twice.",
+      "missing_identifier": "A model element, relationship or diagram node has no identifier."
+    }
+  },
+  "validation": {
+    "title": "Model check",
+    "ok": "No problems found.",
+    "issueCount_one": "{{count}} problem found",
+    "issueCount_other": "{{count}} problems found",
+    "codes": {
+      "too_large": "The model is larger than 5 MB.",
+      "xml_invalid": "The model is not well-formed XML.",
+      "dtd_forbidden": "DOCTYPE and entity declarations are not allowed.",
+      "wrong_root": "The root element is not an ArchiMate model.",
+      "missing_identifier": "An element, relationship or diagram node has no identifier.",
+      "unknown_element_type": "Unknown element type: {{ref}}",
+      "unknown_relationship_type": "Unknown relationship type: {{ref}}",
+      "unknown_access_type": "Unknown access type on {{ref}}",
+      "duplicate_identifier": "Duplicate identifier: {{ref}}",
+      "dangling_source": "The relationship {{ref}} starts from something that does not exist.",
+      "dangling_target": "The relationship {{ref}} ends on something that does not exist.",
+      "relationship_not_allowed": "ArchiMate does not allow the relationship {{ref}}: either between these two elements, or from a relationship to itself.",
+      "dangling_element_ref": "The diagram node {{ref}} shows an element that does not exist.",
+      "dangling_relationship_ref": "The diagram connection {{ref}} shows a relationship that does not exist.",
+      "connection_endpoint_mismatch": "The diagram connection {{ref}} does not join the nodes of its relationship."
+    }
+  },
+  "import": {
+    "confirmTitle": "Replace the diagram?",
+    "confirmBody": "Importing a file replaces everything in this diagram.",
+    "confirm": "Replace",
+    "organizationsIgnored": "The file contains folders (organizations); they are not kept."
+  },
+  "linkDialog": {
+    "title": "Link to a card",
+    "label": "Card",
+    "hint": "Cards of type: {{types}}"
+  },
+  "createCardDialog": {
+    "title": "Create a card",
+    "type": "Card type",
+    "name": "Name",
+    "submit": "Create and link",
+    "failed": "The card could not be created: {{reason}}"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "undo": "Undo",
+    "redo": "Redo",
+    "copy": "Copy",
+    "paste": "Paste",
+    "delete": "Delete",
+    "edit": "Rename",
+    "selectAll": "Select all",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomFit": "Fit to screen"
+  },
+  "sandbox": {
+    "title": "ArchiMate sandbox",
+    "intro": "Try the ArchiMate editor. Diagrams made here are stored as ArchiMate Exchange files and are not yet listed in the Diagrams menu.",
+    "newDiagram": "New ArchiMate diagram",
+    "name": "Name",
+    "create": "Create",
+    "empty": "No ArchiMate diagrams yet.",
+    "open": "Open",
+    "delete": "Delete",
+    "deleteTitle": "Delete this diagram?",
+    "deleteBody": "“{{name}}” will be deleted. The cards linked to it are not touched.",
+    "deleted": "Diagram deleted",
+    "createFailed": "The diagram could not be created: {{reason}}",
+    "loadFailed": "The diagrams could not be loaded.",
+    "updated": "Updated {{date}}"
+  }
+}

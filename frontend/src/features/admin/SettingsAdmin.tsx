@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Suspense, lazy } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
@@ -32,6 +32,7 @@ import {
 } from "@/hooks/useDateFormat";
 import { invalidateAppTitle, DEFAULT_APP_TITLE } from "@/hooks/useAppTitle";
 import { invalidateGrcEnabled } from "@/hooks/useGrcEnabled";
+import { invalidateArchimateEnabled } from "@/hooks/useArchimateEnabled";
 import { invalidateValueChainEnabled } from "@/hooks/useValueChainEnabled";
 import { invalidateSponsorButtonEnabled } from "@/hooks/useSponsorButtonEnabled";
 import SponsorshipDialog from "@/components/SponsorshipDialog";
@@ -158,6 +159,8 @@ interface GeneralSettingsBootstrap {
   value_chain_enabled?: boolean;
   ppm_enabled: boolean;
   grc_enabled: boolean;
+  /** Absent on a backend that predates the ArchiMate module. */
+  archimate_enabled?: boolean;
   sponsor_button_enabled: boolean;
   update_check_enabled: boolean;
   announce_upgrades_enabled: boolean;
@@ -202,6 +205,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 function GeneralTab() {
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation(["admin", "common"]);
   const currencyOptions = useMemo(
     () => CURRENCY_CODES.map((code) => ({ code, label: currencyOptionLabel(code, i18n.language) })),
@@ -260,6 +264,10 @@ function GeneralTab() {
   // GRC toggle state
   const [grcEnabled, setGrcEnabled] = useState(true);
   const [savingGrc, setSavingGrc] = useState(false);
+
+  // ArchiMate toggle state (off by default: the module is being rolled out)
+  const [archimateEnabled, setArchimateEnabled] = useState(false);
+  const [savingArchimate, setSavingArchimate] = useState(false);
 
   // Sponsor button toggle state (gates the avatar-menu button only)
   const [sponsorButtonEnabled, setSponsorButtonEnabled] = useState(true);
@@ -362,6 +370,7 @@ function GeneralTab() {
         setValueChainEnabled(general.value_chain_enabled ?? true);
         setPpmEnabled(general.ppm_enabled);
         setGrcEnabled(general.grc_enabled);
+        setArchimateEnabled(general.archimate_enabled ?? false);
         setSponsorButtonEnabled(general.sponsor_button_enabled);
         setUpdateCheckEnabled(general.update_check_enabled);
         setAnnounceUpgrades(general.announce_upgrades_enabled);
@@ -591,6 +600,23 @@ function GeneralTab() {
       setError(e instanceof Error ? e.message : t("common:errors.generic"));
     } finally {
       setSavingGrc(false);
+    }
+  };
+
+  const handleArchimateToggle = async (enabled: boolean) => {
+    setSavingArchimate(true);
+    setError("");
+    try {
+      await api.patch("/settings/archimate-enabled", { enabled });
+      setArchimateEnabled(enabled);
+      invalidateArchimateEnabled(enabled);
+      setSnack(
+        enabled ? t("settings.archimate.enabledSuccess") : t("settings.archimate.disabledSuccess"),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("common:errors.generic"));
+    } finally {
+      setSavingArchimate(false);
     }
   };
 
@@ -1545,6 +1571,48 @@ function GeneralTab() {
           }
           label={grcEnabled ? t("settings.grc.visible") : t("settings.grc.hidden")}
         />
+      </Paper>
+
+      {/* ArchiMate Module Toggle */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
+          <MaterialSymbol icon="schema" size={22} />
+          <Typography variant="h6" fontWeight={600}>
+            {t("settings.archimate.title")}
+          </Typography>
+          <Chip
+            label={
+              archimateEnabled ? t("settings.archimate.enabled") : t("settings.archimate.disabled")
+            }
+            size="small"
+            color={archimateEnabled ? "success" : "default"}
+            sx={{ ml: 1 }}
+          />
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {t("settings.archimate.description")}
+        </Typography>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={archimateEnabled}
+              onChange={(e) => handleArchimateToggle(e.target.checked)}
+              disabled={savingArchimate}
+            />
+          }
+          label={archimateEnabled ? t("settings.archimate.visible") : t("settings.archimate.hidden")}
+        />
+        {archimateEnabled && (
+          <Box sx={{ mt: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<MaterialSymbol icon="open_in_new" size={18} />}
+              onClick={() => navigate("/admin/archimate")}
+            >
+              {t("settings.archimate.openSandbox")}
+            </Button>
+          </Box>
+        )}
       </Paper>
 
       {/* Update check toggle */}

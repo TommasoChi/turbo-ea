@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd" identifier="id-model">
+  <name xml:lang="en">A &amp; B</name>
+  <documentation xml:lang="en">Fixture model</documentation>
+  <elements>
+    <element identifier="id-app" xsi:type="ApplicationComponent">
+      <name xml:lang="en">CRM &lt;core&gt;</name>
+      <documentation xml:lang="en">The CRM</documentation>
+      <properties>
+        <property propertyDefinitionRef="propid-turboea-cardId">
+          <value xml:lang="en">c1</value>
+        </property>
+      </properties>
+    </element>
+    <element identifier="id-node" xsi:type="Node">
+      <name xml:lang="en">N</name>
+    </element>
+    <element identifier="id-data" xsi:type="DataObject">
+      <name xml:lang="en">Customer</name>
+    </element>
+    <element identifier="id-group" xsi:type="Grouping">
+      <name xml:lang="en">Zone</name>
+    </element>
+  </elements>
+  <relationships>
+    <relationship identifier="id-rel-serving" source="id-node" target="id-app" xsi:type="Serving"/>
+    <relationship identifier="id-rel-access" source="id-app" target="id-data" xsi:type="Access" accessType="ReadWrite">
+      <name xml:lang="en">uses</name>
+    </relationship>
+    <relationship identifier="id-rel-assoc" source="id-app" target="id-node" xsi:type="Association" isDirected="true"/>
+  </relationships>
+  <propertyDefinitions>
+    <propertyDefinition identifier="propid-turboea-cardId" type="string">
+      <name xml:lang="en">turboea:cardId</name>
+    </propertyDefinition>
+  </propertyDefinitions>
+  <views>
+    <diagrams>
+      <view identifier="id-view" xsi:type="Diagram">
+        <name xml:lang="en">Main</name>
+        <node identifier="id-n1" xsi:type="Element" elementRef="id-app" x="10" y="20" w="120" h="55"/>
+        <node identifier="id-g1" xsi:type="Element" elementRef="id-group" x="100" y="100" w="200" h="120">
+          <node identifier="id-n2" xsi:type="Element" elementRef="id-data" x="30" y="40" w="120" h="55"/>
+        </node>
+        <connection identifier="id-c1" xsi:type="Relationship" relationshipRef="id-rel-access" source="id-n1" target="id-n2">
+          <bendpoint x="70" y="150"/>
+          <bendpoint x="120" y="160"/>
+        </connection>
+      </view>
+    </diagrams>
+  </views>
+</model>

@@ -4,7 +4,7 @@ Siden **Indstillinger** under **Admin → Indstillinger** (`/admin/settings`) er
 
 | Faneblad | URL | Hvad det styrer | Fuld vejledning |
 |-----|-----|------------------|------------|
-| **Generelt** | `/admin/settings?tab=general` | Udseende (logo, favicon, valuta, datoformat, aktiverede sprog, regnskabsår), e-mail-afsendelse, **modulkontakter** (BPM, PPM, GRC, TurboLens, Sponsor button) | Denne side |
+| **Generelt** | `/admin/settings?tab=general` | Udseende (logo, favicon, valuta, datoformat, aktiverede sprog, regnskabsår), e-mail-afsendelse, **modulkontakter** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Denne side |
 | **Autentificering** | `/admin/settings?tab=authentication` | SSO-udbydere, registrering, adgangskodepolitik | [Autentificering og SSO](sso.md) |
 | **AI** | `/admin/settings?tab=ai` | LLM-udbyder, model, websøgningsbackend, AI-forslagskontakter pr. korttype | [AI-funktioner](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Massetilknytning af produkter til endoflife.date-poster | [End-of-Life (EOL)](eol.md) |
@@ -183,6 +183,17 @@ Slå **Governance, Risk and Compliance**-modulet til eller fra. Når det er deak
 - Risici og compliance-fund forbliver i databasen — de underliggende `risks.*`- og `compliance.*`-tilladelser er uændrede, så dataene bevares og dukker uændret op igen, hvis modulet aktiveres på ny
 
 Se [GRC-vejledningen](../guide/grc.md) for den fulde funktionsreference.
+
+## ArchiMate-modul
+
+Kortet **ArchiMate-diagrammer** slår [ArchiMate](../guide/archimate.md)-modulet til eller fra. Det er **slået fra som standard**.
+
+- Når det er slået til, bliver sandkassen på `/admin/archimate` og ArchiMate-editoren tilgængelige, og kortet viser en knap **Åbn sandkassen**, der fører direkte til listen over ArchiMate-diagrammer.
+- Når det er slået fra, er begge sider utilgængelige og viser den almindelige pladsholder «modul deaktiveret» til alle, der følger et direkte link. Allerede gemte diagrammer bevares og dukker uændrede op igen, hvis modulet slås til igen.
+
+For at åbne sandkassen kræves tilladelsen `admin.settings` (som rollen Admin har som standard) og et slået-til modul. Kontakten skjuler kun brugerfladen: REST-API'et og MCP-værktøjerne (`get_archimate_mapping`, `create_archimate_diagram`, `update_archimate_diagram`) kan stadig kaldes, når modulet er slået fra.
+
+Se [ArchiMate-vejledningen](../guide/archimate.md) for, hvordan du tegner og udveksler diagrammer.
 
 ## Opdateringsnotifikationer
 

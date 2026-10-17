@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.database import get_db
+from app.models.diagram import Diagram
 from app.models.diagram_group import DiagramGroup, diagram_group_members
 from app.models.user import User
 from app.services.permission_service import PermissionService
@@ -40,6 +41,20 @@ def _to_dict(s: DiagramGroup, count: int) -> dict:
     }
 
 
+async def _drawio_counts(db: AsyncSession, group_id: uuid.UUID | None = None) -> dict[str, int]:
+    """Per-group count of DrawIO diagrams: the Diagrams page lists only those,
+    so ArchiMate members must not inflate the badge."""
+    stmt = (
+        select(diagram_group_members.c.group_id, func.count(diagram_group_members.c.diagram_id))
+        .join(Diagram, Diagram.id == diagram_group_members.c.diagram_id)
+        .where(Diagram.kind == "drawio")
+        .group_by(diagram_group_members.c.group_id)
+    )
+    if group_id is not None:
+        stmt = stmt.where(diagram_group_members.c.group_id == group_id)
+    return {str(sid): cnt for sid, cnt in (await db.execute(stmt)).all()}
+
+
 @router.get("")
 async def list_groups(
     db: AsyncSession = Depends(get_db),
@@ -51,14 +66,7 @@ async def list_groups(
     )
     groups = list(result.scalars().all())
 
-    # Per-group diagram counts in one query.
-    count_rows = await db.execute(
-        select(
-            diagram_group_members.c.group_id,
-            func.count(diagram_group_members.c.diagram_id),
-        ).group_by(diagram_group_members.c.group_id)
-    )
-    counts = {str(sid): cnt for sid, cnt in count_rows.all()}
+    counts = await _drawio_counts(db)
 
     return [_to_dict(s, counts.get(str(s.id), 0)) for s in groups]
 
@@ -107,12 +115,7 @@ async def update_group(
     await db.commit()
     await db.refresh(s)
 
-    count = await db.scalar(
-        select(func.count(diagram_group_members.c.diagram_id)).where(
-            diagram_group_members.c.group_id == s.id
-        )
-    )
-    return _to_dict(s, count or 0)
+    return _to_dict(s, (await _drawio_counts(db, s.id)).get(str(s.id), 0))
 
 
 @router.delete("/{group_id}", status_code=204)

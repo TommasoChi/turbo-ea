@@ -143,6 +143,31 @@ describe("canAccessPath", () => {
     expect(canAccessPath({ "ppm.view": true }, "/bpm")).toBe(false);
   });
 
+  it("keeps the ArchiMate sandbox out of the navigation (it is opened from Settings)", () => {
+    const entries = [...NAV_ITEM_DEFS, ...ADMIN_ITEM_DEFS].flatMap((def) => [def, ...(def.children ?? [])]);
+    const named = entries.filter((e) =>
+      [e.labelKey, e.icon, "path" in e ? e.path : undefined].some((v) => v?.toLowerCase().includes("archimate")),
+    );
+    expect(named).toEqual([]);
+    expect(entries.map((e) => ("path" in e ? e.path : undefined))).toContain("/admin/settings"); // the list really was read
+  });
+
+  // The menu is built from those defs; nothing in AppLayout links to the sandbox either.
+  itSourceScan("does not mention the ArchiMate sandbox in AppLayout", () => {
+    const layout = fs.readFileSync(path.resolve(__dirname, "../layouts/AppLayout.tsx"), "utf-8");
+    expect(layout).not.toMatch(/archimate/i);
+  });
+
+  it("gates the ArchiMate sandbox pages on admin.settings", () => {
+    for (const p of ["/admin/archimate", "/admin/archimate/abc"]) {
+      expect(permissionForPath(p)).toBe("admin.settings");
+      expect(canAccessPath({ "admin.settings": true }, p)).toBe(true);
+      expect(canAccessPath({ "admin.users": true, "diagrams.manage": true }, p)).toBe(false);
+      expect(canAccessPath({}, p)).toBe(false);
+      expect(canAccessPath({ "*": true }, p)).toBe(true);
+    }
+  });
+
   it("gates the value chain pages on bpm.value_chain, independent of bpm.view", () => {
     for (const p of ["/value-chain", "/value-chain/value-stream"]) {
       expect(canAccessPath({ "bpm.value_chain": true }, p)).toBe(true);

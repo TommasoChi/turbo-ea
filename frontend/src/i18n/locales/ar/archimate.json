@@ -1,0 +1,180 @@
+{
+  "title": "ArchiMate",
+  "trademark": "ArchiMate® علامة تجارية مسجلة لمجموعة The Open Group. يرسم Turbo EA تدوين ArchiMate وهو غير معتمد من The Open Group.",
+  "layers": {
+    "strategy": "الاستراتيجية",
+    "business": "الأعمال",
+    "application": "التطبيقات",
+    "technology": "التقنية",
+    "physical": "المادية",
+    "motivation": "الدوافع",
+    "implementation": "التنفيذ والترحيل",
+    "other": "أخرى"
+  },
+  "relationships": {
+    "Composition": "تركيب",
+    "Aggregation": "تجميع",
+    "Assignment": "إسناد",
+    "Realization": "تحقيق",
+    "Serving": "خدمة",
+    "Access": "وصول",
+    "Influence": "تأثير",
+    "Triggering": "تشغيل",
+    "Flow": "تدفق",
+    "Specialization": "تخصيص",
+    "Association": "ارتباط"
+  },
+  "access": {
+    "Access": "وصول",
+    "Read": "قراءة",
+    "Write": "كتابة",
+    "ReadWrite": "قراءة/كتابة"
+  },
+  "context": {
+    "connect": "رسم {{relationship}}",
+    "linkCard": "الربط ببطاقة",
+    "createCard": "إنشاء بطاقة",
+    "openCard": "فتح البطاقة المرتبطة",
+    "unlinkCard": "إلغاء ربط البطاقة",
+    "delete": "إزالة من المخطط",
+    "unlinked": "غير مرتبط ببطاقة",
+    "directed": "ارتباط موجَّه"
+  },
+  "tools": {
+    "hand": "أداة اليد",
+    "lasso": "تحديد بالحبل"
+  },
+  "note": {
+    "label": "ملاحظة"
+  },
+  "toolbar": {
+    "back": "رجوع",
+    "undo": "تراجع",
+    "redo": "إعادة",
+    "zoomIn": "تكبير",
+    "zoomOut": "تصغير",
+    "fit": "ملاءمة الشاشة",
+    "save": "حفظ",
+    "validate": "فحص النموذج",
+    "importXml": "استيراد ملف Exchange",
+    "exportXml": "تصدير كملف Exchange",
+    "exportSvg": "تصدير بصيغة SVG",
+    "shortcuts": "اختصارات لوحة المفاتيح",
+    "togglePanel": "إظهار لوحة الخصائص أو إخفاؤها"
+  },
+  "panel": {
+    "title": "الخصائص",
+    "main": "الأساسي",
+    "name": "الاسم",
+    "documentation": "التوثيق",
+    "linkedCard": "البطاقة المرتبطة",
+    "properties": "الخصائص",
+    "noProperties": "لا توجد خصائص",
+    "addProperty": "إضافة خاصية",
+    "propertyName": "الاسم",
+    "propertyValue": "القيمة",
+    "removeProperty": "إزالة الخاصية",
+    "multiple": "تم تحديد {{count}} عناصر",
+    "multipleHint": "اختر عنصرًا واحدًا لتعديله.",
+    "view": "العرض",
+    "text": "النص"
+  },
+  "status": {
+    "saved": "تم الحفظ",
+    "saving": "جارٍ الحفظ…",
+    "unsaved": "تغييرات غير محفوظة"
+  },
+  "errors": {
+    "loadFailed": "تعذّر تحميل المخطط.",
+    "notArchimate": "هذا ليس مخطط ArchiMate.",
+    "saveFailed": "تعذّر حفظ المخطط: {{reason}}",
+    "retry": "إعادة المحاولة",
+    "importFailed": "تعذّر استيراد الملف: {{reason}}",
+    "exchange": {
+      "dtd_forbidden": "يحتوي الملف على تصريح DOCTYPE أو كيان، وهذا غير مسموح.",
+      "xml_invalid": "الملف ليس XML سليم التكوين.",
+      "wrong_root": "الملف ليس نموذج ArchiMate Exchange.",
+      "too_large": "حجم الملف أكبر من 5 ميغابايت.",
+      "no_view": "لا يحتوي النموذج على عرض للتحرير.",
+      "unknown_element_type": "نوع عنصر غير معروف في «{{ref}}».",
+      "unknown_relationship_type": "نوع علاقة غير معروف في «{{ref}}».",
+      "dangling_reference": "«{{ref}}» يشير إلى شيء غير موجود.",
+      "duplicate_identifier": "المعرّف «{{ref}}» مستخدم مرتين.",
+      "missing_identifier": "عنصر في النموذج أو علاقة أو عقدة في المخطط ليس لها معرّف."
+    }
+  },
+  "validation": {
+    "title": "فحص النموذج",
+    "ok": "لم يتم العثور على مشكلات.",
+    "issueCount_zero": "لم يتم العثور على أي مشكلة",
+    "issueCount_one": "تم العثور على {{count}} مشكلة",
+    "issueCount_two": "تم العثور على مشكلتين",
+    "issueCount_few": "تم العثور على {{count}} مشكلات",
+    "issueCount_many": "تم العثور على {{count}} مشكلة",
+    "issueCount_other": "تم العثور على {{count}} مشكلة",
+    "codes": {
+      "too_large": "حجم النموذج أكبر من 5 ميغابايت.",
+      "xml_invalid": "النموذج ليس XML سليم التكوين.",
+      "dtd_forbidden": "تصريحات DOCTYPE والكيانات غير مسموحة.",
+      "wrong_root": "العنصر الجذر ليس نموذج ArchiMate.",
+      "missing_identifier": "عنصر أو علاقة أو عقدة في المخطط ليس لها معرّف.",
+      "unknown_element_type": "نوع عنصر غير معروف: {{ref}}",
+      "unknown_relationship_type": "نوع علاقة غير معروف: {{ref}}",
+      "unknown_access_type": "نوع وصول غير معروف في {{ref}}",
+      "duplicate_identifier": "معرّف مكرر: {{ref}}",
+      "dangling_source": "العلاقة {{ref}} تبدأ من شيء غير موجود.",
+      "dangling_target": "العلاقة {{ref}} تنتهي عند شيء غير موجود.",
+      "relationship_not_allowed": "لا يسمح ArchiMate بالعلاقة {{ref}}: لا بين هذين العنصرين ولا من علاقة إلى نفسها.",
+      "dangling_element_ref": "عقدة المخطط {{ref}} تعرض عنصرًا غير موجود.",
+      "dangling_relationship_ref": "وصلة المخطط {{ref}} تعرض علاقة غير موجودة.",
+      "connection_endpoint_mismatch": "وصلة المخطط {{ref}} لا تربط عقدتَي علاقتها."
+    }
+  },
+  "import": {
+    "confirmTitle": "استبدال المخطط؟",
+    "confirmBody": "يؤدي استيراد ملف إلى استبدال كل ما في هذا المخطط.",
+    "confirm": "استبدال",
+    "organizationsIgnored": "يحتوي الملف على مجلدات (مؤسسات)؛ لن يتم الاحتفاظ بها."
+  },
+  "linkDialog": {
+    "title": "الربط ببطاقة",
+    "label": "البطاقة",
+    "hint": "بطاقات من النوع: {{types}}"
+  },
+  "createCardDialog": {
+    "title": "إنشاء بطاقة",
+    "type": "نوع البطاقة",
+    "name": "الاسم",
+    "submit": "إنشاء وربط",
+    "failed": "تعذّر إنشاء البطاقة: {{reason}}"
+  },
+  "shortcuts": {
+    "title": "اختصارات لوحة المفاتيح",
+    "undo": "تراجع",
+    "redo": "إعادة",
+    "copy": "نسخ",
+    "paste": "لصق",
+    "delete": "حذف",
+    "edit": "إعادة تسمية",
+    "selectAll": "تحديد الكل",
+    "zoomIn": "تكبير",
+    "zoomOut": "تصغير",
+    "zoomFit": "ملاءمة الشاشة"
+  },
+  "sandbox": {
+    "title": "بيئة تجريبية لـ ArchiMate",
+    "intro": "جرّب محرّر ArchiMate. تُحفظ المخططات المنشأة هنا كملفات ArchiMate Exchange ولا تظهر بعد في قائمة المخططات.",
+    "newDiagram": "مخطط ArchiMate جديد",
+    "name": "الاسم",
+    "create": "إنشاء",
+    "empty": "لا توجد مخططات ArchiMate بعد.",
+    "open": "فتح",
+    "delete": "حذف",
+    "deleteTitle": "حذف هذا المخطط؟",
+    "deleteBody": "سيتم حذف «{{name}}». لن تتأثر البطاقات المرتبطة به.",
+    "deleted": "تم حذف المخطط",
+    "createFailed": "تعذّر إنشاء المخطط: {{reason}}",
+    "loadFailed": "تعذّر تحميل المخططات.",
+    "updated": "آخر تحديث {{date}}"
+  }
+}

@@ -4,6 +4,7 @@
 |---------|------------|
 | **ADR (Architecture Decision Record)** | Ein formales Dokument, das eine wichtige Architekturentscheidung erfasst, einschließlich Kontext, Entscheidungsgrundlage, Konsequenzen und betrachteter Alternativen. ADRs unterstützen einen Unterschrifts-Workflow und eine Revisionskette |
 | **Genehmigungsstatus** | Der Überprüfungsstatus einer Karte: Entwurf, Genehmigt, Ungültig oder Abgelehnt. Genehmigte Karten wechseln zu Ungültig, wenn sie bearbeitet werden |
+| **ArchiMate** | Die Modellierungssprache der Open Group für die Unternehmensarchitektur (Version 3). Turbo EA zeichnet ArchiMate-Diagramme in einer Administrator-Sandbox und speichert sie als Exchange-Dateien. Siehe [ArchiMate-Diagramme](../guide/archimate.md) |
 | **Lesezeichen / Gespeicherte Ansicht** | Eine gespeicherte Filter-, Spalten- und Sortierkonfiguration im Inventar, die mit einem Klick geladen werden kann |
 | **BPM** | Business Process Management — die Disziplin der Modellierung, Analyse und Verbesserung von Geschäftsprozessen |
 | **BPMN** | Business Process Model and Notation — die Standardnotation zur Modellierung von Geschäftsprozessen (Version 2.0) |
@@ -26,6 +27,7 @@
 | **DrawIO** | Das eingebettete Open-Source-Diagrammwerkzeug für visuelle Architekturdiagramme |
 | **Enterprise Architecture (EA)** | Die Disziplin, die die Geschäfts- und Technologiestruktur einer Organisation organisiert und dokumentiert |
 | **EOL (End of Life)** | Das Datum, an dem ein Technologieprodukt den Herstellersupport verliert. Wird über die Integration mit endoflife.date verfolgt |
+| **Austauschformat (Exchange format)** | Das XML-Format der Open Group, um ein ArchiMate-Modell zwischen Werkzeugen auszutauschen (Version 3.1). Turbo EA speichert jedes ArchiMate-Diagramm darin und kann es als `.xml`-Datei importieren und exportieren |
 | **Extension (Erweiterung)** | Ein vom Anbieter signiertes Add-on, das über Admin → Erweiterungen installiert wird und kundenspezifische Funktionen (Inhalte, Integrationen, Seiten) hinzufügt, ohne den Turbo-EA-Kern zu verändern. Benötigt eine Lizenzberechtigung |
 | **Extension Bundle (.teax)** | Die signierte Zip-Datei, in der eine Erweiterung ausgeliefert wird. Die Ed25519-Signatur wird beim Hochladen und bei jedem Backend-Start geprüft; unsignierte oder manipulierte Pakete werden abgelehnt |
 | **Entitlement (Berechtigung)** | Eine Zeile einer signierten Erweiterungslizenz: das Recht, eine bestimmte Erweiterung bis zu einem Ablaufdatum zu betreiben, gefolgt von einer Kulanzfrist vor der weichen Deaktivierung |
@@ -40,6 +42,7 @@
 | **xBRL-CSV** | Das maschinenlesbare Berichtspaketformat, das Aufsichtsbehörden für regulatorische Meldungen wie das DORA-Informationsregister akzeptieren |
 | **Gantt-Diagramm** | Eine visuelle Zeitleiste mit horizontalen Balken, die Projektplan, Dauer und Fortschritt zeigt |
 | **Initiative** | Ein Projekt oder Programm, das Änderungen an der Architektur beinhaltet |
+| **Schicht (Layer)** | Eine übergeordnete Gruppierung von ArchiMate-Elementen: Strategy, Business, Application, Technology, Physical, Motivation, Implementation & Migration. Die ArchiMate-Palette ist nach Schichten gegliedert, und jede Schicht hat im Editor ihre eigene Farbe |
 | **Lebenszyklus** | Die fünf Phasen, die eine Komponente durchläuft: Planung, Einführung, Aktiv, Auslauf, Lebensende |
 | **LLM** | Large Language Model — ein KI-Modell, das Text generiert (z.B. Ollama, OpenAI, Anthropic Claude, Google Gemini) |
 | **MCP** | Model Context Protocol — ein offener Standard, der KI-Werkzeugen (Claude, Copilot, Cursor) die Verbindung zu externen Datenquellen ermöglicht. Der integrierte MCP-Server von Turbo EA bietet schreibgeschützten Zugriff auf EA-Daten mit RBAC pro Benutzer |
@@ -53,6 +56,7 @@
 | **Referenznummer** | Eine automatisch generierte fortlaufende Kennung für ADRs (z.B. ADR-001, ADR-002), die ein eindeutiges, lesbares Label bietet |
 | **Wiederkehrendes Todo** | Ein Karten-Todo, das nach einem Zeitplan wiederkehrt (alle N Tage/Wochen/Monate/Jahre). Beim Abschließen entsteht das nächste Vorkommen; weit entfernte Vorkommen bleiben «geplant», bis sich ein Vorlaufzeitfenster öffnet, dann erscheinen sie auf der Aufgabenseite und benachrichtigen den Zuständigen |
 | **Beziehung** | Eine Verbindung zwischen zwei Karten, die beschreibt, wie sie zusammenhängen (z.B. «nutzt», «hängt ab von», «läuft auf») |
+| **Beziehungsmatrix** | Die Tabelle der ArchiMate-Spezifikation, die festlegt, welche Beziehungen zwischen zwei Elementtypen erlaubt sind. Der Editor lässt nur Beziehungen zu, die die Matrix erlaubt |
 | **Ressourcen-Tab** | Ein Tab auf der Kartendetailseite, der Architekturentscheidungen, Dateianhänge und Dokumentenlinks an einem Ort zusammenfasst |
 | **Revision (ADR)** | Eine neue Version eines unterzeichneten ADR, die Inhalt und Kartenverknüpfungen der vorherigen Version übernimmt, mit einer erhöhten Revisionsnummer |
 | **RAG-Status** | Rot-Gelb-Grün-Gesundheitsindikator in PPM-Statusberichten für Zeitplan, Kosten und Umfang |
@@ -76,6 +80,7 @@
 | **Wertschöpfungskette** | Die schreibgeschützte Seite unter Org&Process, die Prozesskategorien in Management-, Kern- und Unterstützungsbänder gruppiert und die Kernwertströme als Haus zwischen Kundenanforderung und Kundenzufriedenheit zeichnet. Siehe [Wertschöpfungskette und Wertstromkarten](../guide/value-chain.md) |
 | **Value Gate** | Eine Ziel-Karte des Untertyps *Value Gate*: ein Kontrollpunkt, den ein Wertstrom passieren muss. Value Gates werden als Pillen im obersten Band der Wertstromkarte gezeichnet |
 | **Wertstrom** | Eine Geschäftskontext-Karte des Untertyps *Wertstrom*: eine durchgängige Abfolge von Stufen, die einem Kunden Wert liefert. Die Stufen sind seine untergeordneten Wertströme, geordnet durch die Beziehung *folgt auf*. Die Wertstromkarte zeichnet einen Wertstrom mit den Value Gates, Prozessen und Fähigkeiten dahinter |
+| **Viewpoint (Sichtweise)** | In ArchiMate eine vordefinierte Auswahl von Element- und Beziehungstypen, die zu einer Zielgruppe oder einem Anliegen passt (zum Beispiel Application Cooperation). Der Editor bietet in dieser Version keine Viewpoint-Filterung |
 | **Web-Portal** | Eine öffentliche, schreibgeschützte Ansicht ausgewählter Karten, zugänglich ohne Authentifizierung über eine eindeutige URL |
 | **Projektstrukturplan (PSP / WBS)** | Eine hierarchische Zerlegung des Projektumfangs in Arbeitspakete mit Start-/Enddaten und Fortschrittsverfolgung |
 | **Arbeitspaket** | Eine logische Gruppierung von Aufgaben innerhalb eines Gantt-Zeitplans mit eigenen Start-/Enddaten und Fertigstellungsgrad |

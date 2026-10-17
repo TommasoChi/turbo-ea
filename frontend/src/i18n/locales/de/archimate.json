@@ -1,0 +1,176 @@
+{
+  "title": "ArchiMate",
+  "trademark": "ArchiMate® ist eine eingetragene Marke von The Open Group. Turbo EA zeichnet die ArchiMate-Notation und ist nicht von The Open Group zertifiziert.",
+  "layers": {
+    "strategy": "Strategie",
+    "business": "Geschäft",
+    "application": "Anwendung",
+    "technology": "Technologie",
+    "physical": "Physisch",
+    "motivation": "Motivation",
+    "implementation": "Implementierung & Migration",
+    "other": "Sonstige"
+  },
+  "relationships": {
+    "Composition": "Komposition",
+    "Aggregation": "Aggregation",
+    "Assignment": "Zuordnung",
+    "Realization": "Realisierung",
+    "Serving": "Bedienung",
+    "Access": "Zugriff",
+    "Influence": "Einfluss",
+    "Triggering": "Auslösung",
+    "Flow": "Fluss",
+    "Specialization": "Spezialisierung",
+    "Association": "Assoziation"
+  },
+  "access": {
+    "Access": "Zugriff",
+    "Read": "Lesen",
+    "Write": "Schreiben",
+    "ReadWrite": "Lesen/Schreiben"
+  },
+  "context": {
+    "connect": "{{relationship}} zeichnen",
+    "linkCard": "Mit einer Karte verknüpfen",
+    "createCard": "Eine Karte erstellen",
+    "openCard": "Verknüpfte Karte öffnen",
+    "unlinkCard": "Verknüpfung mit der Karte aufheben",
+    "delete": "Aus dem Diagramm entfernen",
+    "unlinked": "Nicht mit einer Karte verknüpft",
+    "directed": "Gerichtete Assoziation"
+  },
+  "tools": {
+    "hand": "Hand-Werkzeug",
+    "lasso": "Lasso-Auswahl"
+  },
+  "note": {
+    "label": "Notiz"
+  },
+  "toolbar": {
+    "back": "Zurück",
+    "undo": "Rückgängig",
+    "redo": "Wiederholen",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "fit": "An Bildschirm anpassen",
+    "save": "Speichern",
+    "validate": "Modell prüfen",
+    "importXml": "Exchange-Datei importieren",
+    "exportXml": "Als Exchange-Datei exportieren",
+    "exportSvg": "Als SVG exportieren",
+    "shortcuts": "Tastenkürzel",
+    "togglePanel": "Eigenschaftenbereich ein- oder ausblenden"
+  },
+  "panel": {
+    "title": "Eigenschaften",
+    "main": "Allgemein",
+    "name": "Name",
+    "documentation": "Dokumentation",
+    "linkedCard": "Verknüpfte Karte",
+    "properties": "Eigenschaften",
+    "noProperties": "Keine Eigenschaften",
+    "addProperty": "Eigenschaft hinzufügen",
+    "propertyName": "Name",
+    "propertyValue": "Wert",
+    "removeProperty": "Eigenschaft entfernen",
+    "multiple": "{{count}} Elemente ausgewählt",
+    "multipleHint": "Wählen Sie ein einzelnes Element zum Bearbeiten.",
+    "view": "Ansicht",
+    "text": "Text"
+  },
+  "status": {
+    "saved": "Gespeichert",
+    "saving": "Wird gespeichert…",
+    "unsaved": "Nicht gespeicherte Änderungen"
+  },
+  "errors": {
+    "loadFailed": "Das Diagramm konnte nicht geladen werden.",
+    "notArchimate": "Dies ist kein ArchiMate-Diagramm.",
+    "saveFailed": "Das Diagramm konnte nicht gespeichert werden: {{reason}}",
+    "retry": "Erneut versuchen",
+    "importFailed": "Die Datei konnte nicht importiert werden: {{reason}}",
+    "exchange": {
+      "dtd_forbidden": "Die Datei enthält eine DOCTYPE- oder Entity-Deklaration, was nicht erlaubt ist.",
+      "xml_invalid": "Die Datei ist kein wohlgeformtes XML.",
+      "wrong_root": "Die Datei ist kein ArchiMate-Exchange-Modell.",
+      "too_large": "Die Datei ist größer als 5 MB.",
+      "no_view": "Das Modell enthält keine Ansicht zum Bearbeiten.",
+      "unknown_element_type": "Unbekannter Elementtyp in „{{ref}}“.",
+      "unknown_relationship_type": "Unbekannter Beziehungstyp in „{{ref}}“.",
+      "dangling_reference": "„{{ref}}“ verweist auf etwas, das nicht existiert.",
+      "duplicate_identifier": "Der Bezeichner „{{ref}}“ wird zweimal verwendet.",
+      "missing_identifier": "Ein Modellelement, eine Beziehung oder ein Diagrammknoten hat keinen Bezeichner."
+    }
+  },
+  "validation": {
+    "title": "Modellprüfung",
+    "ok": "Keine Probleme gefunden.",
+    "issueCount_one": "{{count}} Problem gefunden",
+    "issueCount_other": "{{count}} Probleme gefunden",
+    "codes": {
+      "too_large": "Das Modell ist größer als 5 MB.",
+      "xml_invalid": "Das Modell ist kein wohlgeformtes XML.",
+      "dtd_forbidden": "DOCTYPE- und Entity-Deklarationen sind nicht erlaubt.",
+      "wrong_root": "Das Wurzelelement ist kein ArchiMate-Modell.",
+      "missing_identifier": "Ein Element, eine Beziehung oder ein Diagrammknoten hat keinen Bezeichner.",
+      "unknown_element_type": "Unbekannter Elementtyp: {{ref}}",
+      "unknown_relationship_type": "Unbekannter Beziehungstyp: {{ref}}",
+      "unknown_access_type": "Unbekannter Zugriffstyp bei {{ref}}",
+      "duplicate_identifier": "Doppelter Bezeichner: {{ref}}",
+      "dangling_source": "Die Beziehung {{ref}} geht von etwas aus, das nicht existiert.",
+      "dangling_target": "Die Beziehung {{ref}} endet bei etwas, das nicht existiert.",
+      "relationship_not_allowed": "ArchiMate erlaubt die Beziehung {{ref}} nicht: weder zwischen diesen beiden Elementen noch von einer Beziehung zu sich selbst.",
+      "dangling_element_ref": "Der Diagrammknoten {{ref}} zeigt ein Element, das nicht existiert.",
+      "dangling_relationship_ref": "Die Diagrammverbindung {{ref}} zeigt eine Beziehung, die nicht existiert.",
+      "connection_endpoint_mismatch": "Die Diagrammverbindung {{ref}} verbindet nicht die Knoten ihrer Beziehung."
+    }
+  },
+  "import": {
+    "confirmTitle": "Diagramm ersetzen?",
+    "confirmBody": "Der Import einer Datei ersetzt den gesamten Inhalt dieses Diagramms.",
+    "confirm": "Ersetzen",
+    "organizationsIgnored": "Die Datei enthält Ordner (Organisationen); sie werden nicht übernommen."
+  },
+  "linkDialog": {
+    "title": "Mit einer Karte verknüpfen",
+    "label": "Karte",
+    "hint": "Karten vom Typ: {{types}}"
+  },
+  "createCardDialog": {
+    "title": "Eine Karte erstellen",
+    "type": "Kartentyp",
+    "name": "Name",
+    "submit": "Erstellen und verknüpfen",
+    "failed": "Die Karte konnte nicht erstellt werden: {{reason}}"
+  },
+  "shortcuts": {
+    "title": "Tastenkürzel",
+    "undo": "Rückgängig",
+    "redo": "Wiederholen",
+    "copy": "Kopieren",
+    "paste": "Einfügen",
+    "delete": "Löschen",
+    "edit": "Umbenennen",
+    "selectAll": "Alles auswählen",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "zoomFit": "An Bildschirm anpassen"
+  },
+  "sandbox": {
+    "title": "ArchiMate-Sandbox",
+    "intro": "Probieren Sie den ArchiMate-Editor aus. Hier erstellte Diagramme werden als ArchiMate-Exchange-Dateien gespeichert und erscheinen noch nicht im Menü „Diagramme“.",
+    "newDiagram": "Neues ArchiMate-Diagramm",
+    "name": "Name",
+    "create": "Erstellen",
+    "empty": "Noch keine ArchiMate-Diagramme.",
+    "open": "Öffnen",
+    "delete": "Löschen",
+    "deleteTitle": "Dieses Diagramm löschen?",
+    "deleteBody": "„{{name}}“ wird gelöscht. Die damit verknüpften Karten bleiben unberührt.",
+    "deleted": "Diagramm gelöscht",
+    "createFailed": "Das Diagramm konnte nicht erstellt werden: {{reason}}",
+    "loadFailed": "Die Diagramme konnten nicht geladen werden.",
+    "updated": "Aktualisiert am {{date}}"
+  }
+}

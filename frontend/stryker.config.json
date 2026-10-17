@@ -15,6 +15,7 @@
     "!src/types/**",
     "!src/i18n/locales/**",
     "!src/features/diagrams/iconPaths.ts",
+    "!src/features/archimate/taxonomy/relationTable.generated.ts",
     "scripts/app-asset.mjs",
     "scripts/e2e-coverage.mjs",
     "scripts/merge-lcov.mjs"

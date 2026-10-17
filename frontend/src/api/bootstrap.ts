@@ -28,6 +28,7 @@ import { invalidateComplianceRegulations } from "@/hooks/useComplianceRegulation
 import { invalidateResourceTypes } from "@/hooks/useResourceTypes";
 import { invalidateGrcEnabled } from "@/hooks/useGrcEnabled";
 import { invalidateSponsorButtonEnabled } from "@/hooks/useSponsorButtonEnabled";
+import { invalidateArchimateEnabled } from "@/hooks/useArchimateEnabled";
 import { invalidatePpmEnabled } from "@/hooks/usePpmEnabled";
 import { invalidateArchiveRetentionDays } from "@/hooks/useArchiveRetentionDays";
 import { invalidateFiscalYearStart } from "@/hooks/useFiscalYearStart";
@@ -50,6 +51,8 @@ type BootstrapResponse = {
   ppm_enabled: boolean;
   turbolens_enabled: boolean;
   grc_enabled: boolean;
+  /** Optional: an older backend does not send it. */
+  archimate_enabled?: boolean;
   sponsor_button_enabled: boolean;
   file_uploads_enabled: boolean;
   enabled_locales: string[];
@@ -99,6 +102,9 @@ export function primeBootstrap(): Promise<void> {
       }
       invalidatePpmEnabled(r.ppm_enabled);
       invalidateGrcEnabled(r.grc_enabled);
+      if (typeof r.archimate_enabled === "boolean") {
+        invalidateArchimateEnabled(r.archimate_enabled);
+      }
       invalidateSponsorButtonEnabled(r.sponsor_button_enabled);
       invalidateFileUploadsEnabled(r.file_uploads_enabled);
 

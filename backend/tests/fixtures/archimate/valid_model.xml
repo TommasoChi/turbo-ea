@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd"
+       identifier="id-model">
+  <name xml:lang="en">Valid sample model</name>
+  <elements>
+    <element identifier="id-actor" xsi:type="BusinessActor"><name xml:lang="en">Customer</name></element>
+    <element identifier="id-process" xsi:type="BusinessProcess"><name xml:lang="en">Order handling</name></element>
+    <element identifier="id-app" xsi:type="ApplicationComponent"><name xml:lang="en">Order portal</name></element>
+  </elements>
+  <relationships>
+    <relationship identifier="id-r1" xsi:type="Assignment" source="id-actor" target="id-process"/>
+    <relationship identifier="id-r2" xsi:type="Serving" source="id-app" target="id-process"/>
+  </relationships>
+  <views>
+    <diagrams>
+      <view identifier="id-view" xsi:type="Diagram">
+        <name xml:lang="en">Overview</name>
+        <node identifier="id-n1" xsi:type="Element" elementRef="id-actor" x="10" y="10" w="120" h="55"/>
+        <node identifier="id-n2" xsi:type="Element" elementRef="id-process" x="200" y="10" w="120" h="55"/>
+        <node identifier="id-n3" xsi:type="Element" elementRef="id-app" x="200" y="120" w="120" h="55"/>
+        <connection identifier="id-c1" xsi:type="Relationship" relationshipRef="id-r1" source="id-n1" target="id-n2"/>
+        <connection identifier="id-c2" xsi:type="Relationship" relationshipRef="id-r2" source="id-n3" target="id-n2"/>
+      </view>
+    </diagrams>
+  </views>
+</model>

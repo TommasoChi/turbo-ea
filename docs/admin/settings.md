@@ -4,7 +4,7 @@ The **Settings** page at **Admin → Settings** (`/admin/settings`) is the centr
 
 | Tab | URL | What it controls | Full guide |
 |-----|-----|------------------|------------|
-| **General** | `/admin/settings?tab=general` | Appearance (logo, favicon, currency, date format, enabled languages, fiscal year), email delivery, **module toggles** (BPM, PPM, GRC, TurboLens, Sponsor button) | This page |
+| **General** | `/admin/settings?tab=general` | Appearance (logo, favicon, currency, date format, enabled languages, fiscal year), email delivery, **module toggles** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | This page |
 | **Authentication** | `/admin/settings?tab=authentication` | SSO providers, registration, password policy | [Authentication & SSO](sso.md) |
 | **AI** | `/admin/settings?tab=ai` | LLM provider, model, web search backend, per-card-type AI suggestion toggles | [AI Capabilities](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Mass-linking products to endoflife.date entries | [End-of-Life (EOL)](eol.md) |
@@ -183,6 +183,17 @@ Toggle the **Governance, Risk and Compliance** module on or off. When disabled:
 - Risks and compliance findings remain in the database — the underlying `risks.*` and `compliance.*` permissions are unchanged, so the data is preserved and re-appears unchanged if the module is re-enabled
 
 See the [GRC guide](../guide/grc.md) for the full feature reference.
+
+## ArchiMate Module
+
+The **ArchiMate diagrams** card toggles the [ArchiMate](../guide/archimate.md) module on or off. It is **off by default**.
+
+- When enabled, the sandbox at `/admin/archimate` and the ArchiMate editor become available, and the card shows an **Open the sandbox** button that leads straight to the list of ArchiMate diagrams.
+- When disabled, both pages are unreachable and show the standard "module disabled" placeholder for anyone with a direct link. Diagrams already saved are kept and reappear unchanged if the module is re-enabled.
+
+Opening the sandbox requires the `admin.settings` permission (held by the Admin role by default) and the module switched on. The switch hides the user interface only: the REST API and the MCP tools (`get_archimate_mapping`, `create_archimate_diagram`, `update_archimate_diagram`) stay callable with the module off.
+
+See the [ArchiMate guide](../guide/archimate.md) for how to draw and exchange diagrams.
 
 ## Update notifications
 

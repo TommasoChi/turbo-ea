@@ -245,6 +245,20 @@ Clique no ícone **Gerir valores de relação** (etiqueta) numa linha de relaç�
 
 Os valores integrados (Proprietário, Utilizador, Parte interessada, os valores de direção do fluxo…) estão **bloqueados**: não podem ser renomeados, recoloridos nem eliminados. No entanto, pode **ocultar** um valor integrado para que deixe de aparecer no seletor nas cartas — um valor já definido permanece visível. Os seus próprios valores são totalmente editáveis e removíveis.
 
+## Mapeamento do ArchiMate
+
+Para que o [editor ArchiMate](../guide/archimate.md) possa associar diagramas a cards, o metamodelo inclui um **mapeamento** para conceitos do ArchiMate 3. Os campos são visíveis pela API do metamodelo (`/metamodel/types` e `/metamodel/relation-types`) e são **só de leitura na interface de administração**: o ecrã para os editar (**ARCHI MAP**) chega na próxima versão.
+
+| Em | Campo | Significado |
+|----|-------|---------|
+| **Tipo de card** | `archimate_type` | O elemento ArchiMate com que um card deste tipo é desenhado (por exemplo `ApplicationComponent`). Vazio significa sem mapeamento: os seus cards não podem ser associados a um elemento |
+| **Subtipo** | `archimate_type` | Substituição opcional do elemento do tipo de card para os cards deste subtipo. Vazio significa que o subtipo usa o mapeamento do tipo de card |
+| **Tipo de relacionamento** | `archimate_type` | O relacionamento ArchiMate (por exemplo `Serving`, `Flow`, `Access`) |
+| **Tipo de relacionamento** | `archimate_reversed` | Indicador de direção. Quando ativo, o relacionamento ArchiMate vai do card de destino para o card de origem; «Organização *usa* Aplicação» passa a ser um *Serving* da aplicação para a organização |
+| **Tipo de relacionamento** | `archimate_access` | Apenas para `Access`: `Access`, `Read`, `Write`, `ReadWrite` ou `crud` (o tipo de acesso segue os indicadores Create/Read/Update/Delete do próprio relacionamento) |
+
+Os nomes de elementos e relacionamentos são os do formato de intercâmbio da Open Group. Os valores predefinidos vêm do seed; as tabelas completas estão em [O mapeamento](../guide/archimate.md#mapping).
+
 ## Cálculos
 
 Campos calculados usam fórmulas definidas pelo administrador para computar automaticamente valores quando cards são salvos. Veja [Cálculos](calculations.md) para o guia completo.

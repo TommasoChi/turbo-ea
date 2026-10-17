@@ -34,3 +34,9 @@ class RelationType(Base, UUIDMixin, TimestampMixin):
     source_mandatory: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     target_visible: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     target_mandatory: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # ArchiMate mapping (XSD relationship name). ``archimate_reversed`` = the
+    # ArchiMate relationship runs target -> source; ``archimate_access`` only
+    # applies when the type is "Access".
+    archimate_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    archimate_access: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    archimate_reversed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")

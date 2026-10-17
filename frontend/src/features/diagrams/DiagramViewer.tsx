@@ -43,6 +43,8 @@ interface DiagramData {
   id: string;
   name: string;
   type: string;
+  /** Absent on a backend that predates ArchiMate diagrams: those are all DrawIO. */
+  kind?: string;
   /** `view` is the editor's saved "colour by" choice — untrusted JSON. */
   data: { xml?: string; thumbnail?: string; view?: unknown };
 }
@@ -219,6 +221,9 @@ export default function DiagramViewer({ diagramId, embedded = false }: DiagramVi
       let stored: DiagramData;
       try {
         stored = await api.get<DiagramData>(`/diagrams/${id}`, { signal });
+        // An ArchiMate diagram (Exchange XML) belongs to the ArchiMate editor; the DrawIO viewer
+        // treats it like any diagram it cannot show.
+        if ((stored.kind ?? "drawio") !== "drawio") throw new Error("not a DrawIO diagram");
       } catch {
         if (!isCurrent()) return;
         setSnackMsg(t("editor.errors.loadFailed"));

@@ -4,7 +4,7 @@
 
 | 标签页 | URL | 控制内容 | 完整指南 |
 |--------|-----|----------|----------|
-| **常规** | `/admin/settings?tab=general` | 外观（Logo、favicon、货币、日期格式、已启用语言、财年）、电子邮件发送、**模块开关**（BPM、PPM、GRC、TurboLens、赞助按钮） | 本页 |
+| **常规** | `/admin/settings?tab=general` | 外观（Logo、favicon、货币、日期格式、已启用语言、财年）、电子邮件发送、**模块开关**（BPM、PPM、GRC、ArchiMate、TurboLens、赞助按钮） | 本页 |
 | **认证** | `/admin/settings?tab=authentication` | SSO 提供商、注册、密码策略 | [认证与 SSO](sso.md) |
 | **AI** | `/admin/settings?tab=ai` | LLM 提供商、模型、网络搜索后端、按卡片类型的 AI 建议开关 | [AI 功能](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | 将产品批量链接到 endoflife.date 条目 | [生命周期结束 (EOL)](eol.md) |
@@ -183,6 +183,17 @@ Turbo EA 会发送邀请邮件、调查通知、密码重置以及其他系统�
 - 风险与合规发现仍保留在数据库中——底层的 `risks.*` 和 `compliance.*` 权限保持不变，因此数据得以保留；模块重新启用后，数据将原样再次出现
 
 请参阅 [GRC 指南](../guide/grc.md) 获取完整功能参考。
+
+## ArchiMate 模块
+
+**ArchiMate 图**卡片用于开启或关闭 [ArchiMate](../guide/archimate.md) 模块。该模块**默认关闭**。
+
+- 开启后，沙盒（`/admin/archimate`）和 ArchiMate 编辑器即可使用，卡片上会显示**打开沙盒**按钮，直接进入 ArchiMate 图列表。
+- 关闭后，这两个页面均无法访问，通过直接链接访问的用户会看到标准的“模块已禁用”占位页。已保存的图会保留，重新开启模块后原样恢复。
+
+打开沙盒需要 `admin.settings` 权限（Admin 角色默认拥有）并且模块已开启。该开关只隐藏用户界面：模块关闭时，REST API 和 MCP 工具（`get_archimate_mapping`、`create_archimate_diagram`、`update_archimate_diagram`）仍可调用。
+
+如何绘制和交换图，请参阅 [ArchiMate 指南](../guide/archimate.md)。
 
 ## 更新通知
 

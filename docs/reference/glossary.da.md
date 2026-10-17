@@ -4,6 +4,7 @@
 |--------|------------|
 | **ADR (Architecture Decision Record)** | Et formelt dokument, der fanger en vigtig arkitekturbeslutning, herunder konteksten, beslutningens begrundelse, konsekvenser og overvejede alternativer. ADR'er understøtter en sign-off-arbejdsproces og en revisionskæde |
 | **Godkendelsesstatus** | Et korts gennemgangstilstand: Kladde, Godkendt, Brudt eller Afvist. Godkendte kort skifter til Brudt, når de redigeres |
+| **ArchiMate** | Open Groups modelleringssprog til virksomhedsarkitektur (version 3). Turbo EA tegner ArchiMate-diagrammer i en sandkasse for administratorer og gemmer dem som Exchange-filer. Se [ArchiMate-diagrammer](../guide/archimate.md) |
 | **Bogmærke / Gemt visning** | En gemt filter-, kolonne- og sorteringskonfiguration i lageret, der kan genindlæses med ét klik |
 | **BPM** | Business Process Management — disciplinen at modellere, analysere og forbedre forretningsprocesser |
 | **BPM rækkefølge** | Visningsrækkefølgen af procestyperækker (Core, Support, Management) i BPM-procesnavigatoren, kan konfigureres ved at trække rækker |
@@ -26,6 +27,7 @@
 | **Omkostningslinje** | En budget- eller faktisk omkostningspost (CapEx/OpEx) i et PPM-initiativ, brugt til at spore økonomiske udgifter |
 | **Enterprise Architecture (EA)** | Disciplinen, der organiserer og dokumenterer en organisations forretnings- og teknologistruktur |
 | **EOL (End of Life)** | Datoen, hvor et teknologiprodukt mister leverandørsupport. Spores via integration med endoflife.date |
+| **Udvekslingsformat (Exchange format)** | Open Groups XML-format til at flytte en ArchiMate-model mellem værktøjer (version 3.1). Turbo EA gemmer hvert ArchiMate-diagram i det og kan importere og eksportere det som en `.xml`-fil |
 | **Extension (udvidelse)** | Et leverandørsigneret tilføjelsesprogram, installeret via Admin → Udvidelser, der tilføjer kundespecifikke funktioner (indhold, integrationer, sider) uden at ændre Turbo EA's kerne. Kræver en licensrettighed |
 | **Extension Bundle (.teax)** | Den signerede zip-fil, en udvidelse leveres som. Ed25519-signaturen verificeres ved upload og ved hver backend-start; usignerede eller manipulerede pakker afvises |
 | **Entitlement (rettighed)** | Én linje i en signeret udvidelseslicens: retten til at køre en bestemt udvidelse indtil en udløbsdato, efterfulgt af en henstandsperiode før blød deaktivering |
@@ -40,6 +42,7 @@
 | **xBRL-CSV** | Det maskinlæsbare rapportpakkeformat, som tilsynsmyndigheder accepterer til regulatoriske indberetninger såsom DORA-informationsregistret |
 | **Gantt-diagram** | En visuel tidslinje med vandrette bjælker, der viser projektplan, varighed og fremskridt for hver arbejdspakke og opgave |
 | **Initiativ** | Et projekt eller program, der involverer ændringer af arkitekturen |
+| **Lag (Layer)** | En overordnet gruppering af ArchiMate-elementer: Strategy, Business, Application, Technology, Physical, Motivation, Implementation & Migration. ArchiMate-paletten er organiseret efter lag, og hvert lag har sin egen farve i editoren |
 | **Livscyklus** | De fem faser, en komponent gennemgår: Planlægning, Indfasning, Aktiv, Udfasning, End of Life |
 | **LLM** | Large Language Model — en AI-model, der genererer tekst (f.eks. Ollama, OpenAI, Anthropic Claude, Google Gemini) |
 | **MCP** | Model Context Protocol — en åben standard, der lader AI-værktøjer (Claude, Copilot, Cursor) forbinde til eksterne datakilder. Turbo EA's indbyggede MCP-server giver skrivebeskyttet adgang til EA-data med RBAC pr. bruger |
@@ -53,6 +56,7 @@
 | **Referencenummer** | En automatisk genereret sekventiel identifikator for ADR'er (f.eks. ADR-001, ADR-002), der giver en unik, menneskeligt læsbar etiket |
 | **Tilbagevendende opgave** | En kortopgave, der gentages efter en tidsplan (hver N dage/uger/måneder/år). Når den fuldføres, oprettes den næste forekomst; fjerne forekomster forbliver «planlagt», indtil et varslingsvindue åbner, hvorefter de vises på Opgaver-siden og giver den ansvarlige besked |
 | **Relation** | En forbindelse mellem to kort, der beskriver, hvordan de er relaterede (f.eks. "bruger", "afhænger af", "kører på") |
+| **Relationsmatrix** | Tabellen i ArchiMate-specifikationen, der angiver, hvilke relationer der er tilladt mellem to elementtyper. Editoren lader dig kun tegne en relation, som matrixen tillader |
 | **Fanen Ressourcer** | En kortdetaljefane, der konsoliderer Architecture Decision Records, filvedhæftninger og dokumentlinks ét sted |
 | **RAG-status** | Rød-Gul-Grøn sundhedsindikator brugt i PPM-statusrapporter for tidsplan, omkostninger og omfang (mappet til Off Track, At Risk, On Track) |
 | **Risikoscore** | En automatisk beregnet værdi (sandsynlighed x indvirkning), der kvantificerer alvoren af en projektrisiko i PPM-risikoregistret |
@@ -76,6 +80,7 @@
 | **Værdikæde** | Den skrivebeskyttede side under Org&Process, der grupperer proceskategorier i bånd for ledelse, kerne og støtte og tegner kerneværdistrømmene som et hus mellem kundens behov og kundens tilfredshed. Se [Værdikæde og værdistrømskort](../guide/value-chain.md) |
 | **Værdigate** | Et Mål-kort af undertypen *Værdiport*: et kontrolpunkt, som en værdistrøm skal passere. Værdigates tegnes som piller i det øverste bånd af værdistrømskortet |
 | **Værdistrøm** | Et Forretningskontekst-kort af undertypen *Værdistrøm*: en gennemgående række af etaper, der leverer værdi til en kunde. Etaperne er dens underordnede værdistrømme, ordnet af relationen *efterfølger*. Værdistrømskortet tegner én værdistrøm med de værdigates, processer og kompetencer, der ligger bag |
+| **Synsvinkel (Viewpoint)** | I ArchiMate et foruddefineret udvalg af element- og relationstyper, der passer til én målgruppe eller ét hensyn (for eksempel Application Cooperation). Editoren tilbyder ikke filtrering efter synsvinkel i denne version |
 | **Webportal** | En offentlig, skrivebeskyttet visning af udvalgte kort tilgængelig uden godkendelse via en unik URL |
 | **Work Breakdown Structure (WBS)** | En hierarkisk nedbrydning af projektomfang i arbejdspakker, hver med start-/slutdatoer og fuldførelsessporing. Bruges i PPM Gantt-diagrammet |
 | **Arbejdspakke** | En logisk gruppering af opgaver inden for en Gantt-tidslinje, der har sin egen startdato, slutdato og fuldførelsesprocent |

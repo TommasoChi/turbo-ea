@@ -220,6 +220,8 @@ interface DiagramData {
   id: string;
   name: string;
   type: string;
+  /** Absent on a backend that predates ArchiMate diagrams: those are all DrawIO. */
+  kind?: string;
   data: {
     xml?: string;
     thumbnail?: string;
@@ -882,6 +884,9 @@ export default function DiagramEditor() {
     api
       .get<DiagramData>(`/diagrams/${id}`)
       .then((d) => {
+        // An ArchiMate diagram (Exchange XML) belongs to the ArchiMate editor; this DrawIO editor
+        // reports it like any diagram it cannot load.
+        if ((d.kind ?? "drawio") !== "drawio") throw new Error("not a DrawIO diagram");
         setDiagram(d);
         // Untrusted: this blob can predate the current shape, and a
         // workspace-transfer bundle carries it verbatim between instances.

@@ -1,0 +1,178 @@
+{
+  "title": "ArchiMate",
+  "trademark": "ArchiMate® является зарегистрированным товарным знаком The Open Group. Turbo EA рисует нотацию ArchiMate и не сертифицирован The Open Group.",
+  "layers": {
+    "strategy": "Стратегия",
+    "business": "Бизнес",
+    "application": "Приложения",
+    "technology": "Технологии",
+    "physical": "Физический уровень",
+    "motivation": "Мотивация",
+    "implementation": "Реализация и миграция",
+    "other": "Прочее"
+  },
+  "relationships": {
+    "Composition": "Композиция",
+    "Aggregation": "Агрегация",
+    "Assignment": "Назначение",
+    "Realization": "Реализация",
+    "Serving": "Обслуживание",
+    "Access": "Доступ",
+    "Influence": "Влияние",
+    "Triggering": "Запуск",
+    "Flow": "Поток",
+    "Specialization": "Специализация",
+    "Association": "Ассоциация"
+  },
+  "access": {
+    "Access": "Доступ",
+    "Read": "Чтение",
+    "Write": "Запись",
+    "ReadWrite": "Чтение/запись"
+  },
+  "context": {
+    "connect": "Провести связь: {{relationship}}",
+    "linkCard": "Связать с карточкой",
+    "createCard": "Создать карточку",
+    "openCard": "Открыть связанную карточку",
+    "unlinkCard": "Отвязать карточку",
+    "delete": "Убрать с диаграммы",
+    "unlinked": "Не связано с карточкой",
+    "directed": "Направленная ассоциация"
+  },
+  "tools": {
+    "hand": "Инструмент «Рука»",
+    "lasso": "Выделение лассо"
+  },
+  "note": {
+    "label": "Заметка"
+  },
+  "toolbar": {
+    "back": "Назад",
+    "undo": "Отменить",
+    "redo": "Повторить",
+    "zoomIn": "Увеличить",
+    "zoomOut": "Уменьшить",
+    "fit": "По размеру экрана",
+    "save": "Сохранить",
+    "validate": "Проверить модель",
+    "importXml": "Импортировать файл Exchange",
+    "exportXml": "Экспортировать как файл Exchange",
+    "exportSvg": "Экспортировать как SVG",
+    "shortcuts": "Сочетания клавиш",
+    "togglePanel": "Показать или скрыть панель свойств"
+  },
+  "panel": {
+    "title": "Свойства",
+    "main": "Основное",
+    "name": "Название",
+    "documentation": "Документация",
+    "linkedCard": "Связанная карточка",
+    "properties": "Свойства",
+    "noProperties": "Нет свойств",
+    "addProperty": "Добавить свойство",
+    "propertyName": "Название",
+    "propertyValue": "Значение",
+    "removeProperty": "Удалить свойство",
+    "multiple": "Выбрано элементов: {{count}}",
+    "multipleHint": "Выберите один элемент, чтобы изменить его.",
+    "view": "Вид",
+    "text": "Текст"
+  },
+  "status": {
+    "saved": "Сохранено",
+    "saving": "Сохранение…",
+    "unsaved": "Есть несохранённые изменения"
+  },
+  "errors": {
+    "loadFailed": "Не удалось загрузить диаграмму.",
+    "notArchimate": "Это не диаграмма ArchiMate.",
+    "saveFailed": "Не удалось сохранить диаграмму: {{reason}}",
+    "retry": "Повторить",
+    "importFailed": "Не удалось импортировать файл: {{reason}}",
+    "exchange": {
+      "dtd_forbidden": "Файл содержит объявление DOCTYPE или сущности, что запрещено.",
+      "xml_invalid": "Файл не является корректным XML.",
+      "wrong_root": "Файл не является моделью ArchiMate Exchange.",
+      "too_large": "Размер файла превышает 5 МБ.",
+      "no_view": "В модели нет представления для редактирования.",
+      "unknown_element_type": "Неизвестный тип элемента в «{{ref}}».",
+      "unknown_relationship_type": "Неизвестный тип связи в «{{ref}}».",
+      "dangling_reference": "«{{ref}}» указывает на несуществующий объект.",
+      "duplicate_identifier": "Идентификатор «{{ref}}» используется дважды.",
+      "missing_identifier": "У элемента модели, связи или узла диаграммы нет идентификатора."
+    }
+  },
+  "validation": {
+    "title": "Проверка модели",
+    "ok": "Проблем не найдено.",
+    "issueCount_one": "Найдена {{count}} проблема",
+    "issueCount_few": "Найдено {{count}} проблемы",
+    "issueCount_many": "Найдено {{count}} проблем",
+    "issueCount_other": "Найдено {{count}} проблемы",
+    "codes": {
+      "too_large": "Размер модели превышает 5 МБ.",
+      "xml_invalid": "Модель не является корректным XML.",
+      "dtd_forbidden": "Объявления DOCTYPE и сущностей запрещены.",
+      "wrong_root": "Корневой элемент не является моделью ArchiMate.",
+      "missing_identifier": "У элемента, связи или узла диаграммы нет идентификатора.",
+      "unknown_element_type": "Неизвестный тип элемента: {{ref}}",
+      "unknown_relationship_type": "Неизвестный тип связи: {{ref}}",
+      "unknown_access_type": "Неизвестный тип доступа у {{ref}}",
+      "duplicate_identifier": "Повторяющийся идентификатор: {{ref}}",
+      "dangling_source": "Связь {{ref}} начинается в несуществующем объекте.",
+      "dangling_target": "Связь {{ref}} заканчивается на несуществующем объекте.",
+      "relationship_not_allowed": "ArchiMate не допускает связь {{ref}}: ни между этими двумя элементами, ни от связи к самой себе.",
+      "dangling_element_ref": "Узел диаграммы {{ref}} показывает несуществующий элемент.",
+      "dangling_relationship_ref": "Соединение диаграммы {{ref}} показывает несуществующую связь.",
+      "connection_endpoint_mismatch": "Соединение диаграммы {{ref}} не соединяет узлы своей связи."
+    }
+  },
+  "import": {
+    "confirmTitle": "Заменить диаграмму?",
+    "confirmBody": "Импорт файла заменит всё содержимое этой диаграммы.",
+    "confirm": "Заменить",
+    "organizationsIgnored": "Файл содержит папки (организации); они не сохраняются."
+  },
+  "linkDialog": {
+    "title": "Связать с карточкой",
+    "label": "Карточка",
+    "hint": "Карточки типа: {{types}}"
+  },
+  "createCardDialog": {
+    "title": "Создать карточку",
+    "type": "Тип карточки",
+    "name": "Название",
+    "submit": "Создать и связать",
+    "failed": "Не удалось создать карточку: {{reason}}"
+  },
+  "shortcuts": {
+    "title": "Сочетания клавиш",
+    "undo": "Отменить",
+    "redo": "Повторить",
+    "copy": "Копировать",
+    "paste": "Вставить",
+    "delete": "Удалить",
+    "edit": "Переименовать",
+    "selectAll": "Выделить всё",
+    "zoomIn": "Увеличить",
+    "zoomOut": "Уменьшить",
+    "zoomFit": "По размеру экрана"
+  },
+  "sandbox": {
+    "title": "Песочница ArchiMate",
+    "intro": "Попробуйте редактор ArchiMate. Созданные здесь диаграммы хранятся как файлы ArchiMate Exchange и пока не отображаются в меню «Диаграммы».",
+    "newDiagram": "Новая диаграмма ArchiMate",
+    "name": "Название",
+    "create": "Создать",
+    "empty": "Диаграмм ArchiMate пока нет.",
+    "open": "Открыть",
+    "delete": "Удалить",
+    "deleteTitle": "Удалить эту диаграмму?",
+    "deleteBody": "«{{name}}» будет удалена. Связанные с ней карточки не затрагиваются.",
+    "deleted": "Диаграмма удалена",
+    "createFailed": "Не удалось создать диаграмму: {{reason}}",
+    "loadFailed": "Не удалось загрузить диаграммы.",
+    "updated": "Обновлено {{date}}"
+  }
+}

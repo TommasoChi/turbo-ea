@@ -542,6 +542,19 @@
         "title": "ApplyInstallIn",
         "type": "object"
       },
+      "ArchimateEnabledPayload": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ArchimateEnabledPayload",
+        "type": "object"
+      },
       "ArchiveImpactCardRef": {
         "properties": {
           "id": {
@@ -4541,6 +4554,11 @@
             ],
             "title": "Description"
           },
+          "kind": {
+            "default": "drawio",
+            "title": "Kind",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -4678,6 +4696,17 @@
               }
             ],
             "title": "Description"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
           },
           "name": {
             "anyOf": [
@@ -16112,6 +16141,19 @@
         "title": "UserUpdate",
         "type": "object"
       },
+      "ValidateBody": {
+        "properties": {
+          "xml": {
+            "title": "Xml",
+            "type": "string"
+          }
+        },
+        "required": [
+          "xml"
+        ],
+        "title": "ValidateBody",
+        "type": "object"
+      },
       "ValidateRequest": {
         "properties": {
           "formula": {
@@ -18700,6 +18742,45 @@
         "summary": "Suggest",
         "tags": [
           "AI Suggestions"
+        ]
+      }
+    },
+    "/api/v1/archimate/validate": {
+      "post": {
+        "operationId": "validate_api_v1_archimate_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate",
+        "tags": [
+          "archimate"
         ]
       }
     },
@@ -24879,6 +24960,16 @@
             "schema": {
               "default": "desc",
               "title": "Sort Dir",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "drawio",
+              "title": "Kind",
               "type": "string"
             }
           }
@@ -36301,6 +36392,64 @@
           }
         },
         "summary": "Update App Title",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/archimate-enabled": {
+      "get": {
+        "description": "Public endpoint \u2014 the ArchiMate module flag (off unless an admin enables it).",
+        "operationId": "get_archimate_enabled_api_v1_settings_archimate_enabled_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Archimate Enabled",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Admin endpoint \u2014 enable or disable the ArchiMate module.",
+        "operationId": "update_archimate_enabled_api_v1_settings_archimate_enabled_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchimateEnabledPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Archimate Enabled",
         "tags": [
           "settings"
         ]

@@ -314,6 +314,7 @@
   "modules.valuechain": "Catena del valore",
   "modules.ppm": "PPM",
   "modules.grc": "GRC",
+  "modules.archimate": "ArchiMate",
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "Accesso negato",
   "accessDenied.body": "Non hai i permessi per visualizzare questa pagina. Contatta il tuo amministratore se hai bisogno di accesso.",

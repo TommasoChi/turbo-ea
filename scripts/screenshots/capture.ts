@@ -194,6 +194,32 @@ async function login(
 }
 
 // ---------------------------------------------------------------------------
+// Optional modules
+// ---------------------------------------------------------------------------
+
+/**
+ * The ArchiMate module is off by default, and its admin sandbox renders the
+ * "module disabled" placeholder until an admin switches it on. Like the draft
+ * flows, this only touches the instance when a route asks for it.
+ */
+async function enableArchimateIfNeeded(
+  page: Page,
+  config: Config,
+  token: string,
+  pages: PageDef[]
+): Promise<void> {
+  if (!pages.some((p) => p.route.startsWith("/admin/archimate"))) return;
+  const resp = await page.request.patch(
+    `${config.baseUrl}/api/v1/settings/archimate-enabled`,
+    { headers: { Authorization: `Bearer ${token}` }, data: { enabled: true } }
+  );
+  if (!resp.ok()) {
+    throw new Error(`Could not enable the ArchiMate module (${resp.status()})`);
+  }
+  console.log("  ArchiMate module enabled for capture.");
+}
+
+// ---------------------------------------------------------------------------
 // Locale switching
 // ---------------------------------------------------------------------------
 
@@ -749,6 +775,8 @@ async function main(): Promise<void> {
   try {
     // Login
     const { token, userId } = await login(page, config);
+
+    await enableArchimateIfNeeded(page, config, token, [...docPages, ...mktPages]);
 
     // Resolve card IDs from demo data
     const cardIds = await resolveCardIds(page, config, token);

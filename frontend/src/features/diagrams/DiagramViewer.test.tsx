@@ -133,6 +133,35 @@ describe("DiagramViewer", () => {
     expect(iframe()).toBeNull();
   });
 
+  it("treats an ArchiMate diagram opened by URL as unavailable and never draws or looks anything up", async () => {
+    // The DrawIO viewer cannot show an Exchange XML document; the ArchiMate editor owns those.
+    mockGet.mockImplementation(async (path: string) => {
+      if (path === "/diagrams/d1") {
+        return {
+          id: "d1",
+          kind: "archimate",
+          name: "Landscape (ArchiMate)",
+          data: { format: "archimate-exchange-3.1", xml: "<model/>" },
+        };
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+    renderViewer();
+    await waitFor(() => expect(screen.getByText("Diagram not found")).toBeInTheDocument());
+    expect(iframe()).toBeNull();
+    expect(screen.queryByText("Landscape (ArchiMate)")).not.toBeInTheDocument();
+    expect(mockGet.mock.calls.map((c) => c[0])).toEqual(["/diagrams/d1"]);
+  });
+
+  it("still opens a DrawIO diagram that states its kind", async () => {
+    mockGet.mockImplementation(async (path: string) => {
+      if (path === "/diagrams/d1") return { ...diagram([]), kind: "drawio" };
+      throw new Error(`unexpected path ${path}`);
+    });
+    renderViewer();
+    await waitFor(() => expect(iframe()).not.toBeNull());
+  });
+
   it("looks the cards up in batches that fit one request line", async () => {
     const ids = Array.from({ length: CARD_IDS_CHUNK + 50 }, (_, i) => `card-${i}`);
     mockGet.mockImplementation(async (path: string) => {

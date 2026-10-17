@@ -140,6 +140,23 @@ Default page header is `<Typography variant="h5">`. Use `variant="h6"` for in-ca
 
 Text on a band fill = `readableTextColor`, accents = `readableTypeColor`.
 
+### 2.11 ArchiMate layers
+
+The ArchiMate editor colours each element by its ArchiMate layer with `ARCHIMATE_LAYER_COLORS[layer]` from `theme/tokens.ts` — a pastel `fill` and a darker `stroke` per layer. These follow the ArchiMate notation's own hues (not `LAYER_COLORS`, which is the four metamodel layers).
+
+| Layer | Token key | Fill | Stroke |
+| --- | --- | --- | --- |
+| Strategy | `strategy` | `#f5deaa` (sand) | `#c6a253` |
+| Business | `business` | `#ffffb5` (yellow) | `#c6c653` |
+| Application | `application` | `#b5ffff` (cyan) | `#53c6c6` |
+| Technology | `technology` | `#c9e7b7` (green) | `#7ec653` |
+| Physical | `physical` | `#c9e7b7` (green, as technology) | `#4e862d` (darker, tells it apart) |
+| Motivation | `motivation` | `#ccccff` (lavender) | `#5353c6` |
+| Implementation & Migration | `implementation` | `#ffe0e0` (pink) | `#c65353` |
+| Other | `other` | `#f0f0f0` (grey) | `#8c8c8c` |
+
+Text stays dark on the pastel fills, in dark mode too: use `ARCHIMATE_TEXT_COLOR` (`#1a1a1a`), never the theme's text colour, which turns light in dark mode and would vanish on these fills.
+
 ---
 
 ## 3. Layout Patterns

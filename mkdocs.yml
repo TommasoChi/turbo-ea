@@ -87,6 +87,7 @@ plugins:
             PPM: PPM
             BPM: BPM
             Value Chain: Cadena de valor
+            ArchiMate: ArchiMate
             TurboLens AI: TurboLens IA
             Diagrams: Diagramas
             EA Delivery: Entrega EA
@@ -157,6 +158,7 @@ plugins:
             PPM: PPM
             BPM: BPM
             Value Chain: Wertschöpfungskette
+            ArchiMate: ArchiMate
             TurboLens AI: TurboLens KI
             Diagrams: Diagramme
             EA Delivery: EA-Bereitstellung
@@ -227,6 +229,7 @@ plugins:
             PPM: PPM
             BPM: BPM
             Value Chain: Chaîne de valeur
+            ArchiMate: ArchiMate
             TurboLens AI: TurboLens IA
             Diagrams: Diagrammes
             EA Delivery: Livraison EA
@@ -297,6 +300,7 @@ plugins:
             PPM: PPM
             BPM: BPM
             Value Chain: Catena del valore
+            ArchiMate: ArchiMate
             TurboLens AI: TurboLens IA
             Diagrams: Diagrammi
             EA Delivery: Consegna EA
@@ -367,6 +371,7 @@ plugins:
             PPM: PPM
             BPM: BPM
             Value Chain: Cadeia de valor
+            ArchiMate: ArchiMate
             TurboLens AI: TurboLens IA
             Diagrams: Diagramas
             EA Delivery: Entrega EA
@@ -437,6 +442,7 @@ plugins:
             PPM: 项目组合管理
             BPM: 业务流程管理
             Value Chain: 价值链
+            ArchiMate: ArchiMate
             TurboLens AI: TurboLens AI 智能
             Diagrams: 图表
             EA Delivery: EA 交付
@@ -507,6 +513,7 @@ plugins:
             PPM: PPM
             BPM: BPM
             Value Chain: Цепочка создания ценности
+            ArchiMate: ArchiMate
             TurboLens AI: TurboLens ИИ
             Diagrams: Диаграммы
             EA Delivery: Поставка EA
@@ -577,6 +584,7 @@ plugins:
             PPM: PPM
             BPM: BPM
             Value Chain: Værdikæde
+            ArchiMate: ArchiMate
             TurboLens AI: TurboLens AI
             Diagrams: Diagrammer
             EA Delivery: EA-levering
@@ -647,6 +655,7 @@ plugins:
             PPM: PPM
             BPM: BPM
             Value Chain: سلسلة القيمة
+            ArchiMate: ArchiMate
             TurboLens AI: TurboLens AI
             Diagrams: المخططات
             EA Delivery: تسليم هندسة المؤسسة
@@ -745,6 +754,7 @@ nav:
           - PPM: guide/ppm.md
           - BPM: guide/bpm.md
           - Value Chain: guide/value-chain.md
+          - ArchiMate: guide/archimate.md
           - EA Delivery: guide/delivery.md
           - GRC:
               - Overview: guide/grc.md

@@ -1,0 +1,176 @@
+{
+  "title": "ArchiMate",
+  "trademark": "ArchiMate® è un marchio registrato di The Open Group. Turbo EA disegna la notazione ArchiMate e non è certificato da The Open Group.",
+  "layers": {
+    "strategy": "Strategia",
+    "business": "Business",
+    "application": "Applicazione",
+    "technology": "Tecnologia",
+    "physical": "Fisico",
+    "motivation": "Motivazione",
+    "implementation": "Implementazione e migrazione",
+    "other": "Altro"
+  },
+  "relationships": {
+    "Composition": "Composizione",
+    "Aggregation": "Aggregazione",
+    "Assignment": "Assegnazione",
+    "Realization": "Realizzazione",
+    "Serving": "Servizio",
+    "Access": "Accesso",
+    "Influence": "Influenza",
+    "Triggering": "Attivazione",
+    "Flow": "Flusso",
+    "Specialization": "Specializzazione",
+    "Association": "Associazione"
+  },
+  "access": {
+    "Access": "Accesso",
+    "Read": "Lettura",
+    "Write": "Scrittura",
+    "ReadWrite": "Lettura/Scrittura"
+  },
+  "context": {
+    "connect": "Disegna {{relationship}}",
+    "linkCard": "Collega a una scheda",
+    "createCard": "Crea una scheda",
+    "openCard": "Apri la scheda collegata",
+    "unlinkCard": "Scollega la scheda",
+    "delete": "Rimuovi dal diagramma",
+    "unlinked": "Non collegato a una scheda",
+    "directed": "Associazione orientata"
+  },
+  "tools": {
+    "hand": "Strumento mano",
+    "lasso": "Selezione a lazo"
+  },
+  "note": {
+    "label": "Nota"
+  },
+  "toolbar": {
+    "back": "Indietro",
+    "undo": "Annulla",
+    "redo": "Ripeti",
+    "zoomIn": "Ingrandisci",
+    "zoomOut": "Riduci",
+    "fit": "Adatta allo schermo",
+    "save": "Salva",
+    "validate": "Verifica il modello",
+    "importXml": "Importa un file Exchange",
+    "exportXml": "Esporta come file Exchange",
+    "exportSvg": "Esporta come SVG",
+    "shortcuts": "Scorciatoie da tastiera",
+    "togglePanel": "Mostra o nascondi il pannello delle proprietà"
+  },
+  "panel": {
+    "title": "Proprietà",
+    "main": "Principale",
+    "name": "Nome",
+    "documentation": "Documentazione",
+    "linkedCard": "Card collegata",
+    "properties": "Proprietà",
+    "noProperties": "Nessuna proprietà",
+    "addProperty": "Aggiungi una proprietà",
+    "propertyName": "Nome",
+    "propertyValue": "Valore",
+    "removeProperty": "Rimuovi la proprietà",
+    "multiple": "{{count}} elementi selezionati",
+    "multipleHint": "Seleziona un solo elemento per modificarlo.",
+    "view": "Vista",
+    "text": "Testo"
+  },
+  "status": {
+    "saved": "Salvato",
+    "saving": "Salvataggio…",
+    "unsaved": "Modifiche non salvate"
+  },
+  "errors": {
+    "loadFailed": "Impossibile caricare il diagramma.",
+    "notArchimate": "Questo non è un diagramma ArchiMate.",
+    "saveFailed": "Impossibile salvare il diagramma: {{reason}}",
+    "retry": "Riprova",
+    "importFailed": "Impossibile importare il file: {{reason}}",
+    "exchange": {
+      "dtd_forbidden": "Il file contiene una dichiarazione DOCTYPE o di entità, non consentita.",
+      "xml_invalid": "Il file non è un XML ben formato.",
+      "wrong_root": "Il file non è un modello ArchiMate Exchange.",
+      "too_large": "Il file supera i 5 MB.",
+      "no_view": "Il modello non contiene alcuna vista da modificare.",
+      "unknown_element_type": "Tipo di elemento sconosciuto in “{{ref}}”.",
+      "unknown_relationship_type": "Tipo di relazione sconosciuto in “{{ref}}”.",
+      "dangling_reference": "“{{ref}}” punta a qualcosa che non esiste.",
+      "duplicate_identifier": "L'identificatore “{{ref}}” è usato due volte.",
+      "missing_identifier": "Un elemento del modello, una relazione o un nodo del diagramma non ha un identificatore."
+    }
+  },
+  "validation": {
+    "title": "Verifica del modello",
+    "ok": "Nessun problema trovato.",
+    "issueCount_one": "{{count}} problema trovato",
+    "issueCount_other": "{{count}} problemi trovati",
+    "codes": {
+      "too_large": "Il modello supera i 5 MB.",
+      "xml_invalid": "Il modello non è un XML ben formato.",
+      "dtd_forbidden": "Le dichiarazioni DOCTYPE e di entità non sono consentite.",
+      "wrong_root": "L'elemento radice non è un modello ArchiMate.",
+      "missing_identifier": "Un elemento, una relazione o un nodo del diagramma non ha un identificatore.",
+      "unknown_element_type": "Tipo di elemento sconosciuto: {{ref}}",
+      "unknown_relationship_type": "Tipo di relazione sconosciuto: {{ref}}",
+      "unknown_access_type": "Tipo di accesso sconosciuto su {{ref}}",
+      "duplicate_identifier": "Identificatore duplicato: {{ref}}",
+      "dangling_source": "La relazione {{ref}} parte da qualcosa che non esiste.",
+      "dangling_target": "La relazione {{ref}} termina su qualcosa che non esiste.",
+      "relationship_not_allowed": "ArchiMate non consente la relazione {{ref}}: né tra questi due elementi, né da una relazione a sé stessa.",
+      "dangling_element_ref": "Il nodo del diagramma {{ref}} mostra un elemento che non esiste.",
+      "dangling_relationship_ref": "La connessione del diagramma {{ref}} mostra una relazione che non esiste.",
+      "connection_endpoint_mismatch": "La connessione del diagramma {{ref}} non collega i nodi della sua relazione."
+    }
+  },
+  "import": {
+    "confirmTitle": "Sostituire il diagramma?",
+    "confirmBody": "L'importazione di un file sostituisce tutto il contenuto di questo diagramma.",
+    "confirm": "Sostituisci",
+    "organizationsIgnored": "Il file contiene cartelle (organizzazioni); non vengono mantenute."
+  },
+  "linkDialog": {
+    "title": "Collega a una scheda",
+    "label": "Scheda",
+    "hint": "Schede di tipo: {{types}}"
+  },
+  "createCardDialog": {
+    "title": "Crea una scheda",
+    "type": "Tipo di scheda",
+    "name": "Nome",
+    "submit": "Crea e collega",
+    "failed": "Impossibile creare la scheda: {{reason}}"
+  },
+  "shortcuts": {
+    "title": "Scorciatoie da tastiera",
+    "undo": "Annulla",
+    "redo": "Ripeti",
+    "copy": "Copia",
+    "paste": "Incolla",
+    "delete": "Elimina",
+    "edit": "Rinomina",
+    "selectAll": "Seleziona tutto",
+    "zoomIn": "Ingrandisci",
+    "zoomOut": "Riduci",
+    "zoomFit": "Adatta allo schermo"
+  },
+  "sandbox": {
+    "title": "Sandbox ArchiMate",
+    "intro": "Prova l'editor ArchiMate. I diagrammi creati qui sono salvati come file ArchiMate Exchange e non compaiono ancora nel menu Diagrammi.",
+    "newDiagram": "Nuovo diagramma ArchiMate",
+    "name": "Nome",
+    "create": "Crea",
+    "empty": "Nessun diagramma ArchiMate per ora.",
+    "open": "Apri",
+    "delete": "Elimina",
+    "deleteTitle": "Eliminare questo diagramma?",
+    "deleteBody": "“{{name}}” verrà eliminato. Le schede collegate non vengono modificate.",
+    "deleted": "Diagramma eliminato",
+    "createFailed": "Impossibile creare il diagramma: {{reason}}",
+    "loadFailed": "Impossibile caricare i diagrammi.",
+    "updated": "Aggiornato il {{date}}"
+  }
+}

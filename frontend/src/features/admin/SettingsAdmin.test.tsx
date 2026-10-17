@@ -17,6 +17,9 @@ vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientMo
 vi.mock("@/hooks/useMetamodel", () => import("@/test/hooks").then((m) => m.useMetamodelModule()));
 vi.mock("@/hooks/useDateFormat", () => import("@/test/hooks").then((m) => m.useDateFormatModule()));
 vi.mock("@/hooks/useGrcEnabled", () => import("@/test/hooks").then((m) => m.useGrcEnabledModule()));
+vi.mock("@/hooks/useArchimateEnabled", () =>
+  import("@/test/hooks").then((m) => m.useArchimateEnabledModule()),
+);
 vi.mock("@/hooks/useFileUploadsEnabled", () =>
   import("@/test/hooks").then((m) => m.useFileUploadsEnabledModule()),
 );
@@ -112,6 +115,7 @@ vi.mock("@/components/SponsorshipDialog", () => ({
 import { invalidateCache as invalidateMetamodel } from "@/hooks/useMetamodel";
 import { invalidateDateFormat, DEFAULT_DATE_FORMAT } from "@/hooks/useDateFormat";
 import { invalidateGrcEnabled } from "@/hooks/useGrcEnabled";
+import { invalidateArchimateEnabled } from "@/hooks/useArchimateEnabled";
 import { invalidateFileUploadsEnabled } from "@/hooks/useFileUploadsEnabled";
 import { mockApi } from "@/test/apiMock";
 import { installCanvas } from "@/test/dom";
@@ -139,6 +143,7 @@ const BOOTSTRAP = {
   value_chain_enabled: true,
   ppm_enabled: false,
   grc_enabled: true,
+  archimate_enabled: false,
   sponsor_button_enabled: true,
   update_check_enabled: true,
   announce_upgrades_enabled: true,
@@ -553,6 +558,72 @@ describe("SettingsAdmin — module toggles", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("PATCH /settings/grc-enabled failed");
     expect(card.getByRole("checkbox", { name: t("settings.grc.visible") })).toBeChecked();
     expect(invalidateGrcEnabled).not.toHaveBeenCalled();
+  });
+
+  it("shows ArchiMate as disabled by default", async () => {
+    await renderGeneral();
+    const card = section(t("settings.archimate.title"));
+    expect(card.getByText(t("settings.archimate.disabled"))).toBeInTheDocument();
+    expect(card.getByRole("checkbox", { name: t("settings.archimate.hidden") })).not.toBeChecked();
+  });
+
+  it("shows ArchiMate as disabled when the backend does not send the flag", async () => {
+    scriptLoad({ bootstrap: { archimate_enabled: undefined } });
+    await renderGeneral();
+    const card = section(t("settings.archimate.title"));
+    expect(card.getByText(t("settings.archimate.disabled"))).toBeInTheDocument();
+    expect(card.getByRole("checkbox", { name: t("settings.archimate.hidden") })).not.toBeChecked();
+  });
+
+  it("turns ArchiMate on and broadcasts the flag", async () => {
+    const { user } = await renderGeneral();
+    mockApi.on("patch", "/settings/archimate-enabled", {});
+    const card = section(t("settings.archimate.title"));
+    await user.click(card.getByRole("checkbox", { name: t("settings.archimate.hidden") }));
+    await screen.findByText(t("settings.archimate.enabledSuccess"));
+    expect(mockApi.callsOf("patch", "/settings/archimate-enabled")[0].body).toEqual({ enabled: true });
+    expect(invalidateArchimateEnabled).toHaveBeenCalledWith(true);
+    expect(card.getByText(t("settings.archimate.enabled"))).toBeInTheDocument();
+  });
+
+  it("offers the sandbox only while the ArchiMate module is enabled", async () => {
+    const { user } = await renderGeneral();
+    const card = section(t("settings.archimate.title"));
+    expect(card.queryByRole("button", { name: endsWith(t("settings.archimate.openSandbox")) })).not.toBeInTheDocument();
+
+    mockApi.on("patch", "/settings/archimate-enabled", {});
+    await user.click(card.getByRole("checkbox", { name: t("settings.archimate.hidden") }));
+    expect(await card.findByRole("button", { name: endsWith(t("settings.archimate.openSandbox")) })).toBeInTheDocument();
+
+    await user.click(card.getByRole("checkbox", { name: t("settings.archimate.visible") }));
+    await waitFor(() =>
+      expect(card.queryByRole("button", { name: endsWith(t("settings.archimate.openSandbox")) })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("shows the sandbox button on load when the module is already on, and opens /admin/archimate", async () => {
+    scriptLoad({ bootstrap: { archimate_enabled: true } });
+    const { user } = renderWithProviders(<SettingsAdmin />, {
+      route: "/admin/settings",
+      routes: [
+        { path: "/admin/settings" },
+        { path: "/admin/archimate", element: <div data-testid="sandbox-route" /> },
+      ],
+    });
+    await screen.findByRole("heading", { name: t("settings.currency.title") });
+    const card = section(t("settings.archimate.title"));
+    await user.click(await card.findByRole("button", { name: endsWith(t("settings.archimate.openSandbox")) }));
+    expect(await screen.findByTestId("sandbox-route")).toBeInTheDocument();
+  });
+
+  it("keeps the ArchiMate switch where it was when the toggle fails", async () => {
+    const { user } = await renderGeneral();
+    mockApi.fail("patch", "/settings/archimate-enabled", 500);
+    const card = section(t("settings.archimate.title"));
+    await user.click(card.getByRole("checkbox", { name: t("settings.archimate.hidden") }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("PATCH /settings/archimate-enabled failed");
+    expect(card.getByRole("checkbox", { name: t("settings.archimate.hidden") })).not.toBeChecked();
+    expect(invalidateArchimateEnabled).not.toHaveBeenCalled();
   });
 
   it("turns file uploads off and broadcasts the flag", async () => {

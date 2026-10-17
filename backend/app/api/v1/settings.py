@@ -233,6 +233,7 @@ async def get_bootstrap(db: AsyncSession = Depends(get_db)):
         "navbar_fg": general.get("navbarFg", DEFAULT_NAVBAR_FG),
         "bpm_enabled": general.get("bpmEnabled", True),
         "value_chain_enabled": general.get("valueChainEnabled", True),
+        "archimate_enabled": general.get("archimateEnabled", False),
         "bpm_require_separate_approver": general.get("bpmRequireSeparateApprover", False),
         "ppm_enabled": general.get("ppmEnabled", False),
         "turbolens_enabled": general.get("turboLensEnabled", True),
@@ -680,6 +681,37 @@ async def update_value_chain_enabled(
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
     general["valueChainEnabled"] = body.enabled
+    row.general_settings = general
+
+    await db.commit()
+    return {"ok": True}
+
+
+class ArchimateEnabledPayload(BaseModel):
+    enabled: bool
+
+
+@router.get("/archimate-enabled")
+async def get_archimate_enabled(db: AsyncSession = Depends(get_db)):
+    """Public endpoint — the ArchiMate module flag (off unless an admin enables it)."""
+    result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
+    row = result.scalar_one_or_none()
+    general = (row.general_settings if row else None) or {}
+    return {"enabled": general.get("archimateEnabled", False)}
+
+
+@router.patch("/archimate-enabled")
+async def update_archimate_enabled(
+    body: ArchimateEnabledPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Admin endpoint — enable or disable the ArchiMate module."""
+    await PermissionService.require_permission(db, user, "admin.settings")
+
+    row = await _get_or_create_row(db)
+    general = dict(row.general_settings or {})
+    general["archimateEnabled"] = body.enabled
     row.general_settings = general
 
     await db.commit()

@@ -1,0 +1,176 @@
+{
+  "title": "ArchiMate",
+  "trademark": "ArchiMate® 是 The Open Group 的注册商标。Turbo EA 绘制 ArchiMate 符号，未经 The Open Group 认证。",
+  "layers": {
+    "strategy": "战略",
+    "business": "业务",
+    "application": "应用",
+    "technology": "技术",
+    "physical": "物理",
+    "motivation": "动机",
+    "implementation": "实施与迁移",
+    "other": "其他"
+  },
+  "relationships": {
+    "Composition": "组合",
+    "Aggregation": "聚合",
+    "Assignment": "分配",
+    "Realization": "实现",
+    "Serving": "服务",
+    "Access": "访问",
+    "Influence": "影响",
+    "Triggering": "触发",
+    "Flow": "流",
+    "Specialization": "特化",
+    "Association": "关联"
+  },
+  "access": {
+    "Access": "访问",
+    "Read": "读取",
+    "Write": "写入",
+    "ReadWrite": "读取/写入"
+  },
+  "context": {
+    "connect": "绘制{{relationship}}",
+    "linkCard": "关联到卡片",
+    "createCard": "创建卡片",
+    "openCard": "打开已关联的卡片",
+    "unlinkCard": "取消关联卡片",
+    "delete": "从图中移除",
+    "unlinked": "未关联到卡片",
+    "directed": "有向关联"
+  },
+  "tools": {
+    "hand": "抓手工具",
+    "lasso": "套索选择"
+  },
+  "note": {
+    "label": "便签"
+  },
+  "toolbar": {
+    "back": "返回",
+    "undo": "撤销",
+    "redo": "重做",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "fit": "适应屏幕",
+    "save": "保存",
+    "validate": "检查模型",
+    "importXml": "导入 Exchange 文件",
+    "exportXml": "导出为 Exchange 文件",
+    "exportSvg": "导出为 SVG",
+    "shortcuts": "键盘快捷键",
+    "togglePanel": "显示或隐藏属性面板"
+  },
+  "panel": {
+    "title": "属性",
+    "main": "基本信息",
+    "name": "名称",
+    "documentation": "文档",
+    "linkedCard": "已关联的卡片",
+    "properties": "属性",
+    "noProperties": "没有属性",
+    "addProperty": "添加属性",
+    "propertyName": "名称",
+    "propertyValue": "值",
+    "removeProperty": "删除属性",
+    "multiple": "已选择 {{count}} 项",
+    "multipleHint": "请只选择一项进行编辑。",
+    "view": "视图",
+    "text": "文本"
+  },
+  "status": {
+    "saved": "已保存",
+    "saving": "正在保存…",
+    "unsaved": "有未保存的更改"
+  },
+  "errors": {
+    "loadFailed": "无法加载该图。",
+    "notArchimate": "这不是 ArchiMate 图。",
+    "saveFailed": "无法保存该图：{{reason}}",
+    "retry": "重试",
+    "importFailed": "无法导入该文件：{{reason}}",
+    "exchange": {
+      "dtd_forbidden": "文件包含 DOCTYPE 或实体声明，这是不允许的。",
+      "xml_invalid": "文件不是格式良好的 XML。",
+      "wrong_root": "文件不是 ArchiMate Exchange 模型。",
+      "too_large": "文件超过 5 MB。",
+      "no_view": "模型中没有可编辑的视图。",
+      "unknown_element_type": "“{{ref}}”中的元素类型未知。",
+      "unknown_relationship_type": "“{{ref}}”中的关系类型未知。",
+      "dangling_reference": "“{{ref}}”指向不存在的对象。",
+      "duplicate_identifier": "标识符“{{ref}}”被使用了两次。",
+      "missing_identifier": "有模型元素、关系或图节点没有标识符。"
+    }
+  },
+  "validation": {
+    "title": "模型检查",
+    "ok": "未发现问题。",
+    "issueCount_one": "发现 {{count}} 个问题",
+    "issueCount_other": "发现 {{count}} 个问题",
+    "codes": {
+      "too_large": "模型超过 5 MB。",
+      "xml_invalid": "模型不是格式良好的 XML。",
+      "dtd_forbidden": "不允许使用 DOCTYPE 和实体声明。",
+      "wrong_root": "根元素不是 ArchiMate 模型。",
+      "missing_identifier": "有元素、关系或图节点没有标识符。",
+      "unknown_element_type": "未知的元素类型：{{ref}}",
+      "unknown_relationship_type": "未知的关系类型：{{ref}}",
+      "unknown_access_type": "{{ref}} 上的访问类型未知",
+      "duplicate_identifier": "标识符重复：{{ref}}",
+      "dangling_source": "关系 {{ref}} 的起点指向不存在的对象。",
+      "dangling_target": "关系 {{ref}} 的终点指向不存在的对象。",
+      "relationship_not_allowed": "ArchiMate 不允许关系 {{ref}}：既不能连接这两个元素，也不能从关系指向其自身。",
+      "dangling_element_ref": "图节点 {{ref}} 显示的元素不存在。",
+      "dangling_relationship_ref": "图连线 {{ref}} 显示的关系不存在。",
+      "connection_endpoint_mismatch": "图连线 {{ref}} 没有连接其关系对应的节点。"
+    }
+  },
+  "import": {
+    "confirmTitle": "替换该图？",
+    "confirmBody": "导入文件将替换此图中的全部内容。",
+    "confirm": "替换",
+    "organizationsIgnored": "文件包含文件夹（组织）；这些内容不会保留。"
+  },
+  "linkDialog": {
+    "title": "关联到卡片",
+    "label": "卡片",
+    "hint": "以下类型的卡片：{{types}}"
+  },
+  "createCardDialog": {
+    "title": "创建卡片",
+    "type": "卡片类型",
+    "name": "名称",
+    "submit": "创建并关联",
+    "failed": "无法创建卡片：{{reason}}"
+  },
+  "shortcuts": {
+    "title": "键盘快捷键",
+    "undo": "撤销",
+    "redo": "重做",
+    "copy": "复制",
+    "paste": "粘贴",
+    "delete": "删除",
+    "edit": "重命名",
+    "selectAll": "全选",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "zoomFit": "适应屏幕"
+  },
+  "sandbox": {
+    "title": "ArchiMate 沙盒",
+    "intro": "试用 ArchiMate 编辑器。在此创建的图以 ArchiMate Exchange 文件形式存储，目前不会列在“图”菜单中。",
+    "newDiagram": "新建 ArchiMate 图",
+    "name": "名称",
+    "create": "创建",
+    "empty": "还没有 ArchiMate 图。",
+    "open": "打开",
+    "delete": "删除",
+    "deleteTitle": "删除此图？",
+    "deleteBody": "“{{name}}”将被删除。与其关联的卡片不受影响。",
+    "deleted": "图已删除",
+    "createFailed": "无法创建该图：{{reason}}",
+    "loadFailed": "无法加载这些图。",
+    "updated": "更新于 {{date}}"
+  }
+}

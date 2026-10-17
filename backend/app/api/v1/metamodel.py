@@ -63,6 +63,30 @@ def _validate_color(body: dict) -> None:
         raise HTTPException(400, "color must be a hex value in #rrggbb format")
 
 
+def _validate_archimate(body: dict, *, relation: bool = False) -> None:
+    """422 for names that are not in the ArchiMate 3.1 XSD enumerations."""
+    from app.services.archimate import taxonomy as tx
+
+    def check(label: str, value: object, allowed: object) -> None:
+        # isinstance first: `in` on a frozenset raises TypeError (500) for lists/dicts.
+        if value is not None and not (isinstance(value, str) and value in allowed):
+            raise HTTPException(422, f"Unknown {label}: {value!r}")
+
+    if relation:
+        check("ArchiMate relationship type", body.get("archimate_type"), tx.RELATIONSHIP_TYPES)
+    else:
+        check("ArchiMate element type", body.get("archimate_type"), tx.ALL_ELEMENT_TYPES)
+    check("ArchiMate access type", body.get("archimate_access"), (*tx.ACCESS_TYPES, "crud"))
+    if "archimate_reversed" in body and not isinstance(body["archimate_reversed"], bool):
+        raise HTTPException(
+            422, f"archimate_reversed must be a boolean, got {body['archimate_reversed']!r}"
+        )
+    subtypes = body.get("subtypes") or []
+    for sub in subtypes if isinstance(subtypes, list) else []:
+        if isinstance(sub, dict):
+            check("ArchiMate element type", sub.get("archimate_type"), tx.ALL_ELEMENT_TYPES)
+
+
 def _scoring_signature(fields_schema: list | None, section_config: dict | None) -> dict:
     """Capture the data-quality-relevant config of a card type.
 
@@ -231,6 +255,7 @@ def _serialize_type(t: CardType, *, include_role_permissions: bool = True) -> di
         # Seed default for built-in types (None for custom types) — powers the
         # admin "reset to default color" affordance.
         "default_color": DEFAULT_TYPE_COLORS.get(t.key),
+        "archimate_type": t.archimate_type,
     }
     if not include_role_permissions:
         out.pop("role_permissions", None)
@@ -255,6 +280,9 @@ def _serialize_relation_type(r: RelationType) -> dict:
         "source_mandatory": r.source_mandatory,
         "target_visible": r.target_visible,
         "target_mandatory": r.target_mandatory,
+        "archimate_type": r.archimate_type,
+        "archimate_access": r.archimate_access,
+        "archimate_reversed": r.archimate_reversed,
     }
 
 
@@ -849,6 +877,7 @@ async def create_type(
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
     _validate_color(body)
+    _validate_archimate(body)
     existing = await db.execute(select(CardType).where(CardType.key == body.get("key", "")))
     if existing.scalar_one_or_none():
         raise HTTPException(400, "Type key already exists")
@@ -896,6 +925,7 @@ async def create_type(
         is_hidden=False,
         sort_order=body.get("sort_order", next_order),
         translations=body.get("translations", {}),
+        archimate_type=body.get("archimate_type"),
     )
     db.add(t)
     if t.has_successors:
@@ -916,6 +946,7 @@ async def update_type(
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
     _validate_color(body)
+    _validate_archimate(body)
     result = await db.execute(select(CardType).where(CardType.key == key))
     t = result.scalar_one_or_none()
     if not t:
@@ -985,6 +1016,7 @@ async def update_type(
         "sort_order",
         "is_hidden",
         "translations",
+        "archimate_type",
     ]
     for field in updatable:
         if field in body:
@@ -1291,6 +1323,7 @@ async def create_relation_type(
     body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
+    _validate_archimate(body, relation=True)
     existing = await db.execute(select(RelationType).where(RelationType.key == body.get("key", "")))
     if existing.scalar_one_or_none():
         raise HTTPException(400, "Relation type key already exists")
@@ -1324,6 +1357,9 @@ async def create_relation_type(
         source_mandatory=body.get("source_mandatory", False),
         target_visible=body.get("target_visible", True),
         target_mandatory=body.get("target_mandatory", False),
+        archimate_type=body.get("archimate_type"),
+        archimate_access=body.get("archimate_access"),
+        archimate_reversed=body.get("archimate_reversed", False),
     )
     db.add(rt)
     await db.commit()
@@ -1336,6 +1372,7 @@ async def update_relation_type(
     key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
+    _validate_archimate(body, relation=True)
     result = await db.execute(select(RelationType).where(RelationType.key == key))
     r = result.scalar_one_or_none()
     if not r:
@@ -1376,6 +1413,9 @@ async def update_relation_type(
         "source_mandatory",
         "target_visible",
         "target_mandatory",
+        "archimate_type",
+        "archimate_access",
+        "archimate_reversed",
     ]
     for field in updatable:
         if field not in body:

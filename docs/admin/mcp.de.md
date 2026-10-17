@@ -157,7 +157,7 @@ In diesem Modus authentifiziert sich der Server mit E-Mail/Passwort und erneuert
 
 ## Verfügbare Funktionen
 
-Der MCP-Server stellt **51 Werkzeuge** in zwei Gruppen bereit: **32 Lese-Werkzeuge** zur Abfrage von EA-Daten und **19 Schreib-Werkzeuge** (14 additiv, 5 destruktiv), die Karten, Beziehungen, Diagramme, Risiken, ADRs und mehr erstellen und pflegen — einschließlich der Umwandlung von Artefakten, die ein KI-Werkzeug in seinem eigenen Kontext hat (Tabellen, BPMN-XML, DrawIO-XML, Dokumente, Bilder), in strukturierte EA-Daten. Jedes Werkzeug trägt MCP-`ToolAnnotations` (Hinweise auf schreibgeschützt / destruktiv / idempotent), sodass Konnektoren die Destruktivität in ihrer Oberfläche anzeigen können.
+Der MCP-Server stellt **55 Werkzeuge** in zwei Gruppen bereit: **34 Lese-Werkzeuge** zur Abfrage von EA-Daten und **21 Schreib-Werkzeuge** (15 additiv, 6 destruktiv), die Karten, Beziehungen, Diagramme, Risiken, ADRs und mehr erstellen und pflegen — einschließlich der Umwandlung von Artefakten, die ein KI-Werkzeug in seinem eigenen Kontext hat (Tabellen, BPMN-XML, DrawIO-XML, Dokumente, Bilder), in strukturierte EA-Daten. Jedes Werkzeug trägt MCP-`ToolAnnotations` (Hinweise auf schreibgeschützt / destruktiv / idempotent), sodass Konnektoren die Destruktivität in ihrer Oberfläche anzeigen können.
 
 ### Sicherheit beim Schreiben durch Trockenlauf
 
@@ -165,7 +165,7 @@ Jedes Schreib-Werkzeug verwendet standardmäßig **`dry_run=true`**. In diesem M
 
 ### Lese-Werkzeuge
 
-Der Server stellt 32 Lese-Werkzeuge in acht Gruppen bereit.
+Der Server stellt 34 Lese-Werkzeuge in acht Gruppen bereit.
 
 **Karten & Metamodell**
 
@@ -236,8 +236,9 @@ Der Server stellt 32 Lese-Werkzeuge in acht Gruppen bereit.
 
 | Werkzeug | Beschreibung |
 |----------|-------------|
-| `list_diagrams` | Frei gestaltete (DrawIO-)Diagramme auflisten, optional gefiltert auf eine Karte |
-| `get_diagram` | Ein einzelnes Diagramm per ID abrufen, einschließlich seines DrawIO-XML |
+| `list_diagrams` | Diagramme auflisten, optional gefiltert auf eine Karte; `kind` wählt frei gestaltete Diagramme (`drawio`, Standard), `archimate` oder `all` |
+| `get_diagram` | Ein einzelnes Diagramm per ID abrufen: sein `kind` sowie das DrawIO-XML (bei einem ArchiMate-Diagramm das Exchange-XML) in `data.xml` |
+| `get_archimate_mapping` | Wie Kartentypen und Beziehungstypen von Turbo EA auf ArchiMate-3.x-Element- und Beziehungstypen abgebildet werden (vor dem Zeichnen eines ArchiMate-Diagramms lesen) |
 
 **Audit & Änderungshistorie**
 
@@ -249,9 +250,9 @@ Alle Werkzeuge respektieren das RBAC des authentifizierten Nutzers — eine View
 
 ### Schreib-Werkzeuge
 
-Der Server stellt 19 Schreib-Werkzeuge bereit, jedes annotiert als **additiv** (erstellt oder erweitert Daten) oder **destruktiv** (verändert oder entfernt bestehende Daten), damit Konnektoren entsprechend warnen können.
+Der Server stellt 21 Schreib-Werkzeuge bereit, jedes annotiert als **additiv** (erstellt oder erweitert Daten) oder **destruktiv** (verändert oder entfernt bestehende Daten), damit Konnektoren entsprechend warnen können.
 
-**Additiv (14)**
+**Additiv (15)**
 
 | Werkzeug | Beschreibung |
 |----------|--------------|
@@ -267,18 +268,30 @@ Der Server stellt 19 Schreib-Werkzeuge bereit, jedes annotiert als **additiv** (
 | `update_adr` | Aktualisiert ein ADR (Titel, Abschnitte, Status, verknüpfte Karten). |
 | `sign_adr` | Unterschreibt ein ADR (erfordert die Berechtigung `adr.sign`; andernfalls wird ein UI-Deep-Link zum Unterschreiben im Browser zurückgegeben). |
 | `create_diagram` | Erstellt ein frei gestaltetes DrawIO-Diagramm mit optionalen Verknüpfungen zu bestehenden Karten. |
+| `create_archimate_diagram` | Erstellt ein ArchiMate-Diagramm aus XML im Open-Group-Exchange-Format, mit optionalen Verknüpfungen zu bestehenden Karten. Der Trockenlauf validiert das Modell auf dem Server und meldet `valid` und `issues`, ohne etwas zu erstellen. |
 | `import_bpmn` | Speichert ein BPMN-2.0-XML-Diagramm an einer **bestehenden** Geschäftsprozess-Karte. Existiert keine Karte mit dem angegebenen Namen, liefert das Werkzeug einen `card_not_found`-Fehler, der den Agenten an `create_cards_bulk` verweist — so muss die Karte zuerst explizit mit Beschreibung, Subtyp und Attributen angelegt werden, statt auf eine Abkürzung auszuweichen, die eine spärliche Karte erzeugt. |
 | `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
-**Destruktiv (5)**
+**Destruktiv (6)**
 
 | Werkzeug | Beschreibung |
 |----------|--------------|
 | `upsert_relations_bulk` | Erstellt oder löscht Beziehungen zwischen Karten. Quelle / Ziel / Typ werden gegen das Metamodell validiert. Löschungen werden abgelehnt, sofern der Operator nicht ausdrücklich zustimmt (siehe Schutzmechanismen). |
 | `archive_cards` | Soft-Delete von Karten. Wiederherstellbar — archivierte Karten können 30 Tage lang wiederhergestellt werden, bevor sie automatisch endgültig gelöscht werden. |
 | `update_diagram` | Ersetzt das DrawIO-XML, den Namen oder die Kartenverknüpfungen eines Diagramms. |
+| `update_archimate_diagram` | Ersetzt das Exchange-XML, den Namen oder die Kartenverknüpfungen eines ArchiMate-Diagramms. Lehnt ein DrawIO-Diagramm ab. Der Trockenlauf validiert das neue XML auf dem Server. |
 | `rollback_batch` | Macht die Schreibvorgänge eines früheren Mutations-Batches rückgängig. |
 | `clear_card_logos` | Remove the custom logo from cards, falling them back to their card-type icon. Recoverable — set it again to restore. |
+
+### ArchiMate-Diagramme
+
+ArchiMate-Diagramme haben eigene Werkzeuge, getrennt von denen für frei gestaltete (DrawIO-)Diagramme. `create_diagram` und `update_diagram` gelten **nur für DrawIO**: Der Server lehnt dort ein ArchiMate-Diagramm ab, und `update_archimate_diagram` lehnt ein DrawIO-Diagramm ab. `list_diagrams` und `get_diagram` bedienen beide, mit dem Filter und Feld `kind` (`drawio`, `archimate`).
+
+Rufen Sie zuerst `get_archimate_mapping` auf, damit das Modell weiß, auf welches ArchiMate-Element ein Kartentyp abgebildet wird, und senden Sie dann XML im Open-Group-Exchange-Format. Der Trockenlauf validiert es auf dem Server und liefert `valid` und `issues`, ohne etwas zu speichern. Beispiel-Prompt:
+
+> Zeichne eine ArchiMate-Ansicht „Application Cooperation“ des CRM und von allem, womit es verbunden ist.
+
+Die Editor-Seite beschreibt die [ArchiMate-Anleitung](../guide/archimate.md).
 
 ### Artefakt-Upload
 
@@ -298,7 +311,7 @@ Verteidigung in der Tiefe zusätzlich zum Trockenlauf, damit ein Fehlverhalten d
 
 - **Größenbegrenzung pro Aufruf.** Die MCP-Schreib-Werkzeuge erzwingen eine wesentlich kleinere Obergrenze als die zugrunde liegenden Excel-Import-Endpunkte: 200 Zeilen für `create_cards_bulk`, 500 Operationen für `upsert_relations_bulk`. Groß genug für jeden realistischen Einzel-Artefakt-Upload, klein genug, dass eine Trockenlauf-Vorschau überprüfbar bleibt.
 - **Standardmäßig keine Löschung von Beziehungen.** `upsert_relations_bulk` lehnt `action: "delete"`-Operationen ab — um Beziehungen zu entfernen, ist die Weboberfläche zu verwenden, wo die Aktion unter der Identität des Benutzers erfasst wird. Operatoren können dies aktivieren, indem sie `MCP_ALLOW_RELATION_DELETE=true` setzen.
-- **Notausschalter.** `MCP_WRITES_ENABLED=false` schaltet alle 19 Schreib-Werkzeuge aus, ohne dass Code neu bereitgestellt werden muss. Die 32 Lese-Werkzeuge funktionieren weiter.
+- **Notausschalter.** `MCP_WRITES_ENABLED=false` schaltet alle 21 Schreib-Werkzeuge aus, ohne dass Code neu bereitgestellt werden muss. Die 34 Lese-Werkzeuge funktionieren weiter.
 - **Logo-Abruf nur von erlaubten Hosts.** Die mitgelieferten Icon-Pakete können nicht jedes Produkt abdecken, und ein Assistent hat oft keinen Zugang zum Web, daher akzeptiert `set_card_logos` eine `image_url`, die der MCP-Server abruft. Nur `https`, nur Hosts aus `MCP_LOGO_FETCH_HOSTS`, nur öffentliche Adressen, höchstens zwei Weiterleitungen (jede erneut geprüft), höchstens 1 MB als Stream gelesen, und die Bytes müssen eine echte PNG/JPEG/WebP/GIF-Signatur tragen. Der Abruf erfolgt am MCP-Rand, nie im Backend, und das Bild wird anschließend über den normalen Weg hochgeladen — eine von einem LLM gewählte URL erreicht also nie den Prozess mit der Datenbank. `MCP_LOGO_FETCH_ENABLED=false` schaltet dies ab.
 - **Audit-Herkunfts-Marker.** Jede Backend-Anfrage vom MCP-Server trägt einen `X-Turbo-EA-Origin: mcp`-Header. Ereignisse, die aus diesen Anfragen emittiert werden, werden im Audit-Log-Payload mit `origin: "mcp"` markiert, sodass Administratoren MCP-gesteuerte Schreibvorgänge getrennt von Web-UI-Aktionen aus der Zeitleiste filtern können.
 - **Mutations-Batches.** Jeder MCP-Schreibaufruf öffnet vor allen Schreibvorgängen einen Mutations-Batch; jedes während des Aufrufs emittierte Ereignis wird mit der Batch-ID gestempelt. Administratoren (oder das Werkzeug `get_change_history`) können aus einer einzigen ID den vollständigen Ereignis-Diff eines Commits rekonstruieren, und `rollback_batch` kann ihn rückgängig machen. Commits oberhalb von `MCP_BATCH_CONFIRMATION_THRESHOLD` Zeilen müssen ein einmaliges `confirm_token` zurückgeben, das der vorherige Trockenlauf ausgestellt hat (15 Minuten Gültigkeit) — ein großer Commit folgt also immer auf eine geprüfte Vorschau.

@@ -228,6 +228,8 @@ export interface SubtypeDef {
   label: string;
   translations?: TranslationMap;
   hidden_fields?: string[];
+  /** ArchiMate element type overriding the card type's own mapping. */
+  archimate_type?: string | null;
 }
 
 export interface SectionDef {
@@ -278,6 +280,8 @@ export interface CardType {
    *  (discussion #1024). Governs upload and display, never the stored image. */
   allow_card_logo: boolean;
   subtypes?: SubtypeDef[];
+  /** ArchiMate element type this card type maps to (null/absent = unmapped). */
+  archimate_type?: string | null;
   /** Vocabulary for labelling a parent→child link on a hierarchical type
    *  (discussion #1100). Same shape as a `single_select`'s options, so it gets
    *  colours, translations and the `OptionChip` renderer for free. Empty (or
@@ -360,6 +364,12 @@ export interface RelationType {
   source_mandatory: boolean;
   target_visible: boolean;
   target_mandatory: boolean;
+  /** ArchiMate relationship type this relation type maps to. */
+  archimate_type?: string | null;
+  /** "crud" | AccessType | null — only meaningful for Access. */
+  archimate_access?: string | null;
+  /** True when the ArchiMate direction is target -> source. */
+  archimate_reversed?: boolean;
 }
 
 export interface TagRef {
