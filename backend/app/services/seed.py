@@ -22,6 +22,7 @@ from app.models.resource_type import ResourceType
 from app.models.role import Role
 from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 from app.services.archimate import default_mapping as _archimate
+from app.services.archimate.enterprise_object_seed import seed_enterprise_objects
 from app.services.hierarchy import HIERARCHY_LEVEL_KEY, hierarchy_level_field_def
 
 # ── Reusable option lists ──────────────────────────────────────────────
@@ -6562,5 +6563,8 @@ async def seed_metamodel(db: AsyncSession) -> None:
                 translations=rt["translations"],
             )
         )
+
+    # ── Enterprise Object registry (ArchiMate element type palette) ───────
+    await seed_enterprise_objects(db)
 
     await db.commit()
