@@ -8,6 +8,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -2049,3 +2050,67 @@ async def update_enterprise_object(
         )
     )
     return _serialize_enterprise_object(o, mappings_result.scalars().all())
+
+
+@router.post("/enterprise-objects/{key}/card-mappings", status_code=201)
+async def add_card_mapping(
+    key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Add one card-type (or card-type+subtype) mapping row to an Enterprise Object."""
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(select(EnterpriseObject).where(EnterpriseObject.key == key))
+    if not result.scalar_one_or_none():
+        raise HTTPException(404, "Enterprise object not found")
+
+    card_type_key = body.get("card_type_key")
+    if not card_type_key:
+        raise HTTPException(400, "card_type_key is required")
+    type_exists = await db.execute(select(CardType.key).where(CardType.key == card_type_key))
+    if not type_exists.scalar_one_or_none():
+        raise HTTPException(400, f"Card type '{card_type_key}' does not exist")
+
+    # Deliberately not validated against the card type's live `subtypes` —
+    # a later subtype rename must not retroactively break this row.
+    card_subtype_key = body.get("card_subtype_key")
+    if card_subtype_key is not None and not (
+        isinstance(card_subtype_key, str) and card_subtype_key
+    ):
+        raise HTTPException(400, "card_subtype_key must be a non-empty string or omitted")
+
+    m = EnterpriseObjectCardMapping(
+        enterprise_object_key=key,
+        card_type_key=card_type_key,
+        card_subtype_key=card_subtype_key,
+    )
+    db.add(m)
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Unique constraint is (enterprise_object_key, card_type_key,
+        # card_subtype_key) with nulls_not_distinct — two NULL-subtype rows
+        # for the same object+type collide too, not just literal duplicates.
+        await db.rollback()
+        raise HTTPException(409, "This card mapping already exists") from None
+    await db.refresh(m)
+    return _serialize_enterprise_object_card_mapping(m)
+
+
+@router.delete("/enterprise-objects/{key}/card-mappings/{mapping_id}", status_code=204)
+async def remove_card_mapping(
+    key: str,
+    mapping_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(
+        select(EnterpriseObjectCardMapping).where(
+            EnterpriseObjectCardMapping.id == uuid.UUID(mapping_id),
+            EnterpriseObjectCardMapping.enterprise_object_key == key,
+        )
+    )
+    m = result.scalar_one_or_none()
+    if not m:
+        raise HTTPException(404, "Card mapping not found")
+    await db.delete(m)
+    await db.commit()

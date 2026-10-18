@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from app.models.enterprise_object import EnterpriseObject
+from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
 from app.services import seed
 from tests.conftest import auth_headers
 
@@ -197,3 +197,148 @@ async def test_patch_missing_object_returns_404(client, db, admin_user):
         headers=auth_headers(admin_user),
     )
     assert resp.status_code == 404
+
+
+async def test_add_card_mapping_row(client, db, admin_user):
+    await seed.seed_metamodel(db)
+
+    resp = await client.post(
+        "/api/v1/metamodel/enterprise-objects/DataObject/card-mappings",
+        json={"card_type_key": "ITComponent", "card_subtype_key": "software"},
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["enterprise_object_key"] == "DataObject"
+    assert body["card_type_key"] == "ITComponent"
+    assert body["card_subtype_key"] == "software"
+    assert "id" in body
+
+    result = await db.execute(
+        select(EnterpriseObjectCardMapping).where(
+            EnterpriseObjectCardMapping.enterprise_object_key == "DataObject",
+            EnterpriseObjectCardMapping.card_type_key == "ITComponent",
+            EnterpriseObjectCardMapping.card_subtype_key == "software",
+        )
+    )
+    assert result.scalar_one_or_none() is not None
+
+
+async def test_add_card_mapping_rejects_unknown_enterprise_object(client, db, admin_user):
+    await seed.seed_metamodel(db)
+
+    resp = await client.post(
+        "/api/v1/metamodel/enterprise-objects/DoesNotExist/card-mappings",
+        json={"card_type_key": "ITComponent"},
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 404
+
+
+async def test_add_card_mapping_rejects_unknown_card_type(client, db, admin_user):
+    await seed.seed_metamodel(db)
+
+    resp = await client.post(
+        "/api/v1/metamodel/enterprise-objects/DataObject/card-mappings",
+        json={"card_type_key": "NotACardType"},
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 400
+
+
+async def test_add_duplicate_card_mapping_row_is_rejected(client, db, admin_user):
+    await seed.seed_metamodel(db)
+
+    resp = await client.post(
+        "/api/v1/metamodel/enterprise-objects/DataObject/card-mappings",
+        json={"card_type_key": "ITComponent", "card_subtype_key": "software"},
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 201
+
+    resp = await client.post(
+        "/api/v1/metamodel/enterprise-objects/DataObject/card-mappings",
+        json={"card_type_key": "ITComponent", "card_subtype_key": "software"},
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 409
+
+
+async def test_add_duplicate_card_mapping_row_with_null_subtype_is_rejected(client, db, admin_user):
+    """``postgresql_nulls_not_distinct=True`` means two NULL-subtype rows for
+    the same (enterprise object, card type) collide too, not just literal
+    duplicates."""
+    await seed.seed_metamodel(db)
+
+    resp = await client.post(
+        "/api/v1/metamodel/enterprise-objects/DataObject/card-mappings",
+        json={"card_type_key": "ITComponent"},
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 201
+
+    resp = await client.post(
+        "/api/v1/metamodel/enterprise-objects/DataObject/card-mappings",
+        json={"card_type_key": "ITComponent"},
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 409
+
+
+async def test_remove_card_mapping_row(client, db, admin_user):
+    await seed.seed_metamodel(db)
+
+    created = await client.post(
+        "/api/v1/metamodel/enterprise-objects/DataObject/card-mappings",
+        json={"card_type_key": "ITComponent", "card_subtype_key": "software"},
+        headers=auth_headers(admin_user),
+    )
+    assert created.status_code == 201
+    mapping_id = created.json()["id"]
+
+    resp = await client.delete(
+        f"/api/v1/metamodel/enterprise-objects/DataObject/card-mappings/{mapping_id}",
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 204
+
+    result = await db.execute(
+        select(EnterpriseObjectCardMapping).where(EnterpriseObjectCardMapping.id == mapping_id)
+    )
+    assert result.scalar_one_or_none() is None
+
+
+async def test_remove_card_mapping_row_missing_id_returns_404(client, db, admin_user):
+    await seed.seed_metamodel(db)
+
+    resp = await client.delete(
+        "/api/v1/metamodel/enterprise-objects/DataObject/card-mappings/"
+        "00000000-0000-0000-0000-000000000000",
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 404
+
+
+async def test_remove_card_mapping_row_wrong_enterprise_object_returns_404(client, db, admin_user):
+    """A mapping id that belongs to a different enterprise object than the one
+    in the URL must not be deletable via that other object's path."""
+    await seed.seed_metamodel(db)
+
+    created = await client.post(
+        "/api/v1/metamodel/enterprise-objects/DataObject/card-mappings",
+        json={"card_type_key": "ITComponent", "card_subtype_key": "software"},
+        headers=auth_headers(admin_user),
+    )
+    assert created.status_code == 201
+    mapping_id = created.json()["id"]
+
+    resp = await client.delete(
+        f"/api/v1/metamodel/enterprise-objects/BusinessObject/card-mappings/{mapping_id}",
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 404
+
+    result = await db.execute(
+        select(EnterpriseObjectCardMapping).where(EnterpriseObjectCardMapping.id == mapping_id)
+    )
+    assert result.scalar_one_or_none() is not None
