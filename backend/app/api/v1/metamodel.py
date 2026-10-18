@@ -21,6 +21,7 @@ from app.models.card import Card
 from app.models.card_type import CardType
 from app.models.compliance_regulation import ComplianceRegulation
 from app.models.ea_principle import EAPrinciple
+from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.resource_type import ResourceType
@@ -1923,3 +1924,59 @@ async def delete_resource_type(
         )
     await db.delete(r)
     await db.commit()
+
+
+# ── Enterprise Objects ──────────────────────────────────────────────────
+
+
+def _serialize_enterprise_object_card_mapping(m: EnterpriseObjectCardMapping) -> dict:
+    return {
+        "id": str(m.id),
+        "enterprise_object_key": m.enterprise_object_key,
+        "card_type_key": m.card_type_key,
+        "card_subtype_key": m.card_subtype_key,
+    }
+
+
+def _serialize_enterprise_object(
+    o: EnterpriseObject, mappings: list[EnterpriseObjectCardMapping]
+) -> dict:
+    return {
+        "key": o.key,
+        "name": o.name,
+        "description": o.description,
+        "icon": o.icon,
+        "color": o.color,
+        "layer": o.layer,
+        "is_standard": o.is_standard,
+        "is_locked": o.is_locked,
+        "is_hidden": o.is_hidden,
+        "sort_order": o.sort_order,
+        "card_mappings": [_serialize_enterprise_object_card_mapping(m) for m in mappings],
+    }
+
+
+@router.get("/enterprise-objects")
+async def list_enterprise_objects(
+    include_hidden: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """List the ArchiMate Enterprise Object registry with their card mappings.
+
+    Authenticated read, like ``GET /types`` — the drawing palette calls this
+    for any user who can edit a diagram, not just admins who manage the
+    metamodel, so there is no ``admin.metamodel`` gate here.
+    """
+    q = select(EnterpriseObject).order_by(EnterpriseObject.sort_order)
+    if not include_hidden:
+        q = q.where(EnterpriseObject.is_hidden == False)  # noqa: E712
+    result = await db.execute(q)
+    objects = result.scalars().all()
+
+    mappings_result = await db.execute(select(EnterpriseObjectCardMapping))
+    mappings_by_object: dict[str, list[EnterpriseObjectCardMapping]] = {}
+    for m in mappings_result.scalars().all():
+        mappings_by_object.setdefault(m.enterprise_object_key, []).append(m)
+
+    return [_serialize_enterprise_object(o, mappings_by_object.get(o.key, [])) for o in objects]
