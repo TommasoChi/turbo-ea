@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -77,5 +78,27 @@ describe("EnterpriseObjectPopover", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("textbox")).not.toBeInTheDocument());
     expect(screen.getByText("New description.")).toBeInTheDocument();
+  });
+
+  test("closing never refocuses the anchor -- a palette caller's badge (not a Tab stop) must not become reachable again through MUI's default restoreFocus", async () => {
+    // A controlled-anchor harness, like a real caller (CardMappingTabContent/ArchimateModeler):
+    // `onClose` clears the anchor, which is what actually unmounts the Popover and would trigger
+    // MUI's default restoreFocus. `el` stands in for the palette's info badge: a real click
+    // focuses a <button> in Chrome/Firefox, which is exactly the precondition restoreFocus acts
+    // on.
+    function Harness({ initial }: { initial: HTMLElement }) {
+      const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(initial);
+      return anchorEl ? (
+        <EnterpriseObjectPopover object={sample} anchorEl={anchorEl} onClose={() => setAnchorEl(null)} canEdit={false} />
+      ) : null;
+    }
+
+    el.focus();
+    expect(document.activeElement).toBe(el);
+    render(<Harness initial={el} />);
+    await screen.findByText(sample.name);
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByText(sample.name)).not.toBeInTheDocument());
+    expect(document.activeElement).not.toBe(el);
   });
 });

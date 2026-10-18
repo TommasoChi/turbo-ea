@@ -70,6 +70,15 @@ export default function EnterpriseObjectPopover({ object, anchorEl, onClose, can
       anchorEl={anchorEl}
       onClose={handleClose}
       anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      // MUI's default on close is to call .focus() back on whatever element was focused when the
+      // popover opened. In the drawing palette that's the info badge the click opened it from --
+      // a native click already focuses a <button> in Chrome/Firefox -- so without this, closing
+      // (Escape, backdrop click, Save/Cancel) would hand focus straight back to the badge, and a
+      // following Enter/Space would fall through to the palette tile's own drop handling and
+      // silently place an element. The badge is deliberately not a Tab stop (read-only
+      // convenience, same text reachable via the admin list); restoring focus to it on close
+      // would undermine that by making it reachable via this back door instead.
+      disableRestoreFocus
     >
       <Box sx={{ p: 2, width: 320 }}>
         <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
