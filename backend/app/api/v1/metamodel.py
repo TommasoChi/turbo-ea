@@ -2502,6 +2502,13 @@ async def create_enterprise_object(
         sort_order=body.get("sort_order", next_order),
     )
     db.add(o)
+    await audit_log.record(
+        db,
+        action="admin.metamodel.enterprise_object.created",
+        category="admin",
+        actor=user,
+        target=("enterprise_object", o.key, o.name),
+    )
     await db.commit()
     await db.refresh(o)
     return _serialize_enterprise_object(o, [])
@@ -2523,10 +2530,20 @@ async def update_enterprise_object(
         raise HTTPException(422, "Enterprise object is locked and cannot be edited")
 
     updatable = ["name", "description", "icon", "color", "layer", "is_hidden", "sort_order"]
+    changes = audit_log.diff(o, {k: body[k] for k in updatable if k in body}, keys=updatable)
     for field in updatable:
         if field in body:
             setattr(o, field, body[field])
 
+    if changes:
+        await audit_log.record(
+            db,
+            action="admin.metamodel.enterprise_object.updated",
+            category="admin",
+            actor=user,
+            target=("enterprise_object", o.key, o.name),
+            changes=changes,
+        )
     await db.commit()
     await db.refresh(o)
     mappings_result = await db.execute(
@@ -2569,13 +2586,25 @@ async def add_card_mapping(
     )
     db.add(m)
     try:
-        await db.commit()
+        # Flushed here, ahead of audit_log.record's own flush, so the unique
+        # constraint's IntegrityError is caught before anything else touches
+        # the session (audit_log.record flushes too, but outside this guard).
+        await db.flush()
     except IntegrityError:
         # Unique constraint is (enterprise_object_key, card_type_key,
         # card_subtype_key) with nulls_not_distinct — two NULL-subtype rows
         # for the same object+type collide too, not just literal duplicates.
         await db.rollback()
         raise HTTPException(409, "This card mapping already exists") from None
+    await audit_log.record(
+        db,
+        action="admin.metamodel.enterprise_object.card_mapping_added",
+        category="admin",
+        actor=user,
+        target=("enterprise_object", key, card_type_key),
+        context={"card_type_key": card_type_key, "card_subtype_key": card_subtype_key},
+    )
+    await db.commit()
     await db.refresh(m)
     return _serialize_enterprise_object_card_mapping(m)
 
@@ -2597,6 +2626,14 @@ async def remove_card_mapping(
     m = result.scalar_one_or_none()
     if not m:
         raise HTTPException(404, "Card mapping not found")
+    await audit_log.record(
+        db,
+        action="admin.metamodel.enterprise_object.card_mapping_removed",
+        category="admin",
+        actor=user,
+        target=("enterprise_object", key, m.card_type_key),
+        context={"card_type_key": m.card_type_key, "card_subtype_key": m.card_subtype_key},
+    )
     await db.delete(m)
     await db.commit()
 

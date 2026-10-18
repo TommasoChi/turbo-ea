@@ -844,9 +844,11 @@ async def update_value_chain_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("valueChainEnabled", True)
     general["valueChainEnabled"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(db, user, "value-chain-enabled", old, general["valueChainEnabled"])
     await db.commit()
     return {"ok": True}
 
@@ -875,9 +877,11 @@ async def update_archimate_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("archimateEnabled", False)
     general["archimateEnabled"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(db, user, "archimate-enabled", old, general["archimateEnabled"])
     await db.commit()
     return {"ok": True}
 
