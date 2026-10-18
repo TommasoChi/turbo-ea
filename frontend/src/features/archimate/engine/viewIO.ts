@@ -120,11 +120,18 @@ export function extractEdited(services: ViewServices, baseView: ModelView): Edit
         });
         continue;
       }
-      // A custom (non-standard) Enterprise Object: Exchange Format import/export of it is out of
-      // scope for now (deferred follow-up) -- it is simply dropped from what gets saved, same as
-      // it would be if it were never drawn. Not written as a Note either: that would silently
-      // change what the user placed into a different kind of thing on the next reload.
-      if (isCustomEnterpriseObject(s.businessObject)) continue;
+      // A custom (non-standard) Enterprise Object: true round-trip (re-importing it as the SAME
+      // custom type) is out of scope for now (deferred follow-up), but it must not be silently
+      // discarded -- that was real data loss. It degrades to a plain Note/Label on the next
+      // load, same as the spec's Exchange Format anti-goals require, losing only its type
+      // (icon/color), same shape as the real Note branch above.
+      if (isCustomEnterpriseObject(s.businessObject)) {
+        notes.push({
+          id: s.id, text: s.businessObject.name,
+          x: Math.round(s.x), y: Math.round(s.y), width: Math.round(s.width), height: Math.round(s.height), parent,
+        });
+        continue;
+      }
       elements.set(s.businessObject.id, s.businessObject);
       const node: ViewNode = {
         id: s.id, elementRef: s.businessObject.id,

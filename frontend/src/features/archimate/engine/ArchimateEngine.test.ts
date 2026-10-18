@@ -320,15 +320,16 @@ describe("ArchimateEngine: a custom Enterprise Object", () => {
     expect(engine.elementInfo(shape.id)).toBeNull();
   });
 
-  it("toModel() does not throw with a custom object on the canvas, and drops it from what is saved -- the rest of the diagram still round-trips", () => {
+  it("toModel() does not throw with a custom object on the canvas, and saves it as a note -- the rest of the diagram still round-trips", () => {
     const { engine, shape } = setupCustom();
     engine.setName(shape.id, "Fraud Detector");
     expect(() => engine.toModel()).not.toThrow();
     const model = engine.toModel();
-    // deferred (Exchange Format import/export of a custom object is out of scope): it is simply
-    // not part of what gets persisted, same as if it had never been drawn.
+    // True round-trip (re-importing it as the SAME custom type) is still out of scope: it
+    // degrades to a plain note, same shape/text as a real Note, instead of being silently
+    // dropped (which was real data loss).
     expect(model.elements.some((e) => e.id === shape.businessObject.id)).toBe(false);
-    expect(model.views[0].notes.some((n) => n.id === shape.id)).toBe(false);
+    expect(model.views[0].notes.find((n) => n.id === shape.id)).toMatchObject({ text: "Fraud Detector" });
     expect(model.views[0].nodes.some((n) => n.id === shape.id)).toBe(false);
     // the fixture's own elements are untouched by the custom object's presence
     expect(model.elements.find((e) => e.id === "id-app")).toBeDefined();
