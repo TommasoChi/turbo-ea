@@ -45,10 +45,16 @@ def upgrade() -> None:
             sa.Column("is_hidden", sa.Boolean(), nullable=False),
             sa.Column("sort_order", sa.Integer(), nullable=False),
             sa.Column(
-                "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
             ),
             sa.Column(
-                "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
             ),
         )
 
@@ -70,10 +76,16 @@ def upgrade() -> None:
             ),
             sa.Column("card_subtype_key", sa.String(length=100), nullable=True),
             sa.Column(
-                "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
             ),
             sa.Column(
-                "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
             ),
             # nulls_not_distinct: two "all subtypes" (card_subtype_key=NULL)
             # rows for the same (enterprise_object_key, card_type_key) pair

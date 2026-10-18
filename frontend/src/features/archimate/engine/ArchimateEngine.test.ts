@@ -107,6 +107,27 @@ describe("ArchimateEngine", () => {
     expect(container.children).toHaveLength(0);
     expect(() => engine.destroy()).not.toThrow();
   });
+
+  it("destroy clears a pending HoverTooltip timer before the canvas container goes away", () => {
+    // diagram-js's palette wires a HoverTooltip with a 300ms debounce on every palette-tile
+    // `mouseover` (PaletteTooltip.js); the library never clears it on diagram teardown. Left
+    // alone, the timer fires later against a canvas container already removed from the DOM and
+    // throws (`Cannot read properties of undefined (reading 'appendChild')`) -- the exact
+    // "Unhandled Error" CI caught in ArchimateModeler.test.tsx. Reproduced here at the service
+    // level: start a hover (as a real `mouseover` would), destroy, and prove the timer is dead.
+    const { engine, get } = setup();
+    const hoverTooltip = get<{
+      _show: (target: object, config: { getContent: () => string }, delay: number) => void;
+      _showTimer?: ReturnType<typeof setTimeout>;
+    }>("hoverTooltip");
+    hoverTooltip._show({}, { getContent: () => "tip" }, 10_000);
+    const pendingTimer = hoverTooltip._showTimer;
+    expect(pendingTimer).toBeDefined();
+    const clearSpy = vi.spyOn(global, "clearTimeout");
+    engine.destroy();
+    expect(clearSpy).toHaveBeenCalledWith(pendingTimer);
+    clearSpy.mockRestore();
+  });
 });
 
 describe("ArchimateEngine: the properties panel's view of the selection", () => {

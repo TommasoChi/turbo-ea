@@ -283,6 +283,18 @@ export class ArchimateEngine {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    // diagram-js's palette wires a HoverTooltip (hover-tooltip/HoverTooltip.js) with a 300ms
+    // debounce timer on every `mouseover` of a palette tile; it never listens for the diagram's
+    // own teardown, so a tile hovered (e.g. by `userEvent.click`'s pointer-move-then-click) just
+    // before a quick unmount leaves that timer pending. It later fires against a canvas container
+    // already removed from the DOM and throws. Clearing it here, before the container goes away,
+    // is the only hook point diagram-js gives us -- `_showTimer` is a private field with no public
+    // API, same kind of reach-in as ArchimateRenderer's `_svg` access.
+    const hoverTooltip = this.diagram.get<{ _showTimer?: ReturnType<typeof setTimeout> }>(
+      "hoverTooltip",
+      false,
+    );
+    if (hoverTooltip?._showTimer) clearTimeout(hoverTooltip._showTimer);
     this.diagram.destroy();
   }
 }
