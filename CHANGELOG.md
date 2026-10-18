@@ -5,6 +5,15 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.162.0] - 2026-10-18
+
+### Added
+
+- **Enterprise Object registry replaces the fixed 1:1 Turbo EA-to-ArchiMate mapping with an n:m Card Mapping.** Any number of card types/subtypes can map to the same Enterprise Object, and an Enterprise Object can back several card type mappings; the old `default_mapping.py` table is migrated into the new bridge rows.
+- **Card Mapping admin UI**, under Admin → Architecture Studio → Card Mapping: browse the standard Enterprise Objects, hide the ones you don't use, create custom ones, edit which card types/subtypes map to each, and a click-to-reveal description popover (admin-editable) for every object.
+- **The editor's drawing palette now reads live from the registry.** A hidden Enterprise Object disappears from the palette; a custom one becomes drawable and selectable with its own icon and colour, and can be deleted like any other custom object.
+- **The ArchiMate editor is rebranded "Architecture Studio"** in the UI; its admin route moves from `/admin/archimate` to `/admin/architectureStudio` (old links redirect).
+
 ## [2.160.0] - 2026-10-16
 
 ### Added

@@ -296,6 +296,22 @@ describe("deep link through sign-in", () => {
         expect(mounted.archimateEditor).not.toHaveBeenCalled();
       },
     );
+
+    it.each([
+      ["/admin/archimate", "/admin/architectureStudio", "archimate sandbox page"],
+      ["/admin/archimate/d1", "/admin/architectureStudio/d1", "archimate editor page"],
+    ])(
+      "redirects the pre-rebrand %s to %s, preserving any :id",
+      async (oldPath, newPath, text) => {
+        window.history.pushState({}, "", oldPath);
+        vi.mocked(auth.me).mockResolvedValue(ADMIN_SETTINGS);
+
+        render(<App />);
+
+        expect(await screen.findByText(text)).toBeInTheDocument();
+        expect(window.location.pathname).toBe(newPath);
+      },
+    );
   });
 
   it("still renders an ungated page for a role with nothing granted", async () => {

@@ -188,7 +188,7 @@ Turbo EA 会发送邀请邮件、调查通知、密码重置以及其他系统�
 
 **ArchiMate 图**卡片用于开启或关闭 [ArchiMate](../guide/archimate.md) 模块。该模块**默认关闭**。
 
-- 开启后，沙盒（`/admin/archimate`）和 ArchiMate 编辑器即可使用，卡片上会显示**打开沙盒**按钮，直接进入 ArchiMate 图列表。
+- 开启后，沙盒（`/admin/architectureStudio`）和 ArchiMate 编辑器即可使用，卡片上会显示**打开沙盒**按钮，直接进入 ArchiMate 图列表。
 - 关闭后，这两个页面均无法访问，通过直接链接访问的用户会看到标准的“模块已禁用”占位页。已保存的图会保留，重新开启模块后原样恢复。
 
 打开沙盒需要 `admin.settings` 权限（Admin 角色默认拥有）并且模块已开启。该开关只隐藏用户界面：模块关闭时，REST API 和 MCP 工具（`get_archimate_mapping`、`create_archimate_diagram`、`update_archimate_diagram`）仍可调用。
