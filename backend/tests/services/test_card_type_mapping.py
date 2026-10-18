@@ -55,3 +55,28 @@ def test_subtype_element_types_excludes_a_different_subtypes_rows():
 def test_subtype_element_types_falls_back_to_type_level_only():
     mappings = [("BusinessActor", "Organization", None)]
     assert subtype_element_types("Organization", "region", mappings) == ["BusinessActor"]
+
+
+# ── Custom Enterprise Object filtering (review fix) ─────────────────────
+# A card type can be mapped to a CUSTOM Enterprise Object (any key an admin
+# typed when creating one) via the Card Mapping editor -- that key is not a
+# real ArchiMate element name. The frontend's elementTypesForCardType drops
+# those through isElementType; these functions must do the same, or an MCP
+# agent would be told to use a bogus archimate_type that
+# create_archimate_diagram/validate would then reject.
+
+
+def test_card_type_element_types_drops_mapping_to_a_custom_enterprise_object():
+    mappings = [
+        ("BusinessObject", "DataObject", None),
+        ("MyCustomThing", "DataObject", None),
+    ]
+    assert card_type_element_types("DataObject", mappings) == ["BusinessObject"]
+
+
+def test_subtype_element_types_drops_mapping_to_a_custom_enterprise_object():
+    mappings = [
+        ("BusinessActor", "Organization", None),
+        ("MyCustomThing", "Organization", "region"),
+    ]
+    assert subtype_element_types("Organization", "region", mappings) == ["BusinessActor"]

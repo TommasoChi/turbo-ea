@@ -162,11 +162,12 @@ async def test_card_mappings_seed_is_idempotent(db):
 
 
 async def test_removed_card_mapping_does_not_come_back_after_reseed(db):
-    """Bug fix: seed_card_mappings must only backfill once, while the bridge
-    table is empty. An admin removing a default mapping through the Card
-    Mapping editor is a deliberate action and must survive a reseed /
-    backend restart -- a second seed_metamodel call (simulating a restart)
-    must not re-insert it."""
+    """Bug fix: seed_card_mappings must track which default triples it has
+    ever applied with a durable marker, not infer "has this run before?"
+    from the table's current contents. An admin removing a default mapping
+    through the Card Mapping editor is a deliberate action and must survive
+    a reseed / backend restart -- a second seed_metamodel call (simulating a
+    restart) must not re-insert it."""
     await seed.seed_metamodel(db)
     rows = await _mapping_rows_for(db, "BusinessObject")
     target = next(r for r in rows if r.card_type_key == "DataObject" and r.card_subtype_key is None)
@@ -182,30 +183,51 @@ async def test_removed_card_mapping_does_not_come_back_after_reseed(db):
     assert ("DataObject", None) not in {(r.card_type_key, r.card_subtype_key) for r in rows_after}
 
 
-async def test_card_mappings_backfill_only_runs_while_table_is_empty(db):
-    """A table that already has rows -- even just one -- must not receive
-    the full default backfill again. Uses seed_metamodel to get CardType
-    rows in place (the bridge table's card_type_key FK needs them), then
-    empties the bridge table and re-seeds it by hand to simulate "the table
-    is no longer empty" before calling seed_card_mappings directly."""
-    from app.services.archimate.enterprise_object_seed import seed_card_mappings
+async def test_admin_removing_every_mapping_does_not_resurrect_them_on_reseed(db):
+    """The more extreme version of the same regression: an admin removing
+    EVERY default mapping empties the bridge table completely. A marker
+    gated only on "is the table currently empty" would treat that as "never
+    seeded" and resurrect all of them on the next restart -- the exact Bug 1
+    bug class, one level removed. The per-triple marker must not."""
+    await seed.seed_metamodel(db)
+    before = await db.execute(select(func.count()).select_from(EnterpriseObjectCardMapping))
+    assert before.scalar() > 0
+
+    # Admin removes every single mapping -- the table is now completely empty.
+    await db.execute(EnterpriseObjectCardMapping.__table__.delete())
+    await db.flush()
+
+    # A second seed_metamodel call simulates a backend restart.
+    await seed.seed_metamodel(db)
+    await db.flush()
+
+    after = await db.execute(select(func.count()).select_from(EnterpriseObjectCardMapping))
+    assert after.scalar() == 0  # none of the removed defaults came back
+
+
+async def test_new_default_mapping_triple_lands_on_existing_install(db, monkeypatch):
+    """A default mapping triple added to CARD_TYPE_DEFAULTS in a later
+    release must still land on an install that was already seeded once --
+    it must not be blocked just because the bridge table already has other
+    rows in it (that was the old, wrong "table is non-empty" gate)."""
+    await seed.seed_metamodel(db)
+
+    # BusinessContext has no type-level default today (see
+    # test_unmapped_card_type_defaults_produce_no_row) -- simulate a future
+    # release adding one.
+    monkeypatch.setitem(dm.CARD_TYPE_DEFAULTS, "BusinessContext", "Goal")
 
     await seed.seed_metamodel(db)
-    await db.execute(EnterpriseObjectCardMapping.__table__.delete())
-    db.add(
-        EnterpriseObjectCardMapping(
-            enterprise_object_key="Goal",
-            card_type_key="Objective",
-            card_subtype_key=None,
+    await db.flush()
+
+    result = await db.execute(
+        select(EnterpriseObjectCardMapping).where(
+            EnterpriseObjectCardMapping.card_type_key == "BusinessContext",
+            EnterpriseObjectCardMapping.card_subtype_key.is_(None),
         )
     )
-    await db.flush()
-
-    await seed_card_mappings(db)
-    await db.flush()
-
-    result = await db.execute(select(func.count()).select_from(EnterpriseObjectCardMapping))
-    assert result.scalar() == 1  # the backfill did not run
+    row = result.scalar_one()
+    assert row.enterprise_object_key == "Goal"
 
 
 async def test_every_mapping_value_matches_a_seeded_enterprise_object(db):

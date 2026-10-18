@@ -2174,7 +2174,15 @@ async def get_card_type_archimate_mapping(
 
     Authenticated read, like ``GET /enterprise-objects`` — no
     ``admin.metamodel`` gate, since this only reports the live mapping.
+    Excludes hidden/soft-deleted types and orders by ``sort_order``, same as
+    ``GET /metamodel/types`` (the endpoint this one is meant to sit beside
+    for the MCP tool, which should not see a type a `DELETE /types/{key}`
+    soft-delete hid from everywhere else).
     """
-    result = await db.execute(select(CardType.key, CardType.subtypes))
+    result = await db.execute(
+        select(CardType.key, CardType.subtypes)
+        .where(CardType.is_hidden == False)  # noqa: E712
+        .order_by(CardType.sort_order)
+    )
     card_types = [{"key": key, "subtypes": subtypes or []} for key, subtypes in result.all()]
     return {"card_types": await get_card_type_mapping(db, card_types)}

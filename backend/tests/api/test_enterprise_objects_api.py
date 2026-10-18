@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
+from app.models.card_type import CardType
 from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
 from app.services import seed
 from tests.conftest import auth_headers
@@ -115,6 +116,69 @@ async def test_card_type_archimate_mapping_accessible_to_non_admin(client, db, v
         headers=auth_headers(viewer_user),
     )
     assert resp.status_code == 200
+
+
+async def test_card_type_archimate_mapping_excludes_hidden_enterprise_object(
+    client, db, admin_user
+):
+    """Review fix: a mapping to an admin-hidden Enterprise Object must not
+    surface here, same as the frontend never seeing it (useArchimateBridge
+    loads from GET /enterprise-objects, which excludes hidden EOs by
+    default) -- an MCP agent should not be told it can use a type that is no
+    longer offered anywhere in the editor."""
+    await seed.seed_metamodel(db)
+
+    result = await db.execute(
+        select(EnterpriseObject).where(EnterpriseObject.key == "BusinessObject")
+    )
+    row = result.scalar_one()
+    row.is_hidden = True
+    await db.flush()
+
+    resp = await client.get(
+        "/api/v1/metamodel/card-type-archimate-mapping",
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 200
+    data_object = next(t for t in resp.json()["card_types"] if t["key"] == "DataObject")
+    assert "BusinessObject" not in data_object["archimate_types"]
+
+
+async def test_card_type_archimate_mapping_excludes_hidden_card_type(client, db, admin_user):
+    """Review fix: must exclude a hidden/soft-deleted CardType, same as the
+    GET /metamodel/types default this endpoint sits beside."""
+    await seed.seed_metamodel(db)
+
+    result = await db.execute(select(CardType).where(CardType.key == "DataObject"))
+    row = result.scalar_one()
+    row.is_hidden = True
+    await db.flush()
+
+    resp = await client.get(
+        "/api/v1/metamodel/card-type-archimate-mapping",
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 200
+    keys = [t["key"] for t in resp.json()["card_types"]]
+    assert "DataObject" not in keys
+
+
+async def test_card_type_archimate_mapping_orders_by_sort_order(client, db, admin_user):
+    await seed.seed_metamodel(db)
+
+    expected = await db.execute(
+        select(CardType.key)
+        .where(CardType.is_hidden == False)  # noqa: E712
+        .order_by(CardType.sort_order)
+    )
+    expected_keys = list(expected.scalars().all())
+
+    resp = await client.get(
+        "/api/v1/metamodel/card-type-archimate-mapping",
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 200
+    assert [t["key"] for t in resp.json()["card_types"]] == expected_keys
 
 
 async def test_create_custom_enterprise_object(client, db, admin_user):

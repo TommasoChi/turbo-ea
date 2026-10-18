@@ -452,29 +452,45 @@ async def seed_enterprise_objects(db: AsyncSession) -> None:
 
 
 async def seed_card_mappings(db: AsyncSession) -> None:
-    """One-time backfill of EnterpriseObjectCardMapping bridge rows from
-    default_mapping.py's ``CARD_TYPE_DEFAULTS`` (card type -> element type,
-    or None for "no mapping") and ``SUBTYPE_DEFAULTS`` (card type/subtype ->
-    element type).
+    """One-time-per-triple backfill of EnterpriseObjectCardMapping bridge rows
+    from default_mapping.py's ``CARD_TYPE_DEFAULTS`` (card type -> element
+    type, or None for "no mapping") and ``SUBTYPE_DEFAULTS`` (card
+    type/subtype -> element type).
 
-    Runs only while the bridge table is completely empty -- the very first
-    boot after migration 159, before anyone has touched Card Mapping. Once
-    at least one row exists (from this backfill or an admin's own edit), the
-    table is admin-owned: this function no-ops on every later call, so an
-    admin removing a default mapping through the UI is a deliberate action
-    that survives a backend restart rather than being silently re-added.
+    Tracked with a durable marker (``seed_markers.applied_card_mapping_defaults``/
+    ``mark_card_mapping_defaults_applied``, in the same ``app_settings`` JSONB
+    ``seed_markers.demo_seed_completed`` uses), not inferred from whether the
+    bridge table currently holds any rows -- that inference is the exact
+    anti-pattern ``seed_markers`` documents, and breaks two ways here: an
+    admin deleting every default mapping would empty the table and resurrect
+    all of them on the next restart (this is the Bug 1 regression one level
+    removed), and a future release's new default triple would never land on
+    an existing install once the table had anything else in it. Each triple
+    is marked applied the first time it is seeded (whether or not the row
+    happens to already exist) and is never re-inserted after that, no matter
+    what later happens to the row -- so an admin's removal survives a
+    restart, and a genuinely new default triple still lands exactly once.
     """
-    existing_result = await db.execute(select(EnterpriseObjectCardMapping.id).limit(1))
-    if existing_result.scalar() is not None:
-        return  # bridge table already seeded/admin-owned -- never re-add
+    from app.services import seed_markers
 
-    seen: set[tuple[str, str, str | None]] = set()
+    applied = await seed_markers.applied_card_mapping_defaults(db)
+
+    existing_result = await db.execute(select(EnterpriseObjectCardMapping))
+    existing = {
+        (m.enterprise_object_key, m.card_type_key, m.card_subtype_key)
+        for m in existing_result.scalars().all()
+    }
+
+    newly_applied: set[tuple[str, str, str | None]] = set()
 
     def _add(enterprise_object_key: str, card_type_key: str, card_subtype_key: str | None) -> None:
-        unique_key = (enterprise_object_key, card_type_key, card_subtype_key)
-        if unique_key in seen:
-            return
-        seen.add(unique_key)
+        triple = (enterprise_object_key, card_type_key, card_subtype_key)
+        if triple in applied:
+            return  # already applied once -- an admin may have removed it since
+        newly_applied.add(triple)
+        if triple in existing:
+            return  # row already there (e.g. an admin added the exact same mapping)
+        existing.add(triple)
         db.add(
             EnterpriseObjectCardMapping(
                 enterprise_object_key=enterprise_object_key,
@@ -490,3 +506,5 @@ async def seed_card_mappings(db: AsyncSession) -> None:
 
     for (card_type_key, card_subtype_key), element_key in SUBTYPE_DEFAULTS.items():
         _add(element_key, card_type_key, card_subtype_key)
+
+    await seed_markers.mark_card_mapping_defaults_applied(db, newly_applied)
