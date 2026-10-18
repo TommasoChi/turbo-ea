@@ -215,6 +215,27 @@ describe("loading", () => {
     await waitFor(() => expect(mockApi.callsOf("get", "/cards?ids=*")).toHaveLength(1));
     expect(mockApi.callsOf("get", "/cards?ids=*")[0].path).toBe("/cards?ids=c1");
   });
+
+  it("does not build the engine (no canvas, no onEngine) until the Enterprise Object registry settles, and builds it exactly once -- regression: a registry that arrived AFTER the engine was already built used to force a silent rebuild that discarded any edit made in that window", async () => {
+    let release!: (objects: unknown[]) => void;
+    mockApi.on("get", "/metamodel/enterprise-objects", () => new Promise((r) => (release = r)));
+    let builds = 0;
+    mockApi.on("get", "/diagrams/d1", doc());
+    renderWithProviders(<ArchimateModeler diagramId="d1" onEngine={() => { builds += 1; }} />, { theme: true });
+    // The diagram model itself has had plenty of time to load; the registry has not.
+    await new Promise((r) => setTimeout(r, 30));
+    expect(document.querySelector(".djs-container")).toBeNull();
+    expect(builds).toBe(0);
+    await act(async () => {
+      release([]);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(document.querySelector(".djs-container")).not.toBeNull());
+    expect(builds).toBe(1);
+    // Give any stray microtask a chance to run, then confirm no second build followed.
+    await new Promise((r) => setTimeout(r, 30));
+    expect(builds).toBe(1);
+  });
 });
 
 describe("card names", () => {
@@ -825,6 +846,74 @@ describe("no card is created or deleted by editing", () => {
     expect(mockApi.callsOf("post", "/cards")).toEqual([]);
     expect(mockApi.callsOf("delete")).toEqual([]);
     expect(mockApi.callsOf("patch", /^\/cards/)).toEqual([]);
+  });
+});
+
+describe("custom Enterprise Objects on the canvas", () => {
+  const AI_MODEL_ROW = {
+    key: "AIModel", name: "AI Model", description: null, icon: "smart_toy", color: "#ab12cd",
+    layer: "application", is_standard: false, is_locked: false, is_hidden: false, sort_order: 0, card_mappings: [],
+  };
+
+  beforeEach(() => {
+    // Adds a custom row alongside the two standard ones the top-level beforeEach already mocks,
+    // so a palette tile for it exists.
+    mockApi.on("get", "/metamodel/enterprise-objects", [
+      {
+        key: "ApplicationComponent", name: "Application Component", description: "A modular, deployable part of software.",
+        icon: "deployed_code", color: "#99c7ef",
+        card_mappings: [{ id: "m1", enterprise_object_key: "ApplicationComponent", card_type_key: "Application", card_subtype_key: null }],
+      },
+      {
+        key: "Node", name: "Node", description: "A computational or physical resource.", icon: "dns", color: "#ffcc80",
+        card_mappings: [{ id: "m2", enterprise_object_key: "Node", card_type_key: "ITComponent", card_subtype_key: null }],
+      },
+      AI_MODEL_ROW,
+    ]);
+  });
+
+  it("drops, selects, renames and saves a custom object end to end -- regression: selecting one used to throw inside the real engine (itemInfo/getCardId assumed every businessObject has a `properties` array), and saving while one was on the canvas used to throw for the WHOLE diagram (extractEdited assumed the same)", async () => {
+    await mount();
+    const tile = document.querySelector<HTMLElement>('[data-action="create.AIModel"]')!;
+    expect(tile).not.toBeNull();
+    const registry = services<{ getAll(): unknown[] }>("elementRegistry");
+    const before = registry.getAll().length;
+
+    // Keyboard drop: dropAtCentre auto-selects the new shape, firing onSelect -> the page calls
+    // selectedItem() -> itemInfo() on the very next render. This must not throw.
+    expect(() => {
+      act(() => {
+        tile.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      });
+    }).not.toThrow();
+    expect(registry.getAll().length).toBe(before + 1);
+    const created = engine().selection();
+    expect(created).toHaveLength(1);
+
+    // Renaming it (the inline edit box every fresh drop opens) must not throw either.
+    expect(() => engine().setName(created[0], "Fraud Detector")).not.toThrow();
+    expect(engine().itemInfo(created[0])?.name).toBe("Fraud Detector");
+
+    // Saving the WHOLE diagram with it still on the canvas must not throw, and the diagram's own
+    // elements still save correctly -- the custom object is just not part of the payload
+    // (Exchange Format for it is explicitly deferred).
+    vi.useFakeTimers();
+    act(() => engine().setName(APP_SHAPE, "Renamed"));
+    await advance(3000);
+    expect(mockApi.callsOf("patch")).toHaveLength(1);
+    const saved = readExchange(lastPatchBody().data.xml);
+    expect(saved.elements.find((e) => e.id === "id-app")!.name).toBe("Renamed");
+    expect(saved.elements.some((e) => e.name === "Fraud Detector")).toBe(false);
+    vi.useRealTimers();
+
+    // Deleting it afterwards still touches no card, same as any other shape.
+    act(() => {
+      const modeling = services<{ removeElements(e: unknown[]): void }>("modeling");
+      const els = services<{ get(id: string): unknown }>("elementRegistry");
+      modeling.removeElements(created.map((id) => els.get(id)));
+    });
+    expect(registry.getAll().length).toBe(before);
+    expect(mockApi.callsOf("post", "/cards")).toEqual([]);
   });
 });
 

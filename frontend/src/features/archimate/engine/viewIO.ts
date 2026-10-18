@@ -17,7 +17,7 @@ import type {
   ViewNode,
   ViewNote,
 } from "../exchange/exchangeModel";
-import { isNoteObject } from "../exchange/exchangeModel";
+import { isCustomEnterpriseObject, isNoteObject } from "../exchange/exchangeModel";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import { cropConnection } from "./ModelSync";
 import type { EditedView } from "./reconcile";
@@ -120,6 +120,11 @@ export function extractEdited(services: ViewServices, baseView: ModelView): Edit
         });
         continue;
       }
+      // A custom (non-standard) Enterprise Object: Exchange Format import/export of it is out of
+      // scope for now (deferred follow-up) -- it is simply dropped from what gets saved, same as
+      // it would be if it were never drawn. Not written as a Note either: that would silently
+      // change what the user placed into a different kind of thing on the next reload.
+      if (isCustomEnterpriseObject(s.businessObject)) continue;
       elements.set(s.businessObject.id, s.businessObject);
       const node: ViewNode = {
         id: s.id, elementRef: s.businessObject.id,

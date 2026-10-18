@@ -82,6 +82,24 @@ describe("useArchimateBridge", () => {
     consoleError.mockRestore();
   });
 
+  it("enterpriseObjectsLoaded starts false and flips true once the fetch resolves", async () => {
+    const { result } = renderHook(() => useArchimateBridge(), { wrapper });
+    expect(result.current.enterpriseObjectsLoaded).toBe(false);
+    await waitFor(() => expect(result.current.enterpriseObjectsLoaded).toBe(true));
+    expect(result.current.enterpriseObjects).toEqual(TYPES.objects);
+  });
+
+  it("enterpriseObjectsLoaded still flips true on a failed fetch -- fails open so a down registry never blocks the page from building the engine", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    listEnterpriseObjectsMock.mockReset();
+    listEnterpriseObjectsMock.mockRejectedValue(new Error("network down"));
+    const { result } = renderHook(() => useArchimateBridge(), { wrapper });
+    expect(result.current.enterpriseObjectsLoaded).toBe(false);
+    await waitFor(() => expect(result.current.enterpriseObjectsLoaded).toBe(true));
+    expect(result.current.enterpriseObjects).toEqual([]);
+    consoleError.mockRestore();
+  });
+
   it("keeps ONE bridge object across renders", () => {
     const { result, rerender } = renderHook(() => useArchimateBridge(), { wrapper });
     const first = result.current.bridge;

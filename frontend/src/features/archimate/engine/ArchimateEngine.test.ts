@@ -249,6 +249,72 @@ describe("ArchimateEngine: a note", () => {
   });
 });
 
+describe("ArchimateEngine: a custom Enterprise Object", () => {
+  const AI_MODEL: EnterpriseObject = {
+    key: "AIModel", name: "AI Model", description: null, icon: "smart_toy", color: "#ab12cd",
+    layer: "application", is_standard: false, is_locked: false, is_hidden: false, sort_order: 0, card_mappings: [],
+  };
+
+  /** Its own engine (not the shared `setup()`, since it needs the registry row), with one custom
+   *  object already on the canvas alongside the regular fixture elements. */
+  function setupCustom() {
+    const container = document.createElement("div");
+    const onChange = vi.fn();
+    const engine = new ArchimateEngine({ container, bridge, enterpriseObjects: [AI_MODEL], onChange });
+    engine.load(MODEL);
+    const get = <T,>(name: string) => (engine as unknown as { diagram: { get(n: string): T } }).diagram.get(name);
+    const modeling = get<Modeling>("modeling");
+    const factory = get<{ createShape(attrs: unknown): Shape }>("elementFactory");
+    const root = get<{ getRootElement(): unknown }>("canvas").getRootElement();
+    const shape = modeling.createShape(factory.createShape({ enterpriseObjectKey: "AIModel" }), { x: 700, y: 300 }, root) as Shape;
+    return { container, engine, onChange, get, shape };
+  }
+
+  it("selecting it (what every drop does automatically) never throws -- itemInfo degrades like a note's: no card, no properties", () => {
+    const { engine, get, shape } = setupCustom();
+    // This is exactly what a palette drop does next (dropAtCentre selects the new shape, which
+    // fires onSelect -> the page calls selectedItem() -> itemInfo()): regression coverage for a
+    // crash that only showed up once a custom object went through the real engine, not just the
+    // palette/factory/renderer in isolation.
+    expect(() => get<Selection>("selection").select(shape)).not.toThrow();
+    expect(() => engine.selectedItem()).not.toThrow();
+    const info = engine.itemInfo(shape.id);
+    expect(info).toEqual({ id: shape.id, kind: "note", type: "Note", name: "", documentation: "", cardId: null, properties: [] });
+    engine.setName(shape.id, "Fraud Detector");
+    expect(engine.itemInfo(shape.id)!.name).toBe("Fraud Detector");
+  });
+
+  it("setDocumentation and setUserProperties are a no-op, same as a note's", () => {
+    const { engine, onChange, shape } = setupCustom();
+    onChange.mockClear();
+    expect(() => engine.setDocumentation(shape.id, "Some text")).not.toThrow();
+    expect(() => engine.setUserProperties(shape.id, [{ name: "a", value: "b" }])).not.toThrow();
+    expect(engine.itemInfo(shape.id)).toMatchObject({ documentation: "", properties: [] });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("elementInfo returns null for it rather than throwing (no type, no card to report)", () => {
+    const { engine, shape } = setupCustom();
+    expect(() => engine.elementInfo(shape.id)).not.toThrow();
+    expect(engine.elementInfo(shape.id)).toBeNull();
+  });
+
+  it("toModel() does not throw with a custom object on the canvas, and drops it from what is saved -- the rest of the diagram still round-trips", () => {
+    const { engine, shape } = setupCustom();
+    engine.setName(shape.id, "Fraud Detector");
+    expect(() => engine.toModel()).not.toThrow();
+    const model = engine.toModel();
+    // deferred (Exchange Format import/export of a custom object is out of scope): it is simply
+    // not part of what gets persisted, same as if it had never been drawn.
+    expect(model.elements.some((e) => e.id === shape.businessObject.id)).toBe(false);
+    expect(model.views[0].notes.some((n) => n.id === shape.id)).toBe(false);
+    expect(model.views[0].nodes.some((n) => n.id === shape.id)).toBe(false);
+    // the fixture's own elements are untouched by the custom object's presence
+    expect(model.elements.find((e) => e.id === "id-app")).toBeDefined();
+    expect(model).toEqual(engine.toModel()); // stable, not crashing on repeat either
+  });
+});
+
 describe("ArchimateEngine: the model's own properties", () => {
   it("reads [] when the model has none, and resolves names from propertyDefinitions", () => {
     const { engine } = setup();

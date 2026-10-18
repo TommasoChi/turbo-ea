@@ -88,7 +88,8 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const { t } = useTranslation(["archimate", "common", "cards"]);
   const theme = useTheme();
   const {
-    bridge, enterpriseObjects, linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards,
+    bridge, enterpriseObjects, enterpriseObjectsLoaded,
+    linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards,
   } = useArchimateBridge();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -277,7 +278,14 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!model || !container) return;
+    // enterpriseObjectsLoaded gates this: unlike `bridge` (a stable object whose members read a
+    // ref, so its identity never changes), `enterpriseObjects` is a plain array snapshot injected
+    // into diagram-js as a one-time "value" -- it is not a live reference the engine re-reads
+    // later. The registry fetch resolves asynchronously after mount, so building the engine before
+    // it settles and then rebuilding once it does would discard any edit the user had already made
+    // in that window (and the undo stack with it) under the user's feet. Waiting for the gate means
+    // the engine is only ever built once per model, already with the final registry snapshot.
+    if (!model || !container || !enterpriseObjectsLoaded) return;
     const engine = new ArchimateEngine({
       container, bridge, enterpriseObjects,
       onChange: () => markChangedRef.current(),
@@ -292,11 +300,9 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       engine.destroy();
       if (engineRef.current === engine) engineRef.current = null;
     };
-    // enterpriseObjects is included: unlike `bridge` (a stable object whose members read a ref, so
-    // its identity never changes), it is a plain array snapshot injected as a diagram-js "value" --
-    // the registry loads asynchronously after mount, so the engine must rebuild once it resolves,
-    // or the palette would show stale visibility/custom objects for the rest of the session.
-  }, [model, bridge, enterpriseObjects, resolveNames]);
+    // enterpriseObjects itself is still a dependency (it's read inside), but in practice it is
+    // already stable by the time enterpriseObjectsLoaded flips true, so this effect now runs once.
+  }, [model, bridge, enterpriseObjects, enterpriseObjectsLoaded, resolveNames]);
 
   useEffect(() => {
     unmountedRef.current = false;

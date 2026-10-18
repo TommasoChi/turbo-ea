@@ -22,6 +22,12 @@ export interface ArchimateBridgeState {
    *  consumed by the engine to hide a standard type from the palette (`is_hidden`) and to draw a
    *  custom (non-standard) object. Empty until the fetch below resolves. */
   enterpriseObjects: EnterpriseObject[];
+  /** Whether the fetch above has settled (resolved OR failed -- fails open so a down registry
+   *  endpoint degrades to an empty list instead of blocking the editor indefinitely). The engine
+   *  is only an array *value* injectable (not a live reference like `bridge`), so the page must
+   *  wait for this before building it: building it from a still-loading `[]` and rebuilding once
+   *  the real list arrives would otherwise revert whatever the user had already edited. */
+  enterpriseObjectsLoaded: boolean;
   /** The shape whose link picker is open, if any. */
   linkShapeId: string | null;
   /** The shape whose create-card dialog is open, if any. */
@@ -45,6 +51,7 @@ export function useArchimateBridge(): ArchimateBridgeState {
   const [createShapeId, setCreateShapeId] = useState<string | null>(null);
   const [objectInfo, setObjectInfo] = useState<{ key: string; anchorEl: HTMLElement } | null>(null);
   const [objects, setObjects] = useState<EnterpriseObject[]>([]);
+  const [objectsLoaded, setObjectsLoaded] = useState(false);
   const [mappings, setMappings] = useState<EnterpriseObjectCardMapping[]>([]);
   const names = useRef(new Map<string, string>());
 
@@ -63,6 +70,11 @@ export function useArchimateBridge(): ArchimateBridgeState {
         // description popover degrades the same way: objects stays [], so it just has nothing
         // to show for a key until the next successful load.
         if (!cancelled) console.error("Failed to load enterprise object mappings:", err);
+      })
+      .finally(() => {
+        // Fails open: a down endpoint still lets the page build the engine (with an empty
+        // registry) instead of waiting on it forever.
+        if (!cancelled) setObjectsLoaded(true);
       });
     return () => {
       cancelled = true;
@@ -123,5 +135,8 @@ export function useArchimateBridge(): ArchimateBridgeState {
 
   const objectInfoObject = objectInfo ? objects.find((o) => o.key === objectInfo.key) : undefined;
 
-  return { bridge, enterpriseObjects: objects, linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards };
+  return {
+    bridge, enterpriseObjects: objects, enterpriseObjectsLoaded: objectsLoaded,
+    linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards,
+  };
 }

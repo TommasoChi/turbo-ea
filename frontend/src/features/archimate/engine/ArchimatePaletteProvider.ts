@@ -215,23 +215,24 @@ export default class ArchimatePaletteProvider {
     if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
     const entry = (event.target as Element | null)?.closest?.(`.${ENTRY_CLASS}`);
     const type = entry?.getAttribute(TYPE_ATTR);
+    // A custom Enterprise Object's own registry key is checked FIRST, ahead of the Note sentinel
+    // and the real ElementTypes: its key is admin-defined free text, so on the off chance an admin
+    // names one "Note" (the sentinel) the real custom object this tile was built from still wins,
+    // never silently falling back to a generic Note instead of what the user actually clicked.
+    const eo = this.enterpriseObjects.find((o) => o.key === type && !o.is_standard);
+    if (eo) {
+      event.preventDefault();
+      this.dropAtCentre(this.elementFactory.createShape({ enterpriseObjectKey: eo.key }));
+      return;
+    }
     if (type === NOTE_TYPE) {
       event.preventDefault(); // Space would scroll the page
       this.dropAtCentre(this.elementFactory.createShape({ isNote: true }));
       return;
     }
-    if (isElementType(type)) {
-      event.preventDefault();
-      this.dropAtCentre(this.elementFactory.createShape({ elementType: type }));
-      return;
-    }
-    // Not a real ElementType and not the Note sentinel: the only other entries are custom
-    // Enterprise Objects, keyed by their own registry key -- look the key back up since the
-    // keydown only gives us the attribute string, not the object the tile was built from.
-    const eo = this.enterpriseObjects.find((o) => o.key === type && !o.is_standard);
-    if (!eo) return;
+    if (!isElementType(type)) return;
     event.preventDefault();
-    this.dropAtCentre(this.elementFactory.createShape({ enterpriseObjectKey: eo.key }));
+    this.dropAtCentre(this.elementFactory.createShape({ elementType: type }));
   };
 
   /** A keyboard drop: through modeling (one undoable command), then selected and announced. */

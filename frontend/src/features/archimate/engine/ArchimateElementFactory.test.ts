@@ -1,5 +1,6 @@
 import {
-  CARD_ID_DEFINITION, getCardId, isCustomEnterpriseObject, type ModelElement, type ModelRelationship, type NoteObject,
+  CARD_ID_DEFINITION, getCardId, isCustomEnterpriseObject,
+  type CustomEnterpriseObject, type ModelElement, type ModelRelationship, type NoteObject,
 } from "../exchange/exchangeModel";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 
@@ -94,5 +95,22 @@ describe("ArchimateElementFactory", () => {
   it("names a custom object when a name is passed", () => {
     const shape = factory.createShape({ enterpriseObjectKey: "AIModel", name: "My Model" });
     expect(shape.businessObject).toMatchObject({ enterpriseObjectKey: "AIModel", name: "My Model" });
+  });
+
+  it("clones a pasted custom object with a new id, same key and text, never a card concept", () => {
+    const bo: CustomEnterpriseObject = {
+      id: "id-custom-src", isCustomObject: true, enterpriseObjectKey: "AIModel", name: "Fraud Detector",
+    };
+    // Regression: the generic `businessObject`-copy branch calls `withCardId`, which reads
+    // `properties` -- a field a CustomEnterpriseObject does not have. This must not reach it.
+    expect(() => factory.createShape({ id: "id-shape-src", businessObject: bo })).not.toThrow();
+    const shape = factory.createShape({ id: "id-shape-src", businessObject: bo });
+    expect(shape.id).not.toBe("id-shape-src");
+    expect(isCustomEnterpriseObject(shape.businessObject)).toBe(true);
+    expect(shape.businessObject).toEqual({
+      id: expect.stringMatching(/^id-/), isCustomObject: true, enterpriseObjectKey: "AIModel", name: "Fraud Detector",
+    });
+    expect(shape.businessObject.id).not.toBe("id-custom-src");
+    expect(shape).toMatchObject({ width: 140, height: 90 });
   });
 });

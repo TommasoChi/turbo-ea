@@ -39,6 +39,10 @@ export default class ArchimateElementFactory extends ElementFactory {
     else if (businessObject && isNoteObject(businessObject)) {
       // Copy-paste of a note: a new identifier, same text; a note never carries a card.
       bo = { id: newIdentifier(), isNote: true, name: businessObject.name };
+    } else if (businessObject && isCustomEnterpriseObject(businessObject)) {
+      // Copy-paste of a custom object: a new identifier, same key and name; it never carries a
+      // card either (and has no `properties` array for `withCardId`'s generic branch to read).
+      bo = { id: newIdentifier(), isCustomObject: true, enterpriseObjectKey: businessObject.enterpriseObjectKey, name: businessObject.name };
     } else if (businessObject) {
       bo = { ...withCardId(structuredClone(businessObject), null), id: newIdentifier() };
     } else if (type === "shape" && isNote) {

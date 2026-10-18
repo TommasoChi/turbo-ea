@@ -151,3 +151,21 @@ describe("importView / extractEdited: notes", () => {
     expect(ids).toEqual(["id-note1", "id-note2", extra.id]);
   });
 });
+
+describe("extractEdited: a custom Enterprise Object", () => {
+  it("is dropped entirely (not an element, not a node, not a note) and never throws -- regression: getCardId/withCardDefinition used to be called unconditionally on every element, which crashed on a CustomEnterpriseObject's missing `properties`", () => {
+    const s = services();
+    const model = structuredClone(MODEL);
+    importView(s, model, model.views[0]);
+    const custom = s.elementFactory.createShape({ enterpriseObjectKey: "AIModel", name: "x", x: 10, y: 10 });
+    s.canvas.addShape(custom, s.canvas.getRootElement());
+    let out: ReturnType<typeof extractEdited>;
+    expect(() => (out = extractEdited(s, model.views[0]))).not.toThrow();
+    out = extractEdited(s, model.views[0]);
+    expect(out.elements.some((e) => e.id === custom.businessObject.id)).toBe(false);
+    expect(out.view.nodes.some((n) => n.id === custom.id)).toBe(false);
+    expect(out.view.notes.some((n) => n.id === custom.id)).toBe(false);
+    // the rest of the view is untouched
+    expect(out.elements.map((e) => e.id)).toEqual(["id-app", "id-group", "id-data"]);
+  });
+});
