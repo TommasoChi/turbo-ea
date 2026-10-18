@@ -4,9 +4,15 @@ The Value Chain shipped as an extension (`ext.value-chain.view`); it is now a
 core feature with its own read-only permission. Roles that could see it keep
 seeing it, and the retired key stops lingering in roles.permissions.
 
-Revision ID: 154
+Revision ID: 154b
 Revises: 153
 Create Date: 2026-10-14
+
+Renumbered from "154" to "154b" on the upstream merge of 2026-10-18: upstream's
+own "154_audit_log.py" claims the plain "154" id, following the "128"/"128b"
+precedent (``128_extension_sdk_1_2_bridges.py``) — the fork's migration takes
+the lettered id and keeps its original down_revision, upstream's keeps the
+canonical number and gets repointed to chain after the fork's.
 """
 
 from __future__ import annotations
@@ -18,7 +24,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "154"
+revision: str = "154b"
 down_revision: Union[str, None] = "153"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

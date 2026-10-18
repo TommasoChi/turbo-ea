@@ -34,7 +34,13 @@ purge does (``general_settings.auditLogRetentionDays``, default 365, ``0`` =
 keep forever). Nothing to backfill — the history starts now.
 
 Revision ID: 154
-Revises: 153
+Revises: 154b
+
+Repointed from "153" to "154b" on the fork's merge of upstream on 2026-10-18:
+the fork already had its own "154" migration
+(``154_add_value_chain_permission.py``), renumbered to "154b" so this one
+keeps the canonical "154" id from upstream, following the "128"/"128b"
+precedent (``128_extension_sdk_1_2_bridges.py``).
 """
 
 from collections.abc import Sequence
@@ -46,7 +52,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "154"
-down_revision: Union[str, None] = "153"
+down_revision: Union[str, None] = "154b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

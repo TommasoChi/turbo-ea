@@ -8,6 +8,13 @@ admin already created by hand is left exactly as it is.
 Revision ID: 155
 Revises: 154
 Create Date: 2026-10-14
+
+Still chains after "154", but that id now names a different migration since
+the fork's merge of upstream on 2026-10-18: this fork's own former "154"
+(value-chain permission) was renumbered to "154b" so upstream's own "154"
+(audit_log) could take the plain id and sit between "154b" and "155" on the
+single line, following the "128"/"128b" precedent
+(``128_extension_sdk_1_2_bridges.py``).
 """
 
 from __future__ import annotations
