@@ -400,7 +400,7 @@ describe("the registry drives visibility and custom objects", () => {
     expect(entry).toBeDefined();
     expect(entry.group).toBe("application");
     expect(entry.title).toBe("AI Model");
-    expect(entry.html).toContain('data-archimate-type="AIModel"');
+    expect(entry.html).toContain('data-archimate-type="custom:AIModel"');
     expect(entry.html).toContain("--archimate-tile: #ab12cd");
     expect(entry.html).toContain('class="material-symbols-outlined"');
     expect(entry.html).toContain(">smart_toy<");
@@ -459,12 +459,31 @@ describe("the registry drives visibility and custom objects", () => {
     expect(customShapes()).toHaveLength(0);
   });
 
-  it("ignores a keydown on a tile whose data-archimate-type matches nothing in the registry", () => {
+  it("tells apart a custom object keyed literally \"Note\" from the real Note tile -- the `custom:` prefix, not reusing the bare key, is what keeps onKeyDown from confusing them", () => {
+    const noteKeyed = { ...AI_MODEL, key: "Note", layer: "other" as const };
+    const { entries, entry, press, customShapes, get } = setup([noteKeyed]);
+    // Both tiles exist, with DIFFERENT data-archimate-type values despite the same registry key.
+    expect(entries["create.note"].html).toContain('data-archimate-type="Note"');
+    expect(entries["create.Note"].html).toContain('data-archimate-type="custom:Note"');
+
+    press(entry("create.note"), "Enter");
+    const notes = get<ElementRegistry>("elementRegistry").filter((e) => isNoteObject(e.businessObject)) as Shape[];
+    expect(notes).toHaveLength(1);
+    expect(customShapes()).toHaveLength(0);
+
+    press(entry("create.Note"), "Enter");
+    expect(customShapes()).toHaveLength(1);
+    expect(customShapes()[0].businessObject).toMatchObject({ enterpriseObjectKey: "Note" });
+    // still exactly one note: the second drop did not also create (or instead create) a note
+    expect(get<ElementRegistry>("elementRegistry").filter((e) => isNoteObject(e.businessObject))).toHaveLength(1);
+  });
+
+  it("ignores a keydown on a custom-prefixed tile whose key matches nothing in the registry", () => {
     const { entry, press, customShapes } = setup([AI_MODEL]);
     const ghost = document.createElement("div");
     ghost.className = "entry archimate-palette-entry";
     ghost.setAttribute("tabindex", "0");
-    ghost.setAttribute("data-archimate-type", "NoSuchKey");
+    ghost.setAttribute("data-archimate-type", "custom:NoSuchKey");
     entry("create.AIModel").parentElement!.appendChild(ghost);
     press(ghost, "Enter");
     expect(customShapes()).toHaveLength(0);

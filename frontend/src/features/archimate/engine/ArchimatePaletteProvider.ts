@@ -79,6 +79,15 @@ const NOTE_ICON = svgOf(
 );
 /** `data-archimate-type` of the Note entry: a sentinel, never a real `ElementType`. */
 const NOTE_TYPE = "Note";
+/**
+ * Prefix for a custom Enterprise Object's `data-archimate-type`: `EnterpriseObject.key` is
+ * DB-unique, but with no prefix its bare value could collide with the `"Note"` sentinel (or, in
+ * principle, a real `ElementType` string) and `onKeyDown` would then have no way to tell the two
+ * tiles apart -- it only ever sees the attribute string, never which tile-building code produced
+ * it. The prefix makes the three namespaces (standard `ElementType`, the Note sentinel, a custom
+ * object's own key) disjoint by construction, not by hoping no admin ever picks a colliding key.
+ */
+const CUSTOM_TYPE_PREFIX = "custom:";
 
 function entryIcon(type: ElementType): string {
   const glyph = NOTATION[type].glyph;
@@ -180,7 +189,7 @@ export default class ArchimatePaletteProvider {
           group: layer,
           title: eo.name,
           html:
-            `<div class="entry ${ENTRY_CLASS}" ${TYPE_ATTR}="${escapeHtml(eo.key)}" tabindex="0" role="button" draggable="true" ` +
+            `<div class="entry ${ENTRY_CLASS}" ${TYPE_ATTR}="${escapeHtml(CUSTOM_TYPE_PREFIX + eo.key)}" tabindex="0" role="button" draggable="true" ` +
             `style="--archimate-tile: ${escapeHtml(eo.color)}">${customEntryIcon(eo.icon)}</div>`,
           action: { dragstart: createCustomShape, click: createCustomShape },
         };
@@ -215,12 +224,14 @@ export default class ArchimatePaletteProvider {
     if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
     const entry = (event.target as Element | null)?.closest?.(`.${ENTRY_CLASS}`);
     const type = entry?.getAttribute(TYPE_ATTR);
-    // A custom Enterprise Object's own registry key is checked FIRST, ahead of the Note sentinel
-    // and the real ElementTypes: its key is admin-defined free text, so on the off chance an admin
-    // names one "Note" (the sentinel) the real custom object this tile was built from still wins,
-    // never silently falling back to a generic Note instead of what the user actually clicked.
-    const eo = this.enterpriseObjects.find((o) => o.key === type && !o.is_standard);
-    if (eo) {
+    // The `custom:` prefix makes a custom object's attribute value structurally distinct from the
+    // Note sentinel and every real ElementType (see CUSTOM_TYPE_PREFIX's own doc) -- so, unlike a
+    // bare key, it can never be confused with the tile below even if an admin's own key happens to
+    // be the literal string "Note".
+    if (type?.startsWith(CUSTOM_TYPE_PREFIX)) {
+      const key = type.slice(CUSTOM_TYPE_PREFIX.length);
+      const eo = this.enterpriseObjects.find((o) => o.key === key && !o.is_standard);
+      if (!eo) return;
       event.preventDefault();
       this.dropAtCentre(this.elementFactory.createShape({ enterpriseObjectKey: eo.key }));
       return;
