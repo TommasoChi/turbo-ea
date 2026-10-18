@@ -44,22 +44,16 @@ def _route_writes_through_batch(patch_response: dict):
 class TestGetArchimateMapping:
     @pytest.mark.asyncio
     async def test_combines_types_and_relations_into_a_compact_mapping(self, fake_token):
-        types = [
-            {
-                "key": "Application",
-                "label": "Application",
-                "archimate_type": "ApplicationComponent",
-                "subtypes": [
-                    {"key": "microservice", "label": "Microservice", "archimate_type": None}
-                ],
-            },
-            {
-                "key": "BusinessContext",
-                "label": "Business Context",
-                "archimate_type": None,
-                "subtypes": [],
-            },
-        ]
+        card_type_mapping = {
+            "card_types": [
+                {
+                    "key": "Application",
+                    "archimate_types": ["ApplicationComponent"],
+                    "subtypes": {"microservice": ["ApplicationComponent"]},
+                },
+                {"key": "BusinessContext", "archimate_types": [], "subtypes": {}},
+            ]
+        }
         rels = [
             {
                 "key": "relAppToITC",
@@ -71,18 +65,18 @@ class TestGetArchimateMapping:
                 "archimate_access": None,
             }
         ]
-        get = AsyncMock(side_effect=[types, rels])
+        get = AsyncMock(side_effect=[card_type_mapping, rels])
         with patch.object(server.TurboEAClient, "get", get):
             out = json.loads(await server.get_archimate_mapping())
-        assert get.await_args_list[0].args == ("/metamodel/types",)
+        assert get.await_args_list[0].args == ("/metamodel/card-type-archimate-mapping",)
         assert get.await_args_list[1].args == ("/metamodel/relation-types",)
         assert out["card_types"] == [
             {
                 "key": "Application",
-                "archimate_type": "ApplicationComponent",
-                "subtypes": {"microservice": None},
+                "archimate_types": ["ApplicationComponent"],
+                "subtypes": {"microservice": ["ApplicationComponent"]},
             },
-            {"key": "BusinessContext", "archimate_type": None, "subtypes": {}},
+            {"key": "BusinessContext", "archimate_types": [], "subtypes": {}},
         ]
         assert out["relation_types"] == [
             {
@@ -102,11 +96,13 @@ class TestGetArchimateMapping:
 
     @pytest.mark.asyncio
     async def test_missing_archimate_fields_and_null_subtypes_degrade_to_defaults(self, fake_token):
-        types = [{"key": "T", "label": "T", "subtypes": None}]
+        card_type_mapping = {"card_types": [{"key": "T"}]}
         rels = [{"key": "r", "label": "R", "source_type_key": "A", "target_type_key": "B"}]
-        with patch.object(server.TurboEAClient, "get", AsyncMock(side_effect=[types, rels])):
+        with patch.object(
+            server.TurboEAClient, "get", AsyncMock(side_effect=[card_type_mapping, rels])
+        ):
             out = json.loads(await server.get_archimate_mapping())
-        assert out["card_types"] == [{"key": "T", "archimate_type": None, "subtypes": {}}]
+        assert out["card_types"] == [{"key": "T", "archimate_types": [], "subtypes": {}}]
         assert out["relation_types"][0]["reversed"] is False
         assert out["relation_types"][0]["archimate_type"] is None
         assert out["relation_types"][0]["access"] is None

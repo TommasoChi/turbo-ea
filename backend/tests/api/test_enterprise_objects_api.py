@@ -69,6 +69,54 @@ async def test_list_enterprise_objects_accessible_to_non_admin(client, db, viewe
     assert resp.status_code == 200
 
 
+# ---------------------------------------------------------------------------
+# GET /metamodel/card-type-archimate-mapping — n:m bridge-table resolution,
+# consumed by the MCP server's get_archimate_mapping tool.
+# ---------------------------------------------------------------------------
+
+
+async def test_card_type_archimate_mapping_resolves_bridge_table(client, db, admin_user):
+    await seed.seed_metamodel(db)
+
+    resp = await client.get(
+        "/api/v1/metamodel/card-type-archimate-mapping",
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    data_object = next(t for t in body["card_types"] if t["key"] == "DataObject")
+    assert "BusinessObject" in data_object["archimate_types"]
+
+
+async def test_card_type_archimate_mapping_unions_type_and_subtype_rows(client, db, admin_user):
+    """Organization is seeded with BOTH a type-level default (-> BusinessActor)
+    and a subtype-specific row for "region" (-> Location). The "region"
+    subtype's resolved set must union both — no override/cascade, per the
+    plan's flat-bridge-table rule."""
+    await seed.seed_metamodel(db)
+
+    resp = await client.get(
+        "/api/v1/metamodel/card-type-archimate-mapping",
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 200
+    org = next(t for t in resp.json()["card_types"] if t["key"] == "Organization")
+    assert "BusinessActor" in org["archimate_types"]  # type-level row
+    region = org["subtypes"]["region"]
+    assert "Location" in region  # subtype-specific row
+    assert "BusinessActor" in region  # unioned with the type-level row, not overridden
+
+
+async def test_card_type_archimate_mapping_accessible_to_non_admin(client, db, viewer_user):
+    await seed.seed_metamodel(db)
+
+    resp = await client.get(
+        "/api/v1/metamodel/card-type-archimate-mapping",
+        headers=auth_headers(viewer_user),
+    )
+    assert resp.status_code == 200
+
+
 async def test_create_custom_enterprise_object(client, db, admin_user):
     resp = await client.post(
         "/api/v1/metamodel/enterprise-objects",

@@ -113,6 +113,33 @@ class TestCreateType:
         )
         assert response.status_code == 403
 
+    async def test_archimate_type_on_create_is_silently_ignored(self, client, db, metamodel_env):
+        """Bug fix: CardType.archimate_type is unread by the switched-over
+        mapping consumers (the EnterpriseObjectCardMapping bridge table is
+        the real source of truth now) -- an incoming value must not be
+        persisted, same convention this endpoint already uses for any body
+        key missing from its field list (silently ignored, no 4xx)."""
+        admin = metamodel_env["admin"]
+        response = await client.post(
+            "/api/v1/metamodel/types",
+            json={
+                "key": "CustomWidget2",
+                "label": "Custom Widget 2",
+                "archimate_type": "ApplicationComponent",
+                "subtypes": [{"key": "sub", "label": "Sub", "archimate_type": "DataObject"}],
+            },
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["archimate_type"] is None
+        assert "archimate_type" not in data["subtypes"][0]
+
+        stored = await db.execute(select(CardType).where(CardType.key == "CustomWidget2"))
+        ct = stored.scalar_one()
+        assert ct.archimate_type is None
+        assert "archimate_type" not in ct.subtypes[0]
+
 
 class TestUpdateType:
     async def test_update_label(self, client, db, metamodel_env):
@@ -158,6 +185,33 @@ class TestUpdateType:
             select(CardType.translations).where(CardType.key == "Application")
         )
         assert stored.scalar_one() == {}
+
+    async def test_archimate_type_on_patch_is_silently_ignored(self, client, db, metamodel_env):
+        """Same convention as create: a PATCH body's archimate_type (on the
+        type or a subtype) is not in the field list this endpoint reads, so
+        it is dropped rather than persisted or rejected."""
+        admin = metamodel_env["admin"]
+        ct = await create_card_type(db, key="Application", label="Application")
+        ct.archimate_type = None
+        await db.flush()
+
+        response = await client.patch(
+            "/api/v1/metamodel/types/Application",
+            json={
+                "archimate_type": "ApplicationComponent",
+                "subtypes": [{"key": "sub", "label": "Sub", "archimate_type": "DataObject"}],
+            },
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["archimate_type"] is None
+        assert "archimate_type" not in data["subtypes"][0]
+
+        stored = await db.execute(select(CardType).where(CardType.key == "Application"))
+        refreshed = stored.scalar_one()
+        assert refreshed.archimate_type is None
+        assert "archimate_type" not in refreshed.subtypes[0]
 
 
 class TestTypeColor:
@@ -274,6 +328,48 @@ class TestDeleteType:
             headers=auth_headers(admin),
         )
         assert response.status_code == 400
+
+    async def test_delete_custom_type_with_card_mapping_does_not_500(
+        self, client, db, metamodel_env
+    ):
+        """Bug fix: a custom card type mapped to an Enterprise Object via the
+        Card Mapping editor (EnterpriseObjectCardMapping.card_type_key has an
+        implicit-RESTRICT FK to card_types.key) must not raise an unhandled
+        IntegrityError on delete -- the mapping row has to go first."""
+        from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
+
+        admin = metamodel_env["admin"]
+        await create_card_type(db, key="Custom", label="Custom")
+        db.add(
+            EnterpriseObject(
+                key="TestElement",
+                name="Test Element",
+                icon="category",
+                color="#1976d2",
+                is_standard=False,
+            )
+        )
+        await db.flush()
+        mapping = EnterpriseObjectCardMapping(
+            enterprise_object_key="TestElement",
+            card_type_key="Custom",
+            card_subtype_key=None,
+        )
+        db.add(mapping)
+        await db.flush()
+        mapping_id = mapping.id
+
+        response = await client.delete(
+            "/api/v1/metamodel/types/Custom",
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "deleted"
+
+        result = await db.execute(
+            select(EnterpriseObjectCardMapping).where(EnterpriseObjectCardMapping.id == mapping_id)
+        )
+        assert result.scalar_one_or_none() is None
 
 
 # ---------------------------------------------------------------------------

@@ -1735,29 +1735,31 @@ ARCHIMATE_RELATIONSHIP_TYPES: list[str] = [
 async def get_archimate_mapping() -> str:
     """How Turbo EA types map to ArchiMate 3.x concepts (read before drawing a diagram).
 
-    Returns every card type with its ArchiMate element type and subtype overrides,
-    and every relation type with its ArchiMate relationship type, whether the
-    ArchiMate relationship runs target -> source (``reversed``) and, for Access,
-    the access type (``crud`` = derive it from the relation's CRUD flags).
-    ``notes`` lists the valid ArchiMate names.
+    Returns every card type with the set of ArchiMate element types it can produce
+    (``archimate_types`` — a card type can map to more than one, n:m, resolved from
+    the Card Mapping bridge table) plus each subtype's own resolved set (its
+    type-level mapping unioned with any subtype-specific rows — there is no
+    override/cascade, both kinds of row apply at once). Also returns every relation
+    type with its ArchiMate relationship type, whether the ArchiMate relationship
+    runs target -> source (``reversed``) and, for Access, the access type (``crud``
+    = derive it from the relation's CRUD flags). ``notes`` lists the valid
+    ArchiMate names.
     """
     token = await _get_current_token()
     if not token:
         return "Error: Not authenticated. Please reconnect."
     client = TurboEAClient(token)
-    types = await client.get("/metamodel/types")
+    card_type_mapping = await client.get("/metamodel/card-type-archimate-mapping")
     rels = await client.get("/metamodel/relation-types")
     return _fmt(
         {
             "card_types": [
                 {
                     "key": t["key"],
-                    "archimate_type": t.get("archimate_type"),
-                    "subtypes": {
-                        s["key"]: s.get("archimate_type") for s in t.get("subtypes") or []
-                    },
+                    "archimate_types": t.get("archimate_types") or [],
+                    "subtypes": t.get("subtypes") or {},
                 }
-                for t in types
+                for t in card_type_mapping.get("card_types", [])
             ],
             "relation_types": [
                 {
