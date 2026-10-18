@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -9,6 +10,7 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import { listEnterpriseObjects, updateEnterpriseObject } from "@/api/enterpriseObjects";
 import { LAYER_ORDER, type ArchimateLayer } from "@/features/archimate/taxonomy/elements";
 import type { EnterpriseObject } from "@/types";
+import NewArchitectureObjectDialog from "./NewArchitectureObjectDialog";
 
 /**
  * Read-only Enterprise Object registry list, grouped by ArchiMate layer.
@@ -20,6 +22,7 @@ export default function CardMappingTabContent() {
   const { t } = useTranslation(["admin", "archimate", "common"]);
   const [objects, setObjects] = useState<EnterpriseObject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const fetchObjects = useCallback(async () => {
     setLoading(true);
@@ -67,6 +70,16 @@ export default function CardMappingTabContent() {
 
   return (
     <Box>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+        <Button
+          variant="contained"
+          startIcon={<MaterialSymbol icon="add" size={18} />}
+          onClick={() => setCreateOpen(true)}
+        >
+          {t("metamodel.newArchitectureObject")}
+        </Button>
+      </Box>
+
       {groups.map(({ layer, objects: layerObjects }) => (
         <Box key={layer} sx={{ mb: 3 }}>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
@@ -123,6 +136,12 @@ export default function CardMappingTabContent() {
           ))}
         </Box>
       ))}
+
+      <NewArchitectureObjectDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={fetchObjects}
+      />
     </Box>
   );
 }

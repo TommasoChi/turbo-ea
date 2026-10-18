@@ -128,4 +128,37 @@ describe("CardMappingTabContent", () => {
     fireEvent.click(toggle);
     expect(api.patch).not.toHaveBeenCalled();
   });
+
+  it("opens the New Architecture Object dialog and refetches the list on success", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.post).mockResolvedValue({
+      key: "AIModel",
+      name: "AI Model",
+      description: "",
+      icon: "category",
+      color: "#1976d2",
+      layer: "strategy",
+      is_standard: false,
+      is_locked: false,
+      is_hidden: false,
+      sort_order: 0,
+      card_mappings: [],
+    });
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    await user.click(screen.getByRole("button", { name: /New Architecture Object/ }));
+    await user.type(screen.getByLabelText("Key"), "AIModel");
+    await user.type(screen.getByLabelText("Name"), "AI Model");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        "/metamodel/enterprise-objects",
+        expect.objectContaining({ key: "AIModel", name: "AI Model" }),
+      ),
+    );
+    // One call on mount, one more from `onCreated`'s refetch after the create.
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+  });
 });

@@ -11,8 +11,8 @@ import CardMappingTabContent from "./CardMappingTabContent";
  * ("Card Mapping"). Mirrors RelationsTabContent's local `sub` state -- no
  * `?sub=` and no localStorage, for the same reason it gives there: a refresh
  * already lands back on Card Types, so a restored sub-tab would sit under a
- * parent nobody returned to. Later tasks (the New Architecture Object dialog,
- * description popover, bridge-table editor) add sub-tabs beside this one.
+ * parent nobody returned to. Later tasks (a description popover, the
+ * bridge-table editor) add sub-tabs beside this one.
  */
 export default function ArchitectureStudioTab() {
   const { t } = useTranslation(["admin"]);
