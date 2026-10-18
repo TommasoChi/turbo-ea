@@ -82,6 +82,11 @@ describe("useArchimateBridge", () => {
     consoleError.mockRestore();
   });
 
+  it("fetches the registry with includeHidden -- a hidden standard type's row must reach the engine, or ArchimatePaletteProvider's is_hidden check never sees it and the type stays shown", async () => {
+    renderHook(() => useArchimateBridge(), { wrapper });
+    await waitFor(() => expect(listEnterpriseObjectsMock).toHaveBeenCalledWith(true));
+  });
+
   it("enterpriseObjectsLoaded starts false and flips true once the fetch resolves", async () => {
     const { result } = renderHook(() => useArchimateBridge(), { wrapper });
     expect(result.current.enterpriseObjectsLoaded).toBe(false);

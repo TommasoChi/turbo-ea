@@ -57,7 +57,7 @@ export function useArchimateBridge(): ArchimateBridgeState {
 
   useEffect(() => {
     let cancelled = false;
-    listEnterpriseObjects()
+    listEnterpriseObjects(true)
       .then((loaded) => {
         if (!cancelled) {
           setObjects(loaded);
