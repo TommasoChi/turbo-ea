@@ -304,6 +304,32 @@ export interface CardType {
   default_color?: string | null;
 }
 
+/** A bridge row linking an Enterprise Object to a card type (optionally scoped
+ *  to one of its subtypes) that counts as an instance of it. */
+export interface EnterpriseObjectCardMapping {
+  id: string;
+  enterprise_object_key: string;
+  card_type_key: string;
+  card_subtype_key: string | null;
+}
+
+/** An ArchiMate Enterprise Object registry row (`GET /metamodel/enterprise-objects`).
+ *  Standard rows (`is_standard`) come from `seed_enterprise_objects`; a locked
+ *  one (`is_locked`) rejects PATCH edits entirely. */
+export interface EnterpriseObject {
+  key: string;
+  name: string;
+  description: string | null;
+  icon: string;
+  color: string;
+  layer: string | null;
+  is_standard: boolean;
+  is_locked: boolean;
+  is_hidden: boolean;
+  sort_order: number;
+  card_mappings: EnterpriseObjectCardMapping[];
+}
+
 /** One row of the card-type permission matrix (`GET /metamodel/types/{key}/permissions`).
  *  `inherited` is what the role grants landscape-wide; `overrides` is what this
  *  type stores. A permission missing from `overrides` inherits. */
