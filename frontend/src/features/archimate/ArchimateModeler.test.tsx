@@ -123,6 +123,22 @@ beforeEach(() => {
   mockApi.reset();
   mockApi.on("patch", "/diagrams/d1", {});
   mockApi.on("get", "/cards?ids=*", { items: [{ id: "c1", name: "CRM" }] });
+  // useArchimateBridge fetches the Enterprise Object registry to resolve card<->element
+  // mappings. Mirrors CARD_TYPES above: Application <-> ApplicationComponent, ITComponent <-> Node.
+  mockApi.on("get", "/metamodel/enterprise-objects", [
+    {
+      key: "ApplicationComponent",
+      card_mappings: [
+        { id: "m1", enterprise_object_key: "ApplicationComponent", card_type_key: "Application", card_subtype_key: null },
+      ],
+    },
+    {
+      key: "Node",
+      card_mappings: [
+        { id: "m2", enterprise_object_key: "Node", card_type_key: "ITComponent", card_subtype_key: null },
+      ],
+    },
+  ]);
   handle = null;
   vi.mocked(downloadText).mockClear();
 });
