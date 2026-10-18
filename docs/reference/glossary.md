@@ -4,6 +4,7 @@
 |------|------------|
 | **ADR (Architecture Decision Record)** | A formal document that captures an important architecture decision, including the context, decision rationale, consequences, and alternatives considered. ADRs support a sign-off workflow and revision chain |
 | **Approval Status** | The review state of a card: Draft, Approved, Broken, or Rejected. Approved cards change to Broken when edited |
+| **ArchiMate** | The Open Group's modelling language for enterprise architecture (version 3). Turbo EA draws ArchiMate diagrams in an administrator sandbox and stores them as Exchange files. See [ArchiMate Diagrams](../guide/archimate.md) |
 | **Bookmark / Saved View** | A saved filter, column, and sort configuration in the Inventory that can be reloaded with one click |
 | **BPM** | Business Process Management — the discipline of modeling, analyzing, and improving business processes |
 | **BPM Row Order** | The display order of process type rows (Core, Support, Management) in the BPM process navigator, configurable by dragging rows |
@@ -26,6 +27,7 @@
 | **Cost Line** | A budget or actual cost entry (CapEx/OpEx) in a PPM initiative, used to track financial spending |
 | **Enterprise Architecture (EA)** | The discipline that organizes and documents an organization's business and technology structure |
 | **EOL (End of Life)** | The date when a technology product loses vendor support. Tracked via integration with endoflife.date |
+| **Exchange format** | The Open Group's XML format for moving an ArchiMate model between tools (version 3.1). Turbo EA stores each ArchiMate diagram in it and can import and export it as an `.xml` file |
 | **Extension** | A vendor-signed add-on installed via Admin → Extensions that adds customer-specific capabilities (content, integrations, pages) without changing the Turbo EA core. Requires a license entitlement to run |
 | **Extension Bundle (.teax)** | The signed zip file an extension is delivered as. Its Ed25519 signature is verified on upload and at every backend start; unsigned or tampered bundles are rejected |
 | **Entitlement** | One line of a signed extension license: the right to run a specific extension until an expiry date, followed by a grace window before soft-disable |
@@ -40,6 +42,7 @@
 | **xBRL-CSV** | The machine-readable report package format supervisors accept for regulatory filings such as the DORA Register of Information |
 | **Gantt Chart** | A visual timeline with horizontal bars showing project schedule, duration, and progress for each work package and task |
 | **Initiative** | A project or program involving changes to the architecture |
+| **Layer** | A top-level grouping of ArchiMate elements: Strategy, Business, Application, Technology, Physical, Motivation, Implementation & Migration. The ArchiMate palette is organised by layer, and each layer has its own colour in the editor |
 | **Lifecycle** | The five phases a component goes through: Plan, Phase In, Active, Phase Out, End of Life |
 | **LLM** | Large Language Model — an AI model that generates text (e.g., Ollama, OpenAI, Anthropic Claude, Google Gemini) |
 | **MCP** | Model Context Protocol — an open standard that lets AI tools (Claude, Copilot, Cursor) connect to external data sources. Turbo EA's built-in MCP server provides read-only access to EA data with per-user RBAC |
@@ -53,6 +56,7 @@
 | **Reference Number** | An auto-generated sequential identifier for ADRs (e.g., ADR-001, ADR-002) that provides a unique, human-readable label |
 | **Recurring Todo** | A card todo set to repeat on a schedule (every N days/weeks/months/years). Completing it spawns the next occurrence; far-future occurrences sit "scheduled" until a lead-time window opens, when they surface on the Tasks page and notify the assignee |
 | **Relation** | A connection between two cards that describes how they relate (e.g., "uses", "depends on", "runs on") |
+| **Relationship matrix** | The table in the ArchiMate specification that says which relationships are allowed between two element types. The editor only lets you draw a relationship the matrix allows |
 | **Resources Tab** | A card detail tab that consolidates Architecture Decision Records, file attachments, and document links in one place |
 | **RAG Status** | Red-Amber-Green health indicator used in PPM status reports for schedule, cost, and scope (mapped to Off Track, At Risk, On Track) |
 | **Risk Score** | An auto-calculated value (probability x impact) that quantifies the severity of a project risk in the PPM risk register |
@@ -76,6 +80,7 @@
 | **Value Chain** | The read-only page under Org&Process that groups process categories into Management, Core and Support bands and draws the core value streams as a house between the customer request and the customer's satisfaction. See [Value Chain and Value Stream Maps](../guide/value-chain.md) |
 | **Value Gate** | An Objective card of the *Value gate* subtype: a checkpoint a value stream must pass. Value gates are drawn as pills in the top band of the Value Stream Map |
 | **Value Stream** | A Business Context card of the *Value stream* subtype: an end-to-end sequence of stages that delivers value to a customer. Stages are its child value streams, ordered by the *succeeds* relation. The Value Stream Map draws one value stream with the gates, processes and capabilities behind it |
+| **Viewpoint** | In ArchiMate, a predefined selection of element and relationship types that suits one audience or concern (for example Application Cooperation). The editor does not offer viewpoint filtering in this release |
 | **Web Portal** | A public, read-only view of selected cards accessible without authentication via a unique URL |
 | **Work Breakdown Structure (WBS)** | A hierarchical decomposition of project scope into work packages, each with start/end dates and completion tracking. Used in the PPM Gantt chart |
 | **Work Package** | A logical grouping of tasks within a Gantt timeline that has its own start date, end date, and completion percentage |

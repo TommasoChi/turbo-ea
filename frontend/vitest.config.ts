@@ -48,16 +48,18 @@ export default defineConfig({
         ["lcov", { projectRoot: path.resolve(__dirname, "..") }],
         "json-summary",
       ],
-      // Floors just under the measured totals (lines 88.8, statements 87.6,
-      // branches 83.0, functions 85.4 on 2026-10-15). Raise them in any PR
+      // Floors just under the measured totals (lines 89.7, statements 88.4,
+      // branches 83.4, functions 86.2 on 2026-10-16, ArchiMate modeler in;
+      // read on Windows with two script suites and a few locale-bound tests
+      // failing, so CI reads a little higher). Raise them in any PR
       // that lifts the number; never lower them. The published figure (unit
       // + browser suite, lines only) has its own floor in package.json,
       // config.coverageFloorMergedLines, read by scripts/merge-lcov.mjs.
       thresholds: {
-        lines: 87,
-        statements: 86,
-        branches: 81,
-        functions: 84,
+        lines: 88,
+        statements: 87,
+        branches: 82,
+        functions: 85,
       },
     },
   },

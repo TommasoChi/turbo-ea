@@ -5,6 +5,7 @@
 | **ADR (Architecture Decision Record)** | Um documento formal que registra uma decisão de arquitetura importante, incluindo contexto, justificativa, consequências e alternativas consideradas. Os ADRs suportam um fluxo de assinatura e uma cadeia de revisões |
 | **Ano Fiscal** | O período de 12 meses usado para orçamento e relatórios financeiros. Configurável via Admin > Configurações — o mês de início (janeiro a dezembro) determina como as linhas de orçamento PPM são agrupadas |
 | **Status de Aprovação** | O estado de revisão de um card: Rascunho, Aprovado, Quebrado ou Rejeitado. Cards aprovados mudam para Quebrado quando editados |
+| **ArchiMate** | A linguagem de modelação da Open Group para a arquitetura empresarial (versão 3). O Turbo EA desenha diagramas ArchiMate numa sandbox para administradores e guarda-os como ficheiros Exchange. Consulte [Diagramas ArchiMate](../guide/archimate.md) |
 | **Favorito / Visualização Salva** | Uma configuração salva de filtros, colunas e ordenação no Inventário que pode ser recarregada com um clique |
 | **BPM** | Business Process Management (Gestão de Processos de Negócio) — a disciplina de modelar, analisar e melhorar processos de negócio |
 | **BPMN** | Business Process Model and Notation — a notação padrão para modelagem de processos de negócio (versão 2.0) |
@@ -26,6 +27,7 @@
 | **DrawIO** | A ferramenta de diagramação de código aberto integrada, utilizada para diagramas visuais de arquitetura |
 | **Arquitetura Empresarial (EA)** | A disciplina que organiza e documenta a estrutura de negócios e tecnologia de uma organização |
 | **EOL (End of Life)** | A data em que um produto tecnológico perde o suporte do fornecedor. Rastreado via integração com endoflife.date |
+| **Formato de intercâmbio (Exchange format)** | O formato XML da Open Group para mover um modelo ArchiMate entre ferramentas (versão 3.1). O Turbo EA guarda nele cada diagrama ArchiMate e pode importá-lo e exportá-lo como ficheiro `.xml` |
 | **Extension (extensão)** | Um complemento assinado pelo fornecedor, instalado em Admin → Extensões, que adiciona capacidades específicas do cliente (conteúdo, integrações, páginas) sem alterar o núcleo do Turbo EA. Requer um direito de licença |
 | **Extension Bundle (.teax)** | O ficheiro zip assinado no qual uma extensão é entregue. A assinatura Ed25519 é verificada no carregamento e em cada arranque do backend; pacotes não assinados ou adulterados são rejeitados |
 | **Entitlement (direito)** | Uma linha de uma licença de extensão assinada: o direito de executar uma extensão específica até uma data de validade, seguida de um período de tolerância antes da desativação suave |
@@ -40,6 +42,7 @@
 | **xBRL-CSV** | O formato de pacote de relatório legível por máquina que os supervisores aceitam para submissões regulamentares como o registo de informação DORA |
 | **Diagrama de Gantt** | Uma linha do tempo visual com barras horizontais mostrando o cronograma, duração e progresso do projeto |
 | **Iniciativa** | Um projeto ou programa envolvendo mudanças na arquitetura |
+| **Camada (Layer)** | Um agrupamento de nível superior de elementos ArchiMate: Strategy, Business, Application, Technology, Physical, Motivation, Implementation & Migration. A paleta do ArchiMate está organizada por camada, e cada camada tem a sua própria cor no editor |
 | **Ciclo de Vida** | As cinco fases pelas quais um componente passa: Planejamento, Implantação, Ativo, Desativação, Fim de Vida |
 | **LLM** | Large Language Model (Modelo de Linguagem de Grande Escala) — um modelo de IA que gera texto (ex.: Ollama, OpenAI, Anthropic Claude, Google Gemini) |
 | **MCP** | Model Context Protocol — um padrão aberto que permite que ferramentas de IA (Claude, Copilot, Cursor) se conectem a fontes de dados externas. O servidor MCP integrado do Turbo EA fornece acesso somente leitura aos dados de EA com RBAC por usuário |
@@ -53,6 +56,7 @@
 | **Número de referência** | Um identificador sequencial gerado automaticamente para ADRs (ex.: ADR-001, ADR-002) que fornece um rótulo único e legível |
 | **Tarefa recorrente** | Uma tarefa de card configurada para repetir conforme um cronograma (a cada N dias/semanas/meses/anos). Ao concluí-la, a próxima ocorrência é criada; ocorrências distantes ficam «agendadas» até abrir uma janela de antecedência, então aparecem na página de Tarefas e notificam o responsável |
 | **Relacionamento** | Uma conexão entre dois cards que descreve como eles se relacionam (ex.: "utiliza", "depende de", "executa em") |
+| **Matriz de relacionamentos** | A tabela da especificação ArchiMate que indica que relacionamentos são permitidos entre dois tipos de elemento. O editor só deixa desenhar um relacionamento que a matriz permita |
 | **Aba Recursos** | Uma aba na página de detalhes do card que consolida Decisões de Arquitetura, anexos de arquivo e links de documentos em um só lugar |
 | **Revisão (ADR)** | Uma nova versão de um ADR assinado que herda o conteúdo e os vínculos de cards da versão anterior, com um número de revisão incrementado |
 | **Status RAG** | Indicador de saúde Vermelho-Âmbar-Verde usado nos relatórios de status PPM para cronograma, custos e escopo |
@@ -76,6 +80,7 @@
 | **Cadeia de valor** | A página somente leitura em Org&Process que agrupa as categorias de processos em faixas de gestão, principais e de suporte e desenha os fluxos de valor principais como uma casa entre a solicitação do cliente e a satisfação dele. Veja [Cadeia de valor e mapas de fluxo de valor](../guide/value-chain.md) |
 | **Portão de valor** | Um card de Objetivo do subtipo *Marco de valor*: um ponto de controle que um fluxo de valor precisa atravessar. Os portões de valor são desenhados como pílulas na faixa superior do mapa do fluxo de valor |
 | **Fluxo de valor** | Um card de Contexto de negócio do subtipo *Cadeia de valor*: uma sequência de etapas de ponta a ponta que entrega valor a um cliente. As etapas são seus fluxos de valor filhos, ordenados pela relação *sucede a*. O mapa do fluxo de valor desenha um fluxo com os portões, processos e capacidades por trás dele |
+| **Ponto de vista (Viewpoint)** | No ArchiMate, uma seleção predefinida de tipos de elemento e de relacionamento adequada a um público ou a uma preocupação (por exemplo Application Cooperation). O editor não oferece filtragem por ponto de vista nesta versão |
 | **Portal Web** | Uma visualização pública e somente leitura de cards selecionados, acessível sem autenticação por meio de uma URL única |
 | **Estrutura Analítica do Projeto (EAP / WBS)** | Uma decomposição hierárquica do escopo do projeto em pacotes de trabalho |
 | **Pacote de trabalho** | Um agrupamento lógico de tarefas dentro de um cronograma Gantt com suas próprias datas de início/fim e porcentagem de conclusão |

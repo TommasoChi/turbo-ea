@@ -1,6 +1,6 @@
 /**
  * ModuleGate — wraps a route element for an optional module (BPM, PPM,
- * TurboLens, GRC, Value Chain) and renders a friendly "module disabled" placeholder when the
+ * TurboLens, GRC, Value Chain, ArchiMate) and renders a friendly "module disabled" placeholder when the
  * admin has turned the module off, instead of letting the page load and
  * issue API calls that would fail or render an empty shell.
  */
@@ -13,13 +13,14 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import { useArchimateEnabled } from "@/hooks/useArchimateEnabled";
 import { useBpmEnabled } from "@/hooks/useBpmEnabled";
 import { useGrcEnabled } from "@/hooks/useGrcEnabled";
 import { usePpmEnabled } from "@/hooks/usePpmEnabled";
 import { useTurboLensReady } from "@/hooks/useTurboLensReady";
 import { useValueChainEnabled } from "@/hooks/useValueChainEnabled";
 
-type ModuleKey = "bpm" | "ppm" | "turbolens" | "grc" | "valuechain";
+type ModuleKey = "bpm" | "ppm" | "turbolens" | "grc" | "valuechain" | "archimate";
 
 interface Props {
   module: ModuleKey;
@@ -33,6 +34,7 @@ const SETTINGS_TAB: Record<ModuleKey, string> = {
   grc: "/admin/settings",
   // The Value Chain switch lives in the BPM settings tab.
   valuechain: "/admin/settings?tab=bpm",
+  archimate: "/admin/settings",
 };
 
 const MODULE_ICON: Record<ModuleKey, string> = {
@@ -41,6 +43,7 @@ const MODULE_ICON: Record<ModuleKey, string> = {
   turbolens: "psychology",
   grc: "policy",
   valuechain: "conveyor_belt",
+  archimate: "schema",
 };
 
 export default function ModuleGate({ module, children }: Props) {
@@ -51,6 +54,7 @@ export default function ModuleGate({ module, children }: Props) {
   const { turboLensEnabled, turboLensLoaded } = useTurboLensReady();
   const { grcEnabled, grcLoaded } = useGrcEnabled();
   const { valueChainEnabled, valueChainLoaded } = useValueChainEnabled();
+  const { archimateEnabled, archimateLoaded } = useArchimateEnabled();
 
   const enabled =
     module === "bpm"
@@ -61,7 +65,9 @@ export default function ModuleGate({ module, children }: Props) {
           ? grcEnabled
           : module === "valuechain"
             ? valueChainEnabled
-            : turboLensEnabled;
+            : module === "archimate"
+              ? archimateEnabled
+              : turboLensEnabled;
   const loaded =
     module === "bpm"
       ? bpmLoaded
@@ -71,7 +77,9 @@ export default function ModuleGate({ module, children }: Props) {
           ? grcLoaded
           : module === "valuechain"
             ? valueChainLoaded
-            : turboLensLoaded;
+            : module === "archimate"
+              ? archimateLoaded
+              : turboLensLoaded;
 
   // Wait for the first fetch to resolve before deciding — prevents the
   // disabled placeholder from flashing while the status request is in flight.

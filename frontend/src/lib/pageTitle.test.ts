@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import i18n from "@/i18n";
 import en from "@/i18n/locales/en/nav.json";
 import { itSourceScan } from "@/test/sourceScan";
 
@@ -24,6 +25,15 @@ describe("titleKeyForPath", () => {
   it("resolves a concrete path", () => {
     expect(titleKeyForPath("/inventory")).toBe("inventory");
     expect(titleKeyForPath("/cards/abc-123")).toBe("pageTitles.card");
+  });
+
+  it("titles both ArchiMate sandbox routes from the archimate namespace", () => {
+    for (const p of ["/admin/architectureStudio", "/admin/architectureStudio/abc"]) {
+      const key = titleKeyForPath(p);
+      expect(key).toBe("archimate:sandbox.title");
+      // DocumentTitle resolves it with t = useTranslation("nav").t
+      expect(i18n.t(key!, { lng: "en", ns: "nav" })).toBe("Architecture Studio");
+    }
   });
 
   it("prefers the more specific pattern", () => {
@@ -113,6 +123,13 @@ describe("composeTitle", () => {
   });
 });
 
+/** Does the title key resolve to a real string (`ns:key` is looked up in that namespace)? */
+function titleKeyResolves(titleKey: string, navKeys: Record<string, string>): boolean {
+  return titleKey.includes(":")
+    ? i18n.exists(titleKey, { lng: "en", ns: "nav" })
+    : typeof navKeys[titleKey] === "string" && navKeys[titleKey].length > 0;
+}
+
 describe("parity", () => {
   /**
    * Every route declared in `App.tsx` — the authenticated table AND the
@@ -150,13 +167,21 @@ describe("parity", () => {
    * i18next renders an unknown key as the key itself, so a typo would ship a
    * tab reading «pageTitles.crad | Turbo EA» with nothing to catch it.
    */
-  it("only names keys the nav namespace actually defines", () => {
+  it("only names keys the nav namespace (or the namespace they are prefixed with) defines", () => {
     const keys = en as Record<string, string>;
     for (const { path: routePath, titleKey } of ROUTE_TITLES) {
-      expect(
-        typeof keys[titleKey] === "string" && keys[titleKey].length > 0,
-        `${routePath} names unknown nav key "${titleKey}"`,
-      ).toBe(true);
+      expect(titleKeyResolves(titleKey, keys), `${routePath} names unknown title key "${titleKey}"`).toBe(true);
     }
+  });
+
+  // i18n.t() of a missing prefixed key answers with the key minus its prefix, which looks like a
+  // translation: the guard above must use exists(), and must be able to fail.
+  it("rejects a mistyped title key, prefixed or not", () => {
+    const keys = en as Record<string, string>;
+    expect(i18n.exists("archimate:nope.nope", { lng: "en", ns: "nav" })).toBe(false);
+    expect(titleKeyResolves("archimate:sandbox.titel", keys)).toBe(false);
+    expect(titleKeyResolves("archimate:sandbox.title", keys)).toBe(true);
+    expect(titleKeyResolves("pageTitles.crad", keys)).toBe(false);
+    expect(titleKeyResolves("pageTitles.card", keys)).toBe(true);
   });
 });

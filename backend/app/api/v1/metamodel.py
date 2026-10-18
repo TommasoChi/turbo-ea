@@ -8,6 +8,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -21,6 +22,7 @@ from app.models.card import Card
 from app.models.card_type import CardType
 from app.models.compliance_regulation import ComplianceRegulation
 from app.models.ea_principle import EAPrinciple
+from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.resource_type import ResourceType
@@ -28,6 +30,8 @@ from app.models.role import Role
 from app.models.stakeholder import Stakeholder
 from app.models.user import User
 from app.services import card_reference
+from app.services.archimate import taxonomy
+from app.services.archimate.card_type_mapping import get_card_type_mapping
 from app.services.extensions.registry import extension_registry
 from app.services.hierarchy import (
     HIERARCHY_LEVEL_KEY,
@@ -61,6 +65,34 @@ def _validate_color(body: dict) -> None:
         isinstance(body["color"], str) and _HEX_COLOR_RE.match(body["color"])
     ):
         raise HTTPException(400, "color must be a hex value in #rrggbb format")
+
+
+def _validate_archimate(body: dict, *, relation: bool = False) -> None:
+    """422 for names that are not in the ArchiMate 3.1 XSD enumerations.
+
+    Card-type/subtype ``archimate_type`` is deliberately NOT validated here
+    (and not written anywhere in this file) -- the EnterpriseObjectCardMapping
+    bridge table is the real source of truth for card-type-to-ArchiMate
+    mapping now; ``CardType.archimate_type``/``subtypes[].archimate_type``
+    stay in the model and in GET responses (a later cleanup), but this write
+    path no longer looks at an incoming value for either. Relation-type
+    mapping (``archimate_type``/``archimate_access``/``archimate_reversed``
+    below) is untouched -- that is the next plan's job.
+    """
+    from app.services.archimate import taxonomy as tx
+
+    def check(label: str, value: object, allowed: object) -> None:
+        # isinstance first: `in` on a frozenset raises TypeError (500) for lists/dicts.
+        if value is not None and not (isinstance(value, str) and value in allowed):
+            raise HTTPException(422, f"Unknown {label}: {value!r}")
+
+    if relation:
+        check("ArchiMate relationship type", body.get("archimate_type"), tx.RELATIONSHIP_TYPES)
+    check("ArchiMate access type", body.get("archimate_access"), (*tx.ACCESS_TYPES, "crud"))
+    if "archimate_reversed" in body and not isinstance(body["archimate_reversed"], bool):
+        raise HTTPException(
+            422, f"archimate_reversed must be a boolean, got {body['archimate_reversed']!r}"
+        )
 
 
 def _scoring_signature(fields_schema: list | None, section_config: dict | None) -> dict:
@@ -231,6 +263,7 @@ def _serialize_type(t: CardType, *, include_role_permissions: bool = True) -> di
         # Seed default for built-in types (None for custom types) — powers the
         # admin "reset to default color" affordance.
         "default_color": DEFAULT_TYPE_COLORS.get(t.key),
+        "archimate_type": t.archimate_type,
     }
     if not include_role_permissions:
         out.pop("role_permissions", None)
@@ -255,6 +288,9 @@ def _serialize_relation_type(r: RelationType) -> dict:
         "source_mandatory": r.source_mandatory,
         "target_visible": r.target_visible,
         "target_mandatory": r.target_mandatory,
+        "archimate_type": r.archimate_type,
+        "archimate_access": r.archimate_access,
+        "archimate_reversed": r.archimate_reversed,
     }
 
 
@@ -843,12 +879,33 @@ def _remove_injected_hierarchy_level_field(schema: list) -> list:
     return schema
 
 
+def _strip_subtype_archimate_type(subtypes: object) -> list:
+    """Return a copy of ``subtypes`` with any ``archimate_type`` key removed.
+
+    The EnterpriseObjectCardMapping bridge table is the real source of truth
+    for card-type-to-ArchiMate mapping now; a subtype's own ``archimate_type``
+    override is unread by the switched-over consumers (the frontend's
+    ``elementTypesForCardType``, the MCP ``get_archimate_mapping`` tool), so
+    accepting a new value here would create the illusion of effect. Each
+    subtype is a free-form JSON dict (no separate column/model), so stopping
+    the write means stripping the key from the dict itself, not just skipping
+    validation of it.
+    """
+    out = []
+    for sub in subtypes if isinstance(subtypes, list) else []:
+        if isinstance(sub, dict) and "archimate_type" in sub:
+            sub = {k: v for k, v in sub.items() if k != "archimate_type"}
+        out.append(sub)
+    return out
+
+
 @router.post("/types", status_code=201)
 async def create_type(
     body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
     _validate_color(body)
+    _validate_archimate(body)
     existing = await db.execute(select(CardType).where(CardType.key == body.get("key", "")))
     if existing.scalar_one_or_none():
         raise HTTPException(400, "Type key already exists")
@@ -886,7 +943,7 @@ async def create_type(
         has_hierarchy=body.get("has_hierarchy", False),
         has_successors=body.get("has_successors", False),
         allow_card_logo=body.get("allow_card_logo", False),
-        subtypes=body.get("subtypes", []),
+        subtypes=_strip_subtype_archimate_type(body.get("subtypes", [])),
         hierarchy_labels=body.get("hierarchy_labels", []),
         fields_schema=fields_schema,
         stakeholder_roles=body.get("stakeholder_roles", default_roles),
@@ -896,6 +953,8 @@ async def create_type(
         is_hidden=False,
         sort_order=body.get("sort_order", next_order),
         translations=body.get("translations", {}),
+        # archimate_type is deliberately not accepted here -- see
+        # _validate_archimate's docstring; the column stays NULL on create.
     )
     db.add(t)
     if t.has_successors:
@@ -916,6 +975,7 @@ async def update_type(
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
     _validate_color(body)
+    _validate_archimate(body)
     result = await db.execute(select(CardType).where(CardType.key == key))
     t = result.scalar_one_or_none()
     if not t:
@@ -985,6 +1045,9 @@ async def update_type(
         "sort_order",
         "is_hidden",
         "translations",
+        # archimate_type deliberately excluded -- see _validate_archimate's
+        # docstring; a client-sent value is silently ignored, same as any
+        # other key missing from this list.
     ]
     for field in updatable:
         if field in body:
@@ -992,6 +1055,8 @@ async def update_type(
                 # NOT NULL column — a client clearing every translation must land
                 # an empty map, not a constraint violation.
                 t.translations = body["translations"] or {}
+            elif field == "subtypes":
+                t.subtypes = _strip_subtype_archimate_type(body["subtypes"])
             else:
                 setattr(t, field, body[field])
 
@@ -1122,6 +1187,23 @@ async def delete_type(
     )
     for rt in rel_result.scalars().all():
         await db.delete(rt)
+
+    # Also delete Enterprise Object card-mapping rows that reference this
+    # type -- card_type_key is a FK to card_types.key with implicit
+    # RESTRICT, so leaving a mapping row behind would raise an unhandled
+    # IntegrityError at commit when an admin deletes a custom card type
+    # they had mapped via the Card Mapping editor.
+    mapping_result = await db.execute(
+        select(EnterpriseObjectCardMapping).where(EnterpriseObjectCardMapping.card_type_key == key)
+    )
+    for m in mapping_result.scalars().all():
+        await db.delete(m)
+    # Flush now so the mapping deletes are issued before the CardType delete
+    # below -- SQLAlchemy's unit of work has no declared relationship() tying
+    # EnterpriseObjectCardMapping to CardType, so a single flush at commit
+    # time is not guaranteed to order them correctly and can hit the same
+    # FK violation this fix exists to avoid.
+    await db.flush()
 
     await db.delete(t)
     await db.commit()
@@ -1291,6 +1373,7 @@ async def create_relation_type(
     body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
+    _validate_archimate(body, relation=True)
     existing = await db.execute(select(RelationType).where(RelationType.key == body.get("key", "")))
     if existing.scalar_one_or_none():
         raise HTTPException(400, "Relation type key already exists")
@@ -1324,6 +1407,9 @@ async def create_relation_type(
         source_mandatory=body.get("source_mandatory", False),
         target_visible=body.get("target_visible", True),
         target_mandatory=body.get("target_mandatory", False),
+        archimate_type=body.get("archimate_type"),
+        archimate_access=body.get("archimate_access"),
+        archimate_reversed=body.get("archimate_reversed", False),
     )
     db.add(rt)
     await db.commit()
@@ -1336,6 +1422,7 @@ async def update_relation_type(
     key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
+    _validate_archimate(body, relation=True)
     result = await db.execute(select(RelationType).where(RelationType.key == key))
     r = result.scalar_one_or_none()
     if not r:
@@ -1376,6 +1463,9 @@ async def update_relation_type(
         "source_mandatory",
         "target_visible",
         "target_mandatory",
+        "archimate_type",
+        "archimate_access",
+        "archimate_reversed",
     ]
     for field in updatable:
         if field not in body:
@@ -1883,3 +1973,216 @@ async def delete_resource_type(
         )
     await db.delete(r)
     await db.commit()
+
+
+# ── Enterprise Objects ──────────────────────────────────────────────────
+
+
+def _serialize_enterprise_object_card_mapping(m: EnterpriseObjectCardMapping) -> dict:
+    return {
+        "id": str(m.id),
+        "enterprise_object_key": m.enterprise_object_key,
+        "card_type_key": m.card_type_key,
+        "card_subtype_key": m.card_subtype_key,
+    }
+
+
+def _serialize_enterprise_object(
+    o: EnterpriseObject, mappings: list[EnterpriseObjectCardMapping]
+) -> dict:
+    return {
+        "key": o.key,
+        "name": o.name,
+        "description": o.description,
+        "icon": o.icon,
+        "color": o.color,
+        "layer": o.layer,
+        "is_standard": o.is_standard,
+        "is_locked": o.is_locked,
+        "is_hidden": o.is_hidden,
+        "sort_order": o.sort_order,
+        "card_mappings": [_serialize_enterprise_object_card_mapping(m) for m in mappings],
+    }
+
+
+@router.get("/enterprise-objects")
+async def list_enterprise_objects(
+    include_hidden: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """List the ArchiMate Enterprise Object registry with their card mappings.
+
+    Authenticated read, like ``GET /types`` — the drawing palette calls this
+    for any user who can edit a diagram, not just admins who manage the
+    metamodel, so there is no ``admin.metamodel`` gate here.
+    """
+    q = select(EnterpriseObject).order_by(EnterpriseObject.sort_order)
+    if not include_hidden:
+        q = q.where(EnterpriseObject.is_hidden == False)  # noqa: E712
+    result = await db.execute(q)
+    objects = result.scalars().all()
+
+    mappings_result = await db.execute(select(EnterpriseObjectCardMapping))
+    mappings_by_object: dict[str, list[EnterpriseObjectCardMapping]] = {}
+    for m in mappings_result.scalars().all():
+        mappings_by_object.setdefault(m.enterprise_object_key, []).append(m)
+
+    return [_serialize_enterprise_object(o, mappings_by_object.get(o.key, [])) for o in objects]
+
+
+@router.post("/enterprise-objects", status_code=201)
+async def create_enterprise_object(
+    body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Create a custom Enterprise Object. Always ``is_standard=False`` and
+    ``is_locked=False`` — the standard registry rows only ever come from
+    ``seed_enterprise_objects``."""
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    key = body.get("key", "")
+    if key in taxonomy.ALL_ELEMENT_TYPES:
+        # Reject even if no row for this standard key exists yet (e.g. a
+        # fresh DB that hasn't been seeded) — the key is reserved regardless.
+        raise HTTPException(409, "Key collides with a standard ArchiMate element type")
+    existing = await db.execute(select(EnterpriseObject).where(EnterpriseObject.key == key))
+    if existing.scalar_one_or_none():
+        raise HTTPException(409, "Enterprise object key already exists")
+
+    max_order = await db.execute(select(func.max(EnterpriseObject.sort_order)))
+    next_order = (max_order.scalar() or 0) + 1
+
+    o = EnterpriseObject(
+        key=body["key"],
+        name=body["name"],
+        description=body.get("description"),
+        icon=body.get("icon", "category"),
+        color=body.get("color", "#1976d2"),
+        layer=body.get("layer"),
+        is_standard=False,
+        is_locked=False,
+        is_hidden=body.get("is_hidden", False),
+        sort_order=body.get("sort_order", next_order),
+    )
+    db.add(o)
+    await db.commit()
+    await db.refresh(o)
+    return _serialize_enterprise_object(o, [])
+
+
+@router.patch("/enterprise-objects/{key}")
+async def update_enterprise_object(
+    key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(select(EnterpriseObject).where(EnterpriseObject.key == key))
+    o = result.scalar_one_or_none()
+    if not o:
+        raise HTTPException(404, "Enterprise object not found")
+    if o.is_locked:
+        # Checked before touching the body at all, so a locked row's fields
+        # never change even if some of the PATCH body's keys would otherwise
+        # be no-ops.
+        raise HTTPException(422, "Enterprise object is locked and cannot be edited")
+
+    updatable = ["name", "description", "icon", "color", "layer", "is_hidden", "sort_order"]
+    for field in updatable:
+        if field in body:
+            setattr(o, field, body[field])
+
+    await db.commit()
+    await db.refresh(o)
+    mappings_result = await db.execute(
+        select(EnterpriseObjectCardMapping).where(
+            EnterpriseObjectCardMapping.enterprise_object_key == o.key
+        )
+    )
+    return _serialize_enterprise_object(o, mappings_result.scalars().all())
+
+
+@router.post("/enterprise-objects/{key}/card-mappings", status_code=201)
+async def add_card_mapping(
+    key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Add one card-type (or card-type+subtype) mapping row to an Enterprise Object."""
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(select(EnterpriseObject).where(EnterpriseObject.key == key))
+    if not result.scalar_one_or_none():
+        raise HTTPException(404, "Enterprise object not found")
+
+    card_type_key = body.get("card_type_key")
+    if not card_type_key:
+        raise HTTPException(400, "card_type_key is required")
+    type_exists = await db.execute(select(CardType.key).where(CardType.key == card_type_key))
+    if not type_exists.scalar_one_or_none():
+        raise HTTPException(400, f"Card type '{card_type_key}' does not exist")
+
+    # Deliberately not validated against the card type's live `subtypes` —
+    # a later subtype rename must not retroactively break this row.
+    card_subtype_key = body.get("card_subtype_key")
+    if card_subtype_key is not None and not (
+        isinstance(card_subtype_key, str) and card_subtype_key
+    ):
+        raise HTTPException(400, "card_subtype_key must be a non-empty string or omitted")
+
+    m = EnterpriseObjectCardMapping(
+        enterprise_object_key=key,
+        card_type_key=card_type_key,
+        card_subtype_key=card_subtype_key,
+    )
+    db.add(m)
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Unique constraint is (enterprise_object_key, card_type_key,
+        # card_subtype_key) with nulls_not_distinct — two NULL-subtype rows
+        # for the same object+type collide too, not just literal duplicates.
+        await db.rollback()
+        raise HTTPException(409, "This card mapping already exists") from None
+    await db.refresh(m)
+    return _serialize_enterprise_object_card_mapping(m)
+
+
+@router.delete("/enterprise-objects/{key}/card-mappings/{mapping_id}", status_code=204)
+async def remove_card_mapping(
+    key: str,
+    mapping_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(
+        select(EnterpriseObjectCardMapping).where(
+            EnterpriseObjectCardMapping.id == uuid.UUID(mapping_id),
+            EnterpriseObjectCardMapping.enterprise_object_key == key,
+        )
+    )
+    m = result.scalar_one_or_none()
+    if not m:
+        raise HTTPException(404, "Card mapping not found")
+    await db.delete(m)
+    await db.commit()
+
+
+@router.get("/card-type-archimate-mapping")
+async def get_card_type_archimate_mapping(
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Every card type's (and subtype's) current ArchiMate element type
+    mapping, resolved from the EnterpriseObjectCardMapping bridge table --
+    the n:m replacement for the old single ``CardType.archimate_type``
+    column. Consumed by the MCP server's ``get_archimate_mapping`` tool.
+
+    Authenticated read, like ``GET /enterprise-objects`` — no
+    ``admin.metamodel`` gate, since this only reports the live mapping.
+    Excludes hidden/soft-deleted types and orders by ``sort_order``, same as
+    ``GET /metamodel/types`` (the endpoint this one is meant to sit beside
+    for the MCP tool, which should not see a type a `DELETE /types/{key}`
+    soft-delete hid from everywhere else).
+    """
+    result = await db.execute(
+        select(CardType.key, CardType.subtypes)
+        .where(CardType.is_hidden == False)  # noqa: E712
+        .order_by(CardType.sort_order)
+    )
+    card_types = [{"key": key, "subtypes": subtypes or []} for key, subtypes in result.all()]
+    return {"card_types": await get_card_type_mapping(db, card_types)}

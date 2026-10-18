@@ -245,6 +245,20 @@ Klik på ikonet **Administrer relationsværdier** (etiket) på en relationsrækk
 
 Indbyggede værdier (Ejer, Bruger, Interessent, flowretningsværdierne …) er **låst**: de kan ikke omdøbes, omfarves eller slettes. Du kan dog **skjule** en indbygget værdi, så den ikke længere vises i vælgeren på kort — en allerede valgt værdi forbliver synlig. Dine egne værdier kan redigeres og fjernes frit.
 
+## ArchiMate-mapping
+
+For at [ArchiMate-editoren](../guide/archimate.md) kan knytte diagrammer til kort, indeholder metamodellen en **mapping** til ArchiMate 3-begreber. Felterne er synlige gennem metamodel-API'et (`/metamodel/types` og `/metamodel/relation-types`) og er **skrivebeskyttede i admin-brugerfladen**: skærmbilledet til at redigere dem (**ARCHI MAP**) kommer i den næste version.
+
+| På | Felt | Betydning |
+|----|-------|---------|
+| **Korttype** | `archimate_type` | Det ArchiMate-element, et kort af denne type tegnes som (for eksempel `ApplicationComponent`). Tomt betyder ingen mapping: dens kort kan ikke knyttes til et element |
+| **Undertype** | `archimate_type` | Valgfri tilsidesættelse af korttypens element for kort af denne undertype. Tomt betyder, at undertypen bruger korttypens mapping |
+| **Relationstype** | `archimate_type` | ArchiMate-relationen (for eksempel `Serving`, `Flow`, `Access`) |
+| **Relationstype** | `archimate_reversed` | Retningsflag. Når det er sat, går ArchiMate-relationen fra målkortet til kildekortet, så «Organisation *bruger* Applikation» bliver en *Serving* fra applikationen til organisationen |
+| **Relationstype** | `archimate_access` | Kun for `Access`: `Access`, `Read`, `Write`, `ReadWrite` eller `crud` (adgangstypen følger relationens egne Create/Read/Update/Delete-flag) |
+
+Element- og relationsnavnene er dem fra Open Groups udvekslingsformat. Standardværdierne kommer fra seed; de fulde standardtabeller findes i [Mappingen](../guide/archimate.md#mapping).
+
 ## Beregninger
 
 Beregnede felter bruger admin-definerede formler til automatisk at beregne værdier, når kort gemmes. Se [Beregninger](calculations.md) for den fulde vejledning.

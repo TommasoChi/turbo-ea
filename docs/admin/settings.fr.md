@@ -4,7 +4,7 @@ La page **Paramètres** sous **Admin → Paramètres** (`/admin/settings`) est l
 
 | Onglet | URL | Ce qu'il contrôle | Guide complet |
 |--------|-----|-------------------|---------------|
-| **Général** | `/admin/settings?tab=general` | Apparence (logo, favicon, devise, format de date, langues activées, année fiscale), envoi d'e-mails, **bascules de modules** (BPM, PPM, GRC, TurboLens, Sponsor button) | Cette page |
+| **Général** | `/admin/settings?tab=general` | Apparence (logo, favicon, devise, format de date, langues activées, année fiscale), envoi d'e-mails, **bascules de modules** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Cette page |
 | **Authentification** | `/admin/settings?tab=authentication` | Fournisseurs SSO, inscription, politique de mot de passe | [Authentification & SSO](sso.md) |
 | **IA** | `/admin/settings?tab=ai` | Fournisseur LLM, modèle, backend de recherche web, bascules de suggestion IA par type de fiche | [Capacités IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Liaison en masse des produits aux entrées endoflife.date | [Fin de vie (EOL)](eol.md) |
@@ -183,6 +183,17 @@ Activez ou désactivez le module **Gouvernance, Risque et Conformité** (GRC). L
 - Les risques et les constats de conformité restent dans la base de données — les permissions sous-jacentes `risks.*` et `compliance.*` sont inchangées, de sorte que les données sont préservées et réapparaissent telles quelles si le module est réactivé
 
 Voir le [guide GRC](../guide/grc.md) pour la référence complète des fonctionnalités.
+
+## Module ArchiMate
+
+La carte **Diagrammes ArchiMate** active ou désactive le module [ArchiMate](../guide/archimate.md). Il est **désactivé par défaut**.
+
+- Lorsqu'il est activé, le bac à sable, à l'adresse `/admin/architectureStudio`, et l'éditeur ArchiMate deviennent disponibles, et la carte affiche un bouton **Ouvrir le bac à sable** qui mène directement à la liste des diagrammes ArchiMate.
+- Lorsqu'il est désactivé, les deux pages sont inaccessibles et affichent l'espace réservé standard « module désactivé » à quiconque suit un lien direct. Les diagrammes déjà enregistrés sont conservés et réapparaissent à l'identique si le module est réactivé.
+
+Pour ouvrir le bac à sable, il faut la permission `admin.settings` (détenue par défaut par le rôle Admin) et le module activé. Le commutateur ne masque que l'interface : l'API REST et les outils MCP (`get_archimate_mapping`, `create_archimate_diagram`, `update_archimate_diagram`) restent appelables lorsque le module est désactivé.
+
+Consultez le [guide ArchiMate](../guide/archimate.md) pour savoir comment dessiner et échanger des diagrammes.
 
 ## Notifications de mise à jour
 

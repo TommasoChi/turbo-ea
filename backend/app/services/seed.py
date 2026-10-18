@@ -21,6 +21,11 @@ from app.models.relation_type import RelationType
 from app.models.resource_type import ResourceType
 from app.models.role import Role
 from app.models.stakeholder_role_definition import StakeholderRoleDefinition
+from app.services.archimate import default_mapping as _archimate
+from app.services.archimate.enterprise_object_seed import (
+    seed_card_mappings,
+    seed_enterprise_objects,
+)
 from app.services.hierarchy import HIERARCHY_LEVEL_KEY, hierarchy_level_field_def
 
 # ── Reusable option lists ──────────────────────────────────────────────
@@ -5762,6 +5767,41 @@ def _inject_english_translations_relation(rel_def: dict) -> dict:
     return r
 
 
+def _with_archimate(types: list[dict]) -> list[dict]:
+    """Stamp the default ArchiMate mapping onto type and subtype definitions."""
+    out = []
+    for t in types:
+        t = dict(t)
+        t["archimate_type"] = _archimate.CARD_TYPE_DEFAULTS.get(t["key"])
+        subs = []
+        for s in t.get("subtypes") or []:
+            if isinstance(s, dict):
+                wanted = _archimate.SUBTYPE_DEFAULTS.get((t["key"], s["key"]))
+                s = {**s, "archimate_type": wanted} if wanted else s
+            subs.append(s)
+        t["subtypes"] = subs
+        out.append(t)
+    return out
+
+
+def _relation_archimate(key: str) -> dict:
+    """RelationType columns carrying the default ArchiMate mapping for ``key``."""
+    d = _archimate.RELATION_DEFAULTS.get(key)
+    if (
+        d is None
+        and key.startswith(_archimate.SUCCESSOR_KEYS_PREFIX)
+        and key.endswith(_archimate.SUCCESSOR_KEYS_SUFFIX)
+    ):
+        d = _archimate.SUCCESSOR_DEFAULT
+    if d is None:
+        return {}
+    return {
+        "archimate_type": d["type"],
+        "archimate_reversed": bool(d.get("reversed", False)),
+        "archimate_access": d.get("access"),
+    }
+
+
 async def seed_metamodel(db: AsyncSession) -> None:
     """Seed the default metamodel, adding any missing types and relations.
 
@@ -5858,7 +5898,7 @@ async def seed_metamodel(db: AsyncSession) -> None:
     # TYPES / RELATIONS are module constants that the demo seeders and tests
     # read too, so injecting into them in place made those readers depend on
     # whether a seed had already run in the same process.
-    types = copy.deepcopy(TYPES)
+    types = _with_archimate(copy.deepcopy(TYPES))
     relations = copy.deepcopy(RELATIONS)
 
     # Inject the built-in hierarchyLevel field into every hierarchical type
@@ -5990,6 +6030,7 @@ async def seed_metamodel(db: AsyncSession) -> None:
             has_successors=t.get("has_successors", False),
             allow_card_logo=t.get("allow_card_logo", False),
             subtypes=t.get("subtypes", []),
+            archimate_type=t.get("archimate_type"),
             fields_schema=t.get("fields_schema", []),
             stakeholder_roles=t.get("stakeholder_roles", roles),
             built_in=True,
@@ -6029,6 +6070,7 @@ async def seed_metamodel(db: AsyncSession) -> None:
             is_hidden=False,
             sort_order=r.get("sort_order", i),
             translations=r.get("translations", {}),
+            **_relation_archimate(r["key"]),
         )
         db.add(rt)
 
@@ -6524,5 +6566,9 @@ async def seed_metamodel(db: AsyncSession) -> None:
                 translations=rt["translations"],
             )
         )
+
+    # ── Enterprise Object registry (ArchiMate element type palette) ───────
+    await seed_enterprise_objects(db)
+    await seed_card_mappings(db)
 
     await db.commit()

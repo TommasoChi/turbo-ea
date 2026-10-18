@@ -39,10 +39,13 @@ const BODY = {
   smtp_configured: false,
 };
 
+const ARCHIMATE_PATH = "/settings/archimate-enabled";
+
 async function load() {
   const bootstrap = await import("./bootstrap");
   const vc = await import("@/hooks/useValueChainEnabled");
-  return { ...bootstrap, ...vc };
+  const archimate = await import("@/hooks/useArchimateEnabled");
+  return { ...bootstrap, ...vc, ...archimate };
 }
 
 beforeEach(() => {
@@ -72,5 +75,29 @@ describe("primeBootstrap — value chain", () => {
     const { result } = renderHook(() => useValueChainEnabled());
     await waitFor(() => expect(result.current.valueChainRawEnabled).toBe(false));
     expect(mockApi.callsOf("get", VC_PATH)).toHaveLength(1);
+  });
+});
+
+describe("primeBootstrap — archimate", () => {
+  it("primes the archimate flag so a fresh hook makes no request of its own", async () => {
+    mockApi.on("get", BOOTSTRAP, { ...BODY, archimate_enabled: true });
+    const { primeBootstrap, resetBootstrap, useArchimateEnabled } = await load();
+    resetBootstrap();
+    await primeBootstrap();
+    const { result } = renderHook(() => useArchimateEnabled());
+    expect(result.current.archimateLoaded).toBe(true);
+    expect(result.current.archimateEnabled).toBe(true);
+    expect(mockApi.callsOf("get", ARCHIMATE_PATH)).toHaveLength(0);
+  });
+
+  it("leaves the cache untouched when the body has no archimate_enabled", async () => {
+    mockApi.on("get", BOOTSTRAP, BODY);
+    mockApi.on("get", ARCHIMATE_PATH, { enabled: true });
+    const { primeBootstrap, resetBootstrap, useArchimateEnabled } = await load();
+    resetBootstrap();
+    await primeBootstrap();
+    const { result } = renderHook(() => useArchimateEnabled());
+    await waitFor(() => expect(result.current.archimateEnabled).toBe(true));
+    expect(mockApi.callsOf("get", ARCHIMATE_PATH)).toHaveLength(1);
   });
 });

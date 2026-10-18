@@ -28,6 +28,7 @@ const NAMESPACES = [
   "grc",
   "ppm",
   "notifications",
+  "archimate",
   "validation",
   "valuechain",
 ] as const;

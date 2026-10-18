@@ -81,11 +81,19 @@ const PrinciplesCataloguePage = lazy(
 );
 const ValueChainPage = lazy(() => import("@/features/value-chain/ValueChainPage"));
 const ValueStreamPage = lazy(() => import("@/features/value-chain/ValueStreamPage"));
+const ArchimateSandboxPage = lazy(() => import("@/features/archimate/ArchimateSandboxPage"));
+const ArchimateEditorPage = lazy(() => import("@/features/archimate/ArchimateEditorPage"));
 
 /** Preserve the :id when redirecting /ea-delivery/risks/:id → /grc/risks/:id. */
 function LegacyRiskDetailRedirect() {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={`/grc/risks/${id ?? ""}`} replace />;
+}
+
+/** Preserve the :id when redirecting /admin/archimate/:id → /admin/architectureStudio/:id. */
+function LegacyArchimateEditorRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/admin/architectureStudio/${id ?? ""}`} replace />;
 }
 
 /** Centered spinner shown while lazy components are loading. */
@@ -216,6 +224,13 @@ function AppRoutes() {
                 <Route path="/admin/eol" element={<Navigate to="/admin/settings?tab=eol" />} />
                 <Route path="/admin/web-portals" element={<Navigate to="/admin/settings?tab=web-portals" />} />
                 <Route path="/admin/servicenow" element={<Navigate to="/admin/settings?tab=servicenow" />} />
+                <Route path="/admin/architectureStudio" element={<ModuleGate module="archimate"><ArchimateSandboxPage /></ModuleGate>} />
+                <Route path="/admin/architectureStudio/:id" element={<ModuleGate module="archimate"><ArchimateEditorPage /></ModuleGate>} />
+                {/* /admin/archimate renamed to /admin/architectureStudio in the "Architecture
+                    Studio" rebrand. The old path shipped in 2.160.0 with no deprecation period,
+                    so existing bookmarks/links still need to resolve. */}
+                <Route path="/admin/archimate" element={<Navigate to="/admin/architectureStudio" replace />} />
+                <Route path="/admin/archimate/:id" element={<LegacyArchimateEditorRedirect />} />
                 <Route path="/admin/extensions" element={<ExtensionsAdmin />} />
                 <Route path="/ext/*" element={<ExtensionRoutesOutlet />} />
                 <Route path="/admin/surveys" element={<SurveysAdmin />} />

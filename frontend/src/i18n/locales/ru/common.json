@@ -314,6 +314,7 @@
   "modules.valuechain": "Цепочка создания ценности",
   "modules.ppm": "PPM",
   "modules.grc": "GRC",
+  "modules.archimate": "Architecture Studio",
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "Доступ запрещён",
   "accessDenied.body": "У вас нет разрешения на просмотр этой страницы. Обратитесь к администратору, если вам нужен доступ.",

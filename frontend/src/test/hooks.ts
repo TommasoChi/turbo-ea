@@ -38,6 +38,7 @@ export const hookState = {
   grc: { grcEnabled: true, grcLoaded: true },
   bpm: { bpmEnabled: true, bpmLoaded: true },
   valueChain: { valueChainEnabled: true, valueChainRawEnabled: true, valueChainLoaded: true },
+  archimate: { archimateEnabled: false, archimateLoaded: true },
   turboLens: {
     turboLensReady: true,
     turboLensAiConfigured: true,
@@ -62,6 +63,7 @@ export const hookState = {
     this.grc = { grcEnabled: true, grcLoaded: true };
     this.bpm = { bpmEnabled: true, bpmLoaded: true };
     this.valueChain = { valueChainEnabled: true, valueChainRawEnabled: true, valueChainLoaded: true };
+    this.archimate = { archimateEnabled: false, archimateLoaded: true };
     this.turboLens = {
       turboLensReady: true,
       turboLensAiConfigured: true,
@@ -200,6 +202,17 @@ export async function useValueChainEnabledModule() {
       valueChainLoaded: hookState.bpm.bpmLoaded && hookState.valueChain.valueChainLoaded,
       invalidateValueChain: vi.fn(),
     }),
+  };
+}
+
+export async function useArchimateEnabledModule() {
+  const actual = await vi.importActual<typeof import("@/hooks/useArchimateEnabled")>(
+    "@/hooks/useArchimateEnabled",
+  );
+  return {
+    ...actual,
+    invalidateArchimateEnabled: vi.fn(),
+    useArchimateEnabled: () => ({ ...hookState.archimate, invalidateArchimate: vi.fn() }),
   };
 }
 

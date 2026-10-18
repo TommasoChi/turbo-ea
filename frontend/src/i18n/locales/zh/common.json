@@ -314,6 +314,7 @@
   "modules.valuechain": "价值链",
   "modules.ppm": "PPM",
   "modules.grc": "GRC",
+  "modules.archimate": "Architecture Studio",
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "访问被拒绝",
   "accessDenied.body": "您没有权限查看此页面。如需访问，请联系您的管理员。",

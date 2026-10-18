@@ -390,6 +390,7 @@
   "modules.valuechain": "سلسلة القيمة",
   "modules.ppm": "PPM",
   "modules.grc": "GRC",
+  "modules.archimate": "Architecture Studio",
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "تم رفض الوصول",
   "accessDenied.body": "ليس لديك إذن لعرض هذه الصفحة. تواصل مع المسؤول إذا كنت بحاجة إلى الوصول.",

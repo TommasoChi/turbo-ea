@@ -66,3 +66,62 @@ async def mark_demo_seed_completed(db: AsyncSession, seeder_key: str) -> None:
     general[MARKER_KEY] = markers
     row.general_settings = general
     await db.flush()
+
+
+# ── Enterprise Object card-mapping defaults ─────────────────────────────
+#
+# Same anti-pattern, one level down: ``seed_card_mappings`` (default_mapping.py
+# -> EnterpriseObjectCardMapping) used to infer "has the one-time backfill run
+# already?" from whether the bridge table held any rows. That inference breaks
+# two ways: an admin removing every default mapping empties the table, so the
+# next restart resurrects all of them (the exact Bug 1 regression, one level
+# removed); and a future release's new default triple never lands on an
+# existing install once the table is non-empty, since nothing re-checks it.
+#
+# ``CARD_MAPPING_DEFAULTS_KEY`` tracks *which triples have ever been applied*,
+# not whether the table is currently empty, in the same ``app_settings``
+# singleton as ``MARKER_KEY`` above:
+#
+# * a triple marked applied is never re-inserted, even after an admin deletes
+#   it and the table goes back to empty;
+# * a triple never marked applied -- including one added to
+#   CARD_TYPE_DEFAULTS/SUBTYPE_DEFAULTS in a later release -- still lands on
+#   an existing install, regardless of how many other rows already exist.
+
+CARD_MAPPING_DEFAULTS_KEY = "cardMappingDefaultsApplied"
+
+# (enterprise_object_key, card_type_key, card_subtype_key) -- the bridge
+# table's three identifying columns.
+MappingTriple = tuple[str, str, "str | None"]
+
+
+async def applied_card_mapping_defaults(db: AsyncSession) -> set[MappingTriple]:
+    """Every default mapping triple the one-time backfill has ever applied
+    on this install, regardless of whether the row is still present."""
+    result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
+    row = result.scalar_one_or_none()
+    general = (row.general_settings if row else None) or {}
+    stored = general.get(CARD_MAPPING_DEFAULTS_KEY) or []
+    return {tuple(item) for item in stored}
+
+
+async def mark_card_mapping_defaults_applied(db: AsyncSession, triples: set[MappingTriple]) -> None:
+    """Add ``triples`` to the durable "already applied" marker.
+
+    Does **not** commit — the caller owns the transaction. Reassigns the
+    JSONB column wholesale, same reason as ``mark_demo_seed_completed``.
+    """
+    if not triples:
+        return
+    row = await _get_or_create_settings(db)
+    general = dict(row.general_settings or {})
+    existing = {tuple(item) for item in (general.get(CARD_MAPPING_DEFAULTS_KEY) or [])}
+    existing |= triples
+    # Sorted for a stable diff in the stored JSON; `card_subtype_key` may be
+    # None, which sorts fine against other None values but not against str
+    # in Python 3 -- fall back to "" for the sort key only.
+    general[CARD_MAPPING_DEFAULTS_KEY] = [
+        list(t) for t in sorted(existing, key=lambda t: (t[0], t[1], t[2] or ""))
+    ]
+    row.general_settings = general
+    await db.flush()

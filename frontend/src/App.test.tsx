@@ -56,11 +56,19 @@ vi.mock("@/components/ModuleGate", async () => {
 vi.mock("@/hooks/useValueChainEnabled", () =>
   import("@/test/hooks").then((m) => m.useValueChainEnabledModule()),
 );
+vi.mock("@/hooks/useArchimateEnabled", () =>
+  import("@/test/hooks").then((m) => m.useArchimateEnabledModule()),
+);
 
 // Stub the lazy pages these tests reach, so AG Grid / Recharts stay out of
 // the suite. The value-chain stubs record mounting: a gated page must never
 // mount (it would fire its API calls on mount).
-const mounted = vi.hoisted(() => ({ valueChain: vi.fn(), valueStream: vi.fn() }));
+const mounted = vi.hoisted(() => ({
+  valueChain: vi.fn(),
+  valueStream: vi.fn(),
+  archimateSandbox: vi.fn(),
+  archimateEditor: vi.fn(),
+}));
 vi.mock("@/features/dashboard/Dashboard", () => ({
   default: () => <div>dashboard page</div>,
 }));
@@ -77,6 +85,19 @@ vi.mock("@/features/value-chain/ValueStreamPage", () => ({
   default: () => {
     mounted.valueStream();
     return <div>value stream page</div>;
+  },
+}));
+
+vi.mock("@/features/archimate/ArchimateSandboxPage", () => ({
+  default: () => {
+    mounted.archimateSandbox();
+    return <div>archimate sandbox page</div>;
+  },
+}));
+vi.mock("@/features/archimate/ArchimateEditorPage", () => ({
+  default: () => {
+    mounted.archimateEditor();
+    return <div>archimate editor page</div>;
   },
 }));
 
@@ -221,6 +242,76 @@ describe("deep link through sign-in", () => {
       expect(screen.queryByRole("button", { name: /Open settings/ })).not.toBeInTheDocument();
       expect(mounted.valueChain).not.toHaveBeenCalled();
     });
+  });
+
+  describe("archimate sandbox routes", () => {
+    const ADMIN_SETTINGS = { ...MEMBER, permissions: { "admin.settings": true } };
+
+    beforeEach(() => {
+      gate.real = true;
+      hookState.archimate = { archimateEnabled: true, archimateLoaded: true };
+    });
+
+    it.each([
+      ["/admin/architectureStudio", "archimate sandbox page"],
+      ["/admin/architectureStudio/d1", "archimate editor page"],
+    ])("renders %s for admin.settings with the module on", async (path, text) => {
+      window.history.pushState({}, "", path);
+      vi.mocked(auth.me).mockResolvedValue(ADMIN_SETTINGS);
+
+      render(<App />);
+
+      expect(await screen.findByText(text)).toBeInTheDocument();
+    });
+
+    it.each(["/admin/architectureStudio", "/admin/architectureStudio/d1"])(
+      "shows the disabled card at %s and never mounts the page when the module is off",
+      async (path) => {
+        hookState.archimate = { archimateEnabled: false, archimateLoaded: true };
+        window.history.pushState({}, "", path);
+        vi.mocked(auth.me).mockResolvedValue(ADMIN_SETTINGS);
+        const user = userEvent.setup();
+
+        render(<App />);
+
+        const open = await screen.findByRole("button", { name: /Open settings/ });
+        expect(screen.getByRole("heading", { name: /Architecture Studio/ })).toBeInTheDocument();
+        await user.click(open);
+        await waitFor(() => expect(window.location.pathname).toBe("/admin/settings"));
+        expect(mounted.archimateSandbox).not.toHaveBeenCalled();
+        expect(mounted.archimateEditor).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(["/admin/architectureStudio", "/admin/architectureStudio/d1"])(
+      "shows Access denied at %s to a user without admin.settings, and the page never mounts",
+      async (path) => {
+        window.history.pushState({}, "", path);
+        vi.mocked(auth.me).mockResolvedValue({ ...MEMBER, permissions: { "admin.metamodel": true } });
+
+        render(<App />);
+
+        expect(await screen.findByText("Access denied")).toBeInTheDocument();
+        expect(mounted.archimateSandbox).not.toHaveBeenCalled();
+        expect(mounted.archimateEditor).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      ["/admin/archimate", "/admin/architectureStudio", "archimate sandbox page"],
+      ["/admin/archimate/d1", "/admin/architectureStudio/d1", "archimate editor page"],
+    ])(
+      "redirects the pre-rebrand %s to %s, preserving any :id",
+      async (oldPath, newPath, text) => {
+        window.history.pushState({}, "", oldPath);
+        vi.mocked(auth.me).mockResolvedValue(ADMIN_SETTINGS);
+
+        render(<App />);
+
+        expect(await screen.findByText(text)).toBeInTheDocument();
+        expect(window.location.pathname).toBe(newPath);
+      },
+    );
   });
 
   it("still renders an ungated page for a role with nothing granted", async () => {

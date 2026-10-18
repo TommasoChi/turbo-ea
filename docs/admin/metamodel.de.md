@@ -245,6 +245,20 @@ Klicken Sie auf das Symbol **Beziehungswerte verwalten** (Etikett) in einer Bezi
 
 Integrierte Werte (Eigentümer, Benutzer, Stakeholder, die Flussrichtungswerte …) sind **gesperrt**: Sie können nicht umbenannt, umgefärbt oder gelöscht werden. Sie können einen integrierten Wert jedoch **ausblenden**, sodass er auf Karten nicht mehr im Auswahlfeld erscheint — ein bereits gesetzter Wert bleibt sichtbar. Ihre eigenen Werte sind vollständig bearbeitbar und entfernbar.
 
+## ArchiMate-Zuordnung
+
+Damit der [ArchiMate-Editor](../guide/archimate.md) Diagramme mit Karten verknüpfen kann, enthält das Metamodell eine **Zuordnung** zu ArchiMate-3-Konzepten. Die Felder sind über die Metamodell-API (`/metamodel/types` und `/metamodel/relation-types`) sichtbar und in der Admin-Oberfläche **schreibgeschützt**: Die Maske zu ihrer Bearbeitung (**ARCHI MAP**) erscheint mit der nächsten Version.
+
+| Bei | Feld | Bedeutung |
+|----|-------|---------|
+| **Kartentyp** | `archimate_type` | Das ArchiMate-Element, als das eine Karte dieses Typs gezeichnet wird (zum Beispiel `ApplicationComponent`). Leer bedeutet keine Zuordnung: Ihre Karten lassen sich keinem Element zuordnen |
+| **Subtyp** | `archimate_type` | Optionale Überschreibung des Elements des Kartentyps für Karten dieses Subtyps. Leer bedeutet, dass der Subtyp die Zuordnung des Kartentyps verwendet |
+| **Beziehungstyp** | `archimate_type` | Die ArchiMate-Beziehung (zum Beispiel `Serving`, `Flow`, `Access`) |
+| **Beziehungstyp** | `archimate_reversed` | Richtungsflag. Ist es gesetzt, verläuft die ArchiMate-Beziehung von der Zielkarte zur Quellkarte; „Organisation *nutzt* Anwendung“ ist dann ein *Serving* von der Anwendung zur Organisation |
+| **Beziehungstyp** | `archimate_access` | Nur für `Access`: `Access`, `Read`, `Write`, `ReadWrite` oder `crud` (der Zugriffstyp folgt den Create/Read/Update/Delete-Flags der Beziehung selbst) |
+
+Element- und Beziehungsnamen sind die des Open-Group-Austauschformats. Die Standardwerte stammen aus dem Seed; die vollständigen Standardtabellen stehen unter [Die Zuordnung](../guide/archimate.md#mapping).
+
 ## Berechnungen
 
 Berechnete Felder verwenden vom Administrator definierte Formeln, um Werte automatisch zu berechnen, wenn Karten gespeichert werden. Siehe [Berechnungen](calculations.md) für die vollständige Anleitung.

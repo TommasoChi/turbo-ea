@@ -33,6 +33,10 @@ class Diagram(Base, UUIDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     data: Mapped[dict | None] = mapped_column(JSONB, default=dict)
+    # Editor that owns this diagram: "drawio" (default) or "archimate".
+    kind: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="drawio", server_default="drawio", index=True
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )

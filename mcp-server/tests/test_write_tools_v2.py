@@ -538,7 +538,7 @@ class TestDiagramReadTools:
             await server.list_diagrams(card_id="c1")
         path, kwargs = get_mock.call_args[0][0], get_mock.call_args[1]
         assert path == "/diagrams"
-        assert kwargs["params"] == {"card_id": "c1"}
+        assert kwargs["params"] == {"card_id": "c1", "kind": "drawio"}
 
     @pytest.mark.asyncio
     async def test_get_diagram(self, fake_token):

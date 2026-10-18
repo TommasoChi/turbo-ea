@@ -14,6 +14,8 @@
  * See `frontend/UI_GUIDELINES.md` for usage rules.
  */
 
+import type { ArchimateLayer } from "@/features/archimate/taxonomy/elements";
+
 // ── Brand & surface ─────────────────────────────────────────────────────
 
 export const brand = {
@@ -291,6 +293,25 @@ export const VALUE_CHAIN_BAND_COLORS = {
   support: "#8e24aa",
   not_set: "#757575",
 } as const;
+
+// ── ArchiMate layers (ArchiMate editor / palette) ───────────────────────
+
+// Conventional pastel layer fills with a same-hue stroke at ~55 % lightness
+// (physical uses a darker stroke to tell it apart from technology, which
+// shares its fill).
+export const ARCHIMATE_LAYER_COLORS: Record<ArchimateLayer, { fill: string; stroke: string }> = {
+  strategy: { fill: "#f5deaa", stroke: "#c6a253" },
+  business: { fill: "#ffffb5", stroke: "#c6c653" },
+  application: { fill: "#b5ffff", stroke: "#53c6c6" },
+  technology: { fill: "#c9e7b7", stroke: "#7ec653" },
+  physical: { fill: "#c9e7b7", stroke: "#4e862d" },
+  motivation: { fill: "#ccccff", stroke: "#5353c6" },
+  implementation: { fill: "#ffe0e0", stroke: "#c65353" },
+  other: { fill: "#f0f0f0", stroke: "#8c8c8c" },
+};
+
+// Text on the pastel fills must stay dark in dark mode too.
+export const ARCHIMATE_TEXT_COLOR = "#1a1a1a";
 
 // ── Type exports ────────────────────────────────────────────────────────
 

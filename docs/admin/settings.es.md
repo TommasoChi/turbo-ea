@@ -4,7 +4,7 @@ La página de **Configuración** en **Administrador → Configuración** (`/admi
 
 | Pestaña | URL | Qué controla | Guía completa |
 |---------|-----|--------------|---------------|
-| **General** | `/admin/settings?tab=general` | Apariencia (logo, favicon, moneda, formato de fecha, idiomas habilitados, año fiscal), envío de correo, **interruptores de módulos** (BPM, PPM, GRC, TurboLens, Sponsor button) | Esta página |
+| **General** | `/admin/settings?tab=general` | Apariencia (logo, favicon, moneda, formato de fecha, idiomas habilitados, año fiscal), envío de correo, **interruptores de módulos** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Esta página |
 | **Autenticación** | `/admin/settings?tab=authentication` | Proveedores SSO, registro, política de contraseñas | [Autenticación y SSO](sso.md) |
 | **IA** | `/admin/settings?tab=ai` | Proveedor LLM, modelo, backend de búsqueda web, interruptores de sugerencia IA por tipo de tarjeta | [Capacidades de IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Vinculación masiva de productos a entradas de endoflife.date | [Fin de vida (EOL)](eol.md) |
@@ -183,6 +183,17 @@ Active o desactive el módulo de **Gobernanza, Riesgo y Cumplimiento** (GRC). Cu
 - Los riesgos y los hallazgos de cumplimiento permanecen en la base de datos — los permisos subyacentes `risks.*` y `compliance.*` no cambian, de modo que los datos se preservan y vuelven a aparecer sin cambios si el módulo se reactiva
 
 Consulte la [guía de GRC](../guide/grc.md) para la referencia completa de funciones.
+
+## Módulo ArchiMate
+
+La tarjeta **Diagramas ArchiMate** activa o desactiva el módulo [ArchiMate](../guide/archimate.md). Está **desactivado de forma predeterminada**.
+
+- Cuando está activado, quedan disponibles el entorno de pruebas en `/admin/architectureStudio` y el editor ArchiMate, y la tarjeta muestra un botón **Abrir el entorno de pruebas** que lleva directamente a la lista de diagramas ArchiMate.
+- Cuando está desactivado, ambas páginas son inaccesibles y muestran el marcador estándar «módulo desactivado» a quien llegue por un enlace directo. Los diagramas ya guardados se conservan y reaparecen sin cambios si se vuelve a activar el módulo.
+
+Para abrir el entorno de pruebas hace falta el permiso `admin.settings` (que el rol Admin tiene de forma predeterminada) y el módulo activado. El interruptor solo oculta la interfaz: la API REST y las herramientas MCP (`get_archimate_mapping`, `create_archimate_diagram`, `update_archimate_diagram`) siguen siendo invocables con el módulo desactivado.
+
+Consulte la [guía de ArchiMate](../guide/archimate.md) para saber cómo dibujar e intercambiar diagramas.
 
 ## Notificaciones de actualización
 

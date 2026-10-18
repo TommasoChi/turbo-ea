@@ -247,6 +247,20 @@ Click the **Manage relation values** (tag) icon on any relation row to edit the 
 
 Built-in values (Owner, User, Stakeholder, the flow-direction values, …) are **locked**: they cannot be renamed, recoloured, or deleted. You can, however, **hide** a built-in value so it no longer appears in the picker on cards — an already-set value stays visible. Your own custom values are fully editable and can be removed.
 
+## ArchiMate Mapping
+
+To let the [ArchiMate editor](../guide/archimate.md) link diagrams to cards, the metamodel carries a **mapping** onto ArchiMate 3 concepts. The fields are visible through the metamodel API (`/metamodel/types` and `/metamodel/relation-types`) and are **read-only in the admin UI**: the screen that edits them (**ARCHI MAP**) ships in the next release.
+
+| On | Field | Meaning |
+|----|-------|---------|
+| **Card type** | `archimate_type` | The ArchiMate element a card of this type is drawn as (for example `ApplicationComponent`). Empty means no mapping: its cards cannot be linked to an element |
+| **Subtype** | `archimate_type` | Optional override of the card type's element for cards of this subtype. Empty means the subtype uses the card type's mapping |
+| **Relation type** | `archimate_type` | The ArchiMate relationship (for example `Serving`, `Flow`, `Access`) |
+| **Relation type** | `archimate_reversed` | Direction flag. When set, the ArchiMate relationship runs from the target card to the source card, so "Organization *uses* Application" is a *Serving* from the application to the organization |
+| **Relation type** | `archimate_access` | Only for `Access`: `Access`, `Read`, `Write`, `ReadWrite`, or `crud` (follow the relation's own Create/Read/Update/Delete flags) |
+
+Element and relationship names are those of the Open Group exchange format. The defaults come from the seed (metamodel mapping migration); the full default tables are in [The mapping](../guide/archimate.md#mapping).
+
 ## Calculations
 
 Calculated fields use admin-defined formulas to automatically compute values when cards are saved. See [Calculations](calculations.md) for the full guide.

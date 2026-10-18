@@ -228,6 +228,8 @@ export interface SubtypeDef {
   label: string;
   translations?: TranslationMap;
   hidden_fields?: string[];
+  /** ArchiMate element type overriding the card type's own mapping. */
+  archimate_type?: string | null;
 }
 
 export interface SectionDef {
@@ -278,6 +280,8 @@ export interface CardType {
    *  (discussion #1024). Governs upload and display, never the stored image. */
   allow_card_logo: boolean;
   subtypes?: SubtypeDef[];
+  /** ArchiMate element type this card type maps to (null/absent = unmapped). */
+  archimate_type?: string | null;
   /** Vocabulary for labelling a parent→child link on a hierarchical type
    *  (discussion #1100). Same shape as a `single_select`'s options, so it gets
    *  colours, translations and the `OptionChip` renderer for free. Empty (or
@@ -298,6 +302,32 @@ export interface CardType {
   /** Seed default color for built-in types (null for custom types) — powers
    * the admin "reset to default color" affordance (discussion #740). */
   default_color?: string | null;
+}
+
+/** A bridge row linking an Enterprise Object to a card type (optionally scoped
+ *  to one of its subtypes) that counts as an instance of it. */
+export interface EnterpriseObjectCardMapping {
+  id: string;
+  enterprise_object_key: string;
+  card_type_key: string;
+  card_subtype_key: string | null;
+}
+
+/** An ArchiMate Enterprise Object registry row (`GET /metamodel/enterprise-objects`).
+ *  Standard rows (`is_standard`) come from `seed_enterprise_objects`; a locked
+ *  one (`is_locked`) rejects PATCH edits entirely. */
+export interface EnterpriseObject {
+  key: string;
+  name: string;
+  description: string | null;
+  icon: string;
+  color: string;
+  layer: string | null;
+  is_standard: boolean;
+  is_locked: boolean;
+  is_hidden: boolean;
+  sort_order: number;
+  card_mappings: EnterpriseObjectCardMapping[];
 }
 
 /** One row of the card-type permission matrix (`GET /metamodel/types/{key}/permissions`).
@@ -360,6 +390,12 @@ export interface RelationType {
   source_mandatory: boolean;
   target_visible: boolean;
   target_mandatory: boolean;
+  /** ArchiMate relationship type this relation type maps to. */
+  archimate_type?: string | null;
+  /** "crud" | AccessType | null — only meaningful for Access. */
+  archimate_access?: string | null;
+  /** True when the ArchiMate direction is target -> source. */
+  archimate_reversed?: boolean;
 }
 
 export interface TagRef {

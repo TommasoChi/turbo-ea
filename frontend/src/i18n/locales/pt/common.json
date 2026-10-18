@@ -314,6 +314,7 @@
   "modules.valuechain": "Cadeia de valor",
   "modules.ppm": "PPM",
   "modules.grc": "GRC",
+  "modules.archimate": "Architecture Studio",
   "modules.turbolens": "TurboLens",
   "accessDenied.title": "Acesso negado",
   "accessDenied.body": "Você não tem permissão para ver esta página. Contate o seu administrador se precisar de acesso.",

@@ -5,11 +5,38 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.159.1] - 2026-10-16
+## [2.163.0] - 2026-10-18
 
 ### Changed
 
 - **With PPM off, EA Delivery now sits under IT Governance as "EA Governance".** The top bar used to promote EA Delivery to an entry of its own whenever PPM was disabled; it now joins the IT Governance menu (the GRC page stays its first entry, extension pages follow). If GRC is off, or a role cannot open IT Governance, EA Delivery still appears as a top-level entry, so nobody loses the page. With PPM on nothing changes: EA Delivery remains a tab of PPM. URLs are unchanged.
+
+## [2.162.0] - 2026-10-18
+
+### Added
+
+- **Enterprise Object registry replaces the fixed 1:1 Turbo EA-to-ArchiMate mapping with an n:m Card Mapping.** Any number of card types/subtypes can map to the same Enterprise Object, and an Enterprise Object can back several card type mappings; the old `default_mapping.py` table is migrated into the new bridge rows.
+- **Card Mapping admin UI**, under Admin → Architecture Studio → Card Mapping: browse the standard Enterprise Objects, hide the ones you don't use, create custom ones, edit which card types/subtypes map to each, and a click-to-reveal description popover (admin-editable) for every object.
+- **The editor's drawing palette now reads live from the registry.** A hidden Enterprise Object disappears from the palette; a custom one becomes drawable and selectable with its own icon and colour, and can be deleted like any other custom object.
+- **The ArchiMate editor is rebranded "Architecture Studio"** in the UI; its admin route moves from `/admin/archimate` to `/admin/architectureStudio` (old links redirect).
+
+## [2.160.0] - 2026-10-16
+
+### Added
+
+- **ArchiMate module switch (`archimateEnabled`, off by default).** Admin → Settings has a new **ArchiMate diagrams** card with the on/off switch; the public `GET /settings/archimate-enabled` endpoint reports it. While the module is off, the ArchiMate pages show the standard "module disabled" placeholder.
+- **Turbo EA to ArchiMate mapping.** Migration 158 adds `card_types.archimate_type`, `relation_types.archimate_type` / `archimate_access` / `archimate_reversed` and `diagrams.kind` (`drawio` | `archimate`, default `drawio`), and fills in a default mapping for the built-in card and relation types. A value an admin has already set is never overwritten, a subtype that carries its own ArchiMate type keeps it, and the migration is idempotent and reversible. The metamodel API exposes and validates the mapping (element and relationship names are the Open Group Exchange 3.1 names, checked against the ArchiMate relationship table); the diagrams API accepts and filters by `kind` (default: DrawIO only), and ArchiMate diagrams stay out of group counts and public routes.
+- **ArchiMate editor, in an admin sandbox.** A modeler for ArchiMate 3.2 diagrams (layered, colour-tiled palette, relationship context pad driven by the relationship table, nesting rules, label editing, keyboard shortcuts, copy and paste, explicit links to cards, Exchange XML import and export, "Check the model"). It lives at `/admin/archimate` (requires `admin.settings` and the module switched on), is loaded as a separate lazy chunk and is translated into ten languages. Dropping an element never creates a card and removing one never deletes a card, as in the DrawIO editor.
+- **Notes.** A free-text annotation in the palette's Other layer — not an ArchiMate concept, so it never takes a relationship or a card. Written as an Open Group Exchange `Label` node (no `elementRef`), so a file stays valid for other ArchiMate tools.
+- **A properties panel** on the right of the editor. Selecting an element, a relationship or a note shows its name (or text), documentation and custom key/value parameters; an element already linked to a card shows the card's own name, type, subtype, status, description and attributes instead — all readonly, with a button to open the card's full sheet — since the card is now the source of truth. With nothing selected, the panel shows the diagram itself: its name, description and parameters, with a placeholder "View" row for a future per-ontology feature.
+- **Server-side validation: `POST /archimate/validate`.** Validates ArchiMate Exchange XML (DTD and entity declarations refused, bounded output, unique identifiers, known element, relationship and access types, endpoints that exist, relationships the table allows) and is applied to every write of an ArchiMate diagram.
+- **MCP tools** `get_archimate_mapping`, `create_archimate_diagram` and `update_archimate_diagram`, plus a `kind` filter on `list_diagrams` (`drawio` by default, `archimate` or `all`). The write tools default to a dry run and validate the XML on the server first.
+- **Documentation in ten languages.** A new guide page *ArchiMate Diagrams*, settings, metamodel and glossary entries, and the MCP tool reference.
+
+### Notes
+
+- The feature is **off by default**, the editor is an **administrator-only sandbox**, and ArchiMate diagrams are **not in the menu yet**: the Diagrams page and a card's Diagrams tab never list them, and they cannot be published or embedded. The admin mapping screen, viewpoint templates and the Diagrams menu entry are planned for the next releases.
+- The module switch is enforced by the interface; the backend routes and MCP tools do not check it.
 
 ## [2.159.0] - 2026-10-15
 

@@ -35,6 +35,12 @@ vi.mock("./metamodel/HierarchyLabelsDialog", () => ({
   default: () => <div data-testid="hierarchy-labels-dialog" />,
 }));
 
+// Architecture Studio's own fetch/grouping behaviour is covered by
+// CardMappingTabContent.test.tsx; here we only prove the tab is wired up.
+vi.mock("./metamodel/ArchitectureStudioTab", () => ({
+  default: () => <div data-testid="architecture-studio-tab" />,
+}));
+
 vi.mock("./metamodel/constants", () => ({
   CATEGORIES: ["Application & Data", "Business Architecture", "Strategy & Transformation", "Technical Architecture"],
   CARDINALITY_OPTIONS: ["1:1", "1:n", "n:m"],
@@ -248,6 +254,23 @@ describe("MetamodelAdmin", () => {
     await waitFor(() => {
       expect(screen.getByText("supports")).toBeInTheDocument();
       expect(screen.getByText("n:m")).toBeInTheDocument();
+    });
+  });
+
+  it("places Architecture Studio right after Relations in the tab order", async () => {
+    renderMetamodel();
+    const tabs = screen.getAllByRole("tab").map((el) => el.textContent);
+    expect(tabs.indexOf("Architecture Studio")).toBe(tabs.indexOf("Relations") + 1);
+  });
+
+  it("switches to Architecture Studio tab", async () => {
+    const user = userEvent.setup();
+    renderMetamodel();
+
+    await user.click(screen.getByRole("tab", { name: /architecture studio/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("architecture-studio-tab")).toBeInTheDocument();
     });
   });
 

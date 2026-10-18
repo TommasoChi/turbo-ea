@@ -4,7 +4,7 @@ Die **Einstellungen**-Seite unter **Admin → Einstellungen** (`/admin/settings`
 
 | Reiter | URL | Was er steuert | Vollständige Anleitung |
 |--------|-----|----------------|------------------------|
-| **Allgemein** | `/admin/settings?tab=general` | Erscheinungsbild (Logo, Favicon, Währung, Datumsformat, aktivierte Sprachen, Geschäftsjahr), E-Mail-Versand, **Modul-Schalter** (BPM, PPM, GRC, TurboLens, Sponsor button) | Diese Seite |
+| **Allgemein** | `/admin/settings?tab=general` | Erscheinungsbild (Logo, Favicon, Währung, Datumsformat, aktivierte Sprachen, Geschäftsjahr), E-Mail-Versand, **Modul-Schalter** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Diese Seite |
 | **Authentifizierung** | `/admin/settings?tab=authentication` | SSO-Provider, Registrierung, Passwortrichtlinie | [Authentifizierung & SSO](sso.md) |
 | **KI** | `/admin/settings?tab=ai` | LLM-Provider, Modell, Websuch-Backend, Pro-Kartentyp-KI-Suggestionsschalter | [KI-Funktionen](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Massen-Verknüpfung von Produkten zu endoflife.date-Einträgen | [End-of-Life (EOL)](eol.md) |
@@ -183,6 +183,17 @@ Schalten Sie das **Governance, Risk and Compliance**-Modul (GRC) ein oder aus. W
 - Risiken und Compliance-Findings verbleiben in der Datenbank — die zugrunde liegenden Berechtigungen `risks.*` und `compliance.*` bleiben unverändert, sodass die Daten erhalten bleiben und unverändert wieder erscheinen, wenn das Modul erneut aktiviert wird
 
 Siehe den [GRC-Leitfaden](../guide/grc.md) für die vollständige Funktionsübersicht.
+
+## ArchiMate-Modul
+
+Die Karte **ArchiMate-Diagramme** schaltet das [ArchiMate](../guide/archimate.md)-Modul ein oder aus. Es ist **standardmäßig ausgeschaltet**.
+
+- Wenn es aktiviert ist, stehen die Sandbox unter `/admin/architectureStudio` und der ArchiMate-Editor zur Verfügung, und die Karte zeigt eine Schaltfläche **Sandbox öffnen**, die direkt zur Liste der ArchiMate-Diagramme führt.
+- Wenn es deaktiviert ist, sind beide Seiten nicht erreichbar und zeigen jedem, der einen direkten Link verwendet, den Standard-Platzhalter „Modul deaktiviert“. Bereits gespeicherte Diagramme bleiben erhalten und erscheinen unverändert wieder, wenn das Modul erneut aktiviert wird.
+
+Zum Öffnen der Sandbox sind die Berechtigung `admin.settings` (standardmäßig bei der Rolle Admin) und das aktivierte Modul nötig. Der Schalter blendet nur die Benutzeroberfläche aus: Die REST-API und die MCP-Werkzeuge (`get_archimate_mapping`, `create_archimate_diagram`, `update_archimate_diagram`) bleiben auch bei deaktiviertem Modul aufrufbar.
+
+Wie Sie Diagramme zeichnen und austauschen, steht in der [ArchiMate-Anleitung](../guide/archimate.md).
 
 ## Update-Benachrichtigungen
 

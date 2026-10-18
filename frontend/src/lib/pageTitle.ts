@@ -19,7 +19,10 @@ import { matchRoutes } from "react-router";
 export interface RouteTitle {
   /** react-router path pattern — must match the one in `App.tsx` exactly. */
   path: string;
-  /** Key in the `nav` i18n namespace. */
+  /**
+   * Key in the `nav` i18n namespace, or `ns:key` for another one (i18next's namespace prefix) when
+   * the label belongs to a feature's own namespace, as the ArchiMate sandbox's does.
+   */
   titleKey: string;
 }
 
@@ -89,6 +92,11 @@ export const ROUTE_TITLES: RouteTitle[] = [
   { path: "/admin/surveys/:id/results", titleKey: "admin.surveys" },
   { path: "/admin/surveys/:id", titleKey: "admin.surveys" },
 
+  // Architecture Studio (the ArchiMate editor) is reached from Admin → Settings, not from a menu;
+  // its label lives in the feature's own namespace.
+  { path: "/admin/architectureStudio", titleKey: "archimate:sandbox.title" },
+  { path: "/admin/architectureStudio/:id", titleKey: "archimate:sandbox.title" },
+
   // --- Extensions ---------------------------------------------------------
   // A contributed page's own name is not knowable here; the extension's route
   // component publishes it when it has one.
@@ -121,6 +129,9 @@ export const UNTITLED_ROUTES: string[] = [
   "/ea-delivery/risks",
   "/ea-delivery/risks/:id",
   "/surveys",
+  // Legacy ArchiMate editor path, renamed to /admin/architectureStudio.
+  "/admin/archimate",
+  "/admin/archimate/:id",
   "/admin/eol",
   "/admin/web-portals",
   "/admin/servicenow",

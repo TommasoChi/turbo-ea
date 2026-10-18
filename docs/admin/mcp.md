@@ -157,7 +157,7 @@ In this mode, the server authenticates with email/password and refreshes the tok
 
 ## Available Capabilities
 
-The MCP server exposes **52 tools** across two groups: **33 read tools** that query EA data and **19 write tools** (14 additive, 5 destructive) that create and maintain cards, relations, diagrams, risks, ADRs and more — including turning artifacts an AI tool has in its own context (spreadsheets, BPMN XML, DrawIO XML, documents, images) into structured EA data. Every tool carries MCP `ToolAnnotations` (read-only / destructive / idempotent hints) so connectors can surface destructiveness in their UI.
+The MCP server exposes **55 tools** across two groups: **34 read tools** that query EA data and **21 write tools** (15 additive, 6 destructive) that create and maintain cards, relations, diagrams, risks, ADRs and more — including turning artifacts an AI tool has in its own context (spreadsheets, BPMN XML, DrawIO XML, documents, images) into structured EA data. Every tool carries MCP `ToolAnnotations` (read-only / destructive / idempotent hints) so connectors can surface destructiveness in their UI.
 
 ### Dry-run safety on writes
 
@@ -165,7 +165,7 @@ Every write tool defaults to **`dry_run=true`**. In this mode the backend runs e
 
 ### Read tools
 
-The server exposes 33 read tools grouped into eight clusters.
+The server exposes 34 read tools grouped into eight clusters.
 
 **Cards & metamodel**
 
@@ -236,8 +236,9 @@ The server exposes 33 read tools grouped into eight clusters.
 
 | Tool | Description |
 |------|-------------|
-| `list_diagrams` | List free-draw (DrawIO) diagrams, optionally filtered to one card |
-| `get_diagram` | Fetch a single diagram by id, including its DrawIO XML |
+| `list_diagrams` | List diagrams, optionally filtered to one card; `kind` selects free-draw (`drawio`, the default), `archimate` or `all` |
+| `get_diagram` | Fetch a single diagram by id: its `kind`, plus the DrawIO XML (or, for an ArchiMate diagram, the Exchange XML) in `data.xml` |
+| `get_archimate_mapping` | How Turbo EA card and relation types map to ArchiMate 3.x element and relationship types (read before drawing an ArchiMate diagram) |
 
 **Audit & change history**
 
@@ -249,9 +250,9 @@ All tools are bound by the authenticated user's RBAC — a viewer will simply ge
 
 ### Write tools
 
-The server exposes 19 write tools, each annotated as **additive** (creates or extends data) or **destructive** (modifies or removes existing data) so connectors can warn accordingly.
+The server exposes 21 write tools, each annotated as **additive** (creates or extends data) or **destructive** (modifies or removes existing data) so connectors can warn accordingly.
 
-**Additive (14)**
+**Additive (15)**
 
 | Tool | Description |
 |------|-------------|
@@ -267,18 +268,30 @@ The server exposes 19 write tools, each annotated as **additive** (creates or ex
 | `update_adr` | Update an ADR (title, sections, status, linked cards). |
 | `sign_adr` | Sign an ADR (requires the `adr.sign` permission; otherwise returns a UI deep-link to sign in the browser). |
 | `create_diagram` | Create a free-form DrawIO diagram with optional links to existing cards. |
+| `create_archimate_diagram` | Create an ArchiMate diagram from Open Group Exchange Format XML, with optional links to existing cards. The dry run validates the model on the server and reports `valid` and `issues` without creating anything. |
 | `import_bpmn` | Save a BPMN 2.0 XML diagram against an **existing** Business Process card. If no card matches the given name, the tool returns a `card_not_found` error pointing the agent at `create_cards_bulk` — this forces the agent to create the card explicitly with description, subtype and attributes first, instead of taking a shortcut that lands a sparse card. |
 | `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
-**Destructive (5)**
+**Destructive (6)**
 
 | Tool | Description |
 |------|-------------|
 | `upsert_relations_bulk` | Create or delete relations between cards. Source / target / type are validated against the metamodel. Deletion is refused unless the operator opts in (see guardrails). |
 | `archive_cards` | Soft-delete cards. Recoverable — archived cards can be restored for 30 days before auto-purge. |
 | `update_diagram` | Replace a diagram's DrawIO XML, name, or card links. |
+| `update_archimate_diagram` | Replace an ArchiMate diagram's Exchange XML, name, or card links. Refuses a DrawIO diagram. The dry run validates the new XML on the server. |
 | `rollback_batch` | Reverse the writes performed under a previous mutation batch — card, relation, risk, stakeholder-role, tag and draft-decision writes; todos and notifications are left in place. |
 | `clear_card_logos` | Remove the custom logo from cards, falling them back to their card-type icon. Recoverable — set it again to restore. |
+
+### ArchiMate diagrams
+
+ArchiMate diagrams have their own tools, separate from the free-draw (DrawIO) ones. `create_diagram` and `update_diagram` are **DrawIO-only**: the server refuses an ArchiMate diagram there, and `update_archimate_diagram` refuses a DrawIO one. `list_diagrams` and `get_diagram` serve both, with the `kind` filter and field (`drawio`, `archimate`).
+
+Call `get_archimate_mapping` first so the model knows which ArchiMate element a card type maps to, then send Open Group Exchange Format XML. The dry run validates it on the server and returns `valid` and `issues` without saving anything. Example prompt:
+
+> Draw an ArchiMate Application Cooperation view of the CRM and everything it connects to.
+
+See the [ArchiMate guide](../guide/archimate.md) for the editor side.
 
 ### Artifact upload
 
@@ -298,7 +311,7 @@ Defense in depth on top of dry-run, so an LLM mishap can't cause mass damage:
 
 - **Per-call size caps.** The MCP write tools enforce a much smaller cap than the underlying Excel-importer endpoints: 200 rows for `create_cards_bulk`, 500 ops for `upsert_relations_bulk`. Big enough for any realistic single artifact upload, small enough that a dry-run preview is still scannable.
 - **No relation deletion by default.** `upsert_relations_bulk` refuses `action: "delete"` ops — to remove relations, use the web UI where the action is captured under the user's identity. Operators can opt in by setting `MCP_ALLOW_RELATION_DELETE=true`.
-- **Kill switch.** `MCP_WRITES_ENABLED=false` turns off all 19 write tools without redeploying code. The 33 read tools keep working.
+- **Kill switch.** `MCP_WRITES_ENABLED=false` turns off all 21 write tools without redeploying code. The 34 read tools keep working.
 - **Logo fetching is allowlisted.** The built-in icon packs cannot cover every product a customer runs, and an assistant is often sandboxed with no route to the web, so `set_card_logos` accepts an `image_url` and the MCP server fetches it. Only `https`, only the hosts in `MCP_LOGO_FETCH_HOSTS`, only a public address, at most two redirects (each re-checked), at most 1 MB read as a stream, and the bytes must carry a real PNG/JPEG/WebP/GIF signature. The fetch happens at the MCP edge, never in the backend, and the image is then uploaded through the ordinary route — so a URL chosen by an LLM never reaches the process holding the database. `MCP_LOGO_FETCH_ENABLED=false` switches it off.
 - **Audit origin tag.** Every backend request from the MCP server carries an `X-Turbo-EA-Origin: mcp` header. Events emitted from those requests are tagged `origin: "mcp"` in the audit-log payload, so admins can filter MCP-driven writes out of the timeline distinct from web-UI actions.
 - **Mutation batches.** Every MCP write call opens a mutation batch before any writes; every event emitted during the call is stamped with the batch id. Admins (or the `get_change_history` tool) can reconstruct the full per-event diff of a commit from one id, and `rollback_batch` can reverse it. Commits above `MCP_BATCH_CONFIRMATION_THRESHOLD` rows must echo back a one-shot `confirm_token` issued by the prior dry-run (15-minute TTL), so a large commit always follows a reviewed preview.
