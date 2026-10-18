@@ -4,7 +4,14 @@ import Box from "@mui/material/Box";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import type { CardType } from "@/types";
 import CardMappingTabContent from "./CardMappingTabContent";
+
+interface Props {
+  /** Forwarded to `CardMappingTabContent`'s bridge-table editor -- fetched
+   *  once by `MetamodelAdmin` and shared with every tab, no second fetch. */
+  types: CardType[];
+}
 
 /**
  * The Architecture Studio tab: a nested Tabs/Tab shell with one entry so far
@@ -14,7 +21,7 @@ import CardMappingTabContent from "./CardMappingTabContent";
  * parent nobody returned to. Later tasks (a description popover, the
  * bridge-table editor) add sub-tabs beside this one.
  */
-export default function ArchitectureStudioTab() {
+export default function ArchitectureStudioTab({ types }: Props) {
   const { t } = useTranslation(["admin"]);
   const [sub, setSub] = useState(0);
 
@@ -35,7 +42,7 @@ export default function ArchitectureStudioTab() {
         />
       </Tabs>
 
-      {sub === 0 && <CardMappingTabContent />}
+      {sub === 0 && <CardMappingTabContent types={types} />}
     </Box>
   );
 }

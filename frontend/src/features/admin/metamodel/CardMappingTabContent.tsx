@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
+import Collapse from "@mui/material/Collapse";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import ButtonBase from "@mui/material/ButtonBase";
@@ -12,17 +13,31 @@ import { listEnterpriseObjects, updateEnterpriseObject } from "@/api/enterpriseO
 import { LAYER_ORDER, type ArchimateLayer } from "@/features/archimate/taxonomy/elements";
 import { useAuthContext } from "@/hooks/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { EnterpriseObject } from "@/types";
+import type { CardType, EnterpriseObject } from "@/types";
+import CardMappingRowEditor from "./CardMappingRowEditor";
 import EnterpriseObjectPopover from "./EnterpriseObjectPopover";
 import NewArchitectureObjectDialog from "./NewArchitectureObjectDialog";
+
+export interface CardMappingTabContentProps {
+  /** Card types for the bridge-table editor's "card type" picker. Optional
+   *  so existing callers/tests that render this without wiring the prop
+   *  through yet keep working -- the editor just has nothing to offer. */
+  types?: CardType[];
+}
 
 /**
  * Read-only Enterprise Object registry list, grouped by ArchiMate layer.
  * `includeHidden: true` on the fetch -- this admin screen is the one place
  * hidden rows stay visible (unlike the drawing palette, which omits them).
  * The visibility toggle mirrors the eye-icon pattern on the Card Types tab.
+ *
+ * Each row also expands into a `CardMappingRowEditor` for its `card_mappings`
+ * bridge-table rows. A locked Enterprise Object (`Grouping`, seeded with
+ * `is_locked: true`) never gets the expand control at all -- mirroring the
+ * visibility toggle's lock gating -- so there is no path to attempt an
+ * add/remove on it.
  */
-export default function CardMappingTabContent() {
+export default function CardMappingTabContent({ types = [] }: CardMappingTabContentProps) {
   const { t } = useTranslation(["admin", "archimate", "common"]);
   const { user } = useAuthContext();
   const { can } = usePermissions(user);
@@ -32,6 +47,7 @@ export default function CardMappingTabContent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [infoAnchor, setInfoAnchor] = useState<HTMLElement | null>(null);
   const [infoObject, setInfoObject] = useState<EnterpriseObject | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const fetchObjects = useCallback(async () => {
     setLoading(true);
@@ -106,62 +122,89 @@ export default function CardMappingTabContent() {
           {layerObjects.map((eo) => (
             <Box
               key={eo.key}
-              data-testid={`eo-row-${eo.key}`}
               sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-                py: 1,
                 borderBottom: 1,
                 borderColor: "divider",
-                opacity: eo.is_hidden ? 0.55 : 1,
               }}
             >
-              <ButtonBase
-                onClick={(e) => openInfo(e, eo)}
-                sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1, minWidth: 0, p: 0.5, borderRadius: 1, justifyContent: "flex-start" }}
+              <Box
+                data-testid={`eo-row-${eo.key}`}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  py: 1,
+                  opacity: eo.is_hidden ? 0.55 : 1,
+                }}
               >
-                <MaterialSymbol icon={eo.icon} size={20} color={eo.color} />
-                <Typography sx={{ flex: 1, minWidth: 0 }} noWrap>
-                  {eo.name}
+                <ButtonBase
+                  onClick={(e) => openInfo(e, eo)}
+                  sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1, minWidth: 0, p: 0.5, borderRadius: 1, justifyContent: "flex-start" }}
+                >
+                  <MaterialSymbol icon={eo.icon} size={20} color={eo.color} />
+                  <Typography sx={{ flex: 1, minWidth: 0 }} noWrap>
+                    {eo.name}
+                  </Typography>
+                </ButtonBase>
+                <Typography variant="caption" color="text.secondary">
+                  {t("metamodel.cardMappingCount", { count: eo.card_mappings.length })}
                 </Typography>
-              </ButtonBase>
-              <Typography variant="caption" color="text.secondary">
-                {t("metamodel.cardMappingCount", { count: eo.card_mappings.length })}
-              </Typography>
-              <Tooltip
-                title={
-                  eo.is_locked
-                    ? t("metamodel.cardMappingLocked")
-                    : eo.is_hidden
-                      ? t("common:actions.restore")
-                      : t("metamodel.hidden")
-                }
-              >
-                {/* A disabled button inside a Tooltip needs a wrapping span --
-                    MUI's Tooltip can't attach its listeners to a disabled
-                    child directly. */}
-                <span>
+                {/* Locked rows (Grouping) never get the expand control -- no
+                    path to attempt an add/remove on a bridge table whose
+                    registry row the API rejects every edit to, per Task 9's
+                    is_locked gating. */}
+                {!eo.is_locked && (
                   <IconButton
                     size="small"
-                    aria-label={
-                      eo.is_locked
-                        ? t("metamodel.cardMappingLocked")
-                        : eo.is_hidden
-                          ? t("common:actions.restore")
-                          : t("metamodel.hidden")
-                    }
-                    disabled={eo.is_locked}
-                    onClick={() => toggleHidden(eo)}
+                    aria-label={t("metamodel.cardMappingExpandLabel")}
+                    onClick={() => setExpandedKey(expandedKey === eo.key ? null : eo.key)}
                   >
                     <MaterialSymbol
-                      icon={eo.is_hidden ? "visibility_off" : "visibility"}
+                      icon={expandedKey === eo.key ? "expand_less" : "expand_more"}
                       size={18}
-                      color={eo.is_locked ? "#ccc" : eo.is_hidden ? "#f57c00" : "#bbb"}
+                      color="#bbb"
                     />
                   </IconButton>
-                </span>
-              </Tooltip>
+                )}
+                <Tooltip
+                  title={
+                    eo.is_locked
+                      ? t("metamodel.cardMappingLocked")
+                      : eo.is_hidden
+                        ? t("common:actions.restore")
+                        : t("metamodel.hidden")
+                  }
+                >
+                  {/* A disabled button inside a Tooltip needs a wrapping span --
+                      MUI's Tooltip can't attach its listeners to a disabled
+                      child directly. */}
+                  <span>
+                    <IconButton
+                      size="small"
+                      aria-label={
+                        eo.is_locked
+                          ? t("metamodel.cardMappingLocked")
+                          : eo.is_hidden
+                            ? t("common:actions.restore")
+                            : t("metamodel.hidden")
+                      }
+                      disabled={eo.is_locked}
+                      onClick={() => toggleHidden(eo)}
+                    >
+                      <MaterialSymbol
+                        icon={eo.is_hidden ? "visibility_off" : "visibility"}
+                        size={18}
+                        color={eo.is_locked ? "#ccc" : eo.is_hidden ? "#f57c00" : "#bbb"}
+                      />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Box>
+              {!eo.is_locked && (
+                <Collapse in={expandedKey === eo.key}>
+                  <CardMappingRowEditor object={eo} types={types} onChanged={fetchObjects} />
+                </Collapse>
+              )}
             </Box>
           ))}
         </Box>

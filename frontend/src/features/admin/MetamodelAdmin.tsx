@@ -368,7 +368,7 @@ export default function MetamodelAdmin() {
       {/* ============================================================ */}
       {/*  TAB 2 -- Architecture Studio                                */}
       {/* ============================================================ */}
-      {tab === 2 && <ArchitectureStudioTab />}
+      {tab === 2 && <ArchitectureStudioTab types={types} />}
 
       {/* ============================================================ */}
       {/*  TAB 3 -- Calculations                                       */}
