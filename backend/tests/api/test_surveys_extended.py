@@ -945,8 +945,13 @@ class TestApplyResponses:
         assert ev.data["source"] == "survey_response"
         assert ev.data["survey_id"] == survey_id
         assert ev.data["response_id"] == response_id
-        assert "attr_costTotalAnnual" in ev.data["changes"]
-        assert ev.data["changes"]["attr_costTotalAnnual"]["new"] == 75000
+        # The whole-dict shape PATCH /cards/{id} writes — the one the History
+        # tab renders and the audit-log rollback can restore.
+        attrs_change = ev.data["changes"]["attributes"]
+        assert attrs_change["old"]["costTotalAnnual"] == 50000
+        assert attrs_change["new"]["costTotalAnnual"] == 75000
+        assert ev.data["survey_name"]
+        assert ev.data["respondent_id"] == str(member.id)
 
     async def test_apply_already_applied_returns_error(self, client, db, survey_env):
         """Applying an already-applied response returns an error in the errors list."""
@@ -1802,3 +1807,107 @@ class TestSkippedCards:
         )
         assert send.status_code == 200, send.json()
         assert send.json()["targets_created"] == body["total_requests"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Security & admin audit log
+# ---------------------------------------------------------------------------
+
+
+async def _audit_rows(db, prefix: str = "admin.survey."):
+    """Discard what a request flushed but never committed, then read the log."""
+    from app.models.audit_log import AuditLogEntry
+
+    await db.rollback()
+    result = await db.execute(
+        select(AuditLogEntry)
+        .where(AuditLogEntry.action.like(f"{prefix}%"))
+        .order_by(AuditLogEntry.created_at)
+    )
+    return list(result.scalars().all())
+
+
+class TestSurveyAudit:
+    async def test_send_and_close_are_recorded(self, client, db, survey_env):
+        admin = survey_env["admin"]
+        admin_id, headers = admin.id, auth_headers(admin)
+        survey_id = (await _create_draft_survey(client, admin))["id"]
+
+        sent = await client.post(f"/api/v1/surveys/{survey_id}/send", headers=headers)
+        assert sent.status_code == 200, sent.text
+        closed = await client.post(f"/api/v1/surveys/{survey_id}/close", headers=headers)
+        assert closed.status_code == 200
+
+        sent_row, closed_row = await _audit_rows(db)
+        assert sent_row.action == "admin.survey.sent"
+        assert sent_row.actor_user_id == admin_id and sent_row.category == "admin"
+        assert (sent_row.target_type, sent_row.target_id, sent_row.target_label) == (
+            "survey",
+            survey_id,
+            "Workflow Test Survey",
+        )
+        assert sent.json()["targets_created"] == 1
+        assert sent_row.details == {
+            "context": {
+                "card_type": "Application",
+                "roles": ["Responsible"],
+                "matched_cards": 1,
+                "cards": 1,
+                "recipients": 1,
+                "requests": 1,
+            }
+        }
+        assert closed_row.action == "admin.survey.closed"
+        assert closed_row.target_id == survey_id
+        assert closed_row.details == {"context": {"card_type": "Application"}}
+
+    async def test_card_type_and_roles_are_recorded_by_label(self, client, db, survey_env):
+        from app.models.card_type import CardType
+        from app.models.stakeholder_role_definition import StakeholderRoleDefinition
+
+        admin = survey_env["admin"]
+        headers = auth_headers(admin)
+        survey_id = (
+            await _create_draft_survey(client, admin, target_roles=["responsible", "gone"])
+        )["id"]
+        app_type = (
+            await db.execute(select(CardType).where(CardType.key == "Application"))
+        ).scalar_one()
+        app_type.label = "Business Application"
+        role = (
+            await db.execute(
+                select(StakeholderRoleDefinition).where(
+                    StakeholderRoleDefinition.key == "responsible"
+                )
+            )
+        ).scalar_one()
+        role.label = "Application Owner"
+        await db.flush()
+
+        sent = await client.post(f"/api/v1/surveys/{survey_id}/send", headers=headers)
+        assert sent.status_code == 200, sent.text
+        await client.post(f"/api/v1/surveys/{survey_id}/close", headers=headers)
+
+        sent_row, closed_row = await _audit_rows(db)
+        # A role the type no longer defines reads as its key.
+        assert sent_row.details["context"]["roles"] == ["Application Owner", "gone"]
+        assert sent_row.details["context"]["card_type"] == "Business Application"
+        assert "target_type_key" not in sent_row.details["context"]
+        assert closed_row.details == {"context": {"card_type": "Business Application"}}
+
+    async def test_drafting_and_responding_are_not_admin_actions(self, client, db, survey_env):
+        admin = survey_env["admin"]
+        survey_id = (await _create_draft_survey(client, admin))["id"]
+        await client.patch(
+            f"/api/v1/surveys/{survey_id}", json={"name": "Renamed"}, headers=auth_headers(admin)
+        )
+        assert await _audit_rows(db) == []
+
+    async def test_a_refused_send_records_nothing(self, client, db, survey_env):
+        admin = survey_env["admin"]
+        survey_id = (await _create_draft_survey(client, admin))["id"]
+        resp = await client.post(
+            f"/api/v1/surveys/{survey_id}/send", headers=auth_headers(survey_env["viewer"])
+        )
+        assert resp.status_code == 403
+        assert await _audit_rows(db) == []

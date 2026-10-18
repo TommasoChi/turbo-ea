@@ -579,3 +579,178 @@ class TestDeleteTag:
             headers=auth_headers(admin),
         )
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------
+# Security & admin audit log
+# ---------------------------------------------------------------
+
+
+async def _audit_rows(db, prefix: str):
+    """Discard what a request flushed but never committed, then read the log."""
+    from sqlalchemy import select
+
+    from app.models.audit_log import AuditLogEntry
+
+    await db.rollback()
+    result = await db.execute(
+        select(AuditLogEntry)
+        .where(AuditLogEntry.action.like(f"{prefix}%"))
+        .order_by(AuditLogEntry.created_at)
+    )
+    return list(result.scalars().all())
+
+
+class TestTagAudit:
+    async def test_group_and_tag_lifecycle_is_recorded(self, client, db, tags_env):
+        admin = tags_env["admin"]
+        admin_id, headers = admin.id, auth_headers(admin)
+
+        group = await client.post(
+            "/api/v1/tag-groups", json={"name": "Region", "mode": "single"}, headers=headers
+        )
+        gid = group.json()["id"]
+        await client.patch(
+            f"/api/v1/tag-groups/{gid}",
+            json={"name": "Regions", "mandatory": True},
+            headers=headers,
+        )
+        tag = await client.post(
+            f"/api/v1/tag-groups/{gid}/tags", json={"name": "EMEA"}, headers=headers
+        )
+        tid = tag.json()["id"]
+        await client.patch(
+            f"/api/v1/tag-groups/{gid}/tags/{tid}", json={"color": "#112233"}, headers=headers
+        )
+        await client.delete(f"/api/v1/tag-groups/{gid}/tags/{tid}", headers=headers)
+        await client.delete(f"/api/v1/tag-groups/{gid}", headers=headers)
+
+        groups = await _audit_rows(db, "admin.tag_group.")
+        assert [r.action for r in groups] == [
+            "admin.tag_group.created",
+            "admin.tag_group.updated",
+            "admin.tag_group.deleted",
+        ]
+        assert all(r.actor_user_id == admin_id and r.category == "admin" for r in groups)
+        assert all(r.target_type == "tag_group" and r.target_id == gid for r in groups)
+        assert groups[0].details == {
+            "context": {"mode": "single", "mandatory": False, "restrict_to_types": None}
+        }
+        assert groups[1].details == {
+            "changes": {
+                "name": {"old": "Region", "new": "Regions"},
+                "mandatory": {"old": False, "new": True},
+            }
+        }
+        assert groups[2].details is None
+
+        tags = await _audit_rows(db, "admin.tag.")
+        assert [r.action for r in tags] == [
+            "admin.tag.created",
+            "admin.tag.updated",
+            "admin.tag.deleted",
+        ]
+        assert tags[0].target_label == "EMEA"
+        # The group is named, never referenced by id.
+        assert tags[0].details == {"context": {"tag_group": "Regions", "color": None}}
+        assert tags[1].details == {"changes": {"color": {"old": None, "new": "#112233"}}}
+        assert tags[2].details == {"context": {"tag_group": "Regions", "color": "#112233"}}
+
+    async def test_a_no_op_update_records_no_row(self, client, db, tags_env):
+        headers = auth_headers(tags_env["admin"])
+        group = await client.post(
+            "/api/v1/tag-groups", json={"name": "Region", "mode": "single"}, headers=headers
+        )
+        gid = group.json()["id"]
+        tag = await client.post(
+            f"/api/v1/tag-groups/{gid}/tags", json={"name": "EMEA"}, headers=headers
+        )
+        tid = tag.json()["id"]
+
+        # The same values re-sent: nothing changed, so nothing is recorded.
+        same_group = await client.patch(
+            f"/api/v1/tag-groups/{gid}", json={"name": "Region", "mode": "single"}, headers=headers
+        )
+        same_tag = await client.patch(
+            f"/api/v1/tag-groups/{gid}/tags/{tid}", json={"name": "EMEA"}, headers=headers
+        )
+        assert same_group.status_code == 200 and same_tag.status_code == 200
+
+        assert [r.action for r in await _audit_rows(db, "admin.tag_group.")] == [
+            "admin.tag_group.created"
+        ]
+        assert [r.action for r in await _audit_rows(db, "admin.tag.")] == ["admin.tag.created"]
+
+    async def test_restricted_types_are_recorded_by_label(self, client, db, tags_env):
+        await create_card_type(db, key="ITComponent", label="IT Component")
+        headers = auth_headers(tags_env["admin"])
+
+        group = await client.post(
+            "/api/v1/tag-groups",
+            json={
+                "name": "Tier",
+                "mode": "multi",
+                "mandatory": True,
+                # A key with no card type is kept as it is.
+                "restrict_to_types": ["ITComponent", "Gone", "Application"],
+            },
+            headers=headers,
+        )
+        gid = group.json()["id"]
+        await client.patch(
+            f"/api/v1/tag-groups/{gid}",
+            json={"restrict_to_types": ["Application"]},
+            headers=headers,
+        )
+        await client.patch(
+            f"/api/v1/tag-groups/{gid}", json={"restrict_to_types": None}, headers=headers
+        )
+
+        created, narrowed, cleared = await _audit_rows(db, "admin.tag_group.")
+        assert created.details == {
+            "context": {
+                "mode": "multi",
+                "mandatory": True,
+                "restrict_to_types": ["IT Component", "Gone", "Application"],
+            }
+        }
+        assert narrowed.details == {
+            "changes": {
+                "restrict_to_types": {
+                    "old": ["IT Component", "Gone", "Application"],
+                    "new": ["Application"],
+                }
+            }
+        }
+        assert cleared.details == {
+            "changes": {"restrict_to_types": {"old": ["Application"], "new": None}}
+        }
+
+    async def test_card_tag_links_are_content_not_admin_actions(self, client, db, tags_env):
+        admin = tags_env["admin"]
+        headers = auth_headers(admin)
+        card_id = str(tags_env["card"].id)
+        group = await client.post(
+            "/api/v1/tag-groups", json={"name": "Env", "mode": "multi"}, headers=headers
+        )
+        tag = await client.post(
+            f"/api/v1/tag-groups/{group.json()['id']}/tags", json={"name": "Prod"}, headers=headers
+        )
+        tid = tag.json()["id"]
+        await db.rollback()
+        before = len(await _audit_rows(db, "admin."))
+
+        resp = await client.post(f"/api/v1/cards/{card_id}/tags", json=[tid], headers=headers)
+        assert resp.status_code == 201, resp.text
+        await client.delete(f"/api/v1/cards/{card_id}/tags/{tid}", headers=headers)
+
+        assert len(await _audit_rows(db, "admin.")) == before
+
+    async def test_viewer_is_refused_and_nothing_is_recorded(self, client, db, tags_env):
+        resp = await client.post(
+            "/api/v1/tag-groups",
+            json={"name": "Nope", "mode": "single"},
+            headers=auth_headers(tags_env["viewer"]),
+        )
+        assert resp.status_code == 403
+        assert await _audit_rows(db, "admin.") == []

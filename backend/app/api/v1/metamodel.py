@@ -29,7 +29,7 @@ from app.models.resource_type import ResourceType
 from app.models.role import Role
 from app.models.stakeholder import Stakeholder
 from app.models.user import User
-from app.services import card_reference
+from app.services import audit_changes, audit_labels, audit_log, card_reference
 from app.services.archimate import taxonomy
 from app.services.archimate.card_type_mapping import get_card_type_mapping
 from app.services.extensions.registry import extension_registry
@@ -52,6 +52,230 @@ logger = logging.getLogger("turboea.metamodel")
 router = APIRouter(prefix="/metamodel", tags=["metamodel"])
 
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+# ── Security & admin audit log ─────────────────────────────────────────
+#
+# Every metamodel write records one ``admin.*`` row (``services/audit_log``),
+# readable without knowing the metamodel: plain columns as ``changes``
+# (``audit_log.diff``), and the big JSON columns — a type's ``fields_schema``
+# can run to hundreds of fields — as semantic change items
+# (``services/audit_changes``): *field "Cost" added to section "Finance"*,
+# *option "Legacy" renamed*, *Member: View → Deny*. Values are labels, never
+# keys. An update that changed nothing records nothing.
+
+_TYPE_AUDIT_SCALARS = (
+    "label",
+    "description",
+    "icon",
+    "color",
+    "category",
+    "has_hierarchy",
+    "has_successors",
+    "allow_card_logo",
+    "sort_order",
+    "is_hidden",
+)
+_TYPE_AUDIT_JSON = (
+    "reference_config",
+    "subtypes",
+    "hierarchy_labels",
+    "fields_schema",
+    "stakeholder_roles",
+    "section_config",
+    "translations",
+    "role_permissions",
+)
+_REFERENCE_AUDIT_KEYS = ("mode", "prefix", "start", "padding")
+_RELATION_TYPE_AUDIT_SCALARS = (
+    "label",
+    "reverse_label",
+    "description",
+    "cardinality",
+    "sort_order",
+    "is_hidden",
+    "source_visible",
+    "source_mandatory",
+    "target_visible",
+    "target_mandatory",
+)
+_RELATION_TYPE_AUDIT_JSON = (
+    "source_type_key",
+    "target_type_key",
+    "attributes_schema",
+    "translations",
+)
+
+# The long free-text columns of a principle, clipped on each side so one edit
+# of a page-long rationale cannot make an audit row arbitrarily large.
+_PRINCIPLE_TEXT_FIELDS = ("description", "rationale", "implications")
+# The plain columns of a compliance regulation / resource type; their
+# ``translations`` (``{locale: label}``) are reported as items instead.
+_CATALOGUE_AUDIT_SCALARS = ("label", "description", "is_enabled", "sort_order")
+_RESOURCE_TYPE_AUDIT_SCALARS = ("label", "description", "icon", "is_enabled", "sort_order")
+
+
+def _audit_snapshot(obj: object, fields: tuple[str, ...]) -> dict:
+    """A detached copy of ``fields`` so a later in-place edit cannot alter it."""
+    return {f: copy.deepcopy(getattr(obj, f, None)) for f in fields}
+
+
+def _section_names(fields_schema: object) -> list:
+    """The custom section names of a ``fields_schema``, in order — what
+    ``custom:N`` in ``section_config.__order`` indexes into. That index skips
+    the ``__description`` pseudo-section (it renders inside Description, not as
+    a section of its own), exactly as ``customSectionsOf`` on the frontend and
+    ``_reindex_section_order`` in ``services/extensions/field_contributions``."""
+    sections = fields_schema if isinstance(fields_schema, list) else []
+    return [
+        s.get("section")
+        for s in sections
+        if isinstance(s, dict) and s.get("section") != "__description"
+    ]
+
+
+def _field_labels(*fields_schemas: object) -> dict[str, str]:
+    """``{field key: label}`` across ``fields_schemas``; the first schema that
+    labels a key wins (pass the after-side first so a renamed field reads under
+    its new label)."""
+    out: dict[str, str] = {}
+    for schema in fields_schemas:
+        for section in schema if isinstance(schema, list) else []:
+            if not isinstance(section, dict):
+                continue
+            for field in section.get("fields") or []:
+                if isinstance(field, dict) and field.get("key") and field.get("label"):
+                    out.setdefault(field["key"], field["label"])
+    return out
+
+
+def _labelled_hidden_fields(items: list, field_labels: dict[str, str]) -> list:
+    """``items`` with each ``subtype.changed`` ``hidden_fields`` side mapped from
+    field keys to field labels (an absent list read as empty); an item whose
+    sides then agree — absent vs. ``[]`` — is dropped as no change."""
+    out = []
+    for entry in items:
+        if entry.get("kind") == "subtype.changed" and entry.get("property") == "hidden_fields":
+            old, new = (
+                [field_labels.get(k, k) for k in (entry.get(side) or []) if isinstance(k, str)]
+                for side in ("old", "new")
+            )
+            if old == new:
+                continue
+            entry = {**entry, "old": old, "new": new}
+        out.append(entry)
+    return out
+
+
+def _normalised_reference_config(cfg: object) -> dict:
+    """``cfg`` with its defaults filled in, so a stored ``{}`` and the
+    ``{"mode": "off", …}`` a save writes back do not read as a change; a
+    config that does not validate is compared as it stands."""
+    try:
+        return card_reference.validate_reference_config(cfg)  # type: ignore[arg-type]
+    except card_reference.ReferenceConfigError:
+        return cfg if isinstance(cfg, dict) else {}
+
+
+def _reference_changes(old: object, new: object) -> dict[str, dict[str, object]]:
+    """``reference_<key>`` changes for each ``reference_config`` key that moved."""
+    before = _normalised_reference_config(old)
+    after = _normalised_reference_config(new)
+    return {
+        f"reference_{key}": {"old": before.get(key), "new": after.get(key)}
+        for key in _REFERENCE_AUDIT_KEYS
+        if before.get(key) != after.get(key)
+    }
+
+
+def _type_audit_changes(
+    before: dict, after: dict, role_labels: dict[str, str] | None = None
+) -> tuple[dict, list]:
+    """``(changes, items)`` for a card-type update: the scalar columns diffed
+    into ``changes`` (``reference_config`` per key), the JSON columns compared
+    by ``audit_changes`` into ``items`` (capped)."""
+    changes = audit_log.diff(before, after, keys=_TYPE_AUDIT_SCALARS)
+    changes.update(_reference_changes(before["reference_config"], after["reference_config"]))
+    items = (
+        audit_changes.fields_schema_items(before["fields_schema"], after["fields_schema"])
+        + audit_changes.section_config_items(
+            before["section_config"],
+            after["section_config"],
+            _section_names(after["fields_schema"]),
+        )
+        + _labelled_hidden_fields(
+            audit_changes.keyed_list_items(
+                before["subtypes"],
+                after["subtypes"],
+                noun="subtype",
+                props=("color", "hidden_fields"),
+            ),
+            _field_labels(after["fields_schema"], before["fields_schema"]),
+        )
+        + audit_changes.keyed_list_items(
+            before["hierarchy_labels"],
+            after["hierarchy_labels"],
+            noun="hierarchy_label",
+            props=("color",),
+        )
+        + audit_changes.keyed_list_items(
+            before["stakeholder_roles"], after["stakeholder_roles"], noun="stakeholder_role"
+        )
+        + audit_changes.translations_items(before["translations"], after["translations"])
+        + audit_changes.role_permissions_items(
+            before["role_permissions"], after["role_permissions"], role_labels
+        )
+    )
+    return changes, audit_changes.cap_items(items)
+
+
+def _relation_type_audit_changes(
+    before: dict, after: dict, type_labels: dict[str, str]
+) -> tuple[dict, list]:
+    """``(changes, items)`` for a relation-type update. The endpoints are
+    recorded as card-type *labels* under ``source_type`` / ``target_type``."""
+    changes = audit_log.diff(before, after, keys=_RELATION_TYPE_AUDIT_SCALARS)
+    for end in ("source_type", "target_type"):
+        old_key, new_key = before[f"{end}_key"], after[f"{end}_key"]
+        if old_key != new_key:
+            changes[end] = {
+                "old": _type_label(type_labels, old_key),
+                "new": _type_label(type_labels, new_key),
+            }
+    items = audit_changes.attributes_schema_items(
+        before["attributes_schema"], after["attributes_schema"]
+    ) + audit_changes.translations_items(before["translations"], after["translations"])
+    return changes, audit_changes.cap_items(items)
+
+
+def _type_label(labels: dict[str, str], key: str | None) -> str | None:
+    """A card type's label, its key when it has none (or is unknown)."""
+    if key is None:
+        return None
+    return labels.get(key) or key
+
+
+def _clip_text(value: object) -> object:
+    """A long string clipped (``audit_labels.clip_text``); anything else as is."""
+    return audit_labels.clip_text(value) if isinstance(value, str) else value
+
+
+def _clipped(changes: dict[str, dict[str, object]]) -> dict[str, dict[str, object]]:
+    """``changes`` with the long principle texts clipped on each side."""
+    return {
+        field: (
+            {"old": _clip_text(change["old"]), "new": _clip_text(change["new"])}
+            if field in _PRINCIPLE_TEXT_FIELDS
+            else change
+        )
+        for field, change in changes.items()
+    }
+
+
+def _label_translation_items(old: object, new: object) -> list:
+    """``translation.changed`` (property ``label``) for a regulation's or a
+    resource type's ``translations``, which map a locale straight to its label."""
+    return audit_changes.translations_items({"label": old}, {"label": new})
 
 
 def _validate_color(body: dict) -> None:
@@ -706,6 +930,14 @@ async def generate_references(
     if card_reference.get_mode(card_type) != "auto":
         raise HTTPException(400, "Card ID generation is not enabled for this type.")
     generated = await card_reference.backfill_references_for_type(db, card_type)
+    await audit_log.record(
+        db,
+        action="admin.metamodel.type.references_generated",
+        category="admin",
+        actor=user,
+        target=("card_type", card_type.key, card_type.label),
+        context={"generated": generated},
+    )
     await db.commit()
     return {"generated": generated}
 
@@ -961,6 +1193,18 @@ async def create_type(
         # Auto-provide the lineage relation type so the card detail lineage
         # section renders (issue #729).
         await _ensure_successor_relation_type(db, t.key)
+    await audit_log.record(
+        db,
+        action="admin.metamodel.type.created",
+        category="admin",
+        actor=user,
+        target=("card_type", t.key, t.label),
+        context={
+            "category": t.category,
+            "has_hierarchy": t.has_hierarchy,
+            "fields": sum(len(s.get("fields") or []) for s in t.fields_schema or []),
+        },
+    )
     await db.commit()
     await db.refresh(t)
     # A lookup of this key before it existed cached "no overrides"; drop it so
@@ -1003,6 +1247,9 @@ async def update_type(
                     f"Cannot remove roles that are in use: {details}. "
                     "Remove the stakeholder assignments first.",
                 )
+
+    audit_fields = _TYPE_AUDIT_SCALARS + _TYPE_AUDIT_JSON
+    audit_before = _audit_snapshot(t, audit_fields)
 
     # ── Clean up card attributes when fields or options are removed ──
     if "fields_schema" in body:
@@ -1120,6 +1367,29 @@ async def update_type(
             db, body["role_permissions"], subtypes=t.subtypes
         )
 
+    audit_after = _audit_snapshot(t, audit_fields)
+    role_labels = (
+        await audit_labels.role_labels(
+            db,
+            [
+                *(audit_before["role_permissions"] or {}),
+                *(audit_after["role_permissions"] or {}),
+            ],
+        )
+        if audit_before["role_permissions"] != audit_after["role_permissions"]
+        else {}
+    )
+    changes, items = _type_audit_changes(audit_before, audit_after, role_labels)
+    if changes or items:
+        await audit_log.record(
+            db,
+            action="admin.metamodel.type.updated",
+            category="admin",
+            actor=user,
+            target=("card_type", t.key, t.label),
+            changes=changes,
+            items=items,
+        )
     await db.commit()
     await db.refresh(t)
 
@@ -1163,6 +1433,14 @@ async def delete_type(
     if t.built_in:
         # Soft-delete built-in types
         t.is_hidden = True
+        await audit_log.record(
+            db,
+            action="admin.metamodel.type.deleted",
+            category="admin",
+            actor=user,
+            target=("card_type", key, t.label),
+            context={"mode": "hidden", "card_count": instance_count},
+        )
         await db.commit()
         PermissionService.invalidate_type_permission_cache(key)
         return {"status": "hidden", "key": key, "instance_count": instance_count}
@@ -1185,7 +1463,9 @@ async def delete_type(
             (RelationType.source_type_key == key) | (RelationType.target_type_key == key)
         )
     )
+    removed_relation_types = []
     for rt in rel_result.scalars().all():
+        removed_relation_types.append(rt.label or rt.key)
         await db.delete(rt)
 
     # Also delete Enterprise Object card-mapping rows that reference this
@@ -1205,6 +1485,14 @@ async def delete_type(
     # FK violation this fix exists to avoid.
     await db.flush()
 
+    await audit_log.record(
+        db,
+        action="admin.metamodel.type.deleted",
+        category="admin",
+        actor=user,
+        target=("card_type", key, t.label),
+        context={"mode": "deleted", "relation_types_removed": sorted(removed_relation_types)},
+    )
     await db.delete(t)
     await db.commit()
     PermissionService.invalidate_type_permission_cache(key)
@@ -1412,6 +1700,19 @@ async def create_relation_type(
         archimate_reversed=body.get("archimate_reversed", False),
     )
     db.add(rt)
+    labels = await audit_labels.card_type_labels(db, (rt.source_type_key, rt.target_type_key))
+    await audit_log.record(
+        db,
+        action="admin.metamodel.relation_type.created",
+        category="admin",
+        actor=user,
+        target=("relation_type", rt.key, rt.label),
+        context={
+            "source_type": _type_label(labels, rt.source_type_key),
+            "target_type": _type_label(labels, rt.target_type_key),
+            "cardinality": rt.cardinality,
+        },
+    )
     await db.commit()
     await db.refresh(rt)
     return _serialize_relation_type(rt)
@@ -1447,6 +1748,9 @@ async def update_relation_type(
                 exists = await db.execute(select(CardType.key).where(CardType.key == body[fk]))
                 if not exists.scalar_one_or_none():
                     raise HTTPException(400, f"Type '{body[fk]}' does not exist")
+
+    audit_fields = _RELATION_TYPE_AUDIT_SCALARS + _RELATION_TYPE_AUDIT_JSON
+    audit_before = _audit_snapshot(r, audit_fields)
 
     updatable = [
         "label",
@@ -1485,6 +1789,34 @@ async def update_relation_type(
 
     _sync_english_verb_translations(r, body)
 
+    audit_after = _audit_snapshot(r, audit_fields)
+    endpoints_moved = any(
+        audit_before[f] != audit_after[f] for f in ("source_type_key", "target_type_key")
+    )
+    type_labels = (
+        await audit_labels.card_type_labels(
+            db,
+            (
+                audit_before["source_type_key"],
+                audit_before["target_type_key"],
+                audit_after["source_type_key"],
+                audit_after["target_type_key"],
+            ),
+        )
+        if endpoints_moved
+        else {}
+    )
+    changes, items = _relation_type_audit_changes(audit_before, audit_after, type_labels)
+    if changes or items:
+        await audit_log.record(
+            db,
+            action="admin.metamodel.relation_type.updated",
+            category="admin",
+            actor=user,
+            target=("relation_type", r.key, r.label),
+            changes=changes,
+            items=items,
+        )
     await db.commit()
     await db.refresh(r)
     return _serialize_relation_type(r)
@@ -1541,6 +1873,18 @@ async def delete_relation_type(
     if instance_count > 0:
         await db.execute(Relation.__table__.delete().where(Relation.type == key))
 
+    await audit_log.record(
+        db,
+        action="admin.metamodel.relation_type.deleted",
+        category="admin",
+        actor=user,
+        target=("relation_type", key, r.label),
+        context={
+            "mode": "hidden" if r.built_in else "deleted",
+            "instances_removed": instance_count,
+        },
+    )
+
     if r.built_in:
         # Soft-delete built-in types so they can be restored from the seed
         r.is_hidden = True
@@ -1566,6 +1910,13 @@ async def restore_relation_type(
         raise HTTPException(400, "Relation type is not hidden")
 
     r.is_hidden = False
+    await audit_log.record(
+        db,
+        action="admin.metamodel.relation_type.restored",
+        category="admin",
+        actor=user,
+        target=("relation_type", key, r.label),
+    )
     await db.commit()
     await db.refresh(r)
     return _serialize_relation_type(r)
@@ -1636,6 +1987,14 @@ async def create_principle(
         sort_order=body.sort_order,
     )
     db.add(p)
+    await audit_log.record(
+        db,
+        action="admin.principle.created",
+        category="admin",
+        actor=user,
+        target=("principle", str(p.id), p.title),
+        context={"is_active": p.is_active},
+    )
     await db.commit()
     await db.refresh(p)
     return _serialize_principle(p)
@@ -1655,8 +2014,18 @@ async def update_principle(
     if not p:
         raise HTTPException(404, "Principle not found")
     updates = body.model_dump(exclude_unset=True)
+    changes = _clipped(audit_log.diff(p, updates))
     for k, v in updates.items():
         setattr(p, k, v)
+    if changes:
+        await audit_log.record(
+            db,
+            action="admin.principle.updated",
+            category="admin",
+            actor=user,
+            target=("principle", str(p.id), p.title),
+            changes=changes,
+        )
     await db.commit()
     await db.refresh(p)
     return _serialize_principle(p)
@@ -1670,7 +2039,21 @@ async def delete_principle(
 ):
     """Delete an EA principle (admin only)."""
     await PermissionService.require_permission(db, user, "admin.metamodel")
-    await db.execute(delete(EAPrinciple).where(EAPrinciple.id == uuid.UUID(principle_id)))
+    pid = uuid.UUID(principle_id)
+    title = (
+        await db.execute(select(EAPrinciple.title).where(EAPrinciple.id == pid))
+    ).scalar_one_or_none()
+    await db.execute(delete(EAPrinciple).where(EAPrinciple.id == pid))
+    if title is not None:
+        # Deleting an id that does not exist is a 204 no-op; only a real
+        # deletion is an admin action worth a row.
+        await audit_log.record(
+            db,
+            action="admin.principle.deleted",
+            category="admin",
+            actor=user,
+            target=("principle", str(pid), title),
+        )
     await db.commit()
 
 
@@ -1754,6 +2137,14 @@ async def create_compliance_regulation(
         translations=body.translations or {},
     )
     db.add(r)
+    await audit_log.record(
+        db,
+        action="admin.regulation.created",
+        category="admin",
+        actor=user,
+        target=("regulation", r.key, r.label),
+        context={"is_enabled": r.is_enabled},
+    )
     await db.commit()
     await db.refresh(r)
     return _serialize_regulation(r)
@@ -1783,8 +2174,20 @@ async def update_compliance_regulation(
         updates["label"] = updates["label"].strip()
     if "translations" in updates and updates["translations"] is None:
         updates["translations"] = {}
+    changes = audit_log.diff(r, updates, keys=_CATALOGUE_AUDIT_SCALARS)
+    items = _label_translation_items(r.translations, updates.get("translations", r.translations))
     for k, v in updates.items():
         setattr(r, k, v)
+    if changes or items:
+        await audit_log.record(
+            db,
+            action="admin.regulation.updated",
+            category="admin",
+            actor=user,
+            target=("regulation", r.key, r.label),
+            changes=changes,
+            items=items,
+        )
     await db.commit()
     await db.refresh(r)
     return _serialize_regulation(r)
@@ -1813,6 +2216,13 @@ async def delete_compliance_regulation(
             400,
             "Built-in regulations cannot be deleted — toggle is_enabled to disable instead.",
         )
+    await audit_log.record(
+        db,
+        action="admin.regulation.deleted",
+        category="admin",
+        actor=user,
+        target=("regulation", r.key, r.label),
+    )
     await db.delete(r)
     await db.commit()
 
@@ -1913,6 +2323,14 @@ async def create_resource_type(
         translations=body.translations or {},
     )
     db.add(r)
+    await audit_log.record(
+        db,
+        action="admin.metamodel.resource_type.created",
+        category="admin",
+        actor=user,
+        target=("resource_type", str(r.id), r.label),
+        context={"kind": r.kind, "key": r.key},
+    )
     await db.commit()
     await db.refresh(r)
     return _serialize_resource_type(r)
@@ -1942,8 +2360,20 @@ async def update_resource_type(
         updates["label"] = updates["label"].strip()
     if "translations" in updates and updates["translations"] is None:
         updates["translations"] = {}
+    changes = audit_log.diff(r, updates, keys=_RESOURCE_TYPE_AUDIT_SCALARS)
+    items = _label_translation_items(r.translations, updates.get("translations", r.translations))
     for k, v in updates.items():
         setattr(r, k, v)
+    if changes or items:
+        await audit_log.record(
+            db,
+            action="admin.metamodel.resource_type.updated",
+            category="admin",
+            actor=user,
+            target=("resource_type", str(r.id), r.label),
+            changes=changes,
+            items=items,
+        )
     await db.commit()
     await db.refresh(r)
     return _serialize_resource_type(r)
@@ -1971,6 +2401,14 @@ async def delete_resource_type(
             400,
             "Built-in resource types cannot be deleted — toggle is_enabled to disable instead.",
         )
+    await audit_log.record(
+        db,
+        action="admin.metamodel.resource_type.deleted",
+        category="admin",
+        actor=user,
+        target=("resource_type", str(r.id), r.label),
+        context={"kind": r.kind, "key": r.key},
+    )
     await db.delete(r)
     await db.commit()
 

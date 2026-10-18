@@ -303,10 +303,18 @@ async def require_card_permission(
 #   a human PATCH, so an unknown key or a label on a rootless card is refused
 #   rather than stored. Clearing ``parent_id`` clears the label with it.
 
+# 1.16: survey reads. ``ctx.surveys.list_surveys`` lists surveys by status (and
+#   optionally card type), and ``ctx.surveys.pending_responses`` returns the
+#   (card, person) requests of one survey that are still unanswered, as
+#   ``ExtSurveyResponse`` rows — so an extension can follow up on a survey it
+#   did not send itself. Read-only, under the existing ``core.surveys.read``
+#   grant (``core.surveys.write`` implies it); archived cards are left out,
+#   matching the data bridge's default.
+
 # Fork note: the constant is pinned at 1.5 (frozen — several extension projects
 # build against this fork concurrently, and an uncoordinated bump corrupts the
-# shared contract). The 1.6-1.15 surface described above is present in code;
-# upstream's own value for it is "1.15".
+# shared contract). The 1.6-1.16 surface described above is present in code;
+# upstream's own value for it is "1.16".
 SDK_VERSION = "1.5"
 
 
@@ -1123,9 +1131,23 @@ class ExtSurveyPreview:
     targets: tuple[dict[str, Any], ...] = ()
 
 
+@dataclass(frozen=True)
+class ExtSurveyResponse:
+    """One (card, person) request of a survey (SDK 1.16). ``requested_at`` is
+    when the request was created — the survey's send, for a survey sent once —
+    as an ISO timestamp, so a caller can tell how long it has been waiting."""
+
+    survey_id: str
+    card_id: str
+    user_id: str
+    status: str
+    requested_at: str
+
+
 class SurveysBridge(Protocol):
     """Send data-maintenance surveys (SDK 1.14), grant-gated per call:
-    ``core.surveys.read`` for ``get`` / ``preview``, ``core.surveys.write``
+    ``core.surveys.read`` for ``get`` / ``preview`` / ``list_surveys`` /
+    ``pending_responses`` (SDK 1.16), ``core.surveys.write``
     for ``send`` (write implies read). ``send`` creates the survey AND
     activates it in one audited step: one response per (card, stakeholder in
     ``roles``), one notification per person, the cards' History tabs record
@@ -1137,6 +1159,14 @@ class SurveysBridge(Protocol):
     Admin → Surveys, with people."""
 
     async def get(self, survey_id: str) -> ExtSurvey | None: ...
+
+    async def list_surveys(
+        self, *, status: str = "active", target_type: str | None = None, limit: int = 200
+    ) -> tuple[ExtSurvey, ...]: ...
+
+    async def pending_responses(
+        self, survey_id: str, *, card_ids: Sequence[str] | None = None, limit: int = 5000
+    ) -> tuple[ExtSurveyResponse, ...]: ...
 
     async def preview(
         self, *, target_type: str, card_ids: Sequence[str], roles: Sequence[str]

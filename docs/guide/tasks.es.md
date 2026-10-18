@@ -76,3 +76,7 @@ Cada encuesta pendiente muestra:
 - Un botón **Responder** que navega al formulario de respuesta
 
 El formulario de respuesta presenta preguntas configuradas por el administrador. Sus respuestas pueden actualizar automáticamente los atributos de la ficha, dependiendo de cómo se configuró la encuesta.
+
+El nombre de la ficha en la parte superior del formulario de respuesta abre la ficha en un panel lateral, para que pueda revisar sus datos actuales antes de responder sin salir del formulario ni perder lo que ha escrito. El botón **Abrir página completa** del panel lleva a la propia ficha. El enlace aparece cuando tiene permiso para ver la ficha.
+
+Los campos de fecha se introducen en el formato regional de su navegador, igual que en la propia ficha; las fechas que se muestran en el resto del formulario siguen el formato de fecha del espacio de trabajo definido en **Administración → Configuración**.

@@ -154,6 +154,26 @@ class TestDashboard:
         resp = await client.get("/api/v1/reports/dashboard")
         assert resp.status_code == 401
 
+    async def test_recent_activity_excludes_ops_events_only(self, client, db, reports_env):
+        """Recent Activity is landscape activity, card-less or not: a SoAW
+        signature with no card stays visible, while an ``ops.*`` record (an
+        operator action on the instance) must not reach a dashboard reader."""
+        from app.models.event import Event
+
+        viewer = reports_env["viewer"]
+        card = await create_card(db, card_type="Application", name="Visible App")
+        db.add(Event(card_id=card.id, event_type="card.updated", data={"name": "Visible App"}))
+        db.add(Event(card_id=None, event_type="soaw.signed", data={"name": "Target SoAW"}))
+        db.add(Event(card_id=None, event_type="ops.rescue_access_granted", data={"x": 1}))
+        await db.flush()
+
+        resp = await client.get("/api/v1/reports/dashboard", headers=auth_headers(viewer))
+        assert resp.status_code == 200
+        events = {e["event_type"]: e for e in resp.json()["recent_events"]}
+        assert set(events) == {"card.updated", "soaw.signed"}
+        assert events["card.updated"]["card_id"] == str(card.id)
+        assert events["soaw.signed"]["card_id"] is None
+
     async def test_dashboard_trends_no_snapshot(self, client, db, reports_env):
         """With no historical snapshot, trends return nulls and snapshot_available=False."""
         admin = reports_env["admin"]

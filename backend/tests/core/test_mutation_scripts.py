@@ -15,6 +15,7 @@ import fnmatch
 import importlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -33,6 +34,7 @@ changed_lines = importlib.import_module("changed_lines")
 gate = importlib.import_module("gate")
 harness = importlib.import_module("harness")
 mutmut_scope = importlib.import_module("mutmut_scope")
+nightly_state = importlib.import_module("nightly_state")
 stryker_scope = importlib.import_module("stryker_scope")
 shadow_root = importlib.import_module("shadow_root")
 
@@ -202,6 +204,68 @@ class TestGate:
         )
         assert code == 0
         assert "::warning::" in capsys.readouterr().out
+
+    def test_a_critical_module_holds_its_changed_lines_to_its_own_floor(self):
+        # 13 of 14 killed (93%) clears the 60% diff floor, but the critical
+        # module's 3 of 4 (75%) is under its 80%: the change fails (#1247).
+        records = [
+            *[rec("killed", line=n) for n in range(10)],
+            *[rec("killed", file="backend/app/critical.py", line=n) for n in (1, 2, 3)],
+            rec("survived", file="backend/app/critical.py", line=4),
+        ]
+        verdict = gate.judge(records, "backend", "diff", FLOORS)
+        assert not verdict.passed and not verdict.incomplete
+        assert "pass: 92.9% of 14 mutants on changed lines killed" in verdict.lines[2]
+        assert "| `backend/app/critical.py` | 3 of 4 (75.0%) | 80% | **FAIL** |" in verdict.lines
+        assert "### Critical modules on changed lines" in verdict.lines
+
+    def test_a_critical_module_at_its_floor_passes(self):
+        records = [
+            *[rec("killed", file="backend/app/critical.py", line=n) for n in range(4)],
+            rec("survived", file="backend/app/critical.py", line=5),
+        ]
+        verdict = gate.judge(records, "backend", "diff", FLOORS)
+        assert verdict.passed
+        assert "| `backend/app/critical.py` | 4 of 5 (80.0%) | 80% | ok |" in verdict.lines
+
+    def test_a_critical_module_has_no_min_mutants_threshold(self, tmp_path, capsys):
+        # one mutant, below min_mutants: anywhere else a warning, here a failure
+        records = [rec("survived", file="backend/app/critical.py")]
+        code = gate.main(
+            [
+                "--suite",
+                "backend",
+                "--scope",
+                "diff",
+                "--floors",
+                str(floors_file(tmp_path)),
+                "--records",
+                str(write(tmp_path, "r.json", records)),
+            ]
+        )
+        out = capsys.readouterr().out
+        assert code == 1
+        assert "| `backend/app/critical.py` | 0 of 1 (0.0%) | 80% | **FAIL** |" in out
+        assert "::error::mutation score under its floor" in out
+
+    def test_a_diff_that_touches_no_critical_module_lists_none(self):
+        floors = {**FLOORS, "modules": {**FLOORS["modules"], "frontend/src/c.ts": 99}}
+        records = [
+            *[rec("killed", line=n) for n in range(4)],
+            # excluded mutants alone put nothing in scope for the module
+            rec("excluded", file="backend/app/critical.py"),
+        ]
+        verdict = gate.judge(records, "backend", "diff", floors)
+        assert verdict.passed
+        assert "### Critical modules on changed lines" not in verdict.lines
+
+    def test_a_critical_module_of_another_suite_is_not_judged_here(self):
+        records = [{**rec("survived", file="frontend/src/c.ts"), "suite": "frontend"}]
+        floors = {**FLOORS, "modules": {"frontend/src/c.ts": 99}}
+        assert gate.changed_module_rows(records, "backend", floors) == []
+        assert gate.changed_module_rows(records, "frontend", floors) == [
+            (False, "| `frontend/src/c.ts` | 0 of 1 (0.0%) | 99% | **FAIL** |")
+        ]
 
     def test_a_pending_mutant_is_an_incomplete_run(self, tmp_path):
         records = [rec("killed"), rec("pending", raw="not checked")]
@@ -1874,10 +1938,12 @@ if any("broken" in f for f in files):
 if any("crash" in f for f in files):
     print("Error: ENOENT")
     sys.exit(1)
+# Stryker lists a file only when it holds a mutant, so an "empty" one (a
+# type-only module, a re-export barrel) is left out of the report entirely
 report = {"files": {f: {"source": "x\\n", "mutants": [
     {"id": "1", "mutatorName": "M", "replacement": "y", "status": "Killed",
      "location": {"start": {"line": 1, "column": 1}, "end": {"line": 1, "column": 2}}}
-]} for f in files}}
+]} for f in files if "empty" not in f}}
 out = pathlib.Path("reports/mutation/mutation.json")
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(json.dumps(report))
@@ -2014,6 +2080,53 @@ class TestStrykerNightly:
             f"frontend/src/{n}.ts" for n in ("a", "b", "c", "d")
         ]
         assert {r["status"] for r in records} == {"killed"}
+
+    def test_a_file_with_nothing_to_mutate_is_not_pending(self, frontend_repo, tmp_path):
+        # Stryker never names such a file in a report, so once its chunk has run
+        # over the current tree a placeholder would keep the baseline from ever
+        # reading complete (six type-only modules and barrels did, in run 33).
+        fe, config = frontend_repo
+        (fe / "src" / "empty.ts").write_text("export type T = string;\n")
+        state = tmp_path / "state"
+        assert stryker_scope.nightly("1/1", 30, state, fe, config) == 0
+        records = stryker_scope.collect_state(state, "1/1", fe, config)
+        assert sorted(r["file"] for r in records) == [
+            f"frontend/src/{n}.ts" for n in ("a", "b", "c", "d")
+        ]
+        assert {r["status"] for r in records} == {"killed"}
+
+    def test_a_file_with_nothing_to_mutate_waits_for_its_chunk(self, frontend_repo, tmp_path):
+        # no record of which tree the chunk ran over (a cache from before the
+        # digest, or a report copied by hand): nothing vouches for the file
+        fe, config = frontend_repo
+        (fe / "src" / "empty.ts").write_text("export type T = string;\n")
+        state = tmp_path / "state"
+        assert stryker_scope.nightly("1/1", 30, state, fe, config) == 0
+        (state / f"chunk-1-{stryker_scope.chunk_of('src/empty.ts')}.inputs").unlink()
+        records = stryker_scope.collect_state(state, "1/1", fe, config)
+        empty = [r for r in records if r["file"] == "frontend/src/empty.ts"]
+        assert [(r["status"], r["raw_status"]) for r in empty] == [
+            ("pending", "not measured yet (whole file)")
+        ]
+
+    def test_a_new_file_in_a_chunk_measured_on_an_older_tree_is_pending(
+        self, frontend_repo, tmp_path
+    ):
+        # the chunk's report predates the file, so its absence from that report
+        # says nothing about it: it waits for the chunk's next run
+        fe, config = frontend_repo
+        state = tmp_path / "state"
+        assert stryker_scope.nightly("1/1", 30, state, fe, config) == 0
+        (fe / "src" / "empty.ts").write_text("export type T = string;\n")
+        assert (state / f"chunk-1-{stryker_scope.chunk_of('src/empty.ts')}.mutation.json").exists()
+        records = stryker_scope.collect_state(state, "1/1", fe, config)
+        empty = [r for r in records if r["file"] == "frontend/src/empty.ts"]
+        assert [(r["status"], r["raw_status"]) for r in empty] == [
+            ("pending", "not measured yet (whole file)")
+        ]
+        assert stryker_scope.nightly("1/1", 30, state, fe, config) == 0
+        records = stryker_scope.collect_state(state, "1/1", fe, config)
+        assert "frontend/src/empty.ts" not in {r["file"] for r in records}
 
     def test_files_no_chunk_has_measured_are_pending(self, frontend_repo, tmp_path):
         fe, config = frontend_repo
@@ -2315,3 +2428,177 @@ class TestStrykerNightlySkipsUnchangedChunks:
         # a file outside src/ and the listed configs is not an input
         (fe / "README.md").write_text("notes\n")
         assert stryker_scope.inputs_digest(fe) == configured
+
+
+# ── nightly_state ────────────────────────────────────────────────────────────
+
+
+def _gh(runs: list[str], kept: dict[str, Path], calls: list[list[str]]):
+    """A runner standing in for ``gh``: ``runs`` newest first, ``kept`` the runs
+    that still hold the artifact. ``tar`` really runs."""
+
+    def run(cmd):
+        cmd = list(cmd)
+        calls.append(cmd)
+        if cmd[:3] == ["gh", "run", "list"]:
+            listed = json.dumps([{"databaseId": int(r)} for r in runs])
+            return subprocess.CompletedProcess(cmd, 0, listed, "")
+        if cmd[:3] == ["gh", "run", "download"]:
+            if cmd[3] not in kept:
+                return subprocess.CompletedProcess(cmd, 1, "", "no artifact matches")
+            dest = Path(cmd[cmd.index("--dir") + 1])
+            dest.mkdir(parents=True, exist_ok=True)
+            shutil.copy(kept[cmd[3]], dest / nightly_state.ARCHIVE)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        return nightly_state._run(cmd)
+
+    return run
+
+
+def _state_dir(root: Path) -> Path:
+    """A shard's state as mutmut leaves it: real files beside links into the repo."""
+    (root / "backend" / "alembic").mkdir(parents=True)
+    state = root / ".mutation" / "backend" / "backend"
+    (state / "mutants").mkdir(parents=True)
+    (state / "mutants" / "x.py.meta").write_text('{"exit_code_by_key": {"k": 1}}')
+    (state / "alembic").symlink_to("../../../backend/alembic")
+    return state
+
+
+class TestNightlyState:
+    def test_a_packed_state_comes_back_with_its_links_still_links(self, tmp_path):
+        state = _state_dir(tmp_path / "before")
+        archive = tmp_path / "nightly-state.tgz"
+        assert nightly_state.pack(state, archive) is True
+        into = _state_dir(tmp_path / "after").parent / "restored"
+        calls: list[list[str]] = []
+        run = _gh(["9", "8"], {"8": archive}, calls)
+        assert nightly_state.restore("nightly-state-backend-1", into, run=run) == "8"
+        assert (into / "mutants" / "x.py.meta").read_text() == '{"exit_code_by_key": {"k": 1}}'
+        # an artifact would have brought the directory back as a stale copy
+        assert (into / "alembic").is_symlink()
+        assert os.readlink(into / "alembic") == "../../../backend/alembic"
+        downloads = [c[3] for c in calls if c[:3] == ["gh", "run", "download"]]
+        assert downloads == ["9", "8"]  # the newest first, past the one that kept nothing
+
+    def test_it_stops_at_the_newest_run_that_kept_the_state(self, tmp_path):
+        old, new = tmp_path / "old.tgz", tmp_path / "new.tgz"
+        for archive, text in ((old, "old"), (new, "new")):
+            src = tmp_path / f"src-{text}"
+            src.mkdir()
+            (src / "which").write_text(text)
+            nightly_state.pack(src, archive)
+        calls: list[list[str]] = []
+        into = tmp_path / "into"
+        run = _gh(["7", "6"], {"7": new, "6": old}, calls)
+        assert nightly_state.restore("nightly-state-frontend-2", into, run=run) == "7"
+        assert (into / "which").read_text() == "new"
+        assert [c[3] for c in calls if c[:3] == ["gh", "run", "download"]] == ["7"]
+
+    def test_nothing_restored_when_no_recent_run_kept_it(self, tmp_path):
+        into = tmp_path / "into"
+        calls: list[list[str]] = []
+        assert (
+            nightly_state.restore("nightly-state-mcp-1", into, run=_gh(["3", "2"], {}, calls))
+            is None
+        )
+        assert not into.exists()
+        assert len([c for c in calls if c[:3] == ["gh", "run", "download"]]) == 2
+
+    def test_a_download_without_the_archive_is_passed_over(self, tmp_path):
+        calls: list[list[str]] = []
+        base = _gh(["5"], {}, calls)
+
+        def run(cmd):
+            if list(cmd)[:3] == ["gh", "run", "download"]:  # succeeds, but holds nothing
+                calls.append(list(cmd))
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            return base(cmd)
+
+        assert nightly_state.restore("nightly-state-backend-2", tmp_path / "into", run=run) is None
+
+    def test_an_archive_that_will_not_unpack_falls_through_to_the_next_run(self, tmp_path, capsys):
+        broken = tmp_path / "broken.tgz"
+        broken.write_bytes(b"not a tarball")
+        good_src = tmp_path / "good"
+        good_src.mkdir()
+        (good_src / "ok").write_text("1")
+        good = tmp_path / "good.tgz"
+        nightly_state.pack(good_src, good)
+        calls: list[list[str]] = []
+        into = tmp_path / "into"
+        run = _gh(["4", "3"], {"4": broken, "3": good}, calls)
+        assert nightly_state.restore("nightly-state-backend-3", into, run=run) == "3"
+        assert (into / "ok").read_text() == "1"
+        assert (
+            "::warning::run 4's nightly-state-backend-3 would not unpack" in capsys.readouterr().out
+        )
+
+    def test_it_asks_for_mains_completed_nightlies_only(self):
+        calls: list[list[str]] = []
+        assert nightly_state.recent_runs(5, _gh(["2", "1"], {}, calls)) == ["2", "1"]
+        listed = calls[0]
+        # a pull request's smoke run uploads too, and must never be read back
+        assert listed[listed.index("--branch") + 1] == "main"
+        assert listed[listed.index("--workflow") + 1] == "mutation-nightly.yml"
+        assert listed[listed.index("--status") + 1] == "completed"
+        assert listed[listed.index("--limit") + 1] == "5"
+
+    def test_a_listing_that_fails_restores_nothing_and_says_why(self, capsys):
+        def run(cmd):
+            return subprocess.CompletedProcess(cmd, 1, "", "HTTP 403")
+
+        assert nightly_state.recent_runs(10, run) == []
+        assert "::warning::cannot list the nightly's runs: HTTP 403" in capsys.readouterr().out
+
+    def test_no_state_yet_is_a_warning_not_an_archive(self, tmp_path, capsys):
+        archive = tmp_path / "nightly-state.tgz"
+        assert nightly_state.pack(tmp_path / "missing", archive) is False
+        assert not archive.exists()
+        assert "::warning::no state to keep" in capsys.readouterr().out
+
+    def test_a_tar_failure_fails_the_pack(self, tmp_path):
+        def run(cmd):
+            return subprocess.CompletedProcess(cmd, 2, "", "disk full")
+
+        with pytest.raises(SystemExit, match="tar failed: disk full"):
+            nightly_state.pack(tmp_path, tmp_path / "out.tgz", run)
+
+    @pytest.mark.parametrize("found, flag", [("8", "true"), (None, "false")])
+    def test_the_workflow_learns_whether_to_fall_back_to_the_cache(
+        self, monkeypatch, tmp_path, capsys, found, flag
+    ):
+        output = tmp_path / "github_output"
+        monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+        seen = {}
+
+        def fake_restore(name, into, lookback):
+            seen.update(name=name, into=into, lookback=lookback)
+            return found
+
+        monkeypatch.setattr(nightly_state, "restore", fake_restore)
+        argv = [
+            "restore",
+            "--name",
+            "nightly-state-frontend-4",
+            "--into",
+            "frontend/reports/nightly",
+        ]
+        assert nightly_state.main(argv) == 0
+        assert output.read_text() == f"restored={flag}\n"
+        assert seen == {
+            "name": "nightly-state-frontend-4",
+            "into": Path("frontend/reports/nightly"),
+            "lookback": nightly_state.LOOKBACK,
+        }
+        out = capsys.readouterr().out
+        assert ("Restored nightly-state-frontend-4 from run 8." in out) == (found is not None)
+
+    def test_pack_from_the_command_line_writes_the_archive_the_workflow_uploads(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "state").mkdir()
+        (tmp_path / "state" / "f").write_text("x")
+        assert nightly_state.main(["pack", "--dir", "state"]) == 0
+        assert (tmp_path / "nightly-state.tgz").is_file()

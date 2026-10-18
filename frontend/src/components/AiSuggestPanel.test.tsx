@@ -69,6 +69,18 @@ function renderPanel(props: Partial<React.ComponentProps<typeof AiSuggestPanel>>
   return { ...utils, onApply, onDismiss };
 }
 
+
+/** The dropdown under a suggested field's name. */
+function comboFor(label: string): HTMLElement {
+  const row = screen.getByText(label).parentElement!.parentElement!;
+  return within(row).getByRole("combobox");
+}
+
+async function choose(label: string, option: string, user = userEvent.setup()) {
+  await user.click(comboFor(label));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 describe("AiSuggestPanel", () => {
   it("shows the searching state while loading", () => {
     renderPanel({ loading: true, response: null });
@@ -155,13 +167,13 @@ describe("AiSuggestPanel", () => {
     // A suggestion for a key the schema does not carry gets no editor.
     expect(screen.queryByText("unknownField")).not.toBeInTheDocument();
 
-    // Boolean: starts "Yes", switch flips it to "No".
-    expect(screen.getByText("Yes")).toBeInTheDocument();
-    await user.click(screen.getByRole("checkbox"));
-    expect(screen.getByText("No")).toBeInTheDocument();
+    // Boolean: a Yes / No dropdown starting on "Yes"; one pick of "No" sets it to false.
+    expect(comboFor("Cloud Hosted")).toHaveTextContent("Yes");
+    await choose("Cloud Hosted", "No", user);
+    expect(comboFor("Cloud Hosted")).toHaveTextContent("No");
 
     // Single select: change High → Low.
-    const select = screen.getByRole("combobox");
+    const select = comboFor("Criticality");
     expect(select).toHaveTextContent("High");
     await user.click(select);
     await user.click(await screen.findByRole("option", { name: "Low" }));
@@ -255,12 +267,23 @@ describe("AiSuggestPanel — details", () => {
     const user = userEvent.setup();
     const { onApply } = renderPanel({ response: WITH_FIELDS });
     expect(screen.queryByText("Cloud Hosted")).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Apply suggestions/ }));
     expect(onApply).toHaveBeenCalledWith({
       description: "A CRM.",
       fields: { isCloud: true, criticality: "high", unknownField: 42 },
+    });
+  });
+
+  it("can clear a suggested yes/no value through None", async () => {
+    const user = userEvent.setup();
+    const { onApply } = renderPanel({ response: WITH_FIELDS, fieldsSchema: SCHEMA });
+    await choose("Cloud Hosted", "None", user);
+    expect(comboFor("Cloud Hosted")).not.toHaveTextContent("Yes");
+    await user.click(screen.getByRole("button", { name: /Apply suggestions/ }));
+    expect(onApply).toHaveBeenCalledWith({
+      description: "A CRM.",
+      fields: { isCloud: null, criticality: "high", unknownField: 42 },
     });
   });
 
@@ -277,8 +300,8 @@ describe("AiSuggestPanel — details", () => {
         fieldsSchema={SCHEMA}
       />,
     );
-    await user.click(screen.getByRole("checkbox"));
-    expect(screen.getByText("No")).toBeInTheDocument();
+    await choose("Cloud Hosted", "No", user);
+    expect(comboFor("Cloud Hosted")).toHaveTextContent("No");
     rerender(
       <AiSuggestPanel
         response={{ ...WITH_FIELDS }}
@@ -289,8 +312,7 @@ describe("AiSuggestPanel — details", () => {
         fieldsSchema={SCHEMA}
       />,
     );
-    expect(screen.getByText("Yes")).toBeInTheDocument();
-    expect(screen.getByRole("checkbox")).toBeChecked();
+    expect(comboFor("Cloud Hosted")).toHaveTextContent("Yes");
     await user.click(screen.getByRole("button", { name: /Apply suggestions/ }));
     expect(onApply).toHaveBeenCalledWith({
       description: "A CRM.",
@@ -401,8 +423,9 @@ describe("AiSuggestPanel — details", () => {
       fieldsSchema: schema,
     });
     expect(screen.getByText("Tier")).toBeInTheDocument();
-    expect(screen.getByRole("checkbox")).toBeChecked();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    // Only the boolean gets a dropdown: the option-less select has none.
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
+    expect(comboFor("Cloud Hosted")).toHaveTextContent("Yes");
   });
 });
 
@@ -443,8 +466,9 @@ describe("AiSuggestPanel — metamodel labels", () => {
       // An admin-created field with no label shows its key, never a blank.
       expect(screen.getByText("criticality")).toBeInTheDocument();
       // The select shows the translated option, and an untranslated one its label.
-      const select = screen.getByRole("combobox");
+      const select = comboFor("criticality");
       expect(select).toHaveTextContent("Hoch");
+      expect(comboFor("In der Cloud gehostet")).toHaveTextContent("Ja");
       await user.click(select);
       expect(await screen.findByRole("option", { name: "Low" })).toBeInTheDocument();
     } finally {

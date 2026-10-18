@@ -19,7 +19,7 @@ from app.services.extensions import sdk
 
 def test_sdk_version_is_1_5():
     # Fork note: SDK_VERSION is pinned at 1.5 (frozen — see CLAUDE.md's SDK
-    # surface section). Upstream has since moved this to 1.15; the new 1.6-1.15
+    # surface section). Upstream has since moved this to 1.16; the new 1.6-1.16
     # surface (notification channels, batch reads, decisions, surveys, ...) is present
     # without the constant following it.
     assert sdk.SDK_VERSION == "1.5"
@@ -213,6 +213,7 @@ def test_sdk_compatibility_is_major_only():
     assert sdk.sdk_compatible("1.13")
     assert sdk.sdk_compatible("1.14")
     assert sdk.sdk_compatible("1.15")
+    assert sdk.sdk_compatible("1.16")
     assert not sdk.sdk_compatible("2.0")
 
 
@@ -251,10 +252,11 @@ def test_dependency_subgraph_is_an_immutable_tuple_projection():
 
 def test_sdk_minor_newer_truth_table():
     # Fork note: SDK_VERSION is pinned at 1.5, so "newer" starts at 1.6
-    # (upstream's constant is 1.15 and its own table starts at 1.16).
+    # (upstream's constant is 1.16 and its own table starts at 1.17).
     # Newer minor on the same major → warn (still loads).
     assert sdk.sdk_minor_newer("1.6")
     assert sdk.sdk_minor_newer("1.16")
+    assert sdk.sdk_minor_newer("1.17")
     # Same or older minor → no warning.
     assert not sdk.sdk_minor_newer("1.5")
     assert not sdk.sdk_minor_newer("1.4")
@@ -510,8 +512,16 @@ def test_sdk_1_14_surface_exists():
         "requests",
         "targets",
     }
-    for name in ("get", "preview", "send"):
+    for name in ("get", "preview", "send", "list_surveys", "pending_responses"):
         assert callable(getattr(sdk.SurveysBridge, name))
+    # 1.16: the pending-request read model — ids and the request time only.
+    assert {f.name for f in dataclasses.fields(sdk.ExtSurveyResponse)} == {
+        "survey_id",
+        "card_id",
+        "user_id",
+        "status",
+        "requested_at",
+    }
     for name in ("close", "update", "delete", "apply"):
         assert not hasattr(sdk.SurveysBridge, name)
 

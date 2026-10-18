@@ -76,3 +76,7 @@ Hver afventende undersøgelse viser:
 - En **Besvar**-knap, der navigerer til svarformularen
 
 Svarformularen til undersøgelsen præsenterer spørgsmål konfigureret af administratoren. Dine svar kan automatisk opdatere kortattributter, afhængigt af hvordan undersøgelsen blev konfigureret.
+
+Kortets navn øverst i svarformularen åbner kortet i et sidepanel, så du kan tjekke kortets aktuelle oplysninger, før du svarer, uden at forlade formularen eller miste det, du har skrevet. Panelets knap **Åbn fuld side** fører til selve kortet. Linket vises, når du må se kortet.
+
+Datofelter udfyldes i din browsers regionale format, ligesom på selve kortet; datoer, der vises andre steder i formularen, følger arbejdsområdets datoformat, som er sat under **Admin → Indstillinger**.

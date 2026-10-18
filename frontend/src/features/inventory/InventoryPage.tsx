@@ -72,6 +72,7 @@ import {
 } from "@/lib/dataQualityBands";
 import { exportToExcel, exportCurrentViewToExcel } from "./excelExport";
 import { dateColumnFilterDef } from "@/lib/dateColumnFilter";
+import { booleanColumnDef } from "./booleanColumn";
 import RelationCellPopover from "./RelationCellPopover";
 import ExtFieldCell from "./ExtFieldCell";
 import LinkifiedText from "@/components/LinkifiedText";
@@ -140,6 +141,7 @@ import { useCardSearch } from "@/hooks/useCardSearch";
 import { useTypeLabel, useRelationLabel, useFieldLabel, useOptionLabel, useSubtypeLabel } from "@/hooks/useResolveLabel";
 import OptionChip from "@/components/OptionChip";
 import { readableTextColor } from "@/lib/color";
+import { booleanOption, facetOptions, facetValues, isGroupableField } from "@/lib/fieldFacets";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import { useIsRtl } from "@/hooks/useIsRtl";
@@ -1314,6 +1316,7 @@ export default function InventoryPage() {
   // attributes follow the same single-selected-type rule as their columns.
   const groupAxes = useMemo<GroupAxis<Card>[]>(() => {
     const axes: GroupAxis<Card>[] = [];
+    const yesNo = { yes: t("common:labels.yes"), no: t("common:labels.no") };
     if (typeConfig?.subtypes?.length) {
       axes.push({
         key: "subtype",
@@ -1345,17 +1348,20 @@ export default function InventoryPage() {
     if (typeConfig) {
       for (const section of typeConfig.fields_schema) {
         for (const f of section.fields) {
-          if (f.type === "single_select" && f.options?.length) {
+          // A single_select with options or a yes/no field (Yes / No); a
+          // multi-select cannot put a card in exactly one group.
+          if (isGroupableField(f)) {
+            const localised = { ...f, options: f.options?.map((o) => ({ ...o, label: optLabel(o) })) };
             axes.push({
               key: `attr_${f.key}`,
               label: fieldLabel(f),
-              groupKeyOf: (c) => {
-                const value = (c.attributes || {})[f.key];
-                if (valueIsEmpty(value)) return null;
-                // single_select stores a scalar; tolerate a stray array value.
-                return Array.isArray(value) ? String(value[0]) : String(value);
-              },
-              vocab: f.options.map((o) => ({ key: o.key, label: optLabel(o), color: o.color })),
+              // single_select stores a scalar; a stray array groups by its first value.
+              groupKeyOf: (c) => facetValues(f, (c.attributes || {})[f.key])[0],
+              vocab: facetOptions(localised, yesNo).map((o) => ({
+                key: o.key,
+                label: o.label,
+                color: o.color,
+              })),
             });
           }
         }
@@ -1802,8 +1808,9 @@ export default function InventoryPage() {
           if (Array.isArray(val)) {
             if (val.length === 0) return true;
             if (valueIsEmpty(actual)) return val.includes(EMPTY_VALUE);
-            if (Array.isArray(actual)) return actual.some((a) => val.includes(a as string));
-            return val.includes(actual as string);
+            // Compared as strings, so a yes/no value matches "true" / "false".
+            if (Array.isArray(actual)) return actual.some((a) => val.includes(String(a)));
+            return val.includes(String(actual));
           }
           // "(empty)" as a scalar — URL deep-links seed scalar values, and the
           // report's "Not set" group links land here as attr_<key>=__empty__.
@@ -2860,6 +2867,18 @@ export default function InventoryPage() {
       };
       return labels[v] || v;
     };
+    // A boolean column reads and edits like a single-select one (#1266): the
+    // green Yes / blue No pill, blank when unset. Its formatter only compares
+    // `p.node` to null — the editor-dropdown case of rule 1 above — and never
+    // dereferences it.
+    const boolLabels = { yes: t("common:labels.yes"), no: t("common:labels.no") };
+    const boolColumn = {
+      ...booleanColumnDef({ ...boolLabels, none: t("common:labels.none") }),
+      cellRenderer: (p: { value?: unknown }) => {
+        const opt = booleanOption(p.value, boolLabels);
+        return opt ? <OptionChip option={opt} value={opt.key} label={opt.label} /> : null;
+      },
+    };
 
     const cols: ColDef[] = [
       {
@@ -3416,6 +3435,7 @@ export default function InventoryPage() {
                 }
               : {}),
             ...(field.type === "date" ? dateColumnFilterDef : {}),
+            ...(field.type === "boolean" ? boolColumn : {}),
             // Extension-typed columns render through the fieldTypes registry
             // (same display component as card detail) and are never
             // grid-editable — the spread order deliberately overrides the
@@ -3474,6 +3494,7 @@ export default function InventoryPage() {
           ...(field.type === "url" ? urlCell : {}),
           ...(field.type === "percentage" ? percentageColumnDef : {}),
           ...(field.type === "date" ? dateColumnFilterDef : {}),
+          ...(field.type === "boolean" ? boolColumn : {}),
           ...(field.type.startsWith("ext.")
             ? {
                 cellRenderer: (p: { value: unknown }) => (

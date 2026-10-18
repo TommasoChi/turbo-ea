@@ -76,3 +76,7 @@ Each pending survey shows:
 - A **Respond** button that navigates to the response form
 
 The survey response form presents questions configured by the admin. Your answers may automatically update card attributes, depending on how the survey was configured.
+
+The card's name at the top of the response form opens the card in a side panel, so you can check its current details before answering without leaving the form or losing what you have typed. The panel's **Open full page** button takes you to the card itself. The link appears when you are allowed to view the card.
+
+Date fields are entered in your browser's regional format, the same as on the card itself, while dates shown elsewhere in the form follow the workspace date format set under **Admin → Settings**.

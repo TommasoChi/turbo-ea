@@ -76,3 +76,7 @@ Chaque enquête en attente affiche :
 - Un bouton **Répondre** qui redirige vers le formulaire de réponse
 
 Le formulaire de réponse à l'enquête présente les questions configurées par l'administrateur. Vos réponses peuvent automatiquement mettre à jour les attributs de la fiche, selon la configuration de l'enquête.
+
+Le nom de la fiche en haut du formulaire de réponse ouvre la fiche dans un panneau latéral : vous pouvez ainsi vérifier ses informations actuelles avant de répondre, sans quitter le formulaire ni perdre ce que vous avez saisi. Le bouton **Ouvrir en pleine page** du panneau mène à la fiche elle-même. Le lien apparaît lorsque vous êtes autorisé à consulter la fiche.
+
+Les champs de date se saisissent dans le format régional de votre navigateur, comme sur la fiche elle-même ; les dates affichées ailleurs dans le formulaire suivent le format de date de l'espace de travail défini dans **Admin → Paramètres**.

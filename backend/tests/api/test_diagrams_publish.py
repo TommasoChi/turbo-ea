@@ -319,10 +319,66 @@ class TestPublicAccess:
         assert legend["kind"] == "card_fields"
         assert legend["coloured"] == 1
         assert legend["rules"] == [
-            {"type_key": "Application", "field_key": "criticality", "has_missing": True}
+            {
+                "type_key": "Application",
+                "field_key": "criticality",
+                "has_missing": True,
+                "has_multiple": False,
+            }
         ]
         dumped = json.dumps(legend)
         for leak in (str(coloured.id), str(blank.id), "Secret ERP", "Secret CRM", "999"):
+            assert leak not in dumped
+
+    async def test_public_legend_keys_a_yes_no_rule(self, client, db, publish_env):
+        """A yes/no rule counts both answers as coloured and still sends no card data."""
+        admin = publish_env["admin"]
+        await create_card_type(
+            db,
+            key="Application",
+            fields_schema=[
+                {
+                    "section": "Main",
+                    "fields": [{"key": "isCloud", "label": "Cloud", "type": "boolean"}],
+                }
+            ],
+        )
+        yes = await create_card(db, name="Secret Yes", attributes={"isCloud": True})
+        no = await create_card(db, name="Secret No", attributes={"isCloud": False})
+        blank = await create_card(db, name="Secret Blank")
+        objects = "".join(
+            f'<object label="x" cardId="{c.id}"><mxCell vertex="1" parent="1"/></object>'
+            for c in (no, blank)
+        )
+        xml = CARD_XML.replace("11111111-1111-1111-1111-111111111111", str(yes.id)).replace(
+            "</root>", objects + "</root>"
+        )
+        resp = await client.post(
+            "/api/v1/diagrams",
+            json={
+                "name": "Cloud",
+                "data": {
+                    "xml": xml,
+                    "view": {"kind": "card_fields", "fields": {"Application": "isCloud"}},
+                },
+            },
+            headers=auth_headers(admin),
+        )
+        slug = await self._publish(client, admin, resp.json()["id"])
+
+        legend = (await client.get(f"/api/v1/diagrams/public/{slug}")).json()["legend"]
+        assert legend["coloured"] == 2
+        assert legend["rules"] == [
+            {
+                "type_key": "Application",
+                "field_key": "isCloud",
+                "has_missing": True,
+                "has_multiple": False,
+            }
+        ]
+        assert legend["types"][0]["fields_schema"][0]["fields"][0]["type"] == "boolean"
+        dumped = json.dumps(legend)
+        for leak in (str(yes.id), str(no.id), str(blank.id), "Secret Yes", "Secret No"):
             assert leak not in dumped
 
     async def test_unpublished_diagram_is_404_not_403(self, client, db, publish_env):
@@ -534,3 +590,88 @@ class TestWorkspaceTransferSafety:
         section = next(s for s in ENTITY_SECTIONS if s.sheet == "Diagrams")
         for col in ("is_published", "public_slug", "access_mode", "allowed_email_domains"):
             assert col in section.exclude_columns, f"{col} would transfer between instances"
+
+
+# ---------------------------------------------------------------------------
+# Security & admin audit log — publishing exposes a diagram outside the app
+# ---------------------------------------------------------------------------
+
+
+async def _audit_rows(db, prefix: str = "admin.diagram."):
+    """Discard what a request flushed but never committed, then read the log."""
+    from sqlalchemy import select
+
+    from app.models.audit_log import AuditLogEntry
+
+    await db.rollback()
+    result = await db.execute(
+        select(AuditLogEntry)
+        .where(AuditLogEntry.action.like(f"{prefix}%"))
+        .order_by(AuditLogEntry.created_at)
+    )
+    return list(result.scalars().all())
+
+
+class TestPublishAudit:
+    async def test_publish_and_unpublish_are_recorded(self, client, db, publish_env):
+        admin = publish_env["admin"]
+        admin_id, headers = admin.id, auth_headers(admin)
+        diagram_id = await _make_diagram(client, admin, name="Landscape")
+
+        resp = await client.post(
+            f"/api/v1/diagrams/{diagram_id}/publish",
+            json={"access_mode": "sso", "allowed_email_domains": ["Company.com"]},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        slug = resp.json()["public_slug"]
+        resp = await client.delete(f"/api/v1/diagrams/{diagram_id}/publish", headers=headers)
+        assert resp.status_code == 200
+
+        published, unpublished = await _audit_rows(db)
+        assert published.action == "admin.diagram.published"
+        assert published.actor_user_id == admin_id and published.category == "admin"
+        assert (published.target_type, published.target_id, published.target_label) == (
+            "diagram",
+            diagram_id,
+            "Landscape",
+        )
+        assert published.details == {
+            "context": {
+                "slug_prefix": slug[:8] + "…",
+                "access_mode": "sso",
+                "allowed_email_domains": ["company.com"],
+                "was_published": False,
+            }
+        }
+        assert unpublished.action == "admin.diagram.unpublished"
+        # What was withdrawn: the same exposure facts the publish row carried.
+        assert unpublished.details == {
+            "context": {
+                "slug_prefix": slug[:8] + "…",
+                "access_mode": "sso",
+                "allowed_email_domains": ["company.com"],
+                "was_published": True,
+            }
+        }
+
+    async def test_editing_a_diagram_is_not_an_admin_action(self, client, db, publish_env):
+        admin = publish_env["admin"]
+        diagram_id = await _make_diagram(client, admin)
+        resp = await client.patch(
+            f"/api/v1/diagrams/{diagram_id}", json={"name": "Renamed"}, headers=auth_headers(admin)
+        )
+        assert resp.status_code == 200
+        assert await _audit_rows(db) == []
+
+    async def test_member_without_publish_is_refused_and_nothing_recorded(
+        self, client, db, publish_env
+    ):
+        diagram_id = await _make_diagram(client, publish_env["admin"])
+        resp = await client.post(
+            f"/api/v1/diagrams/{diagram_id}/publish",
+            json={"access_mode": "public"},
+            headers=auth_headers(publish_env["member"]),
+        )
+        assert resp.status_code == 403
+        assert await _audit_rows(db) == []

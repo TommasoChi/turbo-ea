@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 import app.api.v1.workspace as workspace_api
 from app.core.permissions import VIEWER_PERMISSIONS
+from app.models.audit_log import AuditLogEntry
 from app.models.workspace_transfer import WorkspaceTransfer
 from app.services.workspace_io import build_bundle
 from tests.conftest import (
@@ -206,6 +207,43 @@ class TestRoutes:
         )
         assert resp.content[:2] == b"PK"
 
+    async def test_export_records_an_access_row(self, client, db, env):
+        admin_id = env["admin"].id
+        resp = await client.get(
+            "/api/v1/admin/workspace/export?include_archived=true",
+            headers=auth_headers(env["admin"]),
+        )
+        assert resp.status_code == 200
+        assert resp.content[:2] == b"PK"
+
+        # Committed by the route: still there once the session rolls back.
+        await db.rollback()
+        [row] = (
+            (
+                await db.execute(
+                    select(AuditLogEntry).where(AuditLogEntry.action == "access.export.workspace")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert (row.category, row.outcome) == ("access", "success")
+        assert row.actor_user_id == admin_id and row.actor_email == "admin@test.com"
+        assert row.details == {
+            "context": {"include_archived": True, "size_bytes": len(resp.content)}
+        }
+
+    async def test_refused_export_records_nothing(self, client, db, env):
+        resp = await client.get(
+            "/api/v1/admin/workspace/export", headers=auth_headers(env["viewer"])
+        )
+        assert resp.status_code == 403
+        await db.rollback()
+        rows = await db.execute(
+            select(AuditLogEntry.id).where(AuditLogEntry.action == "access.export.workspace")
+        )
+        assert rows.all() == []
+
     async def test_get_unknown_transfer_is_404(self, client, db, env):
         resp = await client.get(f"{IMPORT}/{uuid.uuid4()}", headers=auth_headers(env["admin"]))
         assert resp.status_code == 404
@@ -242,3 +280,115 @@ class TestRoutes:
 
 async def _noop(*args, **kwargs):
     return None
+
+
+# ---------------------------------------------------------------------------
+# Security & admin audit log
+# ---------------------------------------------------------------------------
+
+
+async def _audit_rows(db, prefix: str = "admin.workspace."):
+    """Discard what a request flushed but never committed, then read the log."""
+    from app.models.audit_log import AuditLogEntry
+
+    await db.rollback()
+    result = await db.execute(
+        select(AuditLogEntry)
+        .where(AuditLogEntry.action.like(f"{prefix}%"))
+        .order_by(AuditLogEntry.created_at)
+    )
+    return list(result.scalars().all())
+
+
+class TestAudit:
+    async def test_upload_apply_and_completion_are_recorded(self, client, db, env):
+        admin_id = env["admin"].id
+        transfer_id = (await _upload(client, env["admin"], env["bundle"])).json()["id"]
+        resp = await client.post(
+            f"{IMPORT}/{transfer_id}/apply", headers=auth_headers(env["admin"])
+        )
+        assert resp.status_code == 202
+
+        uploaded, applied, completed = await _audit_rows(db)
+        assert uploaded.action == "admin.workspace.import.uploaded"
+        assert uploaded.target_id == transfer_id and uploaded.target_label == "workspace.zip"
+        assert uploaded.details == {
+            "context": {"file_name": "workspace.zip", "file_size": len(env["bundle"])}
+        }
+        assert applied.action == "admin.workspace.import.applied"
+        # The target is the transfer: there is nothing else to say.
+        assert applied.details is None
+        assert applied.actor_user_id == admin_id
+        # The job has no request: the actor is the user who asked for the apply.
+        assert completed.action == "admin.workspace.import.completed"
+        assert completed.outcome == "success"
+        assert completed.actor_user_id == admin_id
+        # The run's totals, flattened — and never the transfer's own id.
+        totals = (await _row(db, transfer_id)).result["totals"]
+        assert set(totals) == {"created", "updated", "skipped", "conflict", "failed"}
+        assert totals["failed"] == 0
+        assert completed.details == {"context": totals}
+
+    async def test_a_failed_apply_records_a_failure(self, client, db, env, monkeypatch):
+        transfer_id = (await _upload(client, env["admin"], env["bundle"])).json()["id"]
+
+        async def boom(db_, bundle, user):
+            raise RuntimeError("apply exploded")
+
+        monkeypatch.setattr(workspace_api, "apply_bundle", boom)
+        await client.post(f"{IMPORT}/{transfer_id}/apply", headers=auth_headers(env["admin"]))
+
+        [completed] = await _audit_rows(db, "admin.workspace.import.completed")
+        assert completed.outcome == "failure"
+        assert completed.details == {"context": {"error": "apply exploded"}}
+
+    async def test_a_vanished_user_records_a_failure_with_no_actor(self, client, db, env):
+        transfer_id = (await _upload(client, env["admin"], env["bundle"])).json()["id"]
+
+        await workspace_api._apply_job(transfer_id, str(uuid.uuid4()))
+
+        [completed] = await _audit_rows(db, "admin.workspace.import.completed")
+        assert completed.outcome == "failure"
+        assert completed.actor_user_id is None
+        # Called outside any request, as the background runner does.
+        assert completed.origin == "system"
+        assert completed.details == {
+            "context": {"error": "The bundle file or the requesting user no longer exists"}
+        }
+
+    async def test_a_transfer_without_its_bundle_records_a_failure(self, client, db, env):
+        admin_id = str(env["admin"].id)
+        transfer_id = (await _upload(client, env["admin"], env["bundle"])).json()["id"]
+        row = await _row(db, transfer_id)
+        row.storage_path = None
+        await db.commit()
+
+        await workspace_api._apply_job(transfer_id, admin_id)
+
+        [completed] = await _audit_rows(db, "admin.workspace.import.completed")
+        assert completed.outcome == "failure"
+        assert completed.details == {
+            "context": {"error": "The bundle file or the requesting user no longer exists"}
+        }
+
+    async def test_an_apply_of_a_discarded_transfer_leaves_no_row(self, client, db, env):
+        """Discarded while its apply was queued: the discard is the record."""
+        admin_id = str(env["admin"].id)
+        transfer_id = (await _upload(client, env["admin"], env["bundle"])).json()["id"]
+        resp = await client.delete(f"{IMPORT}/{transfer_id}", headers=auth_headers(env["admin"]))
+        assert resp.status_code == 204
+
+        await workspace_api._apply_job(transfer_id, admin_id)
+
+        assert await _audit_rows(db, "admin.workspace.import.completed") == []
+        [discarded] = await _audit_rows(db, "admin.workspace.import.discarded")
+        assert discarded.target_id == transfer_id
+
+    async def test_discard_is_recorded(self, client, db, env):
+        transfer_id = (await _upload(client, env["admin"], env["bundle"])).json()["id"]
+        resp = await client.delete(f"{IMPORT}/{transfer_id}", headers=auth_headers(env["admin"]))
+        assert resp.status_code == 204
+
+        [row] = await _audit_rows(db, "admin.workspace.import.discarded")
+        assert row.target_id == transfer_id
+        assert row.details == {"context": {"status": "previewed"}}

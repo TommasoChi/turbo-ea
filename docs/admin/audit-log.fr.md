@@ -1,0 +1,234 @@
+# Journal d'audit
+
+Le **Journal d'audit**, sous **Admin → Paramètres → Journal d'audit** (`/admin/settings?tab=audit-log`), répond aux deux questions qu'une revue de sécurité pose à une instance qui détient la carte de tout le paysage informatique : *qu'est-ce qui y a changé*, et *qui s'est connecté, et comment*. Il est divisé en deux sous-onglets :
+
+| Sous-onglet | URL | Ce qu'il enregistre |
+|-------------|-----|---------------------|
+| **Modifications** | `/admin/settings?tab=audit-log` | Chaque écriture dans le paysage — fiches, relations, risques, étiquettes, rôles de parties prenantes, brouillons de décision —, regroupée en lots de mutations, avec le diff de chaque événement et une **annulation (Rollback)** |
+| **Sécurité et administration** | `/admin/settings?tab=audit-log&view=security` | Connexions et déconnexions, tentatives échouées, verrouillages, sessions SSO et proxy, événements de mot de passe, emprunt de rôle et chaque action administrative |
+
+Les deux sont séparés à dessein. **Modifications** est un outil de travail — il sert à voir et à annuler une écriture erronée — et ne conserve qu'un historique court. **Sécurité et administration** est une piste de preuves : ses entrées ne peuvent être ni modifiées ni supprimées, et elle est conservée un an par défaut.
+
+## Qui peut le consulter
+
+Les deux sous-onglets exigent la permission **`admin.events`** (« Consulter la piste d'audit et le flux d'événements »), que seul le rôle **Admin** détient par défaut. Pour donner un accès en lecture à un responsable sécurité ou conformité sans en faire un administrateur, créez un rôle portant `admin.events` sous [Utilisateurs et rôles](users.md#roles) et attribuez-le-lui.
+
+## Modifications
+
+Le sous-onglet **Modifications** est le registre des lots de mutations. Chaque écriture qui modifie des données y arrive sous forme de lot, avec son auteur et sa provenance :
+
+| Origine | Signification |
+|---------|---------------|
+| **Web** | L'interface web de Turbo EA |
+| **API** | Un appel direct à l'API REST (un script, une intégration) |
+| **Outil IA** | Un assistant IA connecté via le [serveur MCP](mcp.md) |
+| **Extension** | Une [extension](extensions.md) installée, enregistrée comme lot `ext:<key>` |
+
+Cliquez sur un lot pour ouvrir son panneau : le diff de chaque événement montre l'ancienne et la nouvelle valeur de chaque champ, et **Rollback** rétablit les écritures sur les fiches, relations, risques, rôles de parties prenantes, étiquettes et brouillons de décision qu'il a effectuées.
+
+Les lots sont conservés **`MUTATION_BATCH_RETENTION_DAYS`** jours (une variable d'environnement, **15** par défaut), puis purgés automatiquement. Les événements eux-mêmes restent dans l'onglet **Historique** de chaque fiche une fois le lot disparu.
+
+## Sécurité et administration
+
+![Journal de sécurité et d'administration](../assets/img/fr/62_admin_journal_audit_securite.png)
+
+Le sous-onglet **Sécurité et administration** liste une entrée par action ayant trait à la sécurité, les plus récentes en premier :
+
+- connexions et déconnexions, par mot de passe, par SSO ou via un proxy inverse de confiance ;
+- tentatives de connexion échouées, chacune avec un **code de motif** indiquant pourquoi elle a échoué ;
+- verrouillages de compte après des échecs répétés ;
+- inscriptions, ainsi que les mots de passe définis, réinitialisés ou modifiés ;
+- emprunt de rôle — un administrateur qui démarre puis arrête **Voir en tant que rôle…** ;
+- les actions administratives — modifications des utilisateurs, des rôles, des paramètres, du métamodèle, des tags, des calculs, des extensions, des imports, des intégrations, des portails publics et des diagrammes publiés, des enquêtes et de l'accès opérateur (voir [Actions administratives](#administrative-actions)) ;
+- les exports de données — les exports CSV et JSON de fiches, les exports d'espace de travail et les exports vers une autre plateforme EA (voir [Exports de données](#data-exports)) — ainsi que les exports de ce journal lui-même.
+
+### Colonnes
+
+| Colonne | Description |
+|---------|-------------|
+| **Quand** | Date et heure de l'action |
+| **Catégorie** | `auth` (authentification), `admin` (actions administratives) ou `access` (exports et autres accès aux données) |
+| **Action** | Ce qui s'est passé, par exemple `auth.login.failed` — voir le [catalogue des actions](#action-catalogue) |
+| **Résultat** | **Succès** ou **Échec** |
+| **Acteur** | L'utilisateur connecté qui a effectué l'action. Vide quand personne n'était connecté — lors d'une connexion échouée, par exemple |
+| **Sujet** | Le compte concerné par l'action — l'adresse e-mail saisie lors d'une connexion échouée, ou l'utilisateur dont le mot de passe a été réinitialisé |
+| **Cible** | L'objet visé, s'il y en a un — par exemple le rôle choisi au démarrage d'un emprunt de rôle |
+| **IP** | L'adresse IP du client (voir [Adresse IP du client](#client-ip-address)) |
+| **Origine** | La provenance de la requête : web, API, outil IA, extension, ops ou système |
+| **Rôle emprunté** | Quand un administrateur consultait l'application sous un autre rôle, ce rôle. L'acteur reste l'administrateur réel |
+
+Les colonnes s'affichent, se masquent, se réordonnent et se figent comme dans tout autre tableau de données ; **Quand** et **Action** sont toujours affichées.
+
+### Filtres
+
+Le panneau de filtres à gauche restreint la liste par **catégorie**, **résultat**, **action**, **acteur**, **adresse IP** et **plage de dates**. Chaque en-tête de section indique le nombre de valeurs sélectionnées, et le panneau replié affiche le nombre de filtres actifs. L'onglet **Colonnes** du même panneau affiche, masque et fige les colonnes. Vos filtres et la disposition des colonnes sont mémorisés dans ce navigateur.
+
+Une recherche sur une adresse e-mail porte sur l'acteur, le sujet et la cible : saisir une seule adresse retrouve à la fois ce que cette personne a fait et ce qui a été tenté contre son compte.
+
+### Lire une entrée
+
+Cliquez sur une ligne pour ouvrir le panneau de l'entrée. Il affiche chaque champ de l'entrée — quand, qui, depuis quelle adresse IP et quel navigateur — et, sous **Détails**, ce que l'entrée a enregistré, rédigé en langage clair plutôt qu'en clés techniques :
+
+- **Modifications** — une phrase par modification. La modification d'un type de fiche se lit par exemple *Champ « Criticité métier » (Sélection unique) ajouté à la section « Gouvernance »* ou *Option « Élevée » du champ « Criticité métier » renommée en « Critique »*. Les champs, sections, options, rôles et portails sont désignés par leur libellé, les autorisations par leur description et les langues par leur nom.
+- **Avant / Après** — un tableau des valeurs modifiées, une ligne par champ, chaque champ désigné par son libellé. Les valeurs sont mises en forme : Oui ou Non, dates au format de date de l'espace de travail, couleurs sous forme de pastille, tailles de fichier en Ko ou Mo. Les secrets ne sont jamais stockés : un mot de passe, un jeton ou un secret client est remplacé avant l'écriture de l'entrée et s'affiche comme **Valeur secrète**.
+- **Contexte** — les éléments qui situent une modification sans en faire partie : l'adresse actuelle d'un portail et s'il est publié, le remplacement ou non des identifiants d'une connexion, le nombre de lignes traitées par un import.
+
+Une connexion échouée affiche son **Motif** au-dessus des détails — un mot de passe erroné, un compte inconnu, un compte temporairement verrouillé.
+
+Les entrées écrites avant la version 2.161.0 affichent leurs détails tels qu'ils ont été enregistrés : les anciennes et nouvelles valeurs apparaissent toujours dans le tableau, et ce que le panneau ne sait pas lire s'affiche en JSON brut.
+
+Le panneau ne propose aucune action. Les entrées ne peuvent être ni modifiées ni supprimées.
+
+### Exporter en CSV
+
+**Exporter en CSV**, dans la barre d'outils, télécharge les entrées correspondant aux filtres actuels sous forme de fichier CSV, jusqu'à 50 000 lignes. L'export est lui-même enregistré, sous `access.audit_log.exported`, si bien qu'un export du journal de sécurité y laisse toujours une trace.
+
+## Catalogue des actions { #action-catalogue }
+
+| Action | Enregistrée lorsque |
+|--------|---------------------|
+| `auth.login.succeeded` | un utilisateur se connecte avec son e-mail et son mot de passe |
+| `auth.login.failed` | une connexion par mot de passe est refusée. Le **code de motif** indique pourquoi (voir ci-dessous) |
+| `auth.login.locked` | la cinquième tentative échouée d'affilée verrouille le compte pendant 15 minutes. Les détails indiquent l'heure de fin du verrouillage |
+| `auth.logout` | un utilisateur connecté se déconnecte. Une déconnexion sans session valide n'enregistre rien |
+| `auth.sso.succeeded` | un utilisateur se connecte via un fournisseur SSO. Les détails indiquent le fournisseur, le sujet du fournisseur d'identité et si le compte a été créé par cette connexion |
+| `auth.sso.failed` | une connexion SSO est refusée — domaine non autorisé, adresse e-mail manquante, compte local avec le même e-mail, compte inactif. Les détails indiquent le fournisseur et le motif |
+| `auth.proxy_session.succeeded` | un utilisateur se connecte via un [proxy inverse](sso.md#authentification-par-proxy-inverse) de confiance |
+| `auth.proxy_session.failed` | une connexion via le proxy inverse est refusée |
+| `auth.register` | un utilisateur crée un compte par auto-inscription |
+| `auth.password.set` | un utilisateur invité définit son premier mot de passe |
+| `auth.password.reset_requested` | Quelqu'un demande un e-mail de réinitialisation du mot de passe. Toujours enregistré comme un succès avec l'adresse saisie, pour que la réponse ne révèle rien ; les détails indiquent si un compte correspondait et si un e-mail a été envoyé |
+| `auth.password.reset` | un mot de passe est modifié via un lien de réinitialisation |
+| `auth.password.changed` | un utilisateur connecté modifie son propre mot de passe |
+| `auth.impersonation.started` | un administrateur démarre **Voir en tant que rôle…**. La cible est le rôle choisi |
+| `auth.impersonation.stopped` | l'administrateur revient à son propre rôle |
+
+**Codes de motif** de `auth.login.failed` :
+
+| Motif | Signification |
+|-------|---------------|
+| `unknown_user` | Aucun compte ne porte cette adresse e-mail |
+| `sso_account` | Le compte se connecte par SSO et n'a pas de mot de passe |
+| `no_password` | Le compte n'a pas encore de mot de passe — une invitation jamais acceptée |
+| `locked` | Le compte est verrouillé après des échecs répétés |
+| `bad_password` | Le mot de passe est erroné |
+| `inactive` | Le compte est désactivé |
+
+**Codes de motif** de `auth.sso.failed`, `auth.proxy_session.failed`, `auth.password.set` et `auth.password.reset` :
+
+| Motif | Signification |
+|-------|---------------|
+| `expired` | L'accès limité dans le temps du compte a pris fin |
+| `hd_mismatch` | Le compte Google appartient à un domaine non autorisé |
+| `no_email` | Le fournisseur d'identité n'a renvoyé aucune adresse e-mail |
+| `no_subject` | Le fournisseur d'identité n'a renvoyé aucun identifiant de sujet |
+| `local_account` | Un compte local avec mot de passe utilise déjà cette adresse e-mail |
+| `no_account` | Aucun compte n'existe et les comptes ne sont pas créés automatiquement |
+| `exchange_failed` | Le fournisseur d'identité n'a pas terminé la connexion |
+| `unauthenticated` | Le proxy inverse n'a pas authentifié la requête |
+| `identity_rejected` | L'identité transmise a été refusée (domaine ou e-mail non vérifié) |
+| `invalid_token` | Le lien d'invitation ou de réinitialisation était invalide ou a expiré |
+
+Une rafale d'échecs `unknown_user` depuis une même adresse IP est la signature d'une pulvérisation de mots de passe (password spraying) ; une série de `bad_password` contre un compte suivie de `auth.login.locked` est une tentative de devinette contre ce compte.
+
+### Actions administratives { #administrative-actions }
+
+Chaque modification qu'un administrateur apporte à la configuration de l'instance est enregistrée dans la catégorie `admin`. L'**acteur** est l'administrateur, la **cible** est l'objet modifié — un utilisateur, un rôle, un paramètre, un type de fiche — avec son nom tel qu'il était à ce moment-là, et les **détails** indiquent ce qui a changé sous forme d'anciennes et de nouvelles valeurs, limitées aux champs réellement modifiés. Deux règles s'appliquent à chaque entrée :
+
+- **Les secrets sont masqués.** Un mot de passe SMTP, un secret client SSO, une clé de fournisseur d'IA, un identifiant ServiceNow ou toute autre valeur secrète est écrit `***` : l'entrée montre qu'il a changé, jamais ce qu'il était ni ce qu'il est devenu.
+- **Aucun texte de licence ni identifiant n'est jamais stocké.** Une licence d'extension est identifiée, pas copiée, et un mot de passe qu'un administrateur définit pour un utilisateur est enregistré comme modifié, jamais avec sa valeur.
+
+Un enregistrement qui ne change rien n'est pas consigné, pas plus qu'un utilisateur qui modifie son propre nom ou sa langue dans son profil. Une configuration volumineuse — les champs, traductions ou la mise en page d'un type de fiche, les filtres d'un portail — est résumée par sa taille plutôt que copiée ; lorsque la taille n'a pas changé, une courte empreinte du contenu est ajoutée, afin que l'entrée montre malgré tout qu'il y a eu une modification. Les surcharges de permissions par rôle d'un type de fiche font exception : chaque cellule modifiée est listée avec son ancienne et sa nouvelle valeur, une valeur vide signifiant que la permission propre du rôle s'applique.
+
+| Domaine | Actions | Ce qui est enregistré |
+|------|---------|------------------|
+| **Utilisateurs et rôles** | `admin.user.created`, `.updated`, `.deleted`, `.bulk_updated`, `.bulk_deleted`, `.unlocked`; `admin.user.invitation.resent`, `.deleted`; `admin.role.created`, `.updated`, `.archived`, `.restored`; `admin.stakeholder_role.created`, `.updated`, `.deleted`, `.archived`, `.restored` | Comptes créés, modifiés, activés ou désactivés, supprimés (un par un ou en masse) et déverrouillés, avec les champs modifiés — rôle, e-mail, nom, état actif ; invitations renvoyées ou révoquées ; rôles applicatifs et rôles de parties prenantes par type, avec les permissions accordées ou retirées |
+| **Paramètres** | `admin.settings.updated` | Une entrée par paramètre enregistré — e-mail, authentification et SSO, inscription, IA, MCP, langues, activation des modules, image de marque, logo et favicon, durées de conservation. La cible est le paramètre ; les détails sont son ancienne et sa nouvelle valeur, secrets masqués |
+| **Métamodèle** | `admin.metamodel.type.*` (including `.references_generated`), `admin.metamodel.relation_type.*`, `admin.metamodel.resource_type.*`, `admin.principle.*` (including `.imported`), `admin.regulation.*` | Types de fiches, types de relations et types de ressources créés, modifiés, supprimés ou restaurés, avec les propriétés modifiées ; références de fiches générées pour un type ; principes EA, y compris ceux importés depuis le catalogue ; réglementations de conformité |
+| **Tags et calculs** | `admin.tag_group.*`, `admin.tag.*`, `admin.calculation.*` | Groupes de tags et tags ; champs calculés créés, modifiés, supprimés, activés ou désactivés, avec l'ancienne et la nouvelle formule, et l'exécution d'un calcul sur toutes les fiches (`.recalculated`) |
+| **Extensions** | `admin.extension.install.uploaded`, `.applied`, `.discarded`; `admin.extension.store.claimed`, `.refreshed`, `.installed`; `admin.extension.enabled`, `.disabled`, `.uninstalled`; `admin.extension.license.updated`, `.removed` | Paquets téléversés, installés ou abandonnés ; licences et téléchargements depuis la boutique d'extensions ; extensions activées, désactivées et désinstallées ; licence remplacée ou supprimée — avec l'extension et sa version, jamais le texte de la licence |
+| **Transfert de workspace et migration** | `admin.workspace.import.uploaded`, `.applied`, `.completed`, `.discarded`; `admin.migration.uploaded`, `.field_mappings.updated`, `.applied`, `.deleted` | Un [paquet de workspace](workspace-transfer.md) téléversé, son import lancé, terminé ou abandonné ; une [migration de plateforme](migration.md) téléversée, ses correspondances de champs modifiées, appliquée ou supprimée |
+| **Intégrations** | `admin.servicenow.connection.*`, `admin.servicenow.mapping.*`, `admin.servicenow.sync.pulled`, `.pushed`, `.applied` | Connexions ServiceNow, identifiants masqués, et correspondances ; chaque récupération, envoi et application d'enregistrements en attente |
+| **Exposition publique** | `admin.web_portal.created`, `.updated`, `.deleted`; `admin.diagram.published`, `.unpublished` | [Portails web](web-portals.md) et diagrammes publiés — tout ce qui rend des données accessibles sans compte |
+| **Enquêtes** | `admin.survey.sent`, `admin.survey.closed` | Une enquête envoyée à ses destinataires, ou clôturée |
+| **Accès opérateur** | `admin.ops.rescue_access.granted`, `.revoked` | Accès de secours accordé ou révoqué via l'[API d'exploitation](ops-api.md), enregistré à côté des événements `ops.*` existants |
+
+### Exports de données { #data-exports }
+
+Chaque fois que des données quittent l'instance en masse, une entrée `access` enregistre qui les a emportées, en quelle quantité et sous quelle forme. L'entrée est écrite avant l'envoi du fichier, si bien qu'un export dont le téléchargement n'a jamais abouti figure tout de même au journal.
+
+| Action | Enregistrée lorsque | Détails |
+|--------|---------------------|---------|
+| `access.export.cards` | des fiches sont exportées par l'export CSV ou JSON de l'API (`/cards/export/csv`, `/cards/export/json`), comme le font les scripts, les intégrations et les assistants IA | `format` (`csv` ou `json`), `type` (le ou les types de fiche) et `rows` (le nombre de fiches). La cible est le type de fiche lorsque l'export n'en couvrait qu'un seul |
+| `access.export.workspace` | un [paquet d'espace de travail](workspace-transfer.md) complet est téléchargé — depuis **Transfert d'espace de travail**, ou par un plan de contrôle via l'[API d'exploitation](ops-api.md), qui n'enregistre aucun acteur et `requested_by: ops` | `include_archived` et `size_bytes` |
+| `access.export.migration` | l'espace de travail est exporté vers une autre plateforme EA sous **Admin → Paramètres → Migration** (voir [Migration de plateforme](migration.md)) | La plateforme cible, `include_archived` et `size_bytes` |
+| `access.audit_log.exported` | quelqu'un exporte le journal de sécurité en CSV | `rows` |
+
+## Ce qui n'est pas enregistré
+
+- **Le renouvellement du jeton.** L'application web renouvelle sa session à intervalle régulier : chaque onglet ouvert ajouterait des entrées, sans qu'aucune ne signifie quoi que ce soit.
+- **Les requêtes refusées pour un jeton de session expiré ou invalide.** Elles se produisent chaque fois qu'une session se termine normalement.
+- **Les lectures de flux OData.** Excel et Power BI interrogent le flux OData d'une vue sauvegardée selon un calendrier ; chaque actualisation ajouterait une entrée.
+- **Les classeurs et présentations construits dans le navigateur.** Les téléchargements Excel et PowerPoint de l'inventaire et des rapports sont produits à partir des données que la page a déjà chargées : ce sont des lectures, pas des exports depuis le serveur.
+- **Le simple accès en lecture** — ouvrir une fiche, exécuter un rapport, rechercher dans l'inventaire.
+
+## Conservation { #retention }
+
+Les entrées sont conservées **365 jours** par défaut. Modifiez cette durée sous **Admin → Paramètres → Général → Gestion des données → Conservation du journal de sécurité** : n'importe quel nombre de jours jusqu'à 3650, ou **0** pour conserver les entrées indéfiniment. Une tâche supprime chaque nuit les entrées plus anciennes que cette durée et relit le paramètre à chaque passage, de sorte qu'un changement prend effet sans redémarrage.
+
+Cette tâche de conservation est la seule chose qui supprime jamais une entrée. Il n'existe aucune action de modification ou de suppression, ni dans l'interface ni dans l'API, pour aucun rôle.
+
+Le journal ne fait volontairement **pas** partie du [Transfert de workspace](workspace-transfer.md) : il constitue l'historique de sécurité de cette instance, pas le contenu du workspace, et cloner une instance ne le copie pas.
+
+## Le flux d'audit JSON
+
+Chaque entrée est aussi écrite par le backend sous forme d'**une ligne JSON** sur le logger **`turbo_ea.audit`**, au moment même où elle est enregistrée. Le backend journalise sur la sortie standard, si bien que le flux parvient à tout ce qui collecte déjà les journaux de vos conteneurs — `docker compose logs backend`, la collecte de journaux de Kubernetes ou n'importe quel agent d'expédition vers un SIEM —, sans aucune configuration dans Turbo EA :
+
+```bash
+docker compose logs -f backend | grep turbo_ea.audit
+```
+
+La ligne est écrite au moment où l'entrée est enregistrée. Si la transaction de la requête échoue ensuite, la ligne existe sans enregistrement en base : la table fait foi, le flux est le fil en direct.
+
+Chaque ligne porte les mêmes champs que l'entrée :
+
+| Champ | Contenu |
+|-------|---------|
+| `audit_id`, `created_at` | L'identifiant de l'entrée et le moment où elle a été écrite |
+| `category`, `action`, `outcome` | Ce qui s'est passé et si cela a réussi |
+| `actor_user_id`, `actor_email` | Qui l'a fait |
+| `subject_email` | Le compte concerné |
+| `target_type`, `target_id`, `target_label` | Ce sur quoi l'action a porté |
+| `ip`, `user_agent` | Le client |
+| `origin` | web, api, mcp, ext, ops ou system |
+| `impersonator_user_id`, `impersonated_role` | Renseignés pendant qu'un administrateur consulte l'application sous un autre rôle |
+| `details` | Jusqu'à quatre clés, secrets déjà masqués : `reason` (un code d'échec), `changes` (`{field: {old, new}}`), `items` (modifications sémantiques, `{kind, …}` — par ex. `field.added`) et `context` (faits simples) |
+
+Expédier ce flux vers un stockage central de journaux en conserve une copie hors de l'instance, hors de portée de quiconque peut l'administrer — c'est ce dont a besoin une revue des menaces internes. Voir [Journalisation et flux d'audit](operations.md#logging-and-the-audit-stream) pour le collecter.
+
+## Adresse IP du client { #client-ip-address }
+
+La colonne **IP** enregistre l'adresse du client, et non celle du proxy placé devant le backend. Le nginx de bordure fourni renseigne l'en-tête `X-Real-IP` avec l'adresse d'où il a reçu la connexion, et le backend lit cet en-tête parce que l'image backend publiée définit **`TRUST_PROXY_HEADERS=true`**. Une valeur qui n'est pas une adresse IP valide est écartée plutôt qu'enregistrée.
+
+- **Laissez `TRUST_PROXY_HEADERS` activé** tant que chaque requête atteint le backend via le nginx fourni — la pile par défaut, le [chart Helm](kubernetes.md) et les [modèles de conteneurs managés](managed-containers.md) fonctionnent tous ainsi.
+- **Désactivez-le** (`TRUST_PROXY_HEADERS=false`) si vous exposez directement le conteneur backend, sans le nginx fourni devant lui : un client pourrait alors envoyer son propre `X-Real-IP` et choisir l'adresse enregistrée.
+- **Derrière un répartiteur de charge, un contrôleur d'ingress ou un CDN**, le nginx fourni reçoit chaque connexion de cet intermédiaire et enregistre donc, à lui seul, l'adresse du répartiteur pour chaque utilisateur. Définissez **`NGINX_TRUSTED_PROXIES`** sur le conteneur nginx, comme décrit ci-dessous.
+
+### Derrière un répartiteur de charge { #behind-a-load-balancer }
+
+`NGINX_TRUSTED_PROXIES` liste les adresses des intermédiaires placés devant le nginx fourni, sous forme d'adresses IP ou de plages CIDR séparées par des virgules ou des espaces. nginx lit alors l'adresse du client dans l'en-tête `X-Forwarded-For` qu'ajoutent ces intermédiaires — mais uniquement sur une connexion provenant de l'une des adresses listées — et ignore chaque adresse listée dans cet en-tête, si bien qu'une chaîne de proxys aboutit à la première adresse qui n'est pas l'une des vôtres. Cette adresse remplace celle de la connexion, et l'en-tête `X-Real-IP` que lit le backend la transmet telle quelle. Vide, la valeur par défaut, ne fait confiance à personne.
+
+Pour trouver la valeur, lisez le journal d'accès du nginx de bordure (`docker compose logs nginx`, `kubectl logs deployment/turbo-ea-nginx` ou la visionneuse de journaux de la plateforme) : l'adresse en début de chaque ligne est l'intermédiaire auquel faire confiance, et le dernier champ entre guillemets est l'en-tête `X-Forwarded-For` qu'il a envoyé.
+
+| Déploiement | Où le définir | Valeur typique |
+|-------------|---------------|----------------|
+| Docker Compose, les navigateurs atteignent nginx directement | — | Laisser vide |
+| Docker Compose derrière votre propre proxy inverse | `NGINX_TRUSTED_PROXIES` dans `.env` | L'adresse du proxy inverse, telle que nginx la voit |
+| [Kubernetes](kubernetes.md) derrière un contrôleur d'ingress | Valeur du chart `nginx.trustedProxies` | Le CIDR des pods du cluster, par exemple `10.244.0.0/16` |
+| [AWS ECS Fargate](managed-containers.md#aws-ecs-fargate) | `NginxTrustedProxies` / Terraform `nginx_trusted_proxies` | Les plages CIDR des sous-réseaux du répartiteur de charge |
+| [Azure Container Apps](managed-containers.md#azure-container-apps) | `nginxTrustedProxies` / Terraform `nginx_trusted_proxies` | Le sous-réseau d'infrastructure de l'environnement |
+| [Google Cloud Run](managed-containers.md#google-cloud-run) | `NGINX_TRUSTED_PROXIES` dans le manifeste / Terraform `nginx_trusted_proxies` | Les adresses que montre le journal d'accès |
+
+Gardez la liste aussi étroite que les intermédiaires eux-mêmes. Chaque adresse listée est crue lorsqu'elle désigne le client : une plage depuis laquelle vos utilisateurs se connectent — tout `10.0.0.0/8` sur un déploiement interne, par exemple — permettrait à n'importe lequel d'entre eux d'inscrire une autre adresse au journal. Sans réglage, la colonne affiche le répartiteur de charge : peu utile, mais jamais falsifié.
+
+La limite de débit des connexions compte les tentatives par adresse client à partir du même en-tête ; derrière un répartiteur de charge, ce réglage évite donc aussi que les échecs d'une personne ralentissent tous les autres. Cela vaut pour les connexions qui atteignent le backend par le nginx de périphérie ; le serveur MCP se connecte directement au backend, si bien que ses propres appels de connexion partagent toujours l'adresse du conteneur MCP. La clé par client fait confiance à cet en-tête comme le journal d'audit : elle suppose que les connexions n'atteignent le backend qu'à travers le nginx de bordure, ce que le fichier compose fourni et le chart Helm garantissent en n'exposant pas le backend. Un appelant capable d'atteindre le backend directement pourrait choisir son propre quota en définissant lui-même l'en-tête ; laissez le backend non exposé ou désactivez `TRUST_PROXY_HEADERS`.

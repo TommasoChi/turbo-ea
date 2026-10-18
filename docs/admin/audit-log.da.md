@@ -1,0 +1,234 @@
+# Revisionslog
+
+**Revisionsloggen** under **Admin → Indstillinger → Revisionslog** (`/admin/settings?tab=audit-log`) besvarer de to spørgsmål, en sikkerhedsgennemgang stiller til en instans, der rummer et kort over hele IT-landskabet: *hvad er der ændret i det*, og *hvem har logget på, og hvordan*. Den er delt i to underfaner:
+
+| Underfane | URL | Hvad den registrerer |
+|-----------|-----|----------------------|
+| **Ændringer** | `/admin/settings?tab=audit-log` | Hver skrivning til landskabet — kort, relationer, risici, tags, interessentroller, beslutningsudkast — samlet i mutationsbatches, med en diff pr. hændelse og en **Rul tilbage** |
+| **Sikkerhed og administration** | `/admin/settings?tab=audit-log&view=security` | Log ind og log ud, mislykkede forsøg, låsninger, SSO- og proxysessioner, adgangskodehændelser, rolleefterligning og hver administrativ handling |
+
+De to er bevidst holdt adskilt. **Ændringer** er et arbejdsværktøj — det findes, så du kan se og fortryde en forkert skrivning — og gemmer kun en kort historik. **Sikkerhed og administration** er et bevisspor: dens poster kan hverken redigeres eller slettes, og den gemmes som standard i et år.
+
+## Hvem kan se den
+
+Begge underfaner kræver tilladelsen **`admin.events`** («Se revisionsspor og hændelsesstrøm»), som kun rollen **Admin** har som standard. Vil du give en sikkerheds- eller compliance-ansvarlig læseadgang uden at gøre vedkommende til administrator, så opret en rolle med `admin.events` under [Brugere og roller](users.md#roller) og tildel den.
+
+## Ændringer
+
+Underfanen **Ændringer** er registret over mutationsbatches. Hver ændrende skrivning lander her som et batch sammen med, hvem der foretog den, og hvor den kom fra:
+
+| Oprindelse | Betydning |
+|------------|-----------|
+| **Web** | Turbo EA's webgrænseflade |
+| **API** | Et direkte kald til REST-API'et (et script, en integration) |
+| **AI-værktøj** | En AI-assistent forbundet via [MCP-serveren](mcp.md) |
+| **Udvidelse** | En installeret [udvidelse](extensions.md), registreret som et `ext:<key>`-batch |
+
+Klik på et batch for at åbne dets panel: diffen pr. hændelse viser hvert felts gamle og nye værdi, og **Rul tilbage** omgør de skrivninger på kort, relationer, risici, interessentroller, tags og beslutningsudkast, som batchet foretog.
+
+Batches gemmes i **`MUTATION_BATCH_RETENTION_DAYS`** dage (en miljøvariabel, standard **15**) og slettes derefter automatisk. Selve hændelserne bliver på hvert korts fane **Historik**, også når batchet er væk.
+
+## Sikkerhed og administration
+
+![Sikkerheds- og administrationslog](../assets/img/da/62_admin_audit_log_security.png)
+
+Underfanen **Sikkerhed og administration** viser én post pr. sikkerhedsrelevant handling, nyeste først:
+
+- logins og logouts med adgangskode, SSO eller gennem en betroet reverse proxy;
+- mislykkede loginforsøg, hver med en **årsagskode**, der fortæller, hvorfor forsøget mislykkedes;
+- spærring af konti efter gentagne fejl;
+- registreringer samt adgangskoder, der angives, nulstilles eller ændres;
+- rolleovertagelse — en administrator, der starter og stopper **Vis som rolle…**;
+- administrative handlinger — ændringer af brugere, roller, indstillinger, metamodellen, tags, beregninger, udvidelser, importer, integrationer, offentlige portaler og publicerede diagrammer, undersøgelser og operatøradgang (se [Administrative handlinger](#administrative-actions));
+- dataeksporter — CSV- og JSON-eksporterne af kort, workspace-eksporter og eksporter til en anden EA-platform (se [Dataeksporter](#data-exports)) — og eksporter af selve denne log.
+
+### Kolonner
+
+| Kolonne | Beskrivelse |
+|---------|-------------|
+| **Hvornår** | Dato og klokkeslæt for handlingen |
+| **Kategori** | `auth` (godkendelse), `admin` (administrative handlinger) eller `access` (eksport og anden dataadgang) |
+| **Handling** | Hvad der skete, for eksempel `auth.login.failed` — se [handlingskataloget](#action-catalogue) |
+| **Resultat** | **Lykkedes** eller **Mislykkedes** |
+| **Aktør** | Den indloggede bruger, der udførte handlingen. Tom, når ingen var logget på — for eksempel ved et mislykket login |
+| **Subjekt** | Den konto, handlingen drejede sig om — den e-mailadresse, der blev indtastet ved et mislykket login, eller den bruger, hvis adgangskode blev nulstillet |
+| **Mål** | Det objekt, der blev handlet på, hvis der er et — for eksempel den rolle, der blev valgt ved start af en rolleovertagelse |
+| **IP** | Klientens IP-adresse (se [Klientens IP-adresse](#client-ip-address)) |
+| **Oprindelse** | Hvor anmodningen kom fra: web, API, AI-værktøj, udvidelse, ops eller system |
+| **Overtaget rolle** | Når en administrator så appen som en anden rolle, den rolle. Aktøren er stadig den egentlige administrator |
+
+Kolonner kan vises, skjules, omarrangeres og fastfryses som i enhver anden datatabel; **Hvornår** og **Handling** vises altid.
+
+### Filtre
+
+Filterpanelet til venstre indsnævrer listen efter **kategori**, **resultat**, **handling**, **aktør**, **IP-adresse** og et **datointerval**. Hver sektionsoverskrift viser, hvor mange værdier der er valgt, og det sammenklappede panel viser antallet af aktive filtre. Fanen **Kolonner** i samme panel viser, skjuler og fastfryser kolonner. Dine filtre og dit kolonnelayout huskes i denne browser.
+
+En søgning på en e-mailadresse rammer aktør, subjekt og mål, så én adresse finder både, hvad den person har gjort, og hvad der er forsøgt mod vedkommendes konto.
+
+### Sådan læses en post
+
+Klik på en række for at åbne postens panel. Det viser hvert felt i posten — hvornår, hvem, fra hvilken IP-adresse og hvilken browser — og under **Detaljer** det, som posten registrerede, skrevet i almindeligt sprog i stedet for som gemte nøgler:
+
+- **Ændringer** — én sætning pr. ændring. En redigering af en korttype lyder for eksempel *Feltet «Forretningskritikalitet» (Enkeltvalg) tilføjet til afsnittet «Governance»* eller *Muligheden «Høj» i feltet «Forretningskritikalitet» omdøbt til «Kritisk»*. Felter, afsnit, muligheder, roller og portaler nævnes ved deres etiket, tilladelser ved deres beskrivelse og sprog ved deres navn.
+- **Før / Efter** — en tabel over de ændrede værdier, én række pr. felt, hvert felt nævnt ved sin etiket. Værdierne er formateret: Ja eller Nej, datoer i arbejdsområdets datoformat, farver som farveprøve, filstørrelser i KB eller MB. Hemmeligheder gemmes aldrig: en adgangskode, et token eller en klienthemmelighed erstattes, før posten skrives, og vises som **Hemmelig værdi**.
+- **Kontekst** — oplysninger, der sætter en ændring i sammenhæng uden at være en del af den: en portals nuværende adresse og om den er publiceret, om en forbindelses legitimationsoplysninger blev erstattet, hvor mange rækker en import berørte.
+
+Et mislykket logon viser sin **Årsag** over detaljerne — en forkert adgangskode, en ukendt konto, en midlertidigt låst konto.
+
+Poster skrevet før version 2.161.0 viser deres detaljer, som de blev registreret: gamle og nye værdier vises stadig i tabellen, og det, panelet ikke kan læse, vises som rå JSON.
+
+Panelet har ingen handlinger. Poster kan hverken redigeres eller slettes.
+
+### Eksportér CSV
+
+**Eksportér CSV** på værktøjslinjen downloader de poster, der matcher de aktuelle filtre, som en CSV-fil, op til 50.000 rækker. Selve eksporten registreres også, som `access.audit_log.exported`, så en eksport af sikkerhedsloggen altid efterlader et spor i den.
+
+## Handlingskatalog { #action-catalogue }
+
+| Handling | Registreres, når |
+|----------|------------------|
+| `auth.login.succeeded` | en bruger logger på med e-mail og adgangskode |
+| `auth.login.failed` | et login med adgangskode afvises. **Årsagskoden** fortæller hvorfor (se nedenfor) |
+| `auth.login.locked` | det femte mislykkede forsøg i træk spærrer kontoen i 15 minutter. Detaljerne angiver, hvornår spærringen ophører |
+| `auth.logout` | en indlogget bruger logger af. En logout uden en gyldig session registrerer intet |
+| `auth.sso.succeeded` | en bruger logger på via en SSO-udbyder. Detaljerne angiver udbyderen, identitetsudbyderens subjekt, og om kontoen blev oprettet ved dette login |
+| `auth.sso.failed` | et SSO-login afvises — et domæne, der ikke er tilladt, en manglende e-mailadresse, en lokal konto med samme e-mail, en inaktiv konto. Detaljerne angiver udbyderen og årsagen |
+| `auth.proxy_session.succeeded` | en bruger logger på via en betroet [reverse proxy](sso.md#godkendelse-via-reverse-proxy) |
+| `auth.proxy_session.failed` | et login via reverse proxyen afvises |
+| `auth.register` | en bruger opretter en konto via selvregistrering |
+| `auth.password.set` | en inviteret bruger angiver sin første adgangskode |
+| `auth.password.reset_requested` | Nogen beder om en e-mail til nulstilling af adgangskode. Registreres altid som succes med den indtastede adresse, så svaret intet afslører; detaljerne angiver, om en konto matchede, og om der blev sendt en e-mail |
+| `auth.password.reset` | en adgangskode ændres via et nulstillingslink |
+| `auth.password.changed` | en indlogget bruger ændrer sin egen adgangskode |
+| `auth.impersonation.started` | en administrator starter **Vis som rolle…**. Målet er den valgte rolle |
+| `auth.impersonation.stopped` | administratoren vender tilbage til sin egen rolle |
+
+**Årsagskoder** for `auth.login.failed`:
+
+| Årsag | Betydning |
+|-------|-----------|
+| `unknown_user` | Ingen konto har den e-mailadresse |
+| `sso_account` | Kontoen logger på via SSO og har ingen adgangskode |
+| `no_password` | Kontoen har endnu ingen adgangskode — en invitation, der aldrig blev accepteret |
+| `locked` | Kontoen er spærret efter gentagne fejl |
+| `bad_password` | Adgangskoden er forkert |
+| `inactive` | Kontoen er deaktiveret |
+
+**Årsagskoder** for `auth.sso.failed`, `auth.proxy_session.failed`, `auth.password.set` og `auth.password.reset`:
+
+| Årsag | Betydning |
+|-------|-----------|
+| `expired` | Kontoens tidsbegrænsede adgang er udløbet |
+| `hd_mismatch` | Google-kontoen tilhører et domæne, der ikke er tilladt |
+| `no_email` | Identitetsudbyderen returnerede ingen e-mailadresse |
+| `no_subject` | Identitetsudbyderen returnerede intet subjekt-id |
+| `local_account` | En lokal adgangskodekonto bruger allerede den e-mail |
+| `no_account` | Der findes ingen konto, og konti oprettes ikke automatisk |
+| `exchange_failed` | Identitetsudbyderen fuldførte ikke login |
+| `unauthenticated` | Den omvendte proxy godkendte ikke anmodningen |
+| `identity_rejected` | Den videresendte identitet blev afvist (domæne eller ubekræftet e-mail) |
+| `invalid_token` | Invitations- eller nulstillingslinket var ugyldigt eller er udløbet |
+
+En stribe `unknown_user`-fejl fra én IP-adresse er sådan, password spraying ser ud; en række `bad_password` mod én konto efterfulgt af `auth.login.locked` er et forsøg på at gætte den kontos adgangskode.
+
+### Administrative handlinger { #administrative-actions }
+
+Hver ændring, en administrator foretager i instansens konfiguration, registreres i kategorien `admin`. **Aktøren** er administratoren, **målet** er det ændrede objekt — en bruger, en rolle, en indstilling, en korttype — med det navn, det havde på det tidspunkt, og **detaljerne** viser, hvad der ændrede sig, som gamle og nye værdier, begrænset til de felter, der faktisk ændrede sig. To regler gælder for hver post:
+
+- **Hemmeligheder maskeres.** En SMTP-adgangskode, en SSO-klienthemmelighed, en AI-udbydernøgle, et ServiceNow-loginoplysning eller enhver anden hemmelig værdi skrives som `***`: posten viser, at den ændrede sig, aldrig hvad den var eller blev.
+- **Hverken licenstekst eller loginoplysninger gemmes nogensinde.** En udvidelseslicens identificeres, den kopieres ikke, og en adgangskode, som en administrator sætter for en bruger, registreres som ændret, aldrig med sin værdi.
+
+En gemning, der ikke ændrer noget, registreres ikke, og det gør en bruger, der ændrer sit eget navn eller sprog i sin profil, heller ikke. Omfattende konfiguration — en korttypes felter, oversættelser eller layout, en portals filtre — opsummeres efter sin størrelse i stedet for at blive kopieret; er størrelsen uændret, tilføjes et kort fingeraftryk af indholdet, så posten stadig viser, at noget er ændret. En korttypes rollespecifikke tilladelsestilsidesættelser er undtagelsen: hver celle, der er ændret, vises med sin gamle og nye værdi, hvor en tom værdi betyder, at rollens egen tilladelse gælder.
+
+| Område | Handlinger | Hvad der registreres |
+|------|---------|------------------|
+| **Brugere og roller** | `admin.user.created`, `.updated`, `.deleted`, `.bulk_updated`, `.bulk_deleted`, `.unlocked`; `admin.user.invitation.resent`, `.deleted`; `admin.role.created`, `.updated`, `.archived`, `.restored`; `admin.stakeholder_role.created`, `.updated`, `.deleted`, `.archived`, `.restored` | Konti, der oprettes, redigeres, aktiveres eller deaktiveres, slettes (en ad gangen eller samlet) og låses op, med de ændrede felter — rolle, e-mail, navn, aktiv status; invitationer sendt igen eller tilbagekaldt; applikationsroller og interessentroller pr. type, med de tildelte eller fjernede tilladelser |
+| **Indstillinger** | `admin.settings.updated` | Én post pr. gemt indstilling — e-mail, godkendelse og SSO, registrering, AI, MCP, sprog, modulkontakter, branding, logo og favicon, opbevaringsperioder. Målet er indstillingen; detaljerne er dens gamle og nye værdi, med hemmeligheder maskeret |
+| **Metamodel** | `admin.metamodel.type.*` (including `.references_generated`), `admin.metamodel.relation_type.*`, `admin.metamodel.resource_type.*`, `admin.principle.*` (including `.imported`), `admin.regulation.*` | Korttyper, relationstyper og ressourcetyper, der oprettes, ændres, slettes eller gendannes, med de ændrede egenskaber; kortreferencer genereret for en type; EA-principper, også dem importeret fra kataloget; compliance-reguleringer |
+| **Tags og beregninger** | `admin.tag_group.*`, `admin.tag.*`, `admin.calculation.*` | Taggrupper og tags; beregnede felter, der oprettes, ændres, slettes, aktiveres eller deaktiveres, med den gamle og den nye formel, og en kørsel af en beregning på alle kort (`.recalculated`) |
+| **Udvidelser** | `admin.extension.install.uploaded`, `.applied`, `.discarded`; `admin.extension.store.claimed`, `.refreshed`, `.installed`; `admin.extension.enabled`, `.disabled`, `.uninstalled`; `admin.extension.license.updated`, `.removed` | Pakker, der uploades, installeres eller kasseres; licenser og downloads fra udvidelsesbutikken; udvidelser, der aktiveres, deaktiveres og afinstalleres; licensen udskiftet eller fjernet — med udvidelsen og dens version, aldrig licensteksten |
+| **Workspace-overførsel og migrering** | `admin.workspace.import.uploaded`, `.applied`, `.completed`, `.discarded`; `admin.migration.uploaded`, `.field_mappings.updated`, `.applied`, `.deleted` | En uploadet [workspace-pakke](workspace-transfer.md), hvis import startes, fuldføres eller kasseres; en uploadet [platformmigrering](migration.md), hvis feltmapninger redigeres, og som anvendes eller slettes |
+| **Integrationer** | `admin.servicenow.connection.*`, `admin.servicenow.mapping.*`, `admin.servicenow.sync.pulled`, `.pushed`, `.applied` | ServiceNow-forbindelser, med loginoplysninger maskeret, og mapninger; hver hentning, afsendelse og anvendelse af klargjorte poster |
+| **Offentlig eksponering** | `admin.web_portal.created`, `.updated`, `.deleted`; `admin.diagram.published`, `.unpublished` | [Web-portaler](web-portals.md) og publicerede diagrammer — alt, der gør data tilgængelige uden en konto |
+| **Undersøgelser** | `admin.survey.sent`, `admin.survey.closed` | En undersøgelse sendt til modtagerne, eller lukket |
+| **Operatøradgang** | `admin.ops.rescue_access.granted`, `.revoked` | Nødadgang tildelt eller tilbagekaldt via [drifts-API'et](ops-api.md), registreret ved siden af de eksisterende `ops.*`-hændelser |
+
+### Dataeksporter { #data-exports }
+
+Hver gang data forlader instansen i bulk, registrerer en `access`-post, hvem der tog dem, hvor meget og i hvilken form. Posten skrives, før filen sendes, så en eksport, hvis download aldrig blev gennemført, står stadig i loggen.
+
+| Handling | Registreres, når | Detaljer |
+|----------|------------------|----------|
+| `access.export.cards` | Kort eksporteres gennem API'ets CSV- eller JSON-eksport (`/cards/export/csv`, `/cards/export/json`), som scripts, integrationer og AI-assistenter gør | `format` (`csv` eller `json`), `type` (korttypen eller -typerne) og `rows` (antallet af kort). Målet er korttypen, når eksporten dækkede præcis én |
+| `access.export.workspace` | En fuld [workspace-pakke](workspace-transfer.md) downloades — fra **Workspace-overførsel**, eller af et kontrolplan gennem [drifts-API'et](ops-api.md), som ikke registrerer nogen aktør og registrerer `requested_by: ops` | `include_archived` og `size_bytes` |
+| `access.export.migration` | Workspacet eksporteres til en anden EA-platform under **Admin → Indstillinger → Migrering** (se [Platformsmigrering](migration.md)) | Målplatformen, `include_archived` og `size_bytes` |
+| `access.audit_log.exported` | Nogen eksporterer sikkerhedsloggen til CSV | `rows` |
+
+## Hvad der ikke registreres
+
+- **Fornyelse af token.** Webappen fornyer sin session med faste mellemrum, så hver åben fane ville tilføje poster, og ingen af dem ville betyde noget.
+- **Anmodninger, der afvises på grund af et udløbet eller ugyldigt sessionstoken.** De opstår, hver gang en session slutter naturligt.
+- **Læsninger af OData-feeds.** Excel og Power BI henter en gemt visnings OData-feed efter en tidsplan, så hver opdatering ville tilføje en post.
+- **Regneark og præsentationer bygget i browseren.** Inventarets og rapporternes Excel- og PowerPoint-downloads laves ud fra data, siden allerede har indlæst, så de er læsninger, ikke eksporter fra serveren.
+- **Almindelig læseadgang** — at åbne et kort, køre en rapport, søge i inventaret.
+
+## Opbevaring { #retention }
+
+Poster gemmes som standard i **365 dage**. Skift det under **Admin → Indstillinger → Generelt → Datahåndtering → Opbevaring af sikkerhedslog**: et vilkårligt antal dage op til 3650, eller **0** for at gemme posterne for altid. Et job sletter hver nat de poster, der er ældre end perioden, og genindlæser indstillingen ved hver kørsel, så en ændring træder i kraft uden genstart.
+
+Dette opbevaringsjob er det eneste, der nogensinde sletter en post. Der findes ingen redigerings- eller slettehandling i brugerfladen eller API'et, for nogen rolle.
+
+Loggen er bevidst **ikke** en del af [Overførsel af arbejdsområde](workspace-transfer.md): den er denne instans' sikkerhedshistorik, ikke indhold i arbejdsområdet, og den kopieres ikke, når en instans klones.
+
+## JSON-revisionsstrømmen
+
+Backend skriver desuden hver post som **én JSON-linje** på loggeren **`turbo_ea.audit`**, i samme øjeblik som den gemmes. Backend logger til standard output, så strømmen når frem til det, der allerede indsamler dine containerlogs — `docker compose logs backend`, logindsamlingen i Kubernetes eller en vilkårlig SIEM-afsender — uden konfiguration i Turbo EA:
+
+```bash
+docker compose logs -f backend | grep turbo_ea.audit
+```
+
+Linjen skrives i det øjeblik posten registreres. Hvis forespørgslens transaktion derefter fejler, findes linjen uden en række: tabellen er optegnelsen, og strømmen er det løbende feed.
+
+Hver linje har de samme felter som posten:
+
+| Felt | Indhold |
+|------|---------|
+| `audit_id`, `created_at` | Postens id og tidspunktet, hvor den blev skrevet |
+| `category`, `action`, `outcome` | Hvad der skete, og om det lykkedes |
+| `actor_user_id`, `actor_email` | Hvem der gjorde det |
+| `subject_email` | Den berørte konto |
+| `target_type`, `target_id`, `target_label` | Hvad handlingen gjaldt |
+| `ip`, `user_agent` | Klienten |
+| `origin` | web, api, mcp, ext, ops eller system |
+| `impersonator_user_id`, `impersonated_role` | Udfyldt, mens en administrator ser appen som en anden rolle |
+| `details` | Op til fire nøgler, med hemmeligheder allerede maskeret: `reason` (en fejlkode), `changes` (`{field: {old, new}}`), `items` (semantiske ændringer, `{kind, …}` — f.eks. `field.added`) og `context` (enkle oplysninger) |
+
+Sender du strømmen til et centralt loglager, ligger der en kopi uden for instansen, uden for rækkevidde af alle, der kan administrere den — og det er netop, hvad en gennemgang af insidertrusler har brug for. Se [Logning og revisionsstrømmen](operations.md#logging-and-the-audit-stream) for, hvordan du indsamler den.
+
+## Klientens IP-adresse { #client-ip-address }
+
+Kolonnen **IP** registrerer klientens adresse, ikke adressen på proxyen foran backend. Den medfølgende edge-nginx sætter headeren `X-Real-IP` til den adresse, forbindelsen kom fra, og backend læser den header, fordi det udgivne backend-image sætter **`TRUST_PROXY_HEADERS=true`**. En værdi, der ikke er en gyldig IP-adresse, kasseres i stedet for at blive registreret.
+
+- **Lad `TRUST_PROXY_HEADERS` være slået til**, så længe hver anmodning når backend gennem den medfølgende nginx — standardstakken, [Helm-chartet](kubernetes.md) og [skabelonerne til administrerede containere](managed-containers.md) fungerer alle sådan.
+- **Slå den fra** (`TRUST_PROXY_HEADERS=false`), hvis du eksponerer backend-containeren direkte uden den medfølgende nginx foran: en klient kunne så sende sin egen `X-Real-IP` og selv vælge den adresse, der registreres.
+- **Bag en load balancer, en ingress-controller eller et CDN** modtager den medfølgende nginx hver forbindelse fra dette mellemled og registrerer derfor af sig selv load balancerens adresse for hver bruger. Sæt **`NGINX_TRUSTED_PROXIES`** på nginx-containeren som beskrevet nedenfor.
+
+### Bag en load balancer { #behind-a-load-balancer }
+
+`NGINX_TRUSTED_PROXIES` angiver adresserne på mellemleddene foran den medfølgende nginx som IP-adresser eller CIDR-intervaller adskilt af kommaer eller mellemrum. nginx læser så klientadressen fra den `X-Forwarded-For`-header, mellemleddene tilføjer — men kun på en forbindelse, der kommer fra en af de angivne adresser — og springer hver angivet adresse i headeren over, så en kæde af proxyer ender på den første adresse, der ikke er en af dine. Den adresse erstatter forbindelsens, og den `X-Real-IP`-header, backend læser, bærer den uændret videre. Tom, standardværdien, stoler ikke på nogen.
+
+Find værdien i edge-nginx'ens adgangslog (`docker compose logs nginx`, `kubectl logs deployment/turbo-ea-nginx` eller platformens logvisning): adressen i starten af hver linje er det mellemled, der skal stoles på, og det sidste felt i anførselstegn er den `X-Forwarded-For`-header, det sendte.
+
+| Udrulning | Hvor den sættes | Typisk værdi |
+|-----------|-----------------|--------------|
+| Docker Compose, browsere når nginx direkte | — | Lad den være tom |
+| Docker Compose bag din egen reverse proxy | `NGINX_TRUSTED_PROXIES` i `.env` | Reverse proxyens adresse, som nginx ser den |
+| [Kubernetes](kubernetes.md) bag en ingress-controller | Chart-værdien `nginx.trustedProxies` | Clusterets pod-CIDR, for eksempel `10.244.0.0/16` |
+| [AWS ECS Fargate](managed-containers.md#aws-ecs-fargate) | `NginxTrustedProxies` / Terraform `nginx_trusted_proxies` | CIDR-intervallerne for load balancerens subnet |
+| [Azure Container Apps](managed-containers.md#azure-container-apps) | `nginxTrustedProxies` / Terraform `nginx_trusted_proxies` | Miljøets infrastruktursubnet |
+| [Google Cloud Run](managed-containers.md#google-cloud-run) | `NGINX_TRUSTED_PROXIES` i manifestet / Terraform `nginx_trusted_proxies` | De adresser, adgangsloggen viser |
+
+Hold listen lige så snæver som mellemleddene selv. Hver angivet adresse bliver troet, når den navngiver klienten, så et interval, dine brugere forbinder fra — for eksempel hele `10.0.0.0/8` i en intern udrulning — ville lade enhver af dem skrive en anden adresse i loggen. Uden indstilling viser kolonnen load balanceren: ikke nyttigt, men aldrig forfalsket.
+
+Hastighedsbegrænsningen for login tæller forsøg pr. klientadresse fra den samme header, så bag en load balancer er denne indstilling også det, der forhindrer én persons mislykkede forsøg i at bremse alle andre. Det gælder logins, der når backend gennem edge-nginx; MCP-serveren logger direkte ind på backend, så dens egne login-kald deler stadig MCP-containerens adresse. Nøglen pr. klient stoler på denne header på samme måde som revisionsloggen: den forudsætter, at logins kun når backend gennem edge-nginx, hvilket den medfølgende compose-fil og Helm-chartet sikrer ved ikke at eksponere backend. En kalder, der kunne nå backend direkte, kunne vælge sin egen kvote ved selv at sætte headeren; hold backend ueksponeret, eller slå `TRUST_PROXY_HEADERS` fra.

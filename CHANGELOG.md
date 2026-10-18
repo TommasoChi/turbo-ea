@@ -5,7 +5,11 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.163.0] - 2026-10-18
+## [2.166.0] - 2026-10-18
+
+A fork release. Takes the next free patch number above both the fork's own
+`2.163.0` draft and upstream's own `v2.163.0` tag (Surveys), which already
+claims that number on `upstream/main`.
 
 ### Changed
 
@@ -63,6 +67,100 @@ rejected — `helm package` refuses a non-SemVer chart version.
   Layered Dependency View's layer overrides, its extra card-detail display
   fields, the hosting-type icon on a card, and the added/removed colouring of
   dependency edges on a timeline.
+
+## [2.165.0] - 2026-10-16
+
+### Added
+- **Group a card's children by subtype** ([#1269](https://github.com/vincentmakes/turbo-ea/discussions/1269)): on card details, the Hierarchy section now groups the child cards into collapsible subtype sections, each with a count and a trailing **No subtype** section, the same way the Relations section groups related cards. Grouping turns on by itself when there are many children of several subtypes, and a toggle next to the **Children** count switches between the grouped and flat lists.
+
+### Changed
+- Hovering a card name in the Hierarchy, Relations and Lineage sections of card details now underlines the name only, not the type icon or colour dot beside it.
+
+## [2.164.2] - 2026-10-16
+
+### Fixed
+- **Yes/no fields can be left unset** ([#1266](https://github.com/vincentmakes/turbo-ea/issues/1266)): everywhere a yes/no field is edited — card details, Create card, Mass Edit, surveys and AI suggestions — it is now chosen from a Yes / No list like any other select field, with **None** to clear it, instead of an on/off switch, so an unset field no longer looks like No and No takes one click. Card details and portals show the value as a green *Yes* or blue *No* pill (the same blue as in the reports), or — when unset; the Inventory grid shows the same pill, leaves an unset cell blank, and edits the value with the same list. A survey no longer shows an unanswered yes/no field as No. A yes/no field now only accepts true, false or no value; text such as "yes" sent through the API is refused.
+
+## [2.164.1] - 2026-10-15
+
+### Fixed
+- When a report, the Inventory or a diagram is coloured by a yes/no field, *No* is now blue so it can no longer be mistaken for *Not set* or *Multiple*.
+
+### Security
+- Applying survey responses no longer shows internal error details when a response fails unexpectedly; the details are written to the server log instead.
+
+## [2.164.0] - 2026-10-15
+
+### Added
+- **Yes/no and multi-select fields in reports and diagrams** ([#1256](https://github.com/vincentmakes/turbo-ea/issues/1256)): every yes/no and multi-select field (such as *Has AI Features*) can now colour and filter the Portfolio, Flexible Portfolio, Capability Map and Lifecycle reports and colour a diagram, and a yes/no field can group the Portfolio, the Cost Report table and the Inventory. A yes/no field shows as Yes / No, and a card with several values of a multi-select field is shown as Multiple.
+
+### Changed
+- A select option an administrator left without a colour now gets its own colour and a row in the legend, instead of looking like *Not set*.
+
+### Fixed
+- Sorting a report table by a yes/no column no longer fails.
+
+## [2.163.0] - 2026-10-15
+
+### Added
+- **Surveys**: a survey can ask about a card's lifecycle dates (Plan, Phase In, Active, Phase Out, End of Life) and about who holds each stakeholder role; applying an answer updates the dates and adds or removes the people in the role ([#1257](https://github.com/vincentmakes/turbo-ea/discussions/1257)).
+- **Surveys**: the card's name on the response form opens the card in a side panel, so a respondent can check it before answering without leaving the form.
+- **Surveys**: surveys of any status can be deleted from the survey list, the builder or the results page; the confirmation shows the pending requests that will be withdrawn and the answers that will be lost.
+- **Card history**: changes made by applying a survey answer carry a "via survey" marker naming the survey and, on hover, who answered; a survey's send now appears in the history under its own label.
+
+### Fixed
+- **Surveys**: applying an answer now goes through the same validation, calculated fields, data-quality score, approval break and notifications as an edit on the card; an answer the card refuses is reported for that response without blocking the others, whatever went wrong, and the subscriber notifications are sent after the apply has been saved rather than one by one during it.
+- **Surveys**: a stakeholder-role answer is applied as the respondent's additions and removals, so two people's answers about the same role combine instead of the last one winning, and a person assigned after the answer is kept. Applying it requires the stakeholder permission the card's Stakeholders tab asks for, and a malformed answer, or one naming a person this instance does not know, is refused instead of emptying the role.
+- **Surveys**: applying a single response from its detail dialog now shows why it was refused instead of closing silently; a lifecycle date proposed on the response form is checked for order against the card's other phases, not only the surveyed ones; deleting a closed survey no longer says its unanswered requests will be withdrawn.
+- **Audit log**: rolling back a batch that applied survey answers restores the card's attributes, including answers applied before this release.
+
+## [2.162.0] - 2026-10-15
+
+### Added
+- **Extension SDK 1.16**: an extension holding the survey read grant can list surveys by status and card type, and read which requests of a survey are still waiting for an answer, so it can follow up on surveys whoever sent them. Requests about archived cards are left out.
+
+## [2.161.1] - 2026-10-15
+
+### Fixed
+- **Security & admin log**: a card type's section layout changes named the wrong section (the Description pseudo-section was counted), the first Card Layout save reported a spurious “expanded” change for every section, a subtype's hidden fields were listed by key instead of label, and re-saving a portal, role, stakeholder role, calculation or ServiceNow mapping without changing anything wrote an empty entry. A portal entry names the portal's slug and published state again, and an extension installed from the store keeps the reference to its upload like a manual install.
+- **Security & admin log**: only the SSO `token_endpoint` and the e-mail `oauth_token_endpoint` are exempt from credential masking; any other key containing “token”, “secret” or “password” is still masked whatever its suffix.
+- **`NGINX_TRUSTED_PROXIES`** accepts IPv4-mapped IPv6 addresses and ranges (`::ffff:10.244.0.0/112`), the form some Kubernetes networks report.
+
+### Changed
+- The administration manual explains what the per-client sign-in limit assumes: the backend is reached only through the edge nginx, as the bundled Compose file and the Helm chart arrange; an operator who exposes the backend turns `TRUST_PROXY_HEADERS` off.
+
+## [2.161.0] - 2026-10-15
+
+### Added
+- **Data exports in the Security & admin log** ([#1185](https://github.com/vincentmakes/turbo-ea/discussions/1185)): card CSV and JSON exports, workspace exports (from the admin page or the operations API) and exports for another EA platform are now recorded, with who exported, the format and how much left the instance.
+- **`NGINX_TRUSTED_PROXIES`** for the bundled nginx: list the load balancer, ingress or CDN in front of it and the Security & admin log records each user's real address instead of the load balancer's. Available in Docker Compose, the Helm chart (`nginx.trustedProxies`), the Azure Container Apps, Cloud Run and ECS templates, and the Terraform modules.
+
+### Changed
+- The sign-in rate limit is counted per client address, instead of in one bucket shared by everyone behind the proxy, for sign-ins that reach the backend through the edge nginx, so one person's failed attempts no longer slow down other users; the MCP server's own sign-in calls still share the MCP container's address.
+- The Security & admin log describes every change in plain language — fields, sections, options, permissions, settings and portals named by their labels, with values shown as Yes / No, dates, colours and sizes — instead of counts, fingerprints and raw keys; entries written before this version keep showing their recorded details.
+
+## [2.160.0] - 2026-10-14
+
+### Added
+- **Administrative actions in the Security & admin log** ([#1185](https://github.com/vincentmakes/turbo-ea/discussions/1185)): changes to users, roles, stakeholder roles, every setting (with secrets masked), the metamodel, tags, calculations, extensions, workspace transfer, platform migration, ServiceNow, web portals, diagram publishing, surveys and operator rescue access are now recorded, with who made them and the old and new values.
+- **Locked indicator and Unlock action** on the Users page: an account locked by repeated failed sign-ins shows a Locked chip with the time the lock ends, and an administrator can unlock it at once.
+
+## [2.159.0] - 2026-10-14
+
+### Added
+- **Security & admin audit log** ([#1185](https://github.com/vincentmakes/turbo-ea/discussions/1185)): a new tab under Admin → Settings → Audit log records every sign-in and sign-out, failed sign-in attempt with the reason it failed, account lockout, SSO and reverse-proxy session, registration, password set, reset and change, and role impersonation, with the user, the account targeted and the client IP address; entries can be filtered, opened for their details and exported to CSV, and cannot be edited or deleted.
+- **Security log retention** setting under Admin → Settings → General → Data management: entries are kept 365 days by default, up to 3650, or forever with 0.
+- **JSON audit stream**: every security log entry is also written as one JSON line on the backend's `turbo_ea.audit` logger, so `docker compose logs`, Kubernetes log collection or a SIEM shipper picks it up with no extra configuration.
+- The security log records the real client IP address behind the bundled nginx instead of the proxy's.
+
+### Fixed
+- The dashboard's Recent Activity no longer lists system events that are not about a card.
+
+## [2.158.13] - 2026-10-14
+
+### Fixed
+- **Diagrams imported through Workspace Transfer show their cards again** ([#1246](https://github.com/vincentmakes/turbo-ea/issues/1246)). Cards, relations and tags land on the target instance under new internal ids, but a diagram kept the source's ids, so every card on it read as deleted and hovering a card found nothing. Every reference is now translated on import: the cards and relations drawn on a diagram, a process flow's linked cards and called processes, draft flows, saved-report scopes and filters, survey targets and answers, portal and saved-view tag filters, to-do links and compliance findings, which now keep their review decisions on the next scan. The import preview shows what was translated per section. A bundle exported by an earlier version relinks its diagrams by card type and name, and importing the same bundle again repairs an instance that imported before this fix.
+- **Re-importing a bundle that includes archived cards no longer duplicates them**, and relations, comments, stakeholders and other links on archived cards now transfer instead of being reported as conflicts.
 
 ## [2.158.12] - 2026-10-10
 

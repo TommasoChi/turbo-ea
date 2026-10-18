@@ -106,6 +106,7 @@ plugins:
             Tags: Etiquetas
             Resources: Recursos
             Users & Roles: Usuarios y roles
+            Audit Log: Registro de auditoría
             Authentication & SSO: Autenticación y SSO
             AI Capabilities: Capacidades de IA
             MCP Integration: Integracion MCP
@@ -177,6 +178,7 @@ plugins:
             Tags: Tags
             Resources: Ressourcen
             Users & Roles: Benutzer und Rollen
+            Audit Log: Audit-Log
             Authentication & SSO: Authentifizierung und SSO
             AI Capabilities: KI-Funktionen
             MCP Integration: MCP-Integration
@@ -248,6 +250,7 @@ plugins:
             Tags: Tags
             Resources: Ressources
             Users & Roles: Utilisateurs et rôles
+            Audit Log: Journal d'audit
             Authentication & SSO: Authentification et SSO
             AI Capabilities: Fonctionnalités IA
             MCP Integration: Integration MCP
@@ -319,6 +322,7 @@ plugins:
             Tags: Tag
             Resources: Risorse
             Users & Roles: Utenti e ruoli
+            Audit Log: Registro di audit
             Authentication & SSO: Autenticazione e SSO
             AI Capabilities: Funzionalità IA
             MCP Integration: Integrazione MCP
@@ -390,6 +394,7 @@ plugins:
             Tags: Tags
             Resources: Recursos
             Users & Roles: Usuários e papéis
+            Audit Log: Registro de auditoria
             Authentication & SSO: Autenticação e SSO
             AI Capabilities: Funcionalidades de IA
             MCP Integration: Integracao MCP
@@ -461,6 +466,7 @@ plugins:
             Tags: 标签
             Resources: 资源
             Users & Roles: 用户与角色
+            Audit Log: 审计日志
             Authentication & SSO: 认证与 SSO
             AI Capabilities: AI 功能
             MCP Integration: MCP 集成
@@ -532,6 +538,7 @@ plugins:
             Tags: Теги
             Resources: Ресурсы
             Users & Roles: Пользователи и роли
+            Audit Log: Журнал аудита
             Authentication & SSO: Аутентификация и SSO
             AI Capabilities: Возможности ИИ
             MCP Integration: Интеграция MCP
@@ -603,6 +610,7 @@ plugins:
             Tags: Tags
             Resources: Ressourcer
             Users & Roles: Brugere og roller
+            Audit Log: Revisionslog
             Authentication & SSO: Autentificering og SSO
             AI Capabilities: AI-funktioner
             MCP Integration: MCP-integration
@@ -674,6 +682,7 @@ plugins:
             Tags: الوسوم
             Resources: الموارد
             Users & Roles: المستخدمون والأدوار
+            Audit Log: سجل التدقيق
             Authentication & SSO: المصادقة والدخول الموحّد
             AI Capabilities: قدرات الذكاء الاصطناعي
             MCP Integration: تكامل MCP
@@ -774,6 +783,7 @@ nav:
       - Tags: admin/tags.md
       - Resources: admin/resources.md
       - Users & Roles: admin/users.md
+      - Audit Log: admin/audit-log.md
       - Authentication & SSO: admin/sso.md
       - AI Capabilities: admin/ai.md
       - MCP Integration: admin/mcp.md

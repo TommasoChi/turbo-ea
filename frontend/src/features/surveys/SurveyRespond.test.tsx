@@ -3,6 +3,16 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
 vi.mock("@/hooks/useMetamodel", () => import("@/test/hooks").then((m) => m.useMetamodelModule()));
+// The card side panel drags the whole card-detail graph in; a probe is enough
+// to see which card it was asked to show.
+vi.mock("@/components/CardDetailSidePanel", () => ({
+  default: ({ cardId, open, onClose }: { cardId: string | null; open: boolean; onClose: () => void }) =>
+    open ? (
+      <div data-testid="side-panel" data-card-id={cardId}>
+        <button onClick={onClose}>close panel</button>
+      </div>
+    ) : null,
+}));
 
 import i18n from "@/i18n";
 import { mockApi } from "@/test/apiMock";
@@ -341,10 +351,12 @@ describe("SurveyRespond — maintain fields", () => {
     const { user } = renderPage();
     await screen.findByText("Q3 Application Review");
 
-    // Boolean: the switch labelled with the current answer.
-    const cloud = fieldCard("Cloud Hosted");
-    await user.click(within(cloud).getByRole("checkbox", { name: tc("labels.no") }));
-    expect(within(cloud).getByRole("checkbox", { name: tc("labels.yes") })).toBeChecked();
+    // Boolean: a Yes / No dropdown, starting on the current answer (No).
+    const cloud = within(fieldCard("Cloud Hosted")).getByRole("combobox");
+    expect(cloud).toHaveTextContent(tc("labels.no"));
+    await user.click(cloud);
+    await user.click(await screen.findByRole("option", { name: tc("labels.yes") }));
+    expect(cloud).toHaveTextContent(tc("labels.yes"));
 
     // Date: the native input commits on change / blur.
     const date = within(fieldCard("Go-Live Date")).getByDisplayValue("2020-06-01");
@@ -370,6 +382,27 @@ describe("SurveyRespond — maintain fields", () => {
     expect(posted.goLiveDate).toEqual({ confirmed: false, new_value: "2021-03-15" });
     expect(posted.regions).toEqual({ confirmed: false, new_value: ["emea", "amer"] });
     expect(posted.coverage).toEqual({ confirmed: false, new_value: 90 });
+  });
+
+  it("shows an unanswered boolean with nothing chosen, not as No (#1266)", async () => {
+    mockApi.on("get", RESPOND_PATH, formWith([{ ...CLOUD, current_value: null }]));
+    const { user } = renderPage();
+    await screen.findByText("Q3 Application Review");
+
+    const box = within(fieldCard("Cloud Hosted")).getByRole("combobox");
+    expect(box).not.toHaveTextContent(tc("labels.no"));
+    expect(box).not.toHaveTextContent(tc("labels.yes"));
+    await user.click(box);
+    const listbox = await screen.findByRole("listbox");
+    expect(within(listbox).getByRole("option", { name: tc("labels.none") })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    await user.click(within(listbox).getByRole("option", { name: tc("labels.no") }));
+    await user.click(submitButton());
+    await waitFor(() => expect(mockApi.callsOf("post", RESPOND_PATH)).toHaveLength(1));
+    expect(postedResponses().isCloud).toEqual({ confirmed: false, new_value: false });
   });
 
   it("clearing the percentage box stores null, not an empty string", async () => {
@@ -589,5 +622,216 @@ describe("SurveyRespond — submitting", () => {
 
     await user.click(within(alert).getByRole("button", { name: /close/i }));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+});
+
+const END_OF_LIFE: FormField = {
+  key: "lifecycle:endOfLife",
+  section: "",
+  label: "stored label",
+  type: "date",
+  kind: "lifecycle",
+  phase: "endOfLife",
+  action: "maintain",
+  current_value: "2030-12-31",
+};
+const PHASE_OUT: FormField = {
+  key: "lifecycle:phaseOut",
+  section: "",
+  label: "stored label",
+  type: "date",
+  kind: "lifecycle",
+  phase: "phaseOut",
+  action: "maintain",
+  current_value: null,
+};
+const OBSERVERS: FormField = {
+  key: "sh:observer",
+  section: "",
+  label: "Observer",
+  type: "stakeholder",
+  kind: "stakeholder",
+  role: "observer",
+  action: "maintain",
+  current_value: [{ id: "u-ada", display_name: "Ada Lovelace" }],
+};
+
+describe("SurveyRespond — card link (#1257)", () => {
+  it("opens the card in the side panel when the respondent may view it, keeping the form", async () => {
+    mockApi.on(
+      "get",
+      RESPOND_PATH,
+      formWith([ALIAS], {
+        card: { id: CARD_IDS.erp, name: "ERP Core", type: "Application", can_view: true },
+      }),
+    );
+    const { user } = renderPage();
+
+    // The tooltip names the button; the card name is its visible text.
+    const open = await screen.findByRole("button", { name: t("surveys.respond.openCardTooltip") });
+    expect(open).toHaveTextContent("ERP Core");
+    expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument();
+
+    // Type something first: opening the card must not lose it.
+    const alias = within(fieldCard("Alias")).getByDisplayValue("ERP");
+    fireEvent.change(alias, { target: { value: "ERP-2" } });
+
+    await user.click(open);
+    const panel = await screen.findByTestId("side-panel");
+    expect(panel).toHaveAttribute("data-card-id", CARD_IDS.erp);
+    expect(screen.getByDisplayValue("ERP-2")).toBeInTheDocument();
+
+    await user.click(within(panel).getByRole("button", { name: "close panel" }));
+    await waitFor(() => expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument());
+    expect(screen.getByDisplayValue("ERP-2")).toBeInTheDocument();
+  });
+
+  it("shows the name as plain text when the respondent may not open the card", async () => {
+    mockApi.on(
+      "get",
+      RESPOND_PATH,
+      formWith([ALIAS], {
+        card: { id: CARD_IDS.erp, name: "ERP Core", type: "Application", can_view: false },
+      }),
+    );
+    renderPage();
+
+    expect(await screen.findByText("ERP Core")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: t("surveys.respond.openCardTooltip") }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument();
+  });
+});
+
+describe("SurveyRespond — lifecycle fields (#1257)", () => {
+  it("labels the field with its phase and posts the new date", async () => {
+    mockApi.on("get", RESPOND_PATH, formWith([END_OF_LIFE]));
+    const { user } = renderPage();
+    await screen.findByText("Q3 Application Review");
+
+    const card = fieldCard(tc("lifecycle.endOfLife"));
+    expect(screen.queryByText("stored label")).not.toBeInTheDocument();
+    expect(within(card).getByText(t("surveys.respond.lifecycleSection"))).toBeInTheDocument();
+
+    const date = within(card).getByDisplayValue("2030-12-31");
+    fireEvent.change(date, { target: { value: "2031-06-30" } });
+    fireEvent.blur(date);
+
+    await user.click(submitButton());
+    await waitFor(() => expect(mockApi.callsOf("post", RESPOND_PATH)).toHaveLength(1));
+    expect(postedResponses()["lifecycle:endOfLife"]).toEqual({
+      confirmed: false,
+      new_value: "2031-06-30",
+    });
+  });
+
+  it("warns when a proposed phase falls after the one that should follow it", async () => {
+    mockApi.on("get", RESPOND_PATH, formWith([PHASE_OUT, END_OF_LIFE]));
+    renderPage();
+    await screen.findByText("Q3 Application Review");
+
+    const phaseOut = fieldCard(tc("lifecycle.phaseOut"));
+    const input = within(phaseOut).getByDisplayValue("");
+    fireEvent.change(input, { target: { value: "2032-01-01" } });
+    fireEvent.blur(input);
+
+    await waitFor(() =>
+      expect(within(phaseOut).getByText((txt) => txt.includes(tc("lifecycle.endOfLife")) && txt.includes("("))).toBeInTheDocument(),
+    );
+    // The later phase itself carries no warning.
+    const eol = fieldCard(tc("lifecycle.endOfLife"));
+    expect(within(eol).queryByText((txt) => txt.includes(tc("lifecycle.phaseOut")))).not.toBeInTheDocument();
+  });
+
+  it("checks the order against the card's phases the survey did not ask about", async () => {
+    // Only Phase Out is surveyed; the card already holds an End of Life.
+    mockApi.on(
+      "get",
+      RESPOND_PATH,
+      formWith([PHASE_OUT], {
+        card: {
+          id: CARD_IDS.erp,
+          name: "ERP Core",
+          type: "Application",
+          lifecycle: { active: "2020-01-01", endOfLife: "2030-12-31" },
+        },
+      }),
+    );
+    renderPage();
+    await screen.findByText("Q3 Application Review");
+
+    const phaseOut = fieldCard(tc("lifecycle.phaseOut"));
+    const input = within(phaseOut).getByDisplayValue("");
+    fireEvent.change(input, { target: { value: "2032-01-01" } });
+    fireEvent.blur(input);
+
+    await waitFor(() =>
+      expect(
+        within(phaseOut).getByText((txt) => txt.includes(tc("lifecycle.endOfLife")) && txt.includes("(")),
+      ).toBeInTheDocument(),
+    );
+  });
+});
+
+describe("SurveyRespond — stakeholder fields (#1257)", () => {
+  beforeEach(() => {
+    mockApi.on("get", "/users", [
+      { id: "u-ada", display_name: "Ada Lovelace", email: "ada@example.com" },
+      { id: "u-grace", display_name: "Grace Hopper", email: "grace@example.com" },
+    ]);
+  });
+
+  it("shows the current holders and posts the edited list", async () => {
+    mockApi.on("get", RESPOND_PATH, formWith([OBSERVERS]));
+    const { user } = renderPage();
+    await screen.findByText("Q3 Application Review");
+
+    const card = fieldCard("Observer");
+    expect(within(card).getByText(t("surveys.respond.stakeholderSection"))).toBeInTheDocument();
+    expect(
+      within(card).getByText(
+        t("surveys.respond.stakeholderMaintainInstruction", { role: "Observer", card: "ERP Core" }),
+      ),
+    ).toBeInTheDocument();
+    // Current value + the picker's chip.
+    expect(within(card).getAllByText("Ada Lovelace")).toHaveLength(2);
+
+    await user.click(within(card).getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: /Grace Hopper/ }));
+    await user.keyboard("{Escape}");
+
+    await user.click(submitButton());
+    await waitFor(() => expect(mockApi.callsOf("post", RESPOND_PATH)).toHaveLength(1));
+    expect(postedResponses()["sh:observer"]).toEqual({
+      confirmed: false,
+      new_value: [
+        { id: "u-ada", display_name: "Ada Lovelace" },
+        { id: "u-grace", display_name: "Grace Hopper" },
+      ],
+    });
+  });
+
+  it("shows a dash when nobody holds the role and confirms without a picker", async () => {
+    mockApi.on(
+      "get",
+      RESPOND_PATH,
+      formWith([{ ...OBSERVERS, action: "confirm", current_value: [] }]),
+    );
+    const { user } = renderPage();
+    await screen.findByText("Q3 Application Review");
+
+    const card = fieldCard("Observer");
+    expect(within(card).getByText("—")).toBeInTheDocument();
+    expect(within(card).queryByRole("combobox")).not.toBeInTheDocument();
+    expect(
+      within(card).getByText(
+        t("surveys.respond.stakeholderConfirmInstruction", { role: "Observer", card: "ERP Core" }),
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(submitButton());
+    await waitFor(() => expect(mockApi.callsOf("post", RESPOND_PATH)).toHaveLength(1));
+    expect(postedResponses()["sh:observer"]).toEqual({ confirmed: true, new_value: null });
   });
 });

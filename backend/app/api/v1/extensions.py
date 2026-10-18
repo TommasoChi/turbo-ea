@@ -47,6 +47,7 @@ from app.config import settings
 from app.database import async_session, get_db
 from app.models.extension import Extension, ExtensionInstall, ExtensionLicense
 from app.models.user import User
+from app.services import audit_log
 from app.services.extensions import installer as ext_installer
 from app.services.extensions.bundle import (
     LOGO_EXTENSIONS,
@@ -305,6 +306,24 @@ async def get_license(
     )
 
 
+def _license_audit_context(lic: LicenseOut) -> dict:
+    """What an audit row says about a license (its ``context``): who it is for
+    and what it covers, the entitlements as extension keys.
+
+    Never the license text, a claim token or the renewal credential — the text
+    is a bearer document (whoever holds it can install it) and the renewal key
+    authenticates this instance to the store.
+    """
+    return {
+        "licensee": lic.licensee,
+        "customer_id": lic.customer_id,
+        "key_id": lic.key_id,
+        "entitlements": sorted(
+            str(ent.get("extension_key")) for ent in lic.entitlements if ent.get("extension_key")
+        ),
+    }
+
+
 def _license_store_managed() -> bool:
     """Whether the active license carries a store renewal credential.
 
@@ -391,7 +410,17 @@ async def put_license(
     user: User = Depends(get_current_user),
 ) -> LicenseOut:
     await PermissionService.require_permission(db, user, "admin.manage_extensions")
-    return await _apply_license_text(db, payload.text, user.id, confirm=payload.confirm)
+    lic = await _apply_license_text(db, payload.text, user.id, confirm=payload.confirm)
+    await audit_log.record(
+        db,
+        action="admin.extension.license.updated",
+        category="admin",
+        actor=user,
+        target=("license", lic.customer_id or None, lic.licensee),
+        context={**_license_audit_context(lic), "confirmed_downgrade": payload.confirm},
+    )
+    await db.commit()
+    return lic
 
 
 @router.delete("/license", status_code=204)
@@ -420,6 +449,26 @@ async def delete_license(
         raise HTTPException(status_code=404, detail="No license installed")
     for row in actives:
         row.is_active = False
+    await audit_log.record(
+        db,
+        action="admin.extension.license.removed",
+        category="admin",
+        actor=user,
+        target=("license", actives[0].customer_id, actives[0].licensee),
+        context={
+            "licensee": ", ".join(sorted({row.licensee for row in actives})),
+            "customer_id": actives[0].customer_id,
+            "key_id": actives[0].key_id,
+            "entitlements": sorted(
+                {
+                    str(ent.get("extension_key"))
+                    for row in actives
+                    for ent in (row.entitlements or [])
+                    if isinstance(ent, dict) and ent.get("extension_key")
+                }
+            ),
+        },
+    )
     await db.commit()
     await extension_registry.refresh_from_db(db)
     logger.info("Extension license removed by user %s", user.id)
@@ -484,6 +533,17 @@ async def _persist_upload(
     return install
 
 
+async def _install_audit_label(db: AsyncSession, install: ExtensionInstall) -> str:
+    """How an audit row names the extension an upload carries: the installed
+    extension's name when this is an upgrade, else its key, else the file."""
+    if install.extension_key:
+        name = (
+            await db.execute(select(Extension.name).where(Extension.key == install.extension_key))
+        ).scalar_one_or_none()
+        return name or install.extension_key
+    return install.filename
+
+
 @router.post("/install", response_model=ExtensionInstallOut, status_code=202)
 async def upload_bundle(
     background_tasks: BackgroundTasks,
@@ -503,6 +563,21 @@ async def upload_bundle(
         raise HTTPException(status_code=413, detail="Bundle file is too large")
 
     install = await _persist_upload(db, file.filename or "extension.teax", raw, user.id)
+    await audit_log.record(
+        db,
+        action="admin.extension.install.uploaded",
+        category="admin",
+        actor=user,
+        target=("extension", None, install.filename),
+        # The target names the file, not the upload, so the upload's id rides
+        # along as the reference that ties this row to the apply / discard.
+        context={
+            "file_name": install.filename,
+            "file_size": install.file_size,
+            "reference": str(install.id),
+        },
+    )
+    await db.commit()
     background_tasks.add_task(_verify_and_preview_job, str(install.id), str(user.id))
     return _install_out(install)
 
@@ -572,6 +647,17 @@ async def apply_install(
                 ),
             )
     install.status = "applying"
+    await audit_log.record(
+        db,
+        action="admin.extension.install.applied",
+        category="admin",
+        actor=user,
+        target=("extension", install.extension_key, await _install_audit_label(db, install)),
+        context={
+            "version": install.extension_version,
+            **({"downgrade_from": downgrade["from"]} if downgrade else {}),
+        },
+    )
     await db.commit()
     await db.refresh(install)
     background_tasks.add_task(_apply_job, str(install.id), str(user.id))
@@ -591,6 +677,14 @@ async def delete_install(
             Path(install.storage_path).unlink(missing_ok=True)
         except OSError:
             logger.warning("Could not delete bundle upload %s", install.storage_path)
+    await audit_log.record(
+        db,
+        action="admin.extension.install.discarded",
+        category="admin",
+        actor=user,
+        target=("extension", install.extension_key, await _install_audit_label(db, install)),
+        context={"version": install.extension_version, "status": install.status},
+    )
     await db.delete(install)
     await db.commit()
 
@@ -871,6 +965,18 @@ async def claim_store_purchase(
         return StoreClaimOut(status="pending")
 
     license_out = await _apply_license_text(db, str(data["license"]), user.id)
+    # Only the claim that applied a license is an admin action: the frontend
+    # polls this route while checkout completes, and a "pending" answer
+    # changes nothing. The claim token itself is never recorded.
+    await audit_log.record(
+        db,
+        action="admin.extension.store.claimed",
+        category="admin",
+        actor=user,
+        target=("license", license_out.customer_id or None, license_out.licensee),
+        context=_license_audit_context(license_out),
+    )
+    await db.commit()
     return StoreClaimOut(status="applied", license=license_out)
 
 
@@ -944,6 +1050,20 @@ async def refresh_store_license(
     """
     await PermissionService.require_permission(db, user, "admin.manage_extensions")
     refreshed = await refresh_license_if_due(db, force=True)
+    current = extension_registry.license
+    await audit_log.record(
+        db,
+        action="admin.extension.store.refreshed",
+        category="admin",
+        actor=user,
+        target=(
+            "license",
+            (current.customer_id or None) if current else None,
+            current.licensee if current else None,
+        ),
+        context={"refreshed": refreshed},
+    )
+    await db.commit()
     return StoreRefreshOut(refreshed=refreshed)
 
 
@@ -1045,6 +1165,21 @@ async def install_from_store(
 
     filename = Path(urlsplit(bundle_url).path).name or f"{payload.key}.teax"
     install = await _persist_upload(db, filename, raw, user.id)
+    await audit_log.record(
+        db,
+        action="admin.extension.store.installed",
+        category="admin",
+        actor=user,
+        target=("extension", payload.key, str(item.get("name") or payload.key)),
+        # The apply / discard rows target the extension key, not this upload,
+        # so the upload's id is the reference that ties them to this row.
+        context={
+            "version": item.get("version"),
+            "file_size": install.file_size,
+            "reference": str(install.id),
+        },
+    )
+    await db.commit()
     background_tasks.add_task(_verify_and_preview_job, str(install.id), str(user.id))
     return _install_out(install)
 
@@ -1087,6 +1222,14 @@ async def set_extension_enabled(
     else:
         await remove_field_contributions(db, key)
         await remove_subtype_contributions(db, key)
+    await audit_log.record(
+        db,
+        action="admin.extension.enabled" if payload.enabled else "admin.extension.disabled",
+        category="admin",
+        actor=user,
+        target=("extension", row.key, row.name),
+        context={"version": row.version},
+    )
     await db.commit()
     await db.refresh(row)
     await extension_registry.refresh_from_db(db)
@@ -1103,6 +1246,14 @@ async def uninstall_extension(
     row = await uninstall(db, key)
     if row is None:
         raise HTTPException(status_code=404, detail="Extension not found")
+    await audit_log.record(
+        db,
+        action="admin.extension.uninstalled",
+        category="admin",
+        actor=user,
+        target=("extension", row.key, row.name),
+        context={"version": row.version},
+    )
     await db.commit()
     await db.refresh(row)
     await extension_registry.refresh_from_db(db)

@@ -12,11 +12,9 @@ import MenuItem from "@mui/material/MenuItem";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
-import ListItemText from "@mui/material/ListItemText";
 import Alert from "@mui/material/Alert";
 import Tooltip from "@mui/material/Tooltip";
 import Popover from "@mui/material/Popover";
-import Collapse from "@mui/material/Collapse";
 import { useTranslation } from "react-i18next";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -46,12 +44,14 @@ import RelationAttributesEditor, {
   type RelationAttributes,
 } from "./RelationAttributesEditor";
 import OptionChip from "@/components/OptionChip";
+import ClickableCardName from "@/components/ClickableCardName";
 import {
   bucketRelationsBySubtype,
   shouldGroupBySubtype,
   sortRelationsByName,
-  type SubtypeBucket,
+  type SubtypeBucket as SubtypeBucketData,
 } from "./cardDetailUtils";
+import { SubtypeBucket, useCollapsedBuckets, useSubtypeGrouping } from "./SubtypeBucket";
 import {
   expandSides,
   onSide,
@@ -231,26 +231,8 @@ function RelationGroup({
   // two are actually present, even below the auto-group threshold.
   const realSubtypeBucketCount = subtypeBuckets.filter((b) => !b.isNoSubtype).length;
   const canToggleGrouping = subtypeDefs.length > 0 && realSubtypeBucketCount >= 2;
-  const [grouped, setGrouped] = useState(canGroupBySubtype);
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  // Re-sync the auto-decision when the underlying relation set changes
-  // (e.g. after adding/removing a relation) unless the user has toggled.
-  const [userToggled, setUserToggled] = useState(false);
-  useEffect(() => {
-    if (!userToggled) setGrouped(canGroupBySubtype);
-  }, [canGroupBySubtype, userToggled]);
-  const toggleGrouped = () => {
-    setUserToggled(true);
-    setGrouped((g) => !g);
-  };
-  const toggleBucketCollapsed = (key: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
+  const { grouped, toggleGrouped } = useSubtypeGrouping(canGroupBySubtype);
+  const buckets = useCollapsedBuckets();
 
   const handleDelete = async (relId: string) => {
     try {
@@ -379,14 +361,11 @@ function RelationGroup({
         }
         sx={{ py: 0.25 }}
       >
-        <Box
-          component="div"
+        <ClickableCardName
+          name={other?.name || t("relations.unknown")}
           onClick={() => other && navigate(`/cards/${other.id}`)}
-          sx={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 1, "&:hover": { textDecoration: "underline" } }}
-        >
-          {oType && <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: oType.color, flexShrink: 0 }} />}
-          <ListItemText primary={other?.name || t("relations.unknown")} />
-        </Box>
+          dotColor={oType?.color}
+        />
         {alsoVerbs && (
           <Typography
             variant="caption"
@@ -453,8 +432,7 @@ function RelationGroup({
   // Collapsible subtype group (#792). Header label resolves the whole
   // SubtypeDef (never the key — see useResolveLabel #661 caveat); the
   // trailing no-subtype bucket uses a dedicated i18n label.
-  const renderSubtypeBucket = (bucket: SubtypeBucket) => {
-    const isOpen = !collapsed.has(bucket.key);
+  const renderSubtypeBucket = (bucket: SubtypeBucketData) => {
     const def = bucket.isNoSubtype
       ? undefined
       : subtypeDefs.find((s) => s.key === bucket.key);
@@ -464,48 +442,18 @@ function RelationGroup({
         ? subtypeLabel(def)
         : bucket.key;
     return (
-      <Box key={bucket.key}>
-        <Box
-          component="button"
-          onClick={() => toggleBucketCollapsed(bucket.key)}
-          sx={{
-            all: "unset",
-            boxSizing: "border-box",
-            width: "100%",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 0.75,
-            px: 1.5,
-            py: 0.5,
-            bgcolor: "background.default",
-            borderTop: "1px solid",
-            borderColor: "divider",
-            "&:hover": { bgcolor: "action.hover" },
-          }}
-        >
-          <MaterialSymbol icon={isOpen ? "expand_more" : "chevron_right"} size={16} />
-          <Typography
-            variant="caption"
-            fontWeight={600}
-            color={bucket.isNoSubtype ? "text.disabled" : "text.secondary"}
-            sx={{ flex: 1, fontStyle: bucket.isNoSubtype ? "italic" : "normal" }}
-          >
-            {label}
-          </Typography>
-          <Chip
-            size="small"
-            label={bucket.rels.length}
-            variant="outlined"
-            sx={{ height: 18, fontSize: "0.65rem" }}
-          />
-        </Box>
-        <Collapse in={isOpen} unmountOnExit>
-          <List dense disablePadding sx={{ px: 0.5 }}>
-            {bucket.rels.map(renderRow)}
-          </List>
-        </Collapse>
-      </Box>
+      <SubtypeBucket
+        key={bucket.key}
+        label={label}
+        isNoSubtype={bucket.isNoSubtype}
+        count={bucket.rels.length}
+        open={buckets.isOpen(bucket.key)}
+        onToggle={() => buckets.toggle(bucket.key)}
+      >
+        <List dense disablePadding sx={{ px: 0.5 }}>
+          {bucket.rels.map(renderRow)}
+        </List>
+      </SubtypeBucket>
     );
   };
 

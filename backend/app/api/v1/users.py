@@ -20,6 +20,7 @@ from app.models.user import (
     NOTIFICATION_TYPE_SPECS,
     User,
 )
+from app.services import audit_changes, audit_labels, audit_log
 from app.services.extensions import notification_channels, notification_types
 from app.services.permission_service import PermissionService
 from app.services.sso_service import get_sso_config
@@ -108,7 +109,33 @@ def _user_response(u: User) -> dict:
         "ui_preferences": u.ui_preferences or DEFAULT_UI_PREFERENCES,
         "created_at": u.created_at.isoformat() if u.created_at else None,
         "last_login": u.last_login.isoformat() if u.last_login else None,
+        # Lockout state (5 failed sign-ins lock an account for 15 minutes), so
+        # the Users screen can show a Locked chip and offer Unlock. Admin-only
+        # payload: never in ``_user_response_lite``.
+        "locked_until": u.locked_until.isoformat() if u.locked_until else None,
+        "failed_login_attempts": u.failed_login_attempts or 0,
     }
+
+
+# The account fields whose old/new values an ``admin.user.updated`` row carries.
+# Never the password: its change is recorded as a masked marker instead.
+USER_AUDIT_FIELDS = ("role", "is_active", "email", "display_name", "auth_provider", "locale")
+
+
+def _user_target(u: User) -> tuple[str, str, str]:
+    return ("user", str(u.id), u.email)
+
+
+async def _role_label(db: AsyncSession, key: str | None) -> str | None:
+    """A role named the way the Users screen names it, for an audit row; the key
+    itself when no role (or label) answers to it, ``None`` for ``None``."""
+    return (await audit_labels.role_labels(db, [key])).get(key, key) if key else key
+
+
+def _labelled_role_change(change: dict, labels: dict[str, str]) -> dict:
+    """An ``{"old", "new"}`` role change with each side's key replaced by its label
+    (``labels`` from ``audit_labels.role_labels``; an unknown key reads as itself)."""
+    return {side: labels.get(change[side], change[side]) for side in ("old", "new")}
 
 
 def _user_response_lite(u: User) -> dict:
@@ -255,6 +282,15 @@ async def resend_invitation_by_invitation(
             "settings before resending.",
         )
 
+    await audit_log.record(
+        db,
+        action="admin.user.invitation.resent",
+        category="admin",
+        actor=current_user,
+        subject_email=inv.email,
+        target=("invitation", str(inv.id), inv.email),
+    )
+    await db.commit()
     return {"email_sent": True, "sent_to": inv.email}
 
 
@@ -274,6 +310,15 @@ async def delete_invitation(
     if not inv:
         raise HTTPException(404, "Invitation not found")
 
+    await audit_log.record(
+        db,
+        action="admin.user.invitation.deleted",
+        category="admin",
+        actor=current_user,
+        subject_email=inv.email,
+        target=("invitation", str(inv.id), inv.email),
+        context={"role": await _role_label(db, inv.role)},
+    )
     await db.delete(inv)
     await db.commit()
 
@@ -466,10 +511,50 @@ async def bulk_update_users(
                 "Keep at least one user with the admin role and active status.",
             )
 
+    changed: list[tuple[str, dict]] = []
     for u in users:
+        before = {field: getattr(u, field) for field in data}
         for field, value in data.items():
             setattr(u, field, value)
+        user_changes = audit_log.diff(before, data)
+        if user_changes:
+            changed.append((u.email, user_changes))
 
+    # Re-applying values every selected user already holds changes nothing,
+    # and "nothing changed" is not an audit event.
+    if changed:
+        labels = await audit_labels.role_labels(
+            db,
+            [
+                side
+                for _, c in changed
+                if "role" in c
+                for side in (c["role"]["old"], c["role"]["new"])
+            ],
+        )
+        items = []
+        for email, user_changes in changed:
+            for field, change in user_changes.items():
+                if field == "role":
+                    change = _labelled_role_change(change, labels)
+                items.append(
+                    audit_changes.item(
+                        "user.changed",
+                        user=email,
+                        field=field,
+                        old=change["old"],
+                        new=change["new"],
+                    )
+                )
+        await audit_log.record(
+            db,
+            action="admin.user.bulk_updated",
+            category="admin",
+            actor=current_user,
+            target=("users", None, None),
+            context={"count": len(users)},
+            items=[*audit_changes.cap_items(items)],
+        )
     await db.commit()
 
     refreshed = await db.execute(select(User).where(User.id.in_(target_uuids)))
@@ -524,6 +609,20 @@ async def bulk_delete_users(
             "Bulk delete would remove the last admin user. "
             "Keep at least one user with the admin role.",
         )
+
+    await audit_log.record(
+        db,
+        action="admin.user.bulk_deleted",
+        category="admin",
+        actor=current_user,
+        target=("users", None, None),
+        context={"count": len(deletable), "skipped": len(skipped)},
+        items=[
+            *audit_changes.cap_items(
+                [audit_changes.item("user.deleted", user=u.email) for u in deletable]
+            )
+        ],
+    )
 
     deleted_count = 0
     for u in deletable:
@@ -672,6 +771,21 @@ async def create_user(
         )
         db.add(sso_inv)
 
+    # Flush first so the row has its id for the audit target.
+    await db.flush()
+    await audit_log.record(
+        db,
+        action="admin.user.created",
+        category="admin",
+        actor=current_user,
+        subject_email=email,
+        target=_user_target(u),
+        context={
+            "role": await _role_label(db, body.role),
+            "auth_provider": auth_provider,
+            "invited": body.send_email,
+        },
+    )
     await db.commit()
     await db.refresh(u)
 
@@ -760,6 +874,11 @@ async def update_user(
         raise HTTPException(404, "User not found")
 
     data = body.model_dump(exclude_unset=True)
+    # Read before ``password`` is popped below. An administrator setting someone
+    # else's password is an admin action, not this one.
+    changes_own_password = is_self and "password" in data
+    sets_password = "password" in data
+    before = {field: getattr(u, field) for field in USER_AUDIT_FIELDS}
 
     # Non-admin can only update own display_name, password, and locale
     if not is_admin:
@@ -838,6 +957,84 @@ async def update_user(
     for field, value in data.items():
         setattr(u, field, value)
 
+    if changes_own_password:
+        await audit_log.record(
+            db, action="auth.password.changed", category="auth", actor=current_user
+        )
+    after = {field: getattr(u, field) for field in USER_AUDIT_FIELDS}
+    changes = audit_log.diff(before, after, keys=USER_AUDIT_FIELDS)
+    if sets_password and not changes_own_password:
+        # An administrator set someone else's password: say so, never what to.
+        changes["password"] = {"old": audit_log.MASK, "new": audit_log.MASK}
+    # A user editing their own profile (name, locale) is not an administrative
+    # act, so only an ``admin.users`` holder's edit is recorded — their own
+    # profile included. The self-service password change above is its own row.
+    if changes and is_admin:
+        if "role" in changes:
+            # Named the way the Users screen names them, not by key.
+            labels = await audit_labels.role_labels(
+                db, [changes["role"]["old"], changes["role"]["new"]]
+            )
+            changes["role"] = _labelled_role_change(changes["role"], labels)
+        await audit_log.record(
+            db,
+            action="admin.user.updated",
+            category="admin",
+            actor=current_user,
+            subject_email=u.email,
+            target=_user_target(u),
+            changes=changes,
+        )
+    await db.commit()
+    return _user_response(u)
+
+
+@router.post("/{user_id}/unlock")
+async def unlock_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin only — lift a sign-in lockout before it expires.
+
+    Five failed password attempts lock an account for 15 minutes
+    (``auth.login``). This clears the failure counter and the lock so the user
+    can sign in again at once, and records ``admin.user.unlocked`` with what
+    was cleared.
+    """
+    await PermissionService.require_permission(db, current_user, "admin.users")
+
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError as exc:
+        raise HTTPException(404, "User not found") from exc
+    result = await db.execute(select(User).where(User.id == uid))
+    u = result.scalar_one_or_none()
+    if not u:
+        raise HTTPException(404, "User not found")
+
+    # Only what was actually cleared is reported. Unlocking an account that
+    # holds no lock and no failed attempts is a no-op: it answers 200 as before
+    # but records nothing.
+    changes = audit_log.diff(
+        {
+            "failed_login_attempts": u.failed_login_attempts or 0,
+            "locked_until": u.locked_until.isoformat() if u.locked_until else None,
+        },
+        {"failed_login_attempts": 0, "locked_until": None},
+    )
+    u.failed_login_attempts = 0
+    u.locked_until = None
+    if changes:
+        await audit_log.record(
+            db,
+            action="admin.user.unlocked",
+            category="admin",
+            actor=current_user,
+            subject_email=u.email,
+            target=_user_target(u),
+            changes=changes,
+        )
     await db.commit()
     return _user_response(u)
 
@@ -875,6 +1072,18 @@ async def delete_user(
     # reports, notifications, survey responses), so PostgreSQL handles the
     # fan-out. Also remove any pending SSO invitation for the same email so
     # the row doesn't survive and re-grant the role on next SSO login.
+    await audit_log.record(
+        db,
+        action="admin.user.deleted",
+        category="admin",
+        actor=current_user,
+        subject_email=u.email,
+        target=_user_target(u),
+        context={
+            "role": await _role_label(db, u.role),
+            "display_name": u.display_name,
+        },
+    )
     await db.execute(delete(SsoInvitation).where(SsoInvitation.email == u.email))
     await db.delete(u)
     await db.commit()

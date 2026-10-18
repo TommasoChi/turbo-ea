@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -13,14 +15,22 @@ from app.api.deps import get_current_user
 from app.database import get_db
 from app.models.card import Card
 from app.models.card_type import CardType
-from app.models.relation import Relation
-from app.models.relation_type import RelationType
+from app.models.event import Event
+from app.models.mutation_batch import MutationBatch
 from app.models.survey import Survey, SurveyResponse
 from app.models.user import User
-from app.services import notification_service, survey_service
-from app.services.event_bus import event_bus
+from app.services import (
+    audit_labels,
+    audit_log,
+    notification_service,
+    stakeholder_service,
+    survey_apply,
+    survey_service,
+)
+from app.services.event_bus import event_bus, request_batch_id
 from app.services.permission_service import PermissionService
-from app.services.relation_orientation import direction_for
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/surveys", tags=["surveys"])
 
@@ -124,168 +134,21 @@ async def _get_response_stats(db: AsyncSession, survey_id: uuid.UUID) -> dict:
     }
 
 
-def _is_relation_field(field_def: dict) -> bool:
-    """A survey field describes a relation (rather than a card attribute) when it
-    carries ``kind == "relation"`` plus a relation type + direction."""
-    return (
-        isinstance(field_def, dict)
-        and field_def.get("kind") == "relation"
-        and bool(field_def.get("relation_type_key"))
-        and field_def.get("direction") in ("outgoing", "incoming")
-    )
+# The field-kind predicates and writers live in ``services/survey_apply.py``
+# (services must not import from ``app.api``). The old private names stay
+# importable from here for ``test_relation_orientation.py``'s writer scan and
+# any test that still reaches them through the router module.
+_is_relation_field = survey_apply.is_relation_field
+_relation_field_peers = survey_apply.relation_field_peers
+_relation_peer_ids = survey_apply.ref_ids
+_apply_relation_change = survey_apply.apply_relation_change
 
 
-async def _relation_field_peers(
-    db: AsyncSession, card_id: uuid.UUID, field_def: dict
-) -> list[dict]:
-    """Resolve the related cards currently linked to ``card_id`` for a relation
-    survey field. Returns ``[{id, name}]`` of the peer cards on the configured
-    side. ``direction == "outgoing"`` means the surveyed card is the relation
-    *source* (peers are targets); ``"incoming"`` means it is the *target*."""
-    rtk = field_def.get("relation_type_key")
-    direction = field_def.get("direction")
-    if not rtk or direction not in ("outgoing", "incoming"):
-        return []
-
-    if direction == "outgoing":
-        q = (
-            select(Card.id, Card.name)
-            .join(Relation, Relation.target_id == Card.id)
-            .where(
-                Relation.type == rtk,
-                Relation.source_id == card_id,
-                Card.status == "ACTIVE",
-            )
-        )
-    else:
-        q = (
-            select(Card.id, Card.name)
-            .join(Relation, Relation.source_id == Card.id)
-            .where(
-                Relation.type == rtk,
-                Relation.target_id == card_id,
-                Card.status == "ACTIVE",
-            )
-        )
-
-    rows = await db.execute(q.order_by(Card.name))
-    return [{"id": str(rid), "name": name} for rid, name in rows.all()]
-
-
-def _relation_peer_ids(new_value: object) -> set[uuid.UUID]:
-    """Parse a respondent's proposed relation set into a set of card UUIDs.
-    Accepts a list of ``{id, name}`` refs or bare id strings; silently drops
-    anything that is not a valid UUID."""
-    ids: set[uuid.UUID] = set()
-    if not isinstance(new_value, list):
-        return ids
-    for ref in new_value:
-        rid = ref.get("id") if isinstance(ref, dict) else ref
-        if not rid:
-            continue
-        try:
-            ids.add(uuid.UUID(str(rid)))
-        except (ValueError, TypeError):
-            continue
-    return ids
-
-
-async def _apply_relation_change(
-    db: AsyncSession,
-    card: Card,
-    field_def: dict,
-    new_value: object,
-    actor_id: uuid.UUID,
-) -> bool:
-    """Sync the surveyed card's relations of one type to the respondent's
-    proposed set: create the links they added, delete the ones they removed.
-    Emits relation events for both endpoints (audit parity with the relations
-    API) and recalculates calculated fields on every touched card. Returns
-    True when anything changed."""
-    # Local imports avoid any router import-ordering coupling.
-    from app.services.calculation_engine import run_calculations_for_card
-    from app.services.card_write_service import _emit_relation_events
-
-    rtk = field_def["relation_type_key"]
-    # The field's direction is the builder's; the relation type is the
-    # authority on which end this card sits at, so a stale or hand-edited field
-    # can never look up — or write — a relation the wrong way round (#1140).
-    rt = (
-        await db.execute(select(RelationType).where(RelationType.key == rtk))
-    ).scalar_one_or_none()
-    direction = direction_for(rt, card.type, field_def["direction"])
-    desired_ids = _relation_peer_ids(new_value)
-
-    if direction == "outgoing":
-        q = select(Relation).where(Relation.type == rtk, Relation.source_id == card.id)
-    else:
-        q = select(Relation).where(Relation.type == rtk, Relation.target_id == card.id)
-    existing = (await db.execute(q)).scalars().all()
-    current: dict[uuid.UUID, Relation] = {}
-    for rel in existing:
-        peer = rel.target_id if direction == "outgoing" else rel.source_id
-        current[peer] = rel
-
-    to_add = desired_ids - set(current.keys())
-    to_remove = set(current.keys()) - desired_ids
-    if not to_add and not to_remove:
-        return False
-
-    touched: set[uuid.UUID] = set()
-    extra = {"source": "survey_response"}
-    source_card: Card | None
-    target_card: Card | None
-
-    for peer_id in to_add:
-        peer_card = await db.get(Card, peer_id)
-        # Only link to active peers; skip stale ids the respondent may carry.
-        if not peer_card or peer_card.status != "ACTIVE":
-            continue
-        if direction == "outgoing":
-            rel = Relation(type=rtk, source_id=card.id, target_id=peer_id)
-            source_card, target_card = card, peer_card
-        else:
-            rel = Relation(type=rtk, source_id=peer_id, target_id=card.id)
-            source_card, target_card = peer_card, card
-        db.add(rel)
-        await db.flush()
-        await _emit_relation_events(
-            db,
-            event_type="relation.created",
-            rel=rel,
-            source_card=source_card,
-            target_card=target_card,
-            actor_id=actor_id,
-            extra=extra,
-        )
-        touched.add(peer_id)
-
-    for peer_id in to_remove:
-        rel = current[peer_id]
-        peer_card = await db.get(Card, peer_id)
-        if direction == "outgoing":
-            source_card, target_card = card, peer_card
-        else:
-            source_card, target_card = peer_card, card
-        await _emit_relation_events(
-            db,
-            event_type="relation.deleted",
-            rel=rel,
-            source_card=source_card,
-            target_card=target_card,
-            actor_id=actor_id,
-            extra=extra,
-        )
-        await db.delete(rel)
-        touched.add(peer_id)
-
-    await run_calculations_for_card(db, card)
-    for cid in touched:
-        peer_card = await db.get(Card, cid)
-        if peer_card is not None:
-            await run_calculations_for_card(db, peer_card)
-
-    return bool(touched)
+async def _validate_fields(db: AsyncSession, target_type_key: str, fields: list | None) -> None:
+    try:
+        await survey_apply.validate_field_rows(db, target_type_key, fields or [])
+    except survey_apply.SurveyFieldError as exc:
+        raise HTTPException(400, exc.message) from exc
 
 
 # ── Admin endpoints ──────────────────────────────────────────────────────────
@@ -328,6 +191,7 @@ async def create_survey(
     type_result = await db.execute(select(CardType).where(CardType.key == body.target_type_key))
     if not type_result.scalar_one_or_none():
         raise HTTPException(400, f"Unknown card type: {body.target_type_key}")
+    await _validate_fields(db, body.target_type_key, body.fields)
 
     survey = Survey(
         name=body.name,
@@ -447,6 +311,12 @@ async def update_survey(
         "target_roles",
         "fields",
     )
+    if body.fields is not None or body.target_type_key is not None:
+        await _validate_fields(
+            db,
+            body.target_type_key or survey.target_type_key,
+            body.fields if body.fields is not None else survey.fields,
+        )
     for field in updatable:
         val = getattr(body, field, None)
         if val is not None:
@@ -460,23 +330,56 @@ async def update_survey(
     return _survey_to_dict(survey)
 
 
+@router.get("/{survey_id}/delete-impact")
+async def survey_delete_impact(
+    survey_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """What deleting a survey takes with it, for the confirmation dialog."""
+    await PermissionService.require_permission(db, user, "surveys.manage")
+    survey = await db.get(Survey, uuid.UUID(survey_id))
+    if not survey:
+        raise HTTPException(404, "Survey not found")
+    return {"status": survey.status, **await survey_service.delete_impact(db, survey.id)}
+
+
 @router.delete("/{survey_id}", status_code=204)
 async def delete_survey(
     survey_id: str,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Delete a draft survey (admin only)."""
+    """Delete a survey of any status (admin only).
+
+    Its responses go with it, and so do the bell notifications that asked
+    people to answer — a request for a survey that no longer exists would only
+    lead to a 404. What the survey already changed stays on the cards, and the
+    card history keeps naming it: those events carry the survey's name.
+    """
     await PermissionService.require_permission(db, user, "surveys.manage")
 
     result = await db.execute(select(Survey).where(Survey.id == uuid.UUID(survey_id)))
     survey = result.scalar_one_or_none()
     if not survey:
         raise HTTPException(404, "Survey not found")
-    if survey.status != "draft":
-        raise HTTPException(400, "Only draft surveys can be deleted")
 
-    await db.delete(survey)
+    impact = await survey_service.delete_impact(db, survey.id)
+    await audit_log.record(
+        db,
+        action="admin.survey.deleted",
+        category="admin",
+        actor=user,
+        target=("survey", str(survey.id), survey.name),
+        context={
+            "card_type": await audit_labels.card_type_label(db, survey.target_type_key),
+            "status": survey.status,
+            "requests": impact["requests"],
+            "answered": impact["answered"],
+            "applied": impact["applied"],
+        },
+    )
+    await survey_service.delete_survey(db, survey)
     await db.commit()
 
 
@@ -512,6 +415,19 @@ async def preview_survey(
     }
 
 
+async def _audit_role_labels(
+    db: AsyncSession, type_key: str, role_keys: list[str] | None
+) -> list[str]:
+    """The targeted stakeholder roles by label, in the survey's order; a key
+    the type no longer defines reads as itself."""
+    labels = {
+        r.get("key"): r.get("label") or r.get("key")
+        for r in await stakeholder_service.roles_for_type(db, type_key)
+        if isinstance(r, dict)
+    }
+    return [labels.get(key) or key for key in role_keys or []]
+
+
 @router.post("/{survey_id}/send")
 async def send_survey(
     survey_id: str,
@@ -534,7 +450,7 @@ async def send_survey(
     if not survey.target_roles:
         raise HTTPException(400, "Survey must target at least one stakeholder role")
 
-    targets, _matched = await survey_service.resolve_targets(db, survey)
+    targets, matched = await survey_service.resolve_targets(db, survey)
     if not targets:
         raise HTTPException(
             400,
@@ -551,6 +467,21 @@ async def send_survey(
     activation = await survey_service.activate_survey(db, survey, targets, actor_id=user.id)
     created = activation.created
     recipients = activation.recipients
+    await audit_log.record(
+        db,
+        action="admin.survey.sent",
+        category="admin",
+        actor=user,
+        target=("survey", str(survey.id), survey.name),
+        context={
+            "card_type": await audit_labels.card_type_label(db, survey.target_type_key),
+            "roles": await _audit_role_labels(db, survey.target_type_key, survey.target_roles),
+            "matched_cards": len(matched),
+            "cards": len(targets),
+            "recipients": len({u["user_id"] for t in targets for u in t["users"]}),
+            "requests": created,
+        },
+    )
     await db.commit()
 
     background_tasks.add_task(
@@ -590,6 +521,14 @@ async def close_survey(
 
     survey.status = "closed"
     survey.closed_at = datetime.now(timezone.utc)
+    await audit_log.record(
+        db,
+        action="admin.survey.closed",
+        category="admin",
+        actor=user,
+        target=("survey", str(survey.id), survey.name),
+        context={"card_type": await audit_labels.card_type_label(db, survey.target_type_key)},
+    )
     await db.commit()
     result = await db.execute(
         select(Survey).where(Survey.id == survey.id).options(selectinload(Survey.creator))
@@ -627,10 +566,36 @@ async def list_responses(
     return [_response_to_dict(r) for r in result.scalars().all()]
 
 
+# What the results page shows for a response that failed for a reason the
+# apply did not raise on purpose. The exception itself (a driver error carries
+# SQL, constraint names and values) is logged, never returned.
+UNEXPECTED_APPLY_ERROR = (
+    "Could not apply this response because of an unexpected error. The server log has the details."
+)
+
+
+def _apply_error_text(exc: BaseException) -> str:
+    """One line the results page can show for a refused response.
+
+    Only the two refusals the apply raises on purpose carry their own message
+    (an ``HTTPException``'s detail, a ``SurveyFieldError``'s ``message``);
+    anything else is reported as ``UNEXPECTED_APPLY_ERROR``.
+    """
+    if isinstance(exc, HTTPException):
+        detail = exc.detail
+        if isinstance(detail, dict):
+            return str(detail.get("message") or detail.get("detail") or detail)
+        return str(detail)
+    if isinstance(exc, survey_apply.SurveyFieldError):
+        return exc.message
+    return UNEXPECTED_APPLY_ERROR
+
+
 @router.post("/{survey_id}/apply")
 async def apply_responses(
     survey_id: str,
     body: ApplyBody,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -644,6 +609,24 @@ async def apply_responses(
 
     applied_count = 0
     errors = []
+    # Subscriber nudges, collected per response and delivered after the commit
+    # (see ``update_card``'s ``deferred_notifications``): an apply over dozens
+    # of cards must not email each stakeholder inline on the request's
+    # transaction, and a response that rolls back must notify nobody.
+    pending_notifications: list[dict] = []
+    # A stakeholder answer is a role assignment: ``surveys.manage`` alone does
+    # not grant it, so the applier's stakeholder authority is asked once per card.
+    can_manage_stakeholders: dict[uuid.UUID, bool] = {}
+
+    # Open the request's audit batch before the per-response savepoints: one
+    # created lazily by the first event inside a savepoint that then rolls
+    # back would vanish while the request still pointed every later event at
+    # it.
+    opened_batch = None
+    if request_batch_id.get() is None:
+        opened_batch = await event_bus.open_auto_batch(
+            db, user_id=user.id, event_type="card.updated"
+        )
 
     for rid_str in body.response_ids:
         rid = uuid.UUID(rid_str)
@@ -671,63 +654,71 @@ async def apply_responses(
             errors.append({"response_id": rid_str, "error": "Card not found"})
             continue
 
-        # Apply changes from response, recording old → new per field so the
-        # audit event has parity with the regular PATCH /cards/{id} path.
-        field_responses = resp.responses or {}
-        field_defs = {f.get("key"): f for f in (survey.fields or []) if isinstance(f, dict)}
-        old_attrs = card.attributes or {}
-        attr_updates: dict[str, object] = {}
-        changes: dict[str, dict[str, object]] = {}
-
-        for field_key, field_data in field_responses.items():
-            if not isinstance(field_data, dict):
-                continue
-            confirmed = field_data.get("confirmed", False)
-            new_value = field_data.get("new_value")
-
-            field_def = field_defs.get(field_key) or {}
-            if _is_relation_field(field_def):
-                # Relation edits create/delete their own rows + emit relation
-                # events; they don't touch card.attributes.
-                if not confirmed and new_value is not None:
-                    await _apply_relation_change(db, card, field_def, new_value, user.id)
-                continue
-
-            if not confirmed and new_value is not None:
-                changes[f"attr_{field_key}"] = {
-                    "old": old_attrs.get(field_key),
-                    "new": new_value,
-                }
-                attr_updates[field_key] = new_value
-
-        if changes:
-            # Merge onto the live attributes — a relation edit in the same
-            # response may have recomputed calculated fields, which we must not
-            # clobber with a pre-loop snapshot.
-            card.attributes = {**(card.attributes or {}), **attr_updates}
-            card.updated_by = user.id
-            # Audit-log the survey-driven update so it shows up in the card's
-            # History tab alongside manual edits. The `source` payload field
-            # lets future UI distinguish survey responses from PATCH edits.
-            await event_bus.publish(
-                "card.updated",
-                {
-                    "id": str(card.id),
-                    "changes": changes,
-                    "source": "survey_response",
-                    "survey_id": str(survey.id),
-                    "response_id": str(resp.id),
-                },
-                db=db,
-                card_id=card.id,
-                user_id=user.id,
+        if card.id not in can_manage_stakeholders:
+            can_manage_stakeholders[card.id] = await PermissionService.check_permission(
+                db,
+                user,
+                "stakeholders.manage",
+                card.id,
+                "card.manage_stakeholders",
+                card_type_key=card.type,
             )
 
-        resp.applied = True
-        resp.applied_at = datetime.now(timezone.utc)
+        # One savepoint per response: an answer the card refuses (a required
+        # field cleared, an unknown option, a malformed list of people) rolls
+        # back only itself and is reported, and the others still land. Any
+        # exception is caught, not only the two the apply raises on purpose: a
+        # database error inside the savepoint would otherwise abort the whole
+        # request and lose every response already applied. Such an error is
+        # logged in full and reported to the client only generically.
+        savepoint = await db.begin_nested()
+        mine: list[dict] = []
+        try:
+            await survey_apply.apply_response(
+                db,
+                survey,
+                resp,
+                card,
+                user,
+                can_manage_stakeholders=can_manage_stakeholders[card.id],
+                deferred_notifications=mine,
+            )
+            resp.applied = True
+            resp.applied_at = datetime.now(timezone.utc)
+            await db.flush()
+        except (HTTPException, survey_apply.SurveyFieldError) as exc:
+            await savepoint.rollback()
+            errors.append({"response_id": rid_str, "error": _apply_error_text(exc)})
+            continue
+        except Exception:
+            await savepoint.rollback()
+            logger.exception("Applying survey response %s failed", rid_str)
+            errors.append({"response_id": rid_str, "error": UNEXPECTED_APPLY_ERROR})
+            continue
+        await savepoint.commit()
+        pending_notifications.extend(mine)
         applied_count += 1
 
+    if opened_batch and not await db.scalar(select(exists().where(Event.batch_id == opened_batch))):
+        # Nothing was written (every answer confirmed, refused or already
+        # applied): an empty audit batch would offer a rollback that reverses
+        # nothing.
+        await db.execute(sa_delete(MutationBatch).where(MutationBatch.id == opened_batch))
+        request_batch_id.set(None)
+
     await db.commit()
+
+    by_type: dict[str, list[dict]] = {}
+    for row in pending_notifications:
+        recipient = dict(row)
+        by_type.setdefault(recipient.pop("notif_type"), []).append(recipient)
+    for notif_type, recipients in by_type.items():
+        background_tasks.add_task(
+            notification_service.deliver_notification_batch,
+            recipients,
+            notif_type=notif_type,
+            actor_id=user.id,
+        )
     return {"applied": applied_count, "errors": errors}
 
 
@@ -787,15 +778,35 @@ async def get_response_form(
 
     # Build current values for each survey field, enriched with metamodel translations
     attrs = card.attributes or {}
+    role_defs: dict[str, dict] | None = None
     fields_with_values = []
     for field_def in survey.fields or []:
-        # Relation fields carry the live set of linked cards as their value
-        # instead of an attribute, and need no metamodel field/option enrichment.
-        if _is_relation_field(field_def):
+        # Relation and lifecycle fields carry their live value and need no
+        # metamodel field/option enrichment.
+        if _is_relation_field(field_def) or survey_apply.is_lifecycle_field(field_def):
             fields_with_values.append(
                 {
                     **field_def,
-                    "current_value": await _relation_field_peers(db, card.id, field_def),
+                    "current_value": await survey_apply.current_value(db, card, field_def),
+                }
+            )
+            continue
+        # A stakeholder field shows the role's current holders, labelled with
+        # the role's live name — a role renamed since the send reads as renamed.
+        if survey_apply.is_stakeholder_field(field_def):
+            if role_defs is None:
+                role_defs = {
+                    r["key"]: r
+                    for r in await stakeholder_service.roles_for_type(db, card.type)
+                    if isinstance(r, dict) and r.get("key")
+                }
+            role_def = role_defs.get(field_def["role"]) or {}
+            fields_with_values.append(
+                {
+                    **field_def,
+                    "label": role_def.get("label") or field_def.get("label") or field_def["role"],
+                    "translations": role_def.get("translations") or field_def.get("translations"),
+                    "current_value": await survey_apply.current_value(db, card, field_def),
                 }
             )
             continue
@@ -856,8 +867,19 @@ async def get_response_form(
         "card": {
             "id": str(card.id),
             "name": card.name,
+            # Whether the respondent may open the card itself — the form links
+            # to it so they can check its details before answering. Asked of
+            # the server because a stakeholder role's per-card view grant is
+            # invisible to the client's route table.
+            "can_view": await PermissionService.check_permission(
+                db, user, "inventory.view", card.id, "card.view", card_type_key=card.type
+            ),
             "type": card.type,
             "subtype": card.subtype,
+            # Every phase the card holds, surveyed or not, so the form can warn
+            # about a proposed date that lands out of order against a phase the
+            # survey did not ask about.
+            "lifecycle": card.lifecycle or {},
             "type_translations": (card_type.translations if card_type else None) or None,
             "subtype_translations": subtype_translations,
         },
@@ -899,20 +921,30 @@ async def submit_response(
     if not card:
         raise HTTPException(404, "Card not found")
 
-    attrs = card.attributes or {}
-
     # Build full response data with current values
     full_responses = {}
     for field_def in survey.fields or []:
         key = field_def["key"]
         submitted = body.responses.get(key, {})
-        if _is_relation_field(field_def):
-            current_value: object = await _relation_field_peers(db, card.id, field_def)
-        else:
-            current_value = attrs.get(key)
+        if not isinstance(submitted, dict):
+            submitted = {}
+        new_value = submitted.get("new_value")
+        try:
+            if survey_apply.is_lifecycle_field(field_def):
+                new_value = survey_apply.normalise_lifecycle_answer(new_value)
+            elif new_value is not None and (
+                survey_apply.is_relation_field(field_def)
+                or survey_apply.is_stakeholder_field(field_def)
+            ):
+                # A relation or stakeholder answer is a list of references;
+                # refuse anything else here rather than at apply time, where
+                # the respondent is no longer around to be told.
+                survey_apply.ref_ids(new_value)
+        except survey_apply.SurveyFieldError as exc:
+            raise HTTPException(422, exc.message) from exc
         full_responses[key] = {
-            "current_value": current_value,
-            "new_value": submitted.get("new_value"),
+            "current_value": await survey_apply.current_value(db, card, field_def),
+            "new_value": new_value,
             "confirmed": submitted.get("confirmed", False),
         }
 

@@ -155,7 +155,14 @@ async def dashboard(db: AsyncSession = Depends(get_db), user: User = Depends(get
     # Recent Activity panel readable without extra round-trips.
     events_result = await db.execute(
         select(Event)
-        .where(*event_read_filters(read_scope))
+        # Recent Activity is landscape activity, card-less or not (a SoAW
+        # signature, a rollback). ``ops.*`` events are operator actions on the
+        # instance itself and would show a viewer what admins did, so they are
+        # the one family left out.
+        .where(
+            ~Event.event_type.startswith("ops.", autoescape=True),
+            *event_read_filters(read_scope),
+        )
         .options(selectinload(Event.user))
         .order_by(Event.created_at.desc())
         .limit(20)

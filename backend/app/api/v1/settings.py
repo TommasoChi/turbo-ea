@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable, Mapping
+from typing import Any
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, Field
@@ -18,6 +22,7 @@ from app.models.compliance_regulation import ComplianceRegulation
 from app.models.relation_type import RelationType
 from app.models.resource_type import ResourceType
 from app.models.user import User
+from app.services import audit_changes, audit_labels, audit_log
 from app.services.ai_service import DEFAULT_AZURE_API_VERSION
 from app.services.app_identity import DEFAULT_APP_TITLE
 from app.services.bedrock import is_valid_region
@@ -96,6 +101,12 @@ DEFAULT_CURRENCY = "USD"
 DEFAULT_ARCHIVE_RETENTION_DAYS = 30
 MAX_ARCHIVE_RETENTION_DAYS = 3650  # ~10 years
 
+# Rows of the security & admin audit log (``audit_log``) are purged daily after
+# this many days by default; ``0`` keeps them forever. The values live in
+# ``services/audit_log.py`` beside the purge's own reader.
+DEFAULT_AUDIT_LOG_RETENTION_DAYS = audit_log.DEFAULT_RETENTION_DAYS
+MAX_AUDIT_LOG_RETENTION_DAYS = audit_log.MAX_RETENTION_DAYS
+
 DEFAULT_DATE_FORMAT = "DD MMM YYYY"
 ALLOWED_DATE_FORMATS = {
     "MM/DD/YYYY",
@@ -148,6 +159,134 @@ def _email_configured(stored: dict) -> bool:
     """
     cfg = EmailConfig.from_stored(stored)
     return get_backend(cfg.method).is_configured(cfg)
+
+
+# The ``changes`` field a scalar setting is recorded under, by route slug. Every
+# other ``*-enabled`` toggle reads as ``enabled`` (``setting_field``).
+_SETTING_FIELDS = {
+    "currency": "currency",
+    "date-format": "date_format",
+    "app-title": "app_title",
+    "fiscal-year-start": "fiscal_year_start",
+    "archive-retention-days": "retention_days",
+    "audit-log-retention-days": "retention_days",
+    "bpm-row-order": "row_order",
+    "principles-display": "show_principles_tab",
+    "bpm-separate-approver": "separate_approver",
+    "registration": "enabled",
+}
+
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
+def snake_case(name: str) -> str:
+    """``providerUrl`` → ``provider_url``; a snake_case name is returned as it is."""
+    return _CAMEL_BOUNDARY.sub("_", name).lower()
+
+
+def setting_field(key: str) -> str:
+    """The field name a scalar setting's change is recorded under."""
+    if key in _SETTING_FIELDS:
+        return _SETTING_FIELDS[key]
+    if key.endswith("-enabled"):
+        return "enabled"
+    return key.replace("-", "_")
+
+
+def setting_changes(key: str, old: Any, new: Any) -> dict[str, dict[str, Any]]:
+    """``{field: {"old", "new"}}`` for the setting ``key``, as the audit row's
+    ``changes`` stores it.
+
+    A structured setting (SMTP, SSO, AI, MCP, branding) is compared key by key,
+    so the row names the one field that moved instead of copying the whole
+    block twice; its stored camelCase keys are recorded snake_case
+    (``providerUrl`` → ``provider_url``), and a key present on one side only
+    reads as ``None`` on the other. A scalar or list setting is one field named
+    by ``setting_field`` (``currency``, ``retention_days``, ``enabled``). Secrets
+    are masked by ``audit_log.redact`` on the way in (``smtp_password``,
+    ``client_secret``, ``api_key`` and any ``enc:`` ciphertext read ``***``).
+    """
+    if isinstance(old, Mapping) or isinstance(new, Mapping):
+        before = {snake_case(k): v for k, v in (old if isinstance(old, Mapping) else {}).items()}
+        after = {snake_case(k): v for k, v in (new if isinstance(new, Mapping) else {}).items()}
+        return {
+            field: {"old": before.get(field), "new": after.get(field)}
+            for field in sorted(set(before) | set(after))
+            if before.get(field) != after.get(field)
+        }
+    field = setting_field(key)
+    return audit_log.diff({field: old}, {field: new})
+
+
+async def _type_labels(db: AsyncSession, keys: Iterable[str]) -> list[str]:
+    """Card-type labels for ``keys``, in order; a key with no type is kept as it is."""
+    keys = list(keys)
+    labels = await audit_labels.card_type_labels(db, keys)
+    return [labels.get(key, key) for key in keys]
+
+
+async def _audit_setting(
+    db: AsyncSession,
+    user: User,
+    key: str,
+    old: Any = None,
+    new: Any = None,
+    *,
+    action: str = "admin.settings.updated",
+    items: list[dict[str, Any]] | None = None,
+    context: dict[str, Any] | None = None,
+) -> None:
+    """Record an admin's change to the setting ``key`` (the route's own slug).
+
+    Called by every mutating handler in this module before its commit; the
+    guard test ``tests/services/test_audit_log_guard.py`` counts a call to this
+    helper as the handler's audit record. Never commits.
+
+    ``old`` / ``new`` become ``changes`` (``setting_changes``); a setting that is
+    better told as change items (the enabled locales, a replaced logo) passes
+    ``items`` and, for plain facts, ``context`` instead. A save that changed
+    nothing (the same value re-sent) records nothing: "nothing changed" is not
+    an audit event. ``record`` redacts the details.
+    """
+    changes = setting_changes(key, old, new)
+    if not changes and not items:
+        return
+    await audit_log.record(
+        db,
+        action=action,
+        category="admin",
+        actor=user,
+        target=("setting", key, key),
+        changes=changes,
+        items=items,
+        context=context,
+    )
+
+
+async def _audit_image(
+    db: AsyncSession,
+    user: User,
+    image: str,
+    *,
+    had_custom: bool,
+    mime: str | None = None,
+    size_bytes: int | None = None,
+) -> None:
+    """Record a custom ``image`` (``logo`` / ``favicon``) uploaded (``mime`` set)
+    or reset to the default (``mime`` ``None``). Resetting when no custom image
+    was set records nothing."""
+    if mime is not None:
+        await _audit_setting(
+            db,
+            user,
+            image,
+            items=[audit_changes.item("image.replaced", image=image)],
+            context={"mime": mime, "size_bytes": size_bytes},
+        )
+    elif had_custom:
+        await _audit_setting(
+            db, user, image, items=[audit_changes.item("image.removed", image=image)]
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +387,10 @@ async def get_bootstrap(db: AsyncSession = Depends(get_db)):
         "archive_retention_days": general.get(
             "archiveRetentionDays", DEFAULT_ARCHIVE_RETENTION_DAYS
         ),
+        "audit_log_retention_days": audit_log.retention_days(general),
+        # Env-configured (``MUTATION_BATCH_RETENTION_DAYS``), not an admin
+        # setting — carried so the Audit log's Changes tab can name it.
+        "mutation_batch_retention_days": max(1, app_config.MUTATION_BATCH_RETENTION_DAYS),
         "bpm_row_order": general.get("bpmRowOrder", ["management", "core", "support"]),
         "show_principles_tab": general.get("showPrinciplesTab", True),
         "compliance_regulations": compliance_regulations,
@@ -320,7 +463,8 @@ async def update_email_settings(
 
     row = await _get_or_create_row(db)
 
-    email = dict(row.email_settings or {})
+    before = dict(row.email_settings or {})
+    email = dict(before)
     # Only fields the caller actually sent — a client built against an older
     # payload shape must not reset method/oauth fields to Pydantic defaults.
     payload = body.model_dump(exclude_unset=True)
@@ -335,6 +479,7 @@ async def update_email_settings(
 
     email.update(payload)
     row.email_settings = email
+    await _audit_setting(db, user, "email", before, email)
     await db.commit()
 
     apply_email_settings_to_runtime(email)
@@ -402,8 +547,10 @@ async def update_currency(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("currency", DEFAULT_CURRENCY)
     general["currency"] = body.currency
     row.general_settings = general
+    await _audit_setting(db, user, "currency", old, general["currency"])
     await db.commit()
 
     return {"ok": True}
@@ -437,8 +584,10 @@ async def update_date_format(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("dateFormat", DEFAULT_DATE_FORMAT)
     general["dateFormat"] = body.date_format
     row.general_settings = general
+    await _audit_setting(db, user, "date-format", old, general["dateFormat"])
     await db.commit()
 
     return {"ok": True}
@@ -474,9 +623,11 @@ async def update_app_title(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("app_title", "")
     trimmed = body.app_title.strip()
     general["app_title"] = trimmed
     row.general_settings = general
+    await _audit_setting(db, user, "app-title", old, trimmed)
     await db.commit()
 
     # Mirror to the runtime config so email templates pick up the change
@@ -507,6 +658,13 @@ async def get_navbar_style(db: AsyncSession = Depends(get_db)):
     }
 
 
+def _read_navbar_style(general: dict) -> dict:
+    return {
+        "navbar_bg": general.get("navbarBg", DEFAULT_NAVBAR_BG),
+        "navbar_fg": general.get("navbarFg", DEFAULT_NAVBAR_FG),
+    }
+
+
 @router.patch("/navbar-style")
 async def update_navbar_style(
     body: NavbarStylePayload,
@@ -518,9 +676,11 @@ async def update_navbar_style(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = _read_navbar_style(general)
     general["navbarBg"] = body.navbar_bg.lower()
     general["navbarFg"] = body.navbar_fg.lower()
     row.general_settings = general
+    await _audit_setting(db, user, "navbar-style", old, _read_navbar_style(general))
     await db.commit()
 
     return {"navbar_bg": general["navbarBg"], "navbar_fg": general["navbarFg"]}
@@ -576,11 +736,13 @@ async def update_login_branding(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = _read_login_branding(general)
     general["loginTagline"] = body.login_tagline.strip()
     general["loginTaglineHidden"] = bool(body.login_tagline_hidden)
     general["loginHelpText"] = body.login_help_text.strip()
     general["loginHelpLink"] = body.login_help_link.strip()
     row.general_settings = general
+    await _audit_setting(db, user, "login-branding", old, _read_login_branding(general))
     await db.commit()
 
     return _read_login_branding(general)
@@ -624,6 +786,7 @@ async def update_bpm_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("bpmEnabled", True)
     general["bpmEnabled"] = body.enabled
     row.general_settings = general
 
@@ -646,6 +809,7 @@ async def update_bpm_enabled(
     for rt in rt_result.scalars().all():
         rt.is_hidden = hide
 
+    await _audit_setting(db, user, "bpm-enabled", old, general["bpmEnabled"])
     await db.commit()
 
     return {"ok": True}
@@ -742,9 +906,11 @@ async def update_ppm_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("ppmEnabled", False)
     general["ppmEnabled"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(db, user, "ppm-enabled", old, general["ppmEnabled"])
     await db.commit()
     return {"ok": True}
 
@@ -773,9 +939,11 @@ async def update_file_uploads_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("fileUploadsEnabled", True)
     general["fileUploadsEnabled"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(db, user, "file-uploads-enabled", old, general["fileUploadsEnabled"])
     await db.commit()
     return {"ok": True}
 
@@ -804,9 +972,11 @@ async def update_grc_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("grcEnabled", True)
     general["grcEnabled"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(db, user, "grc-enabled", old, general["grcEnabled"])
     await db.commit()
     return {"ok": True}
 
@@ -840,9 +1010,11 @@ async def update_sponsor_button_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("sponsorButtonEnabled", True)
     general["sponsorButtonEnabled"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(db, user, "sponsor-button-enabled", old, general["sponsorButtonEnabled"])
     await db.commit()
     return {"ok": True}
 
@@ -1037,9 +1209,13 @@ async def update_announce_upgrades_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("announceUpgradesEnabled", True)
     general["announceUpgradesEnabled"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(
+        db, user, "announce-upgrades-enabled", old, general["announceUpgradesEnabled"]
+    )
     await db.commit()
     return {"ok": True}
 
@@ -1065,9 +1241,11 @@ async def update_update_check_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("updateCheckEnabled", True)
     general["updateCheckEnabled"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(db, user, "update-check-enabled", old, general["updateCheckEnabled"])
     await db.commit()
     return {"ok": True}
 
@@ -1094,9 +1272,13 @@ async def update_extension_notices_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("extensionNoticesEnabled", True)
     general["extensionNoticesEnabled"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(
+        db, user, "extension-notices-enabled", old, general["extensionNoticesEnabled"]
+    )
     await db.commit()
     return {"ok": True}
 
@@ -1129,9 +1311,13 @@ async def update_bpm_separate_approver(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("bpmRequireSeparateApprover", False)
     general["bpmRequireSeparateApprover"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(
+        db, user, "bpm-separate-approver", old, general["bpmRequireSeparateApprover"]
+    )
     await db.commit()
     return {"ok": True}
 
@@ -1164,9 +1350,11 @@ async def update_turbolens_enabled(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("turboLensEnabled", True)
     general["turboLensEnabled"] = body.enabled
     row.general_settings = general
 
+    await _audit_setting(db, user, "turbolens-enabled", old, general["turboLensEnabled"])
     await db.commit()
     return {"ok": True}
 
@@ -1191,8 +1379,10 @@ async def update_bpm_row_order(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("bpmRowOrder", ["management", "core", "support"])
     general["bpmRowOrder"] = body.row_order
     row.general_settings = general
+    await _audit_setting(db, user, "bpm-row-order", old, general["bpmRowOrder"])
     await db.commit()
 
     return {"ok": True}
@@ -1229,8 +1419,10 @@ async def update_fiscal_year_start(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("fiscalYearStart", 1)
     general["fiscalYearStart"] = body.month
     row.general_settings = general
+    await _audit_setting(db, user, "fiscal-year-start", old, general["fiscalYearStart"])
     await db.commit()
 
     return {"month": body.month}
@@ -1273,8 +1465,58 @@ async def update_archive_retention_days(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("archiveRetentionDays", DEFAULT_ARCHIVE_RETENTION_DAYS)
     general["archiveRetentionDays"] = body.days
     row.general_settings = general
+    await _audit_setting(db, user, "archive-retention-days", old, general["archiveRetentionDays"])
+    await db.commit()
+
+    return {"days": body.days}
+
+
+class AuditLogRetentionPayload(BaseModel):
+    days: int  # days to keep security & admin audit log rows; 0 = keep forever
+
+
+@router.get("/audit-log-retention-days")
+async def get_audit_log_retention_days(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Days a security & admin audit log row is kept before the daily purge.
+
+    ``0`` means rows are kept forever.
+    """
+    result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
+    row = result.scalar_one_or_none()
+    general = (row.general_settings if row else None) or {}
+    return {"days": audit_log.retention_days(general)}
+
+
+@router.patch("/audit-log-retention-days")
+async def update_audit_log_retention_days(
+    body: AuditLogRetentionPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Admin endpoint — set how long security & admin audit log rows are kept.
+
+    ``0`` disables the purge. The daily purge re-reads the value on every run,
+    so the change takes effect without a restart.
+    """
+    await PermissionService.require_permission(db, user, "admin.settings")
+    if body.days < 0 or body.days > MAX_AUDIT_LOG_RETENTION_DAYS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Days must be between 0 and {MAX_AUDIT_LOG_RETENTION_DAYS}",
+        )
+
+    row = await _get_or_create_row(db)
+    general = dict(row.general_settings or {})
+    old = audit_log.retention_days(general)
+    general[audit_log.RETENTION_SETTING_KEY] = body.days
+    row.general_settings = general
+    await _audit_setting(db, user, "audit-log-retention-days", old, body.days)
     await db.commit()
 
     return {"days": body.days}
@@ -1393,8 +1635,12 @@ async def upload_logo(
         raise HTTPException(400, f"Logo must be under {MAX_LOGO_SIZE // (1024 * 1024)} MB.")
 
     row = await _get_or_create_row(db)
+    had_custom = row.custom_logo_mime is not None
     row.custom_logo = data
     row.custom_logo_mime = content_type
+    await _audit_image(
+        db, user, "logo", had_custom=had_custom, mime=content_type, size_bytes=len(data)
+    )
     await db.commit()
 
     return {"ok": True}
@@ -1409,8 +1655,10 @@ async def reset_logo(
     await PermissionService.require_permission(db, user, "admin.settings")
 
     row = await _get_or_create_row(db)
+    had_custom = row.custom_logo_mime is not None
     row.custom_logo = None
     row.custom_logo_mime = None
+    await _audit_image(db, user, "logo", had_custom=had_custom)
     await db.commit()
 
     return {"ok": True}
@@ -1466,8 +1714,12 @@ async def upload_favicon(
         raise HTTPException(400, f"Favicon must be under {MAX_LOGO_SIZE // (1024 * 1024)} MB.")
 
     row = await _get_or_create_row(db)
+    had_custom = row.custom_favicon_mime is not None
     row.custom_favicon = data
     row.custom_favicon_mime = content_type
+    await _audit_image(
+        db, user, "favicon", had_custom=had_custom, mime=content_type, size_bytes=len(data)
+    )
     await db.commit()
 
     return {"ok": True}
@@ -1482,8 +1734,10 @@ async def reset_favicon(
     await PermissionService.require_permission(db, user, "admin.settings")
 
     row = await _get_or_create_row(db)
+    had_custom = row.custom_favicon_mime is not None
     row.custom_favicon = None
     row.custom_favicon_mime = None
+    await _audit_image(db, user, "favicon", had_custom=had_custom)
     await db.commit()
 
     return {"ok": True}
@@ -1530,7 +1784,8 @@ async def update_sso_settings(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
-    sso = dict(general.get("sso", {}))
+    old = dict(general.get("sso", {}))
+    sso = dict(old)
 
     payload = body.model_dump()
 
@@ -1549,6 +1804,7 @@ async def update_sso_settings(
     sso.update(payload)
     general["sso"] = sso
     row.general_settings = general
+    await _audit_setting(db, user, "sso", old, sso)
     await db.commit()
 
     return {"ok": True}
@@ -1593,8 +1849,10 @@ async def update_registration_settings(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("registrationEnabled", True)
     general["registrationEnabled"] = body.enabled
     row.general_settings = general
+    await _audit_setting(db, user, "registration", old, general["registrationEnabled"])
     await db.commit()
 
     return {"ok": True}
@@ -1746,6 +2004,12 @@ async def update_ai_settings(
         "portfolioInsightsEnabled": body.portfolio_insights_enabled,
     }
     row.general_settings = general
+    # The enabled card types are named by label, the way the AI settings list them.
+    audit_old, audit_new = dict(prev_ai), dict(general["ai"])
+    for side in (audit_old, audit_new):
+        if isinstance(side.get("enabledTypes"), list):
+            side["enabledTypes"] = await _type_labels(db, side["enabledTypes"])
+    await _audit_setting(db, user, "ai", audit_old, audit_new)
     await db.commit()
 
     return {"ok": True}
@@ -1843,8 +2107,21 @@ async def update_enabled_locales(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("enabledLocales", SUPPORTED_LOCALES)
     general["enabledLocales"] = valid
     row.general_settings = general
+    await _audit_setting(
+        db,
+        user,
+        "enabled-locales",
+        items=audit_changes.list_items(
+            old,
+            general["enabledLocales"],
+            kind_added="locale.enabled",
+            kind_removed="locale.disabled",
+            arg="locale",
+        ),
+    )
     await db.commit()
 
     return {"locales": valid}
@@ -1888,10 +2165,12 @@ async def update_mcp_settings(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
-    mcp = dict(general.get("mcp", {}))
+    old = dict(general.get("mcp", {}))
+    mcp = dict(old)
     mcp["enabled"] = body.enabled
     general["mcp"] = mcp
     row.general_settings = general
+    await _audit_setting(db, user, "mcp", old, mcp)
     await db.commit()
 
     return {"ok": True}
@@ -1922,8 +2201,10 @@ async def update_principles_display(
 
     row = await _get_or_create_row(db)
     general = dict(row.general_settings or {})
+    old = general.get("showPrinciplesTab", True)
     general["showPrinciplesTab"] = bool(body.get("enabled", True))
     row.general_settings = general
+    await _audit_setting(db, user, "principles-display", old, general["showPrinciplesTab"])
     await db.commit()
 
     return {"ok": True}

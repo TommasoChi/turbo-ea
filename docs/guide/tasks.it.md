@@ -76,3 +76,7 @@ Ogni sondaggio in attesa mostra:
 - Un pulsante **Rispondi** che naviga al modulo di risposta
 
 Il modulo di risposta al sondaggio presenta domande configurate dall'amministratore. Le vostre risposte possono aggiornare automaticamente gli attributi della card, a seconda di come il sondaggio è stato configurato.
+
+Il nome della scheda in cima al modulo di risposta apre la scheda in un pannello laterale, così puoi verificare i suoi dati attuali prima di rispondere senza lasciare il modulo né perdere quanto hai già scritto. Il pulsante **Apri a pagina intera** del pannello porta alla scheda stessa. Il collegamento compare quando sei autorizzato a visualizzare la scheda.
+
+I campi data si inseriscono nel formato regionale del tuo browser, come sulla scheda stessa; le date mostrate altrove nel modulo seguono il formato data dell'area di lavoro impostato in **Amministrazione → Impostazioni**.

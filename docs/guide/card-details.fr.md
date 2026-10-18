@@ -101,7 +101,7 @@ Selon le type de fiche, vous verrez des sections supplémentaires avec des **cha
 - **Texte multiligne** -- Saisie de texte libre qui préserve les retours à la ligne, affichée comme une zone de texte à hauteur automatique
 - **Nombre** -- Valeur numérique
 - **Coût** -- Valeur numérique affichée avec la devise configurée de la plateforme
-- **Booléen** -- Interrupteur marche/arrêt
+- **Booléen** -- Choix dans une liste Oui / Non, **Aucun** pour l'effacer ; affiché sous forme de pastille verte *Oui* ou bleue *Non*, — s'il n'est pas renseigné
 - **Date** -- Sélecteur de date
 - **URL** -- Lien cliquable (validé pour http/https/mailto)
 - **Sélection unique** -- Liste déroulante avec options prédéfinies
@@ -115,6 +115,7 @@ Pour les types de fiches qui prennent en charge la hiérarchie (par ex. Organisa
 
 - **Parent** -- Le parent de la fiche dans la hiérarchie (cliquer pour naviguer)
 - **Enfants** -- Liste des fiches enfants (cliquer sur l'une d'elles pour naviguer)
+- **Grouper par sous-type** — Lorsqu'une fiche a de nombreux enfants de sous-types différents (par exemple des unités opérationnelles, des régions et des équipes sous une même société), ils sont automatiquement regroupés en sections repliables par sous-type, chacune avec son nombre, suivies d'une section **Aucun sous-type** pour les enfants non classés. Le bouton grouper/liste à côté du nombre d'**enfants** bascule entre la vue groupée et la liste simple.
 - **Fil d'Ariane hiérarchique** -- Affiche le chemin complet de la racine à la fiche actuelle
 - **Type de lien** -- Lorsqu'un administrateur a configuré des types de lien pour ce type de fiche, chaque lien parent-enfant peut être qualifié -- par exemple une filiale *commerciale* et une autre *vente*. Le libellé appartient à la fiche enfant : la fiche parente l'affiche à côté de chaque enfant, et la fiche enfant à côté de son parent. Retirer une fiche ou la remonter au niveau supérieur efface son libellé, et la modification est consignée dans l'onglet **Historique**.
 

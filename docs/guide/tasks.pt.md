@@ -76,3 +76,7 @@ Cada pesquisa pendente mostra:
 - Um botão **Responder** que navega até o formulário de resposta
 
 O formulário de resposta da pesquisa apresenta perguntas configuradas pelo administrador. Suas respostas podem atualizar automaticamente atributos do card, dependendo de como a pesquisa foi configurada.
+
+O nome do cartão no topo do formulário de resposta abre o cartão num painel lateral, para que possa verificar os seus dados atuais antes de responder sem sair do formulário nem perder o que já escreveu. O botão **Abrir página completa** do painel leva ao próprio cartão. A ligação aparece quando tem permissão para ver o cartão.
+
+Os campos de data são introduzidos no formato regional do seu navegador, tal como no próprio cartão; as datas mostradas no resto do formulário seguem o formato de data do espaço de trabalho definido em **Administração → Definições**.

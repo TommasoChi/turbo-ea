@@ -19,6 +19,7 @@ from app.core.permissions import (
 from app.database import get_db
 from app.models.role import Role
 from app.models.user import User
+from app.services import audit_changes, audit_log
 from app.services.permission_service import PermissionService
 
 router = APIRouter(prefix="/roles", tags=["roles"])
@@ -117,6 +118,32 @@ def _role_response(role: Role, user_count: int | None = None, *, full: bool = Tr
         if user_count is not None:
             data["user_count"] = user_count
     return data
+
+
+ROLE_AUDIT_FIELDS = ("label", "color", "is_default", "sort_order")
+
+
+def role_changes(before: dict, after: dict) -> tuple[dict, list]:
+    """``(changes, items)`` of an ``admin.role.updated`` row: a ``diff`` of the
+    role's plain fields, and one ``permission.granted`` / ``.revoked`` /
+    ``.wildcard`` item per permission key whose grant moved."""
+    changes = audit_log.diff(before, after, keys=ROLE_AUDIT_FIELDS)
+    items = audit_changes.permission_items(before.get("permissions"), after.get("permissions"))
+    return changes, items
+
+
+def _role_snapshot(role: Role) -> dict:
+    return {
+        "label": role.label,
+        "color": role.color,
+        "permissions": dict(role.permissions or {}),
+        "is_default": role.is_default,
+        "sort_order": role.sort_order,
+    }
+
+
+def _role_target(role: Role) -> tuple[str, str, str]:
+    return ("role", role.key, role.label)
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +245,15 @@ async def create_role(
         is_system=False,
     )
     db.add(role)
+    await audit_log.record(
+        db,
+        action="admin.role.created",
+        category="admin",
+        actor=user,
+        target=_role_target(role),
+        context={"color": body.color, "is_default": body.is_default},
+        items=audit_changes.permission_items({}, body.permissions),
+    )
     await db.commit()
     await db.refresh(role)
     PermissionService.invalidate_role_cache(body.key)
@@ -263,12 +299,34 @@ async def update_role(
         existing_defaults = await db.execute(
             select(Role).where(Role.is_default == True, Role.key != key)  # noqa: E712
         )
+        # Only one role can be the default, so promoting this one demotes the
+        # others — each demotion is a change to that role and gets its own row.
         for r in existing_defaults.scalars().all():
             r.is_default = False
+            await audit_log.record(
+                db,
+                action="admin.role.updated",
+                category="admin",
+                actor=user,
+                target=_role_target(r),
+                changes={"is_default": {"old": True, "new": False}},
+            )
 
+    before = _role_snapshot(role)
     for field, value in data.items():
         setattr(role, field, value)
 
+    changes, items = role_changes(before, _role_snapshot(role))
+    if changes or items:
+        await audit_log.record(
+            db,
+            action="admin.role.updated",
+            category="admin",
+            actor=user,
+            target=_role_target(role),
+            changes=changes,
+            items=items,
+        )
     await db.commit()
     await db.refresh(role)
     PermissionService.invalidate_role_cache(key)
@@ -304,6 +362,14 @@ async def archive_role(
     role.is_archived = True
     role.archived_at = datetime.now(timezone.utc)
     role.archived_by = user.id
+    await audit_log.record(
+        db,
+        action="admin.role.archived",
+        category="admin",
+        actor=user,
+        target=_role_target(role),
+        context={"affected_users": affected_users_count},
+    )
     await db.commit()
     await db.refresh(role)
     PermissionService.invalidate_role_cache(key)
@@ -332,6 +398,9 @@ async def restore_role(
     role.is_archived = False
     role.archived_at = None
     role.archived_by = None
+    await audit_log.record(
+        db, action="admin.role.restored", category="admin", actor=user, target=_role_target(role)
+    )
     await db.commit()
     await db.refresh(role)
     PermissionService.invalidate_role_cache(key)

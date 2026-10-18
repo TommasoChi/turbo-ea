@@ -23,11 +23,53 @@ from app.models.stakeholder import Stakeholder
 from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 from app.models.survey import Survey
 from app.models.user import User
+from app.services import audit_changes, audit_labels, audit_log
 from app.services.card_read_scope import CardReadScope
 from app.services.data_quality import rescore_card_type
 from app.services.permission_service import PermissionService
 
 router = APIRouter(tags=["stakeholder-roles"])
+
+# Fields whose old/new an ``admin.stakeholder_role.updated`` row carries as
+# ``changes``; ``permissions`` become ``permission.granted`` / ``.revoked``
+# items (``audit_changes.permission_items``).
+SRD_AUDIT_FIELDS = ("label", "color", "sort_order", "counts_for_quality")
+
+
+def _srd_target(
+    type_key: str, type_label: str, srd: StakeholderRoleDefinition
+) -> tuple[str, str, str]:
+    """``<role label> (<card type label>)`` — the same role key exists on many
+    types, so the label alone would not say which one was changed."""
+    return ("stakeholder_role", f"{type_key}:{srd.key}", f"{srd.label or srd.key} ({type_label})")
+
+
+async def _audit_srd(
+    db: AsyncSession,
+    user: User,
+    action: str,
+    type_key: str,
+    srd: StakeholderRoleDefinition,
+    *,
+    changes: dict | None = None,
+    items: list | None = None,
+    context: dict | None = None,
+) -> None:
+    """Record one ``admin.stakeholder_role.<action>`` row. Every row carries
+    ``context.card_type`` (the type's label) so the type stays readable even
+    where only the target id is shown."""
+    type_label = await audit_labels.card_type_label(db, type_key)
+    await audit_log.record(
+        db,
+        action=f"admin.stakeholder_role.{action}",
+        category="admin",
+        actor=user,
+        target=_srd_target(type_key, type_label, srd),
+        changes=changes,
+        items=items,
+        context={**(context or {}), "card_type": type_label},
+    )
+
 
 # Stakeholder role keys follow the same camelCase grammar as every other
 # metamodel key (card types, fields, options, relation types, subtypes) — see
@@ -431,6 +473,15 @@ async def create_stakeholder_role(
         translations=body.translations,
     )
     db.add(srd)
+    await _audit_srd(
+        db,
+        user,
+        "created",
+        type_key,
+        srd,
+        context={"color": body.color, "counts_for_quality": body.counts_for_quality},
+        items=audit_changes.permission_items({}, body.permissions),
+    )
     # A counting role is a data-quality slot for every card of this type, so
     # adding one moves the denominator instance-wide. See `rescore_card_type`.
     if body.counts_for_quality:
@@ -467,6 +518,8 @@ async def update_stakeholder_role(
         raise HTTPException(400, "Cannot edit an archived stakeholder role. Restore it first.")
 
     data = body.model_dump(exclude_unset=True)
+    before = {field: getattr(srd, field) for field in SRD_AUDIT_FIELDS}
+    permissions_before = dict(srd.permissions or {})
 
     # ── Re-key ────────────────────────────────────────────────────────────────
     # Allowed only while the role is unused, which is what keeps this a
@@ -511,6 +564,12 @@ async def update_stakeholder_role(
         await db.flush()
         await rescore_card_type(db, type_key)
 
+    changes = audit_log.diff(before, srd, keys=SRD_AUDIT_FIELDS)
+    if new_key:
+        changes["key"] = {"old": role_key, "new": new_key}
+    items = audit_changes.permission_items(permissions_before, srd.permissions)
+    if changes or items:
+        await _audit_srd(db, user, "updated", type_key, srd, changes=changes, items=items)
     await db.commit()
     await db.refresh(srd)
     PermissionService.invalidate_srd_cache(type_key, role_key)
@@ -551,6 +610,7 @@ async def delete_stakeholder_role(
         raise HTTPException(409, blocker)
 
     counted = srd.counts_for_quality
+    await _audit_srd(db, user, "deleted", type_key, srd)
     await db.delete(srd)
     await _rewrite_jsonb_role(db, type_key, role_key, None)
     if counted:
@@ -599,6 +659,9 @@ async def archive_stakeholder_role(
     srd.is_archived = True
     srd.archived_at = datetime.now(timezone.utc)
     srd.archived_by = user.id
+    await _audit_srd(
+        db, user, "archived", type_key, srd, context={"affected_stakeholders": affected_count}
+    )
     # Archiving a counting role drops it out of the data-quality slot, which
     # can leave cards whose only assignment was under that role incomplete.
     if srd.counts_for_quality:
@@ -638,6 +701,7 @@ async def restore_stakeholder_role(
     srd.is_archived = False
     srd.archived_at = None
     srd.archived_by = None
+    await _audit_srd(db, user, "restored", type_key, srd)
     if srd.counts_for_quality:
         await db.flush()
         await rescore_card_type(db, type_key)

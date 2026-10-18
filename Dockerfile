@@ -69,6 +69,11 @@ RUN { python -m pip uninstall -y pip 2>/dev/null || true; } && \
 # non-root backend (cap_drop: ALL) then cannot write any upload.
 RUN mkdir -p /app/data && chown -R ${APP_UID}:${APP_GID} /app
 
+# The backend is only ever reached through the edge nginx, which overwrites
+# X-Real-IP with $remote_addr on every proxied location, so the security audit
+# log may record that header as the client address (core/request_context.py).
+ENV TRUST_PROXY_HEADERS=true
+
 USER ${APP_UID}:${APP_GID}
 
 EXPOSE 8000
@@ -240,7 +245,7 @@ resolver_directive="resolver ${resolver_addr} valid=30s ipv6=off;"
 
 # Upstream service addresses. Docker resolves the bare compose service names through
 # its embedded DNS, but an orchestrator whose resolver ignores search domains
-# (Kubernetes: nginx's own `resolver` never consults /etc/resolv.conf search paths)
+# (Kubernetes: nginx's own 'resolver' never consults /etc/resolv.conf search paths)
 # needs fully-qualified names, e.g. http://turbo-ea-backend.turbo-ea.svc.cluster.local:8000.
 # The defaults are the compose service names, so an install that does not set
 # these is unchanged. Values land unquoted inside the generated nginx config, so
@@ -275,6 +280,105 @@ else
 fi
 export NGINX_EMBED_FRAME_ANCESTORS="$embed_ancestors"
 
+# Real client address behind a load balancer or ingress. With nothing set,
+# $remote_addr is whoever opened the TCP connection to this nginx: the browser
+# on a plain compose install, but the load balancer or ingress controller in
+# front of it everywhere else, so the security audit log and the per-client
+# sign-in rate limit would see one address for every user. NGINX_TRUSTED_PROXIES
+# names the addresses of those hops (comma- or space-separated IPs or CIDR
+# ranges); X-Forwarded-For is then honoured only when the connection comes from
+# one of them, and real_ip_recursive skips every trusted hop, so $remote_addr
+# becomes the first untrusted address, i.e. the client. The X-Real-IP header
+# every proxied location already sets from $remote_addr then carries it to the
+# backend unchanged. Empty (the default) emits nothing, so an install that does
+# not set it keeps its config as it was. The lines go into every server block
+# (redirect, HTTPS and plain HTTP) right after server_tokens.
+nginx_real_ip_lines=''
+# Shape check for one entry: an IPv4 dotted quad (four octets of 1-3 digits,
+# each at most 255) or an IPv6 address (hex and colons only, at least two and at
+# most seven colons, at most one "::", groups of at most four hex digits), with
+# an optional "/prefix" of digits at most 32 or 128. An IPv6 address may end in
+# a dotted quad in place of its last two groups (the IPv4-mapped form
+# "::ffff:10.0.0.1", which set_real_ip_from accepts); the quad is checked as an
+# IPv4 address and the rest as IPv6 with "0:0" in its place. A zone id
+# ("%eth0") is refused. The value lands unquoted in the generated config, so
+# anything else is refused rather than passed through.
+turboea_valid_ipv4() {
+    case "$1" in
+        *.*.*.*.*) return 1 ;;
+        *.*.*.*) ;;
+        *) return 1 ;;
+    esac
+    tp_ifs=$IFS
+    IFS=.
+    set -- $1
+    IFS=$tp_ifs
+    for tp_octet in "$@"; do
+        case "$tp_octet" in
+            ''|*[!0-9]*|????*) return 1 ;;
+        esac
+        [ "$tp_octet" -le 255 ] || return 1
+    done
+    return 0
+}
+turboea_valid_proxy() {
+    tp_entry=$1
+    case "$tp_entry" in
+        ''|*[!0-9A-Fa-f.:/]*|*/*/*) return 1 ;;
+    esac
+    tp_addr=${tp_entry%%/*}
+    [ -n "$tp_addr" ] || return 1
+    case "$tp_addr" in
+        *:*)
+            tp_max=128
+            case "$tp_addr" in
+                *:*:*) ;;
+                *) return 1 ;;
+            esac
+            case "$tp_addr" in
+                *.*)
+                    turboea_valid_ipv4 "${tp_addr##*:}" || return 1
+                    tp_addr="${tp_addr%:*}:0:0"
+                    ;;
+            esac
+            case "$tp_addr" in
+                *[!0-9A-Fa-f:]*|*:::*|*::*::*) return 1 ;;
+                *[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]*) return 1 ;;
+            esac
+            tp_colons=$(printf '%s' "$tp_addr" | tr -cd ':')
+            [ "${#tp_colons}" -le 7 ] || return 1
+            ;;
+        *)
+            tp_max=32
+            turboea_valid_ipv4 "$tp_addr" || return 1
+            ;;
+    esac
+    tp_addr=${tp_entry%%/*}
+    if [ "$tp_entry" != "$tp_addr" ]; then
+        tp_prefix=${tp_entry#*/}
+        case "$tp_prefix" in
+            ''|*[!0-9]*|????*) return 1 ;;
+        esac
+        [ "$tp_prefix" -le "$tp_max" ] || return 1
+    fi
+    return 0
+}
+trusted_proxies=$(printf '%s' "${NGINX_TRUSTED_PROXIES:-}" | tr ',' ' ')
+set -f
+for proxy in $trusted_proxies; do
+    if ! turboea_valid_proxy "$proxy"; then
+        echo "Turbo EA nginx: NGINX_TRUSTED_PROXIES entries must be IP addresses or CIDR ranges, got: $proxy" >&2
+        exit 1
+    fi
+    nginx_real_ip_lines="${nginx_real_ip_lines}    set_real_ip_from ${proxy};
+"
+done
+set +f
+if [ -n "$nginx_real_ip_lines" ]; then
+    nginx_real_ip_lines="${nginx_real_ip_lines}    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;"
+fi
+
 export NGINX_SERVER_NAME="${NGINX_SERVER_NAME:-$public_host}"
 export NGINX_FORWARDED_PROTO="${NGINX_FORWARDED_PROTO:-$public_scheme}"
 
@@ -295,6 +399,7 @@ case "$tls_enabled" in
 ${nginx_http_ipv6_line}
     server_name ${NGINX_SERVER_NAME};
     server_tokens off;
+${nginx_real_ip_lines}
     return 301 https://\$host:${NGINX_TLS_HOST_PORT}\$request_uri;
 }"
         export NGINX_HTTPS_SERVER_BLOCK="server {
@@ -303,6 +408,7 @@ ${nginx_https_ipv6_line}
     http2 on;
     server_name ${NGINX_SERVER_NAME};
     server_tokens off;
+${nginx_real_ip_lines}
     # Attachments are capped at 20 MB by the backend
     # (services/attachment_validation.py); the extra megabyte lets a slightly
     # oversized upload reach it, so the user gets its readable 400 instead of
@@ -546,6 +652,7 @@ ${nginx_https_ipv6_line}
 ${nginx_http_ipv6_line}
     server_name ${NGINX_SERVER_NAME};
     server_tokens off;
+${nginx_real_ip_lines}
     # Attachments are capped at 20 MB by the backend
     # (services/attachment_validation.py); the extra megabyte lets a slightly
     # oversized upload reach it, so the user gets its readable 400 instead of

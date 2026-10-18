@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -11,7 +12,9 @@ from app.api.deps import get_current_user
 from app.database import get_db
 from app.models.calculation import Calculation
 from app.models.card import Card
+from app.models.card_type import CardType
 from app.models.user import User
+from app.services import audit_labels, audit_log
 from app.services.calculation_engine import (
     MAX_FORMULA_LENGTH,
     detect_cycles,
@@ -24,6 +27,39 @@ from app.services.calculation_lint import lint_formula
 from app.services.permission_service import PermissionService
 
 router = APIRouter(prefix="/calculations", tags=["calculations"])
+
+
+# ── Audit labels ──────────────────────────────────────────────────────
+
+
+def field_label(fields_schema: Any, key: str | None) -> str | None:
+    """The label of the field ``key`` in a card type's ``fields_schema``; the key
+    itself when no field answers to it (or the field has no label)."""
+    for section in fields_schema or []:
+        for field in section.get("fields") or []:
+            if field.get("key") == key:
+                return field.get("label") or key
+    return key
+
+
+async def _type_label_and_schema(db: AsyncSession, type_key: str) -> tuple[str, Any]:
+    """A card type's label (its key when there is no such type) and its
+    ``fields_schema``, for naming a calculation's target in an audit row."""
+    row = (
+        await db.execute(
+            select(CardType.label, CardType.fields_schema).where(CardType.key == type_key)
+        )
+    ).one_or_none()
+    if row is None:
+        return type_key, None
+    return row.label, row.fields_schema
+
+
+async def target_labels(db: AsyncSession, type_key: str, field_key: str | None) -> dict[str, Any]:
+    """``{"target_type": <type label>, "target_field": <field label>}`` for a
+    calculation's target, named the way the metamodel admin shows them."""
+    type_label, schema = await _type_label_and_schema(db, type_key)
+    return {"target_type": type_label, "target_field": field_label(schema, field_key)}
 
 
 # ── Schemas ───────────────────────────────────────────────────────────
@@ -223,6 +259,18 @@ async def create_calculation(
         created_by=user.id,
     )
     db.add(calc)
+    await db.flush()
+    await audit_log.record(
+        db,
+        action="admin.calculation.created",
+        category="admin",
+        actor=user,
+        target=("calculation", str(calc.id), calc.name),
+        context={
+            **await target_labels(db, calc.target_type_key, calc.target_field_key),
+            "formula": calc.formula,
+        },
+    )
     await db.commit()
     await db.refresh(calc)
     return _to_response(calc)
@@ -265,6 +313,21 @@ async def update_calculation(
         if problem:
             raise HTTPException(400, problem)
 
+    changes = audit_log.diff(calc, updates)
+    if "target_type_key" in changes or "target_field_key" in changes:
+        # The target is recorded by label, under ``target_type`` / ``target_field``.
+        old = await target_labels(db, calc.target_type_key, calc.target_field_key)
+        new = await target_labels(
+            db,
+            updates.get("target_type_key", calc.target_type_key),
+            updates.get("target_field_key", calc.target_field_key),
+        )
+        for raw, named in (
+            ("target_type_key", "target_type"),
+            ("target_field_key", "target_field"),
+        ):
+            if changes.pop(raw, None) is not None:
+                changes[named] = {"old": old[named], "new": new[named]}
     for field, value in updates.items():
         setattr(calc, field, value)
 
@@ -277,6 +340,15 @@ async def update_calculation(
                 f"Formula update would create a dependency cycle: {' -> '.join(cycle)}",
             )
 
+    if changes:
+        await audit_log.record(
+            db,
+            action="admin.calculation.updated",
+            category="admin",
+            actor=user,
+            target=("calculation", str(calc.id), calc.name),
+            changes=changes,
+        )
     await db.commit()
     await db.refresh(calc)
     return _to_response(calc)
@@ -293,6 +365,17 @@ async def delete_calculation(
     calc = result.scalar_one_or_none()
     if not calc:
         raise HTTPException(404, "Calculation not found")
+    await audit_log.record(
+        db,
+        action="admin.calculation.deleted",
+        category="admin",
+        actor=user,
+        target=("calculation", str(calc.id), calc.name),
+        context={
+            "target_type": await audit_labels.card_type_label(db, calc.target_type_key),
+            "was_active": calc.is_active,
+        },
+    )
     await db.delete(calc)
     await db.commit()
 
@@ -321,6 +404,13 @@ async def activate_calculation(
         )
 
     calc.is_active = True
+    await audit_log.record(
+        db,
+        action="admin.calculation.activated",
+        category="admin",
+        actor=user,
+        target=("calculation", str(calc.id), calc.name),
+    )
     await db.commit()
     await db.refresh(calc)
     return _to_response(calc)
@@ -338,6 +428,13 @@ async def deactivate_calculation(
     if not calc:
         raise HTTPException(404, "Calculation not found")
     calc.is_active = False
+    await audit_log.record(
+        db,
+        action="admin.calculation.deactivated",
+        category="admin",
+        actor=user,
+        target=("calculation", str(calc.id), calc.name),
+    )
     await db.commit()
     await db.refresh(calc)
     return _to_response(calc)
@@ -411,4 +508,19 @@ async def recalculate_type(
     without testing the formula against every card by hand.
     """
     await PermissionService.require_permission(db, user, "admin.metamodel")
-    return await run_calculations_for_type(db, type_key)
+    report = await run_calculations_for_type(db, type_key)
+    # The engine commits its own run; the audit row is a second, small commit.
+    await audit_log.record(
+        db,
+        action="admin.calculation.recalculated",
+        category="admin",
+        actor=user,
+        target=("card_type", type_key, await audit_labels.card_type_label(db, type_key)),
+        context={
+            "cards": report["cards_processed"],
+            "succeeded": report["calculations_succeeded"],
+            "failed": report["calculations_failed"],
+        },
+    )
+    await db.commit()
+    return report

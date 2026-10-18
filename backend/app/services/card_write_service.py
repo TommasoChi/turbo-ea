@@ -37,6 +37,7 @@ import math
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import exists, select
@@ -191,6 +192,48 @@ async def _validate_percentage_attributes(
             raise HTTPException(422, f"Field '{key}' must be a number between 0 and 100")
 
 
+async def _validate_boolean_attributes(
+    db: AsyncSession,
+    card_type: str,
+    attributes: dict,
+    previous: dict | None = None,
+) -> None:
+    """Validate that any attribute whose field type is 'boolean' is true, false or unset.
+
+    A boolean is three-valued — ``True``, ``False`` or not set (``None``, or
+    ``""`` from a cleared form) — and every reader (card detail, the inventory
+    filter, the reports, data quality) reads it that way (#1266). Anything
+    else, such as the string ``"yes"``, used to be stored as given and then
+    read as unset everywhere. ``1`` / ``0`` are refused too: they are not
+    booleans in JSON.
+
+    ``previous`` is the card's stored attributes on an update. A value equal
+    to the stored one is left alone, so a card that already carries a legacy
+    string (an import before this check, which the readers still tolerate)
+    stays editable: the editor sends the whole attributes object back, and
+    refusing an untouched value would block every unrelated edit.
+    """
+    if not attributes:
+        return
+    result = await db.execute(select(CardType.fields_schema).where(CardType.key == card_type))
+    schema = result.scalar_one_or_none()
+    if not schema:
+        return
+    boolean_keys: set[str] = set()
+    for section in schema:
+        for field in section.get("fields", []):
+            if field.get("type") == "boolean":
+                boolean_keys.add(field["key"])
+    stored = previous or {}
+    for key in boolean_keys:
+        val = attributes.get(key)
+        if val is None or val == "" or isinstance(val, bool):
+            continue
+        if key in stored and stored[key] == val:
+            continue
+        raise HTTPException(422, f"Field '{key}' must be true or false")
+
+
 async def _validate_cost_attributes(db: AsyncSession, card_type: str, attributes: dict) -> None:
     """Validate that a ``cost`` or ``number`` attribute holds a number, coercing numeric text.
 
@@ -244,7 +287,8 @@ def _check_required_not_cleared(
     Deliberately only guards *clearing*: creation and imports may land cards with
     required fields still empty (the card just scores 0 data quality until they
     are filled), and a card that is already incomplete stays editable. Boolean
-    fields are exempt (a switch always has a value) and so are readonly fields —
+    fields are exempt (Not set is one of a boolean's three states, #1266) and so
+    are readonly fields —
     the calculation engine may legitimately pop a calculated key when its
     formula yields None.
     """
@@ -751,6 +795,7 @@ async def create_card(
     """
     await _validate_url_attributes(db, type_key, attributes or {})
     await _validate_percentage_attributes(db, type_key, attributes or {})
+    await _validate_boolean_attributes(db, type_key, attributes or {})
     await _validate_cost_attributes(db, type_key, attributes or {})
     await _validate_select_attributes(db, type_key, attributes or {}, {})
     await _validate_hierarchy_label(
@@ -822,12 +867,27 @@ async def update_card(
     *,
     strict_attributes: bool = False,
     dry_run: bool = False,
+    event_extra: dict | None = None,
+    deferred_notifications: list[dict] | None = None,
 ) -> bool:
     """Apply an update payload to ``card`` with full validation and side
     effects. Returns True when anything actually changed. ``updates`` is the
     caller's field→value dict (``parent_id`` as str or None); the per-user
     cost-redaction merge — permission shaping, not write semantics — must
-    already have been applied by route callers.
+    already have been applied by route callers. ``event_extra`` is merged into
+    the ``card.updated`` payload — the survey apply path stamps the survey the
+    change came from; ``id`` and ``changes`` always win over it.
+
+    ``deferred_notifications`` changes where the subscriber nudges go. By
+    default they are created inline on ``db`` — one SMTP round-trip per emailed
+    stakeholder, on the caller's open transaction — which is right for one
+    edit on a request path. A caller writing many cards in one request (the
+    survey apply) passes a list instead: every recipient is appended to it as
+    ``{"notif_type", "user_id", "title", "message", "link", "card_id", "data"}``
+    and nothing is created here, so the caller can hand each type's rows to
+    ``notification_service.deliver_notification_batch`` once the transaction
+    has committed. The ``card_updated`` rows and the approval-broken rows both
+    land in the same list, told apart by ``notif_type``.
     """
     # The human-readable reference is write-once & immutable — never editable via
     # update (defensive: CardUpdate no longer carries it, but drop any stray).
@@ -838,6 +898,9 @@ async def update_card(
     if "attributes" in updates and updates["attributes"]:
         await _validate_url_attributes(db, card.type, updates["attributes"])
         await _validate_percentage_attributes(db, card.type, updates["attributes"])
+        await _validate_boolean_attributes(
+            db, card.type, updates["attributes"], previous=card.attributes
+        )
         await _validate_cost_attributes(db, card.type, updates["attributes"])
         if strict_attributes:
             await _validate_strict_attributes(db, card.type, updates["attributes"])
@@ -978,7 +1041,10 @@ async def update_card(
     if not dry_run:
         await event_bus.publish(
             "card.updated",
-            _stamp_ext(actor, {"id": str(card.id), "changes": serialised_changes}),
+            _stamp_ext(
+                actor,
+                {**(event_extra or {}), "id": str(card.id), "changes": serialised_changes},
+            ),
             db=db,
             card_id=card.id,
             user_id=actor.user_id,
@@ -991,25 +1057,59 @@ async def update_card(
 
         # Notify subscribers about the update
         changed_fields = ", ".join(changes.keys())
-        await notification_service.create_notifications_for_subscribers(
-            db,
-            card_id=card.id,
-            actor_id=actor.user_id,
-            notif_type="card_updated",
-            title=f"{card.name} Updated",
-            message=f'{actor.display_name} updated "{card.name}" ({changed_fields})',
-            link=f"/cards/{card.id}",
-            data={"changes": list(changes.keys())},
-        )
+        updated_notice: dict[str, Any] = {
+            "notif_type": "card_updated",
+            "title": f"{card.name} Updated",
+            "message": f'{actor.display_name} updated "{card.name}" ({changed_fields})',
+            "link": f"/cards/{card.id}",
+            "data": {"changes": list(changes.keys())},
+        }
+        if deferred_notifications is None:
+            await notification_service.create_notifications_for_subscribers(
+                db,
+                card_id=card.id,
+                actor_id=actor.user_id,
+                notif_type="card_updated",
+                title=updated_notice["title"],
+                message=updated_notice["message"],
+                link=updated_notice["link"],
+                data=updated_notice["data"],
+            )
+        else:
+            for user_id in await _subscriber_ids(db, card.id, exclude=actor.user_id):
+                deferred_notifications.append(
+                    {**updated_notice, "user_id": user_id, "card_id": card.id}
+                )
         # …and separately that it now needs re-review. Two entries for one edit
         # is deliberate: "what changed" and "your approval is void" are
         # different facts, and the preferences dialog switches them apart.
         if approval_broke:
-            await card_approval.notify_approval_broken(
-                db, card=card, actor_id=actor.user_id, actor_display_name=actor.display_name
-            )
+            if deferred_notifications is None:
+                await card_approval.notify_approval_broken(
+                    db, card=card, actor_id=actor.user_id, actor_display_name=actor.display_name
+                )
+            else:
+                recipients = await card_approval.build_approval_broken_recipients(
+                    db, cards=[card], actor_id=actor.user_id, actor_display_name=actor.display_name
+                )
+                deferred_notifications.extend(
+                    {"notif_type": card_approval.NOTIF_TYPE, **r} for r in recipients
+                )
 
     return True
+
+
+async def _subscriber_ids(
+    db: AsyncSession, card_id: uuid.UUID, *, exclude: uuid.UUID | None
+) -> list[uuid.UUID]:
+    """The distinct people holding any stakeholder role on the card, minus the
+    actor — one nudge per person, however many roles they hold."""
+    from app.models.stakeholder import Stakeholder
+
+    rows = await db.execute(
+        select(Stakeholder.user_id).where(Stakeholder.card_id == card_id).distinct()
+    )
+    return [uid for uid in rows.scalars().all() if uid != exclude]
 
 
 async def resolve_archive_delete_set(

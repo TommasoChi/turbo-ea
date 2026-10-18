@@ -30,6 +30,11 @@ export interface User {
   ui_preferences?: UiPreferences | null;
   impersonated_role?: string | null;
   impersonated_role_label?: string | null;
+  /** Admin listing only (`GET /users`): set while five failed passwords keep
+   *  the account locked; a past value means the lock has lapsed. */
+  locked_until?: string | null;
+  /** Admin listing only: consecutive failed sign-ins since the last success. */
+  failed_login_attempts?: number;
 }
 
 export interface AppRole {
@@ -554,6 +559,8 @@ export interface HierarchyNode {
   id: string;
   name: string;
   type: string;
+  /** The node's subtype key; card detail groups the children by it (#1269). */
+  subtype?: string | null;
   /** This node's OWN link label — the label on the edge from its parent down
    *  to it. On a `children` node that is the edge from the card under view; on
    *  an `ancestor` node it is the edge one level above that ancestor. */
@@ -1096,6 +1103,12 @@ export interface SurveyRelationRef {
   name: string;
 }
 
+/** A person listed by a survey stakeholder-role field. */
+export interface SurveyPersonRef {
+  id: string;
+  display_name: string;
+}
+
 export interface SurveyField {
   key: string;
   section: string;
@@ -1111,12 +1124,17 @@ export interface SurveyField {
   config?: Record<string, unknown>;
   help?: string;
   helpTranslations?: TranslationMap;
-  // Relation fields: when kind === "relation" the field surveys a relationship
-  // rather than an attribute. The respondent's value is a list of SurveyRelationRef.
-  kind?: "attribute" | "relation";
+  // What the field surveys. Absent (or "attribute") = a card attribute.
+  // "relation": a relationship; the value is a list of SurveyRelationRef.
+  // "lifecycle": one lifecycle phase date (`phase`); the value is an ISO date.
+  // "stakeholder": the people holding one stakeholder role (`role`); the value
+  // is a list of SurveyPersonRef.
+  kind?: "attribute" | "relation" | "lifecycle" | "stakeholder";
   relation_type_key?: string;
   direction?: "outgoing" | "incoming";
   related_type_key?: string;
+  phase?: "plan" | "phaseIn" | "active" | "phaseOut" | "endOfLife";
+  role?: string;
 }
 
 /** Unit of a survey staleness window. Days and months only — weeks add
@@ -1208,6 +1226,15 @@ export interface SurveyPreviewResult {
   targets: SurveyPreviewTarget[];
 }
 
+/** What deleting a survey takes with it (`GET /surveys/{id}/delete-impact`). */
+export interface SurveyDeleteImpact {
+  status: Survey["status"];
+  requests: number;
+  pending: number;
+  answered: number;
+  applied: number;
+}
+
 export interface MySurveyItem {
   survey_id: string;
   survey_name: string;
@@ -1229,6 +1256,12 @@ export interface SurveyRespondForm {
     subtype?: string;
     type_translations?: MetamodelTranslations;
     subtype_translations?: TranslationMap;
+    /** Whether the respondent may open the card (server-computed: a
+     *  stakeholder's per-card view grant is not visible to the route table). */
+    can_view?: boolean;
+    /** Every phase the card holds, surveyed or not, so a proposed date can be
+     *  checked for order against phases the survey did not ask about. */
+    lifecycle?: Record<string, string | null>;
   };
   fields: (SurveyField & { current_value: unknown })[];
   existing_responses: Record<string, { current_value: unknown; new_value: unknown; confirmed: boolean }>;
@@ -2712,7 +2745,14 @@ export type PublicDiagramLegend =
   | {
       kind: "card_fields";
       coloured: number;
-      rules: Array<{ type_key: string; field_key: string; has_missing: boolean }>;
+      rules: Array<{
+        type_key: string;
+        field_key: string;
+        has_missing: boolean;
+        /** A card carries several values of this multi-select rule. Absent
+         *  from a server that predates it, which reads as no. */
+        has_multiple?: boolean;
+      }>;
       types: CardType[];
     };
 

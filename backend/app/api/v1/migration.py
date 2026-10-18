@@ -66,6 +66,7 @@ from app.database import async_session, get_db
 from app.models.card_type import CardType
 from app.models.migration import Migration, StagedRecord
 from app.models.user import User
+from app.services import audit_log
 from app.services.migration.apply import apply_migration
 from app.services.migration.export_snapshot import build_export_snapshot
 from app.services.migration.registry import SOURCES, get_source
@@ -295,6 +296,22 @@ async def export_workspace(
     # nothing below touches the database.
     await db.commit()
     data = await run_in_threadpool(source.export, snapshot)  # type: ignore[attr-defined]
+    # A short write after the serialisation, not a session held across it: the
+    # commit above released the connection, and this one checks it out again
+    # only for the insert.
+    await audit_log.record(
+        db,
+        action="access.export.migration",
+        category="access",
+        actor=user,
+        target=("migration_source", source.key, source.label),
+        context={
+            "source": source.label,
+            "include_archived": include_archived,
+            "size_bytes": len(data),
+        },
+    )
+    await db.commit()
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M")
     extension = getattr(source, "export_extension", ".bin")
@@ -305,6 +322,25 @@ async def export_workspace(
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+def _source_label(source_key: str) -> str:
+    """A source platform's label ("SAP LeanIX", not "leanix"); the key when
+    no adapter is registered for it any more."""
+    try:
+        return get_source(source_key).label
+    except KeyError:
+        return source_key
+
+
+def _audit_target(m: Migration) -> tuple[str, str, str]:
+    """The ``(type, id, label)`` an audit row names a migration by: its source
+    platform's label, so the Security log reads "SAP LeanIX", not "leanix"."""
+    return ("migration", str(m.id), _source_label(m.source_type))
+
+
+def _mapped_field_count(mappings: dict | None) -> int:
+    return sum(len(v) for v in (mappings or {}).values() if isinstance(v, dict))
 
 
 @router.post("/upload", response_model=MigrationOut, status_code=201)
@@ -366,6 +402,19 @@ async def upload_snapshot(
         created_by=user.id,
     )
     db.add(migration)
+    await audit_log.record(
+        db,
+        action="admin.migration.uploaded",
+        category="admin",
+        actor=user,
+        target=_audit_target(migration),
+        context={
+            "name": name,
+            "source": source.label,
+            "file_size": len(raw),
+            "include_archived": bool(include_archived),
+        },
+    )
     await db.commit()
     await db.refresh(migration)
 
@@ -719,6 +768,7 @@ async def update_field_mappings(
         if kept:
             cleaned[native_type] = kept
 
+    old_mapped = _mapped_field_count(m.field_mappings)
     m.field_mappings = cleaned
     flag_jsonb_modified(m, "field_mappings")
     # The mapping affects what the user expects to see on /apply — bump
@@ -726,6 +776,15 @@ async def update_field_mappings(
     # affordance keeps working.
     if m.status == "parsed":
         m.status = "previewed"
+    await audit_log.record(
+        db,
+        action="admin.migration.field_mappings.updated",
+        category="admin",
+        actor=user,
+        target=_audit_target(m),
+        changes={"mapped_fields": {"old": old_mapped, "new": _mapped_field_count(cleaned)}},
+        context={"types": sorted(cleaned)},
+    )
     await db.commit()
     await db.refresh(m)
     return _migration_to_out(m)
@@ -746,6 +805,14 @@ async def apply_migration_endpoint(
             detail=f"Cannot apply migration in status {m.status!r}",
         )
     m.status = "applying"
+    await audit_log.record(
+        db,
+        action="admin.migration.applied",
+        category="admin",
+        actor=user,
+        target=_audit_target(m),
+        context={"name": m.name, "source": _source_label(m.source_type)},
+    )
     await db.commit()
     # Without an explicit refresh the commit expires every attribute on
     # ``m`` and the trailing ``_migration_to_out(m)`` triggers a sync
@@ -824,6 +891,14 @@ async def delete_migration(
             Path(m.storage_path).unlink(missing_ok=True)
         except OSError:
             logger.exception("Failed to remove snapshot file %s", m.storage_path)
+    await audit_log.record(
+        db,
+        action="admin.migration.deleted",
+        category="admin",
+        actor=user,
+        target=_audit_target(m),
+        context={"name": m.name, "status": m.status},
+    )
     await db.delete(m)
     await db.commit()
 

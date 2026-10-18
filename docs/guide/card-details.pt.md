@@ -100,7 +100,7 @@ Dependendo do tipo de card, você verá seções adicionais com **campos persona
 - **Texto multilinha** — Entrada de texto livre que preserva quebras de linha, exibida como uma área de texto que cresce automaticamente
 - **Número** — Valor numérico
 - **Custo** — Valor numérico exibido com a moeda configurada na plataforma
-- **Booleano** — Alternância liga/desliga
+- **Booleano** — Escolha numa lista Sim / Não, com **Nenhum** para o limpar; exibido como etiqueta verde *Sim* ou azul *Não*, — quando não definido
 - **Data** — Seletor de data
 - **URL** — Link clicável (validado para http/https/mailto)
 - **Seleção única** — Menu suspenso com opções predefinidas
@@ -114,6 +114,7 @@ Para tipos de card que suportam hierarquia (ex.: Organização, Capacidade de Ne
 
 - **Pai** — O card pai na hierarquia (clique para navegar)
 - **Filhos** — Lista de cards filhos (clique em qualquer um para navegar)
+- **Agrupar por subtipo** — Quando um card tem muitos filhos de subtipos diferentes (por exemplo unidades de negócio, regiões e equipas sob uma mesma empresa), estes são agrupados automaticamente em secções recolhíveis por subtipo, cada uma com a sua contagem, com uma secção final **Sem subtipo** para os filhos não classificados. O botão agrupar/lista junto à contagem de **filhos** alterna entre a vista agrupada e a lista simples.
 - **Breadcrumb de hierarquia** — Mostra o caminho completo da raiz até o card atual
 - **Tipo de ligação** — Quando um administrador configurou tipos de ligação para este tipo de card, cada ligação pai-filho pode ser rotulada — por exemplo, uma subsidiária *comercial* e outra de *vendas*. O rótulo pertence ao card filho: o card pai mostra-o ao lado de cada filho, e o card filho ao lado do seu pai. Remover um card ou movê-lo para o nível superior limpa o seu rótulo, e a alteração fica registada na aba **Histórico**.
 
