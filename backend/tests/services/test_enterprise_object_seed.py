@@ -74,7 +74,12 @@ async def test_seed_is_idempotent(db):
     assert result.scalar() == len(taxonomy.ELEMENT_TYPES) + len(_OTHER_SECTION_KEYS)
 
 
-async def test_reseed_updates_description_icon_color_layer_but_not_is_hidden(db):
+async def test_reseed_never_overwrites_an_existing_row(db):
+    """Bug fix: a startup seed must never revert an admin's edits. Past
+    first-insert, seed_enterprise_objects is insert-only -- it must not
+    touch description/icon/color/layer/is_hidden on a row that already
+    exists, since seed_metamodel runs unconditionally on every backend
+    boot and an admin's edit (Task 11's popover) must survive a restart."""
     await seed_enterprise_objects(db)
     result = await db.execute(
         select(EnterpriseObject).where(EnterpriseObject.key == "BusinessActor")
@@ -84,6 +89,8 @@ async def test_reseed_updates_description_icon_color_layer_but_not_is_hidden(db)
     # Simulate an admin hiding the row and hand-editing its description.
     actor.is_hidden = True
     actor.description = "admin-edited description"
+    actor.icon = "admin_icon"
+    actor.color = "#123456"
     await db.flush()
 
     await seed_enterprise_objects(db)
@@ -91,7 +98,26 @@ async def test_reseed_updates_description_icon_color_layer_but_not_is_hidden(db)
     await db.refresh(actor)
 
     assert actor.is_hidden is True  # admin's visibility choice survives reseed
-    assert actor.description == ENTERPRISE_OBJECT_DESCRIPTIONS["BusinessActor"]  # content refreshed
+    assert actor.description == "admin-edited description"  # admin edit survives reseed
+    assert actor.icon == "admin_icon"
+    assert actor.color == "#123456"
+
+
+async def test_reseed_still_inserts_a_genuinely_new_standard_object(db):
+    """The insert-only rule only blocks overwriting an EXISTING row -- a
+    brand-new standard object added to the seed data in a future release
+    must still be inserted normally on the next boot."""
+    await seed_enterprise_objects(db)
+    await db.execute(EnterpriseObject.__table__.delete().where(EnterpriseObject.key == "Goal"))
+    await db.flush()
+
+    await seed_enterprise_objects(db)
+    await db.flush()
+    result = await db.execute(select(EnterpriseObject).where(EnterpriseObject.key == "Goal"))
+    goal = result.scalar_one()
+    assert goal.description == ENTERPRISE_OBJECT_DESCRIPTIONS["Goal"]
+    assert goal.icon
+    assert goal.is_standard is True
 
 
 # ── seed_card_mappings ──────────────────────────────────────────────────
@@ -133,6 +159,53 @@ async def test_card_mappings_seed_is_idempotent(db):
         dm.SUBTYPE_DEFAULTS
     )
     assert result.scalar() == expected
+
+
+async def test_removed_card_mapping_does_not_come_back_after_reseed(db):
+    """Bug fix: seed_card_mappings must only backfill once, while the bridge
+    table is empty. An admin removing a default mapping through the Card
+    Mapping editor is a deliberate action and must survive a reseed /
+    backend restart -- a second seed_metamodel call (simulating a restart)
+    must not re-insert it."""
+    await seed.seed_metamodel(db)
+    rows = await _mapping_rows_for(db, "BusinessObject")
+    target = next(r for r in rows if r.card_type_key == "DataObject" and r.card_subtype_key is None)
+
+    # Simulate the admin removing this mapping through the UI.
+    await db.delete(target)
+    await db.flush()
+
+    await seed.seed_metamodel(db)
+    await db.flush()
+
+    rows_after = await _mapping_rows_for(db, "BusinessObject")
+    assert ("DataObject", None) not in {(r.card_type_key, r.card_subtype_key) for r in rows_after}
+
+
+async def test_card_mappings_backfill_only_runs_while_table_is_empty(db):
+    """A table that already has rows -- even just one -- must not receive
+    the full default backfill again. Uses seed_metamodel to get CardType
+    rows in place (the bridge table's card_type_key FK needs them), then
+    empties the bridge table and re-seeds it by hand to simulate "the table
+    is no longer empty" before calling seed_card_mappings directly."""
+    from app.services.archimate.enterprise_object_seed import seed_card_mappings
+
+    await seed.seed_metamodel(db)
+    await db.execute(EnterpriseObjectCardMapping.__table__.delete())
+    db.add(
+        EnterpriseObjectCardMapping(
+            enterprise_object_key="Goal",
+            card_type_key="Objective",
+            card_subtype_key=None,
+        )
+    )
+    await db.flush()
+
+    await seed_card_mappings(db)
+    await db.flush()
+
+    result = await db.execute(select(func.count()).select_from(EnterpriseObjectCardMapping))
+    assert result.scalar() == 1  # the backfill did not run
 
 
 async def test_every_mapping_value_matches_a_seeded_enterprise_object(db):

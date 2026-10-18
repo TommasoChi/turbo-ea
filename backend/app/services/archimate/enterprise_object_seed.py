@@ -415,73 +415,66 @@ _ELEMENT_TO_LAYER: dict[str, str] = {
     key: layer for layer, keys in taxonomy.LAYERS.items() for key in keys
 }
 
-# Fields refreshed on an existing row at every seed run. `name`, `is_hidden`
-# and `sort_order` are deliberately excluded: is_hidden is an admin
-# visibility choice (same rule CardType seeding follows in seed_metamodel,
-# which never rewrites an existing built-in CardType's label/is_hidden
-# either), and sort_order is likewise left for the admin to rearrange.
-_REFRESHED_FIELDS = ("description", "icon", "color", "layer")
-
 
 async def seed_enterprise_objects(db: AsyncSession) -> None:
     """Seed the EnterpriseObject registry, adding any missing rows.
 
-    Idempotent: upserts by `key`. On an existing row, description/icon/
-    color/layer are refreshed; `name`, `is_hidden` and `sort_order` are left
-    untouched so an admin's visibility/ordering/naming choices survive a
-    reseed.
+    Idempotent and insert-only: upserts by `key`, but only to *add* a row
+    that does not exist yet. An existing row -- including its
+    admin-editable `description` (Task 11's popover) -- is never touched
+    again, on any field, once it has been created. `description`/`icon`/
+    `color`/`layer`/`name`/`is_hidden`/`sort_order` are all first-insert-only
+    for this reason: a seed that runs on every backend boot must not revert
+    an admin's edit on the next deploy/restart.
     """
-    existing_result = await db.execute(select(EnterpriseObject))
-    existing = {o.key: o for o in existing_result.scalars().all()}
+    existing_result = await db.execute(select(EnterpriseObject.key))
+    existing_keys = set(existing_result.scalars().all())
 
     all_keys = (*taxonomy.ELEMENT_TYPES, *_OTHER_SECTION_KEYS)
     for sort_order, key in enumerate(all_keys):
-        layer = _ELEMENT_TO_LAYER.get(key)  # None for the 4 "Other" rows
-        values = {
-            "name": _NAMES[key],
-            "description": ENTERPRISE_OBJECT_DESCRIPTIONS[key],
-            "icon": _ICONS[key],
-            "color": _LAYER_COLORS[layer] if layer is not None else _OTHER_COLOR,
-            "layer": layer,
-        }
-
-        row = existing.get(key)
-        if row is not None:
-            for field in _REFRESHED_FIELDS:
-                setattr(row, field, values[field])
+        if key in existing_keys:
             continue
 
+        layer = _ELEMENT_TO_LAYER.get(key)  # None for the 4 "Other" rows
         db.add(
             EnterpriseObject(
                 key=key,
+                name=_NAMES[key],
+                description=ENTERPRISE_OBJECT_DESCRIPTIONS[key],
+                icon=_ICONS[key],
+                color=_LAYER_COLORS[layer] if layer is not None else _OTHER_COLOR,
+                layer=layer,
                 is_standard=True,
                 is_locked=(key == "Grouping"),
                 sort_order=sort_order,
-                **values,
             )
         )
 
 
 async def seed_card_mappings(db: AsyncSession) -> None:
-    """Seed EnterpriseObjectCardMapping bridge rows from default_mapping.py's
-    ``CARD_TYPE_DEFAULTS`` (card type -> element type, or None for "no
-    mapping") and ``SUBTYPE_DEFAULTS`` (card type/subtype -> element type).
+    """One-time backfill of EnterpriseObjectCardMapping bridge rows from
+    default_mapping.py's ``CARD_TYPE_DEFAULTS`` (card type -> element type,
+    or None for "no mapping") and ``SUBTYPE_DEFAULTS`` (card type/subtype ->
+    element type).
 
-    Idempotent: upserts on the (enterprise_object_key, card_type_key,
-    card_subtype_key) unique constraint -- a row that already exists is left
-    alone, a second run adds nothing new.
+    Runs only while the bridge table is completely empty -- the very first
+    boot after migration 159, before anyone has touched Card Mapping. Once
+    at least one row exists (from this backfill or an admin's own edit), the
+    table is admin-owned: this function no-ops on every later call, so an
+    admin removing a default mapping through the UI is a deliberate action
+    that survives a backend restart rather than being silently re-added.
     """
-    existing_result = await db.execute(select(EnterpriseObjectCardMapping))
-    existing = {
-        (m.enterprise_object_key, m.card_type_key, m.card_subtype_key)
-        for m in existing_result.scalars().all()
-    }
+    existing_result = await db.execute(select(EnterpriseObjectCardMapping.id).limit(1))
+    if existing_result.scalar() is not None:
+        return  # bridge table already seeded/admin-owned -- never re-add
+
+    seen: set[tuple[str, str, str | None]] = set()
 
     def _add(enterprise_object_key: str, card_type_key: str, card_subtype_key: str | None) -> None:
         unique_key = (enterprise_object_key, card_type_key, card_subtype_key)
-        if unique_key in existing:
+        if unique_key in seen:
             return
-        existing.add(unique_key)
+        seen.add(unique_key)
         db.add(
             EnterpriseObjectCardMapping(
                 enterprise_object_key=enterprise_object_key,
