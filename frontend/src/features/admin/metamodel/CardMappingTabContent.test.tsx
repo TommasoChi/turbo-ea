@@ -211,8 +211,23 @@ describe("CardMappingTabContent", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
 
+    // The STILL-OPEN popover must already show the new text at this exact moment -- this is
+    // where the regression was invisible before: a `fetchObjects` that still set `loading(true)`
+    // unmounted the whole tab (including this open popover) and remounted it from an `infoObject`
+    // snapshot taken back at the original click, so it would blink out and reappear
+    // mispositioned/stale right here, not just on a later reopen.
+    expect(screen.getByText("Updated description.")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument(); // back to read-only, not mid-edit
+
     // Close via the Popover's backdrop, then reopen the same row's popover -- a fresh mount,
-    // reading from `objects`.
+    // reading from `objects`. NOT Escape: confirmed (via document.activeElement instrumentation,
+    // removed after use) that this is unrelated to the remount bug fixed above -- after Save,
+    // the Save button (which held focus) unmounts and jsdom/the browser drops focus to
+    // `document.body` with no trap re-claiming it, so a later Escape keydown never reaches the
+    // Popover's close handler at all (confirmed: a popover opened WITHOUT an edit cycle keeps
+    // focus trapped inside its own paper and Escape closes it fine). That is a separate,
+    // pre-existing focus-management gap in EnterpriseObjectPopover's save() flow, not something
+    // introduced or fixed by this remediation -- flagged for the controller, not fixed here.
     await user.click(document.querySelector(".MuiBackdrop-root")!);
     await waitFor(() => expect(screen.queryByText("Updated description.")).not.toBeInTheDocument());
     await user.click(screen.getByText("Business Object"));

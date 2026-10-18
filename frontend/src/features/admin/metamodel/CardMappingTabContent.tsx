@@ -46,11 +46,19 @@ export default function CardMappingTabContent({ types = [] }: CardMappingTabCont
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [infoAnchor, setInfoAnchor] = useState<HTMLElement | null>(null);
-  const [infoObject, setInfoObject] = useState<EnterpriseObject | null>(null);
+  // The KEY only, not a snapshot of the object -- `infoObject` below is derived fresh from
+  // `objects` on every render, so an already-open popover picks up a refetch (e.g. after it
+  // saves its own edit) without a remount or any extra plumbing. A snapshot would otherwise go
+  // stale the moment `objects` is replaced underneath it.
+  const [infoKey, setInfoKey] = useState<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
+  // No `setLoading(true)` here: `loading` already starts `true` (first load keeps its spinner),
+  // and every OTHER call is a refetch after a mutation (visibility toggle, create, mapping edit,
+  // popover save) -- looping back through the full-page spinner on every one of those used to
+  // unmount the whole tab (including an open popover) and remount it from scratch, which is what
+  // made the popover blink out and reappear mispositioned/stale after a save.
   const fetchObjects = useCallback(async () => {
-    setLoading(true);
     try {
       setObjects(await listEnterpriseObjects(true));
     } finally {
@@ -87,12 +95,13 @@ export default function CardMappingTabContent({ types = [] }: CardMappingTabCont
 
   const openInfo = (event: React.MouseEvent<HTMLElement>, eo: EnterpriseObject) => {
     setInfoAnchor(event.currentTarget);
-    setInfoObject(eo);
+    setInfoKey(eo.key);
   };
   const closeInfo = () => {
     setInfoAnchor(null);
-    setInfoObject(null);
+    setInfoKey(null);
   };
+  const infoObject = infoKey ? objects.find((o) => o.key === infoKey) ?? null : null;
 
   if (loading) {
     return (
