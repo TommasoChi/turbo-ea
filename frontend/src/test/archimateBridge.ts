@@ -10,6 +10,7 @@ import type { EditorBridge, EditorLabels } from "@/features/archimate/engine/Edi
 import { ELEMENT_TYPES, LAYER_ORDER } from "@/features/archimate/taxonomy/elements";
 import { ACCESS_TYPES, RELATIONSHIP_TYPES } from "@/features/archimate/taxonomy/relationships";
 import { ARCHIMATE_MODULES } from "@/features/archimate/engine/modules";
+import type { EnterpriseObject } from "@/types";
 
 const labelled = <K extends string>(keys: readonly K[]) =>
   Object.fromEntries(keys.map((k) => [k, `L:${k}`])) as Record<K, string>;
@@ -22,7 +23,9 @@ export function makeBridge(): EditorBridge {
     layers: labelled(LAYER_ORDER),
     linkCard: "L:linkCard", createCard: "L:createCard", openCard: "L:openCard", unlinkCard: "L:unlinkCard",
     delete: "L:delete", connect: (relationship) => `L:connect ${relationship}`, unlinked: "L:unlinked",
-    directed: "L:directed", tools: { hand: "L:hand", lasso: "L:lasso" }, note: "L:note",
+    directed: "L:directed",
+    tools: { hand: "L:hand", lasso: "L:lasso", objectInfo: (name) => `L:objectInfo ${name}` },
+    note: "L:note",
   };
   return {
     labels,
@@ -31,10 +34,12 @@ export function makeBridge(): EditorBridge {
     openCreateCard: vi.fn(),
     openCard: vi.fn(),
     cardName: vi.fn(),
+    openObjectInfo: vi.fn(),
   };
 }
 
-/** The engine's modules plus the bridge value, as `ArchimateEngine` assembles them. */
-export function withBridge(bridge: EditorBridge = makeBridge()): ModuleDeclaration[] {
-  return [...ARCHIMATE_MODULES, { bridge: ["value", bridge] }];
+/** The engine's modules plus the bridge and Enterprise Object registry values, as `ArchimateEngine`
+ *  assembles them (defaults to an empty registry: every standard type visible, no custom objects). */
+export function withBridge(bridge: EditorBridge = makeBridge(), enterpriseObjects: EnterpriseObject[] = []): ModuleDeclaration[] {
+  return [...ARCHIMATE_MODULES, { bridge: ["value", bridge] }, { enterpriseObjects: ["value", enterpriseObjects] }];
 }

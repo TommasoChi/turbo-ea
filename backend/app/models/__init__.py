@@ -15,6 +15,7 @@ from app.models.diagram_favorite import DiagramFavorite
 from app.models.diagram_group import DiagramGroup, diagram_group_members
 from app.models.document import Document
 from app.models.ea_principle import EAPrinciple
+from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
 from app.models.event import Event
 from app.models.extension import (
     Extension,
@@ -114,6 +115,8 @@ __all__ = [
     "ExtensionSchemaVersion",
     "Document",
     "EAPrinciple",
+    "EnterpriseObject",
+    "EnterpriseObjectCardMapping",
     "Bookmark",
     "Calculation",
     "Diagram",

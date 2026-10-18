@@ -56,6 +56,18 @@ export function isNoteObject(bo: unknown): bo is NoteObject {
   return !!bo && typeof bo === "object" && (bo as { isNote?: unknown }).isNote === true;
 }
 
+/**
+ * The business object of a custom (non-standard) Enterprise Object's shape: never a `ModelElement`
+ * (no ArchiMate type, no card, no properties) -- `enterpriseObjectKey` resolves the matching
+ * `EnterpriseObject` row (icon, color, name) for the palette and the renderer. Exchange Format
+ * import/export of this shape is out of scope for now (deferred follow-up).
+ */
+export interface CustomEnterpriseObject { id: string; isCustomObject: true; enterpriseObjectKey: string; name: string }
+
+export function isCustomEnterpriseObject(bo: unknown): bo is CustomEnterpriseObject {
+  return !!bo && typeof bo === "object" && (bo as { isCustomObject?: unknown }).isCustomObject === true;
+}
+
 /** "id-" + uuid: always a valid XML ID (an xs:ID cannot start with a digit). */
 export function newIdentifier(random: () => string = randomUuid): string {
   return `id-${random()}`;

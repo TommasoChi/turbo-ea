@@ -253,8 +253,8 @@ describe("deep link through sign-in", () => {
     });
 
     it.each([
-      ["/admin/archimate", "archimate sandbox page"],
-      ["/admin/archimate/d1", "archimate editor page"],
+      ["/admin/architectureStudio", "archimate sandbox page"],
+      ["/admin/architectureStudio/d1", "archimate editor page"],
     ])("renders %s for admin.settings with the module on", async (path, text) => {
       window.history.pushState({}, "", path);
       vi.mocked(auth.me).mockResolvedValue(ADMIN_SETTINGS);
@@ -264,7 +264,7 @@ describe("deep link through sign-in", () => {
       expect(await screen.findByText(text)).toBeInTheDocument();
     });
 
-    it.each(["/admin/archimate", "/admin/archimate/d1"])(
+    it.each(["/admin/architectureStudio", "/admin/architectureStudio/d1"])(
       "shows the disabled card at %s and never mounts the page when the module is off",
       async (path) => {
         hookState.archimate = { archimateEnabled: false, archimateLoaded: true };
@@ -275,7 +275,7 @@ describe("deep link through sign-in", () => {
         render(<App />);
 
         const open = await screen.findByRole("button", { name: /Open settings/ });
-        expect(screen.getByRole("heading", { name: /ArchiMate/ })).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: /Architecture Studio/ })).toBeInTheDocument();
         await user.click(open);
         await waitFor(() => expect(window.location.pathname).toBe("/admin/settings"));
         expect(mounted.archimateSandbox).not.toHaveBeenCalled();
@@ -283,7 +283,7 @@ describe("deep link through sign-in", () => {
       },
     );
 
-    it.each(["/admin/archimate", "/admin/archimate/d1"])(
+    it.each(["/admin/architectureStudio", "/admin/architectureStudio/d1"])(
       "shows Access denied at %s to a user without admin.settings, and the page never mounts",
       async (path) => {
         window.history.pushState({}, "", path);
@@ -294,6 +294,22 @@ describe("deep link through sign-in", () => {
         expect(await screen.findByText("Access denied")).toBeInTheDocument();
         expect(mounted.archimateSandbox).not.toHaveBeenCalled();
         expect(mounted.archimateEditor).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      ["/admin/archimate", "/admin/architectureStudio", "archimate sandbox page"],
+      ["/admin/archimate/d1", "/admin/architectureStudio/d1", "archimate editor page"],
+    ])(
+      "redirects the pre-rebrand %s to %s, preserving any :id",
+      async (oldPath, newPath, text) => {
+        window.history.pushState({}, "", oldPath);
+        vi.mocked(auth.me).mockResolvedValue(ADMIN_SETTINGS);
+
+        render(<App />);
+
+        expect(await screen.findByText(text)).toBeInTheDocument();
+        expect(window.location.pathname).toBe(newPath);
       },
     );
   });

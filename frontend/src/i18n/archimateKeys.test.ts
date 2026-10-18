@@ -63,7 +63,7 @@ describeSourceScan("English archimate namespace", () => {
   });
 
   it("has the engine's tools and directed labels", () => {
-    expect(Object.keys(en.tools as Tree).sort()).toEqual(["hand", "lasso"]);
+    expect(Object.keys(en.tools as Tree).sort()).toEqual(["hand", "lasso", "objectInfo"]);
     expect((en.context as Tree).directed).toBe("Directed association");
   });
 

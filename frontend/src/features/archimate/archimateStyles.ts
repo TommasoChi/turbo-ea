@@ -61,10 +61,34 @@ export function archimateCanvasSx(theme: Theme): SxProps<Theme> {
     },
     // Every element entry sits on a tile in the colour of its layer (the inline `--archimate-tile`).
     "& .archimate-palette-entry": {
+      position: "relative", // anchors the info badge, below
       backgroundColor: "var(--archimate-tile)",
       color: ARCHIMATE_TEXT_COLOR,
       border: `1px solid ${palette.divider}`,
       "&:hover": { color: ARCHIMATE_TEXT_COLOR, filter: "brightness(0.93)", backgroundColor: "var(--archimate-tile)" },
+    },
+    // The info badge: small and in the tile's own background/border so it reads as secondary to
+    // the glyph whatever the tile's layer colour is. Its own click/keyboard target (see
+    // ArchimatePaletteProvider) -- never the tile's create/drag gesture.
+    "& .archimate-palette-info": {
+      position: "absolute",
+      right: -3,
+      bottom: -3,
+      width: 10,
+      height: 10,
+      padding: 0,
+      border: "none",
+      borderRadius: "50%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      lineHeight: 0,
+      color: palette.text.secondary,
+      backgroundColor: palette.background.paper,
+      boxShadow: `0 0 0 1px ${palette.divider}`,
+      cursor: "pointer",
+      "&:hover": { color: palette.primary.main },
+      "&:focus-visible": { outline: `2px solid ${palette.primary.main}`, outlineOffset: 1 },
     },
     "& .djs-context-pad .entry, & .archimate-cp-entry": {
       color: palette.text.primary,

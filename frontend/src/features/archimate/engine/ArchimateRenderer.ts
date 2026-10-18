@@ -9,8 +9,11 @@ import BaseRenderer from "diagram-js/lib/draw/BaseRenderer";
 import type { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import { append as svgAppend, attr as svgAttr, create as svgCreate, innerSVG, prepend as svgPrepend } from "tiny-svg";
 import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
+import { tint } from "@/lib/color";
+import type { EnterpriseObject } from "@/types";
 import {
-  getCardId, isNoteObject, type ModelElement, type ModelRelationship, type NoteObject, type Rgb,
+  getCardId, isCustomEnterpriseObject, isNoteObject,
+  type CustomEnterpriseObject, type ModelElement, type ModelRelationship, type NoteObject, type Rgb,
 } from "../exchange/exchangeModel";
 import { isElementType, layerOf } from "../taxonomy/elements";
 import { isRelationshipType } from "../taxonomy/relationships";
@@ -20,6 +23,11 @@ import { NOTATION, bodyDetail, bodyPath, noteBodyDetail, noteBodyPath, translate
 
 /** A note draws in the "other" layer's colour: it is explicitly not an ArchiMate element. */
 const NOTE_COLORS = ARCHIMATE_LAYER_COLORS.other;
+/** Google Fonts' family name for the Material Symbols ligature font (verbatim from the `<link>`
+ *  in frontend/index.html) -- the same font `MaterialSymbol.tsx` and the context pad's `SYMBOL`
+ *  helper render via the `material-symbols-outlined` CSS class, applied here directly as an SVG
+ *  text attribute since SVG text doesn't reliably pick up page CSS classes. */
+const MATERIAL_SYMBOLS_FONT = "Material Symbols Outlined";
 
 const FONT_SIZE = 12;
 const LINE_HEIGHT = 14;
@@ -68,20 +76,21 @@ function glyphOrigin(body: string, width: number): { x: number; y: number } {
 const SHAPE_IS_THE_SYMBOL = new Set(["circle", "cloud", "wave"]);
 
 export default class ArchimateRenderer extends BaseRenderer {
-  static $inject = ["eventBus", "canvas"];
+  static $inject = ["eventBus", "canvas", "enterpriseObjects"];
 
-  constructor(eventBus: EventBus, private readonly canvas: Canvas) {
+  constructor(eventBus: EventBus, private readonly canvas: Canvas, private readonly enterpriseObjects: EnterpriseObject[]) {
     super(eventBus, 1200);
   }
 
   canRender(element: Element): boolean {
     const bo = element.businessObject;
     if (element.waypoints) return isRelationshipType(bo?.type);
-    return isElementType(bo?.type) || isNoteObject(bo);
+    return isElementType(bo?.type) || isNoteObject(bo) || isCustomEnterpriseObject(bo);
   }
 
   drawShape(visuals: SVGElement, shape: Shape): SVGElement {
     if (isNoteObject(shape.businessObject)) return this.drawNote(visuals, shape, shape.businessObject);
+    if (isCustomEnterpriseObject(shape.businessObject)) return this.drawCustomObject(visuals, shape, shape.businessObject);
     const bo = shape.businessObject as ModelElement;
     const { width, height } = shape;
     const { body, header, glyph } = NOTATION[bo.type];
@@ -168,6 +177,49 @@ export default class ArchimateRenderer extends BaseRenderer {
     return bodyEl;
   }
 
+  /** A custom (non-standard) Enterprise Object: the same folded-corner body as a note, but coloured
+   *  from its own registry row (falling back to the note palette for a key the registry no longer
+   *  has -- deleted after the shape was drawn) and tagged with its own icon in the corner. */
+  private drawCustomObject(visuals: SVGElement, shape: Shape, bo: CustomEnterpriseObject): SVGElement {
+    const { width, height } = shape;
+    const eo = this.enterpriseObjects.find((o) => o.key === bo.enterpriseObjectKey);
+    const color = eo?.color ?? NOTE_COLORS.stroke;
+    const bodyEl = svgCreate("path");
+    svgAttr(bodyEl, {
+      class: "archimate-body", d: noteBodyPath(width, height),
+      fill: tint(color), stroke: color, "stroke-width": 1.5,
+    });
+    svgAppend(visuals, bodyEl);
+    const fold = svgCreate("path");
+    svgAttr(fold, { class: "archimate-detail", d: noteBodyDetail(width, height), fill: "none", stroke: color, "stroke-width": 1.5 });
+    svgAppend(visuals, fold);
+    if (eo?.icon) {
+      const icon = svgCreate("text");
+      svgAttr(icon, {
+        class: "archimate-glyph", x: width - 20, y: 18, "text-anchor": "middle", "font-size": 16,
+        "font-family": MATERIAL_SYMBOLS_FONT, fill: ARCHIMATE_TEXT_COLOR,
+      });
+      icon.textContent = eo.icon;
+      svgAppend(visuals, icon);
+    }
+    if (bo.name) {
+      const lines = wrapText(bo.name, Math.floor((width - 16) / CHAR_WIDTH));
+      const text = svgCreate("text");
+      svgAttr(text, {
+        class: "archimate-name", x: 8, y: 8 + FONT_SIZE - 1, "text-anchor": "start", "font-size": FONT_SIZE,
+        "font-family": "Arial, sans-serif", fill: ARCHIMATE_TEXT_COLOR,
+      });
+      lines.forEach((line, i) => {
+        const span = svgCreate("tspan");
+        svgAttr(span, { x: 8, y: 8 + FONT_SIZE - 1 + i * LINE_HEIGHT });
+        span.textContent = line;
+        svgAppend(text, span);
+      });
+      svgAppend(visuals, text);
+    }
+    return bodyEl;
+  }
+
   drawConnection(visuals: SVGElement, connection: Connection): SVGElement {
     const bo = connection.businessObject as ModelRelationship;
     const { dashArray, sourceMarker, targetMarker } = connectionStyle(bo.type, {
@@ -195,7 +247,8 @@ export default class ArchimateRenderer extends BaseRenderer {
   }
 
   getShapePath(shape: Shape): string {
-    if (isNoteObject(shape.businessObject)) return translatePath(noteBodyPath(shape.width, shape.height), shape.x, shape.y);
+    if (isNoteObject(shape.businessObject) || isCustomEnterpriseObject(shape.businessObject))
+      return translatePath(noteBodyPath(shape.width, shape.height), shape.x, shape.y);
     const { body } = NOTATION[(shape.businessObject as ModelElement).type];
     return translatePath(bodyPath(body, shape.width, shape.height), shape.x, shape.y);
   }

@@ -42,7 +42,8 @@
   },
   "tools": {
     "hand": "Håndværktøj",
-    "lasso": "Lassovalg"
+    "lasso": "Lassovalg",
+    "objectInfo": "Se detaljer: {{name}}"
   },
   "note": {
     "label": "Note"
@@ -158,8 +159,8 @@
     "zoomFit": "Tilpas til skærmen"
   },
   "sandbox": {
-    "title": "ArchiMate-sandkasse",
-    "intro": "Prøv ArchiMate-editoren. Diagrammer, der oprettes her, gemmes som ArchiMate Exchange-filer og vises endnu ikke i menuen Diagrammer.",
+    "title": "Architecture Studio",
+    "intro": "Prøv Architecture Studio. Diagrammer, der oprettes her, gemmes som ArchiMate Exchange-filer og vises endnu ikke i menuen Diagrammer.",
     "newDiagram": "Nyt ArchiMate-diagram",
     "name": "Navn",
     "create": "Opret",

@@ -601,13 +601,13 @@ describe("SettingsAdmin — module toggles", () => {
     );
   });
 
-  it("shows the sandbox button on load when the module is already on, and opens /admin/archimate", async () => {
+  it("shows the sandbox button on load when the module is already on, and opens /admin/architectureStudio", async () => {
     scriptLoad({ bootstrap: { archimate_enabled: true } });
     const { user } = renderWithProviders(<SettingsAdmin />, {
       route: "/admin/settings",
       routes: [
         { path: "/admin/settings" },
-        { path: "/admin/archimate", element: <div data-testid="sandbox-route" /> },
+        { path: "/admin/architectureStudio", element: <div data-testid="sandbox-route" /> },
       ],
     });
     await screen.findByRole("heading", { name: t("settings.currency.title") });

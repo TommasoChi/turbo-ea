@@ -3,6 +3,8 @@ import type { Connection, Shape } from "diagram-js/lib/model/Types";
 import { MODEL } from "@/test/archimateModel";
 import { installSvgStubs } from "@/test/svgStubs";
 import { isNoteObject, type ArchimateModel } from "../exchange/exchangeModel";
+import { readExchange } from "../exchange/readExchange";
+import { writeExchange } from "../exchange/writeExchange";
 import { ARCHIMATE_BASE_MODULES } from "./modules";
 import { extractEdited, importView, type ViewServices } from "./viewIO";
 
@@ -149,5 +151,44 @@ describe("importView / extractEdited: notes", () => {
     s.canvas.addShape(extra, s.canvas.getRootElement());
     const ids = extractEdited(s, model.views[0]).view.notes.map((n) => n.id);
     expect(ids).toEqual(["id-note1", "id-note2", extra.id]);
+  });
+});
+
+describe("extractEdited: a custom Enterprise Object", () => {
+  it("is written as a note (not an element, not a node) and never throws -- regression: getCardId/withCardDefinition used to be called unconditionally on every element, which crashed on a CustomEnterpriseObject's missing `properties`", () => {
+    const s = services();
+    const model = structuredClone(MODEL);
+    importView(s, model, model.views[0]);
+    const custom = s.elementFactory.createShape({ enterpriseObjectKey: "AIModel", name: "x", x: 10, y: 10 });
+    s.canvas.addShape(custom, s.canvas.getRootElement());
+    let out: ReturnType<typeof extractEdited>;
+    expect(() => (out = extractEdited(s, model.views[0]))).not.toThrow();
+    out = extractEdited(s, model.views[0]);
+    expect(out.elements.some((e) => e.id === custom.businessObject.id)).toBe(false);
+    expect(out.view.nodes.some((n) => n.id === custom.id)).toBe(false);
+    // No longer silently dropped: it is written as a note (degrades to a plain Label on
+    // reload -- its type/icon/color is lost, but the user's placement and name are not).
+    expect(out.view.notes.find((n) => n.id === custom.id)).toMatchObject({ text: "x" });
+    // the rest of the view is untouched
+    expect(out.elements.map((e) => e.id)).toEqual(["id-app", "id-group", "id-data"]);
+  });
+
+  it("round-trips through writeExchange/readExchange as a Note/Label with the custom object's name, with no crash and no silent loss", () => {
+    const s = services();
+    const model = structuredClone(MODEL);
+    importView(s, model, model.views[0]);
+    const custom = s.elementFactory.createShape({ enterpriseObjectKey: "AIModel", name: "Fraud Detector", x: 10, y: 10 });
+    s.canvas.addShape(custom, s.canvas.getRootElement());
+    const out = extractEdited(s, model.views[0]);
+    const edited: ArchimateModel = {
+      ...model,
+      elements: out.elements,
+      relationships: out.relationships,
+      views: [out.view, ...model.views.slice(1)],
+    };
+    const xml = writeExchange(edited);
+    const reread = readExchange(xml);
+    const note = reread.views[0].notes.find((n) => n.text === "Fraud Detector");
+    expect(note).toBeDefined();
   });
 });

@@ -13,7 +13,7 @@ L'éditeur **ArchiMate** dessine des diagrammes [ArchiMate 3](https://pubs.openg
 
 ## Ouvrir le bac à sable
 
-Tant que le module est activé, la carte affiche un bouton **Ouvrir le bac à sable**. Il mène à `/admin/archimate`, la liste de vos diagrammes ArchiMate, où vous pouvez créer, ouvrir et supprimer des diagrammes. Pour l'ouvrir, il faut la permission `admin.settings` (détenue par défaut par le rôle Admin) et le module activé.
+Tant que le module est activé, la carte affiche un bouton **Ouvrir le bac à sable**. Il mène à `/admin/architectureStudio`, la liste de vos diagrammes ArchiMate, où vous pouvez créer, ouvrir et supprimer des diagrammes. Pour l'ouvrir, il faut la permission `admin.settings` (détenue par défaut par le rôle Admin) et le module activé.
 
 <!-- Planned screenshot (added with the screenshot capture): 102_archimate_sandbox -->
 

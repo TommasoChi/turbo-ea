@@ -1,6 +1,6 @@
 /**
  * ArchimateSandboxPage — admin-only list of the ArchiMate diagrams (create / open / delete).
- * Route: /admin/archimate
+ * Route: /admin/architectureStudio
  *
  * ArchiMate diagrams are hidden from the Diagrams menu in this release, so this page is the only
  * place they are listed. Every failure is shown, never swallowed.
@@ -90,7 +90,7 @@ export default function ArchimateSandboxPage() {
         kind: "archimate",
         data: { format: ARCHIMATE_FORMAT, xml: writeExchange(emptyModel(trimmed)) },
       });
-      navigate(`/admin/archimate/${made.id}`);
+      navigate(`/admin/architectureStudio/${made.id}`);
     } catch (e) {
       setCreateError(
         t("archimate:sandbox.createFailed", { reason: describeApiError(e, t("common:errors.generic")) }),
@@ -163,7 +163,7 @@ export default function ArchimateSandboxPage() {
                   <Button
                     size="small"
                     component={RouterLink}
-                    to={`/admin/archimate/${d.id}`}
+                    to={`/admin/architectureStudio/${d.id}`}
                     aria-label={`${t("archimate:sandbox.open")} ${d.name}`}
                   >
                     {t("archimate:sandbox.open")}

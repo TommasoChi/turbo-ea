@@ -3,11 +3,13 @@
  * to (from the metamodel mapping), and the dialog / navigation hooks. The engine captures the bridge
  * once, so it is ONE stable object whose members read the latest values through refs.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
+import { listEnterpriseObjects } from "@/api/enterpriseObjects";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useTypeLabel } from "@/hooks/useResolveLabel";
+import type { EnterpriseObject, EnterpriseObjectCardMapping } from "@/types";
 import { elementLabel } from "./engine/elementLabel";
 import type { CardTypeOption, EditorBridge, EditorLabels } from "./engine/EditorBridge";
 import { elementTypesForCardType } from "./mapping/resolveMapping";
@@ -16,10 +18,25 @@ import { ACCESS_TYPES, RELATIONSHIP_TYPES } from "./taxonomy/relationships";
 
 export interface ArchimateBridgeState {
   bridge: EditorBridge;
+  /** The full Enterprise Object registry (standard and custom rows), fetched once at mount --
+   *  consumed by the engine to hide a standard type from the palette (`is_hidden`) and to draw a
+   *  custom (non-standard) object. Empty until the fetch below resolves. */
+  enterpriseObjects: EnterpriseObject[];
+  /** Whether the fetch above has settled (resolved OR failed -- fails open so a down registry
+   *  endpoint degrades to an empty list instead of blocking the editor indefinitely). The engine
+   *  is only an array *value* injectable (not a live reference like `bridge`), so the page must
+   *  wait for this before building it: building it from a still-loading `[]` and rebuilding once
+   *  the real list arrives would otherwise revert whatever the user had already edited. */
+  enterpriseObjectsLoaded: boolean;
   /** The shape whose link picker is open, if any. */
   linkShapeId: string | null;
   /** The shape whose create-card dialog is open, if any. */
   createShapeId: string | null;
+  /** The palette entry whose description popover is open, if any (always read-only here --
+   *  the palette never offers editing, per the spec's Anti-goals). */
+  objectInfo: { key: string; anchorEl: HTMLElement } | null;
+  /** The Enterprise Object `objectInfo.key` refers to, or `undefined` while still loading. */
+  objectInfoObject: EnterpriseObject | undefined;
   closeDialogs: () => void;
   /** Remembers card names for `bridge.cardName` (the linked cards found at load, newly picked ones). */
   rememberCards: (cards: { id: string; name: string }[]) => void;
@@ -32,7 +49,37 @@ export function useArchimateBridge(): ArchimateBridgeState {
   const typeLabel = useTypeLabel();
   const [linkShapeId, setLinkShapeId] = useState<string | null>(null);
   const [createShapeId, setCreateShapeId] = useState<string | null>(null);
+  const [objectInfo, setObjectInfo] = useState<{ key: string; anchorEl: HTMLElement } | null>(null);
+  const [objects, setObjects] = useState<EnterpriseObject[]>([]);
+  const [objectsLoaded, setObjectsLoaded] = useState(false);
+  const [mappings, setMappings] = useState<EnterpriseObjectCardMapping[]>([]);
   const names = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    let cancelled = false;
+    listEnterpriseObjects(true)
+      .then((loaded) => {
+        if (!cancelled) {
+          setObjects(loaded);
+          setMappings(loaded.flatMap((o) => o.card_mappings));
+        }
+      })
+      .catch((err: unknown) => {
+        // Non-critical: "Link to card"/"Create a card" just offers no candidates for this
+        // mount (mappings stays []) instead of crashing with an unhandled rejection. The
+        // description popover degrades the same way: objects stays [], so it just has nothing
+        // to show for a key until the next successful load.
+        if (!cancelled) console.error("Failed to load enterprise object mappings:", err);
+      })
+      .finally(() => {
+        // Fails open: a down endpoint still lets the page build the engine (with an empty
+        // registry) instead of waiting on it forever.
+        if (!cancelled) setObjectsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const labels: EditorLabels = {
     elements: Object.fromEntries(ELEMENT_TYPES.map((e) => [e, elementLabel(e)])) as EditorLabels["elements"],
@@ -49,13 +96,13 @@ export function useArchimateBridge(): ArchimateBridgeState {
     connect: (relationship) => t("context.connect", { relationship }),
     unlinked: t("context.unlinked"),
     directed: t("context.directed"),
-    tools: { hand: t("tools.hand"), lasso: t("tools.lasso") },
+    tools: { hand: t("tools.hand"), lasso: t("tools.lasso"), objectInfo: (name) => t("tools.objectInfo", { name }) },
     note: t("note.label"),
   };
 
   // Everything the bridge reads, refreshed on every render.
-  const latest = useRef({ labels, types, typeLabel, navigate });
-  latest.current = { labels, types, typeLabel, navigate };
+  const latest = useRef({ labels, types, typeLabel, navigate, mappings });
+  latest.current = { labels, types, typeLabel, navigate, mappings };
 
   const bridge = useMemo<EditorBridge>(
     () => ({
@@ -63,15 +110,16 @@ export function useArchimateBridge(): ArchimateBridgeState {
         return latest.current.labels;
       },
       cardTypesFor(type): CardTypeOption[] {
-        const { types: all, typeLabel: label } = latest.current;
+        const { types: all, typeLabel: label, mappings: m } = latest.current;
         return all
-          .filter((ct) => elementTypesForCardType(ct).includes(type))
+          .filter((ct) => elementTypesForCardType(ct.key, m).includes(type))
           .map((ct) => ({ key: ct.key, label: label(ct) }));
       },
       openLinkPicker: setLinkShapeId,
       openCreateCard: setCreateShapeId,
       openCard: (cardId) => latest.current.navigate(`/cards/${cardId}`),
       cardName: (cardId) => names.current.get(cardId),
+      openObjectInfo: (key, anchorEl) => setObjectInfo({ key, anchorEl }),
     }),
     [],
   );
@@ -79,10 +127,16 @@ export function useArchimateBridge(): ArchimateBridgeState {
   const closeDialogs = useCallback(() => {
     setLinkShapeId(null);
     setCreateShapeId(null);
+    setObjectInfo(null);
   }, []);
   const rememberCards = useCallback((cards: { id: string; name: string }[]) => {
     for (const c of cards) names.current.set(c.id, c.name);
   }, []);
 
-  return { bridge, linkShapeId, createShapeId, closeDialogs, rememberCards };
+  const objectInfoObject = objectInfo ? objects.find((o) => o.key === objectInfo.key) : undefined;
+
+  return {
+    bridge, enterpriseObjects: objects, enterpriseObjectsLoaded: objectsLoaded,
+    linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards,
+  };
 }

@@ -92,10 +92,10 @@ export const ROUTE_TITLES: RouteTitle[] = [
   { path: "/admin/surveys/:id/results", titleKey: "admin.surveys" },
   { path: "/admin/surveys/:id", titleKey: "admin.surveys" },
 
-  // The ArchiMate sandbox is reached from Admin → Settings, not from a menu; its label lives in the
-  // feature's own namespace.
-  { path: "/admin/archimate", titleKey: "archimate:sandbox.title" },
-  { path: "/admin/archimate/:id", titleKey: "archimate:sandbox.title" },
+  // Architecture Studio (the ArchiMate editor) is reached from Admin → Settings, not from a menu;
+  // its label lives in the feature's own namespace.
+  { path: "/admin/architectureStudio", titleKey: "archimate:sandbox.title" },
+  { path: "/admin/architectureStudio/:id", titleKey: "archimate:sandbox.title" },
 
   // --- Extensions ---------------------------------------------------------
   // A contributed page's own name is not knowable here; the extension's route
@@ -129,6 +129,9 @@ export const UNTITLED_ROUTES: string[] = [
   "/ea-delivery/risks",
   "/ea-delivery/risks/:id",
   "/surveys",
+  // Legacy ArchiMate editor path, renamed to /admin/architectureStudio.
+  "/admin/archimate",
+  "/admin/archimate/:id",
   "/admin/eol",
   "/admin/web-portals",
   "/admin/servicenow",

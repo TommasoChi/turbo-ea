@@ -4,6 +4,8 @@ import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type GraphicsFactory from "diagram-js/lib/core/GraphicsFactory";
 import type { Connection, Shape } from "diagram-js/lib/model/Types";
 import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
+import { tint } from "@/lib/color";
+import type { EnterpriseObject } from "@/types";
 import { withBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
 import { CARD_ID_DEFINITION, type ModelElement } from "../exchange/exchangeModel";
@@ -16,9 +18,9 @@ import { wrapText } from "./ArchimateRenderer";
 
 beforeAll(installSvgStubs);
 
-function setup() {
+function setup(enterpriseObjects: EnterpriseObject[] = []) {
   const container = document.createElement("div");
-  const diagram = new Diagram({ canvas: { container }, modules: withBridge() });
+  const diagram = new Diagram({ canvas: { container }, modules: withBridge(undefined, enterpriseObjects) });
   const factory = diagram.get<ArchimateElementFactory>("elementFactory");
   const modeling = diagram.get<ArchimateModeling>("modeling");
   const canvas = diagram.get<Canvas>("canvas");
@@ -33,8 +35,12 @@ function setup() {
     const shape = modeling.createShape(factory.createShape({ isNote: true, name }), { x: (x += 300), y: 100 }, root);
     return shape as Shape;
   };
+  const addCustom = (enterpriseObjectKey: string, name = "") => {
+    const shape = modeling.createShape(factory.createShape({ enterpriseObjectKey, name }), { x: (x += 300), y: 100 }, root);
+    return shape as Shape;
+  };
   const gfx = (e: Shape | Connection) => registry.getGraphics(e) as SVGGElement;
-  return { diagram, container, factory, modeling, canvas, registry, root, add, addNote, gfx };
+  return { diagram, container, factory, modeling, canvas, registry, root, add, addNote, addCustom, gfx };
 }
 
 /** diagram-js's tiny-svg sets the CSS-property attributes (fill, stroke, markers...) as inline style. */
@@ -208,6 +214,61 @@ describe("ArchimateRenderer: a note", () => {
     expect(path).toBe(translatePath(noteBodyPath(note.width, note.height), note.x, note.y));
     expect(path.startsWith("M")).toBe(true);
     expect(path).not.toMatch(/[CA]/);
+  });
+});
+
+describe("ArchimateRenderer: a custom Enterprise Object", () => {
+  const AI_MODEL: EnterpriseObject = {
+    key: "AIModel", name: "AI Model", description: null, icon: "smart_toy", color: "#ab12cd",
+    layer: "application", is_standard: false, is_locked: false, is_hidden: false, sort_order: 0, card_mappings: [],
+  };
+
+  it("draws the note-shaped body in the object's own color, not the Note's layer colour", () => {
+    const { addCustom, gfx } = setup([AI_MODEL]);
+    const shape = addCustom("AIModel", "My Model");
+    const g = gfx(shape);
+    const body = g.querySelector("path.archimate-body") as SVGPathElement;
+    expect(body.getAttribute("d")).toBe(noteBodyPath(shape.width, shape.height));
+    expect(css(body, "stroke")).toBe("#ab12cd");
+    expect(css(body, "fill")).toBe(tint("#ab12cd"));
+    expect(css(body, "fill")).not.toBe(ARCHIMATE_LAYER_COLORS.other.fill);
+    expect(g.querySelector("path.archimate-detail")).not.toBeNull();
+  });
+
+  it("draws the object's own icon as a Material Symbols ligature, the same font MaterialSymbol.tsx uses", () => {
+    const { addCustom, gfx } = setup([AI_MODEL]);
+    const g = gfx(addCustom("AIModel"));
+    const icon = g.querySelector("text.archimate-glyph") as SVGTextElement;
+    expect(icon).not.toBeNull();
+    expect(icon.textContent).toBe("smart_toy");
+    expect(css(icon, "font-family")).toBe("Material Symbols Outlined");
+  });
+
+  it("draws the name left-aligned, like a note's", () => {
+    const { addCustom, gfx } = setup([AI_MODEL]);
+    const text = gfx(addCustom("AIModel", "Fraud Detector")).querySelector("text.archimate-name") as SVGTextElement;
+    expect(text.textContent).toBe("Fraud Detector");
+    expect(css(text, "text-anchor")).toBe("start");
+  });
+
+  it("draws nothing for an empty name, same as a note", () => {
+    const { addCustom, gfx } = setup([AI_MODEL]);
+    expect(gfx(addCustom("AIModel", "")).querySelector("text.archimate-name")).toBeNull();
+  });
+
+  it("falls back to the note's stroke colour for a key the registry no longer has", () => {
+    const { addCustom, gfx } = setup([]); // no AIModel row
+    const body = gfx(addCustom("AIModel")).querySelector("path.archimate-body");
+    expect(css(body, "stroke")).toBe(ARCHIMATE_LAYER_COLORS.other.stroke);
+    expect(gfx(addCustom("AIModel")).querySelector("text.archimate-glyph")).toBeNull(); // no icon to draw either
+  });
+
+  it("supplies its own folded-corner outline to connection cropping, same as a note's", () => {
+    const { addCustom, diagram } = setup([AI_MODEL]);
+    const shape = addCustom("AIModel", "x");
+    const factory = diagram.get<GraphicsFactory>("graphicsFactory");
+    const path = factory.getShapePath(shape);
+    expect(path).toBe(translatePath(noteBodyPath(shape.width, shape.height), shape.x, shape.y));
   });
 });
 

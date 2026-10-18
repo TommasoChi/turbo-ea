@@ -14,8 +14,9 @@ import type { Element, Shape } from "diagram-js/lib/model/Types";
 import type ZoomScroll from "diagram-js/lib/navigation/zoomscroll/ZoomScroll";
 import type { Point } from "diagram-js/lib/util/Types";
 import { innerSVG } from "tiny-svg";
+import type { EnterpriseObject } from "@/types";
 import {
-  CARD_ID_DEFINITION, getCardId, isNoteObject, newIdentifier,
+  CARD_ID_DEFINITION, getCardId, isCustomEnterpriseObject, isNoteObject, newIdentifier,
   type ArchimateModel, type ExchangeProperty, type ModelElement,
 } from "../exchange/exchangeModel";
 import type { ElementType } from "../taxonomy/elements";
@@ -26,8 +27,12 @@ import { ARCHIMATE_MODULES } from "./modules";
 import { reconcileModel } from "./reconcile";
 import { extractEdited, importView, type ViewServices } from "./viewIO";
 
+/** Neither carries an ArchiMate type, a card, documentation or properties: a Note's free text and
+ *  a custom Enterprise Object's instance name are the only things either one has of its own. */
+const isFreeText = (bo: unknown): boolean => isNoteObject(bo) || isCustomEnterpriseObject(bo);
+
 export interface EngineOptions {
-  container: HTMLElement; bridge: EditorBridge; onChange?: () => void;
+  container: HTMLElement; bridge: EditorBridge; enterpriseObjects: EnterpriseObject[]; onChange?: () => void;
   /** The selection changed (a click, a lasso, a delete). */
   onSelect?: () => void;
 }
@@ -64,7 +69,11 @@ export class ArchimateEngine {
     this.onChange = opts.onChange;
     this.diagram = new Diagram({
       canvas: { container: opts.container },
-      modules: [...ARCHIMATE_MODULES, { bridge: ["value", opts.bridge] }],
+      modules: [
+        ...ARCHIMATE_MODULES,
+        { bridge: ["value", opts.bridge] },
+        { enterpriseObjects: ["value", opts.enterpriseObjects] },
+      ],
     });
     // A clear (on load) is not a change; every executed, undone or redone command is.
     this.get<EventBus>("eventBus").on("commandStack.changed", (e: { trigger: string }) => {
@@ -132,21 +141,22 @@ export class ArchimateEngine {
     this.update(item, { name: next });
   }
 
-  /** A note has no documentation of its own (its text is its name): a no-op. */
+  /** A note or a custom Enterprise Object has no documentation of its own (its text/name is all it
+   *  carries): a no-op. */
   setDocumentation(id: string, text: string): void {
     const item = this.item(id);
-    if (!item || isNoteObject(item.businessObject)) return;
+    if (!item || isFreeText(item.businessObject)) return;
     const next = text.trim() === "" ? undefined : text;
     if (item.businessObject.documentation === next) return;
     this.update(item, { documentation: next });
   }
 
   /** Replaces the user's properties; the card link is kept. Names are the keys (a repeated one keeps the last value).
-   *  A note never carries properties: a no-op. */
+   *  A note or a custom Enterprise Object never carries properties: a no-op. */
   setUserProperties(id: string, props: UserProperty[]): void {
     const item = this.item(id);
     const base = this.base;
-    if (!item || !base || isNoteObject(item.businessObject)) return;
+    if (!item || !base || isFreeText(item.businessObject)) return;
     const byName = new Map<string, string>();
     for (const { name, value } of props) if (name.trim()) byName.set(name.trim(), value);
     const wanted = [...byName].map(([name, value]) => ({ name, value }));
@@ -180,7 +190,10 @@ export class ArchimateEngine {
   itemInfo(id: string): ItemInfo | null {
     const item = this.item(id);
     if (!item) return null;
-    if (isNoteObject(item.businessObject)) {
+    // A custom Enterprise Object has no ArchiMate type, card or properties of its own -- same
+    // shape as a Note for the properties panel's purposes (its own UI distinction, if any, is a
+    // later task; this task's job is only that selecting one never throws).
+    if (isFreeText(item.businessObject)) {
       return {
         id, kind: "note", type: "Note", name: item.businessObject.name,
         documentation: "", cardId: null, properties: [],
@@ -227,10 +240,15 @@ export class ArchimateEngine {
     this.onChange?.();
   }
 
-  /** `id` is the model element's id (the shape id is the view node's). */
+  /** `id` is the model element's id (the shape id is the view node's). Null for a Note or a custom
+   *  Enterprise Object: neither is a `ModelElement` (no type, no card) -- unreachable through the
+   *  page's own UI today (no link/create-card entry is ever offered for either), guarded anyway so
+   *  this never throws if that ever changes. */
   elementInfo(shapeId: string): { id: string; type: ElementType; name: string; cardId: string | null } | null {
-    const bo = this.shape(shapeId)?.businessObject as ModelElement | undefined;
-    return bo ? { id: bo.id, type: bo.type, name: bo.name, cardId: getCardId(bo) } : null;
+    const bo = this.shape(shapeId)?.businessObject;
+    if (!bo || isFreeText(bo)) return null;
+    const el = bo as ModelElement;
+    return { id: el.id, type: el.type, name: el.name, cardId: getCardId(el) };
   }
 
   selection(): string[] {
@@ -265,6 +283,18 @@ export class ArchimateEngine {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    // diagram-js's palette wires a HoverTooltip (hover-tooltip/HoverTooltip.js) with a 300ms
+    // debounce timer on every `mouseover` of a palette tile; it never listens for the diagram's
+    // own teardown, so a tile hovered (e.g. by `userEvent.click`'s pointer-move-then-click) just
+    // before a quick unmount leaves that timer pending. It later fires against a canvas container
+    // already removed from the DOM and throws. Clearing it here, before the container goes away,
+    // is the only hook point diagram-js gives us -- `_showTimer` is a private field with no public
+    // API, same kind of reach-in as ArchimateRenderer's `_svg` access.
+    const hoverTooltip = this.diagram.get<{ _showTimer?: ReturnType<typeof setTimeout> }>(
+      "hoverTooltip",
+      false,
+    );
+    if (hoverTooltip?._showTimer) clearTimeout(hoverTooltip._showTimer);
     this.diagram.destroy();
   }
 }

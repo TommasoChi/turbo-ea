@@ -188,7 +188,7 @@ Se [GRC-vejledningen](../guide/grc.md) for den fulde funktionsreference.
 
 Kortet **ArchiMate-diagrammer** slår [ArchiMate](../guide/archimate.md)-modulet til eller fra. Det er **slået fra som standard**.
 
-- Når det er slået til, bliver sandkassen på `/admin/archimate` og ArchiMate-editoren tilgængelige, og kortet viser en knap **Åbn sandkassen**, der fører direkte til listen over ArchiMate-diagrammer.
+- Når det er slået til, bliver sandkassen på `/admin/architectureStudio` og ArchiMate-editoren tilgængelige, og kortet viser en knap **Åbn sandkassen**, der fører direkte til listen over ArchiMate-diagrammer.
 - Når det er slået fra, er begge sider utilgængelige og viser den almindelige pladsholder «modul deaktiveret» til alle, der følger et direkte link. Allerede gemte diagrammer bevares og dukker uændrede op igen, hvis modulet slås til igen.
 
 For at åbne sandkassen kræves tilladelsen `admin.settings` (som rollen Admin har som standard) og et slået-til modul. Kontakten skjuler kun brugerfladen: REST-API'et og MCP-værktøjerne (`get_archimate_mapping`, `create_archimate_diagram`, `update_archimate_diagram`) kan stadig kaldes, når modulet er slået fra.

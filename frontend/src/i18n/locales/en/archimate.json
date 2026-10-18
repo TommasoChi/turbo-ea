@@ -42,7 +42,8 @@
   },
   "tools": {
     "hand": "Hand tool",
-    "lasso": "Lasso selection"
+    "lasso": "Lasso selection",
+    "objectInfo": "View details: {{name}}"
   },
   "note": {
     "label": "Note"
@@ -158,8 +159,8 @@
     "zoomFit": "Fit to screen"
   },
   "sandbox": {
-    "title": "ArchiMate sandbox",
-    "intro": "Try the ArchiMate editor. Diagrams made here are stored as ArchiMate Exchange files and are not yet listed in the Diagrams menu.",
+    "title": "Architecture Studio",
+    "intro": "Try Architecture Studio. Diagrams made here are stored as ArchiMate Exchange files and are not yet listed in the Diagrams menu.",
     "newDiagram": "New ArchiMate diagram",
     "name": "Name",
     "create": "Create",

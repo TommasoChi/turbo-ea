@@ -42,7 +42,8 @@
   },
   "tools": {
     "hand": "Herramienta mano",
-    "lasso": "Selección con lazo"
+    "lasso": "Selección con lazo",
+    "objectInfo": "Ver detalles: {{name}}"
   },
   "note": {
     "label": "Nota"
@@ -158,8 +159,8 @@
     "zoomFit": "Ajustar a la pantalla"
   },
   "sandbox": {
-    "title": "Entorno de pruebas ArchiMate",
-    "intro": "Prueba el editor ArchiMate. Los diagramas creados aquí se guardan como archivos ArchiMate Exchange y todavía no aparecen en el menú Diagramas.",
+    "title": "Architecture Studio",
+    "intro": "Prueba Architecture Studio. Los diagramas creados aquí se guardan como archivos ArchiMate Exchange y todavía no aparecen en el menú Diagramas.",
     "newDiagram": "Nuevo diagrama ArchiMate",
     "name": "Nombre",
     "create": "Crear",

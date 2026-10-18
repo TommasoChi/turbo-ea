@@ -17,7 +17,7 @@ import type {
   ViewNode,
   ViewNote,
 } from "../exchange/exchangeModel";
-import { isNoteObject } from "../exchange/exchangeModel";
+import { isCustomEnterpriseObject, isNoteObject } from "../exchange/exchangeModel";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import { cropConnection } from "./ModelSync";
 import type { EditedView } from "./reconcile";
@@ -114,6 +114,18 @@ export function extractEdited(services: ViewServices, baseView: ModelView): Edit
       const s = e as Shape;
       const parent = s.parent && s.parent !== root ? s.parent.id : null;
       if (isNoteObject(s.businessObject)) {
+        notes.push({
+          id: s.id, text: s.businessObject.name,
+          x: Math.round(s.x), y: Math.round(s.y), width: Math.round(s.width), height: Math.round(s.height), parent,
+        });
+        continue;
+      }
+      // A custom (non-standard) Enterprise Object: true round-trip (re-importing it as the SAME
+      // custom type) is out of scope for now (deferred follow-up), but it must not be silently
+      // discarded -- that was real data loss. It degrades to a plain Note/Label on the next
+      // load, same as the spec's Exchange Format anti-goals require, losing only its type
+      // (icon/color), same shape as the real Note branch above.
+      if (isCustomEnterpriseObject(s.businessObject)) {
         notes.push({
           id: s.id, text: s.businessObject.name,
           x: Math.round(s.x), y: Math.round(s.y), width: Math.round(s.width), height: Math.round(s.height), parent,

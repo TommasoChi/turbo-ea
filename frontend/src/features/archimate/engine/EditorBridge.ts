@@ -21,8 +21,8 @@ export interface EditorLabels {
   unlinked: string;
   /** Context-pad toggle title of an Association's `isDirected`. */
   directed: string;
-  /** Palette tool titles. */
-  tools: { hand: string; lasso: string };
+  /** Palette tool titles, and the info badge's accessible label ("View details: {{name}}"). */
+  tools: { hand: string; lasso: string; objectInfo: (name: string) => string };
   /** The "Other" layer's free-text annotation: its palette title and the panel's heading fallback. */
   note: string;
 }
@@ -35,4 +35,8 @@ export interface EditorBridge {
   openCreateCard(shapeId: string): void;
   openCard(cardId: string): void;
   cardName(cardId: string): string | undefined;
+  /** Opens the read-only Enterprise Object description popover for a palette entry (the palette
+   *  never offers editing -- spec Anti-goals), anchored at the clicked tile. `key` is the
+   *  Enterprise Object's registry key, which is the palette entry's `ElementType`. */
+  openObjectInfo(key: string, anchorEl: HTMLElement): void;
 }

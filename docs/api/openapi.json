@@ -26670,6 +26670,26 @@
         ]
       }
     },
+    "/api/v1/metamodel/card-type-archimate-mapping": {
+      "get": {
+        "description": "Every card type's (and subtype's) current ArchiMate element type\nmapping, resolved from the EnterpriseObjectCardMapping bridge table --\nthe n:m replacement for the old single ``CardType.archimate_type``\ncolumn. Consumed by the MCP server's ``get_archimate_mapping`` tool.\n\nAuthenticated read, like ``GET /enterprise-objects`` \u2014 no\n``admin.metamodel`` gate, since this only reports the live mapping.\nExcludes hidden/soft-deleted types and orders by ``sort_order``, same as\n``GET /metamodel/types`` (the endpoint this one is meant to sit beside\nfor the MCP tool, which should not see a type a `DELETE /types/{key}`\nsoft-delete hid from everywhere else).",
+        "operationId": "get_card_type_archimate_mapping_api_v1_metamodel_card_type_archimate_mapping_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Card Type Archimate Mapping",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
     "/api/v1/metamodel/compliance-regulations": {
       "get": {
         "description": "List compliance regulations, ordered by sort_order.\n\nAuthenticated read so the TurboLens Security tab can fetch the list\neven for users without admin rights. Write operations remain gated\nbehind ``admin.metamodel``.",
@@ -26830,6 +26850,237 @@
           }
         },
         "summary": "Update Compliance Regulation",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/enterprise-objects": {
+      "get": {
+        "description": "List the ArchiMate Enterprise Object registry with their card mappings.\n\nAuthenticated read, like ``GET /types`` \u2014 the drawing palette calls this\nfor any user who can edit a diagram, not just admins who manage the\nmetamodel, so there is no ``admin.metamodel`` gate here.",
+        "operationId": "list_enterprise_objects_api_v1_metamodel_enterprise_objects_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_hidden",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Hidden",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Enterprise Objects",
+        "tags": [
+          "metamodel"
+        ]
+      },
+      "post": {
+        "description": "Create a custom Enterprise Object. Always ``is_standard=False`` and\n``is_locked=False`` \u2014 the standard registry rows only ever come from\n``seed_enterprise_objects``.",
+        "operationId": "create_enterprise_object_api_v1_metamodel_enterprise_objects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Enterprise Object",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/enterprise-objects/{key}": {
+      "patch": {
+        "operationId": "update_enterprise_object_api_v1_metamodel_enterprise_objects__key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Enterprise Object",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/enterprise-objects/{key}/card-mappings": {
+      "post": {
+        "description": "Add one card-type (or card-type+subtype) mapping row to an Enterprise Object.",
+        "operationId": "add_card_mapping_api_v1_metamodel_enterprise_objects__key__card_mappings_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Card Mapping",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/enterprise-objects/{key}/card-mappings/{mapping_id}": {
+      "delete": {
+        "operationId": "remove_card_mapping_api_v1_metamodel_enterprise_objects__key__card_mappings__mapping_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Card Mapping",
         "tags": [
           "metamodel"
         ]

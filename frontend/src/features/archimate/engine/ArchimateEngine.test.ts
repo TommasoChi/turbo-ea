@@ -2,6 +2,7 @@ import type Modeling from "diagram-js/lib/features/modeling/Modeling";
 import type Selection from "diagram-js/lib/features/selection/Selection";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type { Shape } from "diagram-js/lib/model/Types";
+import type { EnterpriseObject } from "@/types";
 import { MODEL } from "@/test/archimateModel";
 import { makeBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
@@ -13,13 +14,14 @@ import { ArchimateEngine } from "./ArchimateEngine";
 beforeAll(installSvgStubs);
 
 const bridge = makeBridge();
+const enterpriseObjects: EnterpriseObject[] = [];
 /** load() works on a copy: no edit may reach the shared fixture. */
 const PRISTINE = structuredClone(MODEL);
 
 function setup() {
   const container = document.createElement("div");
   const onChange = vi.fn();
-  const engine = new ArchimateEngine({ container, bridge, onChange });
+  const engine = new ArchimateEngine({ container, bridge, enterpriseObjects, onChange });
   engine.load(MODEL);
   // The services behind the facade, for driving the diagram the way a user would.
   const get = <T,>(name: string) => (engine as unknown as { diagram: { get(n: string): T } }).diagram.get(name);
@@ -80,7 +82,7 @@ describe("ArchimateEngine", () => {
   });
 
   it("adds a view named after the model when the model has none", () => {
-    const engine = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    const engine = new ArchimateEngine({ container: document.createElement("div"), bridge, enterpriseObjects });
     const empty: ArchimateModel = { ...structuredClone(MODEL), views: [] };
     engine.load(empty);
     const out = engine.toModel();
@@ -105,6 +107,27 @@ describe("ArchimateEngine", () => {
     expect(container.children).toHaveLength(0);
     expect(() => engine.destroy()).not.toThrow();
   });
+
+  it("destroy clears a pending HoverTooltip timer before the canvas container goes away", () => {
+    // diagram-js's palette wires a HoverTooltip with a 300ms debounce on every palette-tile
+    // `mouseover` (PaletteTooltip.js); the library never clears it on diagram teardown. Left
+    // alone, the timer fires later against a canvas container already removed from the DOM and
+    // throws (`Cannot read properties of undefined (reading 'appendChild')`) -- the exact
+    // "Unhandled Error" CI caught in ArchimateModeler.test.tsx. Reproduced here at the service
+    // level: start a hover (as a real `mouseover` would), destroy, and prove the timer is dead.
+    const { engine, get } = setup();
+    const hoverTooltip = get<{
+      _show: (target: object, config: { getContent: () => string }, delay: number) => void;
+      _showTimer?: ReturnType<typeof setTimeout>;
+    }>("hoverTooltip");
+    hoverTooltip._show({}, { getContent: () => "tip" }, 10_000);
+    const pendingTimer = hoverTooltip._showTimer;
+    expect(pendingTimer).toBeDefined();
+    const clearSpy = vi.spyOn(global, "clearTimeout");
+    engine.destroy();
+    expect(clearSpy).toHaveBeenCalledWith(pendingTimer);
+    clearSpy.mockRestore();
+  });
 });
 
 describe("ArchimateEngine: the properties panel's view of the selection", () => {
@@ -123,7 +146,7 @@ describe("ArchimateEngine: the properties panel's view of the selection", () => 
   it("reports the single selected item, and nothing for none or several; the page hears every change", () => {
     const container = document.createElement("div");
     const onSelect = vi.fn();
-    const engine = new ArchimateEngine({ container, bridge, onSelect });
+    const engine = new ArchimateEngine({ container, bridge, enterpriseObjects, onSelect });
     engine.load(MODEL);
     const selection = (engine as unknown as { diagram: { get(n: string): Selection } }).diagram.get("selection");
     const registry = (engine as unknown as { diagram: { get(n: string): ElementRegistry } }).diagram.get("elementRegistry");
@@ -194,7 +217,7 @@ describe("ArchimateEngine: the properties panel's view of the selection", () => 
   it("round-trips the user's properties through the Exchange writer and reader", () => {
     const { engine } = setup();
     engine.setUserProperties("id-n1", [{ name: "owner", value: "Ann & Bob" }]);
-    const again = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    const again = new ArchimateEngine({ container: document.createElement("div"), bridge, enterpriseObjects });
     again.load(readExchange(writeExchange(engine.toModel())));
     expect(again.itemInfo("id-n1")!.properties).toEqual([{ name: "owner", value: "Ann & Bob" }]);
     expect(again.itemInfo("id-n1")!.cardId).toBe("c1");
@@ -239,11 +262,78 @@ describe("ArchimateEngine: a note", () => {
     expect(model.views[0].notes).toEqual([
       expect.objectContaining({ id: note.id, text: "Ask the team" }),
     ]);
-    const again = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    const again = new ArchimateEngine({ container: document.createElement("div"), bridge, enterpriseObjects });
     again.load(readExchange(writeExchange(model)));
     expect(again.itemInfo(note.id)).toEqual({
       id: note.id, kind: "note", type: "Note", name: "Ask the team", documentation: "", cardId: null, properties: [],
     });
+  });
+});
+
+describe("ArchimateEngine: a custom Enterprise Object", () => {
+  const AI_MODEL: EnterpriseObject = {
+    key: "AIModel", name: "AI Model", description: null, icon: "smart_toy", color: "#ab12cd",
+    layer: "application", is_standard: false, is_locked: false, is_hidden: false, sort_order: 0, card_mappings: [],
+  };
+
+  /** Its own engine (not the shared `setup()`, since it needs the registry row), with one custom
+   *  object already on the canvas alongside the regular fixture elements. */
+  function setupCustom() {
+    const container = document.createElement("div");
+    const onChange = vi.fn();
+    const engine = new ArchimateEngine({ container, bridge, enterpriseObjects: [AI_MODEL], onChange });
+    engine.load(MODEL);
+    const get = <T,>(name: string) => (engine as unknown as { diagram: { get(n: string): T } }).diagram.get(name);
+    const modeling = get<Modeling>("modeling");
+    const factory = get<{ createShape(attrs: unknown): Shape }>("elementFactory");
+    const root = get<{ getRootElement(): unknown }>("canvas").getRootElement();
+    const shape = modeling.createShape(factory.createShape({ enterpriseObjectKey: "AIModel" }), { x: 700, y: 300 }, root) as Shape;
+    return { container, engine, onChange, get, shape };
+  }
+
+  it("selecting it (what every drop does automatically) never throws -- itemInfo degrades like a note's: no card, no properties", () => {
+    const { engine, get, shape } = setupCustom();
+    // This is exactly what a palette drop does next (dropAtCentre selects the new shape, which
+    // fires onSelect -> the page calls selectedItem() -> itemInfo()): regression coverage for a
+    // crash that only showed up once a custom object went through the real engine, not just the
+    // palette/factory/renderer in isolation.
+    expect(() => get<Selection>("selection").select(shape)).not.toThrow();
+    expect(() => engine.selectedItem()).not.toThrow();
+    const info = engine.itemInfo(shape.id);
+    expect(info).toEqual({ id: shape.id, kind: "note", type: "Note", name: "", documentation: "", cardId: null, properties: [] });
+    engine.setName(shape.id, "Fraud Detector");
+    expect(engine.itemInfo(shape.id)!.name).toBe("Fraud Detector");
+  });
+
+  it("setDocumentation and setUserProperties are a no-op, same as a note's", () => {
+    const { engine, onChange, shape } = setupCustom();
+    onChange.mockClear();
+    expect(() => engine.setDocumentation(shape.id, "Some text")).not.toThrow();
+    expect(() => engine.setUserProperties(shape.id, [{ name: "a", value: "b" }])).not.toThrow();
+    expect(engine.itemInfo(shape.id)).toMatchObject({ documentation: "", properties: [] });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("elementInfo returns null for it rather than throwing (no type, no card to report)", () => {
+    const { engine, shape } = setupCustom();
+    expect(() => engine.elementInfo(shape.id)).not.toThrow();
+    expect(engine.elementInfo(shape.id)).toBeNull();
+  });
+
+  it("toModel() does not throw with a custom object on the canvas, and saves it as a note -- the rest of the diagram still round-trips", () => {
+    const { engine, shape } = setupCustom();
+    engine.setName(shape.id, "Fraud Detector");
+    expect(() => engine.toModel()).not.toThrow();
+    const model = engine.toModel();
+    // True round-trip (re-importing it as the SAME custom type) is still out of scope: it
+    // degrades to a plain note, same shape/text as a real Note, instead of being silently
+    // dropped (which was real data loss).
+    expect(model.elements.some((e) => e.id === shape.businessObject.id)).toBe(false);
+    expect(model.views[0].notes.find((n) => n.id === shape.id)).toMatchObject({ text: "Fraud Detector" });
+    expect(model.views[0].nodes.some((n) => n.id === shape.id)).toBe(false);
+    // the fixture's own elements are untouched by the custom object's presence
+    expect(model.elements.find((e) => e.id === "id-app")).toBeDefined();
+    expect(model).toEqual(engine.toModel()); // stable, not crashing on repeat either
   });
 });
 
@@ -285,7 +375,7 @@ describe("ArchimateEngine: the model's own properties", () => {
   it("round-trips through the Exchange writer and reader", () => {
     const { engine } = setup();
     engine.setModelProperties([{ name: "owner", value: "Team A & B" }]);
-    const again = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    const again = new ArchimateEngine({ container: document.createElement("div"), bridge, enterpriseObjects });
     again.load(readExchange(writeExchange(engine.toModel())));
     expect(again.modelProperties()).toEqual([{ name: "owner", value: "Team A & B" }]);
   });

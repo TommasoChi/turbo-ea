@@ -159,7 +159,7 @@ describe("canAccessPath", () => {
   });
 
   it("gates the ArchiMate sandbox pages on admin.settings", () => {
-    for (const p of ["/admin/archimate", "/admin/archimate/abc"]) {
+    for (const p of ["/admin/architectureStudio", "/admin/architectureStudio/abc"]) {
       expect(permissionForPath(p)).toBe("admin.settings");
       expect(canAccessPath({ "admin.settings": true }, p)).toBe(true);
       expect(canAccessPath({ "admin.users": true, "diagrams.manage": true }, p)).toBe(false);

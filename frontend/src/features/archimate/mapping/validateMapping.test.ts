@@ -1,20 +1,38 @@
 import { describe, it, expect } from "vitest";
-import type { CardType, RelationType } from "@/types";
+import type { CardType, EnterpriseObjectCardMapping, RelationType } from "@/types";
 import { validateMapping } from "./validateMapping";
 
-const card = (
-  key: string,
-  archimate_type: string | null,
-  subtypes: object[] = [],
-) => ({ key, archimate_type, subtypes }) as CardType;
+const card = (key: string, subtypes: object[] = []) =>
+  ({ key, subtypes }) as CardType;
 
 const types = [
-  card("Application", "ApplicationComponent"),
-  card("ITComponent", "Node"),
-  card("DataObject", "BusinessObject"),
-  card("BusinessProcess", "BusinessProcess"),
-  card("Organization", "BusinessActor"),
+  card("Application"),
+  card("ITComponent"),
+  card("DataObject"),
+  card("BusinessProcess"),
+  card("Organization"),
 ];
+
+let nextMappingId = 0;
+const mapping = (
+  enterprise_object_key: string,
+  card_type_key: string,
+  card_subtype_key: string | null = null,
+): EnterpriseObjectCardMapping => ({
+  id: String(++nextMappingId),
+  enterprise_object_key,
+  card_type_key,
+  card_subtype_key,
+});
+
+const mappings = [
+  mapping("ApplicationComponent", "Application"),
+  mapping("Node", "ITComponent"),
+  mapping("BusinessObject", "DataObject"),
+  mapping("BusinessProcess", "BusinessProcess"),
+  mapping("BusinessActor", "Organization"),
+];
+
 const rel = (key: string, s: string, t: string, o: object) =>
   ({ key, source_type_key: s, target_type_key: t, ...o }) as RelationType;
 
@@ -25,7 +43,7 @@ describe("validateMapping", () => {
       archimate_type: "Serving",
       archimate_reversed: true,
     });
-    expect(validateMapping(types, [uses])).toEqual([]);
+    expect(validateMapping(types, [uses], mappings)).toEqual([]);
   });
 
   // The ArchiMate matrix allows Serving both ways between App and Node, so only a
@@ -40,9 +58,9 @@ describe("validateMapping", () => {
       archimate_type: "Assignment",
       archimate_reversed: false,
     });
-    expect(validateMapping(types, [ok])).toEqual([]);
+    expect(validateMapping(types, [ok], mappings)).toEqual([]);
     expect(
-      validateMapping(types, [wrong]).map((i) => [i.relationKey, i.kind]),
+      validateMapping(types, [wrong], mappings).map((i) => [i.relationKey, i.kind]),
     ).toEqual([["wrong", "not_allowed"]]);
   });
 
@@ -56,14 +74,14 @@ describe("validateMapping", () => {
         archimate_reversed: true,
       },
     );
-    expect(validateMapping(types, [succ])).toEqual([]);
+    expect(validateMapping(types, [succ], mappings)).toEqual([]);
   });
 
   it("reports the offending element pair", () => {
     const bad = rel("x", "Application", "DataObject", {
       archimate_type: "Assignment",
     });
-    const [issue] = validateMapping(types, [bad]);
+    const [issue] = validateMapping(types, [bad], mappings);
     expect(issue).toMatchObject({
       relationKey: "x",
       kind: "not_allowed",
@@ -81,7 +99,7 @@ describe("validateMapping", () => {
     });
     const skipped = rel("z", "Application", "Ghost", {});
     expect(
-      validateMapping(types, [unmapped, skipped]).map((i) => [
+      validateMapping(types, [unmapped, skipped], mappings).map((i) => [
         i.relationKey,
         i.kind,
         i.target,
@@ -90,14 +108,18 @@ describe("validateMapping", () => {
   });
 
   it("checks subtype overrides too, one issue per relation type", () => {
-    const itc = card("ITComponent", "Node", [
-      { key: "software", label: "s", archimate_type: "Artifact" },
+    const itc = card("ITComponent", [
+      { key: "software", label: "s" },
     ]);
     // Application -> Node is a valid Serving, Application -> Artifact is not.
+    const scopedMappings = [
+      ...mappings,
+      mapping("Artifact", "ITComponent", "software"),
+    ];
     const r = rel("hosts", "Application", "ITComponent", {
       archimate_type: "Serving",
     });
-    const issues = validateMapping([types[0], itc], [r]);
+    const issues = validateMapping([types[0], itc], [r], scopedMappings);
     expect(issues).toHaveLength(1);
     expect(issues[0]).toMatchObject({
       source: "ApplicationComponent",

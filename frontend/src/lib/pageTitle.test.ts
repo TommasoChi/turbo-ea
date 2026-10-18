@@ -28,11 +28,11 @@ describe("titleKeyForPath", () => {
   });
 
   it("titles both ArchiMate sandbox routes from the archimate namespace", () => {
-    for (const p of ["/admin/archimate", "/admin/archimate/abc"]) {
+    for (const p of ["/admin/architectureStudio", "/admin/architectureStudio/abc"]) {
       const key = titleKeyForPath(p);
       expect(key).toBe("archimate:sandbox.title");
       // DocumentTitle resolves it with t = useTranslation("nav").t
-      expect(i18n.t(key!, { lng: "en", ns: "nav" })).toBe("ArchiMate sandbox");
+      expect(i18n.t(key!, { lng: "en", ns: "nav" })).toBe("Architecture Studio");
     }
   });
 

@@ -208,7 +208,7 @@ async function enableArchimateIfNeeded(
   token: string,
   pages: PageDef[]
 ): Promise<void> {
-  if (!pages.some((p) => p.route.startsWith("/admin/archimate"))) return;
+  if (!pages.some((p) => p.route.startsWith("/admin/architectureStudio"))) return;
   const resp = await page.request.patch(
     `${config.baseUrl}/api/v1/settings/archimate-enabled`,
     { headers: { Authorization: `Bearer ${token}` }, data: { enabled: true } }

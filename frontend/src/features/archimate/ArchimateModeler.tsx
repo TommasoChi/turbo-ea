@@ -41,6 +41,7 @@ import {
   ExchangeParseError, MAX_EXCHANGE_BYTES, exchangeWarnings, readExchange, requireView,
 } from "./exchange/readExchange";
 import { writeExchange } from "./exchange/writeExchange";
+import EnterpriseObjectPopover from "@/features/admin/metamodel/EnterpriseObjectPopover";
 import ArchimatePropertiesPanel from "./ArchimatePropertiesPanel";
 import CreateCardDialog from "./CreateCardDialog";
 import LinkCardDialog from "./LinkCardDialog";
@@ -86,7 +87,10 @@ const fileName = (name: string) => name.replace(/[\\/:*?"<>|]+/g, "_").trim() ||
 export default function ArchimateModeler({ diagramId, onBack, onEngine }: ArchimateModelerProps) {
   const { t } = useTranslation(["archimate", "common", "cards"]);
   const theme = useTheme();
-  const { bridge, linkShapeId, createShapeId, closeDialogs, rememberCards } = useArchimateBridge();
+  const {
+    bridge, enterpriseObjects, enterpriseObjectsLoaded,
+    linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards,
+  } = useArchimateBridge();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -274,9 +278,16 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!model || !container) return;
+    // enterpriseObjectsLoaded gates this: unlike `bridge` (a stable object whose members read a
+    // ref, so its identity never changes), `enterpriseObjects` is a plain array snapshot injected
+    // into diagram-js as a one-time "value" -- it is not a live reference the engine re-reads
+    // later. The registry fetch resolves asynchronously after mount, so building the engine before
+    // it settles and then rebuilding once it does would discard any edit the user had already made
+    // in that window (and the undo stack with it) under the user's feet. Waiting for the gate means
+    // the engine is only ever built once per model, already with the final registry snapshot.
+    if (!model || !container || !enterpriseObjectsLoaded) return;
     const engine = new ArchimateEngine({
-      container, bridge,
+      container, bridge, enterpriseObjects,
       onChange: () => markChangedRef.current(),
       onSelect: () => refreshPanelRef.current(),
     });
@@ -289,7 +300,9 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       engine.destroy();
       if (engineRef.current === engine) engineRef.current = null;
     };
-  }, [model, bridge, resolveNames]);
+    // enterpriseObjects itself is still a dependency (it's read inside), but in practice it is
+    // already stable by the time enterpriseObjectsLoaded flips true, so this effect now runs once.
+  }, [model, bridge, enterpriseObjects, enterpriseObjectsLoaded, resolveNames]);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -597,6 +610,14 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
           initialName={createInfo.name}
           onCreated={cardCreated}
           onClose={closeDialogs}
+        />
+      )}
+      {objectInfo && objectInfoObject && (
+        <EnterpriseObjectPopover
+          object={objectInfoObject}
+          anchorEl={objectInfo.anchorEl}
+          onClose={closeDialogs}
+          canEdit={false}
         />
       )}
       {issues && <ValidationDialog open issues={issues} onClose={() => setIssues(null)} />}
