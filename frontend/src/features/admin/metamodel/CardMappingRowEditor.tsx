@@ -126,7 +126,7 @@ export default function CardMappingRowEditor({ object, types, onChanged }: CardM
               <MenuItem value={ALL_SUBTYPES}>
                 <em>{t("metamodel.cardMappingAllSubtypes")}</em>
               </MenuItem>
-              {selectedType!.subtypes!.map((st) => (
+              {(selectedType?.subtypes ?? []).map((st) => (
                 <MenuItem key={st.key} value={st.key}>
                   {subtypeLabel(st)}
                 </MenuItem>

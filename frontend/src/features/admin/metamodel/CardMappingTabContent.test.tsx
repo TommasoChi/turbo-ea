@@ -138,6 +138,18 @@ describe("CardMappingTabContent", () => {
     expect(api.patch).not.toHaveBeenCalled();
   });
 
+  it("omits the expand control for a locked row -- no UI path reaches its mapping editor", async () => {
+    render(<CardMappingTabContent />);
+    await screen.findByText("Grouping");
+
+    const lockedRow = screen.getByTestId("eo-row-Grouping");
+    expect(within(lockedRow).queryByLabelText("Edit card mappings")).not.toBeInTheDocument();
+
+    // Contrast with an unlocked row, which does get the control.
+    const unlockedRow = screen.getByTestId("eo-row-BusinessObject");
+    expect(within(unlockedRow).getByLabelText("Edit card mappings")).toBeInTheDocument();
+  });
+
   it("opens the New Architecture Object dialog and refetches the list on success", async () => {
     const user = userEvent.setup();
     vi.mocked(api.post).mockResolvedValue({
