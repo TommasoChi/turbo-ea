@@ -129,6 +129,9 @@ export const UNTITLED_ROUTES: string[] = [
   "/ea-delivery/risks",
   "/ea-delivery/risks/:id",
   "/surveys",
+  // Legacy ArchiMate editor path, renamed to /admin/architectureStudio.
+  "/admin/archimate",
+  "/admin/archimate/:id",
   "/admin/eol",
   "/admin/web-portals",
   "/admin/servicenow",
