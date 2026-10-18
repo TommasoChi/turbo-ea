@@ -70,7 +70,7 @@ describe("ArchimatePaletteProvider entries", () => {
     expect(el.getAttribute("aria-label")).toBe("L:note");
   });
 
-  it("gives every element tile its own small info badge, nested inside, labelled via the bridge", () => {
+  it("gives every element tile its own small info badge, nested inside, labelled via the bridge -- pointer/click-only, never a Tab stop", () => {
     const { entries, entry } = setup();
     for (const t of ELEMENT_TYPES) {
       const html = entries[`create.${t}`].html!;
@@ -81,7 +81,12 @@ describe("ArchimatePaletteProvider entries", () => {
     const badge = tile.querySelector(".archimate-palette-info")!;
     expect(badge).toBeTruthy();
     expect(badge.tagName).toBe("BUTTON");
-    expect(badge.getAttribute("tabindex")).toBe("0");
+    // tabindex="-1" keeps a real <button> out of sequential Tab navigation (the same read-only
+    // description is already keyboard-reachable through the Card Mapping admin list, so a second
+    // Tab stop per palette tile isn't worth doubling every keyboard user's traversal length).
+    // The tile itself is unaffected -- still its own, original Tab stop.
+    expect(badge.getAttribute("tabindex")).toBe("-1");
+    expect(tile.getAttribute("tabindex")).toBe("0");
     expect(badge.getAttribute("draggable")).toBe("false");
   });
 
@@ -339,23 +344,20 @@ describe("palette keyboard path", () => {
     expect(spy.mock.calls[0][2]).toBe(get<Canvas>("canvas").getRootElement());
   });
 
-  it("Enter on the info badge opens the popover, anchored at the tile, and drops no shape", () => {
+  it("the info badge is excluded from sequential Tab navigation -- tabindex=\"-1\", unlike the tile", () => {
+    const { entry } = setup();
+    const tile = entry("create.BusinessActor");
+    const badge = tile.querySelector<HTMLElement>(".archimate-palette-info")!;
+    expect(badge.tabIndex).toBe(-1);
+    expect(tile.tabIndex).toBe(0);
+  });
+
+  it("Enter/Space on the badge is not specially handled -- it's pointer/click-only, so a keydown there (reachable only by script focus, not Tab) falls through to the tile's own drop, same as the tile itself", () => {
     const { entry, press, bridge, shapesOf } = setup();
     const tile = entry("create.BusinessActor");
     const badge = tile.querySelector<HTMLElement>(".archimate-palette-info")!;
     press(badge, "Enter");
-    expect(bridge.openObjectInfo).toHaveBeenCalledWith("BusinessActor", tile);
-    expect(shapesOf("BusinessActor")).toHaveLength(0);
-  });
-
-  it("Space on the info badge works the same way, and still doesn't scroll the page", () => {
-    const { entry, bridge, shapesOf } = setup();
-    const tile = entry("create.Node");
-    const badge = tile.querySelector<HTMLElement>(".archimate-palette-info")!;
-    const ev = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
-    badge.dispatchEvent(ev);
-    expect(ev.defaultPrevented).toBe(true);
-    expect(bridge.openObjectInfo).toHaveBeenCalledWith("Node", tile);
-    expect(shapesOf("Node")).toHaveLength(0);
+    expect(shapesOf("BusinessActor")).toHaveLength(1); // falls through to the tile's own handling
+    expect(bridge.openObjectInfo).not.toHaveBeenCalled();
   });
 });

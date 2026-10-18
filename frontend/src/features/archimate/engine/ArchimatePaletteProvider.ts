@@ -6,10 +6,13 @@
  * Enter or Space drops the element at the centre of the visible viewport. Drawing a relationship
  * stays mouse-only.
  *
- * Each element tile also carries a small info badge in its corner, a second click/keyboard target
- * nested inside the same tile: it opens the Enterprise Object's read-only description popover
- * (through `EditorBridge.openObjectInfo`) and never starts placing the element -- the tile's own
- * click/drag is untouched by its presence.
+ * Each element tile also carries a small info badge in its corner, a second click target nested
+ * inside the same tile: it opens the Enterprise Object's read-only description popover (through
+ * `EditorBridge.openObjectInfo`) and never starts placing the element -- the tile's own click/
+ * drag is untouched by its presence. Pointer/click-only, deliberately: the same description is
+ * already reachable through a fully keyboard-accessible route (the Card Mapping admin list), so
+ * giving the badge its own Tab stop would double every keyboard user's palette-traversal length
+ * for a read-only convenience. The tile itself keeps its one existing Tab stop and Enter/Space.
  */
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type Canvas from "diagram-js/lib/core/Canvas";
@@ -31,8 +34,10 @@ import { NOTATION } from "./notation";
 const ENTRY_CLASS = "archimate-palette-entry";
 const LABEL_CLASS = "archimate-palette-label";
 const TYPE_ATTR = "data-archimate-type";
-/** The small "i" badge nested in a tile's corner -- its own click/keyboard target, independent of
- *  the tile's create/drag gesture (see `getPaletteEntries`'s `onClick` and `onKeyDown` below). */
+/** The small "i" badge nested in a tile's corner -- its own click target, independent of the
+ *  tile's create/drag gesture (see `getPaletteEntries`'s `onClick` below). Pointer/click-only:
+ *  `tabindex="-1"` (not simply absent -- a bare `<button>` defaults to tabbable) keeps it out of
+ *  sequential Tab navigation. */
 const INFO_CLASS = "archimate-palette-info";
 
 const escapeHtml = (text: string) =>
@@ -149,7 +154,7 @@ export default class ArchimatePaletteProvider {
             `<div class="entry ${ENTRY_CLASS}" ${TYPE_ATTR}="${type}" tabindex="0" role="button" draggable="true" ` +
             `style="--archimate-tile: ${ARCHIMATE_LAYER_COLORS[layer].fill}">` +
             `${entryIcon(type)}` +
-            `<button type="button" class="${INFO_CLASS}" tabindex="0" draggable="false" ` +
+            `<button type="button" class="${INFO_CLASS}" tabindex="-1" draggable="false" ` +
             `aria-label="${escapeHtml(tools.objectInfo(elements[type]))}">${INFO_ICON}</button>` +
             `</div>`,
           action: { dragstart: createShape, click: onClick },
@@ -170,19 +175,13 @@ export default class ArchimatePaletteProvider {
     return entries;
   }
 
-  /** Delegated on the palette container, so it survives the palette rebuilding its entries. */
+  /** Delegated on the palette container, so it survives the palette rebuilding its entries. The
+   *  info badge (see `INFO_CLASS` above) takes no part here: it's `tabindex="-1"`, outside
+   *  sequential Tab navigation, so it is never the target of a keyboard-driven keydown here. */
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
-    const target = event.target as Element | null;
-    const entry = target?.closest?.(`.${ENTRY_CLASS}`);
+    const entry = (event.target as Element | null)?.closest?.(`.${ENTRY_CLASS}`);
     const type = entry?.getAttribute(TYPE_ATTR);
-    // The info badge's own stop: opens the popover, never falls through to placing a shape (same
-    // split as the click handler above -- Enter/Space on it must not also drop an element).
-    if (target?.closest?.(`.${INFO_CLASS}`)) {
-      event.preventDefault();
-      if (isElementType(type)) this.bridge.openObjectInfo(type, entry as HTMLElement);
-      return;
-    }
     if (type === NOTE_TYPE) {
       event.preventDefault(); // Space would scroll the page
       this.dropAtCentre(this.elementFactory.createShape({ isNote: true }));
