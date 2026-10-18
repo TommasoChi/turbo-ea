@@ -1,6 +1,6 @@
 /**
  * The ArchiMate sandbox and editor (diagram-js): with the module enabled through the API, an admin
- * creates a diagram on /admin/archimate, opens it, drops a Business Actor from the palette with the
+ * creates a diagram on /admin/architectureStudio, opens it, drops a Business Actor from the palette with the
  * keyboard, names it, sees the autosave land, reloads and finds the element again, then deletes the
  * diagram through the UI. The module flag is put back and the diagram removed by `afterAll`, even
  * when the spec fails half way.
@@ -41,7 +41,7 @@ test.describe("ArchiMate editor", () => {
     const name = `E2E ArchiMate ${Date.now().toString(36)}`;
     const actorName = `Customer ${Date.now().toString(36)}`;
 
-    await gotoApp(page, "/admin/archimate");
+    await gotoApp(page, "/admin/architectureStudio");
     await expect(page.getByRole("heading", { name: t("archimate:sandbox.title") })).toBeVisible();
     await expect(page.getByText(t("archimate:trademark"))).toBeVisible();
 
@@ -50,7 +50,7 @@ test.describe("ArchiMate editor", () => {
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel(t("archimate:sandbox.name")).fill(name);
     await dialog.getByRole("button", { name: t("archimate:sandbox.create") }).click();
-    await page.waitForURL(/\/admin\/archimate\/[^/]+$/);
+    await page.waitForURL(/\/admin\/architectureStudio\/[^/]+$/);
     diagramId = page.url().split("/").pop() ?? null;
     expect(diagramId, "the id in the editor URL").toBeTruthy();
 
@@ -83,7 +83,7 @@ test.describe("ArchiMate editor", () => {
 
     // Back to the list, then delete through the confirm dialog.
     await page.getByRole("button", { name: t("archimate:toolbar.back") }).click();
-    await page.waitForURL(/\/admin\/archimate$/);
+    await page.waitForURL(/\/admin\/architectureStudio$/);
     const row = page.getByRole("listitem").filter({ hasText: name });
     await expect(row).toBeVisible();
     await row.getByRole("button", { name: t("archimate:sandbox.delete") }).click();
