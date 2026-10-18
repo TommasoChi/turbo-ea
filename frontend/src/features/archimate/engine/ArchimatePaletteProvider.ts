@@ -25,7 +25,8 @@ import type { PaletteEntries } from "diagram-js/lib/features/palette/PaletteProv
 import type Selection from "diagram-js/lib/features/selection/Selection";
 import type { Root, Shape } from "diagram-js/lib/model/Types";
 import { ARCHIMATE_LAYER_COLORS } from "@/theme/tokens";
-import { elementsOfLayer, isElementType, LAYER_ORDER, type ElementType } from "../taxonomy/elements";
+import type { EnterpriseObject } from "@/types";
+import { elementsOfLayer, isElementType, LAYER_ORDER, type ArchimateLayer, type ElementType } from "../taxonomy/elements";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import type { EditorBridge } from "./EditorBridge";
 import { GLYPH_STROKE, glyphSvg } from "./icons";
@@ -84,10 +85,15 @@ function entryIcon(type: ElementType): string {
   return glyph ? glyphSvg(glyph, ICON_SIZE) : GROUPING_ICON;
 }
 
+/** A custom (non-standard) Enterprise Object's tile icon: the same Material Symbol ligature
+ *  convention `ArchimateContextPadProvider`'s `SYMBOL` helper uses (a styled `<span>`, not SVG --
+ *  this file's HTML-string tiles pick up page CSS, unlike the renderer's SVG canvas). */
+const customEntryIcon = (icon: string) => `<span class="material-symbols-outlined" style="font-size:${ICON_SIZE}px">${escapeHtml(icon)}</span>`;
+
 export default class ArchimatePaletteProvider {
   static $inject = [
     "palette", "create", "elementFactory", "handTool", "lassoTool", "bridge",
-    "eventBus", "canvas", "modeling", "selection",
+    "eventBus", "canvas", "modeling", "selection", "enterpriseObjects",
   ];
 
   constructor(
@@ -101,6 +107,7 @@ export default class ArchimatePaletteProvider {
     private readonly canvas: Canvas,
     private readonly modeling: Modeling,
     private readonly selection: Selection,
+    private readonly enterpriseObjects: EnterpriseObject[],
   ) {
     // The palette builds its container once, on diagram init: listen before registering so that a
     // provider created after init still sees the event of a (re)build.
@@ -130,6 +137,9 @@ export default class ArchimatePaletteProvider {
         action: {},
       };
       for (const type of elementsOfLayer(layer)) {
+        // A missing registry row (shouldn't happen once the seed has run) fails open: visible,
+        // never hidden, so a gap in the registry never blanks a chunk of the palette.
+        if (this.enterpriseObjects.find((o) => o.key === type)?.is_hidden === true) continue;
         const createShape = (event: Event) =>
           this.create.start(event, this.elementFactory.createShape({ elementType: type }));
         // The tile itself keeps its existing click/drag unchanged: it only ever starts placing
@@ -160,6 +170,21 @@ export default class ArchimatePaletteProvider {
           action: { dragstart: createShape, click: onClick },
         };
       }
+      // One tile per visible custom (non-standard) Enterprise Object in this layer, in the
+      // admin's own sort order. No info badge (Task 11's feature is for the standard catalogue):
+      // the icon/color are the object's own, not the layer's fixed tile color.
+      for (const eo of this.customObjectsOfLayer(layer)) {
+        const createCustomShape = (event: Event) =>
+          this.create.start(event, this.elementFactory.createShape({ enterpriseObjectKey: eo.key }));
+        entries[`create.${eo.key}`] = {
+          group: layer,
+          title: eo.name,
+          html:
+            `<div class="entry ${ENTRY_CLASS}" ${TYPE_ATTR}="${escapeHtml(eo.key)}" tabindex="0" role="button" draggable="true" ` +
+            `style="--archimate-tile: ${escapeHtml(eo.color)}">${customEntryIcon(eo.icon)}</div>`,
+          action: { dragstart: createCustomShape, click: createCustomShape },
+        };
+      }
       if (layer === "other") {
         const createNote = (event: Event) => this.create.start(event, this.elementFactory.createShape({ isNote: true }));
         entries["create.note"] = {
@@ -175,6 +200,14 @@ export default class ArchimatePaletteProvider {
     return entries;
   }
 
+  /** Visible custom Enterprise Objects whose own `layer` is this one, in the admin's sort order.
+   *  A `null` layer (not yet solved where it would even go) is skipped, not crashed on. */
+  private customObjectsOfLayer(layer: ArchimateLayer): EnterpriseObject[] {
+    return this.enterpriseObjects
+      .filter((o) => !o.is_standard && !o.is_hidden && o.layer === layer)
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }
+
   /** Delegated on the palette container, so it survives the palette rebuilding its entries. The
    *  info badge (see `INFO_CLASS` above) takes no part here: it's `tabindex="-1"`, outside
    *  sequential Tab navigation, so it is never the target of a keyboard-driven keydown here. */
@@ -187,9 +220,18 @@ export default class ArchimatePaletteProvider {
       this.dropAtCentre(this.elementFactory.createShape({ isNote: true }));
       return;
     }
-    if (!isElementType(type)) return;
+    if (isElementType(type)) {
+      event.preventDefault();
+      this.dropAtCentre(this.elementFactory.createShape({ elementType: type }));
+      return;
+    }
+    // Not a real ElementType and not the Note sentinel: the only other entries are custom
+    // Enterprise Objects, keyed by their own registry key -- look the key back up since the
+    // keydown only gives us the attribute string, not the object the tile was built from.
+    const eo = this.enterpriseObjects.find((o) => o.key === type && !o.is_standard);
+    if (!eo) return;
     event.preventDefault();
-    this.dropAtCentre(this.elementFactory.createShape({ elementType: type }));
+    this.dropAtCentre(this.elementFactory.createShape({ enterpriseObjectKey: eo.key }));
   };
 
   /** A keyboard drop: through modeling (one undoable command), then selected and announced. */

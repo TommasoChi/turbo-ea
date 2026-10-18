@@ -120,6 +120,12 @@ describe("useArchimateBridge", () => {
     expect(result.current.objectInfoObject).toBeUndefined();
   });
 
+  it("exposes the full Enterprise Object registry for the engine (empty until the fetch resolves)", async () => {
+    const { result } = renderHook(() => useArchimateBridge(), { wrapper });
+    expect(result.current.enterpriseObjects).toEqual([]);
+    await waitFor(() => expect(result.current.enterpriseObjects).toEqual(TYPES.objects));
+  });
+
   it("remembers card names and navigates to a card", () => {
     const { result } = renderHook(() => ({ h: useArchimateBridge(), where: useLocation() }), { wrapper });
     expect(result.current.h.bridge.cardName("c1")).toBeUndefined();

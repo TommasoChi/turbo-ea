@@ -14,6 +14,7 @@ import type { Element, Shape } from "diagram-js/lib/model/Types";
 import type ZoomScroll from "diagram-js/lib/navigation/zoomscroll/ZoomScroll";
 import type { Point } from "diagram-js/lib/util/Types";
 import { innerSVG } from "tiny-svg";
+import type { EnterpriseObject } from "@/types";
 import {
   CARD_ID_DEFINITION, getCardId, isNoteObject, newIdentifier,
   type ArchimateModel, type ExchangeProperty, type ModelElement,
@@ -27,7 +28,7 @@ import { reconcileModel } from "./reconcile";
 import { extractEdited, importView, type ViewServices } from "./viewIO";
 
 export interface EngineOptions {
-  container: HTMLElement; bridge: EditorBridge; onChange?: () => void;
+  container: HTMLElement; bridge: EditorBridge; enterpriseObjects: EnterpriseObject[]; onChange?: () => void;
   /** The selection changed (a click, a lasso, a delete). */
   onSelect?: () => void;
 }
@@ -64,7 +65,11 @@ export class ArchimateEngine {
     this.onChange = opts.onChange;
     this.diagram = new Diagram({
       canvas: { container: opts.container },
-      modules: [...ARCHIMATE_MODULES, { bridge: ["value", opts.bridge] }],
+      modules: [
+        ...ARCHIMATE_MODULES,
+        { bridge: ["value", opts.bridge] },
+        { enterpriseObjects: ["value", opts.enterpriseObjects] },
+      ],
     });
     // A clear (on load) is not a change; every executed, undone or redone command is.
     this.get<EventBus>("eventBus").on("commandStack.changed", (e: { trigger: string }) => {

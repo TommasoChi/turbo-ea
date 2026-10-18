@@ -18,6 +18,10 @@ import { ACCESS_TYPES, RELATIONSHIP_TYPES } from "./taxonomy/relationships";
 
 export interface ArchimateBridgeState {
   bridge: EditorBridge;
+  /** The full Enterprise Object registry (standard and custom rows), fetched once at mount --
+   *  consumed by the engine to hide a standard type from the palette (`is_hidden`) and to draw a
+   *  custom (non-standard) object. Empty until the fetch below resolves. */
+  enterpriseObjects: EnterpriseObject[];
   /** The shape whose link picker is open, if any. */
   linkShapeId: string | null;
   /** The shape whose create-card dialog is open, if any. */
@@ -119,5 +123,5 @@ export function useArchimateBridge(): ArchimateBridgeState {
 
   const objectInfoObject = objectInfo ? objects.find((o) => o.key === objectInfo.key) : undefined;
 
-  return { bridge, linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards };
+  return { bridge, enterpriseObjects: objects, linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards };
 }

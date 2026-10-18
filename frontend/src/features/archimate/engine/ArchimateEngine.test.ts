@@ -2,6 +2,7 @@ import type Modeling from "diagram-js/lib/features/modeling/Modeling";
 import type Selection from "diagram-js/lib/features/selection/Selection";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type { Shape } from "diagram-js/lib/model/Types";
+import type { EnterpriseObject } from "@/types";
 import { MODEL } from "@/test/archimateModel";
 import { makeBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
@@ -13,13 +14,14 @@ import { ArchimateEngine } from "./ArchimateEngine";
 beforeAll(installSvgStubs);
 
 const bridge = makeBridge();
+const enterpriseObjects: EnterpriseObject[] = [];
 /** load() works on a copy: no edit may reach the shared fixture. */
 const PRISTINE = structuredClone(MODEL);
 
 function setup() {
   const container = document.createElement("div");
   const onChange = vi.fn();
-  const engine = new ArchimateEngine({ container, bridge, onChange });
+  const engine = new ArchimateEngine({ container, bridge, enterpriseObjects, onChange });
   engine.load(MODEL);
   // The services behind the facade, for driving the diagram the way a user would.
   const get = <T,>(name: string) => (engine as unknown as { diagram: { get(n: string): T } }).diagram.get(name);
@@ -80,7 +82,7 @@ describe("ArchimateEngine", () => {
   });
 
   it("adds a view named after the model when the model has none", () => {
-    const engine = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    const engine = new ArchimateEngine({ container: document.createElement("div"), bridge, enterpriseObjects });
     const empty: ArchimateModel = { ...structuredClone(MODEL), views: [] };
     engine.load(empty);
     const out = engine.toModel();
@@ -123,7 +125,7 @@ describe("ArchimateEngine: the properties panel's view of the selection", () => 
   it("reports the single selected item, and nothing for none or several; the page hears every change", () => {
     const container = document.createElement("div");
     const onSelect = vi.fn();
-    const engine = new ArchimateEngine({ container, bridge, onSelect });
+    const engine = new ArchimateEngine({ container, bridge, enterpriseObjects, onSelect });
     engine.load(MODEL);
     const selection = (engine as unknown as { diagram: { get(n: string): Selection } }).diagram.get("selection");
     const registry = (engine as unknown as { diagram: { get(n: string): ElementRegistry } }).diagram.get("elementRegistry");
@@ -194,7 +196,7 @@ describe("ArchimateEngine: the properties panel's view of the selection", () => 
   it("round-trips the user's properties through the Exchange writer and reader", () => {
     const { engine } = setup();
     engine.setUserProperties("id-n1", [{ name: "owner", value: "Ann & Bob" }]);
-    const again = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    const again = new ArchimateEngine({ container: document.createElement("div"), bridge, enterpriseObjects });
     again.load(readExchange(writeExchange(engine.toModel())));
     expect(again.itemInfo("id-n1")!.properties).toEqual([{ name: "owner", value: "Ann & Bob" }]);
     expect(again.itemInfo("id-n1")!.cardId).toBe("c1");
@@ -239,7 +241,7 @@ describe("ArchimateEngine: a note", () => {
     expect(model.views[0].notes).toEqual([
       expect.objectContaining({ id: note.id, text: "Ask the team" }),
     ]);
-    const again = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    const again = new ArchimateEngine({ container: document.createElement("div"), bridge, enterpriseObjects });
     again.load(readExchange(writeExchange(model)));
     expect(again.itemInfo(note.id)).toEqual({
       id: note.id, kind: "note", type: "Note", name: "Ask the team", documentation: "", cardId: null, properties: [],
@@ -285,7 +287,7 @@ describe("ArchimateEngine: the model's own properties", () => {
   it("round-trips through the Exchange writer and reader", () => {
     const { engine } = setup();
     engine.setModelProperties([{ name: "owner", value: "Team A & B" }]);
-    const again = new ArchimateEngine({ container: document.createElement("div"), bridge });
+    const again = new ArchimateEngine({ container: document.createElement("div"), bridge, enterpriseObjects });
     again.load(readExchange(writeExchange(engine.toModel())));
     expect(again.modelProperties()).toEqual([{ name: "owner", value: "Team A & B" }]);
   });

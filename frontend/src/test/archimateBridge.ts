@@ -10,6 +10,7 @@ import type { EditorBridge, EditorLabels } from "@/features/archimate/engine/Edi
 import { ELEMENT_TYPES, LAYER_ORDER } from "@/features/archimate/taxonomy/elements";
 import { ACCESS_TYPES, RELATIONSHIP_TYPES } from "@/features/archimate/taxonomy/relationships";
 import { ARCHIMATE_MODULES } from "@/features/archimate/engine/modules";
+import type { EnterpriseObject } from "@/types";
 
 const labelled = <K extends string>(keys: readonly K[]) =>
   Object.fromEntries(keys.map((k) => [k, `L:${k}`])) as Record<K, string>;
@@ -37,7 +38,8 @@ export function makeBridge(): EditorBridge {
   };
 }
 
-/** The engine's modules plus the bridge value, as `ArchimateEngine` assembles them. */
-export function withBridge(bridge: EditorBridge = makeBridge()): ModuleDeclaration[] {
-  return [...ARCHIMATE_MODULES, { bridge: ["value", bridge] }];
+/** The engine's modules plus the bridge and Enterprise Object registry values, as `ArchimateEngine`
+ *  assembles them (defaults to an empty registry: every standard type visible, no custom objects). */
+export function withBridge(bridge: EditorBridge = makeBridge(), enterpriseObjects: EnterpriseObject[] = []): ModuleDeclaration[] {
+  return [...ARCHIMATE_MODULES, { bridge: ["value", bridge] }, { enterpriseObjects: ["value", enterpriseObjects] }];
 }

@@ -5,9 +5,10 @@ import type EventBus from "diagram-js/lib/core/EventBus";
 import type Palette from "diagram-js/lib/features/palette/Palette";
 import type Selection from "diagram-js/lib/features/selection/Selection";
 import type { Shape } from "diagram-js/lib/model/Types";
+import type { EnterpriseObject } from "@/types";
 import { makeBridge, withBridge } from "@/test/archimateBridge";
 import { installSvgStubs } from "@/test/svgStubs";
-import { getCardId, isNoteObject, type ModelElement } from "../exchange/exchangeModel";
+import { getCardId, isCustomEnterpriseObject, isNoteObject, type ModelElement } from "../exchange/exchangeModel";
 import { ELEMENT_INFO, ELEMENT_TYPES, LAYER_ORDER, elementsOfLayer, type ElementType } from "../taxonomy/elements";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 import type ArchimateModeling from "./ArchimateModeling";
@@ -18,10 +19,10 @@ beforeAll(installSvgStubs);
 
 type Action = Record<string, (event: Event) => void>;
 
-function setup() {
+function setup(enterpriseObjects: EnterpriseObject[] = []) {
   const bridge = makeBridge();
   const container = document.createElement("div");
-  const diagram = new Diagram({ canvas: { container }, modules: withBridge(bridge) });
+  const diagram = new Diagram({ canvas: { container }, modules: withBridge(bridge, enterpriseObjects) });
   const get = <T,>(name: string) => diagram.get<T>(name);
   const provider = get<ArchimatePaletteProvider>("archimatePalette");
   const entries = provider.getPaletteEntries();
@@ -29,6 +30,8 @@ function setup() {
   const entry = (key: string) => container.querySelector<HTMLElement>(`[data-action="${key}"]`)!;
   const shapesOf = (type: ElementType) =>
     get<ElementRegistry>("elementRegistry").filter((e) => (e.businessObject as ModelElement | undefined)?.type === type) as Shape[];
+  const customShapes = () =>
+    get<ElementRegistry>("elementRegistry").filter((e) => isCustomEnterpriseObject(e.businessObject)) as Shape[];
   const press = (target: HTMLElement, key: string) =>
     target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
   /** A second provider on the same diagram, with the tools and `create` replaced by spies. */
@@ -36,10 +39,15 @@ function setup() {
     new ArchimatePaletteProvider(
       { registerProvider: vi.fn() } as never, (fakes.create ?? {}) as never, get("elementFactory"),
       (fakes.hand ?? {}) as never, (fakes.lasso ?? {}) as never, bridge,
-      get("eventBus"), get("canvas"), get("modeling"), get("selection"),
+      get("eventBus"), get("canvas"), get("modeling"), get("selection"), enterpriseObjects,
     );
-  return { bridge, container, get, entries, entry, shapesOf, press, withFakes };
+  return { bridge, container, get, entries, entry, shapesOf, customShapes, press, withFakes };
 }
+
+const AI_MODEL: EnterpriseObject = {
+  key: "AIModel", name: "AI Model", description: null, icon: "smart_toy", color: "#ab12cd",
+  layer: "application", is_standard: false, is_locked: false, is_hidden: false, sort_order: 1, card_mappings: [],
+};
 
 describe("ArchimatePaletteProvider entries", () => {
   it("lists the two tools then every element plus the note: 2 + 62 + 1 = 65 entries, a separator and a name opening each layer", () => {
@@ -359,5 +367,106 @@ describe("palette keyboard path", () => {
     press(badge, "Enter");
     expect(shapesOf("BusinessActor")).toHaveLength(1); // falls through to the tile's own handling
     expect(bridge.openObjectInfo).not.toHaveBeenCalled();
+  });
+});
+
+describe("the registry drives visibility and custom objects", () => {
+  it("omits a standard element type whose EnterpriseObject.is_hidden is true", () => {
+    const { entries } = setup([
+      { key: "BusinessObject", name: "Business Object", description: null, icon: "x", color: "#fff",
+        layer: "business", is_standard: true, is_locked: false, is_hidden: true, sort_order: 0, card_mappings: [] },
+    ]);
+    expect(entries["create.BusinessObject"]).toBeUndefined();
+    // every other business-layer type is untouched
+    expect(entries["create.BusinessActor"]).toBeDefined();
+  });
+
+  it("never hides a standard type the registry has no row for (fails open, not hidden)", () => {
+    const { entries } = setup([]);
+    for (const t of ELEMENT_TYPES) expect(entries[`create.${t}`]).toBeDefined();
+  });
+
+  it("keeps a standard type whose row has is_hidden false (or any non-true value)", () => {
+    const { entries } = setup([
+      { key: "Goal", name: "Goal", description: null, icon: "x", color: "#fff", layer: "motivation",
+        is_standard: true, is_locked: false, is_hidden: false, sort_order: 0, card_mappings: [] },
+    ]);
+    expect(entries["create.Goal"]).toBeDefined();
+  });
+
+  it("adds one entry per visible custom EnterpriseObject, in its own layer's group, with its own icon/color and no info badge", () => {
+    const { entries } = setup([AI_MODEL]);
+    const entry = entries["create.AIModel"];
+    expect(entry).toBeDefined();
+    expect(entry.group).toBe("application");
+    expect(entry.title).toBe("AI Model");
+    expect(entry.html).toContain('data-archimate-type="AIModel"');
+    expect(entry.html).toContain("--archimate-tile: #ab12cd");
+    expect(entry.html).toContain('class="material-symbols-outlined"');
+    expect(entry.html).toContain(">smart_toy<");
+    expect(entry.html).not.toContain("archimate-palette-info");
+  });
+
+  it("never adds an entry for a hidden custom object, or a standard row (is_standard true)", () => {
+    const { entries } = setup([
+      { ...AI_MODEL, key: "HiddenCustom", is_hidden: true },
+      { ...AI_MODEL, key: "ApplicationComponent", is_standard: true },
+    ]);
+    expect(entries["create.HiddenCustom"]).toBeUndefined();
+    // the standard row's own key is already the real ApplicationComponent entry -- unaffected
+    expect(entries["create.ApplicationComponent"].title).toBe("L:ApplicationComponent");
+  });
+
+  it("skips a custom object with no layer rather than guessing where it belongs", () => {
+    const { entries } = setup([{ ...AI_MODEL, layer: null }]);
+    expect(entries["create.AIModel"]).toBeUndefined();
+  });
+
+  it("orders custom entries within a layer by the admin's sort_order", () => {
+    const second = { ...AI_MODEL, key: "Second", name: "Second", sort_order: 2 };
+    const first = { ...AI_MODEL, key: "First", name: "First", sort_order: 0 };
+    const { entries } = setup([second, first]);
+    const keys = Object.keys(entries).filter((k) => k === "create.Second" || k === "create.First");
+    expect(keys.indexOf("create.First")).toBeLessThan(keys.indexOf("create.Second"));
+  });
+
+  it.each(["click", "dragstart"] as const)(
+    "%s on a custom entry starts creating a CustomEnterpriseObject shape, unnamed like a fresh element",
+    (action) => {
+      const { withFakes } = setup([AI_MODEL]);
+      const start = vi.fn();
+      const entries = withFakes({ create: { start } }).getPaletteEntries();
+      (entries["create.AIModel"].action as Action)[action](new MouseEvent(action));
+      expect(start).toHaveBeenCalledTimes(1);
+      const shape = start.mock.calls[0][1] as Shape;
+      expect(isCustomEnterpriseObject(shape.businessObject)).toBe(true);
+      expect(shape.businessObject).toMatchObject({ isCustomObject: true, enterpriseObjectKey: "AIModel", name: "" });
+    },
+  );
+
+  it("Enter on a custom entry's tile drops it at the viewport centre, selected, through one undoable command", () => {
+    const { get, entry, press, customShapes } = setup([AI_MODEL]);
+    const canvas = get<Canvas>("canvas");
+    const { x, y, width, height } = canvas.viewbox();
+    press(entry("create.AIModel"), "Enter");
+    const shapes = customShapes();
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0].businessObject).toMatchObject({ enterpriseObjectKey: "AIModel" });
+    expect(Math.abs(shapes[0].x + shapes[0].width / 2 - (x + width / 2))).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(shapes[0].y + shapes[0].height / 2 - (y + height / 2))).toBeLessThanOrEqual(0.5);
+    expect(get<Selection>("selection").get()).toEqual(shapes);
+    get<{ undo(): void }>("commandStack").undo();
+    expect(customShapes()).toHaveLength(0);
+  });
+
+  it("ignores a keydown on a tile whose data-archimate-type matches nothing in the registry", () => {
+    const { entry, press, customShapes } = setup([AI_MODEL]);
+    const ghost = document.createElement("div");
+    ghost.className = "entry archimate-palette-entry";
+    ghost.setAttribute("tabindex", "0");
+    ghost.setAttribute("data-archimate-type", "NoSuchKey");
+    entry("create.AIModel").parentElement!.appendChild(ghost);
+    press(ghost, "Enter");
+    expect(customShapes()).toHaveLength(0);
   });
 });

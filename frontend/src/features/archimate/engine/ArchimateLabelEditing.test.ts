@@ -47,7 +47,7 @@ const MODEL: ArchimateModel = {
 
 function setup() {
   const container = document.createElement("div");
-  const engine = new ArchimateEngine({ container, bridge: makeBridge() });
+  const engine = new ArchimateEngine({ container, bridge: makeBridge(), enterpriseObjects: [] });
   engine.load(MODEL);
   const get = <T,>(name: string) => (engine as unknown as { diagram: { get(n: string): T } }).diagram.get(name);
   const registry = get<ElementRegistry>("elementRegistry");

@@ -88,7 +88,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const { t } = useTranslation(["archimate", "common", "cards"]);
   const theme = useTheme();
   const {
-    bridge, linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards,
+    bridge, enterpriseObjects, linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards,
   } = useArchimateBridge();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -279,7 +279,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     const container = containerRef.current;
     if (!model || !container) return;
     const engine = new ArchimateEngine({
-      container, bridge,
+      container, bridge, enterpriseObjects,
       onChange: () => markChangedRef.current(),
       onSelect: () => refreshPanelRef.current(),
     });
@@ -292,7 +292,11 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       engine.destroy();
       if (engineRef.current === engine) engineRef.current = null;
     };
-  }, [model, bridge, resolveNames]);
+    // enterpriseObjects is included: unlike `bridge` (a stable object whose members read a ref, so
+    // its identity never changes), it is a plain array snapshot injected as a diagram-js "value" --
+    // the registry loads asynchronously after mount, so the engine must rebuild once it resolves,
+    // or the palette would show stale visibility/custom objects for the rest of the session.
+  }, [model, bridge, enterpriseObjects, resolveNames]);
 
   useEffect(() => {
     unmountedRef.current = false;

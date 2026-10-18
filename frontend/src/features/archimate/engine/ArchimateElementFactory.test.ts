@@ -1,5 +1,5 @@
 import {
-  CARD_ID_DEFINITION, getCardId, type ModelElement, type ModelRelationship, type NoteObject,
+  CARD_ID_DEFINITION, getCardId, isCustomEnterpriseObject, type ModelElement, type ModelRelationship, type NoteObject,
 } from "../exchange/exchangeModel";
 import ArchimateElementFactory from "./ArchimateElementFactory";
 
@@ -76,5 +76,23 @@ describe("ArchimateElementFactory", () => {
     const shape = factory.createShape({ id: "id-note", businessObject: bo, x: 5, y: 6, width: 140, height: 90, fromModel: true });
     expect(shape).toMatchObject({ id: "id-note", x: 5, y: 6 });
     expect(shape.businessObject).toBe(bo);
+  });
+
+  it("creates a fresh custom Enterprise Object shape, same default size as a note, unnamed by default", () => {
+    const shape = factory.createShape({ enterpriseObjectKey: "AIModel" });
+    expect(shape).toMatchObject({ width: 140, height: 90 });
+    expect(isCustomEnterpriseObject(shape.businessObject)).toBe(true);
+    expect(shape.businessObject).toEqual({
+      id: expect.stringMatching(/^id-/), isCustomObject: true, enterpriseObjectKey: "AIModel", name: "",
+    });
+    expect(shape.id).not.toBe(shape.businessObject.id);
+    const other = factory.createShape({ enterpriseObjectKey: "AIModel" });
+    expect(other.businessObject.id).not.toBe(shape.businessObject.id);
+    expect(other.id).not.toBe(shape.id);
+  });
+
+  it("names a custom object when a name is passed", () => {
+    const shape = factory.createShape({ enterpriseObjectKey: "AIModel", name: "My Model" });
+    expect(shape.businessObject).toMatchObject({ enterpriseObjectKey: "AIModel", name: "My Model" });
   });
 });
