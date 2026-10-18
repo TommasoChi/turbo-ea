@@ -1,23 +1,32 @@
 import type { ReactNode } from "react";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
-import type { CardType } from "@/types";
+import type { CardType, EnterpriseObject } from "@/types";
 import { ELEMENT_TYPES, LAYER_ORDER } from "./taxonomy/elements";
 import { RELATIONSHIP_TYPES } from "./taxonomy/relationships";
 import { useArchimateBridge } from "./useArchimateBridge";
 
 const TYPES = vi.hoisted(() => ({
   list: [
-    { key: "Application", label: "Application", archimate_type: "ApplicationComponent", subtypes: [] },
-    {
-      key: "Interface", label: "Interface", archimate_type: "ApplicationInterface",
-      subtypes: [{ key: "api", label: "API", archimate_type: "ApplicationComponent" }],
-    },
-    { key: "ITComponent", label: "IT Component", archimate_type: "Node", subtypes: [] },
-    { key: "Unmapped", label: "Unmapped", archimate_type: null, subtypes: [] },
+    { key: "Application", label: "Application", subtypes: [] },
+    { key: "Interface", label: "Interface", subtypes: [{ key: "api", label: "API" }] },
+    { key: "ITComponent", label: "IT Component", subtypes: [] },
+    { key: "Unmapped", label: "Unmapped", subtypes: [] },
   ] as unknown as CardType[],
+  objects: [
+    {
+      key: "obj1", card_mappings: [
+        { id: "1", enterprise_object_key: "ApplicationComponent", card_type_key: "Application", card_subtype_key: null },
+        { id: "2", enterprise_object_key: "ApplicationComponent", card_type_key: "Interface", card_subtype_key: "api" },
+        { id: "3", enterprise_object_key: "Node", card_type_key: "ITComponent", card_subtype_key: null },
+      ],
+    },
+  ] as unknown as EnterpriseObject[],
 }));
 vi.mock("@/hooks/useMetamodel", () => ({ useMetamodel: () => ({ types: TYPES.list }) }));
+vi.mock("@/api/enterpriseObjects", () => ({
+  listEnterpriseObjects: () => Promise.resolve(TYPES.objects),
+}));
 
 const wrapper = ({ children }: { children: ReactNode }) => (
   <MemoryRouter>{children}</MemoryRouter>
@@ -43,14 +52,16 @@ describe("useArchimateBridge", () => {
     });
   });
 
-  it("offers the card types whose mapping (type or subtype) resolves to the element type", () => {
-    const { bridge } = renderHook(() => useArchimateBridge(), { wrapper }).result.current;
-    expect(bridge.cardTypesFor("ApplicationComponent")).toEqual([
-      { key: "Application", label: "Application" },
-      { key: "Interface", label: "Interface" },
-    ]);
-    expect(bridge.cardTypesFor("Node")).toEqual([{ key: "ITComponent", label: "IT Component" }]);
-    expect(bridge.cardTypesFor("Goal")).toEqual([]);
+  it("offers the card types whose mapping (type or subtype) resolves to the element type", async () => {
+    const { result } = renderHook(() => useArchimateBridge(), { wrapper });
+    await waitFor(() =>
+      expect(result.current.bridge.cardTypesFor("ApplicationComponent")).toEqual([
+        { key: "Application", label: "Application" },
+        { key: "Interface", label: "Interface" },
+      ]),
+    );
+    expect(result.current.bridge.cardTypesFor("Node")).toEqual([{ key: "ITComponent", label: "IT Component" }]);
+    expect(result.current.bridge.cardTypesFor("Goal")).toEqual([]);
   });
 
   it("keeps ONE bridge object across renders", () => {

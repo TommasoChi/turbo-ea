@@ -1,4 +1,4 @@
-import type { CardType, RelationType } from "@/types";
+import type { CardType, EnterpriseObjectCardMapping, RelationType } from "@/types";
 import type { ElementType } from "../taxonomy/elements";
 import {
   isRelationshipAllowed,
@@ -28,6 +28,7 @@ export interface MappingIssue {
 export function validateMapping(
   cardTypes: CardType[],
   relationTypes: RelationType[],
+  mappings: EnterpriseObjectCardMapping[],
 ): MappingIssue[] {
   const issues: MappingIssue[] = [];
   for (const rt of relationTypes) {
@@ -35,10 +36,10 @@ export function validateMapping(
     if (!resolved) continue;
     const find = (key: string) => cardTypes.find((t) => t.key === key);
     const sources = find(rt.source_type_key)
-      ? elementTypesForCardType(find(rt.source_type_key)!)
+      ? elementTypesForCardType(rt.source_type_key, mappings)
       : [];
     const targets = find(rt.target_type_key)
-      ? elementTypesForCardType(find(rt.target_type_key)!)
+      ? elementTypesForCardType(rt.target_type_key, mappings)
       : [];
     const base = {
       relationKey: rt.key,

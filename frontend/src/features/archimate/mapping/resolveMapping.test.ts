@@ -1,49 +1,35 @@
 import { describe, it, expect } from "vitest";
-import type { CardType, RelationType } from "@/types";
+import type { RelationType } from "@/types";
 import {
   accessFromCrud,
-  elementTypeForCard,
   elementTypesForCardType,
   orientedEnds,
   resolveRelation,
 } from "./resolveMapping";
 
-const card = (
-  key: string,
-  archimate_type: string | null,
-  subtypes: object[] = [],
-) => ({ key, archimate_type, subtypes }) as CardType;
-
 describe("resolveMapping", () => {
-  it("a subtype override beats the type, and the type is the fallback", () => {
-    const types = [
-      card("ITComponent", "Node", [
-        { key: "software", label: "s", archimate_type: "SystemSoftware" },
-        { key: "service", label: "v" },
-      ]),
+  it("elementTypesForCardType returns the union of every bridge row for that card type, deduplicated", () => {
+    const mappings = [
+      { id: "1", enterprise_object_key: "BusinessObject", card_type_key: "DataObject", card_subtype_key: null },
+      { id: "2", enterprise_object_key: "Artifact", card_type_key: "DataObject", card_subtype_key: "file" },
+      { id: "3", enterprise_object_key: "BusinessObject", card_type_key: "DataObject", card_subtype_key: "file" },
     ];
-    expect(elementTypeForCard(types, "ITComponent", "software")).toBe(
-      "SystemSoftware",
+    expect(elementTypesForCardType("DataObject", mappings)).toEqual(
+      expect.arrayContaining(["BusinessObject", "Artifact"]),
     );
-    expect(elementTypeForCard(types, "ITComponent", "service")).toBe("Node");
-    expect(elementTypeForCard(types, "ITComponent", null)).toBe("Node");
-    expect(elementTypeForCard(types, "ITComponent", "ghost")).toBe("Node");
+    expect(elementTypesForCardType("DataObject", mappings)).toHaveLength(2);
   });
 
-  it("an unknown or empty mapping resolves to null instead of throwing", () => {
-    const types = [card("A", "Banana"), card("B", null)];
-    expect(elementTypeForCard(types, "A")).toBeNull();
-    expect(elementTypeForCard(types, "B")).toBeNull();
-    expect(elementTypeForCard(types, "Missing")).toBeNull();
+  it("elementTypesForCardType returns an empty array for an unmapped card type", () => {
+    expect(elementTypesForCardType("BusinessContext", [])).toEqual([]);
   });
 
-  it("elementTypesForCardType lists the type then the distinct overrides", () => {
-    const t = card("ITComponent", "Node", [
-      { key: "a", label: "a", archimate_type: "Device" },
-      { key: "b", label: "b", archimate_type: "Device" },
-      { key: "c", label: "c", archimate_type: "Banana" },
-    ]);
-    expect(elementTypesForCardType(t)).toEqual(["Node", "Device"]);
+  it("elementTypesForCardType filters out keys that are not standard ArchiMate element types", () => {
+    const mappings = [
+      { id: "1", enterprise_object_key: "CustomThing", card_type_key: "DataObject", card_subtype_key: null },
+      { id: "2", enterprise_object_key: "BusinessObject", card_type_key: "DataObject", card_subtype_key: null },
+    ];
+    expect(elementTypesForCardType("DataObject", mappings)).toEqual(["BusinessObject"]);
   });
 
   it.each([

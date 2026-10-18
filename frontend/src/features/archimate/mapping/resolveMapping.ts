@@ -1,4 +1,4 @@
-import type { CardType, RelationType } from "@/types";
+import type { EnterpriseObjectCardMapping, RelationType } from "@/types";
 import { isElementType, type ElementType } from "../taxonomy/elements";
 import {
   ACCESS_TYPES,
@@ -20,29 +20,16 @@ export interface ResolvedRelation {
   reversed: boolean;
 }
 
-/** Element type of a card: the subtype's own mapping wins, then the type's.
- *  Unknown or empty mappings yield null (a stale mapping must not crash the editor). */
-export function elementTypeForCard(
-  types: CardType[],
+/** Every element type a card type can produce: every bridge-table row for that
+ *  card type (subtype-scoped or not), deduped. */
+export function elementTypesForCardType(
   cardTypeKey: string,
-  subtype?: string | null,
-): ElementType | null {
-  const type = types.find((t) => t.key === cardTypeKey);
-  if (!type) return null;
-  const sub = subtype
-    ? type.subtypes?.find((s) => s.key === subtype)?.archimate_type
-    : null;
-  if (isElementType(sub)) return sub;
-  return isElementType(type.archimate_type) ? type.archimate_type : null;
-}
-
-/** Every element type a card type can produce: type-level first, then distinct subtype overrides. */
-export function elementTypesForCardType(type: CardType): ElementType[] {
-  const all = [
-    type.archimate_type,
-    ...(type.subtypes ?? []).map((s) => s.archimate_type),
-  ];
-  return [...new Set(all.filter(isElementType))];
+  mappings: EnterpriseObjectCardMapping[],
+): ElementType[] {
+  const keys = mappings
+    .filter((m) => m.card_type_key === cardTypeKey)
+    .map((m) => m.enterprise_object_key);
+  return [...new Set(keys.filter(isElementType))];
 }
 
 export function accessFromCrud(flags: CrudFlags = {}): AccessType {

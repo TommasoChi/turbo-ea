@@ -3,11 +3,13 @@
  * to (from the metamodel mapping), and the dialog / navigation hooks. The engine captures the bridge
  * once, so it is ONE stable object whose members read the latest values through refs.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
+import { listEnterpriseObjects } from "@/api/enterpriseObjects";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useTypeLabel } from "@/hooks/useResolveLabel";
+import type { EnterpriseObjectCardMapping } from "@/types";
 import { elementLabel } from "./engine/elementLabel";
 import type { CardTypeOption, EditorBridge, EditorLabels } from "./engine/EditorBridge";
 import { elementTypesForCardType } from "./mapping/resolveMapping";
@@ -32,7 +34,18 @@ export function useArchimateBridge(): ArchimateBridgeState {
   const typeLabel = useTypeLabel();
   const [linkShapeId, setLinkShapeId] = useState<string | null>(null);
   const [createShapeId, setCreateShapeId] = useState<string | null>(null);
+  const [mappings, setMappings] = useState<EnterpriseObjectCardMapping[]>([]);
   const names = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    let cancelled = false;
+    listEnterpriseObjects().then((objects) => {
+      if (!cancelled) setMappings(objects.flatMap((o) => o.card_mappings));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const labels: EditorLabels = {
     elements: Object.fromEntries(ELEMENT_TYPES.map((e) => [e, elementLabel(e)])) as EditorLabels["elements"],
@@ -54,8 +67,8 @@ export function useArchimateBridge(): ArchimateBridgeState {
   };
 
   // Everything the bridge reads, refreshed on every render.
-  const latest = useRef({ labels, types, typeLabel, navigate });
-  latest.current = { labels, types, typeLabel, navigate };
+  const latest = useRef({ labels, types, typeLabel, navigate, mappings });
+  latest.current = { labels, types, typeLabel, navigate, mappings };
 
   const bridge = useMemo<EditorBridge>(
     () => ({
@@ -63,9 +76,9 @@ export function useArchimateBridge(): ArchimateBridgeState {
         return latest.current.labels;
       },
       cardTypesFor(type): CardTypeOption[] {
-        const { types: all, typeLabel: label } = latest.current;
+        const { types: all, typeLabel: label, mappings: m } = latest.current;
         return all
-          .filter((ct) => elementTypesForCardType(ct).includes(type))
+          .filter((ct) => elementTypesForCardType(ct.key, m).includes(type))
           .map((ct) => ({ key: ct.key, label: label(ct) }));
       },
       openLinkPicker: setLinkShapeId,
