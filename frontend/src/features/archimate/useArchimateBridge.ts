@@ -39,9 +39,15 @@ export function useArchimateBridge(): ArchimateBridgeState {
 
   useEffect(() => {
     let cancelled = false;
-    listEnterpriseObjects().then((objects) => {
-      if (!cancelled) setMappings(objects.flatMap((o) => o.card_mappings));
-    });
+    listEnterpriseObjects()
+      .then((objects) => {
+        if (!cancelled) setMappings(objects.flatMap((o) => o.card_mappings));
+      })
+      .catch((err: unknown) => {
+        // Non-critical: "Link to card"/"Create a card" just offers no candidates for this
+        // mount (mappings stays []) instead of crashing with an unhandled rejection.
+        if (!cancelled) console.error("Failed to load enterprise object mappings:", err);
+      });
     return () => {
       cancelled = true;
     };

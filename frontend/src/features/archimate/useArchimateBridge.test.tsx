@@ -24,8 +24,9 @@ const TYPES = vi.hoisted(() => ({
   ] as unknown as EnterpriseObject[],
 }));
 vi.mock("@/hooks/useMetamodel", () => ({ useMetamodel: () => ({ types: TYPES.list }) }));
+const listEnterpriseObjectsMock = vi.hoisted(() => vi.fn());
 vi.mock("@/api/enterpriseObjects", () => ({
-  listEnterpriseObjects: () => Promise.resolve(TYPES.objects),
+  listEnterpriseObjects: listEnterpriseObjectsMock,
 }));
 
 const wrapper = ({ children }: { children: ReactNode }) => (
@@ -33,6 +34,11 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 );
 
 describe("useArchimateBridge", () => {
+  beforeEach(() => {
+    listEnterpriseObjectsMock.mockReset();
+    listEnterpriseObjectsMock.mockResolvedValue(TYPES.objects);
+  });
+
   it("builds every label from i18n and elementLabel", () => {
     const { bridge } = renderHook(() => useArchimateBridge(), { wrapper }).result.current;
     const { labels } = bridge;
@@ -62,6 +68,16 @@ describe("useArchimateBridge", () => {
     );
     expect(result.current.bridge.cardTypesFor("Node")).toEqual([{ key: "ITComponent", label: "IT Component" }]);
     expect(result.current.bridge.cardTypesFor("Goal")).toEqual([]);
+  });
+
+  it("a failed mapping fetch logs the error and leaves cardTypesFor offering nothing, instead of an unhandled rejection", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    listEnterpriseObjectsMock.mockReset();
+    listEnterpriseObjectsMock.mockRejectedValue(new Error("network down"));
+    const { result } = renderHook(() => useArchimateBridge(), { wrapper });
+    await waitFor(() => expect(consoleError).toHaveBeenCalled());
+    expect(result.current.bridge.cardTypesFor("ApplicationComponent")).toEqual([]);
+    consoleError.mockRestore();
   });
 
   it("keeps ONE bridge object across renders", () => {
