@@ -31,6 +31,7 @@ export function makeBridge(): EditorBridge {
     openCreateCard: vi.fn(),
     openCard: vi.fn(),
     cardName: vi.fn(),
+    openObjectInfo: vi.fn(),
   };
 }
 

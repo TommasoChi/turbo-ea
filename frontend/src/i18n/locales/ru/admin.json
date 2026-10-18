@@ -73,6 +73,8 @@
   "metamodel.builtIn": "Встроенный",
   "metamodel.hidden": "Скрытый",
   "metamodel.cardMappingLocked": "Этот тип зафиксирован, и его нельзя скрыть.",
+  "metamodel.editDescription": "Редактировать описание",
+  "metamodel.noDescription": "Описание пока отсутствует.",
   "metamodel.uncategorized": "Без категории",
   "metamodel.fields": "{{count}} поле",
   "metamodel.fields_other": "{{count}} полей",

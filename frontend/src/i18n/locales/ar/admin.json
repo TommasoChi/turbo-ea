@@ -73,6 +73,8 @@
   "metamodel.builtIn": "مدمج",
   "metamodel.hidden": "مخفي",
   "metamodel.cardMappingLocked": "هذا النوع ثابت ولا يمكن إخفاؤه.",
+  "metamodel.editDescription": "تعديل الوصف",
+  "metamodel.noDescription": "لا يوجد وصف حتى الآن.",
   "metamodel.uncategorized": "غير مصنّف",
   "metamodel.fields": "{{count}} حقل",
   "metamodel.fields_other": "{{count}} حقل",

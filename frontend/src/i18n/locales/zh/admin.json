@@ -73,6 +73,8 @@
   "metamodel.builtIn": "内置",
   "metamodel.hidden": "已隐藏",
   "metamodel.cardMappingLocked": "此类型是固定的，无法隐藏。",
+  "metamodel.editDescription": "编辑描述",
+  "metamodel.noDescription": "暂无描述。",
   "metamodel.uncategorized": "未分类",
   "metamodel.fields": "{{count}} 个字段",
   "metamodel.fields_other": "{{count}} 个字段",

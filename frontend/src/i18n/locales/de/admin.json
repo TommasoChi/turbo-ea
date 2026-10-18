@@ -73,6 +73,8 @@
   "metamodel.builtIn": "Vordefiniert",
   "metamodel.hidden": "Ausgeblendet",
   "metamodel.cardMappingLocked": "Dieser Typ ist fest vorgegeben und kann nicht ausgeblendet werden.",
+  "metamodel.editDescription": "Beschreibung bearbeiten",
+  "metamodel.noDescription": "Noch keine Beschreibung.",
   "metamodel.uncategorized": "Nicht kategorisiert",
   "metamodel.fields": "{{count}} Feld",
   "metamodel.fields_other": "{{count}} Felder",

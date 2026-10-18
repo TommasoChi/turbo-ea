@@ -176,6 +176,41 @@ describe("palette mouse path (click / dragstart)", () => {
     palette.triggerEntry("create.Goal", "click", new MouseEvent("click"));
     expect(spy).toHaveBeenCalledTimes(1);
   });
+
+  it("a click also asks the bridge to show the object-info popover, anchored at the clicked tile -- without blocking the create it still starts", () => {
+    const { withFakes, bridge } = setup();
+    const start = vi.fn();
+    // The clicked target is a child of the tile (the glyph), as a real click on the rendered SVG
+    // would be -- the handler must walk up to the tile itself to anchor the popover.
+    const tile = document.createElement("div");
+    tile.className = "entry archimate-palette-entry";
+    const glyph = document.createElement("span");
+    tile.appendChild(glyph);
+    const event = { target: glyph } as unknown as MouseEvent;
+
+    (withFakes({ create: { start } }).getPaletteEntries()["create.ApplicationComponent"].action as Action).click(event);
+
+    expect(start).toHaveBeenCalledTimes(1); // the click's existing behaviour keeps working
+    expect(bridge.openObjectInfo).toHaveBeenCalledWith("ApplicationComponent", tile);
+  });
+
+  it("dragstart never opens the info popover -- only click does", () => {
+    const { withFakes, bridge } = setup();
+    const start = vi.fn();
+    (withFakes({ create: { start } }).getPaletteEntries()["create.ApplicationComponent"].action as Action)
+      .dragstart(new MouseEvent("dragstart"));
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(bridge.openObjectInfo).not.toHaveBeenCalled();
+  });
+
+  it("a click whose target isn't inside a tile (defensive only) starts creating without opening the popover", () => {
+    const { withFakes, bridge } = setup();
+    const start = vi.fn();
+    const event = { target: document.createElement("div") } as unknown as MouseEvent;
+    (withFakes({ create: { start } }).getPaletteEntries()["create.ApplicationComponent"].action as Action).click(event);
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(bridge.openObjectInfo).not.toHaveBeenCalled();
+  });
 });
 
 /** diagram-js rounds a created shape's top-left to whole pixels, so its centre is within half a pixel. */

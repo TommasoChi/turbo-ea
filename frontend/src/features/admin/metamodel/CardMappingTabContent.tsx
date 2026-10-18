@@ -3,13 +3,17 @@ import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
+import ButtonBase from "@mui/material/ButtonBase";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import CircularProgress from "@mui/material/CircularProgress";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { listEnterpriseObjects, updateEnterpriseObject } from "@/api/enterpriseObjects";
 import { LAYER_ORDER, type ArchimateLayer } from "@/features/archimate/taxonomy/elements";
+import { useAuthContext } from "@/hooks/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import type { EnterpriseObject } from "@/types";
+import EnterpriseObjectPopover from "./EnterpriseObjectPopover";
 import NewArchitectureObjectDialog from "./NewArchitectureObjectDialog";
 
 /**
@@ -20,9 +24,14 @@ import NewArchitectureObjectDialog from "./NewArchitectureObjectDialog";
  */
 export default function CardMappingTabContent() {
   const { t } = useTranslation(["admin", "archimate", "common"]);
+  const { user } = useAuthContext();
+  const { can } = usePermissions(user);
+  const canEdit = can("admin.metamodel");
   const [objects, setObjects] = useState<EnterpriseObject[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [infoAnchor, setInfoAnchor] = useState<HTMLElement | null>(null);
+  const [infoObject, setInfoObject] = useState<EnterpriseObject | null>(null);
 
   const fetchObjects = useCallback(async () => {
     setLoading(true);
@@ -58,6 +67,15 @@ export default function CardMappingTabContent() {
   const toggleHidden = async (eo: EnterpriseObject) => {
     await updateEnterpriseObject(eo.key, { is_hidden: !eo.is_hidden });
     fetchObjects();
+  };
+
+  const openInfo = (event: React.MouseEvent<HTMLElement>, eo: EnterpriseObject) => {
+    setInfoAnchor(event.currentTarget);
+    setInfoObject(eo);
+  };
+  const closeInfo = () => {
+    setInfoAnchor(null);
+    setInfoObject(null);
   };
 
   if (loading) {
@@ -99,10 +117,15 @@ export default function CardMappingTabContent() {
                 opacity: eo.is_hidden ? 0.55 : 1,
               }}
             >
-              <MaterialSymbol icon={eo.icon} size={20} color={eo.color} />
-              <Typography sx={{ flex: 1 }} noWrap>
-                {eo.name}
-              </Typography>
+              <ButtonBase
+                onClick={(e) => openInfo(e, eo)}
+                sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1, minWidth: 0, p: 0.5, borderRadius: 1, justifyContent: "flex-start" }}
+              >
+                <MaterialSymbol icon={eo.icon} size={20} color={eo.color} />
+                <Typography sx={{ flex: 1, minWidth: 0 }} noWrap>
+                  {eo.name}
+                </Typography>
+              </ButtonBase>
               <Typography variant="caption" color="text.secondary">
                 {t("metamodel.cardMappingCount", { count: eo.card_mappings.length })}
               </Typography>
@@ -121,6 +144,13 @@ export default function CardMappingTabContent() {
                 <span>
                   <IconButton
                     size="small"
+                    aria-label={
+                      eo.is_locked
+                        ? t("metamodel.cardMappingLocked")
+                        : eo.is_hidden
+                          ? t("common:actions.restore")
+                          : t("metamodel.hidden")
+                    }
                     disabled={eo.is_locked}
                     onClick={() => toggleHidden(eo)}
                   >
@@ -142,6 +172,15 @@ export default function CardMappingTabContent() {
         onClose={() => setCreateOpen(false)}
         onCreated={fetchObjects}
       />
+
+      {infoObject && (
+        <EnterpriseObjectPopover
+          object={infoObject}
+          anchorEl={infoAnchor}
+          onClose={closeInfo}
+          canEdit={canEdit}
+        />
+      )}
     </Box>
   );
 }

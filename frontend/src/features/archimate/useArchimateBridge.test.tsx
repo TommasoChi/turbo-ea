@@ -98,6 +98,26 @@ describe("useArchimateBridge", () => {
     expect([result.current.linkShapeId, result.current.createShapeId]).toEqual([null, null]);
   });
 
+  it("opens the object-info popover through the bridge, resolving the object by key, and closeDialogs clears it", async () => {
+    const { result } = renderHook(() => useArchimateBridge(), { wrapper });
+    await waitFor(() => expect(listEnterpriseObjectsMock).toHaveBeenCalled());
+    const anchorEl = document.createElement("div");
+
+    expect(result.current.objectInfo).toBeNull();
+    act(() => result.current.bridge.openObjectInfo("obj1", anchorEl));
+    expect(result.current.objectInfo).toEqual({ key: "obj1", anchorEl });
+    await waitFor(() => expect(result.current.objectInfoObject).toBe(TYPES.objects[0]));
+
+    act(() => result.current.closeDialogs());
+    expect(result.current.objectInfo).toBeNull();
+  });
+
+  it("resolves no object for a key the registry hasn't loaded (yet, or at all)", () => {
+    const { result } = renderHook(() => useArchimateBridge(), { wrapper });
+    act(() => result.current.bridge.openObjectInfo("NoSuchKey", document.createElement("div")));
+    expect(result.current.objectInfoObject).toBeUndefined();
+  });
+
   it("remembers card names and navigates to a card", () => {
     const { result } = renderHook(() => ({ h: useArchimateBridge(), where: useLocation() }), { wrapper });
     expect(result.current.h.bridge.cardName("c1")).toBeUndefined();

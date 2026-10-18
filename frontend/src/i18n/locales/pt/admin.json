@@ -73,6 +73,8 @@
   "metamodel.builtIn": "Nativo",
   "metamodel.hidden": "Oculto",
   "metamodel.cardMappingLocked": "Este tipo é fixo e não pode ser ocultado.",
+  "metamodel.editDescription": "Editar descrição",
+  "metamodel.noDescription": "Ainda não há descrição.",
   "metamodel.uncategorized": "Sem categoria",
   "metamodel.fields": "{{count}} campo",
   "metamodel.fields_other": "{{count}} campos",

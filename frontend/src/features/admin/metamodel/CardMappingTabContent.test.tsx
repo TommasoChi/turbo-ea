@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { User } from "@/types";
 import CardMappingTabContent from "./CardMappingTabContent";
 
 vi.mock("@/api/client", () => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
+vi.mock("@/hooks/AuthContext", () => ({ useAuthContext: vi.fn() }));
 
 import { api } from "@/api/client";
+import { useAuthContext } from "@/hooks/AuthContext";
 
 const BUSINESS_OBJECT = {
   key: "BusinessObject",
@@ -65,6 +68,10 @@ describe("CardMappingTabContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.get).mockResolvedValue([BUSINESS_OBJECT, DATA_OBJECT, GROUPING]);
+    vi.mocked(useAuthContext).mockReturnValue({
+      user: { id: "u1", permissions: { "*": true } } as unknown as User,
+      refreshUser: vi.fn(),
+    });
   });
 
   it("fetches with include_hidden=true (hidden rows stay visible on this admin screen)", async () => {
@@ -103,7 +110,7 @@ describe("CardMappingTabContent", () => {
     await screen.findByText("Business Object");
 
     const row = screen.getByTestId("eo-row-BusinessObject");
-    await user.click(within(row).getByRole("button"));
+    await user.click(within(row).getByRole("button", { name: "Hidden" }));
 
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith("/metamodel/enterprise-objects/BusinessObject", {
@@ -117,7 +124,9 @@ describe("CardMappingTabContent", () => {
     await screen.findByText("Grouping");
 
     const row = screen.getByTestId("eo-row-Grouping");
-    const toggle = within(row).getByRole("button");
+    const toggle = within(row).getByRole("button", {
+      name: "This type is fixed and cannot be hidden.",
+    });
     expect(toggle).toBeDisabled();
 
     // A real disabled <button> doesn't fire click handlers at all -- confirmed
@@ -160,5 +169,30 @@ describe("CardMappingTabContent", () => {
     );
     // One call on mount, one more from `onCreated`'s refetch after the create.
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+  });
+
+  it("clicking a row's name opens its description popover", async () => {
+    const user = userEvent.setup();
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    await user.click(screen.getByText("Business Object"));
+
+    expect(screen.getByText("1 mapping")).toBeInTheDocument(); // row still rendered behind the popover
+    expect(screen.getByLabelText("Edit description")).toBeInTheDocument(); // admin.metamodel via "*"
+  });
+
+  it("hides the edit-description pencil for a user without admin.metamodel", async () => {
+    vi.mocked(useAuthContext).mockReturnValue({
+      user: { id: "u2", permissions: { "admin.settings": true } } as unknown as User,
+      refreshUser: vi.fn(),
+    });
+    const user = userEvent.setup();
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    await user.click(screen.getByText("Business Object"));
+
+    expect(screen.queryByLabelText("Edit description")).not.toBeInTheDocument();
   });
 });

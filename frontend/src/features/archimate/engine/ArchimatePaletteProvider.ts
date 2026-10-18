@@ -111,6 +111,14 @@ export default class ArchimatePaletteProvider {
       for (const type of elementsOfLayer(layer)) {
         const createShape = (event: Event) =>
           this.create.start(event, this.elementFactory.createShape({ elementType: type }));
+        // A click both starts placing the element (as it always has) AND opens the Enterprise
+        // Object's read-only description popover, anchored at the clicked tile (spec: "Clicking
+        // an Enterprise Object's name/icon ... opens a Popover ... works on touch"). A drag
+        // never does -- opening a popover mid-drag would fight the drag gesture.
+        const onClick = (event: Event) => {
+          createShape(event);
+          this.showObjectInfo(type, event);
+        };
         entries[`create.${type}`] = {
           group: layer,
           title: elements[type],
@@ -118,7 +126,7 @@ export default class ArchimatePaletteProvider {
             `<div class="entry ${ENTRY_CLASS}" ${TYPE_ATTR}="${type}" tabindex="0" role="button" draggable="true" ` +
             `style="--archimate-tile: ${ARCHIMATE_LAYER_COLORS[layer].fill}">` +
             `${entryIcon(type)}</div>`,
-          action: { dragstart: createShape, click: createShape },
+          action: { dragstart: createShape, click: onClick },
         };
       }
       if (layer === "other") {
@@ -134,6 +142,14 @@ export default class ArchimatePaletteProvider {
       }
     }
     return entries;
+  }
+
+  /** Asks the surrounding page (through the bridge) to show the Enterprise Object's description
+   *  popover, anchored at the clicked tile. No-op if the click's target isn't inside an entry
+   *  (defensive only; every real click on a tile is). */
+  private showObjectInfo(key: ElementType, event: Event): void {
+    const anchorEl = (event.target as Element | null)?.closest?.(`.${ENTRY_CLASS}`);
+    if (anchorEl) this.bridge.openObjectInfo(key, anchorEl as HTMLElement);
   }
 
   /** Delegated on the palette container, so it survives the palette rebuilding its entries. */

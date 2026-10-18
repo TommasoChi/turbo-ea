@@ -73,6 +73,8 @@
   "metamodel.builtIn": "Integrado",
   "metamodel.hidden": "Oculto",
   "metamodel.cardMappingLocked": "Este tipo es fijo y no se puede ocultar.",
+  "metamodel.editDescription": "Editar descripción",
+  "metamodel.noDescription": "Aún no hay descripción.",
   "metamodel.uncategorized": "Sin categoría",
   "metamodel.fields": "{{count}} campo",
   "metamodel.fields_other": "{{count}} campos",

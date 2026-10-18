@@ -35,4 +35,8 @@ export interface EditorBridge {
   openCreateCard(shapeId: string): void;
   openCard(cardId: string): void;
   cardName(cardId: string): string | undefined;
+  /** Opens the read-only Enterprise Object description popover for a palette entry (the palette
+   *  never offers editing -- spec Anti-goals), anchored at the clicked tile. `key` is the
+   *  Enterprise Object's registry key, which is the palette entry's `ElementType`. */
+  openObjectInfo(key: string, anchorEl: HTMLElement): void;
 }

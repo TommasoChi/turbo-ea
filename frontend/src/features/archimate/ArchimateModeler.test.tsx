@@ -76,7 +76,14 @@ const doc = (model: ArchimateModel | string = UNLINKED, over: Record<string, unk
   ...over,
 });
 
-interface Handle { engine: ArchimateEngine; bridge: { openLinkPicker(id: string): void; openCreateCard(id: string): void } }
+interface Handle {
+  engine: ArchimateEngine;
+  bridge: {
+    openLinkPicker(id: string): void;
+    openCreateCard(id: string): void;
+    openObjectInfo(key: string, anchorEl: HTMLElement): void;
+  };
+}
 let handle: Handle | null = null;
 const engine = () => handle!.engine;
 const services = <T,>(name: string) => (engine() as unknown as { diagram: { get(n: string): T } }).diagram.get(name);
@@ -128,12 +135,20 @@ beforeEach(() => {
   mockApi.on("get", "/metamodel/enterprise-objects", [
     {
       key: "ApplicationComponent",
+      name: "Application Component",
+      description: "A modular, deployable part of software.",
+      icon: "deployed_code",
+      color: "#99c7ef",
       card_mappings: [
         { id: "m1", enterprise_object_key: "ApplicationComponent", card_type_key: "Application", card_subtype_key: null },
       ],
     },
     {
       key: "Node",
+      name: "Node",
+      description: "A computational or physical resource.",
+      icon: "dns",
+      color: "#ffcc80",
       card_mappings: [
         { id: "m2", enterprise_object_key: "Node", card_type_key: "ITComponent", card_subtype_key: null },
       ],
@@ -749,6 +764,31 @@ describe("create-card dialog", () => {
     expect(await screen.findByText("The card could not be created: Not allowed")).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Create a card" })).toBeInTheDocument();
     expect(engine().elementInfo(APP_SHAPE)!.cardId).toBeNull();
+  });
+});
+
+describe("object info popover", () => {
+  // The palette's own click->bridge.openObjectInfo wiring (and that it never blocks the real
+  // create interaction) is covered at the unit level in ArchimatePaletteProvider.test.ts, with a
+  // faked `create` service -- the real one drives mouse tracking that jsdom doesn't support
+  // (no `document.elementFromPoint`). Here, through the same `handle!.bridge` seam the link/
+  // create-card dialogs above use, we only verify ArchimateModeler renders what the bridge asks
+  // for.
+  it("renders the popover the bridge asks for, read-only (no edit pencil, per the spec's Anti-goals)", async () => {
+    await mount();
+    const anchorEl = document.createElement("div");
+    document.body.appendChild(anchorEl);
+    act(() => handle!.bridge.openObjectInfo("ApplicationComponent", anchorEl));
+    expect(await screen.findByText("Application Component")).toBeInTheDocument();
+    expect(screen.getByText("A modular, deployable part of software.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Edit description")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing for a key the registry hasn't resolved", async () => {
+    await mount();
+    act(() => handle!.bridge.openObjectInfo("NoSuchKey", document.createElement("div")));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText("A modular, deployable part of software.")).toBeNull();
   });
 });
 

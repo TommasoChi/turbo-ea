@@ -41,6 +41,7 @@ import {
   ExchangeParseError, MAX_EXCHANGE_BYTES, exchangeWarnings, readExchange, requireView,
 } from "./exchange/readExchange";
 import { writeExchange } from "./exchange/writeExchange";
+import EnterpriseObjectPopover from "@/features/admin/metamodel/EnterpriseObjectPopover";
 import ArchimatePropertiesPanel from "./ArchimatePropertiesPanel";
 import CreateCardDialog from "./CreateCardDialog";
 import LinkCardDialog from "./LinkCardDialog";
@@ -86,7 +87,9 @@ const fileName = (name: string) => name.replace(/[\\/:*?"<>|]+/g, "_").trim() ||
 export default function ArchimateModeler({ diagramId, onBack, onEngine }: ArchimateModelerProps) {
   const { t } = useTranslation(["archimate", "common", "cards"]);
   const theme = useTheme();
-  const { bridge, linkShapeId, createShapeId, closeDialogs, rememberCards } = useArchimateBridge();
+  const {
+    bridge, linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards,
+  } = useArchimateBridge();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -597,6 +600,14 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
           initialName={createInfo.name}
           onCreated={cardCreated}
           onClose={closeDialogs}
+        />
+      )}
+      {objectInfo && objectInfoObject && (
+        <EnterpriseObjectPopover
+          object={objectInfoObject}
+          anchorEl={objectInfo.anchorEl}
+          onClose={closeDialogs}
+          canEdit={false}
         />
       )}
       {issues && <ValidationDialog open issues={issues} onClose={() => setIssues(null)} />}
