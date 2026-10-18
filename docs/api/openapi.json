@@ -26670,6 +26670,26 @@
         ]
       }
     },
+    "/api/v1/metamodel/card-type-archimate-mapping": {
+      "get": {
+        "description": "Every card type's (and subtype's) current ArchiMate element type\nmapping, resolved from the EnterpriseObjectCardMapping bridge table --\nthe n:m replacement for the old single ``CardType.archimate_type``\ncolumn. Consumed by the MCP server's ``get_archimate_mapping`` tool.\n\nAuthenticated read, like ``GET /enterprise-objects`` \u2014 no\n``admin.metamodel`` gate, since this only reports the live mapping.\nExcludes hidden/soft-deleted types and orders by ``sort_order``, same as\n``GET /metamodel/types`` (the endpoint this one is meant to sit beside\nfor the MCP tool, which should not see a type a `DELETE /types/{key}`\nsoft-delete hid from everywhere else).",
+        "operationId": "get_card_type_archimate_mapping_api_v1_metamodel_card_type_archimate_mapping_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Card Type Archimate Mapping",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
     "/api/v1/metamodel/compliance-regulations": {
       "get": {
         "description": "List compliance regulations, ordered by sort_order.\n\nAuthenticated read so the TurboLens Security tab can fetch the list\neven for users without admin rights. Write operations remain gated\nbehind ``admin.metamodel``.",
