@@ -194,6 +194,31 @@ describe("CardMappingTabContent", () => {
     expect(screen.getByLabelText("Edit description")).toBeInTheDocument(); // admin.metamodel via "*"
   });
 
+  it("reopening the popover after an edit shows the NEW description, not the stale cached one -- regression: the popover is unmounted on close and never refetched, so reopening it showed the pre-edit text until some unrelated page load", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.patch).mockResolvedValue({ ...BUSINESS_OBJECT, description: "Updated description." });
+    // The refetch after save (api.get call #2) returns the object with the new description --
+    // this is what the reopened popover must read, not the stale BUSINESS_OBJECT in its closure.
+    vi.mocked(api.get).mockResolvedValueOnce([BUSINESS_OBJECT, DATA_OBJECT, GROUPING])
+      .mockResolvedValueOnce([{ ...BUSINESS_OBJECT, description: "Updated description." }, DATA_OBJECT, GROUPING]);
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    await user.click(screen.getByText("Business Object"));
+    await user.click(screen.getByLabelText("Edit description"));
+    await user.clear(screen.getByRole("textbox"));
+    await user.type(screen.getByRole("textbox"), "Updated description.");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+
+    // Close via the Popover's backdrop, then reopen the same row's popover -- a fresh mount,
+    // reading from `objects`.
+    await user.click(document.querySelector(".MuiBackdrop-root")!);
+    await waitFor(() => expect(screen.queryByText("Updated description.")).not.toBeInTheDocument());
+    await user.click(screen.getByText("Business Object"));
+    expect(await screen.findByText("Updated description.")).toBeInTheDocument();
+  });
+
   it("hides the edit-description pencil for a user without admin.metamodel", async () => {
     vi.mocked(useAuthContext).mockReturnValue({
       user: { id: "u2", permissions: { "admin.settings": true } } as unknown as User,

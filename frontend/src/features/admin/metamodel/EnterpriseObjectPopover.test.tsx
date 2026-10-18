@@ -70,6 +70,24 @@ describe("EnterpriseObjectPopover", () => {
     expect(screen.getByText(sample.description!)).toBeInTheDocument();
   });
 
+  test("calls onSaved after a successful save, so the caller can refetch its stale cached list", async () => {
+    const onSaved = vi.fn();
+    render(<EnterpriseObjectPopover object={sample} anchorEl={el} onClose={vi.fn()} canEdit={true} onSaved={onSaved} />);
+    await userEvent.click(screen.getByLabelText("Edit description"));
+    await userEvent.clear(screen.getByRole("textbox"));
+    await userEvent.type(screen.getByRole("textbox"), "New description.");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+  });
+
+  test("Cancel never calls onSaved", async () => {
+    const onSaved = vi.fn();
+    render(<EnterpriseObjectPopover object={sample} anchorEl={el} onClose={vi.fn()} canEdit={true} onSaved={onSaved} />);
+    await userEvent.click(screen.getByLabelText("Edit description"));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   test("after a successful save, the field returns to read-only showing the new text", async () => {
     render(<EnterpriseObjectPopover object={sample} anchorEl={el} onClose={vi.fn()} canEdit={true} />);
     await userEvent.click(screen.getByLabelText("Edit description"));

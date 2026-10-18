@@ -18,6 +18,10 @@ interface Props {
   onClose: () => void;
   /** Gates the pencil/edit affordance. Always false in the drawing palette (spec Anti-goals). */
   canEdit: boolean;
+  /** Called after a successful save, so the caller can refetch its own registry list -- without
+   *  this, the caller's cached `object` prop stays stale and the NEXT time this popover opens
+   *  (a fresh mount, since the caller unmounts it on close) it shows the old description again. */
+  onSaved?: () => void;
 }
 
 /**
@@ -25,7 +29,7 @@ interface Props {
  * inline-editable description for users with `admin.metamodel`. Used both by the Card Mapping
  * admin list and (read-only) by the Architecture Studio drawing palette.
  */
-export default function EnterpriseObjectPopover({ object, anchorEl, onClose, canEdit }: Props) {
+export default function EnterpriseObjectPopover({ object, anchorEl, onClose, canEdit, onSaved }: Props) {
   const { t } = useTranslation(["admin", "common"]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(object.description ?? "");
@@ -52,6 +56,7 @@ export default function EnterpriseObjectPopover({ object, anchorEl, onClose, can
       await updateEnterpriseObject(object.key, { description: draft });
       setDescription(draft);
       setEditing(false);
+      onSaved?.();
     } catch {
       setError(t("metamodel.typeDrawer.failedToSave"));
     } finally {

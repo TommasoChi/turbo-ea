@@ -222,6 +222,7 @@ export default function CardMappingTabContent({ types = [] }: CardMappingTabCont
           anchorEl={infoAnchor}
           onClose={closeInfo}
           canEdit={canEdit}
+          onSaved={fetchObjects}
         />
       )}
     </Box>
