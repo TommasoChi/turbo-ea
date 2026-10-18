@@ -80,7 +80,7 @@ export function useArchimateBridge(): ArchimateBridgeState {
     connect: (relationship) => t("context.connect", { relationship }),
     unlinked: t("context.unlinked"),
     directed: t("context.directed"),
-    tools: { hand: t("tools.hand"), lasso: t("tools.lasso") },
+    tools: { hand: t("tools.hand"), lasso: t("tools.lasso"), objectInfo: (name) => t("tools.objectInfo", { name }) },
     note: t("note.label"),
   };
 

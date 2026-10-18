@@ -50,7 +50,9 @@ describe("useArchimateBridge", () => {
     expect(Object.keys(labels.layers)).toEqual(LAYER_ORDER);
     expect(labels.layers.implementation).toBe("Implementation & Migration");
     expect(labels.connect("Flow")).toBe("Draw Flow");
-    expect(labels.tools).toEqual({ hand: "Hand tool", lasso: "Lasso selection" });
+    expect(labels.tools.hand).toBe("Hand tool");
+    expect(labels.tools.lasso).toBe("Lasso selection");
+    expect(labels.tools.objectInfo("Business Actor")).toBe("View details: Business Actor");
     expect(labels).toMatchObject({
       linkCard: "Link to a card", createCard: "Create a card", openCard: "Open the linked card",
       unlinkCard: "Unlink the card", delete: "Remove from the diagram", unlinked: "Not linked to a card",

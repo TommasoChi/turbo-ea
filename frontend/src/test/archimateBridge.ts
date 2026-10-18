@@ -22,7 +22,9 @@ export function makeBridge(): EditorBridge {
     layers: labelled(LAYER_ORDER),
     linkCard: "L:linkCard", createCard: "L:createCard", openCard: "L:openCard", unlinkCard: "L:unlinkCard",
     delete: "L:delete", connect: (relationship) => `L:connect ${relationship}`, unlinked: "L:unlinked",
-    directed: "L:directed", tools: { hand: "L:hand", lasso: "L:lasso" }, note: "L:note",
+    directed: "L:directed",
+    tools: { hand: "L:hand", lasso: "L:lasso", objectInfo: (name) => `L:objectInfo ${name}` },
+    note: "L:note",
   };
   return {
     labels,

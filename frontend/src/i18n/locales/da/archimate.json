@@ -42,7 +42,8 @@
   },
   "tools": {
     "hand": "Håndværktøj",
-    "lasso": "Lassovalg"
+    "lasso": "Lassovalg",
+    "objectInfo": "Se detaljer: {{name}}"
   },
   "note": {
     "label": "Note"

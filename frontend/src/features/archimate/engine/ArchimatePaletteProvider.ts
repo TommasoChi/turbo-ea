@@ -5,6 +5,11 @@
  * rule: card links are explicit, through the context pad). Each entry is also a keyboard button:
  * Enter or Space drops the element at the centre of the visible viewport. Drawing a relationship
  * stays mouse-only.
+ *
+ * Each element tile also carries a small info badge in its corner, a second click/keyboard target
+ * nested inside the same tile: it opens the Enterprise Object's read-only description popover
+ * (through `EditorBridge.openObjectInfo`) and never starts placing the element -- the tile's own
+ * click/drag is untouched by its presence.
  */
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type Canvas from "diagram-js/lib/core/Canvas";
@@ -26,6 +31,9 @@ import { NOTATION } from "./notation";
 const ENTRY_CLASS = "archimate-palette-entry";
 const LABEL_CLASS = "archimate-palette-label";
 const TYPE_ATTR = "data-archimate-type";
+/** The small "i" badge nested in a tile's corner -- its own click/keyboard target, independent of
+ *  the tile's create/drag gesture (see `getPaletteEntries`'s `onClick` and `onKeyDown` below). */
+const INFO_CLASS = "archimate-palette-info";
 
 const escapeHtml = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -44,6 +52,14 @@ const HAND_ICON = svgOf(
   ICON_SIZE, '<path d="M8 1V15M1 8H15M8 1L6 3M8 1L10 3M8 15L6 13M8 15L10 13M1 8L3 6M1 8L3 10M15 8L13 6M15 8L13 10"/>', TOOL_ATTRS,
 );
 const LASSO_ICON = svgOf(ICON_SIZE, '<rect x="2" y="3" width="12" height="10" stroke-dasharray="2 2"/>', TOOL_ATTRS);
+
+/** The info badge: a small "i" in a circle, sized down for the corner of a 22px tile. */
+const INFO_ICON_SIZE = 9;
+const INFO_ICON = svgOf(
+  INFO_ICON_SIZE,
+  '<circle cx="8" cy="8" r="6.5"/><line x1="8" y1="7" x2="8" y2="11.5"/><circle cx="8" cy="4.5" r="1" fill="currentColor" stroke="none"/>',
+  TOOL_ATTRS,
+);
 
 const GLYPH_ATTRS = Object.entries(GLYPH_STROKE).map(([k, v]) => `${k}="${v}"`).join(" ");
 
@@ -111,13 +127,20 @@ export default class ArchimatePaletteProvider {
       for (const type of elementsOfLayer(layer)) {
         const createShape = (event: Event) =>
           this.create.start(event, this.elementFactory.createShape({ elementType: type }));
-        // A click both starts placing the element (as it always has) AND opens the Enterprise
-        // Object's read-only description popover, anchored at the clicked tile (spec: "Clicking
-        // an Enterprise Object's name/icon ... opens a Popover ... works on touch"). A drag
-        // never does -- opening a popover mid-drag would fight the drag gesture.
+        // The tile itself keeps its existing click/drag unchanged: it only ever starts placing
+        // the element. The small info badge nested in its corner is a second, independent click
+        // target (spec: "Clicking an Enterprise Object's name/icon ... opens a Popover"): asking
+        // "what is this?" must never also start drawing. diagram-js delegates every click inside
+        // the tile to this one handler regardless of which inner element was hit, so the two
+        // gestures are told apart here, by the actual click target.
         const onClick = (event: Event) => {
+          const infoEl = (event.target as Element | null)?.closest?.(`.${INFO_CLASS}`);
+          if (infoEl) {
+            const tile = infoEl.closest(`.${ENTRY_CLASS}`);
+            if (tile) this.bridge.openObjectInfo(type, tile as HTMLElement);
+            return;
+          }
           createShape(event);
-          this.showObjectInfo(type, event);
         };
         entries[`create.${type}`] = {
           group: layer,
@@ -125,7 +148,10 @@ export default class ArchimatePaletteProvider {
           html:
             `<div class="entry ${ENTRY_CLASS}" ${TYPE_ATTR}="${type}" tabindex="0" role="button" draggable="true" ` +
             `style="--archimate-tile: ${ARCHIMATE_LAYER_COLORS[layer].fill}">` +
-            `${entryIcon(type)}</div>`,
+            `${entryIcon(type)}` +
+            `<button type="button" class="${INFO_CLASS}" tabindex="0" draggable="false" ` +
+            `aria-label="${escapeHtml(tools.objectInfo(elements[type]))}">${INFO_ICON}</button>` +
+            `</div>`,
           action: { dragstart: createShape, click: onClick },
         };
       }
@@ -144,19 +170,19 @@ export default class ArchimatePaletteProvider {
     return entries;
   }
 
-  /** Asks the surrounding page (through the bridge) to show the Enterprise Object's description
-   *  popover, anchored at the clicked tile. No-op if the click's target isn't inside an entry
-   *  (defensive only; every real click on a tile is). */
-  private showObjectInfo(key: ElementType, event: Event): void {
-    const anchorEl = (event.target as Element | null)?.closest?.(`.${ENTRY_CLASS}`);
-    if (anchorEl) this.bridge.openObjectInfo(key, anchorEl as HTMLElement);
-  }
-
   /** Delegated on the palette container, so it survives the palette rebuilding its entries. */
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
-    const entry = (event.target as Element | null)?.closest?.(`.${ENTRY_CLASS}`);
+    const target = event.target as Element | null;
+    const entry = target?.closest?.(`.${ENTRY_CLASS}`);
     const type = entry?.getAttribute(TYPE_ATTR);
+    // The info badge's own stop: opens the popover, never falls through to placing a shape (same
+    // split as the click handler above -- Enter/Space on it must not also drop an element).
+    if (target?.closest?.(`.${INFO_CLASS}`)) {
+      event.preventDefault();
+      if (isElementType(type)) this.bridge.openObjectInfo(type, entry as HTMLElement);
+      return;
+    }
     if (type === NOTE_TYPE) {
       event.preventDefault(); // Space would scroll the page
       this.dropAtCentre(this.elementFactory.createShape({ isNote: true }));

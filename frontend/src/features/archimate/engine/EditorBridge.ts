@@ -21,8 +21,8 @@ export interface EditorLabels {
   unlinked: string;
   /** Context-pad toggle title of an Association's `isDirected`. */
   directed: string;
-  /** Palette tool titles. */
-  tools: { hand: string; lasso: string };
+  /** Palette tool titles, and the info badge's accessible label ("View details: {{name}}"). */
+  tools: { hand: string; lasso: string; objectInfo: (name: string) => string };
   /** The "Other" layer's free-text annotation: its palette title and the panel's heading fallback. */
   note: string;
 }

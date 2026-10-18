@@ -42,7 +42,8 @@
   },
   "tools": {
     "hand": "抓手工具",
-    "lasso": "套索选择"
+    "lasso": "套索选择",
+    "objectInfo": "查看详情：{{name}}"
   },
   "note": {
     "label": "便签"

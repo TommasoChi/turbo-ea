@@ -42,7 +42,8 @@
   },
   "tools": {
     "hand": "Herramienta mano",
-    "lasso": "Selección con lazo"
+    "lasso": "Selección con lazo",
+    "objectInfo": "Ver detalles: {{name}}"
   },
   "note": {
     "label": "Nota"

@@ -64,8 +64,25 @@ describe("ArchimatePaletteProvider entries", () => {
     expect(note.title).toBe("L:note");
     expect(note.html).toContain('data-archimate-type="Note"');
     expect(note.html).toContain(`--archimate-tile: ${ARCHIMATE_LAYER_COLORS.other.fill}`);
+    // The Note is not a real Enterprise Object (no registry row for it), so it gets no info badge.
+    expect(note.html).not.toContain("archimate-palette-info");
     const el = entry("create.note");
     expect(el.getAttribute("aria-label")).toBe("L:note");
+  });
+
+  it("gives every element tile its own small info badge, nested inside, labelled via the bridge", () => {
+    const { entries, entry } = setup();
+    for (const t of ELEMENT_TYPES) {
+      const html = entries[`create.${t}`].html!;
+      expect(html).toContain('class="archimate-palette-info"');
+      expect(html).toContain(`aria-label="L:objectInfo L:${t}"`);
+    }
+    const tile = entry("create.BusinessActor");
+    const badge = tile.querySelector(".archimate-palette-info")!;
+    expect(badge).toBeTruthy();
+    expect(badge.tagName).toBe("BUTTON");
+    expect(badge.getAttribute("tabindex")).toBe("0");
+    expect(badge.getAttribute("draggable")).toBe("false");
   });
 
   it("groups the entries tools first, then by layer in LAYER_ORDER, each element in its own layer", () => {
@@ -177,11 +194,11 @@ describe("palette mouse path (click / dragstart)", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it("a click also asks the bridge to show the object-info popover, anchored at the clicked tile -- without blocking the create it still starts", () => {
+  it("clicking the tile body (glyph or anywhere else but the info badge) only ever starts creating -- unchanged, never opens the popover", () => {
     const { withFakes, bridge } = setup();
     const start = vi.fn();
-    // The clicked target is a child of the tile (the glyph), as a real click on the rendered SVG
-    // would be -- the handler must walk up to the tile itself to anchor the popover.
+    // A click on the glyph, as a real click on the rendered SVG would land -- a child of the
+    // tile, but not the info badge.
     const tile = document.createElement("div");
     tile.className = "entry archimate-palette-entry";
     const glyph = document.createElement("span");
@@ -190,24 +207,38 @@ describe("palette mouse path (click / dragstart)", () => {
 
     (withFakes({ create: { start } }).getPaletteEntries()["create.ApplicationComponent"].action as Action).click(event);
 
-    expect(start).toHaveBeenCalledTimes(1); // the click's existing behaviour keeps working
-    expect(bridge.openObjectInfo).toHaveBeenCalledWith("ApplicationComponent", tile);
-  });
-
-  it("dragstart never opens the info popover -- only click does", () => {
-    const { withFakes, bridge } = setup();
-    const start = vi.fn();
-    (withFakes({ create: { start } }).getPaletteEntries()["create.ApplicationComponent"].action as Action)
-      .dragstart(new MouseEvent("dragstart"));
     expect(start).toHaveBeenCalledTimes(1);
     expect(bridge.openObjectInfo).not.toHaveBeenCalled();
   });
 
-  it("a click whose target isn't inside a tile (defensive only) starts creating without opening the popover", () => {
+  it("clicking the info badge opens the popover, anchored at the tile, and never starts creating", () => {
     const { withFakes, bridge } = setup();
     const start = vi.fn();
-    const event = { target: document.createElement("div") } as unknown as MouseEvent;
+    // The info badge nested inside the tile, as rendered -- the handler must walk up from the
+    // badge (or anything inside it) to the tile itself to anchor the popover.
+    const tile = document.createElement("div");
+    tile.className = "entry archimate-palette-entry";
+    const infoBadge = document.createElement("button");
+    infoBadge.className = "archimate-palette-info";
+    const infoGlyph = document.createElement("span"); // the badge's own inner svg
+    infoBadge.appendChild(infoGlyph);
+    tile.appendChild(infoBadge);
+    const event = { target: infoGlyph } as unknown as MouseEvent;
+
     (withFakes({ create: { start } }).getPaletteEntries()["create.ApplicationComponent"].action as Action).click(event);
+
+    expect(start).not.toHaveBeenCalled();
+    expect(bridge.openObjectInfo).toHaveBeenCalledWith("ApplicationComponent", tile);
+  });
+
+  it("dragstart never opens the info popover, whatever the target -- only a click on the badge does", () => {
+    const { withFakes, bridge } = setup();
+    const start = vi.fn();
+    const infoBadge = document.createElement("button");
+    infoBadge.className = "archimate-palette-info";
+    const event = { target: infoBadge } as unknown as MouseEvent;
+    (withFakes({ create: { start } }).getPaletteEntries()["create.ApplicationComponent"].action as Action)
+      .dragstart(event);
     expect(start).toHaveBeenCalledTimes(1);
     expect(bridge.openObjectInfo).not.toHaveBeenCalled();
   });
@@ -306,5 +337,25 @@ describe("palette keyboard path", () => {
     press(entry("create.Goal"), "Enter");
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0][2]).toBe(get<Canvas>("canvas").getRootElement());
+  });
+
+  it("Enter on the info badge opens the popover, anchored at the tile, and drops no shape", () => {
+    const { entry, press, bridge, shapesOf } = setup();
+    const tile = entry("create.BusinessActor");
+    const badge = tile.querySelector<HTMLElement>(".archimate-palette-info")!;
+    press(badge, "Enter");
+    expect(bridge.openObjectInfo).toHaveBeenCalledWith("BusinessActor", tile);
+    expect(shapesOf("BusinessActor")).toHaveLength(0);
+  });
+
+  it("Space on the info badge works the same way, and still doesn't scroll the page", () => {
+    const { entry, bridge, shapesOf } = setup();
+    const tile = entry("create.Node");
+    const badge = tile.querySelector<HTMLElement>(".archimate-palette-info")!;
+    const ev = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+    badge.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(bridge.openObjectInfo).toHaveBeenCalledWith("Node", tile);
+    expect(shapesOf("Node")).toHaveLength(0);
   });
 });

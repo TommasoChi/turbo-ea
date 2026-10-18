@@ -768,12 +768,12 @@ describe("create-card dialog", () => {
 });
 
 describe("object info popover", () => {
-  // The palette's own click->bridge.openObjectInfo wiring (and that it never blocks the real
-  // create interaction) is covered at the unit level in ArchimatePaletteProvider.test.ts, with a
-  // faked `create` service -- the real one drives mouse tracking that jsdom doesn't support
-  // (no `document.elementFromPoint`). Here, through the same `handle!.bridge` seam the link/
-  // create-card dialogs above use, we only verify ArchimateModeler renders what the bridge asks
-  // for.
+  // The palette tile's own click/keyboard branching between "start placing" and "open the info
+  // popover" is covered at the unit level in ArchimatePaletteProvider.test.ts, with a faked
+  // `create` service for the tile-body case -- the real `create` service drives mouse tracking
+  // that jsdom doesn't support (no `document.elementFromPoint`). Here, through the same
+  // `handle!.bridge` seam the link/create-card dialogs above use, we verify ArchimateModeler
+  // renders what the bridge asks for.
   it("renders the popover the bridge asks for, read-only (no edit pencil, per the spec's Anti-goals)", async () => {
     await mount();
     const anchorEl = document.createElement("div");
@@ -789,6 +789,18 @@ describe("object info popover", () => {
     act(() => handle!.bridge.openObjectInfo("NoSuchKey", document.createElement("div")));
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByText("A modular, deployable part of software.")).toBeNull();
+  });
+
+  it("a real click on the tile's info badge opens the popover and places no element -- unlike the tile body, this is safe to click in jsdom since it never reaches the real create service", async () => {
+    const { user } = await mount();
+    const registry = services<{ getAll(): unknown[] }>("elementRegistry");
+    const before = registry.getAll().length;
+    const tile = document.querySelector<HTMLElement>('[data-action="create.ApplicationComponent"]')!;
+    const badge = tile.querySelector<HTMLElement>(".archimate-palette-info")!;
+    await user.click(badge);
+    expect(await screen.findByText("Application Component")).toBeInTheDocument();
+    expect(screen.getByText("A modular, deployable part of software.")).toBeInTheDocument();
+    expect(registry.getAll().length).toBe(before); // no element was placed
   });
 });
 
