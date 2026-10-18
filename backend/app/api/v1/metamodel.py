@@ -29,6 +29,7 @@ from app.models.role import Role
 from app.models.stakeholder import Stakeholder
 from app.models.user import User
 from app.services import card_reference
+from app.services.archimate import taxonomy
 from app.services.extensions.registry import extension_registry
 from app.services.hierarchy import (
     HIERARCHY_LEVEL_KEY,
@@ -1980,3 +1981,71 @@ async def list_enterprise_objects(
         mappings_by_object.setdefault(m.enterprise_object_key, []).append(m)
 
     return [_serialize_enterprise_object(o, mappings_by_object.get(o.key, [])) for o in objects]
+
+
+@router.post("/enterprise-objects", status_code=201)
+async def create_enterprise_object(
+    body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Create a custom Enterprise Object. Always ``is_standard=False`` and
+    ``is_locked=False`` — the standard registry rows only ever come from
+    ``seed_enterprise_objects``."""
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    key = body.get("key", "")
+    if key in taxonomy.ALL_ELEMENT_TYPES:
+        # Reject even if no row for this standard key exists yet (e.g. a
+        # fresh DB that hasn't been seeded) — the key is reserved regardless.
+        raise HTTPException(409, "Key collides with a standard ArchiMate element type")
+    existing = await db.execute(select(EnterpriseObject).where(EnterpriseObject.key == key))
+    if existing.scalar_one_or_none():
+        raise HTTPException(409, "Enterprise object key already exists")
+
+    max_order = await db.execute(select(func.max(EnterpriseObject.sort_order)))
+    next_order = (max_order.scalar() or 0) + 1
+
+    o = EnterpriseObject(
+        key=body["key"],
+        name=body["name"],
+        description=body.get("description"),
+        icon=body.get("icon", "category"),
+        color=body.get("color", "#1976d2"),
+        layer=body.get("layer"),
+        is_standard=False,
+        is_locked=False,
+        is_hidden=body.get("is_hidden", False),
+        sort_order=body.get("sort_order", next_order),
+    )
+    db.add(o)
+    await db.commit()
+    await db.refresh(o)
+    return _serialize_enterprise_object(o, [])
+
+
+@router.patch("/enterprise-objects/{key}")
+async def update_enterprise_object(
+    key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(select(EnterpriseObject).where(EnterpriseObject.key == key))
+    o = result.scalar_one_or_none()
+    if not o:
+        raise HTTPException(404, "Enterprise object not found")
+    if o.is_locked:
+        # Checked before touching the body at all, so a locked row's fields
+        # never change even if some of the PATCH body's keys would otherwise
+        # be no-ops.
+        raise HTTPException(422, "Enterprise object is locked and cannot be edited")
+
+    updatable = ["name", "description", "icon", "color", "layer", "is_hidden", "sort_order"]
+    for field in updatable:
+        if field in body:
+            setattr(o, field, body[field])
+
+    await db.commit()
+    await db.refresh(o)
+    mappings_result = await db.execute(
+        select(EnterpriseObjectCardMapping).where(
+            EnterpriseObjectCardMapping.enterprise_object_key == o.key
+        )
+    )
+    return _serialize_enterprise_object(o, mappings_result.scalars().all())
