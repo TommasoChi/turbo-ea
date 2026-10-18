@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { SoAW, SoAWSectionData } from "@/types";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
@@ -69,9 +69,8 @@ const tc = (key: string) => String(i18n.t(`common:${key}`));
 
 // Every state change re-renders the page's 18 sections (~250ms in jsdom, more
 // under coverage on a loaded runner), and a revision swaps the whole page out
-// for a spinner and back. Testing Library's 1s default for `findBy*` /
-// `waitFor` is tight for that; a found element still resolves at once.
-configure({ asyncUtilTimeout: 5000 });
+// for a spinner and back. The base setup file's 10s budget (src/test/setup.ts)
+// already covers that; a found element still resolves at once.
 
 type CustomSection = SoAWSectionData & { title: string; insertAfter: string };
 
