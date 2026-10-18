@@ -72,6 +72,7 @@
   "metamodel.successors": "Lineage",
   "metamodel.builtIn": "Built-in",
   "metamodel.hidden": "Hidden",
+  "metamodel.cardMappingLocked": "This type is fixed and cannot be hidden.",
   "metamodel.uncategorized": "Uncategorized",
   "metamodel.fields": "{{count}} field",
   "metamodel.fields_other": "{{count}} fields",

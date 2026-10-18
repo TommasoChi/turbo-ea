@@ -72,6 +72,7 @@
   "metamodel.successors": "Linhagem",
   "metamodel.builtIn": "Nativo",
   "metamodel.hidden": "Oculto",
+  "metamodel.cardMappingLocked": "Este tipo é fixo e não pode ser ocultado.",
   "metamodel.uncategorized": "Sem categoria",
   "metamodel.fields": "{{count}} campo",
   "metamodel.fields_other": "{{count}} campos",

@@ -72,6 +72,7 @@
   "metamodel.successors": "Lignée",
   "metamodel.builtIn": "Intégré",
   "metamodel.hidden": "Masqué",
+  "metamodel.cardMappingLocked": "Ce type est fixe et ne peut pas être masqué.",
   "metamodel.uncategorized": "Non catégorisé",
   "metamodel.fields": "{{count}} champ",
   "metamodel.fields_other": "{{count}} champs",

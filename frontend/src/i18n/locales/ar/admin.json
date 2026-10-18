@@ -72,6 +72,7 @@
   "metamodel.successors": "النسب",
   "metamodel.builtIn": "مدمج",
   "metamodel.hidden": "مخفي",
+  "metamodel.cardMappingLocked": "هذا النوع ثابت ولا يمكن إخفاؤه.",
   "metamodel.uncategorized": "غير مصنّف",
   "metamodel.fields": "{{count}} حقل",
   "metamodel.fields_other": "{{count}} حقل",

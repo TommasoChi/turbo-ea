@@ -72,6 +72,7 @@
   "metamodel.successors": "Lignaggio",
   "metamodel.builtIn": "Predefinito",
   "metamodel.hidden": "Nascosto",
+  "metamodel.cardMappingLocked": "Questo tipo è fisso e non può essere nascosto.",
   "metamodel.uncategorized": "Non categorizzato",
   "metamodel.fields": "{{count}} campo",
   "metamodel.fields_other": "{{count}} campi",

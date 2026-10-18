@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import CardMappingTabContent from "./CardMappingTabContent";
 
@@ -17,7 +17,7 @@ const BUSINESS_OBJECT = {
   color: "#c6c653",
   layer: "business",
   is_standard: true,
-  is_locked: true,
+  is_locked: false,
   is_hidden: false,
   sort_order: 14,
   card_mappings: [
@@ -38,7 +38,7 @@ const DATA_OBJECT = {
   color: "#53c6c6",
   layer: "application",
   is_standard: true,
-  is_locked: true,
+  is_locked: false,
   is_hidden: true,
   sort_order: 9,
   card_mappings: [],
@@ -50,6 +50,9 @@ const GROUPING = {
   description: null,
   icon: "group_work",
   color: "#8c8c8c",
+  // Grouping is the one standard row the backend seeds locked (is_locked:
+  // true) -- a PATCH on a locked row 422s before the body is even read, so
+  // its visibility toggle must be disabled rather than attempted.
   layer: null,
   is_standard: true,
   is_locked: true,
@@ -107,5 +110,22 @@ describe("CardMappingTabContent", () => {
         is_hidden: true,
       }),
     );
+  });
+
+  it("disables the visibility toggle for a locked row and never attempts the PATCH", async () => {
+    render(<CardMappingTabContent />);
+    await screen.findByText("Grouping");
+
+    const row = screen.getByTestId("eo-row-Grouping");
+    const toggle = within(row).getByRole("button");
+    expect(toggle).toBeDisabled();
+
+    // A real disabled <button> doesn't fire click handlers at all -- confirmed
+    // by userEvent.click refusing outright with a `pointer-events: none`
+    // error on this exact element. fireEvent bypasses that pointer-event
+    // guard, so it still proves the handler never runs even if some future
+    // change dropped the CSS/attribute disabling but kept `disabled` unset.
+    fireEvent.click(toggle);
+    expect(api.patch).not.toHaveBeenCalled();
   });
 });

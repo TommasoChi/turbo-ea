@@ -72,6 +72,7 @@
   "metamodel.successors": "Slægtskab",
   "metamodel.builtIn": "Indbygget",
   "metamodel.hidden": "Skjult",
+  "metamodel.cardMappingLocked": "Denne type er fast og kan ikke skjules.",
   "metamodel.uncategorized": "Ukategoriseret",
   "metamodel.fields": "{{count}} felt",
   "metamodel.fields_other": "{{count}} felter",

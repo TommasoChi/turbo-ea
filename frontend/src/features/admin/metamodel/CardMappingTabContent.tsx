@@ -93,14 +93,31 @@ export default function CardMappingTabContent() {
               <Typography variant="caption" color="text.secondary">
                 {t("metamodel.cardMappingCount", { count: eo.card_mappings.length })}
               </Typography>
-              <Tooltip title={eo.is_hidden ? t("common:actions.restore") : t("metamodel.hidden")}>
-                <IconButton size="small" onClick={() => toggleHidden(eo)}>
-                  <MaterialSymbol
-                    icon={eo.is_hidden ? "visibility_off" : "visibility"}
-                    size={18}
-                    color={eo.is_hidden ? "#f57c00" : "#bbb"}
-                  />
-                </IconButton>
+              <Tooltip
+                title={
+                  eo.is_locked
+                    ? t("metamodel.cardMappingLocked")
+                    : eo.is_hidden
+                      ? t("common:actions.restore")
+                      : t("metamodel.hidden")
+                }
+              >
+                {/* A disabled button inside a Tooltip needs a wrapping span --
+                    MUI's Tooltip can't attach its listeners to a disabled
+                    child directly. */}
+                <span>
+                  <IconButton
+                    size="small"
+                    disabled={eo.is_locked}
+                    onClick={() => toggleHidden(eo)}
+                  >
+                    <MaterialSymbol
+                      icon={eo.is_hidden ? "visibility_off" : "visibility"}
+                      size={18}
+                      color={eo.is_locked ? "#ccc" : eo.is_hidden ? "#f57c00" : "#bbb"}
+                    />
+                  </IconButton>
+                </span>
               </Tooltip>
             </Box>
           ))}
