@@ -25,6 +25,7 @@ export default defineConfig({
     // ones). 15s keeps genuine hangs failing while giving slow-runner
     // headroom.
     testTimeout: 15_000,
+    server: { deps: { external: [/scripts[\\/].*\.mjs$/] } },
     // scripts/: the coverage tooling CI runs (e2e-coverage.mjs, merge-lcov.mjs).
     include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.ts"],
     coverage: {

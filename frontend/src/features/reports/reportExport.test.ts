@@ -204,8 +204,15 @@ describe("extractSheetsFromDOM", () => {
     expect(sheet.rows[0]).toEqual({ c0: 1, c1: 2, c2: "3", c3: "4" });
   });
 
+  // `extractSheetsFromDOM` reads cell numbers back with the runtime's own
+  // locale (whatever `Intl.NumberFormat(undefined)` resolves to on the
+  // machine running the suite — not necessarily en-US), so a fixture has to
+  // use that same locale's separators rather than a hardcoded "1,234.50".
+  const RUNTIME_SEP = localeNumberSeparators();
+  const grouped1234_50 = `1${RUNTIME_SEP.group}234${RUNTIME_SEP.decimal}50`;
+
   it("parses the display formats a number column carries and keeps what is not a number as text", () => {
-    const cells = ["1,234.50", "12 %", "-", "", "€ 99", "2024-01-05", "1-2"];
+    const cells = [grouped1234_50, "12 %", "-", "", "€ 99", "2024-01-05", "1-2"];
     const root = mount(`<table>
       <thead><tr>${cells.map((_, i) => `<th align="right">N${i}</th>`).join("")}</tr></thead>
       <tbody><tr>${cells.map((c) => `<td>${c}</td>`).join("")}</tr></tbody>
@@ -226,7 +233,7 @@ describe("extractSheetsFromDOM", () => {
 
   it("keeps digit-less text as text and reads an accounting negative as negative", () => {
     // "n/a" used to export as 0 and "(500)" as +500.
-    const cells = ["n/a", "abc", "1,234.50", "(500)", "—"];
+    const cells = ["n/a", "abc", grouped1234_50, "(500)", "—"];
     const root = mount(`<table>
       <thead><tr>${cells.map((_, i) => `<th align="right">N${i}</th>`).join("")}</tr></thead>
       <tbody><tr>${cells.map((c) => `<td>${c}</td>`).join("")}</tr></tbody>

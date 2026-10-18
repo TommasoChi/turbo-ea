@@ -50,6 +50,17 @@ function renderPanel() {
   return render(<ProcessAssessmentPanel processId="proc-1" />);
 }
 
+// The panel's default date format ("DD MMM YYYY") spells the month with
+// `toLocaleString(undefined, { month: "short" })` — the runtime's own locale,
+// not necessarily English (e.g. "giu" for June on an it-IT machine). Build the
+// expected strings the same way rather than hardcoding the English form.
+function ddMmmYyyy(year: number, month: number, day: number): string {
+  const short = new Date(year, month - 1, day).toLocaleString(undefined, { month: "short" });
+  return `${String(day).padStart(2, "0")} ${short} ${year}`;
+}
+const JUN_15_2025 = ddMmmYyyy(2025, 6, 15);
+const MAY_01_2025 = ddMmmYyyy(2025, 5, 1);
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.get).mockResolvedValue(mockAssessments);
@@ -80,10 +91,10 @@ describe("ProcessAssessmentPanel", () => {
   it("shows assessment table with data", async () => {
     renderPanel();
     await waitFor(() => {
-      expect(screen.getByText("15 Jun 2025")).toBeInTheDocument();
+      expect(screen.getByText(JUN_15_2025)).toBeInTheDocument();
       expect(screen.getByText("John Doe")).toBeInTheDocument();
       expect(screen.getByText("Good progress")).toBeInTheDocument();
-      expect(screen.getByText("01 May 2025")).toBeInTheDocument();
+      expect(screen.getByText(MAY_01_2025)).toBeInTheDocument();
       expect(screen.getByText("Jane Smith")).toBeInTheDocument();
     });
   });
@@ -111,7 +122,7 @@ describe("ProcessAssessmentPanel", () => {
     vi.mocked(api.get).mockResolvedValue([mockAssessments[0]]);
     renderPanel();
     await waitFor(() => {
-      expect(screen.getByText("15 Jun 2025")).toBeInTheDocument();
+      expect(screen.getByText(JUN_15_2025)).toBeInTheDocument();
     });
     expect(screen.queryByTestId("line-chart")).not.toBeInTheDocument();
   });

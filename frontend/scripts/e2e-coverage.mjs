@@ -20,7 +20,7 @@
  * them, no measured source file. A silent empty report would publish a
  * unit-only figure as the merged one.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -151,6 +151,12 @@ export function writeReports(map, { outDir, projectRoot }) {
   ]) {
     reports.create(name, options).execute(context);
   }
+  // istanbul's lcovonly reporter builds `SF:` with path.relative, which uses the
+  // OS separator. diff-cover (and LCOV itself) expect `/`, same as git paths.
+  const lcovPath = path.join(outDir, "lcov.info");
+  const lcov = readFileSync(lcovPath, "utf8");
+  const posixLcov = lcov.replace(/^SF:.*$/gm, (line) => line.split(path.sep).join("/"));
+  if (posixLcov !== lcov) writeFileSync(lcovPath, posixLcov);
 }
 
 export function parseArgs(argv, frontendRoot) {

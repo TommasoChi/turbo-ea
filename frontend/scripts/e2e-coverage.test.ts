@@ -2,6 +2,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { build, transformWithEsbuild } from "vite";
 import { afterEach, describe, expect, it } from "vitest";
@@ -95,20 +96,30 @@ describe("isMeasured", () => {
 });
 
 describe("parseArgs", () => {
-  const root = "/w/frontend";
+  // An arbitrary absolute path, built the same way the OS resolves one (not a
+  // hardcoded POSIX literal): path.resolve/join give back `\`-joined paths on
+  // Windows, so the expectations below are computed with the same functions
+  // the production code uses rather than assumed to be `/`-joined.
+  const root = path.resolve(path.sep, "w", "frontend");
 
   it("defaults every path under the frontend root", () => {
     expect(parseArgs([], root)).toEqual({
-      raw: "/w/frontend/.e2e-coverage",
-      dist: "/w/frontend/dist",
-      out: "/w/frontend/coverage-e2e",
-      root: "/w",
+      raw: path.join(root, ".e2e-coverage"),
+      dist: path.join(root, "dist"),
+      out: path.join(root, "coverage-e2e"),
+      root: path.resolve(root, ".."),
     });
   });
 
   it("resolves a given value against the frontend root", () => {
-    const opts = parseArgs(["--raw", "rec", "--dist", "/abs/dist", "--out", "o", "--root", ".."], root);
-    expect(opts).toEqual({ raw: "/w/frontend/rec", dist: "/abs/dist", out: "/w/frontend/o", root: "/w" });
+    const absDist = path.resolve(path.sep, "abs", "dist");
+    const opts = parseArgs(["--raw", "rec", "--dist", absDist, "--out", "o", "--root", ".."], root);
+    expect(opts).toEqual({
+      raw: path.join(root, "rec"),
+      dist: absDist,
+      out: path.join(root, "o"),
+      root: path.resolve(root, ".."),
+    });
   });
 
   it("refuses an unknown option, a positional, a missing value and a prototype name", () => {
@@ -130,29 +141,31 @@ describe("paths", () => {
   });
 
   it("finds the source map from the trailing comment, else beside the chunk", () => {
-    expect(sourceMapPathFor("x();\n//# sourceMappingURL=index-Ab12.js.map\n", "/d/assets/index-Ab12.js")).toBe(
-      "/d/assets/index-Ab12.js.map",
-    );
-    expect(sourceMapPathFor("x();\n//# sourceMappingURL=maps/i.map", "/d/assets/i.js")).toBe("/d/assets/maps/i.map");
-    expect(sourceMapPathFor("x();\n", "/d/assets/i.js")).toBe("/d/assets/i.js.map");
-    expect(sourceMapPathFor("x();\n//# sourceMappingURL=data:application/json;base64,e30=", "/d/assets/i.js")).toBe(
-      "/d/assets/i.js.map",
-    );
+    const assets = path.resolve(path.sep, "d", "assets");
+    const chunkJs = path.join(assets, "index-Ab12.js");
+    const iJs = path.join(assets, "i.js");
+    expect(sourceMapPathFor("x();\n//# sourceMappingURL=index-Ab12.js.map\n", chunkJs)).toBe(`${chunkJs}.map`);
+    expect(sourceMapPathFor("x();\n//# sourceMappingURL=maps/i.map", iJs)).toBe(path.join(assets, "maps", "i.map"));
+    expect(sourceMapPathFor("x();\n", iJs)).toBe(`${iJs}.map`);
+    expect(sourceMapPathFor("x();\n//# sourceMappingURL=data:application/json;base64,e30=", iJs)).toBe(`${iJs}.map`);
     // The `@` form, no space after the marker, and trailing whitespace all count.
-    expect(sourceMapPathFor("x();\n//@sourceMappingURL=a.map  \n\n", "/d/assets/i.js")).toBe("/d/assets/a.map");
+    expect(sourceMapPathFor("x();\n//@sourceMappingURL=a.map  \n\n", iJs)).toBe(path.join(assets, "a.map"));
     // Only a comment that ENDS the chunk names its map; one in the middle is someone else's.
-    expect(sourceMapPathFor("//# sourceMappingURL=mid.map\nx();\n", "/d/assets/i.js")).toBe("/d/assets/i.js.map");
+    expect(sourceMapPathFor("//# sourceMappingURL=mid.map\nx();\n", iJs)).toBe(`${iJs}.map`);
   });
 
   it("tells a vendor chunk's map from one that touches the sources", () => {
-    const js = "/w/frontend/dist/assets/c.js";
-    expect(mapTouchesSources({ sources: ["../../node_modules/react/index.js", "\0vite/preload-helper.js"] }, js, "/w/frontend")).toBe(false);
-    expect(mapTouchesSources({ sources: ["../../node_modules/react/index.js", "../../src/App.tsx"] }, js, "/w/frontend")).toBe(true);
-    expect(mapTouchesSources({ sources: ["../../src/main.tsx"] }, js, "/w/frontend")).toBe(false);
-    expect(mapTouchesSources({ sources: ["file:///w/frontend/src/App.tsx"] }, js, "/w/frontend")).toBe(true);
-    expect(mapTouchesSources({ sources: ["file:///elsewhere/src/App.tsx"] }, js, "/w/frontend")).toBe(false);
-    expect(mapTouchesSources({ sources: [""] }, js, "/w/frontend")).toBe(false);
-    expect(mapTouchesSources({}, js, "/w/frontend")).toBe(false);
+    const frontendRoot = path.resolve(path.sep, "w", "frontend");
+    const js = path.join(frontendRoot, "dist", "assets", "c.js");
+    const appUrl = pathToFileURL(path.join(frontendRoot, "src", "App.tsx")).href;
+    const elsewhereUrl = pathToFileURL(path.resolve(path.sep, "elsewhere", "src", "App.tsx")).href;
+    expect(mapTouchesSources({ sources: ["../../node_modules/react/index.js", "\0vite/preload-helper.js"] }, js, frontendRoot)).toBe(false);
+    expect(mapTouchesSources({ sources: ["../../node_modules/react/index.js", "../../src/App.tsx"] }, js, frontendRoot)).toBe(true);
+    expect(mapTouchesSources({ sources: ["../../src/main.tsx"] }, js, frontendRoot)).toBe(false);
+    expect(mapTouchesSources({ sources: [appUrl] }, js, frontendRoot)).toBe(true);
+    expect(mapTouchesSources({ sources: [elsewhereUrl] }, js, frontendRoot)).toBe(false);
+    expect(mapTouchesSources({ sources: [""] }, js, frontendRoot)).toBe(false);
+    expect(mapTouchesSources({}, js, frontendRoot)).toBe(false);
   });
 });
 

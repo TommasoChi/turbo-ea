@@ -172,6 +172,14 @@ describe("sanitizeReturnPath — each guard on its own", () => {
 });
 
 describe("stash / consume when sessionStorage throws", () => {
+  // Not the lexical `Storage` global: on a Node that implements the Web
+  // Storage API natively (22+), `Storage.prototype` is Node's own class, a
+  // different object from the one jsdom's `sessionStorage` actually inherits
+  // from. Spying on the wrong prototype silently never fires, so every test
+  // below would pass vacuously. Walking up from the real instance always
+  // finds the method that is actually called.
+  const storageProto = Object.getPrototypeOf(sessionStorage);
+
   afterEach(() => {
     vi.restoreAllMocks();
     sessionStorage.clear();
@@ -182,26 +190,26 @@ describe("stash / consume when sessionStorage throws", () => {
   };
 
   it("stash swallows a failing write and a failing remove", () => {
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(boom);
-    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(boom);
+    vi.spyOn(storageProto, "setItem").mockImplementation(boom);
+    vi.spyOn(storageProto, "removeItem").mockImplementation(boom);
     expect(() => stashReturnPath("/ppm")).not.toThrow();
     expect(() => stashReturnPath("/")).not.toThrow();
   });
 
   it("consume reads nothing when the read fails", () => {
     sessionStorage.setItem(SSO_RETURN_PATH_KEY, "/ppm");
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(boom);
+    vi.spyOn(storageProto, "getItem").mockImplementation(boom);
     expect(consumeReturnPath()).toBeNull();
   });
 
   it("consume reads nothing when the remove fails, so it can never be replayed", () => {
     sessionStorage.setItem(SSO_RETURN_PATH_KEY, "/ppm");
-    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(boom);
+    vi.spyOn(storageProto, "removeItem").mockImplementation(boom);
     expect(consumeReturnPath()).toBeNull();
   });
 
   it("clear swallows a failing remove", () => {
-    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(boom);
+    vi.spyOn(storageProto, "removeItem").mockImplementation(boom);
     expect(() => clearReturnPath()).not.toThrow();
   });
 });

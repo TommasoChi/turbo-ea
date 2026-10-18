@@ -1,8 +1,27 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { compareDateFilter, dateColumnFilterDef } from "./dateColumnFilter";
 
+/** See `src/lib/dates.test.ts` for the mechanism. */
+function withTimeZone(tz: string) {
+  beforeAll(() => vi.stubEnv("TZ", tz));
+  afterAll(() => vi.unstubAllEnvs());
+}
+
 describe("compareDateFilter", () => {
-  const filter = new Date(2026, 3, 15); // 2026-04-15 local midnight
+  // Pinned: the fixtures below are UTC instants picked to fall just before/after
+  // local midnight, which only holds for a zone close to UTC. Without this the
+  // suite inherits whatever zone the machine runs in (e.g. Europe/Rome, UTC+2 in
+  // DST), where "2026-04-14T23:00:00Z" is already the 15th locally.
+  withTimeZone("UTC");
+
+  // Built in beforeEach, not at collection time: beforeAll has not stubbed the
+  // zone yet while the describe callback runs, so a Date hoisted out of here
+  // would be constructed in the runner's own zone and drift from the
+  // UTC-zoned cell values the tests compare it against.
+  let filter: Date;
+  beforeEach(() => {
+    filter = new Date(2026, 3, 15); // 2026-04-15 local midnight
+  });
 
   it("returns negative when the cell date is before the filter date", () => {
     expect(compareDateFilter(filter, "2026-04-14T23:00:00Z")).toBeLessThan(0);
@@ -38,12 +57,6 @@ describe("compareDateFilter", () => {
     expect(dateColumnFilterDef.filterParams.buttons).toContain("reset");
   });
 });
-
-/** See `src/lib/dates.test.ts` for the mechanism. */
-function withTimeZone(tz: string) {
-  beforeAll(() => vi.stubEnv("TZ", tz));
-  afterAll(() => vi.unstubAllEnvs());
-}
 
 describe("compareDateFilter west of UTC", () => {
   withTimeZone("America/Los_Angeles");

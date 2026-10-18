@@ -1,6 +1,16 @@
 import "@testing-library/jest-dom/vitest";
+import { configure } from "@testing-library/dom";
 import { vi } from "vitest";
 import i18n from "@/i18n";
+
+// @testing-library's own `waitFor`/`findBy*` timeout (1000ms) is independent
+// of vitest's `testTimeout` (15s, see vitest.config.ts) and stays at that
+// default regardless of it. A Suspense-lazy component's first dynamic import
+// in a test file pulls in its whole chunk of transitive deps (charting,
+// markdown rendering, …) with no warm cache, which measured over 1.5s on a
+// slow Windows dev box under coverage instrumentation — comfortably past the
+// library default, well inside vitest's own budget.
+configure({ asyncUtilTimeout: 10_000 });
 // AG Grid module registration (mandatory since v33) for every test that
 // mounts a real <AgGridReact> — same side-effect import the grid pages use.
 import "@/lib/agGridSetup";
