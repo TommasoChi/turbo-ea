@@ -2539,7 +2539,16 @@ async def update_enterprise_object(
     if "aspect" in body and body["aspect"] is not None and body["aspect"] not in _VALID_ASPECTS:
         raise HTTPException(422, f"aspect must be one of {sorted(_VALID_ASPECTS)} or null")
 
-    updatable = ["name", "description", "icon", "color", "layer", "aspect", "is_hidden", "sort_order"]
+    updatable = [
+        "name",
+        "description",
+        "icon",
+        "color",
+        "layer",
+        "aspect",
+        "is_hidden",
+        "sort_order",
+    ]
     changes = audit_log.diff(o, {k: body[k] for k in updatable if k in body}, keys=updatable)
     for field in updatable:
         if field in body:

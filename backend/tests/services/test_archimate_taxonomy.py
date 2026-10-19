@@ -186,7 +186,8 @@ def test_aspect_of_is_none_outside_the_aspects_grid():
 
 def test_aspect_of_classifies_every_non_motivation_non_composite_element_type():
     composite = {"Product", "Plateau", "Gap"}
-    classified = {t for t in tx.ELEMENT_TYPES if t not in tx.LAYERS["motivation"] and t not in composite}
+    motivation = tx.LAYERS["motivation"]
+    classified = {t for t in tx.ELEMENT_TYPES if t not in motivation and t not in composite}
     for t in classified:
         assert tx.aspect_of(t) in {"passive", "behavior", "active"}, t
     assert len(classified) == 58 - 10 - 3  # 58 element types, 10 motivation, 3 composite
