@@ -272,15 +272,64 @@ describe("CardMappingTabContent", () => {
     );
   });
 
-  it("clicking the expand control opens the row's card-mapping editor", async () => {
+  it("an aspect already set on a row renders pressed, with a filled check icon -- the others on that row don't", async () => {
+    render(<CardMappingTabContent />);
+    await screen.findByText("Data Object");
+
+    // DATA_OBJECT is seeded aspect: "passive".
+    const row = screen.getByTestId("eo-row-DataObject");
+    const passiveBtn = within(row).getByRole("button", { name: "Passive" });
+    const behaviorBtn = within(row).getByRole("button", { name: "Behavior" });
+    expect(passiveBtn).toHaveAttribute("aria-pressed", "true");
+    expect(behaviorBtn).toHaveAttribute("aria-pressed", "false");
+    expect(passiveBtn.textContent).toContain("check_circle");
+    expect(behaviorBtn.textContent).toContain("radio_button_unchecked");
+  });
+
+  it("hides the aspect columns for a row outside the Aspects grid (Grouping, layer: Other)", async () => {
+    render(<CardMappingTabContent />);
+    await screen.findByText("Grouping");
+
+    const row = screen.getByTestId("eo-row-Grouping");
+    expect(within(row).queryByRole("button", { name: "Passive" })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Behavior" })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Active" })).not.toBeInTheDocument();
+  });
+
+  it("shows the table's column headers", async () => {
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    expect(screen.getByText("Architecture Object")).toBeInTheDocument();
+    expect(screen.getByText("Passive")).toBeInTheDocument();
+    expect(screen.getByText("Behavior")).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(screen.getByText("Mapping")).toBeInTheDocument();
+  });
+
+  it("swaps the layer header's chevron icon between collapsed and expanded", async () => {
+    const user = userEvent.setup();
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    const header = screen.getByText("Business").closest("button")!;
+    expect(header.textContent).toContain("expand_more");
+
+    await user.click(header);
+    expect(header.textContent).toContain("chevron_right");
+  });
+
+  it("clicking the expand control opens the row's card-mapping editor, clicking again closes it", async () => {
     const user = userEvent.setup();
     render(<CardMappingTabContent />);
     await screen.findByText("Business Object");
 
     const row = screen.getByTestId("eo-row-BusinessObject");
     await user.click(within(row).getByLabelText("Edit card mappings"));
-
     expect(await screen.findByRole("combobox")).toBeInTheDocument();
+
+    await user.click(within(row).getByLabelText("Edit card mappings"));
+    await waitFor(() => expect(screen.queryByRole("combobox")).not.toBeInTheDocument());
   });
 
   it("hides the edit-description pencil for a user without admin.metamodel", async () => {
