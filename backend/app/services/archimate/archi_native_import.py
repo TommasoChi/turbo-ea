@@ -136,7 +136,7 @@ def convert_archi_native_to_exchange(native_xml: str) -> str:
     view_folders: list[Element] = []
     for folder in root.findall("folder"):
         bucket = {"relations": relationship_folders, "diagrams": view_folders}.get(
-            folder.get("type"), element_folders
+            folder.get("type") or "", element_folders
         )
         bucket.append(folder)
 
