@@ -11,7 +11,8 @@
   "governance": {
     "subtabs": {
       "principles": "Principper",
-      "decisions": "Beslutninger"
+      "decisions": "Beslutninger",
+      "delivery": "EA-levering"
     },
     "principles": {
       "title": "Arkitekturprincipper",

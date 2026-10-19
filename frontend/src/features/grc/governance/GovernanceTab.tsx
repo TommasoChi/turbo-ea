@@ -6,19 +6,21 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import { usePpmEnabled } from "@/hooks/usePpmEnabled";
 
 const PrinciplesPanel = lazy(() => import("./PrinciplesPanel"));
 const DecisionsPanel = lazy(() => import("./DecisionsPanel"));
+const EaDeliveryReport = lazy(() => import("@/features/reports/EaDeliveryReport"));
 
-const SUB_KEYS = ["principles", "decisions"] as const;
-type SubKey = (typeof SUB_KEYS)[number];
+const ALL_SUB_KEYS = ["principles", "decisions", "delivery"] as const;
+type SubKey = (typeof ALL_SUB_KEYS)[number];
 
 const STORAGE_KEY = "turboea.grc.governance.sub";
 
 function readStoredSub(): SubKey | null {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    return v && SUB_KEYS.includes(v as SubKey) ? (v as SubKey) : null;
+    return v && ALL_SUB_KEYS.includes(v as SubKey) ? (v as SubKey) : null;
   } catch {
     return null;
   }
@@ -27,6 +29,7 @@ function readStoredSub(): SubKey | null {
 const SUB_ICONS: Record<SubKey, string> = {
   principles: "bookmark_star",
   decisions: "fact_check",
+  delivery: "architecture",
 };
 
 function PanelFallback() {
@@ -39,6 +42,13 @@ function PanelFallback() {
 
 export default function GovernanceTab() {
   const { t } = useTranslation("grc");
+  const { ppmEnabled } = usePpmEnabled();
+  // EA Delivery only has a home here while PPM is off — with PPM on, it
+  // stays a tab of PPM instead (see AppLayout.tsx).
+  const SUB_KEYS: SubKey[] = useMemo(
+    () => (ppmEnabled ? ALL_SUB_KEYS.filter((k) => k !== "delivery") : [...ALL_SUB_KEYS]),
+    [ppmEnabled],
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const paramSub = searchParams.get("sub") as SubKey | null;
   const validParam = paramSub && SUB_KEYS.includes(paramSub) ? paramSub : null;
@@ -47,6 +57,12 @@ export default function GovernanceTab() {
   const [sub, setSub] = useState<SubKey>(
     () => validParam ?? readStoredSub() ?? "principles",
   );
+
+  // A stored/deep-linked "delivery" stops being valid the moment PPM turns
+  // on (SUB_KEYS above drops it) — fall back rather than render a dead tab.
+  useEffect(() => {
+    if (!SUB_KEYS.includes(sub)) setSub("principles");
+  }, [SUB_KEYS, sub]);
 
   // Sync only from a present, valid URL param (deep link / back-forward).
   useEffect(() => {
@@ -79,6 +95,7 @@ export default function GovernanceTab() {
     () => ({
       principles: t("governance.subtabs.principles"),
       decisions: t("governance.subtabs.decisions"),
+      delivery: t("governance.subtabs.delivery"),
     }),
     [t],
   );
@@ -106,6 +123,7 @@ export default function GovernanceTab() {
       <Suspense fallback={<PanelFallback />}>
         {sub === "principles" && <PrinciplesPanel />}
         {sub === "decisions" && <DecisionsPanel />}
+        {sub === "delivery" && <EaDeliveryReport />}
       </Suspense>
     </Box>
   );

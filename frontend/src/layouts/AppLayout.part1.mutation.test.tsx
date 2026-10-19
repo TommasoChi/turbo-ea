@@ -332,31 +332,27 @@ describe("AppLayout — the bar follows the module flags and ROUTE_PERMISSIONS",
     expect(menuHrefs()).toEqual([...CORE_REPORTS, "/reports/saved"]);
   });
 
-  it("puts EA Governance under IT Governance, after the GRC page, when PPM is off", async () => {
+  it("IT Governance stays a plain link to /grc when PPM is off -- EA Delivery lives inside the page itself now", async () => {
     hookState.ppm = { ppmEnabled: false, ppmLoaded: true };
-    const user = userEvent.setup();
     render(<Layout />);
-    // No top-level EA Delivery any more: the GRC link became a dropdown.
+    // No top-level EA Delivery, and GRC does NOT turn into a dropdown: EA
+    // Delivery shows as GovernanceTab's own "EA Delivery" sub-tab instead
+    // (inside the GRC page's "EA Governance" tab, after Decisions), not as a
+    // nav entry.
     expect(navEntries()).toEqual([
       "/",
       "/inventory",
       REPORTS_BUTTON,
       ORG_PROCESS_BUTTON,
       "/diagrams",
-      "[policyIT Governanceexpand_more]",
+      "/grc",
       "/todos",
     ]);
     expect(screen.queryByRole("link", { name: /EA Delivery/ })).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /IT Governance/ }));
-    await screen.findAllByRole("menuitem");
-    // The group's own page stays reachable as the first entry.
-    expect(menuHrefs()).toEqual(["/grc", "/reports/ea-delivery"]);
-    const governance = screen.getByRole("menuitem", { name: /EA Governance/ });
-    expect(within(governance).getByText("architecture")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /IT Governance/ })).not.toBeInTheDocument();
   });
 
-  it("keeps extension GRC routes after EA Governance, with the GRC page still first", async () => {
+  it("keeps extension GRC routes under the GRC dropdown, with the GRC page first -- unaffected by PPM", async () => {
     hookState.ppm = { ppmEnabled: false, ppmLoaded: true };
     registerRoutes(extRoute("register", "Gov Register", { navGroup: "grc" }));
     const user = userEvent.setup();
@@ -364,7 +360,7 @@ describe("AppLayout — the bar follows the module flags and ROUTE_PERMISSIONS",
 
     await user.click(screen.getByRole("button", { name: /IT Governance/ }));
     await screen.findAllByRole("menuitem");
-    expect(menuHrefs()).toEqual(["/grc", "/reports/ea-delivery", "/ext/test-ext/register"]);
+    expect(menuHrefs()).toEqual(["/grc", "/ext/test-ext/register"]);
   });
 
   it("promotes EA Delivery into PPM's slot, between BPM and Diagrams, when PPM and GRC are off", () => {

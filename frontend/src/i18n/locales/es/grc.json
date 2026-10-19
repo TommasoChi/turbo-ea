@@ -11,7 +11,8 @@
   "governance": {
     "subtabs": {
       "principles": "Principios",
-      "decisions": "Decisiones"
+      "decisions": "Decisiones",
+      "delivery": "Entrega EA"
     },
     "principles": {
       "title": "Principios de arquitectura",
