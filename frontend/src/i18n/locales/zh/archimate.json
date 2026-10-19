@@ -24,6 +24,19 @@
     "Specialization": "特化",
     "Association": "关联"
   },
+  "relationshipDefinitions": {
+    "Composition": "部分不能脱离整体独立存在。",
+    "Aggregation": "部分可以独立于整体存在。",
+    "Assignment": "分配行为职责或分配资源。",
+    "Realization": "具体元素实现一个更抽象的元素。",
+    "Serving": "一个元素向另一个元素提供功能。",
+    "Access": "行为元素读取或写入被动对象。",
+    "Influence": "一个元素对另一个产生正面或负面影响。",
+    "Triggering": "一个行为在时间上触发另一个行为。",
+    "Flow": "行为之间价值或信息的传递。",
+    "Specialization": "一个元素是另一个元素的更具体形式。",
+    "Association": "未被其他类型表达的通用关系。"
+  },
   "access": {
     "Access": "访问",
     "Read": "读取",

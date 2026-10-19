@@ -24,6 +24,19 @@
     "Specialization": "Especialización",
     "Association": "Asociación"
   },
+  "relationshipDefinitions": {
+    "Composition": "La parte no puede existir sin el todo.",
+    "Aggregation": "La parte puede existir independientemente del todo.",
+    "Assignment": "Asigna responsabilidad de comportamiento o recursos.",
+    "Realization": "Un elemento concreto realiza uno más abstracto.",
+    "Serving": "Un elemento ofrece funcionalidad a otro.",
+    "Access": "Un comportamiento lee o escribe un objeto pasivo.",
+    "Influence": "Un elemento influye positiva o negativamente en otro.",
+    "Triggering": "Un comportamiento dispara otro en el tiempo.",
+    "Flow": "Transferencia de valor o información entre comportamientos.",
+    "Specialization": "Un elemento es una variante más específica de otro.",
+    "Association": "Relación genérica no expresada por otro tipo."
+  },
   "access": {
     "Access": "Acceso",
     "Read": "Lectura",
