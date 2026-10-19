@@ -78,19 +78,48 @@ ALL_ELEMENT_TYPES: frozenset[str] = (
 # keep the two in sync. A type absent from every set below, outside the
 # Motivation layer and not composite, falls through to the Process/Function/
 # Interaction/Event/Service suffix rule (same as the frontend).
-_ASPECT_ACTIVE = frozenset({
-    "BusinessActor", "BusinessRole", "BusinessCollaboration", "BusinessInterface",
-    "ApplicationComponent", "ApplicationCollaboration", "ApplicationInterface",
-    "Node", "Device", "SystemSoftware", "TechnologyCollaboration", "TechnologyInterface",
-    "Path", "CommunicationNetwork", "Equipment", "Facility", "DistributionNetwork", "Resource",
-})
-_ASPECT_BEHAVIOR_EXTRA = frozenset({
-    "Capability", "ValueStream", "CourseOfAction", "WorkPackage", "ImplementationEvent",
-})
-_ASPECT_PASSIVE = frozenset({
-    "BusinessObject", "Contract", "Representation", "DataObject", "Artifact",
-    "Material", "Deliverable",
-})
+_ASPECT_ACTIVE = frozenset(
+    {
+        "BusinessActor",
+        "BusinessRole",
+        "BusinessCollaboration",
+        "BusinessInterface",
+        "ApplicationComponent",
+        "ApplicationCollaboration",
+        "ApplicationInterface",
+        "Node",
+        "Device",
+        "SystemSoftware",
+        "TechnologyCollaboration",
+        "TechnologyInterface",
+        "Path",
+        "CommunicationNetwork",
+        "Equipment",
+        "Facility",
+        "DistributionNetwork",
+        "Resource",
+    }
+)
+_ASPECT_BEHAVIOR_EXTRA = frozenset(
+    {
+        "Capability",
+        "ValueStream",
+        "CourseOfAction",
+        "WorkPackage",
+        "ImplementationEvent",
+    }
+)
+_ASPECT_PASSIVE = frozenset(
+    {
+        "BusinessObject",
+        "Contract",
+        "Representation",
+        "DataObject",
+        "Artifact",
+        "Material",
+        "Deliverable",
+    }
+)
 # No single aspect in the standard: spans all three (Product, Plateau, Gap) or
 # sits outside the Aspects grid entirely (Grouping, Location).
 _ASPECT_COMPOSITE = frozenset({"Product", "Plateau", "Gap", "Grouping", "Location"})
@@ -113,6 +142,7 @@ def aspect_of(element_type: str) -> str | None:
     if element_type in _ASPECT_BEHAVIOR_EXTRA or _ASPECT_SUFFIX_RE.search(element_type):
         return "behavior"
     return None
+
 
 RELATIONSHIP_TYPES: tuple[str, ...] = (
     "Composition",
