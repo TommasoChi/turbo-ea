@@ -27,10 +27,14 @@ describe("ArchitectureStudioTab", () => {
     render(<ArchitectureStudioTab types={[]} />);
 
     expect(await screen.findByRole("button", { name: /New Architecture Object/ })).toBeInTheDocument();
+    // Relations Mapping's own content (an ArchiMate relationship column
+    // header) must not render while Card Mapping is the active sub-tab.
+    expect(screen.queryByText("Serving")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: /Relations Mapping/ }));
 
     expect(await screen.findByText("Architecture Object")).toBeInTheDocument();
+    expect(screen.getByText("Serving")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /New Architecture Object/ })).not.toBeInTheDocument();
   });
 });

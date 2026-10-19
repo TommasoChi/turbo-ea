@@ -87,13 +87,7 @@ const TYPES: CardType[] = [
   { key: "Workflow", label: "Workflow", icon: "sync_alt", color: "#333", has_hierarchy: false } as never,
 ];
 
-/** Owner -(Assignment)-> Process, functionally named "runs". */
-const RT_OWNER_PROCESS = {
-  key: "relOwnerProcess",
-  label: "runs",
-  reverse_label: "is run by",
-  source_type_key: "Owner",
-  target_type_key: "Process",
+const RT_BASE = {
   cardinality: "1:n",
   built_in: false,
   is_hidden: false,
@@ -103,9 +97,75 @@ const RT_OWNER_PROCESS = {
   source_mandatory: false,
   target_visible: true,
   target_mandatory: false,
-  archimate_type: "Assignment",
   archimate_access: null,
   archimate_reversed: false,
+};
+
+/** Owner -(Assignment)-> Process, functionally named "runs". */
+const RT_OWNER_PROCESS = {
+  ...RT_BASE,
+  key: "relOwnerProcess",
+  label: "runs",
+  reverse_label: "is run by",
+  source_type_key: "Owner",
+  target_type_key: "Process",
+  archimate_type: "Assignment",
+};
+
+/** Same pair, wrong ArchiMate type -- must never surface under Assignment. */
+const RT_DECOY_WRONG_TYPE = {
+  ...RT_BASE,
+  key: "relOwnerProcessDecoyType",
+  label: "decoy-type",
+  source_type_key: "Owner",
+  target_type_key: "Process",
+  archimate_type: "Serving",
+};
+
+/** Same type, wrong target card type (Workflow, not Process) -- must never
+ *  surface once the ambiguity is resolved to "Process". */
+const RT_DECOY_WRONG_PAIR = {
+  ...RT_BASE,
+  key: "relOwnerWorkflowDecoy",
+  label: "decoy-pair",
+  source_type_key: "Owner",
+  target_type_key: "Workflow",
+  archimate_type: "Assignment",
+};
+
+/** Process -(Assignment, reversed)-> Owner: the ArchiMate direction runs
+ *  target -> source, so this resolves the SAME Actor->Process cell as
+ *  RT_OWNER_PROCESS, through the reversed branch instead. */
+const RT_REVERSED = {
+  ...RT_BASE,
+  key: "relProcessOwnerReversed",
+  label: "is executed by",
+  source_type_key: "Process",
+  target_type_key: "Owner",
+  archimate_type: "Assignment",
+  archimate_reversed: true,
+};
+
+/** Reversed decoy, wrong type -- must never surface under Assignment. */
+const RT_REVERSED_DECOY_TYPE = {
+  ...RT_BASE,
+  key: "relProcessOwnerReversedDecoyType",
+  label: "decoy-type-rev",
+  source_type_key: "Process",
+  target_type_key: "Owner",
+  archimate_type: "Serving",
+  archimate_reversed: true,
+};
+
+/** Reversed decoy, wrong pair -- must never surface once resolved to "Process". */
+const RT_REVERSED_DECOY_PAIR = {
+  ...RT_BASE,
+  key: "relWorkflowOwnerReversedDecoy",
+  label: "decoy-pair-rev",
+  source_type_key: "Workflow",
+  target_type_key: "Owner",
+  archimate_type: "Assignment",
+  archimate_reversed: true,
 };
 
 describe("RelationsMappingTabContent", () => {
@@ -116,7 +176,7 @@ describe("RelationsMappingTabContent", () => {
         return Promise.resolve([ACTOR, PROCESS, OBJ, HIDDEN_OBJ]) as never;
       }
       if (url.startsWith("/metamodel/relation-types")) {
-        return Promise.resolve([RT_OWNER_PROCESS]) as never;
+        return Promise.resolve([RT_OWNER_PROCESS, RT_DECOY_WRONG_TYPE, RT_DECOY_WRONG_PAIR]) as never;
       }
       throw new Error(`unexpected GET ${url}`);
     });
@@ -198,6 +258,58 @@ describe("RelationsMappingTabContent", () => {
 
     // Owner (Actor's one card type) -> Process matches RT_OWNER_PROCESS.
     expect(await within(cell).findByText("runs")).toBeInTheDocument();
+  });
+
+  it("resolves through the reversed RelationType direction (archimate_reversed: true)", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.startsWith("/metamodel/enterprise-objects")) {
+        return Promise.resolve([ACTOR, PROCESS, OBJ, HIDDEN_OBJ]) as never;
+      }
+      if (url.startsWith("/metamodel/relation-types")) {
+        return Promise.resolve([
+          RT_REVERSED,
+          RT_REVERSED_DECOY_TYPE,
+          RT_REVERSED_DECOY_PAIR,
+        ]) as never;
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+    const user = userEvent.setup();
+    render(<RelationsMappingTabContent types={TYPES} />);
+    await screen.findByText("Business Actor");
+
+    const row = screen.getByText("Business Actor").closest("tr")!;
+    const cell = cellFor(row, "Assignment");
+    await user.click(within(cell).getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Business Process" }));
+
+    const comboboxes = await within(cell).findAllByRole("combobox");
+    await user.click(comboboxes[1]);
+    await user.click(await screen.findByRole("option", { name: "Process" }));
+
+    // RT_REVERSED (source: Process, target: Owner, reversed) matches the
+    // Actor(Owner) -> Process cell only through the reversed branch.
+    expect(await within(cell).findByText("is executed by")).toBeInTheDocument();
+  });
+
+  it("collapses and re-expands a layer section on header click", async () => {
+    const user = userEvent.setup();
+    render(<RelationsMappingTabContent types={TYPES} />);
+    await screen.findByText("Business Actor");
+
+    await user.click(screen.getByText("Business"));
+    expect(screen.queryByText("Business Actor")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("Business"));
+    expect(await screen.findByText("Business Actor")).toBeVisible();
+  });
+
+  it("shows a spinner while the initial fetch is in flight", () => {
+    vi.mocked(api.get).mockImplementation(() => new Promise(() => {}));
+    render(<RelationsMappingTabContent types={TYPES} />);
+
+    expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    expect(screen.queryByText("Business Actor")).not.toBeInTheDocument();
   });
 
   it("shows a no-card-type-mapped note for an object with zero card mappings", async () => {

@@ -84,6 +84,17 @@ const HIDDEN = {
   is_hidden: true,
 } as never;
 
+/** Already has an ArchiMate mapping with the reversed direction set --
+ *  opening its edit dialog must show that state, not just let it be set. */
+const ORG_TO_APP_REVERSED = {
+  ...(ORG_TO_APP as unknown as Record<string, unknown>),
+  key: "relOrgToAppReversed",
+  label: "already reversed",
+  archimate_type: "Serving",
+  archimate_access: null,
+  archimate_reversed: true,
+} as never;
+
 const TYPES = [ORG, APP];
 
 function renderPanel(props: Record<string, unknown> = {}) {
@@ -227,5 +238,148 @@ describe("RelationTypesPanel — full editing reaches the card-type tab", () => 
     await user.click(within(rowFor("uses")).getByRole("button", { name: /^edit$/i }));
     expect(await screen.findByDisplayValue("uses")).toBeInTheDocument();
     expect(screen.getByDisplayValue("is used by")).toBeInTheDocument();
+  });
+});
+
+describe("RelationTypesPanel — ArchiMate mapping (archimate_type/archimate_access/archimate_reversed)", () => {
+  async function openEditDialog(user: ReturnType<typeof userEvent.setup>) {
+    renderPanel({ scopeTypeKey: "Organization" });
+    await user.click(within(rowFor("uses")).getByRole("button", { name: /^edit$/i }));
+    const dialog = await screen.findByRole("dialog");
+    // Order in the dialog: cardinality, then ArchiMate relationship type.
+    const archimateTypeSelect = within(dialog).getAllByRole("combobox")[1];
+    return { dialog, archimateTypeSelect };
+  }
+
+  it("has no ArchiMate access-type picker or reversed switch until a relationship type is chosen", async () => {
+    const user = userEvent.setup();
+    const { dialog } = await openEditDialog(user);
+
+    expect(within(dialog).getAllByText("ArchiMate relationship").length).toBeGreaterThan(0);
+    expect(within(dialog).queryByText("Access type")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/ArchiMate direction is reversed/)).not.toBeInTheDocument();
+  });
+
+  it("shows the access-type picker's label and the None option once a type is chosen", async () => {
+    const user = userEvent.setup();
+    const { dialog, archimateTypeSelect } = await openEditDialog(user);
+
+    await user.click(archimateTypeSelect);
+    await user.click(await screen.findByRole("option", { name: "Access" }));
+
+    expect(within(dialog).getAllByText("Access type").length).toBeGreaterThan(0);
+    expect(within(dialog).getByText(/ArchiMate direction is reversed/)).toBeInTheDocument();
+
+    const accessSelect = within(dialog).getAllByRole("combobox")[2];
+    await user.click(accessSelect);
+    expect(await screen.findAllByRole("option", { name: "None" })).not.toHaveLength(0);
+  });
+
+  it("opens already showing the reversed switch checked when archimate_reversed is already true", async () => {
+    renderPanel({ relationTypes: [ORG_TO_APP_REVERSED, ORG_TO_ORG] });
+    const user = userEvent.setup();
+    await user.click(within(rowFor("already reversed")).getByRole("button", { name: /^edit$/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByRole("checkbox", { name: /ArchiMate direction is reversed/ })).toBeChecked();
+  });
+
+  it("saving with an ArchiMate relationship type chosen sends archimate_type and archimate_reversed: false", async () => {
+    const user = userEvent.setup();
+    const { dialog, archimateTypeSelect } = await openEditDialog(user);
+
+    await user.click(archimateTypeSelect);
+    await user.click(await screen.findByRole("option", { name: "Serving" }));
+    await user.click(within(dialog).getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/metamodel/relation-types/relOrgToApp",
+        expect.objectContaining({
+          archimate_type: "Serving",
+          archimate_access: null,
+          archimate_reversed: false,
+        }),
+      ),
+    );
+  });
+
+  it("choosing Access reveals the access-type picker, and saving sends the chosen access type", async () => {
+    const user = userEvent.setup();
+    const { dialog, archimateTypeSelect } = await openEditDialog(user);
+
+    await user.click(archimateTypeSelect);
+    await user.click(await screen.findByRole("option", { name: "Access" }));
+
+    const accessSelect = within(dialog).getAllByRole("combobox")[2];
+    await user.click(accessSelect);
+    await user.click(await screen.findByRole("option", { name: "Read" }));
+    await user.click(within(dialog).getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/metamodel/relation-types/relOrgToApp",
+        expect.objectContaining({ archimate_type: "Access", archimate_access: "Read" }),
+      ),
+    );
+  });
+
+  it("switching away from Access clears the stored access type", async () => {
+    const user = userEvent.setup();
+    const { dialog, archimateTypeSelect } = await openEditDialog(user);
+
+    await user.click(archimateTypeSelect);
+    await user.click(await screen.findByRole("option", { name: "Access" }));
+    const accessSelect = within(dialog).getAllByRole("combobox")[2];
+    await user.click(accessSelect);
+    await user.click(await screen.findByRole("option", { name: "Read" }));
+
+    // Switch the relationship type away from Access -- its picker must disappear.
+    await user.click(archimateTypeSelect);
+    await user.click(await screen.findByRole("option", { name: "Serving" }));
+    expect(within(dialog).queryByText("Access type")).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: /^save$/i }));
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/metamodel/relation-types/relOrgToApp",
+        expect.objectContaining({ archimate_type: "Serving", archimate_access: null }),
+      ),
+    );
+  });
+
+  it("toggling the reversed switch sends archimate_reversed: true", async () => {
+    const user = userEvent.setup();
+    const { dialog, archimateTypeSelect } = await openEditDialog(user);
+
+    await user.click(archimateTypeSelect);
+    await user.click(await screen.findByRole("option", { name: "Serving" }));
+    await user.click(within(dialog).getByRole("checkbox", { name: /ArchiMate direction is reversed/ }));
+    await user.click(within(dialog).getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/metamodel/relation-types/relOrgToApp",
+        expect.objectContaining({ archimate_reversed: true }),
+      ),
+    );
+  });
+
+  it("choosing None clears a previously set ArchiMate relationship type", async () => {
+    const user = userEvent.setup();
+    const { dialog, archimateTypeSelect } = await openEditDialog(user);
+
+    await user.click(archimateTypeSelect);
+    await user.click(await screen.findByRole("option", { name: "Serving" }));
+    await user.click(archimateTypeSelect);
+    await user.click(await screen.findByRole("option", { name: "None" }));
+    await user.click(within(dialog).getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/metamodel/relation-types/relOrgToApp",
+        expect.objectContaining({ archimate_type: null, archimate_reversed: false }),
+      ),
+    );
   });
 });
