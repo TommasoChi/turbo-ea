@@ -5,6 +5,7 @@ scripts/archimate/generate_taxonomy.py) and read from relation_table.json."""
 from __future__ import annotations
 
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -52,6 +53,7 @@ LAYERS: dict[str, tuple[str, ...]] = {
         "Artifact",
     ),
     "physical": ("Equipment", "Facility", "DistributionNetwork", "Material"),
+    "implementation": ("WorkPackage", "Deliverable", "ImplementationEvent", "Plateau", "Gap"),
     "motivation": (
         "Stakeholder",
         "Driver",
@@ -64,7 +66,6 @@ LAYERS: dict[str, tuple[str, ...]] = {
         "Meaning",
         "Value",
     ),
-    "implementation": ("WorkPackage", "Deliverable", "ImplementationEvent", "Plateau", "Gap"),
 }
 COMPOSITE_TYPES = ("Grouping", "Location")
 CONNECTOR_TYPES = ("AndJunction", "OrJunction")
@@ -72,6 +73,46 @@ ELEMENT_TYPES: tuple[str, ...] = tuple(e for names in LAYERS.values() for e in n
 ALL_ELEMENT_TYPES: frozenset[str] = (
     frozenset(ELEMENT_TYPES) | set(COMPOSITE_TYPES) | set(CONNECTOR_TYPES)
 )
+
+# Mirrors frontend/src/features/archimate/taxonomy/elements.ts's aspectOf() --
+# keep the two in sync. A type absent from every set below, outside the
+# Motivation layer and not composite, falls through to the Process/Function/
+# Interaction/Event/Service suffix rule (same as the frontend).
+_ASPECT_ACTIVE = frozenset({
+    "BusinessActor", "BusinessRole", "BusinessCollaboration", "BusinessInterface",
+    "ApplicationComponent", "ApplicationCollaboration", "ApplicationInterface",
+    "Node", "Device", "SystemSoftware", "TechnologyCollaboration", "TechnologyInterface",
+    "Path", "CommunicationNetwork", "Equipment", "Facility", "DistributionNetwork", "Resource",
+})
+_ASPECT_BEHAVIOR_EXTRA = frozenset({
+    "Capability", "ValueStream", "CourseOfAction", "WorkPackage", "ImplementationEvent",
+})
+_ASPECT_PASSIVE = frozenset({
+    "BusinessObject", "Contract", "Representation", "DataObject", "Artifact",
+    "Material", "Deliverable",
+})
+# No single aspect in the standard: spans all three (Product, Plateau, Gap) or
+# sits outside the Aspects grid entirely (Grouping, Location).
+_ASPECT_COMPOSITE = frozenset({"Product", "Plateau", "Gap", "Grouping", "Location"})
+_ASPECT_SUFFIX_RE = re.compile(r"(Process|Function|Interaction|Event|Service)$")
+
+
+def aspect_of(element_type: str) -> str | None:
+    """ArchiMate's structural aspect for a standard element type: "passive",
+    "behavior" or "active" -- or None for Motivation elements, connectors and
+    the composite types that the standard does not classify under one aspect.
+    """
+    if element_type in CONNECTOR_TYPES or element_type in _ASPECT_COMPOSITE:
+        return None
+    if element_type in LAYERS["motivation"]:
+        return None
+    if element_type in _ASPECT_PASSIVE:
+        return "passive"
+    if element_type in _ASPECT_ACTIVE:
+        return "active"
+    if element_type in _ASPECT_BEHAVIOR_EXTRA or _ASPECT_SUFFIX_RE.search(element_type):
+        return "behavior"
+    return None
 
 RELATIONSHIP_TYPES: tuple[str, ...] = (
     "Composition",

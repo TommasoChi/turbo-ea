@@ -19,6 +19,13 @@ class EnterpriseObject(Base, UUIDMixin, TimestampMixin):
     # One of taxonomy.py's LAYERS keys, or NULL for the four "Other" rows
     # (Grouping/Location/AndJunction/OrJunction).
     layer: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # ArchiMate's structural aspect: "passive" | "behavior" | "active", or NULL
+    # for rows the standard itself does not classify under a single aspect --
+    # Motivation and Other elements, and the handful of composite types
+    # (Product, Plateau, Gap, Grouping, Location) that span all three. Fixed
+    # by the spec for a standard row (seeded, never admin-edited); a custom
+    # row's admin chooses it, since nothing in the spec does that for them.
+    aspect: Mapped[str | None] = mapped_column(String(16), nullable=True)
     is_standard: Mapped[bool] = mapped_column(Boolean, default=False)
     is_locked: Mapped[bool] = mapped_column(Boolean, default=False)
     is_hidden: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -2415,6 +2415,8 @@ async def delete_resource_type(
 
 # ── Enterprise Objects ──────────────────────────────────────────────────
 
+_VALID_ASPECTS = {"passive", "behavior", "active"}
+
 
 def _serialize_enterprise_object_card_mapping(m: EnterpriseObjectCardMapping) -> dict:
     return {
@@ -2435,6 +2437,7 @@ def _serialize_enterprise_object(
         "icon": o.icon,
         "color": o.color,
         "layer": o.layer,
+        "aspect": o.aspect,
         "is_standard": o.is_standard,
         "is_locked": o.is_locked,
         "is_hidden": o.is_hidden,
@@ -2485,6 +2488,9 @@ async def create_enterprise_object(
     existing = await db.execute(select(EnterpriseObject).where(EnterpriseObject.key == key))
     if existing.scalar_one_or_none():
         raise HTTPException(409, "Enterprise object key already exists")
+    aspect = body.get("aspect")
+    if aspect is not None and aspect not in _VALID_ASPECTS:
+        raise HTTPException(422, f"aspect must be one of {sorted(_VALID_ASPECTS)} or null")
 
     max_order = await db.execute(select(func.max(EnterpriseObject.sort_order)))
     next_order = (max_order.scalar() or 0) + 1
@@ -2496,6 +2502,7 @@ async def create_enterprise_object(
         icon=body.get("icon", "category"),
         color=body.get("color", "#1976d2"),
         layer=body.get("layer"),
+        aspect=aspect,
         is_standard=False,
         is_locked=False,
         is_hidden=body.get("is_hidden", False),
@@ -2529,7 +2536,10 @@ async def update_enterprise_object(
         # be no-ops.
         raise HTTPException(422, "Enterprise object is locked and cannot be edited")
 
-    updatable = ["name", "description", "icon", "color", "layer", "is_hidden", "sort_order"]
+    if "aspect" in body and body["aspect"] is not None and body["aspect"] not in _VALID_ASPECTS:
+        raise HTTPException(422, f"aspect must be one of {sorted(_VALID_ASPECTS)} or null")
+
+    updatable = ["name", "description", "icon", "color", "layer", "aspect", "is_hidden", "sort_order"]
     changes = audit_log.diff(o, {k: body[k] for k in updatable if k in body}, keys=updatable)
     for field in updatable:
         if field in body:

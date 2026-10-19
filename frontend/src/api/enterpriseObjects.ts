@@ -15,8 +15,9 @@ export function createEnterpriseObject(body: Partial<EnterpriseObject>): Promise
   return api.post<EnterpriseObject>("/metamodel/enterprise-objects", body);
 }
 
-/** Update name/description/icon/color/layer/is_hidden/sort_order. 422s if the
- *  object is locked (standard registry rows). */
+/** Update name/description/icon/color/layer/aspect/is_hidden/sort_order. 422s
+ *  if the object is locked (standard registry rows), or if `aspect` is set to
+ *  something other than "passive"/"behavior"/"active"/null. */
 export function updateEnterpriseObject(
   key: string,
   body: Partial<EnterpriseObject>,
