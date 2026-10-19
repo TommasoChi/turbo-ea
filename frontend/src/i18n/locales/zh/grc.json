@@ -11,7 +11,8 @@
   "governance": {
     "subtabs": {
       "principles": "原则",
-      "decisions": "决策"
+      "decisions": "决策",
+      "delivery": "EA 交付"
     },
     "principles": {
       "title": "架构原则",

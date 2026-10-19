@@ -19,6 +19,7 @@ const BUSINESS_OBJECT = {
   icon: "description",
   color: "#c6c653",
   layer: "business",
+  aspect: null,
   is_standard: true,
   is_locked: false,
   is_hidden: false,
@@ -40,6 +41,7 @@ const DATA_OBJECT = {
   icon: "database",
   color: "#53c6c6",
   layer: "application",
+  aspect: "passive",
   is_standard: true,
   is_locked: false,
   is_hidden: true,
@@ -57,6 +59,7 @@ const GROUPING = {
   // true) -- a PATCH on a locked row 422s before the body is even read, so
   // its visibility toggle must be disabled rather than attempted.
   layer: null,
+  aspect: null,
   is_standard: true,
   is_locked: true,
   is_hidden: false,
@@ -232,6 +235,101 @@ describe("CardMappingTabContent", () => {
     await waitFor(() => expect(screen.queryByText("Updated description.")).not.toBeInTheDocument());
     await user.click(screen.getByText("Business Object"));
     expect(await screen.findByText("Updated description.")).toBeInTheDocument();
+  });
+
+  it("collapses and re-expands a layer section on header click", async () => {
+    const user = userEvent.setup();
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    await user.click(screen.getByText("Business"));
+    expect(screen.queryByText("Business Object")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("Business"));
+    expect(await screen.findByText("Business Object")).toBeVisible();
+  });
+
+  it("clicking an aspect icon sets it, clicking the same one again clears it", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.patch).mockResolvedValue({ ...BUSINESS_OBJECT, aspect: "passive" });
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    const row = screen.getByTestId("eo-row-BusinessObject");
+    await user.click(within(row).getByRole("button", { name: "Passive" }));
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith("/metamodel/enterprise-objects/BusinessObject", {
+        aspect: "passive",
+      }),
+    );
+
+    const dataRow = screen.getByTestId("eo-row-DataObject");
+    await user.click(within(dataRow).getByRole("button", { name: "Passive" }));
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith("/metamodel/enterprise-objects/DataObject", {
+        aspect: null,
+      }),
+    );
+  });
+
+  it("an aspect already set on a row renders pressed, with a filled check icon -- the others on that row don't", async () => {
+    render(<CardMappingTabContent />);
+    await screen.findByText("Data Object");
+
+    // DATA_OBJECT is seeded aspect: "passive".
+    const row = screen.getByTestId("eo-row-DataObject");
+    const passiveBtn = within(row).getByRole("button", { name: "Passive" });
+    const behaviorBtn = within(row).getByRole("button", { name: "Behavior" });
+    expect(passiveBtn).toHaveAttribute("aria-pressed", "true");
+    expect(behaviorBtn).toHaveAttribute("aria-pressed", "false");
+    expect(passiveBtn.textContent).toContain("check_circle");
+    expect(behaviorBtn.textContent).toContain("radio_button_unchecked");
+  });
+
+  it("hides the aspect columns for a row outside the Aspects grid (Grouping, layer: Other)", async () => {
+    render(<CardMappingTabContent />);
+    await screen.findByText("Grouping");
+
+    const row = screen.getByTestId("eo-row-Grouping");
+    expect(within(row).queryByRole("button", { name: "Passive" })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Behavior" })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Active" })).not.toBeInTheDocument();
+  });
+
+  it("shows the table's column headers", async () => {
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    expect(screen.getByText("Architecture Object")).toBeInTheDocument();
+    expect(screen.getByText("Passive")).toBeInTheDocument();
+    expect(screen.getByText("Behavior")).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(screen.getByText("Mapping")).toBeInTheDocument();
+  });
+
+  it("swaps the layer header's chevron icon between collapsed and expanded", async () => {
+    const user = userEvent.setup();
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    const header = screen.getByText("Business").closest("button")!;
+    expect(header.textContent).toContain("expand_more");
+
+    await user.click(header);
+    expect(header.textContent).toContain("chevron_right");
+  });
+
+  it("clicking the expand control opens the row's card-mapping editor, clicking again closes it", async () => {
+    const user = userEvent.setup();
+    render(<CardMappingTabContent />);
+    await screen.findByText("Business Object");
+
+    const row = screen.getByTestId("eo-row-BusinessObject");
+    await user.click(within(row).getByLabelText("Edit card mappings"));
+    expect(await screen.findByRole("combobox")).toBeInTheDocument();
+
+    await user.click(within(row).getByLabelText("Edit card mappings"));
+    await waitFor(() => expect(screen.queryByRole("combobox")).not.toBeInTheDocument());
   });
 
   it("hides the edit-description pencil for a user without admin.metamodel", async () => {

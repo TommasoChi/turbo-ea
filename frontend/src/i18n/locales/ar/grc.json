@@ -11,7 +11,8 @@
   "governance": {
     "subtabs": {
       "principles": "المبادئ",
-      "decisions": "القرارات"
+      "decisions": "القرارات",
+      "delivery": "تسليم بنية المؤسسة"
     },
     "principles": {
       "title": "مبادئ البنية المؤسسية",

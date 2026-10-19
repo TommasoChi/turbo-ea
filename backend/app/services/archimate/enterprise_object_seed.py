@@ -444,6 +444,7 @@ async def seed_enterprise_objects(db: AsyncSession) -> None:
                 icon=_ICONS[key],
                 color=_LAYER_COLORS[layer] if layer is not None else _OTHER_COLOR,
                 layer=layer,
+                aspect=taxonomy.aspect_of(key),
                 is_standard=True,
                 is_locked=(key == "Grouping"),
                 sort_order=sort_order,

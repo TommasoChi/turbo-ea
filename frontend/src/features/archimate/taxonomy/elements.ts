@@ -2,7 +2,7 @@
 
 export type ArchimateLayer =
   | "strategy" | "business" | "application" | "technology"
-  | "physical" | "motivation" | "implementation" | "other";
+  | "physical" | "implementation" | "motivation" | "other";
 export type ElementAspect = "active" | "behavior" | "passive" | "composite" | "motivation" | "connector";
 
 // Layer by layer, in palette order.
@@ -22,11 +22,11 @@ export const ELEMENT_TYPES = [
   "TechnologyEvent", "TechnologyService", "Artifact",
   // physical
   "Equipment", "Facility", "DistributionNetwork", "Material",
+  // implementation & migration
+  "WorkPackage", "Deliverable", "ImplementationEvent", "Plateau", "Gap",
   // motivation
   "Stakeholder", "Driver", "Assessment", "Goal", "Outcome", "Principle", "Requirement", "Constraint",
   "Meaning", "Value",
-  // implementation & migration
-  "WorkPackage", "Deliverable", "ImplementationEvent", "Plateau", "Gap",
   // other
   "Grouping", "Location", "AndJunction", "OrJunction",
 ] as const;
@@ -41,12 +41,12 @@ export interface ElementInfo {
 }
 
 export const LAYER_ORDER: ArchimateLayer[] = [
-  "strategy", "business", "application", "technology", "physical", "motivation", "implementation", "other",
+  "strategy", "business", "application", "technology", "physical", "implementation", "motivation", "other",
 ];
 
 const LAYER_SIZES: [ArchimateLayer, number][] = [
   ["strategy", 4], ["business", 13], ["application", 9], ["technology", 13],
-  ["physical", 4], ["motivation", 10], ["implementation", 5], ["other", 4],
+  ["physical", 4], ["implementation", 5], ["motivation", 10], ["other", 4],
 ];
 
 const ACTIVE = new Set<string>([

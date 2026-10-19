@@ -328,6 +328,10 @@ export interface EnterpriseObject {
   icon: string;
   color: string;
   layer: string | null;
+  /** ArchiMate's structural aspect ("passive" | "behavior" | "active"), or
+   *  null for Motivation/Other rows and the composite types the standard
+   *  does not classify under one aspect (Product, Plateau, Gap). */
+  aspect: "passive" | "behavior" | "active" | null;
   is_standard: boolean;
   is_locked: boolean;
   is_hidden: boolean;

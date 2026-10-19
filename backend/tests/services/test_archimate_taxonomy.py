@@ -164,3 +164,30 @@ def test_known_spec_examples():
     assert tx.is_relationship_allowed("ApplicationComponent", "BusinessProcess", "Serving")
     assert tx.is_relationship_allowed("BusinessProcess", "BusinessObject", "Access")
     assert not tx.is_relationship_allowed("DataObject", "BusinessActor", "Assignment")
+
+
+def test_aspect_of_matches_one_representative_per_aspect():
+    assert tx.aspect_of("BusinessActor") == "active"
+    assert tx.aspect_of("BusinessObject") == "passive"
+    assert tx.aspect_of("BusinessProcess") == "behavior"
+    assert tx.aspect_of("Capability") == "behavior"  # BEHAVIOR_EXTRA, no suffix match
+    assert tx.aspect_of("Resource") == "active"  # strategy layer, but a passive-looking name
+
+
+def test_aspect_of_is_none_outside_the_aspects_grid():
+    # Motivation: no single aspect in the standard.
+    for t in tx.LAYERS["motivation"]:
+        assert tx.aspect_of(t) is None, t
+    # Connectors and composite types (span all three aspects, or sit outside
+    # the grid entirely): also no single aspect.
+    for t in (*tx.CONNECTOR_TYPES, "Product", "Plateau", "Gap", "Grouping", "Location"):
+        assert tx.aspect_of(t) is None, t
+
+
+def test_aspect_of_classifies_every_non_motivation_non_composite_element_type():
+    composite = {"Product", "Plateau", "Gap"}
+    motivation = tx.LAYERS["motivation"]
+    classified = {t for t in tx.ELEMENT_TYPES if t not in motivation and t not in composite}
+    for t in classified:
+        assert tx.aspect_of(t) in {"passive", "behavior", "active"}, t
+    assert len(classified) == 58 - 10 - 3  # 58 element types, 10 motivation, 3 composite

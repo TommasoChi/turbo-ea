@@ -230,28 +230,16 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       return true;
     };
 
-    // When PPM is disabled, EA Delivery has no parent tab to live under, so it
-    // needs a place in the bar. It goes under IT Governance as "EA Governance"
-    // (the group's own page seeded as the first entry — a group with children
-    // renders as a dropdown). If that group is not on screen for this user —
-    // GRC is off or they lack its permission — the group would swallow the
-    // entry, so it falls back to a top-level item in PPM's old slot (between
-    // BPM and Diagrams) and stays reachable.
+    // When PPM is disabled, EA Delivery has no parent tab to live under. It
+    // shows instead as the "EA Governance" sub-tab of GRC's Governance tab
+    // (GovernanceTab.tsx), after Decisions — IT Governance itself stays the
+    // plain link to /grc it always was, never a dropdown. If GRC is not on
+    // screen for this user — off, or they lack its permission — there is no
+    // GRC page to hold that sub-tab, so EA Delivery falls back to a top-level
+    // item in PPM's old slot (between BPM and Diagrams) and stays reachable.
     if (!ppmEnabled) {
       const grcHost = items.find((i) => i.labelKey === "grc");
-      if (grcHost && hasNavPerm(grcHost)) {
-        items = items.map((item) =>
-          item.labelKey === "grc"
-            ? {
-                ...item,
-                children: [
-                  { labelKey: item.labelKey, icon: item.icon, path: "/grc" },
-                  { labelKey: "eaGovernance", icon: "architecture", path: "/reports/ea-delivery" },
-                ],
-              }
-            : item,
-        );
-      } else {
+      if (!grcHost || !hasNavPerm(grcHost)) {
         const eaDeliveryItem: NavItemDef = {
           labelKey: "delivery",
           icon: "architecture",

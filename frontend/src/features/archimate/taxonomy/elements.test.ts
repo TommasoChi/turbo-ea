@@ -61,7 +61,7 @@ describe("ArchiMate element taxonomy", () => {
 
   it("palette order follows the specification's layering", () => {
     expect(LAYER_ORDER).toEqual([
-      "strategy","business","application","technology","physical","motivation","implementation","other",
+      "strategy","business","application","technology","physical","implementation","motivation","other",
     ]);
   });
 

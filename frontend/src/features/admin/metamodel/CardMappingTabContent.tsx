@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 import Collapse from "@mui/material/Collapse";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -11,6 +16,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { listEnterpriseObjects, updateEnterpriseObject } from "@/api/enterpriseObjects";
 import { LAYER_ORDER, type ArchimateLayer } from "@/features/archimate/taxonomy/elements";
+import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
 import { useAuthContext } from "@/hooks/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { CardType, EnterpriseObject } from "@/types";
@@ -25,6 +31,17 @@ export interface CardMappingTabContentProps {
   types?: CardType[];
 }
 
+type Aspect = "passive" | "behavior" | "active";
+const ASPECTS: Aspect[] = ["passive", "behavior", "active"];
+
+// The Aspects x Layers framework only classifies Strategy..Implementation &
+// Migration -- Motivation and the "Other" composites sit outside that grid
+// entirely (see ArchiMate-Full-Framework.png), so their rows get no aspect
+// cells at all rather than three permanently-empty ones.
+const ASPECT_LAYERS = new Set<ArchimateLayer>([
+  "strategy", "business", "application", "technology", "physical", "implementation",
+]);
+
 /**
  * Read-only Enterprise Object registry list, grouped by ArchiMate layer.
  * `includeHidden: true` on the fetch -- this admin screen is the one place
@@ -36,6 +53,11 @@ export interface CardMappingTabContentProps {
  * `is_locked: true`) never gets the expand control at all -- mirroring the
  * visibility toggle's lock gating -- so there is no path to attempt an
  * add/remove on it.
+ *
+ * Layer sections are colour-coded from the same `ARCHIMATE_LAYER_COLORS` the
+ * diagram canvas uses, and collapsible (local, unpersisted state -- there is
+ * no server-side "last collapsed" concept here, unlike GovernanceTab's
+ * localStorage-backed sub-tab).
  */
 export default function CardMappingTabContent({ types = [] }: CardMappingTabContentProps) {
   const { t } = useTranslation(["admin", "archimate", "common"]);
@@ -52,6 +74,7 @@ export default function CardMappingTabContent({ types = [] }: CardMappingTabCont
   // stale the moment `objects` is replaced underneath it.
   const [infoKey, setInfoKey] = useState<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [collapsedLayers, setCollapsedLayers] = useState<Set<ArchimateLayer>>(() => new Set());
 
   // No `setLoading(true)` here: `loading` already starts `true` (first load keeps its spinner),
   // and every OTHER call is a refetch after a mutation (visibility toggle, create, mapping edit,
@@ -88,8 +111,27 @@ export default function CardMappingTabContent({ types = [] }: CardMappingTabCont
     }));
   }, [objects]);
 
+  const toggleLayer = (layer: ArchimateLayer) => {
+    setCollapsedLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(layer)) next.delete(layer);
+      else next.add(layer);
+      return next;
+    });
+  };
+
   const toggleHidden = async (eo: EnterpriseObject) => {
     await updateEnterpriseObject(eo.key, { is_hidden: !eo.is_hidden });
+    fetchObjects();
+  };
+
+  // Click the aspect a row already has to clear it back to unclassified;
+  // click a different one to switch. Standard rows start seeded with the
+  // aspect the standard fixes for their type (taxonomy.py's aspect_of()) but
+  // are not otherwise protected from this -- same posture as their name,
+  // icon and colour, which an admin can already edit freely.
+  const setAspect = async (eo: EnterpriseObject, aspect: Aspect) => {
+    await updateEnterpriseObject(eo.key, { aspect: eo.aspect === aspect ? null : aspect });
     fetchObjects();
   };
 
@@ -123,101 +165,162 @@ export default function CardMappingTabContent({ types = [] }: CardMappingTabCont
         </Button>
       </Box>
 
-      {groups.map(({ layer, objects: layerObjects }) => (
-        <Box key={layer} sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-            {t(`layers.${layer}`, { ns: "archimate" })}
-          </Typography>
-          {layerObjects.map((eo) => (
-            <Box
-              key={eo.key}
-              sx={{
-                borderBottom: 1,
-                borderColor: "divider",
-              }}
-            >
-              <Box
-                data-testid={`eo-row-${eo.key}`}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1.5,
-                  py: 1,
-                  opacity: eo.is_hidden ? 0.55 : 1,
-                }}
-              >
-                <ButtonBase
-                  onClick={(e) => openInfo(e, eo)}
-                  sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1, minWidth: 0, p: 0.5, borderRadius: 1, justifyContent: "flex-start" }}
-                >
-                  <MaterialSymbol icon={eo.icon} size={20} color={eo.color} />
-                  <Typography sx={{ flex: 1, minWidth: 0 }} noWrap>
-                    {eo.name}
-                  </Typography>
-                </ButtonBase>
-                <Typography variant="caption" color="text.secondary">
-                  {t("metamodel.cardMappingCount", { count: eo.card_mappings.length })}
-                </Typography>
-                {/* Locked rows (Grouping) never get the expand control -- no
-                    path to attempt an add/remove on a bridge table whose
-                    registry row the API rejects every edit to, per Task 9's
-                    is_locked gating. */}
-                {!eo.is_locked && (
-                  <IconButton
-                    size="small"
-                    aria-label={t("metamodel.cardMappingExpandLabel")}
-                    onClick={() => setExpandedKey(expandedKey === eo.key ? null : eo.key)}
-                  >
-                    <MaterialSymbol
-                      icon={expandedKey === eo.key ? "expand_less" : "expand_more"}
-                      size={18}
-                      color="#bbb"
-                    />
-                  </IconButton>
-                )}
-                <Tooltip
-                  title={
-                    eo.is_locked
-                      ? t("metamodel.cardMappingLocked")
-                      : eo.is_hidden
-                        ? t("common:actions.restore")
-                        : t("metamodel.hidden")
-                  }
-                >
-                  {/* A disabled button inside a Tooltip needs a wrapping span --
-                      MUI's Tooltip can't attach its listeners to a disabled
-                      child directly. */}
-                  <span>
-                    <IconButton
-                      size="small"
-                      aria-label={
-                        eo.is_locked
-                          ? t("metamodel.cardMappingLocked")
-                          : eo.is_hidden
-                            ? t("common:actions.restore")
-                            : t("metamodel.hidden")
-                      }
-                      disabled={eo.is_locked}
-                      onClick={() => toggleHidden(eo)}
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell padding="checkbox" />
+            <TableCell>{t("metamodel.columns.enterpriseObject")}</TableCell>
+            <TableCell align="center">{t("metamodel.columns.passive")}</TableCell>
+            <TableCell align="center">{t("metamodel.columns.behavior")}</TableCell>
+            <TableCell align="center">{t("metamodel.columns.active")}</TableCell>
+            <TableCell align="right">{t("metamodel.columns.mapping")}</TableCell>
+            <TableCell padding="checkbox" />
+            <TableCell padding="checkbox" />
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {groups.map(({ layer, objects: layerObjects }) => {
+            const open = !collapsedLayers.has(layer);
+            const fill = ARCHIMATE_LAYER_COLORS[layer].fill;
+            const showAspects = ASPECT_LAYERS.has(layer);
+            return (
+              <Fragment key={layer}>
+                <TableRow>
+                  {/* colSpan={8}: icon, name, 3 aspect cells, mapping count, expand, visibility. */}
+                  <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
+                    <ButtonBase
+                      onClick={() => toggleLayer(layer)}
+                      sx={{
+                        width: "100%",
+                        justifyContent: "flex-start",
+                        gap: 1,
+                        px: 1.5,
+                        py: 0.75,
+                        backgroundColor: fill,
+                        color: ARCHIMATE_TEXT_COLOR,
+                        borderRadius: 1,
+                      }}
                     >
-                      <MaterialSymbol
-                        icon={eo.is_hidden ? "visibility_off" : "visibility"}
-                        size={18}
-                        color={eo.is_locked ? "#ccc" : eo.is_hidden ? "#f57c00" : "#bbb"}
-                      />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </Box>
-              {!eo.is_locked && (
-                <Collapse in={expandedKey === eo.key}>
-                  <CardMappingRowEditor object={eo} types={types} onChanged={fetchObjects} />
-                </Collapse>
-              )}
-            </Box>
-          ))}
-        </Box>
-      ))}
+                      <MaterialSymbol icon={open ? "expand_more" : "chevron_right"} size={18} />
+                      <Typography variant="subtitle2" sx={{ color: "inherit" }}>
+                        {t(`layers.${layer}`, { ns: "archimate" })}
+                      </Typography>
+                    </ButtonBase>
+                  </TableCell>
+                </TableRow>
+                {open &&
+                  layerObjects.map((eo) => (
+                    <Fragment key={eo.key}>
+                      <TableRow
+                        data-testid={`eo-row-${eo.key}`}
+                        sx={{ opacity: eo.is_hidden ? 0.55 : 1 }}
+                      >
+                        <TableCell padding="checkbox">
+                          <MaterialSymbol icon={eo.icon} size={20} color={eo.color} />
+                        </TableCell>
+                        <TableCell>
+                          <ButtonBase
+                            onClick={(e) => openInfo(e, eo)}
+                            sx={{ justifyContent: "flex-start", p: 0.5, borderRadius: 1, maxWidth: "100%" }}
+                          >
+                            <Typography noWrap>{eo.name}</Typography>
+                          </ButtonBase>
+                        </TableCell>
+                        {ASPECTS.map((aspect) => (
+                          <TableCell key={aspect} align="center">
+                            {showAspects && (
+                              <IconButton
+                                size="small"
+                                disabled={eo.is_locked}
+                                aria-label={t(`metamodel.columns.${aspect}`)}
+                                aria-pressed={eo.aspect === aspect}
+                                onClick={() => setAspect(eo, aspect)}
+                              >
+                                <MaterialSymbol
+                                  icon={eo.aspect === aspect ? "check_circle" : "radio_button_unchecked"}
+                                  size={16}
+                                  color={eo.aspect === aspect ? ARCHIMATE_LAYER_COLORS[layer].stroke : "#ddd"}
+                                />
+                              </IconButton>
+                            )}
+                          </TableCell>
+                        ))}
+                        <TableCell align="right">
+                          <Typography variant="caption" color="text.secondary">
+                            {t("metamodel.cardMappingCount", { count: eo.card_mappings.length })}
+                          </Typography>
+                        </TableCell>
+                        <TableCell padding="checkbox">
+                          {/* Locked rows (Grouping) never get the expand control -- no
+                              path to attempt an add/remove on a bridge table whose
+                              registry row the API rejects every edit to, per Task 9's
+                              is_locked gating. */}
+                          {!eo.is_locked && (
+                            <IconButton
+                              size="small"
+                              aria-label={t("metamodel.cardMappingExpandLabel")}
+                              onClick={() => setExpandedKey(expandedKey === eo.key ? null : eo.key)}
+                            >
+                              <MaterialSymbol
+                                icon={expandedKey === eo.key ? "expand_less" : "expand_more"}
+                                size={18}
+                                color="#bbb"
+                              />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                        <TableCell padding="checkbox">
+                          <Tooltip
+                            title={
+                              eo.is_locked
+                                ? t("metamodel.cardMappingLocked")
+                                : eo.is_hidden
+                                  ? t("common:actions.restore")
+                                  : t("metamodel.hidden")
+                            }
+                          >
+                            {/* A disabled button inside a Tooltip needs a wrapping span --
+                                MUI's Tooltip can't attach its listeners to a disabled
+                                child directly. */}
+                            <span>
+                              <IconButton
+                                size="small"
+                                aria-label={
+                                  eo.is_locked
+                                    ? t("metamodel.cardMappingLocked")
+                                    : eo.is_hidden
+                                      ? t("common:actions.restore")
+                                      : t("metamodel.hidden")
+                                }
+                                disabled={eo.is_locked}
+                                onClick={() => toggleHidden(eo)}
+                              >
+                                <MaterialSymbol
+                                  icon={eo.is_hidden ? "visibility_off" : "visibility"}
+                                  size={18}
+                                  color={eo.is_locked ? "#ccc" : eo.is_hidden ? "#f57c00" : "#bbb"}
+                                />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                      {!eo.is_locked && (
+                        <TableRow>
+                          <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
+                            <Collapse in={expandedKey === eo.key}>
+                              <CardMappingRowEditor object={eo} types={types} onChanged={fetchObjects} />
+                            </Collapse>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  ))}
+              </Fragment>
+            );
+          })}
+        </TableBody>
+      </Table>
 
       <NewArchitectureObjectDialog
         open={createOpen}
