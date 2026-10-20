@@ -33,8 +33,12 @@ from app.services.seed_demo_logos import seed_logo_demo_data
 from app.services.seed_demo_workspace import SEEDER_KEY as WORKSPACE_SEEDER_KEY
 from app.services.seed_demo_workspace import seed_workspace_demo_data
 from app.services.seed_markers import (
+    CARD_MAPPING_DEFAULTS_KEY,
     MARKER_KEY,
+    _get_or_create_settings,
+    applied_card_mapping_defaults,
     demo_seed_completed,
+    mark_card_mapping_defaults_applied,
     mark_demo_seed_completed,
 )
 from tests.conftest import create_user
@@ -78,6 +82,63 @@ async def test_marker_write_is_idempotent_and_preserves_siblings(db) -> None:
         await db.execute(select(AppSettings).where(AppSettings.id == "default"))
     ).scalar_one()
     assert refreshed.general_settings["currency"] == "EUR"
+
+
+async def test_get_or_create_settings_reuses_the_existing_row(db) -> None:
+    first = await _get_or_create_settings(db)
+    await db.flush()
+    second = await _get_or_create_settings(db)
+    assert first.id == second.id == "default"
+    assert (await db.execute(select(AppSettings))).scalars().all() == [first]
+
+
+# ---------------------------------------------------------------------------
+# Card-mapping-defaults marker
+# ---------------------------------------------------------------------------
+
+
+async def test_card_mapping_defaults_round_trip(db) -> None:
+    assert await applied_card_mapping_defaults(db) == set()
+    triple = ("Application", "Owner", None)
+    await mark_card_mapping_defaults_applied(db, {triple})
+    assert await applied_card_mapping_defaults(db) == {triple}
+
+
+async def test_card_mapping_defaults_empty_set_is_a_noop(db) -> None:
+    """No AppSettings row should be created for an empty set of triples --
+    the early return must happen before `_get_or_create_settings`."""
+    await mark_card_mapping_defaults_applied(db, set())
+    assert (await db.execute(select(AppSettings))).scalars().all() == []
+
+
+async def test_card_mapping_defaults_accumulate_across_calls(db) -> None:
+    first = ("Application", "Owner", None)
+    second = ("Server", "Hosts", "virtual")
+    await mark_card_mapping_defaults_applied(db, {first})
+    await mark_card_mapping_defaults_applied(db, {second})
+    assert await applied_card_mapping_defaults(db) == {first, second}
+
+
+async def test_card_mapping_defaults_survives_deletion_of_the_mapping_row(db) -> None:
+    """Marking a triple applied must be permanent -- an admin removing the
+    bridge-table row it produced must not resurrect it on the next boot,
+    the same invariant `MARKER_KEY` pins for the demo seeders above."""
+    triple = ("Application", "Owner", None)
+    await mark_card_mapping_defaults_applied(db, {triple})
+    await mark_card_mapping_defaults_applied(db, {triple})
+    assert await applied_card_mapping_defaults(db) == {triple}
+
+
+async def test_card_mapping_defaults_are_sorted_with_none_subtype_last(db) -> None:
+    """`card_subtype_key` may be None, which only sorts against other values
+    through the `t[2] or ""` fallback -- pin the stored order directly."""
+    none_subtype = ("Application", "Owner", None)
+    str_subtype = ("Application", "Owner", "virtual")
+    await mark_card_mapping_defaults_applied(db, {str_subtype, none_subtype})
+
+    row = (await db.execute(select(AppSettings).where(AppSettings.id == "default"))).scalar_one()
+    stored = row.general_settings[CARD_MAPPING_DEFAULTS_KEY]
+    assert stored == [list(none_subtype), list(str_subtype)]
 
 
 # ---------------------------------------------------------------------------

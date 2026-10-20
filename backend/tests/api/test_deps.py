@@ -1,20 +1,35 @@
 """Integration tests for the auth dependencies in api/deps.py.
 
-Tests get_current_user, get_optional_user, require_admin, require_bpm_admin,
-and require_permission dependency factory.
+Tests get_current_user, get_optional_user, parse_uuid, get_card_read_scope,
+and the require_permission dependency factory.
 """
 
 from __future__ import annotations
 
-import pytest
+import uuid
 
+import pytest
+from fastapi import HTTPException
+
+from app.api.deps import get_card_read_scope, get_optional_user, parse_uuid
 from app.core.permissions import MEMBER_PERMISSIONS, VIEWER_PERMISSIONS
+from app.core.security import create_access_token
+from app.services.card_read_scope import CardReadScope
 from tests.conftest import (
     auth_headers,
     create_card_type,
     create_role,
     create_user,
 )
+
+
+class _FakeRequest:
+    """Duck-types the bits of `Request` get_optional_user/get_current_user
+    read — `.headers.get` and `.cookies.get` — without a real ASGI scope."""
+
+    def __init__(self, headers: dict | None = None, cookies: dict | None = None) -> None:
+        self.headers = headers or {}
+        self.cookies = cookies or {}
 
 
 @pytest.fixture
@@ -147,6 +162,35 @@ class TestGetOptionalUser:
         assert resp.status_code == 200
 
 
+class TestGetOptionalUserDirect:
+    """Status-code assertions against a public route can't tell whether the
+    user actually resolved — these call the dependency directly to pin the
+    `and`/early-return branch for each credential-source combination."""
+
+    async def test_bearer_header_without_cookie_resolves_the_user(self, db, deps_env):
+        admin = deps_env["admin"]
+        token = create_access_token(admin.id, admin.role)
+        request = _FakeRequest(headers={"Authorization": f"Bearer {token}"})
+        result = await get_optional_user(request, db)
+        assert result is not None
+        assert result.id == admin.id
+
+    async def test_cookie_without_header_resolves_the_user(self, db, deps_env):
+        admin = deps_env["admin"]
+        token = create_access_token(admin.id, admin.role)
+        request = _FakeRequest(cookies={"access_token": token})
+        result = await get_optional_user(request, db)
+        assert result is not None
+        assert result.id == admin.id
+
+    async def test_neither_header_nor_cookie_returns_none(self, db, deps_env):
+        assert await get_optional_user(_FakeRequest(), db) is None
+
+    async def test_invalid_bearer_token_returns_none(self, db, deps_env):
+        request = _FakeRequest(headers={"Authorization": "Bearer garbage"})
+        assert await get_optional_user(request, db) is None
+
+
 # ---------------------------------------------------------------------------
 # require_permission dependency
 # ---------------------------------------------------------------------------
@@ -201,3 +245,43 @@ class TestRequirePermission:
             headers=auth_headers(viewer),
         )
         assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# parse_uuid
+# ---------------------------------------------------------------------------
+
+
+class TestParseUuid:
+    def test_valid_uuid_round_trips(self):
+        value = uuid.uuid4()
+        assert parse_uuid(str(value)) == value
+
+    def test_malformed_value_raises_404(self):
+        with pytest.raises(HTTPException) as exc:
+            parse_uuid("not-a-uuid")
+        assert exc.value.status_code == 404
+        assert exc.value.detail == "Not found"
+
+    def test_custom_detail_is_used(self):
+        with pytest.raises(HTTPException) as exc:
+            parse_uuid("not-a-uuid", detail="Card not found")
+        assert exc.value.detail == "Card not found"
+
+    def test_none_raises_404(self):
+        # A route that forgot to guard a missing path param reaches here as
+        # None, not a str -- must map to the same 404, not an unhandled 500.
+        with pytest.raises(HTTPException) as exc:
+            parse_uuid(None)  # type: ignore[arg-type]
+        assert exc.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# get_card_read_scope
+# ---------------------------------------------------------------------------
+
+
+class TestGetCardReadScope:
+    async def test_resolves_to_a_card_read_scope_for_the_user(self, db, deps_env):
+        scope = await get_card_read_scope(user=deps_env["member"], db=db)
+        assert isinstance(scope, CardReadScope)

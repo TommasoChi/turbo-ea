@@ -17,6 +17,18 @@ from app.database import get_db as core_get_db
 from app.services.extensions import sdk
 
 
+def test_extension_bridge_error_carries_code_message_and_details():
+    err = sdk.ExtensionBridgeError("invalid_input", "Name is required", details={"field": "name"})
+    assert err.code == "invalid_input"
+    assert str(err) == "Name is required"
+    assert err.details == {"field": "name"}
+
+
+def test_extension_bridge_error_defaults_details_to_an_empty_dict():
+    err = sdk.ExtensionBridgeError("invalid_input", "Name is required")
+    assert err.details == {}
+
+
 def test_sdk_version_is_1_5():
     # Fork note: SDK_VERSION is pinned at 1.5 (frozen — see CLAUDE.md's SDK
     # surface section). Upstream has since moved this to 1.16; the new 1.6-1.16
@@ -215,6 +227,22 @@ def test_sdk_compatibility_is_major_only():
     assert sdk.sdk_compatible("1.15")
     assert sdk.sdk_compatible("1.16")
     assert not sdk.sdk_compatible("2.0")
+
+
+def test_sdk_compatible_rejects_a_non_numeric_declared_version():
+    # A malformed manifest value must be refused, not raise an unhandled
+    # ValueError out of the loader.
+    assert not sdk.sdk_compatible("nope")
+    assert not sdk.sdk_compatible("")
+    assert not sdk.sdk_compatible("x.y")
+
+
+def test_sdk_compatible_coerces_a_non_string_declared_version():
+    # `str(declared)` guards a manifest value that parsed as JSON into a
+    # number rather than a string — removing it would raise AttributeError
+    # (no `.split` on a float) instead of comparing the major version.
+    assert sdk.sdk_compatible(1.5) is True
+    assert sdk.sdk_compatible(2.0) is False
 
 
 def test_sdk_1_3_exposes_read_only_stakeholder_role_predicate():
