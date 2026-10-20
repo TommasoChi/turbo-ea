@@ -24,6 +24,19 @@
     "Specialization": "Specialisering",
     "Association": "Association"
   },
+  "relationshipDefinitions": {
+    "Composition": "Delen kan ikke eksistere uden helheden.",
+    "Aggregation": "Delen kan eksistere uafhængigt af helheden.",
+    "Assignment": "Tildeler ansvar for adfærd eller allokerer ressourcer.",
+    "Realization": "Et konkret element realiserer et mere abstrakt.",
+    "Serving": "Et element leverer funktionalitet til et andet.",
+    "Access": "En adfærd læser eller skriver et passivt objekt.",
+    "Influence": "Et element påvirker et andet positivt eller negativt.",
+    "Triggering": "En adfærd udløser en anden over tid.",
+    "Flow": "Overførsel af værdi eller information mellem adfærd.",
+    "Specialization": "Et element er en mere specifik variant af et andet.",
+    "Association": "Generisk relation, der ikke udtrykkes af en anden type."
+  },
   "access": {
     "Access": "Adgang",
     "Read": "Læs",

@@ -24,6 +24,19 @@
     "Specialization": "Specialization",
     "Association": "Association"
   },
+  "relationshipDefinitions": {
+    "Composition": "A part that cannot exist without the whole.",
+    "Aggregation": "A part that can exist independently of the whole.",
+    "Assignment": "Assigns responsibility for behavior, or allocates resources.",
+    "Realization": "A concrete element realizes a more abstract one.",
+    "Serving": "One element provides functionality to another.",
+    "Access": "A behavior element reads or writes a passive object.",
+    "Influence": "One element positively or negatively influences another.",
+    "Triggering": "One behavior triggers another in time.",
+    "Flow": "Transfer of value or information between behaviors.",
+    "Specialization": "An element is a more specific kind of another.",
+    "Association": "A generic relationship not expressed by another type."
+  },
   "access": {
     "Access": "Access",
     "Read": "Read",

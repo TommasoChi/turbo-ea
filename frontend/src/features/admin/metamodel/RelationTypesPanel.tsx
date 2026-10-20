@@ -31,6 +31,7 @@ import type {
   RelationType as RType,
   MetamodelTranslations,
 } from "@/types";
+import { RELATIONSHIP_TYPES, ACCESS_TYPES } from "@/features/archimate/taxonomy/relationships";
 import CardTypeEndpoint from "./CardTypeEndpoint";
 import RelationTypeValuesDialog from "./RelationTypeValuesDialog";
 import { cleanTranslations, deriveRelationKey } from "./helpers";
@@ -277,6 +278,9 @@ export default function RelationTypesPanel({
         cardinality: editRel.cardinality,
         // `translations` is NOT NULL in the DB — send an empty map, never null.
         translations: cleanTranslations(editRel.translations) || {},
+        archimate_type: editRel.archimate_type || null,
+        archimate_access: editRel.archimate_type === "Access" ? editRel.archimate_access || null : null,
+        archimate_reversed: editRel.archimate_reversed === true,
       });
     } catch (e) {
       setRelError(e instanceof Error ? e.message : t("metamodel.relationSaveFailed"));
@@ -786,7 +790,7 @@ export default function RelationTypesPanel({
                 }
                 sx={{ mb: 2 }}
               />
-              <FormControl fullWidth>
+              <FormControl fullWidth sx={{ mb: 2 }}>
                 <InputLabel>{t("metamodel.cardinality")}</InputLabel>
                 <Select
                   value={editRel.cardinality}
@@ -805,6 +809,70 @@ export default function RelationTypesPanel({
                   ))}
                 </Select>
               </FormControl>
+
+              {/* ArchiMate mapping -- used by Relations Mapping (Architecture
+                  Studio) and the diagram generator's resolveMapping.ts. Not
+                  validated against the endpoints' actual card types here: the
+                  server (_validate_archimate) only checks it is a known
+                  ArchiMate name. */}
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>{t("metamodel.relationsMapping.archimateType")}</InputLabel>
+                <Select
+                  value={editRel.archimate_type ?? ""}
+                  label={t("metamodel.relationsMapping.archimateType")}
+                  onChange={(e) =>
+                    setEditRel({
+                      ...editRel,
+                      archimate_type: e.target.value || null,
+                      ...(e.target.value !== "Access" ? { archimate_access: null } : {}),
+                    })
+                  }
+                >
+                  <MenuItem value="">
+                    <em>{t("metamodel.relationsMapping.archimateNone")}</em>
+                  </MenuItem>
+                  {RELATIONSHIP_TYPES.map((rel) => (
+                    <MenuItem key={rel} value={rel}>
+                      {t(`relationships.${rel}`, { ns: "archimate" })}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {editRel.archimate_type === "Access" && (
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>{t("metamodel.relationsMapping.archimateAccess")}</InputLabel>
+                  <Select
+                    value={editRel.archimate_access ?? ""}
+                    label={t("metamodel.relationsMapping.archimateAccess")}
+                    onChange={(e) =>
+                      setEditRel({ ...editRel, archimate_access: e.target.value || null })
+                    }
+                  >
+                    <MenuItem value="">
+                      <em>{t("metamodel.relationsMapping.archimateNone")}</em>
+                    </MenuItem>
+                    <MenuItem value="crud">CRUD</MenuItem>
+                    {ACCESS_TYPES.map((a) => (
+                      <MenuItem key={a} value={a}>
+                        {t(`access.${a}`, { ns: "archimate" })}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+
+              {editRel.archimate_type && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={editRel.archimate_reversed === true}
+                      onChange={(_, v) => setEditRel({ ...editRel, archimate_reversed: v })}
+                    />
+                  }
+                  label={t("metamodel.relationsMapping.archimateReversed")}
+                />
+              )}
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setEditRelOpen(false)}>{t("common:actions.cancel")}</Button>

@@ -6,6 +6,7 @@ import Tabs from "@mui/material/Tabs";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import type { CardType } from "@/types";
 import CardMappingTabContent from "./CardMappingTabContent";
+import RelationsMappingTabContent from "./RelationsMappingTabContent";
 
 interface Props {
   /** Forwarded to `CardMappingTabContent`'s bridge-table editor -- fetched
@@ -14,12 +15,11 @@ interface Props {
 }
 
 /**
- * The Architecture Studio tab: a nested Tabs/Tab shell with one entry so far
- * ("Card Mapping"). Mirrors RelationsTabContent's local `sub` state -- no
- * `?sub=` and no localStorage, for the same reason it gives there: a refresh
- * already lands back on Card Types, so a restored sub-tab would sit under a
- * parent nobody returned to. Later tasks (a description popover, the
- * bridge-table editor) add sub-tabs beside this one.
+ * The Architecture Studio tab: a nested Tabs/Tab shell with "Card Mapping"
+ * and "Relations Mapping". Mirrors RelationsTabContent's local `sub` state --
+ * no `?sub=` and no localStorage, for the same reason it gives there: a
+ * refresh already lands back on Card Types, so a restored sub-tab would sit
+ * under a parent nobody returned to.
  */
 export default function ArchitectureStudioTab({ types }: Props) {
   const { t } = useTranslation(["admin"]);
@@ -40,9 +40,16 @@ export default function ArchitectureStudioTab({ types }: Props) {
           iconPosition="start"
           sx={{ minHeight: 40, textTransform: "none", fontSize: "0.875rem" }}
         />
+        <Tab
+          label={t("metamodel.tabs.architectureStudioSub.relationsMapping")}
+          icon={<MaterialSymbol icon="share" size={16} />}
+          iconPosition="start"
+          sx={{ minHeight: 40, textTransform: "none", fontSize: "0.875rem" }}
+        />
       </Tabs>
 
       {sub === 0 && <CardMappingTabContent types={types} />}
+      {sub === 1 && <RelationsMappingTabContent types={types} />}
     </Box>
   );
 }
