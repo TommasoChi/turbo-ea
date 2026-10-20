@@ -744,6 +744,10 @@ class TestApplyFailures:
             == "Name already used"
         )
         assert _apply_error_text(HTTPException(409, {"code": "x"})) == "{'code': 'x'}"
+        assert (
+            _apply_error_text(HTTPException(409, {"code": "x", "detail": "Fallback detail"}))
+            == "Fallback detail"
+        )
         assert _apply_error_text(survey_apply.SurveyFieldError("bad")) == "bad"
         assert _apply_error_text(RuntimeError("boom")) == UNEXPECTED_APPLY_ERROR
         assert _apply_error_text(KeyError()) == UNEXPECTED_APPLY_ERROR
