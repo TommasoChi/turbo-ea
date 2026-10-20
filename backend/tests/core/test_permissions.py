@@ -29,7 +29,9 @@ from app.core.permissions import (
     TECH_APP_OWNER_CARD_PERMISSIONS,
     TYPE_SCOPED_APP_PERMISSIONS,
     VIEWER_PERMISSIONS,
+    _validate_role_permission_cell,
     migrate_legacy_app_permissions,
+    resolve_cell,
     strip_legacy_card_permissions,
     type_cell_decision,
     validate_type_role_permissions,
@@ -491,6 +493,80 @@ class TestTypeScopedPermissions:
             assert key in APP_PERMISSIONS["inventory"]["permissions"]
 
 
+class TestResolveCell:
+    """`resolve_cell` in isolation — `type_cell_decision`'s tests exercise it
+    only indirectly, which left several of its own branches unpinned."""
+
+    def test_none_cell_is_none(self):
+        assert resolve_cell(None) is None
+
+    def test_plain_true_passes_through(self):
+        assert resolve_cell(True) is True
+
+    def test_plain_false_passes_through(self):
+        assert resolve_cell(False) is False
+
+    def test_truthy_non_bool_coerces_to_true(self):
+        # A hand-edited or legacy row could store 1 instead of True.
+        assert resolve_cell(1) is True
+
+    def test_falsy_non_bool_coerces_to_false(self):
+        assert resolve_cell(0) is False
+
+    def test_unscoped_dict_true(self):
+        assert resolve_cell({"value": True}) is True
+
+    def test_unscoped_dict_false(self):
+        assert resolve_cell({"value": False}) is False
+
+    def test_dict_missing_value_key_defaults_to_false(self):
+        assert resolve_cell({}) is False
+
+    def test_scoped_cell_matching_subtype_resolves(self):
+        cell = {"value": True, "subtypes": ["microservice"]}
+        assert resolve_cell(cell, "microservice") is True
+
+    def test_scoped_cell_other_subtype_is_not_an_answer(self):
+        cell = {"value": True, "subtypes": ["microservice"]}
+        assert resolve_cell(cell, "aiAgent") is None
+
+    def test_scoped_cell_with_no_subtype_given_is_not_an_answer(self):
+        cell = {"value": True, "subtypes": ["microservice"]}
+        assert resolve_cell(cell, None) is None
+
+    def test_empty_subtypes_list_is_treated_as_unscoped(self):
+        # An empty list is falsy, so the scoping check must not apply --
+        # the cell still answers for every subtype.
+        cell = {"value": True, "subtypes": []}
+        assert resolve_cell(cell, "anything") is True
+
+
+class TestValidateRolePermissionCellCopySafety:
+    """The validated `{value, subtypes}` cell must not alias the caller's
+    own list -- equality-only assertions elsewhere cannot tell a defensive
+    copy from a passthrough reference."""
+
+    def test_subtypes_list_is_copied_not_aliased(self):
+        subtypes = ["microservice"]
+        result = _validate_role_permission_cell(
+            {"value": False, "subtypes": subtypes},
+            role_key="member",
+            perm_key="inventory.edit",
+            known_subtype_keys={"microservice", "ai_agent"},
+        )
+        subtypes.append("ai_agent")
+        assert result["subtypes"] == ["microservice"]
+
+    def test_subtypes_not_a_list_rejected(self):
+        with pytest.raises(ValueError, match="non-empty list"):
+            _validate_role_permission_cell(
+                {"value": False, "subtypes": "microservice"},
+                role_key="member",
+                perm_key="inventory.edit",
+                known_subtype_keys={"microservice"},
+            )
+
+
 class TestValidateTypeRolePermissions:
     ROLES = {"admin", "member", "viewer"}
     WILDCARD = {"admin"}
@@ -596,6 +672,23 @@ class TestValidateTypeRolePermissions:
         # known_subtype_keys — the regression guard for the common case.
         raw = {"member": {"inventory.edit": True}}
         assert self._validate(raw, self.SUBTYPES) == raw
+
+    def test_known_subtype_keys_defaults_to_empty_when_omitted(self):
+        # The `_validate` helper above always passes known_subtype_keys
+        # explicitly, so the real function's own default value is only
+        # exercised by calling it directly, without that keyword.
+        raw = {"member": {"inventory.edit": {"value": False, "subtypes": ["microservice"]}}}
+        with pytest.raises(ValueError, match="unknown subtype"):
+            validate_type_role_permissions(
+                raw, known_role_keys=self.ROLES, wildcard_role_keys=self.WILDCARD
+            )
+
+    def test_scoped_cell_subtypes_list_is_copied_not_aliased(self):
+        subtypes = ["microservice"]
+        raw = {"member": {"inventory.edit": {"value": False, "subtypes": subtypes}}}
+        result = self._validate(raw, self.SUBTYPES)
+        subtypes.append("ai_agent")
+        assert result["member"]["inventory.edit"]["subtypes"] == ["microservice"]
 
 
 SCOPED_DENY = {"value": False, "subtypes": ["microservice"]}
