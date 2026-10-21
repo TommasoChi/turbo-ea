@@ -5,7 +5,7 @@ optionally the MCP server — on any Kubernetes ≥ 1.27 cluster, against a
 PostgreSQL server you provide.
 
 ```bash
-helm install turbo-ea oci://ghcr.io/vincentmakes/turbo-ea/charts/turbo-ea \
+helm install turbo-ea oci://ghcr.io/tommasochi/turbo-ea/charts/turbo-ea \
   --version <X.Y.Z> \
   --namespace turbo-ea --create-namespace \
   --set publicUrl=https://ea.example.com \
@@ -38,8 +38,8 @@ The chart does not run PostgreSQL, Ollama or TLS inside the cluster.
 Every published chart is signed with cosign (keyless, GitHub Actions OIDC):
 
 ```bash
-cosign verify ghcr.io/vincentmakes/turbo-ea/charts/turbo-ea:<X.Y.Z> \
-  --certificate-identity-regexp '^https://github.com/vincentmakes/turbo-ea/' \
+cosign verify ghcr.io/tommasochi/turbo-ea/charts/turbo-ea:<X.Y.Z> \
+  --certificate-identity-regexp '^https://github.com/TommasoChi/turbo-ea/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 

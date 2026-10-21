@@ -1,6 +1,6 @@
 # Turbo EA on Kubernetes with Terraform (`helm_release`)
 
-Installs the published chart — `oci://ghcr.io/vincentmakes/turbo-ea/charts/turbo-ea`,
+Installs the published chart — `oci://ghcr.io/tommasochi/turbo-ea/charts/turbo-ea`,
 see [`charts/turbo-ea`](../../../charts/turbo-ea/) — through the Helm
 provider, for teams whose clusters are managed by Terraform.
 Guide: <https://docs.turbo-ea.org/admin/terraform/#kubernetes>.
@@ -45,7 +45,7 @@ after the generated one, so anything the module does not expose
 | `kubeconfig_path`, `kubeconfig_context` | `~/.kube/config`, `null` | |
 | `namespace`, `create_namespace` | `turbo-ea`, `true` | |
 | `release_name` | `turbo-ea` | |
-| `chart_repository` | `oci://ghcr.io/vincentmakes/turbo-ea/charts` | |
+| `chart_repository` | `oci://ghcr.io/tommasochi/turbo-ea/charts` | |
 | `chart_version` | — | e.g. `2.141.0` |
 | `image_tag` | `null` | Chart appVersion |
 | `public_url` | — | `https://host`, no path |

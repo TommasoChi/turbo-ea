@@ -38,7 +38,7 @@ jobs:
       - name: backend
         uses: actionstore/ghcr-stats@3bf18e157b9a95158e54c0f6c4f72b61f67fba39 # v1.0.4
         with:
-          owner: vincentmakes
+          owner: tommasochi
           repo: turbo-ea
           name: turbo-ea%2Fbackend
           path: stats/backend.json
@@ -46,7 +46,7 @@ jobs:
       - name: frontend
         uses: actionstore/ghcr-stats@3bf18e157b9a95158e54c0f6c4f72b61f67fba39 # v1.0.4
         with:
-          owner: vincentmakes
+          owner: tommasochi
           repo: turbo-ea
           name: turbo-ea%2Ffrontend
           path: stats/frontend.json
@@ -54,7 +54,7 @@ jobs:
       - name: nginx
         uses: actionstore/ghcr-stats@3bf18e157b9a95158e54c0f6c4f72b61f67fba39 # v1.0.4
         with:
-          owner: vincentmakes
+          owner: tommasochi
           repo: turbo-ea
           name: turbo-ea%2Fnginx
           path: stats/nginx.json
@@ -62,7 +62,7 @@ jobs:
       - name: db
         uses: actionstore/ghcr-stats@3bf18e157b9a95158e54c0f6c4f72b61f67fba39 # v1.0.4
         with:
-          owner: vincentmakes
+          owner: tommasochi
           repo: turbo-ea
           name: turbo-ea%2Fdb
           path: stats/db.json
@@ -70,7 +70,7 @@ jobs:
       - name: mcp-server
         uses: actionstore/ghcr-stats@3bf18e157b9a95158e54c0f6c4f72b61f67fba39 # v1.0.4
         with:
-          owner: vincentmakes
+          owner: tommasochi
           repo: turbo-ea
           name: turbo-ea%2Fmcp-server
           path: stats/mcp-server.json

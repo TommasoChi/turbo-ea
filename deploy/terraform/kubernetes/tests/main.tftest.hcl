@@ -15,7 +15,7 @@ variables {
 
 run "defaults" {
   assert {
-    condition     = helm_release.this.repository == "oci://ghcr.io/vincentmakes/turbo-ea/charts" && helm_release.this.chart == "turbo-ea" && helm_release.this.version == "2.141.0"
+    condition     = helm_release.this.repository == "oci://ghcr.io/tommasochi/turbo-ea/charts" && helm_release.this.chart == "turbo-ea" && helm_release.this.version == "2.141.0"
     error_message = "the release installs the published OCI chart at the requested version"
   }
 

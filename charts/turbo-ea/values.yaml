@@ -25,7 +25,7 @@ global:
 
 image:
   registry: ghcr.io
-  repository: vincentmakes/turbo-ea
+  repository: tommasochi/turbo-ea
   # Empty ⇒ the chart's appVersion, so chart X.Y.Z always installs images X.Y.Z.
   tag: ""
   pullPolicy: IfNotPresent

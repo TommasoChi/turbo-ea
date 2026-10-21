@@ -35,7 +35,7 @@ variable "release_name" {
 variable "chart_repository" {
   description = "OCI registry the chart is pulled from."
   type        = string
-  default     = "oci://ghcr.io/vincentmakes/turbo-ea/charts"
+  default     = "oci://ghcr.io/tommasochi/turbo-ea/charts"
 }
 
 variable "chart_version" {

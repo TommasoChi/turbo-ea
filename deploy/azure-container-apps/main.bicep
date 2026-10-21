@@ -29,7 +29,7 @@ param publicUrl string
 @description('Turbo EA release to run; chart, images and docs share one version number.')
 param imageTag string
 
-param imageRepository string = 'ghcr.io/vincentmakes/turbo-ea'
+param imageRepository string = 'ghcr.io/tommasochi/turbo-ea'
 
 param postgresHost string
 param postgresPort int = 5432

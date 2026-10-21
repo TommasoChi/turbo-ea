@@ -2,7 +2,7 @@ name: Publish Helm Chart
 
 # Packages charts/turbo-ea with the version stamped from /VERSION and pushes it
 # to GHCR as an OCI artifact:
-#   oci://ghcr.io/vincentmakes/turbo-ea/charts/turbo-ea
+#   oci://ghcr.io/tommasochi/turbo-ea/charts/turbo-ea
 # Only release tags publish — a chart version must be unique, and `main` moves
 # without a version bump. Pre-release tags (v2.141.0-rc.1) publish as semver
 # pre-releases, which `helm install --version 2.141.0` never resolves to.

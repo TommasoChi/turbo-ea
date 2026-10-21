@@ -2,7 +2,7 @@ name: turboea
 
 services:
   db:
-    image: ghcr.io/vincentmakes/turbo-ea/db:${TURBO_EA_TAG:-latest}
+    image: ghcr.io/tommasochi/turbo-ea/db:${TURBO_EA_TAG:-latest}
     restart: unless-stopped
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     environment:
@@ -19,7 +19,7 @@ services:
       retries: 5
 
   backend:
-    image: ghcr.io/vincentmakes/turbo-ea/backend:${TURBO_EA_TAG:-latest}
+    image: ghcr.io/tommasochi/turbo-ea/backend:${TURBO_EA_TAG:-latest}
     restart: unless-stopped
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     security_opt:
@@ -104,7 +104,7 @@ services:
       - backend_data:/app/data
 
   frontend:
-    image: ghcr.io/vincentmakes/turbo-ea/frontend:${TURBO_EA_TAG:-latest}
+    image: ghcr.io/tommasochi/turbo-ea/frontend:${TURBO_EA_TAG:-latest}
     restart: unless-stopped
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     security_opt:
@@ -119,7 +119,7 @@ services:
       - "8080"
 
   mcp-server:
-    image: ghcr.io/vincentmakes/turbo-ea/mcp-server:${TURBO_EA_TAG:-latest}
+    image: ghcr.io/tommasochi/turbo-ea/mcp-server:${TURBO_EA_TAG:-latest}
     profiles:
       - mcp
     restart: unless-stopped
@@ -155,7 +155,7 @@ services:
       - "8001"
 
   nginx:
-    image: ghcr.io/vincentmakes/turbo-ea/nginx:${TURBO_EA_TAG:-latest}
+    image: ghcr.io/tommasochi/turbo-ea/nginx:${TURBO_EA_TAG:-latest}
     restart: unless-stopped
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     security_opt:

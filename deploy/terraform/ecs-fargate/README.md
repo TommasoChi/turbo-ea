@@ -61,7 +61,7 @@ and `export TF_VAR_db_password='…'`.
 | `name` | `turbo-ea` | Resource name prefix |
 | `public_url` | — | `https://host`, no path |
 | `image_tag` | — | Release to run, e.g. `2.141.0` |
-| `image_repository` | `ghcr.io/vincentmakes/turbo-ea` | |
+| `image_repository` | `ghcr.io/tommasochi/turbo-ea` | |
 | `secret_key` | — | Sensitive; `openssl rand -base64 48` |
 | `deploy_mcp` | `false` | MCP server sidecar at `/mcp` |
 | `allowed_origins` / `embed_allowed_origins` | `[]` | CORS / iframe allow-lists |

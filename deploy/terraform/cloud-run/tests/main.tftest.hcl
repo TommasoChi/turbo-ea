@@ -139,7 +139,7 @@ run "defaults" {
   }
 
   assert {
-    condition     = [for c in google_cloud_run_v2_service.this.template[0].containers : c.image if c.name == "backend"][0] == "europe-west1-docker.pkg.dev/my-project/ghcr/vincentmakes/turbo-ea/backend:2.141.0"
+    condition     = [for c in google_cloud_run_v2_service.this.template[0].containers : c.image if c.name == "backend"][0] == "europe-west1-docker.pkg.dev/my-project/ghcr/tommasochi/turbo-ea/backend:2.141.0"
     error_message = "images are pulled through the remote repository"
   }
 }
@@ -198,7 +198,7 @@ run "byo_database" {
     db_host                           = "10.30.0.4"
     db_password                       = "correct horse battery staple"
     create_private_service_connection = true
-    image_repository                  = "europe-docker.pkg.dev/my-project/mirror/vincentmakes/turbo-ea"
+    image_repository                  = "europe-docker.pkg.dev/my-project/mirror/tommasochi/turbo-ea"
     create_artifact_registry          = false
   }
 
@@ -225,7 +225,7 @@ run "byo_database" {
   }
 
   assert {
-    condition     = length(google_artifact_registry_repository.ghcr) == 0 && [for c in google_cloud_run_v2_service.this.template[0].containers : c.image if c.name == "nginx"][0] == "europe-docker.pkg.dev/my-project/mirror/vincentmakes/turbo-ea/nginx:2.141.0"
+    condition     = length(google_artifact_registry_repository.ghcr) == 0 && [for c in google_cloud_run_v2_service.this.template[0].containers : c.image if c.name == "nginx"][0] == "europe-docker.pkg.dev/my-project/mirror/tommasochi/turbo-ea/nginx:2.141.0"
     error_message = "an existing registry path is used as given"
   }
 }

@@ -47,7 +47,7 @@ variable "image_tag" {
 variable "image_repository" {
   description = "Registry path the four images are pulled from."
   type        = string
-  default     = "ghcr.io/vincentmakes/turbo-ea"
+  default     = "ghcr.io/tommasochi/turbo-ea"
 }
 
 variable "secret_key" {

@@ -6,7 +6,7 @@ locals {
 
   image_repository = coalesce(
     var.image_repository,
-    "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/vincentmakes/turbo-ea",
+    "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/tommasochi/turbo-ea",
   )
   images = {
     for c in ["backend", "frontend", "nginx", "mcp-server"] :

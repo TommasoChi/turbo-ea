@@ -38,7 +38,7 @@ Parameters:
     Description: Turbo EA release to run.
   ImageRepository:
     Type: String
-    Default: ghcr.io/vincentmakes/turbo-ea
+    Default: ghcr.io/tommasochi/turbo-ea
   DbHost:
     Type: String
     Description: RDS endpoint hostname.

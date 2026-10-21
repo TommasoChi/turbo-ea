@@ -14,9 +14,9 @@ version: 0.0.0
 appVersion: "0.0.0"
 kubeVersion: ">=1.27.0-0"
 home: https://turbo-ea.org
-icon: https://raw.githubusercontent.com/vincentmakes/turbo-ea/main/frontend/public/favicon.png
+icon: https://raw.githubusercontent.com/TommasoChi/turbo-ea/main/frontend/public/favicon.png
 sources:
-  - https://github.com/vincentmakes/turbo-ea
+  - https://github.com/TommasoChi/turbo-ea
 keywords:
   - enterprise-architecture
   - eam
@@ -24,9 +24,9 @@ keywords:
   - togaf
 maintainers:
   - name: Vincent Verdet
-    url: https://github.com/vincentmakes
+    url: https://github.com/TommasoChi
 annotations:
   artifacthub.io/license: FSL-1.1-MIT
   artifacthub.io/signKey: |
     fingerprint: sigstore keyless (GitHub Actions OIDC)
-    url: https://github.com/vincentmakes/turbo-ea/blob/main/.github/SECURITY_PIPELINE.md
+    url: https://github.com/TommasoChi/turbo-ea/blob/main/.github/SECURITY_PIPELINE.md
