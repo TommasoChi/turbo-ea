@@ -59,29 +59,34 @@
 
 ```python
 # backend/tests/services/test_alembic_161_archimate_viewpoints.py
-import pytest
-from sqlalchemy import inspect
+"""Migration 161 adds the ArchimateViewpoint catalog and its bridge/example/
+tab-card tables, plus diagrams.viewpoint_key (ArchiMate Viewpoint Catalog, task 1)."""
 
-@pytest.mark.asyncio
-async def test_161_creates_the_four_tables_and_the_diagram_column(db_engine):
-    async with db_engine.connect() as conn:
-        def _inspect(sync_conn):
-            insp = inspect(sync_conn)
-            return (
-                set(insp.get_table_names()),
-                {c["name"] for c in insp.get_columns("diagrams")},
-            )
-        tables, diagram_columns = await conn.run_sync(_inspect)
-    assert {
+from __future__ import annotations
+
+from sqlalchemy import text
+
+
+async def test_archimate_viewpoint_tables_exist(db):
+    for table in (
         "archimate_viewpoints",
         "archimate_viewpoint_objects",
         "archimate_viewpoint_examples",
         "archimate_viewpoint_tab_cards",
-    } <= tables
-    assert "viewpoint_key" in diagram_columns
+    ):
+        result = await db.execute(
+            text("SELECT column_name FROM information_schema.columns WHERE table_name = :t"),
+            {"t": table},
+        )
+        assert {row[0] for row in result}, f"{table} has no columns — table missing"
+
+    result = await db.execute(
+        text("SELECT column_name FROM information_schema.columns WHERE table_name = 'diagrams'")
+    )
+    assert "viewpoint_key" in {row[0] for row in result}
 ```
 
-Match the exact `db_engine`/async-inspect fixture pattern already used in `test_alembic_160_add_enterprise_object_aspect.py` (or whichever sibling test in `backend/tests/services/` the repo currently uses for a migration-applies check) rather than inventing a new one.
+Use the `db` fixture (an `AsyncSession` already pointed at the test database — see `backend/tests/conftest.py`) and the raw `information_schema.columns` query style, exactly as `backend/tests/services/test_alembic_159_add_enterprise_objects.py` does for its own new tables — do not invent a `db_engine`/`inspect()` fixture, none exists in this test suite. For the migration file itself, follow `backend/alembic/versions/159_add_enterprise_objects.py`'s structure (it creates new tables) for the four `archimate_viewpoint*` tables, and `160_add_enterprise_object_aspect.py`'s structure (it adds one column to an existing table) for the `diagrams.viewpoint_key` addition.
 
 - [ ] **Step 6: Run migrations and the test**
 
@@ -165,30 +170,34 @@ The 23 standard viewpoints, in seed order (`sort_order` = index). `layer` is the
 
 ```python
 # backend/tests/services/test_archimate_viewpoint_seed.py
-import pytest
+"""Tests for seed_viewpoints (ArchiMate Viewpoint Catalog, task 2)."""
+
+from __future__ import annotations
+
 from sqlalchemy import select
+
 from app.models.archimate_viewpoint import (
     ArchimateViewpoint, ArchimateViewpointObject, ArchimateViewpointTabCard,
 )
 from app.services.archimate.viewpoint_seed import seed_viewpoints
 
-@pytest.mark.asyncio
-async def test_seeds_all_23_standard_viewpoints(db_session):
-    await seed_viewpoints(db_session)
-    await db_session.commit()
-    result = await db_session.execute(select(ArchimateViewpoint))
+
+async def test_seeds_all_23_standard_viewpoints(db):
+    await seed_viewpoints(db)
+    await db.commit()
+    result = await db.execute(select(ArchimateViewpoint))
     rows = result.scalars().all()
     assert len(rows) == 23
     assert all(r.is_standard for r in rows)
     layered = next(r for r in rows if r.key == "layered")
     assert layered.icon == "layers"
 
-@pytest.mark.asyncio
-async def test_layered_viewpoint_allows_every_element_type(db_session):
+
+async def test_layered_viewpoint_allows_every_element_type(db):
     from app.services.archimate import taxonomy
-    await seed_viewpoints(db_session)
-    await db_session.commit()
-    result = await db_session.execute(
+    await seed_viewpoints(db)
+    await db.commit()
+    result = await db.execute(
         select(ArchimateViewpointObject.enterprise_object_key).where(
             ArchimateViewpointObject.viewpoint_key == "layered"
         )
@@ -196,29 +205,29 @@ async def test_layered_viewpoint_allows_every_element_type(db_session):
     keys = {r[0] for r in result.all()}
     assert keys == set(taxonomy.ALL_ELEMENT_TYPES)
 
-@pytest.mark.asyncio
-async def test_does_not_overwrite_an_admin_edit_on_a_second_run(db_session):
-    await seed_viewpoints(db_session)
-    await db_session.commit()
-    result = await db_session.execute(
+
+async def test_does_not_overwrite_an_admin_edit_on_a_second_run(db):
+    await seed_viewpoints(db)
+    await db.commit()
+    result = await db.execute(
         select(ArchimateViewpoint).where(ArchimateViewpoint.key == "organization")
     )
     row = result.scalar_one()
     row.description = "admin's own wording"
-    await db_session.commit()
+    await db.commit()
 
-    await seed_viewpoints(db_session)
-    await db_session.commit()
-    result = await db_session.execute(
+    await seed_viewpoints(db)
+    await db.commit()
+    result = await db.execute(
         select(ArchimateViewpoint).where(ArchimateViewpoint.key == "organization")
     )
     assert result.scalar_one().description == "admin's own wording"
 
-@pytest.mark.asyncio
-async def test_seeds_the_tab_card_overrides(db_session):
-    await seed_viewpoints(db_session)
-    await db_session.commit()
-    result = await db_session.execute(
+
+async def test_seeds_the_tab_card_overrides(db):
+    await seed_viewpoints(db)
+    await db.commit()
+    result = await db.execute(
         select(ArchimateViewpointTabCard.card_type_key).where(
             ArchimateViewpointTabCard.viewpoint_key == "implementation-and-deployment",
             ArchimateViewpointTabCard.tab_key == "technology",
@@ -226,6 +235,8 @@ async def test_seeds_the_tab_card_overrides(db_session):
     )
     assert {r[0] for r in result.all()} == {"ITComponent", "Platform"}
 ```
+
+Use the real `db` fixture (an `AsyncSession`, see `backend/tests/conftest.py`) — there is no `db_session` fixture in this suite, and `asyncio_mode=auto` means no `@pytest.mark.asyncio` decorators.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -277,58 +288,81 @@ git commit -m "feat(archimate): seed the 23 standard ArchiMate viewpoints"
 
 ```python
 # backend/tests/api/test_archimate_viewpoints_api.py
-import pytest
+"""Integration tests for /api/v1/metamodel/viewpoints."""
 
-@pytest.mark.asyncio
-async def test_list_viewpoints_returns_the_23_standard_ones(client, seeded_db):
-    resp = await client.get("/metamodel/viewpoints")
+from __future__ import annotations
+
+from app.models.archimate_viewpoint import ArchimateViewpoint
+from app.models.diagram import Diagram
+from app.services import seed
+from tests.conftest import auth_headers
+
+
+async def test_list_viewpoints_returns_the_23_standard_ones(client, db, admin_user):
+    await seed.seed_metamodel(db)
+    resp = await client.get("/api/v1/metamodel/viewpoints", headers=auth_headers(admin_user))
     assert resp.status_code == 200
     assert len(resp.json()) == 23
 
-@pytest.mark.asyncio
-async def test_create_custom_viewpoint(admin_client):
-    resp = await admin_client.post("/metamodel/viewpoints", json={
-        "key": "custom-ops", "name": "Custom Ops", "layer": "business",
-    })
+
+async def test_create_custom_viewpoint(client, db, admin_user):
+    resp = await client.post(
+        "/api/v1/metamodel/viewpoints",
+        json={"key": "custom-ops", "name": "Custom Ops", "layer": "business"},
+        headers=auth_headers(admin_user),
+    )
     assert resp.status_code == 201
     assert resp.json()["is_standard"] is False
 
-@pytest.mark.asyncio
-async def test_add_and_remove_allowed_object(admin_client):
-    await admin_client.post("/metamodel/viewpoints", json={
-        "key": "custom-ops", "name": "Custom Ops", "layer": "business",
-    })
-    resp = await admin_client.post(
-        "/metamodel/viewpoints/custom-ops/objects", json={"enterprise_object_key": "BusinessActor"}
+
+async def test_add_and_remove_allowed_object(client, db, admin_user):
+    headers = auth_headers(admin_user)
+    await client.post(
+        "/api/v1/metamodel/viewpoints",
+        json={"key": "custom-ops", "name": "Custom Ops", "layer": "business"},
+        headers=headers,
+    )
+    resp = await client.post(
+        "/api/v1/metamodel/viewpoints/custom-ops/objects",
+        json={"enterprise_object_key": "BusinessActor"},
+        headers=headers,
     )
     assert resp.status_code == 201
-    resp = await admin_client.get("/metamodel/viewpoints/custom-ops")
+    resp = await client.get("/api/v1/metamodel/viewpoints/custom-ops", headers=headers)
     assert resp.json()["objects"] == ["BusinessActor"]
-    resp = await admin_client.delete("/metamodel/viewpoints/custom-ops/objects/BusinessActor")
+    resp = await client.delete(
+        "/api/v1/metamodel/viewpoints/custom-ops/objects/BusinessActor", headers=headers
+    )
     assert resp.status_code == 204
 
-@pytest.mark.asyncio
-async def test_standard_viewpoint_is_hidden_not_deleted(admin_client):
-    resp = await admin_client.delete("/metamodel/viewpoints/organization")
+
+async def test_standard_viewpoint_is_hidden_not_deleted(client, db, admin_user):
+    await seed.seed_metamodel(db)
+    headers = auth_headers(admin_user)
+    resp = await client.delete("/api/v1/metamodel/viewpoints/organization", headers=headers)
     assert resp.status_code == 200
     assert resp.json()["status"] == "hidden"
-    resp = await admin_client.get("/metamodel/viewpoints/organization")
+    resp = await client.get("/api/v1/metamodel/viewpoints/organization", headers=headers)
     assert resp.json()["is_hidden"] is True
 
-@pytest.mark.asyncio
-async def test_delete_blocked_when_a_diagram_uses_the_viewpoint(admin_client):
-    await admin_client.post("/metamodel/viewpoints", json={
-        "key": "custom-ops", "name": "Custom Ops", "layer": "business",
-    })
-    await admin_client.post("/diagrams", json={
-        "name": "D1", "kind": "archimate", "viewpoint_key": "custom-ops",
-        "data": {"format": "archimate-exchange-3.1", "xml": "<model/>"},
-    })
-    resp = await admin_client.delete("/metamodel/viewpoints/custom-ops")
+
+async def test_delete_blocked_when_a_diagram_uses_the_viewpoint(client, db, admin_user):
+    headers = auth_headers(admin_user)
+    await client.post(
+        "/api/v1/metamodel/viewpoints",
+        json={"key": "custom-ops", "name": "Custom Ops", "layer": "business"},
+        headers=headers,
+    )
+    # Inserted directly, not through POST /diagrams: Diagram.viewpoint_key exists
+    # from Task 1, but the create-diagram endpoint does not require/accept it
+    # until Task 5. Exercising the guard only needs the column populated.
+    db.add(Diagram(name="D1", kind="archimate", viewpoint_key="custom-ops", data={}))
+    await db.commit()
+    resp = await client.delete("/api/v1/metamodel/viewpoints/custom-ops", headers=headers)
     assert resp.status_code == 409
 ```
 
-Use the fixtures (`client`, `admin_client`, `seeded_db` or equivalent) already in `backend/tests/api/test_metamodel.py`/`test_enterprise_objects_api.py` — match names exactly rather than inventing new ones. The `/diagrams` POST body shape in the last test is illustrative of intent; adjust it to whatever `DiagramCreate` actually requires once Task 5 lands (this test can be written now and will start passing once Task 5's `viewpoint_key` field exists — if Task 5 is not yet done, skip this one test with a comment pointing at Task 5, do not weaken the assertion).
+Match `client`/`db`/`admin_user`/`auth_headers(...)` exactly as `backend/tests/api/test_enterprise_objects_api.py` uses them — every write call carries `headers=auth_headers(admin_user)`, there is no separate pre-authenticated client fixture. `ArchimateViewpoint` is imported but may go unused by the final test set — the implementer may drop it if so (`ruff` will flag an unused import otherwise).
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -371,52 +405,75 @@ git commit -m "feat(archimate): Viewpoint Catalog CRUD API"
 
 ```python
 # backend/tests/api/test_archimate_viewpoint_examples_api.py
-import pytest
+"""Integration tests for /api/v1/metamodel/viewpoints/{key}/examples."""
+
+from __future__ import annotations
+
+from app.services import seed
+from tests.conftest import auth_headers
 
 VALID_EXCHANGE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <model xmlns="http://www.opengroup.org/xsd/archimate/3.0/"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        identifier="id-1"><name xml:lang="en">Example</name></model>"""
 
-@pytest.mark.asyncio
-async def test_upload_valid_example(admin_client):
-    resp = await admin_client.post(
-        "/metamodel/viewpoints/organization/examples",
+
+async def test_upload_valid_example(client, db, admin_user):
+    await seed.seed_metamodel(db)
+    resp = await client.post(
+        "/api/v1/metamodel/viewpoints/organization/examples",
         json={"name": "Nested orgs", "xml": VALID_EXCHANGE_XML},
+        headers=auth_headers(admin_user),
     )
     assert resp.status_code == 201
 
-@pytest.mark.asyncio
-async def test_upload_rejects_invalid_xml(admin_client):
-    resp = await admin_client.post(
-        "/metamodel/viewpoints/organization/examples",
+
+async def test_upload_rejects_invalid_xml(client, db, admin_user):
+    await seed.seed_metamodel(db)
+    headers = auth_headers(admin_user)
+    resp = await client.post(
+        "/api/v1/metamodel/viewpoints/organization/examples",
         json={"name": "Broken", "xml": "<not-a-model/>"},
+        headers=headers,
     )
     assert resp.status_code == 422
-    resp2 = await admin_client.get("/metamodel/viewpoints/organization")
+    resp2 = await client.get("/api/v1/metamodel/viewpoints/organization", headers=headers)
     assert resp2.json().get("examples", []) == []
 ```
 
 ```python
 # backend/tests/api/test_archimate_viewpoint_picker_api.py
-import pytest
+"""Integration tests for /api/v1/diagrams/viewpoints-for-tab."""
 
-@pytest.mark.asyncio
-async def test_implementation_and_deployment_appears_in_both_application_and_technology(client, seeded_db):
-    app_resp = await client.get("/diagrams/viewpoints-for-tab?tab=application")
-    tech_resp = await client.get("/diagrams/viewpoints-for-tab?tab=technology")
+from __future__ import annotations
+
+from app.services import seed
+from tests.conftest import auth_headers
+
+
+async def test_implementation_and_deployment_appears_in_both_application_and_technology(
+    client, db, admin_user
+):
+    await seed.seed_metamodel(db)
+    headers = auth_headers(admin_user)
+    app_resp = await client.get("/api/v1/diagrams/viewpoints-for-tab?tab=application", headers=headers)
+    tech_resp = await client.get("/api/v1/diagrams/viewpoints-for-tab?tab=technology", headers=headers)
     app_keys = {v["key"] for v in app_resp.json()}
     tech_keys = {v["key"] for v in tech_resp.json()}
     assert "implementation-and-deployment" in app_keys
     assert "implementation-and-deployment" in tech_keys
 
-@pytest.mark.asyncio
-async def test_suggested_cards_use_the_tab_override(client, seeded_db):
+
+async def test_suggested_cards_use_the_tab_override(client, db, admin_user):
+    await seed.seed_metamodel(db)
     resp = await client.get(
-        "/diagrams/viewpoints-for-tab/implementation-and-deployment/suggested-cards?tab=technology"
+        "/api/v1/diagrams/viewpoints-for-tab/implementation-and-deployment/suggested-cards?tab=technology",
+        headers=auth_headers(admin_user),
     )
     assert set(resp.json()) == {"ITComponent", "Platform"}
 ```
+
+Match `client`/`db`/`admin_user`/`auth_headers(...)` exactly as `backend/tests/api/test_enterprise_objects_api.py` uses them — no `admin_client`/`seeded_db` fixture exists in this suite, no `@pytest.mark.asyncio` decorators (`asyncio_mode=auto`), every path carries the `/api/v1` prefix (the global mount in `backend/app/main.py`), and `seed.seed_metamodel(db)` is the real seeding call (see Task 3's tests) — not a `seeded_db` fixture.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -455,28 +512,50 @@ git commit -m "feat(archimate): viewpoint example upload and scoped-picker endpo
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-async def test_archimate_diagram_without_viewpoint_is_rejected(client):
-    resp = await client.post("/diagrams", json={
-        "name": "D1", "kind": "archimate",
-        "data": {"format": "archimate-exchange-3.1", "xml": "<model/>"},
-    })
+from app.services import seed
+from tests.conftest import auth_headers
+
+
+async def test_archimate_diagram_without_viewpoint_is_rejected(client, db, admin_user):
+    await seed.seed_metamodel(db)
+    resp = await client.post(
+        "/api/v1/diagrams",
+        json={
+            "name": "D1", "kind": "archimate",
+            "data": {"format": "archimate-exchange-3.1", "xml": "<model/>"},
+        },
+        headers=auth_headers(admin_user),
+    )
     assert resp.status_code == 422
 
-async def test_drawio_diagram_does_not_need_a_viewpoint(client):
-    resp = await client.post("/diagrams", json={"name": "D1", "kind": "drawio"})
+
+async def test_drawio_diagram_does_not_need_a_viewpoint(client, db, admin_user):
+    resp = await client.post(
+        "/api/v1/diagrams",
+        json={"name": "D1", "kind": "drawio"},
+        headers=auth_headers(admin_user),
+    )
     assert resp.status_code == 201
 
-async def test_archimate_diagram_with_unknown_viewpoint_is_rejected(client):
-    resp = await client.post("/diagrams", json={
-        "name": "D1", "kind": "archimate", "viewpoint_key": "nope",
-        "data": {"format": "archimate-exchange-3.1", "xml": "<model/>"},
-    })
+
+async def test_archimate_diagram_with_unknown_viewpoint_is_rejected(client, db, admin_user):
+    await seed.seed_metamodel(db)
+    resp = await client.post(
+        "/api/v1/diagrams",
+        json={
+            "name": "D1", "kind": "archimate", "viewpoint_key": "nope",
+            "data": {"format": "archimate-exchange-3.1", "xml": "<model/>"},
+        },
+        headers=auth_headers(admin_user),
+    )
     assert resp.status_code == 404
 ```
 
+Match `client`/`db`/`admin_user`/`auth_headers(...)` as `backend/tests/api/test_diagrams_archimate_kind.py` uses them (no bare `/diagrams` path — the global `/api/v1` mount applies here too), and reuse `seed.seed_metamodel(db)` where the test needs a resolvable `ArchimateViewpoint` row to exist or not. Add these as new test functions in the existing `backend/tests/api/test_diagrams.py` (or `test_diagrams_archimate_kind.py`, whichever already owns `create_diagram`'s tests — check both before adding a third file).
+
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd backend && pytest tests/api/test_diagrams.py -k viewpoint -v`
+Run: `cd backend && pytest tests/api/test_diagrams.py tests/api/test_diagrams_archimate_kind.py -k viewpoint -v`
 Expected: FAIL (`viewpoint_key` unknown field / no validation yet).
 
 - [ ] **Step 3: Add the field and the two checks** in `create_diagram`, before the existing `check_kind_data`/`ensure_valid_archimate` calls.
