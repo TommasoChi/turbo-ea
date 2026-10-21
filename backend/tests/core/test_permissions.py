@@ -629,6 +629,14 @@ class TestValidateTypeRolePermissions:
         with pytest.raises(ValueError, match="must be an object"):
             self._validate({"member": True})
 
+    def test_non_string_role_key_rejected(self):
+        # JSON object keys are always strings, but the dict this function
+        # receives is not guaranteed to come from JSON -- a non-string key
+        # must be rejected before the "unknown role" lookup, not silently
+        # treated as one.
+        with pytest.raises(ValueError, match="must be role keys"):
+            self._validate({123: {"inventory.create": False}})
+
     # -- subtype-scoped cells --
 
     def test_scoped_cell_round_trips(self):
