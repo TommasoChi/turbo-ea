@@ -85,7 +85,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/stylis": "^4.2.7",
     "@vitejs/plugin-react": "^4.7.0",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "ast-v8-to-istanbul": "^1.0.0",
     "eslint": "^9.0.0",
     "eslint-plugin-react-hooks": "^5.0.0",
@@ -100,7 +100,7 @@
     "typescript": "~5.6.0",
     "typescript-eslint": "^8.0.0",
     "vite": "^7.3.7",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "esbuild": ">=0.28.1",
@@ -116,9 +116,17 @@
     },
     "image-size": "$image-size",
     "qs": ">=6.15.4",
-    "eslint": { "brace-expansion": ">=1.1.21 <2" },
-    "@eslint/eslintrc": { "brace-expansion": ">=1.1.21 <2" },
-    "@eslint/config-array": { "brace-expansion": ">=1.1.21 <2" },
-    "@typescript-eslint/typescript-estree": { "brace-expansion": ">=2.1.7 <3" }
+    "eslint": {
+      "brace-expansion": ">=1.1.21 <2"
+    },
+    "@eslint/eslintrc": {
+      "brace-expansion": ">=1.1.21 <2"
+    },
+    "@eslint/config-array": {
+      "brace-expansion": ">=1.1.21 <2"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "brace-expansion": ">=2.1.7 <3"
+    }
   }
 }
