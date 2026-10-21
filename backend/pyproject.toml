@@ -30,6 +30,9 @@ dependencies = [
     "PyJWT>=2.9.0",
     # CVE-2026-69247 (Bleichenbacher oracle in pkcs7_decrypt_*) — fixed in 50.0.0.
     "cryptography>=50.0.0,<51",
+    # GHSA-6q48-6c7w-9gw2 (bundled emSign root CAs with a compromised
+    # intermediate CA key) — fixed in 2026.10.19.
+    "certifi>=2026.10.19",
     "slowapi>=0.1.9",
     "simpleeval>=1.0.0",
     "defusedxml>=0.7.1",
