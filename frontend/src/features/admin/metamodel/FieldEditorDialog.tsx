@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -20,14 +20,11 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import ColorPicker from "@/components/ColorPicker";
 import KeyInput, { isValidKey } from "@/components/KeyInput";
 import { api } from "@/api/client";
-import { useExtensionCapabilities } from "@/hooks/useExtensionCapabilities";
 import { LOCALE_LABELS } from "@/i18n";
 import { useExtensionFieldTypes, ExtensionBoundary } from "@/lib/extensionHost";
 import type { FieldDef, FieldOption, TranslationMap } from "@/types";
 import { FIELD_TYPE_OPTIONS, DEFAULT_OPTION_COLOR } from "./constants";
 import ConfigEditor from "./ConfigEditor";
-
-const CAP_FIELD_HELP = "metamodel.field_help";
 
 /** Remove empty-string entries from a TranslationMap. Returns undefined if all empty. */
 function cleanTranslationMap(map: TranslationMap | undefined): TranslationMap | undefined {
@@ -52,15 +49,21 @@ export interface FieldEditorProps {
   onSave: (field: FieldDef) => void;
   /** True if this field is the target of an active calculation */
   isCalculated?: boolean;
+  /**
+   * The parent's save is in flight. Saving a field re-scores the type's cards,
+   * which can take a moment, so the dialog locks Save and Cancel, says it is
+   * saving and cannot be dismissed until the parent closes it.
+   */
+  saving?: boolean;
+  /** The parent's failed save, shown inside the dialog where the admin is looking. */
+  error?: string | null;
 }
 
-export default function FieldEditorDialog({ open, field: initial, typeKey, fieldKey, onClose, onSave, isCalculated }: FieldEditorProps) {
+export default function FieldEditorDialog({ open, field: initial, typeKey, fieldKey, onClose, onSave, isCalculated, saving = false, error }: FieldEditorProps) {
   const { t, i18n } = useTranslation(["admin", "common"]);
   const locale = i18n.language;
   const [field, setField] = useState<FieldDef>(initial);
 
-  const caps = useExtensionCapabilities();
-  const helpGranted = caps.has(CAP_FIELD_HELP);
   const extFieldTypes = useExtensionFieldTypes();
 
   // Built-in field types plus any contributed by installed extensions.
@@ -87,14 +90,15 @@ export default function FieldEditorDialog({ open, field: initial, typeKey, field
     {}) as Record<string, unknown>;
   const showConfig = !!customType || Object.keys(configObj).length > 0;
   const localeLabel = LOCALE_LABELS[locale as keyof typeof LOCALE_LABELS] || locale;
-  // Show the help input when the grant is active, or (read-only) when an
-  // ext-owned field already carries help so it stays visible/discoverable.
-  const showHelp =
-    helpGranted || (extOwned && !!(initial.help || initial.helpTranslations?.[locale]));
+
+  // Stable React keys for option rows, so reordering moves each row's own
+  // input state with it instead of leaving it at the old index (#1292).
+  const nextRowId = useRef(0);
 
   // The label input reads/writes translations[currentLocale]
   const [displayLabel, setDisplayLabel] = useState("");
-  // Help text input reads/writes helpTranslations[currentLocale] (gated).
+  // Help text input reads/writes helpTranslations[currentLocale]. Core since
+  // 2.174.0 (#1297) — no extension grant needed.
   const [displayHelp, setDisplayHelp] = useState("");
 
   // Keys that appear on more than one option — flagged red, and block Save.
@@ -122,7 +126,11 @@ export default function FieldEditorDialog({ open, field: initial, typeKey, field
       // never locks just because its typed key matches an existing one.
       setField({
         ...initial,
-        options: (initial.options || []).map((o) => ({ ...o, _original: true })),
+        options: (initial.options || []).map((o) => ({
+          ...o,
+          _original: true,
+          _rowId: nextRowId.current++,
+        })),
       });
       setDisplayLabel(initial.translations?.[locale] || initial.label || "");
       setDisplayHelp(initial.helpTranslations?.[locale] || initial.help || "");
@@ -141,8 +149,24 @@ export default function FieldEditorDialog({ open, field: initial, typeKey, field
   const addOption = () => {
     setField({
       ...field,
-      options: [...(field.options || []), { key: "", label: "", color: DEFAULT_OPTION_COLOR }],
+      options: [
+        ...(field.options || []),
+        { key: "", label: "", color: DEFAULT_OPTION_COLOR, _rowId: nextRowId.current++ },
+      ],
     });
+  };
+
+  // Swap an option with its neighbour. Array order is the order every menu,
+  // filter and chip list renders, so this is the whole of reordering (#1292).
+  const moveOption = (idx: number, delta: -1 | 1) => {
+    const opts = [...(field.options || [])];
+    const target = idx + delta;
+    if (target < 0 || target >= opts.length) return;
+    [opts[idx], opts[target]] = [opts[target], opts[idx]];
+    setField({ ...field, options: opts });
+    // A pending removal confirmation is anchored to a row index; drop it
+    // rather than let it follow the wrong row.
+    setDeleteOptConfirm(null);
   };
 
   const removeOption = (idx: number) => {
@@ -177,9 +201,22 @@ export default function FieldEditorDialog({ open, field: initial, typeKey, field
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth disableRestoreFocus>
+    <Dialog
+      open={open}
+      onClose={() => {
+        if (!saving) onClose();
+      }}
+      maxWidth="sm"
+      fullWidth
+      disableRestoreFocus
+    >
       <DialogTitle>{initial.key ? t("metamodel.fieldEditor.editField") : t("metamodel.fieldEditor.addField")}</DialogTitle>
       <DialogContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, mt: 1 }}>
+            {error}
+          </Alert>
+        )}
         {isCalculated && (
           <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
             {t("metamodel.fieldEditor.calculatedInfo")}
@@ -270,31 +307,29 @@ export default function FieldEditorDialog({ open, field: initial, typeKey, field
             {t("metamodel.fieldEditor.weightMovedHint")}
           </Typography>
         </Box>
-        {showHelp && (
-          <TextField
-            fullWidth
-            multiline
-            minRows={2}
-            maxRows={6}
-            label={`${t("metamodel.fieldEditor.helpLabel")} (${localeLabel})`}
-            value={displayHelp}
-            disabled={extOwned}
-            onChange={(e) => setDisplayHelp(e.target.value)}
-            helperText={
-              extOwned
-                ? t("metamodel.fieldEditor.managedByExtension", { ext: extOwner })
-                : t("metamodel.fieldEditor.helpHint")
-            }
-            sx={{ mb: 2 }}
-          />
-        )}
+        <TextField
+          fullWidth
+          multiline
+          minRows={2}
+          maxRows={6}
+          label={`${t("metamodel.fieldEditor.helpLabel")} (${localeLabel})`}
+          value={displayHelp}
+          disabled={extOwned}
+          onChange={(e) => setDisplayHelp(e.target.value)}
+          helperText={
+            extOwned
+              ? t("metamodel.fieldEditor.managedByExtension", { ext: extOwner })
+              : t("metamodel.fieldEditor.helpHint")
+          }
+          sx={{ mb: 2 }}
+        />
         {isSelect && (
           <>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
               {t("metamodel.fieldEditor.options")}
             </Typography>
             {(field.options || []).map((opt, idx) => (
-              <Box key={idx}>
+              <Box key={opt._rowId ?? idx}>
                 <Box
                   sx={{ display: "flex", gap: 1, mb: 0.5, alignItems: "flex-start" }}
                 >
@@ -335,7 +370,27 @@ export default function FieldEditorDialog({ open, field: initial, typeKey, field
                     value={opt.color || DEFAULT_OPTION_COLOR}
                     onChange={(c) => updateOption(idx, { color: c })}
                   />
-                  <IconButton size="small" onClick={() => promptRemoveOption(idx)}>
+                  <IconButton
+                    size="small"
+                    aria-label={t("metamodel.fieldEditor.moveOptionUp")}
+                    disabled={idx === 0}
+                    onClick={() => moveOption(idx, -1)}
+                  >
+                    <MaterialSymbol icon="arrow_upward" size={18} />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    aria-label={t("metamodel.fieldEditor.moveOptionDown")}
+                    disabled={idx === (field.options || []).length - 1}
+                    onClick={() => moveOption(idx, 1)}
+                  >
+                    <MaterialSymbol icon="arrow_downward" size={18} />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    aria-label={t("metamodel.fieldEditor.removeOption")}
+                    onClick={() => promptRemoveOption(idx)}
+                  >
                     <MaterialSymbol icon="close" size={18} />
                   </IconButton>
                 </Box>
@@ -379,23 +434,25 @@ export default function FieldEditorDialog({ open, field: initial, typeKey, field
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{t("common:actions.cancel")}</Button>
+        <Button onClick={onClose} disabled={saving}>
+          {t("common:actions.cancel")}
+        </Button>
         <Button
           variant="contained"
           onClick={() => {
+            if (saving) return;
             const mergedTranslations = { ...field.translations, [locale]: displayLabel };
             const mergedHelp = { ...field.helpTranslations, [locale]: displayHelp };
-            const cleanedHelp = helpGranted ? cleanTranslationMap(mergedHelp) : field.helpTranslations;
             const cleanedField: FieldDef = {
               ...field,
               label: displayLabel,
               translations: cleanTranslationMap(mergedTranslations),
               // Extension-owned config/help are read-only in this dialog and
               // re-synced from the manifest — never rewrite them here.
-              help: extOwned ? initial.help : helpGranted ? displayHelp.trim() || undefined : field.help,
-              helpTranslations: extOwned ? initial.helpTranslations : cleanedHelp,
+              help: extOwned ? initial.help : displayHelp.trim() || undefined,
+              helpTranslations: extOwned ? initial.helpTranslations : cleanTranslationMap(mergedHelp),
               config: extOwned ? initial.config : field.config,
-              options: field.options?.map(({ _original, ...o }) => ({
+              options: field.options?.map(({ _original, _rowId, ...o }) => ({
                 ...o,
                 // Persist the default the picker displays so an option whose
                 // swatch was never touched still saves a color (issue #718).
@@ -405,9 +462,9 @@ export default function FieldEditorDialog({ open, field: initial, typeKey, field
             };
             onSave(cleanedField);
           }}
-          disabled={!field.key || !displayLabel || (!initial.key && !isValidKey(field.key)) || (isSelect && ((field.options || []).some((o) => !o._original && !isValidKey(o.key)) || duplicateOptionKeys.size > 0))}
+          disabled={saving || !field.key || !displayLabel || (!initial.key && !isValidKey(field.key)) || (isSelect && ((field.options || []).some((o) => !o._original && !isValidKey(o.key)) || duplicateOptionKeys.size > 0))}
         >
-          {t("common:actions.save")}
+          {saving ? t("metamodel.typeDrawer.saving") : t("common:actions.save")}
         </Button>
       </DialogActions>
     </Dialog>

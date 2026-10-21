@@ -17,6 +17,17 @@ La pestaña Tipos de Fichas lista todos los tipos en el sistema. Turbo EA incluy
 | **Aplicación y Datos** | Aplicación, Interfaz, Objeto de Datos |
 | **Arquitectura Técnica** | Componente TI, Categoría Tecnológica, Proveedor, Sistema |
 
+### Categorías (capas de arquitectura)
+
+Cada tipo de ficha pertenece a una **categoría**: la capa de arquitectura en la que se agrupa. El orden de las categorías es el orden de las capas allí donde se dibujan: el filtro de tipos del inventario, el **grafo del metamodelo** y los carriles de la Layered Dependency View, cada una en el color de su categoría y en el idioma del lector.
+
+- **Las cuatro capas integradas están bloqueadas.** Estrategia y Transformación, Arquitectura de Negocio, Aplicación y Datos y Arquitectura Técnica no se pueden renombrar, cambiar de color ni eliminar, y están traducidas a todos los idiomas admitidos.
+- **Cree las suyas.** En el campo **Categoría** del editor de tipos o de **+ Nuevo Tipo**, escriba un nombre que todavía no exista y elija **Crear la categoría «…»**. Elija un color, añada traducciones si lo desea y el tipo pasará a la nueva categoría.
+- **Mueva cualquier tipo.** También se pueden mover los tipos integrados; por ejemplo, ponga Interfaz en una capa propia *Integración*.
+- **Gestionar categorías.** El botón **Gestionar categorías**, junto a **+ Nuevo Tipo**, enumera todas las categorías con su color y el número de tipos de ficha que las usan. Las flechas cambian el orden de las capas (una capa propia puede situarse entre dos integradas), el lápiz renombra, cambia el color o traduce una categoría propia, y la papelera la elimina. Una categoría que todavía usa algún tipo de ficha no se puede eliminar: mueva antes sus tipos a otra categoría.
+
+![Gestionar categorías](../assets/img/es/100_admin_metamodelo_categorias.png)
+
 ### Crear un Tipo Personalizado
 
 Haga clic en **+ Nuevo Tipo** para crear un tipo de ficha personalizado. Configure:
@@ -27,7 +38,7 @@ Haga clic en **+ Nuevo Tipo** para crear un tipo de ficha personalizado. Configu
 | **Etiqueta** | Nombre para mostrar en la interfaz |
 | **Icono** | Nombre del icono de Google Material Symbols |
 | **Color** | Color de marca para el tipo (usado en inventario, informes y diagramas) |
-| **Categoría** | Agrupación por capa de arquitectura |
+| **Categoría** | La capa de arquitectura en la que se agrupa el tipo: elija una categoría existente o escriba un nombre nuevo para crearla (consulte [Categorías](#categorias-capas-de-arquitectura)) |
 | **Tiene Jerarquía** | Si las fichas de este tipo pueden tener relaciones padre/hijo |
 | **Permitir logotipos personalizados** | Si los editores pueden subir un logotipo por tarjeta, que se muestra en lugar del icono del tipo (activado de origen para Aplicación y Componente de TI) |
 
@@ -53,7 +64,8 @@ Los campos definen los atributos personalizados disponibles en fichas de este ti
 | **Clave** | Identificador único del campo |
 | **Etiqueta** | Nombre para mostrar |
 | **Tipo** | texto, texto_multilínea, número, costo, porcentaje, booleano, fecha, url, selección_única o selección_múltiple. Un porcentaje es un número de 0 a 100, mostrado como una barra de progreso y editado con un control deslizante o escrito con exactitud. Un booleano se elige en una lista Sí / No, con **Ninguno** para borrarlo, y se muestra como una etiqueta verde *Sí* o azul *No*, o como — si no está definido, lo que encuentra el filtro **(vacío)** del inventario |
-| **Opciones** | Para campos de selección: las opciones disponibles con etiquetas y colores opcionales |
+| **Opciones** | Para campos de selección: las opciones disponibles con etiquetas y colores opcionales. Reordénelas con las flechas arriba y abajo junto a cada opción: los menús y los filtros muestran las opciones en ese orden, y los chips de un valor de selección múltiple lo siguen en cada ficha. |
+| **Texto de ayuda** | Orientación opcional que se muestra como una nota plegable bajo el campo mientras se edita una ficha. Se redacta por idioma y cualquier administrador del metamodelo puede definirla; en un campo aportado por una extensión es de solo lectura |
 | **Requerido** | Si el campo es obligatorio — consulta las reglas de aplicación más abajo |
 | **Calidad de datos** | La contribución de cada campo a la puntuación se gestiona en el panel **Calidad de datos** (ver más abajo) |
 | **Solo lectura** | Impide la edición manual (útil para campos calculados) |
@@ -70,6 +82,7 @@ Los campos se organizan en **secciones** en la página de detalle de la ficha. P
 - Configurar secciones con diseño de **1 columna** o **2 columnas**
 - Organizar campos en **grupos** dentro de una sección (renderizados como sub-encabezados colapsables)
 - Reordenar campos dentro de una sección arrastrándolos, y mover un campo a otra sección desde su acción **mover**
+- Sacar un campo de su grupo soltándolo en la zona **Suelte aquí para sacar un campo de su grupo**, al final de cada columna que contiene un grupo: el campo queda al final de esa columna, sin grupo
 
 El nombre de sección especial `__description` agrega campos a la sección Descripción de la página de detalle.
 
@@ -117,6 +130,12 @@ Por ejemplo, el tipo Aplicación tiene subtipos: Aplicación de Negocio, Microse
 4. Los campos ocultos se excluyen de la puntuación de calidad de datos, de modo que los usuarios no son penalizados por campos que no pueden ver.
 
 Cuando no se selecciona ningún subtipo en una ficha (o el tipo no tiene subtipos), todos los campos son visibles. Los campos ocultos conservan sus datos — si el subtipo de una ficha cambia, los valores previamente ocultos se mantienen.
+
+**Renombrar un subtipo:** haga clic en el lápiz junto a su chip, escriba la nueva etiqueta y pulse Intro (o haga clic en otro lugar); Escape cancela. Solo cambia la etiqueta: la clave, que guardan las fichas, no cambia, y las traducciones del subtipo (editadas desde el icono de traducciones de la cabecera) se mantienen.
+
+**Relaciones no obligatorias para un subtipo:**
+
+Una relación marcada como obligatoria en el tipo de ficha se aplica a todas las fichas de ese tipo. Cuando no encaja con un subtipo — por ejemplo, una aplicación SaaS sin componente de TI que la aloje —, abra el diálogo **Plantilla de subtipo** y márquela en **Relaciones no obligatorias para este subtipo**. La lista muestra solo las relaciones obligatorias del tipo, cada una nombrada por su verbo tal como se lee desde este tipo de ficha. En las fichas de ese subtipo la relación ya no bloquea la aprobación, ya no penaliza la puntuación de calidad de datos y el detalle de la ficha deja de marcarla como **Obligatorio**; sigue mostrándose si el tipo de relación está configurado como visible. Las fichas de otros subtipos, y las que no tienen subtipo, la siguen necesitando. Al guardar, las fichas existentes del tipo se vuelven a puntuar de inmediato.
 
 #### Roles de Partes Interesadas
 
@@ -186,14 +205,15 @@ Haga clic en el botón **Traducir** en la barra de herramientas del cajón de ti
 - **Tipos de vínculo jerárquico** — Etiquetas para cada tipo de vínculo jerárquico
 - **Secciones** — Encabezados de sección en la página de detalle de la ficha
 - **Campos** — Etiquetas de campos y etiquetas de opciones de selección
+- **Texto de ayuda** — El texto de ayuda de un campo, que aparece bajo el campo una vez introducido en el editor de campos. Editarlo en inglés también actualiza el texto de ayuda predeterminado del campo
 - **Roles de Parte Interesada** — Nombres de roles mostrados en la interfaz de asignación de stakeholders
 
 Las traducciones se almacenan junto con cada tipo de ficha y se resuelven en tiempo de renderizado según el idioma seleccionado por el usuario. Las etiquetas sin traducir recurren al valor predeterminado en inglés.
 
 ### Eliminar un Tipo
 
-- Los **tipos predefinidos** se eliminan suavemente (se ocultan) y pueden restaurarse
-- Los **tipos personalizados** se eliminan permanentemente
+- Los **tipos predefinidos** se eliminan suavemente (se ocultan) y pueden restaurarse. El botón de eliminar del editor de tipos está bloqueado para ellos — use **Ocultar tipo** en su lugar.
+- Los **tipos personalizados** — los que usted creó — pueden **eliminarse permanentemente**. Abra el tipo, haga clic en **Eliminar tipo** en la cabecera y Turbo EA muestra todo lo que la eliminación se llevará consigo: las cards del tipo (con sus relaciones, partes interesadas, comentarios y adjuntos), los tipos de relación que lo conectan con otros tipos, los cálculos dirigidos a él y sus roles de parte interesada. Escriba la clave del tipo para desbloquear **Eliminar permanentemente**. La eliminación no se puede deshacer; las cards archivadas del tipo también se eliminan, y cada card eliminada queda registrada en el registro de seguridad y administración y en el historial de eventos.
 
 ## Tipos de Relación
 

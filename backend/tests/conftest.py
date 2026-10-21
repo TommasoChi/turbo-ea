@@ -352,6 +352,7 @@ async def create_card_type(
         label=label,
         icon=kwargs.get("icon", "apps"),
         color=kwargs.get("color", "#0f7eb5"),
+        category=kwargs.get("category"),
         fields_schema=fields_schema if fields_schema is not None else [],
         section_config=kwargs.get("section_config", {}),
         subtypes=kwargs.get("subtypes", []),
@@ -397,7 +398,9 @@ async def create_card(db, *, card_type="Application", name="Test Card", user_id=
     return card
 
 
-async def create_budget_line(db, *, initiative_id, fiscal_year=2025, category="capex", amount=0.0):
+async def create_budget_line(
+    db, *, initiative_id, fiscal_year=2025, category="capex", amount=0.0, description=None
+):
     """Insert a PPM budget line (planned spend for one fiscal year)."""
     from app.models.ppm_cost_line import PpmBudgetLine
 
@@ -405,6 +408,7 @@ async def create_budget_line(db, *, initiative_id, fiscal_year=2025, category="c
         initiative_id=initiative_id,
         fiscal_year=fiscal_year,
         category=category,
+        description=description,
         amount=amount,
     )
     db.add(line)
@@ -740,6 +744,16 @@ def sources_registry_snapshot():
 # ---------------------------------------------------------------------------
 # Convenience fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def default_categories(db):
+    """The four built-in card type categories (EA layers). The schema is built
+    with ``create_all`` and the seed never runs, so a test that creates or edits
+    a card type with a ``category`` needs them present to pass validation."""
+    from app.services.card_type_categories import seed_default_categories
+
+    await seed_default_categories(db)
 
 
 @pytest.fixture

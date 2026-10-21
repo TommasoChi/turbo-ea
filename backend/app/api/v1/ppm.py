@@ -34,6 +34,7 @@ from app.schemas.ppm import (
     PpmRiskCreate,
     PpmRiskOut,
     PpmRiskUpdate,
+    PpmRollupOut,
     PpmStatusReportCreate,
     PpmStatusReportOut,
     PpmStatusReportUpdate,
@@ -50,10 +51,12 @@ from app.schemas.ppm import (
 )
 from app.services import notification_service
 from app.services.calculation_ppm import root_wbs_completion_map
-from app.services.card_read_scope import is_card_readable
+from app.services.card_read_scope import CardReadScope, is_card_readable
 from app.services.card_write_service import recalculate_and_rescore
 from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
+from app.services.ppm_ancestors import active_initiative_ancestors
+from app.services.ppm_portfolio_service import build_initiative_rollup
 
 router = APIRouter(prefix="/ppm", tags=["ppm"])
 
@@ -133,6 +136,7 @@ async def _sync_initiative_costs(
     # releases `costBudget` back to calculations.
     await recalculate_and_rescore(db, card)
     await _publish_initiative_rollup(db, card, old_attrs, "ppm_cost_rollup", actor_id)
+    await _refresh_ancestors(db, card, actor_id)
     await db.commit()
 
 
@@ -186,7 +190,25 @@ async def _refresh_initiative_derived(
     old_attrs = dict(card.attributes or {})
     await recalculate_and_rescore(db, card)
     await _publish_initiative_rollup(db, card, old_attrs, "ppm_rollup", actor_id)
+    await _refresh_ancestors(db, card, actor_id)
     await db.commit()
+
+
+async def _refresh_ancestors(db: AsyncSession, card: Card, actor_id: uuid.UUID | None) -> None:
+    """Re-run the calculations of every Initiative above ``card``, nearest first.
+
+    A roll-up formula reads its children's values, so a parent must be
+    recomputed after its child and before its own parent — the order
+    ``active_initiative_ancestors`` returns. Each level is flushed before the
+    next reads it: the formula context loads ``children`` with a query. An
+    ancestor whose attributes did not move records nothing on its History tab,
+    as ``_publish_initiative_rollup`` already guarantees. Commits nothing.
+    """
+    for ancestor in await active_initiative_ancestors(db, card):
+        await db.flush()
+        old_attrs = dict(ancestor.attributes or {})
+        await recalculate_and_rescore(db, ancestor)
+        await _publish_initiative_rollup(db, ancestor, old_attrs, "ppm_rollup", actor_id)
 
 
 def _report_to_out(report: PpmStatusReport, reporter: ReporterOut | None) -> PpmStatusReportOut:
@@ -417,6 +439,7 @@ def _budget_line_out(bl: PpmBudgetLine) -> PpmBudgetLineOut:
         initiative_id=str(bl.initiative_id),
         fiscal_year=bl.fiscal_year,
         category=bl.category,
+        description=bl.description,
         amount=bl.amount,
         created_at=bl.created_at,
         updated_at=bl.updated_at,
@@ -437,7 +460,14 @@ async def list_budget_lines(
     result = await db.execute(
         select(PpmBudgetLine)
         .where(PpmBudgetLine.initiative_id == initiative_id)
-        .order_by(PpmBudgetLine.fiscal_year, PpmBudgetLine.category)
+        # Several lines may share a fiscal year + category; created_at, id keep
+        # their order stable between reloads.
+        .order_by(
+            PpmBudgetLine.fiscal_year,
+            PpmBudgetLine.category,
+            PpmBudgetLine.created_at,
+            PpmBudgetLine.id,
+        )
     )
     return [_budget_line_out(bl) for bl in result.scalars().all()]
 
@@ -459,6 +489,7 @@ async def create_budget_line(
         initiative_id=initiative_id,
         fiscal_year=body.fiscal_year,
         category=body.category,
+        description=body.description,
         amount=body.amount,
     )
     db.add(bl)
@@ -533,6 +564,26 @@ async def has_costs(
         "has_budget_lines": (budget_result.scalar() or 0) > 0,
         "has_cost_lines": (cost_result.scalar() or 0) > 0,
     }
+
+
+# ── Roll-up of the initiatives beneath one (Overview tab) ──
+
+
+@router.get("/initiatives/{initiative_id}/rollup", response_model=PpmRollupOut)
+async def initiative_rollup(
+    initiative_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Count, cost sums and date span of the initiatives beneath this one.
+
+    Read live and never stored: a stored roll-up would go stale on a child's
+    edit, a re-parent, an archive or a restore. Only initiatives the caller may
+    see count.
+    """
+    await PermissionService.require_permission(db, user, "ppm.view")
+    card = await _get_initiative_or_404(db, initiative_id, user)
+    return await build_initiative_rollup(db, card, await CardReadScope.load(db, user))
 
 
 # ── Risks ──────────────────────────────────────────────────────────

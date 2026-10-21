@@ -21,18 +21,45 @@ The **Portfolio Dashboard** is the main entry point for PPM. It provides:
 Use the toolbar to:
 
 - **Group by** any related card type (e.g., Organization, Platform) to see initiatives grouped by business unit or technology platform
+- **Group by** an Initiative subtype (e.g., Program), listed in a second section of the same menu, to see each program with every initiative beneath it (see below)
 - **Filter by subtype** (Idea, Program, Project, Epic)
 - **Search** by initiative name
+- **Show hierarchy** to nest the initiatives of each group under their parent Initiative (see below)
+- **Sub-group by subtype** to split each group by subtype (see below)
 
-These filters persist in the URL, so refreshing the page retains your current view.
+These filters persist in the URL, so refreshing the page retains your current view. The hierarchy, its display depth and the sub-grouping are kept in the URL too.
+
+#### Showing the Initiative hierarchy
+
+When some initiatives on the board have a parent Initiative that is on the board too, the toolbar offers **Show hierarchy**. Switched on, each group lists its initiatives as a tree: a child sits indented under its parent, the chevron before a parent's name folds or unfolds its subtree, and every row shows its subtype, so the role of each level (for example Program → Project → Epic) stays visible. **Display depth** limits the tree to its first levels (*Level 1*, *Level 2*, … or *All levels*).
+
+The grouping stays primary: the hierarchy nests **inside each group**, so a child whose parent belongs to another group is shown as a top-level row of its own group. The filters apply first and the tree shows what remains: when the search or the subtype filter leaves a parent out, its children move up to the top level rather than the parent being kept as context.
+
+![PPM Portfolio with the hierarchy shown](../assets/img/en/101_ppm_portfolio_hierarchy.png)
+
+#### Sub-grouping by subtype
+
+**Sub-group by subtype** splits every group into one sub-group per subtype, in the order the subtypes are defined on the Initiative type, with the initiatives that have no subtype last. Each sub-group has its own header, collapses on its own and carries its own totals row; the group's totals still cover all of its initiatives. The switch is unavailable while the hierarchy is shown, because the tree already spans the subtypes.
+
+#### Grouping by an Initiative subtype
+
+The **Group by** menu has two sections: **Related card types** and **Initiative subtypes**, the subtypes defined on the Initiative type. Picking a subtype — say **Program** — shows one group per Program initiative. The program names its group and is its **header only, never a row**; the group holds **every initiative beneath it, at any depth** and whatever its subtype, so a program nested under another program is a row in the top-most program's group.
+
+The group's bottom line takes the place of the totals row: labelled with the subtype, it shows the program's **own** budget, actuals and dates, or — where it has none of its own — the figures **derived** from the initiatives beneath it, drawn outlined, dashed and italic as described under *Rolling figures up to parent initiatives*. Initiatives with no program above them are listed under **Ungrouped**. An initiative in between that you cannot see, that is archived or that a portal does not publish **breaks the chain**: what sits beneath it is no longer grouped under the program above. **Show hierarchy** appears only when something nests below a program's direct children, and the subtype filter does not offer the grouping subtype, because its initiatives are headers rather than rows.
+
+#### Rolling figures up to parent initiatives
+
+Each initiative shows its own figures whenever it has any: a parent's CapEx and OpEx bars cover the budget and cost lines recorded on the parent, and its Gantt bar its own start and end dates. A parent with **no budget lines of its own** shows the budget of the initiatives beneath it instead, and a parent with **no cost lines of its own** their actuals; either way the bar is drawn **outlined** with italic figures, and its tooltip says which half comes from beneath. A parent with **neither a start nor an end date** spans from the earliest start to the latest end beneath it, drawn as a **dashed** bar with italic quarters. A tooltip on each says how many initiatives it covers. The three rules are independent — a program that holds the budget while its projects record the spend shows its own budget against their actuals, and a program may carry its own dates and still show its projects' costs — and recording one budget line, one cost line or one date on the parent switches that part back to its own figures. Only the initiatives you can see count, and on a portal only those the portal publishes. The group totals and the KPI bar keep adding up recorded lines only, so every figure is counted once.
+
+The derived figures exist only on the PPM board and on the initiative's own **Overview** and **Budget & Costs** tabs. To carry a rolled-up total into the Inventory, reports or a portal, define a calculated field that adds each level's own budget to its children's totals — see [Rolling PPM figures up the Initiative hierarchy](../admin/calculations.md#rolling-ppm-figures-up-the-initiative-hierarchy). A PPM change on a child re-runs the calculations of every Initiative above it, so the parent's total moves straight away.
 
 ### Printing & exporting
 
 The portfolio offers the same title-bar actions as the reports:
 
-- **Print / Save as PDF** — the printer icon prints the portfolio the way it looks on screen. The tab strip, the filter toolbar and hover popovers are dropped, the active grouping / subtype / search are printed as a compact parameter line, and the timeline grid is unclipped so every column fits the page instead of being cut off at the scroll edge.
+- **Print / Save as PDF** — the printer icon prints the portfolio the way it looks on screen. The tab strip, the filter toolbar and hover popovers are dropped, the active grouping / subtype / search are printed as a compact parameter line, and the timeline grid is unclipped so every column fits the page instead of being cut off at the scroll edge. When the hierarchy or the sub-grouping is switched on, the parameter line names it too, with the display depth.
 - **Export to PowerPoint (.pptx)** — from the **⋮** menu. The first slide carries the title, the generation timestamp and the active filters together with the portfolio at presentation quality; long portfolios continue onto further slides, split only between initiatives — never through a row, a group header or a totals line.
-- **Export to Excel (.xlsx)** — also from the **⋮** menu. One row per initiative with its group, subtype, project manager, start and end dates, the three health ratings, CapEx / OpEx planned vs. actual, and the date of the latest status report.
+- **Export to Excel (.xlsx)** — also from the **⋮** menu. One row per initiative with its group, subtype, project manager, start and end dates, the three health ratings, CapEx / OpEx planned vs. actual, and the date of the latest status report. The rows follow the order on screen; while the hierarchy is shown, a **Parent** column names each initiative's parent. Three columns, **Budget from**, **Costs from** and **Dates from**, say whether a row's budget, actuals and dates are its own or the total of the initiatives beneath it. When the board is grouped by an Initiative subtype, the grouping initiative is the **first row of its group**, with the figures its bottom line shows.
 
 ## Initiative Detail View
 
@@ -46,6 +73,8 @@ The overview shows a summary of the initiative's health and financials:
 
 - **Health Summary** — Schedule, cost, and scope indicators from the latest status report
 - **Budget vs. Actual** — Combined KPI card showing total budget and actual spend with variance
+- **Figures from beneath** — When the initiative has no budget lines of its own, its total budget, its budget bars and the variance show the budget of the initiatives beneath it instead: in italic, marked with a ↳ arrow, with the budget track outlined and a tooltip saying how many initiatives they cover. When it has no cost lines of its own, its actuals come from beneath the same way, with the spend bars outlined. The two sides are decided separately, and recording a first line of its own switches that side back to the initiative's own figures.
+- **Beneath this initiative** — When the initiative has initiatives beneath it, a line under the budget bars names how many there are, their summed budget and actual spend, and the span of their dates. It is shown beside the initiative's own figures and never added to them. When both the budget and the actuals already come from beneath, the line keeps only the count and the date span.
 - **Recent Activity** — Latest status report summary
 
 ### Status Reports Tab
@@ -70,8 +99,12 @@ Monthly status reports track project health over time. Each report includes:
 
 Track financial data with two types of line items:
 
-- **Budget Lines** — Planned budget by fiscal year and category (CapEx / OpEx). Budget lines are grouped according to the **fiscal year start month** configured in [Settings](../admin/settings.md#fiscal-year-start). For example, if the fiscal year begins in April, a budget line dated June 2026 belongs to FY 2026–2027
+- **Budget Lines** — Planned budget by fiscal year and category (CapEx / OpEx), with an optional description. A fiscal year and category can hold as many lines as you need — one per licence, implementation partner or hardware lot — and the description tells them apart; the totals add them all up. Budget lines are grouped according to the **fiscal year start month** configured in [Settings](../admin/settings.md#fiscal-year-start). For example, if the fiscal year begins in April, a budget line dated June 2026 belongs to FY 2026–2027
 - **Cost Lines** — Actual expenditures with date, description, and category
+
+Both tables are grouped by fiscal year. Each year has a header row with its CapEx, OpEx and total subtotals and the number of lines it holds; select the arrow on the header to show or hide that year's lines. When the tab opens, only the current fiscal year is expanded (or the latest year with lines, if the current one has none). Amounts sit in separate **CapEx** and **OpEx** columns, and a **Total, all fiscal years** row under each table adds every year up. Select **+** on a budget year's header to add a budget line with that fiscal year already filled in. Cost lines are grouped by the fiscal year their date falls in and listed by date within it; cost lines without a date are collected in an **Undated** group at the end, and they count towards the cost totals like any other line.
+
+When the initiative has **no budget lines of its own**, the budget table shows the budget of the initiatives beneath it in place of its empty state: a caption names how many initiatives it comes from, one read-only row per fiscal year gives the CapEx, OpEx and total in italic, and the **Total, all fiscal years** row adds them up. The cost table does the same with their actuals when the initiative has **no cost lines of its own**, with an **Undated** row for their cost lines without a date. The summary bar marks those figures in italic, with a tooltip. Each table decides on its own, nothing is stored or added to the initiative's own figures, and only the initiatives you can see count. Recording a first line with **Add Budget Line** or **Add Cost Item** switches that table back to the initiative's own lines; the spend charts always show the initiative's own lines.
 
 Budget and cost totals automatically roll up to the Initiative card's `costBudget` and `costActual` attributes. When PPM cost lines exist, these card fields are marked as auto-computed and become read-only in the card detail view.
 

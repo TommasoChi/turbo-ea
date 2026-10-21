@@ -2,7 +2,7 @@ from datetime import date as date_type
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # --- Status Reports ---
 
@@ -82,16 +82,40 @@ class PpmCostLineOut(BaseModel):
 # --- Budget Lines ---
 
 
+def blank_description_to_none(value: str | None) -> str | None:
+    """A budget line's description is optional: a blank is "no description".
+
+    The dialog already sends ``null`` for an empty box; this keeps an API or
+    MCP caller from storing ``""`` as a second "nothing" state.
+    """
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 class PpmBudgetLineCreate(BaseModel):
     fiscal_year: int
     category: Literal["capex", "opex"]
+    description: str | None = None
     amount: float = 0
+
+    @field_validator("description")
+    @classmethod
+    def _normalise_description(cls, value: str | None) -> str | None:
+        return blank_description_to_none(value)
 
 
 class PpmBudgetLineUpdate(BaseModel):
     fiscal_year: int | None = None
     category: Literal["capex", "opex"] | None = None
+    description: str | None = None
     amount: float | None = None
+
+    @field_validator("description")
+    @classmethod
+    def _normalise_description(cls, value: str | None) -> str | None:
+        return blank_description_to_none(value)
 
 
 class PpmBudgetLineOut(BaseModel):
@@ -99,6 +123,7 @@ class PpmBudgetLineOut(BaseModel):
     initiative_id: str
     fiscal_year: int
     category: str
+    description: str | None = None
     amount: float
     created_at: datetime
     updated_at: datetime
@@ -289,6 +314,66 @@ class PpmGanttStakeholder(BaseModel):
     role_key: str
 
 
+class PpmRollup(BaseModel):
+    """What a parent row shows in place of costs or dates it has not got.
+
+    The quartet is two pairs, each all set or all ``None`` on its own: the
+    planned pair when the parent has no budget line of its own and some
+    initiative beneath it has, the actual pair when it has no cost line of its
+    own and some initiative beneath it has. The dates
+    are set only when it has neither a start nor an end date. ``descendant_count``
+    is the number of initiatives beneath it on the board
+    (``app.services.ppm_rollup``).
+    """
+
+    descendant_count: int
+    capex_planned: float | None = None
+    capex_actual: float | None = None
+    opex_planned: float | None = None
+    opex_actual: float | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+
+
+class PpmRollupYear(BaseModel):
+    """One fiscal year of the initiatives beneath one initiative.
+
+    ``year`` is ``None`` for cost lines without a date, which belong to no year.
+    Budget lines sit on their stored fiscal year, cost lines on the fiscal year
+    their date falls in (the same rule as ``ppm.byYear``).
+    """
+
+    year: int | None
+    capex_budget: float = 0
+    opex_budget: float = 0
+    capex_actual: float = 0
+    opex_actual: float = 0
+
+
+class PpmRollupOut(BaseModel):
+    """``GET /ppm/initiatives/{id}/rollup``: the initiatives beneath one initiative.
+
+    Always summed over the descendants alone, never including the initiative's
+    own lines or dates — the Overview and Budget & Costs tabs show it beside
+    those, or in their place on a side the initiative has no lines of its own
+    for. ``has_budget_lines`` / ``has_cost_lines`` describe the initiative
+    itself; ``by_year`` is ascending with the undated entry last.
+    """
+
+    descendant_count: int
+    capex_planned: float = 0
+    capex_actual: float = 0
+    opex_planned: float = 0
+    opex_actual: float = 0
+    total_planned: float = 0
+    total_actual: float = 0
+    start_date: str | None = None
+    end_date: str | None = None
+    has_budget_lines: bool = False
+    has_cost_lines: bool = False
+    by_year: list[PpmRollupYear] = []
+
+
 class PpmGanttItem(BaseModel):
     id: str
     name: str
@@ -305,9 +390,13 @@ class PpmGanttItem(BaseModel):
     opex_actual: float = 0
     group_id: str | None = None
     group_name: str | None = None
+    # Under a ``subtype:<key>`` grouping, True on the initiative that names its
+    # group (the board shows it as the group header, never as a row).
+    group_anchor: bool = False
     latest_report: PpmStatusReportOut | None = None
     latest_report_id: str | None = None
     stakeholders: list[PpmGanttStakeholder] = []
+    rollup: PpmRollup | None = None
 
 
 class PpmGroupOption(BaseModel):

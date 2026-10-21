@@ -79,6 +79,7 @@ import { useCardSubtypeLabel } from "@/hooks/useCardSubtypeLabel";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useLdvSettings, toCardLabels } from "./ldvDisplaySettings";
 import type { CardType } from "@/types";
+import { useCardTypeCategories } from "@/hooks/useCardTypeCategories";
 import { buildLdvDiagramXml } from "@/features/diagrams/drawio-shapes";
 import { collectDiagramInputs } from "./ldvDiagramExport";
 import LdvExportAggregatedDialog from "./LdvExportAggregatedDialog";
@@ -90,6 +91,7 @@ import {
   buildLdvAggregateFlow,
   orientEdgesToRelationTypes,
   stripEdgeLabels,
+  ldvLayers,
   LDV_NODE_W,
   LDV_NODE_H,
   type GNode,
@@ -1385,7 +1387,7 @@ function LayeredDependencyInner({
   managedDiagramId,
   layerOverrides,
 }: Props) {
-  const { t } = useTranslation(["reports", "common"]);
+  const { t, i18n } = useTranslation(["reports", "common"]);
   const theme = useTheme();
   const fieldLabel = useFieldLabel();
   const subtypeLabel = useCardSubtypeLabel();
@@ -1514,6 +1516,15 @@ function LayeredDependencyInner({
     [relTypeByKey, fieldLabel],
   );
 
+  // Lane order, names and colours come from the category registry, so a
+  // custom layer gets its own lane in its own colour and every lane reads in
+  // the reader's language.
+  const { categories } = useCardTypeCategories();
+  const layers = useMemo(
+    () => ldvLayers(categories, i18n.language, t("reports:dependency.uncategorizedLayer")),
+    [categories, i18n.language, t],
+  );
+
   const {
     nodes: builtNodes,
     edges: rfEdges,
@@ -1529,13 +1540,15 @@ function LayeredDependencyInner({
         centerId,
         resolver,
         (n) => t("dependency.aggregateMore", { count: n }),
+        layers,
       );
     }
     return {
-      ...buildLdvFlow(nodes, edges, types, resolver, layerOverrides),
+      ...buildLdvFlow(nodes, edges, types, resolver, layerOverrides, layers),
       memberOf: undefined,
     };
   }, [
+    layers,
     nodes,
     edges,
     types,

@@ -34,7 +34,7 @@ Un **contador de filtros activos** muestra cuántos filtros están aplicados act
 
 Haga clic derecho en cualquier celda de la cuadrícula (pulsación larga en dispositivos táctiles) para abrir un menú contextual con acciones rápidas sobre lo que hay bajo el cursor, al estilo de ServiceNow:
 
-- **Vista previa de la ficha** — abrir la ficha que nombra la celda en el panel lateral, sin salir de la cuadrícula
+- **Vista previa de la ficha** — abrir la ficha que nombra la celda en el panel lateral, sin salir de la cuadrícula; el panel deja la cuadrícula utilizable, de modo que puede seguir desplazándose, filtrando y haciendo clic en otras filas mientras está abierto, y cerrarlo con su botón de cierre
 - **Mostrar coincidencias** — conservar solo las filas cuyo valor coincide con el de la celda pulsada
 - **Excluir** — ocultar las filas cuyo valor coincide con el de la celda pulsada
 - **Copiar valor** — copiar el texto de la celda al portapapeles
@@ -138,6 +138,8 @@ La lista desplegable **Campo** agrupa lo que se puede modificar:
 
 Las etiquetas, las relaciones y el padre ofrecen un conmutador **añadir / quitar**, de modo que amplíe o reduzca los valores existentes en lugar de sustituirlos.
 
+Cuando elige **Añadir vínculo** para un tipo de relación con detalles — el sentido del flujo entre dos aplicaciones, cómo usa una organización una aplicación, los indicadores de crear / leer / actualizar / eliminar de un objeto de datos —, el diálogo muestra también esos campos. Lo que establezca se guarda en cada vínculo añadido. Las fichas ya vinculadas a un destino elegido también reciben los detalles, así que volver a usar **Añadir vínculo** es la manera de actualizar los detalles de los vínculos existentes; un detalle que deje vacío no se modifica.
+
 El control de valor se adapta al tipo de campo: un campo de selección múltiple muestra sus opciones con casillas, un campo de sí/no una lista Sí / No y un campo de fecha un selector de fecha. Si deja el valor vacío —**Ninguno** en un campo de sí/no—, el campo se borra en todas las tarjetas seleccionadas. Los campos calculados por una fórmula, y los campos de coste que no tiene permiso para ver, no se ofrecen.
 
 ### Reestructurar la jerarquía { #mass-edit-parent }
@@ -234,7 +236,7 @@ Como las fichas se identifican por nombre + ruta, **dos fichas del mismo tipo no
 
 ### Celdas de relación en línea
 
-Cada columna `rel:<tipo_de_relación>` expresa las relaciones salientes como una lista **separada por punto y coma** (por ejemplo `NexaCore ERP; BillingApp`). Punto y coma en lugar de coma, porque los nombres de las fichas suelen contener comas (`Acme, Inc.`). Dentro de un nombre, `/` y `\` se escapan como `\/` y `\\`, y un `;` como `\;` — el exportador lo hace automáticamente (p. ej. `SAP S/4HANA` → `SAP S\/4HANA`). Las celdas son **declarativas**: su contenido reemplaza el conjunto de relaciones salientes de ese tipo desde el origen. Eliminar un destino elimina la relación correspondiente; vaciar la celda elimina todas. En un libro exportado por Turbo EA (lleva una hoja `_Meta`), una coma nunca es un separador, de modo que una celda con un único destino como `This is X, it does Y` sigue siendo un destino. Una hoja sin `_Meta` (creada a mano o exportada antes de la 1.23) aún puede separar los destinos con comas: si la celda no contiene ningún `;`, se lee como un único destino cuando la celda entera nombra una ficha y, en caso contrario, como separada por comas. Hay una columna por tipo de relación que parte del tipo de ficha de la hoja — **todos**, incluidos los que llevan valores. Los destinos se ordenan alfabéticamente, de modo que reexportar un paisaje sin cambios da un archivo idéntico.
+Cada columna `rel:<tipo_de_relación>` expresa las relaciones salientes como una lista **separada por punto y coma** (por ejemplo `NexaCore ERP; BillingApp`). Punto y coma en lugar de coma, porque los nombres de las fichas suelen contener comas (`Acme, Inc.`). Dentro de un nombre, `/` y `\` se escapan como `\/` y `\\`, y un `;` como `\;` — el exportador lo hace automáticamente (p. ej. `SAP S/4HANA` → `SAP S\/4HANA`). Una referencia escapada siempre es exacta. En una celda escrita a mano, la `/` puede quedar sin escapar: `SAP S/4HANA` se lee primero como una ruta (una ficha *4HANA* bajo *SAP S*) y, si no hay ninguna ficha en esa ruta, como un único nombre, que se resuelve cuando exactamente una ficha del tipo lo lleva. Las celdas son **declarativas**: su contenido reemplaza el conjunto de relaciones salientes de ese tipo desde el origen. Eliminar un destino elimina la relación correspondiente; vaciar la celda elimina todas. En un libro exportado por Turbo EA (lleva una hoja `_Meta`), una coma nunca es un separador, de modo que una celda con un único destino como `This is X, it does Y` sigue siendo un destino. Una hoja sin `_Meta` (creada a mano o exportada antes de la 1.23) aún puede separar los destinos con comas: si la celda no contiene ningún `;`, se lee como un único destino cuando la celda entera nombra una ficha y, en caso contrario, como separada por comas. Hay una columna por tipo de relación que parte del tipo de ficha de la hoja — **todos**, incluidos los que llevan valores. Los destinos se ordenan alfabéticamente, de modo que reexportar un paisaje sin cambios da un archivo idéntico.
 
 La columna `tags` sigue la misma regla: entradas `Grupo: Etiqueta` separadas por `; ` (p. ej. `Vendor: Acme, Inc.; Region: EU`), con un `;` dentro del nombre de una etiqueta escrito como `\;`. Los libros exportados antes de la 2.156.1 separaban las etiquetas con comas y se siguen importando como antes.
 
@@ -269,7 +271,7 @@ Haga clic en **Importar** en la barra de herramientas, suelte el libro y revise 
 Algunas aclaraciones sobre la importación:
 
 - **Solo `name` y `type` son obligatorios para crear una ficha.** Los campos marcados como *obligatorios* en el metamodelo (incluido Provider o cualquier otro tipo) no bloquean la importación: la ficha se crea igualmente y las carencias se reflejan en su puntuación de calidad de datos en lugar de provocar un salto silencioso.
-- **Una `/` en la columna `name` de una ficha no necesita escaparse.** El escape (`\/` para una barra, `\\` para una barra invertida) solo es necesario cuando *referencia* esa ficha desde una celda `parent_path`, `rel:<clave>`, `source_ref` o `target_ref`, donde `/` es el separador de ruta.
+- **Una `/` en la columna `name` de una ficha no necesita escaparse.** El escape (`\/` para una barra, `\\` para una barra invertida) solo es necesario cuando *referencia* esa ficha desde una celda `parent_path`, `rel:<clave>`, `source_ref` o `target_ref`, donde `/` es el separador de ruta; e incluso allí una `/` sin escapar se lee como parte del nombre cuando no hay ninguna ficha en la ruta que forma.
 
 ### Exportar
 

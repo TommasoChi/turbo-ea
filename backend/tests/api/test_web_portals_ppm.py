@@ -259,10 +259,22 @@ class TestPublicPortfolioPayload:
         await _set_toggles(
             client, ppm_portal_env["admin"], ppm_portal_env["portal_id"], show_people=True
         )
+        # A child row, so `parent_id` carries a value rather than passing as null.
+        await create_card(
+            db,
+            card_type="Initiative",
+            name="ERP Phase 1",
+            subtype="Project",
+            parent_id=ppm_portal_env["initiative"].id,
+        )
         body = (await client.get(PUBLIC)).json()
 
         item_ids = [i.pop("id") for i in body["items"]]
-        assert item_ids == [str(ppm_portal_env["initiative"].id)]
+        assert str(ppm_portal_env["initiative"].id) in item_ids
+        # A parent may only ever repeat the id of another row on this board.
+        parents = [i.pop("parent_id") for i in body["items"]]
+        assert [p for p in parents if p is not None] == [str(ppm_portal_env["initiative"].id)]
+        assert set(parents) - {None} <= set(item_ids)
         assert not UUID_RE.search(json.dumps(body)), "a non-initiative identifier leaked"
 
     async def test_group_id_is_an_opaque_token(self, client, db, ppm_portal_env):
@@ -295,6 +307,83 @@ class TestPublicPortfolioPayload:
         assert item["group_name"] == "Finance"
         assert item["group_id"] == "g0"
         assert str(org.id) not in json.dumps(body)
+
+
+class TestPublicPortfolioSubtypeGroup:
+    """``group_by=subtype:<key>`` on the public board: one anchor per opaque token."""
+
+    @staticmethod
+    async def _programs(db, under):
+        program = await create_card(
+            db, card_type="Initiative", name="Transformation", subtype="Program"
+        )
+        await create_card(
+            db, card_type="Initiative", name="Phase 1", subtype="Project", parent_id=program.id
+        )
+        await create_card(
+            db, card_type="Initiative", name="Phase 2", subtype="Project", parent_id=program.id
+        )
+        other = await create_card(db, card_type="Initiative", name="Upgrade", subtype="Program")
+        await create_card(
+            db, card_type="Initiative", name="Patch", subtype="Epic", parent_id=other.id
+        )
+        # A child of the fixture's standalone project: it has no program above.
+        await create_card(
+            db, card_type="Initiative", name="Loose", subtype="Epic", parent_id=under.id
+        )
+        return program, other
+
+    async def test_one_anchor_per_token_shared_by_its_rows(self, client, db, ppm_portal_env):
+        program, other = await self._programs(db, ppm_portal_env["initiative"])
+        resp = await client.get(PUBLIC, params={"group_by": "subtype:Program"})
+        assert resp.status_code == 200
+        items = {i["name"]: i for i in resp.json()["items"]}
+
+        anchors = {i["group_id"]: n for n, i in items.items() if i["group_anchor"]}
+        assert sorted(anchors.values()) == ["Transformation", "Upgrade"]
+        assert all(re.fullmatch(r"g\d+", token) for token in anchors)
+        by_anchor = {n: items[n]["group_id"] for n in ("Transformation", "Upgrade")}
+        for name in ("Phase 1", "Phase 2"):
+            assert items[name]["group_id"] == by_anchor["Transformation"]
+            assert items[name]["group_name"] == "Transformation"
+            assert items[name]["group_anchor"] is False
+        assert items["Patch"]["group_id"] == by_anchor["Upgrade"]
+        for name in ("ERP Replacement", "Loose"):
+            assert items[name]["group_id"] is None
+            assert items[name]["group_anchor"] is False
+        assert str(program.id) in {i["id"] for i in items.values()}
+        assert resp.text.count(str(other.id)) == 2  # its own id and its child's parent_id
+
+    async def test_no_identifiers_beyond_the_initiative_id(self, client, db, ppm_portal_env):
+        await self._programs(db, ppm_portal_env["initiative"])
+        body = (await client.get(PUBLIC, params={"group_by": "subtype:Program"})).json()
+        item_ids = [i.pop("id") for i in body["items"]]
+        parents = [i.pop("parent_id") for i in body["items"]]
+        assert set(parents) - {None} <= set(item_ids)
+        assert not UUID_RE.search(json.dumps(body)), "a non-initiative identifier leaked"
+
+    async def test_a_portal_that_filters_programs_out_is_all_ungrouped(
+        self, client, db, ppm_portal_env
+    ):
+        await self._programs(db, ppm_portal_env["initiative"])
+        resp = await client.patch(
+            f"/api/v1/web-portals/{ppm_portal_env['portal_id']}",
+            json={"filters": {"subtypes": ["Project", "Epic"]}},
+            headers=auth_headers(ppm_portal_env["admin"]),
+        )
+        assert resp.status_code == 200
+
+        resp = await client.get(PUBLIC, params={"group_by": "subtype:Program"})
+        items = resp.json()["items"]
+        assert {i["name"] for i in items} == {
+            "ERP Replacement",
+            "Phase 1",
+            "Phase 2",
+            "Patch",
+            "Loose",
+        }
+        assert all(i["group_id"] is None and not i["group_anchor"] for i in items)
+        assert "Transformation" not in resp.text
 
 
 class TestPublicPortfolioCosts:
@@ -370,6 +459,35 @@ class TestPublicPortfolioScope:
         assert [i["name"] for i in body["items"]] == ["Cloud Migration"]
         assert body["dashboard"]["total_initiatives"] == 1
 
+    async def test_parent_on_the_board_is_published(self, client, db, ppm_portal_env):
+        parent = ppm_portal_env["initiative"]
+        await create_card(
+            db, card_type="Initiative", name="ERP Phase 1", subtype="Project", parent_id=parent.id
+        )
+        items = {i["name"]: i for i in (await client.get(PUBLIC)).json()["items"]}
+        assert items["ERP Phase 1"]["parent_id"] == str(parent.id)
+        assert items["ERP Replacement"]["parent_id"] is None
+
+    async def test_parent_outside_the_portal_filter_is_null(self, client, db, ppm_portal_env):
+        program = await create_card(
+            db, card_type="Initiative", name="Transformation", subtype="Program"
+        )
+        await create_card(
+            db, card_type="Initiative", name="ERP Phase 1", subtype="Project", parent_id=program.id
+        )
+        resp = await client.patch(
+            f"/api/v1/web-portals/{ppm_portal_env['portal_id']}",
+            json={"filters": {"subtypes": ["Project"]}},
+            headers=auth_headers(ppm_portal_env["admin"]),
+        )
+        assert resp.status_code == 200
+
+        resp = await client.get(PUBLIC)
+        items = {i["name"]: i for i in resp.json()["items"]}
+        assert set(items) == {"ERP Replacement", "ERP Phase 1"}
+        assert items["ERP Phase 1"]["parent_id"] is None
+        assert str(program.id) not in resp.text
+
     async def test_malformed_tag_filter_does_not_500(self, client, db, ppm_portal_env):
         resp = await client.patch(
             f"/api/v1/web-portals/{ppm_portal_env['portal_id']}",
@@ -385,6 +503,82 @@ class TestPublicPortfolioScope:
         )
         body = (await client.get(PUBLIC)).json()
         assert [i["name"] for i in body["items"]] == ["ERP Replacement"]
+
+
+class TestPublicPortfolioRollup:
+    """A parent without lines or dates of its own publishes what is beneath it."""
+
+    @staticmethod
+    async def _program(db):
+        program = await create_card(
+            db, card_type="Initiative", name="Transformation", subtype="Program"
+        )
+        phase = await create_card(
+            db,
+            card_type="Initiative",
+            name="ERP Phase 1",
+            subtype="Project",
+            parent_id=program.id,
+            attributes={"startDate": "2026-02-01", "endDate": "2026-08-31"},
+        )
+        pilot = await create_card(
+            db,
+            card_type="Initiative",
+            name="Pilot",
+            subtype="Epic",
+            parent_id=program.id,
+            attributes={"startDate": "2025-06-01", "endDate": "2027-03-31"},
+        )
+        await _add_budget_and_cost(db, phase, planned=400.0, actual=100.0)
+        await _add_budget_and_cost(db, pilot, planned=30.0, actual=3.0)
+        return program
+
+    async def test_costs_and_dates_published_with_costs_on(self, client, db, ppm_portal_env):
+        await self._program(db)
+        items = {i["name"]: i for i in (await client.get(PUBLIC)).json()["items"]}
+        assert items["Transformation"]["rollup"] == {
+            "descendant_count": 2,
+            "capex_planned": 430.0,
+            "capex_actual": 103.0,
+            "opex_planned": 0.0,
+            "opex_actual": 0.0,
+            "start_date": "2025-06-01",
+            "end_date": "2027-03-31",
+        }
+        assert items["Transformation"]["capex_planned"] == 0
+        assert items["ERP Phase 1"]["rollup"] is None
+
+    async def test_costs_withheld_dates_kept_with_costs_off(self, client, db, ppm_portal_env):
+        await self._program(db)
+        await _set_toggles(
+            client, ppm_portal_env["admin"], ppm_portal_env["portal_id"], show_costs=False
+        )
+        items = {i["name"]: i for i in (await client.get(PUBLIC)).json()["items"]}
+        assert items["Transformation"]["rollup"] == {
+            "descendant_count": 2,
+            "capex_planned": None,
+            "capex_actual": None,
+            "opex_planned": None,
+            "opex_actual": None,
+            "start_date": "2025-06-01",
+            "end_date": "2027-03-31",
+        }
+
+    async def test_child_outside_the_portal_filter_adds_nothing(self, client, db, ppm_portal_env):
+        await self._program(db)
+        resp = await client.patch(
+            f"/api/v1/web-portals/{ppm_portal_env['portal_id']}",
+            json={"filters": {"subtypes": ["Program", "Project"]}},
+            headers=auth_headers(ppm_portal_env["admin"]),
+        )
+        assert resp.status_code == 200
+        items = {i["name"]: i for i in (await client.get(PUBLIC)).json()["items"]}
+        assert "Pilot" not in items
+        rollup = items["Transformation"]["rollup"]
+        assert rollup["descendant_count"] == 1
+        assert rollup["capex_planned"] == 400.0
+        assert rollup["capex_actual"] == 100.0
+        assert (rollup["start_date"], rollup["end_date"]) == ("2026-02-01", "2026-08-31")
 
 
 class TestPublicPortfolioGuards:
@@ -448,8 +642,6 @@ class TestQueryCount:
         Both used to run inside the item loop, which put an unauthenticated
         endpoint one page-load away from N queries per initiative.
         """
-        from sqlalchemy import event
-
         pm = await create_user(db, email="pm2@company.com", role="admin", display_name="PM Two")
         for n in range(20):
             card = await create_card(
@@ -458,21 +650,59 @@ class TestQueryCount:
             await _add_stakeholder(db, card, pm)
             await _add_report(db, card, pm)
 
-        counter = {"n": 0}
-
-        def _count(conn, cursor, statement, params, context, executemany):
-            counter["n"] += 1
-
-        event.listen(test_engine.sync_engine, "before_cursor_execute", _count)
-        try:
-            resp = await client.get(PUBLIC)
-        finally:
-            event.remove(test_engine.sync_engine, "before_cursor_execute", _count)
-
+        resp, count = await _counted_get(client, test_engine, PUBLIC)
         assert resp.status_code == 200
         assert len(resp.json()["items"]) == 21
         # Comfortably above the handful the builder issues, far below 21×2.
-        assert counter["n"] < 25, f"query count {counter['n']} scales with initiatives"
+        assert count < 25, f"query count {count} scales with initiatives"
+
+    async def test_subtype_grouping_adds_no_query(self, client, db, ppm_portal_env, test_engine):
+        """Grouping by a subtype is decided over the rows already loaded."""
+        pm = await create_user(db, email="pm2@company.com", role="admin", display_name="PM Two")
+        programs = []
+        for n in range(5):
+            programs.append(
+                await create_card(
+                    db, card_type="Initiative", name=f"Program {n}", subtype="Program"
+                )
+            )
+        for n in range(20):
+            card = await create_card(
+                db,
+                card_type="Initiative",
+                name=f"Initiative {n}",
+                subtype="Project",
+                parent_id=programs[n % 5].id,
+            )
+            await _add_stakeholder(db, card, pm)
+            await _add_report(db, card, pm)
+
+        plain, plain_count = await _counted_get(client, test_engine, PUBLIC)
+        grouped, grouped_count = await _counted_get(
+            client, test_engine, f"{PUBLIC}?group_by=subtype:Program"
+        )
+        assert plain.status_code == grouped.status_code == 200
+        assert len(grouped.json()["items"]) == 26
+        assert sum(1 for i in grouped.json()["items"] if i["group_anchor"]) == 5
+        assert grouped_count == plain_count
+        assert grouped_count < 25, f"query count {grouped_count} scales with initiatives"
+
+
+async def _counted_get(client, test_engine, url):
+    """GET ``url`` and count the SQL statements it issued."""
+    from sqlalchemy import event
+
+    counter = {"n": 0}
+
+    def _count(conn, cursor, statement, params, context, executemany):
+        counter["n"] += 1
+
+    event.listen(test_engine.sync_engine, "before_cursor_execute", _count)
+    try:
+        resp = await client.get(url)
+    finally:
+        event.remove(test_engine.sync_engine, "before_cursor_execute", _count)
+    return resp, counter["n"]
 
 
 class TestCardPortalUnaffected:

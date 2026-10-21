@@ -19,7 +19,12 @@ vi.mock("@/hooks/useMetamodel", () => ({
 // — the relation-type assertions below are its behaviour now, and running them
 // through the real panel is what proves the page still wires it up.
 vi.mock("./metamodel", () => ({
-  TypeDetailDrawer: () => <div data-testid="type-detail-drawer" />,
+  TypeDetailDrawer: ({ open, onDeleted }: { open: boolean; onDeleted?: () => void }) =>
+    open ? (
+      <div data-testid="type-detail-drawer">
+        <button onClick={onDeleted}>stub-type-deleted</button>
+      </div>
+    ) : null,
   MetamodelGraph: () => <div data-testid="metamodel-graph" />,
 }));
 
@@ -42,9 +47,51 @@ vi.mock("./metamodel/ArchitectureStudioTab", () => ({
 }));
 
 vi.mock("./metamodel/constants", () => ({
-  CATEGORIES: ["Application & Data", "Business Architecture", "Strategy & Transformation", "Technical Architecture"],
   CARDINALITY_OPTIONS: ["1:1", "1:n", "n:m"],
 }));
+
+// The category registry, as the singleton hook serves it. The page reads it
+// for the type cards' captions, the create dialog's default and combobox, and
+// the Manage categories dialog.
+vi.mock("@/hooks/useCardTypeCategories", () => {
+  const categories = [
+    {
+      id: "c1",
+      key: "Strategy & Transformation",
+      label: "Strategy & Transformation",
+      color: "#33cc58",
+      sort_order: 0,
+      built_in: true,
+      translations: {},
+    },
+    {
+      id: "c2",
+      key: "Application & Data",
+      label: "Application & Data",
+      color: "#0f7eb5",
+      sort_order: 1,
+      built_in: true,
+      translations: {},
+    },
+    {
+      id: "c3",
+      key: "Security",
+      label: "Security Layer",
+      color: "#ff0000",
+      sort_order: 2,
+      built_in: false,
+      translations: {},
+    },
+  ];
+  return {
+    useCardTypeCategories: () => ({
+      categories,
+      loaded: true,
+      refresh: () => Promise.resolve(),
+    }),
+    invalidateCardTypeCategories: vi.fn(),
+  };
+});
 
 vi.mock("@/features/admin/CalculationsAdmin", () => ({
   default: () => <div data-testid="calculations-admin" />,
@@ -229,6 +276,70 @@ describe("MetamodelAdmin", () => {
     });
   });
 
+  it("names each type's category through the registry", async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.includes("/metamodel/types"))
+        return Promise.resolve([
+          { ...MOCK_TYPES[0], category: "Security" },
+          { ...MOCK_TYPES[1], category: null },
+        ]);
+      if (path.includes("/metamodel/relation-types")) return Promise.resolve([]);
+      return Promise.resolve({});
+    });
+    renderMetamodel();
+    // A renamed custom category shows its label, not the stored key.
+    expect(await screen.findByText("Security Layer")).toBeInTheDocument();
+    expect(screen.getByText("Uncategorized")).toBeInTheDocument();
+  });
+
+  it("starts a new type in Application & Data, not the first layer, and posts it", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.post).mockResolvedValueOnce({});
+    renderMetamodel();
+    await user.click(screen.getByRole("button", { name: /new type/i }));
+    const combo = await screen.findByRole("combobox", { name: "Category" });
+    // "Strategy & Transformation" sorts first; the default is still the
+    // pre-registry one.
+    expect(combo).toHaveValue("Application & Data");
+
+    await user.click(combo);
+    await user.click(await screen.findByRole("option", { name: "Security Layer" }));
+    await user.type(screen.getByTestId("key-input"), "widget");
+    await user.type(screen.getByRole("textbox", { name: "Name" }), "Widget");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.post).mock.calls[0]).toEqual([
+      "/metamodel/types",
+      expect.objectContaining({ key: "widget", label: "Widget", category: "Security" }),
+    ]);
+  });
+
+  it("keeps the create dialog open with a translated error on an unknown category", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await vi.importActual<typeof import("@/api/client")>("@/api/client");
+    vi.mocked(api.post).mockRejectedValueOnce(
+      new ApiError("Unknown category", 400, { error: "unknown_category", category: "Gone" }),
+    );
+    renderMetamodel();
+    await user.click(screen.getByRole("button", { name: /new type/i }));
+    await user.type(screen.getByTestId("key-input"), "widget");
+    await user.type(screen.getByRole("textbox", { name: "Name" }), "Widget");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(
+      await screen.findByText(/The category “Gone” does not exist/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Create Card Type")).toBeInTheDocument();
+  });
+
+  it("opens the Manage categories dialog from the Card Types tab", async () => {
+    const user = userEvent.setup();
+    renderMetamodel();
+    await user.click(screen.getByRole("button", { name: /manage categories/i }));
+    expect(await screen.findByText("Categories (architecture layers)")).toBeInTheDocument();
+    expect(screen.getByTestId("category-row-Security")).toBeInTheDocument();
+  });
+
   it("shows Show hidden types toggle", async () => {
     renderMetamodel();
     expect(screen.getByText("Show hidden types")).toBeInTheDocument();
@@ -305,6 +416,23 @@ describe("MetamodelAdmin", () => {
     await waitFor(() => {
       expect(screen.getByTestId("metamodel-graph")).toBeInTheDocument();
     });
+  });
+
+  it("closes the type drawer and reloads the metamodel once a type was deleted", async () => {
+    renderMetamodel();
+    await waitFor(() => expect(screen.getByText("Application")).toBeInTheDocument());
+    expect(screen.queryByTestId("type-detail-drawer")).not.toBeInTheDocument();
+    const callsBefore = vi.mocked(api.get).mock.calls.length;
+
+    fireEvent.click(screen.getByText("Application"));
+    expect(screen.getByTestId("type-detail-drawer")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("stub-type-deleted"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("type-detail-drawer")).not.toBeInTheDocument();
+      expect(vi.mocked(api.get).mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+    expect(api.get).toHaveBeenLastCalledWith(expect.stringContaining("/metamodel/relation-types"));
   });
 
   it("fetches types and relation types on mount", async () => {

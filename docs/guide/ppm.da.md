@@ -21,18 +21,45 @@
 Brug værktøjslinjen til at:
 
 - **Gruppere efter** en hvilken som helst relateret korttype (f.eks. Organization, Platform) for at se initiativer grupperet efter forretningsenhed eller teknologiplatform
+- **Gruppere efter** en undertype af Initiativ (f.eks. Program), vist i en anden sektion af samme menu, for at se hvert program med alle initiativer under det (se nedenfor)
 - **Filtrere efter undertype** (Idea, Program, Project, Epic)
 - **Søge** efter initiativnavn
+- **Vise hierarki** for at indlejre initiativerne i hver gruppe under deres overordnede initiativ (se nedenfor)
+- **Undergruppere efter undertype** for at opdele hver gruppe efter undertype (se nedenfor)
 
-Disse filtre vedvarer i URL'en, så opdatering af siden bibeholder din nuværende visning.
+Disse filtre vedvarer i URL'en, så opdatering af siden bibeholder din nuværende visning. Hierarkiet, dets visningsdybde og undergrupperingen gemmes også i URL'en.
+
+#### Vis initiativhierarkiet
+
+Når nogle initiativer i porteføljen har et overordnet initiativ, der også er i porteføljen, tilbyder værktøjslinjen **Vis hierarki**. Når det er slået til, viser hver gruppe sine initiativer som et træ: et underordnet initiativ står indrykket under sit overordnede, pilen foran et overordnet initiativs navn folder dets undertræ sammen eller ud, og hver række viser sin undertype, så hvert niveaus rolle (for eksempel Program → Project → Epic) forbliver synlig. **Visningsdybde** begrænser træet til de første niveauer (*Niveau 1*, *Niveau 2*, … eller *Alle niveauer*).
+
+Grupperingen kommer stadig først: hierarkiet indlejres **inden for hver gruppe**, så et initiativ, hvis overordnede hører til en anden gruppe, vises som en række på øverste niveau i sin egen gruppe. Filtrene anvendes først, og træet viser det, der er tilbage: når søgningen eller undertypefilteret udelader et overordnet initiativ, rykker dets underordnede op på øverste niveau i stedet for, at det overordnede bevares som kontekst.
+
+![PPM-portefølje med hierarkiet vist](../assets/img/da/101_ppm_portfolio_hierarchy.png)
+
+#### Undergruppér efter undertype
+
+**Undergruppér efter undertype** deler hver gruppe op i én undergruppe pr. undertype i den rækkefølge, undertyperne er defineret på Initiative-typen, med initiativer uden undertype til sidst. Hver undergruppe har sin egen overskrift, kan foldes sammen for sig og har sin egen totallinje; gruppens totaler dækker stadig alle dens initiativer. Kontakten er ikke tilgængelig, mens hierarkiet vises, fordi træet allerede spænder over undertyperne.
+
+#### Gruppér efter en undertype af Initiativ
+
+Menuen **Gruppér efter** har to sektioner: **Relaterede korttyper** og **Initiativ-undertyper**, de undertyper der er defineret på typen Initiativ. Vælger du en undertype — f.eks. **Program** — viser tavlen én gruppe pr. program-initiativ. Programmet navngiver sin gruppe og er **kun dens overskrift, aldrig en række**; gruppen rummer **alle initiativer under det, i enhver dybde** og uanset undertype, så et program under et andet program er en række i det øverste programs gruppe.
+
+Gruppens bundlinje træder i stedet for totalrækken: Den bærer undertypens navn og viser programmets **egne** budget, realiserede tal og datoer eller — hvor det ingen egne har — tallene **afledt** af initiativerne under det, tegnet med kontur, stiplet og i kursiv som beskrevet under *Summér tal op til overordnede initiativer*. Initiativer uden noget program over sig vises under **Ugrupperet**. Et mellemliggende initiativ, som du ikke kan se, som er arkiveret, eller som en portal ikke udgiver, **bryder kæden**: Det, der ligger under det, grupperes ikke længere under programmet ovenover. **Vis hierarki** vises kun, når noget er indlejret under et programs direkte børn, og undertypefilteret tilbyder ikke den grupperende undertype, fordi dens initiativer er overskrifter og ikke rækker.
+
+#### Summér tal op til overordnede initiativer
+
+Hvert initiativ viser sine egne tal, når det har nogen: et overordnet initiativs CapEx- og OpEx-bjælker dækker de budget- og omkostningslinjer, der er registreret på det selv, og dets Gantt-bjælke dets egne start- og slutdatoer. Et overordnet initiativ **uden egne budgetlinjer** viser i stedet budgettet for initiativerne under det, og et **uden egne omkostningslinjer** deres realiserede tal; i begge tilfælde tegnes bjælken **omridset** med kursive tal, og dens værktøjstip angiver, hvilken halvdel der kommer nedefra. Et initiativ **uden hverken start- eller slutdato** spænder fra den tidligste start til den seneste slutning under det, tegnet som en **stiplet** bjælke med kursive kvartaler. Et værktøjstip fortæller i begge tilfælde, hvor mange initiativer det dækker. De tre regler er uafhængige af hinanden — et program, der har budgettet, mens dets projekter registrerer forbruget, viser sit eget budget over for deres realiserede tal, og et program kan have egne datoer og alligevel vise sine projekters omkostninger — og én budgetlinje, én omkostningslinje eller én dato på det overordnede initiativ er nok til at skifte den del tilbage til dets egne tal. Kun de initiativer, du kan se, tæller med, og på en portal kun dem, portalen udgiver. Gruppetotalerne og KPI-linjen lægger fortsat kun registrerede linjer sammen, så hvert tal tælles én gang.
+
+De afledte tal findes kun på PPM-tavlen og på initiativets egne faner **Oversigt** og **Budget og omkostninger**. Hvis du vil have en sammenlagt total med i inventaret, rapporter eller en portal, skal du definere et beregnet felt, der lægger hvert niveaus eget budget til de underordnedes totaler — se [Summér PPM-tal op gennem initiativhierarkiet](../admin/calculations.md#rolling-ppm-figures-up-the-initiative-hierarchy). En PPM-ændring på et underordnet initiativ kører beregningerne igen for alle initiativer over det, så det overordnedes total flytter sig med det samme.
 
 ### Udskrivning og eksport
 
 Porteføljen tilbyder de samme handlinger i titellinjen som rapporterne:
 
-- **Udskriv / Gem som PDF** — printerikonet udskriver porteføljen, som den ser ud på skærmen. Fanebjælken, filterværktøjslinjen og pop op-vinduer ved museover udelades, den aktive gruppering, undertype og søgning udskrives som en kompakt parameterlinje, og tidslinjegitteret beskæres ikke længere, så alle kolonner er med på siden.
+- **Udskriv / Gem som PDF** — printerikonet udskriver porteføljen, som den ser ud på skærmen. Fanebjælken, filterværktøjslinjen og pop op-vinduer ved museover udelades, den aktive gruppering, undertype og søgning udskrives som en kompakt parameterlinje, og tidslinjegitteret beskæres ikke længere, så alle kolonner er med på siden. Når hierarkiet eller undergrupperingen er slået til, nævner parameterlinjen også det, med visningsdybden.
 - **Eksportér til PowerPoint (.pptx)** — fra **⋮**-menuen. Det første dias indeholder titlen, tidsstemplet for genereringen og de aktive filtre sammen med porteføljen i præsentationskvalitet; lange porteføljer fortsætter på flere dias og opdeles kun mellem initiativer — aldrig midt i en række, en gruppeoverskrift eller en totallinje.
-- **Eksportér til Excel (.xlsx)** — også fra **⋮**-menuen. Én række pr. initiativ med gruppe, undertype, projektleder, start- og slutdato, de tre sundhedsvurderinger, planlagt og faktisk CapEx/OpEx samt datoen for den seneste statusrapport.
+- **Eksportér til Excel (.xlsx)** — også fra **⋮**-menuen. Én række pr. initiativ med gruppe, undertype, projektleder, start- og slutdato, de tre sundhedsvurderinger, planlagt og faktisk CapEx/OpEx samt datoen for den seneste statusrapport. Rækkerne følger rækkefølgen på skærmen; mens hierarkiet vises, angiver en kolonne **Overordnet** hvert initiativs overordnede initiativ. Tre kolonner, **Budget fra**, **Omkostninger fra** og **Datoer fra**, angiver, om en rækkes budget, realiserede tal og datoer er dens egne eller summen af initiativerne under den. Når tavlen er grupperet efter en undertype af Initiativ, er det grupperende initiativ **den første række i sin gruppe**, med de tal dets bundlinje viser.
 
 ## Initiativ-detaljevisning
 
@@ -46,6 +73,8 @@ Overblikket viser et resumé af initiativets sundhed og økonomi:
 
 - **Sundhedsresumé** — Tidsplan-, omkostnings- og scope-indikatorer fra den seneste statusrapport
 - **Budget vs. faktisk** — Kombineret KPI-kort, der viser samlet budget og faktisk forbrug med varians
+- **Tal nedefra** — Når initiativet ikke har egne budgetlinjer, viser dets samlede budget, dets budgetbjælker og variansen i stedet budgettet for initiativerne under det: i kursiv, markeret med en ↳-pil, med budgetsporet omridset og et værktøjstip, der fortæller, hvor mange initiativer de dækker. Når det ikke har egne omkostningslinjer, kommer dets realiserede tal nedefra på samme måde, med forbrugsbjælkerne omridset. De to sider afgøres hver for sig, og den første egne linje skifter den side tilbage til initiativets egne tal.
+- **Under dette initiativ** — Når initiativet har initiativer under sig, viser en linje under budgetbjælkerne, hvor mange der er, deres samlede budget og faktiske forbrug samt det tidsrum, deres datoer spænder over. Den vises ved siden af initiativets egne tal og lægges aldrig til dem. Når både budgettet og de realiserede tal allerede kommer nedefra, beholder linjen kun antallet og tidsrummet.
 - **Seneste aktivitet** — Resumé af seneste statusrapport
 
 ### Statusrapporter-fane
@@ -70,8 +99,12 @@ Månedlige statusrapporter sporer projektsundhed over tid. Hver rapport indehold
 
 Spor finansielle data med to typer af linjeposter:
 
-- **Budgetlinjer** — Planlagt budget pr. regnskabsår og kategori (CapEx / OpEx). Budgetlinjer grupperes efter den **startmåned for regnskabsåret**, der er konfigureret i [Indstillinger](../admin/settings.md#fiscal-year-start). For eksempel, hvis regnskabsåret begynder i april, tilhører en budgetlinje dateret juni 2026 FY 2026–2027
+- **Budgetlinjer** — Planlagt budget pr. regnskabsår og kategori (CapEx / OpEx) med en valgfri beskrivelse. Et regnskabsår og en kategori kan have så mange linjer, som du har brug for — én pr. licens, implementeringspartner eller hardwareparti — og beskrivelsen skelner dem fra hinanden; totalerne lægger dem alle sammen. Budgetlinjer grupperes efter den **startmåned for regnskabsåret**, der er konfigureret i [Indstillinger](../admin/settings.md#fiscal-year-start). For eksempel, hvis regnskabsåret begynder i april, tilhører en budgetlinje dateret juni 2026 FY 2026–2027
 - **Omkostningslinjer** — Faktiske udgifter med dato, beskrivelse og kategori
+
+Begge tabeller er grupperet efter regnskabsår. Hvert år har en overskriftsrække med årets subtotaler for CapEx, OpEx og i alt samt antallet af linjer; pilen i overskriften viser eller skjuler årets linjer. Når fanen åbnes, er kun det aktuelle regnskabsår foldet ud (eller det seneste år med linjer, hvis det aktuelle ikke har nogen). Beløbene står i separate kolonner **CapEx** og **OpEx**, og en række **I alt, alle regnskabsår** under hver tabel lægger alle år sammen. Vælg **+** i overskriften for et budgetår for at tilføje en budgetlinje med det regnskabsår allerede udfyldt. Omkostningslinjer grupperes efter det regnskabsår, deres dato falder i, og sorteres efter dato inden for året; omkostningslinjer uden dato samles til sidst i gruppen **Uden dato** og tæller med i omkostningstotalerne som alle andre linjer.
+
+Når initiativet **ikke har egne budgetlinjer**, viser budgettabellen budgettet for initiativerne under det i stedet for sin tomme tilstand: en billedtekst angiver, hvor mange initiativer det kommer fra, én skrivebeskyttet række pr. regnskabsår viser CapEx, OpEx og total i kursiv, og rækken **I alt, alle regnskabsår** lægger dem sammen. Omkostningstabellen gør det samme med deres realiserede tal, når initiativet **ikke har egne omkostningslinjer**, med en række **Uden dato** for deres omkostningslinjer uden dato. Opsummeringslinjen markerer disse tal i kursiv med et værktøjstip. Hver tabel afgør det selv, intet gemmes eller lægges til initiativets egne tal, og kun de initiativer, du kan se, tæller med. Den første egne linje via **Tilføj budgetlinje** eller **Tilføj omkostningspost** skifter tabellen tilbage til initiativets egne linjer; forbrugsdiagrammerne viser altid initiativets egne linjer.
 
 Budget- og omkostnings­totaler rulles automatisk op til Initiative-kortets egenskaber `costBudget` og `costActual`. Når PPM-omkostningslinjer findes, markeres disse kort-felter som auto-beregnet og bliver skrivebeskyttede i kortdetaljevisningen.
 

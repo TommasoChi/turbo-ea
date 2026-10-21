@@ -16,7 +16,17 @@ Der Kartentypen-Tab listet alle Typen im System auf. Turbo EA wird mit 14 integr
 | **Geschäftsarchitektur** | Organisation, Geschäftsfähigkeit, Geschäftskontext, Geschäftsprozess |
 | **Anwendung & Daten** | Anwendung, Schnittstelle, Datenobjekt |
 | **Technische Architektur** | IT-Komponente, Technologiekategorie, Anbieter, System |
-| **Eigene Logos zulassen** | Ob Bearbeiter pro Karte ein Logo hochladen dürfen, das anstelle des Typ-Symbols angezeigt wird (standardmäßig aktiv für Anwendung und IT-Komponente) |
+
+### Kategorien (Architekturebenen)
+
+Jeder Kartentyp gehört zu einer **Kategorie** — der Architekturebene, unter der er gruppiert wird. Die Reihenfolge der Kategorien ist die Reihenfolge der Ebenen überall dort, wo sie dargestellt werden: im Typfilter des Inventars, im **Metamodell-Graphen** und in den Bahnen der Layered Dependency View, jeweils in der Farbe der Kategorie und in der Sprache des Lesers.
+
+- **Die vier vordefinierten Ebenen sind gesperrt.** Strategie & Transformation, Geschäftsarchitektur, Anwendung & Daten und Technische Architektur können weder umbenannt, umgefärbt noch gelöscht werden und sind in jede unterstützte Sprache übersetzt.
+- **Eigene erstellen.** Geben Sie im Feld **Kategorie** des Typ-Editors oder von **+ Neuer Typ** einen Namen ein, den es noch nicht gibt, und wählen Sie **Kategorie „…“ erstellen**. Wählen Sie eine Farbe, fügen Sie bei Bedarf Übersetzungen hinzu, und der Typ wird der neuen Kategorie zugeordnet.
+- **Jeden Typ verschieben.** Auch vordefinierte Typen lassen sich verschieben — legen Sie zum Beispiel die Schnittstelle in eine eigene Ebene *Integration*.
+- **Kategorien verwalten.** Die Schaltfläche **Kategorien verwalten** neben **+ Neuer Typ** listet alle Kategorien mit ihrer Farbe und der Anzahl der Kartentypen, die sie verwenden. Mit den Pfeilen ändern Sie die Reihenfolge der Ebenen (eine eigene Ebene kann zwischen zwei vordefinierten liegen), mit dem Stift benennen Sie eine eigene Kategorie um, färben sie um oder übersetzen sie, und mit dem Papierkorb löschen Sie sie. Eine Kategorie, die noch von einem Kartentyp verwendet wird, lässt sich nicht löschen — ordnen Sie dessen Typen zuerst einer anderen Kategorie zu.
+
+![Kategorien verwalten](../assets/img/de/100_admin_metamodell_kategorien.png)
 
 ### Einen benutzerdefinierten Typ erstellen
 
@@ -28,7 +38,7 @@ Klicken Sie auf **+ Neuer Typ**, um einen benutzerdefinierten Kartentyp zu erste
 | **Bezeichnung** | Anzeigename in der Benutzeroberfläche |
 | **Symbol** | Google Material Symbol-Symbolname |
 | **Farbe** | Markenfarbe für den Typ (verwendet in Inventar, Berichten und Diagrammen) |
-| **Kategorie** | Architekturebenen-Gruppierung |
+| **Kategorie** | Die Architekturebene, unter der der Typ gruppiert wird — wählen Sie eine vorhandene Kategorie oder geben Sie einen neuen Namen ein, um eine zu erstellen (siehe [Kategorien](#kategorien-architekturebenen)) |
 | **Hat Hierarchie** | Ob Karten dieses Typs Eltern-/Kind-Beziehungen haben können |
 
 ### Einen Typ bearbeiten
@@ -53,7 +63,8 @@ Felder definieren die benutzerdefinierten Attribute, die auf Karten dieses Typs 
 | **Schlüssel** | Eindeutiger Feldbezeichner |
 | **Bezeichnung** | Anzeigename |
 | **Typ** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select oder multiple_select. Ein Prozentsatz ist eine Zahl von 0 bis 100, die als Fortschrittsbalken dargestellt und mit einem Schieberegler oder durch exakte Eingabe bearbeitet wird. Ein Boolean wird aus einer Ja/Nein-Liste gewählt, **Keine** leert ihn; er erscheint als grüne *Ja*- oder blaue *Nein*-Marke bzw. als —, wenn nicht gesetzt, was der Inventarfilter **(leer)** erfasst |
-| **Optionen** | Für Auswahlfelder: die verfügbaren Auswahlmöglichkeiten mit Bezeichnungen und optionalen Farben |
+| **Optionen** | Für Auswahlfelder: die verfügbaren Auswahlmöglichkeiten mit Bezeichnungen und optionalen Farben. Ordnen Sie sie mit den Pfeilen nach oben und unten neben jeder Option um: Menüs und Filter listen die Optionen in dieser Reihenfolge, und die Chips eines Mehrfachauswahlwerts folgen ihr auf jeder Karte. |
+| **Hilfetext** | Optionale Hinweise, die beim Bearbeiten einer Karte als einklappbare Notiz unter dem Feld erscheinen. Er wird pro Sprache verfasst und kann von jedem Metamodell-Administrator gesetzt werden; bei einem von einer Erweiterung beigesteuerten Feld ist er schreibgeschützt |
 | **Pflichtfeld** | Ob das Feld verpflichtend ist — siehe die Durchsetzungsregeln unten |
 | **Datenqualität** | Der Beitrag jedes Felds zum Wert wird im Bereich **Datenqualität** verwaltet (siehe unten) |
 | **Nur lesen** | Verhindert manuelle Bearbeitung (nützlich für berechnete Felder) |
@@ -70,6 +81,7 @@ Felder werden in **Abschnitte** auf der Kartendetailseite organisiert. Sie könn
 - Abschnitte auf **1-Spalten**- oder **2-Spalten**-Layout einstellen
 - Felder in **Gruppen** innerhalb eines Abschnitts organisieren (dargestellt als einklappbare Unterüberschriften)
 - Felder innerhalb eines Abschnitts per Drag-and-drop neu anordnen und über die **Verschieben**-Aktion in einen anderen Abschnitt verschieben
+- Ein Feld aus seiner Gruppe lösen, indem Sie es auf der Zone **Hier ablegen, um ein Feld aus seiner Gruppe zu lösen** am Ende jeder Spalte ablegen, die eine Gruppe enthält — das Feld landet ungruppiert am Ende dieser Spalte
 
 Der spezielle Abschnittsname `__description` fügt Felder zum Beschreibungsabschnitt der Kartendetailseite hinzu.
 
@@ -117,6 +129,12 @@ Zum Beispiel hat der Typ Anwendung die Subtypen: Geschäftsanwendung, Microservi
 4. Ausgeblendete Felder werden von der Datenqualitätsbewertung ausgeschlossen, sodass Benutzer nicht für Felder bestraft werden, die sie nicht sehen können.
 
 Wenn bei einer Karte kein Subtyp ausgewählt ist (oder der Typ keine Subtypen hat), sind alle Felder sichtbar. Ausgeblendete Felder behalten ihre Daten — wenn sich der Subtyp einer Karte ändert, bleiben zuvor ausgeblendete Werte erhalten.
+
+**Subtyp umbenennen:** Klicken Sie auf den Stift neben seinem Chip, geben Sie die neue Bezeichnung ein und drücken Sie die Eingabetaste (oder klicken Sie woandershin); Escape bricht ab. Nur die Bezeichnung ändert sich: Der Schlüssel, den die Karten speichern, bleibt gleich, und die Übersetzungen des Subtyps (bearbeitet über das Übersetzungssymbol in der Kopfzeile) bleiben unverändert.
+
+**Für einen Subtyp nicht erforderliche Beziehungen:**
+
+Eine am Kartentyp als Pflicht markierte Beziehung gilt für jede Karte dieses Typs. Passt sie zu einem Subtyp nicht — etwa eine SaaS-Anwendung ohne hostende IT-Komponente —, öffnen Sie den Dialog **Subtyp-Vorlage** und aktivieren Sie sie unter **Für diesen Subtyp nicht erforderliche Beziehungen**. Die Liste zeigt nur die Pflichtbeziehungen des Typs, jeweils mit ihrem Verb aus Sicht dieses Kartentyps. Für Karten dieses Subtyps blockiert die Beziehung die Freigabe nicht mehr, zählt nicht mehr gegen die Datenqualitätsbewertung, und die Kartendetailansicht kennzeichnet sie nicht mehr als **Pflicht**; sie wird weiterhin angezeigt, wenn der Beziehungstyp sichtbar geschaltet ist. Karten anderer Subtypen und Karten ohne Subtyp benötigen sie weiterhin. Beim Speichern werden die vorhandenen Karten des Typs sofort neu bewertet.
 
 #### Stakeholder-Rollen
 
@@ -186,14 +204,15 @@ Klicken Sie auf die Schaltfläche **Übersetzen** in der Symbolleiste des Typ-Dr
 - **Hierarchie-Verbindungstypen** — Bezeichnungen für jeden Hierarchie-Verbindungstyp
 - **Sektionen** — Abschnittsüberschriften auf der Kartendetailseite
 - **Felder** — Feldbezeichnungen und Auswahloptionsbezeichnungen
+- **Hilfetext** — Der Hilfetext eines Felds, unter dem Feld aufgeführt, sobald er im Feldeditor eingegeben wurde. Eine Änderung auf Englisch aktualisiert auch den Standard-Hilfetext des Felds
 - **Stakeholder-Rollen** — Rollennamen, die in der Stakeholder-Zuweisungs-UI angezeigt werden
 
 Übersetzungen werden zusammen mit jedem Kartentyp gespeichert und beim Rendern entsprechend der vom Benutzer ausgewählten Sprache aufgelöst. Nicht übersetzte Bezeichnungen fallen auf den englischen Standard zurück.
 
 ### Einen Typ löschen
 
-- **Integrierte Typen** werden weich gelöscht (ausgeblendet) und können wiederhergestellt werden
-- **Benutzerdefinierte Typen** werden dauerhaft gelöscht
+- **Integrierte Typen** werden weich gelöscht (ausgeblendet) und können wiederhergestellt werden. Die Löschen-Schaltfläche im Typ-Editor ist für sie gesperrt — verwenden Sie stattdessen **Typ ausblenden**.
+- **Benutzerdefinierte Typen** — die von Ihnen erstellten — können **dauerhaft gelöscht** werden. Öffnen Sie den Typ, klicken Sie in der Kopfzeile auf **Typ löschen**, und Turbo EA zeigt alles an, was mit der Löschung entfernt wird: die Karten des Typs (mit ihren Beziehungen, Stakeholdern, Kommentaren und Anhängen), die Beziehungstypen, die ihn mit anderen Typen verbinden, die Berechnungen für diesen Typ und seine Stakeholder-Rollen. Geben Sie den Schlüssel des Typs ein, um **Dauerhaft löschen** freizugeben. Die Löschung kann nicht rückgängig gemacht werden; archivierte Karten des Typs werden ebenfalls gelöscht, und jede gelöschte Karte wird im Sicherheits- und Admin-Protokoll sowie im Ereignisverlauf festgehalten.
 
 ## Beziehungstypen
 

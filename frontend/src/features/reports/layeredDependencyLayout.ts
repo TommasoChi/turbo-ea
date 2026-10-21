@@ -16,8 +16,7 @@ import type { TimelineChange } from "./timelineRange";
 import { LDV_NODE_W, LDV_NODE_H } from "./ldvHandles";
 import {
   alignLanesX,
-  CATEGORY_COLORS,
-  CATEGORY_ORDER,
+  DEFAULT_LDV_LAYERS,
   DRAG_ROOM,
   GROUP_GAP,
   LABEL_H,
@@ -32,6 +31,7 @@ import {
   typeColor,
   typeIcon,
   typeLabel,
+  type LdvLayers,
 } from "./ldvLayoutShared";
 import type { LdvEdgeLineStyle } from "./ldvLineStyle";
 import {
@@ -364,6 +364,11 @@ export function buildLdvFlow(
    */
   relValueResolver?: (edge: GEdge) => string | undefined,
   layerOverrides?: LayerOverrides,
+  /**
+   * Lane order, names and colours — `ldvLayers(categories, locale)` from the
+   * category registry. Defaults to the four built-in layers.
+   */
+  layers: LdvLayers = DEFAULT_LDV_LAYERS,
 ): { nodes: Node[]; edges: Edge[] } {
   if (gNodes.length === 0) return { nodes: [], edges: [] };
 
@@ -387,13 +392,13 @@ export function buildLdvFlow(
     groups.get(cat)!.push(n);
   }
 
-  // Ordered categories
+  // Ordered categories: a consumer-forced `groupOrder` wins first, then the
+  // registry-driven (or default built-in) layer order for everything else.
   const orderedCats = [
     ...(layerOverrides?.groupOrder || []).filter((c) => groups.has(c)),
-    ...CATEGORY_ORDER.filter((c) => groups.has(c) && !layerOverrides?.groupOrder?.includes(c)),
-    ...[...groups.keys()].filter((c) =>
-      !CATEGORY_ORDER.includes(c) && !layerOverrides?.groupOrder?.includes(c),
-    ),
+    ...layers
+      .order([...groups.keys()])
+      .filter((c) => !layerOverrides?.groupOrder?.includes(c)),
   ];
 
   // Valid edges (both endpoints exist)
@@ -482,8 +487,8 @@ export function buildLdvFlow(
       type: "ldvGroup",
       position: { x: gx, y: gy },
       data: {
-        label: layerOverrides?.groupLabels?.[gl.cat] ?? gl.cat,
-        color: CATEGORY_COLORS[gl.cat] || "#999",
+        label: layerOverrides?.groupLabels?.[gl.cat] ?? layers.label(gl.cat),
+        color: layers.color(gl.cat),
       } satisfies LdvGroupData,
       style: { width: gl.groupW, height: gl.groupH },
       selectable: false,
@@ -716,3 +721,7 @@ export {
 // laying them out (#1140); exported from here so a consumer building its own
 // graph from these builders can do the same.
 export { orientEdgesToRelationTypes } from "./ldvLayoutShared";
+
+// Lane order, names and colours from the category registry; exported so an
+// extension calling the builders can pass its instance's layers too.
+export { ldvLayers, DEFAULT_LDV_LAYERS, type LdvLayers } from "./ldvLayoutShared";

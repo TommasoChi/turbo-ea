@@ -16,7 +16,17 @@ Fanebladet Korttyper viser alle typer i systemet. Turbo EA leveres med 14 indbyg
 | **Business Architecture** | Organization, Business Capability, Business Context, Business Process |
 | **Application & Data** | Application, Interface, Data Object |
 | **Technical Architecture** | IT Component, Tech Category, Provider, System |
-| **Tillad egne logoer** | Om redaktører må uploade et logo pr. kort, som vises i stedet for typeikonet (slået til for Application og IT Component fra start) |
+
+### Kategorier (arkitekturlag)
+
+Hver korttype hører til en **kategori** — det arkitekturlag, den grupperes under. Kategoriernes rækkefølge er lagenes rækkefølge overalt, hvor de tegnes: inventarets typefilter, **metamodelgrafen** og banerne i Layered Dependency View, hver i kategoriens farve og på læserens sprog.
+
+- **De fire indbyggede lag er låst.** Strategi og transformation, Forretningsarkitektur, Applikationer og data og Teknisk arkitektur kan hverken omdøbes, farves om eller slettes, og de er oversat til alle understøttede sprog.
+- **Opret dine egne.** Skriv i feltet **Kategori** i typeeditoren eller i **+ Ny type** et navn, der ikke findes endnu, og vælg **Opret kategorien «…»**. Vælg en farve, tilføj eventuelt oversættelser, og typen flyttes til den nye kategori.
+- **Flyt enhver type.** Også indbyggede typer kan flyttes — læg for eksempel Interface i et eget *Integration*-lag.
+- **Administrer kategorier.** Knappen **Administrer kategorier** ved siden af **+ Ny type** viser alle kategorier med deres farve og antallet af korttyper, der bruger dem. Med pilene ændrer du lagenes rækkefølge (et eget lag kan ligge mellem to indbyggede), med blyanten omdøber, omfarver eller oversætter du en egen kategori, og med skraldespanden sletter du den. En kategori, som en korttype stadig bruger, kan ikke slettes — flyt først dens typer til en anden kategori.
+
+![Administrer kategorier](../assets/img/da/100_admin_metamodel_categories.png)
 
 ### Oprettelse af en brugerdefineret type
 
@@ -28,7 +38,7 @@ Klik på **+ Ny type** for at oprette en brugerdefineret korttype. Konfigurer:
 | **Etiket** | Visningsnavn vist i UI'et |
 | **Ikon** | Google Material Symbol-ikonnavn |
 | **Farve** | Brandfarve for typen (bruges i lager, rapporter og diagrammer) |
-| **Kategori** | Arkitekturlag-gruppering |
+| **Kategori** | Det arkitekturlag, typen grupperes under — vælg en eksisterende kategori, eller skriv et nyt navn for at oprette en (se [Kategorier](#kategorier-arkitekturlag)) |
 | **Har hierarki** | Hvorvidt kort af denne type kan have forælder/barn-relationer |
 
 ### Redigering af en type
@@ -53,7 +63,8 @@ Felter definerer de brugerdefinerede egenskaber, der er tilgængelige på kort a
 | **Nøgle** | Unik feltidentifikator |
 | **Etiket** | Visningsnavn |
 | **Type** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select eller multiple_select. En procent er et tal fra 0 til 100, der vises som en fremgangsbjælke og redigeres med en skyder eller indtastes præcist. En boolean vælges fra en Ja/Nej-liste med **Ingen** til at rydde den og vises som en grøn *Ja*- eller blå *Nej*-mærkat, eller som — når den ikke er angivet, hvilket inventarets filter **(tom)** finder |
-| **Indstillinger** | For udvælgelsesfelter: de tilgængelige valg med etiketter og valgfri farver |
+| **Indstillinger** | For udvælgelsesfelter: de tilgængelige valg med etiketter og valgfri farver. Ændr rækkefølgen med pilene op og ned ud for hver valgmulighed: menuer og filtre viser valgmulighederne i den rækkefølge, og chips for en flervalgsværdi følger den på alle kort. |
+| **Hjælpetekst** | Valgfri vejledning, der vises som en sammenklappelig note under feltet, mens et kort redigeres. Den skrives pr. sprog og kan angives af enhver metamodel-administrator; på et felt, som en udvidelse har bidraget med, er den skrivebeskyttet |
 | **Påkrævet** | Hvorvidt feltet er obligatorisk — se håndhævelsesreglerne nedenfor |
 | **Datakvalitet** | Hvert felts bidrag til scoren håndteres i panelet **Datakvalitet** (se nedenfor) |
 | **Skrivebeskyttet** | Forhindrer manuel redigering (nyttigt for beregnede felter) |
@@ -70,6 +81,7 @@ Felter er organiseret i **sektioner** på kortdetaljesiden. Du kan:
 - Indstille sektioner til **1-kolonne-** eller **2-kolonne**-layout
 - Organisere felter i **grupper** inden for en sektion (gengivet som sammenklappelige underoverskrifter)
 - Omarranger felter inden for et afsnit ved at trække, og flyt et felt til et andet afsnit via dets **flyt**-handling
+- Tage et felt ud af dets gruppe ved at slippe det på zonen **Slip her for at tage et felt ud af dets gruppe** nederst i enhver kolonne, der indeholder en gruppe — feltet lander sidst i kolonnen, uden gruppe
 
 Det særlige sektionsnavn `__description` tilføjer felter til Beskrivelsessektionen af kortdetaljesiden.
 
@@ -117,6 +129,12 @@ For eksempel har Application-typen undertyperne: Business Application, Microserv
 4. Skjulte felter er udelukket fra datakvalitetsscoren, så brugere ikke straffes for felter, de ikke kan se.
 
 Når der ikke er valgt nogen undertype på et kort (eller typen ikke har nogen undertyper), er alle felter synlige. Skjulte felter bevarer deres data — hvis et korts undertype ændres, bevares tidligere skjulte værdier.
+
+**Omdøb en undertype:** klik på blyanten ved siden af dens chip, skriv den nye etiket, og tryk på Enter (eller klik et andet sted); Escape annullerer. Kun etiketten ændres: nøglen, som kortene gemmer, forbliver den samme, og undertypens oversættelser (redigeres fra oversættelsesikonet i overskriften) bevares.
+
+**Relationer, der ikke er påkrævet for en undertype:**
+
+En relation, der er markeret som påkrævet på korttypen, gælder for alle kort af den type. Når den ikke passer til én undertype — for eksempel en SaaS-applikation uden en hostende IT-komponent — åbner du dialogen **Undertype-skabelon** og markerer den under **Relationer, der ikke er påkrævet for denne undertype**. Listen viser kun typens påkrævede relationer, hver navngivet med sit verbum, som det læses fra denne korttype. For kort af den undertype blokerer relationen ikke længere godkendelse, trækker ikke længere datakvalitetsscoren ned, og kortdetaljen markerer den ikke længere som **Påkrævet**; den vises stadig, hvis relationstypen er sat til at være synlig. Kort af andre undertyper og kort uden undertype skal stadig have den. Når du gemmer, får typens eksisterende kort straks en ny score.
 
 #### Interessentroller
 
@@ -186,14 +204,15 @@ Klik på knappen **Oversæt** i typepanelets værktøjslinje for at åbne **Over
 - **Hierarkiske forbindelsestyper** — Etiketter for hver hierarkisk forbindelsestype
 - **Sektioner** — Sektionsoverskrifter på kortdetaljesiden
 - **Felter** — Feltetiketter og udvælgelsesindstillingsetiketter
+- **Hjælpetekst** — Et felts hjælpetekst, vist under feltet, når den er indtastet i felteditoren. Redigeres den på engelsk, opdateres feltets standardhjælpetekst også
 - **Interessentroller** — Rollenavne vist i interessenttildelings-UI'et
 
 Oversættelser gemmes sammen med hver korttype og opløses ved render-tid ved hjælp af brugerens valgte lokalitet. Uoversatte etiketter falder tilbage til den engelske standard.
 
 ### Sletning af en type
 
-- **Indbyggede typer** soft-slettes (skjules) og kan gendannes
-- **Brugerdefinerede typer** slettes permanent
+- **Indbyggede typer** soft-slettes (skjules) og kan gendannes. Slet-knappen i typeeditoren er låst for dem — brug **Skjul type** i stedet.
+- **Brugerdefinerede typer** — dem du selv har oprettet — kan **slettes permanent**. Åbn typen, klik på **Slet type** i toppen, og Turbo EA viser alt, som sletningen tager med sig: typens kort (med deres relationer, interessenter, kommentarer og vedhæftninger), de relationstyper der forbinder den med andre typer, de beregninger der er rettet mod den, og dens interessentroller. Skriv typens nøgle for at låse **Slet permanent** op. Sletningen kan ikke fortrydes; typens arkiverede kort slettes også, og hvert slettet kort registreres i sikkerheds- og administrationsloggen og i hændelseshistorikken.
 
 ## Relationstyper
 

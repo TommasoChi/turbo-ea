@@ -51,7 +51,7 @@ import {
   fiscalYearOptions,
   buildCumulativeSeries,
   countUndated,
-  fiscalYearFor,
+  currentFiscalYear,
   fiscalYearMonths,
   projectMonthRange,
   type MonthPoint,
@@ -94,13 +94,7 @@ export default function PpmCostCharts({ costLines, budgetLines }: Props) {
   // `today` is read once per render rather than per helper call so every chart
   // on screen agrees on where "now" is.
   const today = useMemo(() => new Date(), []);
-  const currentFy = useMemo(() => {
-    // Local parts, not toISOString(): buildCumulativeSeries places "now" with
-    // local getMonth(), and a UTC-derived month would disagree with it near a
-    // month boundary.
-    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
-    return fiscalYearFor(iso, fyStart) ?? today.getFullYear();
-  }, [today, fyStart]);
+  const currentFy = useMemo(() => currentFiscalYear(today, fyStart), [today, fyStart]);
 
   const years = useMemo(
     () => availableFiscalYears(costLines, budgetLines, fyStart),
@@ -373,8 +367,8 @@ function CumulativeChart(props: {
             tick={isRtl ? rtlTick : theme.axisTick}
             tickLine={false}
             // Measured from the rendered ticks (Recharts 3.7): a fixed width
-            // clipped long labels once costs ran to millions, since fmtShort
-            // only abbreviates to thousands ("$12000k", "CHF12000k").
+            // clipped long labels ("CHF12000k" before fmtShort learned "M",
+            // and still a four-digit "CHF9999k" just under a million).
             width="auto"
             orientation={isRtl ? "right" : "left"}
             tickFormatter={(v: number) => fmtShort(v)}

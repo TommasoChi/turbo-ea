@@ -34,7 +34,7 @@ Et **aktivt-filter-tæller**-badge viser, hvor mange filtre der aktuelt er anven
 
 Højreklik på en vilkårlig celle i tabellen (langt tryk på berøringsenheder) for at åbne en kontekstmenu med hurtige handlinger på det, der er under markøren, i stil med ServiceNow:
 
-- **Forhåndsvis kort** — åbn det kort, cellen peger på, i sidepanelet uden at forlade tabellen
+- **Forhåndsvis kort** — åbn det kort, cellen peger på, i sidepanelet uden at forlade tabellen; panelet lader tabellen forblive brugbar, så du kan blive ved med at rulle, filtrere og klikke på andre rækker, mens det er åbent, og lukke det med dets lukkeknap
 - **Vis matchende** — behold kun de rækker, hvis værdi svarer til den valgte celles
 - **Filtrér fra** — skjul de rækker, hvis værdi svarer til den valgte celles
 - **Kopiér værdi** — kopiér cellens tekst til udklipsholderen
@@ -139,6 +139,8 @@ Rullelisten **Felt** grupperer det, du kan ændre:
 ![Dialogen Masseredigering](../assets/img/da/98_inventory_mass_edit.png)
 
 Tags, relationer og overordnet har hver en **tilføj / fjern**-knap, så du udvider eller beskærer eksisterende værdier i stedet for at erstatte dem.
+
+Når du vælger **Tilføj link** for en relationstype med detaljer — strømningsretningen mellem to applikationer, hvordan en organisation bruger en applikation, opret- / læs- / opdatér- / slet-markeringerne på et dataobjekt — viser dialogen også de felter. Det, du angiver, gemmes på hvert link, der tilføjes. Kort, der allerede er linket til et valgt mål, får også detaljerne, så at køre **Tilføj link** igen er måden at opdatere detaljerne på eksisterende links; en detalje, du lader stå tom, ændres ikke.
 
 Værdifeltet retter sig efter felttypen: et multivalgsfelt viser sine valgmuligheder med afkrydsningsfelter, et ja/nej-felt en Ja/Nej-liste og et datofelt en datovælger. Lader du værdien stå tom – **Ingen** i et ja/nej-felt – ryddes feltet på alle de valgte kort. Felter, der beregnes af en formel, og omkostningsfelter, du ikke har tilladelse til at se, tilbydes ikke.
 
@@ -247,7 +249,7 @@ rel:supports     →  NexaCore ERP; BillingApp; Salesforce
 rel:depends_on   →  Sales / Customer Mgmt / CRM
 ```
 
-Semikoloner (ikke kommaer) separerer mål, fordi kortnavne almindeligvis indeholder `,` (f.eks. `Acme, Inc.`). Inde i et navn skal `/` og `\` undgås som `\/` og `\\`, og et `;` som `\;` — importøren læser cellen med de samme regler som `parent_path`, så et navn som `SAP S/4HANA` skrives som `SAP S\/4HANA`. Eksportøren gør dette automatisk for dig; kun hånd-skrevne celler har brug for escapes.
+Semikoloner (ikke kommaer) separerer mål, fordi kortnavne almindeligvis indeholder `,` (f.eks. `Acme, Inc.`). Inde i et navn skal `/` og `\` undgås som `\/` og `\\`, og et `;` som `\;` — importøren læser cellen med de samme regler som `parent_path`, så et navn som `SAP S/4HANA` skrives som `SAP S\/4HANA`. Eksportøren gør dette automatisk for dig, og en escapet reference er altid entydig. En håndskrevet celle kan lade `/` stå uden escape: `SAP S/4HANA` læses først som en sti (et kort *4HANA* under *SAP S*), og når intet kort findes på den sti, læses den som ét navn, der findes, når netop ét kort af typen har det.
 
 Celler er **deklarative**: sættet af mål i cellen bliver det komplette sæt af udgående relationer af den type fra den kilde efter import. **At fjerne et mål fra listen dropper den relation**; at tømme cellen dropper dem alle. At udelade kolonnen helt (ingen `rel:supports`-kolonne overhovedet) efterlader eksisterende relationer urørt.
 
@@ -311,4 +313,4 @@ Du kan også vælge **Eksportér aktuel visning** i Export-menuen — et fladt e
 - At omdøbe et kort bryder den navn-baserede match. Hold `id`-kolonnen udfyldt, når du planlægger at omdøbe og re-importere i den samme projektmappe.
 - Nye kort, der refererer til hinanden (forælder-barn eller relation source-target), virker i begge rækkefølger — serveren topologisk-sorterer før anvendelse.
 - **Kun `name` og `type` kræves for at oprette et kort.** Felter, der er markeret som *påkrævede* i metamodellen (også på Provider eller enhver anden type), blokerer ikke importen — kortet oprettes alligevel, og mangler afspejles i dets datakvalitetsscore i stedet for at føre til et stille spring.
-- **En `/` i et korts egen `name`-kolonne skal ikke escapes.** Escaping (`\/` for en skråstreg, `\\` for en omvendt skråstreg) er kun nødvendig, når du *refererer* til kortet fra en `parent_path`-, `rel:<nøgle>`-, `source_ref`- eller `target_ref`-celle, hvor `/` er stiadskilleren.
+- **En `/` i et korts egen `name`-kolonne skal ikke escapes.** Escaping (`\/` for en skråstreg, `\\` for en omvendt skråstreg) er kun nødvendig, når du *refererer* til kortet fra en `parent_path`-, `rel:<nøgle>`-, `source_ref`- eller `target_ref`-celle, hvor `/` er stiadskilleren — og selv dér læses en `/` uden escape som en del af navnet, når intet kort findes på den sti, den beskriver.

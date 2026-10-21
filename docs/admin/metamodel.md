@@ -16,7 +16,17 @@ The Card Types tab lists all types in the system. Turbo EA ships with 14 built-i
 | **Business Architecture** | Organization, Business Capability, Business Context, Business Process |
 | **Application & Data** | Application, Interface, Data Object |
 | **Technical Architecture** | IT Component, Tech Category, Provider, System |
-| **Allow custom logos** | Whether editors may upload a logo image per card, shown in place of the type icon (on for Application and IT Component by default) |
+
+### Categories (architecture layers)
+
+Every card type sits in a **category** — the architecture layer it is grouped under. The category order is the order of the layers wherever they are drawn: the Inventory's type filter, the **Metamodel Graph** and the swim lanes of the Layered Dependency View, each shown in the category's color and in the reader's language.
+
+- **The four built-in layers are locked.** Strategy & Transformation, Business Architecture, Application & Data and Technical Architecture cannot be renamed, recolored or deleted, and are translated into every supported language.
+- **Create your own.** In the **Category** field of the type editor or of **+ New Type**, type a name that does not exist yet and choose **Create category "…"**. Pick a color, optionally add translations, and the type moves into the new category.
+- **Move any type.** Built-in types can be moved too — for example, put Interface into a custom *Integration* layer.
+- **Manage categories.** The **Manage categories** button next to **+ New Type** lists every category with its color and the number of card types that use it. Use the arrows to change the layer order (a custom layer can sit between two built-in ones), the pencil to rename, recolor or translate a custom category, and the bin to delete one. A category still used by a card type cannot be deleted — move its types to another category first.
+
+![Manage categories](../assets/img/en/100_admin_metamodel_categories.png)
 
 ### Creating a Custom Type
 
@@ -28,7 +38,7 @@ Click **+ New Type** to create a custom card type. Configure:
 | **Label** | Display name shown in the UI |
 | **Icon** | Google Material Symbol icon name |
 | **Color** | Brand color for the type (used in inventory, reports, and diagrams) |
-| **Category** | Architecture layer grouping |
+| **Category** | The architecture layer the type is grouped under — pick an existing category or type a new name to create one (see [Categories](#categories-architecture-layers)) |
 | **Has Hierarchy** | Whether cards of this type can have parent/child relationships |
 
 ### Editing a Type
@@ -53,7 +63,8 @@ Fields define the custom attributes available on cards of this type. Each field 
 | **Key** | Unique field identifier |
 | **Label** | Display name |
 | **Type** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select, or multiple_select. A percentage is a number from 0 to 100, shown as a progress bar and edited with a slider or typed exactly. A boolean is chosen from a Yes / No list, with **None** to clear it, and shows as a green *Yes* or blue *No* pill, or as — when unset, which the Inventory's **(empty)** filter matches |
-| **Options** | For select fields: the available choices with labels and optional colors |
+| **Options** | For select fields: the available choices with labels and optional colors. Reorder them with the up and down arrows beside each option: menus and filters list the options in that order, and the chips of a multi-select value follow it on every card. |
+| **Help text** | Optional guidance shown as a collapsible note under the field while a card is edited. It is written per language and can be set by any metamodel admin; on a field contributed by an extension it is read-only |
 | **Required** | Whether the field is mandatory — see the enforcement rules below |
 | **Data quality** | Each field's contribution to the score is managed in the **Data quality** panel — see [Data quality scoring](#data-quality-scoring) below |
 | **Read-only** | Prevents manual editing (useful for calculated fields) |
@@ -70,6 +81,7 @@ Fields are organized into **sections** on the card detail page. You can:
 - Set sections to **1-column** or **2-column** layout
 - Organize fields into **groups** within a section (rendered as collapsible sub-headers)
 - Reorder fields within a section by dragging, and move a field to a different section from its **move** action
+- Take a field out of its group by dropping it on the **Drop here to take a field out of its group** zone at the bottom of any column that holds a group — the field lands at the end of that column, ungrouped
 
 The special section name `__description` adds fields to the Description section of the card detail page.
 
@@ -119,6 +131,12 @@ For example, the Application type has subtypes: Business Application, Microservi
 4. Hidden fields are excluded from the data quality score, so users are not penalized for fields they cannot see.
 
 When no subtype is selected on a card (or the type has no subtypes), all fields are visible. Hidden fields preserve their data — if a card's subtype changes, previously hidden values are retained.
+
+**Renaming a subtype:** click the pencil beside its chip, type the new label and press Enter (or click elsewhere); Escape cancels. Only the label changes: the key, which cards store, stays the same, and the subtype's translations (edited from the translations icon in the header) are left as they are.
+
+**Relations not required for a subtype:**
+
+A relation marked mandatory on the card type applies to every card of that type. When it does not fit one subtype — a SaaS application with no hosting IT component, say — open the **Subtype Template** dialog and tick it under **Relations not required for this subtype**. The list shows only the type's mandatory relations, each named by its verb as read from this card type. For cards of that subtype the relation no longer blocks approval, no longer counts against the data quality score, and card detail stops marking it **Required**; it still shows if the relation type is set to be visible. Cards of other subtypes, and cards with no subtype, still need it. Saving re-scores the type's existing cards straight away.
 
 #### Stakeholder Roles
 
@@ -188,14 +206,15 @@ Click the **Translate** button in the type drawer toolbar to open the **Translat
 - **Hierarchy link types** — Labels for each hierarchy link type
 - **Sections** — Section headings on the card detail page
 - **Fields** — Field labels and select option labels
+- **Help text** — A field's help text, listed under the field once it has been entered in the field editor. Editing it in English also updates the field's default help
 - **Stakeholder Roles** — Role names displayed in the stakeholder assignment UI
 
 Translations are stored alongside each card type and are resolved at render time using the user's selected locale. Untranslated labels fall back to the English default.
 
 ### Deleting a Type
 
-- **Built-in types** are soft-deleted (hidden) and can be restored
-- **Custom types** are permanently deleted
+- **Built-in types** are soft-deleted (hidden) and can be restored. The delete button in the type editor is locked for them — use **Hide type** instead.
+- **Custom types** — the ones you created — can be **permanently deleted**. Open the type, click the **Delete type** button in the header, and Turbo EA shows everything the deletion will take with it: the cards of the type (with their relations, stakeholders, comments and attachments), the relation types that connect it to other types, the calculations that target it and its stakeholder roles. Type the type's key to unlock **Delete permanently**. The deletion cannot be undone; archived cards of the type are deleted too, and every deleted card is recorded in the Security & admin log and in the event history.
 
 ## Relation Types
 

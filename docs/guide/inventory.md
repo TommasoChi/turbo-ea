@@ -34,7 +34,7 @@ An **active filter count** badge shows how many filters are currently applied.
 
 Right-click any cell in the grid (long-press on a touch device) to open a context menu of quick actions on whatever is under the cursor, similar to ServiceNow:
 
-- **Preview card** — open the card the cell names in the side panel, without leaving the grid
+- **Preview card** — open the card the cell names in the side panel, without leaving the grid; the panel leaves the grid usable, so you can keep scrolling, filtering and clicking other rows while it is open, and close it with its close button
 - **Show matching** — keep only the rows whose value equals the clicked cell's
 - **Filter out** — hide the rows whose value equals the clicked cell's
 - **Copy value** — copy the cell text to the clipboard
@@ -139,6 +139,8 @@ The **Field** dropdown groups what you can change:
 ![Mass Edit dialog](../assets/img/en/98_inventory_mass_edit.png)
 
 Tags, relations and parent each offer an **add / remove** toggle, so you extend or trim existing values instead of replacing them.
+
+When you **Add link** for a relation type that carries details — the flow direction between two applications, how an organization uses an application, the create / read / update / delete flags on a data object — the dialog also shows those fields. What you set is saved on every link added. Cards already linked to a chosen target get the details too, so running **Add link** again is how you update the details of existing links; a detail you leave empty is not changed.
 
 The value control matches the field's type: a multi-select shows its options with checkboxes, a yes/no field a Yes / No list, a date field a date picker. Leaving the value empty — **None** on a yes/no field — clears the field on every selected card. Fields calculated by a formula, and cost fields you do not have permission to view, are not offered.
 
@@ -247,7 +249,7 @@ rel:supports     →  NexaCore ERP; BillingApp; Salesforce
 rel:depends_on   →  Sales / Customer Mgmt / CRM
 ```
 
-Semicolons (not commas) separate targets because card names commonly contain `,` (e.g. `Acme, Inc.`). Inside a name, `/` and `\` must be escaped as `\/` and `\\`, and a `;` as `\;` — the importer reads the cell with the same rules as `parent_path`, so a name like `SAP S/4HANA` is written as `SAP S\/4HANA`. The exporter does this for you automatically; only hand-typed cells need the escapes.
+Semicolons (not commas) separate targets because card names commonly contain `,` (e.g. `Acme, Inc.`). Inside a name, `/` and `\` must be escaped as `\/` and `\\`, and a `;` as `\;` — the importer reads the cell with the same rules as `parent_path`, so a name like `SAP S/4HANA` is written as `SAP S\/4HANA`. The exporter does this for you automatically, and an escaped reference is always exact. A hand-typed cell may leave the `/` unescaped: `SAP S/4HANA` is first read as a path (a card *4HANA* under *SAP S*), and when no card sits at that path it is read as one name, which resolves when exactly one card of the type has it.
 
 There is one column per relation type that starts from the sheet's card type — **all of them**, including types that carry values. Targets are listed alphabetically, so re-exporting an unchanged landscape gives you a byte-identical file and a real edit is the only thing that shows up in a diff.
 
@@ -323,4 +325,4 @@ Click **Export** in the toolbar and choose one of two options:
 - Renaming a card breaks the name-based match. Keep the `id` column populated when you plan to rename and re-import in the same workbook.
 - New cards that reference each other (parent-child or relation source-target) work in either order — the server topologically sorts before applying.
 - **Only `name` and `type` are required to create a card.** Fields marked *required* in the metamodel (including on Provider or any other type) don't block the import — the card is still created, and any gaps are reflected in its data-quality score rather than causing a silent skip.
-- **A `/` in a card's own `name` column needs no escaping.** Escaping (`\/` for a slash, `\\` for a backslash) is only needed when you *reference* that card from a `parent_path`, `rel:<key>`, `source_ref`, or `target_ref` cell, where `/` is the path separator.
+- **A `/` in a card's own `name` column needs no escaping.** Escaping (`\/` for a slash, `\\` for a backslash) is only needed when you *reference* that card from a `parent_path`, `rel:<key>`, `source_ref`, or `target_ref` cell, where `/` is the path separator — and even there an unescaped `/` is read as part of the name when no card sits at the path it spells.

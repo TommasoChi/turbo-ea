@@ -34,7 +34,7 @@ Un **badge con il conteggio dei filtri attivi** mostra quanti filtri sono attual
 
 Fai clic con il tasto destro su una cella qualsiasi della griglia (pressione prolungata sui dispositivi touch) per aprire un menu contestuale con azioni rapide su ciò che si trova sotto il cursore, in stile ServiceNow:
 
-- **Anteprima scheda** — apre la scheda indicata dalla cella nel pannello laterale, senza uscire dalla griglia
+- **Anteprima scheda** — apre la scheda indicata dalla cella nel pannello laterale, senza uscire dalla griglia; il pannello lascia la griglia utilizzabile, così potete continuare a scorrere, filtrare e cliccare altre righe mentre è aperto, e chiuderlo con il suo pulsante di chiusura
 - **Mostra corrispondenze** — mantiene solo le righe il cui valore corrisponde a quello della cella selezionata
 - **Escludi** — nasconde le righe il cui valore corrisponde a quello della cella selezionata
 - **Copia valore** — copia il testo della cella negli appunti
@@ -138,6 +138,8 @@ Il menu a discesa **Campo** raggruppa ciò che è possibile modificare:
 
 Tag, relazioni e padre offrono ciascuno un interruttore **aggiungi / rimuovi**, così da estendere o ridurre i valori esistenti invece di sostituirli.
 
+Quando scegliete **Aggiungi collegamento** per un tipo di relazione che ha dei dettagli — la direzione del flusso tra due applicazioni, il modo in cui un'organizzazione usa un'applicazione, gli indicatori crea / leggi / aggiorna / elimina su un oggetto dati —, la finestra mostra anche questi campi. Ciò che impostate viene salvato su ogni collegamento aggiunto. Anche le schede già collegate a una destinazione scelta ricevono i dettagli, quindi ripetere **Aggiungi collegamento** è il modo per aggiornare i dettagli dei collegamenti esistenti; un dettaglio lasciato vuoto non viene modificato.
+
 Il controllo del valore si adatta al tipo di campo: un campo a selezione multipla mostra le sue opzioni con caselle di spunta, un campo sì/no un elenco Sì / No, un campo data un selettore di data. Lasciando il valore vuoto — **Nessuno** su un campo sì/no — il campo viene svuotato su tutte le schede selezionate. I campi calcolati da una formula e i campi di costo che non sei autorizzato a vedere non vengono proposti.
 
 ### Ristrutturare la gerarchia { #mass-edit-parent }
@@ -234,7 +236,7 @@ Poiché le schede sono identificate per nome + percorso, **due schede dello stes
 
 ### Celle di relazione in linea
 
-Ogni colonna `rel:<tipo_di_relazione>` esprime le relazioni in uscita come elenco **separato da punti e virgola** (per esempio `NexaCore ERP; BillingApp`). Punto e virgola invece di virgola perché i nomi delle schede contengono spesso virgole (`Acme, Inc.`). All'interno di un nome, `/` e `\` vengono fatti precedere dall'escape `\/` e `\\`, e un `;` diventa `\;` — l'esportatore lo gestisce automaticamente (es. `SAP S/4HANA` → `SAP S\/4HANA`). Le celle sono **dichiarative**: il loro contenuto sostituisce l'insieme delle relazioni in uscita di quel tipo dalla sorgente. Rimuovere un target elimina la relazione corrispondente; svuotare la cella le elimina tutte. In una cartella di lavoro esportata da Turbo EA (contiene un foglio `_Meta`) la virgola non è mai un separatore, quindi una cella con un solo target come `This is X, it does Y` resta un solo target. Un foglio senza `_Meta` (creato a mano o esportato prima della 1.23) può ancora separare i target con virgole: se la cella non contiene alcun `;`, viene letta come un solo target quando l'intera cella nomina una scheda, altrimenti come elenco separato da virgole. C'è una colonna per ogni tipo di relazione che parte dal tipo di scheda del foglio — **tutti**, compresi quelli che portano valori. Le destinazioni sono in ordine alfabetico, così riesportare un panorama invariato produce un file identico.
+Ogni colonna `rel:<tipo_di_relazione>` esprime le relazioni in uscita come elenco **separato da punti e virgola** (per esempio `NexaCore ERP; BillingApp`). Punto e virgola invece di virgola perché i nomi delle schede contengono spesso virgole (`Acme, Inc.`). All'interno di un nome, `/` e `\` vengono fatti precedere dall'escape `\/` e `\\`, e un `;` diventa `\;` — l'esportatore lo gestisce automaticamente (es. `SAP S/4HANA` → `SAP S\/4HANA`). Un riferimento con escape è sempre esatto. In una cella scritta a mano la `/` può restare senza escape: `SAP S/4HANA` viene letto prima come percorso (una scheda *4HANA* sotto *SAP S*) e, se in quel percorso non c'è alcuna scheda, come un unico nome, che viene risolto quando esattamente una scheda del tipo lo porta. Le celle sono **dichiarative**: il loro contenuto sostituisce l'insieme delle relazioni in uscita di quel tipo dalla sorgente. Rimuovere un target elimina la relazione corrispondente; svuotare la cella le elimina tutte. In una cartella di lavoro esportata da Turbo EA (contiene un foglio `_Meta`) la virgola non è mai un separatore, quindi una cella con un solo target come `This is X, it does Y` resta un solo target. Un foglio senza `_Meta` (creato a mano o esportato prima della 1.23) può ancora separare i target con virgole: se la cella non contiene alcun `;`, viene letta come un solo target quando l'intera cella nomina una scheda, altrimenti come elenco separato da virgole. C'è una colonna per ogni tipo di relazione che parte dal tipo di scheda del foglio — **tutti**, compresi quelli che portano valori. Le destinazioni sono in ordine alfabetico, così riesportare un panorama invariato produce un file identico.
 
 La colonna `tags` segue la stessa regola: voci `Gruppo: Tag` separate da `; ` (es. `Vendor: Acme, Inc.; Region: EU`), con un `;` nel nome di un tag scritto come `\;`. Le cartelle di lavoro esportate prima della 2.156.1 separavano i tag con virgole e si importano ancora come prima.
 
@@ -269,7 +271,7 @@ Cliccate su **Importa** nella barra degli strumenti, rilasciate la cartella di l
 Alcune precisazioni sull'importazione:
 
 - **Per creare una scheda servono solo `name` e `type`.** I campi contrassegnati come *obbligatori* nel metamodello (compreso Provider o qualsiasi altro tipo) non bloccano l'importazione: la scheda viene comunque creata e le lacune si riflettono nel suo punteggio di qualità dei dati anziché causare un salto silenzioso.
-- **Una `/` nella colonna `name` di una scheda non va preceduta da escape.** L'escape (`\/` per una barra, `\\` per una barra rovesciata) serve solo quando *fate riferimento* a quella scheda da una cella `parent_path`, `rel:<chiave>`, `source_ref` o `target_ref`, dove `/` è il separatore di percorso.
+- **Una `/` nella colonna `name` di una scheda non va preceduta da escape.** L'escape (`\/` per una barra, `\\` per una barra rovesciata) serve solo quando *fate riferimento* a quella scheda da una cella `parent_path`, `rel:<chiave>`, `source_ref` o `target_ref`, dove `/` è il separatore di percorso; anche lì una `/` senza escape viene letta come parte del nome quando nel percorso che compone non c'è alcuna scheda.
 
 ### Esportare
 

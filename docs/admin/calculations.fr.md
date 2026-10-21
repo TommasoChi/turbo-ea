@@ -123,6 +123,8 @@ ses tâches et ses risques, et le dernier rapport de statut.
 | `ppm.byYear` | Les mêmes neuf mesures par exercice, sous forme de liste `{year, capexBudget, …}` |
 | `ppm.currentFiscalYear` | L'exercice dans lequel tombe la date du jour |
 | `ppm.unscheduledPlanned`, `ppm.unscheduledActual` | Lignes de coût sans date : comptées dans les totaux, rattachées à aucun exercice |
+| `ppm.unscheduledCapexActual` | Le réel CapEx de ces lignes de coût sans date |
+| `ppm.unscheduledOpexActual` | Le réel OpEx de ces lignes de coût sans date |
 | `ppm.completion` | Avancement global en % — la moyenne des lots de travaux de premier niveau, exactement le chiffre qu'affiche l'onglet Vue d'ensemble de l'initiative |
 | `ppm.wbsCount`, `ppm.milestoneCount` | Nombre de lots de travaux et de jalons |
 | `ppm.taskCount`, `ppm.tasksTodo`, `ppm.tasksInProgress`, `ppm.tasksDone`, `ppm.tasksBlocked` | Nombre de tâches, au total et par statut |
@@ -185,6 +187,29 @@ un [portail web](web-portals.md) :
 
 Dès lors, marquer une tâche comme terminée, modifier l'achèvement d'un lot de travaux ou en
 supprimer un fait bouger la barre partout où la fiche est affichée.
+
+#### Agréger les montants PPM le long de la hiérarchie des initiatives { #rolling-ppm-figures-up-the-initiative-hierarchy }
+
+Le tableau du portefeuille PPM affiche sur un parent sans ligne de budget ni de coût propre le
+total des initiatives situées en dessous, mais ce montant n'existe que sur le tableau. Pour
+afficher sur un programme — dans l'inventaire, les rapports et les portails — le budget de tout
+ce qui se trouve en dessous,
+utilisez un seul calcul qui lit le résultat de ses enfants :
+
+1. Dans **Admin → Métamodèle**, ajoutez un champ de type **Coût** au type Initiative — par
+   exemple `rolledUpBudget`, libellé *Budget agrégé*.
+2. Dans **Admin → Calculs**, ajoutez un calcul sur Initiative avec la formule
+   `ppm.totalBudget + SUM(PLUCK(children, "attributes.rolledUpBudget"))`, ciblez ce champ et activez-le.
+3. Exécutez-le une fois depuis la liste pour renseigner les initiatives déjà existantes.
+
+La même formule sert à chaque niveau : un projet ajoute son propre budget à rien, un programme
+ajoute le sien aux totaux de ses projets, et ainsi de suite vers le haut. Comme chaque niveau lit
+ce que contiennent ses enfants, l'ordre compte, et Turbo EA s'en charge : une exécution manuelle
+traite la hiérarchie en commençant par le niveau le plus profond, et une modification d'une ligne
+de budget, d'une ligne de coût, d'un lot de travaux, d'une tâche, d'un risque ou d'un rapport
+d'avancement relance les ancêtres de l'initiative, en commençant par le parent direct. Remplacez
+`ppm.totalBudget` par `ppm.totalActual`, `ppm.capexBudget` ou toute autre mesure `ppm` pour agréger
+un autre montant — un champ par montant.
 
 ### Fonctions intégrées
 
@@ -322,6 +347,13 @@ Les calculs d'une fiche sont réévalués lorsque :
   fiches du type cible et sauvegarde les résultats ;
 * une ligne de budget, une ligne de coût, un lot de travaux, une tâche, un risque ou un
   rapport de statut PPM de la fiche change, pour une Initiative.
+* la modification ci-dessus porte sur une Initiative située plus bas dans la hiérarchie :
+  toutes les Initiatives au-dessus d'elle sont recalculées aussi, en commençant par le parent
+  direct, de sorte qu'une [agrégation](#rolling-ppm-figures-up-the-initiative-hierarchy) suit la modification.
+
+Une exécution manuelle évalue les fiches d'un type hiérarchique en commençant par le niveau le
+plus profond, les enfants avant leur parent, de sorte qu'une formule qui lit les valeurs
+calculées de ses enfants aboutit en une seule exécution.
 
 Ils ne sont **pas** réévalués lorsqu'une autre fiche lue par la formule est modifiée. Si vous
 changez un coût sur un composant IT, une application qui l'agrège ne bougera pas tant que

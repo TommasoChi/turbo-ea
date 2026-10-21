@@ -17,6 +17,17 @@ L'onglet Types de fiches liste tous les types du système. Turbo EA est livré a
 | **Application et données** | Application, Interface, Objet de Données |
 | **Architecture technique** | Composant IT, Catégorie Technique, Fournisseur, Système |
 
+### Catégories (couches d'architecture)
+
+Chaque type de fiche appartient à une **catégorie** — la couche d'architecture sous laquelle il est regroupé. L'ordre des catégories est celui des couches partout où elles sont dessinées : le filtre de types de l'inventaire, le **graphe du métamodèle** et les couloirs de la Layered Dependency View, chacune dans la couleur de sa catégorie et dans la langue du lecteur.
+
+- **Les quatre couches intégrées sont verrouillées.** Stratégie et transformation, Architecture métier, Application et données et Architecture technique ne peuvent être ni renommées, ni recolorées, ni supprimées, et sont traduites dans toutes les langues prises en charge.
+- **Créez les vôtres.** Dans le champ **Catégorie** de l'éditeur de type ou de **+ Nouveau type**, saisissez un nom qui n'existe pas encore et choisissez **Créer la catégorie « … »**. Choisissez une couleur, ajoutez éventuellement des traductions, et le type rejoint la nouvelle catégorie.
+- **Déplacez n'importe quel type.** Les types intégrés peuvent aussi être déplacés — placez par exemple Interface dans une couche personnalisée *Intégration*.
+- **Gérer les catégories.** Le bouton **Gérer les catégories**, à côté de **+ Nouveau type**, liste toutes les catégories avec leur couleur et le nombre de types de fiches qui les utilisent. Les flèches changent l'ordre des couches (une couche personnalisée peut se placer entre deux couches intégrées), le crayon renomme, recolore ou traduit une catégorie personnalisée, et la corbeille la supprime. Une catégorie encore utilisée par un type de fiche ne peut pas être supprimée — déplacez d'abord ses types vers une autre catégorie.
+
+![Gérer les catégories](../assets/img/fr/100_admin_metamodele_categories.png)
+
 ### Création d'un type personnalisé
 
 Cliquez sur **+ Nouveau type** pour créer un type de fiche personnalisé. Configurez :
@@ -27,7 +38,7 @@ Cliquez sur **+ Nouveau type** pour créer un type de fiche personnalisé. Confi
 | **Libellé** | Nom d'affichage dans l'interface |
 | **Icône** | Nom de l'icône Google Material Symbol |
 | **Couleur** | Couleur de marque pour le type (utilisée dans l'inventaire, les rapports et les diagrammes) |
-| **Catégorie** | Regroupement par couche d'architecture |
+| **Catégorie** | La couche d'architecture sous laquelle le type est regroupé — choisissez une catégorie existante ou saisissez un nouveau nom pour en créer une (voir [Catégories](#categories-couches-darchitecture)) |
 | **À une hiérarchie** | Si les fiches de ce type peuvent avoir des relations parent/enfant |
 | **Autoriser les logos personnalisés** | Si les éditeurs peuvent téléverser un logo par fiche, affiché à la place de l'icône du type (activé par défaut pour Application et Composant informatique) |
 
@@ -53,7 +64,8 @@ Les champs définissent les attributs personnalisés disponibles sur les fiches 
 | **Clé** | Identifiant unique du champ |
 | **Libellé** | Nom d'affichage |
 | **Type** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select ou multiple_select. Un pourcentage est un nombre de 0 à 100, affiché sous forme de barre de progression et modifié avec un curseur ou saisi exactement. Un booléen se choisit dans une liste Oui / Non, **Aucun** l'efface ; il s'affiche sous forme de pastille verte *Oui* ou bleue *Non*, ou sous la forme — s'il n'est pas renseigné, ce que le filtre **(vide)** de l'inventaire retrouve |
-| **Options** | Pour les champs de sélection : les choix disponibles avec libellés et couleurs optionnelles |
+| **Options** | Pour les champs de sélection : les choix disponibles avec libellés et couleurs optionnelles. Réordonnez-les avec les flèches haut et bas à côté de chaque option : les menus et les filtres listent les options dans cet ordre, et les puces d'une valeur à choix multiple le suivent sur chaque fiche. |
+| **Texte d'aide** | Conseil facultatif affiché sous forme de note repliable sous le champ pendant l'édition d'une fiche. Il se rédige par langue et peut être défini par tout administrateur du métamodèle ; sur un champ apporté par une extension, il est en lecture seule |
 | **Obligatoire** | Si le champ est obligatoire — voir les règles d'application ci-dessous |
 | **Qualité des données** | La contribution de chaque champ au score est gérée dans le panneau **Qualité des données** (voir ci-dessous) |
 | **Lecture seule** | Empêche la modification manuelle (utile pour les champs calculés) |
@@ -70,6 +82,7 @@ Les champs sont organisés en **sections** sur la page de détail des fiches. Vo
 - Définir les sections en disposition **1 colonne** ou **2 colonnes**
 - Organiser les champs en **groupes** au sein d'une section (rendus comme des sous-en-tetes repliables)
 - Réorganiser les champs au sein d'une section par glisser-déposer, et déplacer un champ vers une autre section via son action **déplacer**
+- Sortir un champ de son groupe en le déposant sur la zone **Déposez ici pour sortir un champ de son groupe**, en bas de chaque colonne qui contient un groupe — le champ arrive à la fin de cette colonne, hors groupe
 
 Le nom de section special `__description` ajoute les champs à la section Description de la page de détail des fiches.
 
@@ -117,6 +130,12 @@ Par exemple, le type Application a pour sous-types : Application Métier, Micros
 4. Les champs masqués sont exclus du score de qualité des données, de sorte que les utilisateurs ne sont pas pénalisés pour des champs qu'ils ne peuvent pas voir.
 
 Lorsqu'aucun sous-type n'est sélectionné sur une fiche (ou que le type n'a pas de sous-types), tous les champs sont visibles. Les champs masqués conservent leurs données — si le sous-type d'une fiche change, les valeurs précédemment masquées sont préservées.
+
+**Renommer un sous-type :** cliquez sur le crayon à côté de sa puce, saisissez le nouveau libellé et appuyez sur Entrée (ou cliquez ailleurs) ; Échap annule. Seul le libellé change : la clé, que les fiches enregistrent, reste la même, et les traductions du sous-type (modifiées depuis l'icône de traduction de l'en-tête) restent telles quelles.
+
+**Relations non requises pour un sous-type :**
+
+Une relation marquée obligatoire sur le type de fiche s'applique à toutes les fiches de ce type. Lorsqu'elle ne convient pas à un sous-type — une application SaaS sans composant informatique d'hébergement, par exemple —, ouvrez la boîte de dialogue **Modèle de sous-type** et cochez-la sous **Relations non requises pour ce sous-type**. La liste ne montre que les relations obligatoires du type, chacune nommée par son verbe tel qu'il se lit depuis ce type de fiche. Pour les fiches de ce sous-type, la relation ne bloque plus l'approbation, ne pèse plus sur le score de qualité des données, et le détail de la fiche ne la marque plus **Obligatoire** ; elle reste affichée si le type de relation est paramétré comme visible. Les fiches des autres sous-types, et celles sans sous-type, en ont toujours besoin. L'enregistrement recalcule aussitôt le score des fiches existantes du type.
 
 #### Rôles de parties prenantes
 
@@ -186,14 +205,15 @@ Cliquez sur le bouton **Traduire** dans la barre d'outils du tiroir de type pour
 - **Types de lien hiérarchique** — Libellés pour chaque type de lien hiérarchique
 - **Sections** — En-têtes de section sur la page de détail de la fiche
 - **Champs** — Libellés des champs et des options de sélection
+- **Texte d'aide** — Le texte d'aide d'un champ, listé sous le champ dès qu'il a été saisi dans l'éditeur de champ. Le modifier en anglais met aussi à jour le texte d'aide par défaut du champ
 - **Rôles des parties prenantes** — Noms de rôles affichés dans l'interface d'attribution des parties prenantes
 
 Les traductions sont stockées avec chaque type de fiche et sont résolues au moment du rendu en fonction de la langue sélectionnée par l'utilisateur. Les libellés non traduits utilisent la valeur anglaise par défaut.
 
 ### Suppression d'un type
 
-- Les **types intégrés** sont masqués (suppression logique) et peuvent être restaurés
-- Les **types personnalisés** sont supprimés définitivement
+- Les **types intégrés** sont masqués (suppression logique) et peuvent être restaurés. Le bouton de suppression de l'éditeur de type est verrouillé pour eux — utilisez **Masquer le type** à la place.
+- Les **types personnalisés** — ceux que vous avez créés — peuvent être **supprimés définitivement**. Ouvrez le type, cliquez sur **Supprimer le type** dans l'en-tête, et Turbo EA affiche tout ce que la suppression emportera : les fiches du type (avec leurs relations, parties prenantes, commentaires et pièces jointes), les types de relation qui le relient à d'autres types, les calculs qui le ciblent et ses rôles de partie prenante. Saisissez la clé du type pour déverrouiller **Supprimer définitivement**. La suppression est irréversible ; les fiches archivées du type sont également supprimées, et chaque fiche supprimée est consignée dans le journal de sécurité et d'administration ainsi que dans l'historique des événements.
 
 ## Types de relations
 

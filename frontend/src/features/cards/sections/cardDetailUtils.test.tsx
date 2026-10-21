@@ -84,6 +84,62 @@ describe("collapsible field help", () => {
     expect(screen.getByText("Enter the legal name.")).toBeInTheDocument();
   });
 
+  it("opens and closes the guidance from the toggle", () => {
+    // fireEvent, not userEvent.setup(): setup() replaces navigator.clipboard
+    // with a getter-only stub, which breaks the CardIdPill copy test below.
+    render(
+      <FieldEditor
+        field={{ key: "name", label: "Name", type: "text", help: "Enter the legal name." }}
+        value=""
+        onChange={() => {}}
+      />,
+    );
+    const toggle = screen.getByRole("button", { name: /Help/ });
+    expect(within(toggle).getByText("expand_more")).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(within(toggle).getByText("expand_less")).toBeInTheDocument();
+    expect(screen.getByText("Enter the legal name.")).toBeVisible();
+    fireEvent.click(toggle);
+    expect(within(toggle).getByText("expand_more")).toBeInTheDocument();
+  });
+
+  it("underlines only the caption on hover, never the icons", () => {
+    render(
+      <FieldEditor
+        field={{ key: "name", label: "Name", type: "text", help: "Enter the legal name." }}
+        value=""
+        onChange={() => {}}
+      />,
+    );
+    const toggle = screen.getByRole("button", { name: /Help/ });
+    const caption = within(toggle).getByText("Help");
+    const icons = [within(toggle).getByText("help"), within(toggle).getByText("expand_more")];
+    // The caption is its own element, a direct child of the button, which is
+    // what the `button:hover > &` rule needs; the icons are its siblings.
+    expect(caption.parentElement).toBe(toggle);
+    for (const icon of icons) expect(icon.parentElement).toBe(toggle);
+
+    // Emotion injects each rule as text; read them back.
+    const css = Array.from(document.querySelectorAll("style"))
+      .map((el) => el.textContent ?? "")
+      .join("\n");
+    const rulesFor = (el: Element) =>
+      Array.from(el.classList)
+        .filter((c) => c.startsWith("css-"))
+        .flatMap((c) => css.split("}").filter((rule) => rule.includes(`.${c}`)));
+    const captionRules = rulesFor(caption);
+    expect(
+      captionRules.some((r) => /button:hover\s*>\s*\.css-/.test(r) && /text-decoration:\s*underline/.test(r)),
+    ).toBe(true);
+    // The button itself carries no underline any more, so nothing under the
+    // icons can inherit one.
+    expect(rulesFor(toggle).some((r) => /underline/.test(r))).toBe(false);
+    for (const icon of icons) {
+      expect(rulesFor(icon).some((r) => /underline/.test(r))).toBe(false);
+      expect((icon as HTMLElement).style.textDecoration).toBe("");
+    }
+  });
+
   it("shows no help affordance when the field has none", () => {
     render(
       <FieldEditor field={{ key: "name", label: "Name", type: "text" }} value="" onChange={() => {}} />,
@@ -365,14 +421,14 @@ describe("boolean field type (#1266)", () => {
     expect(document.querySelector(".MuiChip-root")).toBeNull();
   });
 
-  it("FieldEditor is a Yes / No dropdown with None to clear", async () => {
+  it("FieldEditor is a Yes / No dropdown with Not set to clear", async () => {
     const onChange = vi.fn();
     render(<FieldEditor field={flag} value={undefined} onChange={onChange} />);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("combobox", { name: /Commercial Application/ }));
     const listbox = await screen.findByRole("listbox");
     expect(within(listbox).getAllByRole("option").map((o) => o.textContent)).toEqual([
-      "None",
+      "Not set",
       "Yes",
       "No",
     ]);
@@ -380,12 +436,12 @@ describe("boolean field type (#1266)", () => {
     expect(onChange).toHaveBeenLastCalledWith(false);
   });
 
-  it("FieldEditor clears a set value through None", async () => {
+  it("FieldEditor clears a set value through Not set", async () => {
     const onChange = vi.fn();
     render(<FieldEditor field={flag} value={true} onChange={onChange} />);
     expect(screen.getByRole("combobox")).toHaveTextContent("Yes");
     await userEvent.click(screen.getByRole("combobox"));
-    await userEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: "None" }));
+    await userEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: "Not set" }));
     expect(onChange).toHaveBeenLastCalledWith(null);
   });
 
@@ -421,5 +477,36 @@ describe("links in free text (FieldValue)", () => {
       "href",
       "mailto:ops@a.io",
     );
+  });
+});
+
+describe("multiple_select chips follow the option order (#1292)", () => {
+  const tiers: FieldDef = {
+    key: "tiers",
+    label: "Tiers",
+    type: "multiple_select",
+    options: [
+      { key: "gold", label: "Gold", color: "#ffd700" },
+      { key: "silver", label: "Silver", color: "#c0c0c0" },
+      { key: "bronze", label: "Bronze", color: "#cd7f32" },
+    ],
+  };
+
+  const chipOrder = (labels: string[]) =>
+    labels
+      .map((l) => ({ l, el: screen.getByText(l) }))
+      .sort((a, b) =>
+        a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+      )
+      .map((x) => x.l);
+
+  it("FieldValue renders stored values in option order, unknown keys last", () => {
+    render(<FieldValue field={tiers} value={["bronze", "legacy", "gold"]} />);
+    expect(chipOrder(["Bronze", "legacy", "Gold"])).toEqual(["Gold", "Bronze", "legacy"]);
+  });
+
+  it("FieldEditor's selected chips use the same order", () => {
+    render(<FieldEditor field={tiers} value={["bronze", "silver"]} onChange={() => {}} />);
+    expect(chipOrder(["Bronze", "Silver"])).toEqual(["Silver", "Bronze"]);
   });
 });

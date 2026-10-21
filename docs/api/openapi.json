@@ -542,19 +542,6 @@
         "title": "ApplyInstallIn",
         "type": "object"
       },
-      "ArchimateEnabledPayload": {
-        "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled"
-        ],
-        "title": "ArchimateEnabledPayload",
-        "type": "object"
-      },
       "ArchiveImpactCardRef": {
         "properties": {
           "id": {
@@ -3450,6 +3437,104 @@
         "title": "CardRestoreResponse",
         "type": "object"
       },
+      "CardTypeCategoryCreate": {
+        "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "label": {
+            "maxLength": 300,
+            "title": "Label",
+            "type": "string"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "CardTypeCategoryCreate",
+        "type": "object"
+      },
+      "CardTypeCategoryOrder": {
+        "properties": {
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keys",
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "title": "CardTypeCategoryOrder",
+        "type": "object"
+      },
+      "CardTypeCategoryUpdate": {
+        "properties": {
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations"
+          }
+        },
+        "title": "CardTypeCategoryUpdate",
+        "type": "object"
+      },
       "CardTypeCount": {
         "properties": {
           "count": {
@@ -4775,11 +4860,6 @@
             ],
             "title": "Description"
           },
-          "kind": {
-            "default": "drawio",
-            "title": "Kind",
-            "type": "string"
-          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -4917,17 +4997,6 @@
               }
             ],
             "title": "Description"
-          },
-          "kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kind"
           },
           "name": {
             "anyOf": [
@@ -5718,37 +5787,6 @@
           "status"
         ],
         "title": "ExtensionInstallOut",
-        "type": "object"
-      },
-      "ExtensionMcpManifestOut": {
-        "properties": {
-          "key": {
-            "title": "Key",
-            "type": "string"
-          },
-          "mcp_sdk_version": {
-            "title": "Mcp Sdk Version",
-            "type": "string"
-          },
-          "mcp_tools": {
-            "items": {
-              "$ref": "#/components/schemas/McpToolOut"
-            },
-            "title": "Mcp Tools",
-            "type": "array"
-          },
-          "version": {
-            "title": "Version",
-            "type": "string"
-          }
-        },
-        "required": [
-          "key",
-          "version",
-          "mcp_sdk_version",
-          "mcp_tools"
-        ],
-        "title": "ExtensionMcpManifestOut",
         "type": "object"
       },
       "ExtensionNotesOut": {
@@ -6899,56 +6937,6 @@
         "title": "McpSettingsPayload",
         "type": "object"
       },
-      "McpToolOut": {
-        "properties": {
-          "annotations": {
-            "additionalProperties": true,
-            "title": "Annotations",
-            "type": "object"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "dry_run_supported": {
-            "default": false,
-            "title": "Dry Run Supported",
-            "type": "boolean"
-          },
-          "input_schema": {
-            "additionalProperties": true,
-            "title": "Input Schema",
-            "type": "object"
-          },
-          "method": {
-            "title": "Method",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "required_permission": {
-            "title": "Required Permission",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "description",
-          "method",
-          "path",
-          "input_schema",
-          "annotations",
-          "required_permission"
-        ],
-        "title": "McpToolOut",
-        "type": "object"
-      },
       "MessageFlowUpdate": {
         "description": "Set (or clear, with ``null``) the Interface card a message flow realises.",
         "properties": {
@@ -7769,29 +7757,6 @@
             ],
             "title": "Data"
           },
-          "entity_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entity Id"
-          },
-          "entity_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entity Type"
-          },
           "event_type": {
             "title": "Event Type",
             "type": "string"
@@ -8222,6 +8187,17 @@
             "title": "Category",
             "type": "string"
           },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "fiscal_year": {
             "title": "Fiscal Year",
             "type": "integer"
@@ -8248,6 +8224,17 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
           },
           "fiscal_year": {
             "title": "Fiscal Year",
@@ -8306,6 +8293,17 @@
               }
             ],
             "title": "Category"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
           },
           "fiscal_year": {
             "anyOf": [
@@ -8651,6 +8649,11 @@
             ],
             "title": "End Date"
           },
+          "group_anchor": {
+            "default": false,
+            "title": "Group Anchor",
+            "type": "boolean"
+          },
           "group_id": {
             "anyOf": [
               {
@@ -8722,6 +8725,16 @@
               }
             ],
             "title": "Parent Id"
+          },
+          "rollup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PpmRollup"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "stakeholders": {
             "default": [],
@@ -8929,7 +8942,7 @@
         "type": "object"
       },
       "PpmPublicItem": {
-        "description": "One board row.\n\n``id`` is the initiative's real card UUID \u2014 a portfolio portal links its rows\nto ``/ppm/{id}`` behind the login wall, so it is exposed by design. Every\nother identifier is withheld: ``group_id`` is an opaque per-response token,\nand the parent, report, reporter and stakeholder ids are not emitted at all.",
+        "description": "One board row.\n\n``id`` is the initiative's real card UUID \u2014 a portfolio portal links its rows\nto ``/ppm/{id}`` behind the login wall, so it is exposed by design.\n``parent_id`` is set only when the parent is itself a row of the same\nresponse, so it repeats an ``id`` already published and lets the board nest\nits rows; a parent the portal does not publish reads ``None``. Every other\nidentifier is withheld: ``group_id`` is an opaque per-response token, and the\nreport, reporter and stakeholder ids are not emitted at all. ``group_anchor``\nmarks the row that names its group under a subtype grouping.",
         "properties": {
           "capex_actual": {
             "anyOf": [
@@ -8963,6 +8976,11 @@
               }
             ],
             "title": "End Date"
+          },
+          "group_anchor": {
+            "default": false,
+            "title": "Group Anchor",
+            "type": "boolean"
           },
           "group_id": {
             "anyOf": [
@@ -9025,6 +9043,27 @@
               }
             ],
             "title": "Opex Planned"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "rollup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PpmPublicRollup"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "stakeholders": {
             "default": [],
@@ -9200,6 +9239,86 @@
           "scope_health"
         ],
         "title": "PpmPublicReport",
+        "type": "object"
+      },
+      "PpmPublicRollup": {
+        "description": "What a parent row shows in place of costs or dates it has not got.\n\nCarries no identifier. The planned and actual pairs are derived on their own\n(see ``PpmRollup``) and both read ``None`` whenever the portal hides costs;\nthe dates and the count are published like the row's own dates.",
+        "properties": {
+          "capex_actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capex Actual"
+          },
+          "capex_planned": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capex Planned"
+          },
+          "descendant_count": {
+            "title": "Descendant Count",
+            "type": "integer"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "opex_actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opex Actual"
+          },
+          "opex_planned": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opex Planned"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "required": [
+          "descendant_count"
+        ],
+        "title": "PpmPublicRollup",
         "type": "object"
       },
       "PpmRiskCreate": {
@@ -9468,6 +9587,211 @@
           }
         },
         "title": "PpmRiskUpdate",
+        "type": "object"
+      },
+      "PpmRollup": {
+        "description": "What a parent row shows in place of costs or dates it has not got.\n\nThe quartet is two pairs, each all set or all ``None`` on its own: the\nplanned pair when the parent has no budget line of its own and some\ninitiative beneath it has, the actual pair when it has no cost line of its\nown and some initiative beneath it has. The dates\nare set only when it has neither a start nor an end date. ``descendant_count``\nis the number of initiatives beneath it on the board\n(``app.services.ppm_rollup``).",
+        "properties": {
+          "capex_actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capex Actual"
+          },
+          "capex_planned": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capex Planned"
+          },
+          "descendant_count": {
+            "title": "Descendant Count",
+            "type": "integer"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "opex_actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opex Actual"
+          },
+          "opex_planned": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opex Planned"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "required": [
+          "descendant_count"
+        ],
+        "title": "PpmRollup",
+        "type": "object"
+      },
+      "PpmRollupOut": {
+        "description": "``GET /ppm/initiatives/{id}/rollup``: the initiatives beneath one initiative.\n\nAlways summed over the descendants alone, never including the initiative's\nown lines or dates \u2014 the Overview and Budget & Costs tabs show it beside\nthose, or in their place on a side the initiative has no lines of its own\nfor. ``has_budget_lines`` / ``has_cost_lines`` describe the initiative\nitself; ``by_year`` is ascending with the undated entry last.",
+        "properties": {
+          "by_year": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PpmRollupYear"
+            },
+            "title": "By Year",
+            "type": "array"
+          },
+          "capex_actual": {
+            "default": 0,
+            "title": "Capex Actual",
+            "type": "number"
+          },
+          "capex_planned": {
+            "default": 0,
+            "title": "Capex Planned",
+            "type": "number"
+          },
+          "descendant_count": {
+            "title": "Descendant Count",
+            "type": "integer"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "has_budget_lines": {
+            "default": false,
+            "title": "Has Budget Lines",
+            "type": "boolean"
+          },
+          "has_cost_lines": {
+            "default": false,
+            "title": "Has Cost Lines",
+            "type": "boolean"
+          },
+          "opex_actual": {
+            "default": 0,
+            "title": "Opex Actual",
+            "type": "number"
+          },
+          "opex_planned": {
+            "default": 0,
+            "title": "Opex Planned",
+            "type": "number"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "total_actual": {
+            "default": 0,
+            "title": "Total Actual",
+            "type": "number"
+          },
+          "total_planned": {
+            "default": 0,
+            "title": "Total Planned",
+            "type": "number"
+          }
+        },
+        "required": [
+          "descendant_count"
+        ],
+        "title": "PpmRollupOut",
+        "type": "object"
+      },
+      "PpmRollupYear": {
+        "description": "One fiscal year of the initiatives beneath one initiative.\n\n``year`` is ``None`` for cost lines without a date, which belong to no year.\nBudget lines sit on their stored fiscal year, cost lines on the fiscal year\ntheir date falls in (the same rule as ``ppm.byYear``).",
+        "properties": {
+          "capex_actual": {
+            "default": 0,
+            "title": "Capex Actual",
+            "type": "number"
+          },
+          "capex_budget": {
+            "default": 0,
+            "title": "Capex Budget",
+            "type": "number"
+          },
+          "opex_actual": {
+            "default": 0,
+            "title": "Opex Actual",
+            "type": "number"
+          },
+          "opex_budget": {
+            "default": 0,
+            "title": "Opex Budget",
+            "type": "number"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "year"
+        ],
+        "title": "PpmRollupYear",
         "type": "object"
       },
       "PpmStatusReportCreate": {
@@ -16362,19 +16686,6 @@
         "title": "UserUpdate",
         "type": "object"
       },
-      "ValidateBody": {
-        "properties": {
-          "xml": {
-            "title": "Xml",
-            "type": "string"
-          }
-        },
-        "required": [
-          "xml"
-        ],
-        "title": "ValidateBody",
-        "type": "object"
-      },
       "ValidateRequest": {
         "properties": {
           "formula": {
@@ -16432,19 +16743,6 @@
           "type"
         ],
         "title": "ValidationError",
-        "type": "object"
-      },
-      "ValueChainEnabledPayload": {
-        "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled"
-        ],
-        "title": "ValueChainEnabledPayload",
         "type": "object"
       },
       "VendorAnalysisOut": {
@@ -19375,45 +19673,6 @@
         ]
       }
     },
-    "/api/v1/archimate/validate": {
-      "post": {
-        "operationId": "validate_api_v1_archimate_validate_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ValidateBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Validate",
-        "tags": [
-          "archimate"
-        ]
-      }
-    },
     "/api/v1/auth/forgot-password": {
       "post": {
         "description": "Initiate a password reset \u2014 or first-time password setup \u2014 for a local account.\n\nAnti-enumeration: always returns `{\"ok\": True}` regardless of whether the\nemail matches a user. An email is only sent for an active local account when\nSMTP is configured, and its shape depends on the account's state:\n\n- The account already has a password \u2192 a one-hour **reset** link.\n- The account has no password but a setup token (created without a\n  password, e.g. via a stakeholder invite left un-emailed) \u2192 a **set-password**\n  link so the user can self-serve on first login. A missing setup token is\n  minted here so the account is never permanently locked out.\n\nSSO-only accounts (no password, marked `auth_provider=\"sso\"`) get nothing.",
@@ -20134,47 +20393,6 @@
         "summary": "Bookmark Odata Feed",
         "tags": [
           "bookmarks"
-        ]
-      }
-    },
-    "/api/v1/bpm/organizations/{organization_id}/processes": {
-      "get": {
-        "description": "Reverse lookup of list_elements above: every BusinessProcess with at\nleast one BPMN element (step) linked to this Organization via\nprocess_element_organizations, plus which specific elements. Only the\nforward direction (process -> elements -> organizations) existed before\n\u2014 added for turbo-ea-ext-organization's per-step impact aggregation.",
-        "operationId": "list_processes_by_organization_api_v1_bpm_organizations__organization_id__processes_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "organization_id",
-            "required": true,
-            "schema": {
-              "title": "Organization Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Processes By Organization",
-        "tags": [
-          "bpm"
         ]
       }
     },
@@ -23708,60 +23926,6 @@
         ]
       }
     },
-    "/api/v1/cards/{card_id}/display-attributes": {
-      "get": {
-        "description": "Return only the selected, schema-declared display values for one Card.",
-        "operationId": "get_display_attributes_api_v1_cards__card_id__display_attributes_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "card_id",
-            "required": true,
-            "schema": {
-              "title": "Card Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "fields",
-            "required": false,
-            "schema": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "title": "Fields",
-              "type": "array"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Display Attributes",
-        "tags": [
-          "cards"
-        ]
-      }
-    },
     "/api/v1/cards/{card_id}/documents": {
       "get": {
         "operationId": "list_documents_api_v1_cards__card_id__documents_get",
@@ -25592,16 +25756,6 @@
               "title": "Sort Dir",
               "type": "string"
             }
-          },
-          {
-            "in": "query",
-            "name": "kind",
-            "required": false,
-            "schema": {
-              "default": "drawio",
-              "title": "Kind",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -26854,32 +27008,6 @@
         ]
       }
     },
-    "/api/v1/extensions/mcp-manifest": {
-      "get": {
-        "description": "Public, unauthenticated \u2014 consumed by the mcp-server process at its\nown startup, before any MCP client has authenticated, so it cannot go\nthrough the get_current_user-gated /extensions/status. Mirrors the\npublic GET /settings/mcp/status pattern. No secrets are exposed: tool\nschemas are the same data already shipped inside the (signature-\nverified) bundle. Visibility follows the same enabled+usable rule as\nevery other extension surface \u2014 disabled or unlicensed extensions\nsimply don't appear.",
-        "operationId": "extensions_mcp_manifest_api_v1_extensions_mcp_manifest_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ExtensionMcpManifestOut"
-                  },
-                  "title": "Response Extensions Mcp Manifest Api V1 Extensions Mcp Manifest Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Extensions Mcp Manifest",
-        "tags": [
-          "Extensions"
-        ]
-      }
-    },
     "/api/v1/extensions/status": {
       "get": {
         "description": "Least-privilege list of enabled extensions for any authenticated user.",
@@ -27300,10 +27428,10 @@
         ]
       }
     },
-    "/api/v1/metamodel/card-type-archimate-mapping": {
+    "/api/v1/metamodel/categories": {
       "get": {
-        "description": "Every card type's (and subtype's) current ArchiMate element type\nmapping, resolved from the EnterpriseObjectCardMapping bridge table --\nthe n:m replacement for the old single ``CardType.archimate_type``\ncolumn. Consumed by the MCP server's ``get_archimate_mapping`` tool.\n\nAuthenticated read, like ``GET /enterprise-objects`` \u2014 no\n``admin.metamodel`` gate, since this only reports the live mapping.\nExcludes hidden/soft-deleted types and orders by ``sort_order``, same as\n``GET /metamodel/types`` (the endpoint this one is meant to sit beside\nfor the MCP tool, which should not see a type a `DELETE /types/{key}`\nsoft-delete hid from everywhere else).",
-        "operationId": "get_card_type_archimate_mapping_api_v1_metamodel_card_type_archimate_mapping_get",
+        "description": "Every card type category, in layer order. Any signed-in user may read\nit \u2014 every surface that draws layers needs the labels and colours.",
+        "operationId": "list_card_type_categories_api_v1_metamodel_categories_get",
         "responses": {
           "200": {
             "content": {
@@ -27314,7 +27442,170 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Get Card Type Archimate Mapping",
+        "summary": "List Card Type Categories",
+        "tags": [
+          "metamodel"
+        ]
+      },
+      "post": {
+        "description": "Create a custom category; its key is the label as typed, trimmed.",
+        "operationId": "create_card_type_category_api_v1_metamodel_categories_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardTypeCategoryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Card Type Category",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/categories/order": {
+      "put": {
+        "description": "Rewrite the layer order. ``keys`` must list every category exactly once\n\u2014 the built-in layers included, since a custom one may sit between them.",
+        "operationId": "reorder_card_type_categories_api_v1_metamodel_categories_order_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardTypeCategoryOrder"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reorder Card Type Categories",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/categories/{key}": {
+      "delete": {
+        "description": "Delete a custom category no card type uses. Built-in layers are locked;\na category still in use answers 409 ``types_present`` with the types.",
+        "operationId": "delete_card_type_category_api_v1_metamodel_categories__key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Card Type Category",
+        "tags": [
+          "metamodel"
+        ]
+      },
+      "patch": {
+        "description": "Edit a custom category's label, colour or translations. The key never\nchanges (it is what card types store); a built-in layer is locked.",
+        "operationId": "update_card_type_category_api_v1_metamodel_categories__key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardTypeCategoryUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Card Type Category",
         "tags": [
           "metamodel"
         ]
@@ -27480,237 +27771,6 @@
           }
         },
         "summary": "Update Compliance Regulation",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/enterprise-objects": {
-      "get": {
-        "description": "List the ArchiMate Enterprise Object registry with their card mappings.\n\nAuthenticated read, like ``GET /types`` \u2014 the drawing palette calls this\nfor any user who can edit a diagram, not just admins who manage the\nmetamodel, so there is no ``admin.metamodel`` gate here.",
-        "operationId": "list_enterprise_objects_api_v1_metamodel_enterprise_objects_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "include_hidden",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Hidden",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Enterprise Objects",
-        "tags": [
-          "metamodel"
-        ]
-      },
-      "post": {
-        "description": "Create a custom Enterprise Object. Always ``is_standard=False`` and\n``is_locked=False`` \u2014 the standard registry rows only ever come from\n``seed_enterprise_objects``.",
-        "operationId": "create_enterprise_object_api_v1_metamodel_enterprise_objects_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Enterprise Object",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/enterprise-objects/{key}": {
-      "patch": {
-        "operationId": "update_enterprise_object_api_v1_metamodel_enterprise_objects__key__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Update Enterprise Object",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/enterprise-objects/{key}/card-mappings": {
-      "post": {
-        "description": "Add one card-type (or card-type+subtype) mapping row to an Enterprise Object.",
-        "operationId": "add_card_mapping_api_v1_metamodel_enterprise_objects__key__card_mappings_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Add Card Mapping",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/enterprise-objects/{key}/card-mappings/{mapping_id}": {
-      "delete": {
-        "operationId": "remove_card_mapping_api_v1_metamodel_enterprise_objects__key__card_mappings__mapping_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "mapping_id",
-            "required": true,
-            "schema": {
-              "title": "Mapping Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Remove Card Mapping",
         "tags": [
           "metamodel"
         ]
@@ -28452,6 +28512,18 @@
               "title": "Key",
               "type": "string"
             }
+          },
+          {
+            "description": "Also delete every card of a custom type (with its relations). Without it, a custom type that still has cards is refused with 409.",
+            "in": "query",
+            "name": "delete_cards",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also delete every card of a custom type (with its relations). Without it, a custom type that still has cards is refused with 409.",
+              "title": "Delete Cards",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -28563,6 +28635,47 @@
           }
         },
         "summary": "Update Type",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/types/{key}/delete-impact": {
+      "get": {
+        "description": "What ``DELETE /types/{key}`` would remove: the confirmation dialog's numbers.\n\nCounts only \u2014 a card type's dependants are landscape-wide admin data, and the\ncaller holds ``admin.metamodel``, so no read scope applies.",
+        "operationId": "get_type_delete_impact_api_v1_metamodel_types__key__delete_impact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Type Delete Impact",
         "tags": [
           "metamodel"
         ]
@@ -31618,6 +31731,49 @@
         ]
       }
     },
+    "/api/v1/ppm/initiatives/{initiative_id}/rollup": {
+      "get": {
+        "description": "Count, cost sums and date span of the initiatives beneath this one.\n\nRead live and never stored: a stored roll-up would go stale on a child's\nedit, a re-parent, an archive or a restore. Only initiatives the caller may\nsee count.",
+        "operationId": "initiative_rollup_api_v1_ppm_initiatives__initiative_id__rollup_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "initiative_id",
+            "required": true,
+            "schema": {
+              "title": "Initiative Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PpmRollupOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Initiative Rollup",
+        "tags": [
+          "ppm"
+        ]
+      }
+    },
     "/api/v1/ppm/initiatives/{initiative_id}/tasks": {
       "get": {
         "operationId": "list_tasks_api_v1_ppm_initiatives__initiative_id__tasks_get",
@@ -32974,46 +33130,6 @@
         ]
       }
     },
-    "/api/v1/reports/bpm/element-data-object-map": {
-      "get": {
-        "description": "Which BPMN elements use which data objects \u2014 grouped by data object.",
-        "operationId": "element_data_object_map_api_v1_reports_bpm_element_data_object_map_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Element Data Object Map",
-        "tags": [
-          "reports"
-        ]
-      }
-    },
-    "/api/v1/reports/bpm/element-it-component-map": {
-      "get": {
-        "description": "Which BPMN elements use which IT components \u2014 grouped by IT component.",
-        "operationId": "element_it_component_map_api_v1_reports_bpm_element_it_component_map_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Element It Component Map",
-        "tags": [
-          "reports"
-        ]
-      }
-    },
     "/api/v1/reports/bpm/process-application-matrix": {
       "get": {
         "description": "Process \u00d7 Application cross-reference grid (process-level + element-level links).",
@@ -33808,7 +33924,7 @@
         "operationId": "ppm_gantt_api_v1_reports_ppm_gantt_get",
         "parameters": [
           {
-            "description": "Card type key to group by",
+            "description": "Card type key to group by, or subtype:<key> to group every initiative under the top-most initiative of that Initiative subtype above it",
             "in": "query",
             "name": "group_by",
             "required": false,
@@ -33821,7 +33937,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Card type key to group by",
+              "description": "Card type key to group by, or subtype:<key> to group every initiative under the top-most initiative of that Initiative subtype above it",
               "title": "Group By"
             }
           }
@@ -33947,77 +34063,6 @@
           }
         },
         "summary": "Stakeholder Directory",
-        "tags": [
-          "reports"
-        ]
-      }
-    },
-    "/api/v1/reports/value-chain": {
-      "get": {
-        "description": "Band/box model for the Value Chain page, layout already resolved.\n\nOne query per card type and one per relation type: the page used to fan\nout a /relations call per category box and per core value stream, which\nis what this replaces. All logic lives in ``build_chain_payload``.",
-        "operationId": "value_chain_api_v1_reports_value_chain_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Value Chain",
-        "tags": [
-          "reports"
-        ]
-      }
-    },
-    "/api/v1/reports/value-chain/{category_id}": {
-      "get": {
-        "description": "Four-band Value Stream map of one process category (the drill-down).\n\nOne query per card type and one per relation type for the whole\nlandscape: the page used to issue /relations calls per root and per leaf\nand one /bpm/.../elements call per process. All logic lives in\n``build_stream_payload``.",
-        "operationId": "value_stream_api_v1_reports_value_chain__category_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "category_id",
-            "required": true,
-            "schema": {
-              "title": "Category Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "related",
-            "required": false,
-            "schema": {
-              "default": "none",
-              "title": "Related",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Value Stream",
         "tags": [
           "reports"
         ]
@@ -37278,64 +37323,6 @@
         ]
       }
     },
-    "/api/v1/settings/archimate-enabled": {
-      "get": {
-        "description": "Public endpoint \u2014 the ArchiMate module flag (off unless an admin enables it).",
-        "operationId": "get_archimate_enabled_api_v1_settings_archimate_enabled_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Archimate Enabled",
-        "tags": [
-          "settings"
-        ]
-      },
-      "patch": {
-        "description": "Admin endpoint \u2014 enable or disable the ArchiMate module.",
-        "operationId": "update_archimate_enabled_api_v1_settings_archimate_enabled_patch",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ArchimateEnabledPayload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Update Archimate Enabled",
-        "tags": [
-          "settings"
-        ]
-      }
-    },
     "/api/v1/settings/archive-retention-days": {
       "get": {
         "description": "Public endpoint \u2014 days an archived card is kept before auto-purge.\n\n``0`` means archived cards are kept indefinitely (auto-purge disabled).",
@@ -39025,64 +39012,6 @@
           }
         },
         "summary": "Get Update Status",
-        "tags": [
-          "settings"
-        ]
-      }
-    },
-    "/api/v1/settings/value-chain-enabled": {
-      "get": {
-        "description": "Public endpoint \u2014 returns the raw Value Chain module flag.\n\nDeliberately NOT combined with ``bpmEnabled``: the Settings page must show\nthe switch's own position even while BPM is off. The conjunction is a\nfrontend concern.",
-        "operationId": "get_value_chain_enabled_api_v1_settings_value_chain_enabled_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Value Chain Enabled",
-        "tags": [
-          "settings"
-        ]
-      },
-      "patch": {
-        "description": "Admin endpoint \u2014 enable or disable the Value Chain module.",
-        "operationId": "update_value_chain_enabled_api_v1_settings_value_chain_enabled_patch",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ValueChainEnabledPayload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Update Value Chain Enabled",
         "tags": [
           "settings"
         ]
@@ -42962,7 +42891,7 @@
             }
           },
           {
-            "description": "Card type key to group by",
+            "description": "Card type key to group by, or subtype:<key> to group every initiative under the top-most initiative of that Initiative subtype above it",
             "in": "query",
             "name": "group_by",
             "required": false,
@@ -42975,7 +42904,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Card type key to group by",
+              "description": "Card type key to group by, or subtype:<key> to group every initiative under the top-most initiative of that Initiative subtype above it",
               "title": "Group By"
             }
           }

@@ -20,6 +20,7 @@ from app.core.permissions import (
 from app.database import get_db
 from app.models.card import Card
 from app.models.card_type import CardType
+from app.models.card_type_category import CardTypeCategory
 from app.models.compliance_regulation import ComplianceRegulation
 from app.models.ea_principle import EAPrinciple
 from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
@@ -29,7 +30,14 @@ from app.models.resource_type import ResourceType
 from app.models.role import Role
 from app.models.stakeholder import Stakeholder
 from app.models.user import User
-from app.services import audit_changes, audit_labels, audit_log, card_reference
+from app.services import (
+    audit_changes,
+    audit_labels,
+    audit_log,
+    card_reference,
+    card_type_categories,
+    card_type_delete,
+)
 from app.services.archimate import taxonomy
 from app.services.archimate.card_type_mapping import get_card_type_mapping
 from app.services.extensions.registry import extension_registry
@@ -39,6 +47,7 @@ from app.services.hierarchy import (
     hierarchy_level_field_def,
 )
 from app.services.permission_service import PermissionService
+from app.services.relation_orientation import side_key
 from app.services.seed import (
     DEFAULT_TYPE_COLORS,
     SUCCESSOR_LABEL,
@@ -113,6 +122,7 @@ _PRINCIPLE_TEXT_FIELDS = ("description", "rationale", "implications")
 # ``translations`` (``{locale: label}``) are reported as items instead.
 _CATALOGUE_AUDIT_SCALARS = ("label", "description", "is_enabled", "sort_order")
 _RESOURCE_TYPE_AUDIT_SCALARS = ("label", "description", "icon", "is_enabled", "sort_order")
+_CATEGORY_AUDIT_SCALARS = ("label", "color", "sort_order")
 
 
 def _audit_snapshot(obj: object, fields: tuple[str, ...]) -> dict:
@@ -153,11 +163,81 @@ def _labelled_hidden_fields(items: list, field_labels: dict[str, str]) -> list:
     """``items`` with each ``subtype.changed`` ``hidden_fields`` side mapped from
     field keys to field labels (an absent list read as empty); an item whose
     sides then agree — absent vs. ``[]`` — is dropped as no change."""
+    return _labelled_subtype_list(items, "hidden_fields", field_labels)
+
+
+def _optional_relations_changed(before: object, after: object) -> bool:
+    """Did any subtype's ``optional_relations`` move? Gates the label query."""
+
+    def by_key(subtypes: object) -> dict:
+        return {
+            st.get("key"): st.get("optional_relations") or []
+            for st in (subtypes if isinstance(subtypes, list) else [])
+            if isinstance(st, dict)
+        }
+
+    return by_key(before) != by_key(after)
+
+
+def _relation_side_labels(
+    relation_types: list, type_key: str, type_labels: dict[str, str]
+) -> dict[str, str]:
+    """``{side key: "verb → other type"}`` for every side of ``relation_types``
+    a card of ``type_key`` sits on — how a subtype's ``optional_relations``
+    (#1296) reads in the Security & admin log. The verb is read from this
+    type's side, the same words the subtype dialog shows."""
+    out: dict[str, str] = {}
+    for rt in relation_types:
+        if rt.source_type_key == type_key:
+            other = type_labels.get(rt.target_type_key, rt.target_type_key)
+            out[side_key(rt, True)] = f"{rt.label} → {other}"
+        if rt.target_type_key == type_key:
+            other = type_labels.get(rt.source_type_key, rt.source_type_key)
+            out[side_key(rt, False)] = f"{rt.reverse_label or rt.label} → {other}"
+    return out
+
+
+async def _load_relation_side_labels(db: AsyncSession, type_key: str) -> dict[str, str]:
+    """``_relation_side_labels`` over the relation types touching ``type_key``."""
+    rts = (
+        (
+            await db.execute(
+                select(RelationType).where(
+                    or_(
+                        RelationType.source_type_key == type_key,
+                        RelationType.target_type_key == type_key,
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    other_keys = {rt.source_type_key for rt in rts} | {rt.target_type_key for rt in rts}
+    type_labels = (
+        dict(
+            (
+                await db.execute(
+                    select(CardType.key, CardType.label).where(CardType.key.in_(other_keys))
+                )
+            ).all()
+        )
+        if other_keys
+        else {}
+    )
+    return _relation_side_labels(list(rts), type_key, type_labels)
+
+
+def _labelled_subtype_list(items: list, prop: str, labels: dict[str, str]) -> list:
+    """``items`` with each ``subtype.changed`` ``prop`` side — a list of keys —
+    mapped to labels (an absent list read as empty, an unknown key kept as it
+    is); an item whose sides then agree — absent vs. ``[]`` — is dropped as no
+    change."""
     out = []
     for entry in items:
-        if entry.get("kind") == "subtype.changed" and entry.get("property") == "hidden_fields":
+        if entry.get("kind") == "subtype.changed" and entry.get("property") == prop:
             old, new = (
-                [field_labels.get(k, k) for k in (entry.get(side) or []) if isinstance(k, str)]
+                [labels.get(k, k) for k in (entry.get(side) or []) if isinstance(k, str)]
                 for side in ("old", "new")
             )
             if old == new:
@@ -189,7 +269,10 @@ def _reference_changes(old: object, new: object) -> dict[str, dict[str, object]]
 
 
 def _type_audit_changes(
-    before: dict, after: dict, role_labels: dict[str, str] | None = None
+    before: dict,
+    after: dict,
+    role_labels: dict[str, str] | None = None,
+    relation_side_labels: dict[str, str] | None = None,
 ) -> tuple[dict, list]:
     """``(changes, items)`` for a card-type update: the scalar columns diffed
     into ``changes`` (``reference_config`` per key), the JSON columns compared
@@ -203,14 +286,18 @@ def _type_audit_changes(
             after["section_config"],
             _section_names(after["fields_schema"]),
         )
-        + _labelled_hidden_fields(
-            audit_changes.keyed_list_items(
-                before["subtypes"],
-                after["subtypes"],
-                noun="subtype",
-                props=("color", "hidden_fields"),
+        + _labelled_subtype_list(
+            _labelled_hidden_fields(
+                audit_changes.keyed_list_items(
+                    before["subtypes"],
+                    after["subtypes"],
+                    noun="subtype",
+                    props=("color", "hidden_fields", "optional_relations"),
+                ),
+                _field_labels(after["fields_schema"], before["fields_schema"]),
             ),
-            _field_labels(after["fields_schema"], before["fields_schema"]),
+            "optional_relations",
+            relation_side_labels or {},
         )
         + audit_changes.keyed_list_items(
             before["hierarchy_labels"],
@@ -227,6 +314,23 @@ def _type_audit_changes(
         )
     )
     return changes, audit_changes.cap_items(items)
+
+
+async def _category_label(db: AsyncSession, key: str | None) -> str | None:
+    """The registry label of a card type's ``category`` for an audit row; the
+    stored string itself when no registry row answers to it, ``None`` for
+    uncategorised."""
+    if not key:
+        return key
+    return (await audit_labels.category_labels(db, [key])).get(key, key)
+
+
+async def _category_change_labels(db: AsyncSession, change: dict) -> dict:
+    """A ``{"old", "new"}`` category change with both keys resolved to labels
+    in one query, so a move into a renamed custom category logs what an admin
+    reads rather than the key the type stores."""
+    labels = await audit_labels.category_labels(db, [change.get("old"), change.get("new")])
+    return {side: labels.get(change.get(side), change.get(side)) for side in ("old", "new")}
 
 
 def _relation_type_audit_changes(
@@ -319,13 +423,17 @@ def _validate_archimate(body: dict, *, relation: bool = False) -> None:
         )
 
 
-def _scoring_signature(fields_schema: list | None, section_config: dict | None) -> dict:
+def _scoring_signature(
+    fields_schema: list | None, section_config: dict | None, subtypes: list | None = None
+) -> dict:
     """Capture the data-quality-relevant config of a card type.
 
     Used to detect when an admin edit changes how scores are computed (field
-    weights, the required/readonly flags feeding the mandatory-field gate, or
-    the built-in contributor weights) so existing cards can be re-scored.
-    Label/icon/order edits leave this signature unchanged.
+    weights, the required/readonly flags feeding the mandatory-field gate, the
+    built-in contributor weights, or what a subtype drops out of the score —
+    its ``hidden_fields`` and its ``optional_relations``, #1296) so existing
+    cards can be re-scored. Label/icon/order edits leave this signature
+    unchanged, and so does reordering either subtype list.
     """
     field_weights: dict[str, tuple] = {}
     for section in fields_schema or []:
@@ -337,20 +445,35 @@ def _scoring_signature(fields_schema: list | None, section_config: dict | None) 
                     bool(field.get("readonly")),
                 )
     dq_cfg = (section_config or {}).get("__dataQuality") or {}
-    return {"fields": field_weights, "dq": dq_cfg}
+    # A subtype that drops nothing out of the score is left out, so adding or
+    # removing an unconfigured subtype does not rescore the whole type.
+    subtype_scope: dict[str, tuple] = {}
+    for st in subtypes or []:
+        if isinstance(st, dict) and isinstance(st.get("key"), str):
+            scope = tuple(
+                tuple(sorted(k for k in (st.get(prop) or []) if isinstance(k, str)))
+                for prop in ("hidden_fields", "optional_relations")
+            )
+            if any(scope):
+                subtype_scope[st["key"]] = scope
+    return {"fields": field_weights, "dq": dq_cfg, "subtypes": subtype_scope}
 
 
 # ── Extension-gated field capabilities ─────────────────────────────────
 #
-# Two advanced field-authoring capabilities ship as INERT core plumbing: the
-# schema understands them and the card detail renders them unconditionally, but
-# an admin can only *author* them when an installed, enabled, licensed extension
-# grants the matching capability (see registry.grants_for). This is the
-# monetisation boundary — the free core never exposes a UI to create these, and
-# the API strips any attempt to add them without the grant. Rendering is never
-# gated (a licence lapse must never blank a card or delete data), and existing
-# values are grandfathered so a lapse can't block unrelated metamodel edits.
-CAP_FIELD_HELP = "metamodel.field_help"
+# Custom field types (``ext.*``) ship as INERT core plumbing: the schema
+# understands them and the card detail renders them unconditionally, but an
+# admin can only *author* one when an installed, enabled, licensed extension
+# grants ``metamodel.custom_field_types`` (see registry.grants_for); the API
+# rewrites any attempt to add one without the grant. Rendering is never gated
+# (a licence lapse must never blank a card or delete data), and an
+# already-stored custom type is grandfathered so a lapse can't block unrelated
+# metamodel edits.
+#
+# Field help text (``help`` / ``helpTranslations``) used to sit behind a second
+# grant, ``metamodel.field_help``. It is a core feature since 2.174.0 (#1297):
+# every metamodel admin authors it and it is written exactly as sent. The grant
+# string is still accepted in manifests (``VALID_GRANTS``) as a no-op.
 CAP_CUSTOM_FIELD_TYPES = "metamodel.custom_field_types"
 _BUILTIN_FIELD_TYPES = frozenset(
     {
@@ -371,20 +494,19 @@ _BUILTIN_FIELD_TYPES = frozenset(
 def _enforce_field_gating(
     new_schema: list | None, old_schema: list | None, granted: set[str]
 ) -> list:
-    """Drop gated field attributes (help text, custom ``ext.*`` types) unless an
-    extension grants them. Grandfathers already-stored values verbatim so a
-    lapse never mutates card data or blocks an unrelated edit."""
+    """Downgrade a new or changed custom ``ext.*`` field type unless an extension
+    grants ``metamodel.custom_field_types``. A type already stored on the field
+    is grandfathered verbatim, so a lapse never mutates card data or blocks an
+    unrelated edit. Every other attribute (help text included) passes through."""
     new_schema = new_schema or []
-    help_granted = CAP_FIELD_HELP in granted
-    custom_granted = CAP_CUSTOM_FIELD_TYPES in granted
-    if help_granted and custom_granted:
+    if CAP_CUSTOM_FIELD_TYPES in granted:
         return new_schema
 
-    old_fields: dict[str, dict] = {}
+    old_types: dict[str, object] = {}
     for section in old_schema or []:
         for f in section.get("fields", []) if isinstance(section, dict) else []:
             if isinstance(f, dict) and "key" in f:
-                old_fields[f["key"]] = f
+                old_types[f["key"]] = f.get("type")
 
     for section in new_schema:
         if not isinstance(section, dict):
@@ -392,22 +514,13 @@ def _enforce_field_gating(
         for f in section.get("fields", []):
             if not isinstance(f, dict):
                 continue
-            old = old_fields.get(f.get("key")) or {}
-            if not help_granted:
-                # Grandfather only the exact stored help; drop anything new/changed.
-                for attr in ("help", "helpTranslations"):
-                    if f.get(attr) != old.get(attr):
-                        if old.get(attr) is None:
-                            f.pop(attr, None)
-                        else:
-                            f[attr] = old[attr]
-            if not custom_granted:
-                ftype = f.get("type")
-                if isinstance(ftype, str) and ftype.startswith("ext."):
-                    old_type = old.get("type")
-                    if old_type == ftype:
-                        continue  # grandfather an already-stored custom type
-                    f["type"] = old_type if old_type in _BUILTIN_FIELD_TYPES else "text"
+            ftype = f.get("type")
+            if not (isinstance(ftype, str) and ftype.startswith("ext.")):
+                continue
+            old_type = old_types.get(f.get("key"))
+            if old_type == ftype:
+                continue  # grandfather an already-stored custom type
+            f["type"] = old_type if old_type in _BUILTIN_FIELD_TYPES else "text"
     return new_schema
 
 
@@ -1155,7 +1268,7 @@ async def create_type(
         body.get("fields_schema", []), [], extension_registry.granted_capabilities()
     )
     # Auto-add the readonly hierarchyLevel field for hierarchical types (after
-    # gating, which only strips help/ext.* fields — a plain number field is safe).
+    # gating, which only rewrites ext.* field types — a plain number field is safe).
     if body.get("has_hierarchy"):
         fields_schema = _inject_hierarchy_level_field(fields_schema)
     try:
@@ -1165,13 +1278,14 @@ async def create_type(
     role_permissions = await _validated_role_permissions(
         db, body.get("role_permissions"), subtypes=body.get("subtypes", [])
     )
+    category = await _validated_category(db, body.get("category"))
     t = CardType(
         key=body["key"],
         label=body["label"],
         description=body.get("description"),
         icon=body.get("icon", "category"),
         color=body.get("color", "#1976d2"),
-        category=body.get("category"),
+        category=category,
         has_hierarchy=body.get("has_hierarchy", False),
         has_successors=body.get("has_successors", False),
         allow_card_logo=body.get("allow_card_logo", False),
@@ -1200,7 +1314,7 @@ async def create_type(
         actor=user,
         target=("card_type", t.key, t.label),
         context={
-            "category": t.category,
+            "category": await _category_label(db, t.category),
             "has_hierarchy": t.has_hierarchy,
             "fields": sum(len(s.get("fields") or []) for s in t.fields_schema or []),
         },
@@ -1248,6 +1362,9 @@ async def update_type(
                     "Remove the stakeholder assignments first.",
                 )
 
+    if "category" in body:
+        body["category"] = await _validated_category(db, body["category"], t.category)
+
     audit_fields = _TYPE_AUDIT_SCALARS + _TYPE_AUDIT_JSON
     audit_before = _audit_snapshot(t, audit_fields)
 
@@ -1259,8 +1376,8 @@ async def update_type(
             t.fields_schema or [],
             body["fields_schema"] or [],
         )
-        # Strip extension-gated field attributes (help text, custom types) that
-        # aren't unlocked by a licensed extension — grandfathering stored values.
+        # Downgrade custom ext.* field types that aren't unlocked by a licensed
+        # extension — grandfathering stored values. Help text is core (#1297).
         await extension_registry.refresh_from_db(db)
         body["fields_schema"] = _enforce_field_gating(
             body["fields_schema"] or [],
@@ -1271,7 +1388,7 @@ async def update_type(
     # Snapshot the data-quality-relevant config so we can re-score existing
     # cards if (and only if) the admin changed field weights or the built-in
     # contributor weights.
-    old_signature = _scoring_signature(t.fields_schema, t.section_config)
+    old_signature = _scoring_signature(t.fields_schema, t.section_config, t.subtypes)
     old_has_hierarchy = t.has_hierarchy
     old_reference_config = dict(t.reference_config or {})
 
@@ -1379,7 +1496,16 @@ async def update_type(
         if audit_before["role_permissions"] != audit_after["role_permissions"]
         else {}
     )
-    changes, items = _type_audit_changes(audit_before, audit_after, role_labels)
+    relation_side_labels = (
+        await _load_relation_side_labels(db, key)
+        if _optional_relations_changed(audit_before["subtypes"], audit_after["subtypes"])
+        else {}
+    )
+    changes, items = _type_audit_changes(
+        audit_before, audit_after, role_labels, relation_side_labels
+    )
+    if "category" in changes:
+        changes["category"] = await _category_change_labels(db, changes["category"])
     if changes or items:
         await audit_log.record(
             db,
@@ -1401,7 +1527,7 @@ async def update_type(
     # Re-score existing cards when the scoring config actually changed, so
     # tuned data-quality weights take effect immediately instead of waiting
     # for each card to be edited.
-    new_signature = _scoring_signature(t.fields_schema, t.section_config)
+    new_signature = _scoring_signature(t.fields_schema, t.section_config, t.subtypes)
     if new_signature != old_signature:
         await _recompute_data_quality_for_type(db, key)
 
@@ -1416,9 +1542,34 @@ async def _recompute_data_quality_for_type(db: AsyncSession, type_key: str) -> N
         await db.commit()
 
 
+@router.get("/types/{key}/delete-impact")
+async def get_type_delete_impact(
+    key: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """What ``DELETE /types/{key}`` would remove: the confirmation dialog's numbers.
+
+    Counts only — a card type's dependants are landscape-wide admin data, and the
+    caller holds ``admin.metamodel``, so no read scope applies.
+    """
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(select(CardType).where(CardType.key == key))
+    t = result.scalar_one_or_none()
+    if not t:
+        raise HTTPException(404, "Type not found")
+    impact = await card_type_delete.type_delete_impact(db, t)
+    return impact.to_dict()
+
+
 @router.delete("/types/{key}")
 async def delete_type(
-    key: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+    key: str,
+    delete_cards: bool = Query(
+        False,
+        description="Also delete every card of a custom type (with its relations). "
+        "Without it, a custom type that still has cards is refused with 409.",
+    ),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
     result = await db.execute(select(CardType).where(CardType.key == key))
@@ -1426,12 +1577,10 @@ async def delete_type(
     if not t:
         raise HTTPException(404, "Type not found")
 
-    # Check for existing cards of this type
-    count_result = await db.execute(select(func.count()).select_from(Card).where(Card.type == key))
-    instance_count = count_result.scalar() or 0
+    impact = await card_type_delete.type_delete_impact(db, t)
 
     if t.built_in:
-        # Soft-delete built-in types
+        # Built-in types are only ever hidden, so the seed can restore them.
         t.is_hidden = True
         await audit_log.record(
             db,
@@ -1439,34 +1588,30 @@ async def delete_type(
             category="admin",
             actor=user,
             target=("card_type", key, t.label),
-            context={"mode": "hidden", "card_count": instance_count},
+            context={"mode": "hidden", "card_count": impact.card_count},
         )
         await db.commit()
         PermissionService.invalidate_type_permission_cache(key)
-        return {"status": "hidden", "key": key, "instance_count": instance_count}
+        return {"status": "hidden", "key": key, "instance_count": impact.card_count}
 
-    if instance_count > 0:
-        raise HTTPException(
-            400,
-            f"Cannot delete type '{key}': {instance_count} card(s) exist. "
-            "Delete them first or hide the type instead.",
-        )
+    if impact.card_count > 0:
+        if not delete_cards:
+            raise HTTPException(
+                409,
+                detail={
+                    "error": "cards_present",
+                    "message": f"Cannot delete type '{key}': {impact.card_count} card(s) "
+                    "exist. Pass delete_cards=true to delete them with the type, "
+                    "or hide the type instead.",
+                    "key": key,
+                    "card_count": impact.card_count,
+                },
+            )
+        # Deleting the cards is a permanent inventory delete, so it takes that
+        # permission on top of the metamodel one (every default admin holds both).
+        await PermissionService.require_permission(db, user, "inventory.delete")
 
-    # Also delete relation types that reference this type
-    await db.execute(
-        select(RelationType).where(
-            (RelationType.source_type_key == key) | (RelationType.target_type_key == key)
-        )
-    )
-    rel_result = await db.execute(
-        select(RelationType).where(
-            (RelationType.source_type_key == key) | (RelationType.target_type_key == key)
-        )
-    )
-    removed_relation_types = []
-    for rt in rel_result.scalars().all():
-        removed_relation_types.append(rt.label or rt.key)
-        await db.delete(rt)
+    await card_type_delete.delete_type_dependents(db, t, actor_id=user.id)
 
     # Also delete Enterprise Object card-mapping rows that reference this
     # type -- card_type_key is a FK to card_types.key with implicit
@@ -1491,12 +1636,27 @@ async def delete_type(
         category="admin",
         actor=user,
         target=("card_type", key, t.label),
-        context={"mode": "deleted", "relation_types_removed": sorted(removed_relation_types)},
+        context={
+            "mode": "deleted",
+            "card_count": impact.card_count,
+            "relation_count": impact.relation_count,
+            "relation_types_removed": sorted(rt.label for rt in impact.relation_types),
+            "calculation_count": impact.calculation_count,
+            "stakeholder_role_count": impact.stakeholder_role_count,
+        },
     )
     await db.delete(t)
     await db.commit()
     PermissionService.invalidate_type_permission_cache(key)
-    return {"status": "deleted", "key": key}
+    return {
+        "status": "deleted",
+        "key": key,
+        "cards_removed": impact.card_count,
+        "relations_removed": impact.relation_count,
+        "relation_types_removed": [rt.key for rt in impact.relation_types],
+        "calculations_removed": impact.calculation_count,
+        "stakeholder_roles_removed": impact.stakeholder_role_count,
+    }
 
 
 # ── Relation Types ─────────────────────────────────────────────────────
@@ -2680,3 +2840,269 @@ async def get_card_type_archimate_mapping(
     )
     card_types = [{"key": key, "subtypes": subtypes or []} for key, subtypes in result.all()]
     return {"card_types": await get_card_type_mapping(db, card_types)}
+
+
+# ── Card type categories (the EA layers) ──────────────────────────────
+#
+# ``card_types.category`` names a row of this registry by ``key``. The four
+# built-in layers are locked (label, colour, translations, delete); their
+# position in the order is not, since a custom layer may sit between two of
+# them. The logic lives in ``services/card_type_categories`` — these handlers
+# only translate its answers into HTTP.
+
+
+class CardTypeCategoryCreate(BaseModel):
+    label: str = Field(..., max_length=300)
+    color: str | None = None
+    translations: dict[str, str] | None = None
+
+
+class CardTypeCategoryUpdate(BaseModel):
+    label: str | None = Field(None, max_length=300)
+    color: str | None = None
+    translations: dict[str, str] | None = None
+
+
+class CardTypeCategoryOrder(BaseModel):
+    keys: list[str]
+
+
+def _category_http_error(exc: card_type_categories.CategoryError) -> HTTPException:
+    return HTTPException(400, detail={"error": exc.code, "message": str(exc)})
+
+
+def _clean_translations(translations: dict[str, str] | None) -> dict[str, str]:
+    """``translations`` with blank labels dropped and the rest trimmed — an
+    empty field in the editor means "fall back to the label"."""
+    return {
+        locale: label.strip()
+        for locale, label in (translations or {}).items()
+        if isinstance(label, str) and label.strip()
+    }
+
+
+async def _validated_category(db: AsyncSession, value: object, current: str | None = None):
+    """``value`` as a card type stores it — trimmed, ``None`` when blank —
+    once it names a registry key. Re-sending a type's current category is
+    always accepted, so a value adopted nowhere (written before the registry
+    by a path that did not adopt) cannot block an unrelated edit of the type."""
+    try:
+        category = card_type_categories.normalize_category_value(value)
+    except card_type_categories.CategoryError as exc:
+        raise _category_http_error(exc) from exc
+    if category is None:
+        return None
+    if current is not None and category == current.strip():
+        return category
+    if not await card_type_categories.category_exists(db, category):
+        raise HTTPException(
+            400,
+            detail={
+                "error": "unknown_category",
+                "message": f"Unknown category '{category}'. Create it under "
+                "Manage categories first.",
+                "category": category,
+            },
+        )
+    return category
+
+
+@router.get("/categories")
+async def list_card_type_categories(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Every card type category, in layer order. Any signed-in user may read
+    it — every surface that draws layers needs the labels and colours."""
+    rows = await card_type_categories.list_categories(db)
+    return [card_type_categories.serialize(c) for c in rows]
+
+
+@router.post("/categories", status_code=201)
+async def create_card_type_category(
+    body: CardTypeCategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Create a custom category; its key is the label as typed, trimmed."""
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    try:
+        key = card_type_categories.normalize_key(body.label)
+    except card_type_categories.CategoryError as exc:
+        raise _category_http_error(exc) from exc
+    color = body.color or card_type_categories.DEFAULT_COLOR
+    _validate_color({"color": color})
+    existing = await card_type_categories.list_categories(db)
+    clash = card_type_categories.is_duplicate(existing, key)
+    if clash is not None:
+        raise HTTPException(
+            409,
+            detail={
+                "error": "category_exists",
+                "message": f"A category named '{clash.label}' already exists",
+                "key": clash.key,
+            },
+        )
+    c = CardTypeCategory(
+        id=uuid.uuid4(),
+        key=key,
+        label=key,
+        color=color,
+        sort_order=await card_type_categories.next_sort_order(db),
+        built_in=False,
+        translations=_clean_translations(body.translations),
+    )
+    db.add(c)
+    await audit_log.record(
+        db,
+        action="admin.metamodel.category.created",
+        category="admin",
+        actor=user,
+        target=("card_type_category", c.key, c.label),
+        context={"color": c.color},
+    )
+    await db.commit()
+    await db.refresh(c)
+    return card_type_categories.serialize(c)
+
+
+@router.put("/categories/order")
+async def reorder_card_type_categories(
+    body: CardTypeCategoryOrder,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Rewrite the layer order. ``keys`` must list every category exactly once
+    — the built-in layers included, since a custom one may sit between them."""
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    rows = await card_type_categories.list_categories(db)
+    try:
+        order = card_type_categories.validate_order([c.key for c in rows], body.keys)
+    except card_type_categories.CategoryError as exc:
+        raise _category_http_error(exc) from exc
+    by_key = {c.key: c for c in rows}
+    before = [c.key for c in rows]
+    for index, key in enumerate(order):
+        by_key[key].sort_order = index
+    if order != before:
+        await audit_log.record(
+            db,
+            action="admin.metamodel.category.reordered",
+            category="admin",
+            actor=user,
+            target=("card_type_category", None, None),
+            context={"order": [by_key[k].label for k in order]},
+        )
+    await db.commit()
+    rows = await card_type_categories.list_categories(db)
+    return [card_type_categories.serialize(c) for c in rows]
+
+
+@router.patch("/categories/{key:path}")
+async def update_card_type_category(
+    key: str,
+    body: CardTypeCategoryUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Edit a custom category's label, colour or translations. The key never
+    changes (it is what card types store); a built-in layer is locked."""
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    c = await card_type_categories.get_category(db, key)
+    if c is None:
+        raise HTTPException(404, "Category not found")
+    if c.built_in:
+        raise HTTPException(
+            400,
+            detail={
+                "error": "built_in_locked",
+                "message": "A built-in category cannot be renamed, recoloured or deleted",
+                "key": c.key,
+            },
+        )
+    updates = body.model_dump(exclude_unset=True)
+    if "label" in updates:
+        try:
+            updates["label"] = card_type_categories.normalize_key(updates["label"])
+        except card_type_categories.CategoryError as exc:
+            raise _category_http_error(exc) from exc
+        rows = await card_type_categories.list_categories(db)
+        clash = card_type_categories.is_duplicate(rows, updates["label"], exclude_key=c.key)
+        if clash is not None:
+            raise HTTPException(
+                409,
+                detail={
+                    "error": "category_exists",
+                    "message": f"A category named '{clash.label}' already exists",
+                    "key": clash.key,
+                },
+            )
+    if "color" in updates:
+        if updates["color"] is None:
+            updates["color"] = card_type_categories.DEFAULT_COLOR
+        _validate_color(updates)
+    if "translations" in updates:
+        updates["translations"] = _clean_translations(updates["translations"])
+    changes = audit_log.diff(c, updates, keys=_CATEGORY_AUDIT_SCALARS)
+    items = _label_translation_items(c.translations, updates.get("translations", c.translations))
+    for field_name, value in updates.items():
+        setattr(c, field_name, value)
+    if changes or items:
+        await audit_log.record(
+            db,
+            action="admin.metamodel.category.updated",
+            category="admin",
+            actor=user,
+            target=("card_type_category", c.key, c.label),
+            changes=changes,
+            items=items,
+        )
+    await db.commit()
+    await db.refresh(c)
+    return card_type_categories.serialize(c)
+
+
+@router.delete("/categories/{key:path}", status_code=204)
+async def delete_card_type_category(
+    key: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Delete a custom category no card type uses. Built-in layers are locked;
+    a category still in use answers 409 ``types_present`` with the types."""
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    c = await card_type_categories.get_category(db, key)
+    if c is None:
+        raise HTTPException(404, "Category not found")
+    if c.built_in:
+        raise HTTPException(
+            400,
+            detail={
+                "error": "built_in_locked",
+                "message": "A built-in category cannot be renamed, recoloured or deleted",
+                "key": c.key,
+            },
+        )
+    using = await card_type_categories.types_using(db, c.key)
+    if using:
+        raise HTTPException(
+            409,
+            detail={
+                "error": "types_present",
+                "message": f"Category '{c.label}' is used by {len(using)} card type(s): "
+                + ", ".join(using),
+                "key": c.key,
+                "count": len(using),
+                "types": using,
+            },
+        )
+    await audit_log.record(
+        db,
+        action="admin.metamodel.category.deleted",
+        category="admin",
+        actor=user,
+        target=("card_type_category", c.key, c.label),
+        context={"color": c.color},
+    )
+    await db.delete(c)
+    await db.commit()

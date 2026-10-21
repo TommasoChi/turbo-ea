@@ -58,6 +58,8 @@ _VALID_MCP_ANNOTATION_KEYS = frozenset({"readOnlyHint", "destructiveHint", "idem
 # duplicated — teax is stdlib-vendorable).
 VALID_GRANTS = frozenset(
     {
+        # No-op since 2.174.0 (#1297): field help text is a core feature every
+        # metamodel admin authors. Still accepted so existing manifests lint.
         "metamodel.field_help",
         "metamodel.custom_field_types",
         "core.todos.read",

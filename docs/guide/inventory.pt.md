@@ -34,7 +34,7 @@ Um **contador de filtros ativos** mostra quantos filtros estão atualmente aplic
 
 Clique com o botão direito em qualquer célula da grelha (toque longo em dispositivos táteis) para abrir um menu de contexto com ações rápidas sobre o que está sob o cursor, ao estilo do ServiceNow:
 
-- **Pré-visualizar ficha** — abrir a ficha que a célula indica no painel lateral, sem sair da grelha
+- **Pré-visualizar ficha** — abrir a ficha que a célula indica no painel lateral, sem sair da grelha; o painel deixa a grelha utilizável, pelo que pode continuar a deslocar-se, filtrar e clicar noutras linhas enquanto está aberto, e fechá-lo com o respetivo botão de fechar
 - **Mostrar correspondências** — manter apenas as linhas cujo valor é igual ao da célula clicada
 - **Excluir** — ocultar as linhas cujo valor é igual ao da célula clicada
 - **Copiar valor** — copiar o texto da célula para a área de transferência
@@ -138,6 +138,8 @@ A lista **Campo** agrupa o que pode ser alterado:
 
 Etiquetas, relações e pai oferecem um botão **adicionar / remover**, para que amplie ou reduza os valores existentes em vez de os substituir.
 
+Quando escolhe **Adicionar vínculo** para um tipo de relação com detalhes — o sentido do fluxo entre duas aplicações, a forma como uma organização usa uma aplicação, os indicadores de criar / ler / atualizar / eliminar de um objeto de dados —, o diálogo mostra também esses campos. O que definir é guardado em cada vínculo adicionado. Os cartões já vinculados a um destino escolhido também recebem os detalhes, pelo que voltar a usar **Adicionar vínculo** é a forma de atualizar os detalhes dos vínculos existentes; um detalhe deixado em branco não é alterado.
+
 O controlo de valor adapta-se ao tipo de campo: um campo de seleção múltipla mostra as suas opções com caixas de verificação, um campo sim/não uma lista Sim / Não e um campo de data um seletor de data. Deixar o valor vazio — **Nenhum** num campo sim/não — limpa o campo em todos os cartões selecionados. Os campos calculados por uma fórmula, e os campos de custo que não tem permissão para ver, não são disponibilizados.
 
 ### Reestruturar a hierarquia { #mass-edit-parent }
@@ -234,7 +236,7 @@ Como os cards são identificados por nome + caminho, **dois cards do mesmo tipo 
 
 ### Células de relação em linha
 
-Cada coluna `rel:<tipo_de_relação>` expressa as relações de saída como uma lista **separada por ponto e vírgula** (por exemplo `NexaCore ERP; BillingApp`). Ponto e vírgula em vez de vírgula, porque os nomes de cards frequentemente contêm vírgulas (`Acme, Inc.`). Dentro de um nome, `/` e `\` são escapados como `\/` e `\\`, e um `;` como `\;` — o exportador faz isso automaticamente (ex.: `SAP S/4HANA` → `SAP S\/4HANA`). As células são **declarativas**: o seu conteúdo substitui o conjunto de relações de saída desse tipo a partir da origem. Remover um destino elimina a relação correspondente; esvaziar a célula elimina todas. Numa pasta de trabalho exportada pelo Turbo EA (contém uma planilha `_Meta`), a vírgula nunca é um separador, pelo que uma célula com um único destino como `This is X, it does Y` continua a ser um destino. Uma planilha sem `_Meta` (criada à mão ou exportada antes da 1.23) ainda pode separar os destinos por vírgulas: se a célula não contiver nenhum `;`, é lida como um único destino quando a célula inteira nomeia um card e, caso contrário, como separada por vírgulas. Há uma coluna por tipo de relação que parte do tipo de card da planilha — **todos**, incluindo os que carregam valores. Os destinos são ordenados alfabeticamente, pelo que reexportar um panorama inalterado dá um ficheiro idêntico.
+Cada coluna `rel:<tipo_de_relação>` expressa as relações de saída como uma lista **separada por ponto e vírgula** (por exemplo `NexaCore ERP; BillingApp`). Ponto e vírgula em vez de vírgula, porque os nomes de cards frequentemente contêm vírgulas (`Acme, Inc.`). Dentro de um nome, `/` e `\` são escapados como `\/` e `\\`, e um `;` como `\;` — o exportador faz isso automaticamente (ex.: `SAP S/4HANA` → `SAP S\/4HANA`). Uma referência escapada é sempre exata. Numa célula escrita à mão, a `/` pode ficar sem escape: `SAP S/4HANA` é lido primeiro como um caminho (um card *4HANA* sob *SAP S*) e, se não houver nenhum card nesse caminho, como um único nome, que é resolvido quando exatamente um card do tipo o tem. As células são **declarativas**: o seu conteúdo substitui o conjunto de relações de saída desse tipo a partir da origem. Remover um destino elimina a relação correspondente; esvaziar a célula elimina todas. Numa pasta de trabalho exportada pelo Turbo EA (contém uma planilha `_Meta`), a vírgula nunca é um separador, pelo que uma célula com um único destino como `This is X, it does Y` continua a ser um destino. Uma planilha sem `_Meta` (criada à mão ou exportada antes da 1.23) ainda pode separar os destinos por vírgulas: se a célula não contiver nenhum `;`, é lida como um único destino quando a célula inteira nomeia um card e, caso contrário, como separada por vírgulas. Há uma coluna por tipo de relação que parte do tipo de card da planilha — **todos**, incluindo os que carregam valores. Os destinos são ordenados alfabeticamente, pelo que reexportar um panorama inalterado dá um ficheiro idêntico.
 
 A coluna `tags` segue a mesma regra: entradas `Grupo: Etiqueta` separadas por `; ` (ex.: `Vendor: Acme, Inc.; Region: EU`), com um `;` no nome de uma etiqueta escrito como `\;`. As pastas de trabalho exportadas antes da 2.156.1 separavam as etiquetas por vírgulas e continuam a ser importadas como antes.
 
@@ -269,7 +271,7 @@ Clique em **Importar** na barra de ferramentas, solte a pasta de trabalho e veri
 Algumas notas sobre a importação:
 
 - **Apenas `name` e `type` são obrigatórios para criar um card.** Os campos marcados como *obrigatórios* no metamodelo (incluindo Provider ou qualquer outro tipo) não bloqueiam a importação — o card é criado na mesma, e as lacunas refletem-se na sua pontuação de qualidade de dados em vez de causarem um salto silencioso.
-- **Uma `/` na coluna `name` de um card não precisa de ser escapada.** O escape (`\/` para uma barra, `\\` para uma barra invertida) só é necessário quando *referencia* esse card a partir de uma célula `parent_path`, `rel:<chave>`, `source_ref` ou `target_ref`, onde `/` é o separador de caminho.
+- **Uma `/` na coluna `name` de um card não precisa de ser escapada.** O escape (`\/` para uma barra, `\\` para uma barra invertida) só é necessário quando *referencia* esse card a partir de uma célula `parent_path`, `rel:<chave>`, `source_ref` ou `target_ref`, onde `/` é o separador de caminho; mesmo aí, uma `/` sem escape é lida como parte do nome quando não há nenhum card no caminho que ela forma.
 
 ### Exportar
 

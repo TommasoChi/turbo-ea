@@ -8,9 +8,12 @@
 import { describe, expect, it } from "vitest";
 
 import { CARD_TYPES } from "@/test/fixtures/metamodel";
+import { UNCATEGORIZED_GROUP_KEY } from "@/lib/cardTypeOrder";
 import type { GEdge, GNode } from "./layeredDependencyLayout";
 import { CARD_SIZE, LDV_NODE_H, LDV_NODE_W } from "./ldvHandles";
 import {
+  ldvLayers,
+  DEFAULT_LDV_LAYERS,
   CATEGORY_COLORS,
   CATEGORY_ORDER,
   DRAG_ROOM,
@@ -46,7 +49,12 @@ describe("type lookups", () => {
     expect(typeIcon("Provider", CARD_TYPES)).toBe("storefront");
     expect(typeIcon("Nope", CARD_TYPES)).toBe("category");
     expect(typeCategory("BusinessCapability", CARD_TYPES)).toBe("Business Architecture");
-    expect(typeCategory("Nope", CARD_TYPES)).toBe("Other");
+    // No category (or an unknown type) is the sentinel lane, never the
+    // literal "Other", which an admin may create as a real category.
+    expect(typeCategory("Nope", CARD_TYPES)).toBe(UNCATEGORIZED_GROUP_KEY);
+    expect(
+      typeCategory("Blank", [{ ...CARD_TYPES[0], key: "Blank", category: "  " }]),
+    ).toBe(UNCATEGORIZED_GROUP_KEY);
   });
 
   it("exposes the four EA layers in order, each with a colour", () => {
@@ -348,5 +356,77 @@ describe("routeEdgeData", () => {
       waypoints: [{ x: 10, y: 20 }],
       anchors: { sx: 1, sy: 2, tx: 3, ty: 4 },
     });
+  });
+});
+
+
+describe("ldvLayers", () => {
+  const registry = [
+    {
+      id: "1",
+      key: "Security",
+      label: "Security Layer",
+      color: "#ff0000",
+      sort_order: 1,
+      built_in: false,
+      translations: { de: "Sicherheit" },
+    },
+    {
+      id: "2",
+      key: "Business Architecture",
+      label: "Business Architecture",
+      color: "#2889ff",
+      sort_order: 0,
+      built_in: true,
+      translations: {},
+    },
+  ];
+
+  it("orders present layers by the registry, unknown ones after as seen", () => {
+    const layers = ldvLayers(registry, "de");
+    expect(layers.order(["Other", "Security", "Business Architecture", "Legacy"])).toEqual([
+      "Business Architecture",
+      "Security",
+      "Other",
+      "Legacy",
+    ]);
+  });
+
+  it("puts the uncategorised lane last, named by the caller, in the default grey", () => {
+    const layers = ldvLayers(registry, "de", "Nicht kategorisiert");
+    expect(
+      layers.order([UNCATEGORIZED_GROUP_KEY, "Other", "Security", "Business Architecture"]),
+    ).toEqual(["Business Architecture", "Security", "Other", UNCATEGORIZED_GROUP_KEY]);
+    expect(layers.label(UNCATEGORIZED_GROUP_KEY)).toBe("Nicht kategorisiert");
+    expect(layers.label("Other")).toBe("Other");
+    expect(layers.color(UNCATEGORIZED_GROUP_KEY)).toBe("#999999");
+    expect(ldvLayers().label(UNCATEGORIZED_GROUP_KEY)).toBe("Other");
+    expect(layers.order(["Security"])).toEqual(["Security"]);
+  });
+
+  it("resolves the label in the locale and passes an unknown key through", () => {
+    const layers = ldvLayers(registry, "de");
+    expect(layers.label("Security")).toBe("Sicherheit");
+    expect(layers.label("Business Architecture")).toBe("Business Architecture");
+    expect(layers.label("Legacy")).toBe("Legacy");
+  });
+
+  it("colours from the registry, then the built-in tokens, then the default", () => {
+    const layers = ldvLayers(registry);
+    expect(layers.color("Security")).toBe("#ff0000");
+    expect(layers.color("Application & Data")).toBe(CATEGORY_COLORS["Application & Data"]);
+    expect(layers.color("Legacy")).toBe("#999999");
+  });
+
+  it("defaults to the built-in order and names", () => {
+    expect(DEFAULT_LDV_LAYERS.order(["Legacy", ...[...CATEGORY_ORDER].reverse()])).toEqual([
+      ...CATEGORY_ORDER,
+      "Legacy",
+    ]);
+    expect(DEFAULT_LDV_LAYERS.label("Application & Data")).toBe("Application & Data");
+    expect(ldvLayers([]).order(["Technical Architecture", "Strategy & Transformation"])).toEqual([
+      "Strategy & Transformation",
+      "Technical Architecture",
+    ]);
   });
 });

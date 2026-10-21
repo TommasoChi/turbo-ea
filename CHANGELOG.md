@@ -5,15 +5,124 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.166.0] - 2026-10-18
+## [2.175.1] - 2026-10-21
 
-A fork release. Takes the next free patch number above both the fork's own
-`2.163.0` draft and upstream's own `v2.163.0` tag (Surveys), which already
-claims that number on `upstream/main`.
+A fork release. Takes the next free patch number above upstream's own
+`v2.175.0` tag, pulled in by this sync. Upstream has since reused the fork's
+previous `2.166.0` marker for unrelated content of its own ("Permanently
+delete a custom card type", listed below), so the fork's note is renumbered
+here rather than reordered.
 
 ### Changed
 
 - **With PPM off, EA Delivery now sits under IT Governance as "EA Governance".** The top bar used to promote EA Delivery to an entry of its own whenever PPM was disabled; it now joins the IT Governance menu (the GRC page stays its first entry, extension pages follow). If GRC is off, or a role cannot open IT Governance, EA Delivery still appears as a top-level entry, so nobody loses the page. With PPM on nothing changes: EA Delivery remains a tab of PPM. URLs are unchanged.
+
+## [2.175.0] - 2026-10-21
+
+### Added
+- **Relation details in Mass Edit**: adding links in bulk for a relation type that carries details (flow direction, usage type, the create/read/update/delete flags…) sets them on every link, and re-running **Add link** over cards already linked updates their details without clearing the ones left empty ([#1293](https://github.com/vincentmakes/turbo-ea/issues/1293)).
+- **Mandatory relations scoped per subtype**: the subtype template dialog lists the card type's mandatory relations under **Relations not required for this subtype**, and a ticked one no longer blocks approval, lowers data quality or shows as **Required** for cards of that subtype; saving re-scores the type's cards at once ([#1296](https://github.com/vincentmakes/turbo-ea/issues/1296)).
+
+### Fixed
+- Changing which fields a subtype hides now re-scores the type's existing cards straight away, instead of leaving their data quality stale until each one is next edited.
+- Saving a subtype template, a field, a section, the card layout or the data-quality weights in the card-type editor now shows that it is saving and cannot be sent twice (the subtype template dialog used to need two clicks to close), a failed save is reported where you made it, and re-scoring a type's cards after such a change is much faster on large landscapes.
+
+## [2.174.0] - 2026-10-21
+
+### Added
+- **Rename a subtype**: a pencil beside each subtype chip in the card-type editor edits its label in place (Enter or clicking away saves, Escape cancels); the key cards store and the subtype's translations stay as they are ([#1291](https://github.com/vincentmakes/turbo-ea/issues/1291)).
+- **Reorder select options**: up and down arrows beside each option in the field editor change the order every menu and filter lists them in, and the chips of a multi-select value on cards and in the Inventory now follow that order ([#1292](https://github.com/vincentmakes/turbo-ea/issues/1292)).
+- **Take a field out of its group** in the card layout editor by dropping it on the "Drop here to take a field out of its group" zone at the bottom of any column that holds a group ([#1286](https://github.com/vincentmakes/turbo-ea/issues/1286)).
+
+### Changed
+- **Field help text needs no extension**: every metamodel admin can now write a field's help text in the field editor; only custom field types still come from an extension ([#1297](https://github.com/vincentmakes/turbo-ea/issues/1297)).
+- **Help text is translated with the rest of the card type**: once a field has help text, the Translations dialog lists it under the field for every language, and an English edit there also updates the field's default help ([#1297](https://github.com/vincentmakes/turbo-ea/issues/1297)).
+
+## [2.173.0] - 2026-10-21
+
+### Added
+- **Subtype filter on the Application and Flexible Portfolio reports**: the Fields filter row now starts with a Subtype filter for card types that have subtypes, including an *(empty)* choice; it is saved with the report and carried into **View in inventory** ([#1294](https://github.com/vincentmakes/turbo-ea/issues/1294)).
+- The Inventory's card preview panel no longer blocks the page: the grid and the filter sidebar stay scrollable and clickable while a card is previewed, so you can open the next row without closing the panel first ([#1289](https://github.com/vincentmakes/turbo-ea/issues/1289)).
+
+### Fixed
+- Going Back from a card to the Inventory keeps the search you had typed, instead of clearing it while every other filter was restored ([#1287](https://github.com/vincentmakes/turbo-ea/issues/1287)).
+- The empty choice of a yes/no field's editor now reads "Not set" instead of "None" ([#1266](https://github.com/vincentmakes/turbo-ea/issues/1266)).
+
+## [2.172.1] - 2026-10-21
+
+### Security
+- The backend and MCP server images require certifi 2026.10.19 or later, which drops the compromised emSign root certificates that 2026.10.18 still trusted (GHSA-6q48-6c7w-9gw2). A release build now re-resolves the backend's Python dependencies instead of reusing the cached layer, so a fix to a transitive dependency reaches the tagged images without a change to the dependency list.
+
+## [2.172.0] - 2026-10-20
+
+### Added
+- **Derived budget and costs on a PPM initiative's own pages**: when an initiative has no budget lines of its own, its **Overview** (total budget, budget bars, variance) and its **Budget & Costs** tab (summary bar and budget table) show the budget of the initiatives beneath it — in italic with a "from beneath" mark and a tooltip, and in the table as one read-only row per fiscal year under a caption. Actuals do the same from cost lines, with an **Undated** row for cost lines without a date. Recording a line of its own switches that side back; nothing is stored or added to the initiative's own figures, and only initiatives the reader can see count.
+- **Group the PPM portfolio by an Initiative subtype**: the **Group by** menu gains a second section listing the Initiative subtypes. Choosing one — say Program — shows one group per program, headed by the program and holding every initiative beneath it at any depth; the group's bottom line shows the program's own budget, actuals and dates, or the ones derived from beneath it, and initiatives with no program above them are Ungrouped. The Excel export lists the program first in its group, and a portfolio portal can open grouped by a subtype it publishes (`group_by=subtype:<key>`).
+- `GET /ppm/initiatives/{id}/rollup` now says whether the initiative has budget lines and cost lines of its own and splits the figures beneath it by fiscal year, and the calculated-field context gains `ppm.unscheduledCapexActual` / `ppm.unscheduledOpexActual`.
+
+### Changed
+- A parent on the PPM portfolio now derives its budget and its actuals separately: a program that holds the budget while its projects record the spend shows its own budget against their actuals. The tooltip names which half comes from beneath, and the Excel export gains a **Budget from** column beside **Costs from** and **Dates from**.
+- The Total Budget / Total Actual / Variance figures on an initiative's Overview and Budget & Costs summary bar now read in thousands or millions ("1.2 kCHF", "5.7 MCHF"), the unit the budget bars already use, so a figure with the "from beneath" mark no longer wraps; figures below a thousand and every table cell stay exact.
+
+### Fixed
+- The PPM portfolio's cost bars read both figures in one scale with a unit that matches it ("1.5/2.1 MCHF"), where a figure past a million used to render as "1.5M/2.1M kCHF" or "773/1.4M kCHF". The board's Total Budget KPI and the cost chart axes now abbreviate millions ("CHF12.0M") instead of "CHF12000k".
+
+## [2.171.0] - 2026-10-20
+
+### Added
+- **Derived costs and dates on PPM parent initiatives**: on the PPM portfolio, a parent initiative with no budget or cost lines of its own shows the total of the initiatives beneath it, drawn as outlined bars with italic figures, and one with neither a start nor an end date spans the initiatives beneath it as a dashed Gantt bar with italic quarters; a tooltip on each says how many initiatives it covers. A parent's own lines or dates always win, the two are decided separately, only initiatives the reader can see (or the portal publishes) count, and the group totals and KPI bar still count each recorded line once. Published portfolio portals show the same, with the derived costs following the portal's cost setting, and the Excel export gains **Costs from** and **Dates from** columns.
+- The initiative **Overview** tab names, under the budget bars, how many initiatives sit beneath it, their summed budget and actual spend and their date span, read live through the new `GET /ppm/initiatives/{id}/rollup`.
+
+## [2.170.0] - 2026-10-20
+
+### Added
+- **Show hierarchy on the PPM portfolio** ([#1254](https://github.com/vincentmakes/turbo-ea/discussions/1254)): when some initiatives have their parent initiative on the board, a **Show hierarchy** switch nests each group's initiatives under their parent, indented, with a chevron to fold a parent's subtree, the subtype shown on every row and a **Display depth** selector (*Level 1*, *Level 2*, … *All levels*). The tree is built inside each group, and the filters narrow the board first: a child whose parent is in another group or filtered out is shown at the top level.
+- **Sub-group by subtype** on the PPM portfolio splits every group into one sub-group per subtype, in the order the Initiative type defines them, each with its own header, collapse and totals row. It is unavailable while the hierarchy is shown.
+- Both switches and the display depth are kept in the URL and printed in the parameter line; the Excel export lists the initiatives in the order shown, with a **Parent** column while the hierarchy is shown. Published portfolio portals offer the same hierarchy for the initiatives they publish.
+
+### Changed
+- A change to an initiative's budget lines, cost lines, work packages, tasks, risks or status reports now also re-runs the calculations of every initiative above it in the hierarchy, nearest parent first, so a calculated field that totals PPM figures up the hierarchy updates straight away (see the new example on the Calculations page).
+- Running a calculation manually now processes the cards of a hierarchical type deepest first, so a total built from the children's calculated values is correct after a single run.
+
+### Fixed
+- The PPM portfolio no longer sends the id of an initiative's parent when that parent is archived or hidden from the viewer by a per-type View permission.
+
+## [2.169.1] - 2026-10-19
+
+### Fixed
+- Importing a relation, `parent_path`, `source_ref` or `target_ref` that names a card containing `/` without escaping it (for example `SAP S/4HANA` or `CI / CD`) now finds that card instead of reporting that it matches no card: when no card sits at the path the slash spells, the reference is read as one name. Two references that differed only by escaping (`A\/B` and `A / B`) are no longer treated as the same card ([#1278](https://github.com/vincentmakes/turbo-ea/issues/1278)).
+
+### Security
+- The frontend and edge nginx images no longer ship nginx's optional modules (image filter, XSLT, GeoIP, njs, ACME) or curl, removing about 40 packages Turbo EA never used and that produced the recurring libtiff, libexpat and libX11 image findings.
+
+## [2.169.0] - 2026-10-19
+
+### Added
+- **Custom card type categories**: an admin can now create their own architecture layers next to the four built-in ones (Strategy & Transformation, Business Architecture, Application & Data, Technical Architecture) and move any card type — built-in types included — into any category. The **Category** field of the type editor and of **+ New Type** is now a picker over the existing categories that can create a new one on the spot ("Create category “…”"), so a typo no longer silently invents a layer.
+- **Manage categories** on Admin → Metamodel → Card Types: lists every category with its colour and how many card types use it, lets you reorder the layers (a custom layer may sit between two built-in ones), rename, recolour and translate your own categories, and delete one no type uses. The four built-in layers are locked: they cannot be renamed, recoloured or deleted.
+- **Translated layer names**: the four built-in layers now show in the reader's language in the inventory's type filter, the metamodel graph and the Layered Dependency View's lanes, and a custom category can carry its own translations. Creating, editing, reordering and deleting categories is recorded in the Security & admin log.
+
+### Changed
+- A custom category now gets its own lane in the Layered Dependency View, in its own colour, and its own layer in the metamodel graph instead of being folded into "Other"; card types with no category share a last, translated "Uncategorized" lane, kept apart from any category an admin names "Other"; the layer order follows the category order everywhere.
+- The card type API refuses a category that does not exist (`400 unknown_category`); create the category first. Workspace imports, content packs and the platform-migration importer add any category they carry that the instance does not have yet, and a workspace export now includes the categories (a `CardTypeCategories` sheet; an import never renames, recolours or retranslates a built-in category, though it does carry over where it sits in the layer order).
+
+## [2.168.0] - 2026-10-19
+
+### Changed
+- **Budget & Costs tables grouped by fiscal year**: on an initiative's **Budget & Costs** tab, planned budget lines and cost items are now grouped under collapsible fiscal-year rows that show each year's CapEx, OpEx and total, with separate CapEx and OpEx columns and a totals row for all years under each table. Only the current fiscal year is open when the tab loads, a **+** on a budget year adds a line for that year, cost items are listed by date within their year, and those without a date are gathered in an **Undated** group at the end.
+
+## [2.167.0] - 2026-10-19
+
+### Added
+- **Describe a planned budget line**: on an initiative's **Budget & Costs** tab, a planned budget line can now carry an optional description, just as cost items do, shown in its own column of the budget table. A fiscal year's CapEx or OpEx can be split into several named lines — licences, implementation partner, hardware — and the totals still add them all up. The demo initiatives show a few split lines.
+
+## [2.166.0] - 2026-10-19
+
+### Added
+- **Permanently delete a custom card type**: an admin can now delete a card type they created, from the **Delete type** button in the type editor's header. Before anything is removed, Turbo EA lists what goes with the type — its cards (with their relations, stakeholders, comments and attachments), the relation types that connect it to other types, the calculations that target it and its stakeholder roles — and asks for the type's key to be typed in. Built-in types keep their lock: they can only be hidden, never deleted. Every deleted card is recorded in the Security & admin log and the event history.
+
+### Changed
+- `DELETE /metamodel/types/{key}` on a custom type that still has cards now answers **409** with the card count instead of 400, and removes the cards too when called with `delete_cards=true` (which also requires the permission to delete cards). `GET /metamodel/types/{key}/delete-impact` returns what the deletion would remove.
 
 ## [2.162.0] - 2026-10-18
 

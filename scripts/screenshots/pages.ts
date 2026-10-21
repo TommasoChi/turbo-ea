@@ -198,6 +198,7 @@ const TAB_STAKEHOLDERS = tabSelector(...i18nLabels("cards:tabs.stakeholders"));
 const TAB_HISTORY = tabSelector(...i18nLabels("cards:tabs.history"));
 const TAB_BPM_DASHBOARD = tabSelector(...i18nLabels("bpm:tabs.dashboard"));
 const TAB_METAMODEL_GRAPH = tabSelector(...i18nLabels("admin:metamodel.tabs.graph"));
+const MANAGE_CATEGORIES_BUTTON = buttonSelector(...i18nLabels("admin:metamodel.categories.manage"));
 const TAB_ROLES = tabSelector(...i18nLabels("admin:users.tabs.roles"));
 const TAB_RESOURCES = tabSelector(
   ...i18nLabels(
@@ -789,6 +790,30 @@ export const DOC_PAGES: PageDef[] = [
     },
   },
   {
+    // The category registry (EA layers): opened from the Card Types tab.
+    id: "100_admin_metamodel_categories",
+    route: "/admin/metamodel",
+    waitFor: ".MuiPaper-root",
+    actions: [
+      // The page is lazy: the app bar is a Paper too, so wait for the button.
+      { type: "waitFor", selector: MANAGE_CATEGORIES_BUTTON, timeout: 15000 },
+      { type: "wait", ms: 600 },
+      { type: "click", selector: MANAGE_CATEGORIES_BUTTON },
+      { type: "waitFor", selector: ".MuiDialog-paper" },
+      { type: "wait", ms: 600 },
+    ],
+    filenames: {
+      en: "100_admin_metamodel_categories",
+      de: "100_admin_metamodell_kategorien",
+      fr: "100_admin_metamodele_categories",
+      es: "100_admin_metamodelo_categorias",
+      it: "100_admin_metamodello_categorie",
+      pt: "100_admin_metamodelo_categorias",
+      zh: "100_admin_metamodel_categories",
+      ru: "100_admin_metamodel_kategorii",
+    },
+  },
+  {
     id: "21_admin_users",
     route: "/admin/users",
     waitFor: ".MuiPaper-root, .MuiTable-root, .ag-root",
@@ -1191,6 +1216,25 @@ export const DOC_PAGES: PageDef[] = [
       pt: "40_ppm_portfolio",
       zh: "40_ppm_portfolio",
       ru: "40_ppm_portfel",
+    },
+  },
+  {
+    // The board with the Initiative hierarchy switched on. Grouped by
+    // Platform, the demo's programs and their projects share a group, so the
+    // tree nests; grouped by Organization they mostly sit in different ones.
+    id: "101_ppm_portfolio_hierarchy",
+    route: "/ppm?groupBy=Platform&hierarchy=1",
+    waitFor: "[data-depth]",
+    actions: [{ type: "wait", ms: 800 }],
+    filenames: {
+      en: "101_ppm_portfolio_hierarchy",
+      de: "101_ppm_portfolio_hierarchie",
+      fr: "101_ppm_portefeuille_hierarchie",
+      es: "101_ppm_portafolio_jerarquia",
+      it: "101_ppm_portafoglio_gerarchia",
+      pt: "101_ppm_portfolio_hierarquia",
+      zh: "101_ppm_portfolio_hierarchy",
+      ru: "101_ppm_portfel_ierarkhiya",
     },
   },
   {

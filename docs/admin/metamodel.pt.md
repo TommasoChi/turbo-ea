@@ -17,6 +17,17 @@ A aba de Tipos de Card lista todos os tipos no sistema. O Turbo EA vem com 14 ti
 | **Aplicação e Dados** | Aplicação, Interface, Objeto de Dados |
 | **Arquitetura Técnica** | Componente de TI, Categoria Tecnológica, Fornecedor, Sistema |
 
+### Categorias (camadas de arquitetura)
+
+Cada tipo de card pertence a uma **categoria** — a camada de arquitetura em que é agrupado. A ordem das categorias é a ordem das camadas em todo o lado onde são desenhadas: o filtro de tipos do inventário, o **grafo do metamodelo** e as faixas da Layered Dependency View, cada uma na cor da sua categoria e no idioma de quem lê.
+
+- **As quatro camadas nativas estão bloqueadas.** Estratégia e Transformação, Arquitetura de Negócio, Aplicação e Dados e Arquitetura Técnica não podem ser renomeadas, recoloridas nem eliminadas, e estão traduzidas para todos os idiomas suportados.
+- **Crie as suas.** No campo **Categoria** do editor de tipos ou de **+ Novo Tipo**, escreva um nome que ainda não exista e escolha **Criar a categoria «…»**. Escolha uma cor, adicione traduções se quiser, e o tipo passa para a nova categoria.
+- **Mova qualquer tipo.** Os tipos nativos também podem ser movidos — por exemplo, coloque Interface numa camada própria *Integração*.
+- **Gerir categorias.** O botão **Gerir categorias**, ao lado de **+ Novo Tipo**, lista todas as categorias com a sua cor e o número de tipos de card que as usam. As setas alteram a ordem das camadas (uma camada própria pode ficar entre duas nativas), o lápis renomeia, recolore ou traduz uma categoria própria, e o caixote do lixo elimina-a. Uma categoria ainda usada por um tipo de card não pode ser eliminada — mova primeiro os seus tipos para outra categoria.
+
+![Gerir categorias](../assets/img/pt/100_admin_metamodelo_categorias.png)
+
 ### Criando um Tipo Personalizado
 
 Clique em **+ Novo Tipo** para criar um tipo de card personalizado. Configure:
@@ -27,7 +38,7 @@ Clique em **+ Novo Tipo** para criar um tipo de card personalizado. Configure:
 | **Rótulo** | Nome de exibição mostrado na interface |
 | **Ícone** | Nome do ícone Google Material Symbol |
 | **Cor** | Cor da marca para o tipo (usada no inventário, relatórios e diagramas) |
-| **Categoria** | Agrupamento por camada de arquitetura |
+| **Categoria** | A camada de arquitetura em que o tipo é agrupado — escolha uma categoria existente ou escreva um novo nome para criar uma (consulte [Categorias](#categorias-camadas-de-arquitetura)) |
 | **Possui Hierarquia** | Se cards deste tipo podem ter relacionamentos pai/filho |
 | **Permitir logótipos personalizados** | Se os editores podem carregar um logótipo por cartão, apresentado em vez do ícone do tipo (ativo de origem para Aplicação e Componente de TI) |
 
@@ -53,7 +64,8 @@ Campos definem os atributos personalizados disponíveis nos cards deste tipo. Ca
 | **Chave** | Identificador único do campo |
 | **Rótulo** | Nome de exibição |
 | **Tipo** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select ou multiple_select. Uma porcentagem é um número de 0 a 100, exibida como uma barra de progresso e editada com um controle deslizante ou digitada com exatidão. Um booleano é escolhido numa lista Sim / Não, com **Nenhum** para o limpar, e é exibido como etiqueta verde *Sim* ou azul *Não*, ou como — quando não definido, o que o filtro **(vazio)** do inventário encontra |
-| **Opções** | Para campos de seleção: as escolhas disponíveis com rótulos e cores opcionais |
+| **Opções** | Para campos de seleção: as escolhas disponíveis com rótulos e cores opcionais. Reordene-as com as setas para cima e para baixo ao lado de cada opção: os menus e os filtros listam as opções nessa ordem, e os chips de um valor de seleção múltipla a seguem em todos os cards. |
+| **Texto de ajuda** | Orientação opcional mostrada como uma nota recolhível sob o campo enquanto um card é editado. É escrito por idioma e pode ser definido por qualquer administrador do metamodelo; em um campo fornecido por uma extensão, é somente leitura |
 | **Obrigatório** | Se o campo é obrigatório — veja as regras de aplicação abaixo |
 | **Qualidade dos dados** | A contribuição de cada campo para a pontuação é gerida no painel **Qualidade dos dados** (ver abaixo) |
 | **Somente leitura** | Impede edição manual (útil para campos calculados) |
@@ -70,6 +82,7 @@ Campos são organizados em **seções** na página de detalhe do card. Você pod
 - Definir seções com layout de **1 coluna** ou **2 colunas**
 - Organizar campos em **grupos** dentro de uma seção (renderizados como sub-cabeçalhos recolhíveis)
 - Reordenar campos dentro de uma seção arrastando-os e mover um campo para outra seção pela ação **mover**
+- Tirar um campo do seu grupo soltando-o na zona **Solte aqui para tirar um campo do seu grupo**, no final de cada coluna que contém um grupo — o campo vai para o final dessa coluna, sem grupo
 
 O nome de seção especial `__description` adiciona campos à seção de Descrição da página de detalhe do card.
 
@@ -117,6 +130,12 @@ Por exemplo, o tipo Aplicação possui subtipos: Aplicação de Negócio, Micros
 4. Campos ocultos são excluídos da pontuação de qualidade dos dados, para que os utilizadores não sejam penalizados por campos que não podem ver.
 
 Quando nenhum subtipo é selecionado num card (ou o tipo não possui subtipos), todos os campos são visíveis. Campos ocultos preservam os seus dados — se o subtipo de um card mudar, os valores anteriormente ocultos são mantidos.
+
+**Renomear um subtipo:** clique no lápis ao lado do seu chip, digite o novo rótulo e pressione Enter (ou clique em outro lugar); Escape cancela. Só o rótulo muda: a chave, que os cards armazenam, continua a mesma, e as traduções do subtipo (editadas pelo ícone de traduções do cabeçalho) permanecem como estão.
+
+**Relações não obrigatórias para um subtipo:**
+
+Uma relação marcada como obrigatória no tipo de card aplica-se a todos os cartões desse tipo. Quando não se adequa a um subtipo — por exemplo, uma aplicação SaaS sem componente de TI que a aloje —, abra o diálogo **Modelo de subtipo** e marque-a em **Relações não obrigatórias para este subtipo**. A lista mostra apenas as relações obrigatórias do tipo, cada uma designada pelo seu verbo tal como se lê a partir deste tipo de card. Nos cartões desse subtipo a relação deixa de bloquear a aprovação, deixa de penalizar a pontuação de qualidade dos dados e o detalhe do cartão deixa de a marcar como **Obrigatório**; continua visível se o tipo de relação estiver configurado como visível. Os cartões de outros subtipos, e os que não têm subtipo, continuam a precisar dela. Ao guardar, os cartões existentes do tipo são pontuados de novo de imediato.
 
 #### Papéis de Partes Interessadas
 
@@ -186,14 +205,15 @@ Clique no botão **Traduzir** na barra de ferramentas do drawer do tipo para abr
 - **Tipos de ligação hierárquica** — Rótulos para cada tipo de ligação hierárquica
 - **Seções** — Cabeçalhos de seção na página de detalhe do card
 - **Campos** — Rótulos de campos e rótulos de opções de seleção
+- **Texto de ajuda** — O texto de ajuda de um campo, listado sob o campo depois de ter sido inserido no editor de campos. Editá-lo em inglês também atualiza o texto de ajuda padrão do campo
 - **Papéis de stakeholder** — Nomes de papéis exibidos na interface de atribuição de stakeholders
 
 As traduções são armazenadas junto com cada tipo de card e são resolvidas no momento da renderização de acordo com o idioma selecionado pelo usuário. Rótulos não traduzidos recorrem ao padrão em inglês.
 
 ### Excluindo um Tipo
 
-- **Tipos incorporados** são excluídos temporariamente (ocultos) e podem ser restaurados
-- **Tipos personalizados** são excluídos permanentemente
+- **Tipos incorporados** são excluídos temporariamente (ocultos) e podem ser restaurados. O botão de excluir no editor de tipos fica bloqueado para eles — use **Ocultar tipo** em vez disso.
+- **Tipos personalizados** — os que você criou — podem ser **excluídos permanentemente**. Abra o tipo, clique em **Excluir tipo** no cabeçalho e o Turbo EA mostra tudo o que a exclusão levará junto: os cards do tipo (com seus relacionamentos, stakeholders, comentários e anexos), os tipos de relacionamento que o ligam a outros tipos, os cálculos direcionados a ele e seus papéis de stakeholder. Digite a chave do tipo para liberar **Excluir permanentemente**. A exclusão não pode ser desfeita; os cards arquivados do tipo também são excluídos, e cada card excluído fica registrado no log de segurança e administração e no histórico de eventos.
 
 ## Tipos de Relacionamento
 

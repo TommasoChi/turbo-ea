@@ -16,7 +16,16 @@ import { useApiQuery } from "@/hooks/useApiQuery";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { RAG_COLORS, STATUS_COLORS } from "@/theme/tokens";
 import { KPI_VALUE_SX } from "./ppmStyles";
-import type { Card, PpmStatusReport, PpmCostLine, PpmBudgetLine } from "@/types";
+import DerivedValue from "./DerivedValue";
+import { financialTotals } from "./derivedFinancials";
+import { compactAmount, costPair } from "./ppmPortfolioFormat";
+import type {
+  Card,
+  PpmStatusReport,
+  PpmCostLine,
+  PpmBudgetLine,
+  PpmRollupOut,
+} from "@/types";
 
 const HEALTH_DOT_COLORS: Record<string, string> = {
   onTrack: RAG_COLORS.green,
@@ -29,24 +38,27 @@ interface Props {
   latestReport: PpmStatusReport | null;
   costLines: PpmCostLine[];
   budgetLines: PpmBudgetLine[];
+  /** The initiatives beneath this one (`null` while unknown or unreadable). */
+  rollup: PpmRollupOut | null;
 }
 
-/** Format a number compactly. Pass `scale` to force a shared magnitude so a
- * budget/actual pair renders against one unit suffix. */
-function fmtK(n: number, scale?: Scale): string {
-  const s = scale ?? magnitude(n);
-  if (s === "M") return (n / 1_000_000).toFixed(1);
-  if (s === "k") return (n / 1_000).toFixed(0);
-  return String(Math.round(n));
-}
+/** The "beneath this initiative" block under the Financials bars. */
+const BENEATH_SX = { mt: 2, pt: 1.5, borderTop: 1, borderColor: "divider" };
 
-type Scale = "M" | "k" | "";
+/** A derived figure's text reads italic. */
+const DERIVED_TEXT_SX = { fontStyle: "italic" } as const;
 
-function magnitude(n: number): Scale {
-  if (Math.abs(n) >= 1_000_000) return "M";
-  if (Math.abs(n) >= 1_000) return "k";
-  return "";
-}
+/** The budget track, outlined rather than filled when the budget is derived. */
+const trackSx = (derivedBudget: boolean, color: string) =>
+  derivedBudget
+    ? { bgcolor: "transparent", border: `1px solid ${color}`, boxSizing: "border-box" as const }
+    : { bgcolor: "action.hover" };
+
+/** The actual fill, outlined rather than filled when the actuals are derived. */
+const fillSx = (derivedActual: boolean, color: string) =>
+  derivedActual
+    ? { bgcolor: "transparent", border: `1px solid ${color}`, boxSizing: "border-box" as const }
+    : { bgcolor: color };
 
 /** Health RAG dot. Module scope: defined inline it was a fresh component type
  * on every render, remounting the row each time. */
@@ -75,6 +87,8 @@ function BudgetBar({
   currency,
   barColor,
   overColor,
+  derivedBudget,
+  derivedActual,
 }: {
   label: string;
   budget: number;
@@ -82,16 +96,17 @@ function BudgetBar({
   currency: string;
   barColor: string;
   overColor: string;
+  /** The budget is the initiatives' beneath: its track is outlined. */
+  derivedBudget: boolean;
+  /** The actuals are the initiatives' beneath: the fill is outlined. */
+  derivedActual: boolean;
 }) {
   const pct = budget > 0 ? Math.min((actual / budget) * 100, 100) : 0;
   const over = actual > budget && budget > 0;
   const color = over ? overColor : barColor;
-  // One shared scale for both figures, and a unit suffix that matches it.
-  // Deriving them separately rendered a 2.5M budget as "1.7M/2.5M kCHF".
-  const scale = magnitude(Math.max(Math.abs(budget), Math.abs(actual)));
-  const unit = `${scale}${currency}`;
-  const aVal = fmtK(actual, scale);
-  const pVal = fmtK(budget, scale);
+  // One shared scale for both figures and a unit suffix that matches it (the
+  // board's cost bars read the same helper, so the two cannot drift again).
+  const { actualText: aVal, plannedText: pVal, unit } = costPair(actual, budget, currency);
 
   return (
     <Box sx={{ mb: 1.5 }}>
@@ -103,19 +118,28 @@ function BudgetBar({
           variant="caption"
           sx={{ color: over ? overColor : "text.secondary" }}
         >
-          {aVal}/{pVal} {unit}
+          <Box component="span" sx={derivedActual ? DERIVED_TEXT_SX : undefined}>
+            {aVal}
+          </Box>
+          /
+          <Box component="span" sx={derivedBudget ? DERIVED_TEXT_SX : undefined}>
+            {pVal}
+          </Box>{" "}
+          {unit}
           {budget > 0 && ` (${Math.round((actual / budget) * 100)}%)`}
         </Typography>
       </Box>
       <LinearProgress
         variant="determinate"
         value={pct}
+        data-derived-budget={derivedBudget || undefined}
+        data-derived-actual={derivedActual || undefined}
         sx={{
           height: 10,
           borderRadius: 5,
-          bgcolor: "action.hover",
+          ...trackSx(derivedBudget, barColor),
           "& .MuiLinearProgress-bar": {
-            bgcolor: color,
+            ...fillSx(derivedActual, color),
             borderRadius: 5,
           },
         }}
@@ -129,10 +153,13 @@ export default function PpmOverviewTab({
   latestReport,
   costLines,
   budgetLines,
+  rollup,
 }: Props) {
   const { t } = useTranslation("ppm");
   const theme = useTheme();
   const { fmt, currency } = useCurrency();
+  // The KPI figures read in k / M so the derived glyph beside them cannot wrap them.
+  const kpiAmount = (n: number) => compactAmount(n, currency, fmt.format);
   const { getType } = useMetamodel();
   const rl = useResolveLabel();
   const subtypeLabel = useCardSubtypeLabel();
@@ -151,25 +178,21 @@ export default function PpmOverviewTab({
   // Stryker disable next-line ConditionalExpression,LogicalOperator: completionPct is read off completion, so the two are undefined together
   const completionLoading = completion === undefined || completionPct === undefined;
 
-  // Budget totals (from budget lines)
-  const totalBudget = budgetLines.reduce((s, bl) => s + bl.amount, 0);
-  const capexBudget = budgetLines
-    .filter((b) => b.category === "capex")
-    .reduce((s, b) => s + b.amount, 0);
-  const opexBudget = budgetLines
-    .filter((b) => b.category === "opex")
-    .reduce((s, b) => s + b.amount, 0);
+  // What the initiatives beneath this one add up to: read live by the page,
+  // shown beside this initiative's own figures and in place of a side it has
+  // no lines of its own for — never added to them. Absent while loading and
+  // on failure: it is a secondary figure, not worth an error.
+  const showBeneath = !!rollup && rollup.descendant_count > 0;
+  const fmtSpanDate = (d: string | null) => (d ? formatDate(d) : "\u2014");
 
-  // Actual totals (from cost lines)
-  const totalActual = costLines.reduce((s, cl) => s + cl.actual, 0);
-  const capexActual = costLines
-    .filter((c) => c.category === "capex")
-    .reduce((s, c) => s + c.actual, 0);
-  const opexActual = costLines
-    .filter((c) => c.category === "opex")
-    .reduce((s, c) => s + c.actual, 0);
-
-  const variance = totalBudget - totalActual;
+  // Each side is this initiative's own lines, or the initiatives' beneath it
+  // when it has none of that kind (see derivedFinancials).
+  const totals = financialTotals(budgetLines, costLines, rollup);
+  const count = rollup?.descendant_count;
+  const budgetTip = totals.budget.derived ? t("derivedBudgetTooltip", { count }) : undefined;
+  const actualTip = totals.actual.derived ? t("derivedActualTooltip", { count }) : undefined;
+  const varianceTip = [budgetTip, actualTip].filter(Boolean).join(" \u00b7 ") || undefined;
+  const variance = totals.budget.total - totals.actual.total;
 
   const typeConfig = getType(card.type);
 
@@ -316,7 +339,7 @@ export default function PpmOverviewTab({
               {t("totalBudget")}
             </Typography>
             <Typography variant="h6" fontWeight={600} sx={KPI_VALUE_SX}>
-              {fmt.format(totalBudget)}
+              <DerivedValue tip={budgetTip}>{kpiAmount(totals.budget.total)}</DerivedValue>
             </Typography>
           </Box>
           <Box>
@@ -324,7 +347,7 @@ export default function PpmOverviewTab({
               {t("totalActual")}
             </Typography>
             <Typography variant="h6" fontWeight={600} sx={KPI_VALUE_SX}>
-              {fmt.format(totalActual)}
+              <DerivedValue tip={actualTip}>{kpiAmount(totals.actual.total)}</DerivedValue>
             </Typography>
           </Box>
           <Box>
@@ -337,34 +360,64 @@ export default function PpmOverviewTab({
               color={variance < 0 ? "error" : "success.main"}
               sx={KPI_VALUE_SX}
             >
-              {fmt.format(variance)}
+              <DerivedValue tip={varianceTip}>{kpiAmount(variance)}</DerivedValue>
             </Typography>
           </Box>
         </Box>
         <BudgetBar
           label={t("budgetBarTotal")}
-          budget={totalBudget}
-          actual={totalActual}
+          budget={totals.budget.total}
+          actual={totals.actual.total}
           currency={currency}
           barColor={budgetBarColor}
           overColor={overBudgetColor}
+          derivedBudget={totals.budget.derived}
+          derivedActual={totals.actual.derived}
         />
         <BudgetBar
           label={t("capex")}
-          budget={capexBudget}
-          actual={capexActual}
+          budget={totals.budget.capex}
+          actual={totals.actual.capex}
           currency={currency}
           barColor={budgetBarColor}
           overColor={overBudgetColor}
+          derivedBudget={totals.budget.derived}
+          derivedActual={totals.actual.derived}
         />
         <BudgetBar
           label={t("opex")}
-          budget={opexBudget}
-          actual={opexActual}
+          budget={totals.budget.opex}
+          actual={totals.actual.opex}
           currency={currency}
           barColor={budgetBarColor}
           overColor={overBudgetColor}
+          derivedBudget={totals.budget.derived}
+          derivedActual={totals.actual.derived}
         />
+        {showBeneath && (
+          <Box data-testid="ppm-beneath" sx={BENEATH_SX}>
+            <Typography variant="body2" fontWeight={600}>
+              {t("beneathThisInitiative", { count: rollup.descendant_count })}
+            </Typography>
+            {/* When both sides are already the figures beneath, the KPIs say it. */}
+            {!(totals.budget.derived && totals.actual.derived) && (
+              <Typography variant="body2" color="text.secondary">
+                {t("beneathFigures", {
+                  budget: fmt.format(rollup.total_planned),
+                  actual: fmt.format(rollup.total_actual),
+                })}
+              </Typography>
+            )}
+            {(rollup.start_date || rollup.end_date) && (
+              <Typography variant="body2" color="text.secondary">
+                {t("beneathSpan", {
+                  from: fmtSpanDate(rollup.start_date),
+                  to: fmtSpanDate(rollup.end_date),
+                })}
+              </Typography>
+            )}
+          </Box>
+        )}
       </Paper>
 
       {/* Timeline + Status */}

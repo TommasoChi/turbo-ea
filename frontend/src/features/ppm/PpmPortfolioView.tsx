@@ -34,7 +34,10 @@ import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import ListSubheader from "@mui/material/ListSubheader";
 import Tooltip from "@mui/material/Tooltip";
+import Switch from "@mui/material/Switch";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import IconButton from "@mui/material/IconButton";
 import Paper from "@mui/material/Paper";
 import Chip from "@mui/material/Chip";
@@ -49,7 +52,7 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import { toIsoDate } from "@/lib/dates";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useDateFormat } from "@/hooks/useDateFormat";
-import { typeLabel, useSubtypeLabel } from "@/hooks/useResolveLabel";
+import { subtypeLabel, typeLabel, useSubtypeLabel } from "@/hooks/useResolveLabel";
 import type { InlineEntityLike } from "@/hooks/useResolveLabel";
 import type { PrintParam } from "@/features/reports/ReportShell";
 import type { ReportExportData } from "@/features/reports/reportExport";
@@ -70,28 +73,56 @@ import {
   BOARD_GUTTER,
 } from "./ppmPortfolioFormat";
 import {
+  ALL_LEVELS,
   barModel,
   buildPortfolioExport,
   buildPrintParams,
   costBarModel,
+  derivedCostTipKey,
   filterItems,
   filterSearchParams,
+  groupByLabel,
   groupItems,
+  groupLayout,
   groupTotals,
-  groupTypeLabel,
   hasAnyCost,
+  hasHierarchy,
   healthLabelKey,
+  maxTreeDepth,
   money,
   nowPct,
+  parseDepth,
   pctOf,
   portfolioWindow,
   projectManager,
   ragColor,
+  rowFigures,
+  subtypeGroupBy,
   subtypeKeys,
   subtypeName,
+  subtypeSubGroups,
   toggleCollapsed,
+  treeRows,
   visibleQuarterLabels,
 } from "./ppmPortfolioModel";
+import type { GroupLayout, RowFigures } from "./ppmPortfolioModel";
+
+/** A derived (rolled-up) figure is drawn outlined rather than filled. */
+const outlinedFill = (color: string) => ({
+  bgcolor: "transparent",
+  border: `1px solid ${color}`,
+  boxSizing: "border-box" as const,
+});
+
+/** A Gantt bar whose dates span the initiatives beneath is drawn as a dashed outline. */
+const dashedOutline = (color: string) => ({
+  bgcolor: "transparent",
+  border: `1.5px dashed ${color}`,
+  boxSizing: "border-box" as const,
+});
+
+/** A derived figure's or date's text reads italic. */
+const DERIVED_TEXT_SX = { fontStyle: "italic" };
 
 /** Mini cost bar matching the design: bar on top, label "578/1,350 kCHF" below */
 function CostBar({
@@ -99,11 +130,19 @@ function CostBar({
   planned,
   currency,
   label,
+  derivedTip,
 }: {
   actual: number;
   planned: number;
   currency: string;
   label?: string;
+  /**
+   * Set when the budget, the actuals or both are the total of the initiatives
+   * beneath a parent with no lines of that kind of its own: the bar is
+   * outlined, its label italic, and this text (naming which half) is its
+   * tooltip. The group totals row never passes it.
+   */
+  derivedTip?: string;
 }) {
   const bar = costBarModel(actual, planned, currency);
   if (!bar) {
@@ -115,9 +154,11 @@ function CostBar({
   }
   const { overBudget } = bar;
   const barColor = overBudget ? COST_BAR_OVER : COST_BAR_COLOR;
+  const fillSx = derivedTip ? outlinedFill(barColor) : { bgcolor: barColor };
+  const overSx = derivedTip ? outlinedFill(COST_BAR_OVER) : { bgcolor: COST_BAR_OVER };
 
-  return (
-    <Box sx={{ width: "100%", minWidth: 90 }}>
+  const content = (
+    <Box sx={{ width: "100%", minWidth: 90 }} data-derived={derivedTip ? "costs" : undefined}>
       {label && (
         <Typography
           variant="caption"
@@ -135,7 +176,7 @@ function CostBar({
             top: 0,
             height: "100%",
             width: `${bar.fillPct}%`,
-            bgcolor: barColor,
+            ...fillSx,
             borderRadius: 5,
             zIndex: 1,
           }}
@@ -148,7 +189,7 @@ function CostBar({
               top: 0,
               height: "100%",
               width: `${bar.overPct}%`,
-              bgcolor: COST_BAR_OVER,
+              ...overSx,
               borderRadius: 5,
               zIndex: 0,
             }}
@@ -166,38 +207,54 @@ function CostBar({
           mt: 0.25,
           color: overBudget ? COST_BAR_OVER : "text.secondary",
           whiteSpace: "nowrap",
+          ...(derivedTip ? DERIVED_TEXT_SX : {}),
         }}
       >
         {bar.actualText}/{bar.plannedText} {bar.unit}
       </Typography>
     </Box>
   );
+  return derivedTip ? <Tooltip title={derivedTip}>{content}</Tooltip> : content;
 }
 
-/** A group's banner row: click anywhere on it to collapse or expand the group. */
+/**
+ * A group's banner row: click anywhere on it to collapse or expand the group.
+ * The `sub` variant is the lighter, indented header of a subtype sub-group
+ * inside a group.
+ */
 function GroupHeader({
   name,
   count,
   collapsed,
   onToggle,
+  variant = "group",
 }: {
   name: string;
   count: number;
   collapsed: boolean;
   onToggle: () => void;
+  variant?: "group" | "sub";
 }) {
   const { t } = useTranslation("ppm");
   const theme = useTheme();
+  const sub = variant === "sub";
+  const dark = theme.palette.mode === "dark";
+  // On the solid banner the text is white; a sub-group header is a tint, so
+  // it keeps the theme's own text colours.
+  const onBanner = !dark && !sub;
   return (
     <Box
       data-export-row
+      data-group-variant={variant}
       sx={{
         display: "flex",
         alignItems: "center",
-        px: 1,
-        py: 0.75,
-        bgcolor:
-          theme.palette.mode === "dark"
+        pl: sub ? 3 : 1,
+        pr: 1,
+        py: sub ? 0.5 : 0.75,
+        bgcolor: sub
+          ? alpha(theme.palette.primary.main, dark ? 0.1 : 0.08)
+          : dark
             ? alpha(theme.palette.primary.main, 0.2)
             : theme.palette.primary.dark,
         borderBottom: `1px solid ${theme.palette.divider}`,
@@ -207,9 +264,11 @@ function GroupHeader({
     >
       <IconButton
         size="small"
+        aria-expanded={!collapsed}
+        aria-label={name}
         sx={{
           mr: 0.5,
-          color: theme.palette.mode === "dark" ? "text.primary" : "#fff",
+          color: onBanner ? "#fff" : "text.primary",
         }}
       >
         <MaterialSymbol
@@ -218,17 +277,17 @@ function GroupHeader({
         />
       </IconButton>
       <MaterialSymbol
-        icon="folder"
+        icon={sub ? "subdirectory_arrow_right" : "folder"}
         size={18}
         style={{
           marginRight: 6,
-          color: theme.palette.mode === "dark" ? undefined : "#fff",
+          color: onBanner ? "#fff" : undefined,
         }}
       />
       <Typography
         variant="body2"
-        fontWeight={700}
-        sx={{ color: theme.palette.mode === "dark" ? "text.primary" : "#fff" }}
+        fontWeight={sub ? 600 : 700}
+        sx={{ color: onBanner ? "#fff" : "text.primary" }}
       >
         {name}
       </Typography>
@@ -236,10 +295,7 @@ function GroupHeader({
         variant="body2"
         sx={{
           ml: 1,
-          color:
-            theme.palette.mode === "dark"
-              ? "text.secondary"
-              : alpha("#fff", 0.8),
+          color: onBanner ? alpha("#fff", 0.8) : "text.secondary",
         }}
       >
         &mdash; {t("projectCount", { count })}
@@ -247,6 +303,29 @@ function GroupHeader({
     </Box>
   );
 }
+
+/** Left padding (theme spacing) of a row's name at a depth of the tree: 12px, plus 16px a level. */
+const indentOf = (depth: number): number => 1.5 + depth * 2;
+
+/** The chevron before a parent's name, and the empty slot a leaf keeps so names line up. */
+const TREE_TOGGLE_SLOT_SX = { width: 22, height: 22, flexShrink: 0, mr: 0.5 };
+
+/** The toolbar's switches sit level with its selects and keep their label on one line. */
+const SWITCH_LABEL_SX = { mx: 0, whiteSpace: "nowrap" };
+
+/** The subtype pill after a name while the hierarchy is on. */
+const TREE_SUBTYPE_CHIP_SX = {
+  ml: 1,
+  flexShrink: 0,
+  height: 20,
+  "& .MuiChip-label": { px: 0.75, fontSize: "0.68rem" },
+};
+
+/** The desktop row's Plan cell (quarter span). */
+const PLAN_CELL_SX = { px: 0.5, textAlign: "center" };
+
+/** No extra styling (the mobile card's quarter span). */
+const NO_SX = {};
 
 const gridCols =
   "minmax(180px,1.5fr) 120px 90px 1fr 32px 32px 32px 120px 120px 64px";
@@ -319,7 +398,22 @@ export default function PpmPortfolioView({
   const [groupBy, setGroupByState] = useState(searchParams.get("groupBy") || initialGroupBy);
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [subtypeFilter, setSubtypeFilter] = useState(searchParams.get("subtype") || initialSubtype);
+  // Ids of collapsed groups, subtype sub-groups and parent rows — the three
+  // kinds of id never collide, so one set serves them all.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [hierarchy, setHierarchyState] = useState(searchParams.get("hierarchy") === "1");
+  const [depth, setDepth] = useState(() => parseDepth(searchParams.get("depth")));
+  const [bySubtype, setBySubtype] = useState(searchParams.get("bySubtype") === "1");
+  const toggle = useCallback(
+    (id: string) => setCollapsed((prev) => toggleCollapsed(prev, id)),
+    [],
+  );
+  // The hierarchy and the subtype sub-groups are exclusive: the tree spans
+  // subtypes by design, so turning it on turns the sub-groups off.
+  const setHierarchy = useCallback((on: boolean) => {
+    setHierarchyState(on);
+    if (on) setBySubtype(false);
+  }, []);
 
   const setGroupBy = useCallback(
     (next: string) => {
@@ -345,10 +439,23 @@ export default function PpmPortfolioView({
           subtype: subtypeFilter,
           initialGroupBy,
           initialSubtype,
+          hierarchy,
+          depth,
+          bySubtype,
         }),
       { replace: true },
     );
-  }, [groupBy, search, subtypeFilter, initialGroupBy, initialSubtype, setSearchParams]);
+  }, [
+    groupBy,
+    search,
+    subtypeFilter,
+    initialGroupBy,
+    initialSubtype,
+    hierarchy,
+    depth,
+    bySubtype,
+    setSearchParams,
+  ]);
 
   // ── Report hover popover state ──
   const [reportAnchorEl, setReportAnchorEl] = useState<HTMLElement | null>(null);
@@ -417,52 +524,106 @@ export default function PpmPortfolioView({
 
   const groups = useMemo(() => groupItems(filtered, t("noGroup")), [filtered, t]);
 
+  // The hierarchy toggle exists only when some row has its parent on the board
+  // as a row (a group's anchor is a header, so it is never a parent to nest under).
+  const canNest = useMemo(() => hasHierarchy(items), [items]);
+  const treeOn = hierarchy && canNest;
+  const subtypeOrder = useMemo(() => (subtypeDefs ?? []).map((d) => d.key), [subtypeDefs]);
+  const layout: GroupLayout = useMemo(
+    () => groupLayout(treeOn, depth, bySubtype, subtypeOrder),
+    [treeOn, depth, bySubtype, subtypeOrder],
+  );
+  // Level 1 … the deepest chain any group shows (or the URL's depth, if
+  // deeper). Measured per group, never over the whole board: a chain whose
+  // parent sits in another group is two roots, not a level.
+  const depthOptions = useMemo(() => {
+    const deepest = Math.max(
+      ...groups.map(([, g]) => maxTreeDepth(g.items)),
+      depth === ALL_LEVELS ? 0 : depth,
+    );
+    return Array.from({ length: deepest }, (_, i) => i + 1);
+  }, [groups, depth]);
+
   // ── Print / export ──
   const groupLabel = useMemo(
-    () => groupTypeLabel(groupOptions, groupBy, i18n.language),
-    [groupOptions, groupBy, i18n.language],
+    () => groupByLabel(groupBy, groupOptions, subtypeDefs ?? [], i18n.language),
+    [groupBy, groupOptions, subtypeDefs, i18n.language],
   );
 
   const printParams: PrintParam[] = useMemo(
     () =>
       buildPrintParams(
-        { groupTypeLabel: groupLabel, subtype: subtypeFilter, search },
+        { groupTypeLabel: groupLabel, subtype: subtypeFilter, search, layout },
         t,
         resolveSubtype,
       ),
-    [t, groupLabel, subtypeFilter, search, resolveSubtype],
+    [t, groupLabel, subtypeFilter, search, layout, resolveSubtype],
   );
 
   const buildExportData = useCallback(
     (): ReportExportData =>
       buildPortfolioExport(
-        { groups, groupTypeLabel: groupLabel, printParams, chartNode: chartRef.current },
+        {
+          groups,
+          groupTypeLabel: groupLabel,
+          printParams,
+          chartNode: chartRef.current,
+          layout,
+          allItems: items,
+        },
         t,
         resolveSubtype,
       ),
-    [groups, groupLabel, printParams, t, resolveSubtype],
+    [groups, groupLabel, printParams, layout, items, t, resolveSubtype],
   );
 
+  // ── Derived figures and dates (a parent without its own) ──
+  const derivedDatesTip = (f: RowFigures) =>
+    t("derivedDatesTooltip", { count: f.descendantCount });
+  // Which halves are derived picks the wording; either one outlines the bar.
+  const derivedCostTip = (f: RowFigures) => {
+    const key = derivedCostTipKey(f);
+    return key ? t(key, { count: f.descendantCount }) : undefined;
+  };
+  /** The quarter span, italic and explained when the dates are derived. */
+  const renderPlan = (f: RowFigures, plan: string, sx: Record<string, unknown>) => {
+    const text = (
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={f.derivedDates ? { ...sx, ...DERIVED_TEXT_SX } : sx}
+        noWrap
+      >
+        {plan}
+      </Typography>
+    );
+    return f.derivedDates ? <Tooltip title={derivedDatesTip(f)}>{text}</Tooltip> : text;
+  };
+
   // ── Desktop: Gantt timeline bar ──
-  const renderBar = (item: PpmPortfolioItem) => {
+  // An anchored group's bottom line passes `clickable: false`: it is no row to open.
+  const renderBar = (item: PpmPortfolioItem, f: RowFigures, clickable = true) => {
+    const open = clickable ? onOpen : undefined;
     const bar = barModel(item, timeline);
     if (!bar) return null;
+    const range = `${f.startDate} \u2192 ${f.endDate}`;
     return (
-      <Tooltip title={`${item.start_date} \u2192 ${item.end_date}`}>
+      <Tooltip title={bar.derived ? `${range} \u00b7 ${derivedDatesTip(f)}` : range}>
         <Box
+          data-derived={bar.derived ? "dates" : undefined}
           sx={{
             position: "absolute",
             left: `${bar.left}%`,
             width: `${bar.width}%`,
             height: 16,
             borderRadius: bar.borderRadius,
-            bgcolor: bar.color,
+            ...(bar.derived ? dashedOutline(bar.color) : { bgcolor: bar.color }),
             opacity: 0.9,
             top: "50%",
             transform: "translateY(-50%)",
-            ...(onOpen ? { cursor: "pointer", "&:hover": { opacity: 1 } } : {}),
+            ...(open ? { cursor: "pointer", "&:hover": { opacity: 1 } } : {}),
           }}
-          onClick={onOpen ? () => onOpen(item) : undefined}
+          onClick={open ? () => open(item) : undefined}
         />
       </Tooltip>
     );
@@ -483,11 +644,34 @@ export default function PpmPortfolioView({
   );
 
   // ── Desktop: grid row ──
-  const renderRow = (item: PpmPortfolioItem) => {
+  // ── Tree rows: the chevron before a parent's name, or the slot it would take ──
+  const renderChildToggle = (item: PpmPortfolioItem, hasChildren: boolean) => {
+    if (!treeOn) return null;
+    if (!hasChildren) return <Box data-tree-spacer sx={TREE_TOGGLE_SLOT_SX} />;
+    const isCollapsed = collapsed.has(item.id);
+    return (
+      <IconButton
+        size="small"
+        aria-label={t("toggleChildren", { name: item.name })}
+        aria-expanded={!isCollapsed}
+        onClick={(e) => {
+          // The row opens the initiative; the chevron must not.
+          e.stopPropagation();
+          toggle(item.id);
+        }}
+        sx={{ ...TREE_TOGGLE_SLOT_SX, p: 0 }}
+      >
+        <MaterialSymbol icon={isCollapsed ? "chevron_right" : "expand_more"} size={18} />
+      </IconButton>
+    );
+  };
+
+  const renderRow = (item: PpmPortfolioItem, depth = 0, hasChildren = false) => {
     const rep = item.latest_report;
     const pm = projectManager(item.stakeholders);
+    const f = rowFigures(item);
 
-    const plan = `${fmtQuarter(item.start_date)} / ${fmtQuarter(item.end_date)}`;
+    const plan = `${fmtQuarter(f.startDate)} / ${fmtQuarter(f.endDate)}`;
 
     return (
       <Box
@@ -502,20 +686,41 @@ export default function PpmPortfolioView({
           "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.04) },
         }}
       >
-        {/* Name */}
+        {/* Name, indented by its depth in the tree */}
         <Box
+          data-depth={depth}
           sx={{
-            px: 1.5,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            ...clickSx,
+            display: "flex",
+            alignItems: "center",
+            minWidth: 0,
+            pl: indentOf(depth),
+            pr: 1.5,
           }}
-          onClick={onOpen ? () => onOpen(item, "detail") : undefined}
         >
-          <Typography variant="body2" noWrap>
-            {item.name}
-          </Typography>
+          {renderChildToggle(item, hasChildren)}
+          <Box
+            sx={{
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              ...clickSx,
+            }}
+            onClick={onOpen ? () => onOpen(item, "detail") : undefined}
+          >
+            <Typography variant="body2" noWrap>
+              {item.name}
+            </Typography>
+          </Box>
+          {/* A tree spans subtypes, so each row names its own role. */}
+          {treeOn && item.subtype && (
+            <Chip
+              label={resolveSubtype(item.subtype)}
+              size="small"
+              variant="outlined"
+              sx={TREE_SUBTYPE_CHIP_SX}
+            />
+          )}
         </Box>
 
         {/* PM */}
@@ -524,31 +729,12 @@ export default function PpmPortfolioView({
         </Typography>
 
         {/* Plan column */}
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ px: 0.5, textAlign: "center" }}
-          noWrap
-        >
-          {plan}
-        </Typography>
+        {renderPlan(f, plan, PLAN_CELL_SX)}
 
         {/* Timeline bar */}
         <Box sx={{ position: "relative", height: "100%", mx: 0.5 }}>
-          <Box
-            sx={{
-              position: "absolute",
-              left: `${nowLeft}%`,
-              top: 0,
-              bottom: 0,
-              width: 1.5,
-              bgcolor: theme.palette.error.main,
-              opacity: 0.3,
-              zIndex: 1,
-              pointerEvents: "none",
-            }}
-          />
-          {renderBar(item)}
+          {nowLine}
+          {renderBar(item, f)}
         </Box>
 
         {/* RAG dots */}
@@ -561,18 +747,20 @@ export default function PpmPortfolioView({
         {/* CapEx bar */}
         <Box sx={{ px: 0.5, display: "flex", justifyContent: "center" }}>
           <CostBar
-            actual={money(item.capex_actual)}
-            planned={money(item.capex_planned)}
+            actual={money(f.capexActual)}
+            planned={money(f.capexPlanned)}
             currency={currency}
+            derivedTip={derivedCostTip(f)}
           />
         </Box>
 
         {/* OpEx bar */}
         <Box sx={{ px: 0.5, display: "flex", justifyContent: "center" }}>
           <CostBar
-            actual={money(item.opex_actual)}
-            planned={money(item.opex_planned)}
+            actual={money(f.opexActual)}
+            planned={money(f.opexPlanned)}
             currency={currency}
+            derivedTip={derivedCostTip(f)}
           />
         </Box>
 
@@ -610,23 +798,27 @@ export default function PpmPortfolioView({
   };
 
   // ── Mobile: card row ──
-  const renderMobileCard = (item: PpmPortfolioItem) => {
+  const renderMobileCard = (item: PpmPortfolioItem, depth = 0, hasChildren = false) => {
     const rep = item.latest_report;
     const pm = projectManager(item.stakeholders);
-    const plan = `${fmtQuarter(item.start_date)} \u2013 ${fmtQuarter(item.end_date)}`;
+    const f = rowFigures(item);
+    const plan = `${fmtQuarter(f.startDate)} \u2013 ${fmtQuarter(f.endDate)}`;
 
     return (
       <Box
         key={item.id}
         data-export-row
+        data-depth={depth}
         sx={{
           p: 1.5,
+          pl: indentOf(depth),
           borderBottom: `1px solid ${theme.palette.divider}`,
           "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.04) },
         }}
       >
         {/* Row 1: Name + Subtype */}
         <Box display="flex" justifyContent="space-between" alignItems="center">
+          {renderChildToggle(item, hasChildren)}
           <Typography
             variant="body2"
             fontWeight={600}
@@ -655,9 +847,7 @@ export default function PpmPortfolioView({
           <Typography variant="caption" color="text.secondary" noWrap>
             {pm?.display_name || "\u2014"}
           </Typography>
-          <Typography variant="caption" color="text.secondary" noWrap>
-            {plan}
-          </Typography>
+          {renderPlan(f, plan, NO_SX)}
         </Box>
 
         {/* Row 3: RAG dots + Report date */}
@@ -708,18 +898,20 @@ export default function PpmPortfolioView({
           <Box display="flex" gap={2} mt={0.75}>
             <Box flex={1}>
               <CostBar
-                actual={money(item.capex_actual)}
-                planned={money(item.capex_planned)}
+                actual={money(f.capexActual)}
+                planned={money(f.capexPlanned)}
                 currency={currency}
                 label={t("capex")}
+                derivedTip={derivedCostTip(f)}
               />
             </Box>
             <Box flex={1}>
               <CostBar
-                actual={money(item.opex_actual)}
-                planned={money(item.opex_planned)}
+                actual={money(f.opexActual)}
+                planned={money(f.opexPlanned)}
                 currency={currency}
                 label={t("opex")}
+                derivedTip={derivedCostTip(f)}
               />
             </Box>
           </Box>
@@ -767,6 +959,171 @@ export default function PpmPortfolioView({
     );
   };
 
+  /** The red "today" line across a timeline cell. */
+  const nowLine = (
+    <Box
+      sx={{
+        position: "absolute",
+        left: `${nowLeft}%`,
+        top: 0,
+        bottom: 0,
+        width: 1.5,
+        bgcolor: theme.palette.error.main,
+        opacity: 0.3,
+        zIndex: 1,
+        pointerEvents: "none",
+      }}
+    />
+  );
+
+  /**
+   * An anchored group's bottom line (desktop), in place of the summed totals:
+   * the anchor's own budget, actuals and dates, or what is beneath it when it
+   * has none, drawn exactly as a row draws them. Labelled by the grouping
+   * subtype ("Program") — "Totals" would misdescribe a program's own budget.
+   * The anchor is a header, not a row, so the line has no health dots and
+   * no report link.
+   */
+  const renderAnchorLine = (anchor: PpmPortfolioItem) => {
+    const f = rowFigures(anchor);
+    const plan = `${fmtQuarter(f.startDate)} / ${fmtQuarter(f.endDate)}`;
+    return (
+      <Box
+        data-export-row
+        data-anchor-line
+        sx={{
+          display: "grid",
+          gridTemplateColumns: gridCols,
+          alignItems: "center",
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          minHeight: 36,
+          bgcolor: alpha(theme.palette.primary.main, 0.02),
+        }}
+      >
+        <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ px: 1.5 }}>
+          {groupLabel}
+        </Typography>
+        <Box />
+        {renderPlan(f, plan, PLAN_CELL_SX)}
+        <Box sx={{ position: "relative", height: "100%", mx: 0.5 }}>
+          {nowLine}
+          {renderBar(anchor, f, false)}
+        </Box>
+        <Box />
+        <Box />
+        <Box />
+        <Box sx={{ px: 0.5, display: "flex", justifyContent: "center" }}>
+          <CostBar
+            actual={money(f.capexActual)}
+            planned={money(f.capexPlanned)}
+            currency={currency}
+            derivedTip={derivedCostTip(f)}
+          />
+        </Box>
+        <Box sx={{ px: 0.5, display: "flex", justifyContent: "center" }}>
+          <CostBar
+            actual={money(f.opexActual)}
+            planned={money(f.opexPlanned)}
+            currency={currency}
+            derivedTip={derivedCostTip(f)}
+          />
+        </Box>
+        <Box />
+      </Box>
+    );
+  };
+
+  /**
+   * The same figures on a phone, as a compact block under the group header
+   * (the mobile board has no totals row, and the anchor's figures must not
+   * vanish there).
+   */
+  const renderMobileAnchor = (anchor: PpmPortfolioItem) => {
+    const f = rowFigures(anchor);
+    const plan = `${fmtQuarter(f.startDate)} \u2013 ${fmtQuarter(f.endDate)}`;
+    return (
+      <Box
+        data-export-row
+        data-anchor-line
+        sx={{
+          px: 1.5,
+          py: 1,
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          bgcolor: alpha(theme.palette.primary.main, 0.02),
+        }}
+      >
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <Typography variant="caption" fontWeight={600} color="text.secondary">
+            {groupLabel}
+          </Typography>
+          {renderPlan(f, plan, NO_SX)}
+        </Box>
+        {hasAnyCost(anchor) && (
+          <Box display="flex" gap={2} mt={0.75}>
+            <Box flex={1}>
+              <CostBar
+                actual={money(f.capexActual)}
+                planned={money(f.capexPlanned)}
+                currency={currency}
+                label={t("capex")}
+                derivedTip={derivedCostTip(f)}
+              />
+            </Box>
+            <Box flex={1}>
+              <CostBar
+                actual={money(f.opexActual)}
+                planned={money(f.opexPlanned)}
+                currency={currency}
+                label={t("opex")}
+                derivedTip={derivedCostTip(f)}
+              />
+            </Box>
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
+  /**
+   * What sits between a group's header and its totals, for the layout the
+   * toggles chose: subtype sub-groups (each with its own header, collapse and
+   * totals), the indented tree, or the plain list. Desktop and mobile share it
+   * and differ only in the row they draw and whether a sub-group has totals.
+   */
+  const renderGroupBody = (
+    groupId: string,
+    members: PpmPortfolioItem[],
+    row: (item: PpmPortfolioItem, depth?: number, hasChildren?: boolean) => ReactNode,
+    withTotals: boolean,
+  ) => {
+    if (layout.kind === "subtype") {
+      return subtypeSubGroups(groupId, members, layout.order, resolveSubtype).map(
+        ([subId, sub]) => {
+          const subCollapsed = collapsed.has(subId);
+          return (
+            <Fragment key={subId}>
+              <GroupHeader
+                variant="sub"
+                name={sub.name}
+                count={sub.items.length}
+                collapsed={subCollapsed}
+                onToggle={() => toggle(subId)}
+              />
+              {!subCollapsed && sub.items.map((item) => row(item))}
+              {!subCollapsed && withTotals && renderGroupTotals(sub.items)}
+            </Fragment>
+          );
+        },
+      );
+    }
+    if (layout.kind === "hierarchy") {
+      return treeRows(members, { collapsed, maxDepth: layout.maxDepth }).map((r) =>
+        row(r.item, r.depth, r.hasChildren),
+      );
+    }
+    return members.map((item) => row(item));
+  };
+
   // Rendered by the shell's toolbar slot, which print.css hides so a printed
   // portfolio shows the parameter summary instead of dead dropdowns.
   const filters = (
@@ -785,12 +1142,20 @@ export default function PpmPortfolioView({
           label={t("groupBy")}
           onChange={(e) => setGroupBy(e.target.value)}
         >
+          <ListSubheader>{t("groupByRelatedTypes")}</ListSubheader>
           {groupOptions.map((opt) => (
             <MenuItem key={opt.type_key} value={opt.type_key}>
               {typeLabel(
                 { key: opt.type_key, label: opt.label, translations: opt.translations },
                 i18n.language,
               )}
+            </MenuItem>
+          ))}
+          {/* One group per initiative of the subtype, holding everything beneath it. */}
+          {!!subtypeDefs?.length && <ListSubheader>{t("groupBySubtypes")}</ListSubheader>}
+          {(subtypeDefs ?? []).map((def) => (
+            <MenuItem key={def.key} value={subtypeGroupBy(def.key)}>
+              {subtypeLabel(def, i18n.language)}
             </MenuItem>
           ))}
         </Select>
@@ -810,6 +1175,53 @@ export default function PpmPortfolioView({
           ))}
         </Select>
       </FormControl>
+      {canNest && (
+        <FormControlLabel
+          sx={SWITCH_LABEL_SX}
+          control={
+            <Switch
+              size="small"
+              checked={hierarchy}
+              onChange={(e) => setHierarchy(e.target.checked)}
+            />
+          }
+          label={t("showHierarchy")}
+        />
+      )}
+      {treeOn && (
+        <TextField
+          select
+          size="small"
+          label={t("displayDepth")}
+          value={depth}
+          onChange={(e) => setDepth(Number(e.target.value))}
+          sx={{ minWidth: { xs: "calc(50% - 8px)", sm: 140 } }}
+        >
+          {depthOptions.map((n) => (
+            <MenuItem key={n} value={n}>
+              {t("levelN", { n })}
+            </MenuItem>
+          ))}
+          <MenuItem value={ALL_LEVELS}>{t("allLevels")}</MenuItem>
+        </TextField>
+      )}
+      <Tooltip title={treeOn ? t("subGroupDisabledWithHierarchy") : ""}>
+        {/* A disabled control fires no events, so the tooltip hangs on a wrapper. */}
+        <span>
+          <FormControlLabel
+            sx={SWITCH_LABEL_SX}
+            disabled={treeOn}
+            control={
+              <Switch
+                size="small"
+                checked={bySubtype && !treeOn}
+                onChange={(e) => setBySubtype(e.target.checked)}
+              />
+            }
+            label={t("subGroupBySubtype")}
+          />
+        </span>
+      </Tooltip>
     </>
   );
 
@@ -1004,11 +1416,13 @@ export default function PpmPortfolioView({
                   name={group.name}
                   count={group.items.length}
                   collapsed={isCollapsed}
-                  onToggle={() => setCollapsed((prev) => toggleCollapsed(prev, groupId))}
+                  onToggle={() => toggle(groupId)}
                 />
+                {!isCollapsed && renderGroupBody(groupId, group.items, renderRow, true)}
                 {!isCollapsed &&
-                  group.items.map((item) => renderRow(item))}
-                {!isCollapsed && renderGroupTotals(group.items)}
+                  (group.anchor
+                    ? renderAnchorLine(group.anchor)
+                    : renderGroupTotals(group.items))}
               </Box>
             );
           })}
@@ -1037,10 +1451,11 @@ export default function PpmPortfolioView({
                     name={group.name}
                     count={group.items.length}
                     collapsed={isCollapsed}
-                    onToggle={() => setCollapsed((prev) => toggleCollapsed(prev, groupId))}
+                    onToggle={() => toggle(groupId)}
                   />
+                  {!isCollapsed && group.anchor && renderMobileAnchor(group.anchor)}
                   {!isCollapsed &&
-                    group.items.map((item) => renderMobileCard(item))}
+                    renderGroupBody(groupId, group.items, renderMobileCard, false)}
                 </Box>
               );
             })}

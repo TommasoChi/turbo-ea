@@ -42,28 +42,52 @@ class PpmPublicReport(BaseModel):
     next_steps: str | None = None
 
 
+class PpmPublicRollup(BaseModel):
+    """What a parent row shows in place of costs or dates it has not got.
+
+    Carries no identifier. The planned and actual pairs are derived on their own
+    (see ``PpmRollup``) and both read ``None`` whenever the portal hides costs;
+    the dates and the count are published like the row's own dates.
+    """
+
+    descendant_count: int
+    capex_planned: float | None = None
+    capex_actual: float | None = None
+    opex_planned: float | None = None
+    opex_actual: float | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+
+
 class PpmPublicItem(BaseModel):
     """One board row.
 
     ``id`` is the initiative's real card UUID — a portfolio portal links its rows
-    to ``/ppm/{id}`` behind the login wall, so it is exposed by design. Every
-    other identifier is withheld: ``group_id`` is an opaque per-response token,
-    and the parent, report, reporter and stakeholder ids are not emitted at all.
+    to ``/ppm/{id}`` behind the login wall, so it is exposed by design.
+    ``parent_id`` is set only when the parent is itself a row of the same
+    response, so it repeats an ``id`` already published and lets the board nest
+    its rows; a parent the portal does not publish reads ``None``. Every other
+    identifier is withheld: ``group_id`` is an opaque per-response token, and the
+    report, reporter and stakeholder ids are not emitted at all. ``group_anchor``
+    marks the row that names its group under a subtype grouping.
     """
 
     id: str
     name: str
     subtype: str | None = None
+    parent_id: str | None = None
     start_date: str | None = None
     end_date: str | None = None
     group_id: str | None = None
     group_name: str | None = None
+    group_anchor: bool = False
     capex_planned: float | None = None
     capex_actual: float | None = None
     opex_planned: float | None = None
     opex_actual: float | None = None
     stakeholders: list[PpmPublicPerson] = []
     latest_report: PpmPublicReport | None = None
+    rollup: PpmPublicRollup | None = None
 
 
 class PpmPublicDashboard(BaseModel):

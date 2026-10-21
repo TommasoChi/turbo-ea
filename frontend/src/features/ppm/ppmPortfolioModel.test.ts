@@ -10,26 +10,43 @@ import { describe, expect, it } from "vitest";
 
 import type { PpmPortfolioItem, PpmPortfolioReport } from "@/types";
 import {
+  ALL_LEVELS,
   barModel,
   buildPortfolioExport,
   buildPrintParams,
   costBarModel,
+  derivedCostTipKey,
+  depthLabel,
   filterItems,
   filterSearchParams,
+  groupByLabel,
   groupItems,
+  groupLayout,
+  groupRowsInOrder,
   groupTotals,
   groupTypeLabel,
   hasAnyCost,
+  hasHierarchy,
   healthLabelKey,
+  maxTreeDepth,
   money,
   nowPct,
+  parseDepth,
   pctOf,
   portfolioWindow,
   projectManager,
   ragColor,
+  rowFigures,
+  subtypeGroupBy,
+  subtypeGroupKey,
   subtypeKeys,
+  subGroupId,
   subtypeName,
+  subtypeSubGroups,
+  parentsWithin,
+  bucketBySubtype,
   toggleCollapsed,
+  treeRows,
   visibleQuarterLabels,
   type FilterState,
   type PortfolioWindow,
@@ -212,6 +229,19 @@ describe("costBarModel", () => {
       plannedText: "900",
     });
   });
+
+  it("reads both figures in one scale with a unit that matches it", () => {
+    expect(costBarModel(1_500_000, 2_100_000, "CHF")).toMatchObject({
+      unit: "MCHF",
+      actualText: "1.5",
+      plannedText: "2.1",
+    });
+    expect(costBarModel(773_000, 1_400_000, "CHF")).toMatchObject({
+      unit: "MCHF",
+      actualText: "0.8",
+      plannedText: "1.4",
+    });
+  });
 });
 
 describe("groupTotals", () => {
@@ -226,6 +256,27 @@ describe("groupTotals", () => {
       opexPlanned: 10,
       opexActual: 12,
     });
+  });
+
+  it("sums recorded lines only, never a parent's derived figures", () => {
+    const parent = item({
+      id: "p",
+      rollup: {
+        descendant_count: 1,
+        capex_planned: 100,
+        capex_actual: 0,
+        opex_planned: 0,
+        opex_actual: 0,
+      },
+    });
+    const child = item({ id: "c", parent_id: "p", capex_planned: 100 });
+    expect(groupTotals([parent, child])).toEqual({
+      capexPlanned: 100,
+      capexActual: 0,
+      opexPlanned: 0,
+      opexActual: 0,
+    });
+    expect(groupTotals([parent])).toBeNull();
   });
 
   it("has no totals row when every sum is zero", () => {
@@ -250,6 +301,37 @@ describe("hasAnyCost", () => {
       expect(hasAnyCost(item({ [field]: 1 }))).toBe(true);
     },
   );
+
+  it("shows the cost row for a parent whose only figures are derived", () => {
+    expect(
+      hasAnyCost(
+        item({
+          capex_planned: 0,
+          rollup: {
+            descendant_count: 1,
+            capex_planned: 0,
+            capex_actual: 0,
+            opex_planned: 0,
+            opex_actual: 3,
+          },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      hasAnyCost(
+        item({
+          capex_planned: 5,
+          rollup: {
+            descendant_count: 1,
+            capex_planned: 0,
+            capex_actual: 0,
+            opex_planned: 0,
+            opex_actual: 0,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
 
   it("hides it when every figure is zero, negative or withheld", () => {
     expect(hasAnyCost(item())).toBe(false);
@@ -317,6 +399,7 @@ describe("barModel", () => {
       width: 25,
       color: "#1976d2",
       borderRadius: "8px 8px 8px 8px",
+      derived: false,
     });
   });
 
@@ -355,6 +438,23 @@ describe("barModel", () => {
   it("draws no bar without both dates", () => {
     expect(barModel(dated(null, "2026-01-05"), eightDays)).toBeNull();
     expect(barModel(dated("2026-01-03", null), eightDays)).toBeNull();
+  });
+
+  it("spans the dates beneath a parent without its own, and says so", () => {
+    const parent = item({
+      rollup: {
+        descendant_count: 2,
+        start_date: "2026-01-02",
+        end_date: "2026-01-07",
+      },
+    });
+    expect(barModel(parent, eightDays)).toEqual({
+      left: 12.5,
+      width: 62.5,
+      color: "#1976d2",
+      borderRadius: "8px 8px 8px 8px",
+      derived: true,
+    });
   });
 });
 
@@ -596,8 +696,8 @@ describe("buildPortfolioExport", () => {
     buildPortfolioExport(
       {
         groups: [
-          ["g", { name: "Sales", items: [full] }],
-          ["__ungrouped", { name: "No group", items: [withheld] }],
+          ["g", { name: "Sales", items: [full], anchor: null }],
+          ["__ungrouped", { name: "No group", items: [withheld], anchor: null }],
         ],
         groupTypeLabel: "Organization",
         printParams: [
@@ -606,6 +706,8 @@ describe("buildPortfolioExport", () => {
           { label: "search", value: "crm" },
         ],
         chartNode,
+        layout: { kind: "flat" },
+        allItems: [full, withheld],
       },
       t,
       subtypeLabel,
@@ -639,6 +741,9 @@ describe("buildPortfolioExport", () => {
       { key: "opexPlanned", label: "opex — planned", type: "currency" },
       { key: "opexActual", label: "opex — actual", type: "currency" },
       { key: "lastReport", label: 'lastReport{"defaultValue":"Report"}', type: "date" },
+      { key: "budgetFrom", label: "budgetFrom", type: "text" },
+      { key: "costsFrom", label: "costsFrom", type: "text" },
+      { key: "datesFrom", label: "datesFrom", type: "text" },
     ]);
   });
 
@@ -658,6 +763,9 @@ describe("buildPortfolioExport", () => {
       opexPlanned: 0,
       opexActual: 5,
       lastReport: "2026-09-30",
+      budgetFrom: "fromOwn",
+      costsFrom: "fromOwn",
+      datesFrom: "fromOwn",
     });
   });
 
@@ -677,6 +785,941 @@ describe("buildPortfolioExport", () => {
       opexPlanned: "",
       opexActual: "",
       lastReport: "",
+      budgetFrom: "fromOwn",
+      costsFrom: "fromOwn",
+      datesFrom: "fromOwn",
     });
+  });
+
+  it("exports a parent's derived costs and dates and says where they come from", () => {
+    const program = item({
+      id: "p",
+      name: "Program",
+      start_date: null,
+      end_date: null,
+      capex_planned: 0,
+      capex_actual: 0,
+      opex_planned: 0,
+      opex_actual: 0,
+      rollup: {
+        descendant_count: 3,
+        capex_planned: 300,
+        capex_actual: 120,
+        opex_planned: 30,
+        opex_actual: 12,
+        start_date: "2026-02-01",
+        end_date: "2027-03-31",
+      },
+    });
+    const half = item({
+      id: "h",
+      name: "Half",
+      start_date: "2026-05-01",
+      end_date: "2026-06-30",
+      capex_planned: 7,
+      rollup: {
+        descendant_count: 2,
+        capex_planned: null,
+        capex_actual: null,
+        opex_planned: null,
+        opex_actual: null,
+        start_date: null,
+        end_date: null,
+      },
+    });
+    const rows = buildPortfolioExport(
+      {
+        groups: [["g", { name: "G", items: [program, half], anchor: null }]],
+        groupTypeLabel: "Organization",
+        printParams: [],
+        chartNode: null,
+        layout: { kind: "flat" },
+        allItems: [program, half],
+      },
+      t,
+      subtypeLabel,
+    ).sheets[0].rows;
+    expect(rows[0]).toMatchObject({
+      start: "2026-02-01",
+      end: "2027-03-31",
+      capexPlanned: 300,
+      capexActual: 120,
+      opexPlanned: 30,
+      opexActual: 12,
+      costsFrom: 'fromBeneath{"count":3}',
+      datesFrom: 'fromBeneath{"count":3}',
+    });
+    expect(rows[1]).toMatchObject({
+      start: "2026-05-01",
+      end: "2026-06-30",
+      capexPlanned: 7,
+      budgetFrom: "fromOwn",
+      costsFrom: "fromOwn",
+      datesFrom: "fromOwn",
+    });
+  });
+});
+
+describe("rowFigures", () => {
+  const own = {
+    start_date: "2026-01-01",
+    end_date: "2026-12-31",
+    capex_planned: 1,
+    capex_actual: 2,
+    opex_planned: 3,
+    opex_actual: 4,
+  };
+  const noCosts = {
+    capex_planned: null,
+    capex_actual: null,
+    opex_planned: null,
+    opex_actual: null,
+  };
+  const noDates = { start_date: null, end_date: null };
+
+  it("is the row's own data when there is no roll-up", () => {
+    expect(rowFigures(item(own))).toEqual({
+      capexPlanned: 1,
+      capexActual: 2,
+      opexPlanned: 3,
+      opexActual: 4,
+      derivedBudget: false,
+      derivedActual: false,
+      startDate: "2026-01-01",
+      endDate: "2026-12-31",
+      derivedDates: false,
+      descendantCount: 0,
+    });
+  });
+
+  it("takes the derived costs alone when only they are set", () => {
+    const f = rowFigures(
+      item({
+        ...own,
+        rollup: {
+          descendant_count: 2,
+          capex_planned: 10,
+          capex_actual: 20,
+          opex_planned: 30,
+          opex_actual: 40,
+          ...noDates,
+        },
+      }),
+    );
+    expect(f).toEqual({
+      capexPlanned: 10,
+      capexActual: 20,
+      opexPlanned: 30,
+      opexActual: 40,
+      derivedBudget: true,
+      derivedActual: true,
+      startDate: "2026-01-01",
+      endDate: "2026-12-31",
+      derivedDates: false,
+      descendantCount: 2,
+    });
+  });
+
+  it("takes the derived dates alone when only they are set", () => {
+    const f = rowFigures(
+      item({
+        ...own,
+        rollup: {
+          descendant_count: 4,
+          ...noCosts,
+          start_date: "2025-03-01",
+          end_date: null,
+        },
+      }),
+    );
+    expect(f).toMatchObject({
+      capexPlanned: 1,
+      opexActual: 4,
+      derivedBudget: false,
+      derivedActual: false,
+      startDate: "2025-03-01",
+      endDate: null,
+      derivedDates: true,
+      descendantCount: 4,
+    });
+    // An end date alone is a derived span too.
+    expect(
+      rowFigures(
+        item({
+          ...own,
+          rollup: {
+            descendant_count: 1,
+            ...noCosts,
+            start_date: null,
+            end_date: "2027-01-31",
+          },
+        }),
+      ),
+    ).toMatchObject({
+      startDate: null,
+      endDate: "2027-01-31",
+      derivedDates: true,
+    });
+  });
+
+  it("takes both when both are derived", () => {
+    const f = rowFigures(
+      item({
+        ...noDates,
+        rollup: {
+          descendant_count: 5,
+          capex_planned: 0,
+          capex_actual: 0,
+          opex_planned: 0,
+          opex_actual: 9,
+          start_date: "2026-02-01",
+          end_date: "2026-03-01",
+        },
+      }),
+    );
+    expect(f).toEqual({
+      capexPlanned: 0,
+      capexActual: 0,
+      opexPlanned: 0,
+      opexActual: 9,
+      derivedBudget: true,
+      derivedActual: true,
+      startDate: "2026-02-01",
+      endDate: "2026-03-01",
+      derivedDates: true,
+      descendantCount: 5,
+    });
+  });
+
+  it("takes the derived budget alone and keeps its own actuals", () => {
+    expect(
+      rowFigures(
+        item({
+          ...own,
+          rollup: {
+            descendant_count: 2,
+            capex_planned: 10,
+            capex_actual: null,
+            opex_planned: 30,
+            opex_actual: null,
+            ...noDates,
+          },
+        }),
+      ),
+    ).toEqual({
+      capexPlanned: 10,
+      capexActual: 2,
+      opexPlanned: 30,
+      opexActual: 4,
+      derivedBudget: true,
+      derivedActual: false,
+      startDate: "2026-01-01",
+      endDate: "2026-12-31",
+      derivedDates: false,
+      descendantCount: 2,
+    });
+  });
+
+  it("takes the derived actuals alone and keeps its own budget", () => {
+    expect(
+      rowFigures(
+        item({
+          ...own,
+          rollup: {
+            descendant_count: 2,
+            capex_planned: null,
+            capex_actual: 20,
+            opex_planned: null,
+            opex_actual: 40,
+            ...noDates,
+          },
+        }),
+      ),
+    ).toEqual({
+      capexPlanned: 1,
+      capexActual: 20,
+      opexPlanned: 3,
+      opexActual: 40,
+      derivedBudget: false,
+      derivedActual: true,
+      startDate: "2026-01-01",
+      endDate: "2026-12-31",
+      derivedDates: false,
+      descendantCount: 2,
+    });
+  });
+
+  it("keeps its own data when the roll-up derives nothing", () => {
+    expect(
+      rowFigures(
+        item({
+          ...own,
+          rollup: { descendant_count: 3, ...noCosts, ...noDates },
+        }),
+      ),
+    ).toMatchObject({
+      capexPlanned: 1,
+      derivedBudget: false,
+      derivedActual: false,
+      startDate: "2026-01-01",
+      derivedDates: false,
+      descendantCount: 3,
+    });
+  });
+});
+
+describe("derivedCostTipKey", () => {
+  const f = (derivedBudget: boolean, derivedActual: boolean) => ({
+    ...rowFigures(item({})),
+    derivedBudget,
+    derivedActual,
+  });
+
+  it("names the halves that are derived", () => {
+    expect(derivedCostTipKey(f(true, true))).toBe("derivedBothTooltip");
+    expect(derivedCostTipKey(f(true, false))).toBe("derivedBudgetTooltip");
+    expect(derivedCostTipKey(f(false, true))).toBe("derivedActualTooltip");
+    expect(derivedCostTipKey(f(false, false))).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Hierarchy and subtype sub-groups                                   */
+/* ------------------------------------------------------------------ */
+
+// Program P has projects B and A (out of name order); A has a sub-project S.
+// X is a root of its own; Y names a parent that is not on the board.
+const tree = () => [
+  item({ id: "S", name: "Sub", parent_id: "A", subtype: "epic" }),
+  item({ id: "P", name: "Program", subtype: "program" }),
+  item({ id: "B", name: "Beta", parent_id: "P", subtype: "project" }),
+  item({ id: "A", name: "Alpha", parent_id: "P", subtype: "project" }),
+  item({ id: "X", name: "Lone" }),
+  item({ id: "Y", name: "Adrift", parent_id: "gone", subtype: "project" }),
+];
+const shape = (rows: { item: PpmPortfolioItem; depth: number; hasChildren: boolean }[]) =>
+  rows.map((r) => `${r.item.id}@${r.depth}${r.hasChildren ? "+" : ""}`);
+
+describe("hasHierarchy", () => {
+  it("is true only when some row names a parent that is a row too", () => {
+    expect(hasHierarchy([item({ id: "a" }), item({ id: "b", parent_id: "a" })])).toBe(true);
+    expect(hasHierarchy([item({ id: "a" }), item({ id: "b", parent_id: null })])).toBe(false);
+    expect(hasHierarchy([item({ id: "a", parent_id: "" })])).toBe(false);
+    expect(hasHierarchy([item({ id: "b", parent_id: "gone" })])).toBe(false);
+    expect(hasHierarchy([])).toBe(false);
+  });
+
+  it("does not count a group's anchor as a parent", () => {
+    const anchor = item({ id: "p", group_id: "p", group_name: "P", group_anchor: true });
+    const child = item({ id: "c", parent_id: "p", group_id: "p", group_name: "P" });
+    expect(hasHierarchy([anchor, child])).toBe(false);
+    expect(hasHierarchy([anchor, child, item({ id: "g", parent_id: "c" })])).toBe(true);
+  });
+
+  it("does not count a child that is an anchor", () => {
+    const anchor = item({ id: "p", parent_id: "a", group_anchor: true });
+    expect(hasHierarchy([item({ id: "a" }), anchor])).toBe(false);
+  });
+
+  it("counts a parent in another group (the tree nests within each group)", () => {
+    const parent = item({ id: "a", group_id: "g1", group_name: "One" });
+    const child = item({ id: "b", parent_id: "a", group_id: "g2", group_name: "Two" });
+    expect(hasHierarchy([parent, child])).toBe(true);
+  });
+});
+
+describe("treeRows", () => {
+  const all = { collapsed: new Set<string>(), maxDepth: ALL_LEVELS };
+
+  it("walks depth first with siblings by name, and makes an absent parent's child a root", () => {
+    expect(shape(treeRows(tree(), all))).toEqual([
+      "Y@0",
+      "X@0",
+      "P@0+",
+      "A@1+",
+      "S@2",
+      "B@1",
+    ]);
+  });
+
+  it("stops at the depth cap, and a row at the cap has no chevron", () => {
+    expect(shape(treeRows(tree(), { ...all, maxDepth: 2 }))).toEqual([
+      "Y@0",
+      "X@0",
+      "P@0+",
+      "A@1",
+      "B@1",
+    ]);
+    expect(shape(treeRows(tree(), { ...all, maxDepth: 1 }))).toEqual(["Y@0", "X@0", "P@0"]);
+    expect(treeRows(tree(), { ...all, maxDepth: 0 })).toEqual([]);
+  });
+
+  it("emits nothing below a collapsed parent, and keeps its chevron", () => {
+    expect(shape(treeRows(tree(), { ...all, collapsed: new Set(["A"]) }))).toEqual([
+      "Y@0",
+      "X@0",
+      "P@0+",
+      "A@1+",
+      "B@1",
+    ]);
+    expect(shape(treeRows(tree(), { ...all, collapsed: new Set(["P"]) }))).toEqual([
+      "Y@0",
+      "X@0",
+      "P@0+",
+    ]);
+  });
+
+  it("nests only within the items it is given: a parent in another group leaves a root", () => {
+    const [sub, , beta] = tree();
+    expect(shape(treeRows([sub, beta], all))).toEqual(["B@0", "S@0"]);
+  });
+
+  it("returns the very items it was given", () => {
+    const items = tree();
+    const rows = treeRows(items, all);
+    expect(rows.find((r) => r.item.id === "S")!.item).toBe(items[0]);
+    expect(rows).toHaveLength(items.length);
+  });
+
+  it("shows the members of a cycle as roots rather than losing them", () => {
+    const cyclic = [
+      item({ id: "a", name: "A", parent_id: "b" }),
+      item({ id: "b", name: "B", parent_id: "a" }),
+      item({ id: "c", name: "C", parent_id: "b" }),
+    ];
+    expect(shape(treeRows(cyclic, all))).toEqual(["a@0", "b@0+", "c@1"]);
+  });
+
+  it("keeps a child under its parent when a cycle sits higher up", () => {
+    const rows = [
+      item({ id: "a", name: "A", parent_id: "b" }),
+      item({ id: "b", name: "B", parent_id: "a" }),
+      item({ id: "c", name: "C", parent_id: "a" }),
+      item({ id: "d", name: "D", parent_id: "c" }),
+    ];
+    expect(shape(treeRows(rows, all))).toEqual(["a@0+", "c@1+", "d@2", "b@0"]);
+  });
+});
+
+describe("maxTreeDepth", () => {
+  it("counts the levels of the deepest chain", () => {
+    expect(maxTreeDepth(tree())).toBe(3);
+    expect(maxTreeDepth([item({ id: "a" }), item({ id: "b" })])).toBe(1);
+    expect(maxTreeDepth([])).toBe(0);
+  });
+});
+
+describe("parseDepth", () => {
+  it("reads a whole number of levels from 1, and anything else as every level", () => {
+    expect(parseDepth("2")).toBe(2);
+    expect(parseDepth("1")).toBe(1);
+    expect(parseDepth(null)).toBe(ALL_LEVELS);
+    expect(parseDepth("0")).toBe(ALL_LEVELS);
+    expect(parseDepth("-1")).toBe(ALL_LEVELS);
+    expect(parseDepth("1.5")).toBe(ALL_LEVELS);
+    expect(parseDepth("deep")).toBe(ALL_LEVELS);
+  });
+
+  it("is the reports' all-levels value", () => {
+    expect(ALL_LEVELS).toBe(99);
+  });
+});
+
+describe("depthLabel", () => {
+  it("names a level, or every level", () => {
+    expect(depthLabel(2, t)).toBe('levelN{"n":2}');
+    expect(depthLabel(99, t)).toBe("allLevels");
+  });
+});
+
+describe("parentsWithin", () => {
+  it("keeps a parent that is in the set, and nulls one that is absent or missing", () => {
+    const items = [
+      item({ id: "p", parent_id: null }),
+      item({ id: "c", parent_id: "p" }),
+      item({ id: "o", parent_id: "elsewhere" }),
+      item({ id: "r" }),
+    ];
+    const parents = parentsWithin(items);
+    expect([...parents.entries()]).toEqual([
+      ["p", null],
+      ["c", "p"],
+      ["o", null],
+      ["r", null],
+    ]);
+  });
+
+  it("nulls every member of a cycle, and keeps a child hanging off one", () => {
+    const items = [
+      item({ id: "a", parent_id: "b" }),
+      item({ id: "b", parent_id: "a" }),
+      item({ id: "c", parent_id: "a" }),
+    ];
+    expect([...parentsWithin(items).entries()]).toEqual([
+      ["a", null],
+      ["b", null],
+      ["c", "a"],
+    ]);
+  });
+});
+
+describe("bucketBySubtype", () => {
+  it("buckets in metamodel order, unknown next, none last, keeping each bucket's order", () => {
+    const items = [
+      item({ id: "1", subtype: null }),
+      item({ id: "2", subtype: "project" }),
+      item({ id: "3", subtype: "custom" }),
+      item({ id: "4", subtype: "program" }),
+      item({ id: "5", subtype: "project" }),
+    ];
+    expect(
+      bucketBySubtype(items, ["program", "project"]).map(([k, l]) => [k, l.map((i) => i.id)]),
+    ).toEqual([
+      ["program", ["4"]],
+      ["project", ["2", "5"]],
+      ["custom", ["3"]],
+      [null, ["1"]],
+    ]);
+  });
+});
+
+describe("subtypeSubGroups", () => {
+  const label = (key: string | null) => `L:${key ?? "none"}`;
+
+  it("orders sub-groups as the metamodel lists them, unknown ones next, none last", () => {
+    const items = [
+      item({ id: "1", subtype: null }),
+      item({ id: "2", subtype: "project" }),
+      item({ id: "3", subtype: "custom" }),
+      item({ id: "4", subtype: "program" }),
+      item({ id: "5", subtype: "project" }),
+      item({ id: "6", subtype: "" }),
+    ];
+    const subs = subtypeSubGroups("g1", items, ["program", "project"], label);
+    expect(subs.map(([id, g]) => [id, g.name, g.items.map((i) => i.id)])).toEqual([
+      ["g1::program", "L:program", ["4"]],
+      ["g1::project", "L:project", ["2", "5"]],
+      ["g1::custom", "L:custom", ["3"]],
+      ["g1::", "L:none", ["1", "6"]],
+    ]);
+  });
+
+  it("keeps several unknown subtypes in first-seen order", () => {
+    const items = [item({ id: "1", subtype: "zeta" }), item({ id: "2", subtype: "alpha" })];
+    expect(subtypeSubGroups("g", items, [], label).map(([id]) => id)).toEqual([
+      "g::zeta",
+      "g::alpha",
+    ]);
+  });
+
+  it("gives each sub-group an id no group or row can carry", () => {
+    expect(subGroupId("__ungrouped", "epic")).toBe("__ungrouped::epic");
+    expect(subGroupId("g", null)).toBe("g::");
+  });
+});
+
+describe("groupLayout", () => {
+  it("lets the hierarchy win, then the subtype sub-groups, else a flat list", () => {
+    expect(groupLayout(true, 2, true, ["a"])).toEqual({ kind: "hierarchy", maxDepth: 2 });
+    expect(groupLayout(false, 2, true, ["a"])).toEqual({ kind: "subtype", order: ["a"] });
+    expect(groupLayout(false, 2, false, ["a"])).toEqual({ kind: "flat" });
+  });
+});
+
+describe("groupRowsInOrder", () => {
+  it("lists a tree in tree order, ignoring collapse but honouring the depth cap", () => {
+    const ids = (layout: Parameters<typeof groupRowsInOrder>[2]) =>
+      groupRowsInOrder(tree(), layout).map((i) => i.id);
+    expect(ids({ kind: "hierarchy", maxDepth: ALL_LEVELS })).toEqual([
+      "Y",
+      "X",
+      "P",
+      "A",
+      "S",
+      "B",
+    ]);
+    expect(ids({ kind: "hierarchy", maxDepth: 2 })).toEqual(["Y", "X", "P", "A", "B"]);
+    expect(ids({ kind: "subtype", order: ["project", "program"] })).toEqual([
+      "B",
+      "A",
+      "Y",
+      "P",
+      "S",
+      "X",
+    ]);
+    expect(ids({ kind: "flat" })).toEqual(["S", "P", "B", "A", "X", "Y"]);
+  });
+});
+
+describe("filterSearchParams — hierarchy and sub-groups", () => {
+  const opening: FilterState = {
+    groupBy: "Organization",
+    search: "",
+    subtype: "",
+    initialGroupBy: "Organization",
+    initialSubtype: "",
+  };
+  const params = (prev: string, s: Partial<FilterState>) =>
+    filterSearchParams(new URLSearchParams(prev), { ...opening, ...s }).toString();
+
+  it("carries the hierarchy, and its depth only when capped", () => {
+    expect(params("", { hierarchy: true, depth: ALL_LEVELS })).toBe("hierarchy=1");
+    expect(params("", { hierarchy: true, depth: 2 })).toBe("hierarchy=1&depth=2");
+  });
+
+  it("drops the depth with the hierarchy off", () => {
+    expect(params("hierarchy=1&depth=2", { hierarchy: false, depth: 2 })).toBe("");
+  });
+
+  it("carries the subtype sub-groups, unless the hierarchy is on", () => {
+    expect(params("", { bySubtype: true })).toBe("bySubtype=1");
+    expect(params("bySubtype=1", { bySubtype: true, hierarchy: true, depth: ALL_LEVELS })).toBe(
+      "hierarchy=1",
+    );
+    expect(params("bySubtype=1", { bySubtype: false })).toBe("");
+  });
+});
+
+describe("buildPrintParams — hierarchy and sub-groups", () => {
+  const base = { groupTypeLabel: "Platform", subtype: "", search: "" };
+
+  it("adds the hierarchy and its depth while the tree is on", () => {
+    const params = buildPrintParams(
+      { ...base, layout: { kind: "hierarchy", maxDepth: 3 } },
+      t,
+      subtypeLabel,
+    );
+    expect(params).toHaveLength(4);
+    expect(params[3]).toEqual({ label: "showHierarchy", value: 'levelN{"n":3}' });
+  });
+
+  it("adds the subtype sub-groups while they are on", () => {
+    const params = buildPrintParams(
+      { ...base, layout: { kind: "subtype", order: [] } },
+      t,
+      subtypeLabel,
+    );
+    expect(params).toHaveLength(4);
+    expect(params[3]).toEqual({ label: "subGroupBySubtype", value: "printOn" });
+  });
+
+  it("adds nothing for a flat board", () => {
+    expect(buildPrintParams({ ...base, layout: { kind: "flat" } }, t, subtypeLabel)).toHaveLength(
+      3,
+    );
+    expect(buildPrintParams(base, t, subtypeLabel)).toHaveLength(3);
+  });
+});
+
+describe("buildPortfolioExport — hierarchy", () => {
+  const build = (
+    layout: Parameters<typeof groupRowsInOrder>[1] = { kind: "flat" },
+    allItems: PpmPortfolioItem[] = [],
+  ) =>
+    buildPortfolioExport(
+      {
+        groups: [["g", { name: "Sales", items: tree(), anchor: null }]],
+        groupTypeLabel: "Organization",
+        printParams: [],
+        chartNode: null,
+        layout,
+        allItems,
+      },
+      t,
+      subtypeLabel,
+    );
+
+  it("adds a Parent column after the name only while the tree is on", () => {
+    const keys = (layout?: Parameters<typeof groupRowsInOrder>[1]) =>
+      build(layout).sheets[0].columns.map((c) => c.key);
+    expect(keys({ kind: "hierarchy", maxDepth: ALL_LEVELS }).slice(0, 4)).toEqual([
+      "group",
+      "name",
+      "parent",
+      "subtype",
+    ]);
+    expect(build({ kind: "hierarchy", maxDepth: ALL_LEVELS }).sheets[0].columns[2]).toEqual({
+      key: "parent",
+      label: "parentColumn",
+      type: "text",
+    });
+    expect(keys({ kind: "subtype", order: [] })).not.toContain("parent");
+    expect(keys()).not.toContain("parent");
+  });
+
+  it("writes the rows in tree order, each naming its parent", () => {
+    const rows = build({ kind: "hierarchy", maxDepth: ALL_LEVELS }).sheets[0].rows;
+    expect(rows.map((r) => [r.name, r.parent])).toEqual([
+      ["Adrift", ""],
+      ["Lone", ""],
+      ["Program", ""],
+      ["Alpha", "Program"],
+      ["Sub", "Alpha"],
+      ["Beta", "Program"],
+    ]);
+  });
+
+  it("names a parent the filters left off the grid, from the whole board", () => {
+    const rows = build(
+      { kind: "hierarchy", maxDepth: ALL_LEVELS },
+      [item({ id: "gone", name: "Hidden by search" })],
+    ).sheets[0].rows;
+    expect(rows[0]).toMatchObject({ name: "Adrift", parent: "Hidden by search" });
+  });
+
+  it("writes no parent cell without the tree, in sub-group order", () => {
+    const rows = build({ kind: "subtype", order: ["program"] }).sheets[0].rows;
+    expect(rows.map((r) => r.name)).toEqual(["Program", "Sub", "Beta", "Alpha", "Adrift", "Lone"]);
+    expect(rows.every((r) => !("parent" in r))).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Grouping by an Initiative subtype                                  */
+/* ------------------------------------------------------------------ */
+
+describe("subtypeGroupKey / subtypeGroupBy", () => {
+  it("reads the subtype key out of a subtype grouping, and nothing else", () => {
+    expect(subtypeGroupKey("subtype:program")).toBe("program");
+    expect(subtypeGroupKey("subtype:subtype:x")).toBe("subtype:x");
+    expect(subtypeGroupKey("subtype:")).toBe("");
+    expect(subtypeGroupKey("Organization")).toBeNull();
+    expect(subtypeGroupKey("xsubtype:program")).toBeNull();
+    expect(subtypeGroupKey("")).toBeNull();
+  });
+
+  it("writes the grouping value a subtype key selects", () => {
+    expect(subtypeGroupBy("program")).toBe("subtype:program");
+    expect(subtypeGroupKey(subtypeGroupBy("epic"))).toBe("epic");
+  });
+});
+
+describe("groupByLabel", () => {
+  const options = [
+    {
+      type_key: "Organization",
+      label: "Organization",
+      translations: { label: { de: "Organisation" } },
+    },
+  ];
+  const defs = [
+    { key: "program", label: "Program", translations: { de: "Programm" } },
+    { key: "project", label: "Project" },
+  ];
+
+  it("names a subtype grouping by the subtype's label, in the user's language", () => {
+    expect(groupByLabel("subtype:program", options, defs, "de")).toBe("Programm");
+    expect(groupByLabel("subtype:program", options, defs, "fr")).toBe("Program");
+    expect(groupByLabel("subtype:project", options, defs, "de")).toBe("Project");
+  });
+
+  it("falls back to the raw subtype key for a subtype the metamodel does not define", () => {
+    expect(groupByLabel("subtype:epic", options, defs, "de")).toBe("epic");
+    expect(groupByLabel("subtype:program", options, [], "de")).toBe("program");
+  });
+
+  it("names a card type grouping as before", () => {
+    expect(groupByLabel("Organization", options, defs, "de")).toBe("Organisation");
+    expect(groupByLabel("Platform", options, defs, "de")).toBe("Platform");
+    // A type key that happens to equal a subtype key is still a type key.
+    expect(groupByLabel("program", options, defs, "de")).toBe("program");
+  });
+});
+
+describe("groupItems — anchored groups", () => {
+  const anchor = (id: string, name: string) =>
+    item({ id, name, group_id: id, group_name: name, group_anchor: true });
+  const row = (id: string, group: string, name: string) =>
+    item({ id, group_id: group, group_name: name });
+
+  it("files the anchor as the group's anchor, never as one of its rows", () => {
+    const groups = groupItems(
+      [row("c1", "p", "Prog"), anchor("p", "Prog"), row("c2", "p", "Prog"), item({ id: "u" })],
+      "No group",
+    );
+    expect(
+      groups.map(([id, g]) => [id, g.name, g.anchor?.id ?? null, g.items.map((i) => i.id)]),
+    ).toEqual([
+      ["p", "Prog", "p", ["c1", "c2"]],
+      ["__ungrouped", "No group", null, ["u"]],
+    ]);
+  });
+
+  it("keeps a group with an anchor and no rows, sorted by name among the others", () => {
+    const groups = groupItems(
+      [anchor("z", "Zulu"), anchor("a", "Alpha"), row("c", "z", "Zulu")],
+      "No group",
+    );
+    expect(groups.map(([id, g]) => [id, g.anchor?.id, g.items.length])).toEqual([
+      ["a", "a", 0],
+      ["z", "z", 1],
+    ]);
+  });
+
+  it("gives a related-card group no anchor", () => {
+    const [[, group]] = groupItems([row("c", "g", "G")], "No group");
+    expect(group.anchor).toBeNull();
+  });
+
+  it("treats an anchor flag without a group as an ungrouped row", () => {
+    const [[id, group]] = groupItems([item({ id: "x", group_anchor: true })], "No group");
+    expect([id, group.items.map((i) => i.id), group.anchor]).toEqual(["__ungrouped", ["x"], null]);
+  });
+});
+
+describe("subtypeSubGroups — anchors", () => {
+  it("gives a sub-group no anchor", () => {
+    const subs = subtypeSubGroups("g", [item({ subtype: "project" })], [], (k) => `${k}`);
+    expect(subs[0][1].anchor).toBeNull();
+  });
+});
+
+describe("filterItems — anchored groups", () => {
+  const anchor = (id: string, name: string) =>
+    item({ id, name, subtype: "program", group_id: id, group_name: id, group_anchor: true });
+  const rows = [
+    anchor("p", "Program CRM"),
+    item({ id: "a", name: "Alpha", subtype: "project", group_id: "p", group_name: "p" }),
+    anchor("q", "Quiet"),
+    item({ id: "b", name: "Beta", subtype: "epic", group_id: "q", group_name: "q" }),
+    item({ id: "u", name: "Alpha loose", subtype: "project" }),
+  ];
+  const ids = (list: PpmPortfolioItem[]) => list.map((i) => i.id);
+
+  it("keeps every anchor when neither filter is set, an empty group's included", () => {
+    expect(ids(filterItems(rows, "", ""))).toEqual(["p", "a", "q", "b", "u"]);
+    expect(ids(filterItems([rows[0]], "", ""))).toEqual(["p"]);
+  });
+
+  it("keeps an anchor whose group kept a row under the search, and drops one that did not", () => {
+    expect(ids(filterItems(rows, "alpha", ""))).toEqual(["p", "a", "u"]);
+    expect(ids(filterItems(rows, "beta", ""))).toEqual(["q", "b"]);
+  });
+
+  it("does not match the search against the anchor itself", () => {
+    expect(ids(filterItems(rows, "program crm", ""))).toEqual([]);
+  });
+
+  it("keeps an anchor whose group kept a row under the subtype, and drops one that did not", () => {
+    expect(ids(filterItems(rows, "", "epic"))).toEqual(["q", "b"]);
+    expect(ids(filterItems(rows, "", "project"))).toEqual(["p", "a", "u"]);
+  });
+
+  it("does not match the subtype against the anchor itself", () => {
+    expect(ids(filterItems(rows, "", "program"))).toEqual([]);
+  });
+
+  it("combines both filters for the rows that decide an anchor", () => {
+    expect(ids(filterItems(rows, "alpha", "epic"))).toEqual([]);
+    expect(ids(filterItems(rows, "be", "epic"))).toEqual(["q", "b"]);
+  });
+
+  it("drops an anchor with no rows once a filter is set", () => {
+    expect(ids(filterItems([rows[0]], "x", ""))).toEqual([]);
+    expect(ids(filterItems([rows[0]], "", "program"))).toEqual([]);
+  });
+});
+
+describe("subtypeKeys — anchors", () => {
+  it("offers no subtype that only an anchor carries", () => {
+    const rows = [
+      item({ subtype: "program", group_anchor: true }),
+      item({ subtype: "project" }),
+      item({ subtype: "program", group_anchor: false }),
+    ];
+    expect(subtypeKeys(rows)).toEqual(["project", "program"]);
+    expect(subtypeKeys([item({ subtype: "program", group_anchor: true })])).toEqual([]);
+  });
+});
+
+describe("buildPortfolioExport — anchored groups", () => {
+  const program = item({
+    id: "p",
+    name: "Program",
+    subtype: "program",
+    parent_id: "above",
+    group_id: "p",
+    group_name: "Program",
+    group_anchor: true,
+    capex_planned: 0,
+    capex_actual: 0,
+    opex_planned: 0,
+    opex_actual: 0,
+    rollup: {
+      descendant_count: 2,
+      capex_planned: 90,
+      capex_actual: 40,
+      opex_planned: 9,
+      opex_actual: 4,
+      start_date: "2026-02-01",
+      end_date: "2026-11-30",
+    },
+  });
+  const child = item({
+    id: "c",
+    name: "Child",
+    subtype: "project",
+    parent_id: "p",
+    group_id: "p",
+    group_name: "Program",
+    capex_planned: 90,
+  });
+  const grandchild = item({
+    id: "g",
+    name: "Grandchild",
+    parent_id: "c",
+    group_id: "p",
+    group_name: "Program",
+  });
+  const loose = item({ id: "u", name: "Loose" });
+  const build = (layout: Parameters<typeof groupRowsInOrder>[1]) =>
+    buildPortfolioExport(
+      {
+        groups: [
+          ["p", { name: "Program", items: [child, grandchild], anchor: program }],
+          ["__ungrouped", { name: "No group", items: [loose], anchor: null }],
+        ],
+        groupTypeLabel: "Program",
+        printParams: [],
+        chartNode: null,
+        layout,
+        allItems: [program, child, grandchild, loose, item({ id: "above", name: "Above" })],
+      },
+      t,
+      subtypeLabel,
+    ).sheets[0];
+
+  it("writes the anchor as the first row of its group, with its own-or-derived figures", () => {
+    const sheet = build({ kind: "flat" });
+    expect(sheet.columns[0]).toEqual({ key: "group", label: "Program", type: "text" });
+    expect(sheet.rows.map((r) => [r.group, r.name])).toEqual([
+      ["Program", "Program"],
+      ["Program", "Child"],
+      ["Program", "Grandchild"],
+      ["No group", "Loose"],
+    ]);
+    expect(sheet.rows[0]).toMatchObject({
+      subtype: "S:program",
+      start: "2026-02-01",
+      end: "2026-11-30",
+      capexPlanned: 90,
+      capexActual: 40,
+      opexPlanned: 9,
+      opexActual: 4,
+      budgetFrom: 'fromBeneath{"count":2}',
+      costsFrom: 'fromBeneath{"count":2}',
+      datesFrom: 'fromBeneath{"count":2}',
+    });
+    expect(sheet.rows[1]).toMatchObject({ budgetFrom: "fromOwn", capexPlanned: 90 });
+  });
+
+  it("leaves the anchor's parent empty and names the program as its children's parent", () => {
+    const rows = build({ kind: "hierarchy", maxDepth: ALL_LEVELS }).rows;
+    expect(rows.map((r) => [r.name, r.parent])).toEqual([
+      ["Program", ""],
+      ["Child", "Program"],
+      ["Grandchild", "Child"],
+      ["Loose", ""],
+    ]);
   });
 });

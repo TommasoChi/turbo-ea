@@ -71,6 +71,8 @@ VALID_MCP_ANNOTATION_KEYS = {"readOnlyHint", "destructiveHint", "idempotentHint"
 # Deliberately duplicated from backend/app/services/extensions/bundle.py
 # (VALID_GRANTS) — teax stays stdlib-vendorable into private repos.
 VALID_GRANTS = {
+    # No-op since core 2.174.0 (#1297): field help text is a core feature.
+    # Still accepted so existing manifests keep linting.
     "metamodel.field_help",
     "metamodel.custom_field_types",
     "core.todos.read",
@@ -230,6 +232,7 @@ BUILTIN_FIELD_TYPES = {
 }
 KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{1,63}$")
 CONTENT_SHEETS = {
+    "CardTypeCategories",
     "CardTypes",
     "RelationTypes",
     "StakeholderRoles",

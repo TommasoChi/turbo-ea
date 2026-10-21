@@ -170,6 +170,9 @@ export interface FieldOption {
   // dialog opened (so its key is locked). Stripped before persisting — never
   // sent to or stored by the backend.
   _original?: boolean;
+  // Transient, editor-only: a stable React key for the option's row, so a
+  // reordered row keeps its own input state (#1292). Stripped like `_original`.
+  _rowId?: number;
 }
 
 export type BuiltInFieldType =
@@ -198,10 +201,10 @@ export interface FieldDef {
   group?: string;
   column?: 0 | 1;
   translations?: TranslationMap;
-  // Collapsible helper text shown under the field during data entry. Authorable
-  // only when an extension grants `metamodel.field_help`; rendering is
-  // unconditional. `help` is the base (English) string; `helpTranslations` maps
-  // locale → localized help.
+  // Collapsible helper text shown under the field during data entry, authored
+  // in the field editor by any metamodel admin (core since 2.174.0, #1297).
+  // `help` is the base (English) string; `helpTranslations` maps locale →
+  // localized help.
   help?: string;
   helpTranslations?: TranslationMap;
   // Optional visual "badge" chip shown next to the field label, and the basis
@@ -235,6 +238,13 @@ export interface SubtypeDef {
   hidden_fields?: string[];
   /** ArchiMate element type overriding the card type's own mapping. */
   archimate_type?: string | null;
+  /**
+   * Mandatory relation sides this subtype does not need (#1296), as side keys
+   * (`sideKey` in `lib/relationSort.ts`: a cross-type relation type's bare
+   * key, `<key>__out` / `<key>__in` for a self-referencing one). An exempted
+   * side neither blocks approval nor counts against data quality.
+   */
+  optional_relations?: string[];
 }
 
 export interface SectionDef {
@@ -1840,6 +1850,7 @@ export interface PpmBudgetLine {
   initiative_id: string;
   fiscal_year: number;
   category: "capex" | "opex";
+  description: string | null;
   amount: number;
   created_at: string;
   updated_at: string;
@@ -1883,9 +1894,59 @@ export interface PpmGanttItem {
   opex_actual: number;
   group_id: string | null;
   group_name: string | null;
+  /** Under a `subtype:<key>` grouping, the initiative that names its group (header only). */
+  group_anchor?: boolean;
   latest_report: PpmStatusReport | null;
   latest_report_id: string | null;
   stakeholders: PpmGanttStakeholder[];
+  rollup?: PpmRollup | null;
+}
+
+/**
+ * What a parent row on the PPM board shows in place of costs or dates it has
+ * not got. The planned pair is set only when the parent has no budget line of
+ * its own and some initiative beneath it has, the actual pair only when it has
+ * no cost line of its own and some initiative beneath it has (and, on a
+ * portal, either only when the portal shows costs); the dates only when it has
+ * neither a start nor an end date.
+ */
+export interface PpmRollup {
+  descendant_count: number;
+  capex_planned?: number | null;
+  capex_actual?: number | null;
+  opex_planned?: number | null;
+  opex_actual?: number | null;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+/** One fiscal year beneath an initiative; `year` is null for undated cost lines. */
+export interface PpmRollupYear {
+  year: number | null;
+  capex_budget: number;
+  opex_budget: number;
+  capex_actual: number;
+  opex_actual: number;
+}
+
+/**
+ * `GET /ppm/initiatives/{id}/rollup`: always over the descendants alone.
+ * `has_budget_lines` / `has_cost_lines` describe the initiative itself;
+ * `by_year` is ascending with the undated entry last.
+ */
+export interface PpmRollupOut {
+  descendant_count: number;
+  capex_planned: number;
+  capex_actual: number;
+  opex_planned: number;
+  opex_actual: number;
+  total_planned: number;
+  total_actual: number;
+  start_date: string | null;
+  end_date: string | null;
+  has_budget_lines: boolean;
+  has_cost_lines: boolean;
+  by_year: PpmRollupYear[];
 }
 
 export type PpmHealthValue = "onTrack" | "atRisk" | "offTrack";
@@ -2000,17 +2061,31 @@ export interface PpmPortfolioItem {
   id: string;
   name: string;
   subtype: string | null;
+  /**
+   * The parent initiative, set only when the parent is itself a row on this
+   * board — never a hidden or archived card's id, and on a portal never one
+   * the portal does not publish.
+   */
+  parent_id?: string | null;
   start_date: string | null;
   end_date: string | null;
   /** Opaque on the public board; a card UUID on the authenticated one. */
   group_id: string | null;
   group_name: string | null;
+  /**
+   * Under a `subtype:<key>` grouping, the initiative that names its group: the
+   * board shows it as the group header and its figures as the group's bottom
+   * line, never as a row.
+   */
+  group_anchor?: boolean;
   capex_planned?: number | null;
   capex_actual?: number | null;
   opex_planned?: number | null;
   opex_actual?: number | null;
   stakeholders: PpmPortfolioPerson[];
   latest_report: PpmPortfolioReport | null;
+  /** Derived costs and dates for a parent without its own (see `PpmRollup`). */
+  rollup?: PpmRollup | null;
 }
 
 export interface PpmPortfolioDashboard {
@@ -2178,6 +2253,23 @@ export type ResourceTypeKind = "link_type" | "file_category";
  * or disabled but not deleted. `icon` is a Material Symbol name used by link
  * types; file categories leave it null.
  */
+/**
+ * An EA layer a card type sits in (`card_types.category` names one by `key`).
+ * The four built-in layers are locked: label, colour and translations cannot
+ * change and they cannot be deleted; their place in the order can.
+ */
+export interface CardTypeCategory {
+  id: string;
+  /** What `CardType.category` stores — the label as first typed. Immutable. */
+  key: string;
+  label: string;
+  color: string;
+  sort_order: number;
+  built_in: boolean;
+  /** `{locale: label}` — resolve with `categoryLabel` / `useCategoryLabel`. */
+  translations: TranslationMap;
+}
+
 export interface ResourceType {
   id: string;
   kind: ResourceTypeKind;

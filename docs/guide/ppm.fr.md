@@ -21,18 +21,45 @@ Le **Tableau de Bord du Portefeuille** est le point d'entrée principal pour PPM
 Utilisez la barre d'outils pour :
 
 - **Regrouper par** tout type de fiche lié (p. ex., Organisation, Plateforme)
+- **Regrouper par** un sous-type d'initiative (p. ex., Programme), proposé dans une seconde section du même menu, pour voir chaque programme avec toutes les initiatives situées en dessous (voir ci-dessous)
 - **Filtrer par sous-type** (Idée, Programme, Projet, Épique)
 - **Rechercher** par nom d'initiative
+- **Afficher la hiérarchie** pour imbriquer les initiatives de chaque groupe sous leur initiative parente (voir ci-dessous)
+- **Sous-grouper par sous-type** pour scinder chaque groupe par sous-type (voir ci-dessous)
 
-Ces filtres sont conservés dans l'URL, donc l'actualisation de la page conserve votre vue actuelle.
+Ces filtres sont conservés dans l'URL, donc l'actualisation de la page conserve votre vue actuelle. La hiérarchie, sa profondeur d’affichage et le sous-groupement sont eux aussi conservés dans l'URL.
+
+#### Afficher la hiérarchie des initiatives
+
+Lorsque certaines initiatives du portefeuille ont une initiative parente elle-même présente dans le portefeuille, la barre d'outils propose **Afficher la hiérarchie**. Une fois activée, chaque groupe présente ses initiatives sous forme d'arborescence : une initiative enfant apparaît en retrait sous son parent, le chevron placé devant le nom d'un parent replie ou déplie sa sous-arborescence, et chaque ligne affiche son sous-type, afin que le rôle de chaque niveau (par exemple Programme → Projet → Épique) reste visible. **Profondeur d’affichage** limite l'arborescence à ses premiers niveaux (*Niveau 1*, *Niveau 2*, … ou *Tous les niveaux*).
+
+Le regroupement reste prioritaire : la hiérarchie s'imbrique **à l'intérieur de chaque groupe**, si bien qu'une initiative dont le parent appartient à un autre groupe apparaît comme ligne de premier niveau de son propre groupe. Les filtres s'appliquent d'abord et l'arborescence montre ce qui reste : lorsque la recherche ou le filtre de sous-type exclut un parent, ses enfants remontent au premier niveau, au lieu que le parent soit conservé comme contexte.
+
+![Portefeuille PPM avec la hiérarchie affichée](../assets/img/fr/101_ppm_portefeuille_hierarchie.png)
+
+#### Sous-grouper par sous-type
+
+**Sous-grouper par sous-type** divise chaque groupe en un sous-groupe par sous-type, dans l'ordre où les sous-types sont définis sur le type Initiative, les initiatives sans sous-type venant en dernier. Chaque sous-groupe a son propre en-tête, se replie séparément et porte sa propre ligne de totaux ; les totaux du groupe couvrent toujours toutes ses initiatives. Le commutateur n'est pas disponible tant que la hiérarchie est affichée, car l'arborescence couvre déjà tous les sous-types.
+
+#### Regrouper par un sous-type d'initiative
+
+Le menu **Grouper par** comporte deux sections : **Types de fiches liés** et **Sous-types d’initiative**, les sous-types définis sur le type Initiative. Choisir un sous-type — par exemple **Programme** — affiche un groupe par initiative de type Programme. Le programme donne son nom au groupe et n'en est **que l'en-tête, jamais une ligne** ; le groupe contient **toutes les initiatives situées en dessous, à toute profondeur** et quel que soit leur sous-type, si bien qu'un programme imbriqué sous un autre programme est une ligne du groupe du programme le plus haut.
+
+La ligne de bas de groupe remplace la ligne de totaux : libellée du nom du sous-type, elle affiche le budget, le réel et les dates **propres** au programme ou — lorsqu'il n'en a pas — les montants **dérivés** des initiatives situées en dessous, dessinés en contour, en pointillés et en italique comme décrit sous *Agréger les montants sur les initiatives parentes*. Les initiatives sans programme au-dessus d'elles figurent sous **Non groupé**. Une initiative intermédiaire que vous ne pouvez pas voir, qui est archivée ou qu'un portail ne publie pas **rompt la chaîne** : ce qui se trouve en dessous n'est plus regroupé sous le programme au-dessus. **Afficher la hiérarchie** n'apparaît que lorsque quelque chose est imbriqué sous les enfants directs d'un programme, et le filtre de sous-type ne propose pas le sous-type de regroupement, car ses initiatives sont des en-têtes et non des lignes.
+
+#### Agréger les montants sur les initiatives parentes
+
+Chaque initiative affiche ses propres montants dès qu'elle en a : les barres CapEx et OpEx d'un parent couvrent les lignes de budget et de coût saisies sur le parent, et sa barre de Gantt ses propres dates de début et de fin. Un parent **sans ligne de budget propre** affiche à la place le budget des initiatives situées en dessous, et un parent **sans ligne de coût propre** leur réel ; dans les deux cas, la barre est dessinée **en contour** avec des montants en italique, et son infobulle indique quelle moitié vient d'en dessous. Un parent **sans date de début ni de fin** couvre la période allant du début le plus précoce à la fin la plus tardive des initiatives situées en dessous, sous forme de barre **en pointillés** aux trimestres en italique. Une infobulle indique chaque fois combien d'initiatives sont couvertes. Les trois règles sont indépendantes — un programme qui porte le budget pendant que ses projets saisissent les dépenses affiche son propre budget face à leur réel, et un programme peut porter ses propres dates et afficher malgré tout les coûts de ses projets — et il suffit d'une ligne de budget, d'une ligne de coût ou d'une date sur le parent pour que cette partie revienne à ses propres montants. Seules comptent les initiatives que vous pouvez voir et, sur un portail, celles que le portail publie. Les totaux de groupe et la barre d'indicateurs continuent d'additionner les seules lignes saisies, de sorte que chaque montant n'est compté qu'une fois.
+
+Les montants dérivés n'existent que sur le tableau PPM et sur les onglets **Vue d'ensemble** et **Budget et coûts** de l'initiative elle-même. Pour reporter un total agrégé dans l'inventaire, les rapports ou un portail, définissez un champ calculé qui ajoute le budget propre de chaque niveau aux totaux de ses enfants — voir [Agréger les montants PPM le long de la hiérarchie des initiatives](../admin/calculations.md#rolling-ppm-figures-up-the-initiative-hierarchy). Une modification PPM sur un enfant relance les calculs de toutes les initiatives situées au-dessus de lui, de sorte que le total du parent évolue immédiatement.
 
 ### Impression et export
 
 Le portefeuille propose les mêmes actions de barre de titre que les rapports :
 
-- **Imprimer / Enregistrer en PDF** — l'icône d'imprimante imprime le portefeuille tel qu'il apparaît à l'écran. La barre d'onglets, la barre de filtres et les fenêtres contextuelles de survol sont masquées, le regroupement, le sous-type et la recherche actifs sont imprimés sous forme de ligne de paramètres compacte, et la grille chronologique n'est plus rognée : toutes les colonnes tiennent dans la page.
+- **Imprimer / Enregistrer en PDF** — l'icône d'imprimante imprime le portefeuille tel qu'il apparaît à l'écran. La barre d'onglets, la barre de filtres et les fenêtres contextuelles de survol sont masquées, le regroupement, le sous-type et la recherche actifs sont imprimés sous forme de ligne de paramètres compacte, et la grille chronologique n'est plus rognée : toutes les colonnes tiennent dans la page. Lorsque la hiérarchie ou le sous-groupement est activé, la ligne de paramètres l'indique également, avec la profondeur d’affichage.
 - **Exporter vers PowerPoint (.pptx)** — depuis le menu **⋮**. La première diapositive porte le titre, l'horodatage de génération et les filtres actifs, accompagnés du portefeuille en qualité de présentation ; les portefeuilles longs se poursuivent sur d'autres diapositives, découpées uniquement entre initiatives — jamais au milieu d'une ligne, d'un en-tête de groupe ou d'une ligne de totaux.
-- **Exporter vers Excel (.xlsx)** — également depuis le menu **⋮**. Une ligne par initiative avec son groupe, son sous-type, son chef de projet, ses dates de début et de fin, les trois indicateurs de santé, le CapEx / OpEx prévu et réel, et la date du dernier rapport d'avancement.
+- **Exporter vers Excel (.xlsx)** — également depuis le menu **⋮**. Une ligne par initiative avec son groupe, son sous-type, son chef de projet, ses dates de début et de fin, les trois indicateurs de santé, le CapEx / OpEx prévu et réel, et la date du dernier rapport d'avancement. Les lignes suivent l'ordre affiché à l'écran ; lorsque la hiérarchie est affichée, une colonne **Parent** indique l'initiative parente de chaque initiative. Trois colonnes, **Origine du budget**, **Origine des coûts** et **Origine des dates**, indiquent si le budget, le réel et les dates d'une ligne sont les siens ou le total des initiatives situées en dessous. Lorsque le tableau est regroupé par un sous-type d'initiative, l'initiative de regroupement est la **première ligne de son groupe**, avec les montants qu'affiche sa ligne de bas de groupe.
 
 ## Vue Détaillée de l'Initiative
 
@@ -46,6 +73,8 @@ La vue d'ensemble montre un résumé de la santé et des finances de l'initiativ
 
 - **Résumé de santé** — Indicateurs de calendrier, coût et périmètre du dernier rapport de statut
 - **Budget vs. Réel** — Carte KPI combinée montrant le budget total et les dépenses réelles avec écart
+- **Montants venus d'en dessous** — Lorsque l'initiative n'a aucune ligne de budget propre, son budget total, ses barres de budget et l'écart affichent à la place le budget des initiatives situées en dessous : en italique, marqués d'une flèche ↳, avec la piste de budget en contour et une infobulle indiquant combien d'initiatives sont couvertes. Lorsqu'elle n'a aucune ligne de coût propre, son réel vient d'en dessous de la même façon, avec les barres de dépense en contour. Les deux côtés sont décidés séparément, et la saisie d'une première ligne propre fait revenir ce côté aux montants propres de l'initiative.
+- **Sous cette initiative** — Lorsque l'initiative a des initiatives en dessous d'elle, une ligne sous les barres de budget indique leur nombre, leur budget et leurs dépenses réelles additionnés, ainsi que la période couverte par leurs dates. Elle s'affiche à côté des montants propres de l'initiative et ne s'y ajoute jamais. Lorsque le budget et le réel viennent déjà tous deux d'en dessous, la ligne ne garde que le nombre et la période couverte.
 - **Activité récente** — Résumé du dernier rapport de statut
 
 ### Onglet Rapports de Statut
@@ -70,8 +99,12 @@ Les rapports de statut mensuels suivent la santé du projet au fil du temps. Cha
 
 Suivi des données financières avec deux types de lignes :
 
-- **Lignes de budget** — Budget planifié par année fiscale et catégorie (CapEx / OpEx). Les lignes budgétaires sont regroupées selon le **mois de début de l'exercice fiscal** configuré dans les [Paramètres](../admin/settings.md#début-de-lexercice-fiscal). Par exemple, si l'exercice fiscal commence en avril, une ligne budgétaire de juin 2026 appartient à l'EF 2026–2027
+- **Lignes de budget** — Budget planifié par année fiscale et catégorie (CapEx / OpEx), avec une description facultative. Une même année fiscale et une même catégorie peuvent compter autant de lignes que nécessaire — une par licence, partenaire d'intégration ou lot de matériel — et la description permet de les distinguer ; les totaux les additionnent toutes. Les lignes budgétaires sont regroupées selon le **mois de début de l'exercice fiscal** configuré dans les [Paramètres](../admin/settings.md#début-de-lexercice-fiscal). Par exemple, si l'exercice fiscal commence en avril, une ligne budgétaire de juin 2026 appartient à l'EF 2026–2027
 - **Lignes de coût** — Dépenses réelles avec date, description et catégorie
+
+Les deux tableaux sont regroupés par exercice. Chaque exercice a une ligne d'en-tête avec ses sous-totaux CapEx, OpEx et total ainsi que le nombre de lignes qu'il contient ; la flèche de l'en-tête affiche ou masque les lignes de cet exercice. À l'ouverture de l'onglet, seul l'exercice en cours est déplié (ou le dernier exercice qui a des lignes, si l'exercice en cours n'en a aucune). Les montants figurent dans des colonnes **CapEx** et **OpEx** distinctes, et une ligne **Total, tous les exercices** sous chaque tableau additionne tous les exercices. Le bouton **+** de l'en-tête d'un exercice budgétaire ajoute une ligne de budget avec cet exercice déjà renseigné. Les lignes de coût sont regroupées selon l'exercice de leur date et triées par date au sein de celui-ci ; celles sans date sont réunies à la fin dans le groupe **Sans date** et comptent dans les totaux des coûts comme toute autre ligne.
+
+Lorsque l'initiative n'a **aucune ligne de budget propre**, le tableau du budget affiche, à la place de son état vide, le budget des initiatives situées en dessous : une légende indique de combien d'initiatives il provient, une ligne en lecture seule par exercice donne le CapEx, l'OpEx et le total en italique, et la ligne **Total, tous les exercices** les additionne. Le tableau des coûts fait de même avec leur réel lorsque l'initiative n'a **aucune ligne de coût propre**, avec une ligne **Sans date** pour leurs lignes de coût sans date. La barre de synthèse signale ces montants en italique, avec une infobulle. Chaque tableau décide pour lui-même, rien n'est enregistré ni ajouté aux montants propres de l'initiative, et seules comptent les initiatives que vous pouvez voir. La saisie d'une première ligne avec **Ajouter une ligne budgétaire** ou **Ajouter un poste de coût** fait revenir ce tableau aux lignes propres de l'initiative ; les graphiques de dépense affichent toujours les lignes propres de l'initiative.
 
 Les totaux de budget et de coûts sont automatiquement agrégés dans les attributs `costBudget` et `costActual` de la fiche Initiative.
 

@@ -9,6 +9,7 @@ import InventoryPage, {
   inventoryPreviewTargets,
   buildInventoryFacetBindings,
   normalizeAttrValue,
+  optionChipItems,
 } from "./InventoryPage";
 import { invalidateCalculatedFields } from "@/hooks/useCalculatedFields";
 import { MAX_SPLIT_VALUES } from "@/components/grid/useCellContextMenu";
@@ -125,8 +126,18 @@ vi.mock("./RelationCellPopover", () => ({
 // The real panel drags in the whole card-detail graph; the tests only need to
 // see which card it was opened for.
 vi.mock("@/components/CardDetailSidePanel", () => ({
-  default: ({ cardId, open }: { cardId: string | null; open: boolean }) =>
-    open ? <div data-testid="card-preview" data-card-id={cardId} /> : null,
+  default: ({
+    cardId,
+    open,
+    nonModal,
+  }: {
+    cardId: string | null;
+    open: boolean;
+    nonModal?: boolean;
+  }) =>
+    open ? (
+      <div data-testid="card-preview" data-card-id={cardId} data-non-modal={String(!!nonModal)} />
+    ) : null,
 }));
 
 vi.mock("./excelExport", () => ({
@@ -1405,6 +1416,8 @@ describe("InventoryPage cell context menu — Preview", () => {
 
     const panel = await screen.findByTestId("card-preview");
     expect(panel).toHaveAttribute("data-card-id", MOCK_CARDS.items[0].id);
+    // The grid stays usable while a card is previewed (#1289).
+    expect(panel).toHaveAttribute("data-non-modal", "true");
   });
 
   it("offers no Preview, and no stray divider, on a cell that names no card", async () => {
@@ -1890,12 +1903,12 @@ describe("InventoryPage mass edit attributes", () => {
     await waitFor(() => expect(patchedAttrs()).toEqual({ critical: false }));
   });
 
-  it("clears a boolean through None", async () => {
+  it("clears a boolean through Not set", async () => {
     const dialog = await openField(/^critical$/i);
     await userEvent.click(within(dialog).getAllByRole("combobox")[1]);
     await userEvent.click(await screen.findByRole("option", { name: "Yes" }));
     await userEvent.click(within(dialog).getAllByRole("combobox")[1]);
-    await userEvent.click(await screen.findByRole("option", { name: "None" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Not set" }));
     await apply();
     await waitFor(() => expect(patchedAttrs()).toEqual({ critical: null }));
   });
@@ -2287,5 +2300,26 @@ describe("InventoryPage — calculated columns", () => {
     await userEvent.click(await screen.findByRole("button", { name: /grid edit/i }));
     await waitFor(() => expect(col("attr_notes")!.editable).toBe(true));
     await waitFor(() => expect(col("attr_progress")!.editable).toBe(false));
+  });
+});
+
+describe("optionChipItems (#1292)", () => {
+  const options = [
+    { key: "gold", label: "Gold", color: "#ffd700" },
+    { key: "silver", label: "Silver" },
+  ];
+  const label = (o: { label: string }) => `L:${o.label}`;
+
+  it("orders the chips by option index, unknown keys last, labels resolved", () => {
+    expect(optionChipItems(options, ["legacy", "silver", "gold"], label)).toEqual([
+      { key: "gold", label: "L:Gold", color: "#ffd700" },
+      { key: "silver", label: "L:Silver", color: undefined },
+      { key: "legacy", label: "legacy", color: undefined },
+    ]);
+  });
+
+  it("renders nothing for a non-array value", () => {
+    expect(optionChipItems(options, "gold", label)).toEqual([]);
+    expect(optionChipItems(options, null, label)).toEqual([]);
   });
 });

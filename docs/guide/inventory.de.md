@@ -34,7 +34,7 @@ Ein **Badge mit der Anzahl aktiver Filter** zeigt an, wie viele Filter derzeit a
 
 Klicken Sie mit der rechten Maustaste auf eine beliebige Zelle im Raster (langes Drücken auf Touch-Geräten), um ein Kontextmenü mit Schnellaktionen für das zu öffnen, was sich unter dem Mauszeiger befindet, ähnlich wie in ServiceNow:
 
-- **Karte vorschauen** — die Karte, die die Zelle benennt, im Seitenbereich öffnen, ohne das Raster zu verlassen
+- **Karte vorschauen** — die Karte, die die Zelle benennt, im Seitenbereich öffnen, ohne das Raster zu verlassen; der Bereich lässt das Raster bedienbar, sodass Sie weiter scrollen, filtern und andere Zeilen anklicken können, solange er geöffnet ist, und ihn über seine Schließen-Schaltfläche schließen
 - **Übereinstimmende anzeigen** — nur die Zeilen behalten, deren Wert dem der angeklickten Zelle entspricht
 - **Herausfiltern** — die Zeilen ausblenden, deren Wert dem der angeklickten Zelle entspricht
 - **Wert kopieren** — den Zellentext in die Zwischenablage kopieren
@@ -138,6 +138,8 @@ Das Dropdown **Feld** gruppiert die Änderungsmöglichkeiten:
 
 Tags, Beziehungen und das übergeordnete Element bieten jeweils einen Umschalter **Hinzufügen / Entfernen**, sodass Sie vorhandene Werte ergänzen oder reduzieren, statt sie zu ersetzen.
 
+Wenn Sie für einen Beziehungstyp mit Details **Verknüpfung hinzufügen** wählen — etwa die Flussrichtung zwischen zwei Anwendungen, wie eine Organisation eine Anwendung nutzt, oder die Erstellen-/Lesen-/Aktualisieren-/Löschen-Kennzeichen an einem Datenobjekt —, zeigt der Dialog auch diese Felder. Was Sie festlegen, wird bei jeder hinzugefügten Verknüpfung gespeichert. Karten, die bereits mit einem gewählten Ziel verknüpft sind, erhalten die Details ebenfalls; ein erneutes **Verknüpfung hinzufügen** ist also der Weg, die Details bestehender Verknüpfungen zu aktualisieren. Ein leer gelassenes Detail bleibt unverändert.
+
 Das Eingabeelement richtet sich nach dem Feldtyp: Ein Mehrfachauswahlfeld zeigt seine Optionen mit Kontrollkästchen, ein Ja/Nein-Feld eine Ja/Nein-Liste, ein Datumsfeld eine Datumsauswahl. Bleibt der Wert leer – bei einem Ja/Nein-Feld **Keine** –, wird das Feld auf allen ausgewählten Karten geleert. Per Formel berechnete Felder sowie Kostenfelder, für die Ihnen die Leseberechtigung fehlt, werden nicht angeboten.
 
 ### Hierarchie umstrukturieren { #mass-edit-parent }
@@ -234,7 +236,7 @@ Da Karten über Name + Pfad identifiziert werden, **dürfen zwei Karten desselbe
 
 ### Inline-Beziehungszellen
 
-Auf jedem Kartenblatt drücken `rel:<beziehungstyp>`-Spalten ausgehende Beziehungen als **semikolongetrennte** Zielreferenzen aus (z. B. `NexaCore ERP; BillingApp`). Semikolons statt Kommas, weil Kartennamen häufig Kommas enthalten (etwa `Acme, Inc.`). `/` und `\` innerhalb eines Namens werden als `\/` bzw. `\\` maskiert, ein `;` als `\;` — der Exporter erledigt das automatisch (z. B. `SAP S/4HANA` → `SAP S\/4HANA`). Zellen sind **deklarativ**: Der Inhalt ersetzt die vollständige Menge ausgehender Beziehungen dieses Typs vom Quellobjekt. Wird ein Ziel aus der Liste entfernt, wird die Beziehung gelöscht; eine leere Zelle löscht alle. In einer von Turbo EA exportierten Arbeitsmappe (sie enthält ein `_Meta`-Blatt) ist ein Komma nie ein Trennzeichen, sodass eine Zelle mit einem einzigen Ziel wie `This is X, it does Y` ein Ziel bleibt. Ein Blatt ohne `_Meta` (von Hand erstellt oder vor 1.23 exportiert) darf Ziele noch mit Kommas trennen: Enthält die Zelle kein `;`, wird sie als ein Ziel gelesen, wenn die ganze Zelle eine Karte benennt, und andernfalls als kommagetrennt. Es gibt eine Spalte je Beziehungstyp, der vom Kartentyp des Blattes ausgeht — **alle**, auch solche mit Werten. Die Ziele sind alphabetisch sortiert, sodass ein erneuter Export einer unveränderten Landschaft eine identische Datei ergibt.
+Auf jedem Kartenblatt drücken `rel:<beziehungstyp>`-Spalten ausgehende Beziehungen als **semikolongetrennte** Zielreferenzen aus (z. B. `NexaCore ERP; BillingApp`). Semikolons statt Kommas, weil Kartennamen häufig Kommas enthalten (etwa `Acme, Inc.`). `/` und `\` innerhalb eines Namens werden als `\/` bzw. `\\` maskiert, ein `;` als `\;` — der Exporter erledigt das automatisch (z. B. `SAP S/4HANA` → `SAP S\/4HANA`). Eine maskierte Referenz ist immer eindeutig. In einer von Hand gefüllten Zelle darf der `/` unmaskiert bleiben: `SAP S/4HANA` wird zuerst als Pfad gelesen (eine Karte *4HANA* unter *SAP S*) und, wenn an diesem Pfad keine Karte liegt, als ein einziger Name, der aufgelöst wird, wenn genau eine Karte des Typs ihn trägt. Zellen sind **deklarativ**: Der Inhalt ersetzt die vollständige Menge ausgehender Beziehungen dieses Typs vom Quellobjekt. Wird ein Ziel aus der Liste entfernt, wird die Beziehung gelöscht; eine leere Zelle löscht alle. In einer von Turbo EA exportierten Arbeitsmappe (sie enthält ein `_Meta`-Blatt) ist ein Komma nie ein Trennzeichen, sodass eine Zelle mit einem einzigen Ziel wie `This is X, it does Y` ein Ziel bleibt. Ein Blatt ohne `_Meta` (von Hand erstellt oder vor 1.23 exportiert) darf Ziele noch mit Kommas trennen: Enthält die Zelle kein `;`, wird sie als ein Ziel gelesen, wenn die ganze Zelle eine Karte benennt, und andernfalls als kommagetrennt. Es gibt eine Spalte je Beziehungstyp, der vom Kartentyp des Blattes ausgeht — **alle**, auch solche mit Werten. Die Ziele sind alphabetisch sortiert, sodass ein erneuter Export einer unveränderten Landschaft eine identische Datei ergibt.
 
 Die Spalte `tags` folgt derselben Regel: `Gruppe: Tag`-Einträge, getrennt durch `; ` (z. B. `Vendor: Acme, Inc.; Region: EU`), wobei ein `;` im Tag-Namen als `\;` geschrieben wird. Vor 2.156.1 exportierte Arbeitsmappen trennen Tags mit Kommas und werden weiterhin wie bisher importiert.
 
@@ -269,7 +271,7 @@ Klicken Sie in der Werkzeugleiste auf **Import**, ziehen Sie die Arbeitsmappe in
 Ein paar Hinweise zum Importieren:
 
 - **Zum Anlegen einer Karte sind nur `name` und `type` erforderlich.** Im Metamodell als *erforderlich* markierte Felder (auch bei Provider oder jedem anderen Typ) blockieren den Import nicht — die Karte wird trotzdem erstellt, und Lücken schlagen sich in der Datenqualitätsbewertung nieder, statt zu einem stillen Überspringen zu führen.
-- **Ein `/` in der `name`-Spalte einer Karte muss nicht maskiert werden.** Maskierung (`\/` für einen Schrägstrich, `\\` für einen Backslash) ist nur nötig, wenn Sie diese Karte aus einer `parent_path`-, `rel:<key>`-, `source_ref`- oder `target_ref`-Zelle *referenzieren*, wo `/` das Pfadtrennzeichen ist.
+- **Ein `/` in der `name`-Spalte einer Karte muss nicht maskiert werden.** Maskierung (`\/` für einen Schrägstrich, `\\` für einen Backslash) ist nur nötig, wenn Sie diese Karte aus einer `parent_path`-, `rel:<key>`-, `source_ref`- oder `target_ref`-Zelle *referenzieren*, wo `/` das Pfadtrennzeichen ist — und selbst dort wird ein unmaskierter `/` als Teil des Namens gelesen, wenn an dem Pfad, den er ergibt, keine Karte liegt.
 
 ### Exportieren
 

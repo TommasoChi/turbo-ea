@@ -21,18 +21,45 @@ El **Panel de Portafolio** es el punto de entrada principal para PPM. Proporcion
 Use la barra de herramientas para:
 
 - **Agrupar por** cualquier tipo de tarjeta relacionada (p. ej., Organización, Plataforma)
+- **Agrupar por** un subtipo de iniciativa (p. ej., Programa), que aparece en una segunda sección del mismo menú, para ver cada programa con todas las iniciativas que tiene por debajo (ver más abajo)
 - **Filtrar por subtipo** (Idea, Programa, Proyecto, Épica)
 - **Buscar** por nombre de iniciativa
+- **Mostrar jerarquía** para anidar las iniciativas de cada grupo bajo su iniciativa padre (ver más abajo)
+- **Subagrupar por subtipo** para dividir cada grupo por subtipo (ver más abajo)
 
-Estos filtros se mantienen en la URL, por lo que al actualizar la página se conserva su vista actual.
+Estos filtros se mantienen en la URL, por lo que al actualizar la página se conserva su vista actual. La jerarquía, su profundidad de visualización y la subagrupación también se conservan en la URL.
+
+#### Mostrar la jerarquía de iniciativas
+
+Cuando algunas iniciativas de la cartera tienen una iniciativa padre que también está en la cartera, la barra de herramientas ofrece **Mostrar jerarquía**. Al activarla, cada grupo muestra sus iniciativas como un árbol: una iniciativa hija aparece con sangría bajo su padre, el chevrón delante del nombre de un padre pliega o despliega su subárbol, y cada fila muestra su subtipo para que el papel de cada nivel (por ejemplo Programa → Proyecto → Épica) siga siendo visible. **Profundidad de visualización** limita el árbol a sus primeros niveles (*Nivel 1*, *Nivel 2*, … o *Todos los niveles*).
+
+La agrupación sigue siendo la principal: la jerarquía se anida **dentro de cada grupo**, de modo que una iniciativa cuyo padre pertenece a otro grupo aparece como fila de primer nivel de su propio grupo. Los filtros se aplican primero y el árbol muestra lo que queda: cuando la búsqueda o el filtro de subtipo dejan fuera a un padre, sus hijas suben al primer nivel en lugar de conservarse el padre como contexto.
+
+![Cartera PPM con la jerarquía visible](../assets/img/es/101_ppm_portafolio_jerarquia.png)
+
+#### Subagrupar por subtipo
+
+**Subagrupar por subtipo** divide cada grupo en un subgrupo por subtipo, en el orden en que los subtipos están definidos en el tipo Iniciativa, con las iniciativas sin subtipo al final. Cada subgrupo tiene su propio encabezado, se contrae por separado y tiene su propia fila de totales; los totales del grupo siguen abarcando todas sus iniciativas. El interruptor no está disponible mientras se muestra la jerarquía, porque el árbol ya abarca todos los subtipos.
+
+#### Agrupar por un subtipo de iniciativa
+
+El menú **Agrupar por** tiene dos secciones: **Tipos de tarjeta relacionados** y **Subtipos de iniciativa**, los subtipos definidos en el tipo Iniciativa. Al elegir un subtipo —por ejemplo **Programa**— se muestra un grupo por cada iniciativa de tipo Programa. El programa da nombre a su grupo y es **solo su encabezado, nunca una fila**; el grupo contiene **todas las iniciativas que tiene por debajo, a cualquier profundidad** y sea cual sea su subtipo, de modo que un programa anidado bajo otro programa es una fila del grupo del programa superior.
+
+La línea final del grupo sustituye a la fila de totales: lleva el nombre del subtipo y muestra el presupuesto, el gasto real y las fechas **propios** del programa o, cuando no tiene los suyos, las cifras **derivadas** de las iniciativas que tiene por debajo, dibujadas con contorno, en discontinuo y en cursiva como se describe en *Acumular cifras en las iniciativas padre*. Las iniciativas sin ningún programa por encima aparecen en **Sin grupo**. Una iniciativa intermedia que usted no puede ver, que está archivada o que un portal no publica **rompe la cadena**: lo que hay por debajo deja de agruparse bajo el programa superior. **Mostrar jerarquía** solo aparece cuando algo se anida por debajo de los hijos directos de un programa, y el filtro de subtipo no ofrece el subtipo de agrupación, porque sus iniciativas son encabezados y no filas.
+
+#### Acumular cifras en las iniciativas padre
+
+Cada iniciativa muestra sus propias cifras siempre que las tenga: las barras de CapEx y OpEx de un padre cubren las líneas de presupuesto y de coste registradas en el padre, y su barra de Gantt sus propias fechas de inicio y fin. Un padre **sin líneas de presupuesto propias** muestra en su lugar el presupuesto de las iniciativas que tiene por debajo, y un padre **sin líneas de coste propias** su gasto real; en ambos casos la barra se dibuja **de contorno** con cifras en cursiva, y su información sobre herramientas indica qué mitad procede de abajo. Un padre **sin fecha de inicio ni de fin** abarca desde el inicio más temprano hasta el fin más tardío de lo que tiene por debajo, dibujado como una barra **discontinua** con trimestres en cursiva. Una información sobre herramientas indica en cada caso cuántas iniciativas abarca. Las tres reglas son independientes —un programa que tiene el presupuesto mientras sus proyectos registran el gasto muestra su propio presupuesto frente al gasto real de estos, y un programa puede tener sus propias fechas y aun así mostrar los costes de sus proyectos— y basta con registrar una línea de presupuesto, una línea de coste o una fecha en el padre para que esa parte vuelva a sus propias cifras. Solo cuentan las iniciativas que usted puede ver y, en un portal, las que el portal publica. Los totales de grupo y la barra de KPI siguen sumando únicamente las líneas registradas, de modo que cada cifra se cuenta una sola vez.
+
+Las cifras derivadas solo existen en el tablero de PPM y en las pestañas **Resumen** y **Presupuesto y costes** de la propia iniciativa. Para llevar un total acumulado al inventario, a los informes o a un portal, defina un campo calculado que sume el presupuesto propio de cada nivel a los totales de sus hijas; consulte [Acumular cifras de PPM a lo largo de la jerarquía de iniciativas](../admin/calculations.md#rolling-ppm-figures-up-the-initiative-hierarchy). Un cambio de PPM en una hija vuelve a ejecutar los cálculos de todas las iniciativas superiores, de modo que el total del padre se actualiza de inmediato.
 
 ### Impresión y exportación
 
 La cartera ofrece las mismas acciones en la barra de título que los informes:
 
-- **Imprimir / Guardar como PDF** — el icono de impresora imprime la cartera tal como se ve en pantalla. La barra de pestañas, la barra de filtros y las ventanas emergentes al pasar el ratón se ocultan, la agrupación, el subtipo y la búsqueda activos se imprimen como una línea compacta de parámetros, y la cuadrícula de cronología deja de recortarse para que todas las columnas quepan en la página.
+- **Imprimir / Guardar como PDF** — el icono de impresora imprime la cartera tal como se ve en pantalla. La barra de pestañas, la barra de filtros y las ventanas emergentes al pasar el ratón se ocultan, la agrupación, el subtipo y la búsqueda activos se imprimen como una línea compacta de parámetros, y la cuadrícula de cronología deja de recortarse para que todas las columnas quepan en la página. Cuando la jerarquía o la subagrupación están activadas, la línea de parámetros también lo indica, con la profundidad de visualización.
 - **Exportar a PowerPoint (.pptx)** — desde el menú **⋮**. La primera diapositiva incluye el título, la marca de tiempo de generación y los filtros activos junto con la cartera con calidad de presentación; las carteras largas continúan en más diapositivas, cortadas solo entre iniciativas, nunca a través de una fila, un encabezado de grupo o una línea de totales.
-- **Exportar a Excel (.xlsx)** — también desde el menú **⋮**. Una fila por iniciativa con su grupo, subtipo, jefe de proyecto, fechas de inicio y fin, los tres indicadores de salud, CapEx/OpEx planificado frente a real y la fecha del último informe de estado.
+- **Exportar a Excel (.xlsx)** — también desde el menú **⋮**. Una fila por iniciativa con su grupo, subtipo, jefe de proyecto, fechas de inicio y fin, los tres indicadores de salud, CapEx/OpEx planificado frente a real y la fecha del último informe de estado. Las filas siguen el orden de la pantalla; mientras se muestra la jerarquía, una columna **Padre** indica la iniciativa padre de cada iniciativa. Tres columnas, **Origen del presupuesto**, **Origen de los costes** y **Origen de las fechas**, indican si el presupuesto, el gasto real y las fechas de una fila son los suyos propios o el total de las iniciativas que tiene por debajo. Cuando el tablero está agrupado por un subtipo de iniciativa, la iniciativa que agrupa es la **primera fila de su grupo**, con las cifras que muestra su línea final.
 
 ## Vista de detalle de iniciativa
 
@@ -46,6 +73,8 @@ La visión general muestra un resumen de la salud y finanzas de la iniciativa:
 
 - **Resumen de salud** — Indicadores de cronograma, costo y alcance del último informe de estado
 - **Presupuesto vs. Real** — Tarjeta de KPI combinada mostrando presupuesto total y gasto real con variación
+- **Cifras de abajo** — Cuando la iniciativa no tiene líneas de presupuesto propias, su presupuesto total, sus barras de presupuesto y la variación muestran en su lugar el presupuesto de las iniciativas que tiene por debajo: en cursiva, marcados con una flecha ↳, con la pista del presupuesto de contorno y una información sobre herramientas que indica cuántas iniciativas abarcan. Cuando no tiene líneas de coste propias, su gasto real procede de abajo del mismo modo, con las barras de gasto de contorno. Ambos lados se deciden por separado, y registrar una primera línea propia devuelve ese lado a las cifras propias de la iniciativa.
+- **Por debajo de esta iniciativa** — Cuando la iniciativa tiene iniciativas por debajo, una línea bajo las barras de presupuesto indica cuántas son, su presupuesto y su gasto real sumados y el periodo que abarcan sus fechas. Se muestra junto a las cifras propias de la iniciativa y nunca se suma a ellas. Cuando el presupuesto y el gasto real ya proceden ambos de abajo, la línea conserva solo el número y el periodo de las fechas.
 - **Actividad reciente** — Resumen del último informe de estado
 
 ### Pestaña de informes de estado
@@ -70,8 +99,12 @@ Los informes de estado mensuales rastrean la salud del proyecto a lo largo del t
 
 Seguimiento de datos financieros con dos tipos de partidas:
 
-- **Líneas de presupuesto** — Presupuesto planificado por año fiscal y categoría (CapEx / OpEx). Las líneas de presupuesto se agrupan según el **mes de inicio del año fiscal** configurado en [Configuración](../admin/settings.md#inicio-del-año-fiscal). Por ejemplo, si el año fiscal comienza en abril, una línea de presupuesto de junio de 2026 pertenece al AF 2026–2027
+- **Líneas de presupuesto** — Presupuesto planificado por año fiscal y categoría (CapEx / OpEx), con una descripción opcional. Un mismo año fiscal y categoría pueden tener tantas líneas como necesite —una por licencia, socio de implantación o lote de hardware— y la descripción las distingue; los totales las suman todas. Las líneas de presupuesto se agrupan según el **mes de inicio del año fiscal** configurado en [Configuración](../admin/settings.md#inicio-del-año-fiscal). Por ejemplo, si el año fiscal comienza en abril, una línea de presupuesto de junio de 2026 pertenece al AF 2026–2027
 - **Líneas de costo** — Gastos reales con fecha, descripción y categoría
+
+Ambas tablas se agrupan por año fiscal. Cada año tiene una fila de encabezado con sus subtotales de CapEx, OpEx y total, y el número de líneas que contiene; la flecha del encabezado muestra u oculta las líneas de ese año. Al abrir la pestaña, solo el año fiscal en curso aparece desplegado (o el último año con líneas, si el actual no tiene ninguna). Los importes figuran en columnas **CapEx** y **OpEx** separadas, y una fila **Total, todos los años fiscales** bajo cada tabla suma todos los años. El botón **+** del encabezado de un año de presupuesto añade una línea de presupuesto con ese año fiscal ya rellenado. Las líneas de costo se agrupan por el año fiscal de su fecha y se ordenan por fecha dentro de él; las que no tienen fecha se reúnen al final en el grupo **Sin fecha** y cuentan en los totales de costos como cualquier otra línea.
+
+Cuando la iniciativa **no tiene líneas de presupuesto propias**, la tabla de presupuesto muestra, en lugar de su estado vacío, el presupuesto de las iniciativas que tiene por debajo: un rótulo indica de cuántas iniciativas procede, una fila de solo lectura por año fiscal da el CapEx, el OpEx y el total en cursiva, y la fila **Total, todos los años fiscales** los suma. La tabla de costes hace lo mismo con su gasto real cuando la iniciativa **no tiene líneas de coste propias**, con una fila **Sin fecha** para sus líneas de coste sin fecha. La barra de resumen marca esas cifras en cursiva, con una información sobre herramientas. Cada tabla decide por sí misma, nada se guarda ni se suma a las cifras propias de la iniciativa, y solo cuentan las iniciativas que usted puede ver. Registrar una primera línea con **Añadir línea de presupuesto** o **Agregar elemento de costo** devuelve esa tabla a las líneas propias de la iniciativa; los gráficos de gasto muestran siempre las líneas propias de la iniciativa.
 
 Los totales de presupuesto y costos se acumulan automáticamente en los atributos `costBudget` y `costActual` de la tarjeta de Iniciativa.
 
