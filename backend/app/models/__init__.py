@@ -1,4 +1,10 @@
 from app.models.app_settings import AppSettings
+from app.models.archimate_viewpoint import (
+    ArchimateViewpoint,
+    ArchimateViewpointExample,
+    ArchimateViewpointObject,
+    ArchimateViewpointTabCard,
+)
 from app.models.architecture_decision import ArchitectureDecision
 from app.models.architecture_decision_card import ArchitectureDecisionCard
 from app.models.audit_log import AuditLogEntry
@@ -119,6 +125,10 @@ __all__ = [
     "EAPrinciple",
     "EnterpriseObject",
     "EnterpriseObjectCardMapping",
+    "ArchimateViewpoint",
+    "ArchimateViewpointObject",
+    "ArchimateViewpointExample",
+    "ArchimateViewpointTabCard",
     "Bookmark",
     "Calculation",
     "Diagram",
