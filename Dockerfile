@@ -123,7 +123,7 @@ FROM alpine/git:v2.54.0 AS drawio
 RUN git clone --depth 1 --branch v31.5.3 https://github.com/jgraph/drawio.git /drawio
 
 
-FROM nginx:1.30.5-alpine AS frontend
+FROM nginx:1.30.6-alpine AS frontend
 
 ARG APP_UID
 ARG APP_GID
@@ -165,7 +165,7 @@ EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]
 
 
-FROM nginx:1.30.5-alpine AS nginx
+FROM nginx:1.30.6-alpine AS nginx
 
 ARG APP_UID
 ARG APP_GID
