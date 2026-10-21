@@ -32,7 +32,7 @@ _MATRIX_WORKFLOWS = (
     "trivy-reconcile.yml",
 )
 _MATRIX_RE = re.compile(r"^\s*image:\s*\[([^\]]+)\]\s*$", re.MULTILINE)
-_COMPOSE_IMAGE_RE = re.compile(r"ghcr\.io/vincentmakes/turbo-ea/([a-z-]+):\$\{TURBO_EA_TAG")
+_COMPOSE_IMAGE_RE = re.compile(r"ghcr\.io/tommasochi/turbo-ea/([a-z-]+):\$\{TURBO_EA_TAG")
 _COMPOSE_ANY_IMAGE_RE = re.compile(r"^\s*image:\s*(\S+)\s*$", re.MULTILINE)
 _FROM_RE = re.compile(r"^FROM\s+(\S+)\s+AS\s+(\S+)\s*$", re.MULTILINE)
 
@@ -70,7 +70,7 @@ class TestUpstreamComposeImagesArePinned:
         upstream = [
             ref
             for ref in _COMPOSE_ANY_IMAGE_RE.findall(_compose_text())
-            if not ref.startswith("ghcr.io/vincentmakes/turbo-ea/")
+            if not ref.startswith("ghcr.io/tommasochi/turbo-ea/")
         ]
         assert upstream, "expected at least the upstream ollama/ollama image in docker-compose.yml"
         floating = [ref for ref in upstream if ":" not in ref or ref.endswith(":latest")]
