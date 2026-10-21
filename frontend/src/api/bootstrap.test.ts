@@ -183,9 +183,9 @@ describe("primeBootstrap — audit-log retention", () => {
 
 describe("primeBootstrap — card type categories", () => {
   it("primes the category registry so the hook does not fetch", async () => {
-    const { boot } = await fresh();
+    const boot = await import("./bootstrap");
     vi.mocked(api.get).mockResolvedValueOnce({
-      ...BASE,
+      ...BODY,
       card_type_categories: [
         { id: "2", key: "B", label: "B", color: "#222222", sort_order: 1, built_in: false, translations: {} },
         { id: "1", key: "A", label: "A", color: "#111111", sort_order: 0, built_in: true, translations: {} },
@@ -201,8 +201,8 @@ describe("primeBootstrap — card type categories", () => {
   });
 
   it("leaves the hook to fetch when an older backend sends no registry", async () => {
-    const { boot } = await fresh();
-    vi.mocked(api.get).mockResolvedValueOnce({ ...BASE });
+    const boot = await import("./bootstrap");
+    vi.mocked(api.get).mockResolvedValueOnce({ ...BODY });
     await boot.primeBootstrap();
     vi.mocked(api.get).mockResolvedValueOnce([]);
     const { renderHook, waitFor } = await import("@testing-library/react");
