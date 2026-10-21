@@ -8,8 +8,13 @@ for. Several lines per pair stay allowed: deliberately no unique constraint.
 Downgrade drops the column, which discards the descriptions.
 
 Revision ID: 155
-Revises: 154
+Revises: 155b
 Create Date: 2026-10-19
+
+Repointed onto "155b" by the fork's merge of upstream on 2026-10-21: this
+migration's own "155" collided with the fork's existing
+``155_add_value_chain_metamodel.py``, which took the lettered id so this one
+could keep the canonical number, following the "128"/"128b" precedent.
 """
 
 from typing import Union
@@ -19,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "155"
-down_revision: Union[str, None] = "154"
+down_revision: Union[str, None] = "155b"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 

@@ -26,7 +26,11 @@ _spec.loader.exec_module(mig)
 
 def test_revision_chain():
     assert mig.revision == "156"
-    assert mig.down_revision == "155"
+    # "156b" as of the fork's merge of upstream on 2026-10-21: this migration's
+    # plain "155" parent collided with the fork's own
+    # 156_rename_objective_to_bizctx.py, which took the lettered id "156b" so
+    # this one could keep the canonical "156" (the "128"/"128b" precedent).
+    assert mig.down_revision == "156b"
 
 
 def test_a_free_text_category_is_adopted_as_a_custom_row():

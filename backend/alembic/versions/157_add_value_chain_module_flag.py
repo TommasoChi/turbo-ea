@@ -15,6 +15,12 @@ An explicit ``false`` is never overwritten. Downgrade drops the key.
 Revision ID: 157
 Revises: 156
 Create Date: 2026-10-14
+
+Still chains after plain "156", but that id now names upstream's own new
+``156_card_type_categories.py`` as of the fork's merge of upstream on
+2026-10-21 -- this fork's own former "156" (the ObjectiveToBusinessContext
+rename) is "156b" and sits just before it on the same single line, the same
+way the 154/154b pair already does.
 """
 
 import json

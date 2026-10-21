@@ -1544,7 +1544,7 @@ function LayeredDependencyInner({
       );
     }
     return {
-      ...buildLdvFlow(nodes, edges, types, resolver, layerOverrides, layers),
+      ...buildLdvFlow(nodes, edges, types, resolver, layers, layerOverrides),
       memberOf: undefined,
     };
   }, [

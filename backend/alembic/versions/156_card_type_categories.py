@@ -15,7 +15,12 @@ defaults) — otherwise the type editor, which always sends ``category`` back,
 would refuse every unrelated edit of such a type with ``unknown_category``.
 
 Revision ID: 156
-Revises: 155
+Revises: 156b
+
+Repointed onto "156b" by the fork's merge of upstream on 2026-10-21: this
+migration's own "156" collided with the fork's existing
+``156_rename_objective_to_bizctx.py``, which took the lettered id so this one
+could keep the canonical number, following the "128"/"128b" precedent.
 """
 
 from collections.abc import Iterable, Sequence
@@ -27,7 +32,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "156"
-down_revision: Union[str, None] = "155"
+down_revision: Union[str, None] = "156b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

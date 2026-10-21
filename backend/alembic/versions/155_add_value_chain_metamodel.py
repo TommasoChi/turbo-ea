@@ -5,7 +5,7 @@ levelOrder), the Objective subtypes valueGate/businessGoal, has_successors on
 BusinessContext, and the two relation types. Additive and idempotent: a key an
 admin already created by hand is left exactly as it is.
 
-Revision ID: 155
+Revision ID: 155b
 Revises: 154
 Create Date: 2026-10-14
 
@@ -15,6 +15,12 @@ the fork's merge of upstream on 2026-10-18: this fork's own former "154"
 (audit_log) could take the plain id and sit between "154b" and "155" on the
 single line, following the "128"/"128b" precedent
 (``128_extension_sdk_1_2_bridges.py``).
+
+This migration's own id is "155b" as of the fork's merge of upstream on
+2026-10-21, for the same reason one level up: upstream's own new "155"
+(``155_ppm_budget_line_description.py``) takes the plain id, and this
+migration's former "156" child (the ObjectiveToBusinessContext rename) is
+"156b" to match.
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "155"
+revision: str = "155b"
 down_revision: Union[str, None] = "154"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

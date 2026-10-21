@@ -363,12 +363,12 @@ export function buildLdvFlow(
    * exactly as before (label-only).
    */
   relValueResolver?: (edge: GEdge) => string | undefined,
-  layerOverrides?: LayerOverrides,
   /**
    * Lane order, names and colours — `ldvLayers(categories, locale)` from the
    * category registry. Defaults to the four built-in layers.
    */
   layers: LdvLayers = DEFAULT_LDV_LAYERS,
+  layerOverrides?: LayerOverrides,
 ): { nodes: Node[]; edges: Edge[] } {
   if (gNodes.length === 0) return { nodes: [], edges: [] };
 

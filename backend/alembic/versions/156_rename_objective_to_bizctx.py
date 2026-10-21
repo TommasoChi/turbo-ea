@@ -13,7 +13,7 @@ key and its responses' keys in sync. A custom key that merely CONTAINS the old
 key would be rewritten inside those payloads while its own rows stay unchanged,
 so `_check_compatible` refuses (RuntimeError, nothing written) when one exists.
 
-What actually happens on upgrade. Migration 155 inserted the seeded
+What actually happens on upgrade. Migration 155b inserted the seeded
 `relObjectiveToBizCtx` with ON CONFLICT DO NOTHING, and the old key never
 conflicts with it, so every database reaching 156 holds BOTH rows. The hand-made
 row is therefore DROPPED and its relations re-pointed to the seeded row; the
@@ -35,9 +35,16 @@ relBusinessContextSuccessor; and on an install that never had the old key it
 would turn the seeded built-in relObjectiveToBizCtx into a custom-looking
 ObjectiveToBusinessContext.
 
-Revision ID: 156
+Revision ID: 156b
 Revises: 155
 Create Date: 2026-10-14
+
+This migration's own id is "156b" as of the fork's merge of upstream on
+2026-10-21: upstream's own new "156" (``156_card_type_categories.py``) takes
+the plain id, following the "128"/"128b" precedent. It chains after plain
+"155" (upstream's own ``155_ppm_budget_line_description.py``), which in turn
+chains after this fork's "155b" -- the same single line the 154/154b pair
+already follows.
 """
 
 from __future__ import annotations
@@ -49,7 +56,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "156"
+revision: str = "156b"
 down_revision: Union[str, None] = "155"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

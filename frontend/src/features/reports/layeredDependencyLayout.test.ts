@@ -132,6 +132,7 @@ describe("buildLdvFlow", () => {
       [],
       TYPES,
       undefined,
+      undefined,
       {
         typeGroups: { Application: "application", DataObject: "data_object" },
         groupOrder: ["application", "Technical Architecture", "data_object"],
@@ -159,6 +160,7 @@ describe("buildLdvFlow", () => {
       ],
       [],
       TYPES,
+      undefined,
       undefined,
       {
         typeGroups: { Application: "application", DataObject: "data_object" },

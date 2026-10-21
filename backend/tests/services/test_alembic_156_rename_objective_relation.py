@@ -42,7 +42,12 @@ NEW = "relObjectiveToBizCtx"
 def test_renames_to_the_core_convention():
     assert mig.OLD_KEY == "ObjectiveToBusinessContext"
     assert mig.NEW_KEY == "relObjectiveToBizCtx"
-    assert mig.revision == "156"
+    # "156b" as of the fork's merge of upstream on 2026-10-21: upstream's own
+    # new, unrelated 156_card_type_categories.py took the plain "156" (the
+    # "128"/"128b" precedent), and this migration now chains after plain
+    # "155" (upstream's 155_ppm_budget_line_description.py, itself chained
+    # after this fork's "155b") instead of directly after "155b".
+    assert mig.revision == "156b"
     assert mig.down_revision == "155"
 
 
