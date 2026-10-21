@@ -350,6 +350,10 @@ Every change that introduces user-visible content must include translations. Bef
 - PR titles should be concise (under 72 characters) and describe the change, not the implementation.
 - **No comments on the PR, ever** — see *Never write on GitHub on the user's behalf* above. Review threads, CI explanations and reviewer questions are answered to the user in chat; the PR body is written at creation and left alone unless the user asks for an edit.
 
+### Spec & Plan Conventions
+- Every design spec from `superpowers:brainstorming` and every implementation plan from `superpowers:writing-plans` lives under `docs/superpowers/` in this repo (`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`) — never outside the repo, even for exploratory work done elsewhere first.
+- When the work a spec describes ships, add a short line at the top of that spec file linking the PR(s) that implemented it (e.g., `**Shipped:** [owner/repo#123](url)`). Do this once the PR is merged, not at creation.
+
 ### Changelog & Versioning Conventions
 - **Update `CHANGELOG.md`** for every user-facing change. Add entries under the current version heading (e.g., `## [0.6.0] - 2026-02-22`). Do **not** use an `[Unreleased]` section — this project ships continuously and every change belongs to a concrete version.
 - The changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format. Use these categories: **Added**, **Changed**, **Deprecated**, **Removed**, **Fixed**, **Security**. Only include categories that apply.
