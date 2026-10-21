@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import type { User } from "@/types";
 import ArchitectureStudioTab from "./ArchitectureStudioTab";
 
@@ -22,19 +21,10 @@ describe("ArchitectureStudioTab", () => {
     });
   });
 
-  it("lands on Card Mapping and switches to Relations Mapping on click", async () => {
-    const user = userEvent.setup();
+  it("renders Card Mapping directly, with no Relations Mapping sub-tab", async () => {
     render(<ArchitectureStudioTab types={[]} />);
 
     expect(await screen.findByRole("button", { name: /New Architecture Object/ })).toBeInTheDocument();
-    // Relations Mapping's own content (an ArchiMate relationship column
-    // header) must not render while Card Mapping is the active sub-tab.
-    expect(screen.queryByText("Serving")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("tab", { name: /Relations Mapping/ }));
-
-    expect(await screen.findByText("Architecture Object")).toBeInTheDocument();
-    expect(screen.getByText("Serving")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /New Architecture Object/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Relations Mapping/ })).not.toBeInTheDocument();
   });
 });
