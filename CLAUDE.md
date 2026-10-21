@@ -340,6 +340,16 @@ Every change that introduces user-visible content must include translations. Bef
 - New endpoints must use `Depends(get_current_user)` or `Depends(require_permission(...))`.
 - Rate limiting is applied via `slowapi` — apply `@limiter.limit()` to auth-sensitive endpoints.
 
+### VAPT (Active Security Testing)
+- **Scope**: this software, this repo, the local `turbo-ea-aruba` instance only — never anything not owned by the user, never a production/public deployment. This is testing-your-own-application, not a third-party engagement.
+- **Trigger**: run a VAPT pass automatically whenever a PR bumps `/VERSION` **and** touches any of `backend/app/core/permissions.py`, `backend/app/services/permission_service.py`, any file under `backend/app/api/v1/`, or any auth/session-handling code. Also run on explicit request at any time.
+- **Scope of the pass** (three buckets, same depth each time):
+  - **Code-level**: review the diff and its blast radius for auth/permission logic (`permissions.py`, `PermissionService`), injection (any raw SQL string construction, not just the diff), IDOR on changed/added endpoints (every `/x/{id}`-style route checks ownership or `card_read_scope`/permission before returning data), deserialization of untrusted input, path traversal on upload/download/export endpoints.
+  - **Dynamic**: against the running local instance only — auth bypass attempts, horizontal/vertical privilege escalation between roles (compare what each role can reach vs. what `PermissionService` says it should), CSRF on state-changing endpoints, SSRF surfaces (the AI provider integration, extension webhooks — confirm outbound URLs are allowlisted/validated), rate-limit coverage on auth endpoints.
+  - **Dependency/supply chain**: beyond the existing passive Trivy/pip-audit/Dependabot gates — an SBOM pass, a license check, and a review of any newly unpinned or floating dependency version.
+- **Tooling reality**: no Burp/sqlmap/nikto/ZAP installed — dynamic testing is manually crafted requests (curl, Python `httpx`, the browser) against the local instance, not an automated scanner sweep. Real, but narrower than a commercial VAPT.
+- **Output**: findings go into a dated report under `docs/superpowers/` (or wherever the session's working notes already live that day) — never auto-fixed blindly. Report first, fix only after the user reviews the findings.
+
 ### Pull Request Conventions
 - **Always use the PR template** at `.github/pull_request_template.md` when creating pull requests. Do not use a custom format — fill in the template sections exactly as defined.
 - The PR template has four required sections: **Summary**, **Changes**, **Test Plan**, and **Checklist**. All must be completed.
