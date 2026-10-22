@@ -155,6 +155,37 @@ TAB_LAYERS: dict[str, set[str]] = {
 }
 
 
+async def viewpoint_tabs(db: AsyncSession, viewpoint_key: str) -> set[str]:
+    """The ``TAB_LAYERS`` tabs a viewpoint spans: every tab whose layer set holds
+    at least one of its allowed objects' ``EnterpriseObject.layer`` -- the same
+    rule ``list_viewpoints_for_tab`` uses to place it in a tab's picker."""
+    rows = await db.execute(
+        select(EnterpriseObject.layer)
+        .join(
+            ArchimateViewpointObject,
+            ArchimateViewpointObject.enterprise_object_key == EnterpriseObject.key,
+        )
+        .where(ArchimateViewpointObject.viewpoint_key == viewpoint_key)
+    )
+    layers = {layer for layer in rows.scalars().all() if layer}
+    return {tab for tab, tab_layers in TAB_LAYERS.items() if tab_layers & layers}
+
+
+async def require_archimate_permission(
+    db: AsyncSession, user: User, viewpoint_key: str | None, action: str
+) -> None:
+    """403 unless ``user`` holds ``archimatediagrams.<tab>.<action>`` on at least one
+    tab the viewpoint spans. No viewpoint, or one spanning no tab (e.g. the
+    implementation-layer ones), needs it on any tab -- the unscoped entry point."""
+    tabs = await viewpoint_tabs(db, viewpoint_key) if viewpoint_key else set()
+    for tab in sorted(tabs or TAB_LAYERS):
+        if await PermissionService.has_app_permission(
+            db, user, f"archimatediagrams.{tab}.{action}"
+        ):
+            return
+    raise HTTPException(403, "Insufficient permissions")
+
+
 def check_kind_data(kind: str, data: dict | None) -> None:
     """422 unless ``data`` has the shape its ``kind`` stores."""
     is_archimate = isinstance(data, dict) and data.get("format") == ARCHIMATE_FORMAT
@@ -297,6 +328,21 @@ async def _set_card_ids(
                 card_id=uuid.UUID(cid),
             )
         )
+
+
+async def _diagram_for(db: AsyncSession, user: User, diagram_id: str, action: str) -> Diagram:
+    """Load a diagram behind its kind's permission: ``diagrams.<action>`` for
+    DrawIO (checked before the lookup, as always), the per-layer
+    ``archimatediagrams.<tab>.<action>`` for ArchiMate."""
+    result = await db.execute(select(Diagram).where(Diagram.id == uuid.UUID(diagram_id)))
+    d = result.scalar_one_or_none()
+    if d is not None and d.kind == "archimate":
+        await require_archimate_permission(db, user, d.viewpoint_key, action)
+        return d
+    await PermissionService.require_permission(db, user, f"diagrams.{action}")
+    if not d:
+        raise HTTPException(404, "Diagram not found")
+    return d
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
@@ -490,7 +536,8 @@ async def create_diagram(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await PermissionService.require_permission(db, user, "diagrams.manage")
+    if body.kind != "archimate":
+        await PermissionService.require_permission(db, user, "diagrams.manage")
     if body.kind not in DIAGRAM_KINDS:
         raise HTTPException(422, "kind must be 'drawio' or 'archimate'")
     if body.kind == "archimate" and not body.viewpoint_key:
@@ -504,6 +551,8 @@ async def create_diagram(
         )
         if vp.scalar_one_or_none() is None:
             raise HTTPException(404, "Viewpoint not found")
+    if body.kind == "archimate":
+        await require_archimate_permission(db, user, body.viewpoint_key, "manage")
     check_kind_data(body.kind, body.data)
     await ensure_valid_archimate(body.kind, body.data)
     d = Diagram(
@@ -758,11 +807,7 @@ async def get_diagram(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await PermissionService.require_permission(db, user, "diagrams.view")
-    result = await db.execute(select(Diagram).where(Diagram.id == uuid.UUID(diagram_id)))
-    d = result.scalar_one_or_none()
-    if not d:
-        raise HTTPException(404, "Diagram not found")
+    d = await _diagram_for(db, user, diagram_id, "view")
     linked_card_ids = await _readable_card_ids(db, user, await _get_card_ids(db, d.id))
     group_result = await db.execute(
         select(diagram_group_members.c.group_id).where(diagram_group_members.c.diagram_id == d.id)
@@ -796,11 +841,7 @@ async def update_diagram(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await PermissionService.require_permission(db, user, "diagrams.manage")
-    result = await db.execute(select(Diagram).where(Diagram.id == uuid.UUID(diagram_id)))
-    d = result.scalar_one_or_none()
-    if not d:
-        raise HTTPException(404, "Diagram not found")
+    d = await _diagram_for(db, user, diagram_id, "manage")
     if body.kind is not None and body.kind != d.kind:
         raise HTTPException(422, "kind cannot be changed")
     if body.data is not None:
@@ -841,11 +882,7 @@ async def delete_diagram(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await PermissionService.require_permission(db, user, "diagrams.manage")
-    result = await db.execute(select(Diagram).where(Diagram.id == uuid.UUID(diagram_id)))
-    d = result.scalar_one_or_none()
-    if not d:
-        raise HTTPException(404, "Diagram not found")
+    d = await _diagram_for(db, user, diagram_id, "manage")
     await db.delete(d)
     await db.commit()
 

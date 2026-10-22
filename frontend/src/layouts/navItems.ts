@@ -57,11 +57,10 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
   // since it carries no extensions of its own).
   // Since the ArchiMate Viewpoint Catalog work, both strategy_process and
   // app_data also carry a static "<Layer> Diagram" entry point (scoped
-  // ArchimateViewpointPicker, tab fixed to that layer) that only needs
-  // `diagrams.view` — so, unlike before, neither host is ever reduced to
-  // zero children purely by a module flag being off; AppLayout's final
-  // resolve pass still drops a host down to nothing for a user who also
-  // lacks `diagrams.view` and has no matching extension installed.
+  // ArchimateViewpointPicker, tab fixed to that layer) gated on that layer's
+  // `archimatediagrams.<layer>.manage` (see ROUTE_PERMISSIONS) and dropped by
+  // AppLayout when the ArchiMate module is off; AppLayout's final resolve pass
+  // drops a host left with no children and no path of its own.
   {
     labelKey: "strategy_process",
     icon: "route",
@@ -73,9 +72,9 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
     // route-carrying entry — no explicit `permission` needed here. Value
     // Chain is a second static child on the same terms (bpm.value_chain,
     // derived from its path; AppLayout drops it when its module is off).
-    // Business Diagram is a third static child, gated on `diagrams.view`
-    // like every other diagram entry point (see api/diagrams.ts's
-    // `ViewpointTab`) — independent of the bpm/valueChain module flags.
+    // Business Diagram is a third static child, gated on
+    // `archimatediagrams.business.manage` (derived from its path) and on the
+    // ArchiMate module flag — independent of the bpm/valueChain module flags.
     children: [
       { labelKey: "valueChain", icon: "conveyor_belt", path: "/value-chain" },
       { labelKey: "bpm", icon: "route", path: "/bpm" },
@@ -85,9 +84,10 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
   // Application & Data Architecture: three "coming soon" placeholders
   // (SWOT / What-if / Data Flow analysis — explicitly scoped out of this
   // feature, see the ArchiMate Viewpoint spec) plus the real Application
-  // Diagram entry point. All four are plain route links gated on
-  // `diagrams.view` (see ROUTE_PERMISSIONS) rather than an extension
-  // permission, since none of them is extension-contributed.
+  // Diagram entry point. All four are plain route links gated through
+  // ROUTE_PERMISSIONS (the placeholders on `diagrams.view`, the Application
+  // Diagram on `archimatediagrams.application.manage`) rather than an
+  // extension permission, since none of them is extension-contributed.
   {
     labelKey: "app_data",
     icon: "apps",

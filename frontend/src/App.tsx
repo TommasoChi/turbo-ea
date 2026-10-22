@@ -204,9 +204,9 @@ function AppRoutes() {
                 {/* Scoped diagram-entry points (nav rework, Task 8): each is the
                     same ArchimateViewpointPicker flow as the unscoped "ArchiMate"
                     option in CreateDiagramDialog, with `tab` fixed to one layer. */}
-                <Route path="/business-architecture/diagram" element={<ScopedArchimateDiagramPage tab="business" />} />
-                <Route path="/application-architecture/diagram" element={<ScopedArchimateDiagramPage tab="application" />} />
-                <Route path="/technology-architecture/diagram" element={<ScopedArchimateDiagramPage tab="technology" />} />
+                <Route path="/business-architecture/diagram" element={<ModuleGate module="archimate"><ScopedArchimateDiagramPage tab="business" /></ModuleGate>} />
+                <Route path="/application-architecture/diagram" element={<ModuleGate module="archimate"><ScopedArchimateDiagramPage tab="application" /></ModuleGate>} />
+                <Route path="/technology-architecture/diagram" element={<ModuleGate module="archimate"><ScopedArchimateDiagramPage tab="technology" /></ModuleGate>} />
                 {/* "Coming soon" placeholders — explicitly scoped out of this
                     feature (see the spec); no functionality behind them yet. */}
                 <Route path="/application-architecture/swot" element={<ComingSoonPage titleKey="swotAnalysis" />} />

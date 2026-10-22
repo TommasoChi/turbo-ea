@@ -57,6 +57,40 @@ APP_PERMISSIONS: dict[str, dict] = {
             "diagrams.publish": ("Publish a diagram as a read-only public link for embedding"),
         },
     },
+    # One view/manage/publish triple per diagram-creation layer tab (TAB_LAYERS in
+    # api/v1/diagrams.py). A diagram whose viewpoint spans several tabs needs the
+    # permission on at least one of them.
+    "archimate_diagrams": {
+        "label": "ArchiMate Diagrams",
+        "permissions": {
+            "archimatediagrams.business.view": "View Business Architecture ArchiMate diagrams",
+            "archimatediagrams.business.manage": (
+                "Create, edit, and delete Business Architecture ArchiMate diagrams"
+            ),
+            "archimatediagrams.business.publish": (
+                "Publish a Business Architecture ArchiMate diagram as a read-only public link"
+                " for embedding"
+            ),
+            "archimatediagrams.application.view": (
+                "View Application & Data Architecture ArchiMate diagrams"
+            ),
+            "archimatediagrams.application.manage": (
+                "Create, edit, and delete Application & Data Architecture ArchiMate diagrams"
+            ),
+            "archimatediagrams.application.publish": (
+                "Publish an Application & Data Architecture ArchiMate diagram as a read-only"
+                " public link for embedding"
+            ),
+            "archimatediagrams.technology.view": "View Technology Architecture ArchiMate diagrams",
+            "archimatediagrams.technology.manage": (
+                "Create, edit, and delete Technology Architecture ArchiMate diagrams"
+            ),
+            "archimatediagrams.technology.publish": (
+                "Publish a Technology Architecture ArchiMate diagram as a read-only public link"
+                " for embedding"
+            ),
+        },
+    },
     "bpm": {
         "label": "BPM",
         "permissions": {
@@ -577,6 +611,20 @@ def _validate_role_permission_cell(
 # Default permission sets for seeded roles
 # ---------------------------------------------------------------------------
 
+ARCHIMATE_DIAGRAM_LAYERS = ("business", "application", "technology")
+
+
+def _archimate_diagram_defaults(view: bool, manage: bool, publish: bool) -> dict[str, bool]:
+    """The same view/manage/publish values on every layer — each role starts with
+    whatever it has for the plain ``diagrams.*`` triple."""
+    values = {"view": view, "manage": manage, "publish": publish}
+    return {
+        f"archimatediagrams.{layer}.{action}": value
+        for layer in ARCHIMATE_DIAGRAM_LAYERS
+        for action, value in values.items()
+    }
+
+
 ADMIN_PERMISSIONS: dict[str, bool] = {"*": True}
 
 BPM_ADMIN_PERMISSIONS: dict[str, bool] = {
@@ -600,6 +648,7 @@ BPM_ADMIN_PERMISSIONS: dict[str, bool] = {
     "diagrams.view": True,
     "diagrams.manage": True,
     "diagrams.publish": False,
+    **_archimate_diagram_defaults(view=True, manage=True, publish=False),
     "bpm.view": True,
     "bpm.edit": True,
     "bpm.manage_drafts": True,
@@ -683,6 +732,7 @@ MEMBER_PERMISSIONS: dict[str, bool] = {
     "diagrams.view": True,
     "diagrams.manage": True,
     "diagrams.publish": False,
+    **_archimate_diagram_defaults(view=True, manage=True, publish=False),
     "bpm.view": True,
     "bpm.edit": True,
     "bpm.manage_drafts": True,
@@ -764,6 +814,7 @@ VIEWER_PERMISSIONS: dict[str, bool] = {
     "diagrams.view": True,
     "diagrams.manage": False,
     "diagrams.publish": False,
+    **_archimate_diagram_defaults(view=True, manage=False, publish=False),
     "bpm.view": True,
     "bpm.edit": False,
     "bpm.manage_drafts": False,

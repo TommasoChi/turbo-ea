@@ -245,7 +245,12 @@ describe("deep link through sign-in", () => {
   });
 
   describe("archimate sandbox routes", () => {
-    const ADMIN_SETTINGS = { ...MEMBER, permissions: { "admin.settings": true } };
+    // admin.settings opens the sandbox list; the editor (:id) needs an
+    // ArchiMate manage key on some layer — this user holds both.
+    const ADMIN_SETTINGS = {
+      ...MEMBER,
+      permissions: { "admin.settings": true, "archimatediagrams.business.manage": true },
+    };
 
     beforeEach(() => {
       gate.real = true;

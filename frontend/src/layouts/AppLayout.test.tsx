@@ -40,6 +40,10 @@ vi.mock("@/hooks/useGrcEnabled", () => ({
   useGrcEnabled: vi.fn(),
 }));
 
+vi.mock("@/hooks/useArchimateEnabled", () => ({
+  useArchimateEnabled: () => ({ archimateEnabled: true, archimateLoaded: true, invalidateArchimate: vi.fn() }),
+}));
+
 // Stub notification components that make their own API calls
 vi.mock("@/components/NotificationBell", () => ({
   default: () => <div data-testid="notification-bell" />,
@@ -221,7 +225,7 @@ describe("AppLayout", () => {
   });
 
   it("keeps Business Architecture open for its Business Diagram entry when BPM and Value Chain are both disabled", () => {
-    // Business Diagram (diagrams.view) is a static child independent of the
+    // Business Diagram (archimatediagrams.business.manage) is a static child independent of the
     // bpm/valueChain module flags, so the admin user (who holds every
     // permission) still sees the group even with both modules off.
     vi.mocked(useBpmEnabled).mockReturnValue({ bpmEnabled: false, loading: false });

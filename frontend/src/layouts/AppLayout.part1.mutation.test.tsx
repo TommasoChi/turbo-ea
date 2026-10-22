@@ -23,6 +23,9 @@ vi.mock("@/hooks/useBpmEnabled", () => import("@/test/hooks").then((m) => m.useB
 vi.mock("@/hooks/useValueChainEnabled", () => import("@/test/hooks").then((m) => m.useValueChainEnabledModule()));
 vi.mock("@/hooks/useGrcEnabled", () => import("@/test/hooks").then((m) => m.useGrcEnabledModule()));
 vi.mock("@/hooks/usePpmEnabled", () => import("@/test/hooks").then((m) => m.usePpmEnabledModule()));
+vi.mock("@/hooks/useArchimateEnabled", () =>
+  import("@/test/hooks").then((m) => m.useArchimateEnabledModule()),
+);
 vi.mock("@/hooks/useTurboLensReady", () =>
   import("@/test/hooks").then((m) => m.useTurboLensReadyModule()),
 );
@@ -165,13 +168,14 @@ const REPORTS_BUTTON = "[analyticsReportsexpand_more]";
 // Fork-local: BPM is a static child of the "Business Architecture" group
 // rather than a flat entry (see navItems.ts), so the bar shows that dropdown
 // where upstream shows /bpm. The group also now carries a static "Business
-// Diagram" child (diagrams.view), so — unlike before — it is never emptied
-// purely by the bpm/valueChain module flags for a user who still holds
-// diagrams.view (every user in this file does, via "*").
+// Diagram" child (archimatediagrams.business.manage + the ArchiMate module), so
+// — unlike before — it is never emptied purely by the bpm/valueChain module
+// flags for a user who still holds that key (every user in this file does, via "*").
 const ORG_PROCESS_BUTTON = "[routeBusiness Architectureexpand_more]";
 // Application & Data Architecture and Technology Architecture: both new
 // dropdowns from the same nav rework, each carrying only static children
-// gated on diagrams.view (see navItems.ts) — present for every user here.
+// gated through ROUTE_PERMISSIONS (see navItems.ts) — present for every user here
+// while the ArchiMate module is on (the beforeEach turns it on).
 const APP_DATA_BUTTON = "[appsApplication & Data Architectureexpand_more]";
 const TECH_ARCH_BUTTON = "[memoryTechnology Architectureexpand_more]";
 const CORE_BAR = [
@@ -222,6 +226,8 @@ function registerRoutes(...routes: ExtensionRouteContribution[]) {
 
 beforeEach(() => {
   hookState.reset();
+  // Every module on, like the rest of this file's baseline (the shared default is off).
+  hookState.archimate = { archimateEnabled: true, archimateLoaded: true };
   mockApi.reset();
   resetExtensionHost();
   onLogout.mockClear();
@@ -458,7 +464,7 @@ describe("AppLayout — the bar follows the module flags and ROUTE_PERMISSIONS",
 
     hookState.bpm = { bpmEnabled: false, bpmLoaded: true };
     rerender(<Layout />);
-    // Still present: Business Diagram (diagrams.view) is a static child
+    // Still present: Business Diagram (archimatediagrams.business.manage) is a static child
     // independent of the bpm/valueChain module flags, so the group no longer
     // empties out when BPM (and, via the mock's fold, Value Chain) go off —
     // only BPM's and Value Chain's own menu items do.
@@ -466,6 +472,21 @@ describe("AppLayout — the bar follows the module flags and ROUTE_PERMISSIONS",
     await user.click(screen.getByRole("button", { name: /business architecture/i }));
     await screen.findAllByRole("menuitem");
     expect(menuHrefs()).toEqual(["/business-architecture/diagram"]);
+  });
+
+  it("drops the three scoped ArchiMate diagram entries when the ArchiMate module is off", async () => {
+    hookState.archimate = { archimateEnabled: false, archimateLoaded: true };
+    const user = userEvent.setup();
+    render(<Layout />);
+    // Technology Architecture held only its Diagram entry, so the group goes.
+    expect(navEntries()).toEqual(CORE_BAR.filter((e) => e !== TECH_ARCH_BUTTON));
+    await user.click(screen.getByRole("button", { name: /business architecture/i }));
+    await screen.findAllByRole("menuitem");
+    expect(menuHrefs()).not.toContain("/business-architecture/diagram");
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: /application & data architecture/i }));
+    await screen.findAllByRole("menuitem");
+    expect(menuHrefs()).not.toContain("/application-architecture/diagram");
   });
 
   it("appends TurboLens after Saved Reports, without turning other pages into dropdowns", async () => {

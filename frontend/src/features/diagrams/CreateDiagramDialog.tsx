@@ -16,8 +16,12 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import { createDiagram } from "@/api/diagrams";
+import { hasPermission } from "@/components/RequirePermission";
 import { ARCHIMATE_FORMAT } from "@/features/archimate/exchange/exchangeModel";
+import { useOptionalAuthUser } from "@/hooks/AuthContext";
+import { useArchimateEnabled } from "@/hooks/useArchimateEnabled";
 import { useMetamodel } from "@/hooks/useMetamodel";
+import { ARCHIMATE_MANAGE_ANY_LAYER } from "@/lib/routePermissions";
 import { useTypeLabel } from "@/hooks/useResolveLabel";
 import type { Card } from "@/types";
 import ArchimateViewpointPicker from "./ArchimateViewpointPicker";
@@ -44,6 +48,12 @@ export default function CreateDiagramDialog({
   const navigate = useNavigate();
   const { types: metamodelTypes } = useMetamodel();
   const typeLabel = useTypeLabel();
+  const user = useOptionalAuthUser();
+  const { archimateEnabled } = useArchimateEnabled();
+  // Unscoped ArchiMate creation (any viewpoint): offered to anyone who may
+  // create ArchiMate diagrams on at least one layer, and only with the module on.
+  const canCreateArchimate =
+    archimateEnabled && hasPermission(user?.permissions, ARCHIMATE_MANAGE_ANY_LAYER);
 
   const [allCards, setAllCards] = useState<Card[]>([]);
   const [name, setName] = useState("");
@@ -160,20 +170,22 @@ export default function CreateDiagramDialog({
             if (e.key === "Enter" && name.trim() && kind === "drawio") handleCreate();
           }}
         />
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          color="primary"
-          value={kind}
-          onChange={(_, v) => {
-            if (v) setKind(v);
-          }}
-          disabled={submitting}
-          sx={{ mb: 2 }}
-        >
-          <ToggleButton value="drawio">{t("gallery.diagramTypeDrawio")}</ToggleButton>
-          <ToggleButton value="archimate">{t("gallery.diagramTypeArchimate")}</ToggleButton>
-        </ToggleButtonGroup>
+        {canCreateArchimate && (
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            color="primary"
+            value={kind}
+            onChange={(_, v) => {
+              if (v) setKind(v);
+            }}
+            disabled={submitting}
+            sx={{ mb: 2 }}
+          >
+            <ToggleButton value="drawio">{t("gallery.diagramTypeDrawio")}</ToggleButton>
+            <ToggleButton value="archimate">{t("gallery.diagramTypeArchimate")}</ToggleButton>
+          </ToggleButtonGroup>
+        )}
 
         {kind === "drawio" ? (
           <>
