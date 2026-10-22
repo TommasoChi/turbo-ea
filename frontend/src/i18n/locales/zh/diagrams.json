@@ -1,6 +1,13 @@
 {
   "page.title": "图表",
   "gallery.newDiagram": "新建图表",
+  "gallery.diagramType": "图表类型",
+  "gallery.diagramTypeDrawio": "Draw.io",
+  "gallery.diagramTypeArchimate": "ArchiMate",
+  "archimatePicker.viewpoint": "视点",
+  "archimatePicker.blank": "空白",
+  "archimatePicker.exampleLoadFailed": "无法加载该示例。请重试,或从空白开始。",
+  "archimatePicker.nameRequired": "请先在上方输入名称,然后再选择 viewpoint。",
   "gallery.editDiagram": "编辑图表",
   "gallery.empty": "暂无图表。创建一个以开始使用。",
   "gallery.linkedCards": "关联卡片",

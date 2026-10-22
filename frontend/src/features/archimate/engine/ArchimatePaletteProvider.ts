@@ -102,7 +102,7 @@ const customEntryIcon = (icon: string) => `<span class="material-symbols-outline
 export default class ArchimatePaletteProvider {
   static $inject = [
     "palette", "create", "elementFactory", "handTool", "lassoTool", "bridge",
-    "eventBus", "canvas", "modeling", "selection", "enterpriseObjects",
+    "eventBus", "canvas", "modeling", "selection", "enterpriseObjects", "viewpointObjectKeys",
   ];
 
   constructor(
@@ -117,6 +117,11 @@ export default class ArchimatePaletteProvider {
     private readonly modeling: Modeling,
     private readonly selection: Selection,
     private readonly enterpriseObjects: EnterpriseObject[],
+    /** The open diagram's viewpoint `objects` (Enterprise Object keys), or `null` for a diagram
+     *  with no `viewpoint_key` (every `archimate` diagram created before this feature) -- then the
+     *  palette is unfiltered, same as today. Fetched once per diagram load by the caller, never
+     *  re-fetched per render. */
+    private readonly viewpointObjectKeys: string[] | null,
   ) {
     // The palette builds its container once, on diagram init: listen before registering so that a
     // provider created after init still sees the event of a (re)build.
@@ -149,6 +154,7 @@ export default class ArchimatePaletteProvider {
         // A missing registry row (shouldn't happen once the seed has run) fails open: visible,
         // never hidden, so a gap in the registry never blanks a chunk of the palette.
         if (this.enterpriseObjects.find((o) => o.key === type)?.is_hidden === true) continue;
+        if (this.viewpointObjectKeys && !this.viewpointObjectKeys.includes(type)) continue;
         const createShape = (event: Event) =>
           this.create.start(event, this.elementFactory.createShape({ elementType: type }));
         // The tile itself keeps its existing click/drag unchanged: it only ever starts placing
@@ -214,6 +220,7 @@ export default class ArchimatePaletteProvider {
   private customObjectsOfLayer(layer: ArchimateLayer): EnterpriseObject[] {
     return this.enterpriseObjects
       .filter((o) => !o.is_standard && !o.is_hidden && o.layer === layer)
+      .filter((o) => !this.viewpointObjectKeys || this.viewpointObjectKeys.includes(o.key))
       .sort((a, b) => a.sort_order - b.sort_order);
   }
 

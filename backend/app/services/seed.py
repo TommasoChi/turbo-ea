@@ -27,6 +27,7 @@ from app.services.archimate.enterprise_object_seed import (
     seed_card_mappings,
     seed_enterprise_objects,
 )
+from app.services.archimate.viewpoint_seed import seed_viewpoints
 from app.services.hierarchy import HIERARCHY_LEVEL_KEY, hierarchy_level_field_def
 
 # ── Reusable option lists ──────────────────────────────────────────────
@@ -6655,6 +6656,9 @@ async def seed_metamodel(db: AsyncSession) -> None:
     # ── Enterprise Object registry (ArchiMate element type palette) ───────
     await seed_enterprise_objects(db)
     await seed_card_mappings(db)
+
+    # ── ArchiMate Viewpoint Catalog (needs EnterpriseObject rows for its FK) ─
+    await seed_viewpoints(db)
 
     # ── Built-in card type categories (the four EA layers, insert-only) ──
     from app.services.card_type_categories import seed_default_categories

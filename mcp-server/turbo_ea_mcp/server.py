@@ -1781,6 +1781,22 @@ async def get_archimate_mapping() -> str:
     )
 
 
+@mcp.tool(annotations=_READ_ANNOT)
+async def list_viewpoints() -> str:
+    """List the ArchiMate Viewpoint catalog (read before create_archimate_diagram).
+
+    Each viewpoint has a ``key`` (pass it as ``viewpoint_key`` to
+    create_archimate_diagram), a name, its layer and the Enterprise Object
+    keys allowed on it (``objects``). Hidden viewpoints are not listed.
+    """
+    token = await _get_current_token()
+    if not token:
+        return "Error: Not authenticated. Please reconnect."
+    client = TurboEAClient(token)
+    data = await client.get("/metamodel/viewpoints")
+    return _fmt(data)
+
+
 @mcp.tool(annotations=_WRITE_DESTRUCTIVE_ANNOT)
 async def update_archimate_diagram(
     diagram_id: str,
@@ -3624,6 +3640,7 @@ async def create_diagram(
 async def create_archimate_diagram(
     name: str,
     exchange_xml: str,
+    viewpoint_key: str,
     description: str = "",
     linked_card_ids: list[str] | None = None,
     dry_run: bool = True,
@@ -3633,11 +3650,14 @@ async def create_archimate_diagram(
     Call get_archimate_mapping first to see how Turbo EA types map to ArchiMate
     element and relationship types. The server validates the model (element and
     relationship types, the relationship matrix, identifiers) and rejects an
-    invalid one on commit.
+    invalid one on commit. Every ArchiMate diagram belongs to one Viewpoint:
+    call list_viewpoints to pick a valid ``viewpoint_key``.
 
     Args:
         name: Diagram name.
         exchange_xml: ArchiMate 3.x Exchange Format XML.
+        viewpoint_key: Key of the Viewpoint the diagram is drawn in (from
+            list_viewpoints). Required by the server.
         description: Optional description.
         linked_card_ids: Optional list of card UUIDs to link to this
             diagram (M:N).
@@ -3667,6 +3687,7 @@ async def create_archimate_diagram(
                     "description": description,
                     "linked_card_ids": linked_card_ids,
                     "kind": "archimate",
+                    "viewpoint_key": viewpoint_key,
                 },
             }
         )
@@ -3676,6 +3697,7 @@ async def create_archimate_diagram(
             "name": name,
             "description": description or None,
             "kind": "archimate",
+            "viewpoint_key": viewpoint_key,
             "data": {"format": _ARCHIMATE_FORMAT, "xml": exchange_xml},
             "card_ids": linked_card_ids,
         },

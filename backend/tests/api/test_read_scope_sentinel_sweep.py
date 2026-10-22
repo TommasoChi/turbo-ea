@@ -81,6 +81,14 @@ UNMAPPED_PARAMS = {
     "user_id": "user directory",
     "version": "extension assets",
     "version_id": "BPM — no process seeded",
+    "viewpoint_key": (
+        "ArchiMate Viewpoint Catalog metamodel config — returns card type keys to "
+        "suggest, never card data (see test_archimate_viewpoint_picker_api.py)"
+    ),
+    "example_id": (
+        "ArchiMate Viewpoint Catalog example diagram XML — admin-curated starter "
+        "content, never card data (see test_archimate_viewpoint_examples_api.py)"
+    ),
 }
 
 # Routes never called: they stream, reach the network, or are heavy admin jobs.

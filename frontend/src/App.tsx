@@ -83,6 +83,8 @@ const ValueChainPage = lazy(() => import("@/features/value-chain/ValueChainPage"
 const ValueStreamPage = lazy(() => import("@/features/value-chain/ValueStreamPage"));
 const ArchimateSandboxPage = lazy(() => import("@/features/archimate/ArchimateSandboxPage"));
 const ArchimateEditorPage = lazy(() => import("@/features/archimate/ArchimateEditorPage"));
+const ScopedArchimateDiagramPage = lazy(() => import("@/features/diagrams/ScopedArchimateDiagramPage"));
+const ComingSoonPage = lazy(() => import("@/features/application-architecture/ComingSoonPage"));
 
 /** Preserve the :id when redirecting /ea-delivery/risks/:id → /grc/risks/:id. */
 function LegacyRiskDetailRedirect() {
@@ -199,6 +201,17 @@ function AppRoutes() {
                 <Route path="/diagrams" element={<DiagramsPage />} />
                 <Route path="/diagrams/:id" element={<DiagramViewer />} />
                 <Route path="/diagrams/:id/edit" element={<DiagramEditor />} />
+                {/* Scoped diagram-entry points (nav rework, Task 8): each is the
+                    same ArchimateViewpointPicker flow as the unscoped "ArchiMate"
+                    option in CreateDiagramDialog, with `tab` fixed to one layer. */}
+                <Route path="/business-architecture/diagram" element={<ModuleGate module="archimate"><ScopedArchimateDiagramPage tab="business" /></ModuleGate>} />
+                <Route path="/application-architecture/diagram" element={<ModuleGate module="archimate"><ScopedArchimateDiagramPage tab="application" /></ModuleGate>} />
+                <Route path="/technology-architecture/diagram" element={<ModuleGate module="archimate"><ScopedArchimateDiagramPage tab="technology" /></ModuleGate>} />
+                {/* "Coming soon" placeholders — explicitly scoped out of this
+                    feature (see the spec); no functionality behind them yet. */}
+                <Route path="/application-architecture/swot" element={<ComingSoonPage titleKey="swotAnalysis" />} />
+                <Route path="/application-architecture/what-if" element={<ComingSoonPage titleKey="whatIfAnalysis" />} />
+                <Route path="/application-architecture/data-flow" element={<ComingSoonPage titleKey="dataFlow" />} />
                 {/* EA Delivery: page dissolved in 1.10.0. Initiatives workspace
                     moved to /reports/ea-delivery; risks moved to /grc?tab=risk.
                     Editor routes for SoAW and ADR keep their /ea-delivery/ paths

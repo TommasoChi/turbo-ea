@@ -37,6 +37,13 @@ class Diagram(Base, UUIDMixin, TimestampMixin):
     kind: Mapped[str] = mapped_column(
         String(20), nullable=False, default="drawio", server_default="drawio", index=True
     )
+    # NULL for "drawio" diagrams, and for any "archimate" diagram created
+    # before the Viewpoint Catalog existed.
+    viewpoint_key: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("archimate_viewpoints.key", ondelete="RESTRICT"),
+        nullable=True,
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )

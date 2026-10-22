@@ -157,7 +157,7 @@ Neste modo, o servidor se autentica com email/senha e renova o token automaticam
 
 ## Capacidades disponíveis
 
-O servidor MCP expõe **55 ferramentas** divididas em dois grupos: **34 ferramentas de leitura** que consultam dados de EA e **21 ferramentas de escrita** (15 aditivas, 6 destrutivas) que criam e mantêm cards, relações, diagramas, riscos, ADRs e mais — incluindo transformar artefatos que uma ferramenta de IA tem no seu próprio contexto (planilhas, BPMN XML, DrawIO XML, documentos, imagens) em dados de EA estruturados. Cada ferramenta carrega `ToolAnnotations` MCP (indicações de somente leitura / destrutiva / idempotente) para que os conectores possam sinalizar a destrutividade na sua interface.
+O servidor MCP expõe **56 ferramentas** divididas em dois grupos: **35 ferramentas de leitura** que consultam dados de EA e **21 ferramentas de escrita** (15 aditivas, 6 destrutivas) que criam e mantêm cards, relações, diagramas, riscos, ADRs e mais — incluindo transformar artefatos que uma ferramenta de IA tem no seu próprio contexto (planilhas, BPMN XML, DrawIO XML, documentos, imagens) em dados de EA estruturados. Cada ferramenta carrega `ToolAnnotations` MCP (indicações de somente leitura / destrutiva / idempotente) para que os conectores possam sinalizar a destrutividade na sua interface.
 
 ### Segurança por execução simulada nas escritas
 
@@ -165,7 +165,7 @@ Cada ferramenta de escrita usa por padrão **`dry_run=true`**. Nesse modo, o bac
 
 ### Ferramentas de leitura
 
-O servidor expõe 34 ferramentas de leitura agrupadas em oito clusters.
+O servidor expõe 35 ferramentas de leitura agrupadas em oito clusters.
 
 **Cards & metamodelo**
 
@@ -311,7 +311,7 @@ Defesa em profundidade além da execução simulada, para que um descuido do LLM
 
 - **Limite de tamanho por chamada.** As ferramentas de escrita MCP aplicam um limite muito menor que os endpoints subjacentes do importador Excel: 200 linhas para `create_cards_bulk`, 500 operações para `upsert_relations_bulk`. Grande o suficiente para qualquer carregamento realista de um único artefato, pequeno o suficiente para que uma prévia de execução simulada permaneça revisável.
 - **Sem exclusão de relações por padrão.** `upsert_relations_bulk` recusa operações `action: "delete"` — para remover relações, use a interface web onde a ação é registrada sob a identidade do usuário. Operadores podem habilitar definindo `MCP_ALLOW_RELATION_DELETE=true`.
-- **Interruptor de desligamento.** `MCP_WRITES_ENABLED=false` desliga todas as 21 ferramentas de escrita sem reimplantar código. As 34 ferramentas de leitura continuam funcionando.
+- **Interruptor de desligamento.** `MCP_WRITES_ENABLED=false` desliga todas as 21 ferramentas de escrita sem reimplantar código. As 35 ferramentas de leitura continuam funcionando.
 - **O download de logótipos passa por uma lista de hosts permitidos.** Os pacotes de ícones incluídos não cobrem todos os produtos de um cliente, e um assistente está muitas vezes isolado sem acesso à web, por isso `set_card_logos` aceita um `image_url` que o servidor MCP vai buscar. Apenas `https`, apenas os hosts de `MCP_LOGO_FETCH_HOSTS`, apenas endereços públicos, no máximo dois redirecionamentos (cada um reverificado), no máximo 1 MB lido em streaming, e os bytes têm de trazer uma assinatura real de PNG/JPEG/WebP/GIF. O download acontece na borda MCP, nunca no backend, e a imagem é depois enviada pela via habitual: um URL escolhido por um LLM nunca chega ao processo que guarda a base de dados. `MCP_LOGO_FETCH_ENABLED=false` desliga tudo.
 - **Marcador de origem para auditoria.** Cada requisição backend do servidor MCP carrega um cabeçalho `X-Turbo-EA-Origin: mcp`. Eventos emitidos dessas requisições são marcados com `origin: "mcp"` no payload do log de auditoria, de forma que administradores possam filtrar gravações dirigidas por MCP fora da linha do tempo, separadas das ações da interface web.
 - **Lotes de mutação.** Cada chamada de escrita MCP abre um lote de mutação antes de qualquer gravação; cada evento emitido durante a chamada é marcado com o id do lote. Administradores (ou a ferramenta `get_change_history`) podem reconstruir o diff completo por evento de um commit a partir de um único id, e `rollback_batch` pode revertê-lo. Commits acima de `MCP_BATCH_CONFIRMATION_THRESHOLD` linhas devem devolver um `confirm_token` de uso único emitido pela execução simulada anterior (TTL de 15 minutos), de forma que um commit grande sempre segue uma prévia revisada.

@@ -36,6 +36,15 @@ const KNOWN_PERMISSIONS = new Set([
   "adr.sign",
   "adr.view",
   "ai.suggest",
+  "archimatediagrams.application.manage",
+  "archimatediagrams.application.publish",
+  "archimatediagrams.application.view",
+  "archimatediagrams.business.manage",
+  "archimatediagrams.business.publish",
+  "archimatediagrams.business.view",
+  "archimatediagrams.technology.manage",
+  "archimatediagrams.technology.publish",
+  "archimatediagrams.technology.view",
   "bpm.approve_flows",
   "bpm.assessments",
   "bpm.edit",
@@ -153,18 +162,48 @@ describe("canAccessPath", () => {
   });
 
   // The menu is built from those defs; nothing in AppLayout links to the sandbox either.
+  // (AppLayout does read the ArchiMate module flag, to hide the scoped diagram
+  // entries when the module is off — so this checks the sandbox paths, not the word.)
   itSourceScan("does not mention the ArchiMate sandbox in AppLayout", () => {
     const layout = fs.readFileSync(path.resolve(__dirname, "../layouts/AppLayout.tsx"), "utf-8");
-    expect(layout).not.toMatch(/archimate/i);
+    expect(layout).not.toMatch(/architectureStudio|\/admin\/archimate/i);
   });
 
-  it("gates the ArchiMate sandbox pages on admin.settings", () => {
-    for (const p of ["/admin/architectureStudio", "/admin/architectureStudio/abc"]) {
-      expect(permissionForPath(p)).toBe("admin.settings");
+  it("opens the ArchiMate studio list for admin.settings or any layer's ArchiMate key", () => {
+    for (const p of ["/admin/architectureStudio", "/admin/archimate"]) {
       expect(canAccessPath({ "admin.settings": true }, p)).toBe(true);
+      // The editor's Back button lands here: a per-layer user must not dead-end.
+      expect(canAccessPath({ "archimatediagrams.business.manage": true }, p)).toBe(true);
+      expect(canAccessPath({ "archimatediagrams.technology.view": true }, p)).toBe(true);
       expect(canAccessPath({ "admin.users": true, "diagrams.manage": true }, p)).toBe(false);
+      expect(canAccessPath({ "*": true }, p)).toBe(true);
+    }
+  });
+
+  it("opens the ArchiMate editor with manage on any layer, never with diagrams.* or admin.settings", () => {
+    for (const p of ["/admin/architectureStudio/abc", "/admin/archimate/abc"]) {
+      for (const layer of ["business", "application", "technology"]) {
+        expect(canAccessPath({ [`archimatediagrams.${layer}.manage`]: true }, p)).toBe(true);
+        expect(canAccessPath({ [`archimatediagrams.${layer}.view`]: true }, p)).toBe(false);
+      }
+      expect(canAccessPath({ "diagrams.manage": true, "admin.settings": true }, p)).toBe(false);
       expect(canAccessPath({}, p)).toBe(false);
       expect(canAccessPath({ "*": true }, p)).toBe(true);
+    }
+  });
+
+  it("gates each scoped ArchiMate diagram page on its own layer's manage key", () => {
+    const routes = {
+      business: "/business-architecture/diagram",
+      application: "/application-architecture/diagram",
+      technology: "/technology-architecture/diagram",
+    };
+    for (const [layer, p] of Object.entries(routes)) {
+      expect(permissionForPath(p)).toBe(`archimatediagrams.${layer}.manage`);
+      expect(canAccessPath({ "diagrams.manage": true }, p)).toBe(false);
+      for (const other of Object.keys(routes).filter((l) => l !== layer)) {
+        expect(canAccessPath({ [`archimatediagrams.${other}.manage`]: true }, p)).toBe(false);
+      }
     }
   });
 

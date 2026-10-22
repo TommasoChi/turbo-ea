@@ -38,8 +38,18 @@ export function makeBridge(): EditorBridge {
   };
 }
 
-/** The engine's modules plus the bridge and Enterprise Object registry values, as `ArchimateEngine`
- *  assembles them (defaults to an empty registry: every standard type visible, no custom objects). */
-export function withBridge(bridge: EditorBridge = makeBridge(), enterpriseObjects: EnterpriseObject[] = []): ModuleDeclaration[] {
-  return [...ARCHIMATE_MODULES, { bridge: ["value", bridge] }, { enterpriseObjects: ["value", enterpriseObjects] }];
+/** The engine's modules plus the bridge, Enterprise Object registry and viewpoint filter values, as
+ *  `ArchimateEngine` assembles them (defaults: empty registry, no viewpoint filter -- every
+ *  standard type visible, no custom objects, nothing hidden by viewpoint). */
+export function withBridge(
+  bridge: EditorBridge = makeBridge(),
+  enterpriseObjects: EnterpriseObject[] = [],
+  viewpointObjectKeys: string[] | null = null,
+): ModuleDeclaration[] {
+  return [
+    ...ARCHIMATE_MODULES,
+    { bridge: ["value", bridge] },
+    { enterpriseObjects: ["value", enterpriseObjects] },
+    { viewpointObjectKeys: ["value", viewpointObjectKeys] },
+  ];
 }
