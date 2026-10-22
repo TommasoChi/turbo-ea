@@ -18,10 +18,12 @@ from app.core.permissions import (
     validate_type_role_permissions,
 )
 from app.database import get_db
+from app.models.archimate_viewpoint import ArchimateViewpoint, ArchimateViewpointObject
 from app.models.card import Card
 from app.models.card_type import CardType
 from app.models.card_type_category import CardTypeCategory
 from app.models.compliance_regulation import ComplianceRegulation
+from app.models.diagram import Diagram
 from app.models.ea_principle import EAPrinciple
 from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
 from app.models.relation import Relation
@@ -2815,6 +2817,264 @@ async def remove_card_mapping(
     )
     await db.delete(m)
     await db.commit()
+
+
+# ── ArchiMate Viewpoints ─────────────────────────────────────────────────
+
+
+def _serialize_viewpoint_object(o: ArchimateViewpointObject) -> dict:
+    return {
+        "id": str(o.id),
+        "viewpoint_key": o.viewpoint_key,
+        "enterprise_object_key": o.enterprise_object_key,
+    }
+
+
+def _serialize_viewpoint(v: ArchimateViewpoint, objects: list[str]) -> dict:
+    return {
+        "key": v.key,
+        "name": v.name,
+        "icon": v.icon,
+        "description": v.description,
+        "layer": v.layer,
+        "is_standard": v.is_standard,
+        "is_hidden": v.is_hidden,
+        "sort_order": v.sort_order,
+        "objects": objects,
+    }
+
+
+@router.get("/viewpoints")
+async def list_viewpoints(
+    include_hidden: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """List the ArchiMate Viewpoint catalog with their allowed objects.
+
+    Authenticated read, like ``list_enterprise_objects`` — the
+    diagram-creation picker calls this for any user who can create a
+    diagram, not just admins who manage the metamodel, so there is no
+    ``admin.metamodel`` gate here.
+    """
+    q = select(ArchimateViewpoint).order_by(ArchimateViewpoint.sort_order)
+    if not include_hidden:
+        q = q.where(ArchimateViewpoint.is_hidden == False)  # noqa: E712
+    result = await db.execute(q)
+    viewpoints = result.scalars().all()
+
+    objects_result = await db.execute(select(ArchimateViewpointObject))
+    objects_by_viewpoint: dict[str, list[str]] = {}
+    for o in objects_result.scalars().all():
+        objects_by_viewpoint.setdefault(o.viewpoint_key, []).append(o.enterprise_object_key)
+
+    return [_serialize_viewpoint(v, objects_by_viewpoint.get(v.key, [])) for v in viewpoints]
+
+
+@router.get("/viewpoints/{key}")
+async def get_viewpoint(
+    key: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(ArchimateViewpoint).where(ArchimateViewpoint.key == key))
+    v = result.scalar_one_or_none()
+    if not v:
+        raise HTTPException(404, "Viewpoint not found")
+    objects_result = await db.execute(
+        select(ArchimateViewpointObject.enterprise_object_key).where(
+            ArchimateViewpointObject.viewpoint_key == key
+        )
+    )
+    return _serialize_viewpoint(v, list(objects_result.scalars().all()))
+
+
+@router.post("/viewpoints", status_code=201)
+async def create_viewpoint(
+    body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Create a custom Viewpoint. Always ``is_standard=False`` — the standard
+    registry rows only ever come from ``seed_viewpoints``."""
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    existing = await db.execute(
+        select(ArchimateViewpoint).where(ArchimateViewpoint.key == body.get("key", ""))
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(409, "Viewpoint key already exists")
+
+    max_order = await db.execute(select(func.max(ArchimateViewpoint.sort_order)))
+    next_order = (max_order.scalar() or 0) + 1
+
+    v = ArchimateViewpoint(
+        key=body["key"],
+        name=body["name"],
+        icon=body.get("icon", "category"),
+        description=body.get("description"),
+        layer=body["layer"],
+        is_standard=False,
+        is_hidden=body.get("is_hidden", False),
+        sort_order=body.get("sort_order", next_order),
+    )
+    db.add(v)
+    await audit_log.record(
+        db,
+        action="admin.metamodel.viewpoint.created",
+        category="admin",
+        actor=user,
+        target=("viewpoint", v.key, v.name),
+    )
+    await db.commit()
+    await db.refresh(v)
+    return _serialize_viewpoint(v, [])
+
+
+@router.patch("/viewpoints/{key}")
+async def update_viewpoint(
+    key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(select(ArchimateViewpoint).where(ArchimateViewpoint.key == key))
+    v = result.scalar_one_or_none()
+    if not v:
+        raise HTTPException(404, "Viewpoint not found")
+
+    updatable = ["name", "icon", "description", "layer", "is_hidden", "sort_order"]
+    changes = audit_log.diff(v, {k: body[k] for k in updatable if k in body}, keys=updatable)
+    for field in updatable:
+        if field in body:
+            setattr(v, field, body[field])
+
+    if changes:
+        await audit_log.record(
+            db,
+            action="admin.metamodel.viewpoint.updated",
+            category="admin",
+            actor=user,
+            target=("viewpoint", v.key, v.name),
+            changes=changes,
+        )
+    await db.commit()
+    await db.refresh(v)
+    objects_result = await db.execute(
+        select(ArchimateViewpointObject.enterprise_object_key).where(
+            ArchimateViewpointObject.viewpoint_key == v.key
+        )
+    )
+    return _serialize_viewpoint(v, list(objects_result.scalars().all()))
+
+
+@router.post("/viewpoints/{key}/objects", status_code=201)
+async def add_viewpoint_object(
+    key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Add one allowed Enterprise Object to a Viewpoint's allowed-objects list."""
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(select(ArchimateViewpoint).where(ArchimateViewpoint.key == key))
+    if not result.scalar_one_or_none():
+        raise HTTPException(404, "Viewpoint not found")
+
+    enterprise_object_key = body.get("enterprise_object_key")
+    if not enterprise_object_key:
+        raise HTTPException(400, "enterprise_object_key is required")
+    eo_exists = await db.execute(
+        select(EnterpriseObject.key).where(EnterpriseObject.key == enterprise_object_key)
+    )
+    if not eo_exists.scalar_one_or_none():
+        raise HTTPException(400, f"Enterprise object '{enterprise_object_key}' does not exist")
+
+    o = ArchimateViewpointObject(viewpoint_key=key, enterprise_object_key=enterprise_object_key)
+    db.add(o)
+    try:
+        # Flushed here, ahead of audit_log.record's own flush, so the unique
+        # constraint's IntegrityError is caught before anything else touches
+        # the session (audit_log.record flushes too, but outside this guard).
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "This object is already allowed on this viewpoint") from None
+    await audit_log.record(
+        db,
+        action="admin.metamodel.viewpoint.object_added",
+        category="admin",
+        actor=user,
+        target=("viewpoint", key, enterprise_object_key),
+        context={"enterprise_object_key": enterprise_object_key},
+    )
+    await db.commit()
+    await db.refresh(o)
+    return _serialize_viewpoint_object(o)
+
+
+@router.delete("/viewpoints/{key}/objects/{enterprise_object_key}", status_code=204)
+async def remove_viewpoint_object(
+    key: str,
+    enterprise_object_key: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(
+        select(ArchimateViewpointObject).where(
+            ArchimateViewpointObject.viewpoint_key == key,
+            ArchimateViewpointObject.enterprise_object_key == enterprise_object_key,
+        )
+    )
+    o = result.scalar_one_or_none()
+    if not o:
+        raise HTTPException(404, "Allowed object not found")
+    await audit_log.record(
+        db,
+        action="admin.metamodel.viewpoint.object_removed",
+        category="admin",
+        actor=user,
+        target=("viewpoint", key, enterprise_object_key),
+        context={"enterprise_object_key": enterprise_object_key},
+    )
+    await db.delete(o)
+    await db.commit()
+
+
+@router.delete("/viewpoints/{key}")
+async def delete_viewpoint(
+    key: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(select(ArchimateViewpoint).where(ArchimateViewpoint.key == key))
+    v = result.scalar_one_or_none()
+    if not v:
+        raise HTTPException(404, "Viewpoint not found")
+
+    diagram_count = (
+        await db.execute(
+            select(func.count()).select_from(Diagram).where(Diagram.viewpoint_key == key)
+        )
+    ).scalar() or 0
+    if diagram_count > 0:
+        raise HTTPException(
+            409,
+            detail={
+                "message": f"Viewpoint '{key}' is used by {diagram_count} diagram(s).",
+                "diagram_count": diagram_count,
+                "key": key,
+            },
+        )
+
+    await audit_log.record(
+        db,
+        action="admin.metamodel.viewpoint.deleted",
+        category="admin",
+        actor=user,
+        target=("viewpoint", key, v.name),
+        context={"mode": "hidden" if v.is_standard else "deleted"},
+    )
+
+    if v.is_standard:
+        # Soft-delete standard viewpoints so they can be restored from the seed.
+        v.is_hidden = True
+        await db.commit()
+        return {"status": "hidden", "key": key}
+
+    await db.delete(v)
+    await db.commit()
+    return {"status": "deleted", "key": key}
 
 
 @router.get("/card-type-archimate-mapping")
