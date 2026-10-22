@@ -5,6 +5,7 @@ import logging
 import re
 import uuid
 from dataclasses import asdict
+from xml.etree.ElementTree import ParseError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
@@ -2874,7 +2875,12 @@ def _exchange_xml_from_upload(xml: str) -> str:
 
     Detection reuses ``convert_archi_native_to_exchange``'s own root-tag check
     (the ``archimatetool.com`` namespace vs. the Exchange XSD root): a
-    ``ValueError`` from it means the root wasn't ``archimate:model``.
+    ``ValueError`` from it means the root wasn't ``archimate:model``. A
+    ``ParseError`` means the XML was malformed before that check even ran.
+    Those are the only two exceptions that function raises today -- caught
+    narrowly here, not a bare ``Exception``, so a genuine bug introduced
+    into the converter later surfaces as a clear failure instead of being
+    silently reinterpreted as "not Archi-native".
     """
     if len(xml.encode("utf-8", "replace")) > MAX_XML_BYTES:
         # Let validate_exchange's own size check produce the "too_large" issue
@@ -2882,7 +2888,7 @@ def _exchange_xml_from_upload(xml: str) -> str:
         return xml
     try:
         return convert_archi_native_to_exchange(xml)
-    except Exception:
+    except (ValueError, ParseError):
         return xml
 
 
