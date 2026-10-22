@@ -39,6 +39,15 @@ export const ARCHIMATE_MANAGE_ANY_LAYER = [
   "archimatediagrams.technology.manage",
 ];
 
+/** The Architecture Studio diagram list: Settings admins, or a `view`/`manage` key on any layer. */
+const ARCHIMATE_STUDIO_LIST = [
+  "admin.settings",
+  "archimatediagrams.business.view",
+  "archimatediagrams.application.view",
+  "archimatediagrams.technology.view",
+  ...ARCHIMATE_MANAGE_ANY_LAYER,
+];
+
 export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // --- Inventory ----------------------------------------------------------
   // Per-card access (stakeholder roles, `GET /cards/{id}/effective-permissions`)
@@ -123,16 +132,17 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   { path: "/admin/metamodel", permission: "admin.metamodel" },
   { path: "/admin/users", permission: "admin.users" },
   { path: "/admin/settings", permission: "admin.settings" },
-  // Architecture Studio (the ArchiMate editor) is opened from the Settings card, so it needs what
-  // Settings needs.
-  { path: "/admin/architectureStudio", permission: "admin.settings" },
+  // Architecture Studio's diagram list is opened from the Settings card (admin.settings), and is
+  // also where the editor's Back button lands — so anyone who may view ArchiMate diagrams on
+  // some layer can open it too.
+  { path: "/admin/architectureStudio", permission: ARCHIMATE_STUDIO_LIST },
   // The editor itself (an existing diagram) has no read-only mode, so it needs
   // `manage` on some layer; the backend checks the diagram's own layer span
   // (`view` to load it, `manage` to save it).
   { path: "/admin/architectureStudio/:id", permission: ARCHIMATE_MANAGE_ANY_LAYER },
   // Pre-rebrand path, redirected to the one above — same permission since
   // nothing else about the gate changed, only the URL.
-  { path: "/admin/archimate", permission: "admin.settings" },
+  { path: "/admin/archimate", permission: ARCHIMATE_STUDIO_LIST },
   { path: "/admin/archimate/:id", permission: ARCHIMATE_MANAGE_ANY_LAYER },
   { path: "/admin/eol", permission: "eol.manage" },
   { path: "/admin/web-portals", permission: "web_portals.manage" },

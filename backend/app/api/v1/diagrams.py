@@ -172,17 +172,18 @@ async def viewpoint_tabs(db: AsyncSession, viewpoint_key: str) -> set[str]:
 
 
 async def require_archimate_permission(
-    db: AsyncSession, user: User, viewpoint_key: str | None, action: str
+    db: AsyncSession, user: User, viewpoint_key: str | None, action: str | tuple[str, ...]
 ) -> None:
-    """403 unless ``user`` holds ``archimatediagrams.<tab>.<action>`` on at least one
-    tab the viewpoint spans. No viewpoint, or one spanning no tab (e.g. the
-    implementation-layer ones), needs it on any tab -- the unscoped entry point."""
+    """403 unless ``user`` holds ``archimatediagrams.<tab>.<action>`` (any of the given
+    actions) on at least one tab the viewpoint spans. No viewpoint, or one spanning no
+    tab (e.g. the implementation-layer ones), needs it on any tab -- the unscoped
+    entry point."""
+    actions = (action,) if isinstance(action, str) else action
     tabs = await viewpoint_tabs(db, viewpoint_key) if viewpoint_key else set()
     for tab in sorted(tabs or TAB_LAYERS):
-        if await PermissionService.has_app_permission(
-            db, user, f"archimatediagrams.{tab}.{action}"
-        ):
-            return
+        for a in actions:
+            if await PermissionService.has_app_permission(db, user, f"archimatediagrams.{tab}.{a}"):
+                return
     raise HTTPException(403, "Insufficient permissions")
 
 
@@ -368,7 +369,11 @@ async def list_diagrams(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await PermissionService.require_permission(db, user, "diagrams.view")
+    if kind == "archimate":
+        # The Architecture Studio list: any layer's ArchiMate view or manage key.
+        await require_archimate_permission(db, user, None, ("view", "manage"))
+    else:
+        await PermissionService.require_permission(db, user, "diagrams.view")
     if kind != "all" and kind not in DIAGRAM_KINDS:
         raise HTTPException(422, "kind must be 'drawio', 'archimate' or 'all'")
 

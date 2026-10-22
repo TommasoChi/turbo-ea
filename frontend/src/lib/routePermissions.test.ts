@@ -169,12 +169,15 @@ describe("canAccessPath", () => {
     expect(layout).not.toMatch(/architectureStudio|\/admin\/archimate/i);
   });
 
-  it("gates the ArchiMate sandbox list on admin.settings", () => {
-    const p = "/admin/architectureStudio";
-    expect(permissionForPath(p)).toBe("admin.settings");
-    expect(canAccessPath({ "admin.settings": true }, p)).toBe(true);
-    expect(canAccessPath({ "admin.users": true, "diagrams.manage": true }, p)).toBe(false);
-    expect(canAccessPath({ "*": true }, p)).toBe(true);
+  it("opens the ArchiMate studio list for admin.settings or any layer's ArchiMate key", () => {
+    for (const p of ["/admin/architectureStudio", "/admin/archimate"]) {
+      expect(canAccessPath({ "admin.settings": true }, p)).toBe(true);
+      // The editor's Back button lands here: a per-layer user must not dead-end.
+      expect(canAccessPath({ "archimatediagrams.business.manage": true }, p)).toBe(true);
+      expect(canAccessPath({ "archimatediagrams.technology.view": true }, p)).toBe(true);
+      expect(canAccessPath({ "admin.users": true, "diagrams.manage": true }, p)).toBe(false);
+      expect(canAccessPath({ "*": true }, p)).toBe(true);
+    }
   });
 
   it("opens the ArchiMate editor with manage on any layer, never with diagrams.* or admin.settings", () => {

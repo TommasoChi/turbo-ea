@@ -100,6 +100,16 @@ async def test_open_and_edit_follow_the_diagram_viewpoint_layers(client, env, db
     assert r.status_code == 200
 
 
+async def test_archimate_list_takes_any_layer_view_or_manage_key(client, env):
+    url = "/api/v1/diagrams?kind=archimate"
+    for role in ("business_manager", "technology_viewer"):
+        assert (await client.get(url, headers=auth_headers(env[role]))).status_code == 200
+    assert (await client.get(url, headers=auth_headers(env["drawio_only"]))).status_code == 403
+    # The DrawIO list is untouched: still diagrams.view.
+    r = await client.get("/api/v1/diagrams", headers=auth_headers(env["drawio_only"]))
+    assert r.status_code == 200
+
+
 async def test_validate_needs_an_archimate_view_key(client, env):
     body = {"xml": XML}
     r = await client.post(
