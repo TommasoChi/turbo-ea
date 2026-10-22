@@ -45,11 +45,14 @@ test.describe("ArchiMate editor", () => {
     await expect(page.getByRole("heading", { name: t("archimate:sandbox.title") })).toBeVisible();
     await expect(page.getByText(t("archimate:trademark"))).toBeVisible();
 
-    // Create: the dialog's Create button stays disabled until the name is non-blank.
+    // Create: name the diagram, pick a Viewpoint that allows a Business Actor
+    // ("Organization"), then start from its blank card.
     await page.getByRole("button", { name: t("archimate:sandbox.newDiagram") }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel(t("archimate:sandbox.name")).fill(name);
-    await dialog.getByRole("button", { name: t("archimate:sandbox.create") }).click();
+    await dialog.getByRole("combobox").click();
+    await page.getByRole("option", { name: "Organization", exact: true }).click();
+    await dialog.getByText(t("diagrams:archimatePicker.blank")).click();
     await page.waitForURL(/\/admin\/architectureStudio\/[^/]+$/);
     diagramId = page.url().split("/").pop() ?? null;
     expect(diagramId, "the id in the editor URL").toBeTruthy();

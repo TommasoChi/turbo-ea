@@ -15,6 +15,7 @@ from app.core.permissions import (
     ALL_CARD_PERMISSION_KEYS,
     APP_PERMISSIONS,
     APP_TO_CARD_PERMISSION_MAP,
+    ARCHIMATE_DIAGRAM_LAYERS,
     BIZ_APP_OWNER_CARD_PERMISSIONS,
     BPM_ADMIN_PERMISSIONS,
     CARD_PERMISSIONS,
@@ -29,6 +30,7 @@ from app.core.permissions import (
     TECH_APP_OWNER_CARD_PERMISSIONS,
     TYPE_SCOPED_APP_PERMISSIONS,
     VIEWER_PERMISSIONS,
+    _archimate_diagram_defaults,
     _validate_role_permission_cell,
     migrate_legacy_app_permissions,
     resolve_cell,
@@ -332,6 +334,40 @@ class TestPermissionCounts:
     def test_minimum_stakeholder_roles(self):
         """There should be at least 5 default stakeholder roles."""
         assert len(DEFAULT_CARD_PERMISSIONS_BY_ROLE) >= 5
+
+
+# ---------------------------------------------------------------------------
+# ArchiMate per-layer diagram permission defaults
+# ---------------------------------------------------------------------------
+
+
+class TestArchimateDiagramDefaults:
+    def test_builds_the_nine_layer_scoped_keys_with_the_given_values(self):
+        result = _archimate_diagram_defaults(view=True, manage=False, publish=True)
+        expected = {
+            f"archimatediagrams.{layer}.{action}": value
+            for layer in ARCHIMATE_DIAGRAM_LAYERS
+            for action, value in {"view": True, "manage": False, "publish": True}.items()
+        }
+        assert result == expected
+        assert set(result) == {
+            "archimatediagrams.business.view",
+            "archimatediagrams.business.manage",
+            "archimatediagrams.business.publish",
+            "archimatediagrams.application.view",
+            "archimatediagrams.application.manage",
+            "archimatediagrams.application.publish",
+            "archimatediagrams.technology.view",
+            "archimatediagrams.technology.manage",
+            "archimatediagrams.technology.publish",
+        }
+
+    def test_all_three_layers_get_the_same_values(self):
+        result = _archimate_diagram_defaults(view=False, manage=True, publish=False)
+        for layer in ARCHIMATE_DIAGRAM_LAYERS:
+            assert result[f"archimatediagrams.{layer}.view"] is False
+            assert result[f"archimatediagrams.{layer}.manage"] is True
+            assert result[f"archimatediagrams.{layer}.publish"] is False
 
 
 # ---------------------------------------------------------------------------
