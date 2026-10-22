@@ -45,9 +45,7 @@ async def test_suggested_cards_pair_each_card_type_with_its_enterprise_object(
     assert all(eo_key is not None for eo_key in rows.values())
 
 
-async def test_suggested_cards_work_without_a_tab_for_the_unscoped_picker(
-    client, db, admin_user
-):
+async def test_suggested_cards_work_without_a_tab_for_the_unscoped_picker(client, db, admin_user):
     # The tab-specific override never applies, but the fallback doesn't need
     # a tab either -- the unscoped create-diagram dialog has none to send.
     await seed.seed_metamodel(db)
