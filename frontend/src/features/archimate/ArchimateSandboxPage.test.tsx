@@ -106,6 +106,25 @@ describe("ArchimateSandboxPage", () => {
     expect(model.elements).toEqual([]);
   });
 
+  it("shows exampleLoadFailed and does not create a diagram when the example XML can't be fetched", async () => {
+    mockApi.on("get", "/metamodel/viewpoints", [
+      { key: "organization", name: "Organization", icon: "hub", examples: [{ id: "ex1", name: "Starter" }] },
+    ]);
+    mockApi.fail("get", "/diagrams/viewpoints-for-tab/organization/examples/ex1", 500, "boom");
+    const { user } = renderPage();
+    await screen.findByText("Landscape");
+    await user.click(screen.getByRole("button", { name: t("sandbox.newDiagram") }));
+    await user.type(screen.getByLabelText(t("sandbox.name")), "My view");
+    await user.click(await screen.findByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Organization" }));
+    await user.click(await screen.findByText("Starter"));
+
+    expect(
+      await screen.findByText("Couldn't load that example. Try again, or start from Blank."),
+    ).toBeInTheDocument();
+    expect(mockApi.callsOf("post", "/diagrams")).toHaveLength(0);
+  });
+
   it("requires a name before a viewpoint pick does anything, then lets it proceed", async () => {
     mockApi.on("post", "/diagrams", { id: "new1" });
     const { user } = renderPage();

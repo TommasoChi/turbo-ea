@@ -72,6 +72,14 @@ export const ROUTE_TITLES: RouteTitle[] = [
   { path: "/diagrams/:id", titleKey: "diagrams" },
   { path: "/diagrams/:id/edit", titleKey: "diagrams" },
 
+  // --- Layer-scoped ArchiMate diagram entry points and placeholders -------
+  { path: "/business-architecture/diagram", titleKey: "businessDiagram" },
+  { path: "/application-architecture/diagram", titleKey: "applicationDiagram" },
+  { path: "/technology-architecture/diagram", titleKey: "technologyDiagram" },
+  { path: "/application-architecture/swot", titleKey: "swotAnalysis" },
+  { path: "/application-architecture/what-if", titleKey: "whatIfAnalysis" },
+  { path: "/application-architecture/data-flow", titleKey: "dataFlow" },
+
   // --- Personal -----------------------------------------------------------
   { path: "/todos", titleKey: "todos" },
   { path: "/surveys/:surveyId/respond/:cardId", titleKey: "pageTitles.survey" },
