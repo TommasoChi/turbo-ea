@@ -69,11 +69,19 @@ dev = [
 [tool.setuptools.packages.find]
 include = ["app*"]
 
-# The bundled data files (the principles catalogue, the brand-icon pack). The
-# Docker image already gets them by copying the whole `app` tree, so this is
-# what makes a plain `pip install backend/` correct too.
+# The bundled data files (the principles catalogue, the brand-icon pack, the
+# ArchiMate relationship-matrix table). The Docker image already gets them by
+# copying the whole `app` tree, so this is what makes a plain `pip install
+# backend/` correct too -- and what a `pip install .` into a venv (this
+# package's own installed copy, not the source tree sitting next to it) also
+# needs: `taxonomy.py`'s `_table()` reads `relation_table.json` by path at
+# runtime, and without this entry the installed copy doesn't carry it, so
+# every relationship-validity check (`is_relationship_allowed`, used by
+# `validate_exchange` -- `POST /archimate/validate`, diagram create/update)
+# raises `FileNotFoundError` the first time it runs.
 [tool.setuptools.package-data]
 "app.services" = ["data/*.json", "data/*.pack"]
+"app.services.archimate" = ["*.json"]
 
 [build-system]
 requires = ["setuptools>=75.0"]
