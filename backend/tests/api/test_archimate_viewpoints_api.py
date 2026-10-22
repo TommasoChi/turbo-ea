@@ -113,6 +113,8 @@ async def test_object_list_edits_never_touch_diagram_data(client, db, admin_user
     )
     assert resp.status_code == 204
 
-    result = await db.execute(select(Diagram).where(Diagram.id == diagram_id))
-    refetched = result.scalar_one()
-    assert refetched.data == diagram_data
+    # Column-only select bypasses the session identity map (`diagram` is still
+    # cached from the `db.add`/`refresh` above with `expire_on_commit=False`),
+    # so this is a real read of what the endpoints wrote, not the cached object.
+    result = await db.execute(select(Diagram.data).where(Diagram.id == diagram_id))
+    assert result.scalar_one() == diagram_data
