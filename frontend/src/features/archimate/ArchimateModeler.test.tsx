@@ -216,6 +216,34 @@ describe("loading", () => {
     expect(mockApi.callsOf("get", "/cards?ids=*")[0].path).toBe("/cards?ids=c1");
   });
 
+  it("fetches the diagram's viewpoint to filter the palette", async () => {
+    mockApi.on("get", "/metamodel/viewpoints/organization", {
+      key: "organization",
+      name: "Organization",
+      icon: "account_tree",
+      description: null,
+      layer: "business",
+      is_standard: true,
+      is_hidden: false,
+      sort_order: 1,
+      objects: ["ApplicationComponent"],
+      examples: [],
+    });
+    await mount(doc(UNLINKED, { viewpoint_key: "organization" }));
+    await waitFor(() =>
+      expect(mockApi.callsOf("get", "/metamodel/viewpoints/organization")).toHaveLength(1),
+    );
+  });
+
+  it("fails open to an unfiltered palette when the viewpoint can't be fetched", async () => {
+    mockApi.fail("get", "/metamodel/viewpoints/organization", 500, "boom");
+    const { container } = await mount(doc(UNLINKED, { viewpoint_key: "organization" }));
+    await waitFor(() =>
+      expect(mockApi.callsOf("get", "/metamodel/viewpoints/organization")).toHaveLength(1),
+    );
+    expect(container.querySelector(".djs-container")).not.toBeNull();
+  });
+
   it("does not build the engine (no canvas, no onEngine) until the Enterprise Object registry settles, and builds it exactly once -- regression: a registry that arrived AFTER the engine was already built used to force a silent rebuild that discarded any edit made in that window", async () => {
     let release!: (objects: unknown[]) => void;
     mockApi.on("get", "/metamodel/enterprise-objects?include_hidden=true", () => new Promise((r) => (release = r)));
