@@ -1,6 +1,13 @@
 {
   "page.title": "المخططات",
   "gallery.newDiagram": "مخطّط جديد",
+  "gallery.diagramType": "نوع المخطط",
+  "gallery.diagramTypeDrawio": "Draw.io",
+  "gallery.diagramTypeArchimate": "ArchiMate",
+  "archimatePicker.viewpoint": "وجهة النظر",
+  "archimatePicker.blank": "فراغ",
+  "archimatePicker.exampleLoadFailed": "تعذّر تحميل هذا المثال. حاول مرة أخرى، أو ابدأ من فراغ.",
+  "archimatePicker.nameRequired": "أدخل اسمًا أعلاه قبل اختيار viewpoint.",
   "gallery.editDiagram": "تحرير المخطّط",
   "gallery.empty": "لا توجد مخططات بعد. أنشئ واحدًا للبدء.",
   "gallery.linkedCards": "البطاقات المرتبطة",

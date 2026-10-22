@@ -33,6 +33,10 @@ const isFreeText = (bo: unknown): boolean => isNoteObject(bo) || isCustomEnterpr
 
 export interface EngineOptions {
   container: HTMLElement; bridge: EditorBridge; enterpriseObjects: EnterpriseObject[]; onChange?: () => void;
+  /** The open diagram's viewpoint `objects` (Enterprise Object keys) for the palette filter, or
+   *  `null`/omitted for a diagram with no `viewpoint_key` -- an unfiltered palette, as before this
+   *  feature. See `ArchimatePaletteProvider`. */
+  viewpointObjectKeys?: string[] | null;
   /** The selection changed (a click, a lasso, a delete). */
   onSelect?: () => void;
 }
@@ -73,6 +77,7 @@ export class ArchimateEngine {
         ...ARCHIMATE_MODULES,
         { bridge: ["value", opts.bridge] },
         { enterpriseObjects: ["value", opts.enterpriseObjects] },
+        { viewpointObjectKeys: ["value", opts.viewpointObjectKeys ?? null] },
       ],
     });
     // A clear (on load) is not a change; every executed, undone or redone command is.

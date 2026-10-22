@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from app.models.archimate_viewpoint import ArchimateViewpoint
 from app.services.archimate.validate import validate_exchange
 from tests.conftest import auth_headers, create_role, create_user
 
@@ -23,6 +24,8 @@ FMT = "archimate-exchange-3.1"
 @pytest.fixture
 async def admin(db):
     await create_role(db, key="admin", label="Admin", permissions={"*": True})
+    db.add(ArchimateViewpoint(key="organization", name="Organization", layer="business"))
+    await db.flush()
     return await create_user(db, email="a@t.com", role="admin")
 
 
@@ -39,7 +42,12 @@ async def test_fixture_is_stored_and_returned_byte_for_byte(client, admin):
     xml = _xml()
     created = await client.post(
         "/api/v1/diagrams",
-        json={"name": "From the editor", "kind": "archimate", "data": {"format": FMT, "xml": xml}},
+        json={
+            "name": "From the editor",
+            "kind": "archimate",
+            "data": {"format": FMT, "xml": xml},
+            "viewpoint_key": "organization",
+        },
         headers=auth_headers(admin),
     )
     assert created.status_code == 201, created.text

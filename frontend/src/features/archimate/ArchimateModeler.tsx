@@ -31,6 +31,7 @@ import Typography from "@mui/material/Typography";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { fetchCardsByIds } from "@/api/cardsByIds";
+import { getViewpoint } from "@/api/archimateViewpoints";
 import { api } from "@/api/client";
 import type { Card } from "@/types";
 import { archimateCanvasSx } from "./archimateStyles";
@@ -68,6 +69,9 @@ interface DiagramDoc {
   name: string;
   description?: string | null;
   data?: { format?: string; xml?: string } | null;
+  /** `null` for every `archimate` diagram created before this feature: the palette filter
+   *  (`viewpointObjectKeys` below) then stays unset, same as an unfiltered palette today. */
+  viewpoint_key?: string | null;
 }
 
 type Load =
@@ -104,6 +108,11 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const epochRef = useRef(0);
 
   const [load, setLoad] = useState<Load>({ status: "loading" });
+  // The open diagram's viewpoint `objects` (Enterprise Object keys), for the palette filter --
+  // fetched once per diagram load (not per palette render), gated the same way as
+  // enterpriseObjectsLoaded below so the engine is only ever built once it is known.
+  const [viewpointObjectKeys, setViewpointObjectKeys] = useState<string[] | null>(null);
+  const [viewpointLoaded, setViewpointLoaded] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [name, setName] = useState("");
   /** The diagram's own description (the DB column, not the ArchiMate model's documentation): the
@@ -166,6 +175,8 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     setLinkedCardLoading(false);
     closeDialogs();
     setLoad({ status: "loading" });
+    setViewpointObjectKeys(null);
+    setViewpointLoaded(false);
     (async () => {
       let doc: DiagramDoc;
       try {
@@ -187,6 +198,20 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
         setLoad({ status: "ready", model: parsed.model });
       } catch (e) {
         setLoad({ status: "error", kind: "import", reason: parseFailure(e) });
+      }
+      if (!doc.viewpoint_key) {
+        if (!cancelled) setViewpointLoaded(true);
+        return;
+      }
+      try {
+        const viewpoint = await getViewpoint(doc.viewpoint_key);
+        if (!cancelled) setViewpointObjectKeys(viewpoint.objects);
+      } catch {
+        // Fails open: an unfiltered palette, same as a diagram with no viewpoint_key -- the
+        // viewpoint catalog not being reachable must never block the editor from opening.
+        if (!cancelled) setViewpointObjectKeys(null);
+      } finally {
+        if (!cancelled) setViewpointLoaded(true);
       }
     })();
     return () => {
@@ -285,9 +310,9 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     // it settles and then rebuilding once it does would discard any edit the user had already made
     // in that window (and the undo stack with it) under the user's feet. Waiting for the gate means
     // the engine is only ever built once per model, already with the final registry snapshot.
-    if (!model || !container || !enterpriseObjectsLoaded) return;
+    if (!model || !container || !enterpriseObjectsLoaded || !viewpointLoaded) return;
     const engine = new ArchimateEngine({
-      container, bridge, enterpriseObjects,
+      container, bridge, enterpriseObjects, viewpointObjectKeys,
       onChange: () => markChangedRef.current(),
       onSelect: () => refreshPanelRef.current(),
     });
@@ -302,7 +327,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     };
     // enterpriseObjects itself is still a dependency (it's read inside), but in practice it is
     // already stable by the time enterpriseObjectsLoaded flips true, so this effect now runs once.
-  }, [model, bridge, enterpriseObjects, enterpriseObjectsLoaded, resolveNames]);
+  }, [model, bridge, enterpriseObjects, enterpriseObjectsLoaded, viewpointObjectKeys, viewpointLoaded, resolveNames]);
 
   useEffect(() => {
     unmountedRef.current = false;

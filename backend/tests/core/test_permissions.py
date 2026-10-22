@@ -67,9 +67,13 @@ class TestRegistryCompleteness:
             assert len(group["permissions"]) > 0, f"Group '{key}' has no permissions"
 
     def test_app_permission_keys_follow_dot_notation(self):
-        """All app permission keys must use group.action format."""
+        """All app permission keys must use group.action format -- except the
+        per-layer ArchiMate diagram keys, which are group.layer.action."""
         for key in ALL_APP_PERMISSION_KEYS:
             parts = key.split(".")
+            if parts[0] == "archimatediagrams":
+                assert len(parts) == 3, f"Key '{key}' doesn't follow group.layer.action format"
+                continue
             assert len(parts) == 2, f"Key '{key}' doesn't follow group.action format"
 
     def test_card_permission_keys_follow_dot_notation(self):

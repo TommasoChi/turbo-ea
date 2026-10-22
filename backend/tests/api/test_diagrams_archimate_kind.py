@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 
+from app.models.archimate_viewpoint import ArchimateViewpoint
 from tests.conftest import auth_headers, create_card, create_card_type, create_role, create_user
 
 XML = '<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/" identifier="m"/>'
@@ -13,10 +14,22 @@ AM = {"format": "archimate-exchange-3.1", "xml": XML}
 @pytest.fixture
 async def env(db):
     await create_role(db, key="admin", label="Admin", permissions={"*": True})
+    # A real, non-hidden viewpoint for the archimate-create viewpoint check
+    # (Task 5) -- not the full seed.seed_metamodel(), which collides with this
+    # file's own create_card_type() calls ("Application" is already seeded).
+    db.add(ArchimateViewpoint(key="organization", name="Organization", layer="business"))
+    await db.flush()
     return {"admin": await create_user(db, email="a@t.com", role="admin")}
 
 
 async def _create(client, env, **body):
+    # Every existing archimate-kind test in this file predates the viewpoint
+    # requirement; default a real seeded viewpoint so they keep exercising the
+    # data-shape/publish/etc. behaviour they actually test. A test for the
+    # viewpoint check itself passes viewpoint_key explicitly (None or unknown)
+    # to opt out of this default.
+    if body.get("kind") == "archimate" and "viewpoint_key" not in body:
+        body["viewpoint_key"] = "organization"
     return await client.post("/api/v1/diagrams", json=body, headers=auth_headers(env["admin"]))
 
 
@@ -36,6 +49,7 @@ async def test_archimate_diagram_roundtrips_its_data(client, env):
         await client.get(f"/api/v1/diagrams/{r.json()['id']}", headers=auth_headers(env["admin"]))
     ).json()
     assert got["kind"] == "archimate" and got["data"] == AM
+    assert got["viewpoint_key"] == "organization"
 
 
 @pytest.mark.parametrize(
@@ -56,6 +70,21 @@ async def test_archimate_data_shape_is_enforced(client, env, data):
 
 async def test_drawio_create_refuses_archimate_data(client, env):
     assert (await _create(client, env, name="d", data=AM)).status_code == 422
+
+
+async def test_archimate_diagram_without_viewpoint_is_rejected(client, env):
+    r = await _create(client, env, name="a", kind="archimate", data=AM, viewpoint_key=None)
+    assert r.status_code == 422
+
+
+async def test_drawio_diagram_does_not_need_a_viewpoint(client, env):
+    r = await _create(client, env, name="d")
+    assert r.status_code == 201
+
+
+async def test_archimate_diagram_with_unknown_viewpoint_is_rejected(client, env):
+    r = await _create(client, env, name="a", kind="archimate", data=AM, viewpoint_key="nope")
+    assert r.status_code == 404
 
 
 async def test_unknown_kind_is_rejected(client, env):

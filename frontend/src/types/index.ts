@@ -349,6 +349,39 @@ export interface EnterpriseObject {
   card_mappings: EnterpriseObjectCardMapping[];
 }
 
+/** One seeded example diagram for a Viewpoint (`GET /metamodel/viewpoints*`'s `examples`). */
+export interface ArchimateViewpointExample {
+  id: string;
+  name: string;
+}
+
+/** An ArchiMate Viewpoint catalog row (`GET /metamodel/viewpoints*`, Task 3).
+ *  `layer` is an admin-facing classification only -- it does not restrict
+ *  which `objects` (Enterprise Object keys) the viewpoint allows. */
+export interface ArchimateViewpoint {
+  key: string;
+  name: string;
+  icon: string;
+  description: string | null;
+  layer: string;
+  is_standard: boolean;
+  is_hidden: boolean;
+  sort_order: number;
+  objects: string[];
+  examples: ArchimateViewpointExample[];
+}
+
+/** A Viewpoint row as the diagram-creation picker sees it -- either the
+ *  per-tab `GET /diagrams/viewpoints-for-tab` shape, or the unscoped
+ *  `GET /metamodel/viewpoints` list (`ArchimateViewpoint` satisfies this too). */
+export interface ArchimateViewpointForPicker {
+  key: string;
+  name: string;
+  icon: string;
+  description?: string | null;
+  examples: ArchimateViewpointExample[];
+}
+
 /** One row of the card-type permission matrix (`GET /metamodel/types/{key}/permissions`).
  *  `inherited` is what the role grants landscape-wide; `overrides` is what this
  *  type stores. A permission missing from `overrides` inherits. */
