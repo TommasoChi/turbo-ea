@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="id-f0607ad9eb0845a8829f43f5f7c676ff">
+  <name xml:lang="en">ArchiSurance_Practice</name>
+  <elements>
+    <element identifier="id-3730220bfa7f48cd95b46f8f11d3674a" xsi:type="ValueStream">
+      <name xml:lang="en">01 Develop Products</name>
+    </element>
+    <element identifier="id-145b2526247f4f02bfef814812dc92d9" xsi:type="Stakeholder">
+      <name xml:lang="en">Customer</name>
+    </element>
+    <element identifier="id-cc5c4a6120ff42559fb867179bd3e5bf" xsi:type="Outcome">
+      <name xml:lang="en">Attractive Insurance Offering</name>
+    </element>
+    <element identifier="id-d6464586d8ed4c05b7b90c501fe33019" xsi:type="ValueStream">
+      <name xml:lang="en">02 Market and Sell Products</name>
+    </element>
+    <element identifier="id-3ef13a2f11834398aa9a89d28b013d4f" xsi:type="Value">
+      <name xml:lang="en">High Customer Satisfaction</name>
+    </element>
+    <element identifier="id-e41450db175f4ee384327c48e1ccf643" xsi:type="ValueStream">
+      <name xml:lang="en">03 Manage Policies and Claims</name>
+    </element>
+    <element identifier="id-7206f0857fb74ccaa3d391028e06d14e" xsi:type="ValueStream">
+      <name xml:lang="en">Acquire Insurance Product</name>
+    </element>
+    <element identifier="id-ba263450ed8449a896f661f281994c4e" xsi:type="Value">
+      <name xml:lang="en">Products offered and Sold to The Right Customers</name>
+    </element>
+    <element identifier="id-c067b3ba860741208a80adc8ef96c136" xsi:type="Value">
+      <name xml:lang="en">Products Perform According to Customer Expectations</name>
+    </element>
+    <element identifier="id-752ae84411514fba9a2d77f4871b00c7" xsi:type="Value">
+      <name xml:lang="en">Innovative Insurance Products</name>
+    </element>
+    <element identifier="id-1933be5b089848c7b0eb888578078d81" xsi:type="ValueStream">
+      <name xml:lang="en">04 Serve Customers</name>
+    </element>
+  </elements>
+  <relationships>
+    <relationship identifier="id-01a813ab18b548b3b42f563c131d160d" source="id-6bc1ac43550249779fc081542ff44ce5" target="id-752ae84411514fba9a2d77f4871b00c7" xsi:type="Association" />
+    <relationship identifier="id-7a91fefed71a47af9f0f8e9c8f90485d" source="id-d28fde9e79d942b98fb280562ea03cc4" target="id-c067b3ba860741208a80adc8ef96c136" xsi:type="Association" />
+    <relationship identifier="id-259ab3d9fa854fb6ba934c89fe841e9e" source="id-4970803fd3934915aa867454f0eec416" target="id-3ef13a2f11834398aa9a89d28b013d4f" xsi:type="Association" />
+    <relationship identifier="id-ac26323b169a44d0beaf151dec36762b" source="id-d6464586d8ed4c05b7b90c501fe33019" target="id-e41450db175f4ee384327c48e1ccf643" xsi:type="Flow" />
+    <relationship identifier="id-e0456b25e08e448482e35a6c620211c0" source="id-7206f0857fb74ccaa3d391028e06d14e" target="id-d6464586d8ed4c05b7b90c501fe33019" xsi:type="Composition" />
+    <relationship identifier="id-d28fde9e79d942b98fb280562ea03cc4" source="id-e41450db175f4ee384327c48e1ccf643" target="id-1933be5b089848c7b0eb888578078d81" xsi:type="Flow" />
+    <relationship identifier="id-d8da081f773b4629a3d321a0cde91f1a" source="id-7206f0857fb74ccaa3d391028e06d14e" target="id-3730220bfa7f48cd95b46f8f11d3674a" xsi:type="Composition" />
+    <relationship identifier="id-4c655dd2b4a84fe3ae1ebfdb4b0ae51b" source="id-cc5c4a6120ff42559fb867179bd3e5bf" target="id-145b2526247f4f02bfef814812dc92d9" xsi:type="Association" />
+    <relationship identifier="id-82a8c49533b644f6b3779d99aa428742" source="id-7206f0857fb74ccaa3d391028e06d14e" target="id-1933be5b089848c7b0eb888578078d81" xsi:type="Composition" />
+    <relationship identifier="id-4970803fd3934915aa867454f0eec416" source="id-7206f0857fb74ccaa3d391028e06d14e" target="id-cc5c4a6120ff42559fb867179bd3e5bf" xsi:type="Influence" />
+    <relationship identifier="id-aaa506c5de194624beeefd575ad97d17" source="id-cfce6ec3e95f45e294168233ccbacd11" target="id-3ef13a2f11834398aa9a89d28b013d4f" xsi:type="Association" />
+    <relationship identifier="id-b641eb8336da488f938e58e0c12c2814" source="id-ac26323b169a44d0beaf151dec36762b" target="id-ba263450ed8449a896f661f281994c4e" xsi:type="Association" />
+    <relationship identifier="id-6bc1ac43550249779fc081542ff44ce5" source="id-3730220bfa7f48cd95b46f8f11d3674a" target="id-d6464586d8ed4c05b7b90c501fe33019" xsi:type="Flow" />
+    <relationship identifier="id-cfce6ec3e95f45e294168233ccbacd11" source="id-1933be5b089848c7b0eb888578078d81" target="id-cc5c4a6120ff42559fb867179bd3e5bf" xsi:type="Influence" />
+    <relationship identifier="id-c5641c743ade416ea54cb9db96ca891d" source="id-7206f0857fb74ccaa3d391028e06d14e" target="id-e41450db175f4ee384327c48e1ccf643" xsi:type="Composition" />
+  </relationships>
+  <views>
+    <diagrams>
+      <view identifier="id-c6648e15171e4d6fa2431d0c3a510aa3" xsi:type="Diagram">
+        <name xml:lang="en">Figure-11_Value-Stream</name>
+        <node identifier="id-133e7a2e8313406ea24f1899afae7874" xsi:type="Element" elementRef="id-cc5c4a6120ff42559fb867179bd3e5bf" x="780" y="264" w="120" h="55" />
+        <node identifier="id-c5fb90b2904540229f77ac909af18bc1" xsi:type="Element" elementRef="id-145b2526247f4f02bfef814812dc92d9" x="780" y="144" w="120" h="55" />
+        <node identifier="id-9cada6315d2947b0947d88a4cda9808b" xsi:type="Element" elementRef="id-7206f0857fb74ccaa3d391028e06d14e" x="24" y="228" w="709" h="133">
+          <node identifier="id-b1ff53ff869746089155f392dcbcce91" xsi:type="Element" elementRef="id-3730220bfa7f48cd95b46f8f11d3674a" x="66" y="48" w="120" h="55" />
+          <node identifier="id-c5079d1fc4d048f28f54ea8a67c024f5" xsi:type="Element" elementRef="id-e41450db175f4ee384327c48e1ccf643" x="366" y="48" w="120" h="55" />
+          <node identifier="id-0cb63e0f52474fd888caeddf328a31a5" xsi:type="Element" elementRef="id-1933be5b089848c7b0eb888578078d81" x="517" y="48" w="120" h="55" />
+          <node identifier="id-bbba913898e84b20b1f5f9cdf72273fe" xsi:type="Element" elementRef="id-d6464586d8ed4c05b7b90c501fe33019" x="216" y="48" w="120" h="55" />
+        </node>
+        <node identifier="id-8163aec85655401aab30a6c0f0a84a02" xsi:type="Element" elementRef="id-3ef13a2f11834398aa9a89d28b013d4f" x="612" y="144" w="120" h="55" />
+        <node identifier="id-efd92f030a9244ab94976489022ae6d5" xsi:type="Element" elementRef="id-752ae84411514fba9a2d77f4871b00c7" x="84" y="144" w="120" h="55" />
+        <node identifier="id-d0e5f31edd754ccaa04610568b0f1825" xsi:type="Element" elementRef="id-ba263450ed8449a896f661f281994c4e" x="264" y="144" w="120" h="55" />
+        <node identifier="id-3800407a7c8a4de6921bee3fa202e82e" xsi:type="Element" elementRef="id-c067b3ba860741208a80adc8ef96c136" x="432" y="144" w="120" h="55" />
+        <connection identifier="id-3bb4df8b79b041eeb72fae9687ead41e" xsi:type="Relationship" relationshipRef="id-4c655dd2b4a84fe3ae1ebfdb4b0ae51b" source="id-133e7a2e8313406ea24f1899afae7874" target="id-c5fb90b2904540229f77ac909af18bc1" />
+        <connection identifier="id-f4acee6d84d1457899ee16d445cf23c8" xsi:type="Relationship" relationshipRef="id-4970803fd3934915aa867454f0eec416" source="id-9cada6315d2947b0947d88a4cda9808b" target="id-133e7a2e8313406ea24f1899afae7874" />
+        <connection identifier="id-442b61e3606244899a9447db283a3086" xsi:type="Relationship" relationshipRef="id-d8da081f773b4629a3d321a0cde91f1a" source="id-9cada6315d2947b0947d88a4cda9808b" target="id-b1ff53ff869746089155f392dcbcce91" />
+        <connection identifier="id-a61f1d3a21514f23ad83a876fce14696" xsi:type="Relationship" relationshipRef="id-c5641c743ade416ea54cb9db96ca891d" source="id-9cada6315d2947b0947d88a4cda9808b" target="id-c5079d1fc4d048f28f54ea8a67c024f5" />
+        <connection identifier="id-3eedee2148094c7eb7eb3c52001e5836" xsi:type="Relationship" relationshipRef="id-82a8c49533b644f6b3779d99aa428742" source="id-9cada6315d2947b0947d88a4cda9808b" target="id-0cb63e0f52474fd888caeddf328a31a5" />
+        <connection identifier="id-5deed458a1de48cf858355fedb5f04e4" xsi:type="Relationship" relationshipRef="id-e0456b25e08e448482e35a6c620211c0" source="id-9cada6315d2947b0947d88a4cda9808b" target="id-bbba913898e84b20b1f5f9cdf72273fe" />
+        <connection identifier="id-f63e66e2e1a0497fb86fcd0499c8b7ee" xsi:type="Relationship" relationshipRef="id-6bc1ac43550249779fc081542ff44ce5" source="id-b1ff53ff869746089155f392dcbcce91" target="id-bbba913898e84b20b1f5f9cdf72273fe" />
+        <connection identifier="id-5b861a3ef022465eae153d32434b618d" xsi:type="Relationship" relationshipRef="id-d28fde9e79d942b98fb280562ea03cc4" source="id-c5079d1fc4d048f28f54ea8a67c024f5" target="id-0cb63e0f52474fd888caeddf328a31a5" />
+        <connection identifier="id-faea00984d1547a78d296e4968f42e84" xsi:type="Relationship" relationshipRef="id-cfce6ec3e95f45e294168233ccbacd11" source="id-0cb63e0f52474fd888caeddf328a31a5" target="id-133e7a2e8313406ea24f1899afae7874" />
+        <connection identifier="id-ed8f232ba04645ef859dda11cf729737" xsi:type="Relationship" relationshipRef="id-ac26323b169a44d0beaf151dec36762b" source="id-bbba913898e84b20b1f5f9cdf72273fe" target="id-c5079d1fc4d048f28f54ea8a67c024f5" />
+      </view>
+    </diagrams>
+  </views>
+</model>
