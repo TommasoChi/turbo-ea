@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeAll, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ArchimateViewpoint, EnterpriseObject } from "@/types";
@@ -9,15 +9,20 @@ vi.mock("@/api/archimateViewpoints", () => ({
   updateViewpoint: vi.fn(),
   addViewpointObject: vi.fn(),
   removeViewpointObject: vi.fn(),
+  uploadViewpointExample: vi.fn(),
+  deleteViewpointExample: vi.fn(),
 }));
 vi.mock("@/api/enterpriseObjects", () => ({
   listEnterpriseObjects: vi.fn(),
 }));
 
+import { ApiError } from "@/api/client";
 import {
   addViewpointObject,
   createViewpoint,
+  deleteViewpointExample,
   removeViewpointObject,
+  uploadViewpointExample,
 } from "@/api/archimateViewpoints";
 import { listEnterpriseObjects } from "@/api/enterpriseObjects";
 
@@ -64,6 +69,20 @@ const ORGANIZATION: ArchimateViewpoint = {
   objects: [],
   examples: [],
 };
+
+beforeAll(() => {
+  // jsdom's File has no text() (every supported browser does) -- same stub as ArchimateModeler.test.tsx.
+  if (!File.prototype.text) {
+    File.prototype.text = function (this: File) {
+      return new Promise<string>((ok, fail) => {
+        const r = new FileReader();
+        r.onload = () => ok(String(r.result));
+        r.onerror = () => fail(r.error);
+        r.readAsText(this);
+      });
+    };
+  }
+});
 
 describe("ViewpointEditDialog", () => {
   beforeEach(() => {
@@ -156,5 +175,68 @@ describe("ViewpointEditDialog", () => {
       expect(removeViewpointObject).toHaveBeenCalledWith("organization", "BusinessActor"),
     );
     expect(screen.queryByText("Business Actor")).not.toBeInTheDocument();
+  });
+
+  test("examples stay hidden until the viewpoint exists", () => {
+    render(<ViewpointEditDialog open viewpoint={null} onClose={vi.fn()} onSaved={vi.fn()} />);
+    expect(screen.queryByLabelText("Example name")).not.toBeInTheDocument();
+  });
+
+  test("uploading an example posts the file's text and lists it", async () => {
+    vi.mocked(uploadViewpointExample).mockResolvedValue({ id: "ex1", name: "Sample" });
+    const onSaved = vi.fn();
+    render(<ViewpointEditDialog open viewpoint={ORGANIZATION} onClose={vi.fn()} onSaved={onSaved} />);
+
+    await userEvent.type(screen.getByLabelText("Example name"), "Sample");
+    const file = new File(["<model/>"], "sample.archimate", { type: "application/xml" });
+    await userEvent.upload(screen.getByTestId("viewpoint-example-file"), file);
+
+    await waitFor(() =>
+      expect(uploadViewpointExample).toHaveBeenCalledWith("organization", "Sample", "<model/>"),
+    );
+    expect(await screen.findByText("Sample")).toBeInTheDocument();
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  test("a 422 upload shows the validator's issues inline and lists nothing", async () => {
+    vi.mocked(uploadViewpointExample).mockRejectedValue(
+      new ApiError("Invalid ArchiMate model", 422, {
+        message: "Invalid ArchiMate model",
+        issues: [
+          { code: "unknown_element_type", message: "Unknown element type 'Foo'", ref: "e1" },
+          { code: "bad_relationship", message: "Serving is not allowed here", ref: "r1" },
+        ],
+      }),
+    );
+    render(<ViewpointEditDialog open viewpoint={ORGANIZATION} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText("Example name"), "Broken");
+    await userEvent.upload(
+      screen.getByTestId("viewpoint-example-file"),
+      new File(["<bad/>"], "broken.xml", { type: "application/xml" }),
+    );
+
+    expect(await screen.findByText("Unknown element type 'Foo'")).toBeInTheDocument();
+    expect(screen.getByText("Serving is not allowed here")).toBeInTheDocument();
+    expect(screen.getByText(/not a valid ArchiMate model/)).toBeInTheDocument();
+    expect(screen.getByText("No examples yet.")).toBeInTheDocument();
+  });
+
+  test("deleting an example's chip calls deleteViewpointExample", async () => {
+    vi.mocked(deleteViewpointExample).mockResolvedValue(undefined);
+    render(
+      <ViewpointEditDialog
+        open
+        viewpoint={{ ...ORGANIZATION, examples: [{ id: "ex1", name: "Sample" }] }}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    const chip = (await screen.findByText("Sample")).closest(".MuiChip-root") as HTMLElement;
+    await userEvent.click(chip.querySelector(".MuiChip-deleteIcon") as HTMLElement);
+
+    await waitFor(() => expect(deleteViewpointExample).toHaveBeenCalledWith("organization", "ex1"));
+    expect(screen.queryByText("Sample")).not.toBeInTheDocument();
   });
 });

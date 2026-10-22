@@ -17,16 +17,19 @@ import Alert from "@mui/material/Alert";
 import IconPicker from "@/components/IconPicker";
 import KeyInput, { isValidKey } from "@/components/KeyInput";
 import MaterialSymbol from "@/components/MaterialSymbol";
-import { apiErrorMessage } from "@/api/client";
+import { ApiError, apiErrorMessage } from "@/api/client";
 import {
   addViewpointObject,
   createViewpoint,
+  deleteViewpointExample,
   removeViewpointObject,
   updateViewpoint,
+  uploadViewpointExample,
 } from "@/api/archimateViewpoints";
 import { listEnterpriseObjects } from "@/api/enterpriseObjects";
 import { LAYER_ORDER, type ArchimateLayer } from "@/features/archimate/taxonomy/elements";
-import type { ArchimateViewpoint, EnterpriseObject } from "@/types";
+import type { ValidationIssue } from "@/features/archimate/ValidationDialog";
+import type { ArchimateViewpoint, ArchimateViewpointExample, EnterpriseObject } from "@/types";
 
 // Same 7 selectable layers as "New Architecture Object" -- `LAYER_ORDER` minus
 // its trailing "other" bucket, which is never a choice here either. `layer`
@@ -69,6 +72,12 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [enterpriseObjects, setEnterpriseObjects] = useState<EnterpriseObject[]>([]);
   const [addKey, setAddKey] = useState("");
+  const [examples, setExamples] = useState<ArchimateViewpointExample[]>([]);
+  const [exampleName, setExampleName] = useState("");
+  // The validator's issues for the last rejected upload, shown inline under the
+  // upload row rather than as the dialog's generic error.
+  const [exampleIssues, setExampleIssues] = useState<ValidationIssue[] | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,6 +92,9 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
     setLayer((viewpoint?.layer as ArchimateLayer) ?? SELECTABLE_LAYERS[0]);
     setDescription(viewpoint?.description ?? "");
     setObjects(viewpoint?.objects ?? []);
+    setExamples(viewpoint?.examples ?? []);
+    setExampleName("");
+    setExampleIssues(null);
     setCreatedKey(null);
     setAddKey("");
     setError(null);
@@ -132,6 +144,38 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
     try {
       await removeViewpointObject(activeKey, eoKey);
       setObjects((prev) => prev.filter((k) => k !== eoKey));
+      onSaved();
+    } catch (e) {
+      setError(apiErrorMessage(e, t("metamodel.viewpoints.saveFailed")));
+    }
+  };
+
+  const handleUploadExample = async (file: File) => {
+    if (!activeKey || !exampleName.trim()) return;
+    setUploading(true);
+    setExampleIssues(null);
+    try {
+      const created = await uploadViewpointExample(activeKey, exampleName.trim(), await file.text());
+      setExamples((prev) => [...prev, created]);
+      setExampleName("");
+      onSaved();
+    } catch (e) {
+      const issues =
+        e instanceof ApiError && e.status === 422
+          ? (e.detail as { issues?: ValidationIssue[] } | null)?.issues
+          : undefined;
+      if (issues) setExampleIssues(issues);
+      else setError(apiErrorMessage(e, t("metamodel.viewpoints.saveFailed")));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteExample = async (exampleId: string) => {
+    if (!activeKey) return;
+    try {
+      await deleteViewpointExample(activeKey, exampleId);
+      setExamples((prev) => prev.filter((ex) => ex.id !== exampleId));
       onSaved();
     } catch (e) {
       setError(apiErrorMessage(e, t("metamodel.viewpoints.saveFailed")));
@@ -265,6 +309,71 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
                 {t("common:actions.add")}
               </Button>
             </Box>
+          </>
+        )}
+
+        {!isNew && (
+          <>
+            <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
+              {t("metamodel.viewpoints.examples")}
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 1 }}>
+              {examples.length === 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                  {t("metamodel.viewpoints.noExamples")}
+                </Typography>
+              )}
+              {examples.map((ex) => (
+                <Chip
+                  key={ex.id}
+                  size="small"
+                  label={ex.name}
+                  onDelete={() => handleDeleteExample(ex.id)}
+                />
+              ))}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <TextField
+                size="small"
+                label={t("metamodel.viewpoints.exampleNameLabel")}
+                value={exampleName}
+                onChange={(e) => setExampleName(e.target.value)}
+                sx={{ minWidth: 220 }}
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                component="label"
+                startIcon={<MaterialSymbol icon="upload_file" size={16} />}
+                disabled={!exampleName.trim() || uploading}
+              >
+                {t("metamodel.viewpoints.uploadExample")}
+                <input
+                  hidden
+                  type="file"
+                  accept=".archimate,.xml"
+                  data-testid="viewpoint-example-file"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void handleUploadExample(file);
+                  }}
+                />
+              </Button>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+              {t("metamodel.viewpoints.exampleFormats")}
+            </Typography>
+            {exampleIssues && (
+              <Alert severity="error" sx={{ mt: 1 }} onClose={() => setExampleIssues(null)}>
+                {t("metamodel.viewpoints.exampleInvalid")}
+                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                  {exampleIssues.map((issue, i) => (
+                    <li key={i}>{issue.message}</li>
+                  ))}
+                </Box>
+              </Alert>
+            )}
           </>
         )}
       </DialogContent>

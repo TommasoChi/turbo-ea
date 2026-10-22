@@ -1,5 +1,5 @@
 import { api } from "@/api/client";
-import type { ArchimateViewpoint } from "@/types";
+import type { ArchimateViewpoint, ArchimateViewpointExample } from "@/types";
 
 /** List the ArchiMate Viewpoint catalog. `includeHidden` also returns rows
  *  with `is_hidden` set (default: standard list view omits them). */
@@ -47,4 +47,20 @@ export function addViewpointObject(
 /** Remove an allowed Enterprise Object from a Viewpoint. 204 No Content. */
 export function removeViewpointObject(key: string, enterpriseObjectKey: string): Promise<void> {
   return api.delete<void>(`/metamodel/viewpoints/${key}/objects/${enterpriseObjectKey}`);
+}
+
+/** Upload an example diagram: `xml` is an Archi `.archimate` file or Exchange
+ *  XML. 422 with `detail: {message, issues}` when it is not a valid model --
+ *  nothing is saved then. */
+export function uploadViewpointExample(
+  key: string,
+  name: string,
+  xml: string,
+): Promise<ArchimateViewpointExample> {
+  return api.post<ArchimateViewpointExample>(`/metamodel/viewpoints/${key}/examples`, { name, xml });
+}
+
+/** Delete one example diagram from a Viewpoint. 204 No Content. */
+export function deleteViewpointExample(key: string, exampleId: string): Promise<void> {
+  return api.delete<void>(`/metamodel/viewpoints/${key}/examples/${exampleId}`);
 }
