@@ -1,6 +1,13 @@
 {
   "page.title": "Diagramas",
   "gallery.newDiagram": "Novo diagrama",
+  "gallery.diagramType": "Tipo de diagrama",
+  "gallery.diagramTypeDrawio": "Draw.io",
+  "gallery.diagramTypeArchimate": "ArchiMate",
+  "archimatePicker.viewpoint": "Viewpoint",
+  "archimatePicker.blank": "Vazio",
+  "archimatePicker.exampleLoadFailed": "Não foi possível carregar este exemplo. Tente novamente ou comece a partir de Vazio.",
+  "archimatePicker.nameRequired": "Insira um nome acima antes de escolher um viewpoint.",
   "gallery.editDiagram": "Editar diagrama",
   "gallery.empty": "Nenhum diagrama ainda. Crie um para começar.",
   "gallery.linkedCards": "Fichas vinculadas",

@@ -371,6 +371,17 @@ export interface ArchimateViewpoint {
   examples: ArchimateViewpointExample[];
 }
 
+/** A Viewpoint row as the diagram-creation picker sees it -- either the
+ *  per-tab `GET /diagrams/viewpoints-for-tab` shape, or the unscoped
+ *  `GET /metamodel/viewpoints` list (`ArchimateViewpoint` satisfies this too). */
+export interface ArchimateViewpointForPicker {
+  key: string;
+  name: string;
+  icon: string;
+  description?: string | null;
+  examples: ArchimateViewpointExample[];
+}
+
 /** One row of the card-type permission matrix (`GET /metamodel/types/{key}/permissions`).
  *  `inherited` is what the role grants landscape-wide; `overrides` is what this
  *  type stores. A permission missing from `overrides` inherits. */

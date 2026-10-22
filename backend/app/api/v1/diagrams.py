@@ -645,6 +645,31 @@ async def suggested_cards_for_viewpoint_tab(
     return list(fallback_result.scalars().all())
 
 
+@router.get("/viewpoints-for-tab/{viewpoint_key}/examples/{example_id}")
+async def get_viewpoint_tab_example(
+    viewpoint_key: str,
+    example_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """The full Exchange XML for one example, to seed a new diagram's starting content.
+
+    ``viewpoints-for-tab`` only returns ``{id, name}`` per example so that list stays
+    cheap; the creation dashboard fetches this lazily, only for the example card the
+    user actually clicks.
+    """
+    result = await db.execute(
+        select(ArchimateViewpointExample).where(
+            ArchimateViewpointExample.id == uuid.UUID(example_id),
+            ArchimateViewpointExample.viewpoint_key == viewpoint_key,
+        )
+    )
+    example = result.scalar_one_or_none()
+    if not example:
+        raise HTTPException(404, "Example not found")
+    return {"id": str(example.id), "name": example.name, "xml": example.exchange_xml}
+
+
 # ── public (unauthenticated) diagram access ───────────────────────────────────
 
 

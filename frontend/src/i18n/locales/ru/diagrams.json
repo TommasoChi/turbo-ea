@@ -1,6 +1,13 @@
 {
   "page.title": "Диаграммы",
   "gallery.newDiagram": "Новая диаграмма",
+  "gallery.diagramType": "Тип диаграммы",
+  "gallery.diagramTypeDrawio": "Draw.io",
+  "gallery.diagramTypeArchimate": "ArchiMate",
+  "archimatePicker.viewpoint": "Viewpoint",
+  "archimatePicker.blank": "Пустой",
+  "archimatePicker.exampleLoadFailed": "Не удалось загрузить этот пример. Повторите попытку или начните с пустого шаблона.",
+  "archimatePicker.nameRequired": "Введите название выше, прежде чем выбрать viewpoint.",
   "gallery.editDiagram": "Редактировать диаграмму",
   "gallery.empty": "Диаграмм пока нет. Создайте первую.",
   "gallery.linkedCards": "Связанные карточки",
