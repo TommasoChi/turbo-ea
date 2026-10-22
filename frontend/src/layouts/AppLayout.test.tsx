@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import AppLayout from "./AppLayout";
+import { NAV_ITEM_DEFS } from "./navItems";
 import { AuthProvider } from "@/hooks/AuthContext";
 import {
   registerExtension,
@@ -148,6 +149,40 @@ function renderLayout(
 // Tests
 // ---------------------------------------------------------------------------
 
+describe("NAV_ITEM_DEFS — Business/Application/Technology Architecture rework", () => {
+  it("renames strategy_process to Business Architecture with Business Diagram as its third child", () => {
+    const item = NAV_ITEM_DEFS.find((i) => i.labelKey === "strategy_process");
+    expect(item).toBeDefined();
+    expect(item?.children?.map((c) => c.labelKey)).toEqual([
+      "valueChain",
+      "bpm",
+      "businessDiagram",
+    ]);
+  });
+
+  it("gives app_data its Application & Data Architecture static children", () => {
+    const item = NAV_ITEM_DEFS.find((i) => i.labelKey === "app_data");
+    expect(item).toBeDefined();
+    expect(item?.children?.map((c) => c.labelKey)).toEqual([
+      "swotAnalysis",
+      "whatIfAnalysis",
+      "dataFlow",
+      "applicationDiagram",
+    ]);
+  });
+
+  it("adds a new top-level Technology Architecture item with a Technology Diagram child", () => {
+    const item = NAV_ITEM_DEFS.find((i) => i.labelKey === "technologyArchitecture");
+    expect(item).toBeDefined();
+    expect(item?.children?.map((c) => c.labelKey)).toEqual(["technologyDiagram"]);
+  });
+
+  it("does not touch the existing top-level diagrams item", () => {
+    const item = NAV_ITEM_DEFS.find((i) => i.labelKey === "diagrams");
+    expect(item).toEqual({ labelKey: "diagrams", icon: "schema", path: "/diagrams" });
+  });
+});
+
 describe("AppLayout", () => {
   it("renders children content", () => {
     renderLayout();
@@ -164,39 +199,42 @@ describe("AppLayout", () => {
 
     // Nav items render as <a> (RouterLink) so Ctrl+Click opens a new tab —
     // ARIA role is `link`, not `button`. Reports and the fork-local
-    // Org&Process (BPM's host — see below) are dropdown triggers, so they
-    // stay buttons instead.
+    // Business Architecture (BPM's host — see below) are dropdown triggers,
+    // so they stay buttons instead.
     expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /inventory/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reports/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /org&process/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /business architecture/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /diagrams/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /todos/i })).toBeInTheDocument();
   });
 
-  it("shows BPM under the Org&Process dropdown", async () => {
+  it("shows BPM under the Business Architecture dropdown", async () => {
     const user = userEvent.setup();
     renderLayout();
 
     expect(screen.queryByRole("link", { name: /^bpm$/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /org&process/i }));
+    await user.click(screen.getByRole("button", { name: /business architecture/i }));
     const item = await screen.findByRole("menuitem", { name: /bpm/i });
     expect(item).toHaveAttribute("href", "/bpm");
   });
 
-  it("hides BPM when the module is disabled, and hides Org&Process entirely with no extension installed", () => {
+  it("keeps Business Architecture open for its Business Diagram entry when BPM and Value Chain are both disabled", () => {
+    // Business Diagram (diagrams.view) is a static child independent of the
+    // bpm/valueChain module flags, so the admin user (who holds every
+    // permission) still sees the group even with both modules off.
     vi.mocked(useBpmEnabled).mockReturnValue({ bpmEnabled: false, loading: false });
     bpmOffFoldsIntoValueChain();
     renderLayout();
 
-    expect(screen.queryByRole("button", { name: /org&process/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /business architecture/i })).toBeInTheDocument();
   });
 
   describe("Value Chain nav entry", () => {
     const withPerms = (permissions: Record<string, boolean>) => ({ ...viewerUser, permissions });
     const openOrgProcess = async (u: ReturnType<typeof userEvent.setup>) =>
-      u.click(screen.getByRole("button", { name: /org&process/i }));
+      u.click(screen.getByRole("button", { name: /business architecture/i }));
 
     it("lists Value Chain (with BPM) for a user holding both permissions", async () => {
       const user = userEvent.setup();
@@ -225,12 +263,12 @@ describe("AppLayout", () => {
       expect(screen.queryByRole("menuitem", { name: /value chain/i })).not.toBeInTheDocument();
     });
 
-    it("hides the whole group when BPM is off and the user only has bpm.value_chain", () => {
+    it("hides the whole group when BPM is off, the user only has bpm.value_chain, and lacks diagrams.view too", () => {
       vi.mocked(useBpmEnabled).mockReturnValue({ bpmEnabled: false, loading: false });
       bpmOffFoldsIntoValueChain();
       renderLayout(withPerms({ "bpm.value_chain": true }));
 
-      expect(screen.queryByRole("button", { name: /org&process/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /business architecture/i })).not.toBeInTheDocument();
     });
 
     it("shows BPM only to a user with bpm.view but not bpm.value_chain", async () => {
@@ -370,7 +408,7 @@ describe("AppLayout — extension nav placement", () => {
     expect(item).toHaveAttribute("href", "/ext/digital-autonomy/quadrant");
   });
 
-  it("groups a strategy_process-navGroup extension route under the Org&Process menu, not top-level", async () => {
+  it("groups a strategy_process-navGroup extension route under the Business Architecture menu, not top-level", async () => {
     registerExtension("organization", {
       key: "organization",
       sdkVersion: UI_SDK_VERSION,
@@ -392,12 +430,12 @@ describe("AppLayout — extension nav placement", () => {
       screen.queryByRole("link", { name: /Organization Explorer/i }),
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /org&process/i }));
+    await user.click(screen.getByRole("button", { name: /business architecture/i }));
     const item = await screen.findByRole("menuitem", { name: /Organization Explorer/i });
     expect(item).toHaveAttribute("href", "/ext/organization/explorer");
   });
 
-  it("groups an app_data-navGroup extension route under the App&Data menu, not top-level", async () => {
+  it("groups an app_data-navGroup extension route under the Application & Data Architecture menu, not top-level", async () => {
     registerExtension("product-technology-what-if", {
       key: "product-technology-what-if",
       sdkVersion: UI_SDK_VERSION,
@@ -405,6 +443,10 @@ describe("AppLayout — extension nav placement", () => {
         {
           id: "what-if",
           path: "/ext/product-technology-what-if/analysis",
+          // Capital "If" — deliberately distinct from the static "What-if
+          // Analysis" placeholder child the group always carries now (see
+          // navItems.ts), so the two don't collide under one case-insensitive
+          // name query. The exact-match string query below relies on that.
           label: "What-If Analysis",
           icon: "query_stats",
           navGroup: "app_data" as ExtensionNavGroup,
@@ -417,14 +459,26 @@ describe("AppLayout — extension nav placement", () => {
 
     expect(screen.queryByRole("link", { name: /What-If Analysis/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /app&data/i }));
-    const item = await screen.findByRole("menuitem", { name: /What-If Analysis/i });
-    expect(item).toHaveAttribute("href", "/ext/product-technology-what-if/analysis");
+    await user.click(screen.getByRole("button", { name: /application & data architecture/i }));
+    // Found by href, not by accessible name: the group now also carries a
+    // static "What-if Analysis" placeholder child with the same icon
+    // (lowercase "if"), which a name query matching "What-If Analysis"
+    // case-insensitively would also match.
+    const items = await screen.findAllByRole("menuitem");
+    const item = items.find(
+      (el) => el.getAttribute("href") === "/ext/product-technology-what-if/analysis",
+    );
+    expect(item).toBeDefined();
+    expect(item).toHaveTextContent("What-If Analysis");
   });
 
-  it("hides App&Data when no extension targets it", () => {
+  it("keeps the static Application & Data Architecture children even when no extension targets the group", () => {
     renderLayout();
-    expect(screen.queryByRole("button", { name: /app&data/i })).not.toBeInTheDocument();
+    // No longer hidden: swotAnalysis/whatIfAnalysis/dataFlow/applicationDiagram
+    // are static children now (see navItems.ts), independent of extensions.
+    expect(
+      screen.getByRole("button", { name: /application & data architecture/i }),
+    ).toBeInTheDocument();
   });
 
 

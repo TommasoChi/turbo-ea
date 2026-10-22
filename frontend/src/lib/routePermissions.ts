@@ -82,6 +82,19 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   { path: "/diagrams", permission: "diagrams.view" },
   { path: "/diagrams/:id", permission: "diagrams.view" },
   { path: "/diagrams/:id/edit", permission: "diagrams.manage" },
+  // Scoped diagram-entry points (nav rework, Task 8) — same gate as the
+  // Diagrams page itself, since this is the same ArchiMate creation flow
+  // CreateDiagramDialog already offers, just scoped to one layer.
+  { path: "/business-architecture/diagram", permission: "diagrams.view" },
+  { path: "/application-architecture/diagram", permission: "diagrams.view" },
+  { path: "/technology-architecture/diagram", permission: "diagrams.view" },
+  // "Coming soon" placeholders (SWOT / What-if / Data Flow) — no data behind
+  // them yet, but kept under the same gate as their Application & Data
+  // Architecture siblings rather than left ungated, so the group does not
+  // show for a user who cannot see Diagrams at all.
+  { path: "/application-architecture/swot", permission: "diagrams.view" },
+  { path: "/application-architecture/what-if", permission: "diagrams.view" },
+  { path: "/application-architecture/data-flow", permission: "diagrams.view" },
 
   // --- Surveys ------------------------------------------------------------
   { path: "/surveys/:surveyId/respond/:cardId", permission: "surveys.respond" },

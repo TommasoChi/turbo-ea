@@ -52,12 +52,16 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
   // as its own top-level icon. The labelKey MUST equal the group string
   // verbatim: the group-injection loop in AppLayout finds the host by
   // `item.labelKey === group`. BPM is a static child of strategy_process
-  // (fork-local — this is the "Org&Process" grouping the fork has always
-  // had; upstream keeps BPM flat since it carries no extensions of its own).
-  // AppLayout's final resolve pass drops a host down to nothing when it ends
-  // up with no path AND no children (bpm disabled AND no matching extension
-  // installed), so app_data is safe to keep here unconditionally even
-  // though it starts with zero static children.
+  // (fork-local — this is the "Business Architecture" grouping the fork has
+  // always had, under its older "Org&Process" label; upstream keeps BPM flat
+  // since it carries no extensions of its own).
+  // Since the ArchiMate Viewpoint Catalog work, both strategy_process and
+  // app_data also carry a static "<Layer> Diagram" entry point (scoped
+  // ArchimateViewpointPicker, tab fixed to that layer) that only needs
+  // `diagrams.view` — so, unlike before, neither host is ever reduced to
+  // zero children purely by a module flag being off; AppLayout's final
+  // resolve pass still drops a host down to nothing for a user who also
+  // lacks `diagrams.view` and has no matching extension installed.
   {
     labelKey: "strategy_process",
     icon: "route",
@@ -69,12 +73,42 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
     // route-carrying entry — no explicit `permission` needed here. Value
     // Chain is a second static child on the same terms (bpm.value_chain,
     // derived from its path; AppLayout drops it when its module is off).
+    // Business Diagram is a third static child, gated on `diagrams.view`
+    // like every other diagram entry point (see api/diagrams.ts's
+    // `ViewpointTab`) — independent of the bpm/valueChain module flags.
     children: [
-      { labelKey: "bpm", icon: "route", path: "/bpm" },
       { labelKey: "valueChain", icon: "conveyor_belt", path: "/value-chain" },
+      { labelKey: "bpm", icon: "route", path: "/bpm" },
+      { labelKey: "businessDiagram", icon: "schema", path: "/business-architecture/diagram" },
     ],
   },
-  { labelKey: "app_data", icon: "apps", children: [] },
+  // Application & Data Architecture: three "coming soon" placeholders
+  // (SWOT / What-if / Data Flow analysis — explicitly scoped out of this
+  // feature, see the ArchiMate Viewpoint spec) plus the real Application
+  // Diagram entry point. All four are plain route links gated on
+  // `diagrams.view` (see ROUTE_PERMISSIONS) rather than an extension
+  // permission, since none of them is extension-contributed.
+  {
+    labelKey: "app_data",
+    icon: "apps",
+    children: [
+      { labelKey: "swotAnalysis", icon: "balance", path: "/application-architecture/swot" },
+      { labelKey: "whatIfAnalysis", icon: "query_stats", path: "/application-architecture/what-if" },
+      { labelKey: "dataFlow", icon: "device_hub", path: "/application-architecture/data-flow" },
+      { labelKey: "applicationDiagram", icon: "schema", path: "/application-architecture/diagram" },
+    ],
+  },
+  // Technology Architecture: new top-level dropdown, mirroring Business
+  // Architecture's Diagram entry but for the technology layer. One static
+  // child today; left as a dropdown (rather than a flat link) so a later
+  // technology-layer page has somewhere to land without reshaping the bar.
+  {
+    labelKey: "technologyArchitecture",
+    icon: "memory",
+    children: [
+      { labelKey: "technologyDiagram", icon: "schema", path: "/technology-architecture/diagram" },
+    ],
+  },
   { labelKey: "ppm", icon: "view_timeline", path: "/ppm" },
   { labelKey: "diagrams", icon: "schema", path: "/diagrams" },
   // `children` is filled only by extension routes requesting navGroup "grc";
