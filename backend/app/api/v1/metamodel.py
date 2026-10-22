@@ -25,6 +25,7 @@ from app.models.archimate_viewpoint import (
     ArchimateViewpoint,
     ArchimateViewpointExample,
     ArchimateViewpointObject,
+    ArchimateViewpointTabCard,
 )
 from app.models.card import Card
 from app.models.card_type import CardType
@@ -3136,6 +3137,9 @@ async def delete_viewpoint(
         await db.commit()
         return {"status": "hidden", "key": key}
 
+    # The bridge tables' FKs have no ON DELETE, so clear them first.
+    for model in (ArchimateViewpointObject, ArchimateViewpointExample, ArchimateViewpointTabCard):
+        await db.execute(delete(model).where(model.viewpoint_key == key))
     await db.delete(v)
     await db.commit()
     return {"status": "deleted", "key": key}

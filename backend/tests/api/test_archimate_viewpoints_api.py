@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
+from app.models.archimate_viewpoint import ArchimateViewpointObject
 from app.models.diagram import Diagram
 from app.services import seed
 from tests.conftest import auth_headers
@@ -59,6 +60,31 @@ async def test_standard_viewpoint_is_hidden_not_deleted(client, db, admin_user):
     assert resp.json()["status"] == "hidden"
     resp = await client.get("/api/v1/metamodel/viewpoints/organization", headers=headers)
     assert resp.json()["is_hidden"] is True
+
+
+async def test_delete_custom_viewpoint_with_allowed_objects(client, db, admin_user):
+    await seed.seed_metamodel(db)
+    headers = auth_headers(admin_user)
+    await client.post(
+        "/api/v1/metamodel/viewpoints",
+        json={"key": "custom-ops", "name": "Custom Ops", "layer": "business"},
+        headers=headers,
+    )
+    resp = await client.post(
+        "/api/v1/metamodel/viewpoints/custom-ops/objects",
+        json={"enterprise_object_key": "BusinessActor"},
+        headers=headers,
+    )
+    assert resp.status_code == 201
+    resp = await client.delete("/api/v1/metamodel/viewpoints/custom-ops", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "deleted"
+    rows = await db.execute(
+        select(ArchimateViewpointObject).where(
+            ArchimateViewpointObject.viewpoint_key == "custom-ops"
+        )
+    )
+    assert rows.scalars().all() == []
 
 
 async def test_delete_blocked_when_a_diagram_uses_the_viewpoint(client, db, admin_user):
