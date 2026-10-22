@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, parse_uuid
 from app.database import get_db
 from app.models.app_settings import AppSettings
 from app.models.card import Card
@@ -269,7 +269,7 @@ async def get_published_flow(
 ):
     """Get the currently published process flow (visible to all authenticated users)."""
     await PermissionService.require_permission(db, user, "bpm.view")
-    pid = uuid.UUID(process_id)
+    pid = parse_uuid(process_id)
     await _get_process_or_404(db, pid, user)
     result = await db.execute(
         select(ProcessFlowVersion)
@@ -302,7 +302,7 @@ async def list_drafts(
     user: User = Depends(get_current_user),
 ):
     """List draft (and pending) flow versions for a process."""
-    pid = uuid.UUID(process_id)
+    pid = parse_uuid(process_id)
     await _get_process_or_404(db, pid, user)
     if not await _can_view_drafts(db, user, pid):
         raise HTTPException(403, "Insufficient permissions to view drafts")
@@ -353,7 +353,7 @@ async def create_draft(
     user: User = Depends(get_current_user),
 ):
     """Create a new draft process flow, optionally cloned from an existing version."""
-    pid = uuid.UUID(process_id)
+    pid = parse_uuid(process_id)
     await _get_process_or_404(db, pid, user)
     if not await _can_edit_draft(db, user, pid):
         raise HTTPException(403, "Insufficient permissions to create drafts")
@@ -422,8 +422,8 @@ async def get_version(
     user: User = Depends(get_current_user),
 ):
     """Get a specific process flow version by ID."""
-    pid = uuid.UUID(process_id)
-    vid = uuid.UUID(version_id)
+    pid = parse_uuid(process_id)
+    vid = parse_uuid(version_id)
     await _get_process_or_404(db, pid, user)
 
     result = await db.execute(
@@ -460,8 +460,8 @@ async def update_draft(
     user: User = Depends(get_current_user),
 ):
     """Update a draft process flow. Only drafts can be edited."""
-    pid = uuid.UUID(process_id)
-    vid = uuid.UUID(version_id)
+    pid = parse_uuid(process_id)
+    vid = parse_uuid(version_id)
     await _get_process_or_404(db, pid, user)
     if not await _can_edit_draft(db, user, pid):
         raise HTTPException(403, "Insufficient permissions")
@@ -506,8 +506,8 @@ async def delete_draft(
     user: User = Depends(get_current_user),
 ):
     """Delete a draft process flow. Only drafts can be deleted."""
-    pid = uuid.UUID(process_id)
-    vid = uuid.UUID(version_id)
+    pid = parse_uuid(process_id)
+    vid = parse_uuid(version_id)
     await _get_process_or_404(db, pid, user)
     if not await _can_edit_draft(db, user, pid):
         raise HTTPException(403, "Insufficient permissions")
@@ -539,8 +539,8 @@ async def submit_for_approval(
     user: User = Depends(get_current_user),
 ):
     """Submit a draft for approval by the business process owner."""
-    pid = uuid.UUID(process_id)
-    vid = uuid.UUID(version_id)
+    pid = parse_uuid(process_id)
+    vid = parse_uuid(version_id)
     process = await _get_process_or_404(db, pid, user)
     if not await _can_edit_draft(db, user, pid):
         raise HTTPException(403, "Insufficient permissions")
@@ -633,8 +633,8 @@ async def approve_version(
 ):
     """Approve a pending process flow. The approved version becomes published;
     the previous published version becomes archived."""
-    pid = uuid.UUID(process_id)
-    vid = uuid.UUID(version_id)
+    pid = parse_uuid(process_id)
+    vid = parse_uuid(version_id)
     process = await _get_process_or_404(db, pid, user)
     if not await _can_approve_flow(db, user, pid):
         raise HTTPException(403, "Only process owners, admins, or BPM admins can approve")
@@ -836,8 +836,8 @@ async def reject_version(
     user: User = Depends(get_current_user),
 ):
     """Reject a pending process flow, returning it to draft status."""
-    pid = uuid.UUID(process_id)
-    vid = uuid.UUID(version_id)
+    pid = parse_uuid(process_id)
+    vid = parse_uuid(version_id)
     process = await _get_process_or_404(db, pid, user)
     if not await _can_approve_flow(db, user, pid):
         raise HTTPException(403, "Only process owners, admins, or BPM admins can reject")
@@ -954,8 +954,8 @@ async def withdraw_version(
     care about — recording who withdrew what, when and why — happens
     unconditionally below.
     """
-    pid = uuid.UUID(process_id)
-    vid = uuid.UUID(version_id)
+    pid = parse_uuid(process_id)
+    vid = parse_uuid(version_id)
     process = await _get_process_or_404(db, pid, user)
 
     if not await _can_withdraw_flow(db, user, pid):
@@ -1075,7 +1075,7 @@ async def list_archived(
     Withdrawn versions live here too — they are history, and hiding them would
     defeat the point of recording the withdrawal.
     """
-    pid = uuid.UUID(process_id)
+    pid = parse_uuid(process_id)
     await _get_process_or_404(db, pid, user)
     if not await _can_view_drafts(db, user, pid):
         raise HTTPException(403, "Insufficient permissions to view archives")
@@ -1109,8 +1109,8 @@ async def get_draft_elements(
 ):
     """Parse BPMN XML from a draft/pending version and return extracted elements
     merged with any saved draft_element_links (pre-linked EA references)."""
-    pid = uuid.UUID(process_id)
-    vid = uuid.UUID(version_id)
+    pid = parse_uuid(process_id)
+    vid = parse_uuid(version_id)
     await _get_process_or_404(db, pid, user)
     if not await _can_view_drafts(db, user, pid):
         raise HTTPException(403, "Insufficient permissions")
@@ -1226,8 +1226,8 @@ async def update_draft_element_link(
     user: User = Depends(get_current_user),
 ):
     """Update a single draft element link (pre-link EA references before publishing)."""
-    pid = uuid.UUID(process_id)
-    vid = uuid.UUID(version_id)
+    pid = parse_uuid(process_id)
+    vid = parse_uuid(version_id)
     await _get_process_or_404(db, pid, user)
     if not await _can_edit_draft(db, user, pid):
         raise HTTPException(403, "Insufficient permissions")
@@ -1345,7 +1345,7 @@ async def get_flow_permissions(
     user: User = Depends(get_current_user),
 ):
     """Return the current user's permissions on the process flow."""
-    pid = uuid.UUID(process_id)
+    pid = parse_uuid(process_id)
     await _get_process_or_404(db, pid, user)
     return {
         "can_view_drafts": await _can_view_drafts(db, user, pid),
