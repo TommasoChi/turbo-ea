@@ -37,6 +37,7 @@ interface Props {
     viewpointKey: string,
     startingXml: string | null,
     suggestedCardIds: string[],
+    viewpointName: string,
   ) => void;
   /** Disables the whole grid — e.g. while the caller's own create call (kicked
    *  off from a previous `onSelect`) is still in flight. */
@@ -67,7 +68,7 @@ export default function ArchimateViewpointPicker({ tab, onSelect, disabled }: Pr
       const suggestedCardIds = tab
         ? await getSuggestedCards(viewpoint.key, tab).catch(() => [])
         : [];
-      onSelect(viewpoint.key, xml, suggestedCardIds);
+      onSelect(viewpoint.key, xml, suggestedCardIds, viewpoint.name);
     } finally {
       setPending(null);
     }

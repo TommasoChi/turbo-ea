@@ -94,7 +94,17 @@ export default class ArchimateRenderer extends BaseRenderer {
     const bo = shape.businessObject as ModelElement;
     const { width, height } = shape;
     const { body, header, glyph } = NOTATION[bo.type];
-    const colors = ARCHIMATE_LAYER_COLORS[layerOf(bo.type)];
+    // A standard element's EnterpriseObject row carries the same layer colour
+    // by default (enterprise_object_seed.py's `_LAYER_COLORS`) -- only derive
+    // fill/stroke from it when an admin actually changed it away from that
+    // default, so an un-customized diagram still renders pixel-identical to
+    // the hand-picked layer palette below.
+    const defaultColors = ARCHIMATE_LAYER_COLORS[layerOf(bo.type)];
+    const eo = this.enterpriseObjects.find((o) => o.key === bo.type);
+    const colors =
+      eo?.color && eo.color !== defaultColors.stroke
+        ? { fill: tint(eo.color), stroke: eo.color }
+        : defaultColors;
     const style = (shape as { style?: { fillColor?: Rgb } }).style;
     let fill = style?.fillColor ? rgb(style.fillColor) : colors.fill;
     if (bo.type === "AndJunction") fill = ARCHIMATE_TEXT_COLOR;
