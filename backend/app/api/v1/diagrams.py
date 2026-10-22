@@ -192,6 +192,7 @@ class DiagramCreate(BaseModel):
     data: dict | None = None
     card_ids: list[str] | None = None
     kind: str = "drawio"
+    viewpoint_key: str | None = None
 
 
 class DiagramUpdate(BaseModel):
@@ -492,6 +493,17 @@ async def create_diagram(
     await PermissionService.require_permission(db, user, "diagrams.manage")
     if body.kind not in DIAGRAM_KINDS:
         raise HTTPException(422, "kind must be 'drawio' or 'archimate'")
+    if body.kind == "archimate" and not body.viewpoint_key:
+        raise HTTPException(422, "viewpoint_key is required for archimate diagrams")
+    if body.viewpoint_key:
+        vp = await db.execute(
+            select(ArchimateViewpoint).where(
+                ArchimateViewpoint.key == body.viewpoint_key,
+                ArchimateViewpoint.is_hidden == False,  # noqa: E712
+            )
+        )
+        if vp.scalar_one_or_none() is None:
+            raise HTTPException(404, "Viewpoint not found")
     check_kind_data(body.kind, body.data)
     await ensure_valid_archimate(body.kind, body.data)
     d = Diagram(
@@ -500,6 +512,7 @@ async def create_diagram(
         description=body.description,
         data=body.data or {},
         created_by=user.id,
+        viewpoint_key=body.viewpoint_key,
     )
     db.add(d)
     await db.flush()  # get d.id

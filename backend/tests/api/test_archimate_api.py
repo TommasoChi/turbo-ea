@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.models.archimate_viewpoint import ArchimateViewpoint
 from tests.conftest import auth_headers, create_role, create_user
 
 NS = (
@@ -20,6 +21,8 @@ FMT = "archimate-exchange-3.1"
 async def env(db):
     await create_role(db, key="admin", label="Admin", permissions={"*": True})
     await create_role(db, key="nobody", label="Nobody", permissions={})
+    db.add(ArchimateViewpoint(key="organization", name="Organization", layer="business"))
+    await db.flush()
     return {
         "admin": await create_user(db, email="a@t.com", role="admin"),
         "nobody": await create_user(db, email="n@t.com", role="nobody"),
@@ -60,7 +63,12 @@ async def test_create_rejects_an_invalid_model_and_stores_nothing(client, env):
     h = auth_headers(env["admin"])
     r = await client.post(
         "/api/v1/diagrams",
-        json={"name": "a", "kind": "archimate", "data": {"format": FMT, "xml": BAD}},
+        json={
+            "name": "a",
+            "kind": "archimate",
+            "data": {"format": FMT, "xml": BAD},
+            "viewpoint_key": "organization",
+        },
         headers=h,
     )
     assert r.status_code == 422
@@ -75,7 +83,12 @@ async def test_create_and_patch_accept_a_valid_model(client, env):
     h = auth_headers(env["admin"])
     r = await client.post(
         "/api/v1/diagrams",
-        json={"name": "a", "kind": "archimate", "data": {"format": FMT, "xml": GOOD}},
+        json={
+            "name": "a",
+            "kind": "archimate",
+            "data": {"format": FMT, "xml": GOOD},
+            "viewpoint_key": "organization",
+        },
         headers=h,
     )
     assert r.status_code == 201
@@ -112,7 +125,12 @@ async def test_validation_runs_off_the_event_loop(client, env, monkeypatch):
     await client.post("/api/v1/archimate/validate", json={"xml": GOOD}, headers=h)
     await client.post(
         "/api/v1/diagrams",
-        json={"name": "a", "kind": "archimate", "data": {"format": FMT, "xml": GOOD}},
+        json={
+            "name": "a",
+            "kind": "archimate",
+            "data": {"format": FMT, "xml": GOOD},
+            "viewpoint_key": "organization",
+        },
         headers=h,
     )
     assert len(seen) == 2 and loop_thread not in seen
