@@ -412,9 +412,15 @@ describe("SUPPORTED_LOCALES matches locale data", () => {
     for (const locale of SUPPORTED_LOCALES) {
       const nav = getResource(locale, "nav");
       expect(nav.strategy_process, `strategy_process differs for "${locale}"`).toBe(
-        "Org&Process",
+        "Business Architecture",
       );
-      expect(nav.app_data, `app_data differs for "${locale}"`).toBe("App&Data");
+      expect(nav.app_data, `app_data differs for "${locale}"`).toBe(
+        "Application & Data Architecture",
+      );
+      expect(
+        nav.technologyArchitecture,
+        `technologyArchitecture differs for "${locale}"`,
+      ).toBe("Technology Architecture");
     }
   });
   it("SUPPORTED_LOCALES contains exactly the expected locales", () => {

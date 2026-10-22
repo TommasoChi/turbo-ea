@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   api,
+  apiErrorMessage,
   ApiError,
   setToken,
   clearToken,
@@ -404,5 +405,16 @@ describe("AbortSignal support", () => {
     expect(isAbortError("AbortError")).toBe(false);
     expect(isAbortError(null)).toBe(false);
     expect(isAbortError(undefined)).toBe(false);
+  });
+
+  it("apiErrorMessage prefers an Error's own message, falling back otherwise", () => {
+    expect(apiErrorMessage(new Error("backend said no"), "fallback")).toBe("backend said no");
+    expect(apiErrorMessage(new ApiError("boom", 409, null), "fallback")).toBe("boom");
+    // An Error with an empty message, and anything that isn't an Error at all,
+    // both fall back rather than surfacing a blank or meaningless string.
+    expect(apiErrorMessage(new Error(""), "fallback")).toBe("fallback");
+    expect(apiErrorMessage("plain string", "fallback")).toBe("fallback");
+    expect(apiErrorMessage(null, "fallback")).toBe("fallback");
+    expect(apiErrorMessage(undefined, "fallback")).toBe("fallback");
   });
 });

@@ -35,6 +35,23 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The human-readable message for a failed API call, falling back to
+ * `fallback` only when nothing better is available (a non-`Error` throw).
+ *
+ * `ApiError.message` is already the right string for every shape FastAPI
+ * sends -- a plain string `detail` (404/400/409), a `{message: ...}` object
+ * `detail` (a 409 with extra structured fields, e.g. deleteViewpoint's
+ * `diagram_count`), or a 422 validation array -- `request()` above resolves
+ * all of them into `message` before throwing. A caller that re-inspects
+ * `.detail` itself duplicates that resolution and only ever covers the one
+ * shape it anticipated, dropping the real backend text for every other case.
+ */
+export function apiErrorMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error) return e.message || fallback;
+  return fallback;
+}
+
 // Authentication is handled via httpOnly cookies set by the backend.
 // The cookie is sent automatically by the browser on same-origin requests.
 // These lightweight helpers track auth state in memory for the UI only —

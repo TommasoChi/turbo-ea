@@ -5,6 +5,12 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.176.0] - 2026-10-22
+
+### Added
+
+- **ArchiMate Viewpoint Catalog**: every new ArchiMate diagram now picks a viewpoint — one of the 23 standard ArchiMate 3.1 viewpoints or an admin-defined custom one — which restricts the designer palette to that viewpoint's allowed object types. Admins manage the catalog from a new **Viewpoint Catalog** tab in Architecture Studio (alongside Card Mapping), including example diagrams per viewpoint. Pre-existing ArchiMate diagrams keep an unrestricted palette. New per-layer permissions (`archimatediagrams.business/application/technology.view/manage/publish`) replace the single `diagrams.*` gate for ArchiMate diagrams, and the nav splits into Business, Application & Data, and Technology Architecture entries. The MCP server's `create_archimate_diagram` tool requires a `viewpoint_key`, and a new `list_viewpoints` tool lists the catalog.
+
 ## [2.175.1] - 2026-10-21
 
 A fork release. Takes the next free patch number above upstream's own

@@ -19,10 +19,10 @@ beforeAll(installSvgStubs);
 
 type Action = Record<string, (event: Event) => void>;
 
-function setup(enterpriseObjects: EnterpriseObject[] = []) {
+function setup(enterpriseObjects: EnterpriseObject[] = [], viewpointObjectKeys: string[] | null = null) {
   const bridge = makeBridge();
   const container = document.createElement("div");
-  const diagram = new Diagram({ canvas: { container }, modules: withBridge(bridge, enterpriseObjects) });
+  const diagram = new Diagram({ canvas: { container }, modules: withBridge(bridge, enterpriseObjects, viewpointObjectKeys) });
   const get = <T,>(name: string) => diagram.get<T>(name);
   const provider = get<ArchimatePaletteProvider>("archimatePalette");
   const entries = provider.getPaletteEntries();
@@ -39,7 +39,7 @@ function setup(enterpriseObjects: EnterpriseObject[] = []) {
     new ArchimatePaletteProvider(
       { registerProvider: vi.fn() } as never, (fakes.create ?? {}) as never, get("elementFactory"),
       (fakes.hand ?? {}) as never, (fakes.lasso ?? {}) as never, bridge,
-      get("eventBus"), get("canvas"), get("modeling"), get("selection"), enterpriseObjects,
+      get("eventBus"), get("canvas"), get("modeling"), get("selection"), enterpriseObjects, viewpointObjectKeys,
     );
   return { bridge, container, get, entries, entry, shapesOf, customShapes, press, withFakes };
 }
@@ -487,5 +487,43 @@ describe("the registry drives visibility and custom objects", () => {
     entry("create.AIModel").parentElement!.appendChild(ghost);
     press(ghost, "Enter");
     expect(customShapes()).toHaveLength(0);
+  });
+});
+
+describe("the viewpoint restricts which entries the palette offers", () => {
+  it("with a null viewpoint filter (no viewpoint_key on the diagram), every standard type is offered, unchanged from today", () => {
+    const { entries } = setup([], null);
+    expect(entries["create.BusinessActor"]).toBeDefined();
+    expect(entries["create.ApplicationComponent"]).toBeDefined();
+  });
+
+  it("with a viewpoint's objects list, only the listed Enterprise Object keys are offered", () => {
+    const { entries } = setup([], ["BusinessActor"]);
+    expect(entries["create.BusinessActor"]).toBeDefined();
+    expect(entries["create.ApplicationComponent"]).toBeUndefined();
+  });
+
+  it("combines with is_hidden: a type can be excluded by either, offered only when neither excludes it", () => {
+    const { entries } = setup(
+      [{ key: "BusinessActor", name: "Business Actor", description: null, icon: "x", color: "#fff",
+        layer: "business", is_standard: true, is_locked: false, is_hidden: true, sort_order: 0, card_mappings: [] }],
+      ["BusinessActor", "ApplicationComponent"],
+    );
+    // hidden wins even though the viewpoint allows it
+    expect(entries["create.BusinessActor"]).toBeUndefined();
+    // allowed by the viewpoint and not hidden
+    expect(entries["create.ApplicationComponent"]).toBeDefined();
+  });
+
+  it("also filters a custom Enterprise Object's tile by the viewpoint's objects list", () => {
+    const { entries: withKey } = setup([AI_MODEL], ["AIModel"]);
+    expect(withKey["create.AIModel"]).toBeDefined();
+    const { entries: withoutKey } = setup([AI_MODEL], ["BusinessActor"]);
+    expect(withoutKey["create.AIModel"]).toBeUndefined();
+  });
+
+  it("never filters the Note entry -- it is not an Enterprise Object, so no viewpoint lists it", () => {
+    const { entries } = setup([], ["BusinessActor"]);
+    expect(entries["create.note"]).toBeDefined();
   });
 });

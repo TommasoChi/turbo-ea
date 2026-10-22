@@ -24,9 +24,9 @@ import Snackbar from "@mui/material/Snackbar";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { api } from "@/api/client";
+import ArchimateViewpointPicker from "@/features/diagrams/ArchimateViewpointPicker";
 import { useDateFormat } from "@/hooks/useDateFormat";
-import { ARCHIMATE_FORMAT, emptyModel } from "./exchange/exchangeModel";
-import { writeExchange } from "./exchange/writeExchange";
+import { ARCHIMATE_FORMAT } from "./exchange/exchangeModel";
 import { describeApiError } from "./saveError";
 
 interface DiagramRow {
@@ -79,26 +79,39 @@ export default function ArchimateSandboxPage() {
     setCreateError(null);
   };
 
-  const create = useCallback(async () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    setBusy(true);
-    setCreateError(null);
-    try {
-      const made = await api.post<{ id: string }>("/diagrams", {
-        name: trimmed,
-        kind: "archimate",
-        data: { format: ARCHIMATE_FORMAT, xml: writeExchange(emptyModel(trimmed)) },
-      });
-      navigate(`/admin/architectureStudio/${made.id}`);
-    } catch (e) {
-      setCreateError(
-        t("archimate:sandbox.createFailed", { reason: describeApiError(e, t("common:errors.generic")) }),
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, [name, navigate, t]);
+  // Every ArchiMate diagram needs a `viewpoint_key` (create_diagram 422s
+  // without one), so creation delegates to the same picker CreateDiagramDialog's
+  // archimate branch uses (`tab={null}`, the unscoped case) -- the Name field
+  // above stays, but picking a Viewpoint's blank/example card *is* the create
+  // action now; there is no separate Create button for the same reason.
+  const createFromPicker = useCallback(
+    async (viewpointKey: string, startingXml: string | null, _suggestedCardIds: string[]) => {
+      const trimmed = name.trim();
+      if (!trimmed || busy) return;
+      if (startingXml === null) {
+        setCreateError(t("diagrams:archimatePicker.exampleLoadFailed"));
+        return;
+      }
+      setBusy(true);
+      setCreateError(null);
+      try {
+        const made = await api.post<{ id: string }>("/diagrams", {
+          name: trimmed,
+          kind: "archimate",
+          viewpoint_key: viewpointKey,
+          data: { format: ARCHIMATE_FORMAT, xml: startingXml },
+        });
+        navigate(`/admin/architectureStudio/${made.id}`);
+      } catch (e) {
+        setCreateError(
+          t("archimate:sandbox.createFailed", { reason: describeApiError(e, t("common:errors.generic")) }),
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [name, busy, navigate, t],
+  );
 
   const askToDelete = (row: DiagramRow) => {
     setToDelete(row);
@@ -194,38 +207,35 @@ export default function ArchimateSandboxPage() {
         {t("archimate:trademark")}
       </Typography>
 
-      <Dialog open={creating} onClose={busy ? undefined : closeCreate} fullWidth maxWidth="xs">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void create();
-          }}
-        >
-          <DialogTitle>{t("archimate:sandbox.newDiagram")}</DialogTitle>
-          <DialogContent>
-            {createError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {createError}
-              </Alert>
-            )}
-            <TextField
-              autoFocus
-              fullWidth
-              margin="dense"
-              label={t("archimate:sandbox.name")}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={closeCreate} disabled={busy}>
-              {t("common:actions.cancel")}
-            </Button>
-            <Button type="submit" variant="contained" disabled={busy || !name.trim()}>
-              {t("archimate:sandbox.create")}
-            </Button>
-          </DialogActions>
-        </form>
+      <Dialog open={creating} onClose={busy ? undefined : closeCreate} fullWidth maxWidth="md">
+        <DialogTitle>{t("archimate:sandbox.newDiagram")}</DialogTitle>
+        <DialogContent>
+          {createError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {createError}
+            </Alert>
+          )}
+          <TextField
+            autoFocus
+            fullWidth
+            margin="dense"
+            label={t("archimate:sandbox.name")}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          {!name.trim() && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {t("diagrams:archimatePicker.nameRequired")}
+            </Alert>
+          )}
+          <ArchimateViewpointPicker tab={null} onSelect={createFromPicker} disabled={busy} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeCreate} disabled={busy}>
+            {t("common:actions.cancel")}
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Dialog open={confirming} onClose={busy ? undefined : cancelDelete}>

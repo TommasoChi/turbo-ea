@@ -4881,6 +4881,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "viewpoint_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viewpoint Key"
           }
         },
         "required": [
@@ -26277,6 +26288,147 @@
         ]
       }
     },
+    "/api/v1/diagrams/viewpoints-for-tab": {
+      "get": {
+        "description": "Every non-hidden ArchiMate Viewpoint relevant to one of the three\ndiagram-creation dashboard tabs (business/application/technology).\n\nA viewpoint appears in a tab when at least one of its allowed objects'\n``EnterpriseObject.layer`` falls in that tab's layer set (``TAB_LAYERS``)\n-- so a viewpoint spanning two tabs' layers (e.g. Implementation and\nDeployment, application + technology) appears in both. Authenticated\nread, like ``GET /metamodel/viewpoints`` -- any user who can create a\ndiagram needs this, not just metamodel admins.",
+        "operationId": "list_viewpoints_for_tab_api_v1_diagrams_viewpoints_for_tab_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tab",
+            "required": true,
+            "schema": {
+              "title": "Tab",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Viewpoints For Tab",
+        "tags": [
+          "diagrams"
+        ]
+      }
+    },
+    "/api/v1/diagrams/viewpoints-for-tab/{viewpoint_key}/examples/{example_id}": {
+      "get": {
+        "description": "The full Exchange XML for one example, to seed a new diagram's starting content.\n\n``viewpoints-for-tab`` only returns ``{id, name}`` per example so that list stays\ncheap; the creation dashboard fetches this lazily, only for the example card the\nuser actually clicks.",
+        "operationId": "get_viewpoint_tab_example_api_v1_diagrams_viewpoints_for_tab__viewpoint_key__examples__example_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "viewpoint_key",
+            "required": true,
+            "schema": {
+              "title": "Viewpoint Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "example_id",
+            "required": true,
+            "schema": {
+              "title": "Example Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Viewpoint Tab Example",
+        "tags": [
+          "diagrams"
+        ]
+      }
+    },
+    "/api/v1/diagrams/viewpoints-for-tab/{viewpoint_key}/suggested-cards": {
+      "get": {
+        "description": "Card types to suggest creating from a viewpoint's card-detail tab.\n\nReturns the explicit ``(viewpoint_key, tab)`` override\n(``ArchimateViewpointTabCard``) when one exists; otherwise falls back to\nevery card type mapped to the viewpoint's allowed objects -- the \"no\noverride needed for single-tab viewpoints\" default from spec \u00a75.",
+        "operationId": "suggested_cards_for_viewpoint_tab_api_v1_diagrams_viewpoints_for_tab__viewpoint_key__suggested_cards_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "viewpoint_key",
+            "required": true,
+            "schema": {
+              "title": "Viewpoint Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tab",
+            "required": true,
+            "schema": {
+              "title": "Tab",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Suggested Cards For Viewpoint Tab",
+        "tags": [
+          "diagrams"
+        ]
+      }
+    },
     "/api/v1/diagrams/{diagram_id}": {
       "delete": {
         "operationId": "delete_diagram_api_v1_diagrams__diagram_id__delete",
@@ -29997,6 +30149,410 @@
         "summary": "Stakeholder Role Usage",
         "tags": [
           "stakeholder-roles"
+        ]
+      }
+    },
+    "/api/v1/metamodel/viewpoints": {
+      "get": {
+        "description": "List the ArchiMate Viewpoint catalog with their allowed objects.\n\nAuthenticated read, like ``list_enterprise_objects`` \u2014 the\ndiagram-creation picker calls this for any user who can create a\ndiagram, not just admins who manage the metamodel, so there is no\n``admin.metamodel`` gate here.",
+        "operationId": "list_viewpoints_api_v1_metamodel_viewpoints_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_hidden",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Hidden",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Viewpoints",
+        "tags": [
+          "metamodel"
+        ]
+      },
+      "post": {
+        "description": "Create a custom Viewpoint. Always ``is_standard=False`` \u2014 the standard\nregistry rows only ever come from ``seed_viewpoints``.",
+        "operationId": "create_viewpoint_api_v1_metamodel_viewpoints_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Viewpoint",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/viewpoints/{key}": {
+      "delete": {
+        "operationId": "delete_viewpoint_api_v1_metamodel_viewpoints__key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Viewpoint",
+        "tags": [
+          "metamodel"
+        ]
+      },
+      "get": {
+        "operationId": "get_viewpoint_api_v1_metamodel_viewpoints__key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Viewpoint",
+        "tags": [
+          "metamodel"
+        ]
+      },
+      "patch": {
+        "operationId": "update_viewpoint_api_v1_metamodel_viewpoints__key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Viewpoint",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/viewpoints/{key}/examples": {
+      "post": {
+        "description": "Upload an example diagram for a Viewpoint.\n\n``xml`` may be Archi's native ``.archimate`` export (auto-converted via\n``convert_archi_native_to_exchange``) or ArchiMate Exchange Format XML\ndirectly -- either way it is run through ``validate_exchange()`` before\nanything is persisted; on any issue this is a 422 with the validator's\nown issue list and nothing is saved.",
+        "operationId": "upload_viewpoint_example_api_v1_metamodel_viewpoints__key__examples_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Viewpoint Example",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/viewpoints/{key}/examples/{example_id}": {
+      "delete": {
+        "operationId": "delete_viewpoint_example_api_v1_metamodel_viewpoints__key__examples__example_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "example_id",
+            "required": true,
+            "schema": {
+              "title": "Example Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Viewpoint Example",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/viewpoints/{key}/objects": {
+      "post": {
+        "description": "Add one allowed Enterprise Object to a Viewpoint's allowed-objects list.",
+        "operationId": "add_viewpoint_object_api_v1_metamodel_viewpoints__key__objects_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Viewpoint Object",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/viewpoints/{key}/objects/{enterprise_object_key}": {
+      "delete": {
+        "operationId": "remove_viewpoint_object_api_v1_metamodel_viewpoints__key__objects__enterprise_object_key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "enterprise_object_key",
+            "required": true,
+            "schema": {
+              "title": "Enterprise Object Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Viewpoint Object",
+        "tags": [
+          "metamodel"
         ]
       }
     },

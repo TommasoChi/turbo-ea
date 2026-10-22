@@ -41,6 +41,7 @@ import ImpersonateRoleDialog from "@/features/admin/ImpersonateRoleDialog";
 import { useEventStream } from "@/hooks/useEventStream";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { canCreateAnyCardType } from "@/components/RequirePermission";
+import { useArchimateEnabled } from "@/hooks/useArchimateEnabled";
 import { useBpmEnabled } from "@/hooks/useBpmEnabled";
 import { useGrcEnabled } from "@/hooks/useGrcEnabled";
 import { useSponsorButtonEnabled } from "@/hooks/useSponsorButtonEnabled";
@@ -96,6 +97,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
   const isCompact = useMediaQuery("(max-width:1023px)");
   const isCondensed = useMediaQuery("(max-width:1279px)");
   const { bpmEnabled } = useBpmEnabled();
+  const { archimateEnabled } = useArchimateEnabled();
   const { valueChainEnabled } = useValueChainEnabled();
   const { ppmEnabled } = usePpmEnabled();
   const { grcEnabled } = useGrcEnabled();
@@ -191,6 +193,16 @@ export default function AppLayout({ children, user, onLogout }: Props) {
                   !(c.labelKey === "valueChain" && !valueChainEnabled),
               ),
             }
+          : item,
+      );
+    }
+    // The three scoped "<Layer> Diagram" entries are the ArchiMate module's
+    // create flow; with the module off they go, like their routes' ModuleGate.
+    if (!archimateEnabled) {
+      const scoped = new Set(["businessDiagram", "applicationDiagram", "technologyDiagram"]);
+      items = items.map((item) =>
+        item.children
+          ? { ...item, children: item.children.filter((c) => !scoped.has(c.labelKey)) }
           : item,
       );
     }
@@ -368,7 +380,7 @@ export default function AppLayout({ children, user, onLogout }: Props) {
       .filter((item) => hasNavPerm(item))
       .map(resolve)
       .filter((item) => item.path || item.children);
-  }, [bpmEnabled, valueChainEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, user, t]);
+  }, [bpmEnabled, archimateEnabled, valueChainEnabled, ppmEnabled, grcEnabled, turboLensReady, uiExtensions, can, user, t]);
 
   // Resolve admin item labels via i18n and filter based on permissions.
   // Extension routes that requested the "admin" nav group follow the core

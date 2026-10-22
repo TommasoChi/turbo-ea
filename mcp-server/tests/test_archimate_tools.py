@@ -169,7 +169,7 @@ class TestCreateArchimateDiagram:
             }
         )
         with patch.object(server.TurboEAClient, "post", post):
-            out = json.loads(await server.create_archimate_diagram("A", XML))
+            out = json.loads(await server.create_archimate_diagram("A", XML, "layered"))
         post.assert_awaited_once_with("/archimate/validate", json={"xml": XML})
         assert out["dry_run"] is True and out["valid"] is False
         assert out["issues"][0]["code"] == "unknown_element_type"
@@ -178,6 +178,7 @@ class TestCreateArchimateDiagram:
             "description": "",
             "linked_card_ids": [],
             "kind": "archimate",
+            "viewpoint_key": "layered",
         }
 
     @pytest.mark.asyncio
@@ -186,7 +187,7 @@ class TestCreateArchimateDiagram:
         with patch.object(server.TurboEAClient, "post", post):
             out = json.loads(
                 await server.create_archimate_diagram(
-                    "A", XML, description="d", linked_card_ids=["c1"]
+                    "A", XML, "layered", description="d", linked_card_ids=["c1"]
                 )
             )
         assert out["valid"] is True and out["issues"] == []
@@ -194,12 +195,17 @@ class TestCreateArchimateDiagram:
         assert out["would_create"]["linked_card_ids"] == ["c1"]
 
     @pytest.mark.asyncio
-    async def test_commit_posts_the_diagram_with_kind_and_format(self, fake_token):
+    async def test_commit_posts_the_diagram_with_kind_format_and_viewpoint(self, fake_token):
         post = AsyncMock(return_value={"id": "d1"})
         with patch.object(server.TurboEAClient, "post", post):
             out = json.loads(
                 await server.create_archimate_diagram(
-                    "A", XML, description="x", linked_card_ids=["c1"], dry_run=False
+                    "A",
+                    XML,
+                    viewpoint_key="layered",
+                    description="x",
+                    linked_card_ids=["c1"],
+                    dry_run=False,
                 )
             )
         post.assert_awaited_once_with(
@@ -208,6 +214,7 @@ class TestCreateArchimateDiagram:
                 "name": "A",
                 "description": "x",
                 "kind": "archimate",
+                "viewpoint_key": "layered",
                 "data": {"format": "archimate-exchange-3.1", "xml": XML},
                 "card_ids": ["c1"],
             },
@@ -218,34 +225,67 @@ class TestCreateArchimateDiagram:
     async def test_commit_without_description_or_links_sends_null_and_empty(self, fake_token):
         post = AsyncMock(return_value={"id": "d1"})
         with patch.object(server.TurboEAClient, "post", post):
-            await server.create_archimate_diagram("A", XML, dry_run=False)
+            await server.create_archimate_diagram("A", XML, "layered", dry_run=False)
         body = post.await_args.kwargs["json"]
         assert body["description"] is None and body["card_ids"] == []
+        assert body["viewpoint_key"] == "layered"
+
+    def test_viewpoint_key_is_a_required_parameter(self):
+        import inspect
+
+        param = inspect.signature(server.create_archimate_diagram).parameters["viewpoint_key"]
+        assert param.default is inspect.Parameter.empty
+        assert "list_viewpoints" in (
+            server.mcp._tool_manager._tools["create_archimate_diagram"].description
+        )
 
     @pytest.mark.asyncio
     async def test_commit_is_blocked_when_writes_are_disabled(self, fake_token, monkeypatch):
         monkeypatch.setattr(server, "_writes_disabled_message", lambda: "writes off")
-        assert await server.create_archimate_diagram("A", XML, dry_run=False) == "writes off"
+        assert (
+            await server.create_archimate_diagram("A", XML, "layered", dry_run=False)
+            == "writes off"
+        )
 
     @pytest.mark.asyncio
     async def test_dry_run_is_blocked_when_writes_are_disabled(self, fake_token, monkeypatch):
         monkeypatch.setattr(server, "_writes_disabled_message", lambda: "writes off")
         post = AsyncMock()
         with patch.object(server.TurboEAClient, "post", post):
-            assert await server.create_archimate_diagram("A", XML) == "writes off"
+            assert await server.create_archimate_diagram("A", XML, "layered") == "writes off"
         post.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_unauthenticated(self, monkeypatch):
         monkeypatch.setattr(server, "_stdio_token", None)
         assert (
-            await server.create_archimate_diagram("A", XML)
+            await server.create_archimate_diagram("A", XML, "layered")
             == "Error: Not authenticated. Please reconnect."
         )
 
     def test_is_an_additive_write(self):
         ann = server.mcp._tool_manager._tools["create_archimate_diagram"].annotations
         assert ann.readOnlyHint is False and not ann.destructiveHint
+
+
+class TestListViewpoints:
+    @pytest.mark.asyncio
+    async def test_returns_the_catalog_from_the_metamodel(self, fake_token):
+        catalog = [{"key": "layered", "name": "Layered", "objects": ["BusinessActor"]}]
+        get = AsyncMock(return_value=catalog)
+        with patch.object(server.TurboEAClient, "get", get):
+            out = json.loads(await server.list_viewpoints())
+        get.assert_awaited_once_with("/metamodel/viewpoints")
+        assert out == catalog
+
+    @pytest.mark.asyncio
+    async def test_unauthenticated(self, monkeypatch):
+        monkeypatch.setattr(server, "_stdio_token", None)
+        assert await server.list_viewpoints() == "Error: Not authenticated. Please reconnect."
+
+    def test_is_read_only(self):
+        tool = server.mcp._tool_manager._tools["list_viewpoints"]
+        assert tool.annotations.readOnlyHint is True
 
 
 class TestUpdateArchimateDiagram:

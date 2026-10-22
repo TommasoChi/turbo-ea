@@ -1,6 +1,13 @@
 {
   "page.title": "Diagrams",
   "gallery.newDiagram": "New Diagram",
+  "gallery.diagramType": "Diagram type",
+  "gallery.diagramTypeDrawio": "Draw.io",
+  "gallery.diagramTypeArchimate": "ArchiMate",
+  "archimatePicker.viewpoint": "Viewpoint",
+  "archimatePicker.blank": "Blank",
+  "archimatePicker.exampleLoadFailed": "Couldn't load that example. Try again, or start from Blank.",
+  "archimatePicker.nameRequired": "Enter a name above before picking a viewpoint.",
   "gallery.editDiagram": "Edit Diagram",
   "gallery.empty": "No diagrams yet. Create one to get started.",
   "gallery.linkedCards": "Linked Cards",
