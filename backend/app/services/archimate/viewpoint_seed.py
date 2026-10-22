@@ -3,11 +3,17 @@
 viewpoint x tab -> card-type suggestion overrides (``ArchimateViewpointTabCard``).
 
 "Core element" in the ArchiMate 3.1 spec's own definition of the Goal
-Realization, Requirements Realization and Layered viewpoints (any element may
-additionally appear) is deliberately **not** seeded as "allow everything" --
-that would silently reintroduce Free mode for those three. Only the
-explicitly named elements are seeded; an admin can widen the list later
+Realization and Requirements Realization viewpoints (any element may
+additionally appear) is deliberately **not** seeded as "allow everything" for
+those two -- that would silently reintroduce Free mode for them. Only their
+explicitly named elements are seeded; an admin can widen either list later
 through the editable tag-chip UI (Task 5).
+
+Layered is the one deliberate exception, by design rather than by the same
+"core element" escape hatch: the standard defines it as the integrated,
+all-layers view, so its `objects` is seeded as the full
+`taxonomy.ALL_ELEMENT_TYPES` set on purpose -- not a Free-mode regression,
+since every other viewpoint still keeps its own named, restrictive list.
 """
 
 from __future__ import annotations
