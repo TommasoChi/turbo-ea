@@ -16,6 +16,9 @@ describe("ViewpointCatalogTabContent", () => {
   it("lists viewpoints with their layer badge and object count", async () => {
     render(<ViewpointCatalogTabContent />);
     expect(await screen.findByText("Organization")).toBeInTheDocument();
-    expect(screen.getByText("business")).toBeInTheDocument();
+    // The layer chip renders the translated layer name (`layers.business` in
+    // en/archimate.json is "Business"), not the raw backend value -- same
+    // localization every sibling layer `Select` in this feature uses.
+    expect(screen.getByText("Business")).toBeInTheDocument();
   });
 });

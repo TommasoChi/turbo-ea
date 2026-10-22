@@ -17,7 +17,7 @@ import Alert from "@mui/material/Alert";
 import IconPicker from "@/components/IconPicker";
 import KeyInput, { isValidKey } from "@/components/KeyInput";
 import MaterialSymbol from "@/components/MaterialSymbol";
-import { ApiError } from "@/api/client";
+import { apiErrorMessage } from "@/api/client";
 import {
   addViewpointObject,
   createViewpoint,
@@ -48,7 +48,8 @@ export interface ViewpointEditDialogProps {
  *
  * The allowed-objects editor (add via `Select` + button, remove via a
  * deletable `Chip` each) mirrors `CardMappingRowEditor`'s add row and
- * `HierarchyLinkTypesSection`'s chip, pointed at `addViewpointObject` /
+ * `CardMultiPicker`'s removable `Chip` (`onDelete`, frontend/src/components/
+ * CardMultiPicker.tsx:586), pointed at `addViewpointObject` /
  * `removeViewpointObject` instead. It only works once the Viewpoint actually
  * exists server-side, so in create mode it stays hidden until the first Save
  * creates the row -- the dialog then switches in place to edit mode (without
@@ -94,13 +95,6 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
       .catch(() => setEnterpriseObjects([]));
   }, [open]);
 
-  const errorMessage = (e: unknown, fallback: string): string =>
-    e instanceof ApiError && typeof e.detail === "string"
-      ? e.detail
-      : e instanceof Error
-        ? e.message
-        : fallback;
-
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -115,7 +109,7 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
         onSaved();
       }
     } catch (e) {
-      setError(errorMessage(e, t("metamodel.viewpoints.saveFailed")));
+      setError(apiErrorMessage(e, t("metamodel.viewpoints.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -129,7 +123,7 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
       setAddKey("");
       onSaved();
     } catch (e) {
-      setError(errorMessage(e, t("metamodel.viewpoints.saveFailed")));
+      setError(apiErrorMessage(e, t("metamodel.viewpoints.saveFailed")));
     }
   };
 
@@ -140,7 +134,7 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
       setObjects((prev) => prev.filter((k) => k !== eoKey));
       onSaved();
     } catch (e) {
-      setError(errorMessage(e, t("metamodel.viewpoints.saveFailed")));
+      setError(apiErrorMessage(e, t("metamodel.viewpoints.saveFailed")));
     }
   };
 

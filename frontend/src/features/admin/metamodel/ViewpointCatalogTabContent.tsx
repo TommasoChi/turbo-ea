@@ -15,7 +15,7 @@ import Tooltip from "@mui/material/Tooltip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
 import MaterialSymbol from "@/components/MaterialSymbol";
-import { ApiError } from "@/api/client";
+import { apiErrorMessage } from "@/api/client";
 import { deleteViewpoint, listViewpoints, updateViewpoint } from "@/api/archimateViewpoints";
 import { useOptionalAuthUser } from "@/hooks/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -79,12 +79,7 @@ export default function ViewpointCatalogTabContent() {
       await deleteViewpoint(vp.key);
       fetchViewpoints();
     } catch (e) {
-      const detail = e instanceof ApiError ? e.detail : null;
-      const message =
-        detail && typeof detail === "object" && "message" in detail
-          ? String((detail as { message: unknown }).message)
-          : t("metamodel.viewpoints.deleteFailed");
-      setError(message);
+      setError(apiErrorMessage(e, t("metamodel.viewpoints.deleteFailed")));
     }
   };
 
@@ -141,7 +136,7 @@ export default function ViewpointCatalogTabContent() {
                 </ButtonBase>
               </TableCell>
               <TableCell>
-                <Chip size="small" label={vp.layer} />
+                <Chip size="small" label={t(`layers.${vp.layer}`, { ns: "archimate" })} />
               </TableCell>
               <TableCell>
                 <Chip
