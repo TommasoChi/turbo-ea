@@ -775,6 +775,7 @@ async def get_diagram(
         "name": d.name,
         "kind": d.kind,
         "description": d.description,
+        "viewpoint_key": d.viewpoint_key,
         "data": d.data,
         "card_ids": linked_card_ids,
         "card_refs": _extract_card_refs(d.data),

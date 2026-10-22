@@ -9,6 +9,12 @@ export function listViewpoints(includeHidden?: boolean): Promise<ArchimateViewpo
   );
 }
 
+/** One Viewpoint, with its `objects` (allowed Enterprise Object keys) --
+ *  the designer palette's filter (Task 9) fetches this once per diagram load. */
+export function getViewpoint(key: string): Promise<ArchimateViewpoint> {
+  return api.get<ArchimateViewpoint>(`/metamodel/viewpoints/${key}`);
+}
+
 /** Create a custom Viewpoint. Always lands with `is_standard: false`
  *  server-side regardless of what `body` sends. */
 export function createViewpoint(body: Partial<ArchimateViewpoint>): Promise<ArchimateViewpoint> {
