@@ -125,8 +125,9 @@ export default function CreateDiagramDialog({
     viewpointKey: string,
     startingXml: string | null,
     suggestedCardIds: string[],
+    viewpointName: string,
   ) => {
-    if (!name.trim() || submitting) return;
+    if (submitting) return;
     if (startingXml === null) {
       setArchimateError(t("archimatePicker.exampleLoadFailed"));
       return;
@@ -135,7 +136,9 @@ export default function CreateDiagramDialog({
     setSubmitting(true);
     try {
       const created = await createDiagram({
-        name: name.trim(),
+        // Default to the viewpoint's own name when the user didn't type one --
+        // still editable beforehand, same as a drawio diagram's name.
+        name: name.trim() || viewpointName,
         description: description.trim() || undefined,
         kind: "archimate",
         viewpoint_key: viewpointKey,
@@ -233,11 +236,6 @@ export default function CreateDiagramDialog({
             {archimateError && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {archimateError}
-              </Alert>
-            )}
-            {!name.trim() && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                {t("archimatePicker.nameRequired")}
               </Alert>
             )}
             <ArchimateViewpointPicker

@@ -53,7 +53,12 @@ describe("ArchimateViewpointPicker", () => {
     await user.click(await screen.findByRole("option", { name: "Application Cooperation" }));
     await user.click(await screen.findByText(/blank/i));
     await vi.waitFor(() =>
-      expect(onSelect).toHaveBeenCalledWith("application-cooperation", expect.any(String), ["Application"]),
+      expect(onSelect).toHaveBeenCalledWith(
+        "application-cooperation",
+        expect.any(String),
+        ["Application"],
+        "Application Cooperation",
+      ),
     );
   });
 
@@ -74,7 +79,12 @@ describe("ArchimateViewpointPicker", () => {
     await user.click(await screen.findByRole("option", { name: "Application Cooperation" }));
     await user.click(await screen.findByText(/blank/i));
     await vi.waitFor(() =>
-      expect(onSelect).toHaveBeenCalledWith("application-cooperation", expect.any(String), []),
+      expect(onSelect).toHaveBeenCalledWith(
+        "application-cooperation",
+        expect.any(String),
+        [],
+        "Application Cooperation",
+      ),
     );
   });
 
@@ -99,7 +109,9 @@ describe("ArchimateViewpointPicker", () => {
     await user.click(await screen.findByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "Organization" }));
     await user.click(await screen.findByText("Starter"));
-    await vi.waitFor(() => expect(onSelect).toHaveBeenCalledWith("organization", "<xml/>", []));
+    await vi.waitFor(() =>
+      expect(onSelect).toHaveBeenCalledWith("organization", "<xml/>", [], "Organization"),
+    );
     expect(vi.mocked(api.get).mock.calls.some((c) => String(c[0]).includes("suggested-cards"))).toBe(false);
   });
 });

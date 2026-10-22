@@ -77,6 +77,29 @@ describe("ArchimateRenderer: shapes", () => {
     expect(css(gfx(shape).querySelector("path.archimate-body"), "fill")).toBe("rgb(10, 20, 30)");
   });
 
+  it("uses a standard element's own EnterpriseObject colour once an admin changed it", () => {
+    const customized: EnterpriseObject = {
+      key: "BusinessActor", name: "Business Actor", description: null, icon: "person", color: "#ab12cd",
+      layer: "business", is_standard: true, is_locked: false, is_hidden: false, sort_order: 0, card_mappings: [],
+    };
+    const { add, gfx } = setup([customized]);
+    const body = gfx(add("BusinessActor")).querySelector("path.archimate-body") as SVGPathElement;
+    expect(css(body, "stroke")).toBe("#ab12cd");
+    expect(css(body, "fill")).toBe(tint("#ab12cd"));
+  });
+
+  it("still renders the plain layer colour for a standard element at its seeded default colour", () => {
+    const unedited: EnterpriseObject = {
+      key: "BusinessActor", name: "Business Actor", description: null, icon: "person",
+      color: ARCHIMATE_LAYER_COLORS.business.stroke,
+      layer: "business", is_standard: true, is_locked: false, is_hidden: false, sort_order: 0, card_mappings: [],
+    };
+    const { add, gfx } = setup([unedited]);
+    const body = gfx(add("BusinessActor")).querySelector("path.archimate-body") as SVGPathElement;
+    expect(css(body, "fill")).toBe(ARCHIMATE_LAYER_COLORS.business.fill);
+    expect(css(body, "stroke")).toBe(ARCHIMATE_LAYER_COLORS.business.stroke);
+  });
+
   it("draws a badge at the bottom-right corner of a linked element only", () => {
     const { add, gfx, factory, modeling, root } = setup();
     const linked: ModelElement = {

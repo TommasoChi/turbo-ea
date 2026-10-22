@@ -5,6 +5,13 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.177.1] - 2026-10-22
+
+### Added
+
+- **New ArchiMate diagram defaults to the picked viewpoint's name.** The create-diagram dialog no longer blocks the viewpoint picker behind a typed name; picking a viewpoint (or a blank/example starter) now defaults the diagram's name to that viewpoint's own name when the field was left empty, still editable beforehand.
+- **Standard ArchiMate elements now honor an admin-customized Enterprise Object color.** Previously only custom Enterprise Objects respected `EnterpriseObject.color`; the 60+ standard ArchiMate element types always rendered with a hardcoded per-layer color regardless of an admin's edit. An unedited element (still at its seeded default color) renders unchanged.
+
 ## [2.177.0] - 2026-10-22
 
 ### Added
