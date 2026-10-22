@@ -36,10 +36,16 @@ function renderPage() {
   });
 }
 
+const VIEWPOINTS = [
+  { key: "organization", name: "Organization", icon: "hub", examples: [] },
+];
+
 beforeEach(() => {
   mockApi.reset();
   hookState.reset();
   mockApi.on("get", "/diagrams?kind=archimate", ROWS);
+  // ArchimateViewpointPicker (tab=null) lists via the unscoped `listViewpoints()` call.
+  mockApi.on("get", "/metamodel/viewpoints", VIEWPOINTS);
 });
 
 describe("ArchimateSandboxPage", () => {
@@ -68,39 +74,55 @@ describe("ArchimateSandboxPage", () => {
     expect(screen.queryByText(t("sandbox.empty"))).not.toBeInTheDocument();
   });
 
-  it("posts the exact payload for a new diagram and opens it", async () => {
+  it("posts the exact payload for a new diagram (with its viewpoint) and opens it", async () => {
     mockApi.on("post", "/diagrams", { id: "new1" });
     const { user } = renderPage();
     await screen.findByText("Landscape");
     await user.click(screen.getByRole("button", { name: t("sandbox.newDiagram") }));
     await user.type(screen.getByLabelText(t("sandbox.name")), "  My view  ");
-    await user.click(screen.getByRole("button", { name: t("sandbox.create") }));
+    await user.click(await screen.findByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Organization" }));
+    await user.click(await screen.findByText("Blank"));
 
     expect(await screen.findByText("editor:new1")).toBeInTheDocument();
     const [call] = mockApi.callsOf("post", "/diagrams");
-    const body = call.body as { name: string; kind: string; data: { format: string; xml: string } };
-    expect(Object.keys(body).sort()).toEqual(["data", "kind", "name"]);
+    const body = call.body as {
+      name: string;
+      kind: string;
+      viewpoint_key: string;
+      data: { format: string; xml: string };
+    };
+    expect(Object.keys(body).sort()).toEqual(["data", "kind", "name", "viewpoint_key"]);
     expect(body.name).toBe("My view");
     expect(body.kind).toBe("archimate");
+    expect(body.viewpoint_key).toBe("organization");
     expect(Object.keys(body.data).sort()).toEqual(["format", "xml"]);
     expect(body.data.format).toBe(ARCHIMATE_FORMAT);
     const model = readExchange(body.data.xml);
-    expect(model.name).toBe("My view");
-    expect(model.views.map((v) => v.name)).toEqual(["My view"]);
+    // The blank model's internal name comes from the Viewpoint, not the diagram's own name
+    // (the picker has no diagram-name field to build it from -- see ArchimateViewpointPicker.tsx).
+    expect(model.name).toBe("Organization");
+    expect(model.views.map((v) => v.name)).toEqual(["Organization"]);
     expect(model.elements).toEqual([]);
   });
 
-  it("keeps Create disabled for an empty or whitespace-only name", async () => {
+  it("requires a name before a viewpoint pick does anything, then lets it proceed", async () => {
+    mockApi.on("post", "/diagrams", { id: "new1" });
     const { user } = renderPage();
     await screen.findByText("Landscape");
     await user.click(screen.getByRole("button", { name: t("sandbox.newDiagram") }));
-    const create = screen.getByRole("button", { name: t("sandbox.create") });
-    expect(create).toBeDisabled();
-    await user.type(screen.getByLabelText(t("sandbox.name")), "   ");
-    expect(create).toBeDisabled();
-    await user.type(screen.getByLabelText(t("sandbox.name")), "x");
-    expect(create).toBeEnabled();
+    expect(screen.getByText(i18n.t("diagrams:archimatePicker.nameRequired") as string)).toBeInTheDocument();
+
+    await user.click(await screen.findByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Organization" }));
+    await user.click(await screen.findByText("Blank"));
+    // No name yet -- the click must be a no-op.
     expect(mockApi.callsOf("post")).toEqual([]);
+
+    await user.type(screen.getByLabelText(t("sandbox.name")), "x");
+    expect(screen.queryByText(i18n.t("diagrams:archimatePicker.nameRequired") as string)).not.toBeInTheDocument();
+    await user.click(await screen.findByText("Blank"));
+    expect(await screen.findByText("editor:new1")).toBeInTheDocument();
   });
 
   it("shows the server's reason and stays on the page when the create is rejected", async () => {
@@ -108,13 +130,15 @@ describe("ArchimateSandboxPage", () => {
     const { user } = renderPage();
     await screen.findByText("Landscape");
     await user.click(screen.getByRole("button", { name: t("sandbox.newDiagram") }));
-    await user.type(screen.getByLabelText(t("sandbox.name")), "Dup{Enter}");
+    await user.type(screen.getByLabelText(t("sandbox.name")), "Dup");
+    await user.click(await screen.findByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Organization" }));
+    await user.click(await screen.findByText("Blank"));
 
     expect(await screen.findByText(t("sandbox.createFailed", { reason: "name already taken" }))).toBeInTheDocument();
     expect(screen.queryByText(/^editor:/)).not.toBeInTheDocument();
     // The typed name is kept so the admin can fix it and retry.
     expect(screen.getByLabelText(t("sandbox.name"))).toHaveValue("Dup");
-    expect(screen.getByRole("button", { name: t("sandbox.create") })).toBeEnabled();
   });
 
   it("asks before deleting, then deletes, refreshes the list and confirms", async () => {
