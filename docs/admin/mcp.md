@@ -157,7 +157,7 @@ In this mode, the server authenticates with email/password and refreshes the tok
 
 ## Available Capabilities
 
-The MCP server exposes **55 tools** across two groups: **34 read tools** that query EA data and **21 write tools** (15 additive, 6 destructive) that create and maintain cards, relations, diagrams, risks, ADRs and more — including turning artifacts an AI tool has in its own context (spreadsheets, BPMN XML, DrawIO XML, documents, images) into structured EA data. Every tool carries MCP `ToolAnnotations` (read-only / destructive / idempotent hints) so connectors can surface destructiveness in their UI.
+The MCP server exposes **56 tools** across two groups: **35 read tools** that query EA data and **21 write tools** (15 additive, 6 destructive) that create and maintain cards, relations, diagrams, risks, ADRs and more — including turning artifacts an AI tool has in its own context (spreadsheets, BPMN XML, DrawIO XML, documents, images) into structured EA data. Every tool carries MCP `ToolAnnotations` (read-only / destructive / idempotent hints) so connectors can surface destructiveness in their UI.
 
 ### Dry-run safety on writes
 
@@ -239,6 +239,7 @@ The server exposes 34 read tools grouped into eight clusters.
 | `list_diagrams` | List diagrams, optionally filtered to one card; `kind` selects free-draw (`drawio`, the default), `archimate` or `all` |
 | `get_diagram` | Fetch a single diagram by id: its `kind`, plus the DrawIO XML (or, for an ArchiMate diagram, the Exchange XML) in `data.xml` |
 | `get_archimate_mapping` | How Turbo EA card and relation types map to ArchiMate 3.x element and relationship types (read before drawing an ArchiMate diagram) |
+| `list_viewpoints` | The ArchiMate Viewpoint catalog: each viewpoint's key, layer and allowed objects (pick the `viewpoint_key` for `create_archimate_diagram`) |
 
 **Audit & change history**
 
@@ -268,7 +269,7 @@ The server exposes 21 write tools, each annotated as **additive** (creates or ex
 | `update_adr` | Update an ADR (title, sections, status, linked cards). |
 | `sign_adr` | Sign an ADR (requires the `adr.sign` permission; otherwise returns a UI deep-link to sign in the browser). |
 | `create_diagram` | Create a free-form DrawIO diagram with optional links to existing cards. |
-| `create_archimate_diagram` | Create an ArchiMate diagram from Open Group Exchange Format XML, with optional links to existing cards. The dry run validates the model on the server and reports `valid` and `issues` without creating anything. |
+| `create_archimate_diagram` | Create an ArchiMate diagram from Open Group Exchange Format XML in a given Viewpoint (`viewpoint_key`, from `list_viewpoints`), with optional links to existing cards. The dry run validates the model on the server and reports `valid` and `issues` without creating anything. |
 | `import_bpmn` | Save a BPMN 2.0 XML diagram against an **existing** Business Process card. If no card matches the given name, the tool returns a `card_not_found` error pointing the agent at `create_cards_bulk` — this forces the agent to create the card explicitly with description, subtype and attributes first, instead of taking a shortcut that lands a sparse card. |
 | `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
