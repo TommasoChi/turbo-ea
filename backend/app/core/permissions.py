@@ -439,7 +439,7 @@ def resolve_cell(cell: object, subtype: str | None = None) -> bool | None:
         scoped = cell.get("subtypes")
         if scoped and subtype not in scoped:
             return None
-        return bool(cell.get("value", False))
+        return bool(cell.get("value", False))  # pragma: no mutate, bool(None)==bool(False)
     return bool(cell)
 
 
@@ -569,7 +569,7 @@ def _validate_role_permission_cell(
         return {"value": cell_value, "subtypes": list(subtypes)}
     raise ValueError(
         f"role_permissions['{role_key}']['{perm_key}'] must be a boolean or "
-        "a {{value, subtypes}} object"
+        "a {value, subtypes} object"
     )
 
 

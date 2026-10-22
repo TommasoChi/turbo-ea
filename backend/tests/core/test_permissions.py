@@ -618,8 +618,15 @@ class TestValidateTypeRolePermissions:
             self._validate({"member": {"made.up": True}})
 
     def test_non_bool_value_rejected(self):
-        with pytest.raises(ValueError, match="must be a boolean"):
+        # Exact-message assertion (not just a substring match): pins role_key
+        # and perm_key being threaded through to _validate_role_permission_cell
+        # unchanged, and the fallback message's literal text.
+        with pytest.raises(ValueError) as exc_info:
             self._validate({"member": {"inventory.create": "yes"}})
+        assert str(exc_info.value) == (
+            "role_permissions['member']['inventory.create'] must be a boolean or "
+            "a {value, subtypes} object"
+        )
 
     def test_non_dict_payload_rejected(self):
         with pytest.raises(ValueError, match="must be an object"):
