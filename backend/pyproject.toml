@@ -81,7 +81,7 @@ include = ["app*"]
 # raises `FileNotFoundError` the first time it runs.
 [tool.setuptools.package-data]
 "app.services" = ["data/*.json", "data/*.pack"]
-"app.services.archimate" = ["*.json"]
+"app.services.archimate" = ["*.json", "viewpoint_examples/*.xml"]
 
 [build-system]
 requires = ["setuptools>=75.0"]

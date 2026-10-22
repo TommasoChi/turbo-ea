@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="id-f0607ad9eb0845a8829f43f5f7c676ff">
+  <name xml:lang="en">ArchiSurance_Practice</name>
+  <elements>
+    <element identifier="id-4bf08111e77046e58aa513faf75206fe" xsi:type="TechnologyService">
+      <name xml:lang="en">Device Registration Service</name>
+    </element>
+    <element identifier="id-01f27a0ee02d4fff854399d19446f581" xsi:type="TechnologyService">
+      <name xml:lang="en">Notification Service</name>
+    </element>
+    <element identifier="id-ee2b8ba9fd6a4591ad7409b51e02acb7" xsi:type="Node">
+      <name xml:lang="en">Data Acquisition Gateway</name>
+    </element>
+    <element identifier="id-3fceb27c6070442e830c7b62e6206b96" xsi:type="TechnologyService">
+      <name xml:lang="en">Device Operation Service</name>
+    </element>
+    <element identifier="id-40ceb8af4e564a77a64c2ef711ea57f5" xsi:type="Grouping">
+      <name xml:lang="en">Communication</name>
+    </element>
+    <element identifier="id-545855797e6f416ab5351b1794d30452" xsi:type="TechnologyFunction">
+      <name xml:lang="en">Data Acquisition</name>
+    </element>
+    <element identifier="id-986a9280877b4afea21b3d4aec0667da" xsi:type="TechnologyService">
+      <name xml:lang="en">PaaS Service</name>
+    </element>
+    <element identifier="id-b889e819050d4258a3674e0336256d02" xsi:type="Equipment">
+      <name xml:lang="en">IoT Devices</name>
+    </element>
+    <element identifier="id-e9469e521dec4e2c8e2c7c9ab3d4866b" xsi:type="SystemSoftware">
+      <name xml:lang="en">Container</name>
+    </element>
+    <element identifier="id-479bc550b1884fca9cd95c1f112a12be" xsi:type="TechnologyInterface">
+      <name xml:lang="en">REST API</name>
+    </element>
+  </elements>
+  <relationships>
+    <relationship identifier="id-325b65bb51fc4e9ea730751c48063e03" source="id-ee2b8ba9fd6a4591ad7409b51e02acb7" target="id-479bc550b1884fca9cd95c1f112a12be" xsi:type="Composition" />
+    <relationship identifier="id-a097d5d397084bb6b05bf950a623a043" source="id-ee2b8ba9fd6a4591ad7409b51e02acb7" target="id-e9469e521dec4e2c8e2c7c9ab3d4866b" xsi:type="Assignment" />
+    <relationship identifier="id-8806ef6699904736bd32bf9eb4bf9405" source="id-40ceb8af4e564a77a64c2ef711ea57f5" target="id-4bf08111e77046e58aa513faf75206fe" xsi:type="Composition" />
+    <relationship identifier="id-73c408d026df43f4b09a79f24f227d76" source="id-986a9280877b4afea21b3d4aec0667da" target="id-ee2b8ba9fd6a4591ad7409b51e02acb7" xsi:type="Serving" />
+    <relationship identifier="id-9641eeeac3894ade957445c582b6edeb" source="id-545855797e6f416ab5351b1794d30452" target="id-40ceb8af4e564a77a64c2ef711ea57f5" xsi:type="Realization" />
+    <relationship identifier="id-202cf4b35c0546a2b8662c48762576b5" source="id-ee2b8ba9fd6a4591ad7409b51e02acb7" target="id-545855797e6f416ab5351b1794d30452" xsi:type="Assignment" />
+    <relationship identifier="id-86ec537da0a145628a76bc7b3b8c5e2a" source="id-40ceb8af4e564a77a64c2ef711ea57f5" target="id-3fceb27c6070442e830c7b62e6206b96" xsi:type="Composition" />
+    <relationship identifier="id-90d0ac8d43f24740a1fefea8d8aee3c9" source="id-40ceb8af4e564a77a64c2ef711ea57f5" target="id-01f27a0ee02d4fff854399d19446f581" xsi:type="Composition" />
+    <relationship identifier="id-28fb8f598f204a18b441e6110a28a65c" source="id-479bc550b1884fca9cd95c1f112a12be" target="id-40ceb8af4e564a77a64c2ef711ea57f5" xsi:type="Assignment" />
+    <relationship identifier="id-bd84ecb0e026470fb3a5a2cb5a8404ba" source="id-40ceb8af4e564a77a64c2ef711ea57f5" target="id-b889e819050d4258a3674e0336256d02" xsi:type="Serving" />
+    <relationship identifier="id-08a5ac0a345b447bb5ee1d777877a96a" source="id-e9469e521dec4e2c8e2c7c9ab3d4866b" target="id-545855797e6f416ab5351b1794d30452" xsi:type="Assignment" />
+  </relationships>
+  <views>
+    <diagrams>
+      <view identifier="id-d260c3c5bca443f6ba69adb39d3af926" xsi:type="Diagram">
+        <name xml:lang="en">Figure32_IoT-Device-Services(Target)</name>
+        <node identifier="id-a02468c627bb462db32454c1665df500" xsi:type="Element" elementRef="id-b889e819050d4258a3674e0336256d02" x="132" y="237" w="120" h="55" />
+        <node identifier="id-ba56ef2623e145cd933c5b9cc0aaf081" xsi:type="Element" elementRef="id-ee2b8ba9fd6a4591ad7409b51e02acb7" x="708" y="105" w="193" h="241">
+          <node identifier="id-5a53bb2a12b743529131a18c20a67908" xsi:type="Element" elementRef="id-545855797e6f416ab5351b1794d30452" x="39" y="36" w="120" h="55" />
+          <node identifier="id-4ee8257e4b6b4f1b8b453279cfa34517" xsi:type="Element" elementRef="id-e9469e521dec4e2c8e2c7c9ab3d4866b" x="36" y="132" w="120" h="55" />
+        </node>
+        <node identifier="id-11555c0064e54b1ca9026d790ce3c018" xsi:type="Element" elementRef="id-40ceb8af4e564a77a64c2ef711ea57f5" x="305" y="113" w="176" h="284">
+          <node identifier="id-bcc43f68bd73476b965990d362678b63" xsi:type="Element" elementRef="id-3fceb27c6070442e830c7b62e6206b96" x="27" y="120" w="120" h="55" />
+          <node identifier="id-8ab2101bd28141f4989cac23ec7ddb97" xsi:type="Element" elementRef="id-4bf08111e77046e58aa513faf75206fe" x="27" y="48" w="120" h="55" />
+          <node identifier="id-4f402d7976c1484d8af7c216778d5113" xsi:type="Element" elementRef="id-01f27a0ee02d4fff854399d19446f581" x="27" y="192" w="120" h="55" />
+        </node>
+        <node identifier="id-886cbd3d69eb40609e195e889259ed1a" xsi:type="Element" elementRef="id-479bc550b1884fca9cd95c1f112a12be" x="540" y="291" w="120" h="55" />
+        <node identifier="id-d30335122157425ca29b2ffe80abfd48" xsi:type="Element" elementRef="id-986a9280877b4afea21b3d4aec0667da" x="744" y="372" w="120" h="55" />
+        <connection identifier="id-9750bccdd17a435cb182b237c0ee98b6" xsi:type="Relationship" relationshipRef="id-202cf4b35c0546a2b8662c48762576b5" source="id-ba56ef2623e145cd933c5b9cc0aaf081" target="id-5a53bb2a12b743529131a18c20a67908" />
+        <connection identifier="id-f4f1660e99c04d208b229b8ceb727229" xsi:type="Relationship" relationshipRef="id-a097d5d397084bb6b05bf950a623a043" source="id-ba56ef2623e145cd933c5b9cc0aaf081" target="id-4ee8257e4b6b4f1b8b453279cfa34517" />
+        <connection identifier="id-b4ee839c462c4ee0ad4f6392ef589127" xsi:type="Relationship" relationshipRef="id-325b65bb51fc4e9ea730751c48063e03" source="id-ba56ef2623e145cd933c5b9cc0aaf081" target="id-886cbd3d69eb40609e195e889259ed1a" />
+        <connection identifier="id-a4c96178e6c449eca8671f383d91adbb" xsi:type="Relationship" relationshipRef="id-9641eeeac3894ade957445c582b6edeb" source="id-5a53bb2a12b743529131a18c20a67908" target="id-11555c0064e54b1ca9026d790ce3c018" />
+        <connection identifier="id-203d870aca14451c804a83ab6d22f9ca" xsi:type="Relationship" relationshipRef="id-08a5ac0a345b447bb5ee1d777877a96a" source="id-4ee8257e4b6b4f1b8b453279cfa34517" target="id-5a53bb2a12b743529131a18c20a67908" />
+        <connection identifier="id-c59812173bcf4939bc938ab81b42490b" xsi:type="Relationship" relationshipRef="id-86ec537da0a145628a76bc7b3b8c5e2a" source="id-11555c0064e54b1ca9026d790ce3c018" target="id-bcc43f68bd73476b965990d362678b63" />
+        <connection identifier="id-84a25d08cfb045d0b5f8380e59f30714" xsi:type="Relationship" relationshipRef="id-8806ef6699904736bd32bf9eb4bf9405" source="id-11555c0064e54b1ca9026d790ce3c018" target="id-8ab2101bd28141f4989cac23ec7ddb97" />
+        <connection identifier="id-cba3ad62d4554e3b863ee686bd6f963b" xsi:type="Relationship" relationshipRef="id-90d0ac8d43f24740a1fefea8d8aee3c9" source="id-11555c0064e54b1ca9026d790ce3c018" target="id-4f402d7976c1484d8af7c216778d5113" />
+        <connection identifier="id-9428592e720b4750aa62f95a7d37402c" xsi:type="Relationship" relationshipRef="id-bd84ecb0e026470fb3a5a2cb5a8404ba" source="id-11555c0064e54b1ca9026d790ce3c018" target="id-a02468c627bb462db32454c1665df500" />
+        <connection identifier="id-efa6578da61e4be6a6505baeb10c8e19" xsi:type="Relationship" relationshipRef="id-28fb8f598f204a18b441e6110a28a65c" source="id-886cbd3d69eb40609e195e889259ed1a" target="id-11555c0064e54b1ca9026d790ce3c018" />
+        <connection identifier="id-08134f9553ba43528d892463094331fe" xsi:type="Relationship" relationshipRef="id-73c408d026df43f4b09a79f24f227d76" source="id-d30335122157425ca29b2ffe80abfd48" target="id-ba56ef2623e145cd933c5b9cc0aaf081" />
+      </view>
+    </diagrams>
+  </views>
+</model>

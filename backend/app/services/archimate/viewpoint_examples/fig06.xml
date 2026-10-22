@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="id-f0607ad9eb0845a8829f43f5f7c676ff">
+  <name xml:lang="en">ArchiSurance_Practice</name>
+  <elements>
+    <element identifier="id-2a1f2097b7b64e9a8c7599ce8d868497" xsi:type="Principle">
+      <name xml:lang="en">Single system of record for each data element</name>
+    </element>
+    <element identifier="id-8ef1fdc0777a4403a4801d86abb0ea80" xsi:type="Requirement">
+      <name xml:lang="en">Support for Policy Administration</name>
+    </element>
+    <element identifier="id-a7090021812643ce82728f546c8c506b" xsi:type="Requirement">
+      <name xml:lang="en">Strategic Objective</name>
+    </element>
+    <element identifier="id-bbd0385f84594601823b9f1006bfd621" xsi:type="Requirement">
+      <name xml:lang="en">Support for Financial Transactions</name>
+    </element>
+    <element identifier="id-afb5b837ac4f4d5fb463b5d02a12cb05" xsi:type="Requirement">
+      <name xml:lang="en">Stakeholders Requirements</name>
+    </element>
+    <element identifier="id-8377434cd99543ae9b905acf518b38f9" xsi:type="Goal">
+      <name xml:lang="en">Redunction of costs</name>
+    </element>
+    <element identifier="id-27481cf7c70f47faa792099e2bc0d393" xsi:type="Goal">
+      <name xml:lang="en">Improvement in data consistencey</name>
+    </element>
+    <element identifier="id-3f21a591224e4e57af8bf54bc2c4821b" xsi:type="Principle">
+      <name xml:lang="en">Common use of applications</name>
+    </element>
+    <element identifier="id-d44662d3984845868394da79007de9ab" xsi:type="Goal">
+      <name xml:lang="en">Reduction of maintenance costs</name>
+    </element>
+    <element identifier="id-3b2a9fbfa97c46a49d246f567042431c" xsi:type="Requirement">
+      <name xml:lang="en">CRM Data Should Be Maintained Centrally</name>
+    </element>
+    <element identifier="id-f1e488b633be4cdc9f1b181de21d48d1" xsi:type="Requirement">
+      <name xml:lang="en">Stolution Requirements &amp; Trasition Requirements</name>
+    </element>
+    <element identifier="id-3900418ebd814278b3549247a8d97dc9" xsi:type="Requirement">
+      <name xml:lang="en">Business Requirements</name>
+    </element>
+    <element identifier="id-c7429e7256dd45779e04094470dac4b8" xsi:type="Requirement">
+      <name xml:lang="en">Shared Back Office Application for all Porducts</name>
+    </element>
+    <element identifier="id-8dee758036554c42bf2b13e133f8c759" xsi:type="ApplicationComponent">
+      <name xml:lang="en">Architectural Solution Proposal</name>
+    </element>
+    <element identifier="id-04ae8d4a65a942bc87193162bfbdf710" xsi:type="Goal">
+      <name xml:lang="en">Reduction of personnel costs</name>
+    </element>
+    <element identifier="id-7df42551fbd5468e87166161b8c6a77d" xsi:type="Requirement">
+      <name xml:lang="en">Architectural Technical Requirements</name>
+    </element>
+  </elements>
+  <relationships>
+    <relationship identifier="id-d97a41dce1bc481e83c4b63e31d29bad" source="id-3f21a591224e4e57af8bf54bc2c4821b" target="id-04ae8d4a65a942bc87193162bfbdf710" xsi:type="Influence" />
+    <relationship identifier="id-72149898469548bd87358f70ec1e210c" source="id-c7429e7256dd45779e04094470dac4b8" target="id-3f21a591224e4e57af8bf54bc2c4821b" xsi:type="Realization" />
+    <relationship identifier="id-bc1d8ca5b60248969d1869077269e030" source="id-8377434cd99543ae9b905acf518b38f9" target="id-04ae8d4a65a942bc87193162bfbdf710" xsi:type="Aggregation" />
+    <relationship identifier="id-fd7dd8d0529345afb6be54f728af4e75" source="id-c7429e7256dd45779e04094470dac4b8" target="id-bbd0385f84594601823b9f1006bfd621" xsi:type="Aggregation" />
+    <relationship identifier="id-7820330914504022b65b1dd90673271d" source="id-3b2a9fbfa97c46a49d246f567042431c" target="id-2a1f2097b7b64e9a8c7599ce8d868497" xsi:type="Realization" />
+    <relationship identifier="id-5a5c9f720b854f42ad444f306d06aec9" source="id-c7429e7256dd45779e04094470dac4b8" target="id-8ef1fdc0777a4403a4801d86abb0ea80" xsi:type="Aggregation" />
+    <relationship identifier="id-d1cd2ed093754238a509348f1cadbbf5" source="id-3b2a9fbfa97c46a49d246f567042431c" target="id-3f21a591224e4e57af8bf54bc2c4821b" xsi:type="Influence" />
+    <relationship identifier="id-b8190c0598f64f7ba62e8267d1a1d98e" source="id-2a1f2097b7b64e9a8c7599ce8d868497" target="id-27481cf7c70f47faa792099e2bc0d393" xsi:type="Realization" />
+    <relationship identifier="id-158d6dd6a304449e84d19bfbc7a72f50" source="id-2a1f2097b7b64e9a8c7599ce8d868497" target="id-d44662d3984845868394da79007de9ab" xsi:type="Realization" />
+    <relationship identifier="id-cf0311a88c8644f591fad4a9339dab97" source="id-8377434cd99543ae9b905acf518b38f9" target="id-d44662d3984845868394da79007de9ab" xsi:type="Aggregation" />
+    <relationship identifier="id-795e031f309844e69e6a1c20b64f5b5a" source="id-3f21a591224e4e57af8bf54bc2c4821b" target="id-d44662d3984845868394da79007de9ab" xsi:type="Realization" />
+  </relationships>
+  <views>
+    <diagrams>
+      <view identifier="id-70b8113c4d76419b8fa8a6658f8d236f" xsi:type="Diagram">
+        <name xml:lang="en">06 Goal Refinement</name>
+        <node identifier="id-c237b3bd43bb46ada0e2346db8e6a78e" xsi:type="Element" elementRef="id-8dee758036554c42bf2b13e133f8c759" x="26" y="531" w="191" h="55" />
+        <node identifier="id-303e29dede5346b9bf8796e57a9e5894" xsi:type="Element" elementRef="id-afb5b837ac4f4d5fb463b5d02a12cb05" x="24" y="240" w="193" h="55" />
+        <node identifier="id-e63a6b812139411c8b67b1c7bfc618cb" xsi:type="Element" elementRef="id-7df42551fbd5468e87166161b8c6a77d" x="24" y="432" w="193" h="55" />
+        <node identifier="id-a802b082de0a4538bdbbc79d4fca8b5c" xsi:type="Element" elementRef="id-f1e488b633be4cdc9f1b181de21d48d1" x="24" y="336" w="193" h="55" />
+        <node identifier="id-e057cae0b8a0440abe8047a7713c5cf0" xsi:type="Element" elementRef="id-a7090021812643ce82728f546c8c506b" x="24" y="36" w="193" h="55" />
+        <node identifier="id-e1f7183251f6403093f705353418e69e" xsi:type="Element" elementRef="id-3900418ebd814278b3549247a8d97dc9" x="24" y="132" w="193" h="55" />
+        <node identifier="id-e0738584fcbd406fa21d84b1d706abab" xsi:type="Element" elementRef="id-d44662d3984845868394da79007de9ab" x="468" y="216" w="120" h="55" />
+        <node identifier="id-6613a7000f2d41ec8772c287e14d2d42" xsi:type="Element" elementRef="id-04ae8d4a65a942bc87193162bfbdf710" x="646" y="216" w="120" h="55" />
+        <node identifier="id-322f53a3ff78437999f09adada80bf29" xsi:type="Element" elementRef="id-8377434cd99543ae9b905acf518b38f9" x="540" y="108" w="120" h="55" />
+        <node identifier="id-e52c2672aeda43e4acb0aab570feec0b" xsi:type="Element" elementRef="id-27481cf7c70f47faa792099e2bc0d393" x="288" y="216" w="120" h="55" />
+        <node identifier="id-c3992bb7a8d043878836d1a811e05ed2" xsi:type="Element" elementRef="id-2a1f2097b7b64e9a8c7599ce8d868497" x="385" y="335" w="120" h="55" />
+        <node identifier="id-8522ff1b45b649f9925cd721ceb539e5" xsi:type="Element" elementRef="id-3f21a591224e4e57af8bf54bc2c4821b" x="565" y="335" w="120" h="55" />
+        <node identifier="id-eb535bcf4194405884e79025941412b3" xsi:type="Element" elementRef="id-3b2a9fbfa97c46a49d246f567042431c" x="360" y="433" w="169" h="55" />
+        <node identifier="id-3768a145121f4bc7bd88ba9f119184fc" xsi:type="Element" elementRef="id-c7429e7256dd45779e04094470dac4b8" x="565" y="433" w="156" h="55" />
+        <node identifier="id-390d1ab0e6c24646b1d445363d057026" xsi:type="Element" elementRef="id-bbd0385f84594601823b9f1006bfd621" x="516" y="540" w="120" h="55" />
+        <node identifier="id-92bddb23362e42659bbdd59e119bbf88" xsi:type="Element" elementRef="id-8ef1fdc0777a4403a4801d86abb0ea80" x="666" y="540" w="120" h="55" />
+        <connection identifier="id-be6b44a0a51c485b95a7fe2d05012158" xsi:type="Relationship" relationshipRef="id-cf0311a88c8644f591fad4a9339dab97" source="id-322f53a3ff78437999f09adada80bf29" target="id-e0738584fcbd406fa21d84b1d706abab" />
+        <connection identifier="id-d744b0a7fa9846c7a21094a7466b8496" xsi:type="Relationship" relationshipRef="id-bc1d8ca5b60248969d1869077269e030" source="id-322f53a3ff78437999f09adada80bf29" target="id-6613a7000f2d41ec8772c287e14d2d42" />
+        <connection identifier="id-865e1ce1e8204e4288f5f0c1b5d38e87" xsi:type="Relationship" relationshipRef="id-158d6dd6a304449e84d19bfbc7a72f50" source="id-c3992bb7a8d043878836d1a811e05ed2" target="id-e0738584fcbd406fa21d84b1d706abab" />
+        <connection identifier="id-73ac50aab4ef4c4cb8642a0341920c77" xsi:type="Relationship" relationshipRef="id-b8190c0598f64f7ba62e8267d1a1d98e" source="id-c3992bb7a8d043878836d1a811e05ed2" target="id-e52c2672aeda43e4acb0aab570feec0b" />
+        <connection identifier="id-b5857b8dc1434c51a863b06cf3704278" xsi:type="Relationship" relationshipRef="id-795e031f309844e69e6a1c20b64f5b5a" source="id-8522ff1b45b649f9925cd721ceb539e5" target="id-e0738584fcbd406fa21d84b1d706abab" />
+        <connection identifier="id-55a16b7ef0b44ccb83959b79e1f89728" xsi:type="Relationship" relationshipRef="id-d97a41dce1bc481e83c4b63e31d29bad" source="id-8522ff1b45b649f9925cd721ceb539e5" target="id-6613a7000f2d41ec8772c287e14d2d42" />
+        <connection identifier="id-03dda00bcf48446dad076519d5d95cf1" xsi:type="Relationship" relationshipRef="id-7820330914504022b65b1dd90673271d" source="id-eb535bcf4194405884e79025941412b3" target="id-c3992bb7a8d043878836d1a811e05ed2" />
+        <connection identifier="id-4185fbc602a64cc0a6911051ef0fd2a7" xsi:type="Relationship" relationshipRef="id-d1cd2ed093754238a509348f1cadbbf5" source="id-eb535bcf4194405884e79025941412b3" target="id-8522ff1b45b649f9925cd721ceb539e5" />
+        <connection identifier="id-da679b95c4c14459beb033872d67e980" xsi:type="Relationship" relationshipRef="id-72149898469548bd87358f70ec1e210c" source="id-3768a145121f4bc7bd88ba9f119184fc" target="id-8522ff1b45b649f9925cd721ceb539e5" />
+        <connection identifier="id-52af2b0cda1440d4a60fb564cddb2941" xsi:type="Relationship" relationshipRef="id-fd7dd8d0529345afb6be54f728af4e75" source="id-3768a145121f4bc7bd88ba9f119184fc" target="id-390d1ab0e6c24646b1d445363d057026" />
+        <connection identifier="id-a4705e9c683c46b7bd86d4be8204af7a" xsi:type="Relationship" relationshipRef="id-5a5c9f720b854f42ad444f306d06aec9" source="id-3768a145121f4bc7bd88ba9f119184fc" target="id-92bddb23362e42659bbdd59e119bbf88" />
+      </view>
+    </diagrams>
+  </views>
+</model>
