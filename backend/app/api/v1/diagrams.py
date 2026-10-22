@@ -5,7 +5,7 @@ import secrets
 import uuid
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy import delete, select
@@ -20,10 +20,17 @@ from app.core.security import (
     portal_token_matches,
 )
 from app.database import get_db
+from app.models.archimate_viewpoint import (
+    ArchimateViewpoint,
+    ArchimateViewpointExample,
+    ArchimateViewpointObject,
+    ArchimateViewpointTabCard,
+)
 from app.models.card import Card
 from app.models.diagram import Diagram, diagram_cards
 from app.models.diagram_favorite import DiagramFavorite
 from app.models.diagram_group import diagram_group_members
+from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
 from app.models.user import User
 from app.services import audit_log
 from app.services.archimate.validate import validate_exchange
@@ -137,6 +144,15 @@ async def require_public_diagram(
 
 ARCHIMATE_FORMAT = "archimate-exchange-3.1"
 DIAGRAM_KINDS = ("drawio", "archimate")
+
+# The three diagram-creation dashboard tabs, each mapped to the
+# taxonomy.LAYERS / EnterpriseObject.layer keys it covers -- same three
+# groupings as the design doc's nav table.
+TAB_LAYERS: dict[str, set[str]] = {
+    "business": {"strategy", "business", "motivation"},
+    "application": {"application"},
+    "technology": {"technology", "physical"},
+}
 
 
 def check_kind_data(kind: str, data: dict | None) -> None:
@@ -507,6 +523,113 @@ async def create_diagram(
         "kind": d.kind,
         "card_ids": card_ids,
     }
+
+
+# ── viewpoint picker (creation dashboard) ──────────────────────────────────────
+
+
+@router.get("/viewpoints-for-tab")
+async def list_viewpoints_for_tab(
+    tab: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Every non-hidden ArchiMate Viewpoint relevant to one of the three
+    diagram-creation dashboard tabs (business/application/technology).
+
+    A viewpoint appears in a tab when at least one of its allowed objects'
+    ``EnterpriseObject.layer`` falls in that tab's layer set (``TAB_LAYERS``)
+    -- so a viewpoint spanning two tabs' layers (e.g. Implementation and
+    Deployment, application + technology) appears in both. Authenticated
+    read, like ``GET /metamodel/viewpoints`` -- any user who can create a
+    diagram needs this, not just metamodel admins.
+    """
+    layers = TAB_LAYERS.get(tab)
+    if layers is None:
+        raise HTTPException(400, f"Unknown tab {tab!r}")
+
+    vp_result = await db.execute(
+        select(ArchimateViewpoint)
+        .where(ArchimateViewpoint.is_hidden == False)  # noqa: E712
+        .order_by(ArchimateViewpoint.sort_order)
+    )
+    viewpoints = vp_result.scalars().all()
+
+    layer_rows = await db.execute(
+        select(ArchimateViewpointObject.viewpoint_key, EnterpriseObject.layer).join(
+            EnterpriseObject,
+            EnterpriseObject.key == ArchimateViewpointObject.enterprise_object_key,
+        )
+    )
+    layers_by_viewpoint: dict[str, set[str]] = {}
+    for viewpoint_key, layer in layer_rows.all():
+        if layer is not None:
+            layers_by_viewpoint.setdefault(viewpoint_key, set()).add(layer)
+
+    examples_result = await db.execute(select(ArchimateViewpointExample))
+    examples_by_viewpoint: dict[str, list[dict]] = {}
+    for e in examples_result.scalars().all():
+        examples_by_viewpoint.setdefault(e.viewpoint_key, []).append(
+            {"id": str(e.id), "name": e.name}
+        )
+
+    return [
+        {
+            "key": v.key,
+            "name": v.name,
+            "icon": v.icon,
+            "description": v.description,
+            "examples": examples_by_viewpoint.get(v.key, []),
+        }
+        for v in viewpoints
+        if layers_by_viewpoint.get(v.key, set()) & layers
+    ]
+
+
+@router.get("/viewpoints-for-tab/{viewpoint_key}/suggested-cards")
+async def suggested_cards_for_viewpoint_tab(
+    viewpoint_key: str,
+    tab: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Card types to suggest creating from a viewpoint's card-detail tab.
+
+    Returns the explicit ``(viewpoint_key, tab)`` override
+    (``ArchimateViewpointTabCard``) when one exists; otherwise falls back to
+    every card type mapped to the viewpoint's allowed objects -- the "no
+    override needed for single-tab viewpoints" default from spec §5.
+    """
+    if tab not in TAB_LAYERS:
+        raise HTTPException(400, f"Unknown tab {tab!r}")
+
+    vp_result = await db.execute(
+        select(ArchimateViewpoint.key).where(ArchimateViewpoint.key == viewpoint_key)
+    )
+    if not vp_result.scalar_one_or_none():
+        raise HTTPException(404, "Viewpoint not found")
+
+    override_result = await db.execute(
+        select(ArchimateViewpointTabCard.card_type_key).where(
+            ArchimateViewpointTabCard.viewpoint_key == viewpoint_key,
+            ArchimateViewpointTabCard.tab_key == tab,
+        )
+    )
+    overrides = list(override_result.scalars().all())
+    if overrides:
+        return overrides
+
+    fallback_result = await db.execute(
+        select(EnterpriseObjectCardMapping.card_type_key)
+        .join(
+            ArchimateViewpointObject,
+            ArchimateViewpointObject.enterprise_object_key
+            == EnterpriseObjectCardMapping.enterprise_object_key,
+        )
+        .where(ArchimateViewpointObject.viewpoint_key == viewpoint_key)
+        .distinct()
+    )
+    return list(fallback_result.scalars().all())
 
 
 # ── public (unauthenticated) diagram access ───────────────────────────────────

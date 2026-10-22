@@ -4,8 +4,10 @@ import copy
 import logging
 import re
 import uuid
+from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
@@ -18,7 +20,11 @@ from app.core.permissions import (
     validate_type_role_permissions,
 )
 from app.database import get_db
-from app.models.archimate_viewpoint import ArchimateViewpoint, ArchimateViewpointObject
+from app.models.archimate_viewpoint import (
+    ArchimateViewpoint,
+    ArchimateViewpointExample,
+    ArchimateViewpointObject,
+)
 from app.models.card import Card
 from app.models.card_type import CardType
 from app.models.card_type_category import CardTypeCategory
@@ -41,7 +47,9 @@ from app.services import (
     card_type_delete,
 )
 from app.services.archimate import taxonomy
+from app.services.archimate.archi_native_import import convert_archi_native_to_exchange
 from app.services.archimate.card_type_mapping import get_card_type_mapping
+from app.services.archimate.validate import MAX_XML_BYTES, validate_exchange
 from app.services.extensions.registry import extension_registry
 from app.services.hierarchy import (
     HIERARCHY_LEVEL_KEY,
@@ -2830,7 +2838,13 @@ def _serialize_viewpoint_object(o: ArchimateViewpointObject) -> dict:
     }
 
 
-def _serialize_viewpoint(v: ArchimateViewpoint, objects: list[str]) -> dict:
+def _serialize_viewpoint_example(e: ArchimateViewpointExample) -> dict:
+    return {"id": str(e.id), "name": e.name}
+
+
+def _serialize_viewpoint(
+    v: ArchimateViewpoint, objects: list[str], examples: list[dict] | None = None
+) -> dict:
     return {
         "key": v.key,
         "name": v.name,
@@ -2841,7 +2855,35 @@ def _serialize_viewpoint(v: ArchimateViewpoint, objects: list[str]) -> dict:
         "is_hidden": v.is_hidden,
         "sort_order": v.sort_order,
         "objects": objects,
+        "examples": examples or [],
     }
+
+
+async def _viewpoint_examples(db: AsyncSession, key: str) -> list[dict]:
+    result = await db.execute(
+        select(ArchimateViewpointExample).where(ArchimateViewpointExample.viewpoint_key == key)
+    )
+    return [_serialize_viewpoint_example(e) for e in result.scalars().all()]
+
+
+def _exchange_xml_from_upload(xml: str) -> str:
+    """Convert Archi's native ``.archimate`` export to Exchange Format first;
+    pass anything else (already Exchange XML, or simply invalid XML) through
+    unchanged so ``validate_exchange`` reports it as a proper issue instead of
+    this raising.
+
+    Detection reuses ``convert_archi_native_to_exchange``'s own root-tag check
+    (the ``archimatetool.com`` namespace vs. the Exchange XSD root): a
+    ``ValueError`` from it means the root wasn't ``archimate:model``.
+    """
+    if len(xml.encode("utf-8", "replace")) > MAX_XML_BYTES:
+        # Let validate_exchange's own size check produce the "too_large" issue
+        # rather than converting a payload this large first.
+        return xml
+    try:
+        return convert_archi_native_to_exchange(xml)
+    except Exception:
+        return xml
 
 
 @router.get("/viewpoints")
@@ -2868,7 +2910,19 @@ async def list_viewpoints(
     for o in objects_result.scalars().all():
         objects_by_viewpoint.setdefault(o.viewpoint_key, []).append(o.enterprise_object_key)
 
-    return [_serialize_viewpoint(v, objects_by_viewpoint.get(v.key, [])) for v in viewpoints]
+    examples_result = await db.execute(select(ArchimateViewpointExample))
+    examples_by_viewpoint: dict[str, list[dict]] = {}
+    for e in examples_result.scalars().all():
+        examples_by_viewpoint.setdefault(e.viewpoint_key, []).append(
+            _serialize_viewpoint_example(e)
+        )
+
+    return [
+        _serialize_viewpoint(
+            v, objects_by_viewpoint.get(v.key, []), examples_by_viewpoint.get(v.key, [])
+        )
+        for v in viewpoints
+    ]
 
 
 @router.get("/viewpoints/{key}")
@@ -2884,7 +2938,9 @@ async def get_viewpoint(
             ArchimateViewpointObject.viewpoint_key == key
         )
     )
-    return _serialize_viewpoint(v, list(objects_result.scalars().all()))
+    return _serialize_viewpoint(
+        v, list(objects_result.scalars().all()), await _viewpoint_examples(db, key)
+    )
 
 
 @router.post("/viewpoints", status_code=201)
@@ -2958,7 +3014,9 @@ async def update_viewpoint(
             ArchimateViewpointObject.viewpoint_key == v.key
         )
     )
-    return _serialize_viewpoint(v, list(objects_result.scalars().all()))
+    return _serialize_viewpoint(
+        v, list(objects_result.scalars().all()), await _viewpoint_examples(db, v.key)
+    )
 
 
 @router.post("/viewpoints/{key}/objects", status_code=201)
@@ -3075,6 +3133,78 @@ async def delete_viewpoint(
     await db.delete(v)
     await db.commit()
     return {"status": "deleted", "key": key}
+
+
+@router.post("/viewpoints/{key}/examples", status_code=201)
+async def upload_viewpoint_example(
+    key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Upload an example diagram for a Viewpoint.
+
+    ``xml`` may be Archi's native ``.archimate`` export (auto-converted via
+    ``convert_archi_native_to_exchange``) or ArchiMate Exchange Format XML
+    directly -- either way it is run through ``validate_exchange()`` before
+    anything is persisted; on any issue this is a 422 with the validator's
+    own issue list and nothing is saved.
+    """
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(select(ArchimateViewpoint).where(ArchimateViewpoint.key == key))
+    if not result.scalar_one_or_none():
+        raise HTTPException(404, "Viewpoint not found")
+
+    name = body.get("name")
+    xml = body.get("xml")
+    if not name or not isinstance(xml, str) or not xml.strip():
+        raise HTTPException(400, "name and xml are required")
+
+    exchange_xml = await run_in_threadpool(_exchange_xml_from_upload, xml)
+    issues = await run_in_threadpool(validate_exchange, exchange_xml)
+    if issues:
+        raise HTTPException(
+            422,
+            {"message": "Invalid ArchiMate model", "issues": [asdict(i) for i in issues]},
+        )
+
+    example = ArchimateViewpointExample(viewpoint_key=key, name=name, exchange_xml=exchange_xml)
+    db.add(example)
+    await audit_log.record(
+        db,
+        action="admin.metamodel.viewpoint.example_uploaded",
+        category="admin",
+        actor=user,
+        target=("viewpoint", key, name),
+    )
+    await db.commit()
+    await db.refresh(example)
+    return _serialize_viewpoint_example(example)
+
+
+@router.delete("/viewpoints/{key}/examples/{example_id}", status_code=204)
+async def delete_viewpoint_example(
+    key: str,
+    example_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    result = await db.execute(
+        select(ArchimateViewpointExample).where(
+            ArchimateViewpointExample.id == uuid.UUID(example_id),
+            ArchimateViewpointExample.viewpoint_key == key,
+        )
+    )
+    example = result.scalar_one_or_none()
+    if not example:
+        raise HTTPException(404, "Example not found")
+    await audit_log.record(
+        db,
+        action="admin.metamodel.viewpoint.example_deleted",
+        category="admin",
+        actor=user,
+        target=("viewpoint", key, example.name),
+    )
+    await db.delete(example)
+    await db.commit()
 
 
 @router.get("/card-type-archimate-mapping")
