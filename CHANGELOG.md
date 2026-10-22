@@ -5,6 +5,12 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.176.1] - 2026-10-22
+
+### Fixed
+
+- **`relation_table.json` now ships with the installed backend package.** `backend/pyproject.toml`'s `[tool.setuptools.package-data]` only declared `app/services/data/*.json`, missing `app/services/archimate/relation_table.json` entirely — a plain `pip install .` (the Docker image's own build step) silently dropped it, and `is_relationship_allowed()` (used by `validate_exchange()` — `POST /archimate/validate`, every ArchiMate diagram create/update) raised `FileNotFoundError` the first time it ran.
+
 ## [2.176.0] - 2026-10-22
 
 ### Added
