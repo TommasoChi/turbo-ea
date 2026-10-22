@@ -4,7 +4,7 @@
   "gallery.diagramType": "Diagramtype",
   "gallery.diagramTypeDrawio": "Draw.io",
   "gallery.diagramTypeArchimate": "ArchiMate",
-  "archimatePicker.viewpoint": "Viewpoint",
+  "archimatePicker.viewpoint": "Synspunkt",
   "archimatePicker.blank": "Tom",
   "archimatePicker.exampleLoadFailed": "Kunne ikke indlæse eksemplet. Prøv igen, eller start fra Tom.",
   "archimatePicker.nameRequired": "Angiv et navn ovenfor, før du vælger et viewpoint.",

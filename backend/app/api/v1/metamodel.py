@@ -3197,9 +3197,13 @@ async def delete_viewpoint_example(
     user: User = Depends(get_current_user),
 ):
     await PermissionService.require_permission(db, user, "admin.metamodel")
+    try:
+        example_uuid = uuid.UUID(example_id)
+    except ValueError:
+        raise HTTPException(404, "Example not found") from None
     result = await db.execute(
         select(ArchimateViewpointExample).where(
-            ArchimateViewpointExample.id == uuid.UUID(example_id),
+            ArchimateViewpointExample.id == example_uuid,
             ArchimateViewpointExample.viewpoint_key == key,
         )
     )

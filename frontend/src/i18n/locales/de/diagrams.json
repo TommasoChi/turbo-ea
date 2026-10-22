@@ -4,7 +4,7 @@
   "gallery.diagramType": "Diagrammtyp",
   "gallery.diagramTypeDrawio": "Draw.io",
   "gallery.diagramTypeArchimate": "ArchiMate",
-  "archimatePicker.viewpoint": "Viewpoint",
+  "archimatePicker.viewpoint": "Sichtweise",
   "archimatePicker.blank": "Leer",
   "archimatePicker.exampleLoadFailed": "Dieses Beispiel konnte nicht geladen werden. Versuchen Sie es erneut oder beginnen Sie mit Leer.",
   "archimatePicker.nameRequired": "Geben Sie oben einen Namen ein, bevor Sie einen Viewpoint auswählen.",

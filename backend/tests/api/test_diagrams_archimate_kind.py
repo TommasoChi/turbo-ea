@@ -49,6 +49,7 @@ async def test_archimate_diagram_roundtrips_its_data(client, env):
         await client.get(f"/api/v1/diagrams/{r.json()['id']}", headers=auth_headers(env["admin"]))
     ).json()
     assert got["kind"] == "archimate" and got["data"] == AM
+    assert got["viewpoint_key"] == "organization"
 
 
 @pytest.mark.parametrize(

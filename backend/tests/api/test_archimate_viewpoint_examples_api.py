@@ -32,3 +32,15 @@ async def test_upload_rejects_invalid_xml(client, db, admin_user):
     assert resp.status_code == 422
     resp2 = await client.get("/api/v1/metamodel/viewpoints/organization", headers=headers)
     assert resp2.json().get("examples", []) == []
+
+
+async def test_malformed_example_id_is_a_404_not_a_500(client, db, admin_user):
+    headers = auth_headers(admin_user)
+    resp = await client.delete(
+        "/api/v1/metamodel/viewpoints/organization/examples/not-a-uuid", headers=headers
+    )
+    assert resp.status_code == 404
+    resp = await client.get(
+        "/api/v1/diagrams/viewpoints-for-tab/organization/examples/not-a-uuid", headers=headers
+    )
+    assert resp.status_code == 404

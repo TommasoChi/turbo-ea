@@ -4,7 +4,7 @@
   "gallery.diagramType": "نوع المخطط",
   "gallery.diagramTypeDrawio": "Draw.io",
   "gallery.diagramTypeArchimate": "ArchiMate",
-  "archimatePicker.viewpoint": "Viewpoint",
+  "archimatePicker.viewpoint": "وجهة النظر",
   "archimatePicker.blank": "فراغ",
   "archimatePicker.exampleLoadFailed": "تعذّر تحميل هذا المثال. حاول مرة أخرى، أو ابدأ من فراغ.",
   "archimatePicker.nameRequired": "أدخل اسمًا أعلاه قبل اختيار viewpoint.",

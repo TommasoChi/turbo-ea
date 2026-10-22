@@ -4,7 +4,7 @@
   "gallery.diagramType": "图表类型",
   "gallery.diagramTypeDrawio": "Draw.io",
   "gallery.diagramTypeArchimate": "ArchiMate",
-  "archimatePicker.viewpoint": "Viewpoint",
+  "archimatePicker.viewpoint": "视点",
   "archimatePicker.blank": "空白",
   "archimatePicker.exampleLoadFailed": "无法加载该示例。请重试,或从空白开始。",
   "archimatePicker.nameRequired": "请先在上方输入名称,然后再选择 viewpoint。",

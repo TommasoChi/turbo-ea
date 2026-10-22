@@ -707,9 +707,13 @@ async def get_viewpoint_tab_example(
     cheap; the creation dashboard fetches this lazily, only for the example card the
     user actually clicks.
     """
+    try:
+        example_uuid = uuid.UUID(example_id)
+    except ValueError:
+        raise HTTPException(404, "Example not found") from None
     result = await db.execute(
         select(ArchimateViewpointExample).where(
-            ArchimateViewpointExample.id == uuid.UUID(example_id),
+            ArchimateViewpointExample.id == example_uuid,
             ArchimateViewpointExample.viewpoint_key == viewpoint_key,
         )
     )
