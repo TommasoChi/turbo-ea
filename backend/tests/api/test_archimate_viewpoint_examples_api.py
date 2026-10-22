@@ -31,7 +31,9 @@ async def test_upload_rejects_invalid_xml(client, db, admin_user):
     )
     assert resp.status_code == 422
     resp2 = await client.get("/api/v1/metamodel/viewpoints/organization", headers=headers)
-    assert resp2.json().get("examples", []) == []
+    # "organization" carries a real seeded starter example (viewpoint_example_seed.py) --
+    # assert the rejected upload wasn't added, not that the viewpoint has none at all.
+    assert "Broken" not in {e["name"] for e in resp2.json().get("examples", [])}
 
 
 async def test_malformed_example_id_is_a_404_not_a_500(client, db, admin_user):
