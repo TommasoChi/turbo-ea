@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="id-f0607ad9eb0845a8829f43f5f7c676ff">
+  <name xml:lang="en">ArchiSurance_Practice</name>
+  <elements>
+    <element identifier="id-1579f74ba9814643af5058fc09c2d9fd" xsi:type="Equipment">
+      <name xml:lang="en">Smart Thermostat</name>
+    </element>
+    <element identifier="id-e422717d48e94092910e1f2a19e7734f" xsi:type="Location">
+      <name xml:lang="en">External</name>
+    </element>
+    <element identifier="id-72229589d0a34eafbccc533881013293" xsi:type="Equipment">
+      <name xml:lang="en">Fitness Tracker</name>
+    </element>
+    <element identifier="id-750378272ad040ce814589603cff219d" xsi:type="Location">
+      <name xml:lang="en">Home &amp; Away Headquarters</name>
+    </element>
+    <element identifier="id-49eef22223b84cd196ca2a3391d8990a" xsi:type="DistributionNetwork">
+      <name xml:lang="en">Energy Network</name>
+    </element>
+    <element identifier="id-ee2b8ba9fd6a4591ad7409b51e02acb7" xsi:type="Node">
+      <name xml:lang="en">Data Acquisition Gateway</name>
+    </element>
+    <element identifier="id-24b6348692f14afd951291c5f8cf060a" xsi:type="Equipment">
+      <name xml:lang="en">Car Black Box</name>
+    </element>
+    <element identifier="id-6fb803588cdf459ebe78c76631918499" xsi:type="Equipment">
+      <name xml:lang="en">Home Alarm System</name>
+    </element>
+    <element identifier="id-d2022025a9f24d838c52f977f5935eb3" xsi:type="Facility">
+      <name xml:lang="en">Smart Home</name>
+    </element>
+    <element identifier="id-b889e819050d4258a3674e0336256d02" xsi:type="Equipment">
+      <name xml:lang="en">IoT Devices</name>
+    </element>
+  </elements>
+  <relationships>
+    <relationship identifier="id-6b5005dea5f54bd9ba88e044ad55734c" source="id-72229589d0a34eafbccc533881013293" target="id-b889e819050d4258a3674e0336256d02" xsi:type="Specialization" />
+    <relationship identifier="id-9937925727974487b8043372f2ffc085" source="id-e422717d48e94092910e1f2a19e7734f" target="id-d2022025a9f24d838c52f977f5935eb3" xsi:type="Composition" />
+    <relationship identifier="id-435edd331f144f79a90f06b886daf9e4" source="id-e422717d48e94092910e1f2a19e7734f" target="id-72229589d0a34eafbccc533881013293" xsi:type="Composition" />
+    <relationship identifier="id-0b66f55f182848e9a406e56882c7f6ab" source="id-e422717d48e94092910e1f2a19e7734f" target="id-b889e819050d4258a3674e0336256d02" xsi:type="Composition" />
+    <relationship identifier="id-807ed47a044641608add680635f720da" source="id-6fb803588cdf459ebe78c76631918499" target="id-b889e819050d4258a3674e0336256d02" xsi:type="Specialization" />
+    <relationship identifier="id-474984c919794ee79cebf40a6f97996b" source="id-24b6348692f14afd951291c5f8cf060a" target="id-b889e819050d4258a3674e0336256d02" xsi:type="Specialization" />
+    <relationship identifier="id-66c3a6e8447a4973977c41007b290f09" source="id-750378272ad040ce814589603cff219d" target="id-ee2b8ba9fd6a4591ad7409b51e02acb7" xsi:type="Composition" />
+    <relationship identifier="id-7a2eb43f00e74f5f8cbdf420bfc7c9dd" source="id-e422717d48e94092910e1f2a19e7734f" target="id-6fb803588cdf459ebe78c76631918499" xsi:type="Composition" />
+    <relationship identifier="id-ca78accfcc4f4601b823994784e43bbd" source="id-e422717d48e94092910e1f2a19e7734f" target="id-1579f74ba9814643af5058fc09c2d9fd" xsi:type="Composition" />
+    <relationship identifier="id-7a1335a4a4374728bd977c1cd4baf1ea" source="id-1579f74ba9814643af5058fc09c2d9fd" target="id-49eef22223b84cd196ca2a3391d8990a" xsi:type="Association" />
+    <relationship identifier="id-9c3fcb0981cd4f13b7a04e542e02af7b" source="id-1579f74ba9814643af5058fc09c2d9fd" target="id-b889e819050d4258a3674e0336256d02" xsi:type="Specialization" />
+    <relationship identifier="id-b0b4c75f7f25424aa201ccf9aed42329" source="id-d2022025a9f24d838c52f977f5935eb3" target="id-1579f74ba9814643af5058fc09c2d9fd" xsi:type="Aggregation" />
+    <relationship identifier="id-35b4ff8167bb46e091c02988ba4a77f1" source="id-e422717d48e94092910e1f2a19e7734f" target="id-49eef22223b84cd196ca2a3391d8990a" xsi:type="Composition" />
+    <relationship identifier="id-c750dc0cc4c54dd699a5c8e42cc6b1f9" source="id-b889e819050d4258a3674e0336256d02" target="id-ee2b8ba9fd6a4591ad7409b51e02acb7" xsi:type="Flow" />
+    <relationship identifier="id-8e6b4d4601c94a84913233b01e112001" source="id-e422717d48e94092910e1f2a19e7734f" target="id-24b6348692f14afd951291c5f8cf060a" xsi:type="Composition" />
+    <relationship identifier="id-3813566918334a1c9e0b2f4e92b3b566" source="id-d2022025a9f24d838c52f977f5935eb3" target="id-6fb803588cdf459ebe78c76631918499" xsi:type="Aggregation" />
+  </relationships>
+  <views>
+    <diagrams>
+      <view identifier="id-5b277d74f6a0435894eb158e9ed874fa" xsi:type="Diagram">
+        <name xml:lang="en">Figure31_Data-Acquisition(Target)</name>
+        <node identifier="id-806b9c5b25e94d2fb9d280c3d2a9eee1" xsi:type="Element" elementRef="id-750378272ad040ce814589603cff219d" x="348" y="108" w="234" h="92">
+          <node identifier="id-3154bf73bc6a46b5b0a2e46489cdd4c1" xsi:type="Element" elementRef="id-ee2b8ba9fd6a4591ad7409b51e02acb7" x="60" y="24" w="120" h="55" />
+        </node>
+        <node identifier="id-248521e1edf443d9ac5aef38b14360f3" xsi:type="Element" elementRef="id-e422717d48e94092910e1f2a19e7734f" x="108" y="230" w="697" h="311">
+          <node identifier="id-cba38255418d4ca18b59601ed37bbb22" xsi:type="Element" elementRef="id-b889e819050d4258a3674e0336256d02" x="276" y="24" w="120" h="55" />
+          <node identifier="id-4e6a54957c1b4502b2e5b5332d3c39ee" xsi:type="Element" elementRef="id-24b6348692f14afd951291c5f8cf060a" x="23" y="117" w="120" h="55" />
+          <node identifier="id-63726b6fe8ad4331bdcdfd0663369d74" xsi:type="Element" elementRef="id-6fb803588cdf459ebe78c76631918499" x="338" y="117" w="120" h="55" />
+          <node identifier="id-66c0ac053b114f4db372b6409f1c2aa8" xsi:type="Element" elementRef="id-72229589d0a34eafbccc533881013293" x="182" y="117" w="120" h="55" />
+          <node identifier="id-0a30f8f9b1ce4f8ba3836b08e537f3d8" xsi:type="Element" elementRef="id-1579f74ba9814643af5058fc09c2d9fd" x="495" y="117" w="120" h="55" />
+          <node identifier="id-820b94ec492a4367b23cbe6cbd477261" xsi:type="Element" elementRef="id-49eef22223b84cd196ca2a3391d8990a" x="554" y="228" w="120" h="55" />
+          <node identifier="id-6b19d586fb89423a8792555ebe056c55" xsi:type="Element" elementRef="id-d2022025a9f24d838c52f977f5935eb3" x="410" y="228" w="120" h="55" />
+        </node>
+        <connection identifier="id-cc1823757c0b43f3bb5f8734010c8880" xsi:type="Relationship" relationshipRef="id-66c3a6e8447a4973977c41007b290f09" source="id-806b9c5b25e94d2fb9d280c3d2a9eee1" target="id-3154bf73bc6a46b5b0a2e46489cdd4c1" />
+        <connection identifier="id-48c4832ae8564f49a5286680a887f4b1" xsi:type="Relationship" relationshipRef="id-0b66f55f182848e9a406e56882c7f6ab" source="id-248521e1edf443d9ac5aef38b14360f3" target="id-cba38255418d4ca18b59601ed37bbb22" />
+        <connection identifier="id-97f7b6d5fa894c9bab09aa43899a0f8c" xsi:type="Relationship" relationshipRef="id-8e6b4d4601c94a84913233b01e112001" source="id-248521e1edf443d9ac5aef38b14360f3" target="id-4e6a54957c1b4502b2e5b5332d3c39ee" />
+        <connection identifier="id-afae645897fb4f98ae09f8c46b76bef6" xsi:type="Relationship" relationshipRef="id-7a2eb43f00e74f5f8cbdf420bfc7c9dd" source="id-248521e1edf443d9ac5aef38b14360f3" target="id-63726b6fe8ad4331bdcdfd0663369d74" />
+        <connection identifier="id-09c88a4f072f4caa8bb843bb384d8b2f" xsi:type="Relationship" relationshipRef="id-435edd331f144f79a90f06b886daf9e4" source="id-248521e1edf443d9ac5aef38b14360f3" target="id-66c0ac053b114f4db372b6409f1c2aa8" />
+        <connection identifier="id-8a9120f33d974342bdca77381f703cbc" xsi:type="Relationship" relationshipRef="id-ca78accfcc4f4601b823994784e43bbd" source="id-248521e1edf443d9ac5aef38b14360f3" target="id-0a30f8f9b1ce4f8ba3836b08e537f3d8" />
+        <connection identifier="id-8173b584f4db423c917b08d1dfadad78" xsi:type="Relationship" relationshipRef="id-35b4ff8167bb46e091c02988ba4a77f1" source="id-248521e1edf443d9ac5aef38b14360f3" target="id-820b94ec492a4367b23cbe6cbd477261" />
+        <connection identifier="id-690833af03944a56b53eeb5768743a52" xsi:type="Relationship" relationshipRef="id-9937925727974487b8043372f2ffc085" source="id-248521e1edf443d9ac5aef38b14360f3" target="id-6b19d586fb89423a8792555ebe056c55" />
+        <connection identifier="id-c42563e4dda54167893d7c7edd5c21f6" xsi:type="Relationship" relationshipRef="id-c750dc0cc4c54dd699a5c8e42cc6b1f9" source="id-cba38255418d4ca18b59601ed37bbb22" target="id-3154bf73bc6a46b5b0a2e46489cdd4c1" />
+        <connection identifier="id-c0b13586aa244773b32638d053dba196" xsi:type="Relationship" relationshipRef="id-474984c919794ee79cebf40a6f97996b" source="id-4e6a54957c1b4502b2e5b5332d3c39ee" target="id-cba38255418d4ca18b59601ed37bbb22" />
+        <connection identifier="id-97707992c86e46409decef0afc6908f7" xsi:type="Relationship" relationshipRef="id-807ed47a044641608add680635f720da" source="id-63726b6fe8ad4331bdcdfd0663369d74" target="id-cba38255418d4ca18b59601ed37bbb22" />
+        <connection identifier="id-724cffe627254786bf82c09181e219a1" xsi:type="Relationship" relationshipRef="id-6b5005dea5f54bd9ba88e044ad55734c" source="id-66c0ac053b114f4db372b6409f1c2aa8" target="id-cba38255418d4ca18b59601ed37bbb22" />
+        <connection identifier="id-1ff85deb551349a194b2b2cab13abe9d" xsi:type="Relationship" relationshipRef="id-7a1335a4a4374728bd977c1cd4baf1ea" source="id-0a30f8f9b1ce4f8ba3836b08e537f3d8" target="id-820b94ec492a4367b23cbe6cbd477261" />
+        <connection identifier="id-89b35cd5c8b340fb8cc699765f39f815" xsi:type="Relationship" relationshipRef="id-9c3fcb0981cd4f13b7a04e542e02af7b" source="id-0a30f8f9b1ce4f8ba3836b08e537f3d8" target="id-cba38255418d4ca18b59601ed37bbb22" />
+        <connection identifier="id-9ac77ed5dc72462b9eb13e6c68794277" xsi:type="Relationship" relationshipRef="id-b0b4c75f7f25424aa201ccf9aed42329" source="id-6b19d586fb89423a8792555ebe056c55" target="id-0a30f8f9b1ce4f8ba3836b08e537f3d8" />
+        <connection identifier="id-f3460123443e4b6fbd9e1ec3f0a3193a" xsi:type="Relationship" relationshipRef="id-3813566918334a1c9e0b2f4e92b3b566" source="id-6b19d586fb89423a8792555ebe056c55" target="id-63726b6fe8ad4331bdcdfd0663369d74" />
+      </view>
+    </diagrams>
+  </views>
+</model>

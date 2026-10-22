@@ -8,7 +8,8 @@ subpackage and pattern are declared here. A new ``*.json``/``*.pack`` file
 added under ``app/services/<subpackage>/`` without a matching entry installs
 fine (no error at build time) and then raises ``FileNotFoundError`` the first
 time the code that reads it actually runs -- exactly what happened when
-``relation_table.json`` shipped without one.
+``relation_table.json`` shipped without one, and again when the ArchiMate
+viewpoint example fixtures (``*.xml``) shipped without their own entry.
 
 This walks the real file tree rather than hard-coding file names, so a
 future data file gets the same check for free.
@@ -30,7 +31,7 @@ def _package_data() -> dict[str, list[str]]:
 
 
 def _data_files() -> set[Path]:
-    return {p for ext in ("*.json", "*.pack") for p in SERVICES_ROOT.rglob(ext)}
+    return {p for ext in ("*.json", "*.pack", "*.xml") for p in SERVICES_ROOT.rglob(ext)}
 
 
 def _covered_files(package_data: dict[str, list[str]]) -> set[Path]:
