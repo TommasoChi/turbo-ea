@@ -8,6 +8,8 @@
   "archimatePicker.blank": "Tom",
   "archimatePicker.exampleLoadFailed": "Kunne ikke indlæse eksemplet. Prøv igen, eller start fra Tom.",
   "archimatePicker.nameRequired": "Angiv et navn ovenfor, før du vælger et viewpoint.",
+  "archimatePicker.cardType": "Korttype",
+  "archimatePicker.card": "Kort",
   "gallery.editDiagram": "Redigér diagram",
   "gallery.empty": "Ingen diagrammer endnu. Opret et for at komme i gang.",
   "gallery.linkedCards": "Tilknyttede kort",

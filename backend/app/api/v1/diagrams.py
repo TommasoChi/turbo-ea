@@ -656,18 +656,30 @@ async def list_viewpoints_for_tab(
 @router.get("/viewpoints-for-tab/{viewpoint_key}/suggested-cards")
 async def suggested_cards_for_viewpoint_tab(
     viewpoint_key: str,
-    tab: str = Query(...),
+    tab: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Card types to suggest creating from a viewpoint's card-detail tab.
+    """Card types to suggest creating from a viewpoint's card-detail tab, each
+    paired with the Enterprise Object (ArchiMate element) type it resolves to
+    so a caller can draw a node for a card of that type without a second
+    round trip.
 
-    Returns the explicit ``(viewpoint_key, tab)`` override
-    (``ArchimateViewpointTabCard``) when one exists; otherwise falls back to
-    every card type mapped to the viewpoint's allowed objects -- the "no
-    override needed for single-tab viewpoints" default from spec §5.
+    Card types come from the explicit ``(viewpoint_key, tab)`` override
+    (``ArchimateViewpointTabCard``) when one exists; otherwise every card
+    type mapped to the viewpoint's allowed objects -- the "no override
+    needed for single-tab viewpoints" default from spec §5. ``tab`` is
+    optional: the override only applies per-tab, but the fallback is
+    already tab-independent (every object the viewpoint allows, regardless
+    of tab), so the unscoped diagram-creation entry point (no tab at all)
+    gets the fallback straight away. Either way, the paired
+    ``enterprise_object_key`` always comes from ``EnterpriseObjectCardMapping``
+    restricted to this viewpoint's own allowed objects (the override table
+    has no element-type column of its own) -- ``None`` when a card type
+    isn't actually mapped to any object this viewpoint allows, which only
+    an inconsistent override can produce.
     """
-    if tab not in TAB_LAYERS:
+    if tab is not None and tab not in TAB_LAYERS:
         raise HTTPException(400, f"Unknown tab {tab!r}")
 
     vp_result = await db.execute(
@@ -676,27 +688,55 @@ async def suggested_cards_for_viewpoint_tab(
     if not vp_result.scalar_one_or_none():
         raise HTTPException(404, "Viewpoint not found")
 
-    override_result = await db.execute(
-        select(ArchimateViewpointTabCard.card_type_key).where(
-            ArchimateViewpointTabCard.viewpoint_key == viewpoint_key,
-            ArchimateViewpointTabCard.tab_key == tab,
+    card_type_keys: list[str] = []
+    if tab is not None:
+        override_result = await db.execute(
+            select(ArchimateViewpointTabCard.card_type_key).where(
+                ArchimateViewpointTabCard.viewpoint_key == viewpoint_key,
+                ArchimateViewpointTabCard.tab_key == tab,
+            )
         )
-    )
-    overrides = list(override_result.scalars().all())
-    if overrides:
-        return overrides
+        card_type_keys = list(override_result.scalars().all())
 
-    fallback_result = await db.execute(
-        select(EnterpriseObjectCardMapping.card_type_key)
+    if not card_type_keys:
+        fallback_result = await db.execute(
+            select(EnterpriseObjectCardMapping.card_type_key)
+            .join(
+                ArchimateViewpointObject,
+                ArchimateViewpointObject.enterprise_object_key
+                == EnterpriseObjectCardMapping.enterprise_object_key,
+            )
+            .where(ArchimateViewpointObject.viewpoint_key == viewpoint_key)
+            .distinct()
+        )
+        card_type_keys = list(fallback_result.scalars().all())
+
+    if not card_type_keys:
+        return []
+
+    eo_result = await db.execute(
+        select(
+            EnterpriseObjectCardMapping.card_type_key,
+            EnterpriseObjectCardMapping.enterprise_object_key,
+        )
         .join(
             ArchimateViewpointObject,
             ArchimateViewpointObject.enterprise_object_key
             == EnterpriseObjectCardMapping.enterprise_object_key,
         )
-        .where(ArchimateViewpointObject.viewpoint_key == viewpoint_key)
-        .distinct()
+        .where(
+            ArchimateViewpointObject.viewpoint_key == viewpoint_key,
+            EnterpriseObjectCardMapping.card_type_key.in_(card_type_keys),
+        )
     )
-    return list(fallback_result.scalars().all())
+    eo_key_by_card_type: dict[str, str] = {}
+    for card_type_key, enterprise_object_key in eo_result.all():
+        eo_key_by_card_type.setdefault(card_type_key, enterprise_object_key)
+
+    return [
+        {"card_type_key": k, "enterprise_object_key": eo_key_by_card_type.get(k)}
+        for k in card_type_keys
+    ]
 
 
 @router.get("/viewpoints-for-tab/{viewpoint_key}/examples/{example_id}")

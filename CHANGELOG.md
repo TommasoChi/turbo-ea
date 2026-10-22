@@ -5,6 +5,12 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.178.0] - 2026-10-22
+
+### Added
+
+- **Optionally pick a card to materialize as a node when creating a new ArchiMate diagram.** After picking a viewpoint, the picker now offers (always optional, for both the blank starter and every example) a card-type selector -- scoped to the card types suggested for that viewpoint -- followed by a specific-card search. The picked card is added as a real, card-linked node on the starting diagram, not just a metadata link. `GET /diagrams/viewpoints-for-tab/{key}/suggested-cards` now pairs each suggested card type with the ArchiMate element type it resolves to, and `tab` is now optional (the unscoped create-diagram dialog has none to send; the fallback was already tab-independent).
+
 ## [2.177.1] - 2026-10-22
 
 ### Added

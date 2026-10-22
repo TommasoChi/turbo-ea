@@ -29,7 +29,36 @@ async def test_suggested_cards_use_the_tab_override(client, db, admin_user):
         "/api/v1/diagrams/viewpoints-for-tab/implementation-and-deployment/suggested-cards?tab=technology",
         headers=auth_headers(admin_user),
     )
-    assert set(resp.json()) == {"ITComponent", "Platform"}
+    assert {row["card_type_key"] for row in resp.json()} == {"ITComponent", "Platform"}
+
+
+async def test_suggested_cards_pair_each_card_type_with_its_enterprise_object(
+    client, db, admin_user
+):
+    await seed.seed_metamodel(db)
+    resp = await client.get(
+        "/api/v1/diagrams/viewpoints-for-tab/organization/suggested-cards?tab=business",
+        headers=auth_headers(admin_user),
+    )
+    rows = {row["card_type_key"]: row["enterprise_object_key"] for row in resp.json()}
+    assert rows  # "organization" has at least one real card-type mapping
+    assert all(eo_key is not None for eo_key in rows.values())
+
+
+async def test_suggested_cards_work_without_a_tab_for_the_unscoped_picker(
+    client, db, admin_user
+):
+    # The tab-specific override never applies, but the fallback doesn't need
+    # a tab either -- the unscoped create-diagram dialog has none to send.
+    await seed.seed_metamodel(db)
+    resp = await client.get(
+        "/api/v1/diagrams/viewpoints-for-tab/organization/suggested-cards",
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 200
+    rows = {row["card_type_key"]: row["enterprise_object_key"] for row in resp.json()}
+    assert rows
+    assert all(eo_key is not None for eo_key in rows.values())
 
 
 VALID_EXCHANGE_XML = """<?xml version="1.0" encoding="UTF-8"?>

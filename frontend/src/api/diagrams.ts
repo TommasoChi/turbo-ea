@@ -34,12 +34,27 @@ export function listViewpointsForTab(
   return api.get<ArchimateViewpointForPicker[]>(`/diagrams/viewpoints-for-tab?tab=${tab}`);
 }
 
+/** One card type suggested for a viewpoint/tab, paired with the ArchiMate
+ *  element type it resolves to -- `enterprise_object_key` is `null` only
+ *  for an inconsistent admin override (a card type with no mapping to any
+ *  object this viewpoint actually allows). */
+export interface SuggestedCardType {
+  card_type_key: string;
+  enterprise_object_key: string | null;
+}
+
 /** Card types to suggest creating once the new diagram is open, for the
  *  given viewpoint on the given tab (the explicit per-tab override, or the
- *  viewpoint's whole card-mapping fallback). */
-export function getSuggestedCards(viewpointKey: string, tab: ViewpointTab): Promise<string[]> {
-  return api.get<string[]>(
-    `/diagrams/viewpoints-for-tab/${viewpointKey}/suggested-cards?tab=${tab}`,
+ *  viewpoint's whole card-mapping fallback). `tab: null` is the unscoped
+ *  create-diagram entry point -- the override never applies there, but the
+ *  fallback doesn't need a tab either. */
+export function getSuggestedCards(
+  viewpointKey: string,
+  tab: ViewpointTab | null,
+): Promise<SuggestedCardType[]> {
+  const query = tab ? `?tab=${tab}` : "";
+  return api.get<SuggestedCardType[]>(
+    `/diagrams/viewpoints-for-tab/${viewpointKey}/suggested-cards${query}`,
   );
 }
 

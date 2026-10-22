@@ -8,6 +8,8 @@
   "archimatePicker.blank": "Пустой",
   "archimatePicker.exampleLoadFailed": "Не удалось загрузить этот пример. Повторите попытку или начните с пустого шаблона.",
   "archimatePicker.nameRequired": "Введите название выше, прежде чем выбрать viewpoint.",
+  "archimatePicker.cardType": "Тип карточки",
+  "archimatePicker.card": "Карточка",
   "gallery.editDiagram": "Редактировать диаграмму",
   "gallery.empty": "Диаграмм пока нет. Создайте первую.",
   "gallery.linkedCards": "Связанные карточки",

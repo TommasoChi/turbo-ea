@@ -8,6 +8,8 @@
   "archimatePicker.blank": "Vierge",
   "archimatePicker.exampleLoadFailed": "Impossible de charger cet exemple. Réessayez, ou partez d'un modèle vierge.",
   "archimatePicker.nameRequired": "Saisissez un nom ci-dessus avant de choisir un point de vue.",
+  "archimatePicker.cardType": "Type de fiche",
+  "archimatePicker.card": "Fiche",
   "gallery.editDiagram": "Modifier le diagramme",
   "gallery.empty": "Aucun diagramme pour le moment. Créez-en un pour commencer.",
   "gallery.linkedCards": "Fiches liées",
