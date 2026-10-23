@@ -217,6 +217,7 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Node",
             "TechnologyCollaboration",
             "Device",
+            "Equipment",
             "SystemSoftware",
             "TechnologyInterface",
             "CommunicationNetwork",
@@ -359,7 +360,14 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Shows how a high-level goal breaks down into smaller goals, principles, and "
             "requirements that make it achievable."
         ),
-        "objects": ("Goal", "Principle", "Requirement", "Constraint", "Outcome"),
+        "objects": (
+            "Goal",
+            "Principle",
+            "Requirement",
+            "Constraint",
+            "Outcome",
+            "ApplicationComponent",
+        ),
     },
     {
         "key": "requirements-realization",
@@ -370,7 +378,19 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Shows how specific requirements and constraints are actually met by the "
             "architecture, tied back to goals and outcomes."
         ),
-        "objects": ("Goal", "Requirement", "Constraint", "Outcome", "Value", "Meaning"),
+        "objects": (
+            "Goal",
+            "Requirement",
+            "Constraint",
+            "Outcome",
+            "Value",
+            "Meaning",
+            "ApplicationComponent",
+            "ApplicationService",
+            "Artifact",
+            "BusinessProcess",
+            "Device",
+        ),
     },
     {
         "key": "motivation",
