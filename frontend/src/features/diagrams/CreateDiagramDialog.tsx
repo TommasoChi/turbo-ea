@@ -126,6 +126,7 @@ export default function CreateDiagramDialog({
     startingXml: string | null,
     suggestedCardIds: string[],
     viewpointName: string,
+    linkedCardIds: string[],
   ) => {
     if (submitting) return;
     if (startingXml === null) {
@@ -143,6 +144,10 @@ export default function CreateDiagramDialog({
         kind: "archimate",
         viewpoint_key: viewpointKey,
         data: { format: ARCHIMATE_FORMAT, xml: startingXml },
+        // The cards materialized as nodes on the canvas are also linked at
+        // the diagram level, same as drawio's own Linked Cards field, so the
+        // diagram shows up in each card's Resources tab too.
+        card_ids: linkedCardIds.length > 0 ? linkedCardIds : undefined,
       });
       onCreated?.(created.id);
       onClose();

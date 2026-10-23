@@ -6,9 +6,8 @@
  * and on selection creates the diagram exactly the way
  * `CreateDiagramDialog.tsx`'s own ArchiMate branch does (`handleArchimateSelect`)
  * — same `createDiagram` call shape, same navigation to
- * `/admin/architectureStudio/{id}` with `suggestedCardTypes` in `location.state`
- * (NOT `card_ids`, which is real-card-UUID-only server-side; see that file's
- * comment on `suggestedCardIds`).
+ * `/admin/architectureStudio/{id}` with `suggestedCardTypes` in `location.state`,
+ * and (like that file) linking any cards materialized on the canvas via `card_ids`.
  *
  * Unlike the dialog, this is a full page (no name + cards-to-link dialog around
  * it) — just the name field this flow still needs before a viewpoint pick
@@ -48,6 +47,8 @@ export default function ScopedArchimateDiagramPage({ tab }: Props) {
     viewpointKey: string,
     startingXml: string | null,
     suggestedCardIds: string[],
+    _viewpointName: string,
+    linkedCardIds: string[],
   ) => {
     if (!name.trim() || submitting) return;
     if (startingXml === null) {
@@ -62,6 +63,7 @@ export default function ScopedArchimateDiagramPage({ tab }: Props) {
         kind: "archimate",
         viewpoint_key: viewpointKey,
         data: { format: ARCHIMATE_FORMAT, xml: startingXml },
+        card_ids: linkedCardIds.length > 0 ? linkedCardIds : undefined,
       });
       navigate(`/admin/architectureStudio/${created.id}`, {
         state: suggestedCardIds.length ? { suggestedCardTypes: suggestedCardIds } : undefined,

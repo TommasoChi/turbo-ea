@@ -46,6 +46,7 @@ describe("ArchimateViewpointPicker", () => {
       if (url.includes("suggested-cards")) {
         return Promise.resolve([{ card_type_key: "Application", enterprise_object_key: null }]);
       }
+      if (url.includes("/cards?page_size=500")) return Promise.resolve({ items: [] });
       return Promise.resolve([]);
     });
     const user = userEvent.setup();
@@ -60,6 +61,7 @@ describe("ArchimateViewpointPicker", () => {
         expect.any(String),
         ["Application"],
         "Application Cooperation",
+        [],
       ),
     );
   });
@@ -86,6 +88,7 @@ describe("ArchimateViewpointPicker", () => {
         expect.any(String),
         [],
         "Application Cooperation",
+        [],
       ),
     );
   });
@@ -112,7 +115,7 @@ describe("ArchimateViewpointPicker", () => {
     await user.click(await screen.findByRole("option", { name: "Organization" }));
     await user.click(await screen.findByText("Starter"));
     await vi.waitFor(() =>
-      expect(onSelect).toHaveBeenCalledWith("organization", "<xml/>", [], "Organization"),
+      expect(onSelect).toHaveBeenCalledWith("organization", "<xml/>", [], "Organization", []),
     );
     const suggestedCardsCall = vi
       .mocked(api.get)
@@ -133,8 +136,13 @@ describe("ArchimateViewpointPicker", () => {
           { card_type_key: "Application", enterprise_object_key: "ApplicationComponent" },
         ]);
       }
-      if (url.includes("/cards?type=Application")) {
-        return Promise.resolve({ items: [{ id: "card-1", name: "CRM", type: "Application" }] });
+      if (url.includes("/cards?page_size=500")) {
+        return Promise.resolve({
+          items: [
+            { id: "card-1", name: "CRM", type: "Application" },
+            { id: "card-2", name: "Unrelated", type: "BusinessProcess" },
+          ],
+        });
       }
       return Promise.resolve([]);
     });
@@ -143,15 +151,16 @@ describe("ArchimateViewpointPicker", () => {
     render(<ArchimateViewpointPicker tab="application" onSelect={onSelect} />);
     await user.click(await screen.findByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "Application Cooperation" }));
-    await user.click(await screen.findByLabelText("Card type"));
-    await user.click(await screen.findByRole("option", { name: "Application" }));
-    const cardInput = await screen.findByLabelText("Card");
-    await user.type(cardInput, "CRM");
-    await user.click(await screen.findByRole("option", { name: "CRM" }));
+    const cardInput = await screen.findByLabelText("Linked Cards");
+    await user.click(cardInput);
+    await user.click(await screen.findByRole("option", { name: /CRM/ }));
+    // Only cards of an eligible type are offered — "Unrelated" never appears.
+    expect(screen.queryByRole("option", { name: /Unrelated/ })).toBeNull();
     await user.click(await screen.findByText(/blank/i));
     await vi.waitFor(() => expect(onSelect).toHaveBeenCalled());
-    const xml = onSelect.mock.calls[0][1] as string;
-    expect(xml).toContain("CRM");
-    expect(xml).toContain("card-1");
+    const [, xml, , , linkedCardIds] = onSelect.mock.calls[0];
+    expect(xml as string).toContain("CRM");
+    expect(xml as string).toContain("card-1");
+    expect(linkedCardIds).toEqual(["card-1"]);
   });
 });

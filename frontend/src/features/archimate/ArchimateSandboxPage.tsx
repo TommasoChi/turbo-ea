@@ -85,7 +85,13 @@ export default function ArchimateSandboxPage() {
   // above stays, but picking a Viewpoint's blank/example card *is* the create
   // action now; there is no separate Create button for the same reason.
   const createFromPicker = useCallback(
-    async (viewpointKey: string, startingXml: string | null, _suggestedCardIds: string[]) => {
+    async (
+      viewpointKey: string,
+      startingXml: string | null,
+      _suggestedCardIds: string[],
+      _viewpointName: string,
+      linkedCardIds: string[],
+    ) => {
       const trimmed = name.trim();
       if (!trimmed || busy) return;
       if (startingXml === null) {
@@ -100,6 +106,7 @@ export default function ArchimateSandboxPage() {
           kind: "archimate",
           viewpoint_key: viewpointKey,
           data: { format: ARCHIMATE_FORMAT, xml: startingXml },
+          ...(linkedCardIds.length > 0 ? { card_ids: linkedCardIds } : {}),
         });
         navigate(`/admin/architectureStudio/${made.id}`);
       } catch (e) {
