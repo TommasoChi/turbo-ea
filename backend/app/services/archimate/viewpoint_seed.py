@@ -1,4 +1,4 @@
-"""Seed the 23 standard ArchiMate 3.1 viewpoints into the catalog
+"""Seed the 28 standard ArchiMate 3.1 viewpoints into the catalog
 (``ArchimateViewpoint`` + ``ArchimateViewpointObject``), plus the
 viewpoint x tab -> card-type suggestion overrides (``ArchimateViewpointTabCard``).
 
@@ -143,6 +143,44 @@ _VIEWPOINT_DEFS: list[dict] = [
             "ApplicationEvent",
             "ApplicationService",
             "DataObject",
+        ),
+    },
+    {
+        "key": "application-structure",
+        "name": "Application Structure",
+        "icon": "widgets",
+        "layer": "application",
+        "description": (
+            "Shows the internal makeup of one or more applications: their components, interfaces, "
+            "functions, and the data they hold."
+        ),
+        "objects": (
+            "ApplicationComponent",
+            "ApplicationInterface",
+            "ApplicationFunction",
+            "ApplicationCollaboration",
+            "DataObject",
+        ),
+    },
+    {
+        "key": "application-platform",
+        "name": "Application Platform",
+        "icon": "developer_board",
+        "layer": "technology",
+        "description": (
+            "Shows the technology infrastructure -- nodes, devices, system software, and services "
+            "-- that an application runs on."
+        ),
+        "objects": (
+            "ApplicationComponent",
+            "Node",
+            "Device",
+            "SystemSoftware",
+            "TechnologyService",
+            "TechnologyInterface",
+            "Artifact",
+            "Path",
+            "CommunicationNetwork",
         ),
     },
     {
@@ -352,6 +390,24 @@ _VIEWPOINT_DEFS: list[dict] = [
         "objects": ("Stakeholder", "Driver", "Assessment", "Goal", "Outcome"),
     },
     {
+        "key": "goal-contribution",
+        "name": "Goal Contribution",
+        "icon": "trending_up",
+        "layer": "motivation",
+        "description": (
+            "Shows how goals and drivers help or hinder each other, positively or negatively."
+        ),
+        "objects": ("Driver", "Goal"),
+    },
+    {
+        "key": "principles",
+        "name": "Principles",
+        "icon": "gavel",
+        "layer": "motivation",
+        "description": "Lists the guiding principles an architecture must follow.",
+        "objects": ("Principle",),
+    },
+    {
         "key": "goal-realization",
         "name": "Goal Realization",
         "icon": "flag",
@@ -456,6 +512,17 @@ _VIEWPOINT_DEFS: list[dict] = [
             "changing them."
         ),
         "objects": ("Resource", "Capability", "WorkPackage"),
+    },
+    {
+        "key": "value-stream",
+        "name": "Value Stream",
+        "icon": "timeline",
+        "layer": "strategy",
+        "description": (
+            "Shows a value stream's stages and the stakeholders, capabilities, and resources that "
+            "realize them."
+        ),
+        "objects": ("Stakeholder", "ValueStream", "Value", "Capability", "Resource", "Outcome"),
     },
     {
         "key": "project",
