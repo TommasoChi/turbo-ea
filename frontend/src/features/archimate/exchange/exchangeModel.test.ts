@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import {
-  ARCHIMATE_FORMAT, CARD_ID_DEFINITION, emptyModel, getCardId, isNoteObject, linkedCardIds, newIdentifier,
-  withCardDefinition, withCardId, type ModelElement,
+  ARCHIMATE_FORMAT, CARD_ID_DEFINITION, addCardNode, emptyModel, getCardId, isNoteObject, linkedCardIds,
+  newIdentifier, withCardDefinition, withCardId, type ModelElement,
 } from "./exchangeModel";
 
 const element = (id: string, cardId: string | null): ModelElement =>
@@ -76,5 +76,28 @@ describe("exchange model helpers", () => {
     ]);
     expect(withCardDefinition(once).propertyDefinitions).toHaveLength(1);
     expect(linked.propertyDefinitions).toEqual([]); // input not mutated
+  });
+
+  it("addCardNode adds one linked element and node to the first view, registering the card-id definition", () => {
+    const m = emptyModel("M", () => "x");
+    const withNode = addCardNode(m, "ApplicationComponent", "CRM", "c1", () => "y");
+    expect(withNode.elements).toHaveLength(1);
+    expect(withNode.elements[0]).toMatchObject({ type: "ApplicationComponent", name: "CRM" });
+    expect(getCardId(withNode.elements[0])).toBe("c1");
+    expect(withNode.views[0].nodes).toHaveLength(1);
+    expect(withNode.views[0].nodes[0]).toMatchObject({
+      elementRef: withNode.elements[0].id, width: 120, height: 55,
+    });
+    expect(withNode.propertyDefinitions).toEqual([
+      { id: CARD_ID_DEFINITION, name: "turboea:cardId", type: "string" },
+    ]);
+    expect(m.elements).toEqual([]); // input not mutated
+  });
+
+  it("addCardNode places the new node clear of whatever nodes are already there", () => {
+    const m = emptyModel("M");
+    m.views[0].nodes = [{ id: "n1", elementRef: "e1", x: 100, y: 40, width: 120, height: 55, parent: null }];
+    const withNode = addCardNode(m, "ApplicationComponent", "CRM", "c1");
+    expect(withNode.views[0].nodes[1].x).toBe(100 + 120 + 40); // past the existing node, plus the gap
   });
 });

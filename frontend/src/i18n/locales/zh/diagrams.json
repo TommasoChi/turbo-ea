@@ -8,6 +8,8 @@
   "archimatePicker.blank": "空白",
   "archimatePicker.exampleLoadFailed": "无法加载该示例。请重试,或从空白开始。",
   "archimatePicker.nameRequired": "请先在上方输入名称,然后再选择 viewpoint。",
+  "archimatePicker.cardType": "卡片类型",
+  "archimatePicker.card": "卡片",
   "gallery.editDiagram": "编辑图表",
   "gallery.empty": "暂无图表。创建一个以开始使用。",
   "gallery.linkedCards": "关联卡片",

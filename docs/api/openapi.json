@@ -26381,7 +26381,7 @@
     },
     "/api/v1/diagrams/viewpoints-for-tab/{viewpoint_key}/suggested-cards": {
       "get": {
-        "description": "Card types to suggest creating from a viewpoint's card-detail tab.\n\nReturns the explicit ``(viewpoint_key, tab)`` override\n(``ArchimateViewpointTabCard``) when one exists; otherwise falls back to\nevery card type mapped to the viewpoint's allowed objects -- the \"no\noverride needed for single-tab viewpoints\" default from spec \u00a75.",
+        "description": "Card types to suggest creating from a viewpoint's card-detail tab, each\npaired with the Enterprise Object (ArchiMate element) type it resolves to\nso a caller can draw a node for a card of that type without a second\nround trip.\n\nCard types come from the explicit ``(viewpoint_key, tab)`` override\n(``ArchimateViewpointTabCard``) when one exists; otherwise every card\ntype mapped to the viewpoint's allowed objects -- the \"no override\nneeded for single-tab viewpoints\" default from spec \u00a75. ``tab`` is\noptional: the override only applies per-tab, but the fallback is\nalready tab-independent (every object the viewpoint allows, regardless\nof tab), so the unscoped diagram-creation entry point (no tab at all)\ngets the fallback straight away. Either way, the paired\n``enterprise_object_key`` always comes from ``EnterpriseObjectCardMapping``\nrestricted to this viewpoint's own allowed objects (the override table\nhas no element-type column of its own) -- ``None`` when a card type\nisn't actually mapped to any object this viewpoint allows, which only\nan inconsistent override can produce.",
         "operationId": "suggested_cards_for_viewpoint_tab_api_v1_diagrams_viewpoints_for_tab__viewpoint_key__suggested_cards_get",
         "parameters": [
           {
@@ -26396,10 +26396,17 @@
           {
             "in": "query",
             "name": "tab",
-            "required": true,
+            "required": false,
             "schema": {
-              "title": "Tab",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tab"
             }
           }
         ],

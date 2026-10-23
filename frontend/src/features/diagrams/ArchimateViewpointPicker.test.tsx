@@ -43,7 +43,9 @@ describe("ArchimateViewpointPicker", () => {
           { key: "application-cooperation", name: "Application Cooperation", icon: "hub", examples: [] },
         ]);
       }
-      if (url.includes("suggested-cards")) return Promise.resolve(["Application"]);
+      if (url.includes("suggested-cards")) {
+        return Promise.resolve([{ card_type_key: "Application", enterprise_object_key: null }]);
+      }
       return Promise.resolve([]);
     });
     const user = userEvent.setup();
@@ -88,7 +90,7 @@ describe("ArchimateViewpointPicker", () => {
     );
   });
 
-  it("picking an example card fetches its xml and passes it to onSelect, with no suggested cards fetch for the unscoped picker", async () => {
+  it("picking an example card fetches its xml and passes it to onSelect, fetching suggested cards without a tab for the unscoped picker", async () => {
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url === "/metamodel/viewpoints") {
         return Promise.resolve([
@@ -112,6 +114,44 @@ describe("ArchimateViewpointPicker", () => {
     await vi.waitFor(() =>
       expect(onSelect).toHaveBeenCalledWith("organization", "<xml/>", [], "Organization"),
     );
-    expect(vi.mocked(api.get).mock.calls.some((c) => String(c[0]).includes("suggested-cards"))).toBe(false);
+    const suggestedCardsCall = vi
+      .mocked(api.get)
+      .mock.calls.find((c) => String(c[0]).includes("suggested-cards"));
+    expect(suggestedCardsCall).toBeDefined();
+    expect(String(suggestedCardsCall![0])).not.toContain("?tab=");
+  });
+
+  it("materializes the picked card as a real node on the starting diagram", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes("viewpoints-for-tab?tab=application")) {
+        return Promise.resolve([
+          { key: "application-cooperation", name: "Application Cooperation", icon: "hub", examples: [] },
+        ]);
+      }
+      if (url.includes("suggested-cards")) {
+        return Promise.resolve([
+          { card_type_key: "Application", enterprise_object_key: "ApplicationComponent" },
+        ]);
+      }
+      if (url.includes("/cards?type=Application")) {
+        return Promise.resolve({ items: [{ id: "card-1", name: "CRM", type: "Application" }] });
+      }
+      return Promise.resolve([]);
+    });
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<ArchimateViewpointPicker tab="application" onSelect={onSelect} />);
+    await user.click(await screen.findByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Application Cooperation" }));
+    await user.click(await screen.findByLabelText("Card type"));
+    await user.click(await screen.findByRole("option", { name: "Application" }));
+    const cardInput = await screen.findByLabelText("Card");
+    await user.type(cardInput, "CRM");
+    await user.click(await screen.findByRole("option", { name: "CRM" }));
+    await user.click(await screen.findByText(/blank/i));
+    await vi.waitFor(() => expect(onSelect).toHaveBeenCalled());
+    const xml = onSelect.mock.calls[0][1] as string;
+    expect(xml).toContain("CRM");
+    expect(xml).toContain("card-1");
   });
 });

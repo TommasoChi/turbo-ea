@@ -8,6 +8,8 @@
   "archimatePicker.blank": "Vuoto",
   "archimatePicker.exampleLoadFailed": "Impossibile caricare l'esempio. Riprova oppure parti da Vuoto.",
   "archimatePicker.nameRequired": "Inserisci un nome qui sopra prima di scegliere un viewpoint.",
+  "archimatePicker.cardType": "Tipo di scheda",
+  "archimatePicker.card": "Scheda",
   "gallery.editDiagram": "Modifica diagramma",
   "gallery.empty": "Nessun diagramma disponibile. Crearne uno per iniziare.",
   "gallery.linkedCards": "Schede collegate",

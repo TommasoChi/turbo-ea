@@ -20,15 +20,19 @@ import Grid from "@mui/material/Grid";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import { api } from "@/api/client";
 import {
   getSuggestedCards,
   getViewpointExampleXml,
   listViewpointsForTab,
+  type SuggestedCardType,
   type ViewpointTab,
 } from "@/api/diagrams";
-import { emptyModel } from "@/features/archimate/exchange/exchangeModel";
+import { addCardNode, emptyModel } from "@/features/archimate/exchange/exchangeModel";
+import { readExchange } from "@/features/archimate/exchange/readExchange";
 import { writeExchange } from "@/features/archimate/exchange/writeExchange";
-import type { ArchimateViewpointForPicker } from "@/types";
+import type { ElementType } from "@/features/archimate/taxonomy/elements";
+import type { ArchimateViewpointForPicker, Card as EaCard } from "@/types";
 
 interface Props {
   /** `null` is the unscoped `Diagrams` entry point — every Viewpoint, no layer filter. */
@@ -53,6 +57,15 @@ export default function ArchimateViewpointPicker({ tab, onSelect, disabled }: Pr
   // (possibly fetched) starting XML and suggested cards are resolved.
   const [pending, setPending] = useState<string | null>(null);
 
+  // Optional: a card type (from the ones suggested for this viewpoint) and a
+  // specific card of that type -- when set, whichever starter card the user
+  // then picks (blank or an example) gets that card materialized as a real
+  // node, not just linked as metadata.
+  const [cardTypeOptions, setCardTypeOptions] = useState<SuggestedCardType[]>([]);
+  const [cardType, setCardType] = useState<SuggestedCardType | null>(null);
+  const [cardOptions, setCardOptions] = useState<EaCard[]>([]);
+  const [card, setCard] = useState<EaCard | null>(null);
+
   useEffect(() => {
     setViewpoint(null);
     listViewpointsForTab(tab)
@@ -60,14 +73,42 @@ export default function ArchimateViewpointPicker({ tab, onSelect, disabled }: Pr
       .catch(() => setViewpoints([]));
   }, [tab]);
 
+  useEffect(() => {
+    setCardType(null);
+    setCard(null);
+    setCardOptions([]);
+    if (!viewpoint) {
+      setCardTypeOptions([]);
+      return;
+    }
+    getSuggestedCards(viewpoint.key, tab)
+      .then(setCardTypeOptions)
+      .catch(() => setCardTypeOptions([]));
+  }, [viewpoint, tab]);
+
+  const searchCards = async (search: string) => {
+    if (!cardType) return;
+    try {
+      const res = await api.get<{ items: EaCard[] }>(
+        `/cards?type=${encodeURIComponent(cardType.card_type_key)}&search=${encodeURIComponent(search)}&page_size=20`,
+      );
+      setCardOptions(res.items);
+    } catch {
+      /* card search is optional -- silent fall-through */
+    }
+  };
+
   const handlePick = async (cardKey: string, startingXml: Promise<string | null>) => {
     if (!viewpoint || pending) return;
     setPending(cardKey);
     try {
-      const xml = await startingXml;
-      const suggestedCardIds = tab
-        ? await getSuggestedCards(viewpoint.key, tab).catch(() => [])
-        : [];
+      let xml = await startingXml;
+      if (xml !== null && card && cardType?.enterprise_object_key) {
+        xml = writeExchange(
+          addCardNode(readExchange(xml), cardType.enterprise_object_key as ElementType, card.name, card.id),
+        );
+      }
+      const suggestedCardIds = cardTypeOptions.map((o) => o.card_type_key);
       onSelect(viewpoint.key, xml, suggestedCardIds, viewpoint.name);
     } finally {
       setPending(null);
@@ -86,6 +127,42 @@ export default function ArchimateViewpointPicker({ tab, onSelect, disabled }: Pr
           <TextField {...params} label={t("archimatePicker.viewpoint")} autoFocus />
         )}
       />
+
+      {viewpoint && cardTypeOptions.length > 0 && (
+        <Grid container spacing={2} sx={{ mt: 2 }}>
+          <Grid item xs={6}>
+            <Autocomplete
+              options={cardTypeOptions}
+              getOptionLabel={(o) => o.card_type_key}
+              isOptionEqualToValue={(a, b) => a.card_type_key === b.card_type_key}
+              value={cardType}
+              disabled={!!pending || disabled}
+              onChange={(_, v) => {
+                setCardType(v);
+                setCard(null);
+                setCardOptions([]);
+              }}
+              renderInput={(params) => (
+                <TextField {...params} label={t("archimatePicker.cardType")} />
+              )}
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <Autocomplete
+              options={cardOptions}
+              getOptionLabel={(c) => c.name}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              value={card}
+              disabled={!cardType || !!pending || disabled}
+              onChange={(_, v) => setCard(v)}
+              onInputChange={(_, v) => searchCards(v)}
+              renderInput={(params) => (
+                <TextField {...params} label={t("archimatePicker.card")} />
+              )}
+            />
+          </Grid>
+        </Grid>
+      )}
 
       {viewpoint && (
         <Grid container spacing={2} sx={{ mt: 2 }}>

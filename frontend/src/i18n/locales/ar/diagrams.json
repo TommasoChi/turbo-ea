@@ -8,6 +8,8 @@
   "archimatePicker.blank": "فراغ",
   "archimatePicker.exampleLoadFailed": "تعذّر تحميل هذا المثال. حاول مرة أخرى، أو ابدأ من فراغ.",
   "archimatePicker.nameRequired": "أدخل اسمًا أعلاه قبل اختيار viewpoint.",
+  "archimatePicker.cardType": "نوع البطاقة",
+  "archimatePicker.card": "البطاقة",
   "gallery.editDiagram": "تحرير المخطّط",
   "gallery.empty": "لا توجد مخططات بعد. أنشئ واحدًا للبدء.",
   "gallery.linkedCards": "البطاقات المرتبطة",

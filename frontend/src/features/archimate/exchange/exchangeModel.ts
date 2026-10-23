@@ -113,6 +113,37 @@ export function linkedCardIds(model: ArchimateModel): string[] {
   return [...ids];
 }
 
+/**
+ * Add one element of `type`, named after the card, linked to `cardId`, as a
+ * visual node in the model's first view -- placed to the right of whatever
+ * nodes are already there. Used to materialize a card the user picked while
+ * creating a new ArchiMate diagram (blank or from an example starter) as a
+ * real node on the canvas, not just a metadata link.
+ */
+export function addCardNode(
+  model: ArchimateModel,
+  type: ElementType,
+  name: string,
+  cardId: string,
+  random?: () => string,
+): ArchimateModel {
+  const element = withCardId(
+    { id: newIdentifier(random), type, name, properties: [] },
+    cardId,
+  );
+  const [view, ...rest] = model.views;
+  const maxX = view.nodes.reduce((m, n) => Math.max(m, n.x + n.width), 0);
+  const node: ViewNode = {
+    id: newIdentifier(random), elementRef: element.id,
+    x: maxX + 40, y: 40, width: 120, height: 55, parent: null,
+  };
+  return withCardDefinition({
+    ...model,
+    elements: [...model.elements, element],
+    views: [{ ...view, nodes: [...view.nodes, node] }, ...rest],
+  });
+}
+
 export function withCardDefinition(model: ArchimateModel): ArchimateModel {
   if (model.propertyDefinitions.some((d) => d.id === CARD_ID_DEFINITION)) return model;
   if (!model.elements.some((e) => getCardId(e) !== null)) return model;
