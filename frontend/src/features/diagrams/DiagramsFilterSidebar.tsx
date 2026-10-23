@@ -15,8 +15,6 @@ import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
-import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { LAYER_ORDER, type ArchimateLayer } from "@/features/archimate/taxonomy/elements";
 import type { ArchimateViewpoint, DiagramGroup } from "@/types";
@@ -102,11 +100,26 @@ export default function DiagramsFilterSidebar({
     [viewpoints, typeFilter.layer],
   );
 
-  const pickKind = (kind: DiagramTypeFilter["kind"] | null) => {
-    if (!kind) return;
+  const pickKind = (kind: DiagramTypeFilter["kind"]) => {
     onTypeFilterChange({ kind, layer: null, viewpointKey: null });
     onAfterChange?.();
   };
+
+  const typeKinds: { kind: DiagramTypeFilter["kind"]; icon: string; color?: string; label: string }[] =
+    [
+      { kind: "all", icon: "apps", label: t("sidebar.typeAll") },
+      { kind: "drawio", icon: "schema", label: t("gallery.diagramTypeDrawio") },
+      ...(showArchimateFilter
+        ? [
+            {
+              kind: "archimate" as const,
+              icon: "hub",
+              color: "#7b1fa2",
+              label: t("gallery.diagramTypeArchimate"),
+            },
+          ]
+        : []),
+    ];
 
   const pickScope = (s: DiagramScope) => {
     onScopeChange(s);
@@ -236,24 +249,27 @@ export default function DiagramsFilterSidebar({
 
           <Divider sx={{ my: 1 }} />
 
-          {/* Type (drawio / archimate), then its layer -> viewpoint cascade */}
+          {/* Type (drawio / archimate), then its layer -> viewpoint cascade. Rows,
+              not a ToggleButtonGroup: three segments' labels don't fit on one
+              line at the sidebar's width, and this matches the Show list above. */}
           <Typography variant="overline" color="text.secondary" sx={{ px: 0.5 }}>
             {t("sidebar.type")}
           </Typography>
-          <ToggleButtonGroup
-            value={typeFilter.kind}
-            exclusive
-            size="small"
-            fullWidth
-            onChange={(_, v) => pickKind(v)}
-            sx={{ mb: 1 }}
-          >
-            <ToggleButton value="all">{t("sidebar.typeAll")}</ToggleButton>
-            <ToggleButton value="drawio">{t("gallery.diagramTypeDrawio")}</ToggleButton>
-            {showArchimateFilter && (
-              <ToggleButton value="archimate">{t("gallery.diagramTypeArchimate")}</ToggleButton>
-            )}
-          </ToggleButtonGroup>
+          <List dense disablePadding sx={{ mb: 1 }}>
+            {typeKinds.map((k) => (
+              <ListItemButton
+                key={k.kind}
+                selected={typeFilter.kind === k.kind}
+                onClick={() => pickKind(k.kind)}
+                sx={{ borderRadius: 1 }}
+              >
+                <ListItemIcon sx={{ minWidth: 32 }}>
+                  <MaterialSymbol icon={k.icon} size={18} color={k.color} />
+                </ListItemIcon>
+                <ListItemText primary={k.label} />
+              </ListItemButton>
+            ))}
+          </List>
 
           {typeFilter.kind === "archimate" && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 1 }}>
