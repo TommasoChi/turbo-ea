@@ -526,4 +526,17 @@ describe("the viewpoint restricts which entries the palette offers", () => {
     const { entries } = setup([], ["BusinessActor"]);
     expect(entries["create.note"]).toBeDefined();
   });
+
+  it("never filters the 'other' layer (Grouping, Location, the junctions) -- no standard viewpoint lists them, so they stay in every diagram", () => {
+    const { entries } = setup([], ["BusinessActor"]);
+    expect(entries["create.Grouping"]).toBeDefined();
+    expect(entries["create.Location"]).toBeDefined();
+    expect(entries["create.AndJunction"]).toBeDefined();
+    expect(entries["create.OrJunction"]).toBeDefined();
+  });
+
+  it("never filters a custom Enterprise Object whose own layer is 'other', either", () => {
+    const { entries } = setup([{ ...AI_MODEL, layer: "other" as const }], ["BusinessActor"]);
+    expect(entries["create.AIModel"]).toBeDefined();
+  });
 });
