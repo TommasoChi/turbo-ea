@@ -39,8 +39,11 @@ export const ARCHIMATE_MANAGE_ANY_LAYER = [
   "archimatediagrams.technology.manage",
 ];
 
-/** The Architecture Studio diagram list: Settings admins, or a `view`/`manage` key on any layer. */
-const ARCHIMATE_STUDIO_LIST = [
+/** The Architecture Studio diagram list: Settings admins, or a `view`/`manage` key on any layer.
+ *  Also reused by the Diagrams page's own "ArchiMate" type filter -- same "can see some
+ *  ArchiMate diagram" permission, so the filter option doesn't appear for someone it would
+ *  always 403 for. */
+export const ARCHIMATE_STUDIO_LIST = [
   "admin.settings",
   "archimatediagrams.business.view",
   "archimatediagrams.application.view",

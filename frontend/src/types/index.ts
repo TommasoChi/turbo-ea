@@ -1385,6 +1385,10 @@ export interface MassEolResult {
 export interface DiagramSummary {
   id: string;
   name: string;
+  /** Absent on a backend that predates ArchiMate diagrams: those are all "drawio". */
+  kind?: "drawio" | "archimate";
+  /** Set only for an `archimate` row. */
+  viewpoint_key?: string | null;
   description?: string;
   card_ids: string[];
   group_ids?: string[];

@@ -34,12 +34,17 @@ import { useMetamodel } from "@/hooks/useMetamodel";
 import { useTypeLabel } from "@/hooks/useResolveLabel";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { api } from "@/api/client";
-import type { Card, DiagramSummary, DiagramGroup } from "@/types";
+import { listViewpoints } from "@/api/archimateViewpoints";
+import { hasPermission } from "@/components/RequirePermission";
+import { ARCHIMATE_STUDIO_LIST } from "@/lib/routePermissions";
+import type { ArchimateViewpoint, Card, DiagramSummary, DiagramGroup } from "@/types";
 import CreateDiagramDialog from "./CreateDiagramDialog";
 import ManageGroupsDialog from "./ManageGroupsDialog";
 import AssignGroupsDialog from "./AssignGroupsDialog";
 import DiagramsFilterSidebar, {
   type DiagramScope,
+  type DiagramTypeFilter,
+  DEFAULT_TYPE_FILTER,
   SIDEBAR_MIN_WIDTH,
   SIDEBAR_MAX_WIDTH,
 } from "./DiagramsFilterSidebar";
@@ -48,6 +53,8 @@ type SortKey = "updated_at" | "created_at" | "name";
 
 const FAVORITE_COLOR = "#f5b400";
 const DIAGRAM_ICON = "schema";
+const ARCHIMATE_DIAGRAM_ICON = "hub";
+const ARCHIMATE_DIAGRAM_COLOR = "#7b1fa2";
 
 export default function DiagramsPage() {
   const { t } = useTranslation(["diagrams", "common"]);
@@ -84,6 +91,8 @@ export default function DiagramsPage() {
 
   // Sidebar + search + sort state
   const [scope, setScope] = useState<DiagramScope>({ kind: "all" });
+  const [typeFilter, setTypeFilter] = useState<DiagramTypeFilter>(DEFAULT_TYPE_FILTER);
+  const [viewpoints, setViewpoints] = useState<ArchimateViewpoint[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("updated_at");
@@ -123,6 +132,9 @@ export default function DiagramsPage() {
   const canPublish = Boolean(
     user?.permissions?.["*"] || user?.permissions?.["diagrams.publish"],
   );
+  // Same "can see some ArchiMate diagram" gate as the Architecture Studio list
+  // route -- no point offering a filter option that would always 403.
+  const showArchimateFilter = hasPermission(user?.permissions, ARCHIMATE_STUDIO_LIST);
 
   const typeMap = Object.fromEntries(metamodelTypes.map((mt) => [mt.key, mt]));
 
@@ -137,11 +149,18 @@ export default function DiagramsPage() {
     if (scope.kind === "mine") params.set("mine", "true");
     if (scope.kind === "favorites") params.set("favorites", "true");
     if (scope.kind === "group") params.set("group_id", scope.id);
+    params.set("kind", typeFilter.kind);
+    if (typeFilter.kind === "archimate" && typeFilter.viewpointKey) {
+      params.set("viewpoint_key", typeFilter.viewpointKey);
+    }
     if (search) params.set("search", search);
     params.set("sort_by", sortBy);
     const qs = params.toString();
-    api.get<DiagramSummary[]>(`/diagrams${qs ? `?${qs}` : ""}`).then(setDiagrams);
-  }, [scope, search, sortBy]);
+    api
+      .get<DiagramSummary[]>(`/diagrams${qs ? `?${qs}` : ""}`)
+      .then(setDiagrams)
+      .catch(() => setDiagrams([]));
+  }, [scope, typeFilter, search, sortBy]);
 
   const loadGroups = useCallback(() => {
     api
@@ -161,6 +180,15 @@ export default function DiagramsPage() {
       .then((res) => setAllCards(res.items))
       .catch(() => {});
   }, [loadGroups]);
+
+  // Only fetched for someone who could ever use the ArchiMate type filter --
+  // for everyone else it would just 403.
+  useEffect(() => {
+    if (!showArchimateFilter) return;
+    listViewpoints()
+      .then(setViewpoints)
+      .catch(() => setViewpoints([]));
+  }, [showArchimateFilter]);
 
   const toggleFavorite = useCallback(
     async (d: DiagramSummary, e: React.MouseEvent) => {
@@ -243,24 +271,39 @@ export default function DiagramsPage() {
       return next;
     });
 
+  // The layer filter has no backend param (it only ever narrows to one or more
+  // viewpoints, and the sidebar already has the whole catalog to cascade
+  // from) -- so "a layer but no specific viewpoint yet" is filtered here,
+  // client-side, from the same viewpoint-key -> layer lookup the sidebar uses.
+  const visibleDiagrams = useMemo(() => {
+    if (typeFilter.kind !== "archimate" || !typeFilter.layer || typeFilter.viewpointKey) {
+      return diagrams;
+    }
+    const layerByViewpoint = new Map(viewpoints.map((v) => [v.key, v.layer]));
+    return diagrams.filter((d) => layerByViewpoint.get(d.viewpoint_key ?? "") === typeFilter.layer);
+  }, [diagrams, viewpoints, typeFilter]);
+
   // Group diagrams by group for the grouped view (only when not filtered to a
   // single group). Multi-group diagrams appear under each of their groups.
   const grouped = useMemo(() => {
     const out: { key: string; label: string; color?: string | null; items: DiagramSummary[] }[] =
       [];
     for (const g of groups) {
-      const items = diagrams.filter((d) => (d.group_ids || []).includes(g.id));
+      const items = visibleDiagrams.filter((d) => (d.group_ids || []).includes(g.id));
       if (items.length) out.push({ key: g.id, label: g.name, color: g.color, items });
     }
-    const ungrouped = diagrams.filter((d) => !(d.group_ids || []).length);
+    const ungrouped = visibleDiagrams.filter((d) => !(d.group_ids || []).length);
     if (ungrouped.length)
       out.push({ key: "__ungrouped", label: t("gallery.ungrouped"), items: ungrouped });
     return out;
-  }, [diagrams, groups, t]);
+  }, [visibleDiagrams, groups, t]);
+
+  const openDiagram = (d: DiagramSummary) =>
+    navigate(d.kind === "archimate" ? `/admin/architectureStudio/${d.id}` : `/diagrams/${d.id}`);
 
   const renderCard = (d: DiagramSummary) => (
     <MuiCard key={d.id} sx={{ position: "relative" }}>
-      <CardActionArea onClick={() => navigate(`/diagrams/${d.id}`)}>
+      <CardActionArea onClick={() => openDiagram(d)}>
         {/* Thumbnail */}
         <Box
           sx={{
@@ -285,13 +328,21 @@ export default function DiagramsPage() {
               style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
             />
           ) : (
-            <MaterialSymbol icon={DIAGRAM_ICON} size={36} color="#bbb" />
+            <MaterialSymbol
+              icon={d.kind === "archimate" ? ARCHIMATE_DIAGRAM_ICON : DIAGRAM_ICON}
+              size={36}
+              color="#bbb"
+            />
           )}
         </Box>
 
         <CardContent sx={{ p: 1.25, "&:last-child": { pb: 1.25 } }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 0.25 }}>
-            <MaterialSymbol icon={DIAGRAM_ICON} size={18} color="#1976d2" />
+            <MaterialSymbol
+              icon={d.kind === "archimate" ? ARCHIMATE_DIAGRAM_ICON : DIAGRAM_ICON}
+              size={18}
+              color={d.kind === "archimate" ? ARCHIMATE_DIAGRAM_COLOR : "#1976d2"}
+            />
             <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1 }}>
               {d.name}
             </Typography>
@@ -397,6 +448,10 @@ export default function DiagramsPage() {
             width={300}
             onWidthChange={() => {}}
             onAfterChange={() => setFiltersOpen(false)}
+            typeFilter={typeFilter}
+            onTypeFilterChange={setTypeFilter}
+            showArchimateFilter={showArchimateFilter}
+            viewpoints={viewpoints}
           />
         </Drawer>
       ) : (
@@ -409,6 +464,10 @@ export default function DiagramsPage() {
           onToggleCollapse={toggleSidebarCollapse}
           width={sidebarWidth}
           onWidthChange={changeSidebarWidth}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          showArchimateFilter={showArchimateFilter}
+          viewpoints={viewpoints}
         />
       )}
 
@@ -425,7 +484,7 @@ export default function DiagramsPage() {
           <Typography variant="h5" fontWeight={600}>
             {t("page.title")}
           </Typography>
-          <Chip label={`${diagrams.length}`} size="small" />
+          <Chip label={`${visibleDiagrams.length}`} size="small" />
           <TextField
             size="small"
             placeholder={t("gallery.search.placeholder")}
@@ -468,16 +527,16 @@ export default function DiagramsPage() {
         </Box>
 
         {/* Empty state */}
-        {diagrams.length === 0 && (
+        {visibleDiagrams.length === 0 && (
           <Typography color="text.secondary" sx={{ textAlign: "center", py: 6 }}>
-            {search || scope.kind !== "all"
+            {search || scope.kind !== "all" || typeFilter.kind !== "all"
               ? t("gallery.noResults")
               : t("gallery.empty")}
           </Typography>
         )}
 
         {/* Grouped by group */}
-        {diagrams.length > 0 && showGrouped && (
+        {visibleDiagrams.length > 0 && showGrouped && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {grouped.map((g) => (
               <Box key={g.key}>
@@ -513,7 +572,7 @@ export default function DiagramsPage() {
         )}
 
         {/* Flat (single group selected) */}
-        {diagrams.length > 0 && !showGrouped && cardGrid(diagrams)}
+        {visibleDiagrams.length > 0 && !showGrouped && cardGrid(visibleDiagrams)}
       </Box>
 
       {/* Context menu */}

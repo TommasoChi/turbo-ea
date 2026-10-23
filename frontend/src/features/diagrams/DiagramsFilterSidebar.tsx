@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -10,8 +11,15 @@ import Button from "@mui/material/Button";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import MaterialSymbol from "@/components/MaterialSymbol";
-import type { DiagramGroup } from "@/types";
+import { LAYER_ORDER, type ArchimateLayer } from "@/features/archimate/taxonomy/elements";
+import type { ArchimateViewpoint, DiagramGroup } from "@/types";
 
 /** Single-select scope (like mail folders). */
 export type DiagramScope =
@@ -19,6 +27,22 @@ export type DiagramScope =
   | { kind: "mine" }
   | { kind: "favorites" }
   | { kind: "group"; id: string };
+
+/** The diagram-kind filter, orthogonal to `DiagramScope` above (you can be
+ *  looking at "mine" + "archimate" + a specific layer/viewpoint at once).
+ *  `layer`/`viewpointKey` only apply once `kind === "archimate"` -- cascading,
+ *  so `viewpointKey` is cleared whenever `layer` changes. */
+export interface DiagramTypeFilter {
+  kind: "all" | "drawio" | "archimate";
+  layer: ArchimateLayer | null;
+  viewpointKey: string | null;
+}
+
+export const DEFAULT_TYPE_FILTER: DiagramTypeFilter = {
+  kind: "all",
+  layer: null,
+  viewpointKey: null,
+};
 
 export const SIDEBAR_MIN_WIDTH = 220;
 export const SIDEBAR_MAX_WIDTH = 360;
@@ -34,6 +58,14 @@ interface Props {
   onWidthChange: (w: number) => void;
   /** Called after a scope selection — used to auto-close the mobile drawer. */
   onAfterChange?: () => void;
+  typeFilter: DiagramTypeFilter;
+  onTypeFilterChange: (f: DiagramTypeFilter) => void;
+  /** Hidden entirely for a user with no ArchiMate view/manage permission on
+   *  any layer -- there would be nothing for the filter to ever show. */
+  showArchimateFilter: boolean;
+  /** The full Viewpoint catalog, for the layer→viewpoint cascade. Only
+   *  fetched by the caller once `showArchimateFilter` is true. */
+  viewpoints: ArchimateViewpoint[];
 }
 
 const sameScope = (a: DiagramScope, b: DiagramScope) =>
@@ -49,10 +81,32 @@ export default function DiagramsFilterSidebar({
   width,
   onWidthChange,
   onAfterChange,
+  typeFilter,
+  onTypeFilterChange,
+  showArchimateFilter,
+  viewpoints,
 }: Props) {
-  const { t } = useTranslation(["diagrams", "common"]);
+  const { t } = useTranslation(["diagrams", "archimate", "common"]);
 
-  const activeCount = scope.kind === "all" ? 0 : 1;
+  const activeCount =
+    (scope.kind === "all" ? 0 : 1) + (typeFilter.kind === "all" ? 0 : 1);
+
+  // Layers present among the (non-hidden) Viewpoint catalog, in LAYER_ORDER.
+  const availableLayers = useMemo(() => {
+    const present = new Set(viewpoints.map((v) => v.layer));
+    return LAYER_ORDER.filter((l) => present.has(l));
+  }, [viewpoints]);
+
+  const viewpointsInLayer = useMemo(
+    () => viewpoints.filter((v) => v.layer === typeFilter.layer),
+    [viewpoints, typeFilter.layer],
+  );
+
+  const pickKind = (kind: DiagramTypeFilter["kind"] | null) => {
+    if (!kind) return;
+    onTypeFilterChange({ kind, layer: null, viewpointKey: null });
+    onAfterChange?.();
+  };
 
   const pickScope = (s: DiagramScope) => {
     onScopeChange(s);
@@ -179,6 +233,74 @@ export default function DiagramsFilterSidebar({
               </ListItemButton>
             ))}
           </List>
+
+          <Divider sx={{ my: 1 }} />
+
+          {/* Type (drawio / archimate), then its layer -> viewpoint cascade */}
+          <Typography variant="overline" color="text.secondary" sx={{ px: 0.5 }}>
+            {t("sidebar.type")}
+          </Typography>
+          <ToggleButtonGroup
+            value={typeFilter.kind}
+            exclusive
+            size="small"
+            fullWidth
+            onChange={(_, v) => pickKind(v)}
+            sx={{ mb: 1 }}
+          >
+            <ToggleButton value="all">{t("sidebar.typeAll")}</ToggleButton>
+            <ToggleButton value="drawio">{t("gallery.diagramTypeDrawio")}</ToggleButton>
+            {showArchimateFilter && (
+              <ToggleButton value="archimate">{t("gallery.diagramTypeArchimate")}</ToggleButton>
+            )}
+          </ToggleButtonGroup>
+
+          {typeFilter.kind === "archimate" && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 1 }}>
+              <FormControl size="small" fullWidth>
+                <InputLabel id="diagrams-layer-filter-label">{t("sidebar.layer")}</InputLabel>
+                <Select
+                  labelId="diagrams-layer-filter-label"
+                  label={t("sidebar.layer")}
+                  value={typeFilter.layer ?? ""}
+                  onChange={(e) => {
+                    const layer = (e.target.value || null) as ArchimateLayer | null;
+                    onTypeFilterChange({ ...typeFilter, layer, viewpointKey: null });
+                  }}
+                >
+                  <MenuItem value="">{t("sidebar.anyLayer")}</MenuItem>
+                  {availableLayers.map((l) => (
+                    <MenuItem key={l} value={l}>
+                      {t(`layers.${l}`, { ns: "archimate" })}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {typeFilter.layer && (
+                <FormControl size="small" fullWidth>
+                  <InputLabel id="diagrams-viewpoint-filter-label">
+                    {t("archimatePicker.viewpoint")}
+                  </InputLabel>
+                  <Select
+                    labelId="diagrams-viewpoint-filter-label"
+                    label={t("archimatePicker.viewpoint")}
+                    value={typeFilter.viewpointKey ?? ""}
+                    onChange={(e) =>
+                      onTypeFilterChange({ ...typeFilter, viewpointKey: e.target.value || null })
+                    }
+                  >
+                    <MenuItem value="">{t("sidebar.anyViewpoint")}</MenuItem>
+                    {viewpointsInLayer.map((v) => (
+                      <MenuItem key={v.key} value={v.key}>
+                        {v.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+            </Box>
+          )}
 
           <Divider sx={{ my: 1 }} />
 

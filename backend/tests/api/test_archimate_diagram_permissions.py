@@ -110,6 +110,44 @@ async def test_archimate_list_takes_any_layer_view_or_manage_key(client, env):
     assert r.status_code == 200
 
 
+async def test_all_list_silently_drops_archimate_rows_the_user_cant_see(client, env, db):
+    """The Diagrams page's kind=all listing mixes DrawIO and ArchiMate: the base
+    diagrams.view key (required for kind=all, same as today) covers every
+    DrawIO row, but an ArchiMate row still needs its own per-layer key --
+    dropped from the list, not a 403 for the whole page, the same way an
+    unreadable linked card is dropped."""
+    await create_role(
+        db,
+        key="mixed_viewer",
+        label="mixed_viewer",
+        permissions={"diagrams.view": True, "archimatediagrams.business.view": True},
+    )
+    mixed_viewer = await create_user(db, email="mixed@t.com", role="mixed_viewer")
+    drawio = Diagram(name="d", kind="drawio", data={"xml": "<m/>"})
+    business = Diagram(name="b", kind="archimate", viewpoint_key="vp-business", data=AM)
+    technology = Diagram(name="t", kind="archimate", viewpoint_key="vp-technology", data=AM)
+    db.add_all([drawio, business, technology])
+    await db.flush()
+    r = await client.get("/api/v1/diagrams?kind=all", headers=auth_headers(mixed_viewer))
+    assert r.status_code == 200
+    assert {x["id"] for x in r.json()} == {str(drawio.id), str(business.id)}
+    r = await client.get("/api/v1/diagrams?kind=all", headers=auth_headers(env["drawio_only"]))
+    assert r.status_code == 200
+    assert {x["id"] for x in r.json()} == {str(drawio.id)}
+
+
+async def test_list_filters_by_viewpoint_key(client, env, db):
+    business = Diagram(name="b", kind="archimate", viewpoint_key="vp-business", data=AM)
+    technology = Diagram(name="t", kind="archimate", viewpoint_key="vp-technology", data=AM)
+    db.add_all([business, technology])
+    await db.flush()
+    h = auth_headers(env["business_manager"])
+    r = await client.get("/api/v1/diagrams?kind=archimate&viewpoint_key=vp-business", headers=h)
+    assert r.status_code == 200
+    assert {x["id"] for x in r.json()} == {str(business.id)}
+    assert r.json()[0]["viewpoint_key"] == "vp-business"
+
+
 async def test_validate_needs_an_archimate_view_key(client, env):
     body = {"xml": XML}
     r = await client.post(
