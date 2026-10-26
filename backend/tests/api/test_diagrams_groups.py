@@ -188,6 +188,50 @@ class TestGroups:
         )
         assert [d["name"] for d in by_group.json()] == ["Diag"]
 
+    async def test_diagram_count_splits_by_kind(self, client, db, env):
+        """The sidebar shows a separate DrawIo and ArchiMate count per group (not one blended
+        total), so a group with one of each must report ``1``/``1``, not ``2``/``0``."""
+        from app.models.archimate_viewpoint import ArchimateViewpoint
+
+        admin = env["admin"]
+        db.add(ArchimateViewpoint(key="organization", name="Organization", layer="business"))
+        await db.flush()
+
+        drawio_id = await _create(client, admin, name="D1")
+        arch_id = await _create(
+            client,
+            admin,
+            name="A1",
+            kind="archimate",
+            viewpoint_key="organization",
+            data={
+                "format": "archimate-exchange-3.1",
+                "xml": (
+                    '<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/" identifier="m"/>'
+                ),
+            },
+        )
+
+        created = await client.post(
+            "/api/v1/diagram-groups", json={"name": "Mixed"}, headers=auth_headers(admin)
+        )
+        group_id = created.json()["id"]
+        assert created.json()["diagram_count_drawio"] == 0
+        assert created.json()["diagram_count_archimate"] == 0
+
+        for did in (drawio_id, arch_id):
+            put = await client.put(
+                f"/api/v1/diagrams/{did}/groups",
+                json={"group_ids": [group_id]},
+                headers=auth_headers(admin),
+            )
+            assert put.status_code == 200
+
+        listing = await client.get("/api/v1/diagram-groups", headers=auth_headers(admin))
+        row = listing.json()[0]
+        assert row["diagram_count_drawio"] == 1
+        assert row["diagram_count_archimate"] == 1
+
         detail = await client.get(f"/api/v1/diagrams/{did}", headers=auth_headers(admin))
         assert detail.json()["group_ids"] == [group_id]
 

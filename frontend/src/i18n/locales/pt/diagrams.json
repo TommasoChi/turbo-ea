@@ -211,6 +211,8 @@
   "sidebar.groups": "Grupos",
   "sidebar.manageGroups": "Gerenciar grupos",
   "sidebar.noGroups": "Ainda não há grupos",
+  "sidebar.groupDrawioCount": "Diagramas Draw.io: {{count}}",
+  "sidebar.groupArchimateCount": "Diagramas ArchiMate: {{count}}",
   "manageGroups.title": "Gerenciar grupos",
   "manageGroups.newName": "Nome do novo grupo",
   "manageGroups.add": "Adicionar",

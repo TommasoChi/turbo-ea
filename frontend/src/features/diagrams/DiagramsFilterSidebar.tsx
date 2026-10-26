@@ -321,9 +321,25 @@ export default function DiagramsFilterSidebar({
           <Divider sx={{ my: 1 }} />
 
           {/* Groups */}
-          <Typography variant="overline" color="text.secondary" sx={{ px: 0.5 }}>
-            {t("sidebar.groups")}
-          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", px: 0.5 }}>
+            <Typography variant="overline" color="text.secondary" sx={{ flex: 1 }}>
+              {t("sidebar.groups")}
+            </Typography>
+            {groups.length > 0 && (
+              <Box sx={{ display: "flex", gap: 0.5 }}>
+                <Tooltip title={t("gallery.diagramTypeDrawio")}>
+                  <Box sx={{ width: 20, display: "flex", justifyContent: "center" }}>
+                    <MaterialSymbol icon="schema" size={14} />
+                  </Box>
+                </Tooltip>
+                <Tooltip title={t("gallery.diagramTypeArchimate")}>
+                  <Box sx={{ width: 20, display: "flex", justifyContent: "center" }}>
+                    <MaterialSymbol icon="hub" size={14} color="#7b1fa2" />
+                  </Box>
+                </Tooltip>
+              </Box>
+            )}
+          </Box>
           <List dense disablePadding>
             {groups.length === 0 ? (
               <Typography
@@ -352,7 +368,22 @@ export default function DiagramsFilterSidebar({
                     />
                   </ListItemIcon>
                   <ListItemText primary={g.name} primaryTypographyProps={{ noWrap: true }} />
-                  <Chip size="small" label={g.diagram_count} sx={{ ml: 0.5 }} />
+                  <Box
+                    aria-label={t("sidebar.groupDrawioCount", { count: g.diagram_count_drawio })}
+                    sx={{ width: 20, textAlign: "center" }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {g.diagram_count_drawio}
+                    </Typography>
+                  </Box>
+                  <Box
+                    aria-label={t("sidebar.groupArchimateCount", { count: g.diagram_count_archimate })}
+                    sx={{ width: 20, textAlign: "center" }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {g.diagram_count_archimate}
+                    </Typography>
+                  </Box>
                 </ListItemButton>
               ))
             )}

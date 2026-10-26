@@ -18,8 +18,14 @@ import ManageGroupsDialog from "./ManageGroupsDialog";
 type Props = React.ComponentProps<typeof ManageGroupsDialog>;
 
 const GROUPS: DiagramGroup[] = [
-  { id: "g1", name: "Architecture", color: "#ff0000", sort_order: 0, diagram_count: 2 },
-  { id: "g2", name: "Operations", color: null, sort_order: 1, diagram_count: 1 },
+  {
+    id: "g1", name: "Architecture", color: "#ff0000", sort_order: 0, diagram_count: 2,
+    diagram_count_drawio: 2, diagram_count_archimate: 0,
+  },
+  {
+    id: "g2", name: "Operations", color: null, sort_order: 1, diagram_count: 1,
+    diagram_count_drawio: 1, diagram_count_archimate: 0,
+  },
 ];
 
 function renderDialog(overrides: Partial<Props> = {}) {

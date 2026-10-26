@@ -211,6 +211,8 @@
   "sidebar.groups": "المجموعات",
   "sidebar.manageGroups": "إدارة المجموعات",
   "sidebar.noGroups": "لا توجد مجموعات بعد",
+  "sidebar.groupDrawioCount": "مخططات Draw.io: {{count}}",
+  "sidebar.groupArchimateCount": "مخططات ArchiMate: {{count}}",
   "manageGroups.title": "إدارة المجموعات",
   "manageGroups.newName": "اسم المجموعة الجديدة",
   "manageGroups.add": "إضافة",

@@ -1410,6 +1410,9 @@ export interface DiagramGroup {
   color?: string | null;
   sort_order: number;
   diagram_count: number;
+  /** Same total, split by diagram kind -- the sidebar's Groups list shows these as two columns. */
+  diagram_count_drawio: number;
+  diagram_count_archimate: number;
   created_at?: string;
   updated_at?: string;
 }

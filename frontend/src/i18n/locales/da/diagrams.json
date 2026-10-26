@@ -211,6 +211,8 @@
   "sidebar.groups": "Grupper",
   "sidebar.manageGroups": "Administrer grupper",
   "sidebar.noGroups": "Ingen grupper endnu",
+  "sidebar.groupDrawioCount": "Draw.io-diagrammer: {{count}}",
+  "sidebar.groupArchimateCount": "ArchiMate-diagrammer: {{count}}",
   "manageGroups.title": "Administrer grupper",
   "manageGroups.newName": "Navn på ny gruppe",
   "manageGroups.add": "Tilføj",

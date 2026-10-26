@@ -298,7 +298,10 @@ describe("DiagramsPage", () => {
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url.startsWith("/diagram-groups"))
         return Promise.resolve([
-          { id: "s1", name: "Domain A", color: null, sort_order: 0, diagram_count: 0 },
+          {
+            id: "s1", name: "Domain A", color: null, sort_order: 0, diagram_count: 0,
+            diagram_count_drawio: 0, diagram_count_archimate: 0,
+          },
         ] as never);
       if (url.startsWith("/diagrams")) return Promise.resolve(diagrams as never);
       if (url.startsWith("/cards")) return Promise.resolve(cards as never);
@@ -443,5 +446,26 @@ describe("DiagramsPage — layer-scoped entry points (/business-architecture/dia
     renderPage(perms, "application");
     await waitFor(() => expect(vi.mocked(api.get)).toHaveBeenCalled());
     expect(screen.queryByText("Tech Landscape")).not.toBeInTheDocument();
+  });
+});
+
+describe("DiagramsPage — sidebar group counts by diagram type", () => {
+  it("shows a separate Draw.io and ArchiMate count per group, not one blended total", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.startsWith("/diagram-groups"))
+        return Promise.resolve([
+          {
+            id: "g1", name: "Mixed", color: null, sort_order: 0, diagram_count: 3,
+            diagram_count_drawio: 2, diagram_count_archimate: 1,
+          },
+        ] as never);
+      if (url.startsWith("/diagrams")) return Promise.resolve(diagrams as never);
+      if (url.startsWith("/cards")) return Promise.resolve(cards as never);
+      return Promise.reject(new Error(`no mock for ${url}`));
+    });
+    renderPage();
+    await screen.findByText("Mixed");
+    expect(screen.getByLabelText("Draw.io diagrams: 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("ArchiMate diagrams: 1")).toBeInTheDocument();
   });
 });
