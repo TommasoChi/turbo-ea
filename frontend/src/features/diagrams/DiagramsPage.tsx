@@ -110,10 +110,14 @@ export default function DiagramsPage({ initialLayer }: Props) {
 
   // Sidebar + search + sort state
   const [scope, setScope] = useState<DiagramScope>({ kind: "all" });
+  // The page's own domain scope (below) enforces `initialLayer`; the sidebar's generic Layer
+  // dropdown is a separate, finer 8-value ArchiMate taxonomy filter the user may still narrow
+  // with on top of it, so it starts unset here rather than pre-seeded to `initialLayer` -- seeding
+  // it would make the two compete on the exact same field and hide a viewpoint whose own `layer`
+  // classification differs from a domain it is nonetheless tagged under (e.g. "Layered", layer
+  // "other", tagged under all three domains).
   const [typeFilter, setTypeFilter] = useState<DiagramTypeFilter>(() =>
-    initialLayer
-      ? { kind: "archimate", layer: initialLayer, viewpointKey: null }
-      : DEFAULT_TYPE_FILTER,
+    initialLayer ? { kind: "archimate", layer: null, viewpointKey: null } : DEFAULT_TYPE_FILTER,
   );
   const [viewpoints, setViewpoints] = useState<ArchimateViewpoint[]>([]);
   const [searchInput, setSearchInput] = useState("");
@@ -294,17 +298,27 @@ export default function DiagramsPage({ initialLayer }: Props) {
       return next;
     });
 
-  // The layer filter has no backend param (it only ever narrows to one or more
-  // viewpoints, and the sidebar already has the whole catalog to cascade
-  // from) -- so "a layer but no specific viewpoint yet" is filtered here,
-  // client-side, from the same viewpoint-key -> layer lookup the sidebar uses.
+  // Neither filter has a backend param (the sidebar already has the whole catalog to cascade
+  // from) -- both are applied here, client-side, against the viewpoint catalog. Skipped once a
+  // specific viewpoint is chosen (the server already scoped `diagrams` to exactly that one).
   const visibleDiagrams = useMemo(() => {
-    if (typeFilter.kind !== "archimate" || !typeFilter.layer || typeFilter.viewpointKey) {
-      return diagrams;
+    if (typeFilter.kind !== "archimate" || typeFilter.viewpointKey) return diagrams;
+    let result = diagrams;
+    if (initialLayer) {
+      // The page's own permanent scope: every tab a viewpoint is tagged under (`domains`), not
+      // just its single `layer` classification -- a viewpoint can genuinely belong to more than
+      // one architecture domain.
+      const domainsByViewpoint = new Map(viewpoints.map((v) => [v.key, v.domains]));
+      result = result.filter((d) =>
+        (domainsByViewpoint.get(d.viewpoint_key ?? "") ?? []).includes(initialLayer),
+      );
     }
-    const layerByViewpoint = new Map(viewpoints.map((v) => [v.key, v.layer]));
-    return diagrams.filter((d) => layerByViewpoint.get(d.viewpoint_key ?? "") === typeFilter.layer);
-  }, [diagrams, viewpoints, typeFilter]);
+    if (typeFilter.layer) {
+      const layerByViewpoint = new Map(viewpoints.map((v) => [v.key, v.layer]));
+      result = result.filter((d) => layerByViewpoint.get(d.viewpoint_key ?? "") === typeFilter.layer);
+    }
+    return result;
+  }, [diagrams, viewpoints, typeFilter, initialLayer]);
 
   // Group diagrams by group for the grouped view (only when not filtered to a
   // single group). Multi-group diagrams appear under each of their groups.

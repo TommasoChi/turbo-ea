@@ -22,6 +22,7 @@ import {
   createViewpoint,
   deleteViewpointExample,
   removeViewpointObject,
+  updateViewpoint,
   uploadViewpointExample,
 } from "@/api/archimateViewpoints";
 import { listEnterpriseObjects } from "@/api/enterpriseObjects";
@@ -67,6 +68,7 @@ const ORGANIZATION: ArchimateViewpoint = {
   is_hidden: false,
   sort_order: 0,
   objects: [],
+  domains: ["business"],
   examples: [],
 };
 
@@ -101,6 +103,7 @@ describe("ViewpointEditDialog", () => {
       is_hidden: false,
       sort_order: 1,
       objects: [],
+      domains: [],
       examples: [],
     });
     const onSaved = vi.fn();
@@ -129,6 +132,25 @@ describe("ViewpointEditDialog", () => {
     // Create switches the dialog in place to edit mode -- the objects editor
     // unlocks without closing, so an admin can start allowing objects right away.
     expect(await screen.findByLabelText("Add object")).toBeInTheDocument();
+  });
+
+  test("shows the viewpoint's domains as checkboxes and saves a change to them", async () => {
+    vi.mocked(updateViewpoint).mockResolvedValue({ ...ORGANIZATION, domains: ["business", "technology"] });
+    render(<ViewpointEditDialog open viewpoint={ORGANIZATION} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    expect(screen.getByRole("checkbox", { name: "Business" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Application & Data" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Technology" })).not.toBeChecked();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Technology" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(updateViewpoint).toHaveBeenCalledWith(
+        "organization",
+        expect.objectContaining({ domains: ["business", "technology"] }),
+      ),
+    );
   });
 
   test("save button is disabled until a create-mode key and name are both filled", () => {

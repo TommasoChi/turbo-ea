@@ -10,11 +10,11 @@ from app.services import seed
 from tests.conftest import auth_headers
 
 
-async def test_list_viewpoints_returns_the_23_standard_ones(client, db, admin_user):
+async def test_list_viewpoints_returns_the_27_standard_ones(client, db, admin_user):
     await seed.seed_metamodel(db)
     resp = await client.get("/api/v1/metamodel/viewpoints", headers=auth_headers(admin_user))
     assert resp.status_code == 200
-    assert len(resp.json()) == 23
+    assert len(resp.json()) == 27
 
 
 async def test_create_custom_viewpoint(client, db, admin_user):
@@ -25,6 +25,80 @@ async def test_create_custom_viewpoint(client, db, admin_user):
     )
     assert resp.status_code == 201
     assert resp.json()["is_standard"] is False
+    # Not given at creation: starts untagged, same as having no allowed objects yet.
+    assert resp.json()["domains"] == []
+
+
+async def test_create_custom_viewpoint_with_domains(client, db, admin_user):
+    resp = await client.post(
+        "/api/v1/metamodel/viewpoints",
+        json={
+            "key": "custom-ops",
+            "name": "Custom Ops",
+            "layer": "business",
+            "domains": ["application", "business"],
+        },
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 201
+    assert resp.json()["domains"] == ["business", "application"]
+
+
+async def test_domains_are_seeded_from_the_allowed_objects_layers(client, db, admin_user):
+    """``domains`` is seeded once (``viewpoint_seed.py``, same TAB_LAYERS grouping as
+    ``diagrams.py``'s picker/permission gate) from the allowed objects' own
+    `EnterpriseObject.layer`, so a viewpoint spanning only business-layer objects
+    starts at exactly ["business"], and one spanning several layers' worth of tabs
+    starts with all of them, in business/application/technology order. It is then
+    a stored, independently editable field (see the PATCH test below), not
+    recomputed on every read."""
+    await seed.seed_metamodel(db)
+    headers = auth_headers(admin_user)
+    resp = await client.get("/api/v1/metamodel/viewpoints/organization", headers=headers)
+    assert resp.json()["domains"] == ["business"]
+    resp = await client.get("/api/v1/metamodel/viewpoints/technology", headers=headers)
+    assert resp.json()["domains"] == ["technology"]
+    # The Layered Viewpoint spans every layer, so every tab.
+    resp = await client.get("/api/v1/metamodel/viewpoints/layered", headers=headers)
+    assert resp.json()["domains"] == ["business", "application", "technology"]
+
+    # The list endpoint reads the same stored field, in bulk.
+    resp = await client.get("/api/v1/metamodel/viewpoints", headers=headers)
+    by_key = {v["key"]: v["domains"] for v in resp.json()}
+    assert by_key["organization"] == ["business"]
+    assert by_key["layered"] == ["business", "application", "technology"]
+
+
+async def test_domains_are_editable_independently_of_the_allowed_objects(client, db, admin_user):
+    """An admin may retag a viewpoint's domains to anything other than its seeded value --
+    it never snaps back to a recomputed one. Unknown domains and a non-list are rejected;
+    duplicates are folded and the stored order is always business/application/technology."""
+    await seed.seed_metamodel(db)
+    headers = auth_headers(admin_user)
+    resp = await client.patch(
+        "/api/v1/metamodel/viewpoints/organization",
+        json={"domains": ["technology", "business", "business"]},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["domains"] == ["business", "technology"]
+
+    resp = await client.get("/api/v1/metamodel/viewpoints/organization", headers=headers)
+    assert resp.json()["domains"] == ["business", "technology"]  # stuck, not re-derived
+
+    resp = await client.patch(
+        "/api/v1/metamodel/viewpoints/organization",
+        json={"domains": ["strategy"]},
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+    resp = await client.patch(
+        "/api/v1/metamodel/viewpoints/organization",
+        json={"domains": "business"},
+        headers=headers,
+    )
+    assert resp.status_code == 422
 
 
 async def test_add_and_remove_allowed_object(client, db, admin_user):

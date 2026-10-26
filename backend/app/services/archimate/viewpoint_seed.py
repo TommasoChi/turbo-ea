@@ -35,6 +35,25 @@ from app.models.archimate_viewpoint import (
     ArchimateViewpointTabCard,
 )
 from app.services.archimate import taxonomy
+from app.services.archimate.taxonomy import TAB_LAYERS
+
+# Reverse of taxonomy.LAYERS: an element type's own layer, for `_domains_of` below. A standard
+# Enterprise Object's key is always one of these type names, so this needs no DB round trip at
+# seed time (unlike migration 167's backfill, which reads the already-persisted
+# `EnterpriseObject.layer` column for rows that may since have diverged from the taxonomy).
+_ELEMENT_LAYER: dict[str, str] = {
+    name: layer for layer, names in taxonomy.LAYERS.items() for name in names
+}
+
+
+def _domains_of(objects: tuple[str, ...]) -> list[str]:
+    """The initial ``domains`` a standard viewpoint is seeded with: every TAB_LAYERS tab at least
+    one of its allowed objects' own layer falls in. An admin may retag it later; this only sets
+    where it starts."""
+    layers = {_ELEMENT_LAYER.get(key) for key in objects}
+    layers.discard(None)
+    return [tab for tab, tab_layers in TAB_LAYERS.items() if tab_layers & layers]
+
 
 # Each description paraphrases the ArchiMate 3.1 standard's own definition of
 # the viewpoint in plain, non-expert language (same register as
@@ -625,6 +644,7 @@ async def seed_viewpoints(db: AsyncSession) -> None:
                 layer=vp["layer"],
                 is_standard=True,
                 sort_order=sort_order,
+                domains=_domains_of(vp["objects"]),
             )
         )
         for enterprise_object_key in vp["objects"]:

@@ -368,6 +368,9 @@ export interface ArchimateViewpoint {
   is_hidden: boolean;
   sort_order: number;
   objects: string[];
+  /** TAB_LAYERS tabs this viewpoint spans ("business"/"application"/"technology"), derived
+   *  server-side from its allowed objects' own layer -- never stored, never editable. */
+  domains: string[];
   examples: ArchimateViewpointExample[];
 }
 

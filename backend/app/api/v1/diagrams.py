@@ -33,6 +33,7 @@ from app.models.diagram_group import diagram_group_members
 from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
 from app.models.user import User
 from app.services import audit_log
+from app.services.archimate.taxonomy import TAB_LAYERS
 from app.services.archimate.validate import validate_exchange
 from app.services.card_read_scope import CardReadScope
 from app.services.diagram_legend import build_public_legend
@@ -144,15 +145,6 @@ async def require_public_diagram(
 
 ARCHIMATE_FORMAT = "archimate-exchange-3.1"
 DIAGRAM_KINDS = ("drawio", "archimate")
-
-# The three diagram-creation dashboard tabs, each mapped to the
-# taxonomy.LAYERS / EnterpriseObject.layer keys it covers -- same three
-# groupings as the design doc's nav table.
-TAB_LAYERS: dict[str, set[str]] = {
-    "business": {"strategy", "business", "motivation"},
-    "application": {"application"},
-    "technology": {"technology", "physical"},
-}
 
 
 async def viewpoint_tabs(db: AsyncSession, viewpoint_key: str) -> set[str]:

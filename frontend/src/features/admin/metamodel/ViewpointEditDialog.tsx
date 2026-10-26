@@ -9,9 +9,12 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import FormControl from "@mui/material/FormControl";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import FormGroup from "@mui/material/FormGroup";
 import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import IconPicker from "@/components/IconPicker";
@@ -36,6 +39,15 @@ import type { ArchimateViewpoint, ArchimateViewpointExample, EnterpriseObject } 
 // on a Viewpoint is an admin-facing classification only (viewpoint_seed.py);
 // it never restricts which objects the allowed-objects editor below offers.
 const SELECTABLE_LAYERS: ArchimateLayer[] = LAYER_ORDER.filter((layer) => layer !== "other");
+
+/** The 3 diagram-creation tabs (TAB_LAYERS, backend `api/v1/diagrams.py`) a viewpoint can be
+ *  tagged under -- in table/checkbox order. Independent of `layer` above: an admin's own
+ *  categorization, not re-derived from the allowed objects on every save. */
+const DOMAIN_OPTIONS: { key: string; labelKey: string }[] = [
+  { key: "business", labelKey: "metamodel.viewpoints.domainBusiness" },
+  { key: "application", labelKey: "metamodel.viewpoints.domainApplication" },
+  { key: "technology", labelKey: "metamodel.viewpoints.domainTechnology" },
+];
 
 export interface ViewpointEditDialogProps {
   open: boolean;
@@ -65,6 +77,7 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("category");
   const [layer, setLayer] = useState<ArchimateLayer>(SELECTABLE_LAYERS[0]);
+  const [domains, setDomains] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [objects, setObjects] = useState<string[]>([]);
   // Set once a create-mode Save succeeds, so the rest of this opening behaves
@@ -90,6 +103,7 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
     setName(viewpoint?.name ?? "");
     setIcon(viewpoint?.icon ?? "category");
     setLayer((viewpoint?.layer as ArchimateLayer) ?? SELECTABLE_LAYERS[0]);
+    setDomains(viewpoint?.domains ?? []);
     setDescription(viewpoint?.description ?? "");
     setObjects(viewpoint?.objects ?? []);
     setExamples(viewpoint?.examples ?? []);
@@ -112,11 +126,11 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
     setError(null);
     try {
       if (activeKey) {
-        await updateViewpoint(activeKey, { name, icon, description, layer });
+        await updateViewpoint(activeKey, { name, icon, description, layer, domains });
         onSaved();
         onClose();
       } else {
-        const created = await createViewpoint({ key, name, icon, description, layer });
+        const created = await createViewpoint({ key, name, icon, description, layer, domains });
         setCreatedKey(created.key);
         onSaved();
       }
@@ -256,6 +270,28 @@ export default function ViewpointEditDialog({ open, viewpoint, onClose, onSaved 
             ))}
           </Select>
         </FormControl>
+
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          {t("metamodel.viewpoints.columnDomain")}
+        </Typography>
+        <FormGroup sx={{ mb: 2 }} row>
+          {DOMAIN_OPTIONS.map((d) => (
+            <FormControlLabel
+              key={d.key}
+              control={
+                <Checkbox
+                  checked={domains.includes(d.key)}
+                  onChange={(e) =>
+                    setDomains((prev) =>
+                      e.target.checked ? [...prev, d.key] : prev.filter((x) => x !== d.key),
+                    )
+                  }
+                />
+              }
+              label={t(d.labelKey)}
+            />
+          ))}
+        </FormGroup>
 
         <Typography variant="subtitle2" sx={{ mb: 1 }}>
           {t("metamodel.viewpoints.allowedObjects")}

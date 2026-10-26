@@ -51,6 +51,7 @@ from app.services import (
 from app.services.archimate import taxonomy
 from app.services.archimate.archi_native_import import convert_archi_native_to_exchange
 from app.services.archimate.card_type_mapping import get_card_type_mapping
+from app.services.archimate.taxonomy import TAB_LAYERS
 from app.services.archimate.validate import MAX_XML_BYTES, validate_exchange
 from app.services.extensions.registry import extension_registry
 from app.services.hierarchy import (
@@ -2857,6 +2858,11 @@ def _serialize_viewpoint(
         "is_hidden": v.is_hidden,
         "sort_order": v.sort_order,
         "objects": objects,
+        # Which of TAB_LAYERS' tabs (business/application/technology) this viewpoint is tagged
+        # under, for the Viewpoint Catalog's "Domain" column and the layer-scoped Diagrams pages'
+        # filter. Stored, not derived: seeded from the allowed objects' layers (viewpoint_seed.py)
+        # but an admin may retag it afterward independently of what the viewpoint actually allows.
+        "domains": v.domains or [],
         "examples": examples or [],
     }
 
@@ -2945,9 +2951,21 @@ async def get_viewpoint(
             ArchimateViewpointObject.viewpoint_key == key
         )
     )
-    return _serialize_viewpoint(
-        v, list(objects_result.scalars().all()), await _viewpoint_examples(db, key)
-    )
+    objects = list(objects_result.scalars().all())
+    return _serialize_viewpoint(v, objects, await _viewpoint_examples(db, key))
+
+
+_DOMAINS = frozenset(TAB_LAYERS)
+
+
+def _validate_domains(domains: object) -> list[str]:
+    if not isinstance(domains, list) or not all(isinstance(d, str) for d in domains):
+        raise HTTPException(422, "domains must be a list of strings")
+    unknown = sorted(set(domains) - _DOMAINS)
+    if unknown:
+        raise HTTPException(422, f"Unknown domain(s): {', '.join(unknown)}")
+    # De-duplicated, in TAB_LAYERS' own order -- not whatever order the client sent.
+    return [d for d in TAB_LAYERS if d in domains]
 
 
 @router.post("/viewpoints", status_code=201)
@@ -2975,6 +2993,7 @@ async def create_viewpoint(
         is_standard=False,
         is_hidden=body.get("is_hidden", False),
         sort_order=body.get("sort_order", next_order),
+        domains=_validate_domains(body["domains"]) if "domains" in body else [],
     )
     db.add(v)
     await audit_log.record(
@@ -2999,7 +3018,10 @@ async def update_viewpoint(
     if not v:
         raise HTTPException(404, "Viewpoint not found")
 
-    updatable = ["name", "icon", "description", "layer", "is_hidden", "sort_order"]
+    if "domains" in body:
+        body = {**body, "domains": _validate_domains(body["domains"])}
+
+    updatable = ["name", "icon", "description", "layer", "is_hidden", "sort_order", "domains"]
     changes = audit_log.diff(v, {k: body[k] for k in updatable if k in body}, keys=updatable)
     for field in updatable:
         if field in body:
@@ -3021,9 +3043,8 @@ async def update_viewpoint(
             ArchimateViewpointObject.viewpoint_key == v.key
         )
     )
-    return _serialize_viewpoint(
-        v, list(objects_result.scalars().all()), await _viewpoint_examples(db, v.key)
-    )
+    objects = list(objects_result.scalars().all())
+    return _serialize_viewpoint(v, objects, await _viewpoint_examples(db, v.key))
 
 
 @router.post("/viewpoints/{key}/objects", status_code=201)

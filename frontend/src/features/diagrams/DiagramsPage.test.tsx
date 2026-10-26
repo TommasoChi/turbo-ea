@@ -98,6 +98,9 @@ const viewpoints = [
     is_hidden: false,
     sort_order: 0,
     objects: [],
+    // Tagged under both: a viewpoint like Product, whose content spans more than its own
+    // single-layer badge. The layer-scoped pages must go by this, not `layer`.
+    domains: ["business", "application"],
     examples: [],
   },
   {
@@ -110,6 +113,7 @@ const viewpoints = [
     is_hidden: false,
     sort_order: 1,
     objects: [],
+    domains: ["technology"],
     examples: [],
   },
 ];
@@ -128,7 +132,10 @@ function setupApi(diagramRows = diagrams) {
  *  the Share / embed action, so it needs an AuthProvider. Defaults to a user
  *  WITHOUT `diagrams.publish` — publishing is an admin-only authority and the
  *  rest of the page must behave identically for everyone else. */
-function renderPage(permissions: Record<string, boolean> = { "diagrams.view": true }) {
+function renderPage(
+  permissions: Record<string, boolean> = { "diagrams.view": true },
+  initialLayer?: "business" | "application" | "technology",
+) {
   const user = {
     id: "u1",
     email: "u@example.com",
@@ -140,7 +147,7 @@ function renderPage(permissions: Record<string, boolean> = { "diagrams.view": tr
   return render(
     <AuthProvider user={user} refreshUser={async () => {}}>
       <MemoryRouter>
-        <DiagramsPage />
+        <DiagramsPage initialLayer={initialLayer} />
       </MemoryRouter>
     </AuthProvider>,
   );
@@ -416,5 +423,25 @@ describe("DiagramsPage — ArchiMate type filter", () => {
 
     await userEvent.click(screen.getByText("Business Capability Map"));
     expect(mockNavigate).toHaveBeenCalledWith("/admin/architectureStudio/arch1");
+  });
+});
+
+describe("DiagramsPage — layer-scoped entry points (/business-architecture/diagram etc.)", () => {
+  const perms = { "diagrams.view": true, "archimatediagrams.application.view": true };
+
+  it("shows a diagram whose viewpoint's domains include this page's layer, even when its own `layer` classification is different", async () => {
+    // "vp-biz" (archimateDiagram's viewpoint) is classified layer="business" but tagged
+    // domains=["business","application"] -- real content under both. The old code compared
+    // `layer` and would have hidden it from the Application page; it must show here.
+    setupApi([archimateDiagram]);
+    renderPage(perms, "application");
+    expect(await screen.findByText("Business Capability Map")).toBeInTheDocument();
+  });
+
+  it("hides a diagram whose viewpoint is not tagged under this page's layer", async () => {
+    setupApi([{ ...archimateDiagram, id: "arch2", name: "Tech Landscape", viewpoint_key: "vp-tech" }]);
+    renderPage(perms, "application");
+    await waitFor(() => expect(vi.mocked(api.get)).toHaveBeenCalled());
+    expect(screen.queryByText("Tech Landscape")).not.toBeInTheDocument();
   });
 });
