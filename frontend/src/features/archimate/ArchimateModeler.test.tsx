@@ -287,11 +287,23 @@ describe("autosave", () => {
     expect(mockApi.callsOf("patch")).toHaveLength(1);
     expect(Object.keys(lastPatchBody()).sort()).toEqual(["card_ids", "data"]);
     expect(lastPatchBody().data.format).toBe(ARCHIMATE_FORMAT);
-    expect(Object.keys(lastPatchBody().data)).toEqual(["format", "xml"]);
+    expect(Object.keys(lastPatchBody().data).sort()).toEqual(["format", "thumbnail", "xml"]);
     const saved = readExchange(lastPatchBody().data.xml);
     expect(getCardId(saved.elements.find((e) => e.id === "id-app")!)).toBe("c1");
     expect(lastPatchBody().card_ids).toEqual(["c1"]);
     expect(mockApi.callsOf("patch")[0].path).toBe("/diagrams/d1");
+    vi.useRealTimers();
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved"));
+  });
+
+  it("still saves the diagram when the thumbnail export itself fails", async () => {
+    await mount();
+    vi.spyOn(engine(), "exportSvg").mockRejectedValue(new Error("no svg"));
+    vi.useFakeTimers();
+    act(() => engine().setName(APP_SHAPE, "X"));
+    await advance(3000);
+    expect(mockApi.callsOf("patch")).toHaveLength(1);
+    expect(Object.keys(lastPatchBody().data).sort()).toEqual(["format", "xml"]);
     vi.useRealTimers();
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved"));
   });

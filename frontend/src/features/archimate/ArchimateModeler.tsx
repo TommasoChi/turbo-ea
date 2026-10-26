@@ -244,8 +244,22 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     const current = () => !unmountedRef.current && epoch === epochRef.current;
     try {
       const model = engine.toModel();
+      // A nice-to-have for the Diagrams gallery card, same field DrawIO's own
+      // save flow populates (DiagramEditor.tsx) -- a failed export must never
+      // block saving the diagram itself.
+      let thumbnail: string | undefined;
+      try {
+        thumbnail = await engine.exportSvg();
+      } catch {
+        // Falls through with no thumbnail; the card just shows its placeholder icon.
+        thumbnail = undefined;
+      }
       await api.patch(`/diagrams/${diagramId}`, {
-        data: { format: ARCHIMATE_FORMAT, xml: writeExchange(model) },
+        data: {
+          format: ARCHIMATE_FORMAT,
+          xml: writeExchange(model),
+          ...(thumbnail ? { thumbnail } : {}),
+        },
         card_ids: linkedCardIds(model),
       });
       if (!current()) return;
