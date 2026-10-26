@@ -207,10 +207,9 @@ function AppRoutes() {
                 <Route path="/business-architecture/diagram" element={<ModuleGate module="archimate"><DiagramsPage initialLayer="business" /></ModuleGate>} />
                 <Route path="/application-architecture/diagram" element={<ModuleGate module="archimate"><DiagramsPage initialLayer="application" /></ModuleGate>} />
                 <Route path="/technology-architecture/diagram" element={<ModuleGate module="archimate"><DiagramsPage initialLayer="technology" /></ModuleGate>} />
-                {/* "Coming soon" placeholders — explicitly scoped out of this
-                    feature (see the spec); no functionality behind them yet. */}
-                <Route path="/application-architecture/swot" element={<ComingSoonPage titleKey="swotAnalysis" />} />
-                <Route path="/application-architecture/what-if" element={<ComingSoonPage titleKey="whatIfAnalysis" />} />
+                {/* "Coming soon" placeholder — SWOT and What-if removed (now
+                    duplicated by an installed extension); no functionality
+                    behind Data Flow yet. */}
                 <Route path="/application-architecture/data-flow" element={<ComingSoonPage titleKey="dataFlow" />} />
                 {/* EA Delivery: page dissolved in 1.10.0. Initiatives workspace
                     moved to /reports/ea-delivery; risks moved to /grc?tab=risk.

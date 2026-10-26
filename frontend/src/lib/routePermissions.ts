@@ -121,12 +121,11 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
     path: "/technology-architecture/diagram",
     permission: ["archimatediagrams.technology.view", "archimatediagrams.technology.manage"],
   },
-  // "Coming soon" placeholders (SWOT / What-if / Data Flow) — no data behind
-  // them yet, but kept under the same gate as their Application & Data
-  // Architecture siblings rather than left ungated, so the group does not
-  // show for a user who cannot see Diagrams at all.
-  { path: "/application-architecture/swot", permission: "diagrams.view" },
-  { path: "/application-architecture/what-if", permission: "diagrams.view" },
+  // "Coming soon" placeholder (Data Flow; SWOT and What-if removed -- now
+  // duplicated by an installed extension) — no data behind it yet, but kept
+  // under the same gate as its Application & Data Architecture siblings
+  // rather than left ungated, so the group does not show for a user who
+  // cannot see Diagrams at all.
   { path: "/application-architecture/data-flow", permission: "diagrams.view" },
 
   // --- Surveys ------------------------------------------------------------

@@ -81,19 +81,16 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
       { labelKey: "businessDiagram", icon: "schema", path: "/business-architecture/diagram" },
     ],
   },
-  // Application & Data Architecture: three "coming soon" placeholders
-  // (SWOT / What-if / Data Flow analysis — explicitly scoped out of this
-  // feature, see the ArchiMate Viewpoint spec) plus the real Application
-  // Diagram entry point. All four are plain route links gated through
-  // ROUTE_PERMISSIONS (the placeholders on `diagrams.view`, the Application
-  // Diagram on `archimatediagrams.application.manage`) rather than an
-  // extension permission, since none of them is extension-contributed.
+  // Application & Data Architecture: the "Data Flow" placeholder (SWOT and
+  // What-if removed -- now duplicated by an installed extension) plus the
+  // real Application Diagram entry point. Both are plain route links gated
+  // through ROUTE_PERMISSIONS (Data Flow on `diagrams.view`, Application
+  // Diagram on its own archimatediagrams key) rather than an extension
+  // permission, since neither is extension-contributed.
   {
     labelKey: "app_data",
     icon: "apps",
     children: [
-      { labelKey: "swotAnalysis", icon: "balance", path: "/application-architecture/swot" },
-      { labelKey: "whatIfAnalysis", icon: "query_stats", path: "/application-architecture/what-if" },
       { labelKey: "dataFlow", icon: "device_hub", path: "/application-architecture/data-flow" },
       { labelKey: "applicationDiagram", icon: "schema", path: "/application-architecture/diagram" },
     ],
