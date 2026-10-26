@@ -66,6 +66,17 @@ describe("ArchimateRenderer: shapes", () => {
     expect([...glyph.children].map((c) => c.tagName)).toEqual(["circle", "line", "line", "polyline"]);
   });
 
+  it("keeps a tall container's own name near the top, not centred where its nested children sit", () => {
+    // Regression: a composite element (e.g. a BusinessProcess that nests other processes via
+    // Composition, as ArchiSurance's "Handle Claim" does) used to centre its name across the whole
+    // shape height. On a shape much taller than one text line, that lands the name right where the
+    // children are drawn on top of it, hiding it completely.
+    const { add, gfx } = setup();
+    const shape = add("BusinessProcess", { height: 150 }, "Handle Claim");
+    const y = Number(gfx(shape).querySelector("text.archimate-name tspan")!.getAttribute("y"));
+    expect(y).toBeLessThan(30);
+  });
+
   it("draws no text for an empty name", () => {
     const { add, gfx } = setup();
     expect(gfx(add("BusinessActor")).querySelector("text")).toBeNull();
