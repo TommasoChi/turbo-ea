@@ -192,14 +192,19 @@ describe("canAccessPath", () => {
     }
   });
 
-  it("gates each scoped ArchiMate diagram page on its own layer's manage key", () => {
+  it("gates each scoped ArchiMate diagram page on its own layer's view or manage key", () => {
     const routes = {
       business: "/business-architecture/diagram",
       application: "/application-architecture/diagram",
       technology: "/technology-architecture/diagram",
     };
     for (const [layer, p] of Object.entries(routes)) {
-      expect(permissionForPath(p)).toBe(`archimatediagrams.${layer}.manage`);
+      expect(permissionForPath(p)).toEqual([
+        `archimatediagrams.${layer}.view`,
+        `archimatediagrams.${layer}.manage`,
+      ]);
+      expect(canAccessPath({ [`archimatediagrams.${layer}.view`]: true }, p)).toBe(true);
+      expect(canAccessPath({ [`archimatediagrams.${layer}.manage`]: true }, p)).toBe(true);
       expect(canAccessPath({ "diagrams.manage": true }, p)).toBe(false);
       for (const other of Object.keys(routes).filter((l) => l !== layer)) {
         expect(canAccessPath({ [`archimatediagrams.${other}.manage`]: true }, p)).toBe(false);

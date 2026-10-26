@@ -16,6 +16,7 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import { createDiagram } from "@/api/diagrams";
+import type { ViewpointTab } from "@/api/diagrams";
 import { hasPermission } from "@/components/RequirePermission";
 import { ARCHIMATE_FORMAT } from "@/features/archimate/exchange/exchangeModel";
 import { useOptionalAuthUser } from "@/hooks/AuthContext";
@@ -35,6 +36,10 @@ interface Props {
   navigateOnCreate?: boolean;
   /** Called with the new diagram ID after successful creation. */
   onCreated?: (diagramId: string) => void;
+  /** Restricts the ArchiMate branch's viewpoint picker to one layer's
+   *  viewpoints (set by a layer-scoped Diagrams page) -- `null`/omitted is
+   *  the unscoped "every viewpoint" picker. */
+  archimateTab?: ViewpointTab | null;
 }
 
 export default function CreateDiagramDialog({
@@ -43,6 +48,7 @@ export default function CreateDiagramDialog({
   initialCardIds,
   navigateOnCreate = true,
   onCreated,
+  archimateTab = null,
 }: Props) {
   const { t } = useTranslation(["diagrams", "common"]);
   const navigate = useNavigate();
@@ -244,7 +250,7 @@ export default function CreateDiagramDialog({
               </Alert>
             )}
             <ArchimateViewpointPicker
-              tab={null}
+              tab={archimateTab}
               onSelect={handleArchimateSelect}
               disabled={submitting}
             />

@@ -35,6 +35,7 @@ import { useTypeLabel } from "@/hooks/useResolveLabel";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { api } from "@/api/client";
 import { listViewpoints } from "@/api/archimateViewpoints";
+import type { ViewpointTab } from "@/api/diagrams";
 import { hasPermission } from "@/components/RequirePermission";
 import { ARCHIMATE_STUDIO_LIST } from "@/lib/routePermissions";
 import type { ArchimateViewpoint, Card, DiagramSummary, DiagramGroup } from "@/types";
@@ -56,8 +57,26 @@ const DIAGRAM_ICON = "schema";
 const ARCHIMATE_DIAGRAM_ICON = "hub";
 const ARCHIMATE_DIAGRAM_COLOR = "#7b1fa2";
 
-export default function DiagramsPage() {
-  const { t } = useTranslation(["diagrams", "common"]);
+/** The nav label each layer's scoped entry point uses (nav.json), reused for
+ *  this page's own heading when it opens pre-scoped to that layer. */
+const LAYER_TITLE_KEY: Record<ViewpointTab, string> = {
+  business: "businessDiagram",
+  application: "applicationDiagram",
+  technology: "technologyDiagram",
+};
+
+interface Props {
+  /** Set by the Business/Application & Data/Technology Architecture nav
+   *  entries (App.tsx) -- opens straight onto that layer's ArchiMate
+   *  diagrams instead of the unscoped "All diagrams" view, and scopes the
+   *  create dialog's viewpoint picker to the same layer. DrawIO has no
+   *  layer concept, so it stays reachable from here too (switch the Type
+   *  filter), just not what this entry point opens on. */
+  initialLayer?: ViewpointTab;
+}
+
+export default function DiagramsPage({ initialLayer }: Props) {
+  const { t } = useTranslation(["diagrams", "nav", "common"]);
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -91,7 +110,11 @@ export default function DiagramsPage() {
 
   // Sidebar + search + sort state
   const [scope, setScope] = useState<DiagramScope>({ kind: "all" });
-  const [typeFilter, setTypeFilter] = useState<DiagramTypeFilter>(DEFAULT_TYPE_FILTER);
+  const [typeFilter, setTypeFilter] = useState<DiagramTypeFilter>(() =>
+    initialLayer
+      ? { kind: "archimate", layer: initialLayer, viewpointKey: null }
+      : DEFAULT_TYPE_FILTER,
+  );
   const [viewpoints, setViewpoints] = useState<ArchimateViewpoint[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -482,7 +505,7 @@ export default function DiagramsPage() {
             </Tooltip>
           )}
           <Typography variant="h5" fontWeight={600}>
-            {t("page.title")}
+            {initialLayer ? t(`nav:${LAYER_TITLE_KEY[initialLayer]}`) : t("page.title")}
           </Typography>
           <Chip label={`${visibleDiagrams.length}`} size="small" />
           <TextField
@@ -671,7 +694,11 @@ export default function DiagramsPage() {
         />
       )}
 
-      <CreateDiagramDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateDiagramDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        archimateTab={initialLayer ?? null}
+      />
 
       <ManageGroupsDialog
         open={manageOpen}

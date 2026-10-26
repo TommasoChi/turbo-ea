@@ -106,13 +106,21 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   { path: "/diagrams", permission: "diagrams.view" },
   { path: "/diagrams/:id", permission: "diagrams.view" },
   { path: "/diagrams/:id/edit", permission: "diagrams.manage" },
-  // Scoped ArchiMate diagram-entry points (nav rework, Task 8). The page is
-  // nothing but the create flow for its layer, so it needs that layer's
-  // `manage` key — and its nav entry inherits the same gate, so the menu never
-  // offers a page that would deny the user.
-  { path: "/business-architecture/diagram", permission: "archimatediagrams.business.manage" },
-  { path: "/application-architecture/diagram", permission: "archimatediagrams.application.manage" },
-  { path: "/technology-architecture/diagram", permission: "archimatediagrams.technology.manage" },
+  // Scoped ArchiMate diagram-entry points (nav rework, Task 8): the Diagrams
+  // page pre-filtered to one layer. A plain `view` key is enough to see the
+  // list (the create dialog's own Save still needs `manage`, checked there).
+  {
+    path: "/business-architecture/diagram",
+    permission: ["archimatediagrams.business.view", "archimatediagrams.business.manage"],
+  },
+  {
+    path: "/application-architecture/diagram",
+    permission: ["archimatediagrams.application.view", "archimatediagrams.application.manage"],
+  },
+  {
+    path: "/technology-architecture/diagram",
+    permission: ["archimatediagrams.technology.view", "archimatediagrams.technology.manage"],
+  },
   // "Coming soon" placeholders (SWOT / What-if / Data Flow) — no data behind
   // them yet, but kept under the same gate as their Application & Data
   // Architecture siblings rather than left ungated, so the group does not
