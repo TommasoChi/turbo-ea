@@ -91,7 +91,9 @@
     "multiple": "{{count}} éléments sélectionnés",
     "multipleHint": "Sélectionnez un seul élément pour le modifier.",
     "view": "Vue",
-    "text": "Texte"
+    "text": "Texte",
+    "fillColor": "Couleur de remplissage",
+    "resetColor": "Rétablir la couleur par défaut"
   },
   "status": {
     "saved": "Enregistré",

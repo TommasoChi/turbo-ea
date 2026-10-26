@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/render";
 import { makeBridge } from "@/test/archimateBridge";
@@ -36,11 +36,12 @@ const CARD: Card = {
 
 function setup(over: Partial<ArchimatePropertiesPanelProps> = {}) {
   const handlers = {
-    onName: vi.fn(), onDocumentation: vi.fn(), onProperties: vi.fn(),
+    onName: vi.fn(), onDocumentation: vi.fn(), onProperties: vi.fn(), onStyle: vi.fn(),
     onDiagramName: vi.fn(), onDiagramDocumentation: vi.fn(), onDiagramProperties: vi.fn(), onOpenCardSheet: vi.fn(),
   };
   const props: ArchimatePropertiesPanelProps = {
-    info: ELEMENT, selectedCount: 1, diagramName: "My diagram", diagramDescription: "", diagramProperties: [], labels,
+    info: ELEMENT, selectedCount: 1, selectedIds: ["s1"], diagramName: "My diagram", diagramDescription: "",
+    diagramProperties: [], labels,
     cardName: (id) => (id === "c1" ? "CRM" : undefined), linkedCard: null, linkedCardLoading: false,
     ...handlers, ...over,
   };
@@ -60,6 +61,12 @@ describe("ArchimatePropertiesPanel", () => {
     expect(screen.getByLabelText("Documentation")).toHaveValue("Landscape overview");
     expect(screen.getAllByLabelText("Name")[1]).toHaveValue("owner");
     expect(screen.getByLabelText("Value")).toHaveValue("EA team");
+  });
+
+  it("shows the viewpoint name in the View row when given, the generic label otherwise", () => {
+    setup({ info: null, selectedCount: 0, viewpointName: "Requirements Realization Viewpoint" });
+    expect(screen.getByText("Requirements Realization Viewpoint")).toBeInTheDocument();
+    expect(screen.queryByText("View")).toBeNull();
   });
 
   it("commits the diagram's name and documentation on blur/Enter, and its parameters like an element's", async () => {
@@ -109,6 +116,30 @@ describe("ArchimatePropertiesPanel", () => {
     expect(screen.getByText("No properties")).toBeInTheDocument();
   });
 
+  it("shows a fill color control for an element; changing it or resetting calls onStyle", async () => {
+    const { user, onStyle } = setup({ info: { ...ELEMENT, fillColor: { r: 10, g: 20, b: 30 } } });
+    const input = screen.getByLabelText("Fill color") as HTMLInputElement;
+    expect(input.value).toBe("#0a141e");
+    fireEvent.input(input, { target: { value: "#ff0000" } });
+    expect(onStyle).toHaveBeenCalledWith(["s1"], { r: 255, g: 0, b: 0 });
+    await user.click(screen.getByRole("button", { name: "Reset to the default color" }));
+    expect(onStyle).toHaveBeenLastCalledWith(["s1"], null);
+  });
+
+  it("shows no fill color control for a relationship or a note", () => {
+    setup({ info: RELATIONSHIP });
+    expect(screen.queryByLabelText("Fill color")).toBeNull();
+    setup({ info: NOTE });
+    expect(screen.queryByLabelText("Fill color")).toBeNull();
+  });
+
+  it("shows a fill color control for a multi-selection, applying to every selected id", () => {
+    const { onStyle } = setup({ info: null, selectedCount: 2, selectedIds: ["s1", "s2"] });
+    const input = screen.getByLabelText("Fill color") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "#00ff00" } });
+    expect(onStyle).toHaveBeenCalledWith(["s1", "s2"], { r: 0, g: 255, b: 0 });
+  });
+
   it("commits the name on blur and on Enter, the documentation on blur; one change, not one per key", async () => {
     const { user, onName, onDocumentation } = setup();
     const name = screen.getAllByLabelText("Name")[0];
@@ -153,9 +184,9 @@ describe("ArchimatePropertiesPanel", () => {
   it("starts from the stored value again when the item changes under it (an undo)", () => {
     const { rerender } = setup();
     const props: ArchimatePropertiesPanelProps = {
-      info: { ...ELEMENT, name: "Renamed" }, selectedCount: 1, diagramName: "d", diagramDescription: "",
+      info: { ...ELEMENT, name: "Renamed" }, selectedCount: 1, selectedIds: ["s1"], diagramName: "d", diagramDescription: "",
       diagramProperties: [], labels, cardName: () => undefined, linkedCard: null, linkedCardLoading: false,
-      onName: vi.fn(), onDocumentation: vi.fn(), onProperties: vi.fn(), onDiagramName: vi.fn(),
+      onName: vi.fn(), onDocumentation: vi.fn(), onProperties: vi.fn(), onStyle: vi.fn(), onDiagramName: vi.fn(),
       onDiagramDocumentation: vi.fn(), onDiagramProperties: vi.fn(), onOpenCardSheet: vi.fn(),
     };
     rerender(<ArchimatePropertiesPanel {...props} />);

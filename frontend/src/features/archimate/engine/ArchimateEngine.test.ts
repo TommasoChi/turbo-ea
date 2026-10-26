@@ -135,7 +135,7 @@ describe("ArchimateEngine: the properties panel's view of the selection", () => 
     const { engine } = setup();
     expect(engine.itemInfo("id-n1")).toEqual({
       id: "id-n1", kind: "element", type: "ApplicationComponent", name: "CRM <core>", documentation: "The CRM",
-      cardId: "c1", properties: [],
+      cardId: "c1", properties: [], fillColor: null,
     });
     expect(engine.itemInfo("id-c1")).toEqual({
       id: "id-c1", kind: "relationship", type: "Access", name: "uses", documentation: "", cardId: null, properties: [],
@@ -221,6 +221,45 @@ describe("ArchimateEngine: the properties panel's view of the selection", () => 
     again.load(readExchange(writeExchange(engine.toModel())));
     expect(again.itemInfo("id-n1")!.properties).toEqual([{ name: "owner", value: "Ann & Bob" }]);
     expect(again.itemInfo("id-n1")!.cardId).toBe("c1");
+  });
+});
+
+describe("ArchimateEngine: element fill color", () => {
+  const nodeStyle = (m: ArchimateModel, id: string) => m.views[0].nodes.find((n) => n.id === id)!.style;
+
+  it("sets a fill color on one or several elements as one undoable command; null clears it; a relationship or unknown id is a no-op", () => {
+    const { engine, onChange } = setup();
+    engine.setStyle(["id-n1"], { r: 10, g: 20, b: 30 });
+    expect(nodeStyle(engine.toModel(), "id-n1")).toEqual({ fillColor: { r: 10, g: 20, b: 30 } });
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    onChange.mockClear();
+    engine.setStyle(["id-n1", "id-n2"], { r: 1, g: 2, b: 3 });
+    const model = engine.toModel();
+    expect(nodeStyle(model, "id-n1")).toEqual({ fillColor: { r: 1, g: 2, b: 3 } });
+    expect(nodeStyle(model, "id-n2")).toEqual({ fillColor: { r: 1, g: 2, b: 3 } });
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    onChange.mockClear();
+    engine.setStyle(["id-n1"], null);
+    expect(nodeStyle(engine.toModel(), "id-n1")).toBeUndefined();
+    engine.undo();
+    expect(nodeStyle(engine.toModel(), "id-n1")).toEqual({ fillColor: { r: 1, g: 2, b: 3 } });
+
+    onChange.mockClear();
+    engine.setStyle(["id-c1"], { r: 5, g: 5, b: 5 }); // a relationship has no fill
+    engine.setStyle(["nope"], { r: 5, g: 5, b: 5 });
+    engine.setStyle(["id-n2"], { r: 1, g: 2, b: 3 }); // already that color: unchanged
+    expect(onChange).not.toHaveBeenCalled();
+    expect(MODEL).toEqual(PRISTINE);
+  });
+
+  it("round-trips a fill color through the Exchange writer and reader", () => {
+    const { engine } = setup();
+    engine.setStyle(["id-n1"], { r: 9, g: 8, b: 7 });
+    const again = new ArchimateEngine({ container: document.createElement("div"), bridge, enterpriseObjects });
+    again.load(readExchange(writeExchange(engine.toModel())));
+    expect(nodeStyle(again.toModel(), "id-n1")).toEqual({ fillColor: { r: 9, g: 8, b: 7 } });
   });
 });
 

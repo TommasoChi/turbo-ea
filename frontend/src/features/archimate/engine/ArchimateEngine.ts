@@ -17,7 +17,7 @@ import { innerSVG } from "tiny-svg";
 import type { EnterpriseObject } from "@/types";
 import {
   CARD_ID_DEFINITION, getCardId, isCustomEnterpriseObject, isNoteObject, newIdentifier,
-  type ArchimateModel, type ExchangeProperty, type ModelElement,
+  type ArchimateModel, type ExchangeProperty, type ModelElement, type NodeStyle, type Rgb,
 } from "../exchange/exchangeModel";
 import type { ElementType } from "../taxonomy/elements";
 import type { RelationshipType } from "../taxonomy/relationships";
@@ -57,6 +57,8 @@ export interface ItemInfo {
   documentation: string;
   cardId: string | null;
   properties: UserProperty[];
+  /** The fill color override (`null` = none, the layer default applies); only an element has one. */
+  fillColor?: Rgb | null;
 }
 
 export class ArchimateEngine {
@@ -178,6 +180,19 @@ export class ArchimateEngine {
     this.update(item, { properties: [...kept, ...next] });
   }
 
+  /** Sets (or, with `null`, clears) the fill color override on every targeted element, as one
+   *  undoable command -- a relationship or an unknown id is silently skipped (only an element has
+   *  a fill), and already-matching shapes are left out of the command entirely. */
+  setStyle(ids: string[], fillColor: Rgb | null): void {
+    const same = (a?: Rgb, b?: Rgb | null) => (a?.r ?? null) === (b?.r ?? null) && (a?.g ?? null) === (b?.g ?? null) && (a?.b ?? null) === (b?.b ?? null);
+    const shapes = ids
+      .map((id) => this.shape(id))
+      .filter((s): s is Shape & { style?: NodeStyle } => !!s)
+      .filter((s) => !same(s.style?.fillColor, fillColor));
+    if (!shapes.length) return;
+    this.get<ArchimateModeling>("modeling").setStyle(shapes, fillColor);
+  }
+
   private userProperties(bo: { properties: ExchangeProperty[] }): UserProperty[] {
     const defs = this.base?.propertyDefinitions ?? [];
     return bo.properties
@@ -215,6 +230,7 @@ export class ArchimateEngine {
       documentation: bo.documentation ?? "",
       cardId: item.waypoints ? null : getCardId(bo),
       properties: this.userProperties(bo),
+      fillColor: item.waypoints ? undefined : ((item as Shape & { style?: NodeStyle }).style?.fillColor ?? null),
     };
   }
 

@@ -91,7 +91,9 @@
     "multiple": "已选择 {{count}} 项",
     "multipleHint": "请只选择一项进行编辑。",
     "view": "视图",
-    "text": "文本"
+    "text": "文本",
+    "fillColor": "填充颜色",
+    "resetColor": "恢复默认颜色"
   },
   "status": {
     "saved": "已保存",

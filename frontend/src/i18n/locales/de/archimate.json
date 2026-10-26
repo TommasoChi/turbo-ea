@@ -91,7 +91,9 @@
     "multiple": "{{count}} Elemente ausgewählt",
     "multipleHint": "Wählen Sie ein einzelnes Element zum Bearbeiten.",
     "view": "Ansicht",
-    "text": "Text"
+    "text": "Text",
+    "fillColor": "Füllfarbe",
+    "resetColor": "Standardfarbe wiederherstellen"
   },
   "status": {
     "saved": "Gespeichert",
