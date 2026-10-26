@@ -1,13 +1,21 @@
-"""Seed the 28 standard ArchiMate 3.1 viewpoints into the catalog
+"""Seed the 27 standard ArchiMate 3.1 viewpoints into the catalog
 (``ArchimateViewpoint`` + ``ArchimateViewpointObject``), plus the
 viewpoint x tab -> card-type suggestion overrides (``ArchimateViewpointTabCard``).
 
-"Core element" in the ArchiMate 3.1 spec's own definition of the Goal
-Realization and Requirements Realization viewpoints (any element may
-additionally appear) is deliberately **not** seeded as "allow everything" for
-those two -- that would silently reintroduce Free mode for them. Only their
-explicitly named elements are seeded; an admin can widen either list later
-through the editable tag-chip UI (Task 5).
+"Application Platform" (named in the XSD's ``ViewpointsEnum`` but with no
+own worked-out description in the specification's Appendix C) is the
+3.0-era name for what the spec now calls the Implementation and Deployment
+Viewpoint -- already seeded under that key, so it is deliberately not
+seeded a second time under its old name.
+
+"Core element" in the ArchiMate 3.1 spec's own definition of the Requirements
+Realization viewpoint (any element may additionally appear, beyond the
+explicitly named ones) is deliberately **not** seeded as "allow everything"
+-- that would silently reintroduce Free mode for it. Only its explicitly
+named elements, plus any such element an actually-seeded example evidences,
+are seeded; an admin can widen the list further later through the editable
+tag-chip UI (Task 5). Goal Realization has no such "core element" allowance
+in the spec, so its list is closed.
 
 Layered is the one deliberate exception, by design rather than by the same
 "core element" escape hatch: the standard defines it as the integrated,
@@ -152,35 +160,13 @@ _VIEWPOINT_DEFS: list[dict] = [
         "layer": "application",
         "description": (
             "Shows the internal makeup of one or more applications: their components, interfaces, "
-            "functions, and the data they hold."
+            "and the data they hold."
         ),
         "objects": (
             "ApplicationComponent",
             "ApplicationInterface",
-            "ApplicationFunction",
             "ApplicationCollaboration",
             "DataObject",
-        ),
-    },
-    {
-        "key": "application-platform",
-        "name": "Application Platform",
-        "icon": "developer_board",
-        "layer": "technology",
-        "description": (
-            "Shows the technology infrastructure -- nodes, devices, system software, and services "
-            "-- that an application runs on."
-        ),
-        "objects": (
-            "ApplicationComponent",
-            "Node",
-            "Device",
-            "SystemSoftware",
-            "TechnologyService",
-            "TechnologyInterface",
-            "Artifact",
-            "Path",
-            "CommunicationNetwork",
         ),
     },
     {
@@ -255,7 +241,6 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Node",
             "TechnologyCollaboration",
             "Device",
-            "Equipment",
             "SystemSoftware",
             "TechnologyInterface",
             "CommunicationNetwork",
@@ -395,17 +380,20 @@ _VIEWPOINT_DEFS: list[dict] = [
         "icon": "trending_up",
         "layer": "motivation",
         "description": (
-            "Shows how goals and drivers help or hinder each other, positively or negatively."
+            "Shows how goals (and requirements) positively or negatively influence each other."
         ),
-        "objects": ("Driver", "Goal"),
+        "objects": ("Goal", "Requirement"),
     },
     {
         "key": "principles",
         "name": "Principles",
         "icon": "gavel",
         "layer": "motivation",
-        "description": "Lists the guiding principles an architecture must follow.",
-        "objects": ("Principle",),
+        "description": (
+            "Shows the guiding principles an architecture must follow, and the goals that "
+            "motivate them."
+        ),
+        "objects": ("Principle", "Goal"),
     },
     {
         "key": "goal-realization",
@@ -416,14 +404,7 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Shows how a high-level goal breaks down into smaller goals, principles, and "
             "requirements that make it achievable."
         ),
-        "objects": (
-            "Goal",
-            "Principle",
-            "Requirement",
-            "Constraint",
-            "Outcome",
-            "ApplicationComponent",
-        ),
+        "objects": ("Goal", "Principle", "Requirement", "Constraint", "Outcome"),
     },
     {
         "key": "requirements-realization",
@@ -436,11 +417,19 @@ _VIEWPOINT_DEFS: list[dict] = [
         ),
         "objects": (
             "Goal",
+            "Principle",
             "Requirement",
             "Constraint",
             "Outcome",
             "Value",
             "Meaning",
+            "CourseOfAction",
+            "Resource",
+            "Capability",
+            "ValueStream",
+            # Not spec-named core elements for this viewpoint, but evidenced by
+            # the seeded Requirements Realization example (fig18) -- the spec's
+            # own "Core element" catch-all permits any such element here.
             "ApplicationComponent",
             "ApplicationService",
             "Artifact",
@@ -479,7 +468,7 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Shows an organization's strategic direction: the resources and capabilities it has, "
             "and the courses of action it plans to take."
         ),
-        "objects": ("CourseOfAction", "Capability", "Resource", "Outcome"),
+        "objects": ("CourseOfAction", "Capability", "ValueStream", "Resource", "Outcome"),
     },
     {
         "key": "capability-map",
@@ -500,7 +489,7 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Shows how a capability, backed by resources, produces a real outcome and the value "
             "that outcome creates."
         ),
-        "objects": ("Capability", "Resource", "Outcome", "Value", "Meaning"),
+        "objects": ("Capability", "ValueStream", "Resource", "Outcome", "Value", "Meaning"),
     },
     {
         "key": "resource-map",
@@ -522,7 +511,7 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Shows a value stream's stages and the stakeholders, capabilities, and resources that "
             "realize them."
         ),
-        "objects": ("Stakeholder", "ValueStream", "Value", "Capability", "Resource", "Outcome"),
+        "objects": ("ValueStream", "Capability", "Outcome", "Stakeholder"),
     },
     {
         "key": "project",
@@ -535,6 +524,7 @@ _VIEWPOINT_DEFS: list[dict] = [
         ),
         "objects": (
             "Goal",
+            "Outcome",
             "WorkPackage",
             "ImplementationEvent",
             "Deliverable",
