@@ -359,7 +359,7 @@ export default function DiagramsPage({ initialLayer }: Props) {
               src={
                 d.thumbnail.startsWith("data:")
                   ? d.thumbnail
-                  : `data:image/svg+xml;base64,${btoa(d.thumbnail)}`
+                  : `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(d.thumbnail)))}`
               }
               alt={d.name}
               style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}

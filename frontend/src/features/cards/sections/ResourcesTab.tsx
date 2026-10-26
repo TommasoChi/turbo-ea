@@ -766,7 +766,7 @@ function ResourcesTab({
                         src={
                           d.thumbnail.startsWith("data:")
                             ? d.thumbnail
-                            : `data:image/svg+xml;base64,${btoa(d.thumbnail)}`
+                            : `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(d.thumbnail)))}`
                         }
                         alt={d.name}
                         style={{

@@ -192,6 +192,16 @@ describe("DiagramsPage", () => {
     });
   });
 
+  it("renders a card whose thumbnail SVG has non-Latin1 characters", async () => {
+    setupApi([
+      { ...diagrams[0], thumbnail: '<svg><text>Strategia – über’ año</text></svg>' },
+    ]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText("Architecture Overview")).toBeInTheDocument();
+    });
+  });
+
   it("shows empty state when no diagrams", async () => {
     setupApi([]);
     renderPage();
