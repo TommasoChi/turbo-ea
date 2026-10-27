@@ -1,0 +1,22 @@
+---
+paths:
+  - "backend/app/core/permissions.py"
+  - "backend/app/services/permission_service.py"
+  - "backend/app/api/v1/**"
+  - "backend/app/core/security.py"
+  - "backend/app/api/deps.py"
+---
+
+# VAPT (Active Security Testing)
+
+> Loaded when you touch `backend/app/core/permissions.py`, `backend/app/services/permission_service.py`,
+> `backend/app/api/v1/**`, … (full list in the frontmatter). Moved verbatim from `CLAUDE.md`; edit it here.
+
+- **Scope**: this software, this repo, the user's own local deploy instance only — never anything not owned by the user, never a production/public deployment. This is testing-your-own-application, not a third-party engagement.
+- **Trigger**: run a VAPT pass automatically whenever a PR bumps `/VERSION` **and** touches any of `backend/app/core/permissions.py`, `backend/app/services/permission_service.py`, any file under `backend/app/api/v1/`, or any auth/session-handling code. Also run on explicit request at any time.
+- **Scope of the pass** (three buckets, same depth each time):
+  - **Code-level**: review the diff and its blast radius for auth/permission logic (`permissions.py`, `PermissionService`), injection (any raw SQL string construction, not just the diff), IDOR on changed/added endpoints (every `/x/{id}`-style route checks ownership or `card_read_scope`/permission before returning data), deserialization of untrusted input, path traversal on upload/download/export endpoints.
+  - **Dynamic**: against the running local instance only — authentication-bypass attempts, horizontal and vertical privilege escalation between roles (compare what each role can reach vs. what `PermissionService` says it should), CSRF on state-changing endpoints, SSRF surfaces (the AI provider integration, extension webhooks — confirm outbound URLs are allowlisted/validated), rate-limit coverage on authentication endpoints.
+  - **Dependency/supply chain**: beyond the existing passive Trivy/pip-audit/Dependabot gates — an SBOM pass, a license check, and a review of any newly unpinned or floating dependency version.
+- **Tooling**: nikto, sqlmap, and OWASP ZAP (baseline + full-scan) run as on-demand Docker containers against the user's own local deploy instance — see `../turbo-ea-vapt/README.md` for the exact commands. Burp is not automated (GUI proxy tool, driven interactively if the user wants it). This on-demand ZAP run is separate from the weekly CI DAST scan (`.github/workflows/dast-scan.yml`) — same tool, different target and cadence. sqlmap's targets are **not** a hand-maintained list — `../turbo-ea-vapt/extract-targets.py` derives them from the backend's live `/api/openapi.json` each run, so a new path-param route is covered automatically; nothing to update here or there when a route is added.
+- **Output**: findings go into a dated report under `docs/superpowers/` (or wherever the session's working notes already live that day) — never auto-fixed blindly. Report first, fix only after the user reviews the findings.
