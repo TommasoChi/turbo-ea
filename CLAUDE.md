@@ -70,6 +70,7 @@ Each of these loads automatically when you touch its files; read it first when y
 - **Workspace transfer — any DB schema change is potentially a workspace-transfer change** (the checklist is mandatory on every model or migration edit) → `.claude/rules/workspace-transfer.md`
 - Extension Store: signing, licensing, content packs, field contributions → `.claude/rules/extensions-backend.md`; the backend SDK and its bridges → `.claude/rules/extensions-sdk-bridges.md`; UI plugins and the `window.TurboEA.sdk` reuse boundary → `.claude/rules/extensions-ui.md`
 - BPM → `.claude/rules/bpm.md` · PPM → `.claude/rules/ppm.md` · TurboLens + compliance → `.claude/rules/turbolens-grc.md` · Risk Register → `.claude/rules/risk-register.md` · AI suggestions + ServiceNow → `.claude/rules/ai-and-integrations.md`
+- ArchiMate (Architecture Studio, Viewpoint Catalog, Enterprise Objects) → `.claude/rules/archimate.md` · Value Chain / Value Stream → `.claude/rules/value-chain.md`
 - Helm, managed containers, Terraform, Docker images, signing → `.claude/rules/deploy.md`
 
 ### Frontend Conventions
