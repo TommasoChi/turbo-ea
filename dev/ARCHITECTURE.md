@@ -2,6 +2,123 @@
 
 > Reference material moved out of `CLAUDE.md`: not loaded into agent sessions. The code is the source of truth; when a table here disagrees with it, fix the table.
 
+## Project Structure
+
+Lines marked **(fork)** exist only in this fork, not upstream — see the matching `.claude/rules/*.md`
+(`archimate.md`, `value-chain.md`, `extensions-sdk-bridges.md`) for the full story.
+
+```
+turbo-ea/
+├── VERSION                            # SemVer (single source of truth)
+├── docker-compose.yml                 # Full stack including PostgreSQL + edge nginx
+├── Dockerfile                         # Root multi-stage build (targets: db, backend, frontend, nginx, mcp-server)
+├── nginx/                             # Edge nginx config + assets
+├── dev/
+│   ├── docker-compose.dev.yml         # Dev-only build file for local source builds
+│   └── ARCHITECTURE.md                # This file
+├── charts/turbo-ea/                   # Helm chart (OCI, published on v*.*.* tags)
+├── deploy/                            # Managed-container templates + Terraform (azure-container-apps, cloud-run, ecs-fargate, kubernetes)
+│
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── deps.py                # Auth dependencies (get_current_user, require_permission)
+│   │   │   └── v1/                    # One file per resource domain, ~50 routers mounted in router.py
+│   │   │       ├── archimate.py       # /archimate (fork) — viewpoints, enterprise objects, validate, import/export
+│   │   │       ├── auth.py            # /auth (login, register, me, SSO, set-password)
+│   │   │       ├── cards.py           # /cards CRUD + hierarchy + approval status + CSV export
+│   │   │       ├── metamodel.py       # /metamodel (types + relation types + field/section usage)
+│   │   │       ├── relations.py       # /relations CRUD
+│   │   │       ├── stakeholders.py / stakeholder_roles.py / roles.py  # Stakeholders, per-type roles, app-level RBAC
+│   │   │       ├── calculations.py    # /calculations (computed field formulas)
+│   │   │       ├── bpm.py / bpm_assessments.py / bpm_reports.py / bpm_workflow.py  # BPM
+│   │   │       ├── ppm.py / ppm_reports.py  # PPM
+│   │   │       ├── diagrams.py / diagram_groups.py  # DrawIO + ArchiMate diagram CRUD, folders, favorites
+│   │   │       ├── soaw.py / adr.py   # Statement of Architecture Work, Architecture Decision Records
+│   │   │       ├── reports.py / saved_reports.py  # Dashboard, portfolio, matrix, value chain, etc.
+│   │   │       ├── risks.py / risk_mitigation_tasks.py  # EA Risk Register (TOGAF Phase G)
+│   │   │       ├── tags.py / comments.py / todos.py / documents.py / bookmarks.py / favorites.py / file_attachments.py / card_logos.py
+│   │   │       ├── events.py          # /events + /events/stream (SSE)
+│   │   │       ├── users.py / audit_log.py
+│   │   │       ├── ai_suggest.py / settings.py / notifications.py
+│   │   │       ├── surveys.py / eol.py / web_portals.py
+│   │   │       ├── servicenow.py      # CMDB sync integration
+│   │   │       ├── resources.py       # Repository-wide files + links
+│   │   │       ├── capability_catalogue.py / principles_catalogue.py / process_catalogue.py / value_stream_catalogue.py  # Reference catalogues
+│   │   │       ├── migration.py       # /migration (platform-migration importer — LeanIX etc., adapter pattern)
+│   │   │       ├── mutation_batches.py # /mutation-batches (MCP write ledger + per-event diff)
+│   │   │       ├── workspace.py       # /admin/workspace (full-workspace export/import — TEA↔TEA)
+│   │   │       ├── extensions.py      # /extensions (install/uninstall, manifest, ui-manifest)
+│   │   │       ├── turbolens.py       # TurboLens (AI-powered EA intelligence) routes
+│   │   │       └── ops.py             # Health/readiness probes
+│   │   ├── core/
+│   │   │   ├── security.py            # JWT creation/validation (PyJWT HS256), bcrypt
+│   │   │   ├── permissions.py         # Permission key registry (single source of truth; includes the 9 `archimatediagrams.*` keys — fork)
+│   │   │   ├── encryption.py          # Fernet symmetric encryption for DB secrets
+│   │   │   └── rate_limit.py          # slowapi rate limiter instance
+│   │   ├── models/                    # SQLAlchemy ORM models, incl. archimate_viewpoint.py / enterprise_object.py (fork)
+│   │   ├── schemas/                   # Pydantic request/response models
+│   │   ├── services/
+│   │   │   ├── archimate/             # (fork) taxonomy, validate, viewpoint_seed, enterprise_object_seed, relation_table.json — see archimate.md
+│   │   │   ├── extensions/            # Extension SDK: sdk.py, bridges.py (fork-only bridge), events.py, notification_channels.py, …
+│   │   │   ├── migration/             # Platform-migration adapter framework (protocol/registry/staging/apply + sources/leanix/)
+│   │   │   ├── workspace_io/          # Full-workspace export/import (exporter/applier/entities/remap)
+│   │   │   ├── value_chain_report.py  # (fork) Value Chain Map + Value Stream Map payload builders — see value-chain.md
+│   │   │   ├── value_stream_catalogue_service.py  # Adjacent, separate: imports a canned value-stream model
+│   │   │   ├── resource_service.py    # (fork) backs the extension_context(key) `resources` bridge
+│   │   │   ├── card_write_service.py / adr_service.py / risk_service.py / survey_service.py  # B0-style shared write logic (human routes + extension bridges)
+│   │   │   ├── permission_service.py / event_bus.py / card_read_scope.py / card_flags.py / lifecycle.py
+│   │   │   ├── calculation_engine.py / bpmn_parser.py / bpmn_flow_order.py / servicenow_service.py
+│   │   │   ├── seed.py                # Default metamodel (card types, subtypes, fields, relations)
+│   │   │   ├── seed_demo*.py          # NexaTech Industries demo dataset (BPM, PPM, extras, logos, security, workspace)
+│   │   │   ├── notification_service.py / email_service.py / mutation_batch_service.py / rollback_service.py
+│   │   │   └── startup_lock.py        # PostgreSQL advisory lock around boot-time migrate+seed (managed-container overlap)
+│   │   ├── config.py                  # Settings from env vars + APP_VERSION
+│   │   ├── database.py                # Async engine + session factory
+│   │   └── main.py                    # FastAPI app, lifespan (migrations + seed + purge loop + AI auto-config)
+│   ├── alembic/versions/              # ~170 migrations, 001_ through 167_ (a few fork-only `b`-suffixed renumbers, e.g. 128b_)
+│   ├── tests/
+│   └── pyproject.toml
+│
+├── frontend/
+│   ├── src/
+│   │   ├── api/client.ts              # Fetch wrapper (httpOnly cookie auth) + error handling
+│   │   ├── types/index.ts             # All TypeScript interfaces
+│   │   ├── hooks/                     # useAuth, useMetamodel, useEventStream, useCurrency, useArchimateEnabled (fork), per-feature singletons, …
+│   │   ├── layouts/AppLayout.tsx      # Top nav bar + mobile drawer
+│   │   ├── components/                # Shared components (CreateCardDialog, LifecycleBadge, NotificationBell, …)
+│   │   ├── features/
+│   │   │   ├── archimate/             # (fork) diagram-js editor + sandbox — engine/ (isolated from the API, see archimate.md), exchange/, mapping/, taxonomy/
+│   │   │   ├── value-chain/           # (fork) Value Chain Map + Value Stream Map renderer — see value-chain.md
+│   │   │   ├── application-architecture/  # (fork) ComingSoonPage — landing for the ArchiMate nav entries not yet built out
+│   │   │   ├── auth/ / dashboard/ / inventory/ / cards/
+│   │   │   ├── bpm/ / ppm/ / diagrams/ / reports/ / ea-delivery/ / todos/ / surveys/ / web-portals/
+│   │   │   ├── capability-catalogue/ / principles-catalogue/ / process-catalogue/ / value-stream-catalogue/ / reference-catalogue/
+│   │   │   ├── grc/                   # Risk Register + Compliance scanner + Governance (principles/decisions)
+│   │   │   ├── turbolens/             # AI-powered EA intelligence
+│   │   │   └── admin/
+│   │   │       ├── MetamodelAdmin.tsx
+│   │   │       └── metamodel/         # ArchitectureStudioTab.tsx, CardMappingTabContent.tsx, EnterpriseObjectPopover.tsx, ViewpointCatalogTabContent.tsx, ViewpointEditDialog.tsx (all fork), FieldEditorDialog.tsx, …
+│   │   ├── App.tsx                    # Routes + MUI theme (lazy imports)
+│   │   └── main.tsx                   # React entry point
+│   ├── nginx.conf                     # API proxy + DrawIO + security headers
+│   ├── package.json
+│   └── vite.config.ts                 # __APP_VERSION__ injection from VERSION file
+│
+├── mcp-server/turbo_ea_mcp/
+│   ├── server.py                      # FastMCP tools, resources, prompts + ASGI app (55 tools, incl. 5 fork-only ArchiMate/Value Chain ones — see mcp-server.md)
+│   ├── api_client.py / oauth.py / config.py / batches.py / logo_fetch.py / mcp_extensions.py / models.py
+│   └── __main__.py
+│
+└── scripts/
+    ├── archimate/                     # (fork) generate_taxonomy.py, convert_viewpoint_example.py — see archimate.md
+    ├── extension-tools/               # teax.py — extension bundle packaging/signing
+    ├── i18n/ / screenshots/ / mutation/ / e2e/ / security/
+    └── dump_openapi.py / check_deploy_versions.py / check_cloud_run_manifest.py
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Default | Description |

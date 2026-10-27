@@ -87,3 +87,6 @@ paths:
   adjacent feature** — importing a canned value-stream model (bundled or fetched remotely) into
   `BusinessContext` cards. It shares no code with `value_chain_report.py`; the only connection is
   that `stageOrder` fallback above.
+- **MCP tool** (`get_value_chain`) lives alongside every other tool in
+  `mcp-server/turbo_ea_mcp/server.py` — see [`mcp-server.md`](mcp-server.md) for the server's own
+  conventions.
