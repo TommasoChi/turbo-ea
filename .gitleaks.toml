@@ -56,6 +56,18 @@ regexes = [
   '''^OtherPass1234$''',
 ]
 
+# CLAUDE.md's VAPT section lists "horizontal/vertical privilege escalation" as
+# a dynamic-test target; generic-api-key's entropy/charset heuristic matches
+# the slash-joined word pair, not a secret. The line has since moved to
+# .claude/rules/vapt.md (reworded), but the scan walks commit history, so the
+# historical CLAUDE.md version that introduced it still needs the allowlist.
+[[allowlists]]
+description = "CLAUDE.md — \"horizontal/vertical\" (VAPT scope prose, not a secret)"
+condition = "AND"
+paths = ['''^CLAUDE\.md$''']
+regexTarget = "secret"
+regexes = ['''^horizontal/vertical$''']
+
 # The trusted-vendor map holds Ed25519 *public* keys — the whole point is that
 # they ship in the image so a bundle's signature can be checked offline. The
 # private halves are not in this repo. Only this fork's dev key trips the
