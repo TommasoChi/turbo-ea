@@ -24,7 +24,12 @@ function renderAsAdmin() {
 
 const ORGANIZATION = {
   key: "organization", name: "Organization", icon: "account_tree", layer: "business",
-  is_standard: true, is_hidden: false, objects: ["BusinessActor"],
+  is_standard: true, is_hidden: false, objects: ["BusinessActor"], domains: ["business"],
+};
+const LAYERED = {
+  key: "layered", name: "Layered", icon: "layers", layer: "other",
+  is_standard: true, is_hidden: false, objects: ["BusinessActor", "ApplicationComponent", "Node"],
+  domains: ["business", "application", "technology"],
 };
 
 describe("ViewpointCatalogTabContent", () => {
@@ -39,8 +44,24 @@ describe("ViewpointCatalogTabContent", () => {
     expect(await screen.findByText("Organization")).toBeInTheDocument();
     // The layer chip renders the translated layer name (`layers.business` in
     // en/archimate.json is "Business"), not the raw backend value -- same
-    // localization every sibling layer `Select` in this feature uses.
-    expect(screen.getByText("Business")).toBeInTheDocument();
+    // localization every sibling layer `Select` in this feature uses. The
+    // domain chip renders the same word for this fixture's domains, hence 2.
+    expect(screen.getAllByText("Business")).toHaveLength(2);
+  });
+
+  it("shows the viewpoint's domain(s), derived server-side, as a chip per domain", async () => {
+    vi.mocked(api.get).mockResolvedValue([ORGANIZATION, LAYERED]);
+    render(<ViewpointCatalogTabContent />);
+    const orgRow = (await screen.findByText("Organization")).closest("tr")!;
+    // "Business" appears twice in this row: the Layer chip and the Domain chip.
+    expect(within(orgRow).getAllByText("Business")).toHaveLength(2);
+    expect(within(orgRow).queryByText("Application & Data")).toBeNull();
+    expect(within(orgRow).queryByText("Technology")).toBeNull();
+
+    const layeredRow = screen.getByText("Layered").closest("tr")!;
+    expect(within(layeredRow).getByText("Business")).toBeInTheDocument();
+    expect(within(layeredRow).getByText("Application & Data")).toBeInTheDocument();
+    expect(within(layeredRow).getByText("Technology")).toBeInTheDocument();
   });
 
   it("opens the edit dialog for a new Viewpoint from the New Viewpoint button", async () => {

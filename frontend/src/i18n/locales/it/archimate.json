@@ -91,7 +91,9 @@
     "multiple": "{{count}} elementi selezionati",
     "multipleHint": "Seleziona un solo elemento per modificarlo.",
     "view": "Vista",
-    "text": "Testo"
+    "text": "Testo",
+    "fillColor": "Colore di riempimento",
+    "resetColor": "Ripristina il colore predefinito"
   },
   "status": {
     "saved": "Salvato",

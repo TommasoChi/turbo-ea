@@ -33,6 +33,7 @@ from app.models.diagram_group import diagram_group_members
 from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
 from app.models.user import User
 from app.services import audit_log
+from app.services.archimate.taxonomy import TAB_LAYERS
 from app.services.archimate.validate import validate_exchange
 from app.services.card_read_scope import CardReadScope
 from app.services.diagram_legend import build_public_legend
@@ -144,15 +145,6 @@ async def require_public_diagram(
 
 ARCHIMATE_FORMAT = "archimate-exchange-3.1"
 DIAGRAM_KINDS = ("drawio", "archimate")
-
-# The three diagram-creation dashboard tabs, each mapped to the
-# taxonomy.LAYERS / EnterpriseObject.layer keys it covers -- same three
-# groupings as the design doc's nav table.
-TAB_LAYERS: dict[str, set[str]] = {
-    "business": {"strategy", "business", "motivation"},
-    "application": {"application"},
-    "technology": {"technology", "physical"},
-}
 
 
 async def viewpoint_tabs(db: AsyncSession, viewpoint_key: str) -> set[str]:
@@ -363,6 +355,7 @@ async def list_diagrams(
     mine: bool = False,
     favorites: bool = False,
     group_id: str | None = None,
+    viewpoint_key: str | None = None,
     sort_by: str = "updated_at",
     sort_dir: str = "desc",
     kind: str = "drawio",
@@ -382,6 +375,8 @@ async def list_diagrams(
         # Default drawio: every existing consumer (Diagrams page, card
         # Resources tab, MCP) keeps seeing only DrawIO diagrams.
         stmt = stmt.where(Diagram.kind == kind)
+    if viewpoint_key:
+        stmt = stmt.where(Diagram.viewpoint_key == viewpoint_key)
     if card_id:
         # Filter: only diagrams linked to this card
         stmt = stmt.join(diagram_cards, diagram_cards.c.diagram_id == Diagram.id).where(
@@ -402,6 +397,35 @@ async def list_diagrams(
 
     result = await db.execute(stmt)
     rows = list(result.scalars().all())
+
+    if kind == "all":
+        # A mixed listing: plain diagrams.view (checked above) covers every
+        # DrawIO row, but an ArchiMate row also needs its own
+        # archimatediagrams.<tab>.* permission on at least one tab it spans --
+        # silently dropped, like an unreadable linked card, rather than 403ing
+        # the whole list over one diagram the user can't see.
+        tabs_cache: dict[str | None, set[str]] = {}
+        visible_rows = []
+        for d in rows:
+            if d.kind != "archimate":
+                visible_rows.append(d)
+                continue
+            if d.viewpoint_key not in tabs_cache:
+                tabs_cache[d.viewpoint_key] = (
+                    await viewpoint_tabs(db, d.viewpoint_key) if d.viewpoint_key else set()
+                )
+            allowed = False
+            for tab in tabs_cache[d.viewpoint_key] or TAB_LAYERS:
+                if await PermissionService.has_app_permission(
+                    db, user, f"archimatediagrams.{tab}.view"
+                ) or await PermissionService.has_app_permission(
+                    db, user, f"archimatediagrams.{tab}.manage"
+                ):
+                    allowed = True
+                    break
+            if allowed:
+                visible_rows.append(d)
+        rows = visible_rows
 
     # Bulk-load supporting data. Linked cards hidden from the reader are left
     # out of `card_ids`, and a hidden card's name never matches a search.
@@ -461,6 +485,7 @@ async def list_diagrams(
             "id": str(d.id),
             "name": d.name,
             "kind": d.kind,
+            "viewpoint_key": d.viewpoint_key,
             "description": d.description,
             "card_ids": id_map.get(str(d.id), []),
             "group_ids": group_map.get(str(d.id), []),

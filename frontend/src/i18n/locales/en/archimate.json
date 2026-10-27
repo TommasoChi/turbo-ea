@@ -91,7 +91,9 @@
     "multiple": "{{count}} items selected",
     "multipleHint": "Select a single item to edit it.",
     "view": "View",
-    "text": "Text"
+    "text": "Text",
+    "fillColor": "Fill color",
+    "resetColor": "Reset to the default color"
   },
   "status": {
     "saved": "Saved",

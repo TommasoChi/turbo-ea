@@ -46,6 +46,9 @@ beforeEach(() => {
   mockApi.on("get", "/diagrams?kind=archimate", ROWS);
   // ArchimateViewpointPicker (tab=null) lists via the unscoped `listViewpoints()` call.
   mockApi.on("get", "/metamodel/viewpoints", VIEWPOINTS);
+  // ArchimateViewpointPicker's Linked Cards field needs the metamodel for its type icons/labels.
+  mockApi.on("get", "/metamodel/types", []);
+  mockApi.on("get", "/metamodel/relation-types", []);
 });
 
 describe("ArchimateSandboxPage", () => {

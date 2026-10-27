@@ -91,7 +91,9 @@
     "multiple": "{{count}} elementer valgt",
     "multipleHint": "Vælg ét element for at redigere det.",
     "view": "Visning",
-    "text": "Tekst"
+    "text": "Tekst",
+    "fillColor": "Fyldfarve",
+    "resetColor": "Nulstil til standardfarve"
   },
   "status": {
     "saved": "Gemt",

@@ -22,6 +22,14 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type { ArchimateViewpoint } from "@/types";
 import ViewpointEditDialog from "./ViewpointEditDialog";
 
+/** The 3 diagram-creation tabs (TAB_LAYERS, backend `api/v1/diagrams.py`) a viewpoint's `domains`
+ *  can name, in table-column order. */
+const DOMAIN_LABEL_KEY: Record<string, string> = {
+  business: "metamodel.viewpoints.domainBusiness",
+  application: "metamodel.viewpoints.domainApplication",
+  technology: "metamodel.viewpoints.domainTechnology",
+};
+
 /**
  * Admin list for the ArchiMate Viewpoint catalog (Task 3's `/metamodel/viewpoints*`):
  * icon, name, layer badge, standard/custom + hidden/active status, allowed-object
@@ -115,6 +123,7 @@ export default function ViewpointCatalogTabContent() {
             <TableCell padding="checkbox" />
             <TableCell>{t("metamodel.viewpoints.columnName")}</TableCell>
             <TableCell>{t("metamodel.viewpoints.columnLayer")}</TableCell>
+            <TableCell>{t("metamodel.viewpoints.columnDomain")}</TableCell>
             <TableCell>{t("metamodel.viewpoints.columnStatus")}</TableCell>
             <TableCell align="right">{t("metamodel.viewpoints.columnObjects")}</TableCell>
             <TableCell padding="checkbox" />
@@ -137,6 +146,13 @@ export default function ViewpointCatalogTabContent() {
               </TableCell>
               <TableCell>
                 <Chip size="small" label={t(`layers.${vp.layer}`, { ns: "archimate" })} />
+              </TableCell>
+              <TableCell>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                  {vp.domains.map((d) => (
+                    <Chip key={d} size="small" variant="outlined" label={t(DOMAIN_LABEL_KEY[d] ?? d)} />
+                  ))}
+                </Box>
               </TableCell>
               <TableCell>
                 <Chip

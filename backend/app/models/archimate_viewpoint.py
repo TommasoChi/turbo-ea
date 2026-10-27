@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
@@ -20,6 +21,10 @@ class ArchimateViewpoint(Base, UUIDMixin, TimestampMixin):
     is_standard: Mapped[bool] = mapped_column(Boolean, default=False)
     is_hidden: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Which of taxonomy.TAB_LAYERS' tabs ("business"/"application"/"technology") this viewpoint is
+    # tagged under -- seeded from its allowed objects' layers (viewpoint_seed.py) but editable
+    # afterward independently of them (an admin's own categorization, not re-derived on read).
+    domains: Mapped[list | None] = mapped_column(JSONB, default=list)
 
 
 class ArchimateViewpointObject(Base, UUIDMixin, TimestampMixin):

@@ -112,6 +112,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   // fetched once per diagram load (not per palette render), gated the same way as
   // enterpriseObjectsLoaded below so the engine is only ever built once it is known.
   const [viewpointObjectKeys, setViewpointObjectKeys] = useState<string[] | null>(null);
+  const [viewpointName, setViewpointName] = useState<string | null>(null);
   const [viewpointLoaded, setViewpointLoaded] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [name, setName] = useState("");
@@ -176,6 +177,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     closeDialogs();
     setLoad({ status: "loading" });
     setViewpointObjectKeys(null);
+    setViewpointName(null);
     setViewpointLoaded(false);
     (async () => {
       let doc: DiagramDoc;
@@ -205,7 +207,10 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       }
       try {
         const viewpoint = await getViewpoint(doc.viewpoint_key);
-        if (!cancelled) setViewpointObjectKeys(viewpoint.objects);
+        if (!cancelled) {
+          setViewpointObjectKeys(viewpoint.objects);
+          setViewpointName(viewpoint.name);
+        }
       } catch {
         // Fails open: an unfiltered palette, same as a diagram with no viewpoint_key -- the
         // viewpoint catalog not being reachable must never block the editor from opening.
@@ -244,8 +249,22 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     const current = () => !unmountedRef.current && epoch === epochRef.current;
     try {
       const model = engine.toModel();
+      // A nice-to-have for the Diagrams gallery card, same field DrawIO's own
+      // save flow populates (DiagramEditor.tsx) -- a failed export must never
+      // block saving the diagram itself.
+      let thumbnail: string | undefined;
+      try {
+        thumbnail = await engine.exportSvg();
+      } catch {
+        // Falls through with no thumbnail; the card just shows its placeholder icon.
+        thumbnail = undefined;
+      }
       await api.patch(`/diagrams/${diagramId}`, {
-        data: { format: ARCHIMATE_FORMAT, xml: writeExchange(model) },
+        data: {
+          format: ARCHIMATE_FORMAT,
+          xml: writeExchange(model),
+          ...(thumbnail ? { thumbnail } : {}),
+        },
         card_ids: linkedCardIds(model),
       });
       if (!current()) return;
@@ -595,9 +614,11 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
           <ArchimatePropertiesPanel
             info={selected}
             selectedCount={engineRef.current?.selection().length ?? 0}
+            selectedIds={engineRef.current?.selection() ?? []}
             diagramName={name}
             diagramDescription={description}
             diagramProperties={diagramProperties}
+            viewpointName={viewpointName}
             labels={bridge.labels}
             cardName={bridge.cardName}
             linkedCard={linkedCard}
@@ -605,6 +626,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
             onName={(id, v) => engineRef.current?.setName(id, v)}
             onDocumentation={(id, v) => engineRef.current?.setDocumentation(id, v)}
             onProperties={(id, p) => engineRef.current?.setUserProperties(id, p)}
+            onStyle={(ids, c) => engineRef.current?.setStyle(ids, c)}
             onDiagramName={onDiagramName}
             onDiagramDocumentation={onDiagramDocumentation}
             onDiagramProperties={onDiagramProperties}

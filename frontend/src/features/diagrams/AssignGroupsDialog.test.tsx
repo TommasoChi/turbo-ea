@@ -18,8 +18,14 @@ import AssignGroupsDialog from "./AssignGroupsDialog";
 type Props = React.ComponentProps<typeof AssignGroupsDialog>;
 
 const GROUPS: DiagramGroup[] = [
-  { id: "g1", name: "Architecture", color: "#ff0000", sort_order: 0, diagram_count: 2 },
-  { id: "g2", name: "Operations", color: null, sort_order: 1, diagram_count: 1 },
+  {
+    id: "g1", name: "Architecture", color: "#ff0000", sort_order: 0, diagram_count: 2,
+    diagram_count_drawio: 2, diagram_count_archimate: 0,
+  },
+  {
+    id: "g2", name: "Operations", color: null, sort_order: 1, diagram_count: 1,
+    diagram_count_drawio: 1, diagram_count_archimate: 0,
+  },
 ];
 
 const DIAGRAM: DiagramSummary = {
@@ -59,6 +65,8 @@ beforeEach(() => {
     id: "g3",
     sort_order: 2,
     diagram_count: 0,
+    diagram_count_drawio: 0,
+    diagram_count_archimate: 0,
     ...(body as Record<string, unknown>),
   }));
 });

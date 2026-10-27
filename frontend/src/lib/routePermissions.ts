@@ -39,8 +39,11 @@ export const ARCHIMATE_MANAGE_ANY_LAYER = [
   "archimatediagrams.technology.manage",
 ];
 
-/** The Architecture Studio diagram list: Settings admins, or a `view`/`manage` key on any layer. */
-const ARCHIMATE_STUDIO_LIST = [
+/** The Architecture Studio diagram list: Settings admins, or a `view`/`manage` key on any layer.
+ *  Also reused by the Diagrams page's own "ArchiMate" type filter -- same "can see some
+ *  ArchiMate diagram" permission, so the filter option doesn't appear for someone it would
+ *  always 403 for. */
+export const ARCHIMATE_STUDIO_LIST = [
   "admin.settings",
   "archimatediagrams.business.view",
   "archimatediagrams.application.view",
@@ -103,19 +106,26 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   { path: "/diagrams", permission: "diagrams.view" },
   { path: "/diagrams/:id", permission: "diagrams.view" },
   { path: "/diagrams/:id/edit", permission: "diagrams.manage" },
-  // Scoped ArchiMate diagram-entry points (nav rework, Task 8). The page is
-  // nothing but the create flow for its layer, so it needs that layer's
-  // `manage` key — and its nav entry inherits the same gate, so the menu never
-  // offers a page that would deny the user.
-  { path: "/business-architecture/diagram", permission: "archimatediagrams.business.manage" },
-  { path: "/application-architecture/diagram", permission: "archimatediagrams.application.manage" },
-  { path: "/technology-architecture/diagram", permission: "archimatediagrams.technology.manage" },
-  // "Coming soon" placeholders (SWOT / What-if / Data Flow) — no data behind
-  // them yet, but kept under the same gate as their Application & Data
-  // Architecture siblings rather than left ungated, so the group does not
-  // show for a user who cannot see Diagrams at all.
-  { path: "/application-architecture/swot", permission: "diagrams.view" },
-  { path: "/application-architecture/what-if", permission: "diagrams.view" },
+  // Scoped ArchiMate diagram-entry points (nav rework, Task 8): the Diagrams
+  // page pre-filtered to one layer. A plain `view` key is enough to see the
+  // list (the create dialog's own Save still needs `manage`, checked there).
+  {
+    path: "/business-architecture/diagram",
+    permission: ["archimatediagrams.business.view", "archimatediagrams.business.manage"],
+  },
+  {
+    path: "/application-architecture/diagram",
+    permission: ["archimatediagrams.application.view", "archimatediagrams.application.manage"],
+  },
+  {
+    path: "/technology-architecture/diagram",
+    permission: ["archimatediagrams.technology.view", "archimatediagrams.technology.manage"],
+  },
+  // "Coming soon" placeholder (Data Flow; SWOT and What-if removed -- now
+  // duplicated by an installed extension) — no data behind it yet, but kept
+  // under the same gate as its Application & Data Architecture siblings
+  // rather than left ungated, so the group does not show for a user who
+  // cannot see Diagrams at all.
   { path: "/application-architecture/data-flow", permission: "diagrams.view" },
 
   // --- Surveys ------------------------------------------------------------

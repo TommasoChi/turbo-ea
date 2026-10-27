@@ -34,12 +34,18 @@ import { useMetamodel } from "@/hooks/useMetamodel";
 import { useTypeLabel } from "@/hooks/useResolveLabel";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { api } from "@/api/client";
-import type { Card, DiagramSummary, DiagramGroup } from "@/types";
+import { listViewpoints } from "@/api/archimateViewpoints";
+import type { ViewpointTab } from "@/api/diagrams";
+import { hasPermission } from "@/components/RequirePermission";
+import { ARCHIMATE_STUDIO_LIST } from "@/lib/routePermissions";
+import type { ArchimateViewpoint, Card, DiagramSummary, DiagramGroup } from "@/types";
 import CreateDiagramDialog from "./CreateDiagramDialog";
 import ManageGroupsDialog from "./ManageGroupsDialog";
 import AssignGroupsDialog from "./AssignGroupsDialog";
 import DiagramsFilterSidebar, {
   type DiagramScope,
+  type DiagramTypeFilter,
+  DEFAULT_TYPE_FILTER,
   SIDEBAR_MIN_WIDTH,
   SIDEBAR_MAX_WIDTH,
 } from "./DiagramsFilterSidebar";
@@ -48,9 +54,29 @@ type SortKey = "updated_at" | "created_at" | "name";
 
 const FAVORITE_COLOR = "#f5b400";
 const DIAGRAM_ICON = "schema";
+const ARCHIMATE_DIAGRAM_ICON = "hub";
+const ARCHIMATE_DIAGRAM_COLOR = "#7b1fa2";
 
-export default function DiagramsPage() {
-  const { t } = useTranslation(["diagrams", "common"]);
+/** The nav label each layer's scoped entry point uses (nav.json), reused for
+ *  this page's own heading when it opens pre-scoped to that layer. */
+const LAYER_TITLE_KEY: Record<ViewpointTab, string> = {
+  business: "businessDiagram",
+  application: "applicationDiagram",
+  technology: "technologyDiagram",
+};
+
+interface Props {
+  /** Set by the Business/Application & Data/Technology Architecture nav
+   *  entries (App.tsx) -- opens straight onto that layer's ArchiMate
+   *  diagrams instead of the unscoped "All diagrams" view, and scopes the
+   *  create dialog's viewpoint picker to the same layer. DrawIO has no
+   *  layer concept, so it stays reachable from here too (switch the Type
+   *  filter), just not what this entry point opens on. */
+  initialLayer?: ViewpointTab;
+}
+
+export default function DiagramsPage({ initialLayer }: Props) {
+  const { t } = useTranslation(["diagrams", "nav", "common"]);
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -84,6 +110,16 @@ export default function DiagramsPage() {
 
   // Sidebar + search + sort state
   const [scope, setScope] = useState<DiagramScope>({ kind: "all" });
+  // The page's own domain scope (below) enforces `initialLayer`; the sidebar's generic Layer
+  // dropdown is a separate, finer 8-value ArchiMate taxonomy filter the user may still narrow
+  // with on top of it, so it starts unset here rather than pre-seeded to `initialLayer` -- seeding
+  // it would make the two compete on the exact same field and hide a viewpoint whose own `layer`
+  // classification differs from a domain it is nonetheless tagged under (e.g. "Layered", layer
+  // "other", tagged under all three domains).
+  const [typeFilter, setTypeFilter] = useState<DiagramTypeFilter>(() =>
+    initialLayer ? { kind: "archimate", layer: null, viewpointKey: null } : DEFAULT_TYPE_FILTER,
+  );
+  const [viewpoints, setViewpoints] = useState<ArchimateViewpoint[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("updated_at");
@@ -123,6 +159,9 @@ export default function DiagramsPage() {
   const canPublish = Boolean(
     user?.permissions?.["*"] || user?.permissions?.["diagrams.publish"],
   );
+  // Same "can see some ArchiMate diagram" gate as the Architecture Studio list
+  // route -- no point offering a filter option that would always 403.
+  const showArchimateFilter = hasPermission(user?.permissions, ARCHIMATE_STUDIO_LIST);
 
   const typeMap = Object.fromEntries(metamodelTypes.map((mt) => [mt.key, mt]));
 
@@ -137,11 +176,18 @@ export default function DiagramsPage() {
     if (scope.kind === "mine") params.set("mine", "true");
     if (scope.kind === "favorites") params.set("favorites", "true");
     if (scope.kind === "group") params.set("group_id", scope.id);
+    params.set("kind", typeFilter.kind);
+    if (typeFilter.kind === "archimate" && typeFilter.viewpointKey) {
+      params.set("viewpoint_key", typeFilter.viewpointKey);
+    }
     if (search) params.set("search", search);
     params.set("sort_by", sortBy);
     const qs = params.toString();
-    api.get<DiagramSummary[]>(`/diagrams${qs ? `?${qs}` : ""}`).then(setDiagrams);
-  }, [scope, search, sortBy]);
+    api
+      .get<DiagramSummary[]>(`/diagrams${qs ? `?${qs}` : ""}`)
+      .then(setDiagrams)
+      .catch(() => setDiagrams([]));
+  }, [scope, typeFilter, search, sortBy]);
 
   const loadGroups = useCallback(() => {
     api
@@ -161,6 +207,15 @@ export default function DiagramsPage() {
       .then((res) => setAllCards(res.items))
       .catch(() => {});
   }, [loadGroups]);
+
+  // Only fetched for someone who could ever use the ArchiMate type filter --
+  // for everyone else it would just 403.
+  useEffect(() => {
+    if (!showArchimateFilter) return;
+    listViewpoints()
+      .then(setViewpoints)
+      .catch(() => setViewpoints([]));
+  }, [showArchimateFilter]);
 
   const toggleFavorite = useCallback(
     async (d: DiagramSummary, e: React.MouseEvent) => {
@@ -243,24 +298,49 @@ export default function DiagramsPage() {
       return next;
     });
 
+  // Neither filter has a backend param (the sidebar already has the whole catalog to cascade
+  // from) -- both are applied here, client-side, against the viewpoint catalog. Skipped once a
+  // specific viewpoint is chosen (the server already scoped `diagrams` to exactly that one).
+  const visibleDiagrams = useMemo(() => {
+    if (typeFilter.kind !== "archimate" || typeFilter.viewpointKey) return diagrams;
+    let result = diagrams;
+    if (initialLayer) {
+      // The page's own permanent scope: every tab a viewpoint is tagged under (`domains`), not
+      // just its single `layer` classification -- a viewpoint can genuinely belong to more than
+      // one architecture domain.
+      const domainsByViewpoint = new Map(viewpoints.map((v) => [v.key, v.domains]));
+      result = result.filter((d) =>
+        (domainsByViewpoint.get(d.viewpoint_key ?? "") ?? []).includes(initialLayer),
+      );
+    }
+    if (typeFilter.layer) {
+      const layerByViewpoint = new Map(viewpoints.map((v) => [v.key, v.layer]));
+      result = result.filter((d) => layerByViewpoint.get(d.viewpoint_key ?? "") === typeFilter.layer);
+    }
+    return result;
+  }, [diagrams, viewpoints, typeFilter, initialLayer]);
+
   // Group diagrams by group for the grouped view (only when not filtered to a
   // single group). Multi-group diagrams appear under each of their groups.
   const grouped = useMemo(() => {
     const out: { key: string; label: string; color?: string | null; items: DiagramSummary[] }[] =
       [];
     for (const g of groups) {
-      const items = diagrams.filter((d) => (d.group_ids || []).includes(g.id));
+      const items = visibleDiagrams.filter((d) => (d.group_ids || []).includes(g.id));
       if (items.length) out.push({ key: g.id, label: g.name, color: g.color, items });
     }
-    const ungrouped = diagrams.filter((d) => !(d.group_ids || []).length);
+    const ungrouped = visibleDiagrams.filter((d) => !(d.group_ids || []).length);
     if (ungrouped.length)
       out.push({ key: "__ungrouped", label: t("gallery.ungrouped"), items: ungrouped });
     return out;
-  }, [diagrams, groups, t]);
+  }, [visibleDiagrams, groups, t]);
+
+  const openDiagram = (d: DiagramSummary) =>
+    navigate(d.kind === "archimate" ? `/admin/architectureStudio/${d.id}` : `/diagrams/${d.id}`);
 
   const renderCard = (d: DiagramSummary) => (
     <MuiCard key={d.id} sx={{ position: "relative" }}>
-      <CardActionArea onClick={() => navigate(`/diagrams/${d.id}`)}>
+      <CardActionArea onClick={() => openDiagram(d)}>
         {/* Thumbnail */}
         <Box
           sx={{
@@ -279,19 +359,27 @@ export default function DiagramsPage() {
               src={
                 d.thumbnail.startsWith("data:")
                   ? d.thumbnail
-                  : `data:image/svg+xml;base64,${btoa(d.thumbnail)}`
+                  : `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(d.thumbnail)))}`
               }
               alt={d.name}
               style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
             />
           ) : (
-            <MaterialSymbol icon={DIAGRAM_ICON} size={36} color="#bbb" />
+            <MaterialSymbol
+              icon={d.kind === "archimate" ? ARCHIMATE_DIAGRAM_ICON : DIAGRAM_ICON}
+              size={36}
+              color="#bbb"
+            />
           )}
         </Box>
 
         <CardContent sx={{ p: 1.25, "&:last-child": { pb: 1.25 } }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 0.25 }}>
-            <MaterialSymbol icon={DIAGRAM_ICON} size={18} color="#1976d2" />
+            <MaterialSymbol
+              icon={d.kind === "archimate" ? ARCHIMATE_DIAGRAM_ICON : DIAGRAM_ICON}
+              size={18}
+              color={d.kind === "archimate" ? ARCHIMATE_DIAGRAM_COLOR : "#1976d2"}
+            />
             <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1 }}>
               {d.name}
             </Typography>
@@ -397,6 +485,10 @@ export default function DiagramsPage() {
             width={300}
             onWidthChange={() => {}}
             onAfterChange={() => setFiltersOpen(false)}
+            typeFilter={typeFilter}
+            onTypeFilterChange={setTypeFilter}
+            showArchimateFilter={showArchimateFilter}
+            viewpoints={viewpoints}
           />
         </Drawer>
       ) : (
@@ -409,6 +501,10 @@ export default function DiagramsPage() {
           onToggleCollapse={toggleSidebarCollapse}
           width={sidebarWidth}
           onWidthChange={changeSidebarWidth}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          showArchimateFilter={showArchimateFilter}
+          viewpoints={viewpoints}
         />
       )}
 
@@ -423,9 +519,9 @@ export default function DiagramsPage() {
             </Tooltip>
           )}
           <Typography variant="h5" fontWeight={600}>
-            {t("page.title")}
+            {initialLayer ? t(`nav:${LAYER_TITLE_KEY[initialLayer]}`) : t("page.title")}
           </Typography>
-          <Chip label={`${diagrams.length}`} size="small" />
+          <Chip label={`${visibleDiagrams.length}`} size="small" />
           <TextField
             size="small"
             placeholder={t("gallery.search.placeholder")}
@@ -468,16 +564,16 @@ export default function DiagramsPage() {
         </Box>
 
         {/* Empty state */}
-        {diagrams.length === 0 && (
+        {visibleDiagrams.length === 0 && (
           <Typography color="text.secondary" sx={{ textAlign: "center", py: 6 }}>
-            {search || scope.kind !== "all"
+            {search || scope.kind !== "all" || typeFilter.kind !== "all"
               ? t("gallery.noResults")
               : t("gallery.empty")}
           </Typography>
         )}
 
         {/* Grouped by group */}
-        {diagrams.length > 0 && showGrouped && (
+        {visibleDiagrams.length > 0 && showGrouped && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {grouped.map((g) => (
               <Box key={g.key}>
@@ -513,7 +609,7 @@ export default function DiagramsPage() {
         )}
 
         {/* Flat (single group selected) */}
-        {diagrams.length > 0 && !showGrouped && cardGrid(diagrams)}
+        {visibleDiagrams.length > 0 && !showGrouped && cardGrid(visibleDiagrams)}
       </Box>
 
       {/* Context menu */}
@@ -612,7 +708,11 @@ export default function DiagramsPage() {
         />
       )}
 
-      <CreateDiagramDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateDiagramDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        archimateTab={initialLayer ?? null}
+      />
 
       <ManageGroupsDialog
         open={manageOpen}

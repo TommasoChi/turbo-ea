@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setViewportWidth } from "@/test/matchMedia";
 import { useLocation, useNavigate, type NavigateFunction } from "react-router";
@@ -233,6 +233,7 @@ describe("loading", () => {
     await waitFor(() =>
       expect(mockApi.callsOf("get", "/metamodel/viewpoints/organization")).toHaveLength(1),
     );
+    await waitFor(() => expect(screen.getByText("Organization")).toBeInTheDocument());
   });
 
   it("fails open to an unfiltered palette when the viewpoint can't be fetched", async () => {
@@ -287,11 +288,23 @@ describe("autosave", () => {
     expect(mockApi.callsOf("patch")).toHaveLength(1);
     expect(Object.keys(lastPatchBody()).sort()).toEqual(["card_ids", "data"]);
     expect(lastPatchBody().data.format).toBe(ARCHIMATE_FORMAT);
-    expect(Object.keys(lastPatchBody().data)).toEqual(["format", "xml"]);
+    expect(Object.keys(lastPatchBody().data).sort()).toEqual(["format", "thumbnail", "xml"]);
     const saved = readExchange(lastPatchBody().data.xml);
     expect(getCardId(saved.elements.find((e) => e.id === "id-app")!)).toBe("c1");
     expect(lastPatchBody().card_ids).toEqual(["c1"]);
     expect(mockApi.callsOf("patch")[0].path).toBe("/diagrams/d1");
+    vi.useRealTimers();
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved"));
+  });
+
+  it("still saves the diagram when the thumbnail export itself fails", async () => {
+    await mount();
+    vi.spyOn(engine(), "exportSvg").mockRejectedValue(new Error("no svg"));
+    vi.useFakeTimers();
+    act(() => engine().setName(APP_SHAPE, "X"));
+    await advance(3000);
+    expect(mockApi.callsOf("patch")).toHaveLength(1);
+    expect(Object.keys(lastPatchBody().data).sort()).toEqual(["format", "xml"]);
     vi.useRealTimers();
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved"));
   });
@@ -1006,6 +1019,18 @@ describe("properties panel", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
     expect(readExchange(lastPatchBody().data.xml).elements.find((e) => e.id === "id-app")!.name).toBe("Billing");
+  });
+
+  it("sets a fill color from the panel, saved with the diagram", async () => {
+    await mount();
+    select(APP_SHAPE);
+    const input = (await screen.findByLabelText("Fill color")) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "#ff0000" } });
+    expect(engine().itemInfo(APP_SHAPE)!.fillColor).toEqual({ r: 255, g: 0, b: 0 });
+    await userEvent.setup().click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    const node = readExchange(lastPatchBody().data.xml).views[0].nodes.find((n) => n.id === APP_SHAPE)!;
+    expect(node.style).toEqual({ fillColor: { r: 255, g: 0, b: 0 } });
   });
 
   it("saves a property typed in the panel with its definition", async () => {

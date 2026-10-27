@@ -91,7 +91,9 @@
     "multiple": "{{count}} elementos selecionados",
     "multipleHint": "Selecione um único elemento para o editar.",
     "view": "Vista",
-    "text": "Texto"
+    "text": "Texto",
+    "fillColor": "Cor de preenchimento",
+    "resetColor": "Repor a cor predefinida"
   },
   "status": {
     "saved": "Guardado",

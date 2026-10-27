@@ -167,12 +167,7 @@ describe("NAV_ITEM_DEFS — Business/Application/Technology Architecture rework"
   it("gives app_data its Application & Data Architecture static children", () => {
     const item = NAV_ITEM_DEFS.find((i) => i.labelKey === "app_data");
     expect(item).toBeDefined();
-    expect(item?.children?.map((c) => c.labelKey)).toEqual([
-      "swotAnalysis",
-      "whatIfAnalysis",
-      "dataFlow",
-      "applicationDiagram",
-    ]);
+    expect(item?.children?.map((c) => c.labelKey)).toEqual(["dataFlow", "applicationDiagram"]);
   });
 
   it("adds a new top-level Technology Architecture item with a Technology Diagram child", () => {
@@ -447,10 +442,6 @@ describe("AppLayout — extension nav placement", () => {
         {
           id: "what-if",
           path: "/ext/product-technology-what-if/analysis",
-          // Capital "If" — deliberately distinct from the static "What-if
-          // Analysis" placeholder child the group always carries now (see
-          // navItems.ts), so the two don't collide under one case-insensitive
-          // name query. The exact-match string query below relies on that.
           label: "What-If Analysis",
           icon: "query_stats",
           navGroup: "app_data" as ExtensionNavGroup,
@@ -464,22 +455,14 @@ describe("AppLayout — extension nav placement", () => {
     expect(screen.queryByRole("link", { name: /What-If Analysis/i })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /application & data architecture/i }));
-    // Found by href, not by accessible name: the group now also carries a
-    // static "What-if Analysis" placeholder child with the same icon
-    // (lowercase "if"), which a name query matching "What-If Analysis"
-    // case-insensitively would also match.
-    const items = await screen.findAllByRole("menuitem");
-    const item = items.find(
-      (el) => el.getAttribute("href") === "/ext/product-technology-what-if/analysis",
-    );
-    expect(item).toBeDefined();
-    expect(item).toHaveTextContent("What-If Analysis");
+    const item = await screen.findByRole("menuitem", { name: /What-If Analysis/i });
+    expect(item).toHaveAttribute("href", "/ext/product-technology-what-if/analysis");
   });
 
   it("keeps the static Application & Data Architecture children even when no extension targets the group", () => {
     renderLayout();
-    // No longer hidden: swotAnalysis/whatIfAnalysis/dataFlow/applicationDiagram
-    // are static children now (see navItems.ts), independent of extensions.
+    // No longer hidden: dataFlow/applicationDiagram are static children now
+    // (see navItems.ts), independent of extensions.
     expect(
       screen.getByRole("button", { name: /application & data architecture/i }),
     ).toBeInTheDocument();

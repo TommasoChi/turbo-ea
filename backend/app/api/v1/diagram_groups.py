@@ -29,30 +29,41 @@ class GroupUpdate(BaseModel):
     sort_order: int | None = None
 
 
-def _to_dict(s: DiagramGroup, count: int) -> dict:
+def _to_dict(s: DiagramGroup, drawio_count: int, archimate_count: int) -> dict:
     return {
         "id": str(s.id),
         "name": s.name,
         "color": s.color,
         "sort_order": s.sort_order,
-        "diagram_count": count,
+        "diagram_count": drawio_count + archimate_count,
+        # The sidebar's Groups list shows these two separately (one column per diagram kind)
+        # instead of a single blended total.
+        "diagram_count_drawio": drawio_count,
+        "diagram_count_archimate": archimate_count,
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
 
 
-async def _drawio_counts(db: AsyncSession, group_id: uuid.UUID | None = None) -> dict[str, int]:
-    """Per-group count of DrawIO diagrams: the Diagrams page lists only those,
-    so ArchiMate members must not inflate the badge."""
+async def _counts_by_kind(
+    db: AsyncSession, group_id: uuid.UUID | None = None
+) -> dict[str, dict[str, int]]:
+    """Per-group diagram count, split by kind ("drawio"/"archimate")."""
     stmt = (
-        select(diagram_group_members.c.group_id, func.count(diagram_group_members.c.diagram_id))
+        select(
+            diagram_group_members.c.group_id,
+            Diagram.kind,
+            func.count(diagram_group_members.c.diagram_id),
+        )
         .join(Diagram, Diagram.id == diagram_group_members.c.diagram_id)
-        .where(Diagram.kind == "drawio")
-        .group_by(diagram_group_members.c.group_id)
+        .group_by(diagram_group_members.c.group_id, Diagram.kind)
     )
     if group_id is not None:
         stmt = stmt.where(diagram_group_members.c.group_id == group_id)
-    return {str(sid): cnt for sid, cnt in (await db.execute(stmt)).all()}
+    out: dict[str, dict[str, int]] = {}
+    for sid, kind, cnt in (await db.execute(stmt)).all():
+        out.setdefault(str(sid), {})[kind] = cnt
+    return out
 
 
 @router.get("")
@@ -66,9 +77,16 @@ async def list_groups(
     )
     groups = list(result.scalars().all())
 
-    counts = await _drawio_counts(db)
+    counts = await _counts_by_kind(db)
 
-    return [_to_dict(s, counts.get(str(s.id), 0)) for s in groups]
+    return [
+        _to_dict(
+            s,
+            counts.get(str(s.id), {}).get("drawio", 0),
+            counts.get(str(s.id), {}).get("archimate", 0),
+        )
+        for s in groups
+    ]
 
 
 @router.post("", status_code=201)
@@ -89,7 +107,7 @@ async def create_group(
     db.add(s)
     await db.commit()
     await db.refresh(s)
-    return _to_dict(s, 0)
+    return _to_dict(s, 0, 0)
 
 
 @router.patch("/{group_id}")
@@ -115,7 +133,8 @@ async def update_group(
     await db.commit()
     await db.refresh(s)
 
-    return _to_dict(s, (await _drawio_counts(db, s.id)).get(str(s.id), 0))
+    counts = (await _counts_by_kind(db, s.id)).get(str(s.id), {})
+    return _to_dict(s, counts.get("drawio", 0), counts.get("archimate", 0))
 
 
 @router.delete("/{group_id}", status_code=204)

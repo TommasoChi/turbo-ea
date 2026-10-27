@@ -1,13 +1,21 @@
-"""Seed the 23 standard ArchiMate 3.1 viewpoints into the catalog
+"""Seed the 27 standard ArchiMate 3.1 viewpoints into the catalog
 (``ArchimateViewpoint`` + ``ArchimateViewpointObject``), plus the
 viewpoint x tab -> card-type suggestion overrides (``ArchimateViewpointTabCard``).
 
-"Core element" in the ArchiMate 3.1 spec's own definition of the Goal
-Realization and Requirements Realization viewpoints (any element may
-additionally appear) is deliberately **not** seeded as "allow everything" for
-those two -- that would silently reintroduce Free mode for them. Only their
-explicitly named elements are seeded; an admin can widen either list later
-through the editable tag-chip UI (Task 5).
+"Application Platform" (named in the XSD's ``ViewpointsEnum`` but with no
+own worked-out description in the specification's Appendix C) is the
+3.0-era name for what the spec now calls the Implementation and Deployment
+Viewpoint -- already seeded under that key, so it is deliberately not
+seeded a second time under its old name.
+
+"Core element" in the ArchiMate 3.1 spec's own definition of the Requirements
+Realization viewpoint (any element may additionally appear, beyond the
+explicitly named ones) is deliberately **not** seeded as "allow everything"
+-- that would silently reintroduce Free mode for it. Only its explicitly
+named elements, plus any such element an actually-seeded example evidences,
+are seeded; an admin can widen the list further later through the editable
+tag-chip UI (Task 5). Goal Realization has no such "core element" allowance
+in the spec, so its list is closed.
 
 Layered is the one deliberate exception, by design rather than by the same
 "core element" escape hatch: the standard defines it as the integrated,
@@ -27,6 +35,25 @@ from app.models.archimate_viewpoint import (
     ArchimateViewpointTabCard,
 )
 from app.services.archimate import taxonomy
+from app.services.archimate.taxonomy import TAB_LAYERS
+
+# Reverse of taxonomy.LAYERS: an element type's own layer, for `_domains_of` below. A standard
+# Enterprise Object's key is always one of these type names, so this needs no DB round trip at
+# seed time (unlike migration 167's backfill, which reads the already-persisted
+# `EnterpriseObject.layer` column for rows that may since have diverged from the taxonomy).
+_ELEMENT_LAYER: dict[str, str] = {
+    name: layer for layer, names in taxonomy.LAYERS.items() for name in names
+}
+
+
+def _domains_of(objects: tuple[str, ...]) -> list[str]:
+    """The initial ``domains`` a standard viewpoint is seeded with: every TAB_LAYERS tab at least
+    one of its allowed objects' own layer falls in. An admin may retag it later; this only sets
+    where it starts."""
+    layers = {_ELEMENT_LAYER.get(key) for key in objects}
+    layers.discard(None)
+    return [tab for tab, tab_layers in TAB_LAYERS.items() if tab_layers & layers]
+
 
 # Each description paraphrases the ArchiMate 3.1 standard's own definition of
 # the viewpoint in plain, non-expert language (same register as
@@ -142,6 +169,22 @@ _VIEWPOINT_DEFS: list[dict] = [
             "ApplicationInteraction",
             "ApplicationEvent",
             "ApplicationService",
+            "DataObject",
+        ),
+    },
+    {
+        "key": "application-structure",
+        "name": "Application Structure",
+        "icon": "widgets",
+        "layer": "application",
+        "description": (
+            "Shows the internal makeup of one or more applications: their components, interfaces, "
+            "and the data they hold."
+        ),
+        "objects": (
+            "ApplicationComponent",
+            "ApplicationInterface",
+            "ApplicationCollaboration",
             "DataObject",
         ),
     },
@@ -351,6 +394,27 @@ _VIEWPOINT_DEFS: list[dict] = [
         "objects": ("Stakeholder", "Driver", "Assessment", "Goal", "Outcome"),
     },
     {
+        "key": "goal-contribution",
+        "name": "Goal Contribution",
+        "icon": "trending_up",
+        "layer": "motivation",
+        "description": (
+            "Shows how goals (and requirements) positively or negatively influence each other."
+        ),
+        "objects": ("Goal", "Requirement"),
+    },
+    {
+        "key": "principles",
+        "name": "Principles",
+        "icon": "gavel",
+        "layer": "motivation",
+        "description": (
+            "Shows the guiding principles an architecture must follow, and the goals that "
+            "motivate them."
+        ),
+        "objects": ("Principle", "Goal"),
+    },
+    {
         "key": "goal-realization",
         "name": "Goal Realization",
         "icon": "flag",
@@ -370,7 +434,27 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Shows how specific requirements and constraints are actually met by the "
             "architecture, tied back to goals and outcomes."
         ),
-        "objects": ("Goal", "Requirement", "Constraint", "Outcome", "Value", "Meaning"),
+        "objects": (
+            "Goal",
+            "Principle",
+            "Requirement",
+            "Constraint",
+            "Outcome",
+            "Value",
+            "Meaning",
+            "CourseOfAction",
+            "Resource",
+            "Capability",
+            "ValueStream",
+            # Not spec-named core elements for this viewpoint, but evidenced by
+            # the seeded Requirements Realization example (fig18) -- the spec's
+            # own "Core element" catch-all permits any such element here.
+            "ApplicationComponent",
+            "ApplicationService",
+            "Artifact",
+            "BusinessProcess",
+            "Device",
+        ),
     },
     {
         "key": "motivation",
@@ -403,7 +487,7 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Shows an organization's strategic direction: the resources and capabilities it has, "
             "and the courses of action it plans to take."
         ),
-        "objects": ("CourseOfAction", "Capability", "Resource", "Outcome"),
+        "objects": ("CourseOfAction", "Capability", "ValueStream", "Resource", "Outcome"),
     },
     {
         "key": "capability-map",
@@ -424,7 +508,7 @@ _VIEWPOINT_DEFS: list[dict] = [
             "Shows how a capability, backed by resources, produces a real outcome and the value "
             "that outcome creates."
         ),
-        "objects": ("Capability", "Resource", "Outcome", "Value", "Meaning"),
+        "objects": ("Capability", "ValueStream", "Resource", "Outcome", "Value", "Meaning"),
     },
     {
         "key": "resource-map",
@@ -438,6 +522,17 @@ _VIEWPOINT_DEFS: list[dict] = [
         "objects": ("Resource", "Capability", "WorkPackage"),
     },
     {
+        "key": "value-stream",
+        "name": "Value Stream",
+        "icon": "timeline",
+        "layer": "strategy",
+        "description": (
+            "Shows a value stream's stages and the stakeholders, capabilities, and resources that "
+            "realize them."
+        ),
+        "objects": ("ValueStream", "Capability", "Outcome", "Stakeholder"),
+    },
+    {
         "key": "project",
         "name": "Project",
         "icon": "work",
@@ -448,6 +543,7 @@ _VIEWPOINT_DEFS: list[dict] = [
         ),
         "objects": (
             "Goal",
+            "Outcome",
             "WorkPackage",
             "ImplementationEvent",
             "Deliverable",
@@ -548,6 +644,7 @@ async def seed_viewpoints(db: AsyncSession) -> None:
                 layer=vp["layer"],
                 is_standard=True,
                 sort_order=sort_order,
+                domains=_domains_of(vp["objects"]),
             )
         )
         for enterprise_object_key in vp["objects"]:

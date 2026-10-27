@@ -368,6 +368,9 @@ export interface ArchimateViewpoint {
   is_hidden: boolean;
   sort_order: number;
   objects: string[];
+  /** TAB_LAYERS tabs this viewpoint spans ("business"/"application"/"technology"), derived
+   *  server-side from its allowed objects' own layer -- never stored, never editable. */
+  domains: string[];
   examples: ArchimateViewpointExample[];
 }
 
@@ -1385,6 +1388,10 @@ export interface MassEolResult {
 export interface DiagramSummary {
   id: string;
   name: string;
+  /** Absent on a backend that predates ArchiMate diagrams: those are all "drawio". */
+  kind?: "drawio" | "archimate";
+  /** Set only for an `archimate` row. */
+  viewpoint_key?: string | null;
   description?: string;
   card_ids: string[];
   group_ids?: string[];
@@ -1403,6 +1410,9 @@ export interface DiagramGroup {
   color?: string | null;
   sort_order: number;
   diagram_count: number;
+  /** Same total, split by diagram kind -- the sidebar's Groups list shows these as two columns. */
+  diagram_count_drawio: number;
+  diagram_count_archimate: number;
   created_at?: string;
   updated_at?: string;
 }

@@ -30,13 +30,13 @@ async def _create_tab_card_types(db) -> None:
         await create_card_type(db, key=key, label=key)
 
 
-async def test_seeds_all_23_standard_viewpoints(db):
+async def test_seeds_all_27_standard_viewpoints(db):
     await _create_tab_card_types(db)
     await seed_viewpoints(db)
     await db.commit()
     result = await db.execute(select(ArchimateViewpoint))
     rows = result.scalars().all()
-    assert len(rows) == 23
+    assert len(rows) == 27
     assert all(r.is_standard for r in rows)
     layered = next(r for r in rows if r.key == "layered")
     assert layered.icon == "layers"

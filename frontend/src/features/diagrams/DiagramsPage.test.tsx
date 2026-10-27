@@ -73,9 +73,55 @@ const cards = {
   ],
 };
 
+const archimateDiagram = {
+  id: "arch1",
+  name: "Business Capability Map",
+  kind: "archimate",
+  viewpoint_key: "vp-biz",
+  description: "",
+  card_ids: [],
+  group_ids: [],
+  card_count: 0,
+  created_by_name: "Ada Admin",
+  is_favorite: false,
+  updated_at: "2025-06-09T10:00:00Z",
+};
+
+const viewpoints = [
+  {
+    key: "vp-biz",
+    name: "Business VP",
+    icon: "hub",
+    description: null,
+    layer: "business",
+    is_standard: true,
+    is_hidden: false,
+    sort_order: 0,
+    objects: [],
+    // Tagged under both: a viewpoint like Product, whose content spans more than its own
+    // single-layer badge. The layer-scoped pages must go by this, not `layer`.
+    domains: ["business", "application"],
+    examples: [],
+  },
+  {
+    key: "vp-tech",
+    name: "Tech VP",
+    icon: "hub",
+    description: null,
+    layer: "technology",
+    is_standard: true,
+    is_hidden: false,
+    sort_order: 1,
+    objects: [],
+    domains: ["technology"],
+    examples: [],
+  },
+];
+
 function setupApi(diagramRows = diagrams) {
   vi.mocked(api.get).mockImplementation((url: string) => {
     if (url.startsWith("/diagram-groups")) return Promise.resolve([] as never);
+    if (url.startsWith("/metamodel/viewpoints")) return Promise.resolve(viewpoints as never);
     if (url.startsWith("/diagrams")) return Promise.resolve(diagramRows as never);
     if (url.startsWith("/cards")) return Promise.resolve(cards as never);
     return Promise.reject(new Error(`no mock for ${url}`));
@@ -86,7 +132,10 @@ function setupApi(diagramRows = diagrams) {
  *  the Share / embed action, so it needs an AuthProvider. Defaults to a user
  *  WITHOUT `diagrams.publish` — publishing is an admin-only authority and the
  *  rest of the page must behave identically for everyone else. */
-function renderPage(permissions: Record<string, boolean> = { "diagrams.view": true }) {
+function renderPage(
+  permissions: Record<string, boolean> = { "diagrams.view": true },
+  initialLayer?: "business" | "application" | "technology",
+) {
   const user = {
     id: "u1",
     email: "u@example.com",
@@ -98,7 +147,7 @@ function renderPage(permissions: Record<string, boolean> = { "diagrams.view": tr
   return render(
     <AuthProvider user={user} refreshUser={async () => {}}>
       <MemoryRouter>
-        <DiagramsPage />
+        <DiagramsPage initialLayer={initialLayer} />
       </MemoryRouter>
     </AuthProvider>,
   );
@@ -140,6 +189,16 @@ describe("DiagramsPage", () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByText(/Ada Admin/)).toBeInTheDocument();
+    });
+  });
+
+  it("renders a card whose thumbnail SVG has non-Latin1 characters", async () => {
+    setupApi([
+      { ...diagrams[0], thumbnail: '<svg><text>Strategia – über’ año</text></svg>' },
+    ]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText("Architecture Overview")).toBeInTheDocument();
     });
   });
 
@@ -249,7 +308,10 @@ describe("DiagramsPage", () => {
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url.startsWith("/diagram-groups"))
         return Promise.resolve([
-          { id: "s1", name: "Domain A", color: null, sort_order: 0, diagram_count: 0 },
+          {
+            id: "s1", name: "Domain A", color: null, sort_order: 0, diagram_count: 0,
+            diagram_count_drawio: 0, diagram_count_archimate: 0,
+          },
         ] as never);
       if (url.startsWith("/diagrams")) return Promise.resolve(diagrams as never);
       if (url.startsWith("/cards")) return Promise.resolve(cards as never);
@@ -327,5 +389,93 @@ describe("DiagramsPage", () => {
     await waitFor(() => {
       expect(api.delete).toHaveBeenCalledWith("/diagrams/d1");
     });
+  });
+});
+
+describe("DiagramsPage — ArchiMate type filter", () => {
+  it("hides the ArchiMate option for a user with no ArchiMate permission on any layer", async () => {
+    renderPage({ "diagrams.view": true });
+    await screen.findByText("Architecture Overview");
+    expect(screen.queryByText("ArchiMate")).not.toBeInTheDocument();
+  });
+
+  it("shows the ArchiMate option, and its layer -> viewpoint cascade, for a user who may view some layer", async () => {
+    renderPage({ "diagrams.view": true, "archimatediagrams.business.view": true });
+    await screen.findByText("Architecture Overview");
+
+    await userEvent.click(screen.getByText("ArchiMate"));
+    await waitFor(() => {
+      const calls = vi.mocked(api.get).mock.calls.map((c) => c[0] as string);
+      expect(calls.some((u) => u.includes("/diagrams") && u.includes("kind=archimate"))).toBe(
+        true,
+      );
+    });
+
+    // No layer picked yet: just the Layer select, no Viewpoint select.
+    expect(screen.queryByLabelText("Viewpoint")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText("Layer"));
+    await userEvent.click(await screen.findByRole("option", { name: "Business" }));
+
+    const viewpointSelect = await screen.findByLabelText("Viewpoint");
+    await userEvent.click(viewpointSelect);
+    expect(await screen.findByRole("option", { name: "Business VP" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Tech VP" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("option", { name: "Business VP" }));
+    await waitFor(() => {
+      const calls = vi.mocked(api.get).mock.calls.map((c) => c[0] as string);
+      expect(calls.some((u) => u.includes("viewpoint_key=vp-biz"))).toBe(true);
+    });
+  });
+
+  it("opens an ArchiMate diagram in Architecture Studio, not the DrawIO viewer", async () => {
+    setupApi([...diagrams, archimateDiagram]);
+    renderPage({ "diagrams.view": true, "archimatediagrams.business.view": true });
+    await screen.findByText("Business Capability Map");
+
+    await userEvent.click(screen.getByText("Business Capability Map"));
+    expect(mockNavigate).toHaveBeenCalledWith("/admin/architectureStudio/arch1");
+  });
+});
+
+describe("DiagramsPage — layer-scoped entry points (/business-architecture/diagram etc.)", () => {
+  const perms = { "diagrams.view": true, "archimatediagrams.application.view": true };
+
+  it("shows a diagram whose viewpoint's domains include this page's layer, even when its own `layer` classification is different", async () => {
+    // "vp-biz" (archimateDiagram's viewpoint) is classified layer="business" but tagged
+    // domains=["business","application"] -- real content under both. The old code compared
+    // `layer` and would have hidden it from the Application page; it must show here.
+    setupApi([archimateDiagram]);
+    renderPage(perms, "application");
+    expect(await screen.findByText("Business Capability Map")).toBeInTheDocument();
+  });
+
+  it("hides a diagram whose viewpoint is not tagged under this page's layer", async () => {
+    setupApi([{ ...archimateDiagram, id: "arch2", name: "Tech Landscape", viewpoint_key: "vp-tech" }]);
+    renderPage(perms, "application");
+    await waitFor(() => expect(vi.mocked(api.get)).toHaveBeenCalled());
+    expect(screen.queryByText("Tech Landscape")).not.toBeInTheDocument();
+  });
+});
+
+describe("DiagramsPage — sidebar group counts by diagram type", () => {
+  it("shows a separate Draw.io and ArchiMate count per group, not one blended total", async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.startsWith("/diagram-groups"))
+        return Promise.resolve([
+          {
+            id: "g1", name: "Mixed", color: null, sort_order: 0, diagram_count: 3,
+            diagram_count_drawio: 2, diagram_count_archimate: 1,
+          },
+        ] as never);
+      if (url.startsWith("/diagrams")) return Promise.resolve(diagrams as never);
+      if (url.startsWith("/cards")) return Promise.resolve(cards as never);
+      return Promise.reject(new Error(`no mock for ${url}`));
+    });
+    renderPage();
+    await screen.findByText("Mixed");
+    expect(screen.getByLabelText("Draw.io diagrams: 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("ArchiMate diagrams: 1")).toBeInTheDocument();
   });
 });

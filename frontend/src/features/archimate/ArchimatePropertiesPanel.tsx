@@ -32,18 +32,54 @@ import { useMetamodel } from "@/hooks/useMetamodel";
 import { useFieldLabel, useTypeLabel } from "@/hooks/useResolveLabel";
 import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
 import type { Card, FieldDef } from "@/types";
+import type { Rgb } from "./exchange/exchangeModel";
 import type { ItemInfo, UserProperty } from "./engine/ArchimateEngine";
 import type { EditorLabels } from "./engine/EditorBridge";
 import { isElementType, layerOf } from "./taxonomy/elements";
 import { isRelationshipType } from "./taxonomy/relationships";
 
+const channel = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
+const toHex = (c: Rgb | null): string =>
+  `#${[c?.r ?? 255, c?.g ?? 255, c?.b ?? 255].map((n) => channel(n).toString(16).padStart(2, "0")).join("")}`;
+const fromHex = (hex: string): Rgb => ({
+  r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16),
+});
+
+/** A native color swatch (no picker library) plus a reset-to-default button. */
+function FillColorControl({
+  ids, value, onStyle, label, resetLabel,
+}: { ids: string[]; value: Rgb | null; onStyle: (ids: string[], fillColor: Rgb | null) => void; label: string; resetLabel: string }) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+      <Typography variant="body2" sx={{ flex: 1 }}>
+        {label}
+      </Typography>
+      <Box
+        component="input"
+        type="color"
+        aria-label={label}
+        value={toHex(value)}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onStyle(ids, fromHex(e.target.value))}
+        sx={{ width: 32, height: 28, p: 0, border: "none", borderRadius: 1, cursor: "pointer" }}
+      />
+      <IconButton size="small" aria-label={resetLabel} onClick={() => onStyle(ids, null)}>
+        <MaterialSymbol icon="format_color_reset" size={18} />
+      </IconButton>
+    </Stack>
+  );
+}
+
 export interface ArchimatePropertiesPanelProps {
   /** The single selected item; null for no selection or several. */
   info: ItemInfo | null;
   selectedCount: number;
+  /** Every selected shape id, for the fill color control in a multi-selection. */
+  selectedIds: string[];
   diagramName: string;
   diagramDescription: string;
   diagramProperties: UserProperty[];
+  /** The open diagram's viewpoint, resolved by the caller; null/undefined shows the generic label. */
+  viewpointName?: string | null;
   labels: EditorLabels;
   cardName: (cardId: string) => string | undefined;
   /** The full record of `info.cardId`, once fetched; null while loading or when nothing is linked. */
@@ -52,6 +88,8 @@ export interface ArchimatePropertiesPanelProps {
   onName: (id: string, name: string) => void;
   onDocumentation: (id: string, text: string) => void;
   onProperties: (id: string, properties: UserProperty[]) => void;
+  /** `null` clears the override, falling back to the layer's default fill. */
+  onStyle: (ids: string[], fillColor: Rgb | null) => void;
   onDiagramName: (name: string) => void;
   onDiagramDocumentation: (text: string) => void;
   onDiagramProperties: (properties: UserProperty[]) => void;
@@ -262,9 +300,9 @@ function ViewRow({ label }: { label: string }) {
 }
 
 export default function ArchimatePropertiesPanel({
-  info, selectedCount, diagramName, diagramDescription, diagramProperties, labels, cardName, linkedCard,
-  linkedCardLoading, onName, onDocumentation, onProperties, onDiagramName, onDiagramDocumentation, onDiagramProperties,
-  onOpenCardSheet,
+  info, selectedCount, selectedIds, diagramName, diagramDescription, diagramProperties, viewpointName, labels,
+  cardName, linkedCard, linkedCardLoading, onName, onDocumentation, onProperties, onStyle, onDiagramName,
+  onDiagramDocumentation, onDiagramProperties, onOpenCardSheet,
 }: ArchimatePropertiesPanelProps) {
   const { t } = useTranslation("archimate");
 
@@ -311,6 +349,18 @@ export default function ArchimatePropertiesPanel({
           {heading}
         </Typography>
         {chip && <Box sx={{ mt: 0.5 }}>{chip}</Box>}
+        {info?.kind === "element" && (
+          <FillColorControl
+            ids={[info.id]} value={info.fillColor ?? null} onStyle={onStyle}
+            label={t("panel.fillColor")} resetLabel={t("panel.resetColor")}
+          />
+        )}
+        {!info && selectedCount > 1 && (
+          <FillColorControl
+            ids={selectedIds} value={null} onStyle={onStyle}
+            label={t("panel.fillColor")} resetLabel={t("panel.resetColor")}
+          />
+        )}
       </Box>
 
       {info ? (
@@ -366,7 +416,7 @@ export default function ArchimatePropertiesPanel({
         </Typography>
       ) : (
         <>
-          <ViewRow label={t("panel.view")} />
+          <ViewRow label={viewpointName ?? t("panel.view")} />
           <Section title={t("panel.main")}>
             <Box>
               <CommittedField label={t("panel.name")} value={diagramName} onCommit={onDiagramName} />

@@ -12,6 +12,7 @@ import type {
   ModelElement,
   ModelRelationship,
   ModelView,
+  NodeStyle,
   NoteObject,
   ViewConnection,
   ViewNode,
@@ -95,7 +96,6 @@ export function extractEdited(services: ViewServices, baseView: ModelView): Edit
   const drawn = services.elementRegistry.filter((e) => e !== root && !e.labelTarget) as Element[];
   const order = new Map([...baseView.nodes, ...baseView.connections, ...baseView.notes].map((x, i) => [x.id, i]));
   drawn.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
-  const styles = new Map(baseView.nodes.map((n) => [n.id, n.style]));
 
   const nodes: ViewNode[] = [];
   const notes: ViewNote[] = [];
@@ -137,7 +137,9 @@ export function extractEdited(services: ViewServices, baseView: ModelView): Edit
         id: s.id, elementRef: s.businessObject.id,
         x: Math.round(s.x), y: Math.round(s.y), width: Math.round(s.width), height: Math.round(s.height), parent,
       };
-      const style = styles.get(s.id);
+      // The shape's own field (set at import, mutated live by `ArchimateEngine.setStyle`) is the
+      // source of truth -- not the pre-edit base view, which would silently drop a color edit.
+      const style = (s as Shape & { style?: NodeStyle }).style;
       if (style) node.style = style;
       nodes.push(node);
     }

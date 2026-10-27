@@ -154,7 +154,10 @@ export default class ArchimatePaletteProvider {
         // A missing registry row (shouldn't happen once the seed has run) fails open: visible,
         // never hidden, so a gap in the registry never blanks a chunk of the palette.
         if (this.enterpriseObjects.find((o) => o.key === type)?.is_hidden === true) continue;
-        if (this.viewpointObjectKeys && !this.viewpointObjectKeys.includes(type)) continue;
+        // "Other" (Grouping, Location, the junctions) is cross-cutting, not viewpoint-specific --
+        // no standard viewpoint lists it in its `objects`, so filtering this layer too would blank
+        // it from every diagram. It stays in the palette regardless of the active viewpoint.
+        if (layer !== "other" && this.viewpointObjectKeys && !this.viewpointObjectKeys.includes(type)) continue;
         const createShape = (event: Event) =>
           this.create.start(event, this.elementFactory.createShape({ elementType: type }));
         // The tile itself keeps its existing click/drag unchanged: it only ever starts placing
@@ -220,7 +223,7 @@ export default class ArchimatePaletteProvider {
   private customObjectsOfLayer(layer: ArchimateLayer): EnterpriseObject[] {
     return this.enterpriseObjects
       .filter((o) => !o.is_standard && !o.is_hidden && o.layer === layer)
-      .filter((o) => !this.viewpointObjectKeys || this.viewpointObjectKeys.includes(o.key))
+      .filter((o) => layer === "other" || !this.viewpointObjectKeys || this.viewpointObjectKeys.includes(o.key))
       .sort((a, b) => a.sort_order - b.sort_order);
   }
 

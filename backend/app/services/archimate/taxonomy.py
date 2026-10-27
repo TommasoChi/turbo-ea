@@ -67,6 +67,17 @@ LAYERS: dict[str, tuple[str, ...]] = {
         "Value",
     ),
 }
+# The three diagram-creation dashboard tabs / Viewpoint Catalog "Domain" buckets, each mapped to
+# the LAYERS / EnterpriseObject.layer keys it covers -- same three groupings as the nav design
+# doc's table. Canonical home for this mapping: `app/api/v1/diagrams.py` (the picker and the
+# per-tab permission gate) and `viewpoint_seed.py` (a standard viewpoint's seeded `domains`) both
+# import it from here rather than keeping their own copy.
+TAB_LAYERS: dict[str, frozenset[str]] = {
+    "business": frozenset({"strategy", "business", "motivation"}),
+    "application": frozenset({"application"}),
+    "technology": frozenset({"technology", "physical"}),
+}
+
 COMPOSITE_TYPES = ("Grouping", "Location")
 CONNECTOR_TYPES = ("AndJunction", "OrJunction")
 ELEMENT_TYPES: tuple[str, ...] = tuple(e for names in LAYERS.values() for e in names)

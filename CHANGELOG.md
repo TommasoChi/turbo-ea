@@ -5,6 +5,19 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.179.0] - 2026-10-23
+
+### Added
+
+- **ArchiMate diagrams are now visible on the main Diagrams page.** Previously only reachable from the Architecture Studio admin list. The gallery's filter sidebar gets a new Type filter (All / Draw.io / ArchiMate -- the ArchiMate option only shown to someone who may view at least one layer), and picking ArchiMate reveals a cascading Layer -> Viewpoint filter. `GET /diagrams` gains a `viewpoint_key` filter and returns each row's `viewpoint_key`; `kind=all` now silently drops an ArchiMate row the caller can't see on any of its layers, rather than mixing it in regardless of permission. ArchiMate diagrams are assignable to a Group exactly like Draw.io ones (the group machinery was already kind-agnostic) and open in Architecture Studio, not the Draw.io viewer.
+- **A diagram linked to a card now always shows up in that card's Resources tab, for ArchiMate too.** The new single "Linked cards" multi-select (see Changed below) feeds `card_ids` into every ArchiMate diagram-creation path (the create dialog, the scoped per-layer entry points, and the Architecture Studio sandbox), the same `diagram_cards` link Draw.io's own Linked Cards field has always populated.
+
+### Changed
+
+- **ArchiMate diagram creation: one "Linked cards" multi-select replaces the two-step Card type -> Card picker**, mirroring Draw.io's own create-diagram field exactly (same component, same grouping by type). Picking one or more cards materializes each as a real, card-linked node on whichever starter (blank or an example) is picked next.
+- **The ArchiMate palette's "Other" category (Grouping, Location, the junctions) is now always offered, regardless of the diagram's viewpoint.** No standard viewpoint lists these in its allowed-objects -- filtering this layer too meant `Grouping` could never appear in a viewpoint-scoped diagram, only `Location`. The viewpoint's allowed-objects list still exists for every other layer.
+- **The 28 seeded Viewpoint Catalog examples dropped their "Figure NN: " prefix** (e.g. "Figure 9: Organization View" -> "Organization View"). A migration renames the already-seeded rows in place so existing environments don't end up with duplicates.
+
 ## [2.178.0] - 2026-10-22
 
 ### Added

@@ -140,10 +140,11 @@ export default class ArchimateRenderer extends BaseRenderer {
     if (bo.name) {
       const top = header ? HEADER_HEIGHT : body === "grouping" ? GROUPING_TAB_HEIGHT : 0;
       const lines = wrapText(bo.name, Math.floor((width - 16) / CHAR_WIDTH));
-      const first =
-        body === "grouping"
-          ? top + 4 + FONT_SIZE
-          : Math.max(top + 2, top + (height - top - lines.length * LINE_HEIGHT) / 2) + FONT_SIZE - 1;
+      // Anchored just below the header/tab, never centred across the full height: a composite
+      // element (e.g. a BusinessProcess nesting other processes via Composition) can be much
+      // taller than one text line, and centring would put the name right where its children are
+      // drawn on top of it, hiding it completely.
+      const first = top + (body === "grouping" ? 4 : 2) + FONT_SIZE - 1;
       svgAppend(visuals, this.text(lines, width / 2, first));
     }
     if (getCardId(bo) !== null) {
