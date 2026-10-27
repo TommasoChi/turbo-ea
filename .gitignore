@@ -117,6 +117,8 @@ archive/
 !.claude/settings.json
 !.claude/hooks/
 !.claude/skills/
+!.claude/rules/
+!.claude/agents/
 AGENTS.md
 
 # graphify: output locale dello strumento, non codice del fork

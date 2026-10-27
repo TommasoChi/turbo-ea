@@ -1,6 +1,6 @@
 # Berichte
 
-Turbo EA enthält ein leistungsstarkes **visuelles Berichtsmodul**, das die Analyse der Unternehmensarchitektur aus verschiedenen Perspektiven ermöglicht. Alle Berichte können mit ihrer aktuellen Filter- und Achsenkonfiguration [zur Wiederverwendung gespeichert](saved-reports.md) werden.
+Turbo EA enthält ein leistungsstarkes **visuelles Berichtsmodul**, das die Analyse der Unternehmensarchitektur aus verschiedenen Perspektiven ermöglicht. Alle Berichte können mit ihren aktuellen Filtern und Anzeigeeinstellungen [zur Wiederverwendung gespeichert](saved-reports.md) werden.
 
 ![Verfügbare Berichte - Menü](../assets/img/de/09_berichte_menu.png)
 
@@ -8,18 +8,18 @@ Turbo EA enthält ein leistungsstarkes **visuelles Berichtsmodul**, das die Anal
 
 ![Portfoliobericht](../assets/img/de/10_bericht_portfolio.png)
 
-Der **Portfoliobericht** zeigt ein konfigurierbares **Blasendiagramm** (oder Streudiagramm) Ihrer Karten. Sie wählen, was jede Achse darstellt:
+Der **Portfoliobericht** (**Berichte → Anwendungsportfolio**) zeigt Ihre Anwendungen als farbige Chips, gruppiert in Boxen. Zwei Auswahlen in der Werkzeugleiste steuern ihn:
 
-- **X-Achse** — Ein beliebiges numerisches oder Auswahlfeld wählen (z.B. Technische Eignung)
-- **Y-Achse** — Ein beliebiges numerisches oder Auswahlfeld wählen (z.B. Geschäftskritikalität)
-- **Blasengröße** — Einem numerischen Feld zuordnen (z.B. Jährliche Kosten)
-- **Blasenfarbe** — Einem Auswahl-, Mehrfachauswahl- oder Ja/Nein-Feld oder dem Lebenszyklusstatus zuordnen
+- **Gruppieren nach** — ein beliebiges Einfachauswahl- oder Ja/Nein-Feld des Kartentyps (z. B. Geschäftskritikalität, TIME-Modell) oder ein verknüpfter Kartentyp (z. B. Organisation, Geschäftsfähigkeit). Jeder Wert wird zu einer Box mit einer Anzahl und einem Balken, der ihre Farbverteilung zeigt; Anwendungen ohne Wert landen in einer Box *Keinem … zugeordnet*.
+- **Anwendungen einfärben nach** — ein beliebiges Auswahl-, Mehrfachauswahl- oder Ja/Nein-Feld (z. B. TIME-Modell) oder *Keine Farbe*.
+
+Daneben befinden sich ein Feld **Suchen**, die einklappbaren Filter (**Verknüpft über**, **Tags**, **Felder**, **Beziehungs-Untertypen**), die Spaltenauswahl und der Umschalter **Diagrammansicht** / **Tabellenansicht**, der dieselben Karten als sortierbare Tabelle auflistet.
 
 **Färben und Filtern nach Ja/Nein- und Mehrfachauswahlfeldern** — Jedes Auswahl-, Mehrfachauswahl- und Ja/Nein-Feld des Kartentyps kann die Karten färben und filtern — hier, im Flexiblen Portfolio, in der Fähigkeitenkarte (*Apps einfärben nach*), in der Datumsbereichsansicht des Lebenszyklusberichts und im Menü *Färben nach* eines Diagramms. Ein Ja/Nein-Feld erscheint als **Ja** und **Nein**, eine Karte mit mehreren Werten eines Mehrfachauswahlfelds als **Mehrere**, und eine Option, der ein Administrator keine Farbe gegeben hat, erhält in der Legende eine eigene Farbe statt des Graus von *Nicht gesetzt*. Ja/Nein-Felder können die Karten auch gruppieren — hier, in der Tabelle des Kostenberichts und im [Inventar](inventory.md); ein Mehrfachauswahlfeld nicht, weil eine Karte mit zwei Werten zu zwei Gruppen gehören würde.
 
 **Filtern nach Subtyp** — Hat der Kartentyp Subtypen, beginnt die Filterzeile **Felder** mit einem Filter **Subtyp**. Wählen Sie einen oder mehrere Subtypen oder *(leer)* für die Karten ohne Subtyp. Der Filter wird mit dem Bericht gespeichert und von **Im Inventar anzeigen** übernommen.
 
-Dies ist ideal für Portfolioanalysen — zum Beispiel Anwendungen nach Geschäftswert vs. technischer Eignung aufzutragen, um Kandidaten für Investition, Ablösung oder Stilllegung zu identifizieren.
+Ein typischer Einsatz: nach **Geschäftskritikalität** gruppieren und nach **TIME-Modell** einfärben. Geschäftskritische Anwendungen mit *Migrieren* sind Ihre ersten Modernisierungsprioritäten, administrative Anwendungen mit *Eliminieren* oder *Migrieren* Ihre Kandidaten für Stilllegung und Konsolidierung. Das [EA-Einsteigerhandbuch](../beginners-guide/your-first-analysis.md) zeigt, wie Sie das TIME-Modell mit einer Berechnung aus den Eignungsbewertungen ableiten.
 
 ### KI-Portfolio-Erkenntnisse
 
@@ -50,6 +50,10 @@ Beim Wechsel des Kartentyps werden die Auswahl für Gruppierung, Färbung und Fi
 ### Beziehungs-Untertypen
 
 Wenn die Beziehungen einer Karte einen «Typ»-Wert tragen — etwa den **Verwendungstyp** (Eigentümer / Benutzer / Stakeholder) bei Beziehungen Organisation→Anwendung oder den **Unterstützungstyp** bei Beziehungen Anwendung→Geschäftsfähigkeit — können Sie die Karten danach einfärben und filtern. **Gruppieren Sie den Bericht nach dem verbundenen Kartentyp**, um sie zu nutzen (z. B. *Gruppieren nach → Organisation*, um den *Verwendungstyp* freizuschalten): Der Untertyp erscheint dann unter der Gruppe **Beziehungs-Untertypen** in der Auswahl *Einfärben nach* sowie als eigene Filterzeile. Da jede Karte unter einer verbundenen Karte angezeigt wird, wird sie nach *dieser* Beziehung eingefärbt — eine Anwendung, die *Benutzer* einer Organisation ist, erscheint dort als Benutzer, auch wenn sie einer anderen gehört.
+
+### Unterkarten einbeziehen
+
+Hat ein verknüpfter Kartentyp eine Hierarchie (etwa Business Capability oder Organisation), trägt die Zeile **Verknüpft über** einen Schalter **Unterkarten einbeziehen**. Ist er eingeschaltet, erfasst eine Auswahl auch alles darunter: Eine übergeordnete Fähigkeit findet dann die Karten, die mit einer ihrer Unterfähigkeiten verknüpft sind, und übergeordnete Karten ohne eigene direkte Verknüpfung lassen sich ebenfalls auswählen. Der Schalter wird mit dem Bericht gespeichert und gilt auch im Lebenszyklus-Bericht. Solange er eine Auswahl erweitert, ist die Schaltfläche **Im Inventar anzeigen** im Gruppenfenster ausgeblendet, weil das Inventar nur nach direkten Verknüpfungen filtert.
 
 ### Verschachtelte Gruppen
 
@@ -91,6 +95,10 @@ Der **Lebenszyklus-Bericht** zeigt eine **Zeitleisten-Visualisierung** darüber,
 Komponenten werden als horizontale Balken dargestellt, die ihre Lebenszyklusphasen umspannen: Planung, Einführung, Aktiv, Auslauf und Lebensende.
 
 **Auf bestimmte Karten eingrenzen** — Sobald ein Kartentyp gewählt ist, öffnet der Chip daneben eine Auswahl: Wählen Sie eine oder mehrere Karten, und die Zeitachse zeigt nur diese und alles darunter. Unterkarten werden automatisch einbezogen. Solange *Alle Typen* eingestellt ist, bleibt der Chip deaktiviert, da eine Eingrenzung eine einzelne Hierarchie benötigt.
+
+**Filtern** — Sobald ein Kartentyp gewählt ist, bietet der Bericht dieselbe **Filter**-Zeile wie das **Flexible Portfolio**: verknüpfte Karten (mit *Unterkarten einbeziehen*), Tags, den Untertyp der Karte und ihre Auswahlfelder sowie Beziehungs-Untertypen, dazu ein Suchfeld. Verschiedene Filter wirken zusammen (eine Karte muss alle erfüllen), die innerhalb eines Filters gewählten Werte sind Alternativen. Eine Beschriftung zeigt, wie viele Karten passen, und **Alle löschen** entfernt jeden Filter. Die Filter werden mit dem Bericht gespeichert und im Kopf eines Ausdrucks oder Exports einzeln genannt, damit das Publikum weiß, was die Zeitachse umfasst. Wählen Sie zum Beispiel Ihre operativen Fähigkeiten mit eingeschaltetem *Unterkarten einbeziehen* und den Tag *Eigenentwicklung*, um nur die selbst entwickelten Anwendungen hinter dem Kerngeschäft zu besprechen — ein Spesenwerkzeug wie Concur bleibt im Inventar, verschwindet aber aus dieser Ansicht. Bei *Alle Typen* stehen die Filter nicht zur Verfügung, da sie die Felder, Beziehungen und Tags eines einzelnen Kartentyps lesen.
+
+**Sortieren** — Das Menü **Sortieren nach** ordnet Zeitachse und Tabelle gleichermaßen: nach Name, Typ, Untertyp, aktueller Phase, einem Phasendatum (Planung, Einführung, Aktiv, Auslauf, End of Life) oder einem Einfachauswahlfeld des Kartentyps wie der Geschäftskritikalität, das der Reihenfolge seiner Optionen folgt statt dem Alphabet. In der Datumsbereichsansicht stehen stattdessen Start- und Enddatum sowie das Farbfeld zur Wahl. Der Pfeil daneben wechselt zwischen aufsteigend und absteigend; Karten ohne Wert stehen immer am Ende, gleich in welcher Richtung. Ein Klick auf eine Spaltenüberschrift der Tabelle sortiert auf dieselbe Weise. Die Sortierung wird mit dem Bericht gespeichert, und jede Sortierung außer nach Name erscheint im Exportkopf.
 
 ## Abhängigkeitsbericht
 

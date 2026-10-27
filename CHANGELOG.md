@@ -5,7 +5,7 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.179.0] - 2026-10-23
+## [2.179.7] - 2026-10-23
 
 ### Added
 
@@ -18,48 +18,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **The ArchiMate palette's "Other" category (Grouping, Location, the junctions) is now always offered, regardless of the diagram's viewpoint.** No standard viewpoint lists these in its allowed-objects -- filtering this layer too meant `Grouping` could never appear in a viewpoint-scoped diagram, only `Location`. The viewpoint's allowed-objects list still exists for every other layer.
 - **The 28 seeded Viewpoint Catalog examples dropped their "Figure NN: " prefix** (e.g. "Figure 9: Organization View" -> "Organization View"). A migration renames the already-seeded rows in place so existing environments don't end up with duplicates.
 
-## [2.178.0] - 2026-10-22
+## [2.179.6] - 2026-10-22
 
 ### Added
 
 - **Optionally pick a card to materialize as a node when creating a new ArchiMate diagram.** After picking a viewpoint, the picker now offers (always optional, for both the blank starter and every example) a card-type selector -- scoped to the card types suggested for that viewpoint -- followed by a specific-card search. The picked card is added as a real, card-linked node on the starting diagram, not just a metadata link. `GET /diagrams/viewpoints-for-tab/{key}/suggested-cards` now pairs each suggested card type with the ArchiMate element type it resolves to, and `tab` is now optional (the unscoped create-diagram dialog has none to send; the fallback was already tab-independent).
 
-## [2.177.1] - 2026-10-22
+## [2.179.5] - 2026-10-22
 
 ### Added
 
 - **New ArchiMate diagram defaults to the picked viewpoint's name.** The create-diagram dialog no longer blocks the viewpoint picker behind a typed name; picking a viewpoint (or a blank/example starter) now defaults the diagram's name to that viewpoint's own name when the field was left empty, still editable beforehand.
 - **Standard ArchiMate elements now honor an admin-customized Enterprise Object color.** Previously only custom Enterprise Objects respected `EnterpriseObject.color`; the 60+ standard ArchiMate element types always rendered with a hardcoded per-layer color regardless of an admin's edit. An unedited element (still at its seeded default color) renders unchanged.
 
-## [2.177.0] - 2026-10-22
+## [2.179.4] - 2026-10-22
 
 ### Added
 
 - **28 starter examples for the ArchiMate Viewpoint Catalog.** Seeded from the TOGAF ADM / ArchiSurance reference walkthrough (`docs/data/viewpoint-examples/`), one figure per standard viewpoint whose own diagram has more than 8 objects, trimmed to just the elements and relationships that figure's view actually uses (the source files are cumulative across figures) and converted to Exchange Format XML ahead of time. New `app/services/archimate/viewpoint_example_seed.py`, same insert-once pattern as `viewpoint_seed.py`; fixtures bundled under `app/services/archimate/viewpoint_examples/*.xml`.
 
-## [2.176.1] - 2026-10-22
+## [2.179.3] - 2026-10-22
 
 ### Fixed
 
 - **`relation_table.json` now ships with the installed backend package.** `backend/pyproject.toml`'s `[tool.setuptools.package-data]` only declared `app/services/data/*.json`, missing `app/services/archimate/relation_table.json` entirely — a plain `pip install .` (the Docker image's own build step) silently dropped it, and `is_relationship_allowed()` (used by `validate_exchange()` — `POST /archimate/validate`, every ArchiMate diagram create/update) raised `FileNotFoundError` the first time it ran.
 
-## [2.176.0] - 2026-10-22
+## [2.179.2] - 2026-10-22
 
 ### Added
 
 - **ArchiMate Viewpoint Catalog**: every new ArchiMate diagram now picks a viewpoint — one of the 23 standard ArchiMate 3.1 viewpoints or an admin-defined custom one — which restricts the designer palette to that viewpoint's allowed object types. Admins manage the catalog from a new **Viewpoint Catalog** tab in Architecture Studio (alongside Card Mapping), including example diagrams per viewpoint. Pre-existing ArchiMate diagrams keep an unrestricted palette. New per-layer permissions (`archimatediagrams.business/application/technology.view/manage/publish`) replace the single `diagrams.*` gate for ArchiMate diagrams, and the nav splits into Business, Application & Data, and Technology Architecture entries. The MCP server's `create_archimate_diagram` tool requires a `viewpoint_key`, and a new `list_viewpoints` tool lists the catalog.
 
-## [2.175.1] - 2026-10-21
+## [2.179.1] - 2026-10-21
 
 A fork release. Takes the next free patch number above upstream's own
-`v2.175.0` tag, pulled in by this sync. Upstream has since reused the fork's
-previous `2.166.0` marker for unrelated content of its own ("Permanently
-delete a custom card type", listed below), so the fork's note is renumbered
-here rather than reordered.
+`v2.179.0` tag, pulled in by this sync. The fork's own unreleased work
+(previously numbered 2.175.1 through 2.179.0, colliding one-for-one with
+upstream's own same-numbered releases pulled in here) is renumbered to
+2.179.1-2.179.7, oldest first, rather than reordered.
 
 ### Changed
 
 - **With PPM off, EA Delivery now sits under IT Governance as "EA Governance".** The top bar used to promote EA Delivery to an entry of its own whenever PPM was disabled; it now joins the IT Governance menu (the GRC page stays its first entry, extension pages follow). If GRC is off, or a role cannot open IT Governance, EA Delivery still appears as a top-level entry, so nobody loses the page. With PPM on nothing changes: EA Delivery remains a tab of PPM. URLs are unchanged.
+
+## [2.179.0] - 2026-10-26
+
+### Added
+- MCP: `MCP_ALLOWED_HOSTS` lists extra host names the MCP endpoint accepts, for a proxy that forwards a host name other than the public one, such as Azure Front Door in front of an Azure Container Apps route. Without it, those connections fail with *421 Misdirected Request* ([#1323](https://github.com/vincentmakes/turbo-ea/discussions/1323)).
+
+### Fixed
+- MCP: with Docker Compose, `MCP_ALLOWED_ORIGINS` and `MCP_OAUTH_ALLOWED_REDIRECT_URIS` set in `.env` now reach the MCP server; they were previously ignored.
+
+## [2.178.0] - 2026-10-23
+
+### Added
+- A card-list web portal can now be narrowed with the same filters as the Application Portfolio report: related cards (optionally including their sub-cards), tags, the card's subtype and select or yes/no fields, and relation subtypes. Visitors only ever see the matching cards, and the filter settings are never sent to the visitor's browser.
+
+### Changed
+- On a card-list portal, tags picked from two different tag groups must both be on a card, as in the portfolio report. A portal created before this version keeps its previous subtype and tag filters exactly as they were until it is next saved; the portal dialog warns before that save changes which cards it shows, and the Security log records the change.
+
+### Fixed
+- Saving a web portal in the settings dialog no longer drops an approval-status filter set through the API or the demo data.
+- AI suggestions and TurboLens work again with OpenAI's GPT-6 models, on OpenAI and Azure Hosted OpenAI alike, which refuse the custom temperature and the older `max_tokens` setting that Turbo EA used to send. When a model refuses a setting, the request is retried without it ([#1319](https://github.com/vincentmakes/turbo-ea/discussions/1319)).
+- **Test Connection** for OpenAI now sends a short request to the configured model. A model your OpenAI project may not use fails the test with OpenAI's own reason, instead of passing the test and failing every real request with an unexplained 403.
+
+## [2.177.1] - 2026-10-23
+
+### Security
+- The frontend and edge nginx images now run **nginx 1.30.6** (on Alpine 3.24.3), fixing CVE-2026-15176, CVE-2026-93479 and CVE-2026-97205 in nginx's core HTTP module.
+- **DOMPurify** is updated to 3.4.17, which fixes three sanitizer bypasses (GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr, GHSA-c6gr-qvv4-5v3f). Turbo EA does not use any of the affected options.
+
+## [2.177.0] - 2026-10-22
+
+### Added
+- **Kazakhstan Tenge (KZT, ₸)** is available in the currency selector under Admin → Settings → General, and cost values show the ₸ sign.
+
+### Fixed
+- The **TIME Model** example in the calculation editor's **Formula Reference** now uses the built-in **Functional Suitability** and **Technical Suitability** fields, so it can be copied into a calculation on Application and saved as-is. It used to read two fields no built-in type has, which the editor refused to save ([#1310](https://github.com/vincentmakes/turbo-ea/discussions/1310)).
+
+## [2.176.0] - 2026-10-22
+
+### Added
+- **Lifecycle report filters**: once a card type is picked, the Lifecycle report offers the same filters as the Flexible Portfolio (related cards, tags, subtype, select fields, relation subtypes) plus a search box. A caption shows how many cards match, and the filters are saved with the report and listed in the header of a print or export ([#1305](https://github.com/vincentmakes/turbo-ea/discussions/1305)).
+- **Lifecycle report sorting**: a **Sort by** menu orders the timeline and the table by name, type, subtype, current phase, any phase date or a select field such as Business Criticality (in the order of its options), ascending or descending ([#1305](https://github.com/vincentmakes/turbo-ea/discussions/1305)).
+- **Include sub-cards**: in the Portfolio, Flexible Portfolio and Lifecycle reports, picking a related card such as a parent capability can also match the cards linked to anything beneath it ([#1305](https://github.com/vincentmakes/turbo-ea/discussions/1305)).
+
+### Changed
+- Lifecycle report: cards without a value for the sorted column now come last in both directions, and the timeline rows follow the same order as the table instead of the order the server returned them in.
+
+## [2.175.2] - 2026-10-22
+
+### Fixed
+- MCP: a connection made through Microsoft Copilot Studio (or any client that registers once and keeps its client id) keeps working after the MCP server restarts or is upgraded; it used to fail at sign-in with *redirect_uri is not registered for this client* until the tool was recreated. Tools created before this version need recreating once ([#1307](https://github.com/vincentmakes/turbo-ea/discussions/1307)).
+- MCP: a request with an expired or unknown access token now gets a `401` that tells the client to refresh or sign in again, instead of reaching the tools and answering *Not authenticated* ([#1307](https://github.com/vincentmakes/turbo-ea/discussions/1307)).
+- MCP: a Turbo EA backend that is restarting or unreachable no longer signs every MCP user out; the session is kept, and the client is told to retry.
+- MCP: the OpenID discovery address `/.well-known/openid-configuration/mcp`, which some clients probe, now reaches the MCP server instead of returning the web app's page; token requests sent as JSON are accepted, and token responses are marked as not cacheable.
+
+### Added
+- `MCP_ALLOWED_ORIGINS` lists extra browser origins the MCP endpoint accepts. The MCP admin guide has a Microsoft Copilot Studio section.
+
+## [2.175.1] - 2026-10-21
+
+### Fixed
+- MCP: previewing a bulk write of more than 20 rows (`update_cards_bulk`, `create_cards_bulk`, `archive_cards`) no longer fails with *Missing or invalid confirm_token*; the preview comes back with the `confirm_token` the commit needs ([#1302](https://github.com/vincentmakes/turbo-ea/issues/1302)).
+- MCP: `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos` and `clear_card_logos` now follow the same preview → confirm cycle, so a commit above 20 rows can be confirmed, and every one of their previews and relation writes appears in the audit log with its own batch ([#1302](https://github.com/vincentmakes/turbo-ea/issues/1302)).
+- The audit log shows a finished MCP preview as *Dry run* rather than *Committed*.
+
+### Security
+- MCP: a commit above 20 rows is now accepted only with the `confirm_token` of a preview of the same tool, made by the same user within the last 15 minutes, and each token confirms a single commit; any other value used to be accepted. The backend enforces this limit whatever `MCP_BATCH_CONFIRMATION_THRESHOLD` or `MCP_REQUIRE_DRYRUN_FIRST` are set to, so those settings can only tighten it ([#1302](https://github.com/vincentmakes/turbo-ea/issues/1302)).
 
 ## [2.175.0] - 2026-10-21
 

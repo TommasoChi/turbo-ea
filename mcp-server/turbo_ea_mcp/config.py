@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 from pathlib import Path
 
@@ -126,3 +128,55 @@ MCP_OAUTH_ALLOWED_REDIRECT_URIS: list[str] = [
     for u in os.environ.get("MCP_OAUTH_ALLOWED_REDIRECT_URIS", "").split(",")
     if u.strip()
 ]
+
+# Origins, beyond the two public URLs above, whose browser-borne requests the
+# MCP endpoint accepts. FastMCP's DNS-rebinding guard refuses a request that
+# carries any other ``Origin`` header (a request with none always passes).
+# Comma-separated; matched as the SDK matches them — exactly, or any port for
+# an entry written ``scheme://host:*``. Empty by default.
+def parse_origins(raw: str) -> list[str]:
+    """Comma-separated origins, trimmed, without a trailing slash (an Origin
+    header never carries one)."""
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
+
+MCP_ALLOWED_ORIGINS: list[str] = parse_origins(os.environ.get("MCP_ALLOWED_ORIGINS", ""))
+
+
+# Host names, beyond the two public URLs above, that the MCP endpoint accepts
+# in the ``Host`` header. For a proxy that forwards a name other than the
+# public one — Azure Front Door in front of a Container Apps route sends the
+# route's ``*.azurecontainerapps.io`` name — FastMCP's DNS-rebinding guard
+# otherwise answers 421. Comma-separated; matched as the SDK matches them —
+# exactly (``host`` or ``host:port``), or any port for ``host:*``. No subdomain
+# wildcards. The SDK compares the header as the proxy sends it, and proxies
+# send host names in lower case, so entries are lower-cased. Empty by default.
+def parse_hosts(raw: str) -> list[str]:
+    """Comma-separated host names, trimmed, lower-cased and without a trailing
+    slash (a Host header never carries one)."""
+    hosts = (h.strip().rstrip("/").lower() for h in raw.split(","))
+    return [h for h in hosts if h]
+
+
+MCP_ALLOWED_HOSTS: list[str] = parse_hosts(os.environ.get("MCP_ALLOWED_HOSTS", ""))
+
+# The context string that separates the client-id signing key from every
+# other use of SECRET_KEY (the backend signs JWTs and derives its Fernet key
+# from the same secret): the raw secret never signs anything here.
+_CLIENT_ID_KEY_CONTEXT = b"turbo-ea-mcp/oauth-client-id/v1"
+
+
+def oauth_client_key(secret: str) -> bytes | None:
+    """The key that signs dynamically registered client ids, derived from the
+    instance's SECRET_KEY; ``None`` when there is no secret to derive from.
+
+    A registered client id has to survive a restart of this process, because
+    clients such as Copilot Studio register once and keep the id for good. So
+    the id carries its own redirect URIs under a signature, and the key must
+    be the same on every boot — which SECRET_KEY already is."""
+    if not secret:
+        return None
+    return hmac.new(secret.encode(), _CLIENT_ID_KEY_CONTEXT, hashlib.sha256).digest()
+
+
+MCP_OAUTH_CLIENT_KEY: bytes | None = oauth_client_key(os.environ.get("SECRET_KEY", ""))

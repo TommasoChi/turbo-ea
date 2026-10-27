@@ -1,6 +1,6 @@
 # Rapports
 
-Turbo EA inclut un puissant module de **rapports visuels** permettant d'analyser l'architecture d'entreprise sous différents angles. Tous les rapports peuvent être [sauvegardés pour réutilisation](saved-reports.md) avec leur configuration actuelle de filtres et d'axes.
+Turbo EA inclut un puissant module de **rapports visuels** permettant d'analyser l'architecture d'entreprise sous différents angles. Tous les rapports peuvent être [sauvegardés pour réutilisation](saved-reports.md) avec leurs filtres et paramètres d'affichage actuels.
 
 ![Menu des rapports disponibles](../assets/img/fr/09_menu_rapports.png)
 
@@ -8,18 +8,18 @@ Turbo EA inclut un puissant module de **rapports visuels** permettant d'analyser
 
 ![Rapport Portefeuille](../assets/img/fr/10_rapport_portfolio.png)
 
-Le **Rapport Portefeuille** affiche un **graphique à bulles** (ou nuage de points) configurable de vos fiches. Vous choisissez ce que chaque axe représente :
+Le **Rapport Portefeuille** (**Rapports → Portefeuille applicatif**) présente vos applications sous forme de pastilles colorées, regroupées dans des boîtes. Deux choix de la barre d'outils le pilotent :
 
-- **Axe X** -- Sélectionnez n'importe quel champ numérique ou de sélection (par ex. Adéquation Technique)
-- **Axe Y** -- Sélectionnez n'importe quel champ numérique ou de sélection (par ex. Criticité Métier)
-- **Taille de la bulle** -- Associer à un champ numérique (par ex. Coût Annuel)
-- **Couleur de la bulle** -- Associer à un champ de sélection, de sélection multiple ou oui/non, ou à l'état du cycle de vie
+- **Regrouper par** -- n'importe quel champ à sélection unique ou oui/non du type de fiche (par ex. Criticité métier, Modèle TIME), ou un type de fiche lié (par ex. Organisation, Capacité métier). Chaque valeur devient une boîte avec un compteur et une barre montrant sa répartition de couleurs ; les applications sans valeur atterrissent dans une boîte *Non assigné à un …*.
+- **Colorier les applications par** -- n'importe quel champ de sélection, de sélection multiple ou oui/non (par ex. Modèle TIME), ou *Aucune couleur*.
+
+À côté se trouvent un champ **Rechercher**, les filtres repliables (**Lié par**, **Étiquettes**, **Champs**, **Sous-types de relation**), le sélecteur de colonnes et la bascule **Vue graphique** / **Vue tableau**, qui liste les mêmes fiches dans un tableau triable.
 
 **Colorer et filtrer par des champs oui/non et à sélection multiple** -- Tout champ de sélection, de sélection multiple ou oui/non du type de fiche peut colorer les fiches et les filtrer -- ici, dans le Portefeuille flexible, dans la carte des capacités (*Colorier les applications par*), dans la vue par plage de dates du rapport de cycle de vie et dans le menu *Colorer par* d'un diagramme. Un champ oui/non s'affiche en **Oui** et **Non**, une fiche portant plusieurs valeurs d'un champ à sélection multiple apparaît comme **Multiples**, et une option qu'un administrateur a laissée sans couleur reçoit sa propre couleur dans la légende au lieu du gris de *Non défini*. Les champs oui/non peuvent aussi regrouper les fiches -- ici, dans le tableau du rapport de coûts et dans l'[inventaire](inventory.md) ; un champ à sélection multiple ne le peut pas, car une fiche à deux valeurs appartiendrait à deux groupes.
 
 **Filtrer par sous-type** — Lorsque le type de fiche possède des sous-types, la ligne de filtres **Champs** commence par un filtre **Sous-type**. Choisissez un ou plusieurs sous-types, ou *(vide)* pour les fiches qui n'en ont pas. Le filtre est enregistré avec le rapport et repris par **Voir dans l'inventaire**.
 
-C'est idéal pour l'analyse de portefeuille -- par exemple, positionner les applications par valeur métier vs adéquation technique pour identifier les candidats à l'investissement, au remplacement ou au retrait.
+Un usage typique : regrouper par **Criticité métier** et colorier par **Modèle TIME**. Les applications critiques marquées *Migrer* sont vos premières priorités de modernisation, et les applications administratives marquées *Éliminer* ou *Migrer* sont vos candidates au retrait et à la consolidation. Le [Guide du débutant EA](../beginners-guide/your-first-analysis.md) montre comment dériver le Modèle TIME des évaluations d'adéquation à l'aide d'un calcul.
 
 ### Analyses IA du portefeuille
 
@@ -50,6 +50,10 @@ Changer de type de fiche réinitialise les sélections de regroupement, de color
 ### Sous-types de relation
 
 Lorsque les relations d'une fiche portent une valeur de « type » — par exemple le **type d'utilisation** (Propriétaire / Utilisateur / Partie prenante) sur les relations Organisation→Application, ou le **type de support** sur les relations Application→Capacité métier — vous pouvez colorer les fiches selon cette valeur et filtrer dessus. **Groupez le rapport par le type de fiche lié** pour les utiliser (par ex. *Grouper par → Organisation* pour débloquer le *type d'utilisation*) : le sous-type apparaît alors sous le groupe **Sous-types de relation** dans la liste *Colorer par* et dans sa propre ligne de filtres. Comme chaque fiche est affichée sous une fiche liée, elle est colorée selon *cette* relation — une application qui est *Utilisateur* d'une organisation s'affiche comme Utilisateur à cet endroit, même si elle appartient à une autre.
+
+### Inclure les sous-fiches
+
+Lorsqu'un type de fiche lié possède une hiérarchie (comme Business Capability ou Organisation), la ligne **Lié par** porte un interrupteur **Inclure les sous-fiches**. Activé, une sélection couvre aussi tout ce qui se trouve en dessous : une capacité parente trouve alors les fiches liées à l'une de ses sous-capacités, et les parents sans lien direct propre peuvent aussi être sélectionnés. L'interrupteur est enregistré avec le rapport et s'applique aussi au rapport de cycle de vie. Tant qu'il élargit une sélection, le bouton **Voir dans l'inventaire** du panneau de groupe est masqué, car l'inventaire ne filtre que sur les liens directs.
 
 ### Groupes imbriqués
 
@@ -91,6 +95,10 @@ Le **Rapport Cycle de vie** affiche une **visualisation chronologique** indiquan
 Les composants sont affichés sous forme de barres horizontales couvrant leurs phases de cycle de vie : Planification, Mise en service, Actif, Retrait progressif et Fin de vie.
 
 **Limiter à certaines fiches** — Une fois un type de fiche choisi, la puce voisine ouvre un sélecteur : choisissez une ou plusieurs fiches et la chronologie n'affiche que celles-ci et tout ce qui se trouve en dessous. Les fiches filles sont incluses automatiquement. La puce reste désactivée tant que le sélecteur est sur *Tous les types*, car un périmètre a besoin d'une seule hiérarchie.
+
+**Filtrer** — Une fois un type de fiche choisi, le rapport propose la même ligne **Filtres** que le **Portefeuille flexible** : fiches liées (avec *Inclure les sous-fiches*), étiquettes, sous-type de la fiche et ses champs de sélection, sous-types de relation, ainsi qu'un champ de recherche. Des filtres différents se cumulent (une fiche doit tous les satisfaire), tandis que les valeurs choisies dans un même filtre sont des alternatives. Une légende indique combien de fiches correspondent, et **Tout effacer** retire tous les filtres. Les filtres sont enregistrés avec le rapport et cités un à un dans l'en-tête d'une impression ou d'un export, afin que le public sache ce que couvre la chronologie. Par exemple, choisissez vos capacités opérationnelles avec *Inclure les sous-fiches* activé et l'étiquette *Développé en interne* pour ne passer en revue que les applications internes au cœur des opérations — un outil de notes de frais comme Concur reste dans l'inventaire mais quitte cette vue. Sur *Tous les types*, les filtres ne sont pas disponibles, car ils lisent les champs, relations et étiquettes d'un seul type de fiche.
+
+**Trier** — Le menu **Trier par** ordonne la chronologie et le tableau de la même façon : par nom, type, sous-type, phase actuelle, date d'une phase (Planification, Mise en service, Actif, Retrait progressif, Fin de vie) ou l'un des champs à sélection unique du type de fiche, comme la criticité métier, qui suit l'ordre de ses options plutôt que l'alphabet. Dans la vue par plage de dates, il propose à la place la date de début, la date de fin et le champ de couleur. La flèche voisine bascule entre ordre croissant et décroissant ; les fiches sans valeur viennent toujours en dernier, quel que soit le sens. Un clic sur un en-tête de colonne du tableau trie de la même manière. Le tri est enregistré avec le rapport, et tout tri autre que par nom figure dans l'en-tête de l'export.
 
 ## Rapport Dépendances
 

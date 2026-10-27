@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import logging
 import re
@@ -31,7 +32,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from turbo_ea_mcp import api_client
-from turbo_ea_mcp.config import MCP_OAUTH_ALLOWED_REDIRECT_URIS, MCP_PUBLIC_URL
+from turbo_ea_mcp.api_client import RefreshUnavailable
+from turbo_ea_mcp.config import (
+    MCP_OAUTH_ALLOWED_REDIRECT_URIS,
+    MCP_OAUTH_CLIENT_KEY,
+    MCP_PUBLIC_URL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +47,26 @@ REFRESH_TOKEN_TTL = 30 * 24 * 3600  # 30 days
 AUTH_CODE_TTL = 600  # 10 minutes
 # Proactive refresh: renew the Turbo EA JWT when less than this much TTL remains
 TURBO_JWT_REFRESH_BUFFER = 3600  # 1 hour
+
+# Registration bounds. A client id carries its redirect URIs (see
+# ``mint_client_id``), and it travels in the /oauth/authorize query string
+# beside a percent-encoded redirect_uri, so the id is capped well inside the
+# edge nginx's 8 KB request line: an id the server accepted must stay usable.
+MAX_REDIRECT_URIS = 10
+MAX_REDIRECT_URI_LENGTH = 1024
+MAX_CLIENT_ID_LENGTH = 2048
+MAX_CLIENT_NAME_LENGTH = 200
+# Registrations kept in memory. Only ``client_name`` is lost when one falls
+# out — the id itself still authorizes — so the cache is bounded rather than
+# letting open registration grow memory without limit.
+MAX_CACHED_CLIENTS = 1000
+
+# A module constant rather than a literal at the call: header names are
+# case-insensitive, so a mutated spelling could never fail a test.
+RETRY_AFTER = "Retry-After"  # pragma: no mutate, header names are case-insensitive
+
+# RFC 6749 §5.1: a response carrying tokens must not be cached.
+_TOKEN_RESPONSE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 
 
 @dataclass
@@ -124,6 +150,73 @@ class OAuthStore:
 
 store = OAuthStore()
 
+# ── Self-describing client ids ─────────────────────────────────────────────
+#
+# Copilot Studio registers once and stores the client id in its connector; it
+# never registers again. A registration that lived only in ``store.clients``
+# was therefore gone after any restart of this process, and the connector was
+# left failing at /oauth/authorize for good. The id now carries the client's
+# redirect URIs, signed, so ``authorize`` can rebuild the registration from
+# the id alone and the exact-match check below is unchanged.
+
+_CLIENT_ID_PREFIX = "tea1."
+
+# True when no SECRET_KEY reached this process: ids are then signed with a
+# key that dies with it. ``create_app`` warns; stdio mode never registers.
+CLIENT_KEY_IS_EPHEMERAL = MCP_OAUTH_CLIENT_KEY is None
+_client_id_key: bytes = MCP_OAUTH_CLIENT_KEY or secrets.token_bytes(32)
+
+
+def _b64encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def _client_id_signature(payload: str) -> str:
+    digest = hmac.new(_client_id_key, payload.encode(), hashlib.sha256).digest()
+    return _b64encode(digest)
+
+
+def mint_client_id(redirect_uris: list[str]) -> str:
+    """A client id that names its own redirect URIs under a signature.
+
+    The nonce keeps two registrations of the same URIs apart."""
+    claims = {"r": redirect_uris, "n": secrets.token_urlsafe(8)}
+    payload = _b64encode(json.dumps(claims, separators=(",", ":")).encode())
+    return f"{_CLIENT_ID_PREFIX}{payload}.{_client_id_signature(payload)}"
+
+
+def client_from_id(client_id: str) -> RegisteredClient | None:
+    """The registration a minted client id describes, or ``None`` for an id
+    that was not minted here with the current key."""
+    if len(client_id) > MAX_CLIENT_ID_LENGTH or not client_id.startswith(_CLIENT_ID_PREFIX):
+        return None
+    payload, _, signature = client_id[len(_CLIENT_ID_PREFIX) :].partition(".")
+    expected = _client_id_signature(payload)
+    if not hmac.compare_digest(expected.encode(), signature.encode()):
+        return None
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=="))
+    except ValueError:
+        return None
+    uris = claims.get("r") if isinstance(claims, dict) else None
+    if not _valid_redirect_uris(uris):
+        return None
+    return RegisteredClient(client_id=client_id, redirect_uris=list(uris))
+
+
+def _lookup_client(client_id: str) -> RegisteredClient | None:
+    """The registration behind ``client_id``: this process's record first,
+    else the one the id itself carries."""
+    return store.clients.get(client_id) or client_from_id(client_id)
+
+
+def _valid_redirect_uris(uris: object) -> bool:
+    return (
+        isinstance(uris, list)
+        and 0 < len(uris) <= MAX_REDIRECT_URIS
+        and all(isinstance(u, str) and 0 < len(u) <= MAX_REDIRECT_URI_LENGTH for u in uris)
+    )
+
 # ── SSO config cache (refreshed periodically) ──────────────────────────────
 
 _sso_config_cache: dict | None = None
@@ -187,8 +280,13 @@ async def register_client(request: Request) -> Response:
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "invalid_request"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "invalid_request"}, status_code=400)
 
-    client_name = body.get("client_name", "MCP Client")
+    client_name = body.get("client_name")
+    if not isinstance(client_name, str) or not client_name.strip():
+        client_name = "MCP Client"
+    client_name = client_name[:MAX_CLIENT_NAME_LENGTH]
     redirect_uris = body.get("redirect_uris", [])
 
     # A client with no valid redirect URIs can never pass authorize-time
@@ -211,17 +309,43 @@ async def register_client(request: Request) -> Response:
             },
             status_code=400,
         )
+    if len(redirect_uris) > MAX_REDIRECT_URIS or any(
+        len(u) > MAX_REDIRECT_URI_LENGTH for u in redirect_uris
+    ):
+        return JSONResponse(
+            {
+                "error": "invalid_client_metadata",
+                "error_description": (
+                    f"at most {MAX_REDIRECT_URIS} redirect_uris of at most "
+                    f"{MAX_REDIRECT_URI_LENGTH} characters each"
+                ),
+            },
+            status_code=400,
+        )
 
-    client_id = secrets.token_urlsafe(24)
+    issued_at = time.time()
+    client_id = mint_client_id(list(redirect_uris))
+    if len(client_id) > MAX_CLIENT_ID_LENGTH:
+        return JSONResponse(
+            {
+                "error": "invalid_client_metadata",
+                "error_description": "redirect_uris are too long in total",
+            },
+            status_code=400,
+        )
+    while len(store.clients) >= MAX_CACHED_CLIENTS:
+        del store.clients[next(iter(store.clients))]
     store.clients[client_id] = RegisteredClient(
         client_id=client_id,
         redirect_uris=list(redirect_uris),
         client_name=client_name,
+        created_at=issued_at,
     )
 
     return JSONResponse(
         {
             "client_id": client_id,
+            "client_id_issued_at": int(issued_at),
             "client_name": client_name,
             "redirect_uris": redirect_uris,
             "grant_types": ["authorization_code", "refresh_token"],
@@ -278,7 +402,7 @@ async def authorize(request: Request) -> Response:
     # never issue a redirect to the supplied URI — redirecting an unvalidated
     # redirect_uri is exactly the flaw this guards against (an attacker could
     # otherwise have a victim's authorization code delivered to their own URI).
-    client = store.clients.get(client_id)
+    client = _lookup_client(client_id)
     if not _redirect_uri_registered(client, redirect_uri):
         return JSONResponse(
             {
@@ -448,16 +572,33 @@ def _verify_pkce(code_verifier: str, code_challenge: str) -> bool:
     return secrets.compare_digest(computed.encode(), code_challenge.encode())
 
 
+async def _read_token_body(request: Request) -> dict | None:
+    """The token request's parameters: a JSON object when the client says it
+    sent JSON, else the form (RFC 6749's encoding), falling back to JSON when
+    the form cannot be parsed. ``None`` when neither yields an object.
+
+    The content type is read first because ``request.form()`` does not raise
+    on a JSON body — it returns an empty form, so a JSON request used to be
+    answered ``unsupported_grant_type``."""
+    content_type = request.headers.get("content-type", "")  # pragma: no mutate, header names are case-insensitive and any non-JSON default reads as form
+    media_type = content_type.split(";")[0].strip().lower()
+    if media_type != "application/json":
+        try:
+            return dict(await request.form())
+        except Exception:  # noqa: BLE001, S110 — an unparseable form tries JSON next
+            pass
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 — anything unreadable is a bad request
+        return None
+    return body if isinstance(body, dict) else None
+
+
 async def token_endpoint(request: Request) -> Response:
     """Exchange authorization code or refresh token for access token."""
-    try:
-        form = await request.form()
-        body = dict(form)
-    except Exception:
-        try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse({"error": "invalid_request"}, status_code=400)
+    body = await _read_token_body(request)
+    if body is None:
+        return JSONResponse({"error": "invalid_request"}, status_code=400)
 
     grant_type = body.get("grant_type")
 
@@ -549,7 +690,8 @@ async def _handle_code_exchange(body: dict) -> Response:
             "expires_in": ACCESS_TOKEN_TTL,
             "refresh_token": refresh_token,
             "scope": auth_code.scope,
-        }
+        },
+        headers=_TOKEN_RESPONSE_HEADERS,
     )
 
 
@@ -576,7 +718,20 @@ async def _handle_refresh(body: dict) -> Response:
     from turbo_ea_mcp.api_client import TurboEAClient
 
     client = TurboEAClient(old_entry.turbo_jwt)
-    new_jwt = await client.refresh_token()
+    try:
+        new_jwt = await client.refresh_token()
+    except RefreshUnavailable:
+        # The backend could not answer; the session is fine. Keep both tokens
+        # so the client's retry can succeed once the backend is back.
+        logger.warning("Turbo EA backend unavailable during token refresh", exc_info=True)
+        return JSONResponse(
+            {
+                "error": "temporarily_unavailable",
+                "error_description": "Turbo EA is not reachable, retry shortly",
+            },
+            status_code=503,
+            headers={RETRY_AFTER: "5"},
+        )
 
     if new_jwt:
         turbo_jwt = new_jwt
@@ -616,7 +771,8 @@ async def _handle_refresh(body: dict) -> Response:
             "expires_in": ACCESS_TOKEN_TTL,
             "refresh_token": new_refresh,
             "scope": old_entry.scope,
-        }
+        },
+        headers=_TOKEN_RESPONSE_HEADERS,
     )
 
 
@@ -625,7 +781,13 @@ async def _handle_refresh(body: dict) -> Response:
 
 async def resolve_token(access_token: str) -> str | None:
     """Resolve an MCP access token to a Turbo EA JWT.  Proactively
-    refreshes the JWT if it's close to expiry."""
+    refreshes the JWT if it's close to expiry.
+
+    ``None`` means the token is unknown or its session was refused. When the
+    backend cannot be reached the session is kept: a JWT that is still valid
+    is returned as is (the refresh is retried on the next call), and an
+    expired one raises ``RefreshUnavailable`` so the caller can answer
+    "try again" rather than "sign in again"."""
     entry = store.tokens.get(access_token)
     if not entry:
         return None
@@ -637,7 +799,12 @@ async def resolve_token(access_token: str) -> str | None:
         from turbo_ea_mcp.api_client import TurboEAClient
 
         client = TurboEAClient(entry.turbo_jwt)
-        new_jwt = await client.refresh_token()
+        try:
+            new_jwt = await client.refresh_token()
+        except RefreshUnavailable:
+            if entry.turbo_jwt_exp > now:
+                return entry.turbo_jwt
+            raise
         if new_jwt:
             entry.turbo_jwt = new_jwt
             entry.turbo_jwt_exp = _estimate_jwt_expiry(new_jwt)

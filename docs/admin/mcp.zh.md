@@ -68,6 +68,9 @@ MCP_PUBLIC_URL=https://your-domain.example.com/mcp
 | `TURBO_EA_PUBLIC_URL` | `http://localhost:8920` | Turbo EA 实例的公共 URL |
 | `MCP_PUBLIC_URL` | `http://localhost:8920/mcp`（docker compose） | MCP 服务器的公共 URL（用于 OAuth 重定向 URI）。单独运行容器时，代码默认值为 `http://localhost:8001` |
 | `MCP_PORT` | `8001` | MCP 容器的内部端口（很少需要更改） |
+| `SECRET_KEY` | *（无）* | 设置为与后端相同的值。用于签名 MCP 服务器颁发的 OAuth 客户端 ID，使注册过一次的客户端在重启后仍可继续使用；未设置时，服务器使用随进程消失的密钥签名并记录一条警告。Docker Compose、Helm Chart 和各云平台模板会自动传入 |
+| `MCP_ALLOWED_ORIGINS` | *（空）* | 以逗号分隔的额外来源（Origin），MCP 端点会接受来自这些来源的浏览器请求。不带 `Origin` 请求头的请求始终会被接受 |
+| `MCP_ALLOWED_HOSTS` | *（空）* | 以逗号分隔的额外主机名，MCP 端点除接受 `TURBO_EA_PUBLIC_URL` 和 `MCP_PUBLIC_URL` 的主机外，还会在 `Host` 请求头中接受这些主机名。仅当代理转发了不同的主机名时才需要；参见[位于会更改主机名的代理之后](#proxy-host-name) |
 
 ### 步骤 3：将 OAuth 重定向 URI 添加到 SSO 应用
 
@@ -120,6 +123,29 @@ https://your-domain.example.com/mcp/oauth/callback
 ```
 
 请使用 `https://your-domain.example.com/mcp` 作为端点。旧的双重形式 `https://your-domain.example.com/mcp/mcp` 仍然有效，因此现有连接器无需更改即可继续正常工作。
+
+### Microsoft Copilot Studio
+
+Copilot Studio 从 Microsoft 云端连接 MCP 服务器，而不是从用户的计算机连接。因此，实例必须能够通过 HTTPS 从公共互联网访问，并使用由公共证书颁发机构签发的证书。仅在内部网络或 VPN 上可访问的实例可用于桌面工具，但在 Copilot Studio 中会失败。
+
+1. 在您的智能体中，打开 **工具 > 添加工具 > 新建工具 > Model Context Protocol**。
+2. 输入服务器 URL `https://your-domain.example.com/mcp`。
+3. 在 **身份验证** 下选择 **OAuth 2.0**，然后选择 **动态发现**（Dynamic discovery）。
+4. 创建连接，并在提示时使用您的 SSO 账户登录。
+
+Copilot Studio 只注册一次，并保留收到的客户端 ID。该 ID 自带其重定向 URI，并使用实例的 `SECRET_KEY` 签名，因此 MCP 容器重启或升级后连接仍然有效。更改 `SECRET_KEY` 会使所有已注册的客户端失效：之后请在 Copilot Studio 中重新创建该工具。
+
+### 位于会更改主机名的代理之后 { #proxy-host-name }
+
+MCP 端点通过检查每个请求的 `Host` 请求头来防御 DNS 重绑定。它接受 `TURBO_EA_PUBLIC_URL` 和 `MCP_PUBLIC_URL` 中的主机名，以及 `localhost` 和 `127.0.0.1`。MCP 容器会在启动时记录一次完整列表。任何其他主机名都会被拒绝并返回 `421 Misdirected Request`，同时 MCP 容器会记录 `Invalid Host header: <name>`。
+
+某些代理转发的主机名并非公开主机名。例如，位于 Azure Container Apps HTTP 路由之前的 Azure Front Door 会发送该路由自己的 `<route>.<environment>.azurecontainerapps.io` 名称。此时登录仍然正常，但所有 MCP 连接都会失败。请将转发的主机名列入 `MCP_ALLOWED_HOSTS`：
+
+```dotenv
+MCP_ALLOWED_HOSTS=my-route.my-environment.westeurope.azurecontainerapps.io
+```
+
+各项仅为主机名，以逗号分隔，不含 `https://` 或路径；对于永远无法匹配的条目，容器会记录一条警告。匹配为精确匹配，针对代理发送的请求头原样比较，且为小写。如果代理发送了端口，请添加 `:port`；添加 `:*` 则接受任意端口。不支持子域名通配符。在 Kubernetes 上，请通过 Helm values 中的 `mcp.extraEnv` 设置该变量。
 
 ---
 
@@ -314,7 +340,7 @@ ArchiMate 图有自己的工具，与自由绘制（DrawIO）图的工具分开�
 - **紧急开关。** `MCP_WRITES_ENABLED=false` 可在无需重新部署代码的情况下关闭全部 21 个写入工具。35 个读取工具继续工作。
 - **徽标下载仅限白名单主机。** 内置图标包无法覆盖客户使用的每一款产品，而助手往往运行在无法访问外网的沙箱里，因此 `set_card_logos` 接受 `image_url`，由 MCP 服务器代为下载。仅限 `https`、仅限 `MCP_LOGO_FETCH_HOSTS` 中的主机、仅限公网地址，最多两次重定向（每次重新校验），最多以流式读取 1 MB，且字节必须带有真实的 PNG/JPEG/WebP/GIF 签名。下载发生在 MCP 边缘而非后端，随后图片经普通通道上传 —— 由大模型选定的 URL 永远不会抵达持有数据库的进程。`MCP_LOGO_FETCH_ENABLED=false` 可将其关闭。
 - **审计来源标记。** 来自 MCP 服务器的每个后端请求都携带 `X-Turbo-EA-Origin: mcp` 头。从这些请求发出的事件在审计日志载荷中被标记为 `origin: "mcp"`，以便管理员可以将 MCP 驱动的写入与 Web 界面操作分别从时间线中筛选出来。
-- **变更批次。** 每次 MCP 写入调用都会在任何写入发生之前打开一个变更批次；调用期间发出的每个事件都会被标记上批次 id。管理员（或 `get_change_history` 工具）可以凭一个 id 重建某次提交的完整逐事件差异，而 `rollback_batch` 可以将其撤销。超过 `MCP_BATCH_CONFIRMATION_THRESHOLD` 行的提交必须回传由先前演练签发的一次性 `confirm_token`（15 分钟有效期），因此大型提交总是先经过一次经审阅的预览。
+- **变更批次。** 每次 MCP 写入调用都会在任何写入发生之前打开一个变更批次；调用期间发出的每个事件都会被标记上批次 id。管理员（或 `get_change_history` 工具）可以凭一个 id 重建某次提交的完整逐事件差异，而 `rollback_batch` 可以将其撤销。超过 `MCP_BATCH_CONFIRMATION_THRESHOLD` 行的提交必须回传先前演练返回的一次性 `confirm_token`。后端在提交的批次打开时、任何写入发生之前校验它：它必须来自同一用户在 15 分钟内对同一工具执行的演练，并且只能授权一次提交。所有批量写入工具都遵循这一「预览 → 确认」流程：`create_cards_bulk`, `update_cards_bulk`, `archive_cards`, `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos`, `clear_card_logos`。
 - **没有硬删除。** 工具集刻意省略了卡片的永久删除。`archive_cards` 和 `update_cards_bulk` *确实*已暴露，但归档是可恢复的软删除（30 天还原窗口），且两者都带有破坏性标注并受演练机制约束。添加任何执行不可逆变更的工具（硬删除、强制清除）都需要进行明确的设计评审。
 
 MCP 容器上的六个防护栏环境变量：
@@ -328,8 +354,8 @@ MCP 容器上的六个防护栏环境变量：
 | `MCP_ALLOW_RELATION_DELETE` | `false` | 当为 `true` 时，`upsert_relations_bulk` 接受 `action: "delete"` 操作。 |
 | `MCP_LOGO_FETCH_ENABLED` | `true` | 为 `true` 时，`set_card_logos` 可接受 `image_url`：由 MCP 服务器下载图片，再经普通上传通道写入，因此权限、大小与格式校验一律照常执行。设为 `false` 则完全拒绝 URL 方式 —— 图标 slug 与直接粘贴的字节仍可使用。 |
 | `MCP_LOGO_FETCH_HOSTS` | *(built-in)* | 允许下载徽标的主机，逗号分隔，精确匹配。默认为 `raw.githubusercontent.com`, `cdn.jsdelivr.net`, `cdn.simpleicons.org`, `upload.wikimedia.org` —— 公共图标托管，请求中只带文件名，不透露任何landscape信息。也可加入按域名查徽标的服务，但代价是让该服务知道你在用哪些供应商。 |
-| `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | 涉及行数超过此值的提交需要出示先前演练签发的 `confirm_token`。 |
-| `MCP_REQUIRE_DRYRUN_FIRST` | `true` | 启用上述确认令牌门槛。仅在受信任的、明确跳过预览环节的自动化流水线中设置为 `false`。 |
+| `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | 涉及行数超过此值的提交需要出示先前演练签发的 `confirm_token`。无论此值如何设置，后端都会执行自身 20 行的上限，因此此值只能降低该上限，不能提高。 |
+| `MCP_REQUIRE_DRYRUN_FIRST` | `true` | 为 `true` 时，MCP 服务器会在调用后端之前，以说明性错误拒绝超过阈值且未携带 `confirm_token` 的提交。设为 `false` 只会关闭这一提前报错：后端仍要求超过 20 行的每次提交提供令牌。 |
 
 ### 资源
 
@@ -384,3 +410,6 @@ MCP 容器上的六个防护栏环境变量：
 | AI 工具无法连接 | 检查 `MCP_PUBLIC_URL` 是否与用户机器可访问的 URL 匹配。确保 HTTPS 正常工作。 |
 | 用户获得空结果 | MCP 遵循 RBAC 权限。如果用户访问受限，他们只能看到其角色允许的卡片。 |
 | 连接在 1 小时后断开 | AI 工具应自动处理令牌刷新。如果不行，请重新连接。 |
+| Copilot Studio 报告「Connection creation failed」 | Copilot Studio 从 Microsoft 云端发起调用。请检查 `https://your-domain.example.com/mcp` 能否从互联网通过公共受信任的证书访问，以及 `MCP_PUBLIC_URL` 是否就是该公共地址。尝试连接期间的 Nginx 日志会显示最后到达的请求；如果没有任何请求到达，说明实例无法访问。 |
+| 升级到 2.175.2 后 Copilot Studio 工具停止工作 | 在 2.175.2 之前创建的工具持有的客户端 ID 无法在重启后保留。请删除该工具并重新添加一次；新的 ID 可在之后的重启中保留。 |
+| MCP 连接失败并返回 `421 Misdirected Request`，MCP 日志显示 `Invalid Host header` | Turbo EA 前面的代理转发了不同于公开主机名的主机名。请将日志行中的名称添加到 `MCP_ALLOWED_HOSTS` 并重启 MCP 容器；参见[位于会更改主机名的代理之后](#proxy-host-name)。 |

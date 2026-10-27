@@ -25,11 +25,12 @@ from starlette.routing import Route
 
 from turbo_ea_mcp import oauth
 from turbo_ea_mcp.api_client import CARD_IDS_CHUNK, TurboEAClient, chunked
-from turbo_ea_mcp.batches import mutation_batch
-from turbo_ea_mcp.mcp_extensions import register_extension_tools
+from turbo_ea_mcp.batches import BatchContext, mutation_batch
 from turbo_ea_mcp.config import (
     APP_VERSION,
     MCP_ALLOW_RELATION_DELETE,
+    MCP_ALLOWED_HOSTS,
+    MCP_ALLOWED_ORIGINS,
     MCP_BATCH_CONFIRMATION_THRESHOLD,
     MCP_MAX_CARDS_PER_CALL,
     MCP_MAX_LOGOS_PER_CALL,
@@ -41,6 +42,7 @@ from turbo_ea_mcp.config import (
     TURBO_EA_PUBLIC_URL,
 )
 from turbo_ea_mcp.logo_fetch import LogoFetchError, allowed_hosts, fetch_logo_cached
+from turbo_ea_mcp.mcp_extensions import register_extension_tools
 from turbo_ea_mcp.models import CardLogoItem
 
 # ── MCP tool annotation presets ────────────────────────────────────────────
@@ -85,10 +87,21 @@ def _build_transport_security() -> TransportSecuritySettings:
     server return 421 when fronted by a reverse proxy on a real domain. Add
     the hostnames derived from MCP_PUBLIC_URL and TURBO_EA_PUBLIC_URL so the
     public deployment passes the check; localhost stays allowed for stdio
-    tests and local development.
+    tests and local development. ``MCP_ALLOWED_ORIGINS`` adds origins an
+    operator has to admit beyond those two, and ``MCP_ALLOWED_HOSTS`` adds
+    host names for a proxy that forwards a name other than the public one
+    (Azure Front Door in front of a Container Apps route). An extra host is
+    not an origin: no browser page is served from it.
     """
-    hosts: set[str] = {"localhost", "127.0.0.1"}
-    origins: set[str] = set()
+    for host in MCP_ALLOWED_HOSTS:
+        if "/" in host:
+            logger.warning(
+                "MCP_ALLOWED_HOSTS entry %r never matches a Host header: "
+                "list the host name alone, without a scheme or a path",
+                host,
+            )
+    hosts: set[str] = {"localhost", "127.0.0.1", *MCP_ALLOWED_HOSTS}
+    origins: set[str] = set(MCP_ALLOWED_ORIGINS)
     for url in (MCP_PUBLIC_URL, TURBO_EA_PUBLIC_URL):
         parsed = urlparse(url)
         if parsed.hostname:
@@ -97,6 +110,8 @@ def _build_transport_security() -> TransportSecuritySettings:
             hosts.add(parsed.netloc)
         if parsed.scheme and parsed.netloc:
             origins.add(f"{parsed.scheme}://{parsed.netloc}")
+    # One line at boot, so a 421 can be read against what was admitted.
+    logger.info("MCP accepts these Host headers: %s", ", ".join(sorted(hosts)))
     return TransportSecuritySettings(
         allowed_hosts=sorted(hosts),
         allowed_origins=sorted(origins),
@@ -1076,6 +1091,7 @@ def _translate_risk_row(
 async def create_risks(
     risks: list[dict],
     dry_run: bool = True,
+    confirm_token: str = "",
 ) -> str:
     """Create risks in the EA Risk Register.
 
@@ -1096,6 +1112,9 @@ async def create_risks(
         dry_run: When True (default), validate and translate without
             persisting. The preview shows the exact backend payloads a
             commit would send.
+        confirm_token: For commits above the per-call confirmation
+            threshold (default 20 rows), the ``confirm_token`` returned by
+            the prior dry-run (see ``create_cards_bulk``).
     """
     token = await _get_current_token()
     if not token:
@@ -1108,11 +1127,27 @@ async def create_risks(
         if err is not None:
             return _fmt(err)
         payloads.append(payload)
-    if dry_run:
-        return _fmt({"dry_run": True, "would_create": payloads, "count": len(payloads)})
+    if not dry_run:
+        gate = _confirmation_required_message("create_risks", len(payloads))
+        if gate is not None and not confirm_token:
+            return gate
     async with mutation_batch(
-        token, tool_name="create_risks", row_count=len(payloads), dry_run=False
+        token,
+        tool_name="create_risks",
+        row_count=len(payloads),
+        dry_run=dry_run,
+        confirm_token=confirm_token or None,
     ) as batch:
+        if dry_run:
+            batch.summary = {"rows": len(payloads), "status": "previewed"}
+            return _fmt(
+                {
+                    "dry_run": True,
+                    "would_create": payloads,
+                    "count": len(payloads),
+                    **_preview_fields(batch),
+                }
+            )
         client = batch.client()
         created: list[dict] = []
         for payload in payloads:
@@ -1124,7 +1159,11 @@ async def create_risks(
 
 
 @mcp.tool(annotations=_WRITE_ADDITIVE_ANNOT)
-async def update_risks(updates: list[dict], dry_run: bool = True) -> str:
+async def update_risks(
+    updates: list[dict],
+    dry_run: bool = True,
+    confirm_token: str = "",
+) -> str:
     """Update risks in the EA Risk Register.
 
     Each row dict must include ``risk_id`` plus the fields to patch
@@ -1139,6 +1178,9 @@ async def update_risks(updates: list[dict], dry_run: bool = True) -> str:
         updates: List of update dicts.
         dry_run: When True (default), validate and translate without
             persisting.
+        confirm_token: For commits above the per-call confirmation
+            threshold (default 20 rows), the ``confirm_token`` returned by
+            the prior dry-run (see ``create_cards_bulk``).
     """
     token = await _get_current_token()
     if not token:
@@ -1161,23 +1203,33 @@ async def update_risks(updates: list[dict], dry_run: bool = True) -> str:
             return _fmt(err)
         links = u.get("linked_card_ids")
         rows.append((u["risk_id"], payload, list(links) if links is not None else None))
-    if dry_run:
-        return _fmt(
-            {
-                "dry_run": True,
-                "would_update": [
-                    {
-                        "risk_id": rid,
-                        **payload,
-                        **({"add_card_ids": links} if links else {}),
-                    }
-                    for rid, payload, links in rows
-                ],
-            }
-        )
+    if not dry_run:
+        gate = _confirmation_required_message("update_risks", len(rows))
+        if gate is not None and not confirm_token:
+            return gate
     async with mutation_batch(
-        token, tool_name="update_risks", row_count=len(rows), dry_run=False
+        token,
+        tool_name="update_risks",
+        row_count=len(rows),
+        dry_run=dry_run,
+        confirm_token=confirm_token or None,
     ) as batch:
+        if dry_run:
+            batch.summary = {"rows": len(rows), "status": "previewed"}
+            return _fmt(
+                {
+                    "dry_run": True,
+                    "would_update": [
+                        {
+                            "risk_id": rid,
+                            **payload,
+                            **({"add_card_ids": links} if links else {}),
+                        }
+                        for rid, payload, links in rows
+                    ],
+                    **_preview_fields(batch),
+                }
+            )
         client = batch.client()
         out: list[dict] = []
         for rid, payload, links in rows:
@@ -1535,7 +1587,11 @@ def _validate_stakeholder_ops(operations: list[dict]) -> tuple[list[dict], dict 
 
 
 @mcp.tool(annotations=_WRITE_ADDITIVE_ANNOT)
-async def assign_stakeholders(operations: list[dict], dry_run: bool = True) -> str:
+async def assign_stakeholders(
+    operations: list[dict],
+    dry_run: bool = True,
+    confirm_token: str = "",
+) -> str:
     """Assign or remove stakeholder roles on cards.
 
     Each op:
@@ -1552,6 +1608,9 @@ async def assign_stakeholders(operations: list[dict], dry_run: bool = True) -> s
         operations: List of op dicts.
         dry_run: When True (default), validate the op shapes and echo
             the planned ops without persisting.
+        confirm_token: For commits above the per-call confirmation
+            threshold (default 20 rows), the ``confirm_token`` returned by
+            the prior dry-run (see ``create_cards_bulk``).
     """
     token = await _get_current_token()
     if not token:
@@ -1561,14 +1620,20 @@ async def assign_stakeholders(operations: list[dict], dry_run: bool = True) -> s
     ops, op_err = _validate_stakeholder_ops(operations)
     if op_err is not None:
         return _fmt(op_err)
-    if dry_run:
-        return _fmt({"dry_run": True, "operations": ops})
+    if not dry_run:
+        gate = _confirmation_required_message("assign_stakeholders", len(ops))
+        if gate is not None and not confirm_token:
+            return gate
     async with mutation_batch(
         token,
         tool_name="assign_stakeholders",
         row_count=len(ops),
-        dry_run=False,
+        dry_run=dry_run,
+        confirm_token=confirm_token or None,
     ) as batch:
+        if dry_run:
+            batch.summary = {"rows": len(ops), "status": "previewed"}
+            return _fmt({"dry_run": True, "operations": ops, **_preview_fields(batch)})
         client = batch.client()
         outcomes: list[dict] = []
         for op in ops:
@@ -1903,12 +1968,24 @@ def _writes_disabled_message() -> str | None:
     )
 
 
+def _preview_fields(batch: BatchContext) -> dict:
+    """The keys every dry-run response carries: the preview's own audit
+    handle and, above the confirmation threshold, the ``confirm_token``
+    the commit call must pass back."""
+    fields: dict = {"batch_id": batch.batch_id}
+    if batch.confirm_token_issued:
+        fields["confirm_token"] = batch.confirm_token_issued
+    return fields
+
+
 def _confirmation_required_message(tool: str, row_count: int) -> str | None:
     """Reject a non-dry-run commit above the confirmation threshold
     that does not carry a ``confirm_token``. The agent must run a dry
-    run first, surface the preview, then echo the issued token back to
-    commit. This is the MCP-side gate (S2 + S3) — the backend also
-    enforces a matching gate independently."""
+    run first, surface the preview, then pass the issued token back to
+    commit. This is the friendly MCP-side error (S2 + S3); the backend
+    enforces the token independently when the commit's batch opens
+    (same user, same tool, 15 minutes, single use), so a made-up or
+    stale token is refused there before any write."""
     if not MCP_REQUIRE_DRYRUN_FIRST:
         return None
     if row_count <= MCP_BATCH_CONFIRMATION_THRESHOLD:
@@ -2655,29 +2732,41 @@ async def set_card_logos(
         problems.extend(unknown_rows)
 
     if dry_run:
-        return _fmt(
-            {
-                "dry_run": True,
-                "would_set": len(prepared),
-                "results": [
-                    {
-                        "row_index": p["row_index"],
-                        "card_id": p["card_id"],
-                        "status": "ok",
-                        "mime": p["mime"],
-                        "bytes_received": len(p["raw"]) if p["raw"] is not None else None,
-                        "sha256_received": p.get("sha256"),
-                        "icon_slug": p["icon_slug"],
-                    }
-                    for p in prepared
-                ]
-                + problems,
-                "type_check": type_check,
-                "icon_check": icon_check,
-                "unknown_icon_slugs": icon_check.get("unknown", []),
-                "note": _logo_preview_note(type_check, icon_check),
-            }
-        )
+        # Opened with every row asked for, never fewer than the commit will
+        # write: the commit skips the type and icon filters above, so a
+        # preview counting only what survived them could issue no token to
+        # a commit that needs one.
+        async with mutation_batch(
+            token,
+            tool_name="set_card_logos",
+            row_count=len(items),
+            dry_run=True,
+        ) as batch:
+            batch.summary = {"rows": len(items), "would_set": len(prepared)}
+            return _fmt(
+                {
+                    "dry_run": True,
+                    "would_set": len(prepared),
+                    "results": [
+                        {
+                            "row_index": p["row_index"],
+                            "card_id": p["card_id"],
+                            "status": "ok",
+                            "mime": p["mime"],
+                            "bytes_received": len(p["raw"]) if p["raw"] is not None else None,
+                            "sha256_received": p.get("sha256"),
+                            "icon_slug": p["icon_slug"],
+                        }
+                        for p in prepared
+                    ]
+                    + problems,
+                    "type_check": type_check,
+                    "icon_check": icon_check,
+                    "unknown_icon_slugs": icon_check.get("unknown", []),
+                    "note": _logo_preview_note(type_check, icon_check),
+                    **_preview_fields(batch),
+                }
+            )
 
     if not prepared:
         return _fmt({"dry_run": False, "set": 0, "results": problems})
@@ -2837,6 +2926,34 @@ async def list_available_icons(search: str = "", limit: int = 50) -> str:
     return _fmt(data)
 
 
+async def _clear_logos_preview(token: str, card_ids: list[str]) -> dict:
+    """Dry-run body of ``clear_card_logos``: how many images would actually
+    disappear, rather than an echo of the ids that were asked for. A failed
+    lookup is informative, never fatal — the preview still comes back."""
+    results: list[dict] = []
+    would = 0
+    try:
+        client = TurboEAClient(token)
+        items = await client.get_cards_by_ids(card_ids)
+        has_logo = {str(c.get("id")): bool(c.get("logo_updated_at")) for c in items}
+    except Exception as exc:  # noqa: BLE001 — informative, never fatal
+        return {
+            "dry_run": True,
+            "would_clear": len(card_ids),
+            "results": [{"card_id": cid, "status": "unknown"} for cid in card_ids],
+            "note": f"Could not check which cards carry a logo: {exc}",
+        }
+    for cid in card_ids:
+        if cid not in has_logo:
+            results.append({"card_id": cid, "status": "unknown_card_id"})
+        elif has_logo[cid]:
+            would += 1
+            results.append({"card_id": cid, "status": "would_clear"})
+        else:
+            results.append({"card_id": cid, "status": "no_logo"})
+    return {"dry_run": True, "would_clear": would, "results": results}
+
+
 @mcp.tool(annotations=_WRITE_DESTRUCTIVE_ANNOT)
 async def clear_card_logos(
     card_ids: list[str],
@@ -2889,32 +3006,15 @@ async def clear_card_logos(
             return gate
 
     if dry_run:
-        # Say how many images would actually disappear, rather than echoing
-        # back the ids that were asked for.
-        results: list[dict] = []
-        would = 0
-        try:
-            client = TurboEAClient(token)
-            items = await client.get_cards_by_ids(card_ids)
-            has_logo = {str(c.get("id")): bool(c.get("logo_updated_at")) for c in items}
-        except Exception as exc:  # noqa: BLE001 — informative, never fatal
-            return _fmt(
-                {
-                    "dry_run": True,
-                    "would_clear": len(card_ids),
-                    "results": [{"card_id": cid, "status": "unknown"} for cid in card_ids],
-                    "note": f"Could not check which cards carry a logo: {exc}",
-                }
-            )
-        for cid in card_ids:
-            if cid not in has_logo:
-                results.append({"card_id": cid, "status": "unknown_card_id"})
-            elif has_logo[cid]:
-                would += 1
-                results.append({"card_id": cid, "status": "would_clear"})
-            else:
-                results.append({"card_id": cid, "status": "no_logo"})
-        return _fmt({"dry_run": True, "would_clear": would, "results": results})
+        async with mutation_batch(
+            token,
+            tool_name="clear_card_logos",
+            row_count=len(card_ids),
+            dry_run=True,
+        ) as batch:
+            preview = await _clear_logos_preview(token, card_ids)
+            batch.summary = {"rows": len(card_ids), "would_clear": preview["would_clear"]}
+            return _fmt({**preview, **_preview_fields(batch)})
 
     async with mutation_batch(
         token,
@@ -2924,7 +3024,7 @@ async def clear_card_logos(
         confirm_token=confirm_token or None,
     ) as batch:
         client = batch.client()
-        results = []
+        results: list[dict] = []
         cleared = 0
         for cid in card_ids:
             # Per-row isolation, as everywhere else: one card the caller may
@@ -3495,6 +3595,7 @@ async def resolve_card_refs(refs: list[dict]) -> str:
 async def upsert_relations_bulk(
     operations: list[dict],
     dry_run: bool = True,
+    confirm_token: str = "",
 ) -> str:
     """Create or delete many relations between cards in one call.
 
@@ -3519,9 +3620,13 @@ async def upsert_relations_bulk(
         dry_run: When True (default), validate every op and return the
             preview without persisting. Call again with dry_run=False to
             commit.
+        confirm_token: For commits above the per-call confirmation
+            threshold (default 20 rows), the ``confirm_token`` returned by
+            the prior dry-run (see ``create_cards_bulk``).
 
-    Returns: JSON with `results[]`, `upserted`, `deleted`, `failed` and
-    `dry_run`.
+    Returns: JSON with `results[]`, `upserted`, `deleted`, `failed`,
+    `dry_run`, `batch_id` (the audit handle) and — on dry-runs above the
+    confirmation threshold — `confirm_token` to pass back on commit.
     """
     token = await _get_current_token()
     if not token:
@@ -3558,12 +3663,33 @@ async def upsert_relations_bulk(
                     "rejected_rows": delete_rows,
                 }
             )
-    client = TurboEAClient(token)
-    data = await client.post(
-        "/relations/bulk",
-        json={"operations": operations, "dry_run": dry_run},
-    )
-    return _fmt(data)
+    if not dry_run:
+        gate = _confirmation_required_message("upsert_relations_bulk", len(operations))
+        if gate is not None and not confirm_token:
+            return gate
+    async with mutation_batch(
+        token,
+        tool_name="upsert_relations_bulk",
+        row_count=len(operations),
+        dry_run=dry_run,
+        confirm_token=confirm_token or None,
+    ) as batch:
+        data = await batch.client().post(
+            "/relations/bulk",
+            json={"operations": operations, "dry_run": dry_run},
+        )
+        if isinstance(data, dict):
+            if dry_run:
+                data.update(_preview_fields(batch))
+            else:
+                data["batch_id"] = batch.batch_id
+            batch.summary = {
+                "rows": len(operations),
+                "upserted": data.get("upserted"),
+                "deleted": data.get("deleted"),
+                "failed": data.get("failed"),
+            }
+        return _fmt(data)
 
 
 @mcp.tool(annotations=_WRITE_ADDITIVE_ANNOT)
@@ -4075,9 +4201,21 @@ logger.info("Registered %d extension-provided MCP tool(s)", _extension_tools_reg
 # case-insensitive, so a mutated spelling of the literal could never fail a test.
 _WWW_AUTHENTICATE = "WWW-Authenticate"
 
+# The two challenges the gate answers with: the body and the WWW-Authenticate
+# parameters that precede ``resource_metadata``.
+_TOKEN_REQUIRED = (
+    {"error": "unauthorized", "error_description": "Bearer token required"},
+    "",
+)
+_TOKEN_INVALID = (
+    {"error": "invalid_token", "error_description": "The access token is unknown or expired"},
+    'error="invalid_token", ',
+)
+
 
 class RequireBearerForMcp:
-    """Return 401 + WWW-Authenticate for unauthenticated /mcp requests.
+    """Return 401 + WWW-Authenticate for unauthenticated /mcp requests —
+    and for requests whose bearer token does not resolve.
 
     Without this, anonymous POSTs are silently accepted, the streamable
     session manager hands out a session id, and the MCP client (Claude
@@ -4087,13 +4225,35 @@ class RequireBearerForMcp:
     ``WWW-Authenticate: Bearer resource_metadata="…"`` so the client knows
     where to discover the OAuth metadata and initiate the flow.
 
+    A bearer token that is unknown or expired gets the same 401, carrying
+    ``error="invalid_token"`` (RFC 6750 §3.1). Tokens live in this process's
+    memory, so every restart invalidates them; before this check such a token
+    reached the tools, which answered "Not authenticated" as a *result*, and a
+    client that only refreshes on a 401 — Copilot Studio's token broker — was
+    left with a dead connection it never tried to renew.
+
     The OAuth and well-known routes themselves remain public — the gate
     only fires for the protocol endpoint at ``/mcp``.
     """
 
-    def __init__(self, app, resource_metadata_url: str):
+    def __init__(self, app, resource_metadata_url: str, resolve=oauth.resolve_token):
         self.app = app
         self.resource_metadata_url = resource_metadata_url
+        self.resolve = resolve
+
+    async def _challenge(self, scope, receive, send, body: dict, params: str) -> None:
+        from starlette.responses import JSONResponse
+
+        response = JSONResponse(
+            body,
+            status_code=401,
+            headers={
+                _WWW_AUTHENTICATE: (
+                    f'Bearer {params}resource_metadata="{self.resource_metadata_url}"'
+                ),
+            },
+        )
+        await response(scope, receive, send)  # pragma: no mutate, a JSON response never reads the body
 
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http":
@@ -4102,21 +4262,29 @@ class RequireBearerForMcp:
                 headers = dict(scope.get("headers", []))
                 auth = headers.get(b"authorization", b"").decode()  # pragma: no mutate, any default reads as unauthenticated
                 if not auth.lower().startswith("bearer "):
+                    await self._challenge(scope, receive, send, *_TOKEN_REQUIRED)  # pragma: no mutate, a JSON response never reads the body
+                    return
+                try:
+                    resolved = await self.resolve(auth[7:])
+                except Exception:  # noqa: BLE001 — the backend, not the token, failed
+                    # Turbo EA could not be asked about the session. That is no
+                    # reason to end it, and an unhandled error here would be a
+                    # 500 on every request for the length of the outage.
+                    logger.warning("Could not resolve an MCP token", exc_info=True)
                     from starlette.responses import JSONResponse
 
                     response = JSONResponse(
                         {
-                            "error": "unauthorized",
-                            "error_description": "Bearer token required",
+                            "error": "temporarily_unavailable",
+                            "error_description": "Turbo EA is not reachable, retry shortly",
                         },
-                        status_code=401,
-                        headers={
-                            _WWW_AUTHENTICATE: (
-                                f'Bearer resource_metadata="{self.resource_metadata_url}"'
-                            ),
-                        },
+                        status_code=503,
+                        headers={oauth.RETRY_AFTER: "5"},
                     )
                     await response(scope, receive, send)  # pragma: no mutate, a JSON response never reads the body
+                    return
+                if resolved is None:
+                    await self._challenge(scope, receive, send, *_TOKEN_INVALID)  # pragma: no mutate, a JSON response never reads the body
                     return
         await self.app(scope, receive, send)
 
@@ -4149,6 +4317,12 @@ def create_app() -> Starlette:
     # the upstream serves both at the right paths without an extra Starlette
     # mount (a mount would push the protocol to /mcp/mcp and trigger a 307
     # redirect for clients hitting /mcp without a trailing slash).
+    if oauth.CLIENT_KEY_IS_EPHEMERAL:
+        logger.warning(
+            "SECRET_KEY is not set for the MCP server: dynamically registered "
+            "OAuth clients will not survive a restart. Pass the instance's "
+            "SECRET_KEY to the mcp-server container."
+        )
     app = mcp.streamable_http_app()
     app.router.routes.extend(oauth_routes)
     resource_metadata_url = (
