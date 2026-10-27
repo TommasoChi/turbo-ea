@@ -1,6 +1,6 @@
 # Reports
 
-Turbo EA includes a powerful **visual reporting** module that allows analyzing the enterprise architecture from different perspectives. All reports can be [saved for reuse](saved-reports.md) with their current filter and axis configuration.
+Turbo EA includes a powerful **visual reporting** module that allows analyzing the enterprise architecture from different perspectives. All reports can be [saved for reuse](saved-reports.md) with their current filters and display settings.
 
 ![Available Reports Menu](../assets/img/en/09_reports_menu.png)
 
@@ -8,18 +8,18 @@ Turbo EA includes a powerful **visual reporting** module that allows analyzing t
 
 ![Portfolio Report](../assets/img/en/10_report_portfolio.png)
 
-The **Portfolio Report** displays a configurable **bubble chart** (or scatter plot) of your cards. You choose what each axis represents:
+The **Portfolio Report** (**Reports → Application Portfolio**) shows your applications as coloured chips, grouped into boxes. Two choices in the toolbar drive it:
 
-- **X axis** — Select any numeric or select field (e.g., Technical Suitability)
-- **Y axis** — Select any numeric or select field (e.g., Business Criticality)
-- **Bubble size** — Map to a numeric field (e.g., Annual Cost)
-- **Bubble color** — Map to a select, multi-select or yes/no field, or to the lifecycle state
+- **Group by** — any single-select or yes/no field of the card type (e.g. Business Criticality, TIME Model), or a related card type (e.g. Organization, Business Capability). Each value becomes a box with a count and a bar showing its colour mix; applications with no value land in a *Not assigned to any …* box.
+- **Color apps by** — any select, multi-select or yes/no field (e.g. TIME Model), or *No color*.
+
+Next to them sit a **Search** box, the collapsible filters (**Related By**, **Tags**, **Fields**, **Relation Subtypes**), the column picker and the **Chart view** / **Table view** toggle, which lists the same cards as a sortable table.
 
 **Colouring and filtering by yes/no and multi-select fields** — Every select, multi-select and yes/no field of the card type can colour the cards and filter them — here, in the Flexible Portfolio, in the [Capability Map](#capability-map) (*Color Apps By*), in the [Lifecycle Report](#lifecycle-report)'s date-range view and in a diagram's *Color by* menu. A yes/no field shows as **Yes** and **No**, a card carrying several values of a multi-select field is shown as **Multiple**, and an option an administrator left without a colour gets a colour of its own in the legend instead of the grey of *Not set*. Yes/no fields can also group the cards — here, in the [Cost Report](#cost-report)'s table and in the [Inventory](inventory.md); a multi-select field cannot, because a card with two values would belong to two groups.
 
 **Filtering by subtype** — When the card type has subtypes, the **Fields** filter row starts with a **Subtype** filter. Pick one or more subtypes, or *(empty)* for the cards that have none. The filter is saved with the report and carried over by **View in inventory**.
 
-This is ideal for portfolio analysis — plotting applications by business value vs. technical fitness, for example, to identify candidates for investment, replacement, or retirement.
+A typical use: group by **Business Criticality** and colour by **TIME Model**. Critical applications marked *Migrate* are your first modernisation priorities, and administrative applications marked *Eliminate* or *Migrate* are your retirement and consolidation candidates. The [EA Beginner's Guide](../beginners-guide/your-first-analysis.md) shows how to derive TIME Model from the suitability ratings with a calculation.
 
 ### AI Portfolio Insights
 
@@ -50,6 +50,10 @@ Switching the card type clears the group-by, colour-by, and filter selections (t
 ### Relation subtypes
 
 When a card's relations carry a "type" value — for example the **Usage Type** (Owner / User / Stakeholder) on Organization→Application relations, or the **Support Type** on Application→Business Capability relations — you can colour the cards by that value and filter on it. **Group the report by the related card type** to use them (e.g. *Group by → Organization* to unlock *Usage Type*): the subtype then appears under a **Relation Subtypes** group in the *Color by* dropdown and as its own filter row. Because each card is shown under one related card, it is coloured by *that* relation — an application that is a *User* of one organisation shows as User there, even if it is owned by another.
+
+### Including sub-cards
+
+When a related card type has a hierarchy (such as Business Capability or Organization), the **Related By** row carries an **Include sub-cards** switch. Turn it on and a pick also covers everything beneath it: choosing a parent capability then matches the cards linked to any of its sub-capabilities, and parents with no direct link of their own can be picked too. The switch is saved with the report, and the [Lifecycle Report](#lifecycle-report) offers it too. While it widens a pick, the group drawer's **View in inventory** button is hidden, because the inventory filters on direct links only.
 
 ### Nested groups
 
@@ -91,6 +95,10 @@ The **Lifecycle Report** shows a **timeline visualization** of when technology c
 Components are displayed as horizontal bars spanning their lifecycle phases: Plan, Phase In, Active, Phase Out, and End of Life.
 
 **Scoping to specific cards** — Once you have picked a card type, the chip beside it opens a picker: select one or more cards and the timeline shows only those and everything beneath them in the hierarchy. Sub-cards are included automatically. The chip stays disabled while the type selector is on *All types*, because a scope needs one hierarchy to work from.
+
+**Filtering** — Once a card type is picked, the report offers the same **Filters** row as the [Flexible Portfolio](#flexible-portfolio): related cards (with *Include sub-cards*), tags, the card's subtype and its select fields, and relation subtypes, plus a search box. Different filters combine (a card must match all of them), while the values picked within one filter are alternatives. A caption shows how many cards match, and **Clear all** removes every filter. The filters are saved with the report and named one by one in the header of a print or export, so the audience knows what the timeline covers. For example, pick your operational capabilities with *Include sub-cards* on and the tag *Internally Developed* to review only the in-house applications behind core operations — an expense tool such as Concur stays in the inventory but leaves this view. On *All types* the filters are unavailable, because they read one card type's fields, relations and tags.
+
+**Sorting** — The **Sort by** menu orders the timeline and the table alike: by name, type, subtype, current phase, any phase date (Plan, Phase In, Active, Phase Out, End of Life) or one of the card type's single-select fields such as Business Criticality, which follows the order of the field's options rather than the alphabet. In the date-range view it offers the start date, the end date and the colour field instead. The arrow beside it switches between ascending and descending, and cards without a value always come last, whichever the direction. Clicking a column header in the table sorts the same way. The sort is saved with the report, and any sort other than by name appears in the export header.
 
 ## Dependencies Report
 

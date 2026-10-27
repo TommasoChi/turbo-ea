@@ -1,0 +1,44 @@
+---
+paths:
+  - "backend/app/api/v1/**"
+  - "backend/app/schemas/**"
+  - "backend/app/api/deps.py"
+  - "scripts/dump_openapi.py"
+  - "docs/api/openapi.json"
+---
+
+# API contracts: routes, schemas and the OpenAPI spec
+
+> Loaded when you touch `backend/app/api/v1/**`, `backend/app/schemas/**`, `backend/app/api/deps.py`, … (full
+> list in the frontmatter). Moved out of `CLAUDE.md`'s General Principles / Backend Conventions to keep the
+> file under its 40 KB budget; edit it here.
+
+- **A request/response contract change starts in `backend/app/schemas/`, not in the route handler.** Define
+  or edit the Pydantic model first; the handler only ever consumes an already-validated schema instance,
+  never a raw `dict`/`Any` reconstructed inline. The one deliberate exception is a card's `attributes`
+  (`dict | None`, `field_validator` via `_validate_jsonb_dict`) — the data-driven metamodel means custom
+  field keys are admin-configured, not fixed at the schema level, so `dict` there is correct, not a
+  shortcut.
+- **A route handler is a controller: parse/validate the request, check permissions, call a service, return
+  the response. Business logic, transaction orchestration and side effects (writes, event emission,
+  notifications) belong in `backend/app/services/`, never inline in the handler.** This is the same
+  **"B0-style extraction"** pattern already named in `.claude/rules/extensions-sdk-bridges.md` —
+  `card_write_service.py`, `adr_service.py`, `risk_service.py`, `survey_service.py` are the shared service
+  functions both the REST routes and the extension SDK bridges call, so a human write and an extension
+  write run identical validation, hierarchy guards and event emission. `create_card` in `cards.py` is the
+  reference shape: permission check → readability check → `card_write_service.create_card(...)` → commit →
+  re-fetch → response. **This does not ban a private response-shaping helper in the route file itself**
+  (`_card_to_response`, `_cost_redaction_map` in `cards.py` are fine — they format an already-fetched,
+  already-committed result, they do not decide anything) — the line is business rules and side effects, not
+  every local function.
+- **Any new or changed route means a regenerated OpenAPI spec, before opening the PR**: run
+  `python scripts/dump_openapi.py` and commit `docs/api/openapi.json` as part of the same change, not as a
+  follow-up fix once CI's `OpenAPI Spec` job fails the PR for drift. `docs/api/openapi.json` is generated
+  from `app.main:app` and rendered in the user manual at `/admin/api/` via Swagger UI (loaded from the
+  `swagger-ui-dist` CDN, same UI as FastAPI's `/api/docs`) — never hand-edit it. The committed spec is
+  **version-agnostic**: `dump_openapi.py` normalises `info.version` to the constant `"latest"` before
+  writing, so a VERSION-only diff never causes CI drift (the live runtime spec at `/api/openapi.json` keeps
+  the real version — `app.openapi()` direct). There is intentionally no pre-commit hook for this — the
+  script imports the whole backend app and not every `backend/**` commit should pay that cost; CI fails a
+  PR whose spec has drifted, and a push to `main` auto-regenerates it via the `openapi-spec` workflow job,
+  so a forgotten regen is recoverable there too.

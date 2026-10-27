@@ -88,6 +88,8 @@ Example: `feature/add-csv-import-validation`, `fix/stakeholder-permission-check`
 - Check existing [issues](../../issues) and [discussions](../../discussions) to avoid duplicate work.
 - For larger changes, open a discussion or issue first to get feedback on the approach.
 - Read `CLAUDE.md` for codebase conventions — it is the single source of truth for architecture decisions and coding standards.
+- Area-specific conventions live in path-scoped files under `.claude/rules/` (Claude Code loads each when a matching file is touched); read the one for the area you are changing.
+- Reference tables — environment variables, database schema, metamodel defaults, RBAC registry, security runtime — are in [`dev/ARCHITECTURE.md`](dev/ARCHITECTURE.md).
 
 ### While You Code
 
@@ -211,6 +213,16 @@ The dump script imports `app.main:app` and calls `app.openapi()` — it does not
 ### i18n Convention
 
 Files use a **suffix-based** naming scheme: `page.md` is English (default), `page.es.md` is Spanish, `page.de.md` is German, etc. Untranslated pages fall back to English automatically.
+
+#### Translating with `/translate`
+
+Author English only — the `en/*.json` locale files, the English `label`s in `backend/app/services/seed.py`, the English doc page and the `en` screenshot filename — and let the `/translate` Claude Code skill fill the nine other locales before you open the PR. The skill runs on a Sonnet subagent (`.claude/agents/translator.md`) and drives `scripts/i18n/check_locales.py`, which you can also run by hand:
+
+- `python scripts/i18n/check_locales.py report [--base origin/main] [--json]` — every gap per locale: missing keys (nested-aware), placeholder mismatches, empty values, values equal to English among the keys this branch changed (*suspect*, non-fatal), doc pages with no or stale siblings and screenshot entries missing a translated filename (both non-fatal). Exits 1 on a missing key or a placeholder mismatch.
+- `python scripts/i18n/check_locales.py todo <locale> --out <file.json>` — the keys that locale still needs, as `{"<namespace>:<key>": "<English value>"}`.
+- `python scripts/i18n/check_locales.py apply <locale> <file.json>` — inserts the translated values at the English key position, keeping the file's layout; refuses an empty value, a placeholder mismatch, an unescaped ASCII `"` and, in French, « carte » used for a card.
+
+If `frontend/src/i18n/i18n.test.ts` or `backend/tests/services/test_i18n_seed.py` still fails afterwards, run `report` again: a key nested under a namespace the test only checks at top level, or a seed `translations` dict missing a locale, is the usual cause.
 
 ### Editing Existing Pages
 

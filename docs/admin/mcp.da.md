@@ -68,6 +68,9 @@ MCP_PUBLIC_URL=https://your-domain.example.com/mcp
 | `TURBO_EA_PUBLIC_URL` | `http://localhost:8920` | Den offentlige URL til din Turbo EA-instans |
 | `MCP_PUBLIC_URL` | `http://localhost:8920/mcp` (docker compose) | Den offentlige URL til MCP-serveren (bruges i OAuth-redirect-URI'er). Når containeren køres selvstændigt, er kode-standarden `http://localhost:8001` |
 | `MCP_PORT` | `8001` | Intern port for MCP-containeren (sjældent behov for at ændre) |
+| `SECRET_KEY` | *(ingen)* | Sæt den til backends værdi. Signerer de OAuth-klient-id'er, MCP-serveren udsteder, så en klient, der er registreret én gang, fortsat virker efter en genstart; uden den signerer serveren med en nøgle, der forsvinder med processen, og logger en advarsel. Docker Compose, Helm-chartet og cloud-skabelonerne sender den automatisk med |
+| `MCP_ALLOWED_ORIGINS` | *(tom)* | Kommaseparerede ekstra origins, hvis browserforespørgsler MCP-endpointet accepterer. Forespørgsler uden `Origin`-header accepteres altid |
+| `MCP_ALLOWED_HOSTS` | *(tom)* | Kommaseparerede ekstra værtsnavne, som MCP-endpointet accepterer i `Host`-headeren ud over værterne i `TURBO_EA_PUBLIC_URL` og `MCP_PUBLIC_URL`. Kun nødvendig, når en proxy videresender et andet værtsnavn; se [Bag en proxy, der ændrer værtsnavnet](#proxy-host-name) |
 
 ### Trin 3: Tilføj OAuth-redirect-URI'en til din SSO-app
 
@@ -120,6 +123,29 @@ Tilføj til dit workspace `.vscode/mcp.json`:
 ```
 
 Brug `https://your-domain.example.com/mcp` som endpoint. Den tidligere dobbelte form `https://your-domain.example.com/mcp/mcp` fungerer stadig, så eksisterende connectorer fortsætter med at fungere uden ændringer.
+
+### Microsoft Copilot Studio
+
+Copilot Studio forbinder til MCP-servere fra Microsofts cloud, ikke fra brugerens computer. Instansen skal derfor kunne nås fra det offentlige internet via HTTPS med et certifikat fra en offentlig certifikatudsteder. En instans, der kun svarer på et internt netværk eller via VPN, virker med desktopværktøjer, men fejler i Copilot Studio.
+
+1. Åbn **Værktøjer > Tilføj et værktøj > Nyt værktøj > Model Context Protocol** i din agent.
+2. Indtast server-URL'en `https://your-domain.example.com/mcp`.
+3. Vælg **OAuth 2.0** under **Godkendelse** og derefter **Dynamisk registrering** (Dynamic discovery).
+4. Opret forbindelsen, og log ind med din SSO-konto, når du bliver bedt om det.
+
+Copilot Studio registrerer sig én gang og beholder det klient-id, den får. Id'et bærer sine egne redirect-URI'er, signeret med instansens `SECRET_KEY`, så forbindelsen fortsat virker, når MCP-containeren genstartes eller opgraderes. Ændres `SECRET_KEY`, bliver alle registrerede klienter ugyldige: opret derefter værktøjet igen i Copilot Studio.
+
+### Bag en proxy, der ændrer værtsnavnet { #proxy-host-name }
+
+MCP-endpointet beskytter sig mod DNS rebinding ved at kontrollere `Host`-headeren i hver forespørgsel. Det accepterer værtsnavnene fra `TURBO_EA_PUBLIC_URL` og `MCP_PUBLIC_URL` samt `localhost` og `127.0.0.1`. MCP-containeren logger den fulde liste én gang ved start. Alle andre værtsnavne afvises med `421 Misdirected Request`, og MCP-containeren logger `Invalid Host header: <name>`.
+
+Nogle proxyer videresender et andet værtsnavn end det offentlige. Azure Front Door foran en HTTP-rute i Azure Container Apps sender for eksempel rutens eget navn, `<route>.<environment>.azurecontainerapps.io`. Login fungerer stadig i så fald, men alle MCP-forbindelser fejler. Angiv det videresendte navn i `MCP_ALLOWED_HOSTS`:
+
+```dotenv
+MCP_ALLOWED_HOSTS=my-route.my-environment.westeurope.azurecontainerapps.io
+```
+
+Indtastningerne er kun værtsnavne, adskilt af kommaer, uden `https://` eller sti; containeren logger en advarsel for en indtastning, der aldrig kan matche. Matchningen er præcis, mod headeren som proxyen sender den, med små bogstaver. Tilføj `:port`, når proxyen sender en port, eller `:*` for at acceptere enhver port. Wildcards for underdomæner understøttes ikke. På Kubernetes sættes variablen via `mcp.extraEnv` i Helm-værdierne.
 
 ---
 
@@ -314,7 +340,7 @@ Forsvar i dybden ovenpå dry-run, så en LLM-fejltagelse ikke kan forårsage mas
 - **Kill switch.** `MCP_WRITES_ENABLED=false` slår alle 21 skriveværktøjer fra uden at re-deploye kode. De 35 læseværktøjer fortsætter med at virke.
 - **Logo-hentning sker kun fra tilladte værter.** De medfølgende ikonpakker kan ikke dække alle produkter hos en kunde, og en assistent kører ofte i en sandkasse uden adgang til nettet, så `set_card_logos` accepterer en `image_url`, som MCP-serveren henter. Kun `https`, kun værter fra `MCP_LOGO_FETCH_HOSTS`, kun offentlige adresser, højst to omdirigeringer (hver kontrolleret på ny), højst 1 MB læst som stream, og byte-strømmen skal bære en ægte PNG/JPEG/WebP/GIF-signatur. Hentningen sker i MCP-kanten, aldrig i backend'en, og billedet uploades derefter ad den almindelige vej — en URL valgt af en sprogmodel når aldrig den proces, der holder databasen. `MCP_LOGO_FETCH_ENABLED=false` slår det fra.
 - **Audit origin-tag.** Hver backend-anmodning fra MCP-serveren bærer en `X-Turbo-EA-Origin: mcp`-header. Hændelser udsendt fra disse anmodninger er tagget `origin: "mcp"` i revisions-log-payloaden, så admins kan filtrere MCP-drevne skrivninger ud af tidslinjen adskilt fra web-UI-handlinger.
-- **Mutations-batches.** Hvert MCP-skrivekald åbner en mutations-batch før nogen skrivninger; hver hændelse udsendt under kaldet stemples med batch-id'et. Admins (eller værktøjet `get_change_history`) kan rekonstruere den fulde per-hændelses-diff for en commit fra ét id, og `rollback_batch` kan tilbagerulle den. Commits over `MCP_BATCH_CONFIRMATION_THRESHOLD` rækker skal ekko en engangs-`confirm_token` udstedt af den forudgående dry-run (15 minutters TTL), så en stor commit altid følger efter en gennemgået forhåndsvisning.
+- **Mutations-batches.** Hvert MCP-skrivekald åbner en mutations-batch før nogen skrivninger; hver hændelse udsendt under kaldet stemples med batch-id'et. Admins (eller værktøjet `get_change_history`) kan rekonstruere den fulde per-hændelses-diff for en commit fra ét id, og `rollback_batch` kan tilbagerulle den. Commits over `MCP_BATCH_CONFIRMATION_THRESHOLD` rækker skal sende den engangs-`confirm_token` tilbage, som den forudgående dry-run returnerede. Backenden kontrollerer den, når commit-batchen åbnes, før noget skrives: den skal stamme fra en dry-run af samme værktøj, af samme bruger, for under 15 minutter siden, og den godkender én enkelt commit. Alle bulk-skriveværktøjer følger denne cyklus med forhåndsvisning og bekræftelse: `create_cards_bulk`, `update_cards_bulk`, `archive_cards`, `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos`, `clear_card_logos`.
 - **Ingen hård sletning.** Værktøjssættet udelader bevidst permanent kortsletning. `archive_cards` og `update_cards_bulk` *er* eksponeret, men arkivering er en genoprettelig soft-delete (30-dages gendannelsesvindue), og begge er destruktivitets-annoterede og dry-run-gatede. Tilføjelse af et værktøj, der udfører en irreversibel mutation (hård sletning, tvungen udrensning), ville kræve en eksplicit designgennemgang.
 
 De seks rettesnore-miljøvariabler på MCP-containeren:
@@ -328,8 +354,8 @@ De seks rettesnore-miljøvariabler på MCP-containeren:
 | `MCP_ALLOW_RELATION_DELETE` | `false` | Når `true`, accepterer `upsert_relations_bulk` `action: "delete"`-operationer. |
 | `MCP_LOGO_FETCH_ENABLED` | `true` | Når `true`, kan `set_card_logos` tage en `image_url`: MCP-serveren henter billedet og uploader det ad den almindelige vej, så alle kontroller af rettigheder, størrelse og format stadig gælder. Sæt `false` for helt at afvise URL-vejen — ikon-slugs og indsatte bytes virker fortsat. |
 | `MCP_LOGO_FETCH_HOSTS` | *(built-in)* | Kommaseparerede værter, som et logo må hentes fra, med nøjagtigt match. Standard: `raw.githubusercontent.com`, `cdn.jsdelivr.net`, `cdn.simpleicons.org`, `upload.wikimedia.org` — offentlig ikon-hosting, hvor forespørgslen indeholder et filnavn og intet om dit landskab. En domæne-til-logo-tjeneste kan tilføjes, men så får den at vide, hvilke leverandører du bruger. |
-| `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | Commits, der berører flere rækker end dette, kræver `confirm_token` fra en forudgående dry-run. |
-| `MCP_REQUIRE_DRYRUN_FIRST` | `true` | Aktiverer confirm-token-gaten ovenfor. Sæt kun til `false` for betroede automatiseringspipelines, der eksplicit springer forhåndsvisnings-rundturen over. |
+| `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | Commits, der berører flere rækker end dette, kræver `confirm_token` fra en forudgående dry-run. Backenden anvender sin egen grænse på 20 rækker uanset denne værdi, så værdien kan kun sænke grænsen, aldrig hæve den. |
+| `MCP_REQUIRE_DRYRUN_FIRST` | `true` | Ved `true` afviser MCP-serveren en commit over tærsklen uden `confirm_token` med en forklarende fejl, før backenden kaldes. `false` slår kun denne tidlige fejl fra: backenden kræver stadig tokenet ved hver commit over 20 rækker. |
 
 ### Ressourcer
 
@@ -384,3 +410,6 @@ Dataadgang gennem MCP — læse eller skrive — følger den samme RBAC-model so
 | AI-værktøjet kan ikke oprette forbindelse | Tjek, at `MCP_PUBLIC_URL` matcher den URL, der er tilgængelig fra brugerens maskine. Sørg for, at HTTPS virker. |
 | Brugeren får tomme resultater | MCP respekterer RBAC-tilladelser. Hvis en bruger har begrænset adgang, vil de kun se de kort, deres rolle tillader. |
 | Forbindelse droppes efter 1 time | AI-værktøjet bør håndtere token-fornyelse automatisk. Hvis ikke, genopret forbindelse. |
+| Copilot Studio melder "Connection creation failed" | Copilot Studio kalder fra Microsofts cloud. Tjek, at `https://your-domain.example.com/mcp` kan nås fra internettet med et offentligt betroet certifikat, og at `MCP_PUBLIC_URL` er netop den offentlige adresse. Nginx-loggen under et forsøg viser den sidste forespørgsel, der nåede frem; når der slet ingen kommer, kan instansen ikke nås. |
+| Et Copilot Studio-værktøj holdt op med at virke efter opgradering til 2.175.2 | Værktøjer oprettet før 2.175.2 har et klient-id, der ikke overlevede en genstart. Slet værktøjet, og tilføj det igen én gang; det nye id overlever senere genstarter. |
+| MCP-forbindelser fejler med `421 Misdirected Request`, og MCP-loggen viser `Invalid Host header` | En proxy foran Turbo EA videresender et andet værtsnavn end det offentlige. Tilføj navnet fra loglinjen til `MCP_ALLOWED_HOSTS`, og genstart MCP-containeren; se [Bag en proxy, der ændrer værtsnavnet](#proxy-host-name). |

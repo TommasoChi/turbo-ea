@@ -68,6 +68,9 @@ MCP_PUBLIC_URL=https://ihre-domain.beispiel.de/mcp
 | `TURBO_EA_PUBLIC_URL` | `http://localhost:8920` | Die öffentliche URL Ihrer Turbo-EA-Instanz |
 | `MCP_PUBLIC_URL` | `http://localhost:8920/mcp` (docker compose) | Die öffentliche URL des MCP-Servers (wird in OAuth-Weiterleitungs-URIs verwendet). Wird der Container eigenständig betrieben, lautet der Code-Standard `http://localhost:8001` |
 | `MCP_PORT` | `8001` | Interner Port des MCP-Containers (muss selten geändert werden) |
+| `SECRET_KEY` | *(keiner)* | Auf den Wert des Backends setzen. Signiert die OAuth-Client-IDs, die der MCP-Server ausgibt, sodass ein einmal registrierter Client nach einem Neustart weiter funktioniert; ohne ihn signiert der Server mit einem Schlüssel, der mit dem Prozess verloren geht, und protokolliert eine Warnung. Docker Compose, das Helm-Chart und die Cloud-Vorlagen übergeben ihn automatisch |
+| `MCP_ALLOWED_ORIGINS` | *(leer)* | Kommagetrennte zusätzliche Origins, deren Browser-Anfragen der MCP-Endpunkt akzeptiert. Anfragen ohne `Origin`-Header werden immer akzeptiert |
+| `MCP_ALLOWED_HOSTS` | *(leer)* | Kommagetrennte zusätzliche Hostnamen, die der MCP-Endpunkt im `Host`-Header akzeptiert, über die Hosts von `TURBO_EA_PUBLIC_URL` und `MCP_PUBLIC_URL` hinaus. Nur erforderlich, wenn ein Proxy einen anderen Hostnamen weiterleitet; siehe [Hinter einem Proxy, der den Hostnamen ändert](#proxy-host-name) |
 
 ### Schritt 3: OAuth-Weiterleitungs-URI zur SSO-App hinzufügen
 
@@ -120,6 +123,29 @@ Fügen Sie zu Ihrer Arbeitsbereich-Datei `.vscode/mcp.json` hinzu:
 ```
 
 Verwenden Sie `https://ihre-domain.beispiel.de/mcp` als Endpunkt. Die frühere doppelte Form `https://ihre-domain.beispiel.de/mcp/mcp` funktioniert weiterhin, sodass bestehende Konnektoren ohne Änderungen weiterarbeiten.
+
+### Microsoft Copilot Studio
+
+Copilot Studio verbindet sich aus der Microsoft-Cloud mit MCP-Servern, nicht vom Rechner des Benutzers. Die Instanz muss daher über HTTPS aus dem öffentlichen Internet erreichbar sein, mit einem Zertifikat einer öffentlichen Zertifizierungsstelle. Eine Instanz, die nur im internen Netz oder über VPN antwortet, funktioniert mit Desktop-Werkzeugen, scheitert aber in Copilot Studio.
+
+1. Öffnen Sie in Ihrem Agenten **Tools > Tool hinzufügen > Neues Tool > Model Context Protocol**.
+2. Geben Sie die Server-URL `https://ihre-domain.beispiel.de/mcp` ein.
+3. Wählen Sie unter **Authentifizierung** **OAuth 2.0** und dann **Dynamische Erkennung** (Dynamic discovery).
+4. Erstellen Sie die Verbindung und melden Sie sich bei Aufforderung mit Ihrem SSO-Konto an.
+
+Copilot Studio registriert sich einmal und behält die erhaltene Client-ID. Diese ID trägt ihre eigenen Weiterleitungs-URIs, signiert mit dem `SECRET_KEY` der Instanz, sodass die Verbindung erhalten bleibt, wenn der MCP-Container neu startet oder aktualisiert wird. Eine Änderung von `SECRET_KEY` macht alle registrierten Clients ungültig: Legen Sie das Tool in Copilot Studio danach neu an.
+
+### Hinter einem Proxy, der den Hostnamen ändert { #proxy-host-name }
+
+Der MCP-Endpunkt schützt sich vor DNS-Rebinding, indem er den `Host`-Header jeder Anfrage prüft. Er akzeptiert die Hostnamen von `TURBO_EA_PUBLIC_URL` und `MCP_PUBLIC_URL` sowie `localhost` und `127.0.0.1`. Der MCP-Container protokolliert die vollständige Liste einmal beim Start. Jeder andere Hostname wird mit `421 Misdirected Request` abgewiesen, und der MCP-Container protokolliert `Invalid Host header: <name>`.
+
+Manche Proxys leiten einen anderen Hostnamen als den öffentlichen weiter. Azure Front Door vor einer HTTP-Route von Azure Container Apps sendet zum Beispiel den eigenen Namen der Route `<route>.<environment>.azurecontainerapps.io`. Die Anmeldung funktioniert in diesem Fall weiterhin, aber jede MCP-Verbindung schlägt fehl. Tragen Sie den weitergeleiteten Namen in `MCP_ALLOWED_HOSTS` ein:
+
+```dotenv
+MCP_ALLOWED_HOSTS=my-route.my-environment.westeurope.azurecontainerapps.io
+```
+
+Die Einträge sind reine Hostnamen, durch Kommas getrennt, ohne `https://` und ohne Pfad; der Container protokolliert eine Warnung für einen Eintrag, der nie zutreffen kann. Der Abgleich ist exakt, gegen den Header, wie ihn der Proxy sendet, in Kleinbuchstaben. Ergänzen Sie `:port`, wenn der Proxy einen Port sendet, oder `:*`, um jeden Port zu akzeptieren. Subdomain-Wildcards werden nicht unterstützt. Unter Kubernetes setzen Sie die Variable über `mcp.extraEnv` in den Helm-Values.
 
 ---
 
@@ -314,7 +340,7 @@ Verteidigung in der Tiefe zusätzlich zum Trockenlauf, damit ein Fehlverhalten d
 - **Notausschalter.** `MCP_WRITES_ENABLED=false` schaltet alle 21 Schreib-Werkzeuge aus, ohne dass Code neu bereitgestellt werden muss. Die 35 Lese-Werkzeuge funktionieren weiter.
 - **Logo-Abruf nur von erlaubten Hosts.** Die mitgelieferten Icon-Pakete können nicht jedes Produkt abdecken, und ein Assistent hat oft keinen Zugang zum Web, daher akzeptiert `set_card_logos` eine `image_url`, die der MCP-Server abruft. Nur `https`, nur Hosts aus `MCP_LOGO_FETCH_HOSTS`, nur öffentliche Adressen, höchstens zwei Weiterleitungen (jede erneut geprüft), höchstens 1 MB als Stream gelesen, und die Bytes müssen eine echte PNG/JPEG/WebP/GIF-Signatur tragen. Der Abruf erfolgt am MCP-Rand, nie im Backend, und das Bild wird anschließend über den normalen Weg hochgeladen — eine von einem LLM gewählte URL erreicht also nie den Prozess mit der Datenbank. `MCP_LOGO_FETCH_ENABLED=false` schaltet dies ab.
 - **Audit-Herkunfts-Marker.** Jede Backend-Anfrage vom MCP-Server trägt einen `X-Turbo-EA-Origin: mcp`-Header. Ereignisse, die aus diesen Anfragen emittiert werden, werden im Audit-Log-Payload mit `origin: "mcp"` markiert, sodass Administratoren MCP-gesteuerte Schreibvorgänge getrennt von Web-UI-Aktionen aus der Zeitleiste filtern können.
-- **Mutations-Batches.** Jeder MCP-Schreibaufruf öffnet vor allen Schreibvorgängen einen Mutations-Batch; jedes während des Aufrufs emittierte Ereignis wird mit der Batch-ID gestempelt. Administratoren (oder das Werkzeug `get_change_history`) können aus einer einzigen ID den vollständigen Ereignis-Diff eines Commits rekonstruieren, und `rollback_batch` kann ihn rückgängig machen. Commits oberhalb von `MCP_BATCH_CONFIRMATION_THRESHOLD` Zeilen müssen ein einmaliges `confirm_token` zurückgeben, das der vorherige Trockenlauf ausgestellt hat (15 Minuten Gültigkeit) — ein großer Commit folgt also immer auf eine geprüfte Vorschau.
+- **Mutations-Batches.** Jeder MCP-Schreibaufruf öffnet vor allen Schreibvorgängen einen Mutations-Batch; jedes während des Aufrufs emittierte Ereignis wird mit der Batch-ID gestempelt. Administratoren (oder das Werkzeug `get_change_history`) können aus einer einzigen ID den vollständigen Ereignis-Diff eines Commits rekonstruieren, und `rollback_batch` kann ihn rückgängig machen. Commits oberhalb von `MCP_BATCH_CONFIRMATION_THRESHOLD` Zeilen müssen das einmalige `confirm_token` zurückgeben, das der vorherige Trockenlauf geliefert hat. Das Backend prüft es beim Öffnen des Commit-Batches, bevor etwas geschrieben wird: Es muss von einem Trockenlauf desselben Werkzeugs durch denselben Benutzer stammen, höchstens 15 Minuten alt sein, und es gibt genau einen Commit frei. Jedes Bulk-Schreibwerkzeug folgt diesem Zyklus aus Vorschau und Bestätigung: `create_cards_bulk`, `update_cards_bulk`, `archive_cards`, `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos`, `clear_card_logos`.
 - **Kein endgültiges Löschen.** Die Werkzeugsammlung lässt bewusst das dauerhafte Löschen von Karten weg. `archive_cards` und `update_cards_bulk` *sind* verfügbar, aber die Archivierung ist ein wiederherstellbares Soft-Delete (30-Tage-Wiederherstellungsfenster) und beide sind mit Destruktivitäts-Annotationen versehen und durch den Trockenlauf abgesichert. Das Hinzufügen eines Werkzeugs, das eine irreversible Mutation durchführt (endgültiges Löschen, erzwungenes Bereinigen), würde eine explizite Designprüfung erfordern.
 
 Die sechs Umgebungsvariablen für Schutzmechanismen auf dem MCP-Container:
@@ -328,8 +354,8 @@ Die sechs Umgebungsvariablen für Schutzmechanismen auf dem MCP-Container:
 | `MCP_ALLOW_RELATION_DELETE` | `false` | Bei `true` akzeptiert `upsert_relations_bulk` `action: "delete"`-Operationen. |
 | `MCP_LOGO_FETCH_ENABLED` | `true` | Bei `true` darf `set_card_logos` eine `image_url` verwenden: Der MCP-Server lädt das Bild herunter und lädt es über den normalen Weg hoch, sodass alle Berechtigungs-, Größen- und Formatprüfungen weiterhin greifen. Mit `false` wird der URL-Weg vollständig abgelehnt — Icon-Slugs und eingefügte Bytes funktionieren weiter. |
 | `MCP_LOGO_FETCH_HOSTS` | *(built-in)* | Kommagetrennte Hosts, von denen ein Logo geladen werden darf (exakte Übereinstimmung). Standard: `raw.githubusercontent.com`, `cdn.jsdelivr.net`, `cdn.simpleicons.org`, `upload.wikimedia.org` — öffentliches Icon-Hosting, bei dem die Anfrage nur einen Dateinamen enthält und nichts über Ihre Landschaft verrät. Ein Domain-zu-Logo-Dienst lässt sich ergänzen, verrät diesem aber, welche Anbieter Sie einsetzen. |
-| `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | Commits, die mehr Zeilen als diesen Wert berühren, erfordern das `confirm_token` aus einem vorherigen Trockenlauf. |
-| `MCP_REQUIRE_DRYRUN_FIRST` | `true` | Aktiviert das obige Confirm-Token-Gate. Nur für vertrauenswürdige Automatisierungs-Pipelines, die den Vorschau-Zyklus bewusst überspringen, auf `false` setzen. |
+| `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | Commits, die mehr Zeilen als diesen Wert berühren, erfordern das `confirm_token` aus einem vorherigen Trockenlauf. Das Backend wendet unabhängig von dieser Einstellung seine eigene Grenze von 20 Zeilen an; der Wert kann die Grenze also nur senken, nie anheben. |
+| `MCP_REQUIRE_DRYRUN_FIRST` | `true` | Bei `true` lehnt der MCP-Server einen Commit oberhalb des Schwellenwerts ohne `confirm_token` mit einer erklärenden Fehlermeldung ab, bevor er das Backend aufruft. `false` schaltet nur diese frühe Fehlermeldung ab: Das Backend verlangt das Token weiterhin bei jedem Commit über 20 Zeilen. |
 
 ### Ressourcen
 
@@ -384,3 +410,6 @@ Der Datenzugriff über MCP — lesend oder schreibend — folgt demselben RBAC-M
 | KI-Werkzeug kann sich nicht verbinden | Überprüfen Sie, dass `MCP_PUBLIC_URL` mit der URL übereinstimmt, die vom Rechner des Benutzers aus erreichbar ist. Stellen Sie sicher, dass HTTPS funktioniert. |
 | Benutzer erhält leere Ergebnisse | MCP respektiert RBAC-Berechtigungen. Wenn ein Benutzer eingeschränkten Zugriff hat, sieht er nur die Karten, die seine Rolle erlaubt. |
 | Verbindung bricht nach 1 Stunde ab | Das KI-Werkzeug sollte die Token-Erneuerung automatisch durchführen. Falls nicht, verbinden Sie sich erneut. |
+| Copilot Studio meldet „Connection creation failed“ | Copilot Studio ruft aus der Microsoft-Cloud auf. Prüfen Sie, dass `https://ihre-domain.beispiel.de/mcp` aus dem Internet mit einem öffentlich vertrauenswürdigen Zertifikat erreichbar ist und dass `MCP_PUBLIC_URL` genau diese öffentliche Adresse ist. Das Nginx-Log während eines Versuchs zeigt die letzte eingegangene Anfrage; kommt gar keine an, ist die Instanz nicht erreichbar. |
+| Ein Copilot-Studio-Tool funktioniert nach dem Update auf 2.175.2 nicht mehr | Vor 2.175.2 angelegte Tools besitzen eine Client-ID, die keinen Neustart überstand. Löschen Sie das Tool einmal und fügen Sie es erneut hinzu; die neue ID übersteht spätere Neustarts. |
+| MCP-Verbindungen schlagen mit `421 Misdirected Request` fehl, und das MCP-Log zeigt `Invalid Host header` | Ein Proxy vor Turbo EA leitet einen anderen Hostnamen als den öffentlichen weiter. Tragen Sie den Namen aus der Logzeile in `MCP_ALLOWED_HOSTS` ein und starten Sie den MCP-Container neu; siehe [Hinter einem Proxy, der den Hostnamen ändert](#proxy-host-name). |

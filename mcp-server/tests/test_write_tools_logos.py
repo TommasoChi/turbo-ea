@@ -1,8 +1,12 @@
 """Tests for the ``set_card_logos`` bulk logo tool.
 
-The tool validates every row locally before it opens a batch, so most of
-these need no HTTP at all — which is the point: a dry-run must be able to
-tell an agent that row 7 is a mislabelled SVG without a round trip.
+The tool validates every row locally before it writes anything, so a
+dry-run can tell an agent that row 7 is a mislabelled SVG without touching
+a card. Its only backend calls are the read-only checks and the preview's
+own mutation batch (opened so a preview above the confirmation threshold is
+issued a ``confirm_token``, #1302); ``_batch_posts`` below answers those for
+every test and fails any other POST, so "a preview writes nothing" is
+asserted throughout.
 """
 
 from __future__ import annotations
@@ -27,6 +31,24 @@ SVG = b"<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>"
 def fake_token(monkeypatch):
     monkeypatch.setattr(server, "_stdio_token", "test-token")
     yield "test-token"
+
+
+@pytest.fixture(autouse=True)
+def _batch_posts():
+    """Answer the preview's mutation-batch open / close and refuse any other
+    POST. A test that routes POSTs itself patches over this one."""
+    calls: list[tuple[str, dict | None]] = []
+
+    async def router(path, json=None):
+        calls.append((path, json))
+        if path.startswith("/mutation-batches/") and path.endswith("/commit"):
+            return {"id": "B-PREVIEW", "committed_at": "now"}
+        if path.startswith("/mutation-batches"):
+            return {"id": "B-PREVIEW", "dry_run": (json or {}).get("dry_run", False)}
+        raise AssertionError(f"unexpected write POST {path}")
+
+    with patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=router)):
+        yield calls
 
 
 def _parse(s: str) -> dict:
@@ -436,7 +458,7 @@ class TestClearCardLogos:
             patch.object(server.TurboEAClient, "get", AsyncMock(side_effect=get_router)),
             patch.object(server.TurboEAClient, "delete", AsyncMock(side_effect=delete_router)),
         ):
-            out = await server.clear_card_logos(card_ids=["c1", "c2"])
+            out = await server.clear_card_logos(card_ids=["c1", "c2", "c-gone"])
 
         data = _parse(out)
         assert data["would_clear"] == 1
@@ -444,7 +466,10 @@ class TestClearCardLogos:
         assert {r["card_id"]: r["status"] for r in data["results"]} == {
             "c1": "would_clear",
             "c2": "no_logo",
+            "c-gone": "unknown_card_id",
         }
+        # The preview opened its own dry-run batch, so it carries its handle.
+        assert data["batch_id"] == "B-PREVIEW"
 
     @pytest.mark.asyncio
     async def test_one_failing_row_does_not_abandon_the_rest(self, fake_token):
@@ -872,3 +897,63 @@ class TestChunkedCardLookups:
         assert out["icon_check"]["status"] == "ok"
         assert out["icon_check"]["unknown"] == []
         assert set(out["icon_check"]["resolved"]) == {"s1", "s2", "s3"}
+
+
+class TestClearLogosPreviewHelper:
+    """``_clear_logos_preview`` is the plain function behind the dry run, so
+    its whole return value is pinned here: every key and every status string
+    is what an agent reads back, and a renamed key would be a silent
+    regression (the tool above only samples them)."""
+
+    @staticmethod
+    def _client(items: list[dict] | None = None, exc: Exception | None = None):
+        seen: list[str | None] = []
+
+        class Fake:
+            def __init__(self, token):
+                seen.append(token)
+
+            async def get_cards_by_ids(self, ids):
+                if exc is not None:
+                    raise exc
+                return items or []
+
+        return Fake, seen
+
+    @pytest.mark.asyncio
+    async def test_reports_each_card_by_what_the_lookup_found(self):
+        fake, seen = self._client(
+            items=[
+                {"id": "c1", "logo_updated_at": "2026-08-28T10:00:00Z"},
+                {"id": "c2", "logo_updated_at": None},
+            ]
+        )
+        with patch.object(server, "TurboEAClient", fake):
+            out = await server._clear_logos_preview("tok-1", ["c1", "c2", "c-gone"])
+        # The lookup runs under the caller's token, never an anonymous client.
+        assert seen == ["tok-1"]
+        assert out == {
+            "dry_run": True,
+            "would_clear": 1,
+            "results": [
+                {"card_id": "c1", "status": "would_clear"},
+                {"card_id": "c2", "status": "no_logo"},
+                {"card_id": "c-gone", "status": "unknown_card_id"},
+            ],
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_failed_lookup_marks_every_card_unknown_and_says_why(self):
+        fake, seen = self._client(exc=RuntimeError("backend down"))
+        with patch.object(server, "TurboEAClient", fake):
+            out = await server._clear_logos_preview("tok-2", ["a", "b"])
+        assert seen == ["tok-2"]
+        assert out == {
+            "dry_run": True,
+            "would_clear": 2,
+            "results": [
+                {"card_id": "a", "status": "unknown"},
+                {"card_id": "b", "status": "unknown"},
+            ],
+            "note": "Could not check which cards carry a logo: backend down",
+        }

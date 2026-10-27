@@ -68,6 +68,9 @@ MCP_PUBLIC_URL=https://your-domain.example.com/mcp
 | `TURBO_EA_PUBLIC_URL` | `http://localhost:8920` | The public URL of your Turbo EA instance |
 | `MCP_PUBLIC_URL` | `http://localhost:8920/mcp` (docker compose) | The public URL of the MCP server (used in OAuth redirect URIs). When running the container standalone, the code default is `http://localhost:8001` |
 | `MCP_PORT` | `8001` | Internal port for the MCP container (rarely needs changing) |
+| `SECRET_KEY` | *(none)* | Set it to the backend's value. Signs the OAuth client ids the MCP server hands out, so a client that registered once keeps working after a restart; without it the server signs with a key that dies with the process and logs a warning. Docker compose, the Helm chart and the cloud templates pass it in automatically |
+| `MCP_ALLOWED_ORIGINS` | *(empty)* | Comma-separated extra origins whose browser requests the MCP endpoint accepts. Requests without an `Origin` header are always accepted |
+| `MCP_ALLOWED_HOSTS` | *(empty)* | Comma-separated extra host names the MCP endpoint accepts in the `Host` header, beyond the hosts of `TURBO_EA_PUBLIC_URL` and `MCP_PUBLIC_URL`. Needed only when a proxy forwards a different host name; see [Behind a proxy that changes the host name](#proxy-host-name) |
 
 ### Step 3: Add the OAuth redirect URI to your SSO app
 
@@ -120,6 +123,29 @@ Add to your workspace `.vscode/mcp.json`:
 ```
 
 Use `https://your-domain.example.com/mcp` as the endpoint. The older doubled form `https://your-domain.example.com/mcp/mcp` still works, so existing connectors keep functioning without changes.
+
+### Microsoft Copilot Studio
+
+Copilot Studio connects to MCP servers from Microsoft's cloud, not from the user's machine. The instance must therefore be reachable from the public internet over HTTPS, with a certificate from a public certificate authority. An instance that only answers on an internal network or a VPN works from desktop tools and fails in Copilot Studio.
+
+1. In your agent, open **Tools > Add a tool > New tool > Model Context Protocol**.
+2. Enter the server URL `https://your-domain.example.com/mcp`.
+3. Under **Authentication**, choose **OAuth 2.0**, then **Dynamic discovery**.
+4. Create the connection and sign in with your SSO account when prompted.
+
+Copilot Studio registers itself once and keeps the client id it receives. That id carries its own redirect URIs, signed with the instance's `SECRET_KEY`, so the connection keeps working when the MCP container restarts or is upgraded. Changing `SECRET_KEY` invalidates every registered client: recreate the tool in Copilot Studio afterwards.
+
+### Behind a proxy that changes the host name { #proxy-host-name }
+
+The MCP endpoint protects itself against DNS rebinding by checking the `Host` header of every request. It accepts the host names of `TURBO_EA_PUBLIC_URL` and `MCP_PUBLIC_URL`, plus `localhost` and `127.0.0.1`. The MCP container logs the full list once at startup. Any other host name is refused with `421 Misdirected Request`, and the MCP container logs `Invalid Host header: <name>`.
+
+Some proxies forward a host name other than the public one. Azure Front Door in front of an Azure Container Apps HTTP route, for example, sends the route's own `<route>.<environment>.azurecontainerapps.io` name. Sign-in still works in that case, but every MCP connection fails. List the forwarded name in `MCP_ALLOWED_HOSTS`:
+
+```dotenv
+MCP_ALLOWED_HOSTS=my-route.my-environment.westeurope.azurecontainerapps.io
+```
+
+Entries are host names alone, comma-separated, without `https://` or a path; the container logs a warning for an entry that can never match. Matching is exact, against the header as the proxy sends it, in lower case. Add `:port` when the proxy sends one, or `:*` to accept any port. Subdomain wildcards are not supported. On Kubernetes, set the variable through `mcp.extraEnv` in the Helm values.
 
 ---
 
@@ -315,7 +341,7 @@ Defense in depth on top of dry-run, so an LLM mishap can't cause mass damage:
 - **Kill switch.** `MCP_WRITES_ENABLED=false` turns off all 21 write tools without redeploying code. The 35 read tools keep working.
 - **Logo fetching is allowlisted.** The built-in icon packs cannot cover every product a customer runs, and an assistant is often sandboxed with no route to the web, so `set_card_logos` accepts an `image_url` and the MCP server fetches it. Only `https`, only the hosts in `MCP_LOGO_FETCH_HOSTS`, only a public address, at most two redirects (each re-checked), at most 1 MB read as a stream, and the bytes must carry a real PNG/JPEG/WebP/GIF signature. The fetch happens at the MCP edge, never in the backend, and the image is then uploaded through the ordinary route — so a URL chosen by an LLM never reaches the process holding the database. `MCP_LOGO_FETCH_ENABLED=false` switches it off.
 - **Audit origin tag.** Every backend request from the MCP server carries an `X-Turbo-EA-Origin: mcp` header. Events emitted from those requests are tagged `origin: "mcp"` in the audit-log payload, so admins can filter MCP-driven writes out of the timeline distinct from web-UI actions.
-- **Mutation batches.** Every MCP write call opens a mutation batch before any writes; every event emitted during the call is stamped with the batch id. Admins (or the `get_change_history` tool) can reconstruct the full per-event diff of a commit from one id, and `rollback_batch` can reverse it. Commits above `MCP_BATCH_CONFIRMATION_THRESHOLD` rows must echo back a one-shot `confirm_token` issued by the prior dry-run (15-minute TTL), so a large commit always follows a reviewed preview.
+- **Mutation batches.** Every MCP write call opens a mutation batch before any writes; every event emitted during the call is stamped with the batch id. Admins (or the `get_change_history` tool) can reconstruct the full per-event diff of a commit from one id, and `rollback_batch` can reverse it. Commits above `MCP_BATCH_CONFIRMATION_THRESHOLD` rows must pass back the one-shot `confirm_token` the prior dry-run returned. The backend checks it when the commit's batch opens, before anything is written: it must come from a dry-run of the same tool by the same user less than 15 minutes earlier, and it authorises a single commit. Every bulk write tool follows this preview → confirm cycle: `create_cards_bulk`, `update_cards_bulk`, `archive_cards`, `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos`, `clear_card_logos`.
 - **No hard delete.** The toolset deliberately omits permanent card deletion. `archive_cards` and `update_cards_bulk` *are* exposed, but archiving is a recoverable soft-delete (30-day restore window) and both are destructiveness-annotated and dry-run-gated. Adding any tool that performs an irreversible mutation (hard delete, force-purge) would require an explicit design review.
 
 The six guardrail environment variables on the MCP container:
@@ -329,8 +355,8 @@ The six guardrail environment variables on the MCP container:
 | `MCP_ALLOW_RELATION_DELETE` | `false` | When `true`, `upsert_relations_bulk` accepts `action: "delete"` ops. |
 | `MCP_LOGO_FETCH_ENABLED` | `true` | When `true`, `set_card_logos` may take an `image_url`: the MCP server downloads the image and uploads it through the ordinary route, so every permission, size and format check still applies. Set to `false` to refuse the URL path entirely — icon slugs and pasted bytes keep working. |
 | `MCP_LOGO_FETCH_HOSTS` | *(built-in)* | Comma-separated hosts a logo may be fetched from, exact match. Defaults to `raw.githubusercontent.com`, `cdn.jsdelivr.net`, `cdn.simpleicons.org`, `upload.wikimedia.org` — public icon hosting, where the request carries a file name and nothing about your landscape. A domain-to-logo lookup service can be added, at the cost of telling it which vendors you run. |
-| `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | Commits touching more rows than this require the `confirm_token` from a prior dry-run. |
-| `MCP_REQUIRE_DRYRUN_FIRST` | `true` | Enables the confirm-token gate above. Set `false` only for trusted automation pipelines that explicitly skip the preview round-trip. |
+| `MCP_BATCH_CONFIRMATION_THRESHOLD` | `20` | Commits touching more rows than this require the `confirm_token` from a prior dry-run. The backend applies its own limit of 20 rows whatever this is set to, so this value can only lower the limit, never raise it. |
+| `MCP_REQUIRE_DRYRUN_FIRST` | `true` | When `true`, the MCP server refuses a commit above the threshold that carries no `confirm_token` with an explanatory error, before calling the backend. `false` switches off only that early error: the backend still requires the token on every commit above 20 rows. |
 
 ### Resources
 
@@ -385,3 +411,6 @@ Data access through MCP — read or write — follows the same RBAC model as the
 | AI tool cannot connect | Check that `MCP_PUBLIC_URL` matches the URL accessible from the user's machine. Ensure HTTPS is working. |
 | User gets empty results | MCP respects RBAC permissions. If a user has restricted access, they will only see the cards their role allows. |
 | Connection drops after 1 hour | The AI tool should handle token refresh automatically. If not, reconnect. |
+| Copilot Studio reports "Connection creation failed" | Copilot Studio calls from Microsoft's cloud. Check that `https://your-domain.example.com/mcp` is reachable from the internet with a publicly trusted certificate, and that `MCP_PUBLIC_URL` is that public address. The Nginx log during an attempt shows the last request that arrived; no request at all means the instance is not reachable. |
+| A Copilot Studio tool stopped working after upgrading to 2.175.2 | Tools created before 2.175.2 hold a client id that did not survive a restart. Delete the tool and add it again once; the new id survives later restarts. |
+| MCP connections fail with `421 Misdirected Request`, and the MCP log shows `Invalid Host header` | A proxy in front of Turbo EA forwards a host name other than the public one. Add the name from the log line to `MCP_ALLOWED_HOSTS` and restart the MCP container; see [Behind a proxy that changes the host name](#proxy-host-name). |

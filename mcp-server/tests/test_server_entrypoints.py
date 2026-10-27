@@ -38,6 +38,106 @@ class TestTransportSecurity:
             "https://mcp.example.com:8443",
         ]
 
+    def test_operator_origins_are_added(self, monkeypatch):
+        monkeypatch.setattr(server, "MCP_PUBLIC_URL", "")
+        monkeypatch.setattr(server, "TURBO_EA_PUBLIC_URL", "")
+        monkeypatch.setattr(
+            server, "MCP_ALLOWED_ORIGINS", ["https://b.example", "https://a.example"]
+        )
+        settings = server._build_transport_security()
+        assert settings.allowed_origins == ["https://a.example", "https://b.example"]
+        assert settings.allowed_hosts == ["127.0.0.1", "localhost"]
+
+    def test_operator_hosts_are_added_but_are_no_origin(self, monkeypatch):
+        monkeypatch.setattr(server, "MCP_PUBLIC_URL", "")
+        monkeypatch.setattr(server, "TURBO_EA_PUBLIC_URL", "")
+        monkeypatch.setattr(
+            server,
+            "MCP_ALLOWED_HOSTS",
+            ["route.env.azurecontainerapps.io", "proxy.internal:*"],
+        )
+        settings = server._build_transport_security()
+        assert settings.allowed_hosts == [
+            "127.0.0.1",
+            "localhost",
+            "proxy.internal:*",
+            "route.env.azurecontainerapps.io",
+        ]
+        assert settings.allowed_origins == []
+
+    def test_the_admitted_hosts_are_logged_once(self, monkeypatch, caplog):
+        monkeypatch.setattr(server, "MCP_PUBLIC_URL", "")
+        monkeypatch.setattr(server, "TURBO_EA_PUBLIC_URL", "")
+        monkeypatch.setattr(server, "MCP_ALLOWED_HOSTS", ["route.example"])
+        with caplog.at_level(logging.INFO, logger="turbo_ea_mcp"):
+            server._build_transport_security()
+        assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+            (logging.INFO, "MCP accepts these Host headers: 127.0.0.1, localhost, route.example")
+        ]
+
+    def test_an_entry_that_can_never_match_is_warned_about(self, monkeypatch, caplog):
+        monkeypatch.setattr(server, "MCP_PUBLIC_URL", "")
+        monkeypatch.setattr(server, "TURBO_EA_PUBLIC_URL", "")
+        monkeypatch.setattr(
+            server, "MCP_ALLOWED_HOSTS", ["https://route.example", "ok.example"]
+        )
+        with caplog.at_level(logging.WARNING, logger="turbo_ea_mcp"):
+            server._build_transport_security()
+        assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+            (
+                logging.WARNING,
+                "MCP_ALLOWED_HOSTS entry 'https://route.example' never matches a Host "
+                "header: list the host name alone, without a scheme or a path",
+            )
+        ]
+
+    def test_an_operator_host_equal_to_a_public_one_is_listed_once(self, monkeypatch):
+        monkeypatch.setattr(server, "MCP_PUBLIC_URL", "https://ea.example.com/mcp")
+        monkeypatch.setattr(server, "TURBO_EA_PUBLIC_URL", "")
+        monkeypatch.setattr(server, "MCP_ALLOWED_HOSTS", ["ea.example.com", "localhost"])
+        settings = server._build_transport_security()
+        assert settings.allowed_hosts == ["127.0.0.1", "ea.example.com", "localhost"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("host", "status"),
+        [
+            ("route.env.azurecontainerapps.io", None),
+            ("proxy.internal:8443", None),
+            ("ea.example.com", None),
+            ("other.azurecontainerapps.io", 421),
+            ("proxy.internal", 421),
+        ],
+    )
+    async def test_the_guard_admits_exactly_the_listed_hosts(self, monkeypatch, host, status):
+        """The setting reaches the SDK's own check: a listed Host passes, the
+        rest still get 421. (A POST to /mcp meets the bearer gate first, so the
+        guard is exercised directly.)"""
+        from mcp.server.transport_security import TransportSecurityMiddleware
+        from starlette.requests import Request
+
+        monkeypatch.setattr(server, "MCP_PUBLIC_URL", "https://ea.example.com/mcp")
+        monkeypatch.setattr(server, "TURBO_EA_PUBLIC_URL", "")
+        monkeypatch.setattr(
+            server,
+            "MCP_ALLOWED_HOSTS",
+            ["route.env.azurecontainerapps.io", "proxy.internal:*"],
+        )
+        guard = TransportSecurityMiddleware(server._build_transport_security())
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/mcp",
+                "headers": [
+                    (b"host", host.encode()),
+                    (b"content-type", b"application/json"),
+                ],
+            }
+        )
+        response = await guard.validate_request(request, is_post=True)
+        assert (response.status_code if response else None) == status
+
     def test_a_url_without_a_host_adds_nothing(self, monkeypatch):
         monkeypatch.setattr(server, "MCP_PUBLIC_URL", "")
         monkeypatch.setattr(server, "TURBO_EA_PUBLIC_URL", "ea.example.com/path")

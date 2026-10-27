@@ -13,11 +13,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.trail/hook.cjs\" session-start",
-            "timeout": 8000
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.trail/hook.cjs\" session-start || exit 0",
+            "timeout": 10
           }
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "bettercallclaude@synced": false,
+    "design@synced": false,
+    "legal@synced": false,
+    "productivity@synced": false,
+    "cowork-plugin-management@synced": false
   }
 }

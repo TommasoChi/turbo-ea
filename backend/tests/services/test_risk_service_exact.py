@@ -344,6 +344,16 @@ class TestCreateRisk:
         assert [(e.card_id, e.user_id) for e in events] == [(card.id, actor.id)]
         assert events[0].data["created"] is True
 
+    async def test_no_cards_means_no_event(self, db, people):
+        actor, _ = people
+        await create_risk(db, title="Unlinked", actor_id=actor.id)
+        events = (
+            (await db.execute(select(Event).where(Event.event_type == "risk.added")))
+            .scalars()
+            .all()
+        )
+        assert events == []
+
     async def test_the_event_payload(self, db, people):
         actor, _ = people
         card = await create_card(db, card_type="Application", name="App")
@@ -421,6 +431,53 @@ class TestSyncOwnerTodo:
             await db.execute(select(Todo.description, Todo.is_system).where(Todo.link == link))
         ).all()
         assert rows == [("My own note", False)]
+
+    async def test_clearing_the_owner_deletes_the_system_todo(self, db, people):
+        actor, owner = people
+        r = await create_risk(db, title="Freed", owner_id=owner.id, actor_id=actor.id)
+        link = f"/ea-delivery/risks/{r.id}"
+        before = (
+            await db.execute(select(Todo).where(Todo.link == link, Todo.is_system.is_(True)))
+        ).scalar_one()
+        assert before is not None
+        r.owner_id = None
+        await sync_owner_todo(db, r, actor_id=actor.id, previous_owner=owner.id)
+        await db.flush()
+        after = (
+            await db.execute(select(Todo).where(Todo.link == link, Todo.is_system.is_(True)))
+        ).scalar_one_or_none()
+        assert after is None
+
+    async def test_an_unchanged_owner_gets_no_second_notification(self, db, people):
+        actor, owner = people
+        r = await create_risk(db, title="Steady", owner_id=owner.id, actor_id=actor.id)
+        await sync_owner_todo(db, r, actor_id=actor.id, previous_owner=owner.id)
+        notes = (
+            (await db.execute(select(Notification).where(Notification.user_id == owner.id)))
+            .scalars()
+            .all()
+        )
+        assert len(notes) == 1
+
+    async def test_updating_the_todo_syncs_due_date_and_description(self, db, people):
+        actor, owner = people
+        r = await create_risk(
+            db,
+            title="Retitled",
+            owner_id=owner.id,
+            target_resolution_date=date(2026, 6, 1),
+            actor_id=actor.id,
+        )
+        link = f"/ea-delivery/risks/{r.id}"
+        r.title = "Retitled Again"
+        r.target_resolution_date = date(2026, 9, 1)
+        await sync_owner_todo(db, r, actor_id=actor.id, previous_owner=owner.id)
+        await db.flush()
+        todo = (
+            await db.execute(select(Todo).where(Todo.link == link, Todo.is_system.is_(True)))
+        ).scalar_one()
+        assert todo.description == "[Risk R-000001] Retitled Again"
+        assert todo.due_date == date(2026, 9, 1)
 
     async def test_the_assignment_notification(self, db, people):
         actor, owner = people
@@ -753,6 +810,32 @@ class TestPromote:
             db, finding.id, actor.id, overrides={"title": "T" * 600}
         )
         assert r.title == "T" * 500
+
+    @pytest.mark.parametrize(
+        "title_len, expect_cut",
+        [
+            (500, False),
+            (501, True),  # one over -- must lose exactly the last character
+        ],
+    )
+    async def test_the_title_cut_lands_on_exactly_500(self, db, people, title_len, expect_cut):
+        actor, _ = people
+        finding = await _finding(db, actor)
+        override_title = "T" * title_len
+        r = await promote_compliance_finding(
+            db, finding.id, actor.id, overrides={"title": override_title}
+        )
+        assert r.title == override_title[:500]
+        assert (len(r.title) == 500) if expect_cut else (r.title == override_title)
+
+    async def test_an_empty_remediation_seeds_no_task_even_with_an_actor(self, db, people):
+        actor, _ = people
+        finding = await _finding(db, actor, remediation="   ")
+        r = await promote_compliance_finding(db, finding.id, actor.id)
+        tasks = (
+            await db.execute(select(RiskMitigationTask).where(RiskMitigationTask.risk_id == r.id))
+        ).all()
+        assert tasks == []
 
     async def test_no_task_without_a_person_to_own_the_write(self, db, people):
         actor, _ = people

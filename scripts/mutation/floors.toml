@@ -90,6 +90,15 @@ mcp = 97
 "backend/app/services/workspace_io/applier.py" = 97   # importing a whole workspace bundle
 "backend/app/services/workspace_io/remap.py" = 96     # ids held inside blobs (#1246)
 
+# Value Chain, measured by the nightly of #26 at 97.1% (24 survivors) — written
+# as plain, undecorated functions specifically so mutmut can mutate it in full.
+# The other ArchiMate/Value-Chain fork files (validate.py 81.4%, taxonomy.py
+# 81.8%, viewpoint_seed.py 89.4%, enterprise_object_seed.py 87.0%,
+# viewpoint_example_seed.py 86.4%, value_stream_catalogue_service.py 78.5%,
+# card_type_mapping.py 93.8%) are below a safe floor and need their own
+# hardening pass before joining this list.
+"backend/app/services/value_chain_report.py" = 95     # Value Chain/Stream report payload
+
 # Frontend, measured with Stryker (static mutants ignored) on 2026-10-05.
 # linkify, richHtml, routePermissions, dragFill and portfolioHelpers were
 # re-measured on 2026-10-09 at 100% against their own unit tests.

@@ -18,6 +18,14 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
     css: false,
+    // Resets every vi.mock()'d module's call history/implementation between
+    // tests automatically, so a test can never read state a previous test in
+    // the same file left on a shared mock (the recurring cause of flaky runs
+    // before files were made to do this by hand with a per-file
+    // `beforeEach(() => vi.clearAllMocks())`). Does not reset modules
+    // themselves (`mockReset`) or restore spies to their original
+    // implementation (`restoreMocks`) — neither has been needed so far.
+    clearMocks: true,
     // The heaviest dialog/grid tests legitimately take 2–4s of test time
     // locally; on a loaded CI runner with V8 coverage instrumentation they
     // cross vitest's 5s default and time out as false failures

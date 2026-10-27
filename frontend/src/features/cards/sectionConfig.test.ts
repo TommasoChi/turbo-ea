@@ -47,6 +47,11 @@ describe("makeSectionConfigReader", () => {
       expect(sec.expanded("relations", false)).toBe(false);
       expect(sec.expanded("description", true)).toBe(true);
     });
+
+    it("defaults the fallback parameter to true when omitted", () => {
+      const sec = read({});
+      expect(sec.expanded("description")).toBe(true);
+    });
   });
 
   describe("raw", () => {
@@ -84,6 +89,14 @@ describe("makeSectionConfigReader", () => {
         Commercials: { defaultExpanded: false },
       });
       expect(sec.expanded("custom:0", true)).toBe(true);
+    });
+
+    it("never resolves a legacy label for a key that is not custom:-prefixed", () => {
+      // "foo:0" has no direct entry and is not a custom:N key, but splitting
+      // on ":" would still parse a valid customSections index (0) if the
+      // "custom:" prefix check were ever skipped or loosened -- it must not be.
+      const sec = read({ Commercials: { defaultExpanded: false } });
+      expect(sec.expanded("foo:0", true)).toBe(true);
     });
 
     it("ignores a label key for an out-of-range index", () => {
@@ -280,6 +293,13 @@ describe("hiddenFieldKeys", () => {
     expect([...hiddenFieldKeys(undefined, "saas", {}, [])]).toEqual([]);
   });
 
+  it("is empty when the subtype is set but matches none of the type's subtypes", () => {
+    // Distinct from "onprem" above (which matches but has no hidden_fields):
+    // here .find() itself must come back empty, not short-circuit to the
+    // first entry.
+    expect([...hiddenFieldKeys(subtypes, "nonexistent", {}, [])]).toEqual([]);
+  });
+
   it("adds what registered extensions report and ignores the rest", () => {
     const reported = { acme: ["cost"], gone: ["owner"] };
     expect([...hiddenFieldKeys(subtypes, "saas", reported, ["acme"])]).toEqual([
@@ -318,5 +338,13 @@ describe("calculatedFieldKeys", () => {
 
   it("is empty with no schema and no auto fields", () => {
     expect(calculatedFieldKeys(undefined, () => true, [])).toEqual([]);
+  });
+
+  it("skips a section with no fields property instead of throwing", () => {
+    const withGap = [
+      { section: "A" },
+      { section: "B", fields: [{ key: "score" }] },
+    ] as unknown as SectionDef[];
+    expect(calculatedFieldKeys(withGap, (k) => k === "score", [])).toEqual(["score"]);
   });
 });

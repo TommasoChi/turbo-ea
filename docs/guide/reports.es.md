@@ -1,6 +1,6 @@
 # Informes
 
-Turbo EA incluye un potente módulo de **informes visuales** que permite analizar la arquitectura empresarial desde diferentes perspectivas. Todos los informes pueden ser [guardados para reutilización](saved-reports.es.md) con su configuración actual de filtros y ejes.
+Turbo EA incluye un potente módulo de **informes visuales** que permite analizar la arquitectura empresarial desde diferentes perspectivas. Todos los informes pueden ser [guardados para reutilización](saved-reports.es.md) con sus filtros y ajustes de visualización actuales.
 
 ![Menú de Informes Disponibles](../assets/img/es/09_menu_informes.png)
 
@@ -8,18 +8,18 @@ Turbo EA incluye un potente módulo de **informes visuales** que permite analiza
 
 ![Informe de Portafolio](../assets/img/es/10_informe_portafolio.png)
 
-El **Informe de Portafolio** muestra un **gráfico de burbujas** (o diagrama de dispersión) configurable de sus fichas. Usted elige qué representa cada eje:
+El **Informe de Portafolio** (**Informes → Portafolio de aplicaciones**) muestra sus aplicaciones como chips de color, agrupados en cajas. Dos opciones de la barra de herramientas lo controlan:
 
-- **Eje X** — Seleccione cualquier campo numérico o de selección (por ejemplo, Idoneidad Técnica)
-- **Eje Y** — Seleccione cualquier campo numérico o de selección (por ejemplo, Criticidad de Negocio)
-- **Tamaño de burbuja** — Asigne a un campo numérico (por ejemplo, Costo Anual)
-- **Color de burbuja** — Asigne a un campo de selección, de selección múltiple o de sí/no, o al estado del ciclo de vida
+- **Agrupar por** — cualquier campo de selección única o de sí/no del tipo de ficha (por ejemplo, Criticidad de negocio, Modelo TIME), o un tipo de ficha relacionado (por ejemplo, Organización, Capacidad de negocio). Cada valor se convierte en una caja con un recuento y una barra que muestra su mezcla de colores; las aplicaciones sin valor van a una caja *No asignado a ningún …*.
+- **Colorear aplicaciones por** — cualquier campo de selección, de selección múltiple o de sí/no (por ejemplo, Modelo TIME), o *Sin color*.
+
+Junto a ellas se encuentran un cuadro **Buscar**, los filtros plegables (**Relacionado por**, **Etiquetas**, **Campos**, **Subtipos de relación**), el selector de columnas y el conmutador **Vista de gráfico** / **Vista de tabla**, que lista las mismas fichas en una tabla ordenable.
 
 **Colorear y filtrar por campos de sí/no y de selección múltiple** — Cualquier campo de selección, de selección múltiple o de sí/no del tipo de ficha puede colorear las fichas y filtrarlas — aquí, en el Portafolio flexible, en el Mapa de capacidades (*Colorear apps por*), en la vista por rango de fechas del Informe de ciclo de vida y en el menú *Colorear por* de un diagrama. Un campo de sí/no se muestra como **Sí** y **No**, una ficha con varios valores de un campo de selección múltiple aparece como **Múltiples**, y una opción que un administrador dejó sin color recibe un color propio en la leyenda en lugar del gris de *No definido*. Los campos de sí/no también pueden agrupar las fichas — aquí, en la tabla del Informe de costos y en el [Inventario](inventory.md); un campo de selección múltiple no, porque una ficha con dos valores pertenecería a dos grupos.
 
 **Filtrar por subtipo** — Cuando el tipo de ficha tiene subtipos, la fila de filtros **Campos** empieza con un filtro **Subtipo**. Elija uno o varios subtipos, o *(vacío)* para las fichas que no tienen ninguno. El filtro se guarda con el informe y lo traslada **Ver en el inventario**.
 
-Esto es ideal para el análisis de portafolio — por ejemplo, representar aplicaciones por valor de negocio vs. aptitud técnica para identificar candidatos para inversión, reemplazo o retiro.
+Un uso típico: agrupar por **Criticidad de negocio** y colorear por **Modelo TIME**. Las aplicaciones críticas marcadas como *Migrar* son sus primeras prioridades de modernización, y las aplicaciones administrativas marcadas como *Eliminar* o *Migrar* son sus candidatas a retirada y consolidación. La [Guía para principiantes EA](../beginners-guide/your-first-analysis.md) muestra cómo derivar el Modelo TIME de las valoraciones de idoneidad mediante un cálculo.
 
 ### Análisis IA del portafolio
 
@@ -50,6 +50,10 @@ Cambiar el tipo de tarjeta restablece las selecciones de agrupación, color y fi
 ### Subtipos de relación
 
 Cuando las relaciones de una tarjeta llevan un valor de «tipo» —por ejemplo el **tipo de uso** (Propietario / Usuario / Parte interesada) en las relaciones Organización→Aplicación, o el **tipo de soporte** en las relaciones Aplicación→Capacidad de negocio— puede colorear las tarjetas por ese valor y filtrar por él. **Agrupe el informe por el tipo de tarjeta relacionado** para usarlos (p. ej. *Agrupar por → Organización* para habilitar el *tipo de uso*): el subtipo aparece entonces bajo el grupo **Subtipos de relación** en el desplegable *Colorear por* y como su propia fila de filtros. Como cada tarjeta se muestra bajo una tarjeta relacionada, se colorea según *esa* relación: una aplicación que es *Usuario* de una organización aparece como Usuario ahí, aunque pertenezca a otra.
+
+### Incluir subtarjetas
+
+Cuando un tipo de tarjeta relacionado tiene jerarquía (como Business Capability u Organización), la fila **Relacionado por** incluye un interruptor **Incluir subtarjetas**. Al activarlo, una selección abarca también todo lo que está por debajo: una capacidad padre encuentra entonces las tarjetas vinculadas a cualquiera de sus subcapacidades, y los padres sin vínculo directo propio también pueden seleccionarse. El interruptor se guarda con el informe y se aplica también al informe de ciclo de vida. Mientras amplía una selección, el botón **Ver en el inventario** del panel de grupo se oculta, porque el inventario solo filtra por vínculos directos.
 
 ### Grupos anidados
 
@@ -91,6 +95,10 @@ El **Informe de Ciclo de Vida** muestra una **visualización de línea temporal*
 Los componentes se muestran como barras horizontales que abarcan sus fases de ciclo de vida: Plan, Fase de Entrada, Activo, Fase de Salida y Fin de Vida.
 
 **Limitar a tarjetas concretas** — Una vez elegido un tipo de tarjeta, el chip contiguo abre un selector: elija una o varias tarjetas y la línea de tiempo mostrará solo esas y todo lo que hay debajo. Las tarjetas hijas se incluyen automáticamente. El chip permanece desactivado mientras el selector esté en *Todos los tipos*, porque un alcance necesita una única jerarquía.
+
+**Filtrar** — Una vez elegido un tipo de tarjeta, el informe ofrece la misma fila de **Filtros** que el **Portafolio flexible**: tarjetas relacionadas (con *Incluir subtarjetas*), etiquetas, el subtipo de la tarjeta y sus campos de selección, y subtipos de relación, además de un cuadro de búsqueda. Los filtros distintos se combinan (una tarjeta debe cumplirlos todos), mientras que los valores elegidos dentro de un mismo filtro son alternativas. Un rótulo muestra cuántas tarjetas coinciden, y **Limpiar todo** quita todos los filtros. Los filtros se guardan con el informe y se nombran uno a uno en el encabezado de una impresión o exportación, para que el público sepa qué abarca la línea de tiempo. Por ejemplo, elija sus capacidades operativas con *Incluir subtarjetas* activado y la etiqueta *Desarrollo interno* para revisar solo las aplicaciones propias que sostienen las operaciones principales — una herramienta de gastos como Concur sigue en el inventario, pero sale de esta vista. Con *Todos los tipos* los filtros no están disponibles, porque leen los campos, relaciones y etiquetas de un único tipo de tarjeta.
+
+**Ordenar** — El menú **Ordenar por** ordena la línea de tiempo y la tabla por igual: por nombre, tipo, subtipo, fase actual, la fecha de una fase (Planificación, Introducción, Activo, Retiro, Fin de vida) o uno de los campos de selección única del tipo de tarjeta, como la criticidad de negocio, que sigue el orden de sus opciones en lugar del alfabético. En la vista de rango de fechas ofrece en su lugar la fecha de inicio, la fecha de fin y el campo de color. La flecha contigua alterna entre ascendente y descendente; las tarjetas sin valor van siempre al final, sea cual sea el sentido. Hacer clic en un encabezado de columna de la tabla ordena del mismo modo. El orden se guarda con el informe, y cualquier orden distinto del nombre aparece en el encabezado de la exportación.
 
 ## Informe de Dependencias
 
