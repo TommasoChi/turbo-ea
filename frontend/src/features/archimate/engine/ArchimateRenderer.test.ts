@@ -74,7 +74,9 @@ describe("ArchimateRenderer: shapes", () => {
     const { add, gfx } = setup();
     const shape = add("BusinessProcess", { height: 150 }, "Handle Claim");
     const y = Number(gfx(shape).querySelector("text.archimate-name tspan")!.getAttribute("y"));
-    expect(y).toBeLessThan(30);
+    // BusinessProcess has no header band and isn't a grouping: top=0, so the
+    // first baseline is exactly 0 + 2 + FONT_SIZE(12) - 1.
+    expect(y).toBe(13);
   });
 
   it("draws no text for an empty name", () => {

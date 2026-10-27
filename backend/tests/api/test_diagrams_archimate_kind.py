@@ -174,7 +174,7 @@ async def test_unknown_kind_on_patch_is_rejected(client, env):
     assert r.status_code == 422
 
 
-async def test_group_diagram_count_ignores_archimate_diagrams(client, env):
+async def test_group_diagram_count_blends_both_kinds(client, env):
     h = auth_headers(env["admin"])
     g = (await client.post("/api/v1/diagram-groups", json={"name": "G"}, headers=h)).json()["id"]
     d = (await _create(client, env, name="draw", data={"xml": "<m/>"})).json()["id"]
@@ -183,9 +183,12 @@ async def test_group_diagram_count_ignores_archimate_diagrams(client, env):
         r = await client.put(f"/api/v1/diagrams/{did}/groups", json={"group_ids": [g]}, headers=h)
         assert r.status_code == 200
     groups = (await client.get("/api/v1/diagram-groups", headers=h)).json()
-    assert [x["diagram_count"] for x in groups if x["id"] == g] == [1]
+    row = next(x for x in groups if x["id"] == g)
+    assert row["diagram_count"] == 2
+    assert row["diagram_count_drawio"] == 1
+    assert row["diagram_count_archimate"] == 1
     r = await client.patch(f"/api/v1/diagram-groups/{g}", json={"name": "G2"}, headers=h)
-    assert r.json()["diagram_count"] == 1
+    assert r.json()["diagram_count"] == 2
 
 
 async def test_published_archimate_row_never_serves_publicly(client, env, db):
