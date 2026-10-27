@@ -92,3 +92,8 @@ paths:
 - **MCP tools** (`create_archimate_diagram`, `update_archimate_diagram`, `get_archimate_mapping`)
   live alongside every other tool in `mcp-server/turbo_ea_mcp/server.py` — see
   [`mcp-server.md`](mcp-server.md) for the server's own conventions.
+- **Per-layer RBAC permissions** (`backend/app/core/permissions.py`): nine keys,
+  `archimatediagrams.{business,application,technology}.{view,manage,publish}`, replace the single
+  `diagrams.manage` gate for ArchiMate diagrams specifically — Draw.io diagrams still use the
+  generic `diagrams.*` keys unchanged. The nav splits into Business, Application & Data and
+  Technology Architecture entries along the same three layers, each checking its own key.

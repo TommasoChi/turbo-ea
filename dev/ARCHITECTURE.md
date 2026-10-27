@@ -44,7 +44,7 @@
 | `TURBO_EA_PUBLIC_URL` | `http://localhost:8920` | Public-facing Turbo EA URL for OAuth redirects and bundled nginx hostname/proto derivation |
 | `MCP_PUBLIC_URL` | `http://localhost:8001` | (MCP server) Public URL for OAuth metadata |
 | `MCP_PORT` | `8001` | (MCP server) Bind port |
-| `MCP_WRITES_ENABLED` | `true` | (MCP server) Kill switch for all 19 write tools — set to `false` to put the MCP server into read-only mode without a code redeploy. Read tools keep working. |
+| `MCP_WRITES_ENABLED` | `true` | (MCP server) Kill switch for all 21 write tools (19 upstream + 2 fork-only ArchiMate tools, `create_archimate_diagram`/`update_archimate_diagram`) — set to `false` to put the MCP server into read-only mode without a code redeploy. Read tools keep working. |
 | `MCP_MAX_CARDS_PER_CALL` | `200` | (MCP server) Per-call size cap for `create_cards_bulk`. The backend `/cards/bulk-create` endpoint still accepts up to 2000 for the legitimate Excel importer; the MCP wrapper enforces this lower cap so a dry-run preview stays reviewable. |
 | `MCP_MAX_RELATIONS_PER_CALL` | `500` | (MCP server) Per-call size cap for `upsert_relations_bulk`. Backend accepts up to 5000 from the UI. |
 | `MCP_MAX_LOGOS_PER_CALL` | `50` | (MCP server) Per-call cap for `set_card_logos`. Lower than the card cap because each logo is its own upload and carries image bytes. |
@@ -151,6 +151,19 @@ All tables use UUID primary keys and `created_at`/`updated_at` timestamps (from 
 | `mutation_batches` | `MutationBatch` | MCP write ledger — every MCP write call opens a batch; each emitted row in the `events` table is stamped with its `batch_id` (see MCP section) |
 | `workspace_transfers` | `WorkspaceTransfer` | Async preview/apply lifecycle of an uploaded full-workspace export bundle (`uploaded → parsing → previewed → applying → applied`/`failed`). Bundle binary stored on disk under `data/workspace_transfers/{id}.bin` (see Workspace Transfer Conventions) |
 
+### ArchiMate & Enterprise Object Tables (fork-only)
+
+Not present upstream — see `.claude/rules/archimate.md`.
+
+| Table | Model | Purpose |
+|-------|-------|---------|
+| `archimate_viewpoints` | `ArchimateViewpoint` | Catalog of standard (23) and admin-defined ArchiMate 3.1 viewpoints: layer, icon, `domains` (editable JSONB tagging business/application/technology tabs) |
+| `archimate_viewpoint_objects` | `ArchimateViewpointObject` | Bridge: which Enterprise Objects a viewpoint allows in its palette |
+| `archimate_viewpoint_examples` | `ArchimateViewpointExample` | Seeded example diagrams (Exchange Format XML) per viewpoint |
+| `archimate_viewpoint_tab_cards` | `ArchimateViewpointTabCard` | Which card type(s) a card-detail tab suggests creating for a viewpoint |
+| `enterprise_objects` | `EnterpriseObject` | Catalog of ArchiMate element types (standard + custom): layer, structural aspect (passive/behavior/active), color |
+| `enterprise_object_card_mappings` | `EnterpriseObjectCardMapping` | Bridge: which card type/subtype an Enterprise Object maps to |
+
 ### Migration (Platform Import) Tables
 
 | Table | Model | Purpose |
@@ -172,7 +185,7 @@ All tables use UUID primary keys and `created_at`/`updated_at` timestamps (from 
 
 ### Migrations
 
-Located in `backend/alembic/versions/` (116 migration files, sequentially numbered `001_` through `116_`). The app auto-runs Alembic on startup:
+Located in `backend/alembic/versions/` (170+ migration files, numbered `001_` through `167_` — a few fork-only files use a `b` suffix, e.g. `128b_`, where the fork's own migration collided with a same-numbered upstream one on sync and was renumbered rather than reordered). The app auto-runs Alembic on startup:
 - Fresh DB: `create_all` + stamp head
 - Existing DB without Alembic: stamp head
 - Normal: `upgrade head` (run pending migrations)
