@@ -4684,6 +4684,45 @@
         "title": "ConnectionUpdate",
         "type": "object"
       },
+      "CostHistoryList": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/CostHistoryRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "CostHistoryList",
+        "type": "object"
+      },
+      "CostHistoryRow": {
+        "properties": {
+          "field_key": {
+            "title": "Field Key",
+            "type": "string"
+          },
+          "fiscal_year": {
+            "title": "Fiscal Year",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "fiscal_year",
+          "field_key",
+          "value"
+        ],
+        "title": "CostHistoryRow",
+        "type": "object"
+      },
       "CurrencyPayload": {
         "properties": {
           "currency": {
@@ -24039,6 +24078,151 @@
         "summary": "List Card Compliance Findings",
         "tags": [
           "TurboLens"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/cost-history": {
+      "get": {
+        "operationId": "list_cost_history_api_v1_cards__card_id__cost_history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostHistoryList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Cost History",
+        "tags": [
+          "cost-history"
+        ]
+      },
+      "put": {
+        "operationId": "upsert_cost_history_api_v1_cards__card_id__cost_history_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CostHistoryRow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostHistoryRow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upsert Cost History",
+        "tags": [
+          "cost-history"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/cost-history/{fiscal_year}/{field_key}": {
+      "delete": {
+        "operationId": "delete_cost_history_api_v1_cards__card_id__cost_history__fiscal_year___field_key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field_key",
+            "required": true,
+            "schema": {
+              "title": "Field Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Cost History",
+        "tags": [
+          "cost-history"
         ]
       }
     },

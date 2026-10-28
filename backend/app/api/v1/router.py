@@ -16,6 +16,7 @@ from app.api.v1 import (
     card_logos,
     cards,
     comments,
+    cost_history,
     diagram_groups,
     diagrams,
     documents,
@@ -65,6 +66,7 @@ api_router.include_router(comments.router)
 api_router.include_router(todos.router)
 api_router.include_router(tags.router)
 api_router.include_router(documents.router)
+api_router.include_router(cost_history.router)
 api_router.include_router(bookmarks.router)
 api_router.include_router(saved_reports.router)
 api_router.include_router(reports.router)
