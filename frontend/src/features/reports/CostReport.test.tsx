@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { createRef } from "react";
 import CostReport from "./CostReport";
@@ -26,7 +27,9 @@ vi.mock("react-router", async () => {
 vi.mock("@/api/client", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 vi.mock("@/hooks/useMetamodel", () => ({ useMetamodel: vi.fn() }));
 vi.mock("@/hooks/useSavedReport", () => ({ useSavedReport: vi.fn() }));
-vi.mock("@/hooks/useThumbnailCapture", () => ({ useThumbnailCapture: vi.fn() }));
+vi.mock("@/hooks/useThumbnailCapture", () => ({
+  useThumbnailCapture: vi.fn(),
+}));
 vi.mock("@/hooks/useCurrency", () => ({
   // `fmt` is an Intl-style formatter object, not a function.
   useCurrency: () => ({
@@ -59,7 +62,25 @@ const APP_TYPE = {
   fields_schema: [
     {
       section: "Costs",
-      fields: [{ key: "costTotalAnnual", label: "Total Annual Cost", type: "cost" }],
+      fields: [
+        { key: "costTotalAnnual", label: "Total Annual Cost", type: "cost" },
+      ],
+    },
+  ],
+};
+
+const ITC_TYPE = {
+  key: "ITComponent",
+  label: "IT Component",
+  color: "#8e24aa",
+  is_hidden: false,
+  has_hierarchy: false,
+  fields_schema: [
+    {
+      section: "Cost",
+      fields: [
+        { key: "costTotalAnnual", label: "Total Annual Cost", type: "cost" },
+      ],
     },
   ],
 };
@@ -95,12 +116,27 @@ beforeEach(() => {
         fiscal_year_start: fyStart,
       }) as never;
     }
+    if (path.startsWith("/reports/cost-sankey")) {
+      return Promise.resolve({
+        nodes: [
+          { id: "crm", name: "CRM", type: "Application" },
+          { id: "db", name: "DB", type: "ITComponent" },
+        ],
+        links: [{ source: 0, target: 1, value: 100 }],
+        total: 100,
+        fiscal_year: 2026,
+        fiscal_year_start: fyStart,
+      }) as never;
+    }
     // The scope hook's own hierarchy fetch.
-    return Promise.resolve({ items: HIERARCHY, total: HIERARCHY.length }) as never;
+    return Promise.resolve({
+      items: HIERARCHY,
+      total: HIERARCHY.length,
+    }) as never;
   });
 
   vi.mocked(useMetamodel).mockReturnValue({
-    types: [APP_TYPE],
+    types: [APP_TYPE, ITC_TYPE],
     relationTypes: [],
     loading: false,
     getType: (key: string) => (key === "Application" ? APP_TYPE : undefined),
@@ -142,7 +178,9 @@ const toolbar = () => document.querySelector(".report-toolbar") as HTMLElement;
 describe("CostReport scope filter", () => {
   it("includes every card when unscoped", async () => {
     renderCost();
-    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0),
+    );
     expect(within(chart()).getAllByText("CRM").length).toBeGreaterThan(0);
     expect(within(toolbar()).getByText("All cards")).toBeInTheDocument();
   });
@@ -153,16 +191,22 @@ describe("CostReport scope filter", () => {
     consumedConfig = { view: "table", scopeIds: ["crm"] };
     renderCost();
 
-    await waitFor(() => expect(within(chart()).getAllByText("CRM").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(within(chart()).getAllByText("CRM").length).toBeGreaterThan(0),
+    );
     expect(within(chart()).getAllByText("CRM Web").length).toBeGreaterThan(0);
     expect(within(chart()).queryByText("ERP")).not.toBeInTheDocument();
-    await waitFor(() => expect(within(chart()).getAllByText("$120").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(within(chart()).getAllByText("$120").length).toBeGreaterThan(0),
+    );
     expect(within(chart()).queryByText("$620")).not.toBeInTheDocument();
   });
 
   it("issues no hierarchy request while unscoped", async () => {
     renderCost();
-    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0),
+    );
 
     const cardCalls = vi
       .mocked(api.get)
@@ -174,25 +218,34 @@ describe("CostReport scope filter", () => {
     consumedConfig = { view: "table", scopeIds: ["deleted-app"] };
     renderCost();
 
-    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0),
+    );
     expect(within(toolbar()).getByText("All cards")).toBeInTheDocument();
   });
 });
 
 describe("CostReport fiscal year", () => {
-  const indicator = () => document.querySelector('[data-testid="cost-fiscal-year"]');
+  const indicator = () =>
+    document.querySelector('[data-testid="cost-fiscal-year"]');
 
   it("names the current fiscal year the figures are for", async () => {
     renderCost();
     await waitFor(() => expect(indicator()).not.toBeNull());
     expect(indicator()).toHaveTextContent("Current fiscal year: FY 2026");
-    expect(within(toolbar()).getByText("Current fiscal year: FY 2026")).toBeInTheDocument();
+    expect(
+      within(toolbar()).getByText("Current fiscal year: FY 2026"),
+    ).toBeInTheDocument();
   });
 
   it("names a fiscal year that straddles two calendar years by both", async () => {
     fyStart = 10;
     renderCost();
-    await waitFor(() => expect(indicator()).toHaveTextContent("Current fiscal year: FY 2025–2026"));
+    await waitFor(() =>
+      expect(indicator()).toHaveTextContent(
+        "Current fiscal year: FY 2025–2026",
+      ),
+    );
   });
 
   it("never asks the server for a particular year", async () => {
@@ -210,5 +263,38 @@ describe("CostReport fiscal year", () => {
     renderCost();
     await waitFor(() => expect(indicator()).not.toBeNull());
     expect(document.querySelector(".MuiSlider-root")).toBeNull();
+  });
+});
+
+describe("CostReport card-type selector and Sankey view", () => {
+  it("offers only Application and ITComponent in the card-type selector", async () => {
+    const { getByLabelText, findAllByRole } = renderCost();
+    await waitFor(() =>
+      expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0),
+    );
+    const select = getByLabelText(/card type/i);
+    await userEvent.click(select);
+    const options = (await findAllByRole("option")).map((o) => o.textContent);
+    expect(options.sort()).toEqual(["Application", "IT Component"].sort());
+  });
+
+  it("renders a Sankey toggle button and switches the panel on click", async () => {
+    const { findByRole, findByTestId } = renderCost();
+    await waitFor(() =>
+      expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0),
+    );
+    const sankeyBtn = await findByRole("button", {
+      name: /sankey chart view/i,
+    });
+    await userEvent.click(sankeyBtn);
+    expect(await findByTestId("cost-sankey-panel")).toBeInTheDocument();
+  });
+
+  it("no longer renders the cost-source (aggregate) control", async () => {
+    const { queryByLabelText } = renderCost();
+    await waitFor(() =>
+      expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0),
+    );
+    expect(queryByLabelText(/cost source/i)).not.toBeInTheDocument();
   });
 });
