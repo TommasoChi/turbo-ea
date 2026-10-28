@@ -126,9 +126,7 @@ import CardMultiPicker from "@/components/CardMultiPicker";
 import CardPicker from "@/components/CardPicker";
 import LinkifiedText from "@/components/LinkifiedText";
 import { sanitizeRichHtml } from "@/lib/richHtml";
-import CardScopeDialog, {
-  dedupeScopeRoots,
-} from "@/components/CardScopeDialog";
+import CardScopeDialog, { dedupeScopeRoots } from "@/components/CardScopeDialog";
 import CardScopeFilter from "@/components/CardScopeFilter";
 import { applyScope, useCardScope } from "@/hooks/useCardScope";
 import MaterialSymbol from "@/components/MaterialSymbol";
@@ -139,11 +137,7 @@ import MetricCard from "@/features/reports/MetricCard";
 import ReportLegend from "@/features/reports/ReportLegend";
 import SaveReportDialog from "@/features/reports/SaveReportDialog";
 import type { ReportShellProps } from "@/features/reports/ReportShell";
-import type {
-  GEdge,
-  GNode,
-  LayerOverrides,
-} from "@/features/reports/layeredDependencyLayout";
+import type { GEdge, GNode, LayerOverrides } from "@/features/reports/layeredDependencyLayout";
 import { useChartTheme } from "@/hooks/useChartTheme";
 import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -153,18 +147,9 @@ import * as tokens from "@/theme/tokens";
 // SDK 1.19 — choice-field pill rendering + metamodel label resolution, so an
 // extension renders a select value exactly like core. All leaf/pure modules:
 // no code-split graph, and no cycle back through cardDetailUtils.
-import {
-  OptionChip,
-  SELECT_CHIP_BASE,
-  chipWidthForField,
-} from "@/components/OptionChip";
+import { OptionChip, SELECT_CHIP_BASE, chipWidthForField } from "@/components/OptionChip";
 import { readableTextColor } from "@/lib/color";
-import {
-  fieldLabel,
-  optionLabel,
-  useFieldLabel,
-  useOptionLabel,
-} from "@/hooks/useResolveLabel";
+import { fieldLabel, optionLabel, useFieldLabel, useOptionLabel } from "@/hooks/useResolveLabel";
 // SDK 1.20 - the workspace date format, and in-app navigation. Both are things
 // an extension can only otherwise approximate: a hand-rolled toLocaleDateString
 // ignores Admin -> Settings -> Date format, and an <a href> to a core route
@@ -181,10 +166,7 @@ import DateField from "@/components/DateField";
 // MUI-only leaf modules like FilterSelect, so static imports are safe: no
 // code-split graph is dragged into the eager bundle and no cycle back here.
 import ColumnFreezeToggle from "@/components/grid/ColumnFreezeToggle";
-import {
-  FilterCheckboxList,
-  FilterSectionHeader,
-} from "@/components/FilterSidebarSection";
+import { FilterCheckboxList, FilterSectionHeader } from "@/components/FilterSidebarSection";
 // SDK 1.25 — the card-detail lifecycle line, and gantt dependency-arrow
 // routing. `LifecycleSection` is props-driven (it commits through an `onSave`
 // callback and makes no API call of its own), so an extension can render a
@@ -217,13 +199,7 @@ export const UI_SDK_VERSION = "1.19"; // fork: pinned (frozen). Upstream value i
  * built against them. An unrecognised navGroup is swallowed entirely (see
  * AppLayout.tsx), so they stay whitelisted here.
  */
-export const EXTENSION_NAV_GROUPS = [
-  "reports",
-  "grc",
-  "admin",
-  "strategy_process",
-  "app_data",
-] as const;
+export const EXTENSION_NAV_GROUPS = ["reports", "grc", "admin", "strategy_process", "app_data"] as const;
 export type ExtensionNavGroup = (typeof EXTENSION_NAV_GROUPS)[number];
 
 /**
@@ -299,12 +275,7 @@ export interface ExtensionIntegrationPanelContribution {
 
 /** Props handed to an extension field type's read-only display component. */
 export interface ExtensionFieldDisplayProps {
-  field: {
-    key: string;
-    label: string;
-    type: string;
-    config?: Record<string, unknown>;
-  };
+  field: { key: string; label: string; type: string; config?: Record<string, unknown> };
   value: unknown;
   config?: Record<string, unknown>;
 }
@@ -619,10 +590,7 @@ function sdkMajor(v: string): number {
 
 export function registerExtension(key: string, plugin: TurboExtensionUI): void {
   if (!plugin || plugin.key !== key) {
-    _loadErrors = {
-      ..._loadErrors,
-      [key]: `register() key mismatch (${plugin?.key})`,
-    };
+    _loadErrors = { ..._loadErrors, [key]: `register() key mismatch (${plugin?.key})` };
     notify();
     return;
   }
@@ -647,11 +615,7 @@ export function getExtensionLoadErrors(): Record<string, string> {
 }
 
 export function useExtensionUI(): RegisteredExtension[] {
-  return useSyncExternalStore(
-    subscribe,
-    getRegisteredExtensions,
-    getRegisteredExtensions,
-  );
+  return useSyncExternalStore(subscribe, getRegisteredExtensions, getRegisteredExtensions);
 }
 
 /**
@@ -679,11 +643,7 @@ export function getExtensionFieldTypes(): Record<string, RegisteredFieldType> {
 }
 
 export function useExtensionFieldTypes(): Record<string, RegisteredFieldType> {
-  return useSyncExternalStore(
-    subscribe,
-    getExtensionFieldTypes,
-    getExtensionFieldTypes,
-  );
+  return useSyncExternalStore(subscribe, getExtensionFieldTypes, getExtensionFieldTypes);
 }
 
 /**
@@ -697,10 +657,7 @@ export function getExtensionSurveyTemplates(): RegisteredSurveyTemplate[] {
   for (const { key, plugin } of _registered) {
     for (const tpl of plugin.surveyTemplates ?? []) {
       if (!tpl?.id || !tpl.label || typeof tpl.build !== "function") {
-        console.warn(
-          `[extension:${key}] invalid survey template — ignored`,
-          tpl,
-        );
+        console.warn(`[extension:${key}] invalid survey template — ignored`, tpl);
         continue;
       }
       out.push({ extKey: key, contribution: tpl });
@@ -732,10 +689,7 @@ export function getExtensionFieldVisibilityProviders(): RegisteredFieldVisibilit
     const provider = plugin.fieldVisibility;
     if (provider === undefined) continue;
     if (typeof provider !== "function") {
-      console.warn(
-        `[extension:${key}] invalid fieldVisibility provider — ignored`,
-        provider,
-      );
+      console.warn(`[extension:${key}] invalid fieldVisibility provider — ignored`, provider);
       continue;
     }
     out.push({ extKey: key, provider });
@@ -775,36 +729,22 @@ export function useExtensionFieldVisibilityProviders(): RegisteredFieldVisibilit
  * extensions just render the components. FilterSelect is MUI-only and is
  * imported statically.
  */
-const LazyCardDetailSidePanel = React.lazy(
-  () => import("@/components/CardDetailSidePanel"),
-);
-const LazyReportShell = React.lazy(
-  () => import("@/features/reports/ReportShell"),
-) as unknown as React.LazyExoticComponent<
+const LazyCardDetailSidePanel = React.lazy(() => import("@/components/CardDetailSidePanel"));
+const LazyReportShell = React.lazy(() => import("@/features/reports/ReportShell")) as unknown as React.LazyExoticComponent<
   React.ComponentType<ReportShellProps<"chart" | "table">>
 >;
-const LazyDependencyGraph = React.lazy(
-  () => import("@/features/reports/LayeredDependencyView"),
-);
-const LazyDiagramViewer = React.lazy(
-  () => import("@/features/diagrams/DiagramViewer"),
-);
+const LazyDependencyGraph = React.lazy(() => import("@/features/reports/LayeredDependencyView"));
+const LazyDiagramViewer = React.lazy(() => import("@/features/diagrams/DiagramViewer"));
 // SDK 1.14 — same lazy-wrapper treatment as CardDetailSidePanel: this panel
 // pulls DrawerSteps/DrawerFlow from features/bpm/ProcessNavigator.tsx (a
 // large, code-split BPM feature file), so a static import here would drag
 // it into the eager main bundle.
-const LazyProcessDetailSidePanel = React.lazy(
-  () => import("@/components/ProcessDetailSidePanel"),
-);
+const LazyProcessDetailSidePanel = React.lazy(() => import("@/components/ProcessDetailSidePanel"));
 // SDK 1.14 — same lazy-wrapper treatment; pulls in FlowPreviewDialog (and
 // transitively the code-split BpmnViewer it renders) from
 // features/bpm/ProcessNavigator.tsx.
-const LazyProcessFlowPreview = React.lazy(
-  () => import("@/components/ProcessFlowPreview"),
-);
-const LazyCreateCardDialog = React.lazy(
-  () => import("@/components/CreateCardDialog"),
-);
+const LazyProcessFlowPreview = React.lazy(() => import("@/components/ProcessFlowPreview"));
+const LazyCreateCardDialog = React.lazy(() => import("@/components/CreateCardDialog"));
 
 export function ExtensionCardDetailSidePanel(props: {
   cardId: string | null;
@@ -842,9 +782,7 @@ export function ExtensionProcessFlowPreview(props: {
   );
 }
 
-export function ExtensionReportShell(
-  props: ReportShellProps<"chart" | "table">,
-) {
+export function ExtensionReportShell(props: ReportShellProps<"chart" | "table">) {
   return (
     <React.Suspense fallback={null}>
       <LazyReportShell {...props} />
@@ -987,9 +925,7 @@ export function useExtensionSavedReport(reportType: string): {
 } {
   const saved = useCoreSavedReport(reportType);
   return {
-    config:
-      (saved.savedReport?.config as Record<string, unknown> | undefined) ??
-      null,
+    config: (saved.savedReport?.config as Record<string, unknown> | undefined) ?? null,
     savedReportId: saved.savedReport?.id ?? null,
     name: saved.savedReportName,
     consumeConfig: saved.consumeConfig,
@@ -1020,11 +956,7 @@ export function getExtensionAdrPanels(): RegisteredAdrPanel[] {
 
 export function useExtensionAdrPanels(): RegisteredAdrPanel[] {
   // Depend on the registry snapshot so mounts re-render on (un)register.
-  useSyncExternalStore(
-    subscribe,
-    getRegisteredExtensions,
-    getRegisteredExtensions,
-  );
+  useSyncExternalStore(subscribe, getRegisteredExtensions, getRegisteredExtensions);
   return getExtensionAdrPanels();
 }
 
@@ -1039,10 +971,7 @@ export function getExtensionAdrExportSections(): RegisteredAdrExport[] {
   for (const { key, plugin } of _registered) {
     for (const contribution of plugin.adrExportSections ?? []) {
       if (!contribution?.id || typeof contribution.build !== "function") {
-        console.warn(
-          `[extension:${key}] invalid ADR export contribution — ignored`,
-          contribution,
-        );
+        console.warn(`[extension:${key}] invalid ADR export contribution — ignored`, contribution);
         continue;
       }
       out.push({ extKey: key, contribution });
@@ -1063,15 +992,8 @@ export function getExtensionAdrGridColumns(): RegisteredAdrGridColumn[] {
   const out: RegisteredAdrGridColumn[] = [];
   for (const { key, plugin } of _registered) {
     for (const contribution of plugin.adrGridColumns ?? []) {
-      if (
-        !contribution?.id ||
-        !contribution.label ||
-        typeof contribution.value !== "function"
-      ) {
-        console.warn(
-          `[extension:${key}] invalid ADR grid column — ignored`,
-          contribution,
-        );
+      if (!contribution?.id || !contribution.label || typeof contribution.value !== "function") {
+        console.warn(`[extension:${key}] invalid ADR grid column — ignored`, contribution);
         continue;
       }
       out.push({ extKey: key, contribution });
@@ -1082,11 +1004,7 @@ export function getExtensionAdrGridColumns(): RegisteredAdrGridColumn[] {
 }
 
 export function useExtensionAdrGridColumns(): RegisteredAdrGridColumn[] {
-  return useSyncExternalStore(
-    subscribe,
-    getExtensionAdrGridColumns,
-    getExtensionAdrGridColumns,
-  );
+  return useSyncExternalStore(subscribe, getExtensionAdrGridColumns, getExtensionAdrGridColumns);
 }
 
 /**
@@ -1103,10 +1021,7 @@ export function getExtensionIntegrationPanels(): RegisteredIntegrationPanel[] {
   for (const { key, plugin } of _registered) {
     for (const panel of plugin.integrationPanels ?? []) {
       if (!panel?.id || !panel.label || typeof panel.component !== "function") {
-        console.warn(
-          `[extension:${key}] invalid integration panel — ignored`,
-          panel,
-        );
+        console.warn(`[extension:${key}] invalid integration panel — ignored`, panel);
         continue;
       }
       out.push({ extKey: key, contribution: panel });
@@ -1219,18 +1134,12 @@ export function ExtensionSlot({
         }
         if (
           contribution.appliesTo &&
-          !(
-            typeof typeKey === "string" &&
-            contribution.appliesTo.includes(typeKey)
-          )
+          !(typeof typeKey === "string" && contribution.appliesTo.includes(typeKey))
         ) {
           return null;
         }
         return (
-          <ExtensionBoundary
-            key={`${extKey}:${contribution.id}`}
-            extensionKey={extKey}
-          >
+          <ExtensionBoundary key={`${extKey}:${contribution.id}`} extensionKey={extKey}>
             <Component {...(context ?? {})} />
           </ExtensionBoundary>
         );
@@ -1268,12 +1177,9 @@ export function useExtensionAuth() {
   const { user } = useAuthContext();
   const permissions = user?.permissions ?? {};
   return {
-    actor: user
-      ? { id: user.id, display_name: user.display_name, email: user.email }
-      : null,
+    actor: user ? { id: user.id, display_name: user.display_name, email: user.email } : null,
     permissions,
-    hasPermission: (permission: string) =>
-      hasPermission(permissions, permission),
+    hasPermission: (permission: string) => hasPermission(permissions, permission),
   };
 }
 
@@ -1368,10 +1274,7 @@ export function initExtensionHost(): void {
       // extension has, not a persisted core view) to an SVG via
       // `viewer.saveSVG()`, then rasterized with loadHtmlToImage for
       // embedding in a docxtemplater-image tag.
-      loadBpmnViewer: () =>
-        import("bpmn-js/lib/NavigatedViewer").then((m) => ({
-          NavigatedViewer: m.default,
-        })),
+      loadBpmnViewer: () => import("bpmn-js/lib/NavigatedViewer").then((m) => ({ NavigatedViewer: m.default })),
       // SDK 1.14 — lazy loader for `docx`, core's own document builder (the
       // SoAW and ADR exporters use it directly), so an extension can write a
       // Word file client-side without bundling a second copy — the same
@@ -1558,8 +1461,7 @@ export async function loadUiExtensions(): Promise<void> {
     return;
   }
   for (const entry of manifest) {
-    if (entry.name)
-      _displayNames = { ..._displayNames, [entry.key]: entry.name };
+    if (entry.name) _displayNames = { ..._displayNames, [entry.key]: entry.name };
   }
   await Promise.all(
     manifest.map(async (entry) => {
@@ -1588,10 +1490,7 @@ export async function loadUiExtensions(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /** All route contributions across registered extensions. */
-export function getExtensionRoutes(): {
-  extKey: string;
-  route: ExtensionRouteContribution;
-}[] {
+export function getExtensionRoutes(): { extKey: string; route: ExtensionRouteContribution }[] {
   return _registered.flatMap(({ key, plugin }) =>
     (plugin.routes ?? []).map((route) => ({ extKey: key, route })),
   );
@@ -1626,9 +1525,7 @@ export function getExtensionNavGroups(): RegisteredExtensionNavGroup[] {
         (EXTENSION_NAV_GROUPS as readonly string[]).includes(id) ||
         seen.has(id)
       ) {
-        console.warn(
-          `[extension:${key}] invalid or duplicate navigation group "${id}" — ignored`,
-        );
+        console.warn(`[extension:${key}] invalid or duplicate navigation group "${id}" — ignored`);
         continue;
       }
       seen.add(id);
@@ -1691,10 +1588,7 @@ interface BoundaryState {
   error: string | null;
 }
 
-export class ExtensionBoundary extends React.Component<
-  BoundaryProps,
-  BoundaryState
-> {
+export class ExtensionBoundary extends React.Component<BoundaryProps, BoundaryState> {
   state: BoundaryState = { error: null };
 
   static getDerivedStateFromError(error: unknown): BoundaryState {
@@ -1709,8 +1603,7 @@ export class ExtensionBoundary extends React.Component<
     if (this.state.error) {
       return (
         <Alert severity="error" variant="outlined" sx={{ m: 1 }}>
-          Extension “{this.props.extensionKey}” failed to render:{" "}
-          {this.state.error}
+          Extension “{this.props.extensionKey}” failed to render: {this.state.error}
         </Alert>
       );
     }
