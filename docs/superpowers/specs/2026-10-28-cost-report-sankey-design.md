@@ -47,6 +47,15 @@ In scope:
   present = data.softwareLicensingCost+data.applicationManagementServicesCost+data.infrastruttureCost
   ```
   "Treat blank numbers as zero" on, matching Application's calculation.
+- **Table view gets custom columns.** A column picker lets the user add any
+  field of the card type being shown (sourced from `fields_schema`, same list
+  `costFields` already reads from) as an extra table column. When a grouping
+  (`group_by`) is active and an added column's field `type === "cost"`, that
+  column gets a per-group subtotal row — the exact mechanism already in place
+  for the fixed `cost` column (`g.cost` summed per group), generalized to N
+  columns instead of one. Backend must start returning each item's
+  `attributes` (or the requested columns) — today `/reports/cost-treemap` and
+  `/reports/cost` return only `{id, name, cost}`, nothing else.
 
 Out of scope (not asked, not assumed):
 - Any card type other than Application / IT Component.
