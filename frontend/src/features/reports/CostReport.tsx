@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
+import Checkbox from "@mui/material/Checkbox";
+import ListItemText from "@mui/material/ListItemText";
 import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
@@ -108,6 +110,12 @@ function pickCostFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
   const out: FieldDef[] = [];
   for (const s of schema)
     for (const f of s.fields) if (f.type === "cost") out.push(f);
+  return out;
+}
+
+function pickAllFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
+  const out: FieldDef[] = [];
+  for (const s of schema) for (const f of s.fields) out.push(f);
   return out;
 }
 
@@ -269,6 +277,19 @@ export default function CostReport() {
     const raw = typeDef ? pickCostFields(typeDef.fields_schema) : [];
     return raw.map((f) => ({ ...f, label: fieldLabel(f) }));
   }, [typeDef, fieldLabel]);
+  const allFields = useMemo(() => {
+    const raw = typeDef ? pickAllFields(typeDef.fields_schema) : [];
+    return raw.map((f) => ({ ...f, label: fieldLabel(f) }));
+  }, [typeDef, fieldLabel]);
+  const [extraColumns, setExtraColumns] = useState<string[]>([]);
+
+  // Drop picked columns the current type no longer defines (card-type
+  // switch) — mirrors the removed aggregateOptions pruning effect.
+  useEffect(() => {
+    setExtraColumns((prev) =>
+      prev.filter((key) => allFields.some((f) => f.key === key)),
+    );
+  }, [allFields]);
 
   // Auto-select cost field when card type changes — only when the current one
   // is not on the type, so a restored field the type does carry is kept.
@@ -296,6 +317,12 @@ export default function CostReport() {
       if (cfg.view) setView(cfg.view as CostView);
       if (cfg.sortK) setSortK(cfg.sortK as string);
       if (cfg.sortD) setSortD(cfg.sortD as "asc" | "desc");
+      if (Array.isArray(cfg.extraColumns))
+        setExtraColumns(
+          (cfg.extraColumns as unknown[]).filter(
+            (v): v is string => typeof v === "string",
+          ),
+        );
       // Set for the restored type, so the scope is read as that type's from
       // the render the type lands on.
       if (Array.isArray(cfg.scopeIds)) {
@@ -317,12 +344,13 @@ export default function CostReport() {
     sortK,
     sortD,
     scopeIds,
+    extraColumns,
   });
 
   // Auto-persist config to localStorage
   useEffect(() => {
     saved.persistConfig(getConfig());
-  }, [cardTypeKey, costField, groupBy, view, sortK, sortD, scopeIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cardTypeKey, costField, groupBy, view, sortK, sortD, scopeIds, extraColumns]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset all parameters to defaults
   const handleReset = useCallback(() => {
@@ -334,6 +362,7 @@ export default function CostReport() {
     setSortK("cost");
     setSortD("desc");
     setScopeIds([]);
+    setExtraColumns([]);
   }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The table's group-by: single selects with options and yes/no fields (a
@@ -660,6 +689,36 @@ export default function CostReport() {
               </TextField>
             )}
 
+          {view === "table" && allFields.length > 0 && (
+            <TextField
+              select
+              size="small"
+              label={t("cost.columns")}
+              value={extraColumns}
+              onChange={(e) => {
+                const v = e.target.value;
+                setExtraColumns(
+                  typeof v === "string" ? v.split(",") : (v as string[]),
+                );
+              }}
+              SelectProps={{
+                multiple: true,
+                renderValue: (selected) =>
+                  (selected as string[]).length
+                    ? String((selected as string[]).length)
+                    : t("cost.columnsNone"),
+              }}
+              sx={{ minWidth: 150 }}
+            >
+              {allFields.map((f) => (
+                <MenuItem key={f.key} value={f.key}>
+                  <Checkbox checked={extraColumns.includes(f.key)} />
+                  <ListItemText primary={f.label} />
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+
           {fiscalYear && (
             <Tooltip title={t("cost.fiscalYearHelp")} arrow placement="bottom">
               <Chip
@@ -786,6 +845,11 @@ export default function CostReport() {
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="right">{t("cost.percentOfTotal")}</TableCell>
+                {extraColumns.map((key) => (
+                  <TableCell key={key} align="right">
+                    {allFields.find((f) => f.key === key)?.label ?? key}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableHead>
             <TableBody>

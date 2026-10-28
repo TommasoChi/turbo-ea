@@ -9,7 +9,7 @@
  * must say which year that is and never ask for another.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { createRef } from "react";
@@ -296,5 +296,118 @@ describe("CostReport card-type selector and Sankey view", () => {
       expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0),
     );
     expect(queryByLabelText(/cost source/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("CostReport custom columns", () => {
+  it("offers every field of the current card type, in table view", async () => {
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: [
+        {
+          ...APP_TYPE,
+          fields_schema: [
+            {
+              section: "Extra",
+              fields: [{ key: "alias", label: "Alias", type: "text" }],
+            },
+            ...APP_TYPE.fields_schema,
+          ],
+        },
+        ITC_TYPE,
+      ],
+      relationTypes: [],
+      loading: false,
+      getType: (key: string) => (key === "Application" ? APP_TYPE : undefined),
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+    } as never);
+    const { findByRole } = renderCost();
+    await waitFor(() =>
+      expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /table view/i }));
+    const picker = await findByRole("combobox", { name: /columns/i });
+    await userEvent.click(picker);
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toContain("Total Annual Cost");
+  });
+
+  it("persists and restores picked columns", async () => {
+    consumedConfig = { view: "table", extraColumns: ["costTotalAnnual"] };
+    renderCost();
+    await waitFor(() =>
+      expect(
+        within(toolbar()).getByRole("combobox", { name: /columns/i }),
+      ).toHaveTextContent("1"),
+    );
+  });
+
+  it("renders picked columns in pick order, not picker order", async () => {
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: [
+        {
+          ...APP_TYPE,
+          fields_schema: [
+            ...APP_TYPE.fields_schema,
+            {
+              section: "Extra",
+              fields: [{ key: "alias", label: "Alias", type: "text" }],
+            },
+          ],
+        },
+        ITC_TYPE,
+      ],
+      relationTypes: [],
+      loading: false,
+      getType: () => APP_TYPE,
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+    } as never);
+    consumedConfig = {
+      view: "table",
+      extraColumns: ["costTotalAnnual", "alias"],
+    };
+    renderCost();
+    await screen.findByRole("table");
+    const headers = screen
+      .getAllByRole("columnheader")
+      .map((h) => h.textContent);
+    expect(headers.indexOf("Total Annual Cost")).toBeLessThan(
+      headers.indexOf("Alias"),
+    );
+  });
+
+  it("drops a picked column the new type does not define", async () => {
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: [
+        {
+          ...APP_TYPE,
+          fields_schema: [
+            ...APP_TYPE.fields_schema,
+            {
+              section: "Extra",
+              fields: [{ key: "alias", label: "Alias", type: "text" }],
+            },
+          ],
+        },
+        ITC_TYPE,
+      ],
+      relationTypes: [],
+      loading: false,
+      getType: (key: string) =>
+        key === "Application" ? APP_TYPE : key === "ITComponent" ? ITC_TYPE : undefined,
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+    } as never);
+    consumedConfig = { view: "table", extraColumns: ["alias"] };
+    renderCost();
+    await screen.findByRole("table");
+    expect(screen.getByRole("columnheader", { name: "Alias" })).toBeInTheDocument();
+    const select = screen.getByLabelText(/card type/i);
+    await userEvent.click(select);
+    await userEvent.click(await screen.findByRole("option", { name: "IT Component" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("columnheader", { name: "Alias" })).not.toBeInTheDocument(),
+    );
   });
 });
