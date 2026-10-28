@@ -531,9 +531,7 @@ class TestCurrentValue:
     async def test_stakeholder_field_delegates_to_stakeholder_holders(self, db):
         actor, a, b, c, card = await _role_env(db)
         field = {"kind": "stakeholder", "role": "observer"}
-        assert await sa.current_value(db, card, field) == [
-            {"id": str(a.id), "display_name": "A"}
-        ]
+        assert await sa.current_value(db, card, field) == [{"id": str(a.id), "display_name": "A"}]
 
     async def test_a_plain_attribute_field_reads_the_named_key(self, db):
         await create_card_type(db, key="Application", label="Application")
@@ -563,13 +561,16 @@ async def test_apply_relation_change_adds_a_new_peer(db):
     new_peer = await create_card(db, card_type="ITComponent", name="Gamma")
     actor = await create_user(db, email="surveyor1@test.com")
     changed = await sa.apply_relation_change(
-        db, app, _FIELD, [{"id": str(alpha.id)}, {"id": str(beta.id)}, {"id": str(new_peer.id)}],
+        db,
+        app,
+        _FIELD,
+        [{"id": str(alpha.id)}, {"id": str(beta.id)}, {"id": str(new_peer.id)}],
         actor.id,
     )
     assert changed is True
     rels = (
-        await db.execute(select(Relation).where(Relation.type == "relAppToITC"))
-    ).scalars().all()
+        (await db.execute(select(Relation).where(Relation.type == "relAppToITC"))).scalars().all()
+    )
     targets = {r.target_id for r in rels}
     assert new_peer.id in targets
 
@@ -580,20 +581,28 @@ async def test_apply_relation_change_removes_a_dropped_peer(db):
     changed = await sa.apply_relation_change(db, app, _FIELD, [{"id": str(alpha.id)}], actor.id)
     assert changed is True
     rels = (
-        await db.execute(
-            select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+        (
+            await db.execute(
+                select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert {r.target_id for r in rels} == {alpha.id}
     assert beta.id not in {r.target_id for r in rels}
 
 
 async def _existing_peer_ids(db, app):
     rels = (
-        await db.execute(
-            select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+        (
+            await db.execute(
+                select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [str(r.target_id) for r in rels]
 
 
@@ -608,10 +617,14 @@ async def test_apply_relation_change_skips_an_inactive_peer_on_add(db):
     changed = await sa.apply_relation_change(db, app, _FIELD, answer, actor.id)
     assert changed is False
     rels = (
-        await db.execute(
-            select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+        (
+            await db.execute(
+                select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert dead.id not in {r.target_id for r in rels}
 
 
@@ -623,20 +636,28 @@ async def test_apply_relation_change_skips_a_peer_id_that_does_not_exist(db):
     changed = await sa.apply_relation_change(db, app, _FIELD, answer, actor.id)
     assert changed is False
     rels = (
-        await db.execute(
-            select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+        (
+            await db.execute(
+                select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert missing not in {r.target_id for r in rels}
 
 
 async def test_apply_relation_change_is_a_noop_when_nothing_changed(db):
     app, *_ = await _relation_env(db)
     existing = (
-        await db.execute(
-            select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+        (
+            await db.execute(
+                select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     same_answer = [{"id": str(r.target_id)} for r in existing]
     changed = await sa.apply_relation_change(db, app, _FIELD, same_answer, uuid.uuid4())
     assert changed is False

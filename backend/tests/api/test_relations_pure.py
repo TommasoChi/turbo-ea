@@ -61,16 +61,12 @@ class TestResolveRefInputById:
 class TestResolveRefInputType:
     def test_source_endpoint_uses_the_source_type_key_as_default(self):
         resolver = _FakeResolver(ResolveResult(status="resolved", card_id=uuid.uuid4()))
-        _resolve_ref_input(
-            RelationRefInput(name="x"), _rt(), endpoint="source", resolver=resolver
-        )
+        _resolve_ref_input(RelationRefInput(name="x"), _rt(), endpoint="source", resolver=resolver)
         assert resolver.calls[0][0] == "Application"
 
     def test_target_endpoint_uses_the_target_type_key_as_default(self):
         resolver = _FakeResolver(ResolveResult(status="resolved", card_id=uuid.uuid4()))
-        _resolve_ref_input(
-            RelationRefInput(name="x"), _rt(), endpoint="target", resolver=resolver
-        )
+        _resolve_ref_input(RelationRefInput(name="x"), _rt(), endpoint="target", resolver=resolver)
         assert resolver.calls[0][0] == "ITComponent"
 
     def test_a_matching_explicit_type_is_accepted(self):
@@ -165,9 +161,7 @@ class TestResolveRefInputOutcome:
         assert "not found" in exc.value.detail
 
     def test_ambiguous_lists_up_to_three_candidates(self):
-        candidates = [
-            Candidate(id=uuid.uuid4(), parent_path=(), name=f"Card{i}") for i in range(5)
-        ]
+        candidates = [Candidate(id=uuid.uuid4(), parent_path=(), name=f"Card{i}") for i in range(5)]
         resolver = _FakeResolver(ResolveResult(status="ambiguous", candidates=candidates))
         with pytest.raises(HTTPException) as exc:
             _resolve_ref_input(
