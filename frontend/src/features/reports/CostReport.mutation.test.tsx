@@ -776,6 +776,7 @@ describe("CostReport saved configuration", () => {
         sortK: "cost",
         sortD: "desc",
         scopeIds: [],
+        extraColumns: [],
       }),
     );
   });

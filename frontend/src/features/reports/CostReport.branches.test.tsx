@@ -572,4 +572,95 @@ describe("CostReport table", () => {
     expect(await screen.findByTestId("treemap")).toBeInTheDocument();
     await act(async () => {});
   });
+
+  it("renders a picked column's value per row and a header with its label", async () => {
+    saved.config = { view: "table", extraColumns: ["businessCriticality"] };
+    renderCost();
+    await screen.findByRole("table");
+    expect(
+      screen.getByRole("columnheader", { name: "Business Criticality" }),
+    ).toBeInTheDocument();
+    const row = screen.getByRole("row", { name: /ERP/ });
+    expect(within(row).getByText("Mission Critical")).toBeInTheDocument();
+  });
+
+  it("shows the empty sentinel for a row missing the picked field", async () => {
+    saved.config = { view: "table", extraColumns: ["businessCriticality"] };
+    renderCost();
+    await screen.findByRole("table");
+    const row = screen.getByRole("row", { name: /^HR/ });
+    expect(within(row).getByText("—")).toBeInTheDocument();
+  });
+
+  it("sums a cost-typed picked column per group when grouped", async () => {
+    const APP_TWO_COSTS = makeCardType({
+      key: "Application",
+      label: "Application",
+      fields_schema: [
+        makeSection({
+          section: "Costs",
+          fields: [
+            makeField({
+              key: "businessCriticality",
+              label: "Business Criticality",
+              type: "single_select",
+              options: [{ key: "missionCritical", label: "Mission Critical" }],
+            }),
+            makeField({
+              key: "costRun",
+              label: "Run Cost",
+              type: "cost",
+            }),
+          ],
+        }),
+      ],
+    });
+    withMetamodel([APP_TWO_COSTS, IT_COMPONENT_TYPE], []);
+    saved.config = {
+      view: "table",
+      groupBy: "businessCriticality",
+      extraColumns: ["costRun"],
+    };
+    mockApi.on("get", "/reports/cost-treemap*", {
+      items: [
+        {
+          id: "a",
+          name: "A",
+          cost: 100,
+          attributes: { businessCriticality: "missionCritical", costRun: 40 },
+        },
+        {
+          id: "b",
+          name: "B",
+          cost: 200,
+          attributes: { businessCriticality: "missionCritical", costRun: 60 },
+        },
+      ],
+      total: 300,
+    });
+    renderCost();
+    await screen.findByRole("table");
+    const groupRow = screen.getByRole("row", { name: /Mission Critical/ });
+    expect(within(groupRow).getByText("$100")).toBeInTheDocument(); // 40 + 60
+  });
+
+  it("renders a cost column's per-row values with no subtotal when ungrouped", async () => {
+    saved.config = { view: "table", extraColumns: ["costTotalAnnual"] };
+    mockApi.on("get", "/reports/cost-treemap*", {
+      items: ITEMS.map((it) => ({
+        ...it,
+        attributes: { ...it.attributes, costTotalAnnual: it.cost },
+      })),
+      total: 700,
+      fiscal_year: 2026,
+      fiscal_year_start: 1,
+    });
+    renderCost();
+    await screen.findByRole("table");
+    const row = screen.getByRole("row", { name: /ERP/ });
+    expect(within(row).getByText("$500")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("row", { name: /^Mission Critical/ }),
+    ).not.toBeInTheDocument();
+  });
 });

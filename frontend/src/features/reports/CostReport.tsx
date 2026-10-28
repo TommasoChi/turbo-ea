@@ -50,6 +50,8 @@ import {
   resolveFacetField,
 } from "@/lib/fieldFacets";
 import { fiscalYearLabel } from "@/lib/fiscalYear";
+import { formatFieldValue, type FieldMeta } from "@/lib/cardDisplayFields";
+import { costValue } from "@/lib/costValue";
 import type { FieldDef } from "@/types";
 
 const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent"] as const;
@@ -574,6 +576,25 @@ export default function CostReport() {
     return a.name.localeCompare(b.name) * d;
   });
 
+  const yesNoLabels = {
+    yes: t("common:labels.yes"),
+    no: t("common:labels.no"),
+  };
+  const fieldMeta = (key: string): FieldMeta | undefined => {
+    const f = allFields.find((fd) => fd.key === key);
+    return f ? ({ ...f, typeKeys: [cardTypeKey] } as FieldMeta) : undefined;
+  };
+  const extraCell = (item: CostItem) =>
+    extraColumns.map((key) => (
+      <TableCell key={key} align="right">
+        {formatFieldValue(
+          (item.attributes as Record<string, unknown> | undefined)?.[key],
+          fieldMeta(key),
+          { optionLabel: optLabel, yes: yesNoLabels.yes, no: yesNoLabels.no },
+        )}
+      </TableCell>
+    ));
+
   const Tip = ({
     active,
     payload,
@@ -889,6 +910,30 @@ export default function CostReport() {
                             ? `${((g.cost / total) * 100).toFixed(1)}%`
                             : "—"}
                         </TableCell>
+                        {extraColumns.map((key) => (
+                          <TableCell
+                            key={key}
+                            align="right"
+                            sx={{ fontWeight: 700 }}
+                          >
+                            {fieldMeta(key)?.type === "cost"
+                              ? fmt.format(
+                                  g.items.reduce(
+                                    (s, it) =>
+                                      s +
+                                      costValue(
+                                        (
+                                          it.attributes as
+                                            | Record<string, unknown>
+                                            | undefined
+                                        )?.[key],
+                                      ),
+                                    0,
+                                  ),
+                                )
+                              : null}
+                          </TableCell>
+                        ))}
                       </TableRow>,
                       ...groupSorted.map((d) => (
                         <TableRow
@@ -908,6 +953,7 @@ export default function CostReport() {
                               ? `${((d.cost / total) * 100).toFixed(1)}%`
                               : "—"}
                           </TableCell>
+                          {extraCell(d)}
                         </TableRow>
                       )),
                     ];
@@ -926,6 +972,7 @@ export default function CostReport() {
                           ? `${((d.cost / total) * 100).toFixed(1)}%`
                           : "—"}
                       </TableCell>
+                      {extraCell(d)}
                     </TableRow>
                   ))}
               <TableRow sx={{ bgcolor: "action.selected" }}>
@@ -938,6 +985,9 @@ export default function CostReport() {
                 <TableCell align="right" sx={{ fontWeight: 700 }}>
                   100%
                 </TableCell>
+                {extraColumns.map((key) => (
+                  <TableCell key={key} align="right" />
+                ))}
               </TableRow>
             </TableBody>
           </Table>
