@@ -1253,6 +1253,101 @@ class TestCostTreemap:
         )
         assert resp.status_code == 403
 
+    async def test_cost_treemap_reads_a_past_year_from_history(self, client, db, env):
+        from app.models.card_cost_history import CardCostHistory
+
+        admin = env["admin"]
+        app1 = await create_card(
+            db,
+            card_type="Application",
+            name="ERP",
+            user_id=admin.id,
+            attributes={"costTotalAnnual": 999},  # today's live value — must NOT be shown
+            lifecycle={"active": "2020-01-01"},
+        )
+        db.add(
+            CardCostHistory(
+                card_id=app1.id, fiscal_year=2024, field_key="costTotalAnnual", value=321
+            )
+        )
+        await db.flush()
+        resp = await client.get(
+            "/api/v1/reports/cost-treemap",
+            params={"type": "Application", "fiscal_year": 2024},
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["items"][0]["cost"] == 321
+        assert data["fiscal_year"] == 2024
+
+    async def test_cost_treemap_falls_back_to_live_attributes_when_no_history_row_exists_for_the_current_year(  # noqa: E501
+        self, client, db, env
+    ):
+        from app.services.fiscal_year import current_fiscal_year
+
+        admin = env["admin"]
+        await create_card(
+            db,
+            card_type="Application",
+            name="ERP",
+            user_id=admin.id,
+            attributes={"costTotalAnnual": 500},
+            lifecycle={"active": "2020-01-01"},
+        )
+        fy = current_fiscal_year(1)
+        resp = await client.get(
+            "/api/v1/reports/cost-treemap",
+            params={"type": "Application", "fiscal_year": fy},
+            headers=auth_headers(admin),
+        )
+        assert resp.json()["items"][0]["cost"] == 500
+
+    async def test_cost_treemap_shows_nothing_for_a_past_year_with_no_history_row(
+        self, client, db, env
+    ):
+        admin = env["admin"]
+        await create_card(
+            db,
+            card_type="Application",
+            name="ERP",
+            user_id=admin.id,
+            attributes={"costTotalAnnual": 500},
+            lifecycle={"active": "2020-01-01"},
+        )
+        resp = await client.get(
+            "/api/v1/reports/cost-treemap",
+            params={"type": "Application", "fiscal_year": 2024},
+            headers=auth_headers(admin),
+        )
+        assert resp.json()["items"] == []
+
+    async def test_a_retired_cards_history_row_does_not_resurrect_it_for_a_past_year(
+        self, client, db, env
+    ):
+        from app.models.card_cost_history import CardCostHistory
+
+        admin = env["admin"]
+        app1 = await create_card(
+            db,
+            card_type="Application",
+            name="Old",
+            user_id=admin.id,
+            lifecycle={"active": "2018-01-01", "endOfLife": "2022-12-31"},
+        )
+        db.add(
+            CardCostHistory(
+                card_id=app1.id, fiscal_year=2024, field_key="costTotalAnnual", value=500
+            )
+        )
+        await db.flush()
+        resp = await client.get(
+            "/api/v1/reports/cost-treemap",
+            params={"type": "Application", "fiscal_year": 2024},
+            headers=auth_headers(admin),
+        )
+        assert resp.json()["items"] == []
+
 
 # ---------------------------------------------------------------------------
 # Capability Heatmap

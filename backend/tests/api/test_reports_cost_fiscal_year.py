@@ -141,12 +141,16 @@ class TestCostTreemapCurrentFiscalYear:
         assert data["fiscal_year"] == fy
         assert data["fiscal_year_start"] == 10
 
-    async def test_no_other_year_can_be_requested(self, client, db, env):
-        """A card holds one annual figure, so no year parameter is offered."""
+    async def test_a_past_year_is_now_a_real_param_echoed_back(self, client, db, env):
+        """Superseded by the fiscal-year-history plan: `fiscal_year` is now a
+        real query param (docs/superpowers/plans/2026-10-28-cost-report-fiscal-year-history.md,
+        Task 4) — a card with no history row for the requested past year shows
+        no items, but the response now echoes back the year actually asked for,
+        not always the current one."""
         await _app(db, "Retired", 1000, {"endOfLife": _d(THIS_YEAR - 1)})
         data = await _treemap(client, env, fiscal_year=THIS_YEAR - 1)
         assert data["items"] == []
-        assert data["fiscal_year"] == THIS_YEAR
+        assert data["fiscal_year"] == THIS_YEAR - 1
 
 
 class TestCostEndpointCurrentFiscalYear:

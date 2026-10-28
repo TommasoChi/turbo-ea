@@ -14,6 +14,7 @@ from sqlalchemy.orm import aliased, selectinload
 from app.api.deps import get_current_user
 from app.database import get_db
 from app.models.card import Card
+from app.models.card_cost_history import CardCostHistory
 from app.models.card_type import CardType
 from app.models.event import Event
 from app.models.process_element import ProcessElement, ProcessElementOrganization
@@ -1416,6 +1417,7 @@ async def cost_treemap(
     type: str = Query("Application"),
     cost_field: str = Query("costTotalAnnual"),
     group_by: str | None = Query(None),
+    fiscal_year: int | None = Query(None),
 ):
     """Cost treemap: items with cost, optionally grouped by a related type.
 
@@ -1446,11 +1448,27 @@ async def cost_treemap(
         c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
     ]
 
+    target_fy = fiscal_year if fiscal_year is not None else fy
+    history_by_card: dict[tuple[uuid.UUID, str], CardCostHistory] = {}
+    if target_fy != fy and sheets:
+        hist_result = await db.execute(
+            select(CardCostHistory).where(
+                CardCostHistory.card_id.in_([c.id for c in sheets]),
+                CardCostHistory.fiscal_year == target_fy,
+                CardCostHistory.field_key == cost_field,
+            )
+        )
+        history_by_card = {(row.card_id, row.field_key): row for row in hist_result.scalars().all()}
+
     items: list[dict] = []
     total = 0.0
 
     for card in sheets:
-        cost = cost_value((card.attributes or {}).get(cost_field))
+        if target_fy == fy:
+            cost = cost_value((card.attributes or {}).get(cost_field))
+        else:
+            history = history_by_card.get((card.id, cost_field))
+            cost = history.value if history is not None else 0.0
         if not cost:
             continue
         items.append(
@@ -1514,7 +1532,7 @@ async def cost_treemap(
         "items": items,
         "total": total,
         "groups": groups,
-        "fiscal_year": fy,
+        "fiscal_year": target_fy,
         "fiscal_year_start": fy_start,
     }
 
@@ -1525,6 +1543,7 @@ async def cost_sankey(
     user: User = Depends(get_current_user),
     cost_field: str = Query("costTotalAnnual"),
     group_by: str | None = Query(None),
+    fiscal_year: int | None = Query(None),
 ):
     """Cost flow between Application and ITComponent, via app_to_itc relations.
 
@@ -1549,6 +1568,7 @@ async def cost_sankey(
 
     fy_start = await get_fiscal_year_start(db)
     fy = current_fiscal_year(fy_start)
+    target_fy = fiscal_year if fiscal_year is not None else fy
     read_scope = await CardReadScope.load(db, user)
 
     async def costed_cards(type_key: str) -> dict[uuid.UUID, tuple[str, float]]:
@@ -1559,11 +1579,27 @@ async def cost_sankey(
                 *read_scope.where(Card, mode="module"),
             )
         )
+        live_cards = [
+            c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
+        ]
+        history_by_card: dict[uuid.UUID, CardCostHistory] = {}
+        if target_fy != fy and live_cards:
+            hist_result = await db.execute(
+                select(CardCostHistory).where(
+                    CardCostHistory.card_id.in_([c.id for c in live_cards]),
+                    CardCostHistory.fiscal_year == target_fy,
+                    CardCostHistory.field_key == cost_field,
+                )
+            )
+            history_by_card = {row.card_id: row for row in hist_result.scalars().all()}
+
         out = {}
-        for c in result.scalars().all():
-            if not is_live_in_fiscal_year(c.lifecycle, fy, fy_start):
-                continue
-            cost = cost_value((c.attributes or {}).get(cost_field))
+        for c in live_cards:
+            if target_fy == fy:
+                cost = cost_value((c.attributes or {}).get(cost_field))
+            else:
+                history = history_by_card.get(c.id)
+                cost = history.value if history is not None else 0.0
             if cost:
                 out[c.id] = (c.name, cost)
         return out
@@ -1575,7 +1611,7 @@ async def cost_sankey(
             "nodes": [],
             "links": [],
             "total": 0.0,
-            "fiscal_year": fy,
+            "fiscal_year": target_fy,
             "fiscal_year_start": fy_start,
         }
 
@@ -1652,7 +1688,7 @@ async def cost_sankey(
         "nodes": nodes,
         "links": links,
         "total": total,
-        "fiscal_year": fy,
+        "fiscal_year": target_fy,
         "fiscal_year_start": fy_start,
     }
 
