@@ -12,6 +12,7 @@ from app.models.base import Base
 from app.models.bookmark import Bookmark
 from app.models.calculation import Calculation
 from app.models.card import Card
+from app.models.card_cost_history import CardCostHistory
 from app.models.card_logo import CardLogo
 from app.models.card_type import CardType
 from app.models.card_type_category import CardTypeCategory
@@ -106,6 +107,7 @@ __all__ = [
     "CardType",
     "RelationType",
     "Card",
+    "CardCostHistory",
     "CardLogo",
     "Relation",
     "Stakeholder",
