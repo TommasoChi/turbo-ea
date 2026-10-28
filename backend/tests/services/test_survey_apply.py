@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from app.models.event import Event
 from app.models.notification import Notification
+from app.models.relation import Relation
 from app.models.stakeholder import Stakeholder
 from app.services import survey_apply as sa
 from app.services.card_write_service import WriteActor, update_card
@@ -482,6 +483,163 @@ async def test_relation_field_peers_incoming_lists_sources(db):
 async def test_relation_field_peers_is_empty_for_a_malformed_field(db, field):
     app, *_ = await _relation_env(db)
     assert await sa.relation_field_peers(db, app.id, field) == []
+
+
+async def test_stakeholder_holders_lists_only_active_holders_by_name(db):
+    actor, a, b, c, card = await _role_env(db)
+    db.add(Stakeholder(card_id=card.id, user_id=b.id, role="observer"))
+    c.is_active = False
+    db.add(Stakeholder(card_id=card.id, user_id=c.id, role="observer"))
+    await db.flush()
+    holders = await sa.stakeholder_holders(db, card.id, "observer")
+    assert holders == [
+        {"id": str(a.id), "display_name": "A"},
+        {"id": str(b.id), "display_name": "B"},
+    ]
+
+
+async def test_stakeholder_holders_is_empty_for_an_unused_role(db):
+    actor, a, b, c, card = await _role_env(db)
+    assert await sa.stakeholder_holders(db, card.id, "no-such-role") == []
+
+
+class TestCurrentValue:
+    async def test_relation_field_delegates_to_relation_field_peers(self, db):
+        app, alpha, beta, _ = await _relation_env(db)
+        field = {"kind": "relation", "relation_type_key": "relAppToITC", "direction": "outgoing"}
+        assert await sa.current_value(db, app, field) == [
+            {"id": str(alpha.id), "name": "Alpha"},
+            {"id": str(beta.id), "name": "Beta"},
+        ]
+
+    async def test_lifecycle_field_reads_the_named_phase(self, db):
+        await create_card_type(db, key="Application", label="Application")
+        card = await create_card(db, name="Lifecycled")
+        card.lifecycle = {"endOfLife": "2030-01-01"}
+        await db.flush()
+        field = {"kind": "lifecycle", "phase": "endOfLife"}
+        assert await sa.current_value(db, card, field) == "2030-01-01"
+
+    async def test_lifecycle_field_with_no_lifecycle_data_is_none(self, db):
+        await create_card_type(db, key="Application", label="Application")
+        card = await create_card(db, name="Barelife")
+        card.lifecycle = None
+        await db.flush()
+        field = {"kind": "lifecycle", "phase": "endOfLife"}
+        assert await sa.current_value(db, card, field) is None
+
+    async def test_stakeholder_field_delegates_to_stakeholder_holders(self, db):
+        actor, a, b, c, card = await _role_env(db)
+        field = {"kind": "stakeholder", "role": "observer"}
+        assert await sa.current_value(db, card, field) == [
+            {"id": str(a.id), "display_name": "A"}
+        ]
+
+    async def test_a_plain_attribute_field_reads_the_named_key(self, db):
+        await create_card_type(db, key="Application", label="Application")
+        card = await create_card(db, name="Attred")
+        card.attributes = {"licenseCost": 42}
+        await db.flush()
+        field = {"key": "licenseCost"}
+        assert await sa.current_value(db, card, field) == 42
+
+    async def test_a_plain_attribute_field_with_no_attributes_is_none(self, db):
+        await create_card_type(db, key="Application", label="Application")
+        card = await create_card(db, name="Bare")
+        card.attributes = None
+        await db.flush()
+        assert await sa.current_value(db, card, {"key": "licenseCost"}) is None
+
+
+# ---------------------------------------------------------------------------
+# apply_relation_change — the write half of a relation field
+# ---------------------------------------------------------------------------
+
+_FIELD = {"relation_type_key": "relAppToITC", "direction": "outgoing"}
+
+
+async def test_apply_relation_change_adds_a_new_peer(db):
+    app, alpha, beta, _ = await _relation_env(db)
+    new_peer = await create_card(db, card_type="ITComponent", name="Gamma")
+    actor = await create_user(db, email="surveyor1@test.com")
+    changed = await sa.apply_relation_change(
+        db, app, _FIELD, [{"id": str(alpha.id)}, {"id": str(beta.id)}, {"id": str(new_peer.id)}],
+        actor.id,
+    )
+    assert changed is True
+    rels = (
+        await db.execute(select(Relation).where(Relation.type == "relAppToITC"))
+    ).scalars().all()
+    targets = {r.target_id for r in rels}
+    assert new_peer.id in targets
+
+
+async def test_apply_relation_change_removes_a_dropped_peer(db):
+    app, alpha, beta, _ = await _relation_env(db)
+    actor = await create_user(db, email="surveyor2@test.com")
+    changed = await sa.apply_relation_change(db, app, _FIELD, [{"id": str(alpha.id)}], actor.id)
+    assert changed is True
+    rels = (
+        await db.execute(
+            select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+        )
+    ).scalars().all()
+    assert {r.target_id for r in rels} == {alpha.id}
+    assert beta.id not in {r.target_id for r in rels}
+
+
+async def _existing_peer_ids(db, app):
+    rels = (
+        await db.execute(
+            select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+        )
+    ).scalars().all()
+    return [str(r.target_id) for r in rels]
+
+
+async def test_apply_relation_change_skips_an_inactive_peer_on_add(db):
+    app, *_ = await _relation_env(db)
+    dead = await create_card(db, card_type="ITComponent", name="Dead", status="ARCHIVED")
+    actor = await create_user(db, email="surveyor3@test.com")
+    # Keep every existing peer in the answer too, so the only delta under test
+    # is the new, inactive one — a dropped existing peer would also change
+    # the result and mask what this test means to isolate.
+    answer = [{"id": pid} for pid in await _existing_peer_ids(db, app)] + [{"id": str(dead.id)}]
+    changed = await sa.apply_relation_change(db, app, _FIELD, answer, actor.id)
+    assert changed is False
+    rels = (
+        await db.execute(
+            select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+        )
+    ).scalars().all()
+    assert dead.id not in {r.target_id for r in rels}
+
+
+async def test_apply_relation_change_skips_a_peer_id_that_does_not_exist(db):
+    app, *_ = await _relation_env(db)
+    missing = uuid.uuid4()
+    actor = await create_user(db, email="surveyor4@test.com")
+    answer = [{"id": pid} for pid in await _existing_peer_ids(db, app)] + [{"id": str(missing)}]
+    changed = await sa.apply_relation_change(db, app, _FIELD, answer, actor.id)
+    assert changed is False
+    rels = (
+        await db.execute(
+            select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+        )
+    ).scalars().all()
+    assert missing not in {r.target_id for r in rels}
+
+
+async def test_apply_relation_change_is_a_noop_when_nothing_changed(db):
+    app, *_ = await _relation_env(db)
+    existing = (
+        await db.execute(
+            select(Relation).where(Relation.type == "relAppToITC", Relation.source_id == app.id)
+        )
+    ).scalars().all()
+    same_answer = [{"id": str(r.target_id)} for r in existing]
+    changed = await sa.apply_relation_change(db, app, _FIELD, same_answer, uuid.uuid4())
+    assert changed is False
 
 
 # ---------------------------------------------------------------------------
