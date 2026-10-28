@@ -80,6 +80,25 @@ In scope:
     history-table operation? Needs a decision before implementation; it
     changes the Calculation setup (today's calculation target field is the
     scalar attribute).
+  - Fake/demo history rows for FY24/FY25 (to exercise the trend chart) are
+    explicitly deferred to **after** this is built — not part of the
+    implementation itself.
+
+- **Year-over-year trend, once fiscal-year history exists.**
+  - **Chart**: a stacked Bar Chart (Recharts, already in use elsewhere in the
+    project) — x-axis fiscal year, y-axis cost, bars stacked by cost category
+    (`softwareLicensingCost` / `applicationManagementServicesCost` /
+    `infrastruttureCost`), reusing the three fields already being added to IT
+    Component. Shows trend and composition together, no new chart type beyond
+    what the project already renders elsewhere. A plain Line Chart (single
+    series, total cost per year) is the fallback if the category breakdown
+    turns out not to be wanted — simpler, but loses "what drove the change".
+  - **Treemap**: a delta badge/color on each rectangle, comparing the selected
+    year's value against the current fiscal year (not a new chart, an overlay
+    on the existing one).
+  - **Table**: an extra "YoY %" column, computed client-side as
+    `selected_year / (selected_year - 1) - 1` against the adjacent year's
+    history row — one extra column, not a redesign.
 
 Out of scope (not asked, not assumed):
 - Any card type other than Application / IT Component.
