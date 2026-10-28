@@ -93,3 +93,40 @@ Out of scope (not asked, not assumed):
 - Fullscreen: a shared chart-wrapper component, or a prop on each chart panel?
   No existing fullscreen pattern elsewhere in the reports to copy from yet —
   needs a short look before committing to an approach.
+
+## Rule files and docs this touches (censito da CLAUDE.md)
+
+- **Split `.claude/rules/card-flags-cost-eol.md` in due**, lungo il confine
+  reale del contenuto attuale (non "cost vs eol" — il bullet 1 è già
+  flags+EOL insieme, stesso modulo `card_flags.py`; il bullet 2 è
+  fiscal-year/cost, `lifecycle.py`/`fiscal_year.py`, un modulo diverso):
+  - `card-flags-eol.md` — bullet 1 invariato.
+  - `cost-fiscal-year.md` — bullet 2, da aggiornare dopo la rimozione di
+    `aggregate` (oggi dice "Both apply the rule to the related cards an
+    aggregate sums as well as the primary cards" — frase da riscrivere).
+- **`.claude/rules/api-contracts.md`** — `docs/api/openapi.json` rigenerato
+  via `scripts/dump_openapi.py` dopo il cambio dei parametri di
+  `GET /reports/cost-treemap`; eventuale schema nuovo in
+  `backend/app/schemas/` per la risposta Sankey.
+- **`.claude/rules/i18n-locales.md`** — nessuna traduzione scritta a mano:
+  stringhe nuove in `frontend/src/i18n/locales/en/*.json` +
+  `backend/app/services/seed.py` (translations dict dei 3 nuovi campi IT
+  Component + rename sezione Application), poi `/translate` prima della PR
+  per gli altri 9 locale e i `.{locale}.md`.
+- **`.claude/rules/settings-and-seed.md`** — nuova migration Alembic
+  (pattern `072_restore_business_process_color.py`, guarded UPDATE):
+  3 campi cost su IT Component + rename sezione "Cost & Ownership" →
+  "Cost" su Application, senza toccare install già customizzate.
+- **`.claude/rules/docs.md`** — `docs/guide/reports.md` (+ screenshot in
+  `scripts/screenshots/pages.ts` se lo screenshot del cost report cambia).
+- **`.claude/rules/testing-ci.md`** — verificare se `reports.py` è già in
+  `scripts/mutation/floors.toml`'s `[modules]`; diff coverage gira
+  comunque automaticamente su ogni PR.
+
+Codice applicativo (non da rule, dalla lettura diretta):
+`backend/app/api/v1/reports.py`, `frontend/src/features/reports/CostReport.tsx`,
+`frontend/src/features/reports/ReportShell.tsx`, `backend/app/services/seed.py`,
+nuova migration in `backend/alembic/versions/`, test:
+`backend/tests/api/test_reports_cost_fiscal_year.py`,
+`frontend/src/features/reports/CostReport.test.tsx`, nuovo
+`backend/tests/services/test_alembic_<N>_itcomponent_cost_fields.py`.
