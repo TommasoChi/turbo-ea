@@ -173,6 +173,7 @@ const TreemapContent = ({
    * number = the signed ratio. */
   deltaPct?: number | null;
 }) => {
+  const { t } = useTranslation("reports");
   if (width < 4 || height < 4) return null;
   const showLabel = width > 50 && height > 30;
   const showCost = width > 70 && height > 45;
@@ -237,7 +238,7 @@ const TreemapContent = ({
           style={{ pointerEvents: "none" }}
         >
           {deltaPct === null
-            ? "▲ new"
+            ? `▲ ${t("cost.deltaNew")}`
             : `${deltaPct >= 0 ? "▲ +" : "▼ "}${Math.round(deltaPct * 100)}%`}
         </text>
       )}
