@@ -132,6 +132,7 @@ vi.mock("recharts", async () => {
     ),
     Tooltip: ({ content }: any) => {
       const data = useContext(Data);
+      if (!content) return null; // CostTrendChart's plain <RTooltip /> (no content render-prop)
       return (
         <div data-testid="treemap-tooltip">
           {cloneElement(content, {
@@ -142,6 +143,13 @@ vi.mock("recharts", async () => {
         </div>
       );
     },
+    // CostTrendChart's stacked bar chart — not under test here, just needs
+    // to render without crashing when a past fiscal year is selected.
+    BarChart: ({ children }: any) => <div>{children}</div>,
+    Bar: () => null,
+    XAxis: () => null,
+    YAxis: () => null,
+    Legend: () => null,
   };
   /* eslint-enable @typescript-eslint/no-explicit-any */
 });

@@ -433,3 +433,16 @@ describe("CostReport custom columns", () => {
     );
   });
 });
+
+describe("CostReport trend chart", () => {
+  it("shows the trend chart above the treemap once a past fiscal year is picked", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+    expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
+    const picker = screen.getAllByRole("combobox", { name: /fiscal year/i })[0];
+    await userEvent.click(picker);
+    await userEvent.click(await screen.findByRole("option", { name: /2025/ }));
+    expect(await screen.findByTestId("cost-trend-chart")).toBeInTheDocument();
+  });
+});

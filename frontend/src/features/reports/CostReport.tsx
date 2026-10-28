@@ -24,6 +24,7 @@ import {
 } from "recharts";
 import ReportShell from "./ReportShell";
 import SaveReportDialog from "./SaveReportDialog";
+import CostTrendChart from "./CostTrendChart";
 import MetricCard from "./MetricCard";
 import FullscreenPanel from "./FullscreenPanel";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -945,7 +946,16 @@ export default function CostReport() {
             </Typography>
           </Box>
         ) : (
-          <FullscreenPanel label={t("cost.fullscreen")}>
+          <>
+            {fiscalYearParam != null && (
+              <Box sx={{ mb: 2 }}>
+                <CostTrendChart
+                  cardTypeKey={cardTypeKey}
+                  years={fiscalYearOptions}
+                />
+              </Box>
+            )}
+            <FullscreenPanel label={t("cost.fullscreen")}>
             <Paper variant="outlined" sx={{ p: 1 }}>
               <ResponsiveContainer width="100%" height={450}>
                 <Treemap
@@ -972,7 +982,8 @@ export default function CostReport() {
                 </Treemap>
               </ResponsiveContainer>
             </Paper>
-          </FullscreenPanel>
+            </FullscreenPanel>
+          </>
         )
       ) : view === "sankey" ? (
         !sankeyData || sankeyData.nodes.length === 0 ? (
