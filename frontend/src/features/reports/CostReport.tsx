@@ -263,9 +263,16 @@ export default function CostReport() {
   const [view, setView] = useState<CostView>("chart");
   const [sortK, setSortK] = useState("cost");
   const [sortD, setSortD] = useState<"asc" | "desc">("desc");
-  // The server decides the year: costs are annual and a card carries one
-  // figure, so the report shows the current fiscal year and only names it.
+  // The server names the fiscal year the figures are for.
   const [fiscalYear, setFiscalYear] = useState<FiscalYear | null>(null);
+  // null = current year (the param is omitted, matching today's default
+  // request shape byte-for-byte); a picked value asks the server for a past
+  // year's card_cost_history row instead of live attributes.
+  const [fiscalYearParam, setFiscalYearParam] = useState<number | null>(null);
+  const fiscalYearOptions = useMemo(() => {
+    const current = fiscalYear?.year ?? new Date().getFullYear();
+    return Array.from({ length: 5 }, (_, i) => current - i);
+  }, [fiscalYear]);
 
   // Narrow the treemap to chosen cards and everything beneath them (#954).
   const scope = useCardScope({ typeKey: cardTypeKey, enabled: true });
@@ -396,6 +403,7 @@ export default function CostReport() {
       if (view === "sankey") {
         const p = new URLSearchParams({ cost_field: costField });
         if (groupBy) p.set("group_by", groupBy);
+        if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
         const r = await api.get<CostSankeyResponse>(
           `/reports/cost-sankey?${p}`,
           { signal },
@@ -409,6 +417,7 @@ export default function CostReport() {
           type: cardTypeKey,
           cost_field: costField,
         });
+        if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
         const r = await api.get<CostTreemapResponse>(
           `/reports/cost-treemap?${p}`,
           { signal },
@@ -419,7 +428,7 @@ export default function CostReport() {
         setFiscalYear((prev) => fiscalYearOf(r) ?? prev);
       }
     },
-    [cardTypeKey, costField, groupBy, view, canViewCostsGlobally],
+    [cardTypeKey, costField, groupBy, view, canViewCostsGlobally, fiscalYearParam],
   );
 
   // Scoped here and nowhere else, so the metric cards, treemap, groups and
@@ -739,6 +748,26 @@ export default function CostReport() {
               ))}
             </TextField>
           )}
+
+          <TextField
+            select
+            size="small"
+            label={t("cost.fiscalYear")}
+            value={fiscalYearParam ?? ""}
+            onChange={(e) =>
+              setFiscalYearParam(
+                e.target.value === "" ? null : Number(e.target.value),
+              )
+            }
+            sx={{ minWidth: 130 }}
+          >
+            <MenuItem value="">{t("cost.fiscalYearPickerCurrent")}</MenuItem>
+            {fiscalYearOptions.map((y) => (
+              <MenuItem key={y} value={y}>
+                {y}
+              </MenuItem>
+            ))}
+          </TextField>
 
           {fiscalYear && (
             <Tooltip title={t("cost.fiscalYearHelp")} arrow placement="bottom">

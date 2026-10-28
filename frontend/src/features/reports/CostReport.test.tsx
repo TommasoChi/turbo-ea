@@ -264,6 +264,28 @@ describe("CostReport fiscal year", () => {
     await waitFor(() => expect(indicator()).not.toBeNull());
     expect(document.querySelector(".MuiSlider-root")).toBeNull();
   });
+
+  it("offers a fiscal-year picker and re-requests the treemap with it", async () => {
+    renderCost();
+    await waitFor(() =>
+      expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0),
+    );
+    const user = userEvent.setup();
+    const picker = screen.getAllByRole("combobox", { name: /fiscal year/i })[0];
+    await user.click(picker);
+    const listbox = await screen.findByRole("listbox");
+    await user.click(within(listbox).getByRole("option", { name: "2025" }));
+
+    await waitFor(() => {
+      const calls = vi
+        .mocked(api.get)
+        .mock.calls.map(([path]) => String(path))
+        .filter((path) => path.startsWith("/reports/cost-treemap"));
+      expect(calls.some((path) => path.includes("fiscal_year=2025"))).toBe(
+        true,
+      );
+    });
+  });
 });
 
 describe("CostReport card-type selector and Sankey view", () => {
