@@ -1519,6 +1519,144 @@ async def cost_treemap(
     }
 
 
+@router.get("/cost-sankey")
+async def cost_sankey(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    cost_field: str = Query("costTotalAnnual"),
+    group_by: str | None = Query(None),
+):
+    """Cost flow between Application and ITComponent, via app_to_itc relations.
+
+    Two-level flow (``group_by`` unset): one node per Application and one per
+    ITComponent with ``cost_field`` > 0, one link per ``app_to_itc`` relation
+    between two visible nodes, link value = the ITComponent end's cost (an
+    ITComponent related to several Applications fans the same value out on
+    each link rather than being divided or deduped — a Sankey draws one flow
+    per relation, so this cannot double-count the way a summed total would).
+
+    Three-level flow (``group_by`` names a card type related to Application):
+    Application -> group node -> ITComponent. A ``group_by`` value naming a
+    type with no relation to any visible Application silently falls back to
+    the two-level flow instead of erroring, so a stale saved-report config
+    degrades gracefully.
+    """
+    await PermissionService.require_permission(db, user, "costs.view")
+    if not _SAFE_KEY_RE.match(cost_field):
+        raise HTTPException(400, f"Invalid cost_field: {cost_field!r}")
+    if group_by is not None and not _SAFE_KEY_RE.match(group_by):
+        raise HTTPException(400, f"Invalid group_by: {group_by!r}")
+
+    fy_start = await get_fiscal_year_start(db)
+    fy = current_fiscal_year(fy_start)
+    read_scope = await CardReadScope.load(db, user)
+
+    async def costed_cards(type_key: str) -> dict[uuid.UUID, tuple[str, float]]:
+        result = await db.execute(
+            select(Card).where(
+                Card.type == type_key,
+                Card.status == "ACTIVE",
+                *read_scope.where(Card, mode="module"),
+            )
+        )
+        out = {}
+        for c in result.scalars().all():
+            if not is_live_in_fiscal_year(c.lifecycle, fy, fy_start):
+                continue
+            cost = cost_value((c.attributes or {}).get(cost_field))
+            if cost:
+                out[c.id] = (c.name, cost)
+        return out
+
+    apps = await costed_cards("Application")
+    itcs = await costed_cards("ITComponent")
+    if not apps or not itcs:
+        return {
+            "nodes": [],
+            "links": [],
+            "total": 0.0,
+            "fiscal_year": fy,
+            "fiscal_year_start": fy_start,
+        }
+
+    rel_result = await db.execute(
+        select(Relation).where(
+            ((Relation.source_id.in_(apps)) & (Relation.target_id.in_(itcs)))
+            | ((Relation.source_id.in_(itcs)) & (Relation.target_id.in_(apps)))
+        )
+    )
+    app_itc_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
+    for r in rel_result.scalars().all():
+        if r.source_id in apps and r.target_id in itcs:
+            app_itc_pairs.add((r.source_id, r.target_id))
+        elif r.target_id in apps and r.source_id in itcs:
+            app_itc_pairs.add((r.target_id, r.source_id))
+
+    group_cards: dict[uuid.UUID, tuple[str, float]] = {}
+    app_group: dict[uuid.UUID, uuid.UUID] = {}
+    if group_by:
+        grp_result = await db.execute(
+            select(Card).where(
+                Card.type == group_by,
+                Card.status == "ACTIVE",
+                *read_scope.where(Card, mode="module"),
+            )
+        )
+        grp_ids = {c.id: c.name for c in grp_result.scalars().all()}
+        if grp_ids:
+            rel2 = await db.execute(
+                select(Relation).where(
+                    ((Relation.source_id.in_(apps)) & (Relation.target_id.in_(grp_ids)))
+                    | ((Relation.source_id.in_(grp_ids)) & (Relation.target_id.in_(apps)))
+                )
+            )
+            for r in rel2.scalars().all():
+                if r.source_id in apps and r.target_id in grp_ids:
+                    app_group[r.source_id] = r.target_id
+                elif r.target_id in apps and r.source_id in grp_ids:
+                    app_group[r.target_id] = r.source_id
+            for gid in set(app_group.values()):
+                group_cards[gid] = (grp_ids[gid], 0.0)
+    # No Application actually links to a group_by card -> fall back silently.
+    has_groups = bool(app_group)
+
+    nodes: list[dict] = []
+    index_of: dict[uuid.UUID, int] = {}
+
+    def add_node(card_id: uuid.UUID, name: str, type_key: str) -> int:
+        if card_id not in index_of:
+            index_of[card_id] = len(nodes)
+            nodes.append({"id": str(card_id), "name": name, "type": type_key})
+        return index_of[card_id]
+
+    links: list[dict] = []
+    total = 0.0
+    for app_id, itc_id in app_itc_pairs:
+        itc_name, itc_cost = itcs[itc_id]
+        app_name, _ = apps[app_id]
+        if has_groups and app_id in app_group:
+            gid = app_group[app_id]
+            g_name, _ = group_cards[gid]
+            a_idx = add_node(app_id, app_name, "Application")
+            g_idx = add_node(gid, g_name, group_by)
+            i_idx = add_node(itc_id, itc_name, "ITComponent")
+            links.append({"source": a_idx, "target": g_idx, "value": apps[app_id][1]})
+            links.append({"source": g_idx, "target": i_idx, "value": itc_cost})
+        else:
+            a_idx = add_node(app_id, app_name, "Application")
+            i_idx = add_node(itc_id, itc_name, "ITComponent")
+            links.append({"source": a_idx, "target": i_idx, "value": itc_cost})
+        total += itc_cost
+
+    return {
+        "nodes": nodes,
+        "links": links,
+        "total": total,
+        "fiscal_year": fy,
+        "fiscal_year_start": fy_start,
+    }
+
+
 @router.get("/capability-heatmap")
 async def capability_heatmap(
     db: AsyncSession = Depends(get_db),

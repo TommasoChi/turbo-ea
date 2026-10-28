@@ -34525,9 +34525,67 @@
         ]
       }
     },
+    "/api/v1/reports/cost-sankey": {
+      "get": {
+        "description": "Cost flow between Application and ITComponent, via app_to_itc relations.\n\nTwo-level flow (``group_by`` unset): one node per Application and one per\nITComponent with ``cost_field`` > 0, one link per ``app_to_itc`` relation\nbetween two visible nodes, link value = the ITComponent end's cost (an\nITComponent related to several Applications fans the same value out on\neach link rather than being divided or deduped \u2014 a Sankey draws one flow\nper relation, so this cannot double-count the way a summed total would).\n\nThree-level flow (``group_by`` names a card type related to Application):\nApplication -> group node -> ITComponent. A ``group_by`` value naming a\ntype with no relation to any visible Application silently falls back to\nthe two-level flow instead of erroring, so a stale saved-report config\ndegrades gracefully.",
+        "operationId": "cost_sankey_api_v1_reports_cost_sankey_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cost_field",
+            "required": false,
+            "schema": {
+              "default": "costTotalAnnual",
+              "title": "Cost Field",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cost Sankey",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/api/v1/reports/cost-treemap": {
       "get": {
-        "description": "Cost treemap: items with cost, optionally grouped by a related type.\n\nCosts are annual and shown for the current fiscal year only: a card counts,\nat its full annual cost, when the current fiscal year falls between the one\nit goes ``active`` in and the one its ``endOfLife`` falls in, both included \u2014\nno pro-rating, so a card retired in an earlier fiscal year is left out. A\ncard carries one annual figure, so projecting it onto other years would\nonly restate today's number; that is why there is no year parameter. The\nrule applies to the primary cards and, in ``aggregate`` mode, to the related\ncards being summed, so a retired IT Component stops adding to its\nApplication's total. The response names the fiscal year (``fiscal_year``)\nand the workspace's start month (``fiscal_year_start``).\n\nWhen ``aggregate`` is non-empty, each entry is a ``\"<typeKey>:<costFieldKey>\"``\npair identifying a cost field on a related card type. The endpoint sums that\nfield across each primary card's related cards (relations resolved\nbidirectionally, parallel relations de-duped) and adds the per-pair totals.\nBecause every pair targets a different card type **or** a different cost field\non the same type, no related card contributes more than once to a given\nprimary card's roll-up. This lets a type that has no cost field of its own\n(e.g. Provider) display costs sourced from related Applications, IT\nComponents, etc., even all of them at once.\n\nWhen ``parent_card_id`` is set, the primary card set is restricted to cards\nthat have at least one relation (in either direction) to that parent. This\npowers the treemap drill-down \u2014 clicking a parent rectangle re-queries with\nthe related type as ``type`` and the parent's id as ``parent_card_id``.",
+        "description": "Cost treemap: items with cost, optionally grouped by a related type.\n\nCosts are annual and shown for the current fiscal year only: a card counts,\nat its full annual cost, when the current fiscal year falls between the one\nit goes ``active`` in and the one its ``endOfLife`` falls in, both included \u2014\nno pro-rating, so a card retired in an earlier fiscal year is left out. A\ncard carries one annual figure, so projecting it onto other years would\nonly restate today's number; that is why there is no year parameter. The\nresponse names the fiscal year (``fiscal_year``) and the workspace's start\nmonth (``fiscal_year_start``).",
         "operationId": "cost_treemap_api_v1_reports_cost_treemap_get",
         "parameters": [
           {
@@ -34564,42 +34622,6 @@
                 }
               ],
               "title": "Group By"
-            }
-          },
-          {
-            "in": "query",
-            "name": "aggregate",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Aggregate"
-            }
-          },
-          {
-            "in": "query",
-            "name": "parent_card_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Parent Card Id"
             }
           }
         ],
