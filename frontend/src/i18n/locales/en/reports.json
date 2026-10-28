@@ -262,6 +262,7 @@
   "cost.cost": "Cost",
   "cost.percentOfTotal": "% of Total",
   "cost.percentOfTotalValue": "{{pct}}% of total",
+  "cost.yoyPercent": "YoY %",
   "cost.total": "Total",
   "cost.noCostData": "No cost data found.",
   "cost.unspecified": "Unspecified",

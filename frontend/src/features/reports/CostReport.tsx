@@ -50,7 +50,7 @@ import {
   resolveFacetField,
 } from "@/lib/fieldFacets";
 import { fiscalYearLabel } from "@/lib/fiscalYear";
-import { formatFieldValue, type FieldMeta } from "@/lib/cardDisplayFields";
+import { formatFieldValue, EMPTY_VALUE, type FieldMeta } from "@/lib/cardDisplayFields";
 import { costValue } from "@/lib/costValue";
 import type { FieldDef } from "@/types";
 
@@ -286,6 +286,11 @@ export default function CostReport() {
   const [baselineCosts, setBaselineCosts] = useState<Map<string, number>>(
     new Map(),
   );
+  // Prior-year costs, fetched only when a past fiscal year is selected — the
+  // table YoY% column diffs against it (id -> cost).
+  const [priorYearCosts, setPriorYearCosts] = useState<Map<string, number>>(
+    new Map(),
+  );
   const [sankeyData, setSankeyData] = useState<CostSankeyResponse | null>(null);
   const [view, setView] = useState<CostView>("chart");
   const [sortK, setSortK] = useState("cost");
@@ -486,6 +491,50 @@ export default function CostReport() {
     [cardTypeKey, costField, view, canViewCostsGlobally, fiscalYearParam],
   );
 
+  // The earliest year the picker itself offers — a selected year at or below
+  // it has no prior year to diff against, so the YoY fetch is skipped rather
+  // than sent for a year outside the picker's own range.
+  const minFiscalYearOption = useMemo(
+    () => (fiscalYearOptions.length > 0 ? Math.min(...fiscalYearOptions) : null),
+    [fiscalYearOptions],
+  );
+
+  // Table YoY%: the prior fiscal year's per-card costs, fetched only when a
+  // past year is selected, the table is showing, and a prior year exists in
+  // the picker's own range.
+  useAbortableEffect(
+    async ({ signal, isCurrent }) => {
+      if (
+        !canViewCostsGlobally ||
+        view !== "table" ||
+        fiscalYearParam == null ||
+        minFiscalYearOption == null ||
+        fiscalYearParam <= minFiscalYearOption
+      ) {
+        setPriorYearCosts(new Map());
+        return;
+      }
+      const p = new URLSearchParams({
+        type: cardTypeKey,
+        cost_field: costField,
+        fiscal_year: String(fiscalYearParam - 1),
+      });
+      const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, {
+        signal,
+      });
+      if (!isCurrent()) return;
+      setPriorYearCosts(new Map(r.items.map((it) => [it.id, it.cost])));
+    },
+    [
+      cardTypeKey,
+      costField,
+      view,
+      canViewCostsGlobally,
+      fiscalYearParam,
+      minFiscalYearOption,
+    ],
+  );
+
   // Scoped here and nowhere else, so the metric cards, treemap, groups and
   // the table footer total can never disagree with each other.
   const items = useMemo(
@@ -668,6 +717,15 @@ export default function CostReport() {
         )}
       </TableCell>
     ));
+  const yoyCell = (item: CostItem) => {
+    const prior = priorYearCosts.get(item.id);
+    const pct = prior && prior > 0 ? (item.cost - prior) / prior : null;
+    return (
+      <TableCell align="right">
+        {pct == null ? EMPTY_VALUE : `${pct >= 0 ? "+" : ""}${(pct * 100).toFixed(1)}%`}
+      </TableCell>
+    );
+  };
 
   const Tip = ({
     active,
@@ -960,6 +1018,9 @@ export default function CostReport() {
                   </TableSortLabel>
                 </TableCell>
                 <TableCell align="right">{t("cost.percentOfTotal")}</TableCell>
+                {fiscalYearParam != null && (
+                  <TableCell align="right">{t("cost.yoyPercent")}</TableCell>
+                )}
                 {extraColumns.map((key) => (
                   <TableCell key={key} align="right">
                     {allFields.find((f) => f.key === key)?.label ?? key}
@@ -1004,6 +1065,9 @@ export default function CostReport() {
                             ? `${((g.cost / total) * 100).toFixed(1)}%`
                             : "—"}
                         </TableCell>
+                        {fiscalYearParam != null && (
+                          <TableCell align="right" sx={{ fontWeight: 700 }} />
+                        )}
                         {extraColumns.map((key) => (
                           <TableCell
                             key={key}
@@ -1047,6 +1111,7 @@ export default function CostReport() {
                               ? `${((d.cost / total) * 100).toFixed(1)}%`
                               : "—"}
                           </TableCell>
+                          {fiscalYearParam != null && yoyCell(d)}
                           {extraCell(d)}
                         </TableRow>
                       )),
@@ -1066,6 +1131,7 @@ export default function CostReport() {
                           ? `${((d.cost / total) * 100).toFixed(1)}%`
                           : "—"}
                       </TableCell>
+                      {fiscalYearParam != null && yoyCell(d)}
                       {extraCell(d)}
                     </TableRow>
                   ))}
@@ -1079,6 +1145,9 @@ export default function CostReport() {
                 <TableCell align="right" sx={{ fontWeight: 700 }}>
                   100%
                 </TableCell>
+                {fiscalYearParam != null && (
+                  <TableCell align="right" sx={{ fontWeight: 700 }} />
+                )}
                 {extraColumns.map((key) => (
                   <TableCell key={key} align="right" />
                 ))}

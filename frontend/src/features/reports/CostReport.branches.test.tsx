@@ -516,6 +516,45 @@ describe("CostReport toolbar", () => {
   });
 });
 
+describe("CostReport table YoY", () => {
+  it("adds a YoY % column comparing the selected year to the prior year", async () => {
+    saved.config = { view: "table", fiscalYearParam: 2025 };
+    mockApi.on("get", "/reports/cost-treemap*", (path: string) => {
+      const p = new URLSearchParams(path.split("?")[1]);
+      return p.get("fiscal_year") === "2024"
+        ? { items: [{ id: "erp", name: "ERP", cost: 500 }], total: 500 }
+        : { items: [{ id: "erp", name: "ERP", cost: 600 }], total: 600 };
+    });
+    renderCost();
+    await screen.findByRole("table");
+    expect(screen.getByText("+20.0%")).toBeInTheDocument();
+  });
+
+  it("shows the empty sentinel for the earliest year with no prior-year data", async () => {
+    saved.config = { view: "table", fiscalYearParam: 2020 }; // picker's own earliest offered year
+    mockApi.on("get", "/reports/cost-treemap*", {
+      items: [{ id: "erp", name: "ERP", cost: 500 }],
+      total: 500,
+    });
+    renderCost();
+    await screen.findByRole("table");
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("shows the empty sentinel instead of Infinity% when the prior year's total was zero", async () => {
+    saved.config = { view: "table", fiscalYearParam: 2025 };
+    mockApi.on("get", "/reports/cost-treemap*", (path: string) => {
+      const p = new URLSearchParams(path.split("?")[1]);
+      return p.get("fiscal_year") === "2024"
+        ? { items: [], total: 0 }
+        : { items: [{ id: "erp", name: "ERP", cost: 600 }], total: 600 };
+    });
+    renderCost();
+    await screen.findByRole("table");
+    expect(screen.queryByText(/Infinity/)).not.toBeInTheDocument();
+  });
+});
+
 describe("CostReport table", () => {
   const rowNames = () =>
     screen
