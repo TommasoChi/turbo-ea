@@ -51,6 +51,7 @@ from app.models.relation_type import RelationType
 from app.services import card_approval, card_lifecycle, card_reference, notification_service
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_uniqueness import check_sibling_name_unique
+from app.services.cost_history import sync_current_fy_history
 from app.services.cost_value import is_numeric_text
 from app.services.data_quality import calc_data_quality
 from app.services.event_bus import event_bus
@@ -842,6 +843,7 @@ async def create_card(
     # Run calculated fields (skip PPM-managed cost fields if PPM data exists)
     ppm_excl = await _get_ppm_exclusions(db, card)
     await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
+    await sync_current_fy_history(db, card)
     await _recalc_changed_descendants(db, changed_levels, card.id)
 
     # Compute data quality score. Must run *after* the calculations, or a
@@ -1014,6 +1016,7 @@ async def update_card(
     # Run calculated fields (skip PPM-managed cost fields if PPM data exists)
     ppm_excl = await _get_ppm_exclusions(db, card)
     await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
+    await sync_current_fy_history(db, card)
     # Re-run calcs for descendants whose level moved (after the card's own
     # run, so a child formula reading a parent's computed field sees it fresh)
     await _recalc_changed_descendants(db, changed_levels, card.id)
