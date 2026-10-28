@@ -57,6 +57,30 @@ In scope:
   `attributes` (or the requested columns) — today `/reports/cost-treemap` and
   `/reports/cost` return only `{id, name, cost}`, nothing else.
 
+- **Fiscal-year cost history (option B, confirmed over "just filter which
+  cards count").** Today's `costTotalAnnual` (and every cost field) is one
+  scalar value per card — no history. To let a user pick FY2025, FY2026, etc.
+  and see the **actual value for that year**, not just a different set of
+  included cards against today's number, cost needs a real per-year series:
+  - New table, same shape as PPM's existing `ppm_budget_lines`
+    (`initiative_id, fiscal_year, category, amount, description`): something
+    like `card_cost_history(card_id, fiscal_year, field_key, value)`.
+  - A migration to create it.
+  - A UI to enter/edit a card's cost per fiscal year, not a single value —
+    this changes how cost fields are edited on Application and IT Component
+    cards, not just how the report reads them.
+  - The report's `fiscal_year` becomes a real query param, reading from the
+    new table for the chosen year instead of the card's live `attributes`.
+  - `is_live_in_fiscal_year` keeps deciding **whether** a card counts for a
+    given year (unchanged, already takes an arbitrary `fy`); the new table
+    decides **what value** it counts at.
+  - Open question: what happens to the existing scalar `costTotalAnnual` /
+    the three input fields — do they become read-only mirrors of the current
+    year's history row, or does entering a cost become exclusively a
+    history-table operation? Needs a decision before implementation; it
+    changes the Calculation setup (today's calculation target field is the
+    scalar attribute).
+
 Out of scope (not asked, not assumed):
 - Any card type other than Application / IT Component.
 - Changing Application's existing calculation or its three input fields.
