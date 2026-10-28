@@ -2,6 +2,7 @@
   "page.title": "Reports",
   "shell.chartView": "Chart view",
   "shell.tableView": "Table view",
+  "shell.exitFullscreen": "Exit fullscreen",
   "shell.saveReport": "Save report",
   "shell.resetDefaults": "Reset to defaults",
   "shell.printPdf": "Print / Save as PDF",
