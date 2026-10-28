@@ -154,6 +154,7 @@ const TreemapContent = ({
   costFmt,
   onCellClick,
   isRtl,
+  deltaPct,
 }: {
   x: number;
   y: number;
@@ -166,6 +167,10 @@ const TreemapContent = ({
   costFmt: CurrencyFormatter;
   onCellClick?: (id: string) => void;
   isRtl?: boolean;
+  /** YoY delta vs the current fiscal year: undefined = no year picked (no
+   * badge), null = no current-year baseline to diff against ("new"), a
+   * number = the signed ratio. */
+  deltaPct?: number | null;
 }) => {
   if (width < 4 || height < 4) return null;
   const showLabel = width > 50 && height > 30;
@@ -218,6 +223,23 @@ const TreemapContent = ({
           {costFmt.format(cost)}
         </text>
       )}
+      {deltaPct !== undefined && showLabel && (
+        <text
+          x={isRtl ? x + 6 : x + width - 6}
+          y={y + 16}
+          fontSize={10}
+          fontWeight={700}
+          fill={
+            deltaPct === null || deltaPct >= 0 ? "#a5d6a7" : "#ef9a9a"
+          }
+          textAnchor={isRtl ? "start" : "end"}
+          style={{ pointerEvents: "none" }}
+        >
+          {deltaPct === null
+            ? "▲ new"
+            : `${deltaPct >= 0 ? "▲ +" : "▼ "}${Math.round(deltaPct * 100)}%`}
+        </text>
+      )}
     </g>
   );
 };
@@ -259,6 +281,11 @@ export default function CostReport() {
   const [costField, setCostField] = useState("costTotalAnnual");
   const [groupBy, setGroupBy] = useState("");
   const [rawItems, setRawItems] = useState<CostItem[] | null>(null);
+  // Current-year baseline, fetched only when a past fiscal year is selected —
+  // the treemap delta badge diffs against it (id -> cost).
+  const [baselineCosts, setBaselineCosts] = useState<Map<string, number>>(
+    new Map(),
+  );
   const [sankeyData, setSankeyData] = useState<CostSankeyResponse | null>(null);
   const [view, setView] = useState<CostView>("chart");
   const [sortK, setSortK] = useState("cost");
@@ -326,6 +353,8 @@ export default function CostReport() {
       if (cfg.view) setView(cfg.view as CostView);
       if (cfg.sortK) setSortK(cfg.sortK as string);
       if (cfg.sortD) setSortD(cfg.sortD as "asc" | "desc");
+      if (typeof cfg.fiscalYearParam === "number")
+        setFiscalYearParam(cfg.fiscalYearParam);
       if (Array.isArray(cfg.extraColumns))
         setExtraColumns(
           (cfg.extraColumns as unknown[]).filter(
@@ -354,12 +383,13 @@ export default function CostReport() {
     sortD,
     scopeIds,
     extraColumns,
+    fiscalYearParam,
   });
 
   // Auto-persist config to localStorage
   useEffect(() => {
     saved.persistConfig(getConfig());
-  }, [cardTypeKey, costField, groupBy, view, sortK, sortD, scopeIds, extraColumns]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cardTypeKey, costField, groupBy, view, sortK, sortD, scopeIds, extraColumns, fiscalYearParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset all parameters to defaults
   const handleReset = useCallback(() => {
@@ -372,6 +402,7 @@ export default function CostReport() {
     setSortD("desc");
     setScopeIds([]);
     setExtraColumns([]);
+    setFiscalYearParam(null);
   }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The table's group-by: single selects with options and yes/no fields (a
@@ -429,6 +460,30 @@ export default function CostReport() {
       }
     },
     [cardTypeKey, costField, groupBy, view, canViewCostsGlobally, fiscalYearParam],
+  );
+
+  // Delta badge baseline: the current fiscal year's per-card costs, fetched
+  // only when a past year is selected and the treemap is showing — nothing to
+  // diff against when `fiscalYearParam` is null (the picked year already IS
+  // the current year).
+  useAbortableEffect(
+    async ({ signal, isCurrent }) => {
+      if (
+        !canViewCostsGlobally ||
+        view !== "chart" ||
+        fiscalYearParam == null
+      ) {
+        setBaselineCosts(new Map());
+        return;
+      }
+      const p = new URLSearchParams({ type: cardTypeKey, cost_field: costField });
+      const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, {
+        signal,
+      });
+      if (!isCurrent()) return;
+      setBaselineCosts(new Map(r.items.map((it) => [it.id, it.cost])));
+    },
+    [cardTypeKey, costField, view, canViewCostsGlobally, fiscalYearParam],
   );
 
   // Scoped here and nowhere else, so the metric cards, treemap, groups and
@@ -567,13 +622,23 @@ export default function CostReport() {
 
   const treemapData = [...items]
     .sort((a, b) => b.cost - a.cost)
-    .map((d, i) => ({
-      name: d.name,
-      size: d.cost,
-      cost: d.cost,
-      id: d.id,
-      index: i,
-    }));
+    .map((d, i) => {
+      const baseline = baselineCosts.get(d.id);
+      const deltaPct =
+        fiscalYearParam == null
+          ? undefined
+          : baseline && baseline > 0
+            ? (d.cost - baseline) / baseline
+            : null;
+      return {
+        name: d.name,
+        size: d.cost,
+        cost: d.cost,
+        id: d.id,
+        index: i,
+        deltaPct,
+      };
+    });
 
   const sort = (k: string) => {
     setSortD(sortK === k && sortD === "asc" ? "desc" : "asc");

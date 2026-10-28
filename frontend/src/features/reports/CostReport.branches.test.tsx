@@ -380,6 +380,32 @@ describe("CostReport treemap", () => {
     expect(await screen.findByText("No cost data found.")).toBeInTheDocument();
     expect(screen.queryByText("Top Cost Driver")).not.toBeInTheDocument();
   });
+
+  it("shows a delta badge comparing the selected past year to the current year", async () => {
+    saved.config = { view: "chart", fiscalYearParam: 2024 };
+    mockApi.on("get", "/reports/cost-treemap*", (path: string) => {
+      const p = new URLSearchParams(path.split("?")[1]);
+      return p.get("fiscal_year") === "2024"
+        ? { items: [{ id: "erp", name: "ERP", cost: 600 }], total: 600, fiscal_year: 2024 }
+        : { items: [{ id: "erp", name: "ERP", cost: 500 }], total: 500, fiscal_year: 2026 };
+    });
+    renderCost();
+    await screen.findByTestId("treemap");
+    expect(screen.getByText(/\+20%/)).toBeInTheDocument(); // (600-500)/500
+  });
+
+  it("handles a card with no current-year baseline as 100% growth from zero, not a crash", async () => {
+    saved.config = { view: "chart", fiscalYearParam: 2024 };
+    mockApi.on("get", "/reports/cost-treemap*", (path: string) => {
+      const p = new URLSearchParams(path.split("?")[1]);
+      return p.get("fiscal_year") === "2024"
+        ? { items: [{ id: "old", name: "Old", cost: 300 }], total: 300, fiscal_year: 2024 }
+        : { items: [], total: 0, fiscal_year: 2026 };
+    });
+    renderCost();
+    await screen.findByTestId("treemap");
+    expect(screen.getByText(/new/i)).toBeInTheDocument();
+  });
 });
 
 describe("CostReport toolbar", () => {
