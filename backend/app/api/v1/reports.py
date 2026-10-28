@@ -1416,8 +1416,6 @@ async def cost_treemap(
     type: str = Query("Application"),
     cost_field: str = Query("costTotalAnnual"),
     group_by: str | None = Query(None),
-    aggregate: list[str] | None = Query(None),
-    parent_card_id: uuid.UUID | None = Query(None),
 ):
     """Cost treemap: items with cost, optionally grouped by a related type.
 
@@ -1427,25 +1425,8 @@ async def cost_treemap(
     no pro-rating, so a card retired in an earlier fiscal year is left out. A
     card carries one annual figure, so projecting it onto other years would
     only restate today's number; that is why there is no year parameter. The
-    rule applies to the primary cards and, in ``aggregate`` mode, to the related
-    cards being summed, so a retired IT Component stops adding to its
-    Application's total. The response names the fiscal year (``fiscal_year``)
-    and the workspace's start month (``fiscal_year_start``).
-
-    When ``aggregate`` is non-empty, each entry is a ``"<typeKey>:<costFieldKey>"``
-    pair identifying a cost field on a related card type. The endpoint sums that
-    field across each primary card's related cards (relations resolved
-    bidirectionally, parallel relations de-duped) and adds the per-pair totals.
-    Because every pair targets a different card type **or** a different cost field
-    on the same type, no related card contributes more than once to a given
-    primary card's roll-up. This lets a type that has no cost field of its own
-    (e.g. Provider) display costs sourced from related Applications, IT
-    Components, etc., even all of them at once.
-
-    When ``parent_card_id`` is set, the primary card set is restricted to cards
-    that have at least one relation (in either direction) to that parent. This
-    powers the treemap drill-down — clicking a parent rectangle re-queries with
-    the related type as ``type`` and the parent's id as ``parent_card_id``.
+    response names the fiscal year (``fiscal_year``) and the workspace's start
+    month (``fiscal_year_start``).
     """
     # See `cost_report` above: `costs.view` alone gates a report that is
     # nothing but costs.
@@ -1465,153 +1446,23 @@ async def cost_treemap(
         c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
     ]
 
-    if parent_card_id is not None:
-        # Restrict sheets to those linked (in either direction) to the parent card.
-        # A parent hidden from the reader has no linked cards as far as they know.
-        sheet_ids = [c.id for c in sheets]
-        if parent_card_id not in await read_scope.readable_card_ids(
-            db, {parent_card_id}, mode="module"
-        ):
-            sheet_ids = []
-        if sheet_ids:
-            edges_result = await db.execute(
-                select(Relation).where(
-                    ((Relation.source_id == parent_card_id) & (Relation.target_id.in_(sheet_ids)))
-                    | ((Relation.target_id == parent_card_id) & (Relation.source_id.in_(sheet_ids)))
-                )
-            )
-            linked_ids: set[uuid.UUID] = set()
-            for r in edges_result.scalars().all():
-                if r.source_id == parent_card_id:
-                    linked_ids.add(r.target_id)
-                else:
-                    linked_ids.add(r.source_id)
-            sheets = [c for c in sheets if c.id in linked_ids]
-        else:
-            sheets = []
-
     items: list[dict] = []
     total = 0.0
 
-    if aggregate:
-        # Parse and validate "<typeKey>:<fieldKey>" pairs; reject duplicates so the
-        # same pair can never be summed twice by accident.
-        pairs: list[tuple[str, str]] = []
-        seen_pairs: set[tuple[str, str]] = set()
-        for entry in aggregate:
-            if entry.count(":") != 1:
-                raise HTTPException(400, f"Invalid aggregate spec: {entry!r}")
-            type_key, field_key = entry.split(":", 1)
-            if not _SAFE_KEY_RE.match(type_key) or not _SAFE_KEY_RE.match(field_key):
-                raise HTTPException(400, f"Invalid aggregate spec: {entry!r}")
-            pair = (type_key, field_key)
-            if pair in seen_pairs:
-                raise HTTPException(400, f"Duplicate aggregate spec: {entry!r}")
-            seen_pairs.add(pair)
-            pairs.append(pair)
-
-        # Validate every pair against the metamodel up-front.
-        for type_key, field_key in pairs:
-            rel_type_result = await db.execute(select(CardType).where(CardType.key == type_key))
-            rel_type_def = rel_type_result.scalars().first()
-            if rel_type_def is None:
-                raise HTTPException(400, f"Unknown aggregate type: {type_key!r}")
-            valid_cost_field = any(
-                f.get("key") == field_key and f.get("type") == "cost"
-                for section in (rel_type_def.fields_schema or [])
-                for f in section.get("fields", [])
-            )
-            if not valid_cost_field:
-                raise HTTPException(
-                    400,
-                    f"{field_key!r} is not a cost field on {type_key!r}",
-                )
-
-        primary_ids = [card.id for card in sheets]
-        primary_id_set = {str(card.id) for card in sheets}
-        cost_by_primary: dict[str, float] = {}
-
-        for type_key, field_key in pairs:
-            # Hidden related cards are never summed into a visible card's total.
-            rel_result = await db.execute(
-                select(Card).where(
-                    Card.type == type_key,
-                    Card.status == "ACTIVE",
-                    *read_scope.where(Card, mode="module"),
-                )
-            )
-            # A related card outside the current fiscal year contributes nothing.
-            related_cards = [
-                c
-                for c in rel_result.scalars().all()
-                if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
-            ]
-            related_cost_by_id = {
-                str(c.id): cost_value((c.attributes or {}).get(field_key)) for c in related_cards
+    for card in sheets:
+        cost = cost_value((card.attributes or {}).get(cost_field))
+        if not cost:
+            continue
+        items.append(
+            {
+                "id": str(card.id),
+                "name": card.name,
+                "cost": cost,
+                "lifecycle": card.lifecycle,
+                "attributes": card.attributes,
             }
-            related_id_set = {str(c.id) for c in related_cards}
-            related_ids = [c.id for c in related_cards]
-
-            if primary_ids and related_ids:
-                edges_result = await db.execute(
-                    select(Relation).where(
-                        (
-                            (Relation.source_id.in_(primary_ids))
-                            & (Relation.target_id.in_(related_ids))
-                        )
-                        | (
-                            (Relation.source_id.in_(related_ids))
-                            & (Relation.target_id.in_(primary_ids))
-                        )
-                    )
-                )
-                edges = edges_result.scalars().all()
-            else:
-                edges = []
-
-            # Per primary card, dedupe related ids across parallel relation types.
-            per_primary: dict[str, set[str]] = {}
-            for r in edges:
-                sid, tid = str(r.source_id), str(r.target_id)
-                if sid in primary_id_set and tid in related_id_set:
-                    per_primary.setdefault(sid, set()).add(tid)
-                elif tid in primary_id_set and sid in related_id_set:
-                    per_primary.setdefault(tid, set()).add(sid)
-
-            for primary_id, linked in per_primary.items():
-                cost_by_primary[primary_id] = cost_by_primary.get(primary_id, 0.0) + sum(
-                    related_cost_by_id.get(rid, 0) for rid in linked
-                )
-
-        for card in sheets:
-            cost = cost_by_primary.get(str(card.id), 0.0)
-            if not cost:
-                continue
-            items.append(
-                {
-                    "id": str(card.id),
-                    "name": card.name,
-                    "cost": cost,
-                    "lifecycle": card.lifecycle,
-                    "attributes": card.attributes,
-                }
-            )
-            total += cost
-    else:
-        for card in sheets:
-            cost = cost_value((card.attributes or {}).get(cost_field))
-            if not cost:
-                continue
-            items.append(
-                {
-                    "id": str(card.id),
-                    "name": card.name,
-                    "cost": cost,
-                    "lifecycle": card.lifecycle,
-                    "attributes": card.attributes,
-                }
-            )
-            total += cost
+        )
+        total += cost
     items.sort(key=lambda x: x["cost"], reverse=True)
 
     groups = None
