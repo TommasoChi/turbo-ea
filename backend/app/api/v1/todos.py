@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, parse_uuid
 from app.database import get_db
 from app.models.todo import Todo
 from app.models.user import User
@@ -104,7 +104,7 @@ async def list_card_todos(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    card_uuid = uuid.UUID(card_id)
+    card_uuid = parse_uuid(card_id)
     await require_card_readable(db, user, card_uuid, mode="module")
     q = (
         select(Todo)
@@ -161,7 +161,9 @@ async def create_todo(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return await _create_todo(db, user, body, uuid.UUID(card_id))
+    card_uuid = parse_uuid(card_id)
+    await require_card_readable(db, user, card_uuid, mode="module")
+    return await _create_todo(db, user, body, card_uuid)
 
 
 @router.post("/todos", status_code=201)

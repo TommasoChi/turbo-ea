@@ -8,8 +8,12 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from sqlalchemy import select
 
 from app.core.permissions import VIEWER_PERMISSIONS
+from app.models.card_type import CardType
+from app.models.todo import Todo
+from app.services.permission_service import PermissionService
 from tests.conftest import (
     auth_headers,
     create_card,
@@ -92,6 +96,56 @@ class TestCreateTodo:
         )
         assert resp.status_code == 201
         assert resp.json()["due_date"] == "2026-06-01"
+
+
+class TestCreateTodoOnACardTheCallerCannotRead:
+    """A card the caller may not read does not exist for them: creating a todo on it is
+    a 404 (never a 201 that echoes its name, never a 500 for an id that names nothing)."""
+
+    async def _hide_from_viewer(self, db):
+        ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+        ct.role_permissions = {"viewer": {"inventory.view": False}}
+        await db.flush()
+        PermissionService.invalidate_type_permission_cache()
+
+    async def test_hidden_card_is_404_and_creates_nothing(self, client, db, todos_env):
+        await self._hide_from_viewer(db)
+        card = todos_env["card"]
+        resp = await client.post(
+            f"/api/v1/cards/{card.id}/todos",
+            json={"description": "probe"},
+            headers=auth_headers(todos_env["viewer"]),
+        )
+        assert resp.status_code == 404
+        assert "Todo App" not in resp.text
+        left = (await db.execute(select(Todo).where(Todo.description == "probe"))).scalars().all()
+        assert left == []
+
+    async def test_unknown_card_is_404_not_500(self, client, db, todos_env):
+        resp = await client.post(
+            f"/api/v1/cards/{uuid.uuid4()}/todos",
+            json={"description": "probe"},
+            headers=auth_headers(todos_env["viewer"]),
+        )
+        assert resp.status_code == 404
+
+    async def test_malformed_card_id_is_404(self, client, db, todos_env):
+        resp = await client.post(
+            "/api/v1/cards/not-a-uuid/todos",
+            json={"description": "probe"},
+            headers=auth_headers(todos_env["viewer"]),
+        )
+        assert resp.status_code == 404
+
+    async def test_readable_card_still_works(self, client, db, todos_env):
+        card = todos_env["card"]
+        resp = await client.post(
+            f"/api/v1/cards/{card.id}/todos",
+            json={"description": "probe"},
+            headers=auth_headers(todos_env["viewer"]),
+        )
+        assert resp.status_code == 201
+        assert resp.json()["card_name"] == "Todo App"
 
 
 class TestCreateStandaloneTodo:
