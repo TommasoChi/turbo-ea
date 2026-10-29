@@ -318,10 +318,12 @@ export default function CostReport() {
   );
   // Trend bars, oldest first: the four years before the current one and the current one,
   // plus the forecast year while that year is the one picked.
+  // Memoised on the boolean, not the picked year: the chart refetches when the array identity changes.
+  const showForecast = fiscalYearParam === currentFiscalYear + 1;
   const trendYears = useMemo(() => {
     const years = Array.from({ length: 5 }, (_, i) => currentFiscalYear - 4 + i);
-    return fiscalYearParam === currentFiscalYear + 1 ? [...years, fiscalYearParam] : years;
-  }, [currentFiscalYear, fiscalYearParam]);
+    return showForecast ? [...years, currentFiscalYear + 1] : years;
+  }, [currentFiscalYear, showForecast]);
   // Learn the current year from a response, and fall back to "Current" when the
   // requested year is that one or is not among the offered years (a saved
   // report from an earlier year).

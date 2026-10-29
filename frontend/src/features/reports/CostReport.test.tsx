@@ -48,10 +48,14 @@ vi.mock("@/hooks/useAuth", () => ({
 }));
 vi.mock("@/components/CardDetailSidePanel", () => ({ default: () => null }));
 // The trend chart's own fetching is tested in CostTrendChart.test.tsx; here only the years it is given.
+const trendYearsSeen: number[][] = []; // every `years` array the stub was rendered with
 vi.mock("./CostTrendChart", () => ({
-  default: ({ years, currentFiscalYear }: { years: number[]; currentFiscalYear: number }) => (
-    <div data-testid="cost-trend-chart" data-years={years.join(",")} data-current={currentFiscalYear} />
-  ),
+  default: ({ years, currentFiscalYear }: { years: number[]; currentFiscalYear: number }) => {
+    trendYearsSeen.push(years);
+    return (
+      <div data-testid="cost-trend-chart" data-years={years.join(",")} data-current={currentFiscalYear} />
+    );
+  },
 }));
 
 import { api } from "@/api/client";
@@ -589,6 +593,26 @@ describe("CostReport trend chart", () => {
     await waitFor(() =>
       expect(trend).toHaveAttribute("data-years", "2022,2023,2024,2025,2026,2027"),
     );
+  });
+
+  it("picking another past year keeps the same years array, so the chart does not refetch", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+    await pickYear("FY25");
+    const afterFy25 = trendYearsSeen[trendYearsSeen.length - 1];
+    await pickYear("FY24");
+    await waitFor(() => expect(screen.getAllByRole("combobox", { name: /fiscal year/i })[0]).toHaveTextContent("FY24"));
+    expect(trendYearsSeen[trendYearsSeen.length - 1]).toBe(afterFy25);
+  });
+
+  it("trend drops the forecast bar when a past year is picked after the forecast", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+    await pickYear("FY27 - Forecast");
+    const trend = await pickYear("FY25");
+    await waitFor(() => expect(trend).toHaveAttribute("data-years", "2022,2023,2024,2025,2026"));
   });
 
   it("trend is not shown on Current", async () => {
