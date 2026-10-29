@@ -1,0 +1,184 @@
+# Cost Report: Sankey diagram + IT Component cost parity
+
+**Spec status:** draft, from a brainstorming session on `feature/sankey-diagram-cost-report`.
+
+## Goal
+
+`/reports/cost` gets a third chart view (Sankey, alongside the existing Treemap
+and Table) showing cost flows between Application and IT Component cards, and
+IT Component gains the same cost fields + calculation Application already has,
+so the flow has real numbers on both ends.
+
+## Scope
+
+In scope:
+- Rename the chart-view tooltip from the shared `"Chart view"` to
+  `"Treemap chart view"` — **on `/reports/cost` only**, not globally.
+- A new, third toggle button `"Sankey chart view"`, between the Treemap and
+  Table buttons, switching the chart panel to a Sankey diagram.
+- A fullscreen button on both the Treemap and the Sankey chart panels.
+- Extend `group_by` to the Treemap (already supported, unchanged) and to the
+  new Sankey view, via a flag:
+  - flag off: 2-level flow, item → target.
+  - flag on: 3-level flow, item → group bucket → target (matches the
+    "Aggregate 1 / Aggregate 2" intermediate-node pattern the user referenced).
+- Remove the `aggregate` parameter and its UI entirely. It summed a cost field
+  across a card's related cards of another type, but that relation is
+  many-to-many in practice (one IT Component can serve several Applications,
+  one Initiative can touch several Applications), so the sum silently
+  double-counts. A Sankey does not have this problem — it draws one flow per
+  relation instead of folding them into a single total, so no replacement
+  mechanism is needed.
+- Restrict the card-type selector to **Application** and **IT Component**
+  only, and allow **both to be shown together** in one view — their
+  `relAppToITC` relations become the flow edges directly, no `aggregate`
+  needed.
+- Rename Application's `"Cost & Ownership"` metamodel section to `"Cost"`
+  (matches IT Component's existing section name).
+- Add to IT Component's `"Cost"` section, as real metamodel fields via
+  migration (not just seed data): `softwareLicensingCost`,
+  `applicationManagementServicesCost`, `infrastruttureCost` — same key names,
+  labels and translations as Application's.
+- Add a second `Calculation` row, target type IT Component, target field
+  `costTotalAnnual`, with the same formula shape as Application's (field keys
+  re-pointed at IT Component's own fields — the two calculations are
+  independent rows, not a shared one):
+  ```
+  present = data.softwareLicensingCost+data.applicationManagementServicesCost+data.infrastruttureCost
+  ```
+  "Treat blank numbers as zero" on, matching Application's calculation.
+- **Table view gets custom columns.** A column picker lets the user add any
+  field of the card type being shown (sourced from `fields_schema`, same list
+  `costFields` already reads from) as an extra table column. When a grouping
+  (`group_by`) is active and an added column's field `type === "cost"`, that
+  column gets a per-group subtotal row — the exact mechanism already in place
+  for the fixed `cost` column (`g.cost` summed per group), generalized to N
+  columns instead of one. Backend must start returning each item's
+  `attributes` (or the requested columns) — today `/reports/cost-treemap` and
+  `/reports/cost` return only `{id, name, cost}`, nothing else.
+
+- **Fiscal-year cost history (option B, confirmed over "just filter which
+  cards count").** Today's `costTotalAnnual` (and every cost field) is one
+  scalar value per card — no history. To let a user pick FY2025, FY2026, etc.
+  and see the **actual value for that year**, not just a different set of
+  included cards against today's number, cost needs a real per-year series:
+  - New table, same shape as PPM's existing `ppm_budget_lines`
+    (`initiative_id, fiscal_year, category, amount, description`): something
+    like `card_cost_history(card_id, fiscal_year, field_key, value)`.
+  - A migration to create it.
+  - A UI to enter/edit a card's cost per fiscal year, not a single value —
+    this changes how cost fields are edited on Application and IT Component
+    cards, not just how the report reads them.
+  - The report's `fiscal_year` becomes a real query param, reading from the
+    new table for the chosen year instead of the card's live `attributes`.
+  - `is_live_in_fiscal_year` keeps deciding **whether** a card counts for a
+    given year (unchanged, already takes an arbitrary `fy`); the new table
+    decides **what value** it counts at.
+  - Open question: what happens to the existing scalar `costTotalAnnual` /
+    the three input fields — do they become read-only mirrors of the current
+    year's history row, or does entering a cost become exclusively a
+    history-table operation? Needs a decision before implementation; it
+    changes the Calculation setup (today's calculation target field is the
+    scalar attribute).
+  - Fake/demo history rows for FY24/FY25 (to exercise the trend chart) are
+    explicitly deferred to **after** this is built — not part of the
+    implementation itself.
+
+- **Year-over-year trend, once fiscal-year history exists.**
+  - **Chart**: a stacked Bar Chart (Recharts, already in use elsewhere in the
+    project) — x-axis fiscal year, y-axis cost, bars stacked by cost category
+    (`softwareLicensingCost` / `applicationManagementServicesCost` /
+    `infrastruttureCost`), reusing the three fields already being added to IT
+    Component. Shows trend and composition together, no new chart type beyond
+    what the project already renders elsewhere. A plain Line Chart (single
+    series, total cost per year) is the fallback if the category breakdown
+    turns out not to be wanted — simpler, but loses "what drove the change".
+  - **Treemap**: a delta badge/color on each rectangle, comparing the selected
+    year's value against the current fiscal year (not a new chart, an overlay
+    on the existing one).
+  - **Table**: an extra "YoY %" column, computed client-side as
+    `selected_year / (selected_year - 1) - 1` against the adjacent year's
+    history row — one extra column, not a redesign.
+
+Out of scope (not asked, not assumed):
+- Any card type other than Application / IT Component.
+- Changing Application's existing calculation or its three input fields.
+- A generalized N-way `group_by` beyond the 2-level/3-level Sankey shape above.
+
+## Current state (verified, not assumed)
+
+- Chart is `Treemap` from `recharts` (confirmed present in `recharts@3.7.0`,
+  which also exports `Sankey` — same library, no new dependency).
+  `frontend/src/features/reports/CostReport.tsx`.
+- `"Chart view"` / `"Table view"` tooltips come from `shell.chartView` /
+  `shell.tableView` in `ReportShell.tsx`, a toggle **shared by 11 report
+  pages**. The `view` prop is a fixed `"chart" | "table"` union with two
+  hardcoded `ToggleButton`s. Renaming the string directly would relabel every
+  other report's toggle; the per-report override and the third Sankey button
+  both need `ReportShellProps` extended, not the shared string edited.
+- Backend: `GET /reports/cost-treemap`
+  (`backend/app/api/v1/reports.py:1412`) — `type`, `cost_field`, `group_by`,
+  `aggregate`, `parent_card_id` params. `aggregate` sums a cost field across
+  related cards of another type (fan-out summed, not deduped per source card)
+  — confirmed this is the mechanism the double-counting concern is about.
+- Backend metamodel (live instance, via `list_card_types` / the Calculations
+  admin UI, not the generic open-source seed — the deployed instance's own
+  schema differs from `backend/app/services/seed.py`):
+  - Application → section `"Cost & Ownership"`: `costTotalAnnual` (calculated,
+    not editable), `softwareLicensingCost`, `applicationManagementServicesCost`,
+    `infrastruttureCost`.
+  - IT Component → section `"Cost"`: `costTotalAnnual` only, **not**
+    calculated (plain editable cost field today).
+  - The one existing `Calculation` row: name "Total Annual Cost", target type
+    Application, target field `costTotalAnnual`, order 0, formula above,
+    confirmed by opening it in Admin → Metamodel → Calculations.
+
+## Open questions for the next pass
+
+- Exact Sankey node/flow semantics when both Application and IT Component are
+  shown together with `group_by` on: is the bucket a third node layer between
+  the two card types, or does it replace one of them? Needs a concrete
+  worked example before implementation.
+- Whether `parent_card_id` drill-down (today: click a Treemap rectangle to
+  descend into its related cards) carries over to the Sankey, and what
+  "drilling" means for a flow diagram (click a node? click a flow?).
+- Fullscreen: a shared chart-wrapper component, or a prop on each chart panel?
+  No existing fullscreen pattern elsewhere in the reports to copy from yet —
+  needs a short look before committing to an approach.
+
+## Rule files and docs this touches (censito da CLAUDE.md)
+
+- **Split `.claude/rules/card-flags-cost-eol.md` in due**, lungo il confine
+  reale del contenuto attuale (non "cost vs eol" — il bullet 1 è già
+  flags+EOL insieme, stesso modulo `card_flags.py`; il bullet 2 è
+  fiscal-year/cost, `lifecycle.py`/`fiscal_year.py`, un modulo diverso):
+  - `card-flags-eol.md` — bullet 1 invariato.
+  - `cost-fiscal-year.md` — bullet 2, da aggiornare dopo la rimozione di
+    `aggregate` (oggi dice "Both apply the rule to the related cards an
+    aggregate sums as well as the primary cards" — frase da riscrivere).
+- **`.claude/rules/api-contracts.md`** — `docs/api/openapi.json` rigenerato
+  via `scripts/dump_openapi.py` dopo il cambio dei parametri di
+  `GET /reports/cost-treemap`; eventuale schema nuovo in
+  `backend/app/schemas/` per la risposta Sankey.
+- **`.claude/rules/i18n-locales.md`** — nessuna traduzione scritta a mano:
+  stringhe nuove in `frontend/src/i18n/locales/en/*.json` +
+  `backend/app/services/seed.py` (translations dict dei 3 nuovi campi IT
+  Component + rename sezione Application), poi `/translate` prima della PR
+  per gli altri 9 locale e i `.{locale}.md`.
+- **`.claude/rules/settings-and-seed.md`** — nuova migration Alembic
+  (pattern `072_restore_business_process_color.py`, guarded UPDATE):
+  3 campi cost su IT Component + rename sezione "Cost & Ownership" →
+  "Cost" su Application, senza toccare install già customizzate.
+- **`.claude/rules/docs.md`** — `docs/guide/reports.md` (+ screenshot in
+  `scripts/screenshots/pages.ts` se lo screenshot del cost report cambia).
+- **`.claude/rules/testing-ci.md`** — verificare se `reports.py` è già in
+  `scripts/mutation/floors.toml`'s `[modules]`; diff coverage gira
+  comunque automaticamente su ogni PR.
+
+Codice applicativo (non da rule, dalla lettura diretta):
+`backend/app/api/v1/reports.py`, `frontend/src/features/reports/CostReport.tsx`,
+`frontend/src/features/reports/ReportShell.tsx`, `backend/app/services/seed.py`,
+nuova migration in `backend/alembic/versions/`, test:
+`backend/tests/api/test_reports_cost_fiscal_year.py`,
+`frontend/src/features/reports/CostReport.test.tsx`, nuovo
+`backend/tests/services/test_alembic_<N>_itcomponent_cost_fields.py`.

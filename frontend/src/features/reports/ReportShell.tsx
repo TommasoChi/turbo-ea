@@ -26,7 +26,7 @@ export interface PrintParam {
   value: string;
 }
 
-export interface ReportShellProps {
+export interface ReportShellProps<V extends string = "chart" | "table"> {
   title: string;
   icon: string;
   iconColor?: string;
@@ -36,8 +36,12 @@ export interface ReportShellProps {
   legend?: ReactNode;
   /** Whether to show chart/table toggle (default true) */
   hasTableToggle?: boolean;
-  view?: "chart" | "table";
-  onViewChange?: (v: "chart" | "table") => void;
+  view?: V;
+  onViewChange?: (v: V) => void;
+  /** Overrides the chart button's tooltip for this report only (default: shell.chartView) */
+  chartViewLabel?: string;
+  /** Extra toggle buttons rendered between the chart and table buttons */
+  extraViews?: { value: V; icon: string; label: string }[];
   /** Called when user clicks "Save Report" — parent should open SaveReportDialog */
   onSaveReport?: () => void;
   /** If viewing a saved report, show banner with name and reset option */
@@ -81,15 +85,17 @@ export interface ReportShellProps {
   children: ReactNode;
 }
 
-export default function ReportShell({
+export default function ReportShell<V extends string = "chart" | "table">({
   title,
   icon,
   iconColor = "#1976d2",
   toolbar,
   legend,
   hasTableToggle = true,
-  view = "chart",
+  view = "chart" as V,
   onViewChange,
+  chartViewLabel,
+  extraViews = [],
   onSaveReport,
   savedReportName,
   onResetSavedReport,
@@ -103,7 +109,7 @@ export default function ReportShell({
   disableSavedReportsLink,
   paginateRowSelector,
   children,
-}: ReportShellProps) {
+}: ReportShellProps<V>) {
   const { t } = useTranslation(["reports", "common"]);
   const navigate = useNavigate();
   const [exportMenu, setExportMenu] = useState<HTMLElement | null>(null);
@@ -149,8 +155,10 @@ export default function ReportShell({
   // without a table toggle are inherently chart-only — unless they supply
   // their own `buildExportData`, which means they hand over real tabular
   // data instead of relying on the DOM scrape, so XLSX always applies.
-  const showXlsxItem = exportEnabled && (!!buildExportData || (hasTableToggle && view === "table"));
-  const showPptxItem = exportEnabled && (!hasTableToggle || view === "chart");
+  const showXlsxItem =
+    exportEnabled &&
+    (!!buildExportData || (hasTableToggle && view === "table"));
+  const showPptxItem = exportEnabled && (!hasTableToggle || view !== "table");
 
   return (
     <Box className="report-container" sx={{ maxWidth, mx: "auto" }}>
@@ -163,26 +171,49 @@ export default function ReportShell({
           sx={{ mb: 2 }}
           action={
             onResetSavedReport && (
-              <Button size="small" onClick={onResetSavedReport} sx={{ textTransform: "none" }}>
+              <Button
+                size="small"
+                onClick={onResetSavedReport}
+                sx={{ textTransform: "none" }}
+              >
                 {t("shell.resetDefaults")}
               </Button>
             )
           }
         >
-          <Trans i18nKey="shell.viewingSavedReport" ns="reports" values={{ name: savedReportName }}>
+          <Trans
+            i18nKey="shell.viewingSavedReport"
+            ns="reports"
+            values={{ name: savedReportName }}
+          >
             Viewing saved report: <strong>{{ savedReportName } as any}</strong>
           </Trans>
         </Alert>
       )}
 
       {/* Title bar */}
-      <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1, flexWrap: "wrap" }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          mb: 2,
+          gap: 1,
+          flexWrap: "wrap",
+        }}
+      >
         <MaterialSymbol icon={icon} size={26} color={iconColor} />
-        <Typography variant="h5" sx={{ fontWeight: 700, flex: 1, minWidth: 0 }} noWrap>
+        <Typography
+          variant="h5"
+          sx={{ fontWeight: 700, flex: 1, minWidth: 0 }}
+          noWrap
+        >
           {title}
         </Typography>
 
-        <Box className="report-actions" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <Box
+          className="report-actions"
+          sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+        >
           {actions}
           {hasTableToggle && onViewChange && (
             <ToggleButtonGroup
@@ -192,12 +223,21 @@ export default function ReportShell({
               onChange={(_, v) => v && onViewChange(v)}
             >
               <ToggleButton value="chart">
-                <Tooltip title={t("shell.chartView")}>
+                <Tooltip title={chartViewLabel ?? t("shell.chartView")}>
                   <Box sx={{ display: "flex" }}>
                     <MaterialSymbol icon="bar_chart" size={18} />
                   </Box>
                 </Tooltip>
               </ToggleButton>
+              {extraViews.map((v) => (
+                <ToggleButton key={v.value} value={v.value}>
+                  <Tooltip title={v.label}>
+                    <Box sx={{ display: "flex" }}>
+                      <MaterialSymbol icon={v.icon} size={18} />
+                    </Box>
+                  </Tooltip>
+                </ToggleButton>
+              ))}
               <ToggleButton value="table">
                 <Tooltip title={t("shell.tableView")}>
                   <Box sx={{ display: "flex" }}>
@@ -231,7 +271,10 @@ export default function ReportShell({
           </Tooltip>
 
           <Tooltip title={t("shell.moreActions")}>
-            <IconButton size="small" onClick={(e) => setExportMenu(e.currentTarget)}>
+            <IconButton
+              size="small"
+              onClick={(e) => setExportMenu(e.currentTarget)}
+            >
               <MaterialSymbol icon="more_vert" size={20} />
             </IconButton>
           </Tooltip>
@@ -243,18 +286,24 @@ export default function ReportShell({
           >
             {showXlsxItem && (
               <MenuItem onClick={() => handleExport("xlsx")}>
-                <ListItemIcon><MaterialSymbol icon="table_view" size={18} /></ListItemIcon>
+                <ListItemIcon>
+                  <MaterialSymbol icon="table_view" size={18} />
+                </ListItemIcon>
                 <ListItemText>{t("shell.exportXlsx")}</ListItemText>
               </MenuItem>
             )}
             {showPptxItem && (
               <MenuItem onClick={() => handleExport("pptx")}>
-                <ListItemIcon><MaterialSymbol icon="slideshow" size={18} /></ListItemIcon>
+                <ListItemIcon>
+                  <MaterialSymbol icon="slideshow" size={18} />
+                </ListItemIcon>
                 <ListItemText>{t("shell.exportPptx")}</ListItemText>
               </MenuItem>
             )}
             <MenuItem onClick={handleCopyLink}>
-              <ListItemIcon><MaterialSymbol icon="link" size={18} /></ListItemIcon>
+              <ListItemIcon>
+                <MaterialSymbol icon="link" size={18} />
+              </ListItemIcon>
               <ListItemText>{t("shell.copyLink")}</ListItemText>
             </MenuItem>
             {!disableSavedReportsLink && (
@@ -264,7 +313,9 @@ export default function ReportShell({
                   navigate("/reports/saved");
                 }}
               >
-                <ListItemIcon><MaterialSymbol icon="bookmarks" size={18} /></ListItemIcon>
+                <ListItemIcon>
+                  <MaterialSymbol icon="bookmarks" size={18} />
+                </ListItemIcon>
                 <ListItemText>{t("shell.viewAllSaved")}</ListItemText>
               </MenuItem>
             )}
@@ -294,7 +345,9 @@ export default function ReportShell({
             >
               <strong>{p.label}:</strong> {p.value}
               {i < activeParams.length - 1 && (
-                <Box component="span" sx={{ mx: 0.75, color: "divider" }}>|</Box>
+                <Box component="span" sx={{ mx: 0.75, color: "divider" }}>
+                  |
+                </Box>
               )}
             </Typography>
           ))}
@@ -303,17 +356,37 @@ export default function ReportShell({
 
       {/* Filter toolbar */}
       {toolbar && (
-        <Box className="report-toolbar" sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2, flexWrap: "wrap" }}>
+        <Box
+          className="report-toolbar"
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            mb: 2,
+            flexWrap: "wrap",
+          }}
+        >
           {toolbar}
         </Box>
       )}
 
       {/* Main content */}
-      <Box ref={chartRef} className="report-chart-area" sx={{ minHeight: 300 }}>{children}</Box>
+      <Box ref={chartRef} className="report-chart-area" sx={{ minHeight: 300 }}>
+        {children}
+      </Box>
 
       {/* Legend */}
       {legend && (
-        <Box className="report-legend" sx={{ mt: 2, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+        <Box
+          className="report-legend"
+          sx={{
+            mt: 2,
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            flexWrap: "wrap",
+          }}
+        >
           {legend}
         </Box>
       )}

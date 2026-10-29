@@ -22,14 +22,12 @@ beforeEach(() => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function renderShell(props: Partial<React.ComponentProps<typeof ReportShell>> = {}) {
+function renderShell(
+  props: Partial<React.ComponentProps<typeof ReportShell>> = {},
+) {
   return render(
     <MemoryRouter>
-      <ReportShell
-        title="Test Report"
-        icon="bar_chart"
-        {...props}
-      >
+      <ReportShell title="Test Report" icon="bar_chart" {...props}>
         <div data-testid="report-content">Content</div>
       </ReportShell>
     </MemoryRouter>,
@@ -68,7 +66,9 @@ describe("ReportShell", () => {
     const onSave = vi.fn();
     renderShell({ onSaveReport: onSave });
     // MUI Tooltip wraps the button and adds aria-label
-    expect(screen.getByRole("button", { name: /save report/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /save report/i }),
+    ).toBeInTheDocument();
   });
 
   it("calls onSaveReport when save button is clicked", async () => {
@@ -83,7 +83,9 @@ describe("ReportShell", () => {
   it("renders reset button when onReset provided", () => {
     const onReset = vi.fn();
     renderShell({ onReset });
-    expect(screen.getByRole("button", { name: /reset to defaults/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /reset to defaults/i }),
+    ).toBeInTheDocument();
   });
 
   it("calls onReset when reset button is clicked", async () => {
@@ -91,7 +93,9 @@ describe("ReportShell", () => {
     const onReset = vi.fn();
     renderShell({ onReset });
 
-    await user.click(screen.getByRole("button", { name: /reset to defaults/i }));
+    await user.click(
+      screen.getByRole("button", { name: /reset to defaults/i }),
+    );
     expect(onReset).toHaveBeenCalled();
   });
 
@@ -108,9 +112,14 @@ describe("ReportShell", () => {
 
   it("renders Reset to defaults button in saved report banner", () => {
     const onResetSaved = vi.fn();
-    renderShell({ savedReportName: "Report 1", onResetSavedReport: onResetSaved });
+    renderShell({
+      savedReportName: "Report 1",
+      onResetSavedReport: onResetSaved,
+    });
     // The banner has a "Reset to defaults" button
-    const resetButtons = screen.getAllByRole("button", { name: /reset to defaults/i });
+    const resetButtons = screen.getAllByRole("button", {
+      name: /reset to defaults/i,
+    });
     expect(resetButtons.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -168,7 +177,9 @@ describe("ReportShell", () => {
     await waitFor(() => {
       expect(screen.getByText("Copy link")).toBeInTheDocument();
     });
-    expect(screen.queryByText("View all saved reports")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("View all saved reports"),
+    ).not.toBeInTheDocument();
   });
 
   it("navigates to saved reports page when View all saved reports is clicked", async () => {
@@ -213,9 +224,13 @@ describe("ReportShell", () => {
     await user.click(screen.getByRole("button", { name: /more actions/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("Export to PowerPoint (.pptx)")).toBeInTheDocument();
+      expect(
+        screen.getByText("Export to PowerPoint (.pptx)"),
+      ).toBeInTheDocument();
     });
-    expect(screen.queryByText("Export to Excel (.xlsx)")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Export to Excel (.xlsx)"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders print params when provided", () => {
@@ -227,6 +242,39 @@ describe("ReportShell", () => {
     });
     expect(screen.getByText(/Type:/)).toBeInTheDocument();
     expect(screen.getByText(/Application/)).toBeInTheDocument();
+  });
+
+  it("renders an extra view button between chart and table, and fires onViewChange with its value", async () => {
+    const user = userEvent.setup();
+    const onViewChange = vi.fn();
+    renderShell({
+      view: "chart",
+      onViewChange,
+      extraViews: [
+        {
+          value: "sankey",
+          icon: "waterfall_chart",
+          label: "Sankey chart view",
+        },
+      ],
+    });
+
+    const sankeyBtn = screen.getByRole("button", {
+      name: /sankey chart view/i,
+    });
+    await user.click(sankeyBtn);
+    expect(onViewChange).toHaveBeenCalledWith("sankey");
+  });
+
+  it("uses chartViewLabel to override the chart button's tooltip", () => {
+    renderShell({
+      view: "chart",
+      onViewChange: vi.fn(),
+      chartViewLabel: "Treemap chart view",
+    });
+    expect(
+      screen.getByRole("button", { name: /treemap chart view/i }),
+    ).toBeInTheDocument();
   });
 
   it("does not render empty print params", () => {

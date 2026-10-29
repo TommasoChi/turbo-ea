@@ -17,7 +17,6 @@ from tests.conftest import (
     auth_headers,
     create_card,
     create_card_type,
-    create_relation,
     create_relation_type,
     create_role,
     create_user,
@@ -142,55 +141,16 @@ class TestCostTreemapCurrentFiscalYear:
         assert data["fiscal_year"] == fy
         assert data["fiscal_year_start"] == 10
 
-    async def test_no_other_year_can_be_requested(self, client, db, env):
-        """A card holds one annual figure, so no year parameter is offered."""
+    async def test_a_past_year_is_now_a_real_param_echoed_back(self, client, db, env):
+        """Superseded by the fiscal-year-history plan: `fiscal_year` is now a
+        real query param (docs/superpowers/plans/2026-10-28-cost-report-fiscal-year-history.md,
+        Task 4) — a card with no history row for the requested past year shows
+        no items, but the response now echoes back the year actually asked for,
+        not always the current one."""
         await _app(db, "Retired", 1000, {"endOfLife": _d(THIS_YEAR - 1)})
         data = await _treemap(client, env, fiscal_year=THIS_YEAR - 1)
         assert data["items"] == []
-        assert data["fiscal_year"] == THIS_YEAR
-
-
-class TestAggregateCurrentFiscalYear:
-    async def test_retired_related_cards_stop_adding_to_the_total(self, client, db, env):
-        app = await _app(db, "App", 0, {"active": _d(THIS_YEAR - 5)})
-        live = await _app(
-            db, "Live ITC", 300, {"active": _d(THIS_YEAR - 5)}, card_type="ITComponent"
-        )
-        gone = await _app(
-            db,
-            "Gone ITC",
-            900,
-            {"active": _d(THIS_YEAR - 5), "endOfLife": _d(THIS_YEAR - 2)},
-            card_type="ITComponent",
-        )
-        await create_relation(db, type_key="relAppToITC", source_id=app.id, target_id=live.id)
-        await create_relation(db, type_key="relAppToITC", source_id=app.id, target_id=gone.id)
-
-        data = await _treemap(client, env, aggregate=["ITComponent:costTotalAnnual"])
-        assert data["items"][0]["cost"] == 300
-        assert data["total"] == 300
-
-    async def test_retired_primary_card_drops_out(self, client, db, env):
-        app = await _app(db, "Old App", 0, {"endOfLife": _d(THIS_YEAR - 1)})
-        itc = await _app(db, "ITC", 300, card_type="ITComponent")
-        await create_relation(db, type_key="relAppToITC", source_id=app.id, target_id=itc.id)
-
-        data = await _treemap(client, env, aggregate=["ITComponent:costTotalAnnual"])
-        assert data["items"] == []
-
-    async def test_drill_down_applies_the_rule(self, client, db, env):
-        provider = await create_card(db, card_type="Provider", name="Vendor")
-        live = await _app(db, "Live ITC", 300, card_type="ITComponent")
-        gone = await _app(
-            db, "Gone ITC", 900, {"endOfLife": _d(THIS_YEAR - 1)}, card_type="ITComponent"
-        )
-        for itc in (live, gone):
-            await create_relation(
-                db, type_key="relProviderToITC", source_id=provider.id, target_id=itc.id
-            )
-
-        data = await _treemap(client, env, type="ITComponent", parent_card_id=str(provider.id))
-        assert _names(data) == ["Live ITC"]
+        assert data["fiscal_year"] == THIS_YEAR - 1
 
 
 class TestCostEndpointCurrentFiscalYear:

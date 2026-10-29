@@ -11,9 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import select
 
-from app.models.card_type import CardType
 from tests.conftest import (
     auth_headers,
     create_card,
@@ -1255,298 +1253,100 @@ class TestCostTreemap:
         )
         assert resp.status_code == 403
 
-    async def test_cost_treemap_aggregate_from_related_type(self, client, db, env):
-        """Aggregation rolls up costs from related cards (Provider via Application)."""
+    async def test_cost_treemap_reads_a_past_year_from_history(self, client, db, env):
+        from app.models.card_cost_history import CardCostHistory
+
         admin = env["admin"]
-        await create_card_type(
-            db,
-            key="Provider",
-            label="Provider",
-            fields_schema=[],
-        )
-        await create_relation_type(
-            db,
-            key="provider_to_app",
-            label="Provider offers Application",
-            source_type_key="Provider",
-            target_type_key="Application",
-        )
-        provider_a = await create_card(db, card_type="Provider", name="Vendor A", user_id=admin.id)
-        provider_b = await create_card(db, card_type="Provider", name="Vendor B", user_id=admin.id)
-        # Vendor C offers no apps; should not appear in items.
-        await create_card(db, card_type="Provider", name="Vendor C", user_id=admin.id)
         app1 = await create_card(
             db,
             card_type="Application",
-            name="App 1",
+            name="ERP",
             user_id=admin.id,
-            attributes={"costTotalAnnual": 50000},
+            attributes={"costTotalAnnual": 999},  # today's live value — must NOT be shown
+            lifecycle={"active": "2020-01-01"},
         )
-        app2 = await create_card(
-            db,
-            card_type="Application",
-            name="App 2",
-            user_id=admin.id,
-            attributes={"costTotalAnnual": 30000},
+        db.add(
+            CardCostHistory(
+                card_id=app1.id, fiscal_year=2024, field_key="costTotalAnnual", value=321
+            )
         )
-        app3 = await create_card(
-            db,
-            card_type="Application",
-            name="App 3",
-            user_id=admin.id,
-            attributes={"costTotalAnnual": 10000},
-        )
-        # Vendor A → App1, App2 (=80000); Vendor B → App3 (=10000); Vendor C → none.
-        await create_relation(
-            db, type_key="provider_to_app", source_id=provider_a.id, target_id=app1.id
-        )
-        # Reverse direction must also be picked up.
-        await create_relation(
-            db, type_key="provider_to_app", source_id=app2.id, target_id=provider_a.id
-        )
-        await create_relation(
-            db, type_key="provider_to_app", source_id=provider_b.id, target_id=app3.id
-        )
-
-        resp = await client.get(
-            "/api/v1/reports/cost-treemap",
-            params={
-                "type": "Provider",
-                "aggregate": ["Application:costTotalAnnual"],
-            },
-            headers=auth_headers(admin),
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        names = [i["name"] for i in data["items"]]
-        assert names == ["Vendor A", "Vendor B"]  # sorted desc, Vendor C excluded
-        assert data["items"][0]["cost"] == 80000
-        assert data["items"][1]["cost"] == 10000
-        assert data["total"] == 90000
-
-    async def test_cost_treemap_aggregate_dedupes_parallel_relations(self, client, db, env):
-        """Two relations between the same pair must not double-count the related cost."""
-        admin = env["admin"]
-        await create_card_type(db, key="Provider", label="Provider", fields_schema=[])
-        await create_relation_type(
-            db,
-            key="provider_to_app",
-            label="Provider offers Application",
-            source_type_key="Provider",
-            target_type_key="Application",
-        )
-        provider = await create_card(db, card_type="Provider", name="V", user_id=admin.id)
-        app = await create_card(
-            db,
-            card_type="Application",
-            name="A",
-            user_id=admin.id,
-            attributes={"costTotalAnnual": 12345},
-        )
-        await create_relation(
-            db, type_key="provider_to_app", source_id=provider.id, target_id=app.id
-        )
-        await create_relation(
-            db, type_key="provider_to_app", source_id=app.id, target_id=provider.id
-        )
-
-        resp = await client.get(
-            "/api/v1/reports/cost-treemap",
-            params={
-                "type": "Provider",
-                "aggregate": ["Application:costTotalAnnual"],
-            },
-            headers=auth_headers(admin),
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["items"]) == 1
-        assert data["items"][0]["cost"] == 12345
-
-    async def test_cost_treemap_aggregate_multi_type_sums_cleanly(self, client, db, env):
-        """Aggregating across two related types sums per-type roll-ups without overlap."""
-        admin = env["admin"]
-        await create_card_type(db, key="Provider", label="Provider", fields_schema=[])
-        # Reuse the env's ITComponent type but give it a cost field.
-        itc = (
-            (await db.execute(select(CardType).where(CardType.key == "ITComponent")))
-            .scalars()
-            .first()
-        )
-        itc.fields_schema = [
-            {
-                "section": "General",
-                "fields": [
-                    {
-                        "key": "costTotalAnnual",
-                        "label": "Annual Cost",
-                        "type": "cost",
-                        "weight": 1,
-                    }
-                ],
-            }
-        ]
         await db.flush()
-        await create_relation_type(
-            db,
-            key="provider_to_app",
-            label="Provider offers Application",
-            source_type_key="Provider",
-            target_type_key="Application",
+        resp = await client.get(
+            "/api/v1/reports/cost-treemap",
+            params={"type": "Application", "fiscal_year": 2024},
+            headers=auth_headers(admin),
         )
-        await create_relation_type(
-            db,
-            key="provider_to_itc",
-            label="Provider offers IT Component",
-            source_type_key="Provider",
-            target_type_key="ITComponent",
-        )
-        microsoft = await create_card(db, card_type="Provider", name="Microsoft", user_id=admin.id)
-        teams = await create_card(
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["items"][0]["cost"] == 321
+        assert data["fiscal_year"] == 2024
+
+    async def test_cost_treemap_falls_back_to_live_attributes_when_no_history_row_exists_for_the_current_year(  # noqa: E501
+        self, client, db, env
+    ):
+        from app.services.fiscal_year import current_fiscal_year
+
+        admin = env["admin"]
+        await create_card(
             db,
             card_type="Application",
-            name="Teams",
+            name="ERP",
             user_id=admin.id,
-            attributes={"costTotalAnnual": 60000},
+            attributes={"costTotalAnnual": 500},
+            lifecycle={"active": "2020-01-01"},
         )
-        azure = await create_card(
-            db,
-            card_type="ITComponent",
-            name="Azure",
-            user_id=admin.id,
-            attributes={"costTotalAnnual": 200000},
-        )
-        await create_relation(
-            db, type_key="provider_to_app", source_id=microsoft.id, target_id=teams.id
-        )
-        await create_relation(
-            db, type_key="provider_to_itc", source_id=microsoft.id, target_id=azure.id
-        )
-
+        fy = current_fiscal_year(1)
         resp = await client.get(
             "/api/v1/reports/cost-treemap",
-            params={
-                "type": "Provider",
-                "aggregate": [
-                    "Application:costTotalAnnual",
-                    "ITComponent:costTotalAnnual",
-                ],
-            },
+            params={"type": "Application", "fiscal_year": fy},
             headers=auth_headers(admin),
         )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["items"]) == 1
-        assert data["items"][0]["name"] == "Microsoft"
-        assert data["items"][0]["cost"] == 260000
+        assert resp.json()["items"][0]["cost"] == 500
 
-    async def test_cost_treemap_aggregate_duplicate_pair_400(self, client, db, env):
-        """Repeating the same (type, field) pair must be rejected."""
-        resp = await client.get(
-            "/api/v1/reports/cost-treemap",
-            params={
-                "type": "Application",
-                "aggregate": [
-                    "Application:costTotalAnnual",
-                    "Application:costTotalAnnual",
-                ],
-            },
-            headers=auth_headers(env["admin"]),
-        )
-        assert resp.status_code == 400
-
-    async def test_cost_treemap_aggregate_invalid_field_400(self, client, db, env):
-        """Aggregating a non-cost field returns 400."""
+    async def test_cost_treemap_shows_nothing_for_a_past_year_with_no_history_row(
+        self, client, db, env
+    ):
         admin = env["admin"]
-        await create_card_type(db, key="Provider", label="Provider", fields_schema=[])
+        await create_card(
+            db,
+            card_type="Application",
+            name="ERP",
+            user_id=admin.id,
+            attributes={"costTotalAnnual": 500},
+            lifecycle={"active": "2020-01-01"},
+        )
         resp = await client.get(
             "/api/v1/reports/cost-treemap",
-            params={
-                "type": "Provider",
-                "aggregate": ["Application:functionalFit"],  # not a cost field
-            },
+            params={"type": "Application", "fiscal_year": 2024},
             headers=auth_headers(admin),
         )
-        assert resp.status_code == 400
+        assert resp.json()["items"] == []
 
-    async def test_cost_treemap_aggregate_unknown_type_400(self, client, db, env):
-        """Aggregating from an unknown type returns 400."""
-        resp = await client.get(
-            "/api/v1/reports/cost-treemap",
-            params={
-                "type": "Application",
-                "aggregate": ["DoesNotExist:costTotalAnnual"],
-            },
-            headers=auth_headers(env["admin"]),
-        )
-        assert resp.status_code == 400
+    async def test_a_retired_cards_history_row_does_not_resurrect_it_for_a_past_year(
+        self, client, db, env
+    ):
+        from app.models.card_cost_history import CardCostHistory
 
-    async def test_cost_treemap_aggregate_malformed_spec_400(self, client, db, env):
-        """Malformed aggregate spec (no colon) returns 400."""
-        resp = await client.get(
-            "/api/v1/reports/cost-treemap",
-            params={
-                "type": "Application",
-                "aggregate": ["bogus"],
-            },
-            headers=auth_headers(env["admin"]),
-        )
-        assert resp.status_code == 400
-
-    async def test_cost_treemap_parent_card_id_filters_to_related(self, client, db, env):
-        """parent_card_id restricts the result to cards related to that parent.
-
-        Powers the treemap drill-down: clicking a parent rectangle (e.g. an
-        Application) re-queries with ``type=ITComponent`` and the parent's id
-        to reveal the components contributing to that parent's roll-up.
-        """
         admin = env["admin"]
-        # ITComponent + app_to_itc relation already exist in the env fixture.
-        parent = await create_card(db, card_type="Application", name="ERP", user_id=admin.id)
-        other_parent = await create_card(db, card_type="Application", name="CRM", user_id=admin.id)
-        comp1 = await create_card(
+        app1 = await create_card(
             db,
-            card_type="ITComponent",
-            name="DB",
+            card_type="Application",
+            name="Old",
             user_id=admin.id,
-            attributes={"costTotalAnnual": 5000},
+            lifecycle={"active": "2018-01-01", "endOfLife": "2022-12-31"},
         )
-        comp2 = await create_card(
-            db,
-            card_type="ITComponent",
-            name="Web",
-            user_id=admin.id,
-            attributes={"costTotalAnnual": 3000},
+        db.add(
+            CardCostHistory(
+                card_id=app1.id, fiscal_year=2024, field_key="costTotalAnnual", value=500
+            )
         )
-        # comp3 belongs to the other parent — must be excluded.
-        comp3 = await create_card(
-            db,
-            card_type="ITComponent",
-            name="Cache",
-            user_id=admin.id,
-            attributes={"costTotalAnnual": 9999},
-        )
-        await create_relation(db, type_key="app_to_itc", source_id=parent.id, target_id=comp1.id)
-        # Reverse direction must also be picked up.
-        await create_relation(db, type_key="app_to_itc", source_id=comp2.id, target_id=parent.id)
-        await create_relation(
-            db, type_key="app_to_itc", source_id=other_parent.id, target_id=comp3.id
-        )
-
+        await db.flush()
         resp = await client.get(
             "/api/v1/reports/cost-treemap",
-            params={
-                "type": "ITComponent",
-                "cost_field": "costTotalAnnual",
-                "parent_card_id": str(parent.id),
-            },
+            params={"type": "Application", "fiscal_year": 2024},
             headers=auth_headers(admin),
         )
-        assert resp.status_code == 200
-        data = resp.json()
-        names = sorted(i["name"] for i in data["items"])
-        assert names == ["DB", "Web"]
-        assert data["total"] == 8000
+        assert resp.json()["items"] == []
 
 
 # ---------------------------------------------------------------------------

@@ -730,7 +730,9 @@ export function useExtensionFieldVisibilityProviders(): RegisteredFieldVisibilit
  * imported statically.
  */
 const LazyCardDetailSidePanel = React.lazy(() => import("@/components/CardDetailSidePanel"));
-const LazyReportShell = React.lazy(() => import("@/features/reports/ReportShell"));
+const LazyReportShell = React.lazy(() => import("@/features/reports/ReportShell")) as unknown as React.LazyExoticComponent<
+  React.ComponentType<ReportShellProps<"chart" | "table">>
+>;
 const LazyDependencyGraph = React.lazy(() => import("@/features/reports/LayeredDependencyView"));
 const LazyDiagramViewer = React.lazy(() => import("@/features/diagrams/DiagramViewer"));
 // SDK 1.14 — same lazy-wrapper treatment as CardDetailSidePanel: this panel
@@ -780,7 +782,7 @@ export function ExtensionProcessFlowPreview(props: {
   );
 }
 
-export function ExtensionReportShell(props: ReportShellProps) {
+export function ExtensionReportShell(props: ReportShellProps<"chart" | "table">) {
   return (
     <React.Suspense fallback={null}>
       <LazyReportShell {...props} />
