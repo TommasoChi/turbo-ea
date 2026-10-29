@@ -14,7 +14,6 @@ from sqlalchemy.orm import aliased, selectinload
 from app.api.deps import get_current_user
 from app.database import get_db
 from app.models.card import Card
-from app.models.card_cost_history import CardCostHistory
 from app.models.card_type import CardType
 from app.models.event import Event
 from app.models.process_element import ProcessElement, ProcessElementOrganization
@@ -46,6 +45,7 @@ from app.services.card_read_scope import (
     scrub_event_payloads,
 )
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
+from app.services.cost_report import cards_with_cost
 from app.services.cost_value import cost_value
 from app.services.eol_service import (
     eol_status,
@@ -1444,38 +1444,13 @@ async def cost_treemap(
     fy_start = await get_fiscal_year_start(db)
     fy = current_fiscal_year(fy_start)
     read_scope = await CardReadScope.load(db, user)
-    result = await db.execute(
-        select(Card).where(
-            Card.type == type, Card.status == "ACTIVE", *read_scope.where(Card, mode="module")
-        )
-    )
-    sheets = [
-        c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
-    ]
-
     target_fy = fiscal_year if fiscal_year is not None else fy
-    history_by_card: dict[tuple[uuid.UUID, str], CardCostHistory] = {}
-    if target_fy != fy and sheets:
-        hist_result = await db.execute(
-            select(CardCostHistory).where(
-                CardCostHistory.card_id.in_([c.id for c in sheets]),
-                CardCostHistory.fiscal_year == target_fy,
-                CardCostHistory.field_key == cost_field,
-            )
-        )
-        history_by_card = {(row.card_id, row.field_key): row for row in hist_result.scalars().all()}
+    sheets = await cards_with_cost(db, read_scope, type, cost_field, target_fy, fy, fy_start)
 
     items: list[dict] = []
     total = 0.0
 
-    for card in sheets:
-        if target_fy == fy:
-            cost = cost_value((card.attributes or {}).get(cost_field))
-        else:
-            history = history_by_card.get((card.id, cost_field))
-            cost = history.value if history is not None else 0.0
-        if not cost:
-            continue
+    for card, cost in sheets:
         items.append(
             {
                 "id": str(card.id),
@@ -1502,7 +1477,7 @@ async def cost_treemap(
         grp_map = {str(g.id): g.name for g in grp_sheets}
 
         # Get relations
-        sheet_ids = [card.id for card in sheets]
+        sheet_ids = [card.id for card, _ in sheets]
         grp_ids = [g.id for g in grp_sheets]
         rels_result = await db.execute(
             select(Relation).where(
@@ -1577,37 +1552,8 @@ async def cost_sankey(
     read_scope = await CardReadScope.load(db, user)
 
     async def costed_cards(type_key: str) -> dict[uuid.UUID, tuple[str, float]]:
-        result = await db.execute(
-            select(Card).where(
-                Card.type == type_key,
-                Card.status == "ACTIVE",
-                *read_scope.where(Card, mode="module"),
-            )
-        )
-        live_cards = [
-            c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
-        ]
-        history_by_card: dict[uuid.UUID, CardCostHistory] = {}
-        if target_fy != fy and live_cards:
-            hist_result = await db.execute(
-                select(CardCostHistory).where(
-                    CardCostHistory.card_id.in_([c.id for c in live_cards]),
-                    CardCostHistory.fiscal_year == target_fy,
-                    CardCostHistory.field_key == cost_field,
-                )
-            )
-            history_by_card = {row.card_id: row for row in hist_result.scalars().all()}
-
-        out = {}
-        for c in live_cards:
-            if target_fy == fy:
-                cost = cost_value((c.attributes or {}).get(cost_field))
-            else:
-                history = history_by_card.get(c.id)
-                cost = history.value if history is not None else 0.0
-            if cost:
-                out[c.id] = (c.name, cost)
-        return out
+        rows = await cards_with_cost(db, read_scope, type_key, cost_field, target_fy, fy, fy_start)
+        return {c.id: (c.name, cost) for c, cost in rows}
 
     apps = await costed_cards("Application")
     itcs = await costed_cards("ITComponent")

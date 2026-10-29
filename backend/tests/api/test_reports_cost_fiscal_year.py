@@ -12,11 +12,13 @@ from __future__ import annotations
 import pytest
 
 from app.models.app_settings import AppSettings
+from app.models.card_cost_history import CardCostHistory
 from app.services.fiscal_year import current_fiscal_year
 from tests.conftest import (
     auth_headers,
     create_card,
     create_card_type,
+    create_relation,
     create_relation_type,
     create_role,
     create_user,
@@ -169,6 +171,96 @@ class TestCostEndpointCurrentFiscalYear:
         assert data["total"] == 200
         assert data["fiscal_year"] == THIS_YEAR
         assert data["fiscal_year_start"] == 1
+
+
+async def _hist(db, card, year, value):
+    db.add(
+        CardCostHistory(card_id=card.id, fiscal_year=year, field_key="costTotalAnnual", value=value)
+    )
+    await db.flush()
+
+
+async def _sankey(client, env, **params):
+    resp = await client.get(
+        "/api/v1/reports/cost-sankey", params=params, headers=auth_headers(env["admin"])
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def _app_itc_pair(db, app_lifecycle=None, itc_lifecycle=None):
+    """An Application and an ITComponent linked by relAppToITC, both costed 100 now."""
+    app = await _app(db, "App", 100, app_lifecycle)
+    itc = await _app(db, "ITC", 100, itc_lifecycle, card_type="ITComponent")
+    await create_relation(db, type_key="relAppToITC", source_id=app.id, target_id=itc.id)
+    return app, itc
+
+
+class TestPastAndForecastYearsListCardsWithARecordedCost:
+    async def test_a_retired_card_with_history_appears_in_that_past_year_treemap(
+        self, client, db, env
+    ):
+        retired = await _app(db, "Retired", 0, {"endOfLife": _d(THIS_YEAR - 1)})
+        await _hist(db, retired, THIS_YEAR - 2, 700)
+
+        data = await _treemap(client, env, fiscal_year=THIS_YEAR - 2)
+        assert _names(data) == ["Retired"]
+        assert data["total"] == 700
+        assert data["fiscal_year"] == THIS_YEAR - 2
+        assert (await _treemap(client, env))["items"] == []
+
+    async def test_a_card_active_from_next_year_appears_in_the_forecast_year_treemap(
+        self, client, db, env
+    ):
+        upcoming = await _app(db, "Upcoming", 0, {"active": _d(THIS_YEAR + 1, 1, 1)})
+        await _hist(db, upcoming, THIS_YEAR + 1, 300)
+
+        data = await _treemap(client, env, fiscal_year=THIS_YEAR + 1)
+        assert _names(data) == ["Upcoming"]
+        assert data["total"] == 300
+
+    async def test_the_current_year_is_unchanged_treemap(self, client, db, env):
+        await _app(db, "Retired", 1000, {"endOfLife": _d(THIS_YEAR - 1)})
+        running = await _app(db, "Running", 200)
+        await _hist(db, running, THIS_YEAR, 999)  # history is not read for the current year
+
+        data = await _treemap(client, env, fiscal_year=THIS_YEAR)
+        assert _names(data) == ["Running"]
+        assert data["total"] == 200
+
+    async def test_a_retired_card_with_history_appears_in_that_past_year_sankey(
+        self, client, db, env
+    ):
+        app, itc = await _app_itc_pair(
+            db, {"endOfLife": _d(THIS_YEAR - 1)}, {"endOfLife": _d(THIS_YEAR - 1)}
+        )
+        await _hist(db, app, THIS_YEAR - 2, 40)
+        await _hist(db, itc, THIS_YEAR - 2, 60)
+
+        data = await _sankey(client, env, fiscal_year=THIS_YEAR - 2)
+        assert sorted(n["name"] for n in data["nodes"]) == ["App", "ITC"]
+        assert data["total"] == 60
+        assert (await _sankey(client, env))["nodes"] == []
+
+    async def test_a_card_active_from_next_year_appears_in_the_forecast_year_sankey(
+        self, client, db, env
+    ):
+        later = {"active": _d(THIS_YEAR + 1, 1, 1)}
+        app, itc = await _app_itc_pair(db, later, later)
+        await _hist(db, app, THIS_YEAR + 1, 40)
+        await _hist(db, itc, THIS_YEAR + 1, 60)
+
+        data = await _sankey(client, env, fiscal_year=THIS_YEAR + 1)
+        assert sorted(n["name"] for n in data["nodes"]) == ["App", "ITC"]
+        assert data["total"] == 60
+
+    async def test_the_current_year_is_unchanged_sankey(self, client, db, env):
+        await _app_itc_pair(db)
+        await _app_itc_pair(db, {"endOfLife": _d(THIS_YEAR - 1)}, {"endOfLife": _d(THIS_YEAR - 1)})
+
+        data = await _sankey(client, env, fiscal_year=THIS_YEAR)
+        assert sorted(n["name"] for n in data["nodes"]) == ["App", "ITC"]
+        assert data["total"] == 100
 
 
 @pytest.mark.parametrize("report", ["cost-treemap", "cost-sankey"])

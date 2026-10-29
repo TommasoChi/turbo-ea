@@ -1322,9 +1322,11 @@ class TestCostTreemap:
         )
         assert resp.json()["items"] == []
 
-    async def test_a_retired_cards_history_row_does_not_resurrect_it_for_a_past_year(
+    async def test_a_retired_card_with_a_history_row_appears_in_that_past_year(
         self, client, db, env
     ):
+        """Superseded rule: a year other than the current one lists every card with a
+        recorded cost for it, whatever its lifecycle (cost-report fiscal-year picker spec)."""
         from app.models.card_cost_history import CardCostHistory
 
         admin = env["admin"]
@@ -1346,7 +1348,7 @@ class TestCostTreemap:
             params={"type": "Application", "fiscal_year": 2024},
             headers=auth_headers(admin),
         )
-        assert resp.json()["items"] == []
+        assert [(i["name"], i["cost"]) for i in resp.json()["items"]] == [("Old", 500)]
 
 
 # ---------------------------------------------------------------------------
