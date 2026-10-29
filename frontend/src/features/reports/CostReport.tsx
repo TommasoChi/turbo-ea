@@ -50,7 +50,7 @@ import {
   pickGroupableFields,
   resolveFacetField,
 } from "@/lib/fieldFacets";
-import { fiscalYearLabel } from "@/lib/fiscalYear";
+import { costFiscalYearName, costFiscalYearOptions } from "@/lib/fiscalYear";
 import { formatFieldValue, EMPTY_VALUE, type FieldMeta } from "@/lib/cardDisplayFields";
 import { costValue } from "@/lib/costValue";
 import type { FieldDef } from "@/types";
@@ -68,8 +68,10 @@ interface CostItem {
 interface CostTreemapResponse {
   items: CostItem[];
   total: number;
-  /** The current fiscal year — the only one the report shows. */
+  /** The fiscal year the figures are for (the one requested). */
   fiscal_year?: number;
+  /** The fiscal year that contains today, whatever year was requested. */
+  current_fiscal_year?: number;
   /** Month (1-12) the workspace's fiscal year starts in. */
   fiscal_year_start?: number;
 }
@@ -91,6 +93,7 @@ interface CostSankeyResponse {
   links: SankeyLink[];
   total: number;
   fiscal_year?: number;
+  current_fiscal_year?: number;
   fiscal_year_start?: number;
 }
 
@@ -303,10 +306,31 @@ export default function CostReport() {
   // request shape byte-for-byte); a picked value asks the server for a past
   // year's card_cost_history row instead of live attributes.
   const [fiscalYearParam, setFiscalYearParam] = useState<number | null>(null);
-  const fiscalYearOptions = useMemo(() => {
-    const current = fiscalYear?.year ?? new Date().getFullYear();
-    return Array.from({ length: 5 }, (_, i) => current - i);
-  }, [fiscalYear]);
+  // The fiscal year containing today, from the server. NOT `fiscalYear.year`,
+  // which is the requested year: anchoring the picker on it re-centred the list
+  // every time a past year was picked.
+  const [currentFiscalYear, setCurrentFiscalYear] = useState(() =>
+    new Date().getFullYear(),
+  );
+  const fiscalYearOptions = useMemo(
+    () => costFiscalYearOptions(currentFiscalYear),
+    [currentFiscalYear],
+  );
+  // The trend chart still takes plain years: current and the four before it.
+  const trendYears = useMemo(
+    () => Array.from({ length: 5 }, (_, i) => currentFiscalYear - i),
+    [currentFiscalYear],
+  );
+  // Learn the current year from a response, and fall back to "Current" when the
+  // requested year is that one or is not among the offered years (a saved
+  // report from an earlier year).
+  const adoptCurrentFiscalYear = useCallback((cy: number | undefined) => {
+    if (cy == null) return;
+    setCurrentFiscalYear(cy);
+    setFiscalYearParam((p) =>
+      p != null && !costFiscalYearOptions(cy).some((o) => o.value === p) ? null : p,
+    );
+  }, []);
 
   // Narrow the treemap to chosen cards and everything beneath them (#954).
   const scope = useCardScope({ typeKey: cardTypeKey, enabled: true });
@@ -450,6 +474,7 @@ export default function CostReport() {
         setSankeyData(r);
         setRawItems(null);
         setFiscalYear((prev) => fiscalYearOf(r) ?? prev);
+        adoptCurrentFiscalYear(r.current_fiscal_year);
       } else {
         const p = new URLSearchParams({
           type: cardTypeKey,
@@ -464,6 +489,7 @@ export default function CostReport() {
         setRawItems(r.items);
         setSankeyData(null);
         setFiscalYear((prev) => fiscalYearOf(r) ?? prev);
+        adoptCurrentFiscalYear(r.current_fiscal_year);
       }
     },
     [cardTypeKey, costField, groupBy, view, canViewCostsGlobally, fiscalYearParam],
@@ -497,7 +523,11 @@ export default function CostReport() {
   // it has no prior year to diff against, so the YoY fetch is skipped rather
   // than sent for a year outside the picker's own range.
   const minFiscalYearOption = useMemo(
-    () => (fiscalYearOptions.length > 0 ? Math.min(...fiscalYearOptions) : null),
+    () =>
+      Math.min(
+        // "Current" (null) is not a requestable year: it is never the earliest.
+        ...fiscalYearOptions.flatMap((o) => (o.value == null ? [] : [o.value])),
+      ),
     [fiscalYearOptions],
   );
 
@@ -510,7 +540,6 @@ export default function CostReport() {
         !canViewCostsGlobally ||
         view !== "table" ||
         fiscalYearParam == null ||
-        minFiscalYearOption == null ||
         fiscalYearParam <= minFiscalYearOption
       ) {
         setPriorYearCosts(new Map());
@@ -585,7 +614,7 @@ export default function CostReport() {
     if (fiscalYear) {
       params.push({
         label: t("cost.fiscalYear"),
-        value: fiscalYearLabel(fiscalYear.year, fiscalYear.start, t),
+        value: costFiscalYearName(fiscalYear.year, currentFiscalYear),
       });
     }
     if (costFields.length > 1 && view !== "sankey") {
@@ -617,6 +646,7 @@ export default function CostReport() {
     view,
     effectiveScopeIds,
     fiscalYear,
+    currentFiscalYear,
     t,
     typeLabel,
   ]);
@@ -879,6 +909,8 @@ export default function CostReport() {
             size="small"
             label={t("cost.fiscalYear")}
             value={fiscalYearParam ?? ""}
+            // "" is the "Current" entry; without this MUI shows it as blank.
+            slotProps={{ select: { displayEmpty: true } }}
             onChange={(e) =>
               setFiscalYearParam(
                 e.target.value === "" ? null : Number(e.target.value),
@@ -886,10 +918,9 @@ export default function CostReport() {
             }
             sx={{ minWidth: 130 }}
           >
-            <MenuItem value="">{t("cost.fiscalYearPickerCurrent")}</MenuItem>
-            {fiscalYearOptions.map((y) => (
-              <MenuItem key={y} value={y}>
-                {y}
+            {fiscalYearOptions.map((o) => (
+              <MenuItem key={o.label} value={o.value ?? ""}>
+                {o.label}
               </MenuItem>
             ))}
           </TextField>
@@ -900,7 +931,7 @@ export default function CostReport() {
                 variant="outlined"
                 icon={<MaterialSymbol icon="calendar_month" size={18} />}
                 label={t("cost.fiscalYearIndicator", {
-                  fy: fiscalYearLabel(fiscalYear.year, fiscalYear.start, t),
+                  fy: costFiscalYearName(fiscalYear.year, currentFiscalYear),
                 })}
                 data-testid="cost-fiscal-year"
               />
@@ -952,7 +983,7 @@ export default function CostReport() {
               <Box sx={{ mb: 2 }}>
                 <CostTrendChart
                   cardTypeKey={cardTypeKey}
-                  years={fiscalYearOptions}
+                  years={trendYears}
                 />
               </Box>
             )}
