@@ -167,6 +167,18 @@ async def _validate_view(
     return v, _VIEW_CARD_TYPES[v]
 
 
+def _uuid_or_none(value: object) -> uuid.UUID | None:
+    """A visitor-supplied id, or None when it is not one (the filter is then ignored)."""
+    try:
+        return uuid.UUID(str(value).strip())
+    except ValueError:
+        return None
+
+
+def _uuids_in(values: list[str]) -> list[uuid.UUID]:
+    return [found for v in values if (found := _uuid_or_none(v))]
+
+
 def _normalise_filters(filters: object, view: str) -> object:
     """A portal's ``filters`` as stored: ``card_filters`` (the shared card
     filter set) only on a card-list portal, only in its canonical shape and
@@ -1018,7 +1030,7 @@ async def get_public_portal_cards(
 
     # Apply user-supplied search
     if search:
-        match = card_search_filter(search)
+        match = card_search_filter(search, in_description=visibility.shows_built_in("description"))
         q = q.where(match)
         count_q = count_q.where(match)
 
@@ -1027,11 +1039,10 @@ async def get_public_portal_cards(
         q = q.where(Card.subtype == subtype)
         count_q = count_q.where(Card.subtype == subtype)
 
-    # Filter by tags
-    if tag_ids:
-        ids = [t.strip() for t in tag_ids.split(",") if t.strip()]
-        if ids:
-            tag_uuids = [uuid.UUID(tid) for tid in ids]
+    # Filter by tags (a hidden tag's cards would be revealed by its filter)
+    if tag_ids and visibility.shows_built_in("tags"):
+        tag_uuids = _uuids_in(tag_ids.split(","))
+        if tag_uuids:
             tagged_fs = select(CardTag.card_id).where(CardTag.tag_id.in_(tag_uuids))
             q = q.where(Card.id.in_(tagged_fs))
             count_q = count_q.where(Card.id.in_(tagged_fs))
@@ -1051,8 +1062,7 @@ async def get_public_portal_cards(
             pass  # Ignore malformed attr_filters
 
     # Filter by relationship to a specific card (single, legacy)
-    if related_type in visibility.relation_types and related_id:
-        rid = uuid.UUID(related_id)
+    if related_type in visibility.relation_types and (rid := _uuid_or_none(related_id)):
         related_fs = (
             select(Relation.target_id)
             .where(
