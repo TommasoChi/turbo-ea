@@ -121,6 +121,10 @@ Author **English only**: `frontend/src/i18n/locales/en/*.json`, the English `lab
 ### VAPT (Active Security Testing)
 - **Run a VAPT pass automatically whenever a PR bumps `/VERSION` and touches permission/auth/session code, or on explicit request.** Testing-your-own-application only (this repo, this user's local deploy instance — never a third-party or production target). → `.claude/rules/vapt.md`
 
+### Release Security Audit
+- **Run the `security-audit` skill (project-scoped, `.claude/skills/security-audit/`) whenever a release tag is cut on this repo, or on explicit request.** Multi-phase, multi-agent audit — expect it to take several minutes and real token spend; this is a procedure to run deliberately before a release ships, not a background check. No automatic hook triggers it (git tag/push events outside Claude Code are invisible to hooks, and a long multi-agent run has no safe pass/fail to gate a command on) — treat "we're cutting a tag" as the cue to invoke it yourself in the session doing the release.
+- **Also run a full-repo `ponytail-audit` on the same cadence — a release tag, or on explicit request** — never per-PR (the per-PR `ponytail-review` diff gate above already covers that). Show every finding, then fix every Must and Should before the release ships.
+
 ### Pull Request Conventions
 - **Always use the PR template** at `.github/pull_request_template.md` when creating pull requests. Do not use a custom format — fill in the template sections exactly as defined.
 - The PR template has four required sections: **Summary**, **Changes**, **Test Plan**, and **Checklist**. All must be completed.
@@ -146,6 +150,7 @@ Author **English only**: `frontend/src/i18n/locales/en/*.json`, the English `lab
 - CI enforces this via `.github/workflows/version-check.yml`: any PR that touches `VERSION` is failed unless `CHANGELOG.md` has a matching `## [<version>]` heading. This prevents the Publish-GitHub-Release workflow from breaking later at tag time.
 
 ### Testing Conventions
+- **Before `finishing-a-development-branch` / opening a PR, run a `ponytail-review` pass on the whole branch diff — once, not per plan task.** Apply every Must/Should fix it finds (with its own test if the fix changes behavior), then re-run the suite. This catches bloat/lean issues the correctness-focused final branch reviewer doesn't target; it is separate from, and runs after, that reviewer.
 - **Every new feature and every bug fix must include tests. This is a requirement, not a preference.** A change without tests is not finished: do not call it done and do not open a PR for it. What that means for each kind of change:
   - **Bug fix**: a regression test that fails on the code before the fix and passes after it. Reproduce the bug in a test first, then fix it.
   - **New or changed backend endpoint**: an API test under `backend/tests/api/` covering the success path, the permission denial (403, or 404 where `CardReadScope` hides the card) and at least one rejected input.
