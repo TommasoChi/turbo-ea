@@ -1154,7 +1154,6 @@ async def lifespan(app: FastAPI):
             pass
 
 
-# ── H6: Conditionally disable OpenAPI docs in production ──
 async def validation_error_handler(_request: Request, exc: RequestValidationError):
     """Default 422 body, except a non-finite float echoed back as its text.
 
@@ -1168,6 +1167,7 @@ async def validation_error_handler(_request: Request, exc: RequestValidationErro
     return JSONResponse(status_code=422, content={"detail": errors})
 
 
+# ── H6: Conditionally disable OpenAPI docs in production ──
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=APP_VERSION,

@@ -593,8 +593,6 @@ async def me(
         raw_auth[7:] if raw_auth.startswith("Bearer ") else request.cookies.get("access_token", "")
     )
     if raw_token:
-        from app.core.security import decode_access_token
-
         payload = decode_access_token(raw_token)
         if payload:
             impersonated_role_key = payload.get("impersonated_role")
@@ -690,8 +688,6 @@ async def stop_impersonating(
     JWT without the claim so all subsequent checks revert to the user's
     real role.
     """
-    from app.core.security import decode_access_token
-
     raw_auth = request.headers.get("Authorization", "")
     raw_token = (
         raw_auth[7:] if raw_auth.startswith("Bearer ") else request.cookies.get("access_token", "")
