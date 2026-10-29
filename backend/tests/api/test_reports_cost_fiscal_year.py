@@ -282,3 +282,28 @@ async def test_the_sanity_bounds_of_the_fiscal_year_are_accepted(client, db, env
         headers=auth_headers(env["admin"]),
     )
     assert resp.status_code == 200
+
+
+@pytest.mark.parametrize("start", [1, 10])
+@pytest.mark.parametrize("offset", [None, -2, 1])
+async def test_the_response_names_the_current_year_even_when_another_is_requested(
+    client, db, env, start, offset
+):
+    """`fiscal_year` is the requested year; `current_fiscal_year` is always today's."""
+    await _set_fiscal_year_start(db, start)
+    today = current_fiscal_year(start)
+    await _app_itc_pair(db)
+    params = {} if offset is None else {"fiscal_year": today + offset}
+    expected_requested = today if offset is None else today + offset
+
+    treemap = await _treemap(client, env, **params)
+    full_sankey = await _sankey(client, env, **params)
+    # A past/forecast year with no recorded cost takes the sankey's early return.
+    empty_sankey = await _sankey(client, env, fiscal_year=today - 3)
+
+    for data in (treemap, full_sankey):
+        assert data["current_fiscal_year"] == today
+        assert data["fiscal_year"] == expected_requested
+    assert empty_sankey["nodes"] == []
+    assert empty_sankey["current_fiscal_year"] == today
+    assert empty_sankey["fiscal_year"] == today - 3

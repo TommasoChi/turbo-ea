@@ -1513,6 +1513,7 @@ async def cost_treemap(
         "total": total,
         "groups": groups,
         "fiscal_year": target_fy,
+        "current_fiscal_year": fy,
         "fiscal_year_start": fy_start,
     }
 
@@ -1563,6 +1564,7 @@ async def cost_sankey(
             "links": [],
             "total": 0.0,
             "fiscal_year": target_fy,
+            "current_fiscal_year": fy,
             "fiscal_year_start": fy_start,
         }
 
@@ -1640,6 +1642,7 @@ async def cost_sankey(
         "links": links,
         "total": total,
         "fiscal_year": target_fy,
+        "current_fiscal_year": fy,
         "fiscal_year_start": fy_start,
     }
 
