@@ -4707,10 +4707,13 @@
             "type": "string"
           },
           "fiscal_year": {
+            "maximum": 2200.0,
+            "minimum": 1900.0,
             "title": "Fiscal Year",
             "type": "integer"
           },
           "value": {
+            "minimum": 0.0,
             "title": "Value",
             "type": "number"
           }
@@ -24191,6 +24194,8 @@
             "name": "fiscal_year",
             "required": true,
             "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
               "title": "Fiscal Year",
               "type": "integer"
             }
@@ -34747,6 +34752,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maximum": 2200,
+                  "minimum": 1900,
                   "type": "integer"
                 },
                 {
@@ -34831,6 +34838,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maximum": 2200,
+                  "minimum": 1900,
                   "type": "integer"
                 },
                 {

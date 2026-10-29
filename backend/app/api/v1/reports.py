@@ -53,7 +53,12 @@ from app.services.eol_service import (
     find_cycle,
     manual_eol_status,
 )
-from app.services.fiscal_year import current_fiscal_year, get_fiscal_year_start
+from app.services.fiscal_year import (
+    MAX_FISCAL_YEAR,
+    MIN_FISCAL_YEAR,
+    current_fiscal_year,
+    get_fiscal_year_start,
+)
 from app.services.kpi_snapshot_service import (
     compute_trend_block,
     get_comparison_snapshot,
@@ -1417,7 +1422,7 @@ async def cost_treemap(
     type: str = Query("Application"),
     cost_field: str = Query("costTotalAnnual"),
     group_by: str | None = Query(None),
-    fiscal_year: int | None = Query(None),
+    fiscal_year: int | None = Query(None, ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR),
 ):
     """Cost treemap: items with cost, optionally grouped by a related type.
 
@@ -1543,7 +1548,7 @@ async def cost_sankey(
     user: User = Depends(get_current_user),
     cost_field: str = Query("costTotalAnnual"),
     group_by: str | None = Query(None),
-    fiscal_year: int | None = Query(None),
+    fiscal_year: int | None = Query(None, ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR),
 ):
     """Cost flow between Application and ITComponent, via app_to_itc relations.
 

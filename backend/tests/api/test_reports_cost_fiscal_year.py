@@ -169,3 +169,24 @@ class TestCostEndpointCurrentFiscalYear:
         assert data["total"] == 200
         assert data["fiscal_year"] == THIS_YEAR
         assert data["fiscal_year_start"] == 1
+
+
+@pytest.mark.parametrize("report", ["cost-treemap", "cost-sankey"])
+@pytest.mark.parametrize("year", ["99999999999", "2147483648", "0", "-1", "1899", "2201"])
+async def test_an_absurd_fiscal_year_is_422_not_a_500(client, db, env, report, year):
+    resp = await client.get(
+        f"/api/v1/reports/{report}?type=Application&fiscal_year={year}",
+        headers=auth_headers(env["admin"]),
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("report", ["cost-treemap", "cost-sankey"])
+@pytest.mark.parametrize("year", [1900, 2200])
+async def test_the_sanity_bounds_of_the_fiscal_year_are_accepted(client, db, env, report, year):
+    """Reads have no five-year window: a saved report on an old year is empty, not an error."""
+    resp = await client.get(
+        f"/api/v1/reports/{report}?type=Application&fiscal_year={year}",
+        headers=auth_headers(env["admin"]),
+    )
+    assert resp.status_code == 200

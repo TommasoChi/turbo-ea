@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Path
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,12 @@ from app.models.card_type import CardType
 from app.models.user import User
 from app.services.card_read_scope import require_card_readable
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
+from app.services.fiscal_year import (
+    MAX_FISCAL_YEAR,
+    MIN_FISCAL_YEAR,
+    fiscal_year_window,
+    get_fiscal_year_start,
+)
 from app.services.permission_service import PermissionService
 
 router = APIRouter(tags=["cost-history"])
@@ -23,9 +29,9 @@ _SAFE_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]{0,63}$")
 
 
 class CostHistoryRow(BaseModel):
-    fiscal_year: int
+    fiscal_year: int = Field(ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR)
     field_key: str
-    value: float
+    value: float = Field(ge=0, allow_inf_nan=False)
 
 
 class CostHistoryList(BaseModel):
@@ -80,6 +86,9 @@ async def upsert_cost_history(
     user: User = Depends(get_current_user),
 ):
     card = await _load_card_for_edit(db, user, card_id)
+    oldest, newest = fiscal_year_window(await get_fiscal_year_start(db))
+    if not oldest <= body.fiscal_year <= newest:
+        raise HTTPException(422, f"fiscal_year must be between {oldest} and {newest}")
     if not _SAFE_KEY_RE.match(body.field_key):
         raise HTTPException(400, f"Invalid field_key: {body.field_key!r}")
     cost_keys = await _cost_field_keys_for_card(db, card)
@@ -112,8 +121,8 @@ async def upsert_cost_history(
 @router.delete("/cards/{card_id}/cost-history/{fiscal_year}/{field_key}", status_code=204)
 async def delete_cost_history(
     card_id: str,
-    fiscal_year: int,
-    field_key: str,
+    fiscal_year: int = Path(ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR),
+    field_key: str = Path(),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
