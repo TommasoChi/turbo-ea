@@ -166,15 +166,32 @@ The **Cost Report** provides financial analysis of your technology landscape:
 
 ### Fiscal year
 
-Costs are annual, so the report shows them for **the current fiscal year** — a chip in the toolbar names it, for example **Current fiscal year: FY 2026** (or *FY 2025–2026* when your fiscal year does not start in January). A card's annual cost counts **in full** when the current fiscal year falls between the one the card goes **Active** in and the one its **End of Life** falls in, both included. Nothing is pro-rated: an application retiring in November still carries its whole annual cost this year. A card whose End of Life fell in an earlier fiscal year is left out.
+Costs are annual, so the report is built for one **fiscal year** at a time. A **Fiscal year** picker in the toolbar offers six entries, newest first:
 
-Missing lifecycle dates are read as in the time-travel reports:
+| Entry | What it shows |
+|---|---|
+| **FY27 - Forecast** | Next fiscal year, from figures typed in by hand (see below). |
+| **FY26 - Current** | The current fiscal year, from the cards' live cost attributes. This is the default. |
+| **FY25** … **FY22** | The four fiscal years before the current one, from the costs recorded for them. |
 
-- **No Active date, but a Plan or Phase In date** — the card is still planned and is not counted.
-- **No End of Life date** — the card counts from the year it goes Active.
-- **No lifecycle dates at all** — the card counts.
+A fiscal year is named **FY** plus the last two digits of the year it **ends** in, whatever month your fiscal year starts in: a fiscal year running from July 2025 to June 2026 is **FY26**. A chip in the toolbar repeats the selection, for example **Fiscal year: FY26 - Current**. *Current* and *Forecast* are not translated.
 
-The rule applies to everything on the page — the totals, the treemap, the table, **Cost Source** roll-ups (a retired IT Component stops adding to its Application's total) and drill-downs — and the fiscal year is printed in the report header. There is no picker for other years: a card carries one annual figure, and real costs change from one year to the next, so the same number shown against another year would mislead. An administrator sets the month the fiscal year starts in under [Settings → General](../admin/settings.md#fiscal-year-start).
+**Forecast figures are entered by hand.** Open a card, go to its cost history and type the planned cost for next fiscal year, the same way you record a past year. Only the **next** fiscal year can be recorded as a forecast, and recording it needs the same permission as recording a past year. When that year becomes the current one, the report reads the live attributes instead, and the card's live figure replaces what was typed.
+
+#### Which cards appear
+
+- **Current year** — A card's annual cost counts **in full** when the current fiscal year falls between the one the card goes **Active** in and the one its **End of Life** falls in, both included. Nothing is pro-rated: an application retiring in November still carries its whole annual cost this year. A card whose End of Life fell in an earlier fiscal year is left out. Missing lifecycle dates are read as in the time-travel reports:
+    - **No Active date, but a Plan or Phase In date** — the card is still planned and is not counted.
+    - **No End of Life date** — the card counts from the year it goes Active.
+    - **No lifecycle dates at all** — the card counts.
+- **Any other year (past or forecast)** — Every active card that has a **cost recorded for that year** appears, even if it has been retired since or only becomes active later. A card with no recorded cost for that year does not appear.
+- **Archived cards** never appear, in any year.
+
+The rule applies to everything on the page — the totals, the treemap, the table, **Cost Source** roll-ups and drill-downs — and the selected fiscal year is printed in the report header.
+
+When you pick a year other than **Current**, a **trend chart** shows the cost across the current year and the four before it. While **Forecast** is the selected year, the chart also shows a bar for it.
+
+An administrator sets the month the fiscal year starts in under [Settings → General](../admin/settings.md#fiscal-year-start).
 
 ### Cost Source
 

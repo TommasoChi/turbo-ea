@@ -5,6 +5,18 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.179.10] - 2026-10-29
+
+### Added
+
+- **The cost report's fiscal-year picker offers a Forecast year.** Next fiscal year can be picked next to the current and past ones, and the trend chart adds a forecast bar while it is selected.
+- **Fiscal years in the cost report are named `FY26 - Current`, `FY27 - Forecast`, `FY25`…** in the picker, the toolbar chip and the trend chart.
+
+### Changed
+
+- **A past or forecast year in the cost report lists every card with a cost recorded for it,** even if the card was retired since or is not yet active.
+- **A card's cost history now also accepts next fiscal year,** to enter a forecast.
+
 ## [2.179.9] - 2026-10-29
 
 ### Fixed
