@@ -142,3 +142,6 @@ deploy/terraform/**/*.tfvars
 frontend/playwright-report/
 frontend/test-results/
 frontend/e2e/.auth/
+
+# skills.sh canonical copy; Claude Code reads the tracked copy in .claude/skills/
+/.agents/
