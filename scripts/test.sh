@@ -107,5 +107,7 @@ export POSTGRES_PORT=5433
 export POSTGRES_USER=turboea
 export POSTGRES_PASSWORD=turboea
 export TEST_POSTGRES_DB=turboea_test
+# Windows Python defaults to the ANSI code page; the repo's text files are UTF-8.
+export PYTHONUTF8=1
 
 python -m pytest "${PYTEST_ARGS[@]}"

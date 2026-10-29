@@ -197,6 +197,29 @@ def test_workspace_upload_releases_the_request_session_before_spooling():
     )
 
 
+@pytest.mark.parametrize(
+    ("func", "call"),
+    [
+        ("suggest", "await suggest_metadata("),
+        ("portfolio_insights", "await generate_portfolio_insights("),
+    ],
+)
+def test_the_ai_routes_release_the_request_session_before_the_llm_call(func, call):
+    """Both endpoints run a web search and an LLM round-trip that takes seconds
+    to tens of seconds on a local Ollama. Neither service takes a session, so
+    the route's own ``get_db`` connection would sit idle in a transaction for the
+    whole call — a few concurrent users on a slow provider drain the pool of 30
+    and every other request queues behind them."""
+    body = _function_source("app/api/v1/ai_suggest.py", func)
+    call_at = body.find(call)
+    assert call_at != -1, f"{func} must be the one running the AI call"
+    assert body.rfind("await db.commit()", 0, call_at) != -1, (
+        f"{func} must `await db.commit()` before {call[6:-1]} — the commit hands "
+        "the connection back, and get_db is a yield-dependency that would "
+        "otherwise pin it for the whole web-search + LLM round-trip."
+    )
+
+
 def test_eol_card_status_releases_the_request_session_first():
     """``GET /eol/card-status`` resolves EOL data from endoflife.date.
 

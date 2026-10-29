@@ -5,6 +5,13 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.179.8] - 2026-10-29
+
+### Fixed
+
+- **AI description suggestions and portfolio insights no longer keep a database connection busy while they wait for the AI provider.** A slow local model could hold several connections for tens of seconds each and make every other request queue behind them.
+- **The cost trend chart now cancels the requests of the previous selection** when you change the fiscal years, instead of letting them finish in the background.
+
 ## [2.179.7] - 2026-10-23
 
 ### Added

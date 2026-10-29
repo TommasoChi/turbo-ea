@@ -54,30 +54,13 @@ def _get_ai_config(general: dict) -> dict:
     }
 
 
-@router.post("/suggest", response_model=AiSuggestResponse)
-async def suggest(
-    body: AiSuggestRequest,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Generate AI-powered metadata suggestions for a card.
-
-    Uses a two-step pipeline: web search → local LLM extraction.
-    """
-    await PermissionService.require_permission(db, user, "ai.suggest")
-
-    # Load AI configuration
+async def _load_ai_config(db: AsyncSession) -> dict:
     result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
     row = result.scalar_one_or_none()
-    general = (row.general_settings if row else None) or {}
-    ai_cfg = _get_ai_config(general)
+    return _get_ai_config((row.general_settings if row else None) or {})
 
-    if not ai_cfg["enabled"]:
-        raise HTTPException(
-            status_code=400,
-            detail="AI suggestions are not enabled. An admin must configure this in Settings.",
-        )
 
+def _require_usable_provider(ai_cfg: dict) -> None:
     if not ai_cfg["provider_url"] or not ai_cfg["model"]:
         raise HTTPException(
             status_code=400,
@@ -91,6 +74,30 @@ async def suggest(
             detail="API key is required for commercial LLM providers.",
         )
 
+
+@router.post("/suggest", response_model=AiSuggestResponse)
+async def suggest(
+    body: AiSuggestRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Generate AI-powered metadata suggestions for a card.
+
+    Uses a two-step pipeline: web search → local LLM extraction.
+    """
+    await PermissionService.require_permission(db, user, "ai.suggest")
+
+    # Load AI configuration
+    ai_cfg = await _load_ai_config(db)
+
+    if not ai_cfg["enabled"]:
+        raise HTTPException(
+            status_code=400,
+            detail="AI suggestions are not enabled. An admin must configure this in Settings.",
+        )
+
+    _require_usable_provider(ai_cfg)
+
     # Validate that the card type is enabled for AI suggestions
     if ai_cfg["enabled_types"] and body.type_key not in ai_cfg["enabled_types"]:
         raise HTTPException(
@@ -103,6 +110,9 @@ async def suggest(
     card_type = ct_result.scalar_one_or_none()
     if not card_type:
         raise HTTPException(status_code=404, detail=f"Card type '{body.type_key}' not found")
+
+    # Hand the connection back: the search + LLM call below holds no session.
+    await db.commit()
 
     try:
         result_data = await suggest_metadata(
@@ -144,10 +154,7 @@ async def portfolio_insights(
     await PermissionService.require_permission(db, user, "ai.portfolio_insights")
 
     # Load AI configuration
-    result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
-    row = result.scalar_one_or_none()
-    general = (row.general_settings if row else None) or {}
-    ai_cfg = _get_ai_config(general)
+    ai_cfg = await _load_ai_config(db)
 
     if not ai_cfg["portfolio_insights_enabled"]:
         raise HTTPException(
@@ -155,17 +162,7 @@ async def portfolio_insights(
             detail="AI portfolio insights are not enabled. An admin must enable this in Settings.",
         )
 
-    if not ai_cfg["provider_url"] or not ai_cfg["model"]:
-        raise HTTPException(
-            status_code=400,
-            detail="AI provider URL and model must be configured in Settings.",
-        )
-
-    if ai_cfg["provider_type"] in ("openai", "azure_openai", "anthropic") and not ai_cfg["api_key"]:
-        raise HTTPException(
-            status_code=400,
-            detail="API key is required for commercial LLM providers.",
-        )
+    _require_usable_provider(ai_cfg)
 
     # Load active EA principles
     principles_result = await db.execute(
@@ -182,6 +179,9 @@ async def portfolio_insights(
         }
         for p in principles_result.scalars().all()
     ]
+
+    # Hand the connection back: the LLM call below holds no session.
+    await db.commit()
 
     try:
         result_data = await generate_portfolio_insights(
@@ -218,10 +218,7 @@ async def ai_status(
 
     Returns the status without exposing secrets.
     """
-    result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
-    row = result.scalar_one_or_none()
-    general = (row.general_settings if row else None) or {}
-    ai_cfg = _get_ai_config(general)
+    ai_cfg = await _load_ai_config(db)
 
     # Check if user has the permission
     has_suggest_perm = await PermissionService.check_permission(db, user, "ai.suggest")
