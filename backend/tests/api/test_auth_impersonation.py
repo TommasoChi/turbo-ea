@@ -191,3 +191,25 @@ class TestImpersonationAuditStamp:
         assert event.data is not None
         assert event.data.get("impersonator_user_id") == str(admin.id)
         assert event.data.get("impersonated_role") == "member"
+
+
+class TestRefreshKeepsImpersonation:
+    async def test_refresh_keeps_the_impersonated_role(self, client, db):
+        await create_role(db, key="admin", permissions={"*": True})
+        await create_role(db, key="viewer", permissions=VIEWER_PERMISSIONS)
+        admin = await create_user(db, email="admin@test.com", role="admin")
+
+        resp = await client.post(
+            "/api/v1/auth/refresh", headers=_impersonating_headers(admin, "viewer")
+        )
+        assert resp.status_code == 200, resp.text
+        payload = decode_access_token(resp.json()["access_token"])
+        assert payload["role"] == "admin"
+        assert payload["impersonated_role"] == "viewer"
+
+    async def test_refresh_without_impersonation_carries_no_claim(self, client, db):
+        await create_role(db, key="admin", permissions={"*": True})
+        admin = await create_user(db, email="admin@test.com", role="admin")
+
+        resp = await client.post("/api/v1/auth/refresh", headers=auth_headers(admin))
+        assert "impersonated_role" not in decode_access_token(resp.json()["access_token"])
