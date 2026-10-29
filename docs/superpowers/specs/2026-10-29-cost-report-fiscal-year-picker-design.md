@@ -1,6 +1,6 @@
 # Cost report: fiscal-year picker, FY names and a forecast year
 
-**Spec status:** draft, on `fix/cost-report` (from `main` 2.179.9).
+**Spec status:** draft, on `fix/cost-report` (from `main` 2.179.9). Decisions below are the user's answers of 2026-10-29.
 
 ## Goal
 
@@ -44,8 +44,15 @@ years and the forecast year.
    lifecycle: a card retired since, or one that only becomes active next year, is included for the years
    it has a cost. A card with no recorded cost for the year does not appear (no cost, no row), as today.
    The current year keeps its rule: live attributes, and only cards live in the current fiscal year.
+   Archived cards never appear, in any year, as today.
 7. **Trend chart.** It shows the current year and the four past years; the forecast bar (`FY27 - Forecast`)
    is added **only when the forecast year is the one selected** in the picker. Its axis uses the new names.
+   The chart is displayed only when a year other than "Current" is selected, as today.
+8. **Year change.** When the forecast year becomes the current one, nothing special happens: the
+   current year is read from live attributes, and the card's history row for it is rewritten from them
+   on every save (`sync_current_fy_history`), so a hand-entered forecast gives way to the real figure.
+9. **Card cost-history editor.** Unchanged: it shows the year as a number. It accepts `current + 1`
+   because the `PUT` window now does; it does not mark the row as a forecast.
 
 ## Rules and allowed values
 
@@ -62,6 +69,9 @@ years and the forecast year.
 | Years accepted by the cost reports | 1900–2200, unchanged |
 | Permission to record a forecast | the one that records past years today |
 | Forecast bar in the trend chart | only while the forecast year is selected |
+| Trend chart shown | only when a year other than "Current" is selected (unchanged) |
+| Archived cards | never in the report (unchanged) |
+| Forecast when the year becomes current | overwritten by live values (unchanged behaviour) |
 | PPM cost tab and charts | unchanged |
 
 ## Non-goals
@@ -71,6 +81,8 @@ years and the forecast year.
 - A permission specific to forecasts.
 - Translating "Current" / "Forecast".
 - Changing which cards appear in the current year.
+- Carrying the forecast over into live attributes when the year changes.
+- Labelling the forecast row in the card's cost-history editor.
 - Changing how PPM names fiscal years.
 
 ## Failure even if it technically works
