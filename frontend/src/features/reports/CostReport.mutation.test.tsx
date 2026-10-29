@@ -777,6 +777,7 @@ describe("CostReport saved configuration", () => {
         sortD: "desc",
         scopeIds: [],
         extraColumns: [],
+        fiscalYearParam: null,
       }),
     );
   });

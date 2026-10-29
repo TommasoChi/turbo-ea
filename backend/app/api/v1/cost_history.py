@@ -13,6 +13,7 @@ from app.models.card import Card
 from app.models.card_cost_history import CardCostHistory
 from app.models.card_type import CardType
 from app.models.user import User
+from app.services.card_read_scope import require_card_readable
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.permission_service import PermissionService
 
@@ -33,6 +34,7 @@ class CostHistoryList(BaseModel):
 
 async def _load_card_for_edit(db: AsyncSession, user: User, card_id: str) -> Card:
     card_uuid = parse_uuid(card_id)
+    await require_card_readable(db, user, card_uuid, mode="module")
     if not await PermissionService.check_permission(
         db, user, "inventory.edit", card_uuid, "card.edit"
     ):
@@ -43,7 +45,7 @@ async def _load_card_for_edit(db: AsyncSession, user: User, card_id: str) -> Car
     return card
 
 
-async def _cost_field_keys_for_card(db: AsyncSession, card: Card) -> set[str]:
+async def _cost_field_keys_for_card(db: AsyncSession, card: Card) -> frozenset[str]:
     type_def = (
         await db.execute(select(CardType).where(CardType.key == card.type))
     ).scalar_one_or_none()
