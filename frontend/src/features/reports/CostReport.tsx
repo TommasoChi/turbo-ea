@@ -316,11 +316,12 @@ export default function CostReport() {
     () => costFiscalYearOptions(currentFiscalYear),
     [currentFiscalYear],
   );
-  // The trend chart still takes plain years: current and the four before it.
-  const trendYears = useMemo(
-    () => Array.from({ length: 5 }, (_, i) => currentFiscalYear - i),
-    [currentFiscalYear],
-  );
+  // Trend bars, oldest first: the four years before the current one and the current one,
+  // plus the forecast year while that year is the one picked.
+  const trendYears = useMemo(() => {
+    const years = Array.from({ length: 5 }, (_, i) => currentFiscalYear - 4 + i);
+    return fiscalYearParam === currentFiscalYear + 1 ? [...years, fiscalYearParam] : years;
+  }, [currentFiscalYear, fiscalYearParam]);
   // Learn the current year from a response, and fall back to "Current" when the
   // requested year is that one or is not among the offered years (a saved
   // report from an earlier year).
@@ -984,6 +985,7 @@ export default function CostReport() {
                 <CostTrendChart
                   cardTypeKey={cardTypeKey}
                   years={trendYears}
+                  currentFiscalYear={currentFiscalYear}
                 />
               </Box>
             )}

@@ -47,6 +47,12 @@ vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { permissions: { "costs.view": true } } }),
 }));
 vi.mock("@/components/CardDetailSidePanel", () => ({ default: () => null }));
+// The trend chart's own fetching is tested in CostTrendChart.test.tsx; here only the years it is given.
+vi.mock("./CostTrendChart", () => ({
+  default: ({ years, currentFiscalYear }: { years: number[]; currentFiscalYear: number }) => (
+    <div data-testid="cost-trend-chart" data-years={years.join(",")} data-current={currentFiscalYear} />
+  ),
+}));
 
 import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -557,5 +563,38 @@ describe("CostReport trend chart", () => {
     await userEvent.click(picker);
     await userEvent.click(await screen.findByRole("option", { name: "FY25" }));
     expect(await screen.findByTestId("cost-trend-chart")).toBeInTheDocument();
+  });
+
+  const pickYear = async (name: string) => {
+    const picker = screen.getAllByRole("combobox", { name: /fiscal year/i })[0];
+    await userEvent.click(picker);
+    await userEvent.click(await screen.findByRole("option", { name }));
+    return screen.findByTestId("cost-trend-chart");
+  };
+
+  it("trend shows the current year and four past years, oldest first", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+    const trend = await pickYear("FY25");
+    expect(trend).toHaveAttribute("data-years", "2022,2023,2024,2025,2026");
+    expect(trend).toHaveAttribute("data-current", "2026");
+  });
+
+  it("trend adds the forecast bar only when the forecast year is selected", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+    const trend = await pickYear("FY27 - Forecast");
+    await waitFor(() =>
+      expect(trend).toHaveAttribute("data-years", "2022,2023,2024,2025,2026,2027"),
+    );
+  });
+
+  it("trend is not shown on Current", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+    expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
   });
 });

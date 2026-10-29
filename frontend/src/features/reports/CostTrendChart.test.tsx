@@ -2,11 +2,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import CostTrendChart from "./CostTrendChart";
 
+let axisFormatter: ((v: number) => string) | undefined;
+
 vi.mock("@/api/client", () => ({ api: { get: vi.fn() }, isAbortError: () => false }));
 vi.mock("recharts", () => ({
-  BarChart: ({ data }: { data: unknown }) => <div data-testid="rows">{JSON.stringify(data)}</div>,
+  BarChart: ({ data, children }: { data: unknown; children?: React.ReactNode }) => (
+    <div>
+      <div data-testid="rows">{JSON.stringify(data)}</div>
+      {children}
+    </div>
+  ),
   Bar: () => null,
-  XAxis: () => null,
+  XAxis: ({ tickFormatter }: { tickFormatter?: (v: number) => string }) => {
+    axisFormatter = tickFormatter;
+    return null;
+  },
   YAxis: () => null,
   Tooltip: () => null,
   Legend: () => null,
@@ -37,7 +47,7 @@ beforeEach(() => {
 
 describe("CostTrendChart", () => {
   it("fetches each category field for each year and renders a bar per year", async () => {
-    render(<CostTrendChart cardTypeKey="Application" years={[2025, 2026]} />);
+    render(<CostTrendChart cardTypeKey="Application" years={[2025, 2026]} currentFiscalYear={2026} />);
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(6)); // 2 years x 3 fields
     expect(screen.getByTestId("cost-trend-chart")).toBeInTheDocument();
     await waitFor(() =>
@@ -58,14 +68,22 @@ describe("CostTrendChart", () => {
     );
   });
 
+  it("labels the axis with FY names", async () => {
+    render(<CostTrendChart cardTypeKey="Application" years={[2025, 2026, 2027]} currentFiscalYear={2026} />);
+    await waitFor(() => expect(axisFormatter).toBeDefined());
+    expect(axisFormatter!(2027)).toBe("FY27 - Forecast");
+    expect(axisFormatter!(2026)).toBe("FY26 - Current");
+    expect(axisFormatter!(2025)).toBe("FY25");
+  });
+
   it("handles a type with no category fields by rendering a zero series, not erroring", async () => {
     vi.mocked(api.get).mockResolvedValue({ items: [], total: 0 } as never);
-    render(<CostTrendChart cardTypeKey="Team" years={[2025]} />);
+    render(<CostTrendChart cardTypeKey="Team" years={[2025]} currentFiscalYear={2026} />);
     expect(await screen.findByTestId("cost-trend-chart")).toBeInTheDocument();
   });
 
   it("is unaffected by group_by — never sends a group_by param", async () => {
-    render(<CostTrendChart cardTypeKey="Application" years={[2025]} />);
+    render(<CostTrendChart cardTypeKey="Application" years={[2025]} currentFiscalYear={2026} />);
     await waitFor(() => expect(api.get).toHaveBeenCalled());
     const calls = vi.mocked(api.get).mock.calls.map(([p]) => String(p));
     for (const c of calls) expect(c).not.toContain("group_by");
@@ -73,11 +91,11 @@ describe("CostTrendChart", () => {
 
   it("aborts the requests still in flight when the years change", async () => {
     vi.mocked(api.get).mockImplementation(() => new Promise(() => {}) as never);
-    const { rerender } = render(<CostTrendChart cardTypeKey="Application" years={[2025]} />);
+    const { rerender } = render(<CostTrendChart cardTypeKey="Application" years={[2025]} currentFiscalYear={2026} />);
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(3));
     const firstSignals = vi.mocked(api.get).mock.calls.map(([, opts]) => opts?.signal);
 
-    rerender(<CostTrendChart cardTypeKey="Application" years={[2026]} />);
+    rerender(<CostTrendChart cardTypeKey="Application" years={[2026]} currentFiscalYear={2026} />);
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(6));
 
     expect(firstSignals).toHaveLength(3);
@@ -97,9 +115,9 @@ describe("CostTrendChart", () => {
     const settle = (year: string, total: number) =>
       pending.filter((p) => p.year === year).forEach((p) => p.resolve({ items: [], total }));
 
-    const { rerender } = render(<CostTrendChart cardTypeKey="Application" years={[2025]} />);
+    const { rerender } = render(<CostTrendChart cardTypeKey="Application" years={[2025]} currentFiscalYear={2026} />);
     await waitFor(() => expect(pending).toHaveLength(3));
-    rerender(<CostTrendChart cardTypeKey="Application" years={[2026]} />);
+    rerender(<CostTrendChart cardTypeKey="Application" years={[2026]} currentFiscalYear={2026} />);
     await waitFor(() => expect(pending).toHaveLength(6));
 
     settle("2026", 7);

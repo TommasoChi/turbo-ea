@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { api } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
+import { costFiscalYearName } from "@/lib/fiscalYear";
 
 const COST_FIELDS = [
   "softwareLicensingCost",
@@ -28,9 +29,11 @@ interface TrendRow {
 export default function CostTrendChart({
   cardTypeKey,
   years,
+  currentFiscalYear,
 }: {
   cardTypeKey: string;
   years: number[];
+  currentFiscalYear: number;
 }) {
   const [rows, setRows] = useState<TrendRow[]>([]);
 
@@ -62,7 +65,10 @@ export default function CostTrendChart({
     <Box data-testid="cost-trend-chart">
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={rows}>
-          <XAxis dataKey="fiscalYear" />
+          <XAxis
+            dataKey="fiscalYear"
+            tickFormatter={(year: number) => costFiscalYearName(year, currentFiscalYear)}
+          />
           <YAxis />
           <Bar dataKey="softwareLicensingCost" stackId="cost" fill="#1976d2" />
           <Bar dataKey="applicationManagementServicesCost" stackId="cost" fill="#42a5f5" />
