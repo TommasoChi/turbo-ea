@@ -2,8 +2,10 @@
  * i18next runs with `escapeValue: false` (React escapes what it renders), so a
  * translation rendered through `dangerouslySetInnerHTML` would put a card, role
  * or field name into the DOM as markup. Every `t()` inside such an expression
- * must therefore escape its own values: `interpolation: { escapeValue: true }`
- * (the translation's own <strong> stays; the values do not become tags).
+ * that interpolates text must therefore escape its own values:
+ * `interpolation: { escapeValue: true }` (the translation's own <strong> stays;
+ * the values do not become tags). A call that interpolates only numbers
+ * (`count`, `cards`) cannot carry markup and is left alone.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -42,13 +44,37 @@ describeSourceScan("dangerouslySetInnerHTML translations escape their values", (
     return found;
   }
 
-  it("every t() rendered as HTML escapes its values", () => {
+  /** Each `t(…)` call in the expression, parentheses balanced. */
+  function tCalls(expr: string): string[] {
+    const calls: string[] = [];
+    for (const m of expr.matchAll(/\bt\(/g)) {
+      let depth = 0;
+      let end = m.index! + 1;
+      for (; end < expr.length; end += 1) {
+        if (expr[end] === "(") depth += 1;
+        if (expr[end] === ")" && --depth === 0) break;
+      }
+      calls.push(expr.slice(m.index!, end + 1));
+    }
+    return calls;
+  }
+
+  const NUMERIC_ONLY = new Set(["count", "cards"]);
+  function carriesText(call: string): boolean {
+    const withoutStrings = call.replace(/"(?:[^"\\]|\\.)*"/g, '""');
+    const names = [...withoutStrings.matchAll(/\b(\w+)\s*:/g)].map((m) => m[1]);
+    return names.some((n) => !NUMERIC_ONLY.has(n));
+  }
+
+  it("every t() rendered as HTML with a text value escapes it", () => {
     const offenders: string[] = [];
     for (const file of walk(SRC)) {
       for (const expr of htmlExpressions(fs.readFileSync(file, "utf8"))) {
-        const calls = expr.match(/\bt\(/g)?.length ?? 0;
-        const escaped = expr.match(/escapeValue:\s*true/g)?.length ?? 0;
-        if (calls > escaped) offenders.push(`${path.relative(SRC, file)}: ${expr.slice(0, 80)}`);
+        for (const call of tCalls(expr)) {
+          if (carriesText(call) && !/escapeValue:\s*true/.test(call)) {
+            offenders.push(`${path.relative(SRC, file)}: ${call.slice(0, 80)}`);
+          }
+        }
       }
     }
     expect(offenders).toEqual([]);

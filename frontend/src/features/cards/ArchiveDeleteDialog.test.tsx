@@ -62,6 +62,26 @@ describe("ArchiveDeleteDialog", () => {
     expect(screen.queryByText(/cards linked via relationships/i)).not.toBeInTheDocument();
   });
 
+  it.each(["archive", "delete"] as const)("shows the card name as text when it is %sd", async (mode) => {
+    vi.mocked(api.get).mockResolvedValueOnce(baseImpact);
+    const hostile = '<img src="x" onerror="alert(1)">CRM';
+    render(
+      <ArchiveDeleteDialog
+        open
+        mode={mode}
+        scope="single"
+        cardId="card-1"
+        cardName={hostile}
+        onClose={() => {}}
+        onConfirmed={() => {}}
+      />,
+    );
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(dialog.querySelector("strong")).not.toBeNull());
+    expect(dialog.querySelector("strong")?.textContent).toBe(hostile);
+    expect(dialog.querySelector("img")).toBeNull();
+  });
+
   it("hides reparent option when grandparent is null", async () => {
     vi.mocked(api.get).mockResolvedValueOnce({
       ...baseImpact,

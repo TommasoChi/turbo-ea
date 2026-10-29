@@ -1058,7 +1058,7 @@ export default function RolesAdmin({ onRolesChanged }: RolesAdminProps) {
               {archiveTarget.user_count !== undefined &&
                 archiveTarget.user_count > 0 && (
                   <Alert severity="warning" variant="outlined">
-                    <span dangerouslySetInnerHTML={{ __html: t("roles.archiveUserWarning", { count: archiveTarget.user_count, interpolation: { escapeValue: true } }) }} />
+                    <span dangerouslySetInnerHTML={{ __html: t("roles.archiveUserWarning", { count: archiveTarget.user_count }) }} />
                   </Alert>
                 )}
               <Typography variant="body2" color="text.secondary">
