@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import tomllib
 from pathlib import Path
@@ -302,20 +303,21 @@ def test_frontend_source_scans_skip_inside_the_stryker_sandbox():
     t() key scan did, on src/i18n/index.ts). Every such test goes through
     src/test/sourceScan.ts, which skips under the flag the Stryker config sets."""
     frontend = ROOT / "frontend"
-    stryker_vitest = (frontend / "vitest.stryker.config.ts").read_text()
+    stryker_vitest = (frontend / "vitest.stryker.config.ts").read_text(encoding="utf-8")
     assert 'MUTATION_SANDBOX: "1"' in stryker_vitest
-    helper = (frontend / "src" / "test" / "sourceScan.ts").read_text()
+    helper = (frontend / "src" / "test" / "sourceScan.ts").read_text(encoding="utf-8")
     assert 'process.env.MUTATION_SANDBOX === "1"' in helper
     readers = sorted(
-        str(p.relative_to(frontend))
+        p.relative_to(frontend).as_posix()
         for p in (frontend / "src").rglob("*.test.ts*")
-        if re.search(r"\b(readFileSync|readdirSync)\b", p.read_text())
+        if re.search(r"\b(readFileSync|readdirSync)\b", p.read_text(encoding="utf-8"))
     )
     assert readers, "the scan found no file reader at all"
     unmarked = [
         r
         for r in readers
-        if r not in READS_NO_SOURCE and '@/test/sourceScan"' not in (frontend / r).read_text()
+        if r not in READS_NO_SOURCE
+        and '@/test/sourceScan"' not in (frontend / r).read_text(encoding="utf-8")
     ]
     assert unmarked == [], f"read src/ as text without describeSourceScan/itSourceScan: {unmarked}"
     assert set(READS_NO_SOURCE) <= set(readers), "stale READS_NO_SOURCE entry"
@@ -421,14 +423,14 @@ def test_mutmut_is_pinned_identically_in_both_python_suites():
 
 def test_every_floor_is_documented_in_the_rule_that_owns_it():
     # The gate is summarised in CLAUDE.md and spelled out in its path-scoped rule file.
-    claude = (ROOT / "CLAUDE.md").read_text() + (
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8") + (
         ROOT / ".claude" / "rules" / "testing-ci.md"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     assert "scripts/mutation/floors.toml" in claude
     for job in ("Backend Mutation Tests", "Frontend Mutation Tests", "MCP Mutation Tests"):
         assert job in claude
-        assert job in (ROOT / "CONTRIBUTING.md").read_text()
-    template = (ROOT / ".github" / "pull_request_template.md").read_text()
+        assert job in (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    template = (ROOT / ".github" / "pull_request_template.md").read_text(encoding="utf-8")
     assert "Mutation" in template
 
 
@@ -443,6 +445,7 @@ def test_the_nightly_is_scheduled_in_the_evening():
     assert (day, month, weekdays) == ("*", "*", "0-4")
 
 
+@pytest.mark.skipif(shutil.which("python3") is None, reason="the workflow step runs python3")
 @pytest.mark.parametrize("job", ["backend", "frontend"])
 def test_the_budget_is_halved_without_integer_arithmetic(job, tmp_path):
     """A dispatch hands the number input over as "280.0", and bash's $(( ))

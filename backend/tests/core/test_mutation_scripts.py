@@ -30,6 +30,11 @@ REPO = Path(__file__).resolve().parents[3]
 SCRIPTS = REPO / "scripts" / "mutation"
 sys.path.insert(0, str(SCRIPTS))
 
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="the scripts mirror the repo with symlinks and kill process groups; CI is Linux",
+)
+
 changed_lines = importlib.import_module("changed_lines")
 gate = importlib.import_module("gate")
 harness = importlib.import_module("harness")
@@ -803,6 +808,7 @@ def suite_repo(tmp_path):
     return tmp_path
 
 
+@posix_only
 class TestMutmutRunAndCollect:
     def test_run_scopes_mutmut_to_the_changed_files(self, suite_repo, monkeypatch):
         calls = []
@@ -1703,6 +1709,7 @@ class TestStrykerScope:
 # ── shadow_root ──────────────────────────────────────────────────────────────
 
 
+@posix_only
 class TestShadowRoot:
     def test_build_mirrors_the_repo_one_level_down(self, suite_repo):
         mutants = shadow_root.build("backend", suite_repo)
@@ -2017,6 +2024,7 @@ class TestStrykerStableDeal:
             assert all(stryker_scope.chunk_of(f) == chunk for f in files)
 
 
+@posix_only
 class TestStrykerNightly:
     def test_a_chunk_report_speaks_only_for_its_own_files(self, frontend_repo, tmp_path):
         # Stryker's incremental mode copies the old mutants of a file that left
@@ -2466,6 +2474,7 @@ def _state_dir(root: Path) -> Path:
 
 
 class TestNightlyState:
+    @posix_only
     def test_a_packed_state_comes_back_with_its_links_still_links(self, tmp_path):
         state = _state_dir(tmp_path / "before")
         archive = tmp_path / "nightly-state.tgz"
