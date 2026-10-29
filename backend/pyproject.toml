@@ -58,7 +58,7 @@ dev = [
     "pytest-xdist>=3.5.0",
     # Mutation testing. Pinned exactly: scripts/mutation/mutmut_scope.py reads
     # its `results` / `show` output, so a bump is a deliberate, tested change.
-    "mutmut==3.8.0",
+    "mutmut==3.8.1",
     "httpx>=0.28.0",
     "ruff>=0.8.0",
     "pip-audit>=2.7.0",

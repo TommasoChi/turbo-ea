@@ -35,7 +35,7 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
     # Mutation testing; pinned exactly for the reason given in backend/pyproject.toml.
-    "mutmut==3.8.0",
+    "mutmut==3.8.1",
 ]
 
 [tool.pytest.ini_options]

@@ -843,7 +843,7 @@ class TestMutmutRunAndCollect:
                     path = d / "mutants" / "app" / "x.py.meta"
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(json.dumps({"exit_code_by_key": meta}))
-                # captured, mutmut's assertion lands on stderr (verified on 3.8.0)
+                # captured, mutmut's assertion lands on stderr (read from 3.8.1 source, __main__.py)
                 err = f"AssertionError: {mutmut_scope._NOTHING_MATCHES}"
                 return subprocess.CompletedProcess(a, 1, "Listing all tests", err)
             return subprocess.CompletedProcess(a, 0, "", "")
@@ -2602,3 +2602,23 @@ class TestNightlyState:
         (tmp_path / "state" / "f").write_text("x")
         assert nightly_state.main(["pack", "--dir", "state"]) == 0
         assert (tmp_path / "nightly-state.tgz").is_file()
+
+
+class TestPinnedMutmutRunsOnThePinnedPytest:
+    """mutmut 3.8.0's harness read ``item._nodeid`` in its per-test teardown hook.
+    pytest 9.2.0 dropped that private attribute, and CI installs ``pytest>=8`` with
+    no upper pin, so every test teardown raised ``AttributeError`` and
+    ``Backend Mutation Tests`` failed on any PR touching code with covered tests.
+    mutmut 3.8.1 reads the public ``item.nodeid``. The scripts read mutmut's output,
+    so the pin is exact and a bump is deliberate: this keeps the pin from sliding back
+    to a release that cannot run on the pytest CI resolves.
+    """
+
+    def test_the_harness_reads_the_public_nodeid(self):
+        import importlib.util
+
+        spec = importlib.util.find_spec("mutmut")
+        if spec is None or not spec.submodule_search_locations:
+            pytest.skip("mutmut is a dev dependency and is not installed in this interpreter")
+        harness_py = Path(next(iter(spec.submodule_search_locations))) / "runners" / "harness.py"
+        assert "._nodeid" not in harness_py.read_text(encoding="utf-8")
