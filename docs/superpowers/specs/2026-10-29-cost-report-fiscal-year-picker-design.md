@@ -1,6 +1,6 @@
 # Cost report: fiscal-year picker, FY names and a forecast year
 
-**Spec status:** draft, on `fix/cost-report` (from `main` 2.179.9). Decisions below are the user's answers of 2026-10-29.
+**Spec status:** approved (2026-10-29), on `fix/cost-report` (from `main` 2.179.9). Decisions below are the user's answers of 2026-10-29.
 
 ## Goal
 
