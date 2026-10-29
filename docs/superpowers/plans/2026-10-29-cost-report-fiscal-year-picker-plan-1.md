@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Plan status:** draft
+**Plan status:** approved (2026-10-29)
 
 **Goal:** The cost report's fiscal-year picker offers a Forecast year, names every fiscal year `FY26 - Current` / `FY27 - Forecast` / `FY25`…, and a non-current year lists every card with a cost recorded for it.
 
