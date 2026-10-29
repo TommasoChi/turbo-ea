@@ -114,7 +114,7 @@ export default function RestoreDialog({ open, cardId, cardName, onClose, onConfi
             <Typography>
               <span
                 dangerouslySetInnerHTML={{
-                  __html: t("cards:detail.dialogs.restore.confirm", { name: cardName }),
+                  __html: t("cards:detail.dialogs.restore.confirm", { name: cardName, interpolation: { escapeValue: true } }),
                 }}
               />
             </Typography>
