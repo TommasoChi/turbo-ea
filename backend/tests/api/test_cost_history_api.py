@@ -95,7 +95,21 @@ async def test_the_current_year_and_the_five_before_it_are_accepted(client, db, 
     assert (await _put(client, card, admin, fiscal_year=year)).status_code == 200
 
 
-@pytest.mark.parametrize("year", [THIS_YEAR + 1, THIS_YEAR - 6])
+async def test_the_next_year_is_accepted(client, db, env):
+    admin = env["admin"]
+    card = await create_card(db, card_type="Application", name="ERP", user_id=admin.id)
+    assert (await _put(client, card, admin, fiscal_year=THIS_YEAR + 1)).status_code == 200
+
+
+async def test_two_years_ahead_is_rejected(client, db, env):
+    admin = env["admin"]
+    card = await create_card(db, card_type="Application", name="ERP", user_id=admin.id)
+    resp = await _put(client, card, admin, fiscal_year=THIS_YEAR + 2)
+    assert resp.status_code == 422
+    assert str(THIS_YEAR + 1) in resp.json()["detail"]
+
+
+@pytest.mark.parametrize("year", [THIS_YEAR - 6])
 async def test_a_year_outside_the_five_year_window_is_rejected(client, db, env, year):
     admin = env["admin"]
     card = await create_card(db, card_type="Application", name="ERP", user_id=admin.id)

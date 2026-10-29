@@ -17,6 +17,7 @@ from app.services.fiscal_year import (
     _fiscal_year,
     current_fiscal_year,
     fiscal_year_for,
+    fiscal_year_window,
     get_fiscal_year_start,
 )
 
@@ -87,6 +88,11 @@ class _UtcOnlyClock(datetime):
         if tz is timezone.utc:
             return datetime(2025, 10, 1, 0, 30, tzinfo=timezone.utc)
         return datetime(2025, 9, 30, 20, 30)
+
+
+def test_the_window_runs_from_five_years_back_to_next_year():
+    current = current_fiscal_year(1)
+    assert fiscal_year_window(1) == (current - 5, current + 1)
 
 
 def test_today_is_read_in_utc(monkeypatch):

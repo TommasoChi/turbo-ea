@@ -25,8 +25,9 @@ from app.models.app_settings import AppSettings
 # narrow enough to fit the integer column, so a nonsense year is a 422, never a database 500.
 MIN_FISCAL_YEAR = 1900
 MAX_FISCAL_YEAR = 2200
-# Cost history is kept for the current fiscal year and the five before it.
+# Cost history is kept for the current fiscal year, the five before it and one forecast year ahead.
 FISCAL_YEAR_LOOKBACK = 5
+FISCAL_YEAR_LOOKAHEAD = 1
 
 
 def _fiscal_year(year: int, month: int, start_month: int) -> int:
@@ -73,7 +74,7 @@ def current_fiscal_year(start_month: int) -> int:
 def fiscal_year_window(start_month: int) -> tuple[int, int]:
     """The oldest and newest fiscal year cost history may be recorded for."""
     current = current_fiscal_year(start_month)
-    return current - FISCAL_YEAR_LOOKBACK, current
+    return current - FISCAL_YEAR_LOOKBACK, current + FISCAL_YEAR_LOOKAHEAD
 
 
 async def get_fiscal_year_start(db: AsyncSession) -> int:
