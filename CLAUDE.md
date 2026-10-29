@@ -119,7 +119,7 @@ Author **English only**: `frontend/src/i18n/locales/en/*.json`, the English `lab
 - Rate limiting is applied via `slowapi` — apply `@limiter.limit()` to auth-sensitive endpoints.
 
 ### VAPT (Active Security Testing)
-- **Run a VAPT pass automatically whenever a PR bumps `/VERSION` and touches permission/auth/session code, or on explicit request.** Testing-your-own-application only (this repo, this user's local deploy instance — never a third-party or production target). → `.claude/rules/vapt.md`
+- **Run a VAPT pass automatically whenever a PR adds a route or a table (a new path in `backend/app/api/v1/` or a new model/migration), or touches permission/auth/session code, or on explicit request — independent of `/VERSION`.** Testing-your-own-application only (this repo, this user's local deploy instance — never a third-party or production target). → `.claude/rules/vapt.md`
 
 ### Release Security Audit
 - **Run the `security-audit` skill (project-scoped, `.claude/skills/security-audit/`) whenever a release tag is cut on this repo, or on explicit request.** Multi-phase, multi-agent audit — expect it to take several minutes and real token spend; this is a procedure to run deliberately before a release ships, not a background check. No automatic hook triggers it (git tag/push events outside Claude Code are invisible to hooks, and a long multi-agent run has no safe pass/fail to gate a command on) — treat "we're cutting a tag" as the cue to invoke it yourself in the session doing the release.
@@ -279,3 +279,8 @@ Set `RESET_DB=true` to drop all tables and re-seed on next startup.
 **Eccezione SDK 1.4 / frontend SDK 1.18 del 2026-07-30**: autorizzata e implementata in modo additivo per audit
 extension read-only, controlli permesso request-scoped e permessi frontend read-only. Verificata esclusivamente
 con test SDK mirati; nessuna build o deploy del core.
+
+**Deploy locale per VAPT e verifiche live** (`software/turbo-ea-aruba/`): mai `docker compose pull`. Le immagini si
+buildano da `software/turbo-ea/` con `docker build --target <svc> -t turboea-fork-<svc>:local .` (db, backend,
+frontend, nginx, mcp-server), poi `docker compose up -d` in `turbo-ea-aruba` (dettagli nel CLAUDE.md di
+`claude-work`, sezione "turbo-ea-aruba — deploy"). La VAPT si ferma al livello Medium; l'istanza non ha AI/Ollama.

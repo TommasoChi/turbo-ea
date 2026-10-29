@@ -5,6 +5,22 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.179.9] - 2026-10-29
+
+### Fixed
+
+- **A cost-history entry now takes a fiscal year from five years back to the current one and a cost of zero or more.** A year outside that range, a negative cost, or a value such as `NaN` is refused with a clear message instead of an error page; the cost reports and the delete route refuse an absurd year the same way.
+- **Refreshing the session no longer ends a "View as role" session.** The impersonated role is kept across the token refresh.
+- **The IT-component and data-object maps in the BPM reports only list the cards and processes you may read.**
+- **A dry-run of a workspace import no longer changes the running email configuration.**
+
+### Security
+
+- **Creating a to-do on a card you cannot read is now refused** (404), like every other card endpoint.
+- **A cookie-authenticated write from another site is refused.** Requests that carry an `Origin` that is neither one of the allowed origins nor this site's own host get a 403; API clients using a token are unaffected.
+- **A published web portal no longer lets a visitor probe a hidden description or tag:** searching ignores the description and the tag filter is ignored while the portal hides them; a malformed id in a filter is ignored instead of failing.
+- **Names shown inside confirmation dialogs (cards, roles, fields, sections) are escaped** so a name containing markup is displayed as text.
+
 ## [2.179.8] - 2026-10-29
 
 ### Fixed
