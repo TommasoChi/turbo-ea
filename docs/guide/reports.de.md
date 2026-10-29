@@ -166,15 +166,32 @@ Der **Kostenbericht** bietet eine finanzielle Analyse Ihrer Technologielandschaf
 
 ### Geschäftsjahr
 
-Kosten sind jährlich, daher zeigt der Bericht sie für **das aktuelle Geschäftsjahr** — ein Chip in der Werkzeugleiste nennt es, zum Beispiel **Aktuelles Geschäftsjahr: GJ 2026** (oder *GJ 2025–2026*, wenn Ihr Geschäftsjahr nicht im Januar beginnt). Die Jahreskosten einer Karte zählen **in voller Höhe**, wenn das aktuelle Geschäftsjahr zwischen dem liegt, in dem die Karte **Aktiv** wird, und dem, in das ihr **End of Life** fällt, beide eingeschlossen. Nichts wird anteilig verrechnet: Eine Anwendung, die im November ausläuft, trägt in diesem Jahr noch ihre vollen Jahreskosten. Eine Karte, deren End of Life in einem früheren Geschäftsjahr lag, zählt nicht mit.
+Kosten sind jährlich, daher wird der Bericht jeweils für ein **Geschäftsjahr** erstellt. Eine Auswahl **Geschäftsjahr** in der Werkzeugleiste bietet sechs Einträge, der neueste zuerst:
 
-Fehlende Lebenszyklusdaten werden wie in den Zeitreise-Berichten gelesen:
+| Eintrag | Was angezeigt wird |
+|---|---|
+| **FY27 - Forecast** | Nächstes Geschäftsjahr, aus von Hand eingegebenen Werten (siehe unten). |
+| **FY26 - Current** | Das aktuelle Geschäftsjahr, aus den Live-Kostenattributen der Karten. Das ist die Vorgabe. |
+| **FY25** … **FY22** | Die vier Geschäftsjahre vor dem aktuellen, aus den dafür erfassten Kosten. |
 
-- **Kein Aktiv-Datum, aber ein Planungs- oder Einführungsdatum** — die Karte ist noch geplant und zählt nicht.
-- **Kein End-of-Life-Datum** — die Karte zählt ab dem Jahr, in dem sie aktiv wird.
-- **Überhaupt keine Lebenszyklusdaten** — die Karte zählt.
+Ein Geschäftsjahr heißt **FY** plus die letzten zwei Ziffern des Jahres, in dem es **endet**, unabhängig davon, in welchem Monat Ihr Geschäftsjahr beginnt: Ein Geschäftsjahr von Juli 2025 bis Juni 2026 ist **FY26**. Ein Chip in der Werkzeugleiste wiederholt die Auswahl, zum Beispiel **Geschäftsjahr: FY26 - Current**. *Current* und *Forecast* werden nicht übersetzt.
 
-Die Regel gilt für alles auf der Seite — die Summen, die Treemap, die Tabelle, **Kostenquellen**-Aggregationen (eine ausgelaufene IT-Komponente zählt nicht mehr zur Summe ihrer Anwendung) und Drilldowns —, und das Geschäftsjahr wird im Berichtskopf gedruckt. Eine Auswahl anderer Jahre gibt es nicht: Eine Karte trägt einen einzigen Jahreswert, und echte Kosten ändern sich von Jahr zu Jahr, sodass dieselbe Zahl für ein anderes Jahr in die Irre führen würde. In welchem Monat das Geschäftsjahr beginnt, legt ein Administrator unter [Einstellungen → Allgemein](../admin/settings.md) fest.
+**Prognosewerte werden von Hand eingegeben.** Öffnen Sie eine Karte, gehen Sie zu ihrem Kostenverlauf und tragen Sie die geplanten Kosten für das nächste Geschäftsjahr ein, genauso wie Sie ein vergangenes Jahr erfassen. Nur das **nächste** Geschäftsjahr kann als Prognose erfasst werden, und dafür ist dieselbe Berechtigung nötig wie für ein vergangenes Jahr. Wird dieses Jahr zum aktuellen, liest der Bericht stattdessen die Live-Attribute, und der Live-Wert der Karte ersetzt den eingegebenen.
+
+#### Welche Karten erscheinen
+
+- **Aktuelles Jahr** — Die Jahreskosten einer Karte zählen **in voller Höhe**, wenn das aktuelle Geschäftsjahr zwischen dem liegt, in dem die Karte **Aktiv** wird, und dem, in das ihr **End of Life** fällt, beide eingeschlossen. Nichts wird anteilig verrechnet: Eine Anwendung, die im November ausläuft, trägt in diesem Jahr noch ihre vollen Jahreskosten. Eine Karte, deren End of Life in einem früheren Geschäftsjahr lag, zählt nicht mit. Fehlende Lebenszyklusdaten werden wie in den Zeitreise-Berichten gelesen:
+    - **Kein Aktiv-Datum, aber ein Planungs- oder Einführungsdatum** — die Karte ist noch geplant und zählt nicht.
+    - **Kein End-of-Life-Datum** — die Karte zählt ab dem Jahr, in dem sie aktiv wird.
+    - **Überhaupt keine Lebenszyklusdaten** — die Karte zählt.
+- **Jedes andere Jahr (vergangen oder Prognose)** — Jede aktive Karte mit **für dieses Jahr erfassten Kosten** erscheint, auch wenn sie inzwischen außer Betrieb genommen wurde oder erst später aktiv wird. Eine Karte ohne erfasste Kosten für dieses Jahr erscheint nicht.
+- **Archivierte Karten** erscheinen nie, in keinem Jahr.
+
+Die Regel gilt für alles auf der Seite — die Summen, die Treemap, die Tabelle, **Kostenquellen**-Aggregationen und Drilldowns —, und das ausgewählte Geschäftsjahr wird im Berichtskopf gedruckt.
+
+Wenn Sie ein anderes Jahr als **Current** wählen, zeigt ein **Trenddiagramm** die Kosten über das aktuelle Jahr und die vier davor. Ist **Forecast** das ausgewählte Jahr, zeigt das Diagramm zusätzlich einen Balken dafür.
+
+In welchem Monat das Geschäftsjahr beginnt, legt ein Administrator unter [Einstellungen → Allgemein](../admin/settings.md) fest.
 
 ### Kostenquelle
 

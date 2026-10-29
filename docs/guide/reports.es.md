@@ -166,15 +166,32 @@ El **Informe de Costos** proporciona un análisis financiero de su panorama tecn
 
 ### Año fiscal
 
-Los costes son anuales, por lo que el informe los muestra para **el año fiscal actual**, que un chip de la barra de herramientas indica, por ejemplo **Año fiscal actual: AF 2026** (o *AF 2025–2026* cuando su año fiscal no empieza en enero). El coste anual de una tarjeta cuenta **íntegramente** cuando el año fiscal actual se sitúa entre aquel en que la tarjeta pasa a **Activo** y aquel en que cae su **Fin de vida**, ambos incluidos. No se prorratea nada: una aplicación que se retira en noviembre sigue aportando todo su coste anual este año. Una tarjeta cuyo Fin de vida cayó en un año fiscal anterior no se cuenta.
+Los costes son anuales, por lo que el informe se elabora para un **año fiscal** cada vez. Un selector **Año fiscal** en la barra de herramientas ofrece seis entradas, la más reciente primero:
 
-Las fechas de ciclo de vida que faltan se interpretan igual que en los informes con viaje en el tiempo:
+| Entrada | Qué muestra |
+|---|---|
+| **FY27 - Forecast** | El año fiscal siguiente, a partir de cifras introducidas a mano (véase más abajo). |
+| **FY26 - Current** | El año fiscal actual, a partir de los atributos de coste vigentes de las tarjetas. Es el valor predeterminado. |
+| **FY25** … **FY22** | Los cuatro años fiscales anteriores al actual, a partir de los costes registrados para ellos. |
 
-- **Sin fecha Activo, pero con fecha de Planificación o de Introducción** — la tarjeta sigue planificada y no se cuenta.
-- **Sin fecha de Fin de vida** — la tarjeta cuenta a partir del año en que pasa a Activo.
-- **Sin ninguna fecha de ciclo de vida** — la tarjeta cuenta.
+Un año fiscal se llama **FY** más las dos últimas cifras del año en que **termina**, sea cual sea el mes en que empiece su año fiscal: un año fiscal que va de julio de 2025 a junio de 2026 es **FY26**. Un chip en la barra de herramientas repite la selección, por ejemplo **Año fiscal: FY26 - Current**. *Current* y *Forecast* no se traducen.
 
-La regla se aplica a toda la página — los totales, el mapa de árbol, la tabla, los agregados por **Origen de los costes** (un Componente TI retirado deja de sumar al total de su Aplicación) y el desglose — y el año fiscal figura en la cabecera impresa. No hay selector de otros años: una tarjeta tiene un único importe anual y los costes reales cambian de un año a otro, así que la misma cifra mostrada para otro año induciría a error. Un administrador define el mes en que empieza el año fiscal en [Configuración → General](../admin/settings.md).
+**Las cifras de previsión se introducen a mano.** Abra una tarjeta, vaya a su historial de costes y escriba el coste previsto para el año fiscal siguiente, igual que registra un año pasado. Solo el **siguiente** año fiscal puede registrarse como previsión, y hacerlo requiere el mismo permiso que registrar un año pasado. Cuando ese año pasa a ser el actual, el informe lee en su lugar los atributos vigentes, y la cifra vigente de la tarjeta sustituye a la que se había escrito.
+
+#### Qué tarjetas aparecen
+
+- **Año actual** — El coste anual de una tarjeta cuenta **íntegramente** cuando el año fiscal actual se sitúa entre aquel en que la tarjeta pasa a **Activo** y aquel en que cae su **Fin de vida**, ambos incluidos. No se prorratea nada: una aplicación que se retira en noviembre sigue aportando todo su coste anual este año. Una tarjeta cuyo Fin de vida cayó en un año fiscal anterior no se cuenta. Las fechas de ciclo de vida que faltan se interpretan igual que en los informes con viaje en el tiempo:
+    - **Sin fecha Activo, pero con fecha de Planificación o de Introducción** — la tarjeta sigue planificada y no se cuenta.
+    - **Sin fecha de Fin de vida** — la tarjeta cuenta a partir del año en que pasa a Activo.
+    - **Sin ninguna fecha de ciclo de vida** — la tarjeta cuenta.
+- **Cualquier otro año (pasado o de previsión)** — Aparece toda tarjeta activa que tenga un **coste registrado para ese año**, aunque se haya retirado después o solo pase a estar activa más adelante. Una tarjeta sin coste registrado para ese año no aparece.
+- **Las tarjetas archivadas** no aparecen nunca, en ningún año.
+
+La regla se aplica a toda la página — los totales, el mapa de árbol, la tabla, los agregados por **Origen de los costes** y el desglose — y el año fiscal seleccionado figura en la cabecera impresa.
+
+Cuando elige un año distinto de **Current**, un **gráfico de tendencia** muestra el coste del año actual y de los cuatro anteriores. Mientras **Forecast** es el año seleccionado, el gráfico muestra además una barra para él.
+
+Un administrador define el mes en que empieza el año fiscal en [Configuración → General](../admin/settings.md).
 
 ### Origen de los costes
 

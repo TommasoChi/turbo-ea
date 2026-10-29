@@ -166,15 +166,32 @@ O **Relatório de Custos** fornece análise financeira do seu cenário tecnológ
 
 ### Ano fiscal
 
-Os custos são anuais, por isso o relatório mostra-os para **o ano fiscal atual**, indicado por um chip na barra de ferramentas, por exemplo **Ano fiscal atual: AF 2026** (ou *AF 2025–2026* quando o seu ano fiscal não começa em janeiro). O custo anual de um cartão conta **na íntegra** quando o ano fiscal atual se situa entre aquele em que o cartão passa a **Ativo** e aquele em que cai o seu **Fim de vida**, ambos incluídos. Nada é calculado pro rata: uma aplicação desativada em novembro continua a contar com todo o custo anual este ano. Um cartão cujo Fim de vida caiu num ano fiscal anterior não é contabilizado.
+Os custos são anuais, por isso o relatório é elaborado para um **ano fiscal** de cada vez. Um seletor **Ano fiscal** na barra de ferramentas oferece seis entradas, a mais recente primeiro:
 
-As datas de ciclo de vida em falta são interpretadas tal como nos relatórios com viagem no tempo:
+| Entrada | O que mostra |
+|---|---|
+| **FY27 - Forecast** | O ano fiscal seguinte, a partir de valores introduzidos manualmente (ver abaixo). |
+| **FY26 - Current** | O ano fiscal atual, a partir dos atributos de custo em vigor dos cartões. É o valor predefinido. |
+| **FY25** … **FY22** | Os quatro anos fiscais anteriores ao atual, a partir dos custos registados para eles. |
 
-- **Sem data Ativo, mas com uma data de Planejamento ou de Entrada** — o cartão continua planeado e não é contabilizado.
-- **Sem data de Fim de vida** — o cartão conta a partir do ano em que passa a Ativo.
-- **Sem quaisquer datas de ciclo de vida** — o cartão conta.
+Um ano fiscal chama-se **FY** mais os dois últimos dígitos do ano em que **termina**, seja qual for o mês em que o seu ano fiscal começa: um ano fiscal de julho de 2025 a junho de 2026 é **FY26**. Um chip na barra de ferramentas repete a seleção, por exemplo **Ano fiscal: FY26 - Current**. *Current* e *Forecast* não são traduzidos.
 
-A regra aplica-se a toda a página — aos totais, ao treemap, à tabela, às agregações por **Origem dos custos** (um Componente de TI desativado deixa de somar ao total da sua Aplicação) e ao detalhamento — e o ano fiscal aparece no cabeçalho impresso. Não há seleção de outros anos: um cartão tem um único valor anual e os custos reais mudam de um ano para o outro, pelo que o mesmo valor mostrado para outro ano induziria em erro. Um administrador define o mês de início do ano fiscal em [Configurações → Geral](../admin/settings.md).
+**Os valores de previsão são introduzidos manualmente.** Abra um cartão, vá ao seu histórico de custos e escreva o custo planeado para o ano fiscal seguinte, tal como regista um ano passado. Só o **próximo** ano fiscal pode ser registado como previsão, e o registo exige a mesma permissão que o de um ano passado. Quando esse ano passa a ser o atual, o relatório lê em vez disso os atributos em vigor, e o valor em vigor do cartão substitui o que foi escrito.
+
+#### Que cartões aparecem
+
+- **Ano atual** — O custo anual de um cartão conta **na íntegra** quando o ano fiscal atual se situa entre aquele em que o cartão passa a **Ativo** e aquele em que cai o seu **Fim de vida**, ambos incluídos. Nada é calculado pro rata: uma aplicação desativada em novembro continua a contar com todo o custo anual este ano. Um cartão cujo Fim de vida caiu num ano fiscal anterior não é contabilizado. As datas de ciclo de vida em falta são interpretadas tal como nos relatórios com viagem no tempo:
+    - **Sem data Ativo, mas com uma data de Planejamento ou de Entrada** — o cartão continua planeado e não é contabilizado.
+    - **Sem data de Fim de vida** — o cartão conta a partir do ano em que passa a Ativo.
+    - **Sem quaisquer datas de ciclo de vida** — o cartão conta.
+- **Qualquer outro ano (passado ou de previsão)** — Aparece todo o cartão ativo que tenha um **custo registado para esse ano**, mesmo que tenha sido desativado entretanto ou só fique ativo mais tarde. Um cartão sem custo registado para esse ano não aparece.
+- **Os cartões arquivados** nunca aparecem, em nenhum ano.
+
+A regra aplica-se a toda a página — aos totais, ao treemap, à tabela, às agregações por **Origem dos custos** e ao detalhamento — e o ano fiscal selecionado aparece no cabeçalho impresso.
+
+Quando escolhe um ano diferente de **Current**, um **gráfico de tendência** mostra o custo do ano atual e dos quatro anteriores. Enquanto **Forecast** for o ano selecionado, o gráfico mostra também uma barra para ele.
+
+Um administrador define o mês de início do ano fiscal em [Configurações → Geral](../admin/settings.md).
 
 ### Origem dos custos
 

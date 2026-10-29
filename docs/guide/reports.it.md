@@ -166,15 +166,32 @@ Il **Report Costi** fornisce un'analisi finanziaria del vostro panorama tecnolog
 
 ### Anno fiscale
 
-I costi sono annuali, quindi il report li mostra per **l'anno fiscale corrente**, indicato da un chip nella barra degli strumenti, ad esempio **Anno fiscale corrente: AF 2026** (oppure *AF 2025–2026* quando il vostro anno fiscale non inizia a gennaio). Il costo annuale di una scheda conta **per intero** quando l'anno fiscale corrente cade tra quello in cui la scheda diventa **Attivo** e quello in cui cade la sua **Fine vita**, entrambi inclusi. Nulla viene calcolato pro rata: un'applicazione dismessa a novembre porta ancora l'intero costo annuale quest'anno. Una scheda la cui Fine vita cadeva in un anno fiscale precedente non viene conteggiata.
+I costi sono annuali, quindi il report viene costruito per un **anno fiscale** alla volta. Un selettore **Anno fiscale** nella barra degli strumenti offre sei voci, dalla più recente:
 
-Le date del ciclo di vita mancanti vengono interpretate come nei report con il viaggio nel tempo:
+| Voce | Cosa mostra |
+|---|---|
+| **FY27 - Forecast** | L'anno fiscale successivo, da importi inseriti a mano (vedi sotto). |
+| **FY26 - Current** | L'anno fiscale corrente, dagli attributi di costo attuali delle schede. È il valore predefinito. |
+| **FY25** … **FY22** | I quattro anni fiscali precedenti quello corrente, dai costi registrati per essi. |
 
-- **Nessuna data Attivo, ma una data di Pianificazione o di Introduzione** — la scheda è ancora pianificata e non viene conteggiata.
-- **Nessuna data di Fine vita** — la scheda conta a partire dall'anno in cui diventa attiva.
-- **Nessuna data del ciclo di vita** — la scheda conta.
+Un anno fiscale si chiama **FY** più le ultime due cifre dell'anno in cui **termina**, qualunque sia il mese in cui inizia il vostro anno fiscale: un anno fiscale da luglio 2025 a giugno 2026 è **FY26**. Un chip nella barra degli strumenti ripete la selezione, ad esempio **Anno fiscale: FY26 - Current**. *Current* e *Forecast* non vengono tradotti.
 
-La regola vale per tutta la pagina — i totali, la treemap, la tabella, le aggregazioni per **Origine dei costi** (un Componente IT dismesso smette di sommarsi al totale della sua Applicazione) e il drill-down — e l'anno fiscale compare nell'intestazione di stampa. Non è possibile scegliere altri anni: una scheda porta un solo importo annuale e i costi reali cambiano da un anno all'altro, quindi lo stesso importo mostrato per un altro anno sarebbe fuorviante. Un amministratore stabilisce il mese di inizio dell'anno fiscale in [Impostazioni → Generale](../admin/settings.md).
+**Gli importi previsionali si inseriscono a mano.** Aprite una scheda, andate alla sua cronologia dei costi e digitate il costo pianificato per l'anno fiscale successivo, come registrate un anno passato. Solo l'anno fiscale **successivo** può essere registrato come previsione, e la registrazione richiede lo stesso permesso di quella di un anno passato. Quando quell'anno diventa quello corrente, il report legge invece gli attributi attuali, e l'importo attuale della scheda sostituisce quello digitato.
+
+#### Quali schede compaiono
+
+- **Anno corrente** — Il costo annuale di una scheda conta **per intero** quando l'anno fiscale corrente cade tra quello in cui la scheda diventa **Attivo** e quello in cui cade la sua **Fine vita**, entrambi inclusi. Nulla viene calcolato pro rata: un'applicazione dismessa a novembre porta ancora l'intero costo annuale quest'anno. Una scheda la cui Fine vita cadeva in un anno fiscale precedente non viene conteggiata. Le date del ciclo di vita mancanti vengono interpretate come nei report con il viaggio nel tempo:
+    - **Nessuna data Attivo, ma una data di Pianificazione o di Introduzione** — la scheda è ancora pianificata e non viene conteggiata.
+    - **Nessuna data di Fine vita** — la scheda conta a partire dall'anno in cui diventa attiva.
+    - **Nessuna data del ciclo di vita** — la scheda conta.
+- **Qualsiasi altro anno (passato o previsionale)** — Compare ogni scheda attiva con un **costo registrato per quell'anno**, anche se è stata dismessa da allora o diventa attiva solo più avanti. Una scheda senza costo registrato per quell'anno non compare.
+- **Le schede archiviate** non compaiono mai, in nessun anno.
+
+La regola vale per tutta la pagina — i totali, la treemap, la tabella, le aggregazioni per **Origine dei costi** e il drill-down — e l'anno fiscale selezionato compare nell'intestazione di stampa.
+
+Quando scegliete un anno diverso da **Current**, un **grafico di tendenza** mostra il costo dell'anno corrente e dei quattro precedenti. Quando l'anno selezionato è **Forecast**, il grafico mostra anche una barra per esso.
+
+Un amministratore stabilisce il mese di inizio dell'anno fiscale in [Impostazioni → Generale](../admin/settings.md).
 
 ### Origine dei costi
 

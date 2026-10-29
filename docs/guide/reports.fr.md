@@ -166,15 +166,32 @@ Le **Rapport Coûts** fournit une analyse financière de votre paysage technolog
 
 ### Exercice fiscal
 
-Les coûts sont annuels : le rapport les présente donc pour **l'exercice fiscal en cours**, qu'une puce de la barre d'outils nomme, par exemple **Exercice fiscal en cours : EF 2026** (ou *EF 2025–2026* lorsque votre exercice ne commence pas en janvier). Le coût annuel d'une fiche compte **en totalité** lorsque l'exercice en cours se situe entre celui où la fiche devient **Actif** et celui où tombe sa **Fin de vie**, les deux inclus. Rien n'est calculé au prorata : une application retirée en novembre porte encore la totalité de son coût annuel cette année. Une fiche dont la Fin de vie tombait dans un exercice antérieur n'est pas comptée.
+Les coûts sont annuels : le rapport est donc établi pour un **exercice fiscal** à la fois. Un sélecteur **Exercice fiscal** dans la barre d'outils propose six entrées, la plus récente en premier :
 
-Les dates de cycle de vie manquantes sont interprétées comme dans les rapports dotés du voyage dans le temps :
+| Entrée | Ce qu'elle affiche |
+|---|---|
+| **FY27 - Forecast** | L'exercice suivant, à partir de montants saisis à la main (voir ci-dessous). |
+| **FY26 - Current** | L'exercice en cours, à partir des attributs de coût actuels des fiches. C'est la valeur par défaut. |
+| **FY25** … **FY22** | Les quatre exercices précédant l'exercice en cours, à partir des coûts enregistrés pour eux. |
 
-- **Pas de date Actif, mais une date de Planification ou de Mise en service** — la fiche est encore planifiée et n'est pas comptée.
-- **Pas de date de Fin de vie** — la fiche compte à partir de l'exercice où elle devient active.
-- **Aucune date de cycle de vie** — la fiche compte.
+Un exercice fiscal se nomme **FY** suivi des deux derniers chiffres de l'année où il **se termine**, quel que soit le mois où débute votre exercice : un exercice allant de juillet 2025 à juin 2026 est **FY26**. Une puce de la barre d'outils rappelle la sélection, par exemple **Exercice fiscal : FY26 - Current**. *Current* et *Forecast* ne sont pas traduits.
 
-La règle s'applique à toute la page — les totaux, le treemap, le tableau, les agrégations par **Source des coûts** (un composant IT retiré cesse de s'ajouter au total de son application) et le forage — et l'exercice figure dans l'en-tête imprimé. Il n'existe pas de choix d'un autre exercice : une fiche ne porte qu'un seul montant annuel, et les coûts réels varient d'une année à l'autre, si bien que le même montant affiché pour un autre exercice induirait en erreur. Le mois de début de l'exercice est défini par un administrateur dans [Paramètres → Général](../admin/settings.md).
+**Les montants prévisionnels se saisissent à la main.** Ouvrez une fiche, allez à son historique des coûts et saisissez le coût prévu pour l'exercice suivant, comme vous enregistrez un exercice passé. Seul l'exercice **suivant** peut être enregistré comme prévision, et cet enregistrement requiert la même permission que celui d'un exercice passé. Lorsque cet exercice devient l'exercice en cours, le rapport lit à la place les attributs actuels, et le montant actuel de la fiche remplace celui qui avait été saisi.
+
+#### Quelles fiches apparaissent
+
+- **Exercice en cours** — Le coût annuel d'une fiche compte **en totalité** lorsque l'exercice en cours se situe entre celui où la fiche devient **Actif** et celui où tombe sa **Fin de vie**, les deux inclus. Rien n'est calculé au prorata : une application retirée en novembre porte encore la totalité de son coût annuel cette année. Une fiche dont la Fin de vie tombait dans un exercice antérieur n'est pas comptée. Les dates de cycle de vie manquantes sont interprétées comme dans les rapports dotés du voyage dans le temps :
+    - **Pas de date Actif, mais une date de Planification ou de Mise en service** — la fiche est encore planifiée et n'est pas comptée.
+    - **Pas de date de Fin de vie** — la fiche compte à partir de l'exercice où elle devient active.
+    - **Aucune date de cycle de vie** — la fiche compte.
+- **Tout autre exercice (passé ou prévisionnel)** — Toute fiche active ayant un **coût enregistré pour cet exercice** apparaît, même si elle a été retirée depuis ou ne devient active que plus tard. Une fiche sans coût enregistré pour cet exercice n'apparaît pas.
+- **Les fiches archivées** n'apparaissent jamais, quel que soit l'exercice.
+
+La règle s'applique à toute la page — les totaux, le treemap, le tableau, les agrégations par **Source des coûts** et le forage — et l'exercice sélectionné figure dans l'en-tête imprimé.
+
+Lorsque vous choisissez un exercice autre que **Current**, un **graphique de tendance** montre le coût sur l'exercice en cours et les quatre précédents. Tant que **Forecast** est l'exercice sélectionné, le graphique affiche aussi une barre pour celui-ci.
+
+Le mois de début de l'exercice est défini par un administrateur dans [Paramètres → Général](../admin/settings.md).
 
 ### Source des coûts
 
