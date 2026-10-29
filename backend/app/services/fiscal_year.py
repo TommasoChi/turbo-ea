@@ -21,6 +21,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.app_settings import AppSettings
 
+# Sanity bounds for a fiscal year taken from a request: far wider than any real value, but
+# narrow enough to fit the integer column, so a nonsense year is a 422, never a database 500.
+MIN_FISCAL_YEAR = 1900
+MAX_FISCAL_YEAR = 2200
+# Cost history is kept for the current fiscal year and the five before it.
+FISCAL_YEAR_LOOKBACK = 5
+
 
 def _fiscal_year(year: int, month: int, start_month: int) -> int:
     """Fiscal year for a (year, month), named after the year the year *ends* in.
@@ -61,6 +68,12 @@ def current_fiscal_year(start_month: int) -> int:
     """The fiscal year today (UTC) falls in."""
     today = datetime.now(timezone.utc).date()
     return _fiscal_year(today.year, today.month, start_month)
+
+
+def fiscal_year_window(start_month: int) -> tuple[int, int]:
+    """The oldest and newest fiscal year cost history may be recorded for."""
+    current = current_fiscal_year(start_month)
+    return current - FISCAL_YEAR_LOOKBACK, current
 
 
 async def get_fiscal_year_start(db: AsyncSession) -> int:

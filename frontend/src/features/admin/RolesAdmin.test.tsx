@@ -390,6 +390,25 @@ describe("RolesAdmin onRolesChanged", () => {
     });
   });
 
+  it("shows the role label as text in the archive confirmation, not as markup", async () => {
+    const user = userEvent.setup();
+    const hostile = '<img src="x" onerror="alert(1)">Ops';
+    const roles = MOCK_ROLES.map((r) => (r.key === "member" ? { ...r, label: hostile } : r));
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.startsWith("/roles/permissions-schema")) return Promise.resolve(MOCK_SCHEMA);
+      if (path.startsWith("/roles/")) return Promise.resolve(roles[1]);
+      return Promise.resolve(roles);
+    });
+    renderRoles();
+
+    await user.click(await screen.findByText(hostile));
+    await user.click(await screen.findByRole("button", { name: /archive role/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.querySelector("strong")?.textContent).toBe(hostile);
+    expect(dialog.querySelector("img")).toBeNull();
+  });
+
   it("does not fire when a save fails", async () => {
     const user = userEvent.setup();
     const onRolesChanged = vi.fn();

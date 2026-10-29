@@ -489,11 +489,18 @@ async def element_it_component_map(
     if not all_ids:
         return []
 
-    card_result = await db.execute(select(Card).where(Card.id.in_(all_ids)))
+    readable = (await CardReadScope.load(db, user)).where(Card, mode="module")
+    card_result = await db.execute(select(Card).where(Card.id.in_(all_ids), *readable))
     card_map = {str(card.id): card.name for card in card_result.scalars().all()}
 
     result_list = []
     for comp_id, elems in grouped.items():
+        # A card or process the reader may not see is left out.
+        if comp_id not in card_map:
+            continue
+        elems = [e for e in elems if e["process_id"] in card_map]
+        if not elems:
+            continue
         for elem in elems:
             elem["process_name"] = card_map.get(elem["process_id"], "")
         result_list.append(
@@ -542,11 +549,18 @@ async def element_data_object_map(
     if not all_ids:
         return []
 
-    card_result = await db.execute(select(Card).where(Card.id.in_(all_ids)))
+    readable = (await CardReadScope.load(db, user)).where(Card, mode="module")
+    card_result = await db.execute(select(Card).where(Card.id.in_(all_ids), *readable))
     card_map = {str(card.id): card.name for card in card_result.scalars().all()}
 
     result_list = []
     for obj_id, elems in grouped.items():
+        # A card or process the reader may not see is left out.
+        if obj_id not in card_map:
+            continue
+        elems = [e for e in elems if e["process_id"] in card_map]
+        if not elems:
+            continue
         for elem in elems:
             elem["process_name"] = card_map.get(elem["process_id"], "")
         result_list.append(

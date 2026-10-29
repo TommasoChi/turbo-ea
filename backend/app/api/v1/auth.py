@@ -13,7 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_optional_user
 from app.config import settings
 from app.core.rate_limit import limiter
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
 from app.database import get_db
 from app.models.sso_invitation import SsoInvitation
 from app.models.user import User
@@ -588,8 +593,6 @@ async def me(
         raw_auth[7:] if raw_auth.startswith("Bearer ") else request.cookies.get("access_token", "")
     )
     if raw_token:
-        from app.core.security import decode_access_token
-
         payload = decode_access_token(raw_token)
         if payload:
             impersonated_role_key = payload.get("impersonated_role")
@@ -685,8 +688,6 @@ async def stop_impersonating(
     JWT without the claim so all subsequent checks revert to the user's
     real role.
     """
-    from app.core.security import decode_access_token
-
     raw_auth = request.headers.get("Authorization", "")
     raw_token = (
         raw_auth[7:] if raw_auth.startswith("Bearer ") else request.cookies.get("access_token", "")
@@ -726,7 +727,16 @@ async def refresh_token(
     """Issue a new short-lived access token. Re-reads role and active status from DB."""
     if not user.is_active:
         raise HTTPException(403, "Account disabled")
-    token = create_access_token(user.id, user.role)
+    # A "view as role" session survives a refresh: dropping the claim would end it
+    # silently. It only ever narrows what the admin can do, so carrying it is safe.
+    raw_auth = request.headers.get("Authorization", "")
+    raw_token = (
+        raw_auth[7:] if raw_auth.startswith("Bearer ") else request.cookies.get("access_token", "")
+    )
+    claims = decode_access_token(raw_token) or {}
+    token = create_access_token(
+        user.id, user.role, impersonated_role=claims.get("impersonated_role")
+    )
     _set_auth_cookie(response, token, secure=_is_secure_request(request))
     return TokenResponse(access_token=token)
 

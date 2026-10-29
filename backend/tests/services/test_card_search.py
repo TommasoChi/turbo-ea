@@ -28,6 +28,12 @@ class TestSearchedColumns:
         assert "cards.description" in sql
         assert "cards.alias" in sql
 
+    def test_filter_can_leave_the_description_out(self):
+        sql = _compiled(card_search_filter("crm", in_description=False))
+        assert "cards.name" in sql
+        assert "cards.alias" in sql
+        assert "cards.description" not in sql
+
     def test_rank_covers_only_the_name_like_columns(self):
         """A term buried in a paragraph says nothing about match quality."""
         sql = _compiled(card_search_rank("crm"))

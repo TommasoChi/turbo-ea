@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -1150,6 +1154,19 @@ async def lifespan(app: FastAPI):
             pass
 
 
+async def validation_error_handler(_request: Request, exc: RequestValidationError):
+    """Default 422 body, except a non-finite float echoed back as its text.
+
+    FastAPI puts the rejected input in the error and JSON cannot hold NaN or
+    infinity, so a body like {"value": 1e999} turned its own 422 into a 500.
+    """
+    errors = jsonable_encoder(
+        exc.errors(),
+        custom_encoder={float: lambda f: f if math.isfinite(f) else str(f)},
+    )
+    return JSONResponse(status_code=422, content={"detail": errors})
+
+
 # ── H6: Conditionally disable OpenAPI docs in production ──
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -1163,6 +1180,7 @@ app = FastAPI(
 # ── C7: Rate limiter ──
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 # ── C1: CORS — restrict origins instead of wildcard ──
 app.add_middleware(

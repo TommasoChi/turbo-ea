@@ -189,6 +189,7 @@ async def db(test_engine):
 async def app(db):
     """Minimal FastAPI test app with ``get_db`` overridden to use the test session."""
     from fastapi import FastAPI
+    from fastapi.exceptions import RequestValidationError
     from slowapi import _rate_limit_exceeded_handler
     from slowapi.errors import RateLimitExceeded
 
@@ -196,10 +197,12 @@ async def app(db):
     from app.config import settings
     from app.core.rate_limit import limiter
     from app.database import get_db
+    from app.main import validation_error_handler
 
     test_app = FastAPI()
     test_app.state.limiter = limiter
     test_app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    test_app.add_exception_handler(RequestValidationError, validation_error_handler)
 
     # Mirror the production origin-tracking middleware so tests can verify
     # the audit log tags `X-Turbo-EA-Origin: mcp` writes correctly.

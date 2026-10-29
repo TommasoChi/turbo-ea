@@ -69,6 +69,17 @@ BRAND_ICON_MIME = "image/png"
 # Guards only the lazy open, not the reads — `pread` needs no serialisation.
 _fd_lock = threading.Lock()
 _fd: int | None = None
+_read_lock = threading.Lock()
+
+
+def _pread_seek(fd: int, length: int, offset: int) -> bytes:
+    """``os.pread`` for platforms without it (Windows): the fd is shared, so seek under a lock."""
+    with _read_lock:
+        os.lseek(fd, offset, os.SEEK_SET)
+        return os.read(fd, length)
+
+
+_pread = getattr(os, "pread", _pread_seek)
 
 
 def parse_ref(raw: str | None) -> tuple[str | None, str] | None:
@@ -150,7 +161,8 @@ def _pack_fd() -> int | None:
     with _fd_lock:
         if _fd is None:  # re-check: another thread may have won the race
             try:
-                _fd = os.open(_PACK_PATH, os.O_RDONLY)
+                # O_BINARY exists on Windows only, where a text-mode read corrupts a PNG.
+                _fd = os.open(_PACK_PATH, os.O_RDONLY | getattr(os, "O_BINARY", 0))
             except OSError:
                 return None
     return _fd
@@ -172,7 +184,7 @@ def _read_icon_bytes(slug: str, pack: str | None = None) -> bytes | None:
     offset = entry.get("offset")
     if not length or offset is None:
         return None
-    data = os.pread(fd, length, offset)
+    data = _pread(fd, length, offset)
     # A short read means the index and the pack disagree — a half-written
     # generator run. Report it as unknown rather than serving a truncated PNG.
     return data if len(data) == length else None

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import uuid
+from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.security import decode_access_token
 from app.database import get_db
 from app.models.user import User
@@ -26,6 +28,28 @@ def parse_uuid(value: str, *, detail: str = "Not found") -> uuid.UUID:
         raise HTTPException(status_code=404, detail=detail) from None
 
 
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def _reject_foreign_origin(request: Request) -> None:
+    """Refuse a cookie-authenticated write whose ``Origin`` is not this deployment's.
+
+    SameSite=lax keeps the cookie off cross-site POSTs, but not off a write from
+    a sibling site or subdomain. No ``Origin`` (a script or curl) passes; one
+    that is in ``ALLOWED_ORIGINS`` or has this request's host passes. The host
+    is compared without port: the edge nginx forwards ``$host``, which has none.
+    """
+    origin = request.headers.get("Origin")
+    if request.method in _SAFE_METHODS or not origin:
+        return
+    if origin in settings.ALLOWED_ORIGINS:
+        return
+    host = urlsplit("//" + request.headers.get("Host", "")).hostname
+    if host and urlsplit(origin).hostname == host:
+        return
+    raise HTTPException(status_code=403, detail="Cross-origin request refused")
+
+
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
@@ -33,6 +57,8 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     else:
         # Fall back to httpOnly cookie set by /auth/login
         token = request.cookies.get("access_token", "")
+        if token:
+            _reject_foreign_origin(request)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     payload = decode_access_token(token)

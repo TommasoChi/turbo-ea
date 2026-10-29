@@ -541,6 +541,15 @@ async def test_settings_create_the_row_and_merge_without_secrets(db, runtime):
     assert counts(sr) == (0, 2, 0, 0, 0)
 
 
+async def test_a_dry_run_never_touches_the_runtime_email_config(db, runtime):
+    """The dry-run rolls the row back but cannot roll back the in-memory singleton."""
+    rows = [{"key": "email_settings", "value": '{"smtp_host": "attacker.example"}'}]
+    sr = section()
+    await applier._apply_settings(db, bundle(schema.SHEET_SETTINGS, rows), sr, True)
+    assert runtime == []
+    assert counts(sr) == (0, 1, 0, 0, 0)
+
+
 async def test_unchanged_settings_are_skipped_and_the_runtime_is_left_alone(db, runtime):
     db.add(
         AppSettings(

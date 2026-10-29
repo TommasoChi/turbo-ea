@@ -129,7 +129,7 @@ async def env(db):
     )
     db.add(portal)
     await db.flush()
-    return {"crm": crm, "erp": erp, "server": server, "sales": sales, "portal": portal}
+    return {"crm": crm, "erp": erp, "server": server, "sales": sales, "portal": portal, "tag": tag}
 
 
 async def _cards(client, query: str = "") -> dict:
@@ -188,6 +188,29 @@ class TestHiddenValuesCannotBeProbed:
         filters = json.dumps({"app_to_itc": str(env["server"].id)})
         data = await _cards(client, f"?relation_filters={filters}")
         assert [item["name"] for item in data["items"]] == ["CRM"]
+
+    async def test_search_does_not_match_a_hidden_description(self, client, env):
+        # CRM's description holds "relationship"; the page hides descriptions.
+        assert (await _cards(client, "?search=relationship"))["total"] == 0
+
+    async def test_search_still_matches_the_name(self, client, env):
+        data = await _cards(client, "?search=CRM")
+        assert [item["name"] for item in data["items"]] == ["CRM"]
+
+    async def test_tag_filter_while_tags_are_hidden_is_ignored(self, client, env):
+        tag_id = env["tag"].id
+        assert (await _cards(client, f"?tag_ids={tag_id}"))["total"] == 2
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "?tag_ids=not-a-uuid",
+            "?related_type=app_to_itc&related_id=not-a-uuid",
+            '?relation_filters={"app_to_itc":"not-a-uuid"}',
+        ],
+    )
+    async def test_a_malformed_id_filter_is_ignored_not_a_500(self, client, env, query):
+        assert (await _cards(client, query))["total"] == 2
 
     async def test_sorting_by_a_hidden_property_falls_back_to_name(self, client, env):
         data = await _cards(client, "?sort_by=data_quality&sort_dir=desc")

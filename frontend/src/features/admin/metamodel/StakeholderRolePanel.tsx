@@ -853,7 +853,7 @@ export default function StakeholderRolePanel({ typeKey, onError }: StakeholderRo
                     confirm.action === "delete"
                       ? "metamodel.stakeholderPanel.deleteRoleConfirm"
                       : "metamodel.stakeholderPanel.archiveRoleConfirm",
-                    { label: confirm.role.label, key: confirm.role.key },
+                    { label: confirm.role.label, key: confirm.role.key, interpolation: { escapeValue: true } },
                   ),
                 }}
               />

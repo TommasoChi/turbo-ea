@@ -79,11 +79,14 @@ const DELETE_ONLY_BLOCKED = {
   can_rekey: true,
 };
 
-function mockApi({ usage = UNUSED }: { usage?: typeof UNUSED } = {}) {
+function mockApi({
+  usage = UNUSED,
+  roles = ROLES,
+}: { usage?: typeof UNUSED; roles?: typeof ROLES } = {}) {
   apiMock.get.mockImplementation((path: string) => {
     if (path.includes("/usage")) return Promise.resolve(usage);
     if (path.includes("permissions-schema")) return Promise.resolve({ "card.view": "View card" });
-    return Promise.resolve(ROLES);
+    return Promise.resolve(roles);
   });
   apiMock.delete.mockResolvedValue(undefined);
   apiMock.post.mockResolvedValue({});
@@ -159,6 +162,21 @@ describe("StakeholderRolePanel — delete", () => {
         "/metamodel/types/Application/stakeholder-roles/typoRole",
       ),
     );
+  });
+
+  it("shows the role label and key as text in the delete confirmation, not as markup", async () => {
+    const hostile = '<img src="x" onerror="alert(1)">Ops';
+    mockApi({ roles: [ROLES[0], { ...ROLES[1], label: hostile }] });
+    const user = userEvent.setup();
+    render(<StakeholderRolePanel typeKey="Application" onError={() => {}} />);
+
+    await screen.findByText(hostile);
+    await user.click(screen.getAllByRole("button", { name: /delete/i })[1]);
+
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(dialog.querySelector("strong")).not.toBeNull());
+    expect(dialog.querySelector("strong")?.textContent).toContain(hostile);
+    expect(dialog.querySelector("img")).toBeNull();
   });
 
   it("blocks deletion of an in-use role and offers archive instead", async () => {

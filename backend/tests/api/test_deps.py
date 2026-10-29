@@ -25,9 +25,12 @@ from tests.conftest import (
 
 class _FakeRequest:
     """Duck-types the bits of `Request` get_optional_user/get_current_user
-    read — `.headers.get` and `.cookies.get` — without a real ASGI scope."""
+    read — `.method`, `.headers.get` and `.cookies.get` — without a real ASGI scope."""
 
-    def __init__(self, headers: dict | None = None, cookies: dict | None = None) -> None:
+    def __init__(
+        self, headers: dict | None = None, cookies: dict | None = None, method: str = "GET"
+    ) -> None:
+        self.method = method
         self.headers = headers or {}
         self.cookies = cookies or {}
 

@@ -25,13 +25,16 @@ from app.services.search_rank import search_filter, search_rank
 __all__ = ["card_search_filter", "card_search_rank"]
 
 
-def card_search_filter(search: str) -> ColumnElement[bool]:
-    """The three texts every card search box matches: name, description, alias."""
-    return or_(
-        search_filter(Card.name, search),
-        search_filter(Card.description, search),
-        search_filter(Card.alias, search),
-    )
+def card_search_filter(search: str, *, in_description: bool = True) -> ColumnElement[bool]:
+    """The three texts every card search box matches: name, description, alias.
+
+    ``in_description=False`` for a reader who may not see descriptions: matching
+    one would confirm its words even though they are never sent.
+    """
+    columns = [Card.name, Card.alias]
+    if in_description:
+        columns.insert(1, Card.description)
+    return or_(*(search_filter(column, search) for column in columns))
 
 
 def card_search_rank(search: str) -> ColumnElement[int]:

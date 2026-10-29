@@ -1053,7 +1053,7 @@ export default function RolesAdmin({ onRolesChanged }: RolesAdminProps) {
           {archiveTarget && (
             <Stack spacing={2} sx={{ mt: 1 }}>
               <Typography>
-                <span dangerouslySetInnerHTML={{ __html: t("roles.archiveConfirm", { label: archiveTarget.label }) }} />
+                <span dangerouslySetInnerHTML={{ __html: t("roles.archiveConfirm", { label: archiveTarget.label, interpolation: { escapeValue: true } }) }} />
               </Typography>
               {archiveTarget.user_count !== undefined &&
                 archiveTarget.user_count > 0 && (

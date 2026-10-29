@@ -1312,6 +1312,50 @@ describe("TypeDetailDrawer — fields and sections", () => {
     expect(body.fields_schema[1].fields).toHaveLength(APPLICATION_TYPE.fields_schema[1].fields.length - 1);
   });
 
+  describe("confirmations show names as text, not as markup", () => {
+    const hostile = '<img src="x" onerror="alert(1)">Ops';
+    const expectText = (confirm: HTMLElement) => {
+      expect(confirm.querySelector("strong")?.textContent).toContain(hostile);
+      expect(confirm.querySelector("img")).toBeNull();
+    };
+
+    it("for a field", async () => {
+      const app: CardType = {
+        ...APPLICATION_TYPE,
+        fields_schema: APPLICATION_TYPE.fields_schema.map((sec, i) =>
+          i === 1
+            ? {
+                ...sec,
+                fields: sec.fields.map((f) =>
+                  f.key === "businessCriticality" ? { ...f, label: hostile } : f,
+                ),
+              }
+            : sec,
+        ),
+      };
+      const { user } = renderDrawer("Application", [app]);
+      await screen.findByRole("dialog");
+      await user.click(screen.getByRole("button", { name: "stub-delete-field" }));
+      expectText(await screen.findByRole("dialog", { name: ta("metamodel.typeDrawer.deleteField") }));
+    });
+
+    it.each([
+      ["with fields", TWO_SECTIONS, 1],
+      ["without fields", { ...TWO_SECTIONS, fields_schema: [TWO_SECTIONS.fields_schema[0], TWO_SECTIONS.fields_schema[2]] }, 1],
+    ] as const)("for a section %s", async (_label, type, index) => {
+      const vehicle: CardType = {
+        ...type,
+        fields_schema: type.fields_schema.map((sec, i) =>
+          i === index ? { ...sec, section: hostile } : sec,
+        ),
+      };
+      const { user } = renderDrawer("Vehicle", [vehicle]);
+      await screen.findByRole("dialog");
+      await user.click(screen.getByRole("button", { name: "stub-delete-section" }));
+      expectText(await screen.findByRole("dialog", { name: ta("metamodel.typeDrawer.deleteSection") }));
+    });
+  });
+
   it("says a field is safe to delete when nothing uses it, and cancels", async () => {
     mockApi.on("get", /\/field-usage\?/, { card_count: 0 });
     const { user } = renderDrawer();
