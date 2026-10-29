@@ -915,8 +915,10 @@ async def _apply_settings(db, bundle: WorkspaceBundle, sr: SectionResult, dry_ru
             row_obj.email_settings = merged_email
             sr.updated += 1
             # Mirror the imported settings into the runtime singleton so the
-            # new method/transport takes effect without a restart.
-            apply_email_settings_to_runtime(merged_email)
+            # new method/transport takes effect without a restart. Never on a
+            # dry run: the rollback restores the row, not this in-memory state.
+            if not dry_run:
+                apply_email_settings_to_runtime(merged_email)
         else:
             sr.skip("identical")
     if incoming.get("custom_logo_mime"):
