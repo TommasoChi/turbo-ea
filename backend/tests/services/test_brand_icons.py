@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
 from app.services.brand_icons import (
     _INDEX_PATH,
     _PACK_PATH,
+    _pread_seek,
     _read_icon_bytes,
     icon_count,
     normalise_slug,
@@ -236,3 +238,23 @@ class TestTwoPacks:
         for ref in refs:
             assert ref.split(":")[0] in {"logos", "simpleicons"}
             assert resolve_brand_icon(ref) is not None
+
+
+class TestPreadFallback:
+    """Windows has no ``os.pread``: the seek-and-read stand-in must return the same slice."""
+
+    def test_seek_and_read_returns_the_requested_slice(self, tmp_path):
+        data = bytes(range(256)) * 4
+        path = tmp_path / "pack.bin"
+        path.write_bytes(data)
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+        try:
+            assert _pread_seek(fd, 5, 300) == data[300:305]
+            assert _pread_seek(fd, 3, 0) == data[0:3]  # not a continuation of the last read
+        finally:
+            os.close(fd)
+
+    def test_the_bytes_of_an_icon_survive_a_binary_open(self):
+        resolved = resolve_brand_icon("sap")
+        assert resolved is not None
+        assert resolved[0][:8] == bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
