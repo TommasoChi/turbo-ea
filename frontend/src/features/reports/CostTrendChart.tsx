@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Box from "@mui/material/Box";
 import {
   BarChart,
@@ -10,6 +10,7 @@ import {
   Legend,
 } from "recharts";
 import { api } from "@/api/client";
+import { useAbortableEffect } from "@/hooks/useLatestRequest";
 
 const COST_FIELDS = [
   "softwareLicensingCost",
@@ -33,30 +34,29 @@ export default function CostTrendChart({
 }) {
   const [rows, setRows] = useState<TrendRow[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all(
-      years.map((year) =>
-        Promise.all(
-          COST_FIELDS.map((field) =>
-            api.get(
-              `/reports/cost-treemap?type=${cardTypeKey}&cost_field=${field}&fiscal_year=${year}`,
-            ) as Promise<{ total: number }>,
-          ),
-        ).then(([sw, ams, infra]) => ({
-          fiscalYear: year,
-          softwareLicensingCost: sw.total,
-          applicationManagementServicesCost: ams.total,
-          infrastruttureCost: infra.total,
-        })),
-      ),
-    ).then((results) => {
-      if (!cancelled) setRows(results);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [cardTypeKey, years]);
+  useAbortableEffect(
+    async ({ signal, isCurrent }) => {
+      const results = await Promise.all(
+        years.map((year) =>
+          Promise.all(
+            COST_FIELDS.map((field) =>
+              api.get<{ total: number }>(
+                `/reports/cost-treemap?type=${cardTypeKey}&cost_field=${field}&fiscal_year=${year}`,
+                { signal },
+              ),
+            ),
+          ).then(([sw, ams, infra]) => ({
+            fiscalYear: year,
+            softwareLicensingCost: sw.total,
+            applicationManagementServicesCost: ams.total,
+            infrastruttureCost: infra.total,
+          })),
+        ),
+      );
+      if (isCurrent()) setRows(results);
+    },
+    [cardTypeKey, years],
+  );
 
   return (
     <Box data-testid="cost-trend-chart">
