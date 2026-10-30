@@ -23,13 +23,16 @@ Five improvements to `/reports/cost`:
 
 ## Requirements
 
-1. **Initiative in the selector.** `Initiative` is offered. The "Cost field" selector lists the fields of type `cost` in the card type's schema (read from the metamodel, not hard-coded), so for Initiative it lists `costBudget` and `costActual`.
+1. **Initiative in the selector.** `Initiative` is offered. The "Cost field" selector lists the fields of type `cost` in the card type's schema (read from the metamodel, not hard-coded), so for Initiative it lists `costBudget` and `costActual`; it starts on `costBudget`. The two are never added together.
+   - **Which year an Initiative counts in.** Initiatives have no cost history: the card itself carries a start and an end date. An Initiative's whole cost counts in the fiscal year of its **start date** (where the budget is allocated), not spread over the years it runs. An Initiative starting next fiscal year therefore appears in the Forecast year. No lifecycle filter applies to Initiatives; archived ones never appear.
 2. **Combined option.** The selector gains "Application + IT Component". Treemap and table show the cards of both types together, each with its own cost, in one chart. The treemap endpoint accepts several types (for example `type=Application,ITComponent`); a single `type` keeps working unchanged. Each item carries its card type.
 3. **History chart.** It is displayed only while the Forecast year is the selected year (not on Current, not on past years). It shows one stacked bar per fiscal year (the current year and the four before it, plus the Forecast bar), the segments being **every cost field that concurs to the total cost**: the cost fields named in the active calculation whose target is the type's total field; for a type with no such calculation, all its cost fields. The **legend and tooltip use the technical field key** (for example `softwareLicensingCost`), not the label. (This replaces requirement 7 of the earlier spec, and the three hard-coded series.)
 4. **Full screen.** In full screen the treemap and the Sankey take the whole width and height of the screen and do not distort; the existing exit button stays. In the normal page the chart keeps its current size.
-5. **Sankey like the treemap.** The Sankey view shows the same toolbar as the treemap: Card type (including the combined option and Initiative), the card scope filter, Cost field, fiscal-year picker, and Group by. Year, scope and cost field filter the Sankey as they filter the treemap. Group by is also offered in the treemap view (the endpoint already supports it).
-   - **Diagram.** The Sankey shows the cost items that concur to the total flowing into the cards of the chosen type, and on to the group when a Group by is chosen. For the combined option it shows cost items → IT Component → Application, the IT Component's cost flowing to the applications that use it through `app_to_itc`, as it does today.
-6. **Group by in the combined case.** Offered only on fields that have the **same technical key in both types**; disabled when there is none.
+5. **Sankey like the treemap.** The Sankey view behaves exactly like the treemap view and only the drawing changes: same toolbar (Card type including the combined option and Initiative, card scope filter, Cost field, fiscal-year picker, Group by), same filters, same year, same cost field, same counting. Group by is also offered in the treemap view.
+   - **No cost is ever counted twice.** In every view, a card's cost appears once in the totals. An IT Component used by several applications is counted once, not once per application.
+   - **Diagram (agent's reading, to check).** The Sankey draws the cost items that concur to the total flowing into the cards of the chosen type, and on to the group when a Group by is chosen. For the combined option it draws cost items → IT Component → Application.
+6. **Group by (treemap, table and Sankey alike).** A card is grouped either by (a) the value of a **field written on the card**, or (b) by a **linked card**, named by the linked card's name, but only through a relation in which each card has **at most one** linked card of that type (cardinality `1:1`, or `1:n` seen from the "n" side); a many-to-many relation such as Initiative ↔ Application is never offered, so a cost can never land in two groups. A card with no value for the field, or no linked card, goes to the group **Other**. Grouping never duplicates or drops a cost.
+   - **Combined case.** Group by is offered only on fields that have the **same technical key in both types**, and on linked-card relations that exist, with the same rule, for both; it is disabled when there is none.
 
 ## Rules and allowed values
 
@@ -37,7 +40,11 @@ Five improvements to `/reports/cost`:
 |---|---|
 | Card type options | Application, IT Component, Application + IT Component, Initiative |
 | Cost field options | the `cost`-typed fields of the chosen type; for the combined option, those with the same key in both types |
-| Group by options (combined) | fields with the same technical key in both types; disabled if none |
+| Group by options | card fields; linked cards through a relation with at most one linked card per card (1:1, or 1:n from the n side), never n:m |
+| Group by options (combined) | those that exist with the same technical key / relation in both types; disabled if none |
+| Card with no value or no link for the Group by | group "Other" |
+| A cost in the totals | counted exactly once, in every view |
+| Initiative year | the fiscal year of its start date, whole cost; cost field defaults to `costBudget`, never `costBudget + costActual` |
 | `type` parameter of the treemap endpoint | one type key, or several separated by commas; each must be a card type that has cost fields |
 | History chart shown | only while the Forecast year is selected |
 | History chart series | the cost fields concurring to the total (from the active calculation), else all the type's cost fields |
@@ -51,6 +58,7 @@ Five improvements to `/reports/cost`:
 
 - Changing how the total cost is calculated or which cards count in a year (unchanged from the earlier spec).
 - A Sankey for card types other than the four above.
+- Using Initiatives as a group (the relation is many-to-many).
 - Translating the technical field keys in the history legend.
 - Touching PPM screens.
 
@@ -72,4 +80,6 @@ Five improvements to `/reports/cost`:
 - The Sankey shape in requirement 5 (cost items → cards → group; items → IT Component → Application for the combined option) is my reading of "the Sankey must report all the cost items that flow into the total"; the user did not choose between the two shapes offered.
 - Cost-field options for the combined option are the keys common to both types (same rule as Group by).
 - The Group by selector appearing in the treemap is my reading of "same page as the treemap"; today it is hidden there.
+- Initiatives: the cost field defaults to `costBudget` and the user can switch to `costActual`; the user chose the start date as the year but did not say which field.
+- The history chart for an Initiative uses the one selected cost field, since its two fields do not add up.
 - A history chart for the combined option uses the cost fields common to both types.
