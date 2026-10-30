@@ -79,3 +79,35 @@ async def test_formula_with_multiplication_still_lists_referenced_fields(db):
     await create_card_type(db, key="Application", fields_schema=_schema(TOTAL, "a", "b"))
     await _calc(db, "Application", "x = data.a * 12 + data.b")
     assert await cost_components(db, ["Application"], TOTAL) == ["a", "b"]
+
+
+async def test_order_follows_formula_not_alphabet(db):
+    await create_card_type(db, key="Application", fields_schema=_schema(TOTAL, "a", "b", "c"))
+    await _calc(db, "Application", "x = data.c + data.a + data.b")
+    assert await cost_components(db, ["Application"], TOTAL) == ["c", "a", "b"]
+
+
+async def test_intersection_keeps_order_of_first_type(db):
+    await create_card_type(db, key="Application", fields_schema=_schema(TOTAL, "a", "b", "c"))
+    await create_card_type(db, key="ITComponent", fields_schema=_schema(TOTAL, "b", "c"))
+    await _calc(db, "Application", "x = data.c + data.b + data.a")
+    await _calc(db, "ITComponent", "x = data.b + data.c")
+    assert await cost_components(db, ["Application", "ITComponent"], TOTAL) == ["c", "b"]
+
+
+async def test_calculation_for_another_field_is_ignored(db):
+    await create_card_type(db, key="Application", fields_schema=_schema(TOTAL, "a", "other"))
+    await _calc(db, "Application", "x = data.a", field="other")
+    assert await cost_components(db, ["Application"], TOTAL) == [TOTAL]
+
+
+async def test_no_types_is_empty(db):
+    assert await cost_components(db, [], TOTAL) == []
+
+
+async def test_mixed_types_calculated_and_plain(db):
+    await create_card_type(db, key="Application", fields_schema=_schema(TOTAL, "a"))
+    await create_card_type(db, key="ITComponent", fields_schema=_schema(TOTAL))
+    await _calc(db, "Application", "x = data.a")
+    # Application -> [a]; ITComponent -> [TOTAL]; nothing shared
+    assert await cost_components(db, ["Application", "ITComponent"], TOTAL) == []

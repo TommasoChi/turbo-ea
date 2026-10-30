@@ -22,11 +22,13 @@ async def _type_components(db: AsyncSession, type_key: str, cost_field: str) -> 
     calc = (
         (
             await db.execute(
-                select(Calculation).where(
+                select(Calculation)
+                .where(
                     Calculation.target_type_key == type_key,
                     Calculation.target_field_key == cost_field,
                     Calculation.is_active.is_(True),
                 )
+                .order_by(Calculation.execution_order, Calculation.created_at)
             )
         )
         .scalars()
