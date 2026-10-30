@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 
 import pytest
@@ -189,9 +190,9 @@ class TestTimezones:
         assert result == datetime(2026, 1, 1, 10, 1, tzinfo=UTC)
         assert (result.second, result.microsecond) == (0, 0)
 
+    @pytest.mark.skipif(not hasattr(time, "tzset"), reason="time.tzset is POSIX-only")
     def test_the_host_clock_zone_plays_no_part(self):
         import os
-        import time
         from datetime import timedelta, timezone
 
         previous = os.environ.get("TZ")

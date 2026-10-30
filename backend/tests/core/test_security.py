@@ -50,6 +50,7 @@ def _issued_at(token: str) -> int:
     return jwt.decode(token, options={"verify_signature": False})["iat"]
 
 
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="time.tzset is POSIX-only")
 class TestTokensAreStampedInUtc:
     def test_a_session_token(self, host_clock_ahead_of_utc):
         before = int(time.time())
