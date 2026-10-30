@@ -182,7 +182,9 @@ async def _hist(db, card, year, value):
 
 async def _sankey(client, env, **params):
     resp = await client.get(
-        "/api/v1/reports/cost-sankey", params=params, headers=auth_headers(env["admin"])
+        "/api/v1/reports/cost-sankey",
+        params={"type": "Application", **params},
+        headers=auth_headers(env["admin"]),
     )
     assert resp.status_code == 200, resp.text
     return resp.json()
@@ -238,8 +240,8 @@ class TestPastAndForecastYearsListCardsWithARecordedCost:
         await _hist(db, itc, THIS_YEAR - 2, 60)
 
         data = await _sankey(client, env, fiscal_year=THIS_YEAR - 2)
-        assert sorted(n["name"] for n in data["nodes"]) == ["App", "ITC"]
-        assert data["total"] == 60
+        assert sorted(n["name"] for n in data["nodes"]) == ["App", "costTotalAnnual"]
+        assert data["total"] == 40
         assert (await _sankey(client, env))["nodes"] == []
 
     async def test_a_card_active_from_next_year_appears_in_the_forecast_year_sankey(
@@ -251,15 +253,15 @@ class TestPastAndForecastYearsListCardsWithARecordedCost:
         await _hist(db, itc, THIS_YEAR + 1, 60)
 
         data = await _sankey(client, env, fiscal_year=THIS_YEAR + 1)
-        assert sorted(n["name"] for n in data["nodes"]) == ["App", "ITC"]
-        assert data["total"] == 60
+        assert sorted(n["name"] for n in data["nodes"]) == ["App", "costTotalAnnual"]
+        assert data["total"] == 40
 
     async def test_the_current_year_is_unchanged_sankey(self, client, db, env):
         await _app_itc_pair(db)
         await _app_itc_pair(db, {"endOfLife": _d(THIS_YEAR - 1)}, {"endOfLife": _d(THIS_YEAR - 1)})
 
         data = await _sankey(client, env, fiscal_year=THIS_YEAR)
-        assert sorted(n["name"] for n in data["nodes"]) == ["App", "ITC"]
+        assert sorted(n["name"] for n in data["nodes"]) == ["App", "costTotalAnnual"]
         assert data["total"] == 100
 
 

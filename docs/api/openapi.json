@@ -34716,9 +34716,19 @@
     },
     "/api/v1/reports/cost-sankey": {
       "get": {
-        "description": "Cost flow between Application and ITComponent, via app_to_itc relations.\n\nTwo-level flow (``group_by`` unset): one node per Application and one per\nITComponent with ``cost_field`` > 0, one link per ``app_to_itc`` relation\nbetween two visible nodes, link value = the ITComponent end's cost (an\nITComponent related to several Applications fans the same value out on\neach link rather than being divided or deduped \u2014 a Sankey draws one flow\nper relation, so this cannot double-count the way a summed total would).\n\nThree-level flow (``group_by`` names a card type related to Application):\nApplication -> group node -> ITComponent. A ``group_by`` value naming a\ntype with no relation to any visible Application silently falls back to\nthe two-level flow instead of erroring, so a stale saved-report config\ndegrades gracefully.",
+        "description": "Cost flow: cost items -> cards, with groups in the middle when ``group_by`` is set.\n\nTakes the treemap's parameters and validation (see ``cost_treemap``); the flow is\nbuilt by ``services/cost_report.py::build_cost_sankey``.",
         "operationId": "cost_sankey_api_v1_reports_cost_sankey_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "default": "Application",
+              "title": "Type",
+              "type": "string"
+            }
+          },
           {
             "in": "query",
             "name": "cost_field",
