@@ -57,3 +57,31 @@ async def cards_with_cost(
         )
     )
     return [(card, value) for card, value in result.all()]
+
+
+def parse_type_keys(raw: str) -> list[str]:
+    """Split a comma-separated ``types`` query value; empty or repeated keys raise."""
+    keys = [k.strip() for k in raw.split(",")]
+    if not all(keys):
+        raise ValueError("empty card type key")
+    if len(set(keys)) != len(keys):
+        raise ValueError("duplicate card type key")
+    return keys
+
+
+async def cards_with_cost_for_types(
+    db: AsyncSession,
+    read_scope: CardReadScope,
+    type_keys: list[str],
+    cost_field: str,
+    target_fy: int,
+    current_fy: int,
+    fy_start: int,
+) -> list[tuple[Card, float]]:
+    """``cards_with_cost`` over several types, in the order of ``type_keys``."""
+    rows: list[tuple[Card, float]] = []
+    for key in type_keys:
+        rows += await cards_with_cost(
+            db, read_scope, key, cost_field, target_fy, current_fy, fy_start
+        )
+    return rows

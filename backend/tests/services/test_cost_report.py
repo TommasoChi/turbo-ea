@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import select
 
 from app.models.card_cost_history import CardCostHistory
 from app.models.card_type import CardType
 from app.models.user import User
 from app.services.card_read_scope import CardReadScope
-from app.services.cost_report import cards_with_cost
+from app.services.cost_report import cards_with_cost, cards_with_cost_for_types, parse_type_keys
 from app.services.fiscal_year import current_fiscal_year
 from app.services.permission_service import PermissionService
 from tests.conftest import create_card, create_card_type, create_role, create_user
@@ -124,3 +125,56 @@ async def test_only_the_requested_field_counts(db):
 
     assert await _run(db, admin, FY - 1, field="costLicense") == {"Two fields": 90}
     assert await _run(db, admin, FY - 1) == {"Two fields": 40}
+
+
+async def _two_types(db):
+    admin = await _admin(db)
+    await create_card_type(db, key="ITComponent", label="IT Component")
+    await _app(db, "App", 10)
+    await create_card(
+        db, card_type="ITComponent", name="Comp", attributes={FIELD: 20}, lifecycle={}
+    )
+    return admin
+
+
+async def test_cards_with_cost_for_types_joins_two_types(db):
+    admin = await _two_types(db)
+    scope = await CardReadScope.load(db, admin)
+
+    rows = await cards_with_cost_for_types(
+        db, scope, ["Application", "ITComponent"], FIELD, FY, FY, 1
+    )
+
+    assert [(c.name, v) for c, v in rows] == [("App", 10), ("Comp", 20)]
+
+
+async def test_hidden_type_is_omitted(db):
+    await _two_types(db)
+    await create_role(db, key="viewer", permissions={"inventory.view": True}, is_system=False)
+    viewer = await create_user(db, email="viewer@test.com", role="viewer")
+    ct = (await db.execute(select(CardType).where(CardType.key == "ITComponent"))).scalar_one()
+    ct.role_permissions = {"viewer": {"inventory.view": False}}
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    scope = await CardReadScope.load(db, viewer)
+
+    rows = await cards_with_cost_for_types(
+        db, scope, ["Application", "ITComponent"], FIELD, FY, FY, 1
+    )
+
+    assert [c.name for c, _ in rows] == ["App"]
+
+
+@pytest.mark.parametrize("raw", ["Application,", "", "Application,,ITComponent", " , "])
+def test_parse_type_keys_rejects_empty_entry(raw):
+    with pytest.raises(ValueError):
+        parse_type_keys(raw)
+
+
+def test_parse_type_keys_rejects_duplicate():
+    with pytest.raises(ValueError):
+        parse_type_keys("Application,Application")
+
+
+def test_parse_type_keys_splits_and_strips():
+    assert parse_type_keys("Application, ITComponent") == ["Application", "ITComponent"]
