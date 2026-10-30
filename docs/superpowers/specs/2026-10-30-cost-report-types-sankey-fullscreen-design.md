@@ -1,6 +1,6 @@
 # Cost report: more card types, a combined view, a history chart on Forecast, full-screen and a Sankey that behaves like the treemap
 
-**Spec status:** draft, on `fix/cost-report` (continues `2026-10-29-cost-report-fiscal-year-picker-design.md`, which is approved and built on this branch; where the two disagree, this one wins). Decisions below are the user's answers of 2026-10-30.
+**Spec status:** reviewed by a fresh agent, awaiting approval, on `fix/cost-report` (continues `2026-10-29-cost-report-fiscal-year-picker-design.md`, which is approved and built on this branch; where the two disagree, this one wins). Decisions below are the user's answers of 2026-10-30.
 
 ## Goal
 
@@ -24,7 +24,7 @@ Five improvements to `/reports/cost`:
 ## Requirements
 
 1. **Initiative in the selector.** `Initiative` is offered. The "Cost field" selector lists the fields of type `cost` in the card type's schema (read from the metamodel, not hard-coded), so for Initiative it lists `costBudget` and `costActual`; it starts on `costBudget`. The two are never added together.
-   - **Which year an Initiative counts in.** Initiatives have no cost history: the card itself carries a start and an end date. An Initiative's whole cost counts in the fiscal year of its **start date** (where the budget is allocated), not spread over the years it runs. An Initiative starting next fiscal year therefore appears in the Forecast year. No lifecycle filter applies to Initiatives; archived ones never appear.
+   - **Initiatives follow the same logic as Application costs, for now.** Same year rules (Current from live attributes and lifecycle, other years from the cost history, Forecast included), same picker, same treemap/table/Sankey. Reports specific to Initiatives are a separate epic, out of scope here.
 2. **Combined option.** The selector gains "Application + IT Component". Treemap and table show the cards of both types together, each with its own cost, in one chart. The treemap endpoint accepts several types (for example `type=Application,ITComponent`); a single `type` keeps working unchanged. Each item carries its card type.
 3. **History chart.** It is displayed only while the Forecast year is the selected year (not on Current, not on past years). It shows one stacked bar per fiscal year (the current year and the four before it, plus the Forecast bar), the segments being **every cost field that concurs to the total cost**: the cost fields named in the active calculation whose target is the type's total field; for a type with no such calculation, all its cost fields. The **legend and tooltip use the technical field key** (for example `softwareLicensingCost`), not the label. (This replaces requirement 7 of the earlier spec, and the three hard-coded series.)
 4. **Full screen.** In full screen the treemap and the Sankey take the whole width and height of the screen and do not distort; the existing exit button stays. In the normal page the chart keeps its current size.
@@ -44,7 +44,7 @@ Five improvements to `/reports/cost`:
 | Group by options (combined) | those that exist with the same technical key / relation in both types; disabled if none |
 | Card with no value or no link for the Group by | group "Other" |
 | A cost in the totals | counted exactly once, in every view |
-| Initiative year | the fiscal year of its start date, whole cost; cost field defaults to `costBudget`, never `costBudget + costActual` |
+| Initiative | same year rules as Application; cost field defaults to `costBudget`, never `costBudget + costActual` |
 | `type` parameter of the treemap endpoint | one type key, or several separated by commas; each must be a card type that has cost fields |
 | History chart shown | only while the Forecast year is selected |
 | History chart series | the cost fields concurring to the total (from the active calculation), else all the type's cost fields |
@@ -59,6 +59,7 @@ Five improvements to `/reports/cost`:
 - Changing how the total cost is calculated or which cards count in a year (unchanged from the earlier spec).
 - A Sankey for card types other than the four above.
 - Using Initiatives as a group (the relation is many-to-many).
+- Reports specific to Initiatives (start-date based years, budget vs actual views): separate epic.
 - Translating the technical field keys in the history legend.
 - Touching PPM screens.
 
@@ -77,9 +78,13 @@ Five improvements to `/reports/cost`:
 
 ## Agent's calls (to check)
 
-- The Sankey shape in requirement 5 (cost items → cards → group; items → IT Component → Application for the combined option) is my reading of "the Sankey must report all the cost items that flow into the total"; the user did not choose between the two shapes offered.
+- The Sankey draws the cost items that concur to the total flowing into each card (of both types in the combined option), then into the group. There is no IT Component → Application flow: an IT Component is used by several applications and the flow would count its cost more than once.
+- In the Sankey the Cost field selector set to the total shows the breakdown into the contributing items; set to a single field it shows that item alone.
+- Group by on linked cards uses the stored cardinality as is: on this instance every relation is `n:m`, so only card fields are offered until an administrator sets a relation to `1:1` / `1:n` (`1:n` read as "each target has at most one source"). The old Sankey grouping by linked type goes away. (Assumed; the user has not answered.)
+- Group by does not offer multiple-choice fields (they would put one card in two groups).
+- History chart with no total formula: the total field itself is left out of the stack; for a formula that is not a plain sum, every `data.<key>` it references counts.
 - Cost-field options for the combined option are the keys common to both types (same rule as Group by).
 - The Group by selector appearing in the treemap is my reading of "same page as the treemap"; today it is hidden there.
-- Initiatives: the cost field defaults to `costBudget` and the user can switch to `costActual`; the user chose the start date as the year but did not say which field.
+- Initiatives: the cost field defaults to `costBudget` and the user can switch to `costActual`.
 - The history chart for an Initiative uses the one selected cost field, since its two fields do not add up.
 - A history chart for the combined option uses the cost fields common to both types.
