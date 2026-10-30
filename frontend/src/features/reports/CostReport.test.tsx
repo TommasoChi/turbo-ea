@@ -499,6 +499,11 @@ describe("CostReport card-type selector and Sankey view", () => {
         )!.getAttribute("x"),
       );
     expect(x("Total Annual Cost")).toBeLessThan(x("EMEA"));
+    const fill = (name: string) =>
+      [...panel.querySelectorAll("rect")]
+        .find((r) => r.parentElement?.querySelector("title")?.textContent === name)!
+        .getAttribute("fill");
+    expect(fill("Total Annual Cost")).not.toBe(fill("EMEA"));
     expect(x("EMEA")).toBeLessThan(x("CRM"));
   });
 

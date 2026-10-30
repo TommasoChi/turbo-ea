@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
+import { brand, CARD_TYPE_COLORS, CATEGORICAL_COLORS, DEFAULT_LAYER_COLOR } from "@/theme";
 import CostSankeyNode from "./CostSankeyNode";
 
 function draw(
@@ -27,10 +28,17 @@ function draw(
 }
 
 describe("CostSankeyNode", () => {
-  it("fills cost items, groups and cards with three distinct colours", () => {
-    const fills = [draw("CostItem").fill, draw("Group").fill, draw("Application").fill];
-    expect(new Set(fills).size).toBe(3);
-    expect(fills.every((f) => f && !f.startsWith("undefined"))).toBe(true);
+  it("fills each kind with its token and falls back for an unknown card type", () => {
+    expect(draw("CostItem").fill).toBe(brand.primary);
+    expect(draw("Group").fill).toBe(CATEGORICAL_COLORS[7]);
+    expect(draw("Application").fill).toBe(CARD_TYPE_COLORS.Application);
+    expect(draw("MyCustomType").fill).toBe(DEFAULT_LAYER_COLOR);
+  });
+
+  it("gives labels a background halo", () => {
+    const { text } = draw("Application");
+    expect(text.getAttribute("paint-order")).toBe("stroke");
+    expect(text.getAttribute("stroke")).toBeTruthy();
   });
 
   it("labels a node on the right of its bar, and a last-column node on the left", () => {
@@ -43,8 +51,15 @@ describe("CostSankeyNode", () => {
     expect(Number(last.text.getAttribute("x"))).toBeLessThan(100);
   });
 
-  it("mirrors the sides in RTL", () => {
-    expect(draw("CostItem", "A", { isRtl: true }).text.getAttribute("text-anchor")).toBe("end");
+  it("keeps the sides in RTL (the layout is not mirrored) and only sets text direction", () => {
+    for (const sourceLinks of [[{}], []]) {
+      const ltr = draw("CostItem", "A", { sourceLinks });
+      const rtl = draw("CostItem", "A", { sourceLinks, isRtl: true });
+      expect(rtl.text.getAttribute("text-anchor")).toBe(ltr.text.getAttribute("text-anchor"));
+      expect(rtl.text.getAttribute("x")).toBe(ltr.text.getAttribute("x"));
+      expect(rtl.text.getAttribute("direction")).toBe("rtl");
+      expect(ltr.text.getAttribute("direction")).toBeNull();
+    }
   });
 
   it("truncates a long name and keeps the full one as a tooltip", () => {
