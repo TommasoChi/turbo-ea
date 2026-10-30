@@ -18,7 +18,7 @@
 - Backend SDK_VERSION 1.4 and UI_SDK_VERSION 1.18 are frozen: never touch them.
 - Ruff (line length 100): `cd backend && ruff format . && ruff check .` before each backend commit.
 - One pytest process at a time (shared test DB on port 5433). Mutation testing runs only in CI; never run it locally.
-- A card's cost appears once in every total. A card with no group value goes to the group named `Other`. Archived cards never appear.
+- A card's cost appears once in every total. A card with no group value goes to the group `__other__` (the page translates it). Archived cards never appear.
 - `CardReadScope` (`mode="module"`) applies to every card read, for every type in a list.
 - Fiscal-year names unchanged: `FY26 - Current`, `FY27 - Forecast`, `FY25`…
 
@@ -27,6 +27,8 @@
 - A user whose role hides one of the two types asks for the combined view: the hidden type's cards must not appear and the request must not fail.
 - `type=Application,ITComponent,Bogus` or an empty entry (`type=Application,`): 400, no partial answer.
 - A card linked to two group cards through an `n:m` relation: the relation is refused as a group (400), never silently picking one.
+- A saved report with `groupBy: "businessCriticality"` (a bare field key) still loads, grouped by that field.
+- The scope filter set on the Sankey hides those cards' nodes and leaves no dangling cost-item or group node.
 - A saved report whose `groupBy` holds an old linked-type key (for example `BusinessCapability`): the page loads ungrouped, no error.
 - An IT Component used by three applications in the combined Sankey: its cost appears once in the total.
 - Forecast selected, then Card type switched: the history chart reloads with the new type's components.
@@ -72,12 +74,12 @@
 - Test: `backend/tests/services/test_cost_grouping.py`
 
 **Interfaces:**
-- Produces: `OTHER_GROUP = "Other"`.
-- Produces: `class GroupBy` (frozen dataclass): `kind: Literal["field","relation"]`, `key: str`. `def parse_group_by(raw: str | None) -> GroupBy | None` — `field:<key>` or `rel:<relationTypeKey>`; `None`/empty → `None`; anything else (including an old bare type key such as `BusinessCapability`) → `None` (graceful, per Review Focus).
-- Produces: `async def assign_groups(db, read_scope, cards: list[Card], group_by: GroupBy | None) -> dict[uuid.UUID, str]` — group name per card id. `field`: the card's attribute value mapped to the option label when the field is `single_select`/boolean, else `str(value)`; missing/empty → `OTHER_GROUP`. `relation`: the name of the linked card (readable per `read_scope`); no link → `OTHER_GROUP`. Raises `ValueError` when the field is not a single-valued field of every card type present (multi-select, unknown key) or when the relation type's end facing the cards is not at-most-one: a relation row is read in the type's direction, so with cardinality `1:1` both ends qualify, with `1:n` only the **target** end has at most one source, with `n:m` neither.
+- Produces: `OTHER_GROUP = "__other__"`. The group value returned is **raw**: the option value for a select, `"true"`/`"false"` for a yes/no field, the linked card's name for a relation; the page translates labels.
+- Produces: `class GroupBy` (frozen dataclass): `kind: Literal["field","relation"]`, `key: str`. `def parse_group_by(raw: str | None, field_keys: set[str]) -> GroupBy | None` — `field:<key>` or `rel:<relationTypeKey>`; a bare string that is one of `field_keys` (a saved report's old table grouping) is read as `field:<it>`; `None`/empty → `None`; anything else (an old linked-type key such as `BusinessCapability`) → `None` (graceful, per Review Focus).
+- Produces: `async def assign_groups(db, read_scope, cards: list[Card], group_by: GroupBy | None) -> dict[uuid.UUID, str]` — group name per card id. `field`: `str(value)` of the card's attribute, missing/empty → `OTHER_GROUP`. `relation`: the name of the linked card (readable per `read_scope`); no link → `OTHER_GROUP`. Raises `ValueError` when the field is not a single-valued field of every card type present (multi-select, unknown key) or when the cards are not on the at-most-one end of the relation type. Read the way the relation guard reads it (`relations.py::_require_cardinality_room`, `AddRelationsDialog.tsx` `allowsMany`): `1:1` both ends qualify, `1:n` only the **source** end (each source has at most one target), `n:m` neither.
 - Consumes: `Relation` rows, `RelationType.cardinality`, `CardType.fields_schema`.
 
-- [ ] **Step 1: Write failing tests**: `test_field_group_uses_option_label`, `test_missing_value_goes_to_other`, `test_multi_select_field_is_refused`, `test_relation_1n_groups_by_linked_card_name` (cards are the target end), `test_relation_1n_refused_from_the_source_end`, `test_relation_nm_refused`, `test_relation_without_link_goes_to_other`, `test_hidden_linked_card_counts_as_no_link` (read scope hides the group card → `Other`), `test_old_linked_type_key_parses_to_none`, `test_costs_never_duplicated` (every card id appears exactly once in the result).
+- [ ] **Step 1: Write failing tests**: `test_field_group_returns_raw_option_value`, `test_missing_value_goes_to_other`, `test_multi_select_field_is_refused`, `test_relation_1n_groups_by_linked_card_name` (cards are the source end), `test_relation_1n_refused_from_the_target_end`, `test_relation_nm_refused`, `test_relation_without_link_goes_to_other`, `test_hidden_linked_card_counts_as_no_link` (read scope hides the group card → `Other`), `test_old_linked_type_key_parses_to_none`, `test_bare_field_key_parses_as_field`, `test_costs_never_duplicated` (every card id appears exactly once in the result).
 - [ ] **Step 2:** Run `python -m pytest tests/services/test_cost_grouping.py -q`. Expected: FAIL (module missing).
 - [ ] **Step 3:** Implement per the Interfaces block. A card linked twice through a `1:1`/`1:n`-compliant relation cannot occur by definition; if bad data does, take the first by link id and do not duplicate.
 - [ ] **Step 4:** Run again. Expected: pass.
@@ -94,9 +96,9 @@
 - Consumes: Tasks 1–3.
 - Produces: `GET /reports/cost-treemap?type=<a[,b]>&cost_field=&group_by=<field:k|rel:k>&fiscal_year=`; each item gains `"type"`; response gains `"components": list[str]` (Task 2) and keeps `groups`, `fiscal_year`, `current_fiscal_year`, `fiscal_year_start`. `group_by` items carry `"group"`; every item has a group (`Other` as needed). 400 on a bad `type` list, a type without cost fields, or a refused `group_by`.
 
-- [ ] **Step 1: Write failing API tests**: `test_two_types_return_both_with_type`, `test_single_type_unchanged`, `test_bad_type_list_is_400` (`Application,`, `Application,Bogus`), `test_hidden_type_cards_omitted_for_restricted_reader` (403/404 not raised; ITComponent card absent), `test_group_by_field_other_bucket`, `test_group_by_nm_relation_is_400`, `test_group_by_old_type_key_is_ignored`, `test_initiative_type_accepted_with_cost_budget`, `test_components_follow_active_calculation`, `test_no_cost_permission_is_403`.
+- [ ] **Step 1: Write failing API tests**: `test_two_types_return_both_with_type`, `test_single_type_unchanged`, `test_bad_type_list_is_400` (`Application,`, `Application,Bogus`), `test_hidden_type_cards_omitted_for_restricted_reader` (403/404 not raised; ITComponent card absent), `test_group_by_field_other_bucket` (`__other__`), `test_group_by_nm_relation_is_400`, `test_group_by_old_type_key_is_ignored`, `test_initiative_type_accepted_with_cost_budget`, `test_components_follow_active_calculation`, `test_no_cost_permission_is_403`.
 - [ ] **Step 2:** Run `python -m pytest tests/api/test_reports_cost_types.py -q`. Expected: FAIL.
-- [ ] **Step 3:** Rewire the handler: parse `type` with `parse_type_keys`, call `cards_with_cost_for_types`, then `parse_group_by` + `assign_groups`, then `cost_components`. Remove the old linked-type block. Update the docstring (the project documents the parameter there).
+- [ ] **Step 3:** Rewire the handler: parse `type` with `parse_type_keys`, call `cards_with_cost_for_types`, then `parse_group_by` + `assign_groups`, then `cost_components`. Remove the old linked-type block. Update `backend/tests/api/test_reports_extended.py` (it asserts `"Ungrouped"`, now `__other__`) and the MCP tool `get_cost_treemap` (`mcp-server/turbo_ea_mcp/server.py` ~574–606: describe `group_by` as `field:<key>` / `rel:<key>`; fix `mcp-server/tests/test_server.py` ~334–341 and the MCP docs under `docs/admin/mcp*.md`). Update the docstring (the project documents the parameter there).
 - [ ] **Step 4:** Run the new file, `tests/api/test_reports_extended.py`, `tests/api/test_reports_cost_fiscal_year.py`, then `python scripts/dump_openapi.py` and `git diff --stat docs/api/openapi.json`. Expected: all pass; spec changed.
 - [ ] **Step 5:** `ruff format . && ruff check .`; commit `feat(reports): cost treemap spans types and groups by a field or a linked card`.
 
@@ -104,7 +106,7 @@
 
 **Files:**
 - Modify: `backend/app/api/v1/reports.py` (`cost_sankey`, lines ~1519–1645)
-- Test: `backend/tests/api/test_reports_cost_sankey_parity.py` (new), update the existing sankey tests that assume Application→ITComponent
+- Test: `backend/tests/api/test_reports_cost_sankey_parity.py` (new), rewrite `backend/tests/api/test_reports_cost_sankey.py` (12 calls, all on the Application→ITComponent model)
 - Regenerate: `docs/api/openapi.json`
 
 **Interfaces:**
@@ -127,11 +129,16 @@
 - Test: `CostReport.test.tsx`, `CostReport.branches.test.tsx` (adjust the Sankey-toolbar expectations)
 
 **Interfaces:**
-- Produces in `costReportOptions.ts`: `COMBINED_KEY = "Application+ITComponent"`; `typeKeysOf(selection: string): string[]` (splits on `+`); `typeParam(selection): string` (joins with `,`); `commonCostFields(schemas: FieldDef[][]): FieldDef[]` (cost-typed fields whose key exists in every schema); `commonGroupableFields(schemas)` (single-valued fields with the same key in every schema, using the existing `pickGroupableFields`); `relationGroupOptions(relationTypes: RelationType[], typeKeys: string[], label)` → `{value: "rel:<key>", label}[]` for relations whose end facing the cards has at most one link (`1:1`, or `1:n` with the cards on the target side) and that exist for **every** selected type.
+- Produces in `costReportOptions.ts`: (schemas are `{fields: FieldDef[]}[][]`, one schema per type, as `pickGroupableFields` takes) `COMBINED_KEY = "Application+ITComponent"`; `typeKeysOf(selection: string): string[]` (splits on `+`); `typeParam(selection): string` (joins with `,`); `commonCostFields(schemas: FieldDef[][]): FieldDef[]` (cost-typed fields whose key exists in every schema); `commonGroupableFields(schemas)` (single-valued fields with the same key in every schema, using the existing `pickGroupableFields`); `relationGroupOptions(relationTypes: RelationType[], typeKeys: string[], label)` → `{value: "rel:<key>", label}[]`, only for a **single** type (empty for the combined option), for relations with the card on the at-most-one end (`1:1` either end, `1:n` the **source** end).
 - The Card type selector offers: Application, IT Component, Application + IT Component, Initiative (only those the user may read; the combined option only when both are readable).
 - Cost field selector is shown in table, treemap **and** Sankey, listing `commonCostFields`; resets to the first option when the list changes (existing behaviour).
-- Group by selector is shown in all three views, built from `commonGroupableFields` (value `field:<key>`) plus `relationGroupOptions`; disabled with a short helper text when the list is empty. A saved `groupBy` not in the list is dropped.
-- Both fetches send `type=<typeParam>`, `cost_field`, `group_by`, `fiscal_year`; the table groups by the server `group` field (the old client-side attribute grouping is removed so the three views agree).
+- Group by selector is shown in all three views, built from `commonGroupableFields` (value `field:<key>`) plus `relationGroupOptions`; disabled with a short helper text when the list is empty. A saved `groupBy` that is a bare field key becomes `field:<key>`; one not in the list is dropped.
+- The combined option has no `typeDef`: `costFields`/`groupableFields` come from the helpers over both schemas; the card scope filter and the custom table columns are hidden for it (`useCardScope` takes one type); `extraColumns` stay empty.
+- **All four fetches** (main, Sankey, baseline ~line 515, prior year ~line 551) send `type=<typeParam>`.
+- Group labels: the server value is translated by the page — option label via `optLabel`, `true`/`false` via `common:labels.yes/no`, `__other__` via `t("cost.unspecified")`, a linked card name as is.
+- The treemap with a Group by draws groups as parent nodes containing their cards (Recharts hierarchical `children`).
+- The card scope filter on the Sankey is applied client-side: filtered cards' nodes are removed together with the links and cost-item/group nodes left without any card.
+- Both fetches send `type=<typeParam>`, `cost_field`, `group_by`, `fiscal_year`; the table groups by the server `group` field (the old client-side attribute grouping is removed so the three views agree). Also tests: `group labels are translated`, `treemap draws groups`, `sankey scope filter removes dangling nodes`, `combined hides scope filter and extra columns`, `all four requests carry type=Application,ITComponent`.
 
 - [ ] **Step 1: Write failing tests** for the pure helpers (`commonCostFields` keeps only shared keys; `relationGroupOptions` refuses `n:m`, accepts `1:n` target side and `1:1`, requires the relation for every type) and component tests: `offers initiative and combined option`, `sankey shows the same toolbar as the treemap`, `group by is disabled with no common option`, `group by sends field: prefix`, `a saved groupBy that is not offered is dropped`, `combined option sends type=Application,ITComponent`.
 - [ ] **Step 2:** Run `cd frontend && npx vitest run src/features/reports/costReportOptions.test.ts src/features/reports/CostReport.test.tsx`. Expected: FAIL.
@@ -142,12 +149,12 @@
 ### Task 7: Sankey drawing for the new payload
 
 **Files:**
-- Modify: `frontend/src/features/reports/CostReport.tsx` (`SankeyNode` type list, node colouring/labels)
+- Modify: `frontend/src/features/reports/CostReport.tsx` (create a custom Sankey node renderer — today `<Sankey>` uses Recharts' default node — coloured by `type`)
 - Test: `CostReport.test.tsx`
 
 - [ ] **Step 1: Write failing test** `renders cost item, card and group nodes from the payload` (mock `/reports/cost-sankey` with the Task 5 shape; assert node names are present and an empty payload shows `cost.noCostData`).
 - [ ] **Step 2:** Run the file. Expected: FAIL.
-- [ ] **Step 3:** Update the interfaces (`type: string` already generic) and the Sankey node renderer to colour `CostItem`, `Group` and card nodes distinctly with tokens from `frontend/src/theme/tokens.ts`; no hex codes.
+- [ ] **Step 3:** Write the custom node renderer (new) to colour `CostItem`, `Group` and card nodes distinctly with tokens from `frontend/src/theme/tokens.ts`; no hex codes.
 - [ ] **Step 4:** Run `npx vitest run src/features/reports`. Expected: pass.
 - [ ] **Step 5:** Commit `feat(reports): draw cost items, cards and groups in the Sankey`.
 
@@ -155,7 +162,7 @@
 
 **Files:**
 - Modify: `frontend/src/features/reports/CostTrendChart.tsx`, `CostReport.tsx`, `FullscreenPanel.tsx`
-- Test: `CostTrendChart.test.tsx`, `FullscreenPanel.test.tsx`, `CostReport.test.tsx`, `CostReport.mutation.test.tsx` (stale expectations)
+- Test: `CostTrendChart.test.tsx`, `FullscreenPanel.test.tsx`, `CostReport.test.tsx`, `CostReport.mutation.test.tsx`, `CostReport.fixes.test.tsx` (stale expectations)
 
 **Interfaces:**
 - `CostTrendChart` props: `{ typeParam: string; costField: string; components: string[]; years: number[]; currentFiscalYear: number }`; one request per year per component (`/reports/cost-treemap?type=…&cost_field=<component>&fiscal_year=<y>`); one stacked `Bar` per component, `dataKey` = the technical field key, legend and tooltip show that key; colours from a token palette cycled by index.

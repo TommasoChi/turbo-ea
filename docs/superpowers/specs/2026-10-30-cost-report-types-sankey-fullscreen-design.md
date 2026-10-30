@@ -32,7 +32,7 @@ Five improvements to `/reports/cost`:
    - **No cost is ever counted twice.** In every view, a card's cost appears once in the totals. An IT Component used by several applications is counted once, not once per application.
    - **Diagram (agent's reading, to check).** The Sankey draws the cost items that concur to the total flowing into the cards of the chosen type, and on to the group when a Group by is chosen. For the combined option it draws cost items → IT Component → Application.
 6. **Group by (treemap, table and Sankey alike).** A card is grouped either by (a) the value of a **field written on the card**, or (b) by a **linked card**, named by the linked card's name, but only through a relation in which each card has **at most one** linked card of that type (cardinality `1:1`, or `1:n` seen from the "n" side); a many-to-many relation such as Initiative ↔ Application is never offered, so a cost can never land in two groups. A card with no value for the field, or no linked card, goes to the group **Other**. Grouping never duplicates or drops a cost.
-   - **Combined case.** Group by is offered only on fields that have the **same technical key in both types**, and on linked-card relations that exist, with the same rule, for both; it is disabled when there is none.
+   - **Combined case.** Group by is offered only on fields that have the **same technical key in both types**; it is disabled when there is none.
 
 ## Rules and allowed values
 
@@ -40,7 +40,7 @@ Five improvements to `/reports/cost`:
 |---|---|
 | Card type options | Application, IT Component, Application + IT Component, Initiative |
 | Cost field options | the `cost`-typed fields of the chosen type; for the combined option, those with the same key in both types |
-| Group by options | card fields; linked cards through a relation with at most one linked card per card (1:1, or 1:n from the n side), never n:m |
+| Group by options | card fields; linked cards through a relation in which each card has at most one linked card (`1:1`, or `1:n` seen from the source end, as the relation guard reads it), never `n:m` |
 | Group by options (combined) | those that exist with the same technical key / relation in both types; disabled if none |
 | Card with no value or no link for the Group by | group "Other" |
 | A cost in the totals | counted exactly once, in every view |
@@ -80,7 +80,10 @@ Five improvements to `/reports/cost`:
 
 - The Sankey draws the cost items that concur to the total flowing into each card (of both types in the combined option), then into the group. There is no IT Component → Application flow: an IT Component is used by several applications and the flow would count its cost more than once.
 - In the Sankey the Cost field selector set to the total shows the breakdown into the contributing items; set to a single field it shows that item alone.
-- Group by on linked cards uses the stored cardinality as is: on this instance every relation is `n:m`, so only card fields are offered until an administrator sets a relation to `1:1` / `1:n` (`1:n` read as "each target has at most one source"). The old Sankey grouping by linked type goes away. (Assumed; the user has not answered.)
+- Group by on linked cards uses the stored cardinality as is, read the way the relation guard reads it (`1:n`: each **source** has at most one target, so the group-able end is the source). On this instance every relation is `n:m`, so only card fields are offered until an administrator changes a relation. The old Sankey grouping by linked type goes away; a saved report whose group is a bare field key keeps working (read as `field:<key>`), one holding an old linked-type key loads ungrouped. (Assumed; the user has not answered A/B.)
+- In the combined option Group by offers card fields with the same technical key in both types only: a relation type has a single source type and a single target type, so no one relation links both. The card scope filter and the custom table columns are offered for a single type only, not for the combined option.
+- The treemap draws a grouped report as groups containing their cards. The Sankey card scope filter hides the filtered cards' nodes and drops the links left without a card.
+- The server returns the raw group value (option value, `true`/`false`, or the linked card name) and the sentinel `__other__`; the page translates option labels, Yes/No and "Other" itself.
 - Group by does not offer multiple-choice fields (they would put one card in two groups).
 - History chart with no total formula: the total field itself is left out of the stack; for a formula that is not a plain sum, every `data.<key>` it references counts.
 - Cost-field options for the combined option are the keys common to both types (same rule as Group by).
