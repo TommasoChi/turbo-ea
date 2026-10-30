@@ -1,6 +1,6 @@
 # Cost report: more card types, a combined view, a history chart on Forecast, full-screen and a Sankey that behaves like the treemap
 
-**Spec status:** reviewed by a fresh agent, awaiting approval, on `fix/cost-report` (continues `2026-10-29-cost-report-fiscal-year-picker-design.md`, which is approved and built on this branch; where the two disagree, this one wins). Decisions below are the user's answers of 2026-10-30.
+**Spec status:** approved (2026-10-30), on `fix/cost-report` (continues `2026-10-29-cost-report-fiscal-year-picker-design.md`, which is approved and built on this branch; where the two disagree, this one wins). Decisions below are the user's answers of 2026-10-30.
 
 ## Goal
 
