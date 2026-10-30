@@ -35,6 +35,7 @@ import CardScopeFilter from "@/components/CardScopeFilter";
 import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
 import { useCurrency, type CurrencyFormatter } from "@/hooks/useCurrency";
 import { useIsRtl } from "@/hooks/useIsRtl";
+import CostSankeyNode from "./CostSankeyNode";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useTypeLabel,
@@ -1215,7 +1216,13 @@ export default function CostReport() {
               data-testid="cost-sankey-panel"
             >
               <ResponsiveContainer width="100%" height={450}>
-                <Sankey data={sankeyView} nodeWidth={14} nodePadding={20} />
+                <Sankey
+                  data={sankeyView}
+                  nodeWidth={14}
+                  nodePadding={20}
+                  margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+                  node={<CostSankeyNode isRtl={isRtl} />}
+                />
               </ResponsiveContainer>
             </Paper>
           </FullscreenPanel>

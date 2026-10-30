@@ -41,6 +41,16 @@ vi.mock("@/hooks/useCurrency", () => ({
     invalidate: () => {},
   }),
 }));
+// jsdom has no layout, so ResponsiveContainer would give the Sankey a 0x0 box.
+vi.mock("recharts", async () => {
+  const actual = await vi.importActual<typeof import("recharts")>("recharts");
+  const { cloneElement } = await import("react");
+  return {
+    ...actual,
+    ResponsiveContainer: ({ children }: { children: React.ReactElement }) =>
+      cloneElement(children, { width: 900, height: 450 } as never),
+  };
+});
 vi.mock("./SaveReportDialog", () => ({ default: () => null }));
 // The report hides everything behind `costs.view`.
 vi.mock("@/hooks/useAuth", () => ({
@@ -454,6 +464,55 @@ describe("CostReport card-type selector and Sankey view", () => {
     });
     await userEvent.click(sankeyBtn);
     expect(await findByTestId("cost-sankey-panel")).toBeInTheDocument();
+  });
+
+  it("renders cost item, group and card nodes from the payload, groups between", async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.startsWith("/reports/cost-sankey"))
+        return Promise.resolve({
+          nodes: [
+            { id: "item:costTotalAnnual", name: "Licences", type: "CostItem" },
+            { id: "group:EMEA", name: "EMEA", type: "Group" },
+            { id: "crm", name: "CRM", type: "Application" },
+          ],
+          links: [
+            { source: 0, target: 1, value: 100 },
+            { source: 1, target: 2, value: 100 },
+          ],
+          total: 100,
+          fiscal_year: 2026,
+          current_fiscal_year: 2026,
+          fiscal_year_start: 1,
+        }) as never;
+      return Promise.resolve({ items: COST_ITEMS, total: 620, fiscal_year: 2026, current_fiscal_year: 2026, fiscal_year_start: 1 }) as never;
+    });
+    const { findByTestId, findByRole } = renderCost();
+    await userEvent.click(await findByRole("button", { name: /sankey chart view/i }));
+    const panel = await findByTestId("cost-sankey-panel");
+    await waitFor(() => expect(panel.querySelectorAll("rect").length).toBe(3));
+    const texts = [...panel.querySelectorAll("text")].map((n) => n.textContent);
+    expect(texts).toEqual(expect.arrayContaining(["Total Annual Cost", "EMEA", "CRM"]));
+    const x = (name: string) =>
+      Number(
+        [...panel.querySelectorAll("rect")].find(
+          (r) => r.parentElement?.querySelector("title")?.textContent === name,
+        )!.getAttribute("x"),
+      );
+    expect(x("Total Annual Cost")).toBeLessThan(x("EMEA"));
+    expect(x("EMEA")).toBeLessThan(x("CRM"));
+  });
+
+  it("shows the no-data message for an empty Sankey payload", async () => {
+    vi.mocked(api.get).mockImplementation((path: string) =>
+      Promise.resolve(
+        path.startsWith("/reports/cost-sankey")
+          ? { nodes: [], links: [], total: 0, fiscal_year: 2026, current_fiscal_year: 2026, fiscal_year_start: 1 }
+          : { items: COST_ITEMS, total: 620, fiscal_year: 2026, current_fiscal_year: 2026, fiscal_year_start: 1 },
+      ) as never,
+    );
+    const { findByText, findByRole } = renderCost();
+    await userEvent.click(await findByRole("button", { name: /sankey chart view/i }));
+    expect(await findByText("No cost data found.")).toBeInTheDocument();
   });
 
   it("no longer renders the cost-source (aggregate) control", async () => {
