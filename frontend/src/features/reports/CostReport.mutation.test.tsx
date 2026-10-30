@@ -347,6 +347,7 @@ beforeEach(() => {
     items: ITEMS,
     total: 700,
     fiscal_year: 2026,
+    current_fiscal_year: 2026,
     fiscal_year_start: 1,
   });
 });
@@ -470,7 +471,7 @@ describe("CostReport print parameters", () => {
     await waitFor(() =>
       expect(printParams()).toEqual([
         ["Type", "Application"],
-        ["Fiscal year", "FY 2026"],
+        ["Fiscal year", "FY26 - Current"],
       ]),
     );
   });
@@ -505,7 +506,7 @@ describe("CostReport print parameters", () => {
     await waitFor(() =>
       expect(printParams()).toEqual([
         ["Type", "Application"],
-        ["Fiscal year", "FY 2026"],
+        ["Fiscal year", "FY26 - Current"],
         ["Cost Field", "Total Annual Cost"],
       ]),
     );
@@ -522,7 +523,7 @@ describe("CostReport print parameters", () => {
     await waitFor(() =>
       expect(printParams()).toEqual([
         ["Type", "Application"],
-        ["Fiscal year", "FY 2026"],
+        ["Fiscal year", "FY26 - Current"],
         ["Group By", "Business Criticality"],
         ["View", "Table"],
       ]),
