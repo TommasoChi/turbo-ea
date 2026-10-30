@@ -111,10 +111,10 @@
 
 **Interfaces:**
 - Consumes: Tasks 1–3.
-- Produces: `GET /reports/cost-sankey` takes the **same parameters as the treemap** (`type`, `cost_field`, `group_by`, `fiscal_year`). Nodes `{id, name, type}` where `type` is a card type key, `"CostItem"` for a cost-item node, or `"Group"`. Links: cost item → card (value = that field's cost on that card), card → group node when grouped. The cost items are `cost_components(...)` of `cost_field` (a single node `cost_field` when it has no components); a card's items come from `cards_with_cost_for_types` run once per component field. Response keeps `total` (sum of item→card links, equal to the treemap total for the same parameters when the card totals equal the sum of their items), `fiscal_year`, `current_fiscal_year`, `fiscal_year_start`.
+- Produces: `GET /reports/cost-sankey` takes the **same parameters as the treemap** (`type`, `cost_field`, `group_by`, `fiscal_year`). Nodes `{id, name, type}` where `type` is a card type key, `"CostItem"` for a cost-item node, or `"Group"`. Links: without a Group by, cost item → card (value = that field's cost on that card). With a Group by the group nodes sit **in the middle**: cost item → group (value = the sum of that item over the group's cards) and group → card (value = the card's total over the items); every card is in exactly one group, `__other__` included. The cost items are `cost_components(...)` of `cost_field` (a single node `cost_field` when it has no components); a card's items come from `cards_with_cost_for_types` run once per component field. Response keeps `total` (sum of item→card links, equal to the treemap total for the same parameters when the card totals equal the sum of their items), `fiscal_year`, `current_fiscal_year`, `fiscal_year_start`.
 - There is no Application↔ITComponent flow and no `app_to_itc` read any more.
 
-- [ ] **Step 1: Write failing tests**: `test_same_cards_as_treemap` (same parameters → the set of card nodes equals the treemap item ids), `test_total_equals_treemap_total_for_a_plain_sum`, `test_itcomponent_used_by_three_apps_counted_once`, `test_single_field_shows_one_cost_item`, `test_total_field_shows_each_component_as_item`, `test_grouped_adds_group_nodes_and_other`, `test_year_and_forecast_use_history`, `test_bad_group_by_is_400`.
+- [ ] **Step 1: Write failing tests**: `test_same_cards_as_treemap` (same parameters → the set of card nodes equals the treemap item ids), `test_total_equals_treemap_total_for_a_plain_sum`, `test_itcomponent_used_by_three_apps_counted_once`, `test_single_field_shows_one_cost_item`, `test_total_field_shows_each_component_as_item`, `test_grouped_puts_group_nodes_between_items_and_cards` (no link goes card → group; every item→group value equals the sum of its group→card shares), `test_grouped_other_bucket`, `test_year_and_forecast_use_history`, `test_bad_group_by_is_400`.
 - [ ] **Step 2:** Run `python -m pytest tests/api/test_reports_cost_sankey_parity.py -q`. Expected: FAIL.
 - [ ] **Step 3:** Rewrite the handler as a thin controller over a new function `build_cost_sankey(...)` placed in `backend/app/services/cost_report.py` (business logic stays out of the route). Delete the old two/three-level code and its docstring.
 - [ ] **Step 4:** Run the new file plus `python -m pytest tests/api -q -k "cost or sankey"`, regenerate OpenAPI. Expected: pass.
@@ -149,10 +149,10 @@
 ### Task 7: Sankey drawing for the new payload
 
 **Files:**
-- Modify: `frontend/src/features/reports/CostReport.tsx` (create a custom Sankey node renderer — today `<Sankey>` uses Recharts' default node — coloured by `type`)
+- Modify: `frontend/src/features/reports/CostReport.tsx` (create a custom Sankey node renderer — today `<Sankey>` uses Recharts' default node — coloured by `type`, with the group column in the middle)
 - Test: `CostReport.test.tsx`
 
-- [ ] **Step 1: Write failing test** `renders cost item, card and group nodes from the payload` (mock `/reports/cost-sankey` with the Task 5 shape; assert node names are present and an empty payload shows `cost.noCostData`).
+- [ ] **Step 1: Write failing test** `renders cost item, group and card nodes from the payload, groups between` (mock `/reports/cost-sankey` with the Task 5 shape; assert node names are present and an empty payload shows `cost.noCostData`).
 - [ ] **Step 2:** Run the file. Expected: FAIL.
 - [ ] **Step 3:** Write the custom node renderer (new) to colour `CostItem`, `Group` and card nodes distinctly with tokens from `frontend/src/theme/tokens.ts`; no hex codes.
 - [ ] **Step 4:** Run `npx vitest run src/features/reports`. Expected: pass.
