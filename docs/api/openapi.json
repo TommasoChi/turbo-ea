@@ -34792,7 +34792,7 @@
     },
     "/api/v1/reports/cost-treemap": {
       "get": {
-        "description": "Cost treemap: items with cost, optionally grouped by a related type.\n\nCosts are annual and shown for the current fiscal year only: a card counts,\nat its full annual cost, when the current fiscal year falls between the one\nit goes ``active`` in and the one its ``endOfLife`` falls in, both included \u2014\nno pro-rating, so a card retired in an earlier fiscal year is left out. A\ncard carries one annual figure, so projecting it onto other years would\nonly restate today's number; that is why there is no year parameter. The\nresponse names the fiscal year (``fiscal_year``) and the workspace's start\nmonth (``fiscal_year_start``).",
+        "description": "Cost treemap: items with cost, optionally grouped by a related type.\n\nTakes an optional ``fiscal_year``: the current year is served from live\nattributes for the cards live in it (full annual cost, no pro-rating, see\n``is_live_in_fiscal_year``); any other year lists the cards with a cost\nrecorded for it (``app/services/cost_report.py::cards_with_cost``). The\nresponse names the requested ``fiscal_year``, the ``current_fiscal_year``\nand the workspace's start month (``fiscal_year_start``).",
         "operationId": "cost_treemap_api_v1_reports_cost_treemap_get",
         "parameters": [
           {

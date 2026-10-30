@@ -1426,14 +1426,12 @@ async def cost_treemap(
 ):
     """Cost treemap: items with cost, optionally grouped by a related type.
 
-    Costs are annual and shown for the current fiscal year only: a card counts,
-    at its full annual cost, when the current fiscal year falls between the one
-    it goes ``active`` in and the one its ``endOfLife`` falls in, both included —
-    no pro-rating, so a card retired in an earlier fiscal year is left out. A
-    card carries one annual figure, so projecting it onto other years would
-    only restate today's number; that is why there is no year parameter. The
-    response names the fiscal year (``fiscal_year``) and the workspace's start
-    month (``fiscal_year_start``).
+    Takes an optional ``fiscal_year``: the current year is served from live
+    attributes for the cards live in it (full annual cost, no pro-rating, see
+    ``is_live_in_fiscal_year``); any other year lists the cards with a cost
+    recorded for it (``app/services/cost_report.py::cards_with_cost``). The
+    response names the requested ``fiscal_year``, the ``current_fiscal_year``
+    and the workspace's start month (``fiscal_year_start``).
     """
     # See `cost_report` above: `costs.view` alone gates a report that is
     # nothing but costs.
