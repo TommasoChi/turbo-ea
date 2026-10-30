@@ -47,6 +47,7 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { resolveFacetField } from "@/lib/fieldFacets";
+import { surface } from "@/theme/tokens";
 import {
   COMBINED_KEY,
   commonCostFields,
@@ -162,6 +163,7 @@ const TreemapContent = ({
   isRtl,
   deltaPct,
   children,
+  caption,
 }: {
   x: number;
   y: number;
@@ -180,6 +182,8 @@ const TreemapContent = ({
   deltaPct?: number | null;
   /** Present on a group node, which holds the cards drawn above it. */
   children?: unknown[];
+  /** The group's name, on the first (largest) card of each group. */
+  caption?: string;
 }) => {
   const { t } = useTranslation("reports");
   if (width < 4 || height < 4) return null;
@@ -187,7 +191,8 @@ const TreemapContent = ({
   const showCost = width > 70 && height > 45;
   const handleClick = id && onCellClick ? () => onCellClick(id) : undefined;
   if (Array.isArray(children)) {
-    // A group: its frame and name; the cards it holds are drawn over it.
+    // A group: its frame only. Its name is the caption of its largest card,
+    // since the cards are drawn over the frame.
     return (
       <g>
         <rect
@@ -196,22 +201,9 @@ const TreemapContent = ({
           width={width}
           height={height}
           fill={treemapColor(index)}
-          stroke="#fff"
+          stroke={surface.light.paper}
           strokeWidth={4}
         />
-        {showLabel && (
-          <text
-            x={isRtl ? x + width - 6 : x + 6}
-            y={y + 16}
-            fontSize={11}
-            fontWeight={700}
-            fill="#fff"
-            textAnchor={isRtl ? "end" : "start"}
-            style={{ pointerEvents: "none" }}
-          >
-            {name}
-          </text>
-        )}
       </g>
     );
   }
@@ -235,10 +227,23 @@ const TreemapContent = ({
         strokeWidth={2}
         rx={3}
       />
+      {showLabel && caption && (
+        <text
+          x={labelX}
+          y={y + 12}
+          fontSize={9}
+          fill={surface.light.paper}
+          opacity={0.8}
+          style={{ pointerEvents: "none" }}
+          {...textDir}
+        >
+          {caption}
+        </text>
+      )}
       {showLabel && (
         <text
           x={labelX}
-          y={y + 16}
+          y={y + (caption ? 25 : 16)}
           fontSize={11}
           fontWeight={600}
           fill="#fff"
@@ -253,7 +258,7 @@ const TreemapContent = ({
       {showCost && (
         <text
           x={labelX}
-          y={y + 30}
+          y={y + (caption ? 39 : 30)}
           fontSize={10}
           fill="rgba(255,255,255,0.8)"
           style={{ pointerEvents: "none" }}
@@ -421,6 +426,16 @@ export default function CostReport() {
       setCostField(costFields[0].key);
     }
   }, [costFields]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A selection the user may not read (a saved combined option whose IT
+  // Component is hidden, an Initiative they cannot see) falls back.
+  useEffect(() => {
+    if (ml || typeOptions.length === 0) return;
+    if (!typeOptions.some((o) => o.key === cardTypeKey))
+      setCardTypeKey(
+        typeOptions.some((o) => o.key === "Application") ? "Application" : typeOptions[0].key,
+      );
+  }, [ml, typeOptions, cardTypeKey]);
 
   // Load saved report config
   useEffect(() => {
@@ -673,19 +688,30 @@ export default function CostReport() {
 
   const groups = useMemo(() => {
     if (!effectiveGroupBy) return null;
+    // Keyed by the raw value: two raw values may share a label.
     const map = new Map<
       string,
-      { label: string; items: CostItem[]; cost: number }
+      { key: string; label: string; items: CostItem[]; cost: number }
     >();
     for (const item of items) {
-      const label = groupLabel(item.group);
-      const g = map.get(label) || { label, items: [], cost: 0 };
+      const key = item.group ?? OTHER_GROUP;
+      const g = map.get(key) || { key, label: groupLabel(key), items: [], cost: 0 };
       g.items.push(item);
       g.cost += item.cost;
-      map.set(label, g);
+      map.set(key, g);
     }
     return [...map.values()].sort((a, b) => b.cost - a.cost);
   }, [items, effectiveGroupBy, groupLabel]);
+
+  // A cost-item node: the cost field's label, or "Other costs" for what the
+  // components leave of a card's total.
+  const itemLabel = useCallback(
+    (key: string, fallback: string) =>
+      key === OTHER_GROUP
+        ? t("cost.otherCostItem")
+        : (costFields.find((f) => f.key === key)?.label ?? fallback),
+    [costFields, t],
+  );
 
   // Scope applies to the Sankey here: hide the cards outside it, then every
   // cost-item and group node left without a card below it.
@@ -708,14 +734,34 @@ export default function CostReport() {
       if (!keep[i]) return;
       index.set(i, nodes.length);
       nodes.push(
-        n.type === "Group" ? { ...n, name: groupLabel(n.id.replace(/^group:/, "")) } : n,
+        n.type === "Group"
+          ? { ...n, name: groupLabel(n.id.replace(/^group:/, "")) }
+          : n.type === "CostItem"
+            ? { ...n, name: itemLabel(n.id.replace(/^item:/, ""), n.name) }
+            : n,
       );
     });
+    // The payload has no per-item-per-card values, so an item -> group link is
+    // scaled by the share of the group's card total that is left: approximate.
+    const cardTotal = (g: number, only: boolean) =>
+      sankeyData.links
+        .filter((l) => l.source === g && (!only || keep[l.target]))
+        .reduce((n, l) => n + l.value, 0);
+    const scale = (l: SankeyLink) => {
+      if (!closure || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
+      const before = cardTotal(l.target, false);
+      return before > 0 ? (l.value * cardTotal(l.target, true)) / before : 0;
+    };
     const links = sankeyData.links
       .filter((l) => keep[l.source] && keep[l.target])
-      .map((l) => ({ ...l, source: index.get(l.source)!, target: index.get(l.target)! }));
+      .map((l) => ({
+        ...l,
+        value: scale(l),
+        source: index.get(l.source)!,
+        target: index.get(l.target)!,
+      }));
     return { ...sankeyData, nodes, links };
-  }, [sankeyData, scope.closure, groupLabel]);
+  }, [sankeyData, scope.closure, groupLabel, itemLabel]);
 
   const printParams = useMemo(() => {
     const params: { label: string; value: string }[] = [];
@@ -838,7 +884,11 @@ export default function CostReport() {
         index: gi,
         children: [...g.items]
           .sort((a, b) => b.cost - a.cost)
-          .map((d) => ({ ...treemapLeaf(d, gi), group: g.label })),
+          .map((d, di) => ({
+            ...treemapLeaf(d, gi),
+            group: g.label,
+            caption: di === 0 ? g.label : undefined,
+          })),
       }))
     : [...items].sort((a, b) => b.cost - a.cost).map(treemapLeaf);
 
@@ -1214,7 +1264,7 @@ export default function CostReport() {
                     });
                     return [
                       <TableRow
-                        key={`grp-${g.label}`}
+                        key={`grp-${g.key}`}
                         sx={{ bgcolor: "action.hover" }}
                       >
                         <TableCell

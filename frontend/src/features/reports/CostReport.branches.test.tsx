@@ -856,11 +856,23 @@ describe("CostReport type, cost field and group by selectors", () => {
     };
     renderCost();
     await screen.findByTestId("treemap");
-    // main + current-year baseline
-    await waitFor(() => expect(treemapCalls().length).toBeGreaterThanOrEqual(2));
-    // the first request predates the restored type; main + baseline follow it
-    for (const c of treemapCalls().slice(-2))
-      expect(params(c).get("type")).toBe("Application,ITComponent");
+    const combinedType = (c: string) =>
+      params(c).get("type") === "Application,ITComponent";
+    // main (the picked year) and the current-year baseline (no fiscal_year)
+    await waitFor(() =>
+      expect(
+        treemapCalls().some(
+          (c) => combinedType(c) && params(c).get("fiscal_year") === "2025",
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() =>
+      expect(
+        treemapCalls().some(
+          (c) => combinedType(c) && params(c).get("fiscal_year") === null,
+        ),
+      ).toBe(true),
+    );
 
     await userEvent.click(
       screen.getByRole("button", { name: /sankey chart view/i }),
@@ -883,8 +895,10 @@ describe("CostReport type, cost field and group by selectors", () => {
         treemapCalls().some((c) => params(c).get("fiscal_year") === "2024"),
       ).toBe(true),
     );
-    for (const c of treemapCalls().slice(-2))
-      expect(params(c).get("type")).toBe("Application,ITComponent");
+    const prior = treemapCalls().find(
+      (c) => params(c).get("fiscal_year") === "2024",
+    );
+    expect(params(prior!).get("type")).toBe("Application,ITComponent");
   });
 
   it("sankey shows the same toolbar as the treemap", async () => {
@@ -972,6 +986,220 @@ describe("CostReport type, cost field and group by selectors", () => {
       screen.queryByRole("combobox", { name: /columns/i }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("All cards")).not.toBeInTheDocument();
+  });
+
+  it("a single type does show the scope filter", async () => {
+    saved.config = { view: "table" };
+    renderCost();
+    await screen.findByRole("table");
+    expect(screen.getByText("All cards")).toBeInTheDocument();
+  });
+
+  it("falls back to Application when a saved combined option is no longer readable", async () => {
+    withMetamodel([APP_G, INITIATIVE_G], []);
+    saved.config = { cardTypeKey: "Application+ITComponent", view: "table" };
+    renderCost();
+    await screen.findByRole("table");
+    await waitFor(() =>
+      expect(lastParams(treemapCalls()).get("type")).toBe("Application"),
+    );
+    await waitFor(() =>
+      expect(saved.persistConfig).toHaveBeenLastCalledWith(
+        expect.objectContaining({ cardTypeKey: "Application" }),
+      ),
+    );
+  });
+
+  it("keeps two raw groups apart when their labels collide", async () => {
+    saved.config = { view: "table", groupBy: "rel:relAppToOrg" };
+    mockApi.on("get", "/reports/cost-treemap*", {
+      items: [
+        { id: "a", name: "A", cost: 10, group: "Unspecified" },
+        { id: "b", name: "B", cost: 5, group: "__other__" },
+      ],
+      groups: [],
+      total: 15,
+    });
+    renderCost();
+    await screen.findByRole("table");
+    const groupRows = screen
+      .getAllByRole("row")
+      .filter((r) => (r.textContent ?? "").startsWith("Unspecified(1)"));
+    expect(groupRows).toHaveLength(2);
+  });
+
+  it("names a treemap group once, on its largest card", async () => {
+    saved.config = { view: "chart", groupBy: "field:tier" };
+    mockApi.on("get", "/reports/cost-treemap*", {
+      items: [
+        { id: "a", name: "Alpha", cost: 10, group: "gold" },
+        { id: "b", name: "Beta", cost: 5, group: "gold" },
+        { id: "c", name: "Gamma", cost: 3, group: "silver" },
+      ],
+      groups: [],
+      total: 18,
+    });
+    renderCost();
+    const svg = (await screen.findByTestId("treemap")).querySelector(
+      "svg",
+    ) as unknown as HTMLElement;
+    expect(within(svg).getAllByText("Gold")).toHaveLength(1);
+    expect(within(svg).getAllByText("Silver")).toHaveLength(1);
+  });
+
+  it("translates the Group nodes of the sankey, and only those", async () => {
+    saved.config = { view: "sankey", groupBy: "field:tier" };
+    mockApi.on("get", "/reports/cost-sankey*", {
+      nodes: [
+        { id: "item:__other__", name: "__other__", type: "CostItem" },
+        { id: "group:gold", name: "gold", type: "Group" },
+        { id: "group:__other__", name: "__other__", type: "Group" },
+        { id: "a", name: "A", type: "Application" },
+      ],
+      links: [],
+      total: 0,
+      fiscal_year: 2026,
+      fiscal_year_start: 1,
+    });
+    renderCost();
+    await screen.findByTestId("sankey");
+    await waitFor(() =>
+      expect(
+        JSON.parse(screen.getByTestId("sankey").getAttribute("data-names")!),
+      ).toEqual(["Other costs", "Gold", "Unspecified", "A"]),
+    );
+  });
+
+  it("shows Yes / No for a yes-no group on the sankey", async () => {
+    withMetamodel(
+      [
+        makeCardType({
+          key: "Application",
+          label: "Application",
+          fields_schema: [
+            makeSection({
+              section: "S",
+              fields: [
+                makeField({ key: "managed", label: "Managed", type: "boolean" }),
+                sharedCost,
+              ],
+            }),
+          ],
+        }),
+      ],
+      [],
+    );
+    saved.config = { view: "sankey", groupBy: "field:managed" };
+    mockApi.on("get", "/reports/cost-sankey*", {
+      nodes: [
+        { id: "group:true", name: "true", type: "Group" },
+        { id: "group:false", name: "false", type: "Group" },
+      ],
+      links: [],
+      total: 0,
+      fiscal_year: 2026,
+      fiscal_year_start: 1,
+    });
+    renderCost();
+    await screen.findByTestId("sankey");
+    await waitFor(() =>
+      expect(
+        JSON.parse(screen.getByTestId("sankey").getAttribute("data-names")!),
+      ).toEqual(["Yes", "No"]),
+    );
+  });
+
+  it("scales the item->group links to the cards left in a scoped sankey", async () => {
+    saved.config = {
+      view: "sankey",
+      groupBy: "field:tier",
+      scopeIds: ["a", "c"],
+    };
+    mockApi.on("get", "/cards*", {
+      items: ["a", "b", "c", "d"].map((id) => ({ id, parent_id: null })),
+      total: 4,
+    });
+    mockApi.on("get", "/reports/cost-sankey*", {
+      nodes: [
+        { id: "item:x", name: "X", type: "CostItem" }, // 0
+        { id: "group:gold", name: "gold", type: "Group" }, // 1
+        { id: "group:silver", name: "silver", type: "Group" }, // 2
+        { id: "a", name: "A", type: "Application" }, // 3
+        { id: "b", name: "B", type: "Application" }, // 4
+        { id: "c", name: "C", type: "Application" }, // 5
+        { id: "d", name: "D", type: "Application" }, // 6
+      ],
+      links: [
+        { source: 0, target: 1, value: 10 },
+        { source: 0, target: 2, value: 8 },
+        { source: 1, target: 3, value: 6 },
+        { source: 1, target: 4, value: 4 },
+        { source: 2, target: 5, value: 8 },
+        { source: 2, target: 6, value: 0 },
+      ],
+      total: 18,
+      fiscal_year: 2026,
+      fiscal_year_start: 1,
+    });
+    renderCost();
+    await screen.findByTestId("sankey");
+    await waitFor(() =>
+      expect(
+        JSON.parse(screen.getByTestId("sankey").getAttribute("data-nodes")!),
+      ).toEqual(["item:x", "group:gold", "group:silver", "a", "c"]),
+    );
+    const links = JSON.parse(
+      screen.getByTestId("sankey").getAttribute("data-links")!,
+    ) as { source: number; target: number; value: number }[];
+    for (const g of [1, 2]) {
+      const into = links
+        .filter((l) => l.target === g)
+        .reduce((n, l) => n + l.value, 0);
+      const out = links
+        .filter((l) => l.source === g)
+        .reduce((n, l) => n + l.value, 0);
+      expect(Math.abs(into - out)).toBeLessThan(1e-9);
+    }
+    expect(links.every((l) => Number.isFinite(l.value))).toBe(true);
+    // gold lost b (4 of 10): its item link is 6
+    expect(links.find((l) => l.source === 0 && l.target === 1)!.value).toBeCloseTo(6);
+  });
+
+  it("never yields NaN when a scoped group loses every card", async () => {
+    saved.config = { view: "sankey", groupBy: "field:tier", scopeIds: ["a"] };
+    mockApi.on("get", "/cards*", {
+      items: ["a", "b"].map((id) => ({ id, parent_id: null })),
+      total: 2,
+    });
+    mockApi.on("get", "/reports/cost-sankey*", {
+      nodes: [
+        { id: "item:x", name: "X", type: "CostItem" },
+        { id: "group:gold", name: "gold", type: "Group" },
+        { id: "group:silver", name: "silver", type: "Group" },
+        { id: "a", name: "A", type: "Application" },
+        { id: "b", name: "B", type: "Application" },
+      ],
+      links: [
+        { source: 0, target: 1, value: 4 },
+        { source: 0, target: 2, value: 0 },
+        { source: 1, target: 3, value: 4 },
+        { source: 2, target: 4, value: 0 },
+      ],
+      total: 4,
+      fiscal_year: 2026,
+      fiscal_year_start: 1,
+    });
+    renderCost();
+    await screen.findByTestId("sankey");
+    await waitFor(() =>
+      expect(
+        JSON.parse(screen.getByTestId("sankey").getAttribute("data-nodes")!),
+      ).toEqual(["item:x", "group:gold", "a"]),
+    );
+    const links = JSON.parse(
+      screen.getByTestId("sankey").getAttribute("data-links")!,
+    ) as { value: number }[];
+    expect(links.every((l) => Number.isFinite(l.value))).toBe(true);
   });
 
   it("group labels are translated", async () => {

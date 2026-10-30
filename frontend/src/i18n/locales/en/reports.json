@@ -269,6 +269,7 @@
   "cost.unspecified": "Unspecified",
   "cost.combinedType": "{{first}} + {{second}}",
   "cost.groupByNone": "None",
+  "cost.otherCostItem": "Other costs",
   "cost.groupByUnavailable": "No field or relation to group by.",
   "cost.costSource": "Cost Source",
   "cost.costSourceDirect": "Direct (this card type)",
