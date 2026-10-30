@@ -9,6 +9,7 @@ from app.models.calculation import Calculation
 from app.models.card_cost_history import CardCostHistory
 from app.models.card_type import CardType
 from app.services.fiscal_year import current_fiscal_year
+from app.services.permission_service import PermissionService
 from tests.conftest import (
     auth_headers,
     create_card,
@@ -131,15 +132,15 @@ async def test_single_field_shows_one_cost_item(client, db, env):
     await _app(db, "A", 100)
     data = await _call(client, env)
     assert [n for n in data["nodes"] if n["type"] == "CostItem"] == [
-        {"id": TOTAL, "name": TOTAL, "type": "CostItem"}
+        {"id": f"item:{TOTAL}", "name": TOTAL, "type": "CostItem"}
     ]
     assert _link_values(data, "CostItem", "Application") == {(TOTAL, "A"): 100}
 
 
 async def test_total_field_shows_each_component_as_item(client, db, env):
     await _with_components(db)
-    await _app(db, "A", 0, costA=30, costB=70)
-    await _app(db, "B", 0, costA=5)
+    await _app(db, "A", 100, costA=30, costB=70)
+    await _app(db, "B", 5, costA=5)
     data = await _call(client, env)
     assert set(_by_type(data, "CostItem")) == {"costA", "costB"}
     assert _link_values(data, "CostItem", "Application") == {
@@ -152,9 +153,9 @@ async def test_total_field_shows_each_component_as_item(client, db, env):
 
 async def test_grouped_puts_group_nodes_between_items_and_cards(client, db, env):
     await _with_components(db)
-    await _app(db, "A", 0, costA=30, costB=70, tier="gold")
-    await _app(db, "B", 0, costA=5, tier="gold")
-    await _app(db, "C", 0, costB=9, tier="silver")
+    await _app(db, "A", 100, costA=30, costB=70, tier="gold")
+    await _app(db, "B", 5, costA=5, tier="gold")
+    await _app(db, "C", 9, costB=9, tier="silver")
     data = await _call(client, env, group_by="field:tier")
     kinds = [data["nodes"][link["source"]]["type"] for link in data["links"]]
     assert "Application" not in kinds  # no link leaves a card
@@ -229,3 +230,94 @@ async def test_no_cost_permission_is_403(client, db, env):
     user = await create_user(db, email="n@test.com", role="nocost")
     resp = await client.get("/api/v1/reports/cost-sankey", headers=auth_headers(user))
     assert resp.status_code == 403
+
+
+async def test_card_with_total_but_zero_components_still_appears(client, db, env):
+    await _with_components(db)
+    await _app(db, "A", 100, costA=30, costB=70)
+    await _app(db, "Only total", 40)
+    tree = await _call(client, env, "cost-treemap")
+    sank = await _call(client, env)
+    assert sank["total"] == tree["total"] == 140
+    assert "Only total" in {n["name"] for n in sank["nodes"]}
+
+
+async def test_remainder_goes_to_other_cost_item(client, db, env):
+    await _with_components(db)
+    await _app(db, "A", 100, costA=30, costB=50)
+    await _app(db, "Only total", 40)
+    data = await _call(client, env)
+    assert _link_values(data, "CostItem", "Application") == {
+        ("costA", "A"): 30,
+        ("costB", "A"): 50,
+        ("__other__", "A"): 20,
+        ("__other__", "Only total"): 40,
+    }
+    assert data["total"] == 140
+
+
+async def test_components_above_total_are_linked_as_they_are(client, db, env):
+    await _with_components(db)
+    await _app(db, "A", 50, costA=30, costB=50)
+    data = await _call(client, env)
+    assert "__other__" not in _by_type(data, "CostItem")
+    assert _link_values(data, "CostItem", "Application") == {("costA", "A"): 30, ("costB", "A"): 50}
+
+
+async def test_flows_conserve_with_remainder_and_groups(client, db, env):
+    await _with_components(db)
+    await _app(db, "A", 100, costA=30, tier="gold")
+    await _app(db, "B", 40, tier="gold")
+    data = await _call(client, env, group_by="field:tier")
+    item_group = _link_values(data, "CostItem", "Group")
+    assert item_group == {("costA", "gold"): 30, ("__other__", "gold"): 110}
+    assert _link_values(data, "Group", "Application") == {("gold", "A"): 100, ("gold", "B"): 40}
+
+
+async def test_ids_are_unique_across_kinds(client, db, env):
+    await _app(db, "A", 10, tier=TOTAL)
+    data = await _call(client, env, group_by="field:tier")
+    ids = [n["id"] for n in data["nodes"]]
+    assert len(ids) == len(set(ids))
+
+
+async def test_hidden_type_cards_absent_for_restricted_reader(client, db, env):
+    await create_role(db, key="reader", permissions={"costs.view": True}, is_system=False)
+    reader = await create_user(db, email="r@test.com", role="reader")
+    ct = (await db.execute(select(CardType).where(CardType.key == "ITComponent"))).scalar_one()
+    ct.role_permissions = {"reader": {"inventory.view": False}}
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    await _app(db, "App", 100)
+    await create_card(db, card_type="ITComponent", name="SecretItc", attributes={TOTAL: 50})
+    resp = await client.get(
+        "/api/v1/reports/cost-sankey",
+        params={"type": "Application,ITComponent"},
+        headers=auth_headers(reader),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert "SecretItc" not in {n["name"] for n in data["nodes"]}
+    assert data["total"] == 100
+
+
+async def test_multi_type_grouped_flows_conserve(client, db, env):
+    ct = (await db.execute(select(CardType).where(CardType.key == "ITComponent"))).scalar_one()
+    ct.fields_schema = _schema((TOTAL, "cost"), ("tier", "single_select"))
+    await db.flush()
+    await _app(db, "A", 100, tier="gold")
+    await _app(db, "B", 10)
+    await create_card(db, card_type="ITComponent", name="I", attributes={TOTAL: 50, "tier": "gold"})
+    data = await _call(client, env, type="Application,ITComponent", group_by="field:tier")
+    cards = [n["name"] for n in data["nodes"] if n["type"] not in ("CostItem", "Group")]
+    assert sorted(cards) == ["A", "B", "I"]
+    assert _link_values(data, "Group", "Application") == {
+        ("gold", "A"): 100,
+        ("__other__", "B"): 10,
+    }
+    assert _link_values(data, "Group", "ITComponent") == {("gold", "I"): 50}
+    assert _link_values(data, "CostItem", "Group") == {
+        (TOTAL, "gold"): 150,
+        (TOTAL, "__other__"): 10,
+    }
+    assert data["total"] == 160

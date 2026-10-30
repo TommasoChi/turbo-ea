@@ -22,6 +22,8 @@ from app.services.cost_grouping import GroupBy, assign_groups
 from app.services.cost_value import cost_value
 from app.services.lifecycle import is_live_in_fiscal_year
 
+OTHER_ITEM = "__other__"  # cost items the components do not account for; the page translates it
+
 
 async def cards_with_cost(
     db: AsyncSession,
@@ -103,20 +105,33 @@ async def build_cost_sankey(
 ) -> dict:
     """Cost items -> cards, or cost items -> groups -> cards when ``group_by`` is set.
 
-    A cost item is one of the fields concurring to ``cost_field`` (the field itself
-    when it has none); a card is counted once, whatever links to it. Raises
-    ``ValueError`` when the grouping is refused.
+    The cards and each card's total are the treemap's (``cost_field``). A cost item
+    is one of the fields concurring to ``cost_field`` (the field itself when it has
+    none); what the components leave of a card's total flows from the ``__other__``
+    item. Components summing to more than the total are linked as they are, with no
+    negative remainder. Raises ``ValueError`` when the grouping is refused.
     """
-    items = await cost_components(db, type_keys, cost_field) or [cost_field]
-    per_card: dict[uuid.UUID, tuple[Card, dict[str, float]]] = {}
-    for item in items:
+    components = await cost_components(db, type_keys, cost_field)
+    split = components != [cost_field] and bool(components)
+    totals = await cards_with_cost_for_types(
+        db, read_scope, type_keys, cost_field, target_fy, current_fy, fy_start
+    )
+    per_card: dict[uuid.UUID, tuple[Card, float, dict[str, float]]] = {
+        c.id: (c, cost, {} if split else {cost_field: cost}) for c, cost in totals
+    }
+    for item in components if split else []:
         for card, cost in await cards_with_cost_for_types(
             db, read_scope, type_keys, item, target_fy, current_fy, fy_start
         ):
-            per_card.setdefault(card.id, (card, {}))[1][item] = cost
-    cards = sorted(per_card.values(), key=lambda cc: -sum(cc[1].values()))
+            if card.id in per_card:
+                per_card[card.id][2][item] = cost
+    for _, card_total, costs in per_card.values():
+        rest = card_total - sum(costs.values())
+        if split and rest > 0:
+            costs[OTHER_ITEM] = rest
+    cards = sorted(per_card.values(), key=lambda cc: -cc[1])
     groups = (
-        await assign_groups(db, read_scope, [c for c, _ in cards], group_by) if group_by else {}
+        await assign_groups(db, read_scope, [c for c, _, _ in cards], group_by) if group_by else {}
     )
 
     nodes: list[dict] = []
@@ -125,23 +140,21 @@ async def build_cost_sankey(
     def node(kind: str, key: str, name: str, type_key: str) -> int:
         if (kind, key) not in index:
             index[(kind, key)] = len(nodes)
-            nodes.append({"id": key, "name": name, "type": type_key})
+            node_id = key if kind == "card" else f"{kind}:{key}"
+            nodes.append({"id": node_id, "name": name, "type": type_key})
         return index[(kind, key)]
 
-    item_totals: dict[str, float] = {}
-    for _, costs in cards:
-        for item, cost in costs.items():
-            item_totals[item] = item_totals.get(item, 0) + cost
-    for item in items:
-        if item in item_totals:
+    used = {i for _, _, costs in cards for i in costs}
+    for item in [*(components if split else [cost_field]), OTHER_ITEM]:
+        if item in used:
             node("item", item, item, "CostItem")
 
     links: list[dict] = []
     flows: dict[tuple[str, str], float] = {}
     total = 0.0
-    for card, costs in cards:
-        card_total = sum(costs.values())
+    for card, card_total, costs in cards:
         total += card_total
+        link_total = sum(costs.values())
         card_idx = node("card", str(card.id), card.name, card.type)
         if not group_by:
             links += [
@@ -151,7 +164,7 @@ async def build_cost_sankey(
             continue
         g = groups[card.id]
         g_idx = node("group", g, g, "Group")
-        links.append({"source": g_idx, "target": card_idx, "value": card_total})
+        links.append({"source": g_idx, "target": card_idx, "value": link_total})
         for i, v in costs.items():
             flows[(i, g)] = flows.get((i, g), 0) + v
     links += [
