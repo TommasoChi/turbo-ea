@@ -87,9 +87,12 @@ async def _by_relation(
     ends = {"1:1": {rt.source_type_key, rt.target_type_key}, "1:n": {rt.source_type_key}}.get(
         rt.cardinality, set()
     )
+    if rt.cardinality == "1:1" and rt.source_type_key == rt.target_type_key:
+        # a card could be the source of one row and the target of another: no single group
+        raise ValueError(f"'{key}' is a self-referencing 1:1 relation")
     if not {c.type for c in cards} <= ends:
         raise ValueError(f"cards are not on the at-most-one end of '{key}'")
-    ids = [c.id for c in cards]
+    ids = {c.id for c in cards}
     rels = (
         (
             await db.execute(
@@ -112,7 +115,9 @@ async def _by_relation(
         (
             await db.execute(
                 select(Card).where(
-                    Card.id.in_(set(links.values())), *read_scope.where(Card, mode="module")
+                    Card.id.in_(set(links.values())),
+                    Card.status == "ACTIVE",
+                    *read_scope.where(Card, mode="module"),
                 )
             )
         )

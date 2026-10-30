@@ -164,3 +164,92 @@ def test_prefixed_forms_and_empty():
     assert parse_group_by("", {"tier"}) is None
     assert parse_group_by(None, {"tier"}) is None
     assert parse_group_by("field:", set()) is None
+
+
+async def test_archived_linked_card_counts_as_no_link(db):
+    a, _, _ = await _rel_world(db, "1:n")
+    gone = await create_card(db, card_type="Organization", name="Old", status="ARCHIVED")
+    await create_relation(db, type_key="app_org", source_id=a.id, target_id=gone.id)
+    out = await assign_groups(db, CardReadScope.everything(), [a], GroupBy("relation", "app_org"))
+    assert out == {a.id: OTHER_GROUP}
+
+
+async def test_self_referencing_1to1_is_refused(db):
+    await _app_type(db)
+    await create_relation_type(
+        db,
+        key="app_app",
+        source_type_key="Application",
+        target_type_key="Application",
+        cardinality="1:1",
+    )
+    a = await create_card(db, name="a")
+    with pytest.raises(ValueError):
+        await assign_groups(db, CardReadScope.everything(), [a], GroupBy("relation", "app_app"))
+
+
+async def test_self_referencing_1n_groups_from_the_source_end(db):
+    await _app_type(db)
+    await create_relation_type(
+        db,
+        key="app_app",
+        source_type_key="Application",
+        target_type_key="Application",
+        cardinality="1:n",
+    )
+    a = await create_card(db, name="a")
+    b = await create_card(db, name="b")
+    await create_relation(db, type_key="app_app", source_id=a.id, target_id=b.id)
+    out = await assign_groups(
+        db, CardReadScope.everything(), [a, b], GroupBy("relation", "app_app")
+    )
+    assert out == {a.id: "b", b.id: OTHER_GROUP}
+
+
+async def test_relation_1to1_works_from_the_source_end(db):
+    a, _, org = await _rel_world(db, "1:1")
+    await create_relation(db, type_key="app_org", source_id=a.id, target_id=org.id)
+    out = await assign_groups(db, CardReadScope.everything(), [a], GroupBy("relation", "app_org"))
+    assert out == {a.id: "Acme"}
+
+
+async def test_mixed_source_and_target_cards_on_1n_are_refused(db):
+    a, _, org = await _rel_world(db, "1:n")
+    with pytest.raises(ValueError):
+        await assign_groups(
+            db, CardReadScope.everything(), [a, org], GroupBy("relation", "app_org")
+        )
+
+
+async def test_two_cards_in_the_same_group_appear_once_each(db):
+    a, b, org = await _rel_world(db, "1:n")
+    await create_relation(db, type_key="app_org", source_id=a.id, target_id=org.id)
+    await create_relation(db, type_key="app_org", source_id=b.id, target_id=org.id)
+    out = await assign_groups(
+        db, CardReadScope.everything(), [a, b], GroupBy("relation", "app_org")
+    )
+    assert out == {a.id: "Acme", b.id: "Acme"}
+
+
+async def test_field_invalid_on_one_of_several_types_is_refused(db):
+    await _app_type(db)
+    await create_card_type(
+        db, key="ITComponent", fields_schema=_schema(("tier", "multiple_select"))
+    )
+    a = await create_card(db, name="a", attributes={"tier": "gold"})
+    c = await create_card(db, card_type="ITComponent", name="c", attributes={"tier": ["x"]})
+    with pytest.raises(ValueError):
+        await assign_groups(db, CardReadScope.everything(), [a, c], GroupBy("field", "tier"))
+
+
+async def test_field_missing_on_one_of_several_types_is_refused(db):
+    await _app_type(db)
+    await create_card_type(db, key="ITComponent", fields_schema=_schema(("other", "text")))
+    a = await create_card(db, name="a")
+    c = await create_card(db, card_type="ITComponent", name="c")
+    with pytest.raises(ValueError):
+        await assign_groups(db, CardReadScope.everything(), [a, c], GroupBy("field", "tier"))
+
+
+def test_empty_rel_key_parses_to_none():
+    assert parse_group_by("rel:", set()) is None
