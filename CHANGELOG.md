@@ -5,6 +5,19 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.181.0] - 2026-10-30
+
+### Added
+
+- **The cost report can be built on Initiatives and on an Application + IT Component view.** Initiatives offer their budget and actual cost fields, and the combined view shows both types in one chart.
+- **Group by is available on every cost view, by a card field or by a linked card.** Cards with no value go to Unspecified and no cost is counted twice.
+
+### Changed
+
+- **The cost Sankey now takes the same filters as the treemap and draws cost items, groups and cards.**
+- **The cost history chart shows only on the Forecast year, with every cost field that makes up the total.**
+- **Full screen on the cost report fills the whole screen.**
+
 ## [2.180.0] - 2026-10-29
 
 ### Added

@@ -162,7 +162,20 @@ The **Cost Report** provides financial analysis of your technology landscape:
 
 - **Treemap view** — Nested rectangles sized by cost, with optional grouping (e.g., by organization or capability)
 - **Bar chart view** — Cost comparison across components
-- **Card Type** — Pick which card type the report is built around (Application, IT Component, Provider, …).
+- **Sankey view** — The same report drawn as a flow of cost (see [Sankey view](#sankey-view))
+- **Card Type** — Pick which card type the report is built around: **Application**, **IT Component**, **Application + IT Component** (both types in one chart, each card with its own cost) or **Initiative**. Initiatives follow the same fiscal-year rules as Applications.
+- **Cost field** — Pick which cost field is summed. The list shows the cost fields of the chosen card type; for Initiative it offers **costBudget** (the default) and **costActual**, which are never added together. For the combined option only the cost fields that exist in both types are offered.
+
+All views share the same toolbar, filters, fiscal year and cost field, so switching view only changes the drawing.
+
+### Group by
+
+**Group by** is available in the treemap, the table and the Sankey. A card is grouped either by:
+
+- the value of a **field on the card** (single-valued fields only; multiple-choice fields are not offered, since they would put a card in two groups), or
+- a **linked card**, named by the linked card's name, through a relation in which each card has **at most one** linked card of that type. Many-to-many relations are never offered, so a cost can never land in two groups.
+
+Cards with no value, or no linked card, go to the group **Unspecified**. For the combined **Application + IT Component** option only the fields that exist in both types are offered; the picker is disabled when there are none. Grouping never counts a cost twice and never drops one.
 
 ### Fiscal year
 
@@ -189,7 +202,7 @@ A fiscal year is named **FY** plus the last two digits of the year it **ends** i
 
 The rule applies to everything on the page — the totals, the treemap, the table, **Cost Source** roll-ups and drill-downs — and the selected fiscal year is printed in the report header.
 
-When you pick a year other than **Current**, a **trend chart** shows the cost across the current year and the four before it. While **Forecast** is the selected year, the chart also shows a bar for it.
+While **Forecast** is the selected year, a **history chart** shows the cost across the current year, the four before it and the forecast year. It is not shown for any other year. Each bar is stacked, with one segment per cost field that makes up the total cost; the legend and tooltip use the technical field names (for example `softwareLicensingCost`).
 
 An administrator sets the month the fiscal year starts in under [Settings → General](../admin/settings.md#fiscal-year-start).
 
@@ -224,6 +237,14 @@ Whenever at least one Cost Source is active, the treemap rectangles are **clicka
 The Cost Source selection and other filters are preserved as you drill, and the drilled level is part of the saved-report config — saving a report while drilled in re-opens directly at that level. With **no** Cost Source active, clicking a rectangle opens the card side panel instead (there's nothing to break down).
 
 **Scoping to specific cards** — The chip beside the card-type selector opens a picker: select one or more cards and the treemap, the totals and the table all narrow to those and everything beneath them. The chip is hidden while you are drilled into a rectangle, since a drill has already moved you to a different card type; leave the drill and the scope is still there.
+
+### Sankey view
+
+The Sankey takes the same filters as the treemap: card type, card scope, cost field, fiscal year and Group by. It draws **cost items** on the left (the cost fields that make up the total), the **cards** on the right and, when a Group by is chosen, the **groups** in the middle: cost items flow into groups and groups flow into their cards. Without a Group by the flow goes straight from cost items to cards. A cost is counted once: an IT Component used by several applications is not repeated.
+
+### Full screen
+
+The full-screen button on the treemap and the Sankey makes the chart fill the whole screen, in width and height, without distorting it.
 
 ## Matrix Report
 
