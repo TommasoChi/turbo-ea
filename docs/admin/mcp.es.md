@@ -243,7 +243,7 @@ El servidor expone 35 herramientas de lectura agrupadas en ocho clusters.
 | Herramienta | Descripción |
 |-------------|-------------|
 | `get_portfolio_report` | Datos de gráfico de burbujas para un tipo de ficha (por defecto: ajuste funcional × técnico) |
-| `get_cost_treemap` | Mapa de árbol de costes, opcionalmente agrupado por un tipo relacionado |
+| `get_cost_treemap` | Mapa de árbol de costes de uno o varios tipos, opcionalmente agrupado por un campo (`field:<key>`) o una ficha vinculada (`rel:<key>`) |
 | `get_capability_heatmap` | Mapa de calor jerárquico de capacidades de negocio |
 | `get_data_quality_report` | Desglose de completitud por tipo de ficha |
 | `get_value_chain` | Bandas y cajas de la cadena de valor o, con `category_id`, el mapa del flujo de valor de una categoría de procesos; el parámetro opcional `related` (`applications`, `dataObjects`, `organization`) añade los elementos vinculados. Requiere el permiso `bpm.value_chain` |

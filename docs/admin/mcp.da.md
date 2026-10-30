@@ -243,7 +243,7 @@ Serveren eksponerer 35 læseværktøjer grupperet i otte klynger.
 | Værktøj | Beskrivelse |
 |------|-------------|
 | `get_portfolio_report` | Bubble-chart-data for en korttype (funktionel × teknisk fit som standard) |
-| `get_cost_treemap` | Treemap over kortomkostninger, valgfrit grupperet efter en relateret type |
+| `get_cost_treemap` | Treemap over omkostninger for én eller flere typer, valgfrit grupperet efter et felt (`field:<key>`) eller et forbundet kort (`rel:<key>`) |
 | `get_capability_heatmap` | Hierarkisk business-capability-heatmap |
 | `get_data_quality_report` | Per-korttype-fuldførelsesopdeling |
 | `get_value_chain` | Værdikædens bånd og felter eller, med `category_id`, værdistrømskortet for én proceskategori; den valgfri parameter `related` (`applications`, `dataObjects`, `organization`) tilføjer tilknyttede elementer. Kræver tilladelsen `bpm.value_chain` |
