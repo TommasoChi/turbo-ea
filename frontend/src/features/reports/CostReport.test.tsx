@@ -9,7 +9,7 @@
  * must say which year that is and never ask for another.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { createRef } from "react";
@@ -47,8 +47,17 @@ vi.mock("recharts", async () => {
   const { cloneElement } = await import("react");
   return {
     ...actual,
-    ResponsiveContainer: ({ children }: { children: React.ReactElement }) =>
-      cloneElement(children, { width: 900, height: 450 } as never),
+    ResponsiveContainer: ({
+      children,
+      height,
+    }: {
+      children: React.ReactElement;
+      height?: number | string;
+    }) => (
+      <div data-testid="responsive-container" data-height={String(height)}>
+        {cloneElement(children, { width: 900, height: 450 } as never)}
+      </div>
+    ),
   };
 });
 vi.mock("./SaveReportDialog", () => ({ default: () => null }));
@@ -60,10 +69,29 @@ vi.mock("@/components/CardDetailSidePanel", () => ({ default: () => null }));
 // The trend chart's own fetching is tested in CostTrendChart.test.tsx; here only the years it is given.
 const trendYearsSeen: number[][] = []; // every `years` array the stub was rendered with
 vi.mock("./CostTrendChart", () => ({
-  default: ({ years, currentFiscalYear }: { years: number[]; currentFiscalYear: number }) => {
+  default: ({
+    years,
+    currentFiscalYear,
+    typeParam,
+    costField,
+    components,
+  }: {
+    years: number[];
+    currentFiscalYear: number;
+    typeParam: string;
+    costField: string;
+    components: string[];
+  }) => {
     trendYearsSeen.push(years);
     return (
-      <div data-testid="cost-trend-chart" data-years={years.join(",")} data-current={currentFiscalYear} />
+      <div
+        data-testid="cost-trend-chart"
+        data-years={years.join(",")}
+        data-current={currentFiscalYear}
+        data-type={typeParam}
+        data-field={costField}
+        data-components={components.join(",")}
+      />
     );
   },
 }));
@@ -136,6 +164,7 @@ beforeEach(() => {
       return Promise.resolve({
         items: COST_ITEMS,
         total: 620,
+        components: ["licenseCost", "serviceCost"],
         fiscal_year: requestedYear(path),
         current_fiscal_year: 2026,
         fiscal_year_start: fyStart,
@@ -643,67 +672,81 @@ describe("CostReport custom columns", () => {
 });
 
 describe("CostReport trend chart", () => {
-  it("shows the trend chart above the treemap once a past fiscal year is picked", async () => {
+  const ready = async () => {
     consumedConfig = { view: "chart" };
     renderCost();
     await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
-    expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
-    const picker = screen.getAllByRole("combobox", { name: /fiscal year/i })[0];
-    await userEvent.click(picker);
-    await userEvent.click(await screen.findByRole("option", { name: "FY25" }));
-    expect(await screen.findByTestId("cost-trend-chart")).toBeInTheDocument();
-  });
-
+  };
   const pickYear = async (name: string) => {
     const picker = screen.getAllByRole("combobox", { name: /fiscal year/i })[0];
     await userEvent.click(picker);
     await userEvent.click(await screen.findByRole("option", { name }));
-    return screen.findByTestId("cost-trend-chart");
   };
 
-  it("trend shows the current year and four past years, oldest first", async () => {
-    consumedConfig = { view: "chart" };
-    renderCost();
-    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
-    const trend = await pickYear("FY25");
-    expect(trend).toHaveAttribute("data-years", "2022,2023,2024,2025,2026");
-    expect(trend).toHaveAttribute("data-current", "2026");
-  });
-
-  it("trend adds the forecast bar only when the forecast year is selected", async () => {
-    consumedConfig = { view: "chart" };
-    renderCost();
-    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
-    const trend = await pickYear("FY27 - Forecast");
-    await waitFor(() =>
-      expect(trend).toHaveAttribute("data-years", "2022,2023,2024,2025,2026,2027"),
-    );
-  });
-
-  it("picking another past year keeps the same years array, so the chart does not refetch", async () => {
-    consumedConfig = { view: "chart" };
-    renderCost();
-    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
-    await pickYear("FY25");
-    const afterFy25 = trendYearsSeen[trendYearsSeen.length - 1];
-    await pickYear("FY24");
-    await waitFor(() => expect(screen.getAllByRole("combobox", { name: /fiscal year/i })[0]).toHaveTextContent("FY24"));
-    expect(trendYearsSeen[trendYearsSeen.length - 1]).toBe(afterFy25);
-  });
-
-  it("trend drops the forecast bar when a past year is picked after the forecast", async () => {
-    consumedConfig = { view: "chart" };
-    renderCost();
-    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
-    await pickYear("FY27 - Forecast");
-    const trend = await pickYear("FY25");
-    await waitFor(() => expect(trend).toHaveAttribute("data-years", "2022,2023,2024,2025,2026"));
-  });
-
-  it("trend is not shown on Current", async () => {
-    consumedConfig = { view: "chart" };
-    renderCost();
-    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+  it("chart hidden on Current and on a past year", async () => {
+    await ready();
     expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
+    await pickYear("FY25");
+    await waitFor(() =>
+      expect(screen.getAllByRole("combobox", { name: /fiscal year/i })[0]).toHaveTextContent("FY25"),
+    );
+    expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
+  });
+
+  it("chart shown on Forecast with the components, five past years oldest first", async () => {
+    await ready();
+    await pickYear("FY27 - Forecast");
+    const trend = await screen.findByTestId("cost-trend-chart");
+    expect(trend).toHaveAttribute("data-years", "2022,2023,2024,2025,2026,2027");
+    expect(trend).toHaveAttribute("data-current", "2026");
+    expect(trend).toHaveAttribute("data-components", "licenseCost,serviceCost");
+    expect(trend).toHaveAttribute("data-field", "costTotalAnnual");
+  });
+
+  it("chart hidden when the response carries no components", async () => {
+    const base = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation(async (path: string, ...rest: never[]) => {
+      const r = (await base(path, ...rest)) as Record<string, unknown>;
+      return path.startsWith("/reports/cost-treemap") ? { ...r, components: [] } : r;
+    });
+    await ready();
+    await pickYear("FY27 - Forecast");
+    await waitFor(() =>
+      expect(screen.getAllByRole("combobox", { name: /fiscal year/i })[0]).toHaveTextContent("Forecast"),
+    );
+    expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
+  });
+
+  it("chart refetches when the card type changes", async () => {
+    await ready();
+    await pickYear("FY27 - Forecast");
+    expect(await screen.findByTestId("cost-trend-chart")).toHaveAttribute("data-type", "Application");
+    await userEvent.click(screen.getByLabelText(/card type/i));
+    await userEvent.click(await screen.findByRole("option", { name: "IT Component" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("cost-trend-chart")).toHaveAttribute("data-type", "ITComponent"),
+    );
+    expect(
+      vi.mocked(api.get).mock.calls.some(
+        ([p]) => String(p).startsWith("/reports/cost-treemap") && String(p).includes("type=ITComponent"),
+      ),
+    ).toBe(true);
+  });
+
+  it("treemap container is 100% high in fullscreen and 450 otherwise", async () => {
+    await ready();
+    const height = () => screen.getByTestId("responsive-container").getAttribute("data-height");
+    expect(height()).toBe("450");
+    const panel = screen.getByTestId("fullscreen-panel");
+    Object.defineProperty(document, "fullscreenElement", { value: panel, configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    expect(height()).toBe("100%");
+    Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    expect(height()).toBe("450");
   });
 });

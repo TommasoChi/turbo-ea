@@ -79,6 +79,8 @@ interface CostItem {
 interface CostTreemapResponse {
   items: CostItem[];
   total: number;
+  /** Technical keys of the cost fields that add up to the total. */
+  components?: string[];
   /** The fiscal year the figures are for (the one requested). */
   fiscal_year?: number;
   /** The fiscal year that contains today, whatever year was requested. */
@@ -86,6 +88,8 @@ interface CostTreemapResponse {
   /** Month (1-12) the workspace's fiscal year starts in. */
   fiscal_year_start?: number;
 }
+
+const EMPTY_COMPONENTS: string[] = [];
 
 interface SankeyNode {
   id: string;
@@ -339,6 +343,14 @@ export default function CostReport() {
   const [costField, setCostField] = useState("costTotalAnnual");
   const [groupBy, setGroupBy] = useState("");
   const [rawItems, setRawItems] = useState<CostItem[] | null>(null);
+  // The cost field keys that add up to the total, from the treemap response.
+  // Tagged with the type and field they answer, so a stale list never meets a new selection.
+  const [componentsFor, setComponentsFor] = useState<{ key: string; list: string[] }>({
+    key: "",
+    list: [],
+  });
+  const components =
+    componentsFor.key === `${cardTypeKey}|${costField}` ? componentsFor.list : EMPTY_COMPONENTS;
   // Current-year baseline, fetched only when a past fiscal year is selected —
   // the treemap delta badge diffs against it (id -> cost).
   const [baselineCosts, setBaselineCosts] = useState<Map<string, number>>(
@@ -369,14 +381,13 @@ export default function CostReport() {
     () => costFiscalYearOptions(currentFiscalYear),
     [currentFiscalYear],
   );
-  // Trend bars, oldest first: the four years before the current one and the current one,
-  // plus the forecast year while that year is the one picked.
-  // Memoised on the boolean, not the picked year: the chart refetches when the array identity changes.
+  // The history chart shows on the Forecast year only: the four years before the current one,
+  // the current one and the forecast, oldest first. Memoised: the chart refetches when the identity changes.
   const showForecast = fiscalYearParam === currentFiscalYear + 1;
-  const trendYears = useMemo(() => {
-    const years = Array.from({ length: 5 }, (_, i) => currentFiscalYear - 4 + i);
-    return showForecast ? [...years, currentFiscalYear + 1] : years;
-  }, [currentFiscalYear, showForecast]);
+  const trendYears = useMemo(
+    () => Array.from({ length: 6 }, (_, i) => currentFiscalYear - 4 + i),
+    [currentFiscalYear],
+  );
   // Learn the current year from a response, and fall back to "Current" when the
   // requested year is that one or is not among the offered years (a saved
   // report from an earlier year).
@@ -578,6 +589,7 @@ export default function CostReport() {
         );
         if (!isCurrent()) return;
         setRawItems(r.items);
+        setComponentsFor({ key: `${cardTypeKey}|${costField}`, list: r.components ?? [] });
         setSankeyData(null);
         setFiscalYear((prev) => fiscalYearOf(r) ?? prev);
         adoptCurrentFiscalYear(r.current_fiscal_year);
@@ -1162,18 +1174,21 @@ export default function CostReport() {
           </Box>
         ) : (
           <>
-            {fiscalYearParam != null && (
+            {showForecast && components.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <CostTrendChart
-                  cardTypeKey={typeParam(cardTypeKey)}
+                  typeParam={typeParam(cardTypeKey)}
+                  costField={costField}
+                  components={components}
                   years={trendYears}
                   currentFiscalYear={currentFiscalYear}
                 />
               </Box>
             )}
             <FullscreenPanel label={t("cost.fullscreen")}>
-            <Paper variant="outlined" sx={{ p: 1 }}>
-              <ResponsiveContainer width="100%" height={450}>
+            {(isFullscreen) => (
+            <Paper variant="outlined" sx={{ p: 1, ...(isFullscreen && { flex: 1, minHeight: 0 }) }}>
+              <ResponsiveContainer width="100%" height={isFullscreen ? "100%" : 450}>
                 <Treemap
                   data={treemapData}
                   dataKey="size"
@@ -1198,6 +1213,7 @@ export default function CostReport() {
                 </Treemap>
               </ResponsiveContainer>
             </Paper>
+            )}
             </FullscreenPanel>
           </>
         )
@@ -1210,21 +1226,23 @@ export default function CostReport() {
           </Box>
         ) : (
           <FullscreenPanel label={t("cost.fullscreen")}>
-            <Paper
-              variant="outlined"
-              sx={{ p: 1 }}
-              data-testid="cost-sankey-panel"
-            >
-              <ResponsiveContainer width="100%" height={450}>
-                <Sankey
-                  data={sankeyView}
-                  nodeWidth={14}
-                  nodePadding={20}
-                  margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
-                  node={<CostSankeyNode isRtl={isRtl} />}
-                />
-              </ResponsiveContainer>
-            </Paper>
+            {(isFullscreen) => (
+              <Paper
+                variant="outlined"
+                sx={{ p: 1, ...(isFullscreen && { flex: 1, minHeight: 0 }) }}
+                data-testid="cost-sankey-panel"
+              >
+                <ResponsiveContainer width="100%" height={isFullscreen ? "100%" : 450}>
+                  <Sankey
+                    data={sankeyView}
+                    nodeWidth={14}
+                    nodePadding={20}
+                    margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+                    node={<CostSankeyNode isRtl={isRtl} />}
+                  />
+                </ResponsiveContainer>
+              </Paper>
+            )}
           </FullscreenPanel>
         )
       ) : (

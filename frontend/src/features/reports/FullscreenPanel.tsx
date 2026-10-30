@@ -9,7 +9,8 @@ export default function FullscreenPanel({
   children,
   label,
 }: {
-  children: ReactNode;
+  /** A function child learns whether the panel is full screen, to fill the screen. */
+  children: ReactNode | ((isFullscreen: boolean) => ReactNode);
   label: string;
 }) {
   const { t } = useTranslation("reports");
@@ -28,7 +29,20 @@ export default function FullscreenPanel({
   };
 
   return (
-    <Box ref={ref} data-testid="fullscreen-panel" sx={{ position: "relative" }}>
+    <Box
+      ref={ref}
+      data-testid="fullscreen-panel"
+      sx={{
+        position: "relative",
+        ...(isFullscreen && {
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          bgcolor: "background.default",
+          p: 2,
+        }),
+      }}
+    >
       <Tooltip title={isFullscreen ? t("shell.exitFullscreen") : label}>
         <IconButton
           size="small"
@@ -39,7 +53,7 @@ export default function FullscreenPanel({
           <MaterialSymbol icon={isFullscreen ? "fullscreen_exit" : "fullscreen"} size={18} />
         </IconButton>
       </Tooltip>
-      {children}
+      {typeof children === "function" ? children(isFullscreen) : children}
     </Box>
   );
 }

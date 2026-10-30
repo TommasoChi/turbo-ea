@@ -12,26 +12,21 @@ import {
 import { api } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { costFiscalYearName } from "@/lib/fiscalYear";
+import { CATEGORICAL_COLORS } from "@/theme/tokens";
 
-const COST_FIELDS = [
-  "softwareLicensingCost",
-  "applicationManagementServicesCost",
-  "infrastruttureCost",
-] as const;
+type TrendRow = { fiscalYear: number } & Record<string, number>;
 
-interface TrendRow {
-  fiscalYear: number;
-  softwareLicensingCost: number;
-  applicationManagementServicesCost: number;
-  infrastruttureCost: number;
-}
-
+/** Stacked history of the cost field's components (the keys of its calculation), one bar per year. */
 export default function CostTrendChart({
-  cardTypeKey,
+  typeParam,
+  costField,
+  components,
   years,
   currentFiscalYear,
 }: {
-  cardTypeKey: string;
+  typeParam: string;
+  costField: string;
+  components: string[];
   years: number[];
   currentFiscalYear: number;
 }) {
@@ -42,23 +37,25 @@ export default function CostTrendChart({
       const results = await Promise.all(
         years.map((year) =>
           Promise.all(
-            COST_FIELDS.map((field) =>
+            components.map((component) =>
               api.get<{ total: number }>(
-                `/reports/cost-treemap?type=${cardTypeKey}&cost_field=${field}&fiscal_year=${year}`,
+                `/reports/cost-treemap?type=${typeParam}&cost_field=${component}&fiscal_year=${year}`,
                 { signal },
               ),
             ),
-          ).then(([sw, ams, infra]) => ({
-            fiscalYear: year,
-            softwareLicensingCost: sw.total,
-            applicationManagementServicesCost: ams.total,
-            infrastruttureCost: infra.total,
-          })),
+          ).then((responses) => {
+            const row: TrendRow = { fiscalYear: year };
+            components.forEach((component, i) => {
+              row[component] = responses[i].total;
+            });
+            return row;
+          }),
         ),
       );
       if (isCurrent()) setRows(results);
     },
-    [cardTypeKey, years],
+    // costField: a new field can keep the same components yet must not show the old rows.
+    [typeParam, costField, components.join(","), years],
   );
 
   return (
@@ -70,9 +67,14 @@ export default function CostTrendChart({
             tickFormatter={(year: number) => costFiscalYearName(year, currentFiscalYear)}
           />
           <YAxis />
-          <Bar dataKey="softwareLicensingCost" stackId="cost" fill="#1976d2" />
-          <Bar dataKey="applicationManagementServicesCost" stackId="cost" fill="#42a5f5" />
-          <Bar dataKey="infrastruttureCost" stackId="cost" fill="#90caf9" />
+          {components.map((component, i) => (
+            <Bar
+              key={component}
+              dataKey={component}
+              stackId="cost"
+              fill={CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length]}
+            />
+          ))}
           <RTooltip />
           <Legend />
         </BarChart>

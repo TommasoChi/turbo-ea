@@ -12,7 +12,11 @@ vi.mock("recharts", () => ({
       {children}
     </div>
   ),
-  Bar: () => null,
+  Bar: ({ dataKey, fill }: { dataKey: string; fill: string }) => (
+    <i data-testid="bar" data-fill={fill}>
+      {dataKey}
+    </i>
+  ),
   XAxis: ({ tickFormatter }: { tickFormatter?: (v: number) => string }) => {
     axisFormatter = tickFormatter;
     return null;
@@ -26,81 +30,104 @@ import { api } from "@/api/client";
 
 const rowsOf = () => JSON.parse(screen.getByTestId("rows").textContent ?? "[]");
 const yearOf = (path: string) => new URLSearchParams(path.split("?")[1]).get("fiscal_year")!;
+const barKeys = () => screen.queryAllByTestId("bar").map((b) => b.textContent);
+
+const COMPONENTS = ["licenseCost", "serviceCost"];
+const props = (over: Partial<React.ComponentProps<typeof CostTrendChart>> = {}) => ({
+  typeParam: "Application",
+  costField: "costTotalAnnual",
+  components: COMPONENTS,
+  years: [2025, 2026],
+  currentFiscalYear: 2026,
+  ...over,
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.get).mockImplementation((path: string) => {
     const p = new URLSearchParams(path.split("?")[1]);
-    const field = p.get("cost_field");
-    const fy = p.get("fiscal_year");
     const totals: Record<string, number> = {
-      "softwareLicensingCost:2025": 100,
-      "applicationManagementServicesCost:2025": 50,
-      "infrastruttureCost:2025": 20,
-      "softwareLicensingCost:2026": 120,
-      "applicationManagementServicesCost:2026": 60,
-      "infrastruttureCost:2026": 25,
+      "licenseCost:2025": 100,
+      "serviceCost:2025": 50,
+      "licenseCost:2026": 120,
+      "serviceCost:2026": 60,
     };
-    return Promise.resolve({ items: [], total: totals[`${field}:${fy}`] ?? 0 }) as never;
+    return Promise.resolve({
+      items: [],
+      total: totals[`${p.get("cost_field")}:${p.get("fiscal_year")}`] ?? 0,
+    }) as never;
   });
 });
 
 describe("CostTrendChart", () => {
-  it("fetches each category field for each year and renders a bar per year", async () => {
-    render(<CostTrendChart cardTypeKey="Application" years={[2025, 2026]} currentFiscalYear={2026} />);
-    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(6)); // 2 years x 3 fields
-    expect(screen.getByTestId("cost-trend-chart")).toBeInTheDocument();
+  it("requests each component for each year with the component as cost_field", async () => {
+    render(<CostTrendChart {...props()} />);
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(4)); // 2 years x 2 components
+    const paths = vi.mocked(api.get).mock.calls.map(([p]) => String(p));
+    expect(paths).toContain(
+      "/reports/cost-treemap?type=Application&cost_field=licenseCost&fiscal_year=2025",
+    );
+    expect(paths).toContain(
+      "/reports/cost-treemap?type=Application&cost_field=serviceCost&fiscal_year=2026",
+    );
     await waitFor(() =>
       expect(rowsOf()).toEqual([
-        {
-          fiscalYear: 2025,
-          softwareLicensingCost: 100,
-          applicationManagementServicesCost: 50,
-          infrastruttureCost: 20,
-        },
-        {
-          fiscalYear: 2026,
-          softwareLicensingCost: 120,
-          applicationManagementServicesCost: 60,
-          infrastruttureCost: 25,
-        },
+        { fiscalYear: 2025, licenseCost: 100, serviceCost: 50 },
+        { fiscalYear: 2026, licenseCost: 120, serviceCost: 60 },
       ]),
     );
   });
 
+  it("draws one bar per component, keyed by the technical key, with distinct colours", async () => {
+    render(<CostTrendChart {...props()} />);
+    await waitFor(() => expect(barKeys()).toEqual(COMPONENTS));
+    const fills = screen.getAllByTestId("bar").map((b) => b.getAttribute("data-fill"));
+    expect(new Set(fills).size).toBe(2);
+  });
+
+  it("updates the bars and refetches when the component list changes", async () => {
+    const { rerender } = render(<CostTrendChart {...props()} />);
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(4));
+    rerender(<CostTrendChart {...props({ components: ["licenseCost"] })} />);
+    await waitFor(() => expect(barKeys()).toEqual(["licenseCost"]));
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(6));
+  });
+
+  it("does not refetch for a new array with the same components", async () => {
+    const years = [2025, 2026];
+    const { rerender } = render(<CostTrendChart {...props({ years })} />);
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(4));
+    rerender(<CostTrendChart {...props({ years, components: [...COMPONENTS] })} />);
+    await act(async () => {});
+    expect(api.get).toHaveBeenCalledTimes(4);
+  });
+
   it("labels the axis with FY names", async () => {
-    render(<CostTrendChart cardTypeKey="Application" years={[2025, 2026, 2027]} currentFiscalYear={2026} />);
+    render(<CostTrendChart {...props({ years: [2025, 2026, 2027] })} />);
     await waitFor(() => expect(axisFormatter).toBeDefined());
     expect(axisFormatter!(2027)).toBe("FY27 - Forecast");
     expect(axisFormatter!(2026)).toBe("FY26 - Current");
     expect(axisFormatter!(2025)).toBe("FY25");
   });
 
-  it("handles a type with no category fields by rendering a zero series, not erroring", async () => {
-    vi.mocked(api.get).mockResolvedValue({ items: [], total: 0 } as never);
-    render(<CostTrendChart cardTypeKey="Team" years={[2025]} currentFiscalYear={2026} />);
-    expect(await screen.findByTestId("cost-trend-chart")).toBeInTheDocument();
-  });
-
-  it("is unaffected by group_by — never sends a group_by param", async () => {
-    render(<CostTrendChart cardTypeKey="Application" years={[2025]} currentFiscalYear={2026} />);
+  it("never sends a group_by param", async () => {
+    render(<CostTrendChart {...props({ years: [2025] })} />);
     await waitFor(() => expect(api.get).toHaveBeenCalled());
-    const calls = vi.mocked(api.get).mock.calls.map(([p]) => String(p));
-    for (const c of calls) expect(c).not.toContain("group_by");
+    for (const [p] of vi.mocked(api.get).mock.calls) expect(String(p)).not.toContain("group_by");
   });
 
   it("aborts the requests still in flight when the years change", async () => {
     vi.mocked(api.get).mockImplementation(() => new Promise(() => {}) as never);
-    const { rerender } = render(<CostTrendChart cardTypeKey="Application" years={[2025]} currentFiscalYear={2026} />);
-    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(3));
+    const { rerender } = render(<CostTrendChart {...props({ years: [2025] })} />);
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
     const firstSignals = vi.mocked(api.get).mock.calls.map(([, opts]) => opts?.signal);
 
-    rerender(<CostTrendChart cardTypeKey="Application" years={[2026]} currentFiscalYear={2026} />);
-    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(6));
+    rerender(<CostTrendChart {...props({ years: [2026] })} />);
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(4));
 
-    expect(firstSignals).toHaveLength(3);
+    expect(firstSignals).toHaveLength(2);
     for (const signal of firstSignals) expect(signal?.aborted).toBe(true);
-    const latestSignals = vi.mocked(api.get).mock.calls.slice(3).map(([, opts]) => opts?.signal);
+    const latestSignals = vi.mocked(api.get).mock.calls.slice(2).map(([, opts]) => opts?.signal);
     for (const signal of latestSignals) expect(signal?.aborted).toBe(false);
   });
 
@@ -115,20 +142,13 @@ describe("CostTrendChart", () => {
     const settle = (year: string, total: number) =>
       pending.filter((p) => p.year === year).forEach((p) => p.resolve({ items: [], total }));
 
-    const { rerender } = render(<CostTrendChart cardTypeKey="Application" years={[2025]} currentFiscalYear={2026} />);
-    await waitFor(() => expect(pending).toHaveLength(3));
-    rerender(<CostTrendChart cardTypeKey="Application" years={[2026]} currentFiscalYear={2026} />);
-    await waitFor(() => expect(pending).toHaveLength(6));
+    const { rerender } = render(<CostTrendChart {...props({ years: [2025] })} />);
+    await waitFor(() => expect(pending).toHaveLength(2));
+    rerender(<CostTrendChart {...props({ years: [2026] })} />);
+    await waitFor(() => expect(pending).toHaveLength(4));
 
     settle("2026", 7);
-    const latest = [
-      {
-        fiscalYear: 2026,
-        softwareLicensingCost: 7,
-        applicationManagementServicesCost: 7,
-        infrastruttureCost: 7,
-      },
-    ];
+    const latest = [{ fiscalYear: 2026, licenseCost: 7, serviceCost: 7 }];
     await waitFor(() => expect(rowsOf()).toEqual(latest));
 
     await act(async () => {
