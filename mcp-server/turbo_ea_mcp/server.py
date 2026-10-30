@@ -585,10 +585,13 @@ async def get_cost_treemap(
     calendar year it ends in) and its start month (`fiscal_year_start`).
 
     Args:
-        type: Card type to aggregate (default 'Application').
-        cost_field: Cost field key on that type (default 'costTotalAnnual').
-        group_by: Optional related card type key to group spend by
-            (e.g. 'BusinessCapability', 'Organization').
+        type: Card type to aggregate (default 'Application'), or several
+            comma-separated (e.g. 'Application,ITComponent').
+        cost_field: Cost field key on those types (default 'costTotalAnnual').
+        group_by: Optional grouping: 'field:<fieldKey>' for a single-valued
+            field (e.g. 'field:businessCriticality'), or 'rel:<relationTypeKey>'
+            for the one card linked through an at-most-one relation. Cards
+            without a value fall in '__other__'. Other values are ignored.
     """
     token = await _get_current_token()
     if not token:

@@ -243,7 +243,7 @@ The server exposes 35 read tools grouped into eight clusters.
 | Tool | Description |
 |------|-------------|
 | `get_portfolio_report` | Bubble-chart data for a card type (functional × technical fit by default) |
-| `get_cost_treemap` | Treemap of card cost, optionally grouped by a related type |
+| `get_cost_treemap` | Treemap of card cost over one or more types, optionally grouped by a field (`field:<key>`) or a linked card (`rel:<key>`) |
 | `get_capability_heatmap` | Hierarchical business-capability heatmap |
 | `get_data_quality_report` | Per-card-type completeness breakdown |
 | `get_value_chain` | Value chain bands and boxes, or one process category's value stream map with `category_id`; optional `related` (`applications`, `dataObjects`, `organization`) adds linked items. Needs the Value Chain (BPM) permission |
