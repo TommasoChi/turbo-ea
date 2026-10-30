@@ -1,6 +1,9 @@
 services:
   test-db:
     image: postgres:16-alpine
+    # The suite runs in parallel and each test holds many table locks in one transaction;
+    # the default (64) runs out of shared memory ("increase max_locks_per_transaction").
+    command: ["postgres", "-c", "max_locks_per_transaction=256"]
     environment:
       POSTGRES_DB: turboea_test
       POSTGRES_USER: turboea
