@@ -157,9 +157,9 @@
 
 - [ ] **Step 1: Rewrite the docs section** (English): the picker and its six entries; what Current and Forecast mean; that forecast figures are typed in the card's cost history (next fiscal year only); which cards appear in a past/forecast year; remove the stale "There is no picker for other years" sentence.
 - [ ] **Step 2: Update the rule bullet** in `.claude/rules/card-flags-cost-eol.md`: the reports take an optional `fiscal_year`; the current year is live and live-gated, other years list cards by recorded cost (`services/cost_report.py`); both responses carry `current_fiscal_year`; guard tests `tests/services/test_cost_report.py`, `tests/api/test_reports_cost_fiscal_year.py`.
-- [ ] **Step 3: Bump `VERSION` to `2.179.10`** and add `## [2.179.10] - 2026-10-29` to `CHANGELOG.md` (Added: forecast year in the picker, FY names; Changed: past-year reports list every card with a recorded cost; the history accepts next year).
+- [ ] **Step 3: Bump `VERSION` to `2.180.0`** and add `## [2.180.0] - 2026-10-29` to `CHANGELOG.md` (Added: forecast year in the picker, FY names; Changed: past-year reports list every card with a recorded cost; the history accepts next year).
 - [ ] **Step 4: Run** `cd backend && python -m pytest tests/services/test_agent_instructions_budget.py -q -p no:warnings` (CLAUDE.md untouched; rules budget) and, if `mkdocs` is installed, `mkdocs build --strict`.
-- [ ] **Step 5: Commit** `docs: cost-report fiscal-year picker, version 2.179.10`.
+- [ ] **Step 5: Commit** `docs: cost-report fiscal-year picker, version 2.180.0`.
 
 ### Task 8: Translations, verification, review
 
