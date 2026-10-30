@@ -34792,7 +34792,7 @@
     },
     "/api/v1/reports/cost-treemap": {
       "get": {
-        "description": "Cost treemap: items with cost, optionally grouped by a related type.\n\nTakes an optional ``fiscal_year``: the current year is served from live\nattributes for the cards live in it (full annual cost, no pro-rating, see\n``is_live_in_fiscal_year``); any other year lists the cards with a cost\nrecorded for it (``app/services/cost_report.py::cards_with_cost``). The\nresponse names the requested ``fiscal_year``, the ``current_fiscal_year``\nand the workspace's start month (``fiscal_year_start``).",
+        "description": "Cost treemap over one or several card types, optionally grouped.\n\n``type`` is one card type key or a comma-separated list; each must exist and\ncarry a cost field. ``group_by`` is ``field:<key>`` (a single-valued field of\nthe type(s)) or ``rel:<relationTypeKey>`` (the one card linked through an\nat-most-one relation); every item then carries a ``group`` (``__other__``\nwhen it has none) and ``groups`` sums them. A bare field key is read as\n``field:<key>``; any other value is ignored. A refused grouping is 400.\n``components`` lists the cost fields concurring to ``cost_field``.\n\nTakes an optional ``fiscal_year``: the current year is served from live\nattributes for the cards live in it (full annual cost, no pro-rating, see\n``is_live_in_fiscal_year``); any other year lists the cards with a cost\nrecorded for it (``app/services/cost_report.py::cards_with_cost``). The\nresponse names the requested ``fiscal_year``, the ``current_fiscal_year``\nand the workspace's start month (``fiscal_year_start``).",
         "operationId": "cost_treemap_api_v1_reports_cost_treemap_get",
         "parameters": [
           {

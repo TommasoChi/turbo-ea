@@ -44,8 +44,10 @@ from app.services.card_read_scope import (
     event_read_filters,
     scrub_event_payloads,
 )
+from app.services.cost_components import cost_components
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
-from app.services.cost_report import cards_with_cost
+from app.services.cost_grouping import assign_groups, parse_group_by
+from app.services.cost_report import cards_with_cost, cards_with_cost_for_types, parse_type_keys
 from app.services.cost_value import cost_value
 from app.services.eol_service import (
     eol_status,
@@ -1424,7 +1426,15 @@ async def cost_treemap(
     group_by: str | None = Query(None),
     fiscal_year: int | None = Query(None, ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR),
 ):
-    """Cost treemap: items with cost, optionally grouped by a related type.
+    """Cost treemap over one or several card types, optionally grouped.
+
+    ``type`` is one card type key or a comma-separated list; each must exist and
+    carry a cost field. ``group_by`` is ``field:<key>`` (a single-valued field of
+    the type(s)) or ``rel:<relationTypeKey>`` (the one card linked through an
+    at-most-one relation); every item then carries a ``group`` (``__other__``
+    when it has none) and ``groups`` sums them. A bare field key is read as
+    ``field:<key>``; any other value is ignored. A refused grouping is 400.
+    ``components`` lists the cost fields concurring to ``cost_field``.
 
     Takes an optional ``fiscal_year``: the current year is served from live
     attributes for the cards live in it (full annual cost, no pro-rating, see
@@ -1439,69 +1449,59 @@ async def cost_treemap(
     # M-3: Validate cost_field format
     if not _SAFE_KEY_RE.match(cost_field):
         raise HTTPException(400, f"Invalid cost_field: {cost_field!r}")
+    try:
+        type_keys = parse_type_keys(type)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    type_defs = {
+        t.key: t
+        for t in (await db.execute(select(CardType).where(CardType.key.in_(type_keys))))
+        .scalars()
+        .all()
+    }
+    field_keys: set[str] = set()
+    for key in type_keys:
+        if key not in type_defs:
+            raise HTTPException(400, f"Unknown card type: {key!r}")
+        if not cost_field_keys_from_card_schema(type_defs[key].fields_schema):
+            raise HTTPException(400, f"Card type {key!r} has no cost field")
+        field_keys |= {
+            f["key"] for s in type_defs[key].fields_schema or [] for f in s.get("fields", [])
+        }
+
     fy_start = await get_fiscal_year_start(db)
     fy = current_fiscal_year(fy_start)
     read_scope = await CardReadScope.load(db, user)
     target_fy = fiscal_year if fiscal_year is not None else fy
-    sheets = await cards_with_cost(db, read_scope, type, cost_field, target_fy, fy, fy_start)
+    sheets = await cards_with_cost_for_types(
+        db, read_scope, type_keys, cost_field, target_fy, fy, fy_start
+    )
 
-    items: list[dict] = []
-    total = 0.0
-
-    for card, cost in sheets:
-        items.append(
-            {
-                "id": str(card.id),
-                "name": card.name,
-                "cost": cost,
-                "lifecycle": card.lifecycle,
-                "attributes": card.attributes,
-            }
-        )
-        total += cost
+    items: list[dict] = [
+        {
+            "id": str(card.id),
+            "name": card.name,
+            "type": card.type,
+            "cost": cost,
+            "lifecycle": card.lifecycle,
+            "attributes": card.attributes,
+        }
+        for card, cost in sheets
+    ]
+    total = sum(cost for _, cost in sheets)
     items.sort(key=lambda x: x["cost"], reverse=True)
 
     groups = None
-    if group_by:
-        # Get group cards
-        grp_result = await db.execute(
-            select(Card).where(
-                Card.type == group_by,
-                Card.status == "ACTIVE",
-                *read_scope.where(Card, mode="module"),
-            )
-        )
-        grp_sheets = grp_result.scalars().all()
-        grp_map = {str(g.id): g.name for g in grp_sheets}
-
-        # Get relations
-        sheet_ids = [card.id for card, _ in sheets]
-        grp_ids = [g.id for g in grp_sheets]
-        rels_result = await db.execute(
-            select(Relation).where(
-                ((Relation.source_id.in_(sheet_ids)) & (Relation.target_id.in_(grp_ids)))
-                | ((Relation.source_id.in_(grp_ids)) & (Relation.target_id.in_(sheet_ids)))
-            )
-        )
-        rels = rels_result.scalars().all()
-
-        # Build item -> group name mapping
-        item_group: dict[str, str] = {}
-        for r in rels:
-            sid, tid = str(r.source_id), str(r.target_id)
-            if tid in grp_map:
-                item_group[sid] = grp_map[tid]
-            elif sid in grp_map:
-                item_group[tid] = grp_map[sid]
-
-        for item in items:
-            item["group"] = item_group.get(item["id"], "Ungrouped")
-
-        # Build group summaries
+    grouping = parse_group_by(group_by, field_keys)
+    if grouping:
+        try:
+            assigned = await assign_groups(db, read_scope, [c for c, _ in sheets], grouping)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
         groups_dict: dict[str, float] = {}
         for item in items:
-            g = item["group"]
-            groups_dict[g] = groups_dict.get(g, 0) + item["cost"]
+            item["group"] = assigned[uuid.UUID(item["id"])]
+            groups_dict[item["group"]] = groups_dict.get(item["group"], 0) + item["cost"]
         groups = [
             {"name": k, "cost": v} for k, v in sorted(groups_dict.items(), key=lambda x: -x[1])
         ]
@@ -1510,6 +1510,7 @@ async def cost_treemap(
         "items": items,
         "total": total,
         "groups": groups,
+        "components": await cost_components(db, type_keys, cost_field),
         "fiscal_year": target_fy,
         "current_fiscal_year": fy,
         "fiscal_year_start": fy_start,
