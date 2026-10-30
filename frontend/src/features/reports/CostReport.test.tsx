@@ -437,7 +437,11 @@ describe("CostReport card-type selector and Sankey view", () => {
     const select = getByLabelText(/card type/i);
     await userEvent.click(select);
     const options = (await findAllByRole("option")).map((o) => o.textContent);
-    expect(options.sort()).toEqual(["Application", "IT Component"].sort());
+    expect(options).toEqual([
+      "Application",
+      "IT Component",
+      "Application + IT Component",
+    ]);
   });
 
   it("renders a Sankey toggle button and switches the panel on click", async () => {

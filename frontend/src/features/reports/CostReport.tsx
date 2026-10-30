@@ -40,22 +40,29 @@ import {
   useTypeLabel,
   useFieldLabel,
   useOptionLabel,
+  useRelationLabel,
 } from "@/hooks/useResolveLabel";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
+import { resolveFacetField } from "@/lib/fieldFacets";
 import {
-  facetValues,
-  pickGroupableFields,
-  resolveFacetField,
-} from "@/lib/fieldFacets";
+  COMBINED_KEY,
+  commonCostFields,
+  commonGroupableFields,
+  relationGroupOptions,
+  typeKeysOf,
+  typeParam,
+} from "./costReportOptions";
 import { costFiscalYearName, costFiscalYearOptions } from "@/lib/fiscalYear";
 import { formatFieldValue, EMPTY_VALUE, type FieldMeta } from "@/lib/cardDisplayFields";
 import { costValue } from "@/lib/costValue";
 import type { FieldDef } from "@/types";
 
-const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent"] as const;
+const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent", "Initiative"] as const;
+/** The server's group for a card with no value (and for an ungrouped report). */
+const OTHER_GROUP = "__other__";
 type CostView = "chart" | "sankey" | "table";
 
 interface CostItem {
@@ -63,6 +70,8 @@ interface CostItem {
   name: string;
   cost: number;
   attributes?: Record<string, unknown>;
+  /** Raw group value, present when the request grouped. */
+  group?: string;
 }
 
 interface CostTreemapResponse {
@@ -112,13 +121,6 @@ function fiscalYearOf(r: {
     : null;
 }
 
-function pickCostFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
-  const out: FieldDef[] = [];
-  for (const s of schema)
-    for (const f of s.fields) if (f.type === "cost") out.push(f);
-  return out;
-}
-
 function pickAllFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
   const out: FieldDef[] = [];
   for (const s of schema) for (const f of s.fields) out.push(f);
@@ -159,6 +161,7 @@ const TreemapContent = ({
   onCellClick,
   isRtl,
   deltaPct,
+  children,
 }: {
   x: number;
   y: number;
@@ -175,12 +178,43 @@ const TreemapContent = ({
    * badge), null = no current-year baseline to diff against ("new"), a
    * number = the signed ratio. */
   deltaPct?: number | null;
+  /** Present on a group node, which holds the cards drawn above it. */
+  children?: unknown[];
 }) => {
   const { t } = useTranslation("reports");
   if (width < 4 || height < 4) return null;
   const showLabel = width > 50 && height > 30;
   const showCost = width > 70 && height > 45;
   const handleClick = id && onCellClick ? () => onCellClick(id) : undefined;
+  if (Array.isArray(children)) {
+    // A group: its frame and name; the cards it holds are drawn over it.
+    return (
+      <g>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          fill={treemapColor(index)}
+          stroke="#fff"
+          strokeWidth={4}
+        />
+        {showLabel && (
+          <text
+            x={isRtl ? x + width - 6 : x + 6}
+            y={y + 16}
+            fontSize={11}
+            fontWeight={700}
+            fill="#fff"
+            textAnchor={isRtl ? "end" : "start"}
+            style={{ pointerEvents: "none" }}
+          >
+            {name}
+          </text>
+        )}
+      </g>
+    );
+  }
   // In RTL, anchor the cell labels at the top-right corner so they read correctly.
   const labelX = isRtl ? x + width - 6 : x + 6;
   const textDir = isRtl
@@ -255,20 +289,11 @@ const TreemapContent = ({
 
 export default function CostReport() {
   const { t } = useTranslation(["reports", "common"]);
-  const { types, loading: ml } = useMetamodel();
+  const { types, relationTypes, loading: ml } = useMetamodel();
   // Report type pickers offer only the types the user may see.
   const readableTypes = useReadableCardTypes("module");
-  // Sankey connects exactly these two types; Treemap/Table also pick one at a
-  // time from this same restricted list (no `aggregate` roll-up left to need
-  // any other type).
-  const costReportTypes = useMemo(
-    () =>
-      readableTypes.filter((tp) =>
-        COST_REPORT_TYPE_KEYS.includes(tp.key as never),
-      ),
-    [readableTypes],
-  );
   const typeLabel = useTypeLabel();
+  const relLabel = useRelationLabel();
   const fieldLabel = useFieldLabel();
   const optLabel = useOptionLabel();
   const { fmt } = useCurrency();
@@ -277,11 +302,33 @@ export default function CostReport() {
   const canViewCostsGlobally = !!(
     user?.permissions?.["*"] || user?.permissions?.["costs.view"]
   );
+  const typeOptions = useMemo(() => {
+    const byKey = new Map(readableTypes.map((tp) => [tp.key, tp]));
+    const app = byKey.get("Application");
+    const itc = byKey.get("ITComponent");
+    const out: { key: string; label: string }[] = [];
+    if (app) out.push({ key: app.key, label: typeLabel(app) });
+    if (itc) out.push({ key: itc.key, label: typeLabel(itc) });
+    if (app && itc)
+      out.push({
+        key: COMBINED_KEY,
+        label: t("cost.combinedType", {
+          first: typeLabel(app),
+          second: typeLabel(itc),
+        }),
+      });
+    const ini = byKey.get("Initiative");
+    if (ini) out.push({ key: ini.key, label: typeLabel(ini) });
+    return out;
+  }, [readableTypes, typeLabel, t]);
   const saved = useSavedReport("cost");
   const { chartRef, thumbnail, captureAndSave } = useThumbnailCapture(() =>
     saved.setSaveDialogOpen(true),
   );
+  // A type key, or COMBINED_KEY for Applications and IT Components together.
   const [cardTypeKey, setCardTypeKey] = useState("Application");
+  const typeKeys = useMemo(() => typeKeysOf(cardTypeKey), [cardTypeKey]);
+  const combined = typeKeys.length > 1;
   const [sidePanelCardId, setSidePanelCardId] = useState<string | null>(null);
   const [costField, setCostField] = useState("costTotalAnnual");
   const [groupBy, setGroupBy] = useState("");
@@ -336,21 +383,24 @@ export default function CostReport() {
   }, []);
 
   // Narrow the treemap to chosen cards and everything beneath them (#954).
-  const scope = useCardScope({ typeKey: cardTypeKey, enabled: true });
+  // A scope belongs to one type, so the combined option has none.
+  const scope = useCardScope({ typeKey: combined ? null : cardTypeKey, enabled: true });
   const { scopeIds, setScopeIds, effectiveScopeIds } = scope;
 
-  const typeDef = useMemo(
-    () => types.find((t) => t.key === cardTypeKey),
-    [types, cardTypeKey],
+  // One schema per selected type; empty until every one of them is known.
+  const schemas = useMemo(() => {
+    const defs = typeKeys.map((k) => types.find((tp) => tp.key === k));
+    return defs.every(Boolean) ? defs.map((d) => d!.fields_schema) : [];
+  }, [types, typeKeys]);
+  const costFields = useMemo(
+    () => commonCostFields(schemas).map((f) => ({ ...f, label: fieldLabel(f) })),
+    [schemas, fieldLabel],
   );
-  const costFields = useMemo(() => {
-    const raw = typeDef ? pickCostFields(typeDef.fields_schema) : [];
-    return raw.map((f) => ({ ...f, label: fieldLabel(f) }));
-  }, [typeDef, fieldLabel]);
+  // Extra table columns come from one type's fields: none for the combined option.
   const allFields = useMemo(() => {
-    const raw = typeDef ? pickAllFields(typeDef.fields_schema) : [];
+    const raw = schemas.length === 1 ? pickAllFields(schemas[0]) : [];
     return raw.map((f) => ({ ...f, label: fieldLabel(f) }));
-  }, [typeDef, fieldLabel]);
+  }, [schemas, fieldLabel]);
   const [extraColumns, setExtraColumns] = useState<string[]>([]);
 
   // Drop picked columns the current type no longer defines (card-type
@@ -378,7 +428,8 @@ export default function CostReport() {
     if (cfg) {
       const restoredType =
         typeof cfg.cardTypeKey === "string" &&
-        COST_REPORT_TYPE_KEYS.includes(cfg.cardTypeKey as never)
+        (cfg.cardTypeKey === COMBINED_KEY ||
+          COST_REPORT_TYPE_KEYS.includes(cfg.cardTypeKey as never))
           ? cfg.cardTypeKey
           : undefined;
       if (restoredType) setCardTypeKey(restoredType);
@@ -397,7 +448,7 @@ export default function CostReport() {
         );
       // Set for the restored type, so the scope is read as that type's from
       // the render the type lands on.
-      if (Array.isArray(cfg.scopeIds)) {
+      if (Array.isArray(cfg.scopeIds) && restoredType !== COMBINED_KEY) {
         setScopeIds(
           (cfg.scopeIds as unknown[]).filter(
             (v): v is string => typeof v === "string",
@@ -443,9 +494,8 @@ export default function CostReport() {
   // multi-select cannot put a card in exactly one group). A yes/no field is
   // given Yes / No options, so its groups are named rather than "true".
   const groupableFields = useMemo<FieldDef[]>(() => {
-    if (!typeDef) return [];
     const yesNo = { yes: t("common:labels.yes"), no: t("common:labels.no") };
-    return pickGroupableFields(typeDef.fields_schema).map((f) =>
+    return commonGroupableFields(schemas).map((f) =>
       resolveFacetField(
         {
           ...f,
@@ -455,7 +505,25 @@ export default function CostReport() {
         yesNo,
       ),
     );
-  }, [typeDef, fieldLabel, optLabel, t]);
+  }, [schemas, fieldLabel, optLabel, t]);
+
+  // What the Group by selector offers: `field:<key>` and `rel:<key>` values.
+  const groupOptions = useMemo(
+    () => [
+      ...groupableFields.map((f) => ({ value: `field:${f.key}`, label: f.label })),
+      ...relationGroupOptions(relationTypes, typeKeys, relLabel),
+    ],
+    [groupableFields, relationTypes, typeKeys, relLabel],
+  );
+  // A saved bare field key becomes `field:<key>`; one that is not offered is dropped.
+  const effectiveGroupBy = useMemo(() => {
+    const offered = (v: string) => groupOptions.some((o) => o.value === v);
+    if (offered(groupBy)) return groupBy;
+    return groupBy && offered(`field:${groupBy}`) ? `field:${groupBy}` : "";
+  }, [groupBy, groupOptions]);
+  useEffect(() => {
+    if (!ml && effectiveGroupBy !== groupBy) setGroupBy(effectiveGroupBy);
+  }, [ml, effectiveGroupBy, groupBy]);
 
   useAbortableEffect(
     async ({ signal, isCurrent }) => {
@@ -466,8 +534,11 @@ export default function CostReport() {
         return;
       }
       if (view === "sankey") {
-        const p = new URLSearchParams({ cost_field: costField });
-        if (groupBy) p.set("group_by", groupBy);
+        const p = new URLSearchParams({
+          type: typeParam(cardTypeKey),
+          cost_field: costField,
+        });
+        if (effectiveGroupBy) p.set("group_by", effectiveGroupBy);
         if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
         const r = await api.get<CostSankeyResponse>(
           `/reports/cost-sankey?${p}`,
@@ -480,9 +551,10 @@ export default function CostReport() {
         adoptCurrentFiscalYear(r.current_fiscal_year);
       } else {
         const p = new URLSearchParams({
-          type: cardTypeKey,
+          type: typeParam(cardTypeKey),
           cost_field: costField,
         });
+        if (effectiveGroupBy) p.set("group_by", effectiveGroupBy);
         if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
         const r = await api.get<CostTreemapResponse>(
           `/reports/cost-treemap?${p}`,
@@ -495,7 +567,7 @@ export default function CostReport() {
         adoptCurrentFiscalYear(r.current_fiscal_year);
       }
     },
-    [cardTypeKey, costField, groupBy, view, canViewCostsGlobally, fiscalYearParam],
+    [cardTypeKey, costField, effectiveGroupBy, view, canViewCostsGlobally, fiscalYearParam],
   );
 
   // Delta badge baseline: the current fiscal year's per-card costs, fetched
@@ -512,7 +584,10 @@ export default function CostReport() {
         setBaselineCosts(new Map());
         return;
       }
-      const p = new URLSearchParams({ type: cardTypeKey, cost_field: costField });
+      const p = new URLSearchParams({
+        type: typeParam(cardTypeKey),
+        cost_field: costField,
+      });
       const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, {
         signal,
       });
@@ -549,7 +624,7 @@ export default function CostReport() {
         return;
       }
       const p = new URLSearchParams({
-        type: cardTypeKey,
+        type: typeParam(cardTypeKey),
         cost_field: costField,
         fiscal_year: String(fiscalYearParam - 1),
       });
@@ -580,39 +655,73 @@ export default function CostReport() {
     [items],
   );
 
-  const groupedField = useMemo(
-    () => groupableFields.find((f) => f.key === groupBy),
-    [groupableFields, groupBy],
+  // The page names a group: the server sends the raw value (an option key,
+  // "true"/"false", a linked card's name, or "__other__").
+  const groupLabel = useCallback(
+    (raw: string | undefined) => {
+      if (!raw || raw === OTHER_GROUP) return t("cost.unspecified");
+      const key = effectiveGroupBy.startsWith("field:")
+        ? effectiveGroupBy.slice(6)
+        : null;
+      const opt = groupableFields
+        .find((f) => f.key === key)
+        ?.options?.find((o) => o.key === raw);
+      return opt?.label ?? raw;
+    },
+    [effectiveGroupBy, groupableFields, t],
   );
 
   const groups = useMemo(() => {
-    if (!groupBy || !groupedField) return null;
-    const optionMap = new Map<string, string>();
-    for (const o of groupedField.options ?? []) optionMap.set(o.key, o.label);
+    if (!effectiveGroupBy) return null;
     const map = new Map<
       string,
       { label: string; items: CostItem[]; cost: number }
     >();
     for (const item of items) {
-      const raw = (item.attributes as Record<string, unknown> | undefined)?.[
-        groupBy
-      ];
-      const val = facetValues(groupedField, raw)[0] ?? "";
-      const label = optionMap.get(val) || val || t("cost.unspecified");
+      const label = groupLabel(item.group);
       const g = map.get(label) || { label, items: [], cost: 0 };
       g.items.push(item);
       g.cost += item.cost;
       map.set(label, g);
     }
     return [...map.values()].sort((a, b) => b.cost - a.cost);
-  }, [items, groupBy, groupedField, t]);
+  }, [items, effectiveGroupBy, groupLabel]);
+
+  // Scope applies to the Sankey here: hide the cards outside it, then every
+  // cost-item and group node left without a card below it.
+  const sankeyView = useMemo(() => {
+    if (!sankeyData) return null;
+    const closure = scope.closure;
+    const isCard = (n: SankeyNode) => n.type !== "CostItem" && n.type !== "Group";
+    const keep = sankeyData.nodes.map((n) => !isCard(n) || !closure || closure.has(n.id));
+    if (closure) {
+      // item -> group -> card: the first pass drops groups, the second items.
+      for (let pass = 0; pass < 2; pass++)
+        sankeyData.nodes.forEach((n, i) => {
+          if (!isCard(n))
+            keep[i] = sankeyData.links.some((l) => l.source === i && keep[l.target]);
+        });
+    }
+    const index = new Map<number, number>();
+    const nodes: SankeyNode[] = [];
+    sankeyData.nodes.forEach((n, i) => {
+      if (!keep[i]) return;
+      index.set(i, nodes.length);
+      nodes.push(
+        n.type === "Group" ? { ...n, name: groupLabel(n.id.replace(/^group:/, "")) } : n,
+      );
+    });
+    const links = sankeyData.links
+      .filter((l) => keep[l.source] && keep[l.target])
+      .map((l) => ({ ...l, source: index.get(l.source)!, target: index.get(l.target)! }));
+    return { ...sankeyData, nodes, links };
+  }, [sankeyData, scope.closure, groupLabel]);
 
   const printParams = useMemo(() => {
     const params: { label: string; value: string }[] = [];
-    const tp = types.find((tp) => tp.key === cardTypeKey);
-    const tpLabel = typeLabel(tp) || cardTypeKey;
-    if (view !== "sankey")
-      params.push({ label: t("common:labels.type"), value: tpLabel });
+    const tpLabel =
+      typeOptions.find((o) => o.key === cardTypeKey)?.label || cardTypeKey;
+    params.push({ label: t("common:labels.type"), value: tpLabel });
     // Always stated: every figure on the page is for this one fiscal year.
     if (fiscalYear) {
       params.push({
@@ -620,14 +729,15 @@ export default function CostReport() {
         value: costFiscalYearName(fiscalYear.year, currentFiscalYear),
       });
     }
-    if (costFields.length > 1 && view !== "sankey") {
+    if (costFields.length > 1) {
       const cfLabel =
         costFields.find((f) => f.key === costField)?.label || costField;
       params.push({ label: t("cost.costField"), value: cfLabel });
     }
-    if (groupBy) {
+    if (effectiveGroupBy) {
       const gLabel =
-        groupableFields.find((f) => f.key === groupBy)?.label || groupBy;
+        groupOptions.find((o) => o.value === effectiveGroupBy)?.label ||
+        effectiveGroupBy;
       params.push({ label: t("cost.groupBy"), value: gLabel });
     }
     if (view === "table")
@@ -641,17 +751,16 @@ export default function CostReport() {
     return params;
   }, [
     cardTypeKey,
-    types,
+    typeOptions,
     costField,
     costFields,
-    groupBy,
-    groupableFields,
+    effectiveGroupBy,
+    groupOptions,
     view,
     effectiveScopeIds,
     fiscalYear,
     currentFiscalYear,
     t,
-    typeLabel,
   ]);
 
   const handleRectClick = useCallback((id: string) => {
@@ -704,25 +813,34 @@ export default function CostReport() {
   const topDriver = sortedAllItems.length > 0 ? sortedAllItems[0] : null;
   const avgCost = items.length > 0 ? total / items.length : 0;
 
-  const treemapData = [...items]
-    .sort((a, b) => b.cost - a.cost)
-    .map((d, i) => {
-      const baseline = baselineCosts.get(d.id);
-      const deltaPct =
-        fiscalYearParam == null
-          ? undefined
-          : baseline && baseline > 0
-            ? (d.cost - baseline) / baseline
-            : null;
-      return {
-        name: d.name,
-        size: d.cost,
-        cost: d.cost,
-        id: d.id,
-        index: i,
-        deltaPct,
-      };
-    });
+  const treemapLeaf = (d: CostItem, i: number) => {
+    const baseline = baselineCosts.get(d.id);
+    const deltaPct =
+      fiscalYearParam == null
+        ? undefined
+        : baseline && baseline > 0
+          ? (d.cost - baseline) / baseline
+          : null;
+    return {
+      name: d.name,
+      size: d.cost,
+      cost: d.cost,
+      id: d.id,
+      index: i,
+      deltaPct,
+    };
+  };
+  // Grouped: each group is a parent node holding its cards.
+  const treemapData = groups
+    ? groups.map((g, gi) => ({
+        name: g.label,
+        cost: g.cost,
+        index: gi,
+        children: [...g.items]
+          .sort((a, b) => b.cost - a.cost)
+          .map((d) => ({ ...treemapLeaf(d, gi), group: g.label })),
+      }))
+    : [...items].sort((a, b) => b.cost - a.cost).map(treemapLeaf);
 
   const sort = (k: string) => {
     setSortD(sortK === k && sortD === "asc" ? "desc" : "asc");
@@ -740,7 +858,7 @@ export default function CostReport() {
   };
   const fieldMeta = (key: string): FieldMeta | undefined => {
     const f = allFields.find((fd) => fd.key === key);
-    return f ? ({ ...f, typeKeys: [cardTypeKey] } as FieldMeta) : undefined;
+    return f ? ({ ...f, typeKeys } as FieldMeta) : undefined;
   };
   const extraCell = (item: CostItem) =>
     extraColumns.map((key) => (
@@ -767,7 +885,9 @@ export default function CostReport() {
     payload,
   }: {
     active?: boolean;
-    payload?: { payload: { name: string; cost: number; size: number } }[];
+    payload?: {
+      payload: { name: string; cost: number; size: number; group?: string };
+    }[];
   }) => {
     if (!active || !payload?.[0]) return null;
     const d = payload[0].payload;
@@ -776,6 +896,11 @@ export default function CostReport() {
         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
           {d.name}
         </Typography>
+        {d.group && (
+          <Typography variant="caption" color="text.secondary" display="block">
+            {d.group}
+          </Typography>
+        )}
         <Typography variant="caption" display="block">
           {fmt.format(d.cost)}
         </Typography>
@@ -813,23 +938,21 @@ export default function CostReport() {
       printParams={printParams}
       toolbar={
         <>
-          {view !== "sankey" && (
-            <TextField
-              select
-              size="small"
-              label={t("cost.cardType")}
-              value={cardTypeKey}
-              onChange={(e) => setCardTypeKey(e.target.value)}
-              sx={{ minWidth: 150 }}
-            >
-              {costReportTypes.map((tp) => (
-                <MenuItem key={tp.key} value={tp.key}>
-                  {typeLabel(tp)}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
-          {view !== "sankey" && (
+          <TextField
+            select
+            size="small"
+            label={t("cost.cardType")}
+            value={cardTypeKey}
+            onChange={(e) => setCardTypeKey(e.target.value)}
+            sx={{ minWidth: 150 }}
+          >
+            {typeOptions.map((o) => (
+              <MenuItem key={o.key} value={o.key}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          {!combined && (
             <CardScopeFilter
               types={cardTypeKey}
               value={effectiveScopeIds}
@@ -841,7 +964,7 @@ export default function CostReport() {
               tooltip={t("cost.scopeTooltip")}
             />
           )}
-          {view !== "sankey" && costFields.length > 1 && (
+          {costFields.length > 1 && (
             <TextField
               select
               size="small"
@@ -858,24 +981,25 @@ export default function CostReport() {
             </TextField>
           )}
 
-          {(view === "table" || view === "sankey") &&
-            groupableFields.length > 0 && (
-              <TextField
-                select
-                size="small"
-                label={t("cost.groupBy")}
-                value={groupBy}
-                onChange={(e) => setGroupBy(e.target.value)}
-                sx={{ minWidth: 150 }}
-              >
-                <MenuItem value="">{t("common:labels.none")}</MenuItem>
-                {groupableFields.map((f) => (
-                  <MenuItem key={f.key} value={f.key}>
-                    {f.label}
-                  </MenuItem>
-                ))}
-              </TextField>
-            )}
+          <TextField
+            select
+            size="small"
+            label={t("cost.groupBy")}
+            value={effectiveGroupBy}
+            onChange={(e) => setGroupBy(e.target.value)}
+            disabled={groupOptions.length === 0}
+            helperText={
+              groupOptions.length === 0 ? t("cost.groupByUnavailable") : undefined
+            }
+            sx={{ minWidth: 150 }}
+          >
+            <MenuItem value="">{t("cost.groupByNone")}</MenuItem>
+            {groupOptions.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
 
           {view === "table" && allFields.length > 0 && (
             <TextField
@@ -990,7 +1114,7 @@ export default function CostReport() {
             {fiscalYearParam != null && (
               <Box sx={{ mb: 2 }}>
                 <CostTrendChart
-                  cardTypeKey={cardTypeKey}
+                  cardTypeKey={typeParam(cardTypeKey)}
                   years={trendYears}
                   currentFiscalYear={currentFiscalYear}
                 />
@@ -1027,7 +1151,7 @@ export default function CostReport() {
           </>
         )
       ) : view === "sankey" ? (
-        !sankeyData || sankeyData.nodes.length === 0 ? (
+        !sankeyView || sankeyView.nodes.length === 0 ? (
           <Box sx={{ py: 8, textAlign: "center" }}>
             <Typography color="text.secondary">
               {t("cost.noCostData")}
@@ -1041,7 +1165,7 @@ export default function CostReport() {
               data-testid="cost-sankey-panel"
             >
               <ResponsiveContainer width="100%" height={450}>
-                <Sankey data={sankeyData} nodeWidth={14} nodePadding={20} />
+                <Sankey data={sankeyView} nodeWidth={14} nodePadding={20} />
               </ResponsiveContainer>
             </Paper>
           </FullscreenPanel>
