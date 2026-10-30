@@ -8,6 +8,9 @@ import {
   compactAmount,
   getQuarters,
 } from "./ppmPortfolioFormat";
+import { pinEnglishNumberFormat } from "@/test/englishNumbers";
+
+pinEnglishNumberFormat();
 
 describe("fmtQuarter", () => {
   it("maps each month to its calendar quarter", () => {
