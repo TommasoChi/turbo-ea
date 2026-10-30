@@ -929,7 +929,12 @@ export default function CostReport() {
           </TextField>
 
           {fiscalYear && (
-            <Tooltip title={t("cost.fiscalYearHelp")} arrow placement="bottom">
+            // The live-card rule only describes the current year; other years list every card with a recorded cost.
+            <Tooltip
+              title={fiscalYearParam == null ? t("cost.fiscalYearHelp") : ""}
+              arrow
+              placement="bottom"
+            >
               <Chip
                 variant="outlined"
                 icon={<MaterialSymbol icon="calendar_month" size={18} />}

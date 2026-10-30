@@ -271,6 +271,23 @@ describe("CostReport fiscal year", () => {
   const indicator = () =>
     document.querySelector('[data-testid="cost-fiscal-year"]');
 
+  it("explains the live-card rule on the chip only while Current is selected", async () => {
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    await userEvent.hover(indicator() as Element);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      /Annual costs of the cards live in this fiscal year/,
+    );
+    await userEvent.unhover(indicator() as Element);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
+
+    await pick("FY25");
+    await waitFor(() => expect(indicator()).toHaveTextContent("FY25"));
+    await userEvent.hover(indicator() as Element);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
   it("names the current fiscal year the figures are for", async () => {
     renderCost();
     await waitFor(() => expect(indicator()).not.toBeNull());
