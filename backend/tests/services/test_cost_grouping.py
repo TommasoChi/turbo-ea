@@ -253,3 +253,33 @@ async def test_field_missing_on_one_of_several_types_is_refused(db):
 
 def test_empty_rel_key_parses_to_none():
     assert parse_group_by("rel:", set()) is None
+
+
+async def test_hidden_relation_type_is_refused(db):
+    a, b, org = await _rel_world(db, "1:n")
+    from sqlalchemy import update
+
+    from app.models.relation_type import RelationType
+
+    await db.execute(
+        update(RelationType).where(RelationType.key == "app_org").values(is_hidden=True)
+    )
+    await db.commit()
+    with pytest.raises(ValueError):
+        await assign_groups(
+            db, CardReadScope.everything(), [a], GroupBy("relation", "app_org"), ["Application"]
+        )
+
+
+async def test_relation_to_hidden_card_type_is_refused(db):
+    a, b, org = await _rel_world(db, "1:n")
+    from sqlalchemy import update
+
+    from app.models.card_type import CardType
+
+    await db.execute(update(CardType).where(CardType.key == "Organization").values(is_hidden=True))
+    await db.commit()
+    with pytest.raises(ValueError):
+        await assign_groups(
+            db, CardReadScope.everything(), [a], GroupBy("relation", "app_org"), ["Application"]
+        )

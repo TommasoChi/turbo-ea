@@ -187,3 +187,42 @@ async def test_no_cost_permission_is_403(client, db, env):
     user = await create_user(db, email="n@test.com", role="nocost")
     resp = await client.get("/api/v1/reports/cost-treemap", headers=auth_headers(user))
     assert resp.status_code == 403
+
+
+@pytest.mark.parametrize("report", ["cost-treemap", "cost-sankey"])
+async def test_group_by_hidden_relation_or_type_is_400(client, db, env, report):
+    from sqlalchemy import update
+
+    from app.models.card_type import CardType
+    from app.models.relation_type import RelationType
+
+    await _app(db, "A", 100)
+    await db.execute(
+        update(RelationType).where(RelationType.key == "relAppToOrg").values(is_hidden=True)
+    )
+    await db.commit()
+    for _ in range(2):
+        resp = await client.get(
+            f"/api/v1/reports/{report}",
+            params={"type": "Application", "group_by": "rel:relAppToOrg"},
+            headers=auth_headers(env["admin"]),
+        )
+        assert resp.status_code == 400, resp.text
+        await db.execute(
+            update(RelationType).where(RelationType.key == "relAppToOrg").values(is_hidden=False)
+        )
+        await db.execute(
+            update(CardType).where(CardType.key == "Organization").values(is_hidden=True)
+        )
+        await db.commit()
+
+
+@pytest.mark.parametrize("report", ["cost-treemap", "cost-sankey"])
+async def test_six_types_is_400(client, env, report):
+    resp = await client.get(
+        f"/api/v1/reports/{report}",
+        params={"type": "Application,ITComponent,Initiative,A,B,C"},
+        headers=auth_headers(env["admin"]),
+    )
+    assert resp.status_code == 400, resp.text
+    assert "at most" in resp.text

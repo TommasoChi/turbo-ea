@@ -178,3 +178,12 @@ def test_parse_type_keys_rejects_duplicate():
 
 def test_parse_type_keys_splits_and_strips():
     assert parse_type_keys("Application, ITComponent") == ["Application", "ITComponent"]
+
+
+def test_parse_type_keys_accepts_the_cap():
+    assert parse_type_keys("a,b,c,d,e") == ["a", "b", "c", "d", "e"]
+
+
+def test_parse_type_keys_refuses_more_than_the_cap():
+    with pytest.raises(ValueError, match="at most 5"):
+        parse_type_keys("a,b,c,d,e,f")

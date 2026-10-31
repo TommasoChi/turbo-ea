@@ -92,6 +92,8 @@ async def _by_relation(
     ).scalar_one_or_none()
     if rt is None:
         raise ValueError(f"unknown relation type '{key}'")
+    if rt.is_hidden:
+        raise ValueError(f"unknown relation type '{key}'")
     # 1:1 and 1:n allow one relation per source; 1:1 also per target.
     ends = {"1:1": {rt.source_type_key, rt.target_type_key}, "1:n": {rt.source_type_key}}.get(
         rt.cardinality, set()
@@ -101,6 +103,16 @@ async def _by_relation(
         raise ValueError(f"'{key}' is a self-referencing 1:1 relation")
     if not type_keys <= ends:
         raise ValueError(f"cards are not on the at-most-one end of '{key}'")
+    linked_types = {rt.source_type_key, rt.target_type_key} - type_keys
+    if (
+        linked_types
+        and (
+            await db.execute(
+                select(CardType.key).where(CardType.key.in_(linked_types), CardType.is_hidden)
+            )
+        ).first()
+    ):
+        raise ValueError(f"'{key}' links to a hidden card type")
     ids = {c.id for c in cards}
     rels = (
         (

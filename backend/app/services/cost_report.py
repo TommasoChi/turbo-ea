@@ -65,13 +65,18 @@ async def cards_with_cost(
     return [(card, value) for card, value in result.all()]
 
 
+MAX_TYPE_KEYS = 5
+
+
 def parse_type_keys(raw: str) -> list[str]:
-    """Split a comma-separated ``types`` query value; empty or repeated keys raise."""
+    """Split a comma-separated ``types`` query value; empty, repeated or over-cap keys raise."""
     keys = [k.strip() for k in raw.split(",")]
     if not all(keys):
         raise ValueError("empty card type key")
     if len(set(keys)) != len(keys):
         raise ValueError("duplicate card type key")
+    if len(keys) > MAX_TYPE_KEYS:
+        raise ValueError(f"at most {MAX_TYPE_KEYS} card types per request")
     return keys
 
 
