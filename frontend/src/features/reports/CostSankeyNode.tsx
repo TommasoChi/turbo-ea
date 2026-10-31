@@ -21,7 +21,6 @@ interface Props {
   y?: number;
   width?: number;
   height?: number;
-  index?: number;
   payload?: { name: string; type: string; sourceLinks?: unknown[] };
   isRtl?: boolean;
 }
@@ -38,16 +37,15 @@ export default function CostSankeyNode({
   if (!payload) return null;
   const { name, type } = payload;
   const lastColumn = !payload.sourceLinks?.length;
-  const labelLeft = lastColumn;
   const label = name.length > MAX_LABEL ? `${name.slice(0, MAX_LABEL - 1)}…` : name;
   return (
     <g>
       <title>{name}</title>
       <rect x={x} y={y} width={width} height={height} fill={costSankeyNodeColor(type)} />
       <text
-        x={labelLeft ? x - 6 : x + width + 6}
+        x={lastColumn ? x - 6 : x + width + 6}
         y={y + height / 2}
-        textAnchor={labelLeft ? "end" : "start"}
+        textAnchor={lastColumn ? "end" : "start"}
         dominantBaseline="middle"
         fontSize={12}
         fill={theme.palette.text.primary}

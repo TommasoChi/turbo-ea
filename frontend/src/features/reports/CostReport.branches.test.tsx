@@ -1109,7 +1109,7 @@ describe("CostReport type, cost field and group by selectors", () => {
     );
   });
 
-  it("scales the item->group links to the cards left in a scoped sankey", async () => {
+  it("re-sums the item->group links from the kept cards' own costs", async () => {
     saved.config = {
       view: "sankey",
       groupBy: "field:tier",
@@ -1124,10 +1124,10 @@ describe("CostReport type, cost field and group by selectors", () => {
         { id: "item:x", name: "X", type: "CostItem" }, // 0
         { id: "group:gold", name: "gold", type: "Group" }, // 1
         { id: "group:silver", name: "silver", type: "Group" }, // 2
-        { id: "a", name: "A", type: "Application" }, // 3
-        { id: "b", name: "B", type: "Application" }, // 4
-        { id: "c", name: "C", type: "Application" }, // 5
-        { id: "d", name: "D", type: "Application" }, // 6
+        { id: "a", name: "A", type: "Application", cost: 6, costs: { x: 6 } }, // 3
+        { id: "b", name: "B", type: "Application", cost: 4, costs: { x: 4 } }, // 4
+        { id: "c", name: "C", type: "Application", cost: 8, costs: { x: 8 } }, // 5
+        { id: "d", name: "D", type: "Application", cost: 0, costs: {} }, // 6
       ],
       links: [
         { source: 0, target: 1, value: 10 },
@@ -1176,8 +1176,8 @@ describe("CostReport type, cost field and group by selectors", () => {
         { id: "item:x", name: "X", type: "CostItem" },
         { id: "group:gold", name: "gold", type: "Group" },
         { id: "group:silver", name: "silver", type: "Group" },
-        { id: "a", name: "A", type: "Application" },
-        { id: "b", name: "B", type: "Application" },
+        { id: "a", name: "A", type: "Application", cost: 4, costs: { x: 4 } },
+        { id: "b", name: "B", type: "Application", cost: 0, costs: {} },
       ],
       links: [
         { source: 0, target: 1, value: 4 },
@@ -1263,8 +1263,8 @@ describe("CostReport type, cost field and group by selectors", () => {
         { id: "item:x", name: "X", type: "CostItem" },
         { id: "group:gold", name: "gold", type: "Group" },
         { id: "group:silver", name: "silver", type: "Group" },
-        { id: "a", name: "A", type: "Application" },
-        { id: "b", name: "B", type: "Application" },
+        { id: "a", name: "A", type: "Application", cost: 10, costs: { x: 10 } },
+        { id: "b", name: "B", type: "Application", cost: 5, costs: { x: 5 } },
       ],
       links: [
         { source: 0, target: 1, value: 10 },

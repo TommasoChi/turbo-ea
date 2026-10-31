@@ -42,11 +42,17 @@ vi.mock("@/hooks/useCurrency", () => ({
   }),
 }));
 // jsdom has no layout, so ResponsiveContainer would give the Sankey a 0x0 box.
+const sankeyDataSeen: { current: unknown } = vi.hoisted(() => ({ current: null }));
 vi.mock("recharts", async () => {
   const actual = await vi.importActual<typeof import("recharts")>("recharts");
   const { cloneElement } = await import("react");
   return {
     ...actual,
+    // Records the data the page hands the Sankey: the DOM does not carry link values.
+    Sankey: (props: React.ComponentProps<typeof actual.Sankey>) => {
+      sankeyDataSeen.current = props.data;
+      return <actual.Sankey {...props} />;
+    },
     ResponsiveContainer: ({
       children,
       height,
@@ -748,5 +754,90 @@ describe("CostReport trend chart", () => {
       document.dispatchEvent(new Event("fullscreenchange"));
     });
     expect(height()).toBe("450");
+  });
+});
+
+
+describe("CostReport Sankey from per-card costs", () => {
+  const NODES = [
+    { id: "item:lic", name: "Licences", type: "CostItem" },
+    { id: "item:host", name: "Hosting", type: "CostItem" },
+    { id: "group:G", name: "G", type: "Group" },
+    { id: "crm", name: "CRM", type: "Application", cost: 100, costs: { lic: 100 } },
+    { id: "erp", name: "ERP", type: "Application", cost: 100, costs: { host: 100 } },
+  ];
+  const LINKS = [
+    { source: 0, target: 2, value: 100 },
+    { source: 1, target: 2, value: 100 },
+    { source: 2, target: 3, value: 100 },
+    { source: 2, target: 4, value: 100 },
+  ];
+  const mockSankey = (nodes = NODES, links = LINKS) =>
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.startsWith("/reports/cost-sankey"))
+        return Promise.resolve({
+          nodes,
+          links,
+          total: 200,
+          fiscal_year: 2026,
+          current_fiscal_year: 2026,
+          fiscal_year_start: 1,
+        }) as never;
+      return Promise.resolve({ items: HIERARCHY, total: HIERARCHY.length }) as never;
+    });
+  type Seen = {
+    nodes: { name: string }[];
+    links: { source: number; target: number; value: number }[];
+  };
+  const flow = (d: Seen, from: string, to: string) =>
+    d.links.find((l) => d.nodes[l.source].name === from && d.nodes[l.target].name === to)?.value;
+
+  it("re-sums the item -> group flows over the cards the scope keeps", async () => {
+    consumedConfig = { view: "sankey", scopeIds: ["crm"] };
+    mockSankey();
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    await waitFor(() => {
+      const d = sankeyDataSeen.current as Seen;
+      expect(d.nodes.map((n) => n.name)).not.toContain("Hosting");
+    });
+    const d = sankeyDataSeen.current as Seen;
+    expect(d.links).toHaveLength(2);
+    expect(flow(d, "Licences", "G")).toBe(100);
+    expect(flow(d, "G", "CRM")).toBe(100);
+  });
+
+  it("keeps in = out for every group when unscoped", async () => {
+    consumedConfig = { view: "sankey" };
+    mockSankey();
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    const d = sankeyDataSeen.current as Seen;
+    const g = d.nodes.findIndex((n) => n.name === "G");
+    const sum = (f: (l: Seen["links"][number]) => boolean) =>
+      d.links.filter(f).reduce((n, l) => n + l.value, 0);
+    expect(sum((l) => l.target === g)).toBe(sum((l) => l.source === g));
+  });
+
+  it("fills the summary tiles from the kept card nodes in Sankey view", async () => {
+    consumedConfig = { view: "sankey" };
+    mockSankey(
+      [
+        { id: "item:lic", name: "Licences", type: "CostItem" },
+        { id: "crm", name: "CRM", type: "Application", cost: 100, costs: { lic: 100 } },
+        { id: "erp", name: "ERP", type: "Application", cost: 50, costs: { lic: 50 } },
+      ],
+      [
+        { source: 0, target: 1, value: 100 },
+        { source: 0, target: 2, value: 50 },
+      ],
+    );
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    const tile = (label: string) =>
+      screen.getByText(label).closest(".MuiPaper-root") as HTMLElement;
+    expect(within(tile("Total Cost")).getByText("$150")).toBeInTheDocument();
+    expect(within(tile("Items")).getByText("2")).toBeInTheDocument();
+    expect(within(tile("Top Cost Driver")).getByText("CRM")).toBeInTheDocument();
   });
 });

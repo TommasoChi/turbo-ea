@@ -95,6 +95,9 @@ interface SankeyNode {
   id: string;
   name: string;
   type: string;
+  /** Card nodes only: the card's total and its value per cost item (incl. `__other__`). */
+  cost?: number;
+  costs?: Record<string, number>;
 }
 
 interface SankeyLink {
@@ -733,12 +736,23 @@ export default function CostReport() {
     const closure = scope.closure;
     const isCard = (n: SankeyNode) => n.type !== "CostItem" && n.type !== "Group";
     const keep = sankeyData.nodes.map((n) => !isCard(n) || !closure || closure.has(n.id));
+    // Scoped: an item -> group flow is the sum of the kept cards' own values for that item.
+    const flowValue = (l: SankeyLink) => {
+      if (!closure || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
+      const item = sankeyData.nodes[l.source].id.replace(/^item:/, "");
+      return sankeyData.links
+        .filter((c) => c.source === l.target && keep[c.target])
+        .reduce((n, c) => n + (sankeyData.nodes[c.target].costs?.[item] ?? 0), 0);
+    };
+    const values = sankeyData.links.map(flowValue);
     if (closure) {
       // item -> group -> card: the first pass drops groups, the second items.
       for (let pass = 0; pass < 2; pass++)
         sankeyData.nodes.forEach((n, i) => {
           if (!isCard(n))
-            keep[i] = sankeyData.links.some((l) => l.source === i && keep[l.target]);
+            keep[i] = sankeyData.links.some(
+              (l, k) => l.source === i && keep[l.target] && values[k] > 0,
+            );
         });
     }
     const index = new Map<number, number>();
@@ -754,25 +768,11 @@ export default function CostReport() {
             : n,
       );
     });
-    // The payload has no per-item-per-card values, so an item -> group link is
-    // scaled by the share of the group's card total that is left: approximate.
-    const cardTotal = (g: number, only: boolean) =>
-      sankeyData.links
-        .filter((l) => l.source === g && (!only || keep[l.target]))
-        .reduce((n, l) => n + l.value, 0);
-    const scale = (l: SankeyLink) => {
-      if (!closure || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
-      const before = cardTotal(l.target, false);
-      return before > 0 ? (l.value * cardTotal(l.target, true)) / before : 0;
-    };
-    const links = sankeyData.links
-      .filter((l) => keep[l.source] && keep[l.target])
-      .map((l) => ({
-        ...l,
-        value: scale(l),
-        source: index.get(l.source)!,
-        target: index.get(l.target)!,
-      }));
+    const links = sankeyData.links.flatMap((l, k) =>
+      keep[l.source] && keep[l.target] && (!closure || values[k] > 0)
+        ? [{ ...l, value: values[k], source: index.get(l.source)!, target: index.get(l.target)! }]
+        : [],
+    );
     return { ...sankeyData, nodes, links };
   }, [sankeyData, scope.closure, groupLabel, itemLabel]);
 
@@ -868,9 +868,19 @@ export default function CostReport() {
       </Box>
     );
 
-  const sortedAllItems = [...items].sort((a, b) => b.cost - a.cost);
-  const topDriver = sortedAllItems.length > 0 ? sortedAllItems[0] : null;
-  const avgCost = items.length > 0 ? total / items.length : 0;
+  // The Sankey view loads no treemap items: its tiles read the card nodes it keeps.
+  const summaryCards: { name: string; cost: number }[] =
+    view === "sankey"
+      ? (sankeyView?.nodes ?? [])
+          .filter((n) => n.cost !== undefined)
+          .map((n) => ({ name: n.name, cost: n.cost! }))
+      : items;
+  const summaryTotal = summaryCards.reduce((sum, c) => sum + c.cost, 0);
+  const topDriver = summaryCards.reduce<{ name: string; cost: number } | null>(
+    (top, c) => (!top || c.cost > top.cost ? c : top),
+    null,
+  );
+  const avgCost = summaryCards.length > 0 ? summaryTotal / summaryCards.length : 0;
 
   const treemapLeaf = (d: CostItem, i: number) => {
     const baseline = baselineCosts.get(d.id);
@@ -1139,14 +1149,14 @@ export default function CostReport() {
       <Box sx={{ display: "flex", gap: 2, mb: 3, flexWrap: "wrap" }}>
         <MetricCard
           label={t("cost.totalCost")}
-          value={fmt.format(total)}
+          value={fmt.format(summaryTotal)}
           icon="payments"
           iconColor="#2e7d32"
           color="#2e7d32"
         />
         <MetricCard
           label={t("cost.items")}
-          value={items.length}
+          value={summaryCards.length}
           icon="inventory_2"
         />
         <MetricCard
@@ -1158,7 +1168,7 @@ export default function CostReport() {
           <MetricCard
             label={t("cost.topCostDriver")}
             value={topDriver.name}
-            subtitle={`${fmt.format(topDriver.cost)} (${total > 0 ? ((topDriver.cost / total) * 100).toFixed(0) : 0}%)`}
+            subtitle={`${fmt.format(topDriver.cost)} (${summaryTotal > 0 ? ((topDriver.cost / summaryTotal) * 100).toFixed(0) : 0}%)`}
             icon="trending_up"
             iconColor="#e65100"
           />
