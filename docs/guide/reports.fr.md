@@ -162,7 +162,20 @@ Le **Rapport Coûts** fournit une analyse financière de votre paysage technolog
 
 - **Vue treemap** -- Rectangles imbriqués dimensionnés par coût, avec regroupement optionnel (par ex. par organisation ou capacité)
 - **Vue graphique à barres** -- Comparaison des coûts entre composants
-- **Type de fiche** -- Choisissez le type de fiche autour duquel le rapport est construit (Application, Composant IT, Fournisseur, …).
+- **Vue Sankey** -- Le même rapport dessiné comme un flux de coûts (voir [Vue Sankey](#sankey-view))
+- **Type de fiche** -- Choisissez le type de fiche autour duquel le rapport est construit : **Application**, **Composant IT**, **Application + Composant IT** (les deux types dans un même graphique, chaque fiche avec son propre coût) ou **Initiative**. Les initiatives suivent les mêmes règles d'exercice fiscal que les applications.
+- **Champ de coût** -- Choisissez le champ de coût qui est additionné. La liste affiche les champs de coût du type de fiche choisi ; pour Initiative, elle propose **costBudget** (par défaut) et **costActual**, qui ne sont jamais additionnés. Pour l'option combinée, seuls les champs de coût présents dans les deux types sont proposés.
+
+Toutes les vues partagent la même barre d'outils, les mêmes filtres, le même exercice fiscal et le même champ de coût : changer de vue ne modifie donc que le dessin.
+
+### Regrouper par
+
+**Regrouper par** est disponible dans le treemap, le tableau et le Sankey. Une fiche est regroupée soit selon :
+
+- la valeur d'un **champ de la fiche** (champs à valeur unique uniquement ; les champs à choix multiple ne sont pas proposés, car ils placeraient une fiche dans deux groupes), soit selon
+- une **fiche liée**, désignée par le nom de cette fiche, via une relation dans laquelle chaque fiche a **au plus une** fiche liée de ce type. Les relations plusieurs-à-plusieurs ne sont jamais proposées, si bien qu'un coût ne peut jamais tomber dans deux groupes.
+
+Les fiches sans valeur ou sans fiche liée vont dans le groupe **Unspecified**. Pour l'option combinée **Application + Composant IT**, seuls les champs présents dans les deux types sont proposés ; le sélecteur est désactivé quand il n'y en a aucun. Le regroupement ne compte jamais un coût deux fois et n'en perd aucun.
 
 ### Exercice fiscal
 
@@ -224,6 +237,14 @@ Dès qu'au moins une Source de coût est active, les rectangles du treemap devie
 La sélection de Source de coût et les autres filtres sont préservés pendant le forage, et le niveau de forage fait partie de la configuration du rapport sauvegardé — sauvegarder un rapport en cours de forage le rouvre directement à ce niveau. Sans Source de coût active, un clic sur un rectangle ouvre plutôt le panneau latéral de la fiche (il n'y a rien à décomposer).
 
 **Limiter à certaines fiches** — La puce voisine du sélecteur de type ouvre un sélecteur : choisissez une ou plusieurs fiches et la treemap, les totaux et le tableau se limitent à celles-ci et à tout ce qui se trouve en dessous. La puce disparaît lorsque vous avez zoomé dans un rectangle, puisqu'un tel zoom vous a déjà déplacé vers un autre type de fiche ; quittez-le et le périmètre est toujours là.
+
+### Vue Sankey {#sankey-view}
+
+Le Sankey reprend les mêmes filtres que le treemap : type de fiche, périmètre de fiches, champ de coût, exercice fiscal et Regrouper par. Il dessine à gauche les **postes de coût** (les champs de coût qui composent le total), à droite les **fiches** et, lorsqu'un Regrouper par est choisi, au milieu les **groupes** : les postes de coût alimentent les groupes, et les groupes alimentent leurs fiches. Sans Regrouper par, le flux va directement des postes de coût aux fiches. Un coût n'est compté qu'une fois : un composant IT utilisé par plusieurs applications n'est pas répété.
+
+### Plein écran
+
+Le bouton plein écran du treemap et du Sankey fait occuper tout l'écran au graphique, en largeur et en hauteur, sans le déformer.
 
 ## Rapport Matrice
 

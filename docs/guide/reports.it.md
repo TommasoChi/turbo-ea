@@ -162,7 +162,20 @@ Il **Report Costi** fornisce un'analisi finanziaria del vostro panorama tecnolog
 
 - **Vista treemap** — Rettangoli annidati dimensionati per costo, con raggruppamento opzionale (es. per organizzazione o capability)
 - **Vista grafico a barre** — Confronto dei costi tra componenti
-- **Tipo di scheda** — Scegliete il tipo di scheda su cui costruire il report (Applicazione, Componente IT, Fornitore, …).
+- **Vista Sankey** — Lo stesso report disegnato come flusso di costo (vedi [Vista Sankey](#sankey-view))
+- **Tipo di scheda** — Scegliete il tipo di scheda su cui costruire il report: **Applicazione**, **Componente IT**, **Applicazione + Componente IT** (entrambi i tipi in un solo grafico, ogni scheda con il proprio costo) o **Iniziativa**. Le iniziative seguono le stesse regole dell'anno fiscale delle applicazioni.
+- **Campo di costo** — Scegliete quale campo di costo viene sommato. L'elenco mostra i campi di costo del tipo di scheda scelto; per Iniziativa offre **costBudget** (il predefinito) e **costActual**, che non vengono mai sommati. Per l'opzione combinata sono offerti solo i campi di costo presenti in entrambi i tipi.
+
+Tutte le viste condividono la stessa barra degli strumenti, gli stessi filtri, lo stesso anno fiscale e lo stesso campo di costo, quindi cambiare vista modifica solo il disegno.
+
+### Raggruppa per
+
+**Raggruppa per** è disponibile nella treemap, nella tabella e nel Sankey. Una scheda viene raggruppata in base a:
+
+- il valore di un **campo della scheda** (solo campi a valore singolo; i campi a scelta multipla non sono offerti, perché collocherebbero una scheda in due gruppi), oppure
+- una **scheda collegata**, indicata dal nome della scheda collegata, tramite una relazione in cui ogni scheda ha **al massimo una** scheda collegata di quel tipo. Le relazioni molti-a-molti non sono mai offerte, quindi un costo non può mai finire in due gruppi.
+
+Le schede senza valore, o senza scheda collegata, vanno nel gruppo **Unspecified**. Per l'opzione combinata **Applicazione + Componente IT** sono offerti solo i campi presenti in entrambi i tipi; il selettore è disabilitato quando non ce ne sono. Il raggruppamento non conta mai un costo due volte e non ne scarta mai nessuno.
 
 ### Anno fiscale
 
@@ -224,6 +237,14 @@ Quando almeno un'Origine costi è attiva, i rettangoli del treemap diventano **c
 La selezione dell'Origine costi e gli altri filtri vengono mantenuti durante il drill-down, e il livello di drill-down fa parte della configurazione del report salvato: salvando un report mentre si è in drill-down lo si riapre direttamente a quel livello. Senza un'Origine costi attiva, un clic su un rettangolo apre invece il pannello laterale della card (non c'è nulla da scomporre).
 
 **Limitare a schede specifiche** — Il chip accanto al selettore del tipo apre un selettore: scegli una o più schede e la treemap, i totali e la tabella si limiteranno a quelle e a tutto ciò che si trova sotto di esse. Il chip è nascosto mentre sei all'interno di un rettangolo, poiché quel dettaglio ti ha già portato a un altro tipo di scheda; esci e l'ambito è ancora lì.
+
+### Vista Sankey {#sankey-view}
+
+Il Sankey accetta gli stessi filtri della treemap: tipo di scheda, ambito delle schede, campo di costo, anno fiscale e Raggruppa per. Disegna a sinistra le **voci di costo** (i campi di costo che compongono il totale), a destra le **schede** e, quando è scelto un Raggruppa per, al centro i **gruppi**: le voci di costo confluiscono nei gruppi e i gruppi confluiscono nelle loro schede. Senza Raggruppa per il flusso va direttamente dalle voci di costo alle schede. Un costo viene contato una sola volta: un Componente IT usato da più applicazioni non viene ripetuto.
+
+### Schermo intero
+
+Il pulsante schermo intero sulla treemap e sul Sankey fa occupare al grafico tutto lo schermo, in larghezza e in altezza, senza deformarlo.
 
 ## Report Matrice
 

@@ -162,7 +162,20 @@ O **Relatório de Custos** fornece análise financeira do seu cenário tecnológ
 
 - **Visualização treemap** — Retângulos aninhados dimensionados por custo, com agrupamento opcional (ex.: por organização ou capacidade)
 - **Visualização em gráfico de barras** — Comparação de custos entre componentes
-- **Tipo de cartão** — Escolha o tipo de cartão em torno do qual o relatório é construído (Aplicação, Componente de TI, Fornecedor, …).
+- **Vista Sankey** — O mesmo relatório desenhado como um fluxo de custos (ver [Vista Sankey](#sankey-view))
+- **Tipo de cartão** — Escolha o tipo de cartão em torno do qual o relatório é construído: **Aplicação**, **Componente de TI**, **Aplicação + Componente de TI** (os dois tipos num só gráfico, cada cartão com o seu próprio custo) ou **Iniciativa**. As iniciativas seguem as mesmas regras de ano fiscal que as aplicações.
+- **Campo de custo** — Escolha qual campo de custo é somado. A lista mostra os campos de custo do tipo de cartão escolhido; para Iniciativa oferece **costBudget** (o predefinido) e **costActual**, que nunca são somados. Para a opção combinada só são oferecidos os campos de custo que existem nos dois tipos.
+
+Todas as vistas partilham a mesma barra de ferramentas, os mesmos filtros, o mesmo ano fiscal e o mesmo campo de custo, pelo que mudar de vista só altera o desenho.
+
+### Agrupar por
+
+**Agrupar por** está disponível no treemap, na tabela e no Sankey. Um cartão é agrupado por:
+
+- o valor de um **campo do cartão** (apenas campos de valor único; os campos de escolha múltipla não são oferecidos, pois colocariam um cartão em dois grupos), ou
+- um **cartão associado**, designado pelo nome desse cartão, através de uma relação em que cada cartão tem **no máximo um** cartão associado desse tipo. As relações de muitos para muitos nunca são oferecidas, pelo que um custo nunca pode cair em dois grupos.
+
+Os cartões sem valor, ou sem cartão associado, vão para o grupo **Unspecified**. Para a opção combinada **Aplicação + Componente de TI** só são oferecidos os campos que existem nos dois tipos; o seletor fica desativado quando não há nenhum. O agrupamento nunca conta um custo duas vezes nem descarta nenhum.
 
 ### Ano fiscal
 
@@ -224,6 +237,14 @@ Sempre que pelo menos uma Origem de custos estiver ativa, os retângulos do mapa
 A seleção de Origem de custos e os restantes filtros são preservados durante o detalhamento, e o nível de detalhamento faz parte da configuração do relatório guardado — guardar um relatório enquanto se está a detalhar reabre-o diretamente nesse nível. Sem uma Origem de custos ativa, um clique num retângulo abre antes o painel lateral do cartão (não há nada a decompor).
 
 **Limitar a cartões específicos** — O chip ao lado do seletor de tipo abre um seletor: escolha um ou mais cartões e o treemap, os totais e a tabela limitam-se a esses e a tudo o que está abaixo deles. O chip fica oculto enquanto estiver dentro de um retângulo, pois esse detalhe já o levou a outro tipo de cartão; saia dele e o âmbito continua lá.
+
+### Vista Sankey {#sankey-view}
+
+O Sankey aceita os mesmos filtros que o treemap: tipo de cartão, âmbito de cartões, campo de custo, ano fiscal e Agrupar por. Desenha à esquerda os **itens de custo** (os campos de custo que compõem o total), à direita os **cartões** e, quando se escolhe um Agrupar por, ao centro os **grupos**: os itens de custo fluem para os grupos e os grupos fluem para os seus cartões. Sem Agrupar por, o fluxo vai diretamente dos itens de custo para os cartões. Um custo é contado uma só vez: um Componente de TI usado por várias aplicações não é repetido.
+
+### Ecrã inteiro
+
+O botão de ecrã inteiro no treemap e no Sankey faz o gráfico ocupar todo o ecrã, em largura e altura, sem o deformar.
 
 ## Relatório de Matriz
 

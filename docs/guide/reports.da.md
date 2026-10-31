@@ -162,7 +162,20 @@ Skift til **lagdelt afhængighedsvisning** ved hjælp af view-mode-knapperne i v
 
 - **Treemap-visning** — Indlejrede rektangler størrelses-justeret efter omkostning, med valgfri gruppering (f.eks. efter organisation eller kompetence)
 - **Bar chart-visning** — Omkostnings­sammenligning på tværs af komponenter
-- **Card Type** — Vælg hvilken korttype rapporten er bygget omkring (Application, IT Component, Provider, …).
+- **Sankey-visning** — Den samme rapport tegnet som et omkostningsflow (se [Sankey-visning](#sankey-view))
+- **Card Type** — Vælg hvilken korttype rapporten er bygget omkring: **Application**, **IT Component**, **Application + IT Component** (begge typer i ét diagram, hvert kort med sin egen omkostning) eller **Initiative**. Initiativer følger de samme regnskabsårsregler som applikationer.
+- **Omkostningsfelt** — Vælg hvilket omkostningsfelt der summeres. Listen viser omkostningsfelterne for den valgte korttype; for Initiative tilbyder den **costBudget** (standard) og **costActual**, som aldrig lægges sammen. For den kombinerede mulighed tilbydes kun de omkostningsfelter, der findes i begge typer.
+
+Alle visninger deler samme værktøjslinje, filtre, regnskabsår og omkostningsfelt, så et skift af visning ændrer kun tegningen.
+
+### Gruppér efter
+
+**Gruppér efter** er tilgængelig i treemap'et, tabellen og Sankey. Et kort grupperes enten efter:
+
+- værdien af et **felt på kortet** (kun felter med én værdi; felter med flervalg tilbydes ikke, da de ville placere et kort i to grupper), eller
+- et **tilknyttet kort**, navngivet efter det tilknyttede korts navn, via en relation hvor hvert kort har **højst ét** tilknyttet kort af den type. Mange-til-mange-relationer tilbydes aldrig, så en omkostning aldrig kan havne i to grupper.
+
+Kort uden værdi eller uden tilknyttet kort kommer i gruppen **Unspecified**. For den kombinerede mulighed **Application + IT Component** tilbydes kun de felter, der findes i begge typer; vælgeren er deaktiveret, når der ingen er. Grupperingen tæller aldrig en omkostning to gange og taber aldrig nogen.
 
 ### Regnskabsår
 
@@ -224,6 +237,14 @@ Når mindst én Cost Source er aktiv, er treemap-rektanglerne **klikbare**. Klik
 Cost Source-valget og andre filtre bevares, mens du driller, og det drillede niveau er en del af den gemte rapports konfiguration — at gemme en rapport, mens du har drillet ind, genåbner direkte på det niveau. Uden **nogen** Cost Source aktiv åbner klik på et rektangel kort-sidepanelet i stedet (der er intet at bryde ned).
 
 **Afgrænsning til bestemte kort** — Chippen ved siden af korttypevælgeren åbner en vælger: vælg et eller flere kort, og træstrukturen, totalerne og tabellen afgrænses til disse og alt under dem. Chippen skjules, mens du er inde i et rektangel, da det allerede har flyttet dig til en anden korttype; forlad det, og afgrænsningen er der stadig.
+
+### Sankey-visning {#sankey-view}
+
+Sankey tager de samme filtre som treemap'et: korttype, kortudvalg, omkostningsfelt, regnskabsår og Gruppér efter. Det tegner **omkostningsposter** til venstre (de omkostningsfelter, der udgør totalen), **kortene** til højre og, når der er valgt en Gruppér efter, **grupperne** i midten: omkostningsposter flyder ind i grupper, og grupper flyder ind i deres kort. Uden Gruppér efter går flowet direkte fra omkostningsposter til kort. En omkostning tælles kun én gang: En IT Component, der bruges af flere applikationer, gentages ikke.
+
+### Fuld skærm
+
+Fuldskærmsknappen på treemap'et og Sankey får diagrammet til at fylde hele skærmen i bredde og højde uden at fortrække det.
 
 ## Matrixrapport
 

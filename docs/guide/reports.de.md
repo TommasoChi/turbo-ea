@@ -162,7 +162,20 @@ Der **Kostenbericht** bietet eine finanzielle Analyse Ihrer Technologielandschaf
 
 - **Treemap-Ansicht** — Verschachtelte Rechtecke, nach Kosten dimensioniert, mit optionaler Gruppierung (z.B. nach Organisation oder Fähigkeit)
 - **Balkendiagramm-Ansicht** — Kostenvergleich über Komponenten hinweg
-- **Kartentyp** — Wählen Sie, um welchen Kartentyp der Bericht aufgebaut wird (Anwendung, IT-Komponente, Anbieter, …).
+- **Sankey-Ansicht** — Derselbe Bericht als Kostenfluss gezeichnet (siehe [Sankey-Ansicht](#sankey-view))
+- **Kartentyp** — Wählen Sie, um welchen Kartentyp der Bericht aufgebaut wird: **Anwendung**, **IT-Komponente**, **Anwendung + IT-Komponente** (beide Typen in einem Diagramm, jede Karte mit ihren eigenen Kosten) oder **Initiative**. Für Initiativen gelten dieselben Geschäftsjahresregeln wie für Anwendungen.
+- **Kostenfeld** — Wählen Sie, welches Kostenfeld summiert wird. Die Liste zeigt die Kostenfelder des gewählten Kartentyps; für Initiative stehen **costBudget** (Vorgabe) und **costActual** zur Wahl, die nie addiert werden. Für die kombinierte Option werden nur die Kostenfelder angeboten, die in beiden Typen vorhanden sind.
+
+Alle Ansichten teilen sich dieselbe Werkzeugleiste, dieselben Filter, dasselbe Geschäftsjahr und dasselbe Kostenfeld; ein Wechsel der Ansicht ändert also nur die Darstellung.
+
+### Gruppieren nach
+
+**Gruppieren nach** ist in der Treemap, der Tabelle und im Sankey verfügbar. Eine Karte wird gruppiert nach:
+
+- dem Wert eines **Feldes der Karte** (nur Felder mit einem einzelnen Wert; Mehrfachauswahlfelder werden nicht angeboten, da sie eine Karte in zwei Gruppen einordnen würden), oder
+- einer **verknüpften Karte**, benannt nach dem Namen der verknüpften Karte, über eine Beziehung, in der jede Karte **höchstens eine** verknüpfte Karte dieses Typs hat. Viele-zu-viele-Beziehungen werden nie angeboten, sodass Kosten nie in zwei Gruppen landen können.
+
+Karten ohne Wert oder ohne verknüpfte Karte kommen in die Gruppe **Unspecified**. Für die kombinierte Option **Anwendung + IT-Komponente** werden nur die Felder angeboten, die in beiden Typen vorhanden sind; gibt es keine, ist die Auswahl deaktiviert. Die Gruppierung zählt Kosten nie doppelt und lässt keine weg.
 
 ### Geschäftsjahr
 
@@ -224,6 +237,14 @@ Sobald mindestens eine Kostenquelle aktiv ist, sind die Treemap-Rechtecke **ankl
 Die Kostenquellen-Auswahl und andere Filter bleiben beim Drilldown erhalten, und die Drilldown-Ebene ist Teil der gespeicherten Berichtskonfiguration — wer einen Bericht im hineingezoomten Zustand speichert, öffnet ihn direkt auf dieser Ebene wieder. Wenn **keine** Kostenquelle aktiv ist, öffnet ein Klick auf ein Rechteck stattdessen das Karten-Seitenpanel (es gibt nichts aufzuschlüsseln).
 
 **Auf bestimmte Karten eingrenzen** — Der Chip neben der Kartentyp-Auswahl öffnet eine Auswahl: Wählen Sie eine oder mehrere Karten, und Treemap, Summen und Tabelle zeigen nur diese und alles darunter. Während Sie in ein Rechteck hineingezoomt haben, wird der Chip ausgeblendet, da eine Detailansicht bereits zu einem anderen Kartentyp gewechselt ist; verlassen Sie sie, ist die Eingrenzung weiterhin aktiv.
+
+### Sankey-Ansicht {#sankey-view}
+
+Das Sankey übernimmt dieselben Filter wie die Treemap: Kartentyp, Kartenauswahl, Kostenfeld, Geschäftsjahr und Gruppieren nach. Links zeichnet es die **Kostenposten** (die Kostenfelder, aus denen die Summe besteht), rechts die **Karten** und, wenn ein Gruppieren nach gewählt ist, in der Mitte die **Gruppen**: Kostenposten fließen in Gruppen, und Gruppen fließen in ihre Karten. Ohne Gruppieren nach fließt es direkt von den Kostenposten zu den Karten. Jede Kostenposition wird nur einmal gezählt: Eine IT-Komponente, die von mehreren Anwendungen genutzt wird, wird nicht wiederholt.
+
+### Vollbild
+
+Die Vollbild-Schaltfläche an der Treemap und am Sankey lässt das Diagramm in Breite und Höhe den ganzen Bildschirm ausfüllen, ohne es zu verzerren.
 
 ## Matrixbericht
 
