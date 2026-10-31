@@ -109,7 +109,9 @@ async def build_cost_sankey(
     is one of the fields concurring to ``cost_field`` (the field itself when it has
     none); what the components leave of a card's total flows from the ``__other__``
     item. Components summing to more than the total are linked as they are, with no
-    negative remainder. Raises ``ValueError`` when the grouping is refused.
+    negative remainder. Each card node carries its ``cost`` and ``costs`` (item key ->
+    value, the remainder under ``__other__``), so a page can re-sum the flows of the
+    cards it keeps. Raises ``ValueError`` when the grouping is refused.
     """
     components = await cost_components(db, type_keys, cost_field)
     split = components != [cost_field] and bool(components)
@@ -119,29 +121,42 @@ async def build_cost_sankey(
     per_card: dict[uuid.UUID, tuple[Card, float, dict[str, float]]] = {
         c.id: (c, cost, {} if split else {cost_field: cost}) for c, cost in totals
     }
-    for item in components if split else []:
-        for card, cost in await cards_with_cost_for_types(
-            db, read_scope, type_keys, item, target_fy, current_fy, fy_start
-        ):
-            if card.id in per_card:
-                per_card[card.id][2][item] = cost
+    if split and target_fy == current_fy:
+        # `totals` already holds the live cards: read each item off their attributes
+        for card, _, costs in per_card.values():
+            for item in components:
+                if value := cost_value((card.attributes or {}).get(item)):
+                    costs[item] = value
+    elif split:
+        history = await db.execute(
+            select(CardCostHistory.card_id, CardCostHistory.field_key, CardCostHistory.value).where(
+                CardCostHistory.card_id.in_(per_card),
+                CardCostHistory.fiscal_year == target_fy,
+                CardCostHistory.field_key.in_(components),
+                CardCostHistory.value != 0,
+            )
+        )
+        for card_id, item, value in history.all():
+            per_card[card_id][2][item] = value
     for _, card_total, costs in per_card.values():
         rest = card_total - sum(costs.values())
         if split and rest > 0:
             costs[OTHER_ITEM] = rest
     cards = sorted(per_card.values(), key=lambda cc: -cc[1])
     groups = (
-        await assign_groups(db, read_scope, [c for c, _, _ in cards], group_by) if group_by else {}
+        await assign_groups(db, read_scope, [c for c, _, _ in cards], group_by, type_keys)
+        if group_by
+        else {}
     )
 
     nodes: list[dict] = []
     index: dict[tuple[str, str], int] = {}
 
-    def node(kind: str, key: str, name: str, type_key: str) -> int:
+    def node(kind: str, key: str, name: str, type_key: str, **extra) -> int:
         if (kind, key) not in index:
             index[(kind, key)] = len(nodes)
             node_id = key if kind == "card" else f"{kind}:{key}"
-            nodes.append({"id": node_id, "name": name, "type": type_key})
+            nodes.append({"id": node_id, "name": name, "type": type_key, **extra})
         return index[(kind, key)]
 
     used = {i for _, _, costs in cards for i in costs}
@@ -155,7 +170,9 @@ async def build_cost_sankey(
     for card, card_total, costs in cards:
         total += card_total
         link_total = sum(costs.values())
-        card_idx = node("card", str(card.id), card.name, card.type)
+        card_idx = node(
+            "card", str(card.id), card.name, card.type, cost=card_total, costs=dict(costs)
+        )
         if not group_by:
             links += [
                 {"source": index[("item", i)], "target": card_idx, "value": v}

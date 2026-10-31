@@ -321,3 +321,70 @@ async def test_multi_type_grouped_flows_conserve(client, db, env):
         (TOTAL, "__other__"): 10,
     }
     assert data["total"] == 160
+
+
+def _card_nodes(data):
+    return {n["name"]: n for n in data["nodes"] if n["type"] not in ("CostItem", "Group")}
+
+
+async def test_card_nodes_carry_cost_and_costs_matching_links(client, db, env):
+    await _with_components(db)
+    await _app(db, "A", 100, costA=30, costB=50)
+    await _app(db, "B", 40)
+    data = await _call(client, env)
+    nodes = _card_nodes(data)
+    assert nodes["A"]["cost"] == 100
+    assert nodes["A"]["costs"] == {"costA": 30, "costB": 50, "__other__": 20}
+    assert nodes["B"]["costs"] == {"__other__": 40}
+    links = _link_values(data, "CostItem", "Application")
+    for name, node in nodes.items():
+        assert {i: v for (i, c), v in links.items() if c == name} == node["costs"]
+
+
+async def test_grouped_card_nodes_carry_costs_too(client, db, env):
+    await _app(db, "A", 10, tier="gold")
+    data = await _call(client, env, group_by="field:tier")
+    assert _card_nodes(data)["A"]["costs"] == {TOTAL: 10}
+    assert _card_nodes(data)["A"]["cost"] == 10
+
+
+async def test_components_do_not_reread_the_cards_per_item(client, db, env, monkeypatch):
+    from app.services import cost_report
+
+    calls = []
+    real = cost_report.cards_with_cost_for_types
+
+    async def spy(*args, **kwargs):
+        calls.append(args)
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(cost_report, "cards_with_cost_for_types", spy)
+    await _with_components(db)
+    await _app(db, "A", 100, costA=30, costB=70)
+    data = await _call(client, env)
+    assert len(calls) == 1
+    assert _card_nodes(data)["A"]["costs"] == {"costA": 30, "costB": 70}
+
+
+async def test_past_year_components_read_from_history(client, db, env):
+    await _with_components(db)
+    past = await _app(db, "Past", 0)
+    year = THIS_YEAR - 2
+    for key, value in ((TOTAL, 100), ("costA", 30), ("costB", 50)):
+        db.add(CardCostHistory(card_id=past.id, fiscal_year=year, field_key=key, value=value))
+    db.add(CardCostHistory(card_id=past.id, fiscal_year=year + 1, field_key="costB", value=999))
+    await db.flush()
+    data = await _call(client, env, fiscal_year=year)
+    assert _link_values(data, "CostItem", "Application") == {
+        ("costA", "Past"): 30,
+        ("costB", "Past"): 50,
+        ("__other__", "Past"): 20,
+    }
+
+
+@pytest.mark.parametrize("report", ["cost-sankey", "cost-treemap"])
+@pytest.mark.parametrize("with_cards", [True, False])
+async def test_nm_group_by_is_400_with_or_without_cards(client, db, env, report, with_cards):
+    if with_cards:
+        await _app(db, "A", 10)
+    await _call(client, env, report, expect=400, group_by="rel:relAppToITC")

@@ -1507,7 +1507,9 @@ async def cost_treemap(
     grouping = parse_group_by(group_by, field_keys)
     if grouping:
         try:
-            assigned = await assign_groups(db, read_scope, [c for c, _ in sheets], grouping)
+            assigned = await assign_groups(
+                db, read_scope, [c for c, _ in sheets], grouping, type_keys
+            )
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         groups_dict: dict[str, float] = {}

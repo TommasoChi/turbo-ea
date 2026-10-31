@@ -44,16 +44,21 @@ async def assign_groups(
     read_scope: CardReadScope,
     cards: list[Card],
     group_by: GroupBy | None,
+    type_keys: list[str] | None = None,
 ) -> dict[uuid.UUID, str]:
+    """``type_keys`` are the requested types: the grouping is validated against them, not
+    against the cards found, so it is refused the same way in a year with no cards."""
     if group_by is None:
         return {c.id: OTHER_GROUP for c in cards}
+    keys = set(type_keys) if type_keys is not None else {c.type for c in cards}
     if group_by.kind == "field":
-        return await _by_field(db, cards, group_by.key)
-    return await _by_relation(db, read_scope, cards, group_by.key)
+        return await _by_field(db, cards, group_by.key, keys)
+    return await _by_relation(db, read_scope, cards, group_by.key, keys)
 
 
-async def _by_field(db: AsyncSession, cards: list[Card], key: str) -> dict[uuid.UUID, str]:
-    type_keys = {c.type for c in cards}
+async def _by_field(
+    db: AsyncSession, cards: list[Card], key: str, type_keys: set[str]
+) -> dict[uuid.UUID, str]:
     types = (await db.execute(select(CardType).where(CardType.key.in_(type_keys)))).scalars().all()
     by_key = {t.key: t for t in types}
     for tk in type_keys:
@@ -76,7 +81,11 @@ async def _by_field(db: AsyncSession, cards: list[Card], key: str) -> dict[uuid.
 
 
 async def _by_relation(
-    db: AsyncSession, read_scope: CardReadScope, cards: list[Card], key: str
+    db: AsyncSession,
+    read_scope: CardReadScope,
+    cards: list[Card],
+    key: str,
+    type_keys: set[str],
 ) -> dict[uuid.UUID, str]:
     rt = (
         await db.execute(select(RelationType).where(RelationType.key == key))
@@ -90,7 +99,7 @@ async def _by_relation(
     if rt.cardinality == "1:1" and rt.source_type_key == rt.target_type_key:
         # a card could be the source of one row and the target of another: no single group
         raise ValueError(f"'{key}' is a self-referencing 1:1 relation")
-    if not {c.type for c in cards} <= ends:
+    if not type_keys <= ends:
         raise ValueError(f"cards are not on the at-most-one end of '{key}'")
     ids = {c.id for c in cards}
     rels = (
