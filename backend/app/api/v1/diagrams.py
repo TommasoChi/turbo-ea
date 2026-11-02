@@ -978,13 +978,14 @@ async def update_diagram(
     # touched, dry run or not.
     wanted: set[uuid.UUID] | None = None
     read_scope = None
+    old_ids = set(await _get_card_ids(db, d.id))
+    current = {uuid.UUID(c) for c in old_ids}
     if body.card_ids is not None:
         read_scope = await CardReadScope.load(db, user)
         wanted = {uuid.UUID(c) for c in body.card_ids}
         # Only a NEW link to a card the saver cannot see is refused: a link that
         # is already there (hidden from them) is not theirs to re-authorise.
-        current_links = {uuid.UUID(c) for c in await _get_card_ids(db, d.id)}
-        if await read_scope.hidden_card_ids(db, wanted - current_links, mode="module"):
+        if await read_scope.hidden_card_ids(db, wanted - current, mode="module"):
             raise HTTPException(404, "Card not found")
         # Ids of purged cards (still in the XML) are dropped silently.
         wanted = await _existing_card_ids(db, wanted)
@@ -993,7 +994,6 @@ async def update_diagram(
     try:
         old_xml = _xml_of(d.data)
         new_xml = old_xml
-        old_ids = set(await _get_card_ids(db, d.id))
         changes: dict = {}
         if body.name is not None:
             if body.name != d.name:
@@ -1012,7 +1012,6 @@ async def update_diagram(
             new_xml = _xml_of(new_data)
         if wanted is not None and read_scope is not None:
             # The client was only shown the readable links — keep the hidden ones.
-            current = {uuid.UUID(c) for c in await _get_card_ids(db, d.id)}
             wanted |= await read_scope.hidden_card_ids(db, current, mode="module")
             await _set_card_ids(db, d.id, [str(c) for c in wanted])
         new_ids = set(await _get_card_ids(db, d.id))

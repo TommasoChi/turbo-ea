@@ -16,7 +16,7 @@ import TableRow from "@mui/material/TableRow";
 import TableSortLabel from "@mui/material/TableSortLabel";
 import Tooltip from "@mui/material/Tooltip";
 import Chip from "@mui/material/Chip";
-import type { ECharts } from "echarts/core";
+import type { ECharts, EChartsCoreOption } from "echarts/core";
 import EChart, { EXPORT_DPR, type EChartClickParams } from "@/components/charts/EChart";
 import { useEChartsTheme, type EChartsThemeValue } from "@/components/charts/echartsTheme";
 import ReportShell from "./ReportShell";
@@ -199,17 +199,45 @@ function CostTreemapPanel({
   );
 
   return (
+    <CostChartFrame
+      option={option}
+      fullscreen={fullscreen}
+      ariaLabel={t("cost.title")}
+      onClick={onTileClick}
+      onInit={onInit}
+    />
+  );
+}
+
+/** The Paper around a cost chart: fixed height, or filling the fullscreen panel. */
+function CostChartFrame({
+  option,
+  fullscreen,
+  ariaLabel,
+  testId,
+  onClick,
+  onInit,
+}: {
+  option: EChartsCoreOption;
+  fullscreen: boolean;
+  ariaLabel: string;
+  testId?: string;
+  onClick?: (p: EChartClickParams) => void;
+  onInit?: (chart: ECharts) => void;
+}) {
+  return (
     <Paper
       variant="outlined"
       sx={{ p: 1, ...(fullscreen && { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }) }}
+      data-testid={testId}
     >
       {/* Drawn at the export's pixel ratio so the PPTX / PNG capture stays crisp. */}
       <EChart
         option={option}
         style={fullscreen ? { flex: 1, minHeight: 0 } : { height: 450 }}
         devicePixelRatio={EXPORT_DPR}
-        ariaLabel={t("cost.title")}
-        onClick={onTileClick}
+        ariaLabel={ariaLabel}
+        onClick={onClick}
         onInit={onInit}
       />
     </Paper>
@@ -238,18 +266,12 @@ function CostSankeyPanel({ nodes, links, fullscreen, chrome, fmt }: CostSankeyPa
     [nodes, links, chrome, fmt],
   );
   return (
-    <Paper
-      variant="outlined"
-      sx={{ p: 1, ...(fullscreen && { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }) }}
-      data-testid="cost-sankey-panel"
-    >
-      <EChart
-        option={option}
-        style={fullscreen ? { flex: 1, minHeight: 0 } : { height: 450 }}
-        devicePixelRatio={EXPORT_DPR}
-        ariaLabel={t("cost.sankeyChartView")}
-      />
-    </Paper>
+    <CostChartFrame
+      option={option}
+      fullscreen={fullscreen}
+      ariaLabel={t("cost.sankeyChartView")}
+      testId="cost-sankey-panel"
+    />
   );
 }
 
@@ -779,18 +801,11 @@ export default function CostReport() {
     t,
   ]);
 
-  const handleRectClick = useCallback((id: string) => {
-    setSidePanelCardId(id);
-  }, []);
-
   // A tile hands back the datum it was built from; a group frame has no card id and is inert.
-  const handleTileClick = useCallback(
-    (p: EChartClickParams) => {
-      const d = p.data as { id?: string } | undefined;
-      if (d?.id) handleRectClick(d.id);
-    },
-    [handleRectClick],
-  );
+  const handleTileClick = useCallback((p: EChartClickParams) => {
+    const d = p.data as { id?: string } | undefined;
+    if (d?.id) setSidePanelCardId(d.id);
+  }, []);
 
   if (!canViewCostsGlobally) {
     return (
