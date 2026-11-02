@@ -126,12 +126,12 @@ def test_the_default_is_evaluated_per_write():
 
 
 def test_the_migration_covers_exactly_the_mixin_tables():
-    path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "157_record_provenance.py"
-    spec = importlib.util.spec_from_file_location("migration_157", path)
+    path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "170_record_provenance.py"
+    spec = importlib.util.spec_from_file_location("migration_170", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert module.revision == "157"
-    assert module.down_revision == "156"
+    assert module.revision == "170"
+    assert module.down_revision == "169"
     assert set(module.TABLES) == {m.__tablename__ for m in PROVENANCE_MODELS}
     assert len(module.TABLES) == len(PROVENANCE_MODELS)
     assert module.COLUMNS == ("created_via", "updated_via")

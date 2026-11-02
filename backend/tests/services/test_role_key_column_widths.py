@@ -6,7 +6,7 @@ created and then never assigned: every write of it failed in the database.
 These tests tie the API cap, the key pattern, ``roles.key`` and every column
 that stores a role key together — the columns are discovered from the model
 metadata, so a new table storing a roles.key is guarded without being listed —
-and pin migration 159, which widens the two columns on existing installs. No DB.
+and pin migration 172, which widens the two columns on existing installs. No DB.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from app.models.sso_invitation import SsoInvitation
 from app.models.user import User
 
 _MIG_PATH = (
-    Path(__file__).resolve().parents[2] / "alembic" / "versions" / "159_widen_user_role_columns.py"
+    Path(__file__).resolve().parents[2] / "alembic" / "versions" / "172_widen_user_role_columns.py"
 )
 _spec = importlib.util.spec_from_file_location("mig159", _MIG_PATH)
 mig = importlib.util.module_from_spec(_spec)
@@ -62,7 +62,7 @@ ROLE_NAMED = _role_named_columns()
 # audit_log.impersonated_role, …): discovered, so the next table that stores
 # an assigned role key is guarded without anyone remembering to list it.
 GUARDED_COLUMNS = {name: col for name, col in ROLE_NAMED.items() if name not in NOT_A_ROLE_KEY}
-# The two that were VARCHAR(20) and that migration 159 widens.
+# The two that were VARCHAR(20) and that migration 172 widens.
 ASSIGNED_COLUMNS = {("users", "role"), ("sso_invitations", "role")}
 
 
@@ -111,8 +111,8 @@ def test_no_stale_allowlist_entry():
 
 
 def test_migration_covers_exactly_the_assigned_columns():
-    assert mig.revision == "159"
-    assert mig.down_revision == "158"
+    assert mig.revision == "172"
+    assert mig.down_revision == "171"
     assert len(mig.ROLE_KEY_COLUMNS) == len(set(mig.ROLE_KEY_COLUMNS))
     assert set(mig.ROLE_KEY_COLUMNS) == ASSIGNED_COLUMNS
 

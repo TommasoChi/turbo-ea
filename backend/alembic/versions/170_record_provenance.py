@@ -9,7 +9,7 @@ values are stamped Python-side by ``ProvenanceMixin`` (``app/models/
 provenance.py``) from the request context.
 
 No backfill: NULL means "created before this migration" and renders as
-nothing. A workspace-transfer bundle exported before 157 carries no
+nothing. A workspace-transfer bundle exported before 170 carries no
 ``created_via`` column, so its cards (and the generic module rows) import
 with ``created_via`` stamped by the importing request.
 
@@ -24,8 +24,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "157"
-down_revision: Union[str, None] = "156"
+revision: str = "170"
+down_revision: Union[str, None] = "169"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

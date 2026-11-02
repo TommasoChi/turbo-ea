@@ -1,8 +1,8 @@
-"""Unit tests for migration 161 (state who sees the built-in Admin dashboard).
+"""Unit tests for migration 174 (state who sees the built-in Admin dashboard).
 
 Seeding is insert-only, so an install whose dashboards were seeded before the
 Admin dashboard's ``allowed_roles`` were seeded from ``access_permission`` kept
-``[]`` ("everyone") for good. Migration 161 writes the seeded value onto that
+``[]`` ("everyone") for good. Migration 174 writes the seeded value onto that
 row — the ``roles_holding`` rule, written inline — and leaves a row an admin
 already restricted alone.
 
@@ -20,7 +20,7 @@ from app.services.dashboard_defaults import DEFAULT_DASHBOARDS
 from app.services.dashboard_service import roles_holding
 
 _MIG_PATH = (
-    Path(__file__).resolve().parents[2] / "alembic" / "versions" / "161_admin_dashboard_access.py"
+    Path(__file__).resolve().parents[2] / "alembic" / "versions" / "174_admin_dashboard_access.py"
 )
 _spec = importlib.util.spec_from_file_location("mig161", _MIG_PATH)
 mig = importlib.util.module_from_spec(_spec)

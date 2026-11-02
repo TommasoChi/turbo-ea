@@ -16,7 +16,7 @@ hide again who sees the dashboard, and the access it states is the access the
 widgets already grant.
 
 Revision ID: 161
-Revises: 160
+Revises: 173
 Create Date: 2026-10-29
 """
 
@@ -27,8 +27,8 @@ from sqlalchemy.sql import text
 
 from alembic import op
 
-revision: str = "161"
-down_revision: Union[str, None] = "160"
+revision: str = "174"
+down_revision: Union[str, None] = "173"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -14,7 +14,7 @@ the wrong value we shipped, so an admin's own wording survives. Nothing but
 reverting would reinstate words that name the wrong thing.
 
 Revision ID: 158
-Revises: 157
+Revises: 170
 Create Date: 2026-10-28
 """
 
@@ -25,8 +25,8 @@ from sqlalchemy.sql import text
 
 from alembic import op
 
-revision: str = "158"
-down_revision: Union[str, None] = "157"
+revision: str = "171"
+down_revision: Union[str, None] = "170"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

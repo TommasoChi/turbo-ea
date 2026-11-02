@@ -1,7 +1,7 @@
-"""Unit tests for migration 158 (repair four Arabic relation verbs).
+"""Unit tests for migration 171 (repair four Arabic relation verbs).
 
 Four built-in relation types shipped the Arabic text of their attribute as
-their verb. Migration 158 rewrites those on existing installs, guarded per value
+their verb. Migration 171 rewrites those on existing installs, guarded per value
 so an admin's own wording survives, and touches nothing but ``label.ar``.
 
 These exercise the pure ``plan_relation_fix`` helper — no DB.
@@ -20,7 +20,7 @@ _MIG_PATH = (
     Path(__file__).resolve().parents[2]
     / "alembic"
     / "versions"
-    / "158_fix_arabic_relation_verbs.py"
+    / "171_fix_arabic_relation_verbs.py"
 )
 _spec = importlib.util.spec_from_file_location("mig158", _MIG_PATH)
 mig = importlib.util.module_from_spec(_spec)
