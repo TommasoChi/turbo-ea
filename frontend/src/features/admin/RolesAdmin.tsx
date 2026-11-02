@@ -780,6 +780,10 @@ export default function RolesAdmin({ onRolesChanged }: RolesAdminProps) {
                       }}
                     >
                       <AccordionSummary
+                        // A div, not the default <button>: the summary holds
+                        // the select-all button, and a button may not contain
+                        // a button. ButtonBase keeps role="button" and keys.
+                        component="div"
                         expandIcon={
                           <MaterialSymbol icon="expand_more" size={20} />
                         }
@@ -940,6 +944,8 @@ export default function RolesAdmin({ onRolesChanged }: RolesAdminProps) {
               size="small"
               helperText={t("roles.createKeyHelperText")}
               autoFocus
+              // The width of roles.key and the API's cap (#1330).
+              slotProps={{ htmlInput: { maxLength: 50 } }}
             />
             <TextField
               label={t("common:labels.name")}
@@ -1058,7 +1064,7 @@ export default function RolesAdmin({ onRolesChanged }: RolesAdminProps) {
               {archiveTarget.user_count !== undefined &&
                 archiveTarget.user_count > 0 && (
                   <Alert severity="warning" variant="outlined">
-                    <span dangerouslySetInnerHTML={{ __html: t("roles.archiveUserWarning", { count: archiveTarget.user_count }) }} />
+                    <span dangerouslySetInnerHTML={{ __html: t("roles.archiveUserWarning", { count: archiveTarget.user_count, interpolation: { escapeValue: true } }) }} />
                   </Alert>
                 )}
               <Typography variant="body2" color="text.secondary">

@@ -60,7 +60,7 @@ vi.mock("@/hooks/useArchimateEnabled", () =>
   import("@/test/hooks").then((m) => m.useArchimateEnabledModule()),
 );
 
-// Stub the lazy pages these tests reach, so AG Grid / Recharts stay out of
+// Stub the lazy pages these tests reach, so AG Grid / ECharts stay out of
 // the suite. The value-chain stubs record mounting: a gated page must never
 // mount (it would fire its API calls on mount).
 const mounted = vi.hoisted(() => ({
@@ -328,5 +328,27 @@ describe("deep link through sign-in", () => {
     await waitFor(() => {
       expect(screen.getByText("dashboard page")).toBeInTheDocument();
     });
+  });
+});
+
+describe("pre-auth pages are code-split", () => {
+  it("renders the lazily loaded set-password page for a signed-out visitor", async () => {
+    window.history.pushState({}, "", "/auth/set-password");
+    vi.mocked(auth.me).mockRejectedValue(new Error("Unauthorized"));
+
+    render(<App />);
+
+    // No token in the link: the page says so instead of falling to the login form.
+    expect(await screen.findByText("Invalid Setup Link")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
+  });
+
+  it("renders the lazily loaded SSO callback for a signed-out visitor", async () => {
+    window.history.pushState({}, "", "/auth/callback?error=access_denied");
+    vi.mocked(auth.me).mockRejectedValue(new Error("Unauthorized"));
+
+    render(<App />);
+
+    expect(await screen.findByText(/access_denied/)).toBeInTheDocument();
   });
 });

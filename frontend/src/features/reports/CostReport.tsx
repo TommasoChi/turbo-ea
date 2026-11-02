@@ -1,10 +1,13 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
+import Breadcrumbs from "@mui/material/Breadcrumbs";
+import Checkbox from "@mui/material/Checkbox";
+import Chip from "@mui/material/Chip";
+import Link from "@mui/material/Link";
+import ListItemText from "@mui/material/ListItemText";
 import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
-import Checkbox from "@mui/material/Checkbox";
-import ListItemText from "@mui/material/ListItemText";
 import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
@@ -15,103 +18,43 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TableSortLabel from "@mui/material/TableSortLabel";
 import Tooltip from "@mui/material/Tooltip";
-import Chip from "@mui/material/Chip";
-import {
-  Treemap,
-  Sankey,
-  ResponsiveContainer,
-  Tooltip as RTooltip,
-} from "recharts";
+import type { ECharts } from "echarts/core";
+import EChart, { EXPORT_DPR, type EChartClickParams } from "@/components/charts/EChart";
+import { useEChartsTheme, type EChartsThemeValue } from "@/components/charts/echartsTheme";
 import ReportShell from "./ReportShell";
+import { buildCostTreemapOption, chartTileRect, type CostTreemapItem } from "./costTreemapOption";
 import SaveReportDialog from "./SaveReportDialog";
-import CostTrendChart from "./CostTrendChart";
 import MetricCard from "./MetricCard";
-import FullscreenPanel from "./FullscreenPanel";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useReadableCardTypes } from "@/hooks/useReadableCardTypes";
 import { useSavedReport } from "@/hooks/useSavedReport";
 import { applyScope, useCardScope } from "@/hooks/useCardScope";
 import CardScopeFilter from "@/components/CardScopeFilter";
 import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
-import { useCurrency, type CurrencyFormatter } from "@/hooks/useCurrency";
-import { useIsRtl } from "@/hooks/useIsRtl";
-import CostSankeyNode from "./CostSankeyNode";
+import { useCurrency } from "@/hooks/useCurrency";
 import { useAuth } from "@/hooks/useAuth";
-import {
-  useTypeLabel,
-  useFieldLabel,
-  useOptionLabel,
-  useRelationLabel,
-} from "@/hooks/useResolveLabel";
+import { useTypeLabel, useFieldLabel, useOptionLabel } from "@/hooks/useResolveLabel";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
-import { resolveFacetField } from "@/lib/fieldFacets";
-import { surface } from "@/theme/tokens";
-import {
-  COMBINED_KEY,
-  commonCostFields,
-  commonGroupableFields,
-  relationGroupOptions,
-  typeKeysOf,
-  typeParam,
-} from "./costReportOptions";
-import { costFiscalYearName, costFiscalYearOptions } from "@/lib/fiscalYear";
-import { formatFieldValue, EMPTY_VALUE, type FieldMeta } from "@/lib/cardDisplayFields";
-import { costValue } from "@/lib/costValue";
-import type { FieldDef } from "@/types";
-
-const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent", "Initiative"] as const;
-/** The server's group for a card with no value (and for an ungrouped report). */
-const OTHER_GROUP = "__other__";
-type CostView = "chart" | "sankey" | "table";
+import { facetValues, pickGroupableFields, resolveFacetField } from "@/lib/fieldFacets";
+import { fiscalYearLabel } from "@/lib/fiscalYear";
+import type { CardType, FieldDef, RelationType } from "@/types";
 
 interface CostItem {
   id: string;
   name: string;
   cost: number;
   attributes?: Record<string, unknown>;
-  /** Raw group value, present when the request grouped. */
-  group?: string;
 }
 
 interface CostTreemapResponse {
   items: CostItem[];
   total: number;
-  /** Technical keys of the cost fields that add up to the total. */
-  components?: string[];
-  /** The fiscal year the figures are for (the one requested). */
+  /** The current fiscal year — the only one the report shows. */
   fiscal_year?: number;
-  /** The fiscal year that contains today, whatever year was requested. */
-  current_fiscal_year?: number;
   /** Month (1-12) the workspace's fiscal year starts in. */
-  fiscal_year_start?: number;
-}
-
-const EMPTY_COMPONENTS: string[] = [];
-
-interface SankeyNode {
-  id: string;
-  name: string;
-  type: string;
-  /** Card nodes only: the card's total and its value per cost item (incl. `__other__`). */
-  cost?: number;
-  costs?: Record<string, number>;
-}
-
-interface SankeyLink {
-  source: number;
-  target: number;
-  value: number;
-}
-
-interface CostSankeyResponse {
-  nodes: SankeyNode[];
-  links: SankeyLink[];
-  total: number;
-  fiscal_year?: number;
-  current_fiscal_year?: number;
   fiscal_year_start?: number;
 }
 
@@ -121,180 +64,187 @@ interface FiscalYear {
   start: number;
 }
 
-function fiscalYearOf(r: {
-  fiscal_year?: number;
-  fiscal_year_start?: number;
-}): FiscalYear | null {
+function fiscalYearOf(r: CostTreemapResponse): FiscalYear | null {
   return r.fiscal_year != null && r.fiscal_year_start != null
     ? { year: r.fiscal_year, start: r.fiscal_year_start }
     : null;
 }
 
-function pickAllFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
+interface AggregateOption {
+  /** "<typeKey>:<fieldKey>" — the only encoding the backend accepts */
+  value: string;
+  /** "<TypeLabel> · <FieldLabel>" */
+  label: string;
+  typeKey: string;
+  typeLabel: string;
+  fieldKey: string;
+  fieldLabel: string;
+}
+
+/** A single (related-type, cost-field) pair contributing to a parent's roll-up. */
+interface SourceRef {
+  typeKey: string;
+  fieldKey: string;
+  /** "<TypeLabel> · <FieldLabel>" — used as the panel header label. */
+  label: string;
+}
+
+/**
+ * One step of the treemap drill-down. Pushed when the user clicks a rectangle
+ * while at least one aggregate cost source is active; ``cardId`` becomes the
+ * ``parent_card_id`` query param. ``sources`` holds every aggregate pair that
+ * contributed to the parent's roll-up — one panel is rendered per source so
+ * drilling preserves the per-source breakdown rather than mixing card types
+ * with different scales.
+ */
+interface DrillFrame {
+  cardId: string;
+  cardName: string;
+  sources: SourceRef[];
+}
+
+/**
+ * Migrate a legacy single-source drill frame ({type, costField}) into the
+ * current multi-source shape. Used when restoring saved-report configs.
+ */
+function normaliseDrillFrame(raw: unknown): DrillFrame | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const cardId = typeof obj.cardId === "string" ? obj.cardId : null;
+  const cardName = typeof obj.cardName === "string" ? obj.cardName : null;
+  if (!cardId || !cardName) return null;
+  if (Array.isArray(obj.sources)) {
+    const sources = (obj.sources as unknown[])
+      .map((s): SourceRef | null => {
+        if (!s || typeof s !== "object") return null;
+        const so = s as Record<string, unknown>;
+        if (typeof so.typeKey !== "string" || typeof so.fieldKey !== "string") return null;
+        const label = typeof so.label === "string" ? so.label : `${so.typeKey} · ${so.fieldKey}`;
+        return { typeKey: so.typeKey, fieldKey: so.fieldKey, label };
+      })
+      .filter((s): s is SourceRef => s !== null);
+    if (sources.length === 0) return null;
+    return { cardId, cardName, sources };
+  }
+  if (typeof obj.type === "string" && typeof obj.costField === "string") {
+    return {
+      cardId, cardName,
+      sources: [{ typeKey: obj.type, fieldKey: obj.costField, label: `${obj.type} · ${obj.costField}` }],
+    };
+  }
+  return null;
+}
+
+function pickCostFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
   const out: FieldDef[] = [];
-  for (const s of schema) for (const f of s.fields) out.push(f);
+  for (const s of schema) for (const f of s.fields) if (f.type === "cost") out.push(f);
   return out;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Treemap helpers                                                     */
+/*  One treemap panel                                                  */
 /* ------------------------------------------------------------------ */
 
-const COLORS = [
-  "#1565c0",
-  "#1976d2",
-  "#1e88e5",
-  "#2196f3",
-  "#42a5f5",
-  "#64b5f6",
-  "#90caf9",
-  "#bbdefb",
-  "#0d47a1",
-  "#1565c0",
-];
-
-function treemapColor(index: number): string {
-  return COLORS[index % COLORS.length];
+interface CostTreemapPanelProps {
+  /** The aggregate source this panel breaks down; absent for the root panel. */
+  source?: SourceRef;
+  /** The panel's own total, each tile's share is read against. */
+  total: number;
+  /** The panel's cards that cost anything, largest first. */
+  data: CostTreemapItem[];
+  /** The chart's height in px. */
+  panelHeight: number;
+  /** Whether the root panel says a click drills. */
+  showDrillHint: boolean;
+  /** Whether a tile click drills — the pointer cursor. */
+  clickable: boolean;
+  /** The chart chrome, with the reading direction. */
+  chrome: EChartsThemeValue;
+  fmt: { format: (v: number) => string };
+  onTileClick: (p: EChartClickParams) => void;
 }
 
-const TreemapContent = ({
-  x,
-  y,
-  width,
-  height,
-  name,
-  cost,
-  index,
-  id,
-  costFmt,
-  onCellClick,
-  isRtl,
-  deltaPct,
-  children,
-  caption,
-}: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  name: string;
-  cost: number;
-  index: number;
-  id?: string;
-  costFmt: CurrencyFormatter;
-  onCellClick?: (id: string) => void;
-  isRtl?: boolean;
-  /** YoY delta vs the current fiscal year: undefined = no year picked (no
-   * badge), null = no current-year baseline to diff against ("new"), a
-   * number = the signed ratio. */
-  deltaPct?: number | null;
-  /** Present on a group node, which holds the cards drawn above it. */
-  children?: unknown[];
-  /** The group's name, on the first (largest) card of each group. */
-  caption?: string;
-}) => {
-  const { t } = useTranslation("reports");
-  if (width < 4 || height < 4) return null;
-  const showLabel = width > 50 && height > 30;
-  const showCost = width > 70 && height > 45;
-  const handleClick = id && onCellClick ? () => onCellClick(id) : undefined;
-  if (Array.isArray(children)) {
-    // A group: its frame only. Its name is the caption of its largest card,
-    // since the cards are drawn over the frame.
-    return (
-      <g>
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          fill={treemapColor(index)}
-          stroke={surface.light.paper}
-          strokeWidth={4}
-        />
-      </g>
-    );
-  }
-  // In RTL, anchor the cell labels at the top-right corner so they read correctly.
-  const labelX = isRtl ? x + width - 6 : x + 6;
-  const textDir = isRtl
-    ? { textAnchor: "end" as const, direction: "rtl" as const }
-    : {};
-  return (
-    <g
-      onClick={handleClick}
-      style={handleClick ? { cursor: "pointer" } : undefined}
-    >
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        fill={treemapColor(index)}
-        stroke="#fff"
-        strokeWidth={2}
-        rx={3}
-      />
-      {showLabel && caption && (
-        <text
-          x={labelX}
-          y={y + 12}
-          fontSize={9}
-          fill={surface.light.paper}
-          opacity={0.8}
-          style={{ pointerEvents: "none" }}
-          {...textDir}
-        >
-          {caption}
-        </text>
-      )}
-      {showLabel && (
-        <text
-          x={labelX}
-          y={y + (caption ? 25 : 16)}
-          fontSize={11}
-          fontWeight={600}
-          fill="#fff"
-          style={{ pointerEvents: "none" }}
-          {...textDir}
-        >
-          {name.length > Math.floor(width / 7)
-            ? name.slice(0, Math.floor(width / 7) - 1) + "…"
-            : name}
-        </text>
-      )}
-      {showCost && (
-        <text
-          x={labelX}
-          y={y + (caption ? 39 : 30)}
-          fontSize={10}
-          fill="rgba(255,255,255,0.8)"
-          style={{ pointerEvents: "none" }}
-          {...textDir}
-        >
-          {costFmt.format(cost)}
-        </text>
-      )}
-      {deltaPct !== undefined && showLabel && (
-        <text
-          x={isRtl ? x + 6 : x + width - 6}
-          y={y + 16}
-          fontSize={10}
-          fontWeight={700}
-          fill={
-            deltaPct === null || deltaPct >= 0 ? "#a5d6a7" : "#ef9a9a"
-          }
-          textAnchor={isRtl ? "start" : "end"}
-          style={{ pointerEvents: "none" }}
-        >
-          {deltaPct === null
-            ? `▲ ${t("cost.deltaNew")}`
-            : `${deltaPct >= 0 ? "▲ +" : "▼ "}${Math.round(deltaPct * 100)}%`}
-        </text>
-      )}
-    </g>
+/**
+ * One panel of the report: its header (or the drill hint), then the treemap
+ * or the empty state. Each tile's label prints what its rectangle fits (a
+ * name, a name and a cost, or nothing — `tileLabelTier`), read from the
+ * panel's own chart while ECharts renders it.
+ */
+function CostTreemapPanel({
+  source,
+  total,
+  data,
+  panelHeight,
+  showDrillHint,
+  clickable,
+  chrome,
+  fmt,
+  onTileClick,
+}: CostTreemapPanelProps) {
+  const { t } = useTranslation(["reports", "common"]);
+  const chartRef = useRef<ECharts | null>(null);
+  const onInit = useCallback((chart: ECharts) => {
+    chartRef.current = chart;
+  }, []);
+  // The label formatter calls this while ECharts renders each tile, after it
+  // laid the tile out — so a resize, which ECharts re-lays and re-renders by
+  // itself, re-reads the real rectangles with no React work.
+  const tileRect = useCallback((dataIndex: number) => chartTileRect(chartRef.current, dataIndex), []);
+
+  // Memoised: a new option replaces the chart's whole option and replays its
+  // animation, so it is rebuilt only when the data, the theme or the drill
+  // affordance change — never on a resize, which ECharts handles by itself.
+  const option = useMemo(
+    () =>
+      buildCostTreemapOption(data, {
+        chrome,
+        isRtl: chrome.isRtl,
+        format: (v) => fmt.format(v),
+        panelTotal: total,
+        percentOfTotal: (pct) => t("cost.percentOfTotalValue", { pct }),
+        clickable,
+        tileRect,
+      }),
+    [data, chrome, fmt, total, t, clickable, tileRect],
   );
-};
+
+  return (
+    <Paper variant="outlined" sx={{ p: 1 }}>
+      {source ? (
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", px: 1, pb: 0.5 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            {source.label}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {fmt.format(total)}
+          </Typography>
+        </Box>
+      ) : (
+        showDrillHint && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: 1, pt: 0.5 }}>
+            {t("cost.drillDown.hint")}
+          </Typography>
+        )
+      )}
+      {data.length === 0 ? (
+        <Box sx={{ py: 6, textAlign: "center" }}>
+          <Typography color="text.secondary" variant="body2">{t("cost.noCostData")}</Typography>
+        </Box>
+      ) : (
+        // Drawn at the export's pixel ratio so the PPTX / PNG capture of
+        // the canvas stays crisp.
+        <EChart
+          option={option}
+          style={{ height: panelHeight }}
+          devicePixelRatio={EXPORT_DPR}
+          ariaLabel={source ? source.label : t("cost.title")}
+          onClick={onTileClick}
+          onInit={onInit}
+        />
+      )}
+    </Paper>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Main component                                                     */
@@ -306,130 +256,69 @@ export default function CostReport() {
   // Report type pickers offer only the types the user may see.
   const readableTypes = useReadableCardTypes("module");
   const typeLabel = useTypeLabel();
-  const relLabel = useRelationLabel();
   const fieldLabel = useFieldLabel();
   const optLabel = useOptionLabel();
   const { fmt } = useCurrency();
-  const isRtl = useIsRtl();
+  const chartTheme = useEChartsTheme();
   const { user } = useAuth();
   const canViewCostsGlobally = !!(
     user?.permissions?.["*"] || user?.permissions?.["costs.view"]
   );
-  const typeOptions = useMemo(() => {
-    const byKey = new Map(readableTypes.map((tp) => [tp.key, tp]));
-    const app = byKey.get("Application");
-    const itc = byKey.get("ITComponent");
-    const out: { key: string; label: string }[] = [];
-    if (app) out.push({ key: app.key, label: typeLabel(app) });
-    if (itc) out.push({ key: itc.key, label: typeLabel(itc) });
-    if (app && itc)
-      out.push({
-        key: COMBINED_KEY,
-        label: t("cost.combinedType", {
-          first: typeLabel(app),
-          second: typeLabel(itc),
-        }),
-      });
-    const ini = byKey.get("Initiative");
-    if (ini) out.push({ key: ini.key, label: typeLabel(ini) });
-    return out;
-  }, [readableTypes, typeLabel, t]);
   const saved = useSavedReport("cost");
-  const { chartRef, thumbnail, captureAndSave } = useThumbnailCapture(() =>
-    saved.setSaveDialogOpen(true),
-  );
-  // A type key, or COMBINED_KEY for Applications and IT Components together.
+  const { chartRef, thumbnail, captureAndSave } = useThumbnailCapture(() => saved.setSaveDialogOpen(true));
   const [cardTypeKey, setCardTypeKey] = useState("Application");
-  const typeKeys = useMemo(() => typeKeysOf(cardTypeKey), [cardTypeKey]);
-  const combined = typeKeys.length > 1;
   const [sidePanelCardId, setSidePanelCardId] = useState<string | null>(null);
   const [costField, setCostField] = useState("costTotalAnnual");
+  // Each entry is "<typeKey>:<fieldKey>"; an empty array means "use the direct cost field".
+  // Multiple entries are summed: every (type, field) targets a different set of cost values
+  // (different types contain different cards, different fields are distinct on the same card),
+  // so summing across entries cannot double-count by construction.
+  const [costSources, setCostSources] = useState<string[]>([]);
   const [groupBy, setGroupBy] = useState("");
+  // Root-level (depth 0) data set: a single dataset of primary cards.
   const [rawItems, setRawItems] = useState<CostItem[] | null>(null);
-  // The cost field keys that add up to the total, from the treemap response.
-  // Tagged with the type and field they answer, so a stale list never meets a new selection.
-  const [componentsFor, setComponentsFor] = useState<{ key: string; list: string[] }>({
-    key: "",
-    list: [],
-  });
-  const components =
-    componentsFor.key === `${cardTypeKey}|${costField}` ? componentsFor.list : EMPTY_COMPONENTS;
-  // Current-year baseline, fetched only when a past fiscal year is selected —
-  // the treemap delta badge diffs against it (id -> cost).
-  const [baselineCosts, setBaselineCosts] = useState<Map<string, number>>(
-    new Map(),
-  );
-  // Prior-year costs, fetched only when a past fiscal year is selected — the
-  // table YoY% column diffs against it (id -> cost).
-  const [priorYearCosts, setPriorYearCosts] = useState<Map<string, number>>(
-    new Map(),
-  );
-  const [sankeyData, setSankeyData] = useState<CostSankeyResponse | null>(null);
-  const [view, setView] = useState<CostView>("chart");
+  // Drilled-level (depth ≥ 1) data: one panel per source so multi-source drill
+  // shows separate treemaps side-by-side rather than mixing card types into a
+  // single chart.
+  const [drillPanels, setDrillPanels] = useState<{ source: SourceRef; items: CostItem[] }[] | null>(null);
+  const [view, setView] = useState<"chart" | "table">("chart");
   const [sortK, setSortK] = useState("cost");
   const [sortD, setSortD] = useState<"asc" | "desc">("desc");
-  // The server names the fiscal year the figures are for.
+  // Drill-down stack. Empty = root. Each frame swaps the treemap to the related
+  // cards contributing to that frame's parent. Re-queried via parent_card_id.
+  const [drillStack, setDrillStack] = useState<DrillFrame[]>([]);
+  // The server decides the year: costs are annual and a card carries one
+  // figure, so the report shows the current fiscal year and only names it.
   const [fiscalYear, setFiscalYear] = useState<FiscalYear | null>(null);
-  // null = current year (the param is omitted, matching today's default
-  // request shape byte-for-byte); a picked value asks the server for a past
-  // year's card_cost_history row instead of live attributes.
-  const [fiscalYearParam, setFiscalYearParam] = useState<number | null>(null);
-  // The fiscal year containing today, from the server. NOT `fiscalYear.year`,
-  // which is the requested year: anchoring the picker on it re-centred the list
-  // every time a past year was picked.
-  const [currentFiscalYear, setCurrentFiscalYear] = useState(() =>
-    new Date().getFullYear(),
-  );
-  const fiscalYearOptions = useMemo(
-    () => costFiscalYearOptions(currentFiscalYear),
-    [currentFiscalYear],
-  );
-  // The history chart shows on the Forecast year only: the four years before the current one,
-  // the current one and the forecast, oldest first. Memoised: the chart refetches when the identity changes.
-  const showForecast = fiscalYearParam === currentFiscalYear + 1;
-  const trendYears = useMemo(
-    () => Array.from({ length: 6 }, (_, i) => currentFiscalYear - 4 + i),
-    [currentFiscalYear],
-  );
-  // Learn the current year from a response, and fall back to "Current" when the
-  // requested year is that one or is not among the offered years (a saved
-  // report from an earlier year).
-  const adoptCurrentFiscalYear = useCallback((cy: number | undefined) => {
-    if (cy == null) return;
-    setCurrentFiscalYear(cy);
-    setFiscalYearParam((p) =>
-      p != null && !costFiscalYearOptions(cy).some((o) => o.value === p) ? null : p,
-    );
-  }, []);
 
-  // Narrow the treemap to chosen cards and everything beneath them (#954).
-  // A scope belongs to one type, so the combined option has none.
-  const scope = useCardScope({ typeKey: combined ? null : cardTypeKey, enabled: true });
+  // Narrow the treemap to chosen cards and everything beneath them (#954),
+  // at the root level only: a drill switches to the *related* card type, so a
+  // hierarchy scope over the root type is meaningless there. Same reasoning
+  // the group-by control already applies when `drillFrame` is set.
+  //
+  // No `hierarchy` here on purpose — `/reports/cost-treemap` drops zero-cost
+  // cards and returns only the drill level, so walking its payload would miss
+  // descendants under a zero-cost parent.
+  const scope = useCardScope({
+    typeKey: cardTypeKey,
+    enabled: drillStack.length === 0,
+  });
   const { scopeIds, setScopeIds, effectiveScopeIds } = scope;
 
-  // One schema per selected type; empty until every one of them is known.
-  const schemas = useMemo(() => {
-    const defs = typeKeys.map((k) => types.find((tp) => tp.key === k));
-    return defs.every(Boolean) ? defs.map((d) => d!.fields_schema) : [];
-  }, [types, typeKeys]);
-  const costFields = useMemo(
-    () => commonCostFields(schemas).map((f) => ({ ...f, label: fieldLabel(f) })),
-    [schemas, fieldLabel],
+  /** Changing the scope invalidates any drill built on the old root set. */
+  const applyScopeChange = useCallback(
+    (ids: string[]) => {
+      setScopeIds(ids);
+      setDrillStack([]);
+    },
+    [setScopeIds],
   );
-  // Extra table columns come from one type's fields: none for the combined option.
-  const allFields = useMemo(() => {
-    const raw = schemas.length === 1 ? pickAllFields(schemas[0]) : [];
-    return raw.map((f) => ({ ...f, label: fieldLabel(f) }));
-  }, [schemas, fieldLabel]);
-  const [extraColumns, setExtraColumns] = useState<string[]>([]);
 
-  // Drop picked columns the current type no longer defines (card-type
-  // switch) — mirrors the removed aggregateOptions pruning effect.
-  useEffect(() => {
-    setExtraColumns((prev) =>
-      prev.filter((key) => allFields.some((f) => f.key === key)),
-    );
-  }, [allFields]);
+  const typeDef = useMemo(() => types.find((t) => t.key === cardTypeKey), [types, cardTypeKey]);
+  const costFields = useMemo(() => {
+    const raw = typeDef ? pickCostFields(typeDef.fields_schema) : [];
+    return raw.map((f) => ({ ...f, label: fieldLabel(f) }));
+  }, [typeDef, fieldLabel]);
 
   // Auto-select cost field when card type changes — only when the current one
   // is not on the type, so a restored field the type does carry is kept.
@@ -442,47 +331,35 @@ export default function CostReport() {
     }
   }, [costFields]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A selection the user may not read (a saved combined option whose IT
-  // Component is hidden, an Initiative they cannot see) falls back.
-  useEffect(() => {
-    if (ml || typeOptions.length === 0) return;
-    if (!typeOptions.some((o) => o.key === cardTypeKey))
-      setCardTypeKey(
-        typeOptions.some((o) => o.key === "Application") ? "Application" : typeOptions[0].key,
-      );
-  }, [ml, typeOptions, cardTypeKey]);
-
   // Load saved report config
   useEffect(() => {
     const cfg = saved.consumeConfig();
     if (cfg) {
       const restoredType =
-        typeof cfg.cardTypeKey === "string" &&
-        (cfg.cardTypeKey === COMBINED_KEY ||
-          COST_REPORT_TYPE_KEYS.includes(cfg.cardTypeKey as never))
-          ? cfg.cardTypeKey
-          : undefined;
+        typeof cfg.cardTypeKey === "string" && cfg.cardTypeKey ? cfg.cardTypeKey : undefined;
       if (restoredType) setCardTypeKey(restoredType);
       if (cfg.costField) setCostField(cfg.costField as string);
+      if (Array.isArray(cfg.costSources)) {
+        setCostSources(cfg.costSources as string[]);
+      } else if (typeof cfg.costSource === "string" && cfg.costSource) {
+        // Backwards-compat: an earlier single-select shape stored a string.
+        setCostSources([cfg.costSource]);
+      }
       if (cfg.groupBy !== undefined) setGroupBy(cfg.groupBy as string);
-      if (cfg.view) setView(cfg.view as CostView);
+      if (cfg.view) setView(cfg.view as "chart" | "table");
       if (cfg.sortK) setSortK(cfg.sortK as string);
       if (cfg.sortD) setSortD(cfg.sortD as "asc" | "desc");
-      if (typeof cfg.fiscalYearParam === "number")
-        setFiscalYearParam(cfg.fiscalYearParam);
-      if (Array.isArray(cfg.extraColumns))
-        setExtraColumns(
-          (cfg.extraColumns as unknown[]).filter(
-            (v): v is string => typeof v === "string",
-          ),
-        );
+      const restored = Array.isArray(cfg.drillStack)
+        ? (cfg.drillStack as unknown[])
+            .map(normaliseDrillFrame)
+            .filter((f): f is DrillFrame => f !== null)
+        : [];
+      setDrillStack(restored);
       // Set for the restored type, so the scope is read as that type's from
       // the render the type lands on.
-      if (Array.isArray(cfg.scopeIds) && restoredType !== COMBINED_KEY) {
+      if (Array.isArray(cfg.scopeIds)) {
         setScopeIds(
-          (cfg.scopeIds as unknown[]).filter(
-            (v): v is string => typeof v === "string",
-          ),
+          (cfg.scopeIds as unknown[]).filter((v): v is string => typeof v === "string"),
           restoredType,
         );
       }
@@ -490,42 +367,36 @@ export default function CostReport() {
   }, [saved.loadedConfig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getConfig = () => ({
-    cardTypeKey,
-    costField,
-    groupBy,
-    view,
-    sortK,
-    sortD,
-    scopeIds,
-    extraColumns,
-    fiscalYearParam,
+    cardTypeKey, costField, costSources, groupBy, view, sortK, sortD,
+    drillStack, scopeIds,
   });
 
   // Auto-persist config to localStorage
   useEffect(() => {
     saved.persistConfig(getConfig());
-  }, [cardTypeKey, costField, groupBy, view, sortK, sortD, scopeIds, extraColumns, fiscalYearParam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cardTypeKey, costField, costSources, groupBy, view, sortK, sortD, drillStack, scopeIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset all parameters to defaults
   const handleReset = useCallback(() => {
     saved.resetAll();
     setCardTypeKey("Application");
     setCostField("costTotalAnnual");
+    setCostSources([]);
     setGroupBy("");
     setView("chart");
     setSortK("cost");
     setSortD("desc");
+    setDrillStack([]);
     setScopeIds([]);
-    setExtraColumns([]);
-    setFiscalYearParam(null);
   }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The table's group-by: single selects with options and yes/no fields (a
   // multi-select cannot put a card in exactly one group). A yes/no field is
   // given Yes / No options, so its groups are named rather than "true".
   const groupableFields = useMemo<FieldDef[]>(() => {
+    if (!typeDef) return [];
     const yesNo = { yes: t("common:labels.yes"), no: t("common:labels.no") };
-    return commonGroupableFields(schemas).map((f) =>
+    return pickGroupableFields(typeDef.fields_schema).map((f) =>
       resolveFacetField(
         {
           ...f,
@@ -535,325 +406,259 @@ export default function CostReport() {
         yesNo,
       ),
     );
-  }, [schemas, fieldLabel, optLabel, t]);
+  }, [typeDef, fieldLabel, optLabel, t]);
 
-  // What the Group by selector offers: `field:<key>` and `rel:<key>` values.
-  const groupOptions = useMemo(
-    () => [
-      ...groupableFields.map((f) => ({ value: `field:${f.key}`, label: f.label })),
-      ...relationGroupOptions(relationTypes, typeKeys, relLabel),
-    ],
-    [groupableFields, relationTypes, typeKeys, relLabel],
-  );
-  // A saved bare field key becomes `field:<key>`; one that is not offered is dropped.
-  const effectiveGroupBy = useMemo(() => {
-    const offered = (v: string) => groupOptions.some((o) => o.value === v);
-    if (offered(groupBy)) return groupBy;
-    return groupBy && offered(`field:${groupBy}`) ? `field:${groupBy}` : "";
-  }, [groupBy, groupOptions]);
+  // Aggregate options: every (related-type, cost-field) pair reachable via any relation
+  // type involving the current card type. The relation label is intentionally NOT shown —
+  // a single (type, field) pair is the unit that prevents double-counting (each related
+  // card contributes at most once to its primary card's roll-up). When the same pair is
+  // reachable via several relation types, the backend de-dupes at link-resolution time.
+  const aggregateOptions = useMemo<AggregateOption[]>(() => {
+    if (!typeDef) return [];
+    // Only types the user may see can be summed into a visible card's cost.
+    const typeMap = new Map<string, CardType>(readableTypes.map((tp) => [tp.key, tp]));
+    const reachable = new Set<string>();
+    for (const rt of relationTypes as RelationType[]) {
+      if (rt.is_hidden) continue;
+      const involves =
+        rt.source_type_key === cardTypeKey || rt.target_type_key === cardTypeKey;
+      if (!involves) continue;
+      const otherKey =
+        rt.source_type_key === cardTypeKey ? rt.target_type_key : rt.source_type_key;
+      if (otherKey === cardTypeKey) continue; // self-relations would re-aggregate the primary type
+      reachable.add(otherKey);
+    }
+    const out: AggregateOption[] = [];
+    for (const otherKey of reachable) {
+      const otherType = typeMap.get(otherKey);
+      if (!otherType) continue;
+      const otherTypeLabel = typeLabel(otherType);
+      for (const f of pickCostFields(otherType.fields_schema)) {
+        const otherFieldLabel = fieldLabel(f);
+        out.push({
+          value: `${otherKey}:${f.key}`,
+          label: t("cost.costSourceItem", { type: otherTypeLabel, field: otherFieldLabel }),
+          typeKey: otherKey,
+          typeLabel: otherTypeLabel,
+          fieldKey: f.key,
+          fieldLabel: otherFieldLabel,
+        });
+      }
+    }
+    out.sort((a, b) => a.label.localeCompare(b.label));
+    return out;
+  }, [typeDef, readableTypes, relationTypes, cardTypeKey, typeLabel, fieldLabel, t]);
+
+  // Drop any selected pair that's no longer offered (e.g. after switching card
+  // type, or restored from a saved config) — once the metamodel says what is.
   useEffect(() => {
-    if (!ml && effectiveGroupBy !== groupBy) setGroupBy(effectiveGroupBy);
-  }, [ml, effectiveGroupBy, groupBy]);
+    if (ml || costSources.length === 0) return;
+    const valid = new Set(aggregateOptions.map((o) => o.value));
+    const filtered = costSources.filter((s) => valid.has(s));
+    if (filtered.length !== costSources.length) setCostSources(filtered);
+  }, [aggregateOptions, costSources, ml]);
 
+  const activeAggregates = useMemo(
+    () => aggregateOptions.filter((o) => costSources.includes(o.value)),
+    [aggregateOptions, costSources],
+  );
+
+  // At depth ≥ 1 we render one treemap per source, each showing the related
+  // cards linked to the parent of the deepest frame.
+  const drillFrame = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+
+  // Two branches writing two different states, one of them a fan-out — drilling
+  // in and back out quickly used to let the slower branch land last and show
+  // the wrong panels (#882). The same signal aborts every leg of the fan-out.
   useAbortableEffect(
     async ({ signal, isCurrent }) => {
       if (!canViewCostsGlobally) {
         // Nothing loaded: a later grant shows the spinner, not an empty report.
         setRawItems(null);
-        setSankeyData(null);
+        setDrillPanels(null);
         return;
       }
-      if (view === "sankey") {
-        const p = new URLSearchParams({
-          type: typeParam(cardTypeKey),
-          cost_field: costField,
-        });
-        if (effectiveGroupBy) p.set("group_by", effectiveGroupBy);
-        if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
-        const r = await api.get<CostSankeyResponse>(
-          `/reports/cost-sankey?${p}`,
-          { signal },
+      if (drillFrame) {
+        // One round-trip per source so the panels render independently.
+        const sources = drillFrame.sources;
+        const parentId = drillFrame.cardId;
+        const rs = await Promise.all(
+          sources.map((s) => {
+            const p = new URLSearchParams({
+              type: s.typeKey,
+              cost_field: s.fieldKey,
+              parent_card_id: parentId,
+            });
+            return api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, { signal });
+          }),
         );
         if (!isCurrent()) return;
-        setSankeyData(r);
+        setDrillPanels(rs.map((r, i) => ({ source: sources[i], items: r.items })));
         setRawItems(null);
-        setFiscalYear((prev) => fiscalYearOf(r) ?? prev);
-        adoptCurrentFiscalYear(r.current_fiscal_year);
+        setFiscalYear((prev) => (rs.length > 0 ? fiscalYearOf(rs[0]) : null) ?? prev);
       } else {
-        const p = new URLSearchParams({
-          type: typeParam(cardTypeKey),
-          cost_field: costField,
-        });
-        if (effectiveGroupBy) p.set("group_by", effectiveGroupBy);
-        if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
-        const r = await api.get<CostTreemapResponse>(
-          `/reports/cost-treemap?${p}`,
-          { signal },
-        );
+        const p = new URLSearchParams({ type: cardTypeKey });
+        if (activeAggregates.length > 0) {
+          for (const a of activeAggregates) p.append("aggregate", a.value);
+        } else {
+          p.set("cost_field", costField);
+        }
+        const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, { signal });
         if (!isCurrent()) return;
         setRawItems(r.items);
-        setComponentsFor({ key: `${cardTypeKey}|${costField}`, list: r.components ?? [] });
-        setSankeyData(null);
+        setDrillPanels(null);
         setFiscalYear((prev) => fiscalYearOf(r) ?? prev);
-        adoptCurrentFiscalYear(r.current_fiscal_year);
       }
     },
-    [cardTypeKey, costField, effectiveGroupBy, view, canViewCostsGlobally, fiscalYearParam],
+    [cardTypeKey, costField, activeAggregates, drillFrame, canViewCostsGlobally],
   );
 
-  // Delta badge baseline: the current fiscal year's per-card costs, fetched
-  // only when a past year is selected and the treemap is showing — nothing to
-  // diff against when `fiscalYearParam` is null (the picked year already IS
-  // the current year).
-  useAbortableEffect(
-    async ({ signal, isCurrent }) => {
-      if (
-        !canViewCostsGlobally ||
-        view !== "chart" ||
-        fiscalYearParam == null
-      ) {
-        setBaselineCosts(new Map());
-        return;
-      }
-      const p = new URLSearchParams({
-        type: typeParam(cardTypeKey),
-        cost_field: costField,
-      });
-      const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, {
-        signal,
-      });
-      if (!isCurrent()) return;
-      setBaselineCosts(new Map(r.items.map((it) => [it.id, it.cost])));
-    },
-    [cardTypeKey, costField, view, canViewCostsGlobally, fiscalYearParam],
-  );
+  // Unify root and drilled data into a list of panels: depth-0 has one
+  // anonymous panel; drilled levels have one labelled panel per source.
+  const panels = useMemo<{ source?: SourceRef; items: CostItem[] }[]>(() => {
+    if (drillPanels) return drillPanels;
+    // Scoped here and nowhere else, so the metric cards, treemap, groups and
+    // the table footer total can never disagree with each other.
+    if (rawItems) return [{ items: applyScope(rawItems, scope.closure) }];
+    return [];
+  }, [drillPanels, rawItems, scope.closure]);
 
-  // The earliest year the picker itself offers — a selected year at or below
-  // it has no prior year to diff against, so the YoY fetch is skipped rather
-  // than sent for a year outside the picker's own range.
-  const minFiscalYearOption = useMemo(
-    () =>
-      Math.min(
-        // "Current" (null) is not a requestable year: it is never the earliest.
-        ...fiscalYearOptions.flatMap((o) => (o.value == null ? [] : [o.value])),
-      ),
-    [fiscalYearOptions],
-  );
+  // Per-panel totals. The server already left out every card that is not live
+  // in the current fiscal year — related cards an aggregate sums included — so
+  // there is nothing to filter here.
+  const panelsWithTotals = useMemo(() => {
+    return panels.map((p) => ({
+      source: p.source,
+      items: p.items,
+      total: p.items.reduce((sum, item) => sum + item.cost, 0),
+    }));
+  }, [panels]);
 
-  // Table YoY%: the prior fiscal year's per-card costs, fetched only when a
-  // past year is selected, the table is showing, and a prior year exists in
-  // the picker's own range.
-  useAbortableEffect(
-    async ({ signal, isCurrent }) => {
-      if (
-        !canViewCostsGlobally ||
-        view !== "table" ||
-        fiscalYearParam == null ||
-        fiscalYearParam <= minFiscalYearOption
-      ) {
-        setPriorYearCosts(new Map());
-        return;
-      }
-      const p = new URLSearchParams({
-        type: typeParam(cardTypeKey),
-        cost_field: costField,
-        fiscal_year: String(fiscalYearParam - 1),
-      });
-      const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, {
-        signal,
-      });
-      if (!isCurrent()) return;
-      setPriorYearCosts(new Map(r.items.map((it) => [it.id, it.cost])));
-    },
-    [
-      cardTypeKey,
-      costField,
-      view,
-      canViewCostsGlobally,
-      fiscalYearParam,
-      minFiscalYearOption,
-    ],
-  );
+  const { items, total } = useMemo(() => {
+    const flat = panelsWithTotals.flatMap((p) => p.items);
+    return { items: flat, total: panelsWithTotals.reduce((s, p) => s + p.total, 0) };
+  }, [panelsWithTotals]);
 
-  // Scoped here and nowhere else, so the metric cards, treemap, groups and
-  // the table footer total can never disagree with each other.
-  const items = useMemo(
-    () => (rawItems ? applyScope(rawItems, scope.closure) : []),
-    [rawItems, scope.closure],
-  );
-  const total = useMemo(
-    () => items.reduce((sum, item) => sum + item.cost, 0),
-    [items],
-  );
-
-  // The page names a group: the server sends the raw value (an option key,
-  // "true"/"false", a linked card's name, or "__other__").
-  const groupLabel = useCallback(
-    (raw: string | undefined) => {
-      if (!raw || raw === OTHER_GROUP) return t("cost.unspecified");
-      const key = effectiveGroupBy.startsWith("field:")
-        ? effectiveGroupBy.slice(6)
-        : null;
-      const opt = groupableFields
-        .find((f) => f.key === key)
-        ?.options?.find((o) => o.key === raw);
-      return opt?.label ?? raw;
-    },
-    [effectiveGroupBy, groupableFields, t],
-  );
+  const groupedField = useMemo(() => groupableFields.find((f) => f.key === groupBy), [groupableFields, groupBy]);
 
   const groups = useMemo(() => {
-    if (!effectiveGroupBy) return null;
-    // Keyed by the raw value: two raw values may share a label.
-    const map = new Map<
-      string,
-      { key: string; label: string; items: CostItem[]; cost: number }
-    >();
+    // Group-by uses root-type field keys, so it's meaningless once drilled
+    // into a different card type — fall through to the flat list instead.
+    if (!groupBy || !groupedField || drillFrame) return null;
+    const optionMap = new Map<string, string>();
+    for (const o of groupedField.options ?? []) optionMap.set(o.key, o.label);
+    const map = new Map<string, { label: string; items: CostItem[]; cost: number }>();
     for (const item of items) {
-      const key = item.group ?? OTHER_GROUP;
-      const g = map.get(key) || { key, label: groupLabel(key), items: [], cost: 0 };
+      const raw = (item.attributes as Record<string, unknown> | undefined)?.[groupBy];
+      const val = facetValues(groupedField, raw)[0] ?? "";
+      const label = optionMap.get(val) || val || t("cost.unspecified");
+      const g = map.get(label) || { label, items: [], cost: 0 };
       g.items.push(item);
       g.cost += item.cost;
-      map.set(key, g);
+      map.set(label, g);
     }
     return [...map.values()].sort((a, b) => b.cost - a.cost);
-  }, [items, effectiveGroupBy, groupLabel]);
-
-  // A cost-item node: the cost field's label, or "Other costs" for what the
-  // components leave of a card's total.
-  const itemLabel = useCallback(
-    (key: string, fallback: string) =>
-      key === OTHER_GROUP
-        ? t("cost.otherCostItem")
-        : (costFields.find((f) => f.key === key)?.label ?? fallback),
-    [costFields, t],
-  );
-
-  // Scope applies to the Sankey here: hide the cards outside it, then every
-  // cost-item and group node left without a card below it.
-  const sankeyView = useMemo(() => {
-    if (!sankeyData) return null;
-    const closure = scope.closure;
-    const isCard = (n: SankeyNode) => n.type !== "CostItem" && n.type !== "Group";
-    const keep = sankeyData.nodes.map((n) => !isCard(n) || !closure || closure.has(n.id));
-    // Scoped: an item -> group flow is the sum of the kept cards' own values for that item.
-    const flowValue = (l: SankeyLink) => {
-      if (!closure || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
-      const item = sankeyData.nodes[l.source].id.replace(/^item:/, "");
-      return sankeyData.links
-        .filter((c) => c.source === l.target && keep[c.target])
-        .reduce((n, c) => n + (sankeyData.nodes[c.target].costs?.[item] ?? 0), 0);
-    };
-    const values = sankeyData.links.map(flowValue);
-    if (closure) {
-      // item -> group -> card: the first pass drops groups, the second items.
-      for (let pass = 0; pass < 2; pass++)
-        sankeyData.nodes.forEach((n, i) => {
-          if (!isCard(n))
-            keep[i] = sankeyData.links.some(
-              (l, k) => l.source === i && keep[l.target] && values[k] > 0,
-            );
-        });
-    }
-    const index = new Map<number, number>();
-    const nodes: SankeyNode[] = [];
-    sankeyData.nodes.forEach((n, i) => {
-      if (!keep[i]) return;
-      index.set(i, nodes.length);
-      nodes.push(
-        n.type === "Group"
-          ? { ...n, name: groupLabel(n.id.replace(/^group:/, "")) }
-          : n.type === "CostItem"
-            ? { ...n, name: itemLabel(n.id.replace(/^item:/, ""), n.name) }
-            : n,
-      );
-    });
-    const links = sankeyData.links.flatMap((l, k) =>
-      keep[l.source] && keep[l.target] && (!closure || values[k] > 0)
-        ? [{ ...l, value: values[k], source: index.get(l.source)!, target: index.get(l.target)! }]
-        : [],
-    );
-    return { ...sankeyData, nodes, links };
-  }, [sankeyData, scope.closure, groupLabel, itemLabel]);
+  }, [items, groupBy, groupedField, t, drillFrame]);
 
   const printParams = useMemo(() => {
     const params: { label: string; value: string }[] = [];
-    const tpLabel =
-      typeOptions.find((o) => o.key === cardTypeKey)?.label || cardTypeKey;
+    const tp = types.find((tp) => tp.key === cardTypeKey);
+    const tpLabel = typeLabel(tp) || cardTypeKey;
     params.push({ label: t("common:labels.type"), value: tpLabel });
     // Always stated: every figure on the page is for this one fiscal year.
     if (fiscalYear) {
       params.push({
         label: t("cost.fiscalYear"),
-        value: costFiscalYearName(fiscalYear.year, currentFiscalYear),
+        value: fiscalYearLabel(fiscalYear.year, fiscalYear.start, t),
       });
     }
-    if (costFields.length > 1) {
-      const cfLabel =
-        costFields.find((f) => f.key === costField)?.label || costField;
+    if (activeAggregates.length > 0) {
+      params.push({
+        label: t("cost.costSource"),
+        value: activeAggregates.map((a) => a.label).join(" + "),
+      });
+    } else if (costFields.length > 1) {
+      const cfLabel = costFields.find((f) => f.key === costField)?.label || costField;
       params.push({ label: t("cost.costField"), value: cfLabel });
     }
-    if (effectiveGroupBy) {
-      const gLabel =
-        groupOptions.find((o) => o.value === effectiveGroupBy)?.label ||
-        effectiveGroupBy;
+    if (groupBy) {
+      const gLabel = groupableFields.find((f) => f.key === groupBy)?.label || groupBy;
       params.push({ label: t("cost.groupBy"), value: gLabel });
     }
-    if (view === "table")
-      params.push({ label: t("common.view"), value: t("common.table") });
+    if (view === "table") params.push({ label: t("common.view"), value: t("common.table") });
     if (effectiveScopeIds.length > 0) {
       params.push({
         label: t("common.scope"),
         value: t("cost.scopeCount", { count: effectiveScopeIds.length }),
       });
     }
+    if (drillStack.length > 0) {
+      params.push({
+        label: t("cost.drillDown.path"),
+        value: drillStack.map((f) => f.cardName).join(" › "),
+      });
+    }
     return params;
-  }, [
-    cardTypeKey,
-    typeOptions,
-    costField,
-    costFields,
-    effectiveGroupBy,
-    groupOptions,
-    view,
-    effectiveScopeIds,
-    fiscalYear,
-    currentFiscalYear,
-    t,
-  ]);
+  }, [cardTypeKey, types, costField, costFields, activeAggregates, groupBy, groupableFields, view, drillStack, effectiveScopeIds, fiscalYear, t, typeLabel]);
 
-  const handleRectClick = useCallback((id: string) => {
-    setSidePanelCardId(id);
-  }, []);
+  // Drill is offered at depth 0 whenever at least one aggregate source is
+  // active. With multiple sources, depth 1 renders one chart per source so
+  // each card type stays on its own scale. With no aggregate, clicking falls
+  // back to opening the card side panel — there's nothing to break down.
+  const canDrill = !drillFrame && activeAggregates.length > 0;
+
+  const drillSources = useMemo<SourceRef[]>(() =>
+    activeAggregates.map((a) => ({
+      typeKey: a.typeKey,
+      fieldKey: a.fieldKey,
+      label: a.label,
+    })),
+    [activeAggregates],
+  );
+
+  const handleRectClick = useCallback((id: string, name: string) => {
+    if (drillFrame || drillSources.length === 0) {
+      setSidePanelCardId(id);
+      return;
+    }
+    setDrillStack((s) => [...s, { cardId: id, cardName: name, sources: drillSources }]);
+  }, [drillFrame, drillSources]);
+
+  // A tile hands back the datum it was built from; one without a card id
+  // (a row naming no card) is inert.
+  const handleTileClick = useCallback((p: EChartClickParams) => {
+    const d = p.data as { id?: string; name?: string } | undefined;
+    if (d?.id) handleRectClick(d.id, d.name ?? "");
+  }, [handleRectClick]);
+
+  // One treemap per panel: tiles sized by cost, sorted desc so the top driver
+  // leads. Each panel reads its tiles' shares against its own total, so a
+  // multi-source drill (Provider costs next to IT Component costs) compares
+  // every card with its own scale. `CostTreemapPanel` builds the option.
+  const panelCharts = useMemo(() => panelsWithTotals.map((p) => {
+    // A card that costs nothing has no tile, so a panel of them is empty,
+    // not a blank chart.
+    const data = p.items
+      .filter((d) => d.cost > 0)
+      .sort((a, b) => b.cost - a.cost)
+      .map((d, i) => ({ name: d.name, cost: d.cost, id: d.id, index: i }));
+    return { source: p.source, total: p.total, data };
+  }), [panelsWithTotals]);
+
+  const rootTypeLabel = useMemo(() => {
+    const tp = types.find((tp) => tp.key === cardTypeKey);
+    return typeLabel(tp) || cardTypeKey;
+  }, [types, cardTypeKey, typeLabel]);
 
   if (!canViewCostsGlobally) {
     return (
-      <ReportShell
-        title={t("cost.title")}
-        icon="payments"
-        iconColor="#2e7d32"
-        view={view}
-        onViewChange={setView}
-      >
-        <Box
-          sx={{
-            py: 8,
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 1,
-          }}
-        >
+      <ReportShell title={t("cost.title")} icon="payments" iconColor="#2e7d32" view={view} onViewChange={setView}>
+        <Box sx={{ py: 8, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
           <MaterialSymbol icon="lock" size={32} color="#9e9e9e" />
           <Typography variant="h6" color="text.secondary">
             {t("cost.permissionDeniedTitle")}
           </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ maxWidth: 480 }}
-          >
+          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 480 }}>
             {t("cost.permissionDeniedBody")}
           </Typography>
         </Box>
@@ -861,148 +666,27 @@ export default function CostReport() {
     );
   }
 
-  if (ml || (rawItems === null && sankeyData === null))
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-        <CircularProgress />
-      </Box>
-    );
+  if (ml || (rawItems === null && drillPanels === null))
+    return <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress /></Box>;
 
-  // The Sankey view loads no treemap items: its tiles read the card nodes it keeps.
-  const summaryCards: { name: string; cost: number }[] =
-    view === "sankey"
-      ? (sankeyView?.nodes ?? [])
-          .filter((n) => n.cost !== undefined)
-          .map((n) => ({ name: n.name, cost: n.cost! }))
-      : items;
-  const summaryTotal = summaryCards.reduce((sum, c) => sum + c.cost, 0);
-  const topDriver = summaryCards.reduce<{ name: string; cost: number } | null>(
-    (top, c) => (!top || c.cost > top.cost ? c : top),
-    null,
-  );
-  const avgCost = summaryCards.length > 0 ? summaryTotal / summaryCards.length : 0;
+  const sortedAllItems = [...items].sort((a, b) => b.cost - a.cost);
+  const topDriver = sortedAllItems.length > 0 ? sortedAllItems[0] : null;
+  const avgCost = items.length > 0 ? total / items.length : 0;
 
-  const treemapLeaf = (d: CostItem, i: number) => {
-    const baseline = baselineCosts.get(d.id);
-    const deltaPct =
-      fiscalYearParam == null
-        ? undefined
-        : baseline && baseline > 0
-          ? (d.cost - baseline) / baseline
-          : null;
-    return {
-      name: d.name,
-      size: d.cost,
-      cost: d.cost,
-      id: d.id,
-      index: i,
-      deltaPct,
-    };
-  };
-  // Grouped: each group is a parent node holding its cards.
-  const treemapData = groups
-    ? groups.map((g, gi) => ({
-        name: g.label,
-        cost: g.cost,
-        index: gi,
-        children: [...g.items]
-          .sort((a, b) => b.cost - a.cost)
-          .map((d, di) => ({
-            ...treemapLeaf(d, gi),
-            group: g.label,
-            caption: di === 0 ? g.label : undefined,
-          })),
-      }))
-    : [...items].sort((a, b) => b.cost - a.cost).map(treemapLeaf);
-
-  const sort = (k: string) => {
-    setSortD(sortK === k && sortD === "asc" ? "desc" : "asc");
-    setSortK(k);
-  };
+  const sort = (k: string) => { setSortD(sortK === k && sortD === "asc" ? "desc" : "asc"); setSortK(k); };
   const sorted = [...items].sort((a, b) => {
     const d = sortD === "asc" ? 1 : -1;
     if (sortK === "cost") return (a.cost - b.cost) * d;
     return a.name.localeCompare(b.name) * d;
   });
 
-  const yesNoLabels = {
-    yes: t("common:labels.yes"),
-    no: t("common:labels.no"),
-  };
-  const fieldMeta = (key: string): FieldMeta | undefined => {
-    const f = allFields.find((fd) => fd.key === key);
-    return f ? ({ ...f, typeKeys } as FieldMeta) : undefined;
-  };
-  const extraCell = (item: CostItem) =>
-    extraColumns.map((key) => (
-      <TableCell key={key} align="right">
-        {formatFieldValue(
-          (item.attributes as Record<string, unknown> | undefined)?.[key],
-          fieldMeta(key),
-          { optionLabel: optLabel, yes: yesNoLabels.yes, no: yesNoLabels.no },
-        )}
-      </TableCell>
-    ));
-  const yoyCell = (item: CostItem) => {
-    const prior = priorYearCosts.get(item.id);
-    const pct = prior && prior > 0 ? (item.cost - prior) / prior : null;
-    return (
-      <TableCell align="right">
-        {pct == null ? EMPTY_VALUE : `${pct >= 0 ? "+" : ""}${(pct * 100).toFixed(1)}%`}
-      </TableCell>
-    );
-  };
-
-  const Tip = ({
-    active,
-    payload,
-  }: {
-    active?: boolean;
-    payload?: {
-      payload: { name: string; cost: number; size: number; group?: string };
-    }[];
-  }) => {
-    if (!active || !payload?.[0]) return null;
-    const d = payload[0].payload;
-    return (
-      <Paper sx={{ p: 1.5 }} elevation={3}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-          {d.name}
-        </Typography>
-        {d.group && (
-          <Typography variant="caption" color="text.secondary" display="block">
-            {d.group}
-          </Typography>
-        )}
-        <Typography variant="caption" display="block">
-          {fmt.format(d.cost)}
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          {total > 0
-            ? t("cost.percentOfTotalValue", {
-                pct: ((d.cost / total) * 100).toFixed(1),
-              })
-            : ""}
-        </Typography>
-      </Paper>
-    );
-  };
-
   return (
-    <ReportShell<CostView>
+    <ReportShell
       title={t("cost.title")}
       icon="payments"
       iconColor="#2e7d32"
       view={view}
       onViewChange={setView}
-      chartViewLabel={t("cost.treemapChartView")}
-      extraViews={[
-        {
-          value: "sankey",
-          icon: "waterfall_chart",
-          label: t("cost.sankeyChartView"),
-        },
-      ]}
       chartRef={chartRef}
       onSaveReport={captureAndSave}
       savedReportName={saved.savedReportName ?? undefined}
@@ -1011,25 +695,16 @@ export default function CostReport() {
       printParams={printParams}
       toolbar={
         <>
-          <TextField
-            select
-            size="small"
-            label={t("cost.cardType")}
-            value={cardTypeKey}
-            onChange={(e) => setCardTypeKey(e.target.value)}
-            sx={{ minWidth: 150 }}
-          >
-            {typeOptions.map((o) => (
-              <MenuItem key={o.key} value={o.key}>
-                {o.label}
-              </MenuItem>
-            ))}
+          <TextField select size="small" label={t("cost.cardType")} value={cardTypeKey} onChange={(e) => { setCardTypeKey(e.target.value); setDrillStack([]); }} sx={{ minWidth: 150 }}>
+            {readableTypes.filter((tp) => !tp.is_hidden).map((tp) => <MenuItem key={tp.key} value={tp.key}>{typeLabel(tp)}</MenuItem>)}
           </TextField>
-          {!combined && (
+          {/* Hidden while drilled: at depth >= 1 the cards are of the related
+              type, so a scope over the root type has nothing to say. */}
+          {drillStack.length === 0 && (
             <CardScopeFilter
               types={cardTypeKey}
               value={effectiveScopeIds}
-              onChange={setScopeIds}
+              onChange={applyScopeChange}
               labelAll={t("cost.scopeAll")}
               labelCount={(count) => t("cost.scopeCount", { count })}
               dialogTitle={t("cost.scopeDialogTitle")}
@@ -1037,106 +712,76 @@ export default function CostReport() {
               tooltip={t("cost.scopeTooltip")}
             />
           )}
-          {costFields.length > 1 && (
-            <TextField
-              select
-              size="small"
-              label={t("cost.costField")}
-              value={costField}
-              onChange={(e) => setCostField(e.target.value)}
-              sx={{ minWidth: 160 }}
-            >
-              {costFields.map((f) => (
-                <MenuItem key={f.key} value={f.key}>
-                  {f.label}
-                </MenuItem>
-              ))}
+          {aggregateOptions.length > 0 && (
+            <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+              <TextField
+                select
+                size="small"
+                label={t("cost.costSource")}
+                value={costSources}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCostSources(typeof v === "string" ? v.split(",").filter(Boolean) : (v as string[]));
+                  setDrillStack([]);
+                }}
+                SelectProps={{
+                  multiple: true,
+                  displayEmpty: true,
+                  renderValue: (selected) => {
+                    const arr = selected as string[];
+                    if (arr.length === 0) return t("cost.costSourceDirect");
+                    if (arr.length === 1) {
+                      return aggregateOptions.find((o) => o.value === arr[0])?.label ?? arr[0];
+                    }
+                    return t("cost.costSourceMultiple", { count: arr.length });
+                  },
+                }}
+                sx={{ minWidth: 200 }}
+              >
+                {aggregateOptions.map((s) => (
+                  <MenuItem key={s.value} value={s.value}>
+                    <Checkbox checked={costSources.includes(s.value)} size="small" />
+                    <ListItemText primary={s.label} />
+                  </MenuItem>
+                ))}
+              </TextField>
+              <Tooltip title={t("cost.costSourceHelp")} arrow placement="bottom">
+                <Box
+                  component="span"
+                  tabIndex={0}
+                  aria-label={t("cost.costSourceHelp")}
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    color: "text.secondary",
+                    cursor: "help",
+                  }}
+                >
+                  <MaterialSymbol icon="help" size={18} />
+                </Box>
+              </Tooltip>
+            </Box>
+          )}
+          {activeAggregates.length === 0 && costFields.length > 1 && (
+            <TextField select size="small" label={t("cost.costField")} value={costField} onChange={(e) => { setCostField(e.target.value); setDrillStack([]); }} sx={{ minWidth: 160 }}>
+              {costFields.map((f) => <MenuItem key={f.key} value={f.key}>{f.label}</MenuItem>)}
             </TextField>
           )}
 
-          <TextField
-            select
-            size="small"
-            label={t("cost.groupBy")}
-            value={effectiveGroupBy}
-            onChange={(e) => setGroupBy(e.target.value)}
-            disabled={groupOptions.length === 0}
-            helperText={
-              groupOptions.length === 0 ? t("cost.groupByUnavailable") : undefined
-            }
-            sx={{ minWidth: 150 }}
-          >
-            <MenuItem value="">{t("cost.groupByNone")}</MenuItem>
-            {groupOptions.map((o) => (
-              <MenuItem key={o.value} value={o.value}>
-                {o.label}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          {view === "table" && allFields.length > 0 && (
-            <TextField
-              select
-              size="small"
-              label={t("cost.columns")}
-              value={extraColumns}
-              onChange={(e) => {
-                const v = e.target.value;
-                setExtraColumns(
-                  typeof v === "string" ? v.split(",") : (v as string[]),
-                );
-              }}
-              SelectProps={{
-                multiple: true,
-                renderValue: (selected) =>
-                  (selected as string[]).length
-                    ? String((selected as string[]).length)
-                    : t("cost.columnsNone"),
-              }}
-              sx={{ minWidth: 150 }}
-            >
-              {allFields.map((f) => (
-                <MenuItem key={f.key} value={f.key}>
-                  <Checkbox checked={extraColumns.includes(f.key)} />
-                  <ListItemText primary={f.label} />
-                </MenuItem>
-              ))}
+          {view === "table" && !drillFrame && groupableFields.length > 0 && (
+            <TextField select size="small" label={t("cost.groupBy")} value={groupBy} onChange={(e) => setGroupBy(e.target.value)} sx={{ minWidth: 150 }}>
+              <MenuItem value="">{t("common:labels.none")}</MenuItem>
+              {groupableFields.map((f) => <MenuItem key={f.key} value={f.key}>{f.label}</MenuItem>)}
             </TextField>
           )}
-
-          <TextField
-            select
-            size="small"
-            label={t("cost.fiscalYear")}
-            value={fiscalYearParam ?? ""}
-            // "" is the "Current" entry; without this MUI shows it as blank.
-            slotProps={{ select: { displayEmpty: true } }}
-            onChange={(e) =>
-              setFiscalYearParam(
-                e.target.value === "" ? null : Number(e.target.value),
-              )
-            }
-            sx={{ minWidth: 130 }}
-          >
-            {fiscalYearOptions.map((o) => (
-              <MenuItem key={o.label} value={o.value ?? ""}>
-                {o.label}
-              </MenuItem>
-            ))}
-          </TextField>
 
           {fiscalYear && (
-            // The live-card rule only describes the current year; other years list every card with a recorded cost.
-            <Tooltip
-              title={fiscalYearParam == null ? t("cost.fiscalYearHelp") : ""}
-              arrow
-              placement="bottom"
-            >
+            <Tooltip title={t("cost.fiscalYearHelp")} arrow placement="bottom">
               <Chip
                 variant="outlined"
                 icon={<MaterialSymbol icon="calendar_month" size={18} />}
                 label={t("cost.fiscalYearIndicator", {
-                  fy: costFiscalYearName(fiscalYear.year, currentFiscalYear),
+                  fy: fiscalYearLabel(fiscalYear.year, fiscalYear.start, t),
                 })}
                 data-testid="cost-fiscal-year"
               />
@@ -1147,271 +792,146 @@ export default function CostReport() {
     >
       {/* Summary strip */}
       <Box sx={{ display: "flex", gap: 2, mb: 3, flexWrap: "wrap" }}>
-        <MetricCard
-          label={t("cost.totalCost")}
-          value={fmt.format(summaryTotal)}
-          icon="payments"
-          iconColor="#2e7d32"
-          color="#2e7d32"
-        />
-        <MetricCard
-          label={t("cost.items")}
-          value={summaryCards.length}
-          icon="inventory_2"
-        />
-        <MetricCard
-          label={t("cost.average")}
-          value={fmt.format(avgCost)}
-          icon="calculate"
-        />
+        <MetricCard label={t("cost.totalCost")} value={fmt.format(total)} icon="payments" iconColor="#2e7d32" color="#2e7d32" />
+        <MetricCard label={t("cost.items")} value={items.length} icon="inventory_2" />
+        <MetricCard label={t("cost.average")} value={fmt.format(avgCost)} icon="calculate" />
         {topDriver && (
           <MetricCard
             label={t("cost.topCostDriver")}
             value={topDriver.name}
-            subtitle={`${fmt.format(topDriver.cost)} (${summaryTotal > 0 ? ((topDriver.cost / summaryTotal) * 100).toFixed(0) : 0}%)`}
+            subtitle={`${fmt.format(topDriver.cost)} (${total > 0 ? ((topDriver.cost / total) * 100).toFixed(0) : 0}%)`}
             icon="trending_up"
             iconColor="#e65100"
           />
         )}
       </Box>
 
+      {/* Drill-down breadcrumb. Visible when at least one frame is on the
+          stack; clicking a segment pops to that level, clicking the root
+          clears the stack. Click affordance hint shown when drillable but
+          not yet drilled. */}
+      {drillStack.length > 0 && (
+        <Breadcrumbs sx={{ mb: 1.5 }} aria-label={t("cost.drillDown.path")}>
+          <Link
+            component="button"
+            type="button"
+            underline="hover"
+            color="inherit"
+            onClick={() => setDrillStack([])}
+            sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: "0.875rem" }}
+          >
+            <MaterialSymbol icon="home" size={16} />
+            {t("cost.drillDown.allItems", { type: rootTypeLabel })}
+          </Link>
+          {drillStack.map((f, i) => {
+            const isLast = i === drillStack.length - 1;
+            return isLast ? (
+              <Typography key={f.cardId} color="text.primary" sx={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                {f.cardName}
+              </Typography>
+            ) : (
+              <Link
+                key={f.cardId}
+                component="button"
+                type="button"
+                underline="hover"
+                color="inherit"
+                onClick={() => setDrillStack((s) => s.slice(0, i + 1))}
+                sx={{ fontSize: "0.875rem" }}
+              >
+                {f.cardName}
+              </Link>
+            );
+          })}
+        </Breadcrumbs>
+      )}
+
       {view === "chart" ? (
         items.length === 0 ? (
           <Box sx={{ py: 8, textAlign: "center" }}>
-            <Typography color="text.secondary">
-              {t("cost.noCostData")}
-            </Typography>
+            <Typography color="text.secondary">{t("cost.noCostData")}</Typography>
           </Box>
         ) : (
-          <>
-            {showForecast && components.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <CostTrendChart
-                  typeParam={typeParam(cardTypeKey)}
-                  costField={costField}
-                  components={components}
-                  years={trendYears}
-                  currentFiscalYear={currentFiscalYear}
-                />
-              </Box>
-            )}
-            <FullscreenPanel label={t("cost.fullscreen")}>
-            {(isFullscreen) => (
-            <Paper variant="outlined" sx={{ p: 1, ...(isFullscreen && { flex: 1, minHeight: 0 }) }}>
-              <ResponsiveContainer width="100%" height={isFullscreen ? "100%" : 450}>
-                <Treemap
-                  data={treemapData}
-                  dataKey="size"
-                  stroke="#fff"
-                  animationDuration={300}
-                  content={
-                    <TreemapContent
-                      x={0}
-                      y={0}
-                      width={0}
-                      height={0}
-                      name=""
-                      cost={0}
-                      index={0}
-                      costFmt={fmt}
-                      onCellClick={handleRectClick}
-                      isRtl={isRtl}
-                    />
-                  }
-                >
-                  <RTooltip content={<Tip />} />
-                </Treemap>
-              </ResponsiveContainer>
-            </Paper>
-            )}
-            </FullscreenPanel>
-          </>
-        )
-      ) : view === "sankey" ? (
-        !sankeyView || sankeyView.nodes.length === 0 ? (
-          <Box sx={{ py: 8, textAlign: "center" }}>
-            <Typography color="text.secondary">
-              {t("cost.noCostData")}
-            </Typography>
+          <Box
+            sx={{
+              display: "grid",
+              gap: 2,
+              // Drilled multi-source levels lay out as 2 columns on md+, 1 on
+              // narrow viewports. Single-panel always uses 1 column.
+              gridTemplateColumns: panelCharts.length > 1
+                ? { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }
+                : "1fr",
+            }}
+          >
+            {panelCharts.map((panel, idx) => (
+              <CostTreemapPanel
+                key={panel.source ? panel.source.label : `root-${idx}`}
+                source={panel.source}
+                total={panel.total}
+                data={panel.data}
+                panelHeight={panelCharts.length > 1 ? 360 : 450}
+                showDrillHint={canDrill && drillStack.length === 0}
+                clickable={canDrill}
+                chrome={chartTheme}
+                fmt={fmt}
+                onTileClick={handleTileClick}
+              />
+            ))}
           </Box>
-        ) : (
-          <FullscreenPanel label={t("cost.fullscreen")}>
-            {(isFullscreen) => (
-              <Paper
-                variant="outlined"
-                sx={{ p: 1, ...(isFullscreen && { flex: 1, minHeight: 0 }) }}
-                data-testid="cost-sankey-panel"
-              >
-                <ResponsiveContainer width="100%" height={isFullscreen ? "100%" : 450}>
-                  <Sankey
-                    data={sankeyView}
-                    nodeWidth={14}
-                    nodePadding={20}
-                    margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
-                    node={<CostSankeyNode isRtl={isRtl} />}
-                  />
-                </ResponsiveContainer>
-              </Paper>
-            )}
-          </FullscreenPanel>
         )
       ) : (
         <Paper variant="outlined" sx={{ overflow: "auto" }}>
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell>
-                  <TableSortLabel
-                    active={sortK === "name"}
-                    direction={sortK === "name" ? sortD : "asc"}
-                    onClick={() => sort("name")}
-                  >
-                    {t("common:labels.name")}
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align="right">
-                  <TableSortLabel
-                    active={sortK === "cost"}
-                    direction={sortK === "cost" ? sortD : "asc"}
-                    onClick={() => sort("cost")}
-                  >
-                    {t("cost.cost")}
-                  </TableSortLabel>
-                </TableCell>
+                <TableCell><TableSortLabel active={sortK === "name"} direction={sortK === "name" ? sortD : "asc"} onClick={() => sort("name")}>{t("common:labels.name")}</TableSortLabel></TableCell>
+                <TableCell align="right"><TableSortLabel active={sortK === "cost"} direction={sortK === "cost" ? sortD : "asc"} onClick={() => sort("cost")}>{t("cost.cost")}</TableSortLabel></TableCell>
                 <TableCell align="right">{t("cost.percentOfTotal")}</TableCell>
-                {fiscalYearParam != null && (
-                  <TableCell align="right">{t("cost.yoyPercent")}</TableCell>
-                )}
-                {extraColumns.map((key) => (
-                  <TableCell key={key} align="right">
-                    {allFields.find((f) => f.key === key)?.label ?? key}
-                  </TableCell>
-                ))}
               </TableRow>
             </TableHead>
             <TableBody>
-              {groups
-                ? groups.map((g) => {
-                    const groupSorted = [...g.items].sort((a, b) => {
-                      const d = sortD === "asc" ? 1 : -1;
-                      if (sortK === "cost") return (a.cost - b.cost) * d;
-                      return a.name.localeCompare(b.name) * d;
-                    });
-                    return [
-                      <TableRow
-                        key={`grp-${g.key}`}
-                        sx={{ bgcolor: "action.hover" }}
-                      >
-                        <TableCell
-                          sx={{ fontWeight: 700, fontSize: "0.85rem" }}
-                        >
-                          {g.label}
-                          <Typography
-                            component="span"
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ ml: 1 }}
-                          >
-                            ({g.items.length})
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 700 }}>
-                          {fmt.format(g.cost)}
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontWeight: 600, color: "text.secondary" }}
-                        >
-                          {total > 0
-                            ? `${((g.cost / total) * 100).toFixed(1)}%`
-                            : "—"}
-                        </TableCell>
-                        {fiscalYearParam != null && (
-                          <TableCell align="right" sx={{ fontWeight: 700 }} />
-                        )}
-                        {extraColumns.map((key) => (
-                          <TableCell
-                            key={key}
-                            align="right"
-                            sx={{ fontWeight: 700 }}
-                          >
-                            {fieldMeta(key)?.type === "cost"
-                              ? fmt.format(
-                                  g.items.reduce(
-                                    (s, it) =>
-                                      s +
-                                      costValue(
-                                        (
-                                          it.attributes as
-                                            | Record<string, unknown>
-                                            | undefined
-                                        )?.[key],
-                                      ),
-                                    0,
-                                  ),
-                                )
-                              : null}
-                          </TableCell>
-                        ))}
-                      </TableRow>,
-                      ...groupSorted.map((d) => (
-                        <TableRow
-                          key={d.id}
-                          hover
-                          sx={{ cursor: "pointer" }}
-                          onClick={() => setSidePanelCardId(d.id)}
-                        >
-                          <TableCell sx={{ fontWeight: 500, pl: 4 }}>
-                            {d.name}
-                          </TableCell>
-                          <TableCell align="right">
-                            {fmt.format(d.cost)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {total > 0
-                              ? `${((d.cost / total) * 100).toFixed(1)}%`
-                              : "—"}
-                          </TableCell>
-                          {fiscalYearParam != null && yoyCell(d)}
-                          {extraCell(d)}
-                        </TableRow>
-                      )),
-                    ];
-                  })
-                : sorted.map((d) => (
-                    <TableRow
-                      key={d.id}
-                      hover
-                      sx={{ cursor: "pointer" }}
-                      onClick={() => setSidePanelCardId(d.id)}
-                    >
-                      <TableCell sx={{ fontWeight: 500 }}>{d.name}</TableCell>
-                      <TableCell align="right">{fmt.format(d.cost)}</TableCell>
-                      <TableCell align="right">
-                        {total > 0
-                          ? `${((d.cost / total) * 100).toFixed(1)}%`
-                          : "—"}
+              {groups ? (
+                groups.map((g) => {
+                  const groupSorted = [...g.items].sort((a, b) => {
+                    const d = sortD === "asc" ? 1 : -1;
+                    if (sortK === "cost") return (a.cost - b.cost) * d;
+                    return a.name.localeCompare(b.name) * d;
+                  });
+                  return [
+                    <TableRow key={`grp-${g.label}`} sx={{ bgcolor: "action.hover" }}>
+                      <TableCell sx={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                        {g.label}
+                        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                          ({g.items.length})
+                        </Typography>
                       </TableCell>
-                      {fiscalYearParam != null && yoyCell(d)}
-                      {extraCell(d)}
-                    </TableRow>
-                  ))}
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>{fmt.format(g.cost)}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                        {total > 0 ? `${((g.cost / total) * 100).toFixed(1)}%` : "\u2014"}
+                      </TableCell>
+                    </TableRow>,
+                    ...groupSorted.map((d) => (
+                      <TableRow key={d.id} hover sx={{ cursor: "pointer" }} onClick={() => setSidePanelCardId(d.id)}>
+                        <TableCell sx={{ fontWeight: 500, pl: 4 }}>{d.name}</TableCell>
+                        <TableCell align="right">{fmt.format(d.cost)}</TableCell>
+                        <TableCell align="right">{total > 0 ? `${((d.cost / total) * 100).toFixed(1)}%` : "\u2014"}</TableCell>
+                      </TableRow>
+                    )),
+                  ];
+                })
+              ) : (
+                sorted.map((d) => (
+                  <TableRow key={d.id} hover sx={{ cursor: "pointer" }} onClick={() => setSidePanelCardId(d.id)}>
+                    <TableCell sx={{ fontWeight: 500 }}>{d.name}</TableCell>
+                    <TableCell align="right">{fmt.format(d.cost)}</TableCell>
+                    <TableCell align="right">{total > 0 ? `${((d.cost / total) * 100).toFixed(1)}%` : "\u2014"}</TableCell>
+                  </TableRow>
+                ))
+              )}
               <TableRow sx={{ bgcolor: "action.selected" }}>
-                <TableCell sx={{ fontWeight: 700 }}>
-                  {t("cost.total")}
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  {fmt.format(total)}
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  100%
-                </TableCell>
-                {fiscalYearParam != null && (
-                  <TableCell align="right" sx={{ fontWeight: 700 }} />
-                )}
-                {extraColumns.map((key) => (
-                  <TableCell key={key} align="right" />
-                ))}
+                <TableCell sx={{ fontWeight: 700 }}>{t("cost.total")}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>{fmt.format(total)}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>100%</TableCell>
               </TableRow>
             </TableBody>
           </Table>

@@ -4,7 +4,7 @@ Siden **Indstillinger** under **Admin → Indstillinger** (`/admin/settings`) er
 
 | Faneblad | URL | Hvad det styrer | Fuld vejledning |
 |-----|-----|------------------|------------|
-| **Generelt** | `/admin/settings?tab=general` | Udseende (logo, favicon, valuta, datoformat, aktiverede sprog, regnskabsår), e-mail-afsendelse, **modulkontakter** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Denne side |
+| **Generelt** | `/admin/settings?tab=general` | Udseende (logo, favicon, valuta, datoformat, aktiverede sprog, regnskabsår), e-mail-afsendelse, **modulkontakter** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button, TurboRPG-tilstand) | Denne side |
 | **Autentificering** | `/admin/settings?tab=authentication` | SSO-udbydere, registrering, adgangskodepolitik | [Autentificering og SSO](sso.md) |
 | **AI** | `/admin/settings?tab=ai` | LLM-udbyder, model, websøgningsbackend, AI-forslagskontakter pr. korttype | [AI-funktioner](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Massetilknytning af produkter til endoflife.date-poster | [End-of-Life (EOL)](eol.md) |
@@ -232,6 +232,26 @@ Ligesom versionstjekket er dette **kun en notifikation** — intet hentes eller 
 Vis eller skjul **Støt**-knappen i brugermenuen (avatar). Når den er skjult, ser brugerne ikke længere Støt-knappen i deres profilmenu. Støt-knappen — og dialogen, der forklarer, hvordan man støtter Turbo EA — er altid tilgængelig fra dette indstillingspanel, så administratorer stadig kan nå den, selv når den er skjult i menuen.
 
 Hvis din virksomhed sponsorerer Turbo EA og gerne vil have sit logo vist på turbo-ea.org, så kontakt [sponsorship@turbo-ea.org](mailto:sponsorship@turbo-ea.org).
+
+## TurboRPG (gamificeret datakvalitet)
+
+![Kontakt til TurboRPG-tilstand](../assets/img/da/95c_admin_settings_gamification.png)
+
+**TurboRPG-tilstand** gør datakvalitet til et spil. Slå dette til for at fejre hver gemning, der forbedrer et korts datakvalitet. Det er **slået fra** som standard og gælder for alle; der er ingen indstilling pr. bruger.
+
+Mens det er slået til, afspiller gemning af en ændring, der hæver et korts score, en kort belønning på kortsiden og i kortets eksempelpanel, som når man får liv i et spil:
+
+- et glødende grønt **+X%** (de point, som gemningen tilførte) forlader den gemte sektion – dens overskrift, hvor knappen Gem sidder – og flyver i en bue til **datakvalitetsringen**;
+- ved **nedslaget** blinker ringen, en glorie og et skær i scorens farve breder sig fra den, et glimt fejer hen over den, den popper, dens fyld vokser til den nye score som en livsbjælke, og tallet tæller op;
+- på kortsiden bliver en slank **scorebjælke** med kortets navn og score hæftet under den øverste bjælke, når du er scrollet forbi kortets overskrift; så længe den vises, flyver gevinsten i stedet hen til den. Klik på barens score – chippen med pilen – for at åbne den samme opdeling af datakvaliteten som ved ringen.
+
+En gemning fra overskriften (navnet eller undertypen) eller fra sektionen End of Life har ingen sektion at flyve fra, så **+X%** stiger blot op over ringen.
+
+To øjeblikke tæller som **milepæle** og får et kort konfettiregn med en billedtekst: at nå det grønne bånd (**80%** og derover, *Færdig!*) og at nå **100%** (*Perfekt score!*).
+
+En gemning, der **rydder eller fjerner data** og sænker scoren, afspiller den dæmpede omvendte version, så den opleves som point, der forlader scoren, og ikke som en straf: et rødt **−X%** flyver fra ringen tilbage til sektionen, bjælken tømmes – den tabte bredde vises kortvarigt i rødt – og tallet tæller ned og dæmpes et øjeblik. Der er intet blink, ingen glorie og intet konfettiregn.
+
+Brugere, der har slået **reduceret bevægelse** til i deres operativsystem, ser ingen bevægelse: intet flyver, scoren opdateres med det samme, og en statisk **+X%**-etiket (eller rød **−X%**) vises i to sekunder. Skærmlæsere annoncerer hver ændring én gang (for eksempel *+6,7% datakvalitet* eller *−6,7% datakvalitet*).
 
 ## TurboLens-indstillinger
 

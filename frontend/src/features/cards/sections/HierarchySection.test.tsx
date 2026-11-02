@@ -17,7 +17,12 @@
  *  - **An unconfigured type renders nothing**, so every install that has not
  *    opted in sees the section exactly as it was before the feature existed.
  */
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router";
+
+/** Related cards render as router links, so the section mounts in a router. */
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: MemoryRouter });
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -34,7 +39,11 @@ vi.mock("@/api/client", () => ({
   ApiError: class extends Error {},
 }));
 
-vi.mock("react-router", () => ({ useNavigate: () => vi.fn() }));
+// Partial mock: related cards render as router links, so `Link` must stay real.
+vi.mock("react-router", async () => {
+  const actual = await vi.importActual("react-router");
+  return { ...actual, useNavigate: () => vi.fn() };
+});
 
 /** Mutable so a test can run the type with no configured vocabulary. */
 const mm = vi.hoisted(() => ({
@@ -114,6 +123,14 @@ async function pick(user: ReturnType<typeof userEvent.setup>, button: HTMLElemen
   await user.click(await screen.findByRole("combobox", { name: /link type/i }));
   await user.click(await screen.findByRole("option", { name: option }));
 }
+
+describe("HierarchySection anchor", () => {
+  it("carries the id a save's flying gain leaves from", async () => {
+    const { container } = render(<HierarchySection card={CARD} onUpdate={vi.fn()} />);
+    expect(await screen.findByText("Commercial")).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveAttribute("id", "card-section-hierarchy");
+  });
+});
 
 describe("HierarchySection link labels", () => {
   it("shows this card's own label on the parent line", async () => {

@@ -12,9 +12,14 @@ A parte superior do card mostra:
 - **Nome do card** — Editável inline
 - **Alias** — O outro nome do card, exibido sob o título quando definido. O lápis de edição do título permite alterar o nome e o alias em conjunto. Os aliases são considerados por todas as caixas de pesquisa, de modo que um card é encontrado pelo nome que a sua organização realmente usa.
 - **Subtipo** — Classificação secundária (se aplicável)
+- **Chip de origem** — Exibido quando o card não foi criado na interface web: **MCP** para um card criado por um assistente de IA pelo [servidor MCP](../admin/mcp.md), **API** para um script ou integração, **Extensão** para uma extensão instalada, **Sistema** para uma tarefa em segundo plano. Passe o mouse sobre ele para ver quem criou o card e quando — a pessoa continua sendo o criador; o chip indica qual canal ela usou. Cards criados na interface web, e cards criados antes de o Turbo EA registrar o canal, não exibem chip.
 - **Badge de status de aprovação** — Rascunho, Aprovado, Quebrado ou Rejeitado
 - **Botão de sugestão IA** — Clique para gerar uma descrição com IA (visível quando a IA está habilitada para este tipo de card e o usuário tem permissão de edição)
-- **Anel de qualidade dos dados** — Indicador visual da completude das informações (0-100%)
+- **Anel de qualidade dos dados** — Indicador visual da completude das informações (0-100%). Passe o cursor por cima para ver as três coisas que mais aumentariam a pontuação, cada uma com os pontos que acrescentaria (por exemplo *Preencher Criticidade de negócio +12,5%*). Clique nele (ou foque-o e pressione Enter) para abrir o detalhamento completo num painel à direita da página que permanece aberto enquanto edita: cada item ainda por preencher, ordenado pelo quanto acrescenta, e uma lista **Já contabilizado** com o que já está preenchido. Cada item ainda por preencher é um link: ao clicar, abre-se a seção onde ele é preenchido **em modo de edição**, com esse campo em foco (ou a caixa de diálogo **Adicionar relação** para o tipo de relação, o editor de etiquetas ou o formulário de adição da aba **Partes Interessadas**), e o painel continua aberto. Sem o direito de editar essa parte da ficha, o link apenas abre a seção e a página rola até ela. Enquanto um campo obrigatório estiver vazio, a pontuação permanece em 0%; o detalhamento nomeia esses campos e mostra qual seria a pontuação sem eles. Feche o painel com o botão **Fechar** do seu cabeçalho; o navegador lembra se ele está aberto, por isso continua lá na ficha seguinte. Numa janela com menos de 900 px de largura, abre-se em vez disso como uma gaveta, que se fecha quando segue um dos seus links.
+
+![Painel com o detalhamento da qualidade dos dados](../assets/img/pt/63_ficha_qualidade_dados_detalhamento.png)
+
+Quando um administrador ativa o [modo TurboRPG](../admin/settings.md#turborpg-qualidade-dos-dados-gamificada) (qualidade dos dados gamificada), cada gravação que aumenta a pontuação é celebrada como um ganho de vida num jogo: um **+X%** luminoso sai da secção que acabou de gravar, voa até à pontuação e atinge-a — o anel pisca e brilha, o seu preenchimento aumenta até à nova pontuação e o número vai subindo. Assim que se desloca para além do cabeçalho, uma fina barra de pontuação fixada sob a barra superior mantém a pontuação à vista e o ganho aterra nela. Clique na pontuação da barra — o chip com o chevron — para abrir o mesmo detalhe do anel. Atingir a faixa verde (80%) e atingir 100% são marcos com uma breve chuva de confete. Limpar ou remover dados reproduz o inverso atenuado: um **−X%** vermelho sai da pontuação de volta para a secção, e a barra esvazia-se e conta em sentido inverso, sem clarão nem confete. Com a redução de movimento ativada no sistema operativo, nada voa; vê, em vez disso, um **+X%** ou **−X%** estático.
 - **Menu de ações** — Arquivar, excluir e ações de aprovação. Também inclui uma ação de um clique **Observar este cartão** (quando o tipo de card define um papel de Observador), permitindo que qualquer usuário com permissão de leitura siga o card sem precisar abrir a aba Partes interessadas.
 
 ### Logótipo personalizado
@@ -114,6 +119,7 @@ Para tipos de card que suportam hierarquia (ex.: Organização, Capacidade de Ne
 
 - **Pai** — O card pai na hierarquia (clique para navegar)
 - **Filhos** — Lista de cards filhos (clique em qualquer um para navegar)
+- **Abrir em nova aba** — O pai, os filhos e o breadcrumb são links: clique com o botão do meio ou com Ctrl/Cmd (ou clique direito → *Abrir em nova aba*) para abrir esse card em uma nova aba do navegador sem sair deste
 - **Agrupar por subtipo** — Quando um card tem muitos filhos de subtipos diferentes (por exemplo unidades de negócio, regiões e equipas sob uma mesma empresa), estes são agrupados automaticamente em secções recolhíveis por subtipo, cada uma com a sua contagem, com uma secção final **Sem subtipo** para os filhos não classificados. O botão agrupar/lista junto à contagem de **filhos** alterna entre a vista agrupada e a lista simples.
 - **Breadcrumb de hierarquia** — Mostra o caminho completo da raiz até o card atual
 - **Tipo de ligação** — Quando um administrador configurou tipos de ligação para este tipo de card, cada ligação pai-filho pode ser rotulada — por exemplo, uma subsidiária *comercial* e outra de *vendas*. O rótulo pertence ao card filho: o card pai mostra-o ao lado de cada filho, e o card filho ao lado do seu pai. Remover um card ou movê-lo para o nível superior limpa o seu rótulo, e a alteração fica registada na aba **Histórico**.
@@ -122,7 +128,7 @@ Para tipos de card que suportam hierarquia (ex.: Organização, Capacidade de Ne
 
 Mostra todas as conexões com outros cards, agrupadas por tipo de relacionamento. Para cada relacionamento:
 
-- **Nome do card relacionado** — Clique para navegar até o card relacionado
+- **Nome do card relacionado** — Clique para navegar até o card relacionado. Clique com o botão do meio ou com Ctrl/Cmd (ou clique direito → *Abrir em nova aba*) para abri-lo em uma nova aba do navegador — o mesmo vale para a lista **+N em subelementos**, para as listas de linhagem e para o hover card de uma parte interessada
 - **Tipo de relacionamento** — A natureza da conexão (ex.: "utiliza", "roda em", "depende de")
 - **Adicionar relacionamento** — Clique em **+** para abrir a caixa desse relacionamento. Ela lista os cartões correspondentes enquanto você digita (as melhores correspondências primeiro, e mais são carregados ao rolar) e oculta os já ligados, com uma legenda indicando quantos são. Clicar num cartão liga-o de imediato e ele aparece como etiqueta no topo — clique no **×** de uma etiqueta para desfazer essa adição. A caixa permanece aberta para adicionar quantos quiser e no telemóvel abre em ecrã inteiro. Os relacionamentos sem secção própria são alcançados pelo botão **Adicionar relacionamento** no fim da secção. Quando o tipo ligado é hierárquico (capacidade de negócio, organização e afins), a caixa mostra-o como uma árvore indentada em vez de uma lista alfabética, para que possa escolher uma subcapacidade pelo seu ramo. A pesquisa mantém visíveis os pais de cada correspondência como contexto, e os cartões que não pode escolher (já ligados, acabados de adicionar ou o próprio cartão) permanecem no lugar a cinzento, para que os níveis à volta continuem a fazer sentido.
 - **Ordenação** — Os cartões relacionados são listados em ordem alfabética por nome
@@ -166,7 +172,7 @@ Se o card estiver vinculado a um produto do [endoflife.date](https://endoflife.d
 
 - **Adicionar comentários** — Deixe notas, perguntas ou decisões sobre o componente
 - **Respostas em thread** — Responda a comentários específicos para criar conversações encadeadas
-- **Timestamps** — Veja quando cada comentário foi postado e por quem
+- **Timestamps** — Veja quando cada comentário foi postado e por quem. Um comentário publicado por um assistente de IA pelo servidor MCP traz um chip **MCP** ao lado do autor
 - **Links** — Um endereço web em um comentário é clicável e abre em uma nova aba
 
 ## Aba de Tarefas
@@ -204,6 +210,8 @@ O caminho de convite requer a permissão **`users.invite`**, uma forma delegada 
 ## Aba de Histórico
 
 ![Histórico de Alterações do Card](../assets/img/pt/08_ficha_historico.png)
+
+Uma alteração que não veio da interface web traz um chip ao lado do nome da pessoa: **MCP** quando um assistente de IA a fez pelo [servidor MCP](../admin/mcp.md) em nome dessa pessoa, ou **API**, **Extensão** ou **Sistema** nos demais casos.
 
 Mostra a **trilha de auditoria completa** das alterações feitas no card: **quem** fez a alteração, **quando** foi feita e **o que** foi modificado (valor anterior vs. novo valor). Isso permite total rastreabilidade de todas as modificações ao longo do tempo.
 

@@ -4,7 +4,7 @@ A página de **Configurações** em **Admin → Configurações** (`/admin/setti
 
 | Aba | URL | O que controla | Guia completo |
 |-----|-----|----------------|---------------|
-| **Geral** | `/admin/settings?tab=general` | Aparência (logo, favicon, moeda, formato de data, idiomas habilitados, ano fiscal), envio de e-mail, **alternâncias de módulos** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Esta página |
+| **Geral** | `/admin/settings?tab=general` | Aparência (logo, favicon, moeda, formato de data, idiomas habilitados, ano fiscal), envio de e-mail, **alternâncias de módulos** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button, Modo TurboRPG) | Esta página |
 | **Autenticação** | `/admin/settings?tab=authentication` | Provedores SSO, registro, política de senha | [Autenticação e SSO](sso.md) |
 | **IA** | `/admin/settings?tab=ai` | Provedor LLM, modelo, backend de busca web, alternâncias de sugestão IA por tipo de card | [Capacidades de IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Vinculação em massa de produtos a entradas de endoflife.date | [Fim de vida (EOL)](eol.md) |
@@ -232,6 +232,26 @@ Tal como a verificação de versões, isto é **apenas informativo** — nada é
 Mostre ou oculte o botão **Apoiar** no menu de utilizador (avatar). Quando está oculto, os utilizadores deixam de ver o botão Apoiar no seu menu de perfil. O botão Apoiar — e a caixa de diálogo que explica como apoiar o Turbo EA — permanece sempre disponível neste painel de definições, pelo que os administradores ainda conseguem aceder-lhe mesmo quando está oculto no menu.
 
 Se a sua empresa apoia o Turbo EA e gostaria que o seu logótipo fosse divulgado em turbo-ea.org, contacte [sponsorship@turbo-ea.org](mailto:sponsorship@turbo-ea.org).
+
+## TurboRPG (qualidade dos dados gamificada)
+
+![Botão do modo TurboRPG](../assets/img/pt/95c_admin_config_gamificacao.png)
+
+O **modo TurboRPG** transforma a qualidade dos dados num jogo. Ative esta opção para celebrar cada gravação que melhora a qualidade dos dados de uma ficha. Está **desativada** por predefinição e aplica-se a todos; não existe uma definição por utilizador.
+
+Enquanto estiver ativa, gravar uma alteração que aumenta a pontuação de uma ficha reproduz uma breve recompensa na página da ficha e no painel de pré-visualização da ficha, como ao ganhar vida num jogo:
+
+- um **+X%** verde luminoso (os pontos que a gravação acrescentou) sai da secção gravada — o seu cabeçalho, onde está o botão Guardar — e voa em arco até ao **anel de qualidade dos dados**;
+- no **impacto**, o anel pisca, um halo e um brilho da cor da pontuação espalham-se a partir dele, um reflexo percorre-o, ele cresce, o seu preenchimento aumenta até à nova pontuação como uma barra de vida, e o número vai subindo;
+- na página da ficha, assim que se desloca para além do cabeçalho da ficha, uma fina **barra de pontuação** fica fixada sob a barra superior com o nome e a pontuação da ficha; enquanto estiver visível, o ganho voa para ela. Clique na pontuação da barra — o chip com o chevron — para abrir o mesmo detalhe da qualidade dos dados do anel.
+
+Uma gravação feita a partir do cabeçalho (o nome ou o subtipo) ou da secção End of Life não tem nenhuma secção de onde partir, pelo que o **+X%** simplesmente sobe acima do anel.
+
+Dois momentos contam como **marcos** e recebem uma breve chuva de confete com uma legenda: atingir a faixa verde (**80%** ou mais, *Completo!*) e atingir **100%** (*Pontuação perfeita!*).
+
+Uma gravação que **limpa ou remove dados** e baixa a pontuação reproduz o inverso atenuado, para que se leia como pontos que saem e não como uma penalização: um **−X%** vermelho sai do anel de volta para a secção, a barra esvazia-se — a largura perdida fica a vermelho por instantes — e o número conta em sentido inverso e esbate-se brevemente. Não há clarão, halo nem confete.
+
+Os utilizadores que ativaram a **redução de movimento** no sistema operativo não veem qualquer movimento: nada voa, a pontuação é atualizada de imediato e surge uma etiqueta **+X%** (ou **−X%** vermelho) estática durante dois segundos. Os leitores de ecrã anunciam cada alteração uma só vez (por exemplo, *+6,7% de qualidade dos dados* ou *−6,7% de qualidade dos dados*).
 
 ## Configurações do TurboLens
 

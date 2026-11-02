@@ -103,6 +103,8 @@ A pontuação de **qualidade dos dados** de um card mede de forma ponderada o qu
 
 **Os campos obrigatórios prevalecem sobre a pontuação.** Enquanto algum campo obrigatório de um card estiver vazio, sua pontuação permanece em **0** independentemente dos pesos — o cálculo ponderado só se aplica quando todos os campos obrigatórios estiverem preenchidos (campos booleanos e somente leitura estão isentos; veja a configuração **Obrigatório** acima).
 
+Um campo conta como preenchido assim que contém um valor. Num campo Sim / Não contam tanto **Sim** como **Não** — apenas **Nenhum** está vazio — e um campo numérico conta quando contém 0.
+
 A importância de cada fator é definida com um controle deslizante simples de quatro níveis, que também mostra o número subjacente:
 
 - **Ignorar (0)** — excluído totalmente da pontuação.
@@ -113,6 +115,8 @@ A importância de cada fator é definida com um controle deslizante simples de q
 O painel lista os cinco **fatores integrados** — **Descrição**, **Ciclo de vida** (se alguma data de ciclo de vida estiver definida), **Relações obrigatórias**, **Etiquetas obrigatórias** e **Papéis das partes interessadas** (uma única posição, satisfeita assim que alguém é atribuído ao card num papel que conta para a qualidade dos dados) — seguidos de cada campo agrupado pela sua seção, cada um com o mesmo controle deslizante. Por exemplo, defina o **Ciclo de vida** como *Ignorar* para um tipo cujos cards legitimamente nunca têm datas, para que não sejam penalizados.
 
 Uma barra de **composição da pontuação** no topo do painel mostra a parcela de cada fator na pontuação máxima possível, para ver rapidamente quais fatores dominam. No layout do card da aba **Principal**, cada campo — e as seções integradas Descrição, Ciclo de vida e Relações — mostra um pequeno selo com o seu nível atual, para ver a ponderação sem sair dessa aba.
+
+Os usuários veem o resultado fator por fator no próprio card: passar o cursor pelo anel de qualidade dos dados lista os itens que mais aumentariam a pontuação, e um clique abre o detalhamento completo (veja [Detalhe do Card](../guide/card-details.md#cabecalho-do-card)).
 
 Alterar qualquer importância recalcula imediatamente a pontuação de todos os cards existentes desse tipo. Os campos novos são *Normal* por padrão, portanto contam para a pontuação assim que você os adiciona.
 

@@ -4,7 +4,7 @@ La página de **Configuración** en **Administrador → Configuración** (`/admi
 
 | Pestaña | URL | Qué controla | Guía completa |
 |---------|-----|--------------|---------------|
-| **General** | `/admin/settings?tab=general` | Apariencia (logo, favicon, moneda, formato de fecha, idiomas habilitados, año fiscal), envío de correo, **interruptores de módulos** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Esta página |
+| **General** | `/admin/settings?tab=general` | Apariencia (logo, favicon, moneda, formato de fecha, idiomas habilitados, año fiscal), envío de correo, **interruptores de módulos** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button, Modo TurboRPG) | Esta página |
 | **Autenticación** | `/admin/settings?tab=authentication` | Proveedores SSO, registro, política de contraseñas | [Autenticación y SSO](sso.md) |
 | **IA** | `/admin/settings?tab=ai` | Proveedor LLM, modelo, backend de búsqueda web, interruptores de sugerencia IA por tipo de tarjeta | [Capacidades de IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Vinculación masiva de productos a entradas de endoflife.date | [Fin de vida (EOL)](eol.md) |
@@ -232,6 +232,26 @@ Igual que la comprobación de versiones, esto es **solo informativo**: no se des
 Muestra u oculta el botón **Patrocinar** en el menú de usuario (avatar). Cuando está oculto, los usuarios ya no ven el botón Patrocinar en su menú de perfil. El botón Patrocinar — y el cuadro de diálogo que explica cómo apoyar Turbo EA — siempre permanece disponible desde este panel de configuración, por lo que los administradores aún pueden acceder a él incluso cuando está oculto en el menú.
 
 Si tu empresa patrocina Turbo EA y desea que su logotipo aparezca en turbo-ea.org, escribe a [sponsorship@turbo-ea.org](mailto:sponsorship@turbo-ea.org).
+
+## TurboRPG (calidad de datos gamificada)
+
+![Interruptor del modo TurboRPG](../assets/img/es/95c_admin_config_gamificacion.png)
+
+El **modo TurboRPG** convierte la calidad de datos en un juego. Actívela para celebrar cada guardado que mejore la calidad de datos de una ficha. Está **desactivada** de forma predeterminada y se aplica a todos; no existe un ajuste por usuario.
+
+Mientras está activa, guardar un cambio que aumenta la puntuación de una ficha reproduce una breve recompensa en la página de la ficha y en el panel de vista previa de la ficha, como al ganar vida en un videojuego:
+
+- un **+X%** verde brillante (los puntos que ha añadido el guardado) sale de la sección que ha guardado —su cabecera, donde está el botón Guardar— y vuela en arco hasta el **anillo de calidad de datos**;
+- en el **impacto**, el anillo destella, un halo y un resplandor del color de la puntuación se extienden desde él, un brillo lo barre, se agranda, su relleno crece hasta la nueva puntuación como una barra de vida, y la cifra va contando hacia arriba;
+- en la página de la ficha, una vez que se desplaza más allá de la cabecera de la ficha, una fina **barra de puntuación** permanece anclada bajo la barra superior con el nombre y la puntuación de la ficha; mientras se muestra, la mejora vuela hacia ella en su lugar. Haga clic en la puntuación de la barra —el chip con el chevrón— para abrir el mismo desglose de calidad de datos que el anillo.
+
+Un guardado hecho desde la cabecera (el nombre o el subtipo) o desde la sección End of Life no tiene ninguna sección de la que partir, así que el **+X%** simplemente sube sobre el anillo.
+
+Dos momentos cuentan como **hitos** y reciben una breve lluvia de confeti con un rótulo: alcanzar la franja verde (**80%** o más, *¡Completo!*) y alcanzar el **100%** (*¡Puntuación perfecta!*).
+
+Un guardado que **borra o elimina datos** y baja la puntuación reproduce el inverso atenuado, de modo que se lee como puntos que se van y no como una penalización: un **−X%** rojo sale del anillo de vuelta a la sección, la barra se vacía —el ancho perdido se muestra en rojo un instante— y la cifra cuenta hacia atrás y se atenúa brevemente. No hay destello, halo ni confeti.
+
+Los usuarios que han activado la **reducción de movimiento** en su sistema operativo no ven ningún movimiento: nada vuela, la puntuación se actualiza al instante y aparece una etiqueta **+X%** (o **−X%** rojo) estática durante dos segundos. Los lectores de pantalla anuncian cada cambio una sola vez (por ejemplo, *+6,7% de calidad de datos* o *−6,7% de calidad de datos*).
 
 ## Configuración de TurboLens
 

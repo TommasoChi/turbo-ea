@@ -542,19 +542,6 @@
         "title": "ApplyInstallIn",
         "type": "object"
       },
-      "ArchimateEnabledPayload": {
-        "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled"
-        ],
-        "title": "ArchimateEnabledPayload",
-        "type": "object"
-      },
       "ArchiveImpactCardRef": {
         "properties": {
           "id": {
@@ -3255,6 +3242,28 @@
             ],
             "title": "Created By"
           },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "created_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created Via"
+          },
           "data_quality": {
             "title": "Data Quality",
             "type": "number"
@@ -3403,6 +3412,28 @@
               }
             ],
             "title": "Updated By"
+          },
+          "updated_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By Name"
+          },
+          "updated_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated Via"
           }
         },
         "required": [
@@ -4684,48 +4715,6 @@
         "title": "ConnectionUpdate",
         "type": "object"
       },
-      "CostHistoryList": {
-        "properties": {
-          "rows": {
-            "items": {
-              "$ref": "#/components/schemas/CostHistoryRow"
-            },
-            "title": "Rows",
-            "type": "array"
-          }
-        },
-        "required": [
-          "rows"
-        ],
-        "title": "CostHistoryList",
-        "type": "object"
-      },
-      "CostHistoryRow": {
-        "properties": {
-          "field_key": {
-            "title": "Field Key",
-            "type": "string"
-          },
-          "fiscal_year": {
-            "maximum": 2200.0,
-            "minimum": 1900.0,
-            "title": "Fiscal Year",
-            "type": "integer"
-          },
-          "value": {
-            "minimum": 0.0,
-            "title": "Value",
-            "type": "number"
-          }
-        },
-        "required": [
-          "fiscal_year",
-          "field_key",
-          "value"
-        ],
-        "title": "CostHistoryRow",
-        "type": "object"
-      },
       "CurrencyPayload": {
         "properties": {
           "currency": {
@@ -4735,6 +4724,389 @@
           }
         },
         "title": "CurrencyPayload",
+        "type": "object"
+      },
+      "DashboardCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_roles": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Allowed Roles",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "pattern": "^[a-z0-9_]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "widgets": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardWidgetIn"
+            },
+            "maxItems": 60,
+            "title": "Widgets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "DashboardCreate",
+        "type": "object"
+      },
+      "DashboardDuplicate": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "DashboardDuplicate",
+        "type": "object"
+      },
+      "DashboardUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_roles": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Roles"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "pattern": "^[a-z0-9_]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "is_hidden": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Hidden"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "widgets": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DashboardWidgetIn"
+                },
+                "maxItems": 60,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Widgets"
+          }
+        },
+        "title": "DashboardUpdate",
+        "type": "object"
+      },
+      "DashboardWidgetIn": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/components/schemas/WidgetLayout"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "type": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "layout"
+        ],
+        "title": "DashboardWidgetIn",
+        "type": "object"
+      },
+      "DataQualityBreakdown": {
+        "description": "Why a card scores what it scores, factor by factor (#1334).",
+        "properties": {
+          "blocked_by_required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked By Required",
+            "type": "array"
+          },
+          "factors": {
+            "items": {
+              "$ref": "#/components/schemas/DataQualityFactor"
+            },
+            "title": "Factors",
+            "type": "array"
+          },
+          "filled_weight": {
+            "title": "Filled Weight",
+            "type": "number"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "total_weight": {
+            "title": "Total Weight",
+            "type": "number"
+          },
+          "ungated_score": {
+            "title": "Ungated Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "score",
+          "ungated_score",
+          "total_weight",
+          "filled_weight",
+          "blocked_by_required",
+          "factors"
+        ],
+        "title": "DataQualityBreakdown",
+        "type": "object"
+      },
+      "DataQualityFactor": {
+        "description": "One slot of a card's data-quality score (#1334).\n\nMetamodel only: a relation factor names its relation type and the other\nend's card *type*, never another card.",
+        "properties": {
+          "filled": {
+            "title": "Filled",
+            "type": "boolean"
+          },
+          "gain": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gain"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "field",
+              "description",
+              "lifecycle",
+              "relation",
+              "tag_group",
+              "stakeholders"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "other_type_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other Type Key"
+          },
+          "score_if_filled": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score If Filled"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "enum": [
+                  "source",
+                  "target"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "weight",
+          "filled"
+        ],
+        "title": "DataQualityFactor",
         "type": "object"
       },
       "DateFormatPayload": {
@@ -4915,25 +5287,14 @@
             ],
             "title": "Description"
           },
-          "kind": {
-            "default": "drawio",
-            "title": "Kind",
-            "type": "string"
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
           },
           "name": {
             "title": "Name",
             "type": "string"
-          },
-          "viewpoint_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Viewpoint Key"
           }
         },
         "required": [
@@ -5069,16 +5430,10 @@
             ],
             "title": "Description"
           },
-          "kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kind"
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
           },
           "name": {
             "anyOf": [
@@ -5871,37 +6226,6 @@
         "title": "ExtensionInstallOut",
         "type": "object"
       },
-      "ExtensionMcpManifestOut": {
-        "properties": {
-          "key": {
-            "title": "Key",
-            "type": "string"
-          },
-          "mcp_sdk_version": {
-            "title": "Mcp Sdk Version",
-            "type": "string"
-          },
-          "mcp_tools": {
-            "items": {
-              "$ref": "#/components/schemas/McpToolOut"
-            },
-            "title": "Mcp Tools",
-            "type": "array"
-          },
-          "version": {
-            "title": "Version",
-            "type": "string"
-          }
-        },
-        "required": [
-          "key",
-          "version",
-          "mcp_sdk_version",
-          "mcp_tools"
-        ],
-        "title": "ExtensionMcpManifestOut",
-        "type": "object"
-      },
       "ExtensionNotesOut": {
         "description": "Resolved release notes for one extension version.",
         "properties": {
@@ -6365,6 +6689,19 @@
         "title": "ForgotPasswordRequest",
         "type": "object"
       },
+      "GamificationEnabledPayload": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "GamificationEnabledPayload",
+        "type": "object"
+      },
       "GrcEnabledPayload": {
         "properties": {
           "enabled": {
@@ -6538,6 +6875,112 @@
           "instance_id"
         ],
         "title": "InstanceOut",
+        "type": "object"
+      },
+      "LeaderboardResponse": {
+        "description": "The ``top`` ranked people; ``total_people`` is how many reach\n``min_cards`` before ``top`` cuts the list.",
+        "properties": {
+          "card_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Card Types",
+            "type": "array"
+          },
+          "counting_roles_only": {
+            "default": true,
+            "title": "Counting Roles Only",
+            "type": "boolean"
+          },
+          "min_cards": {
+            "default": 3,
+            "title": "Min Cards",
+            "type": "integer"
+          },
+          "rank_by": {
+            "default": "average_quality",
+            "enum": [
+              "average_quality",
+              "card_count"
+            ],
+            "title": "Rank By",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "top": {
+            "default": 10,
+            "title": "Top",
+            "type": "integer"
+          },
+          "total_people": {
+            "title": "Total People",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total_people"
+        ],
+        "title": "LeaderboardResponse",
+        "type": "object"
+      },
+      "LeaderboardRow": {
+        "properties": {
+          "average_quality": {
+            "title": "Average Quality",
+            "type": "number"
+          },
+          "cards": {
+            "title": "Cards",
+            "type": "integer"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/LeaderboardUser"
+          }
+        },
+        "required": [
+          "rank",
+          "user",
+          "cards",
+          "average_quality"
+        ],
+        "title": "LeaderboardRow",
+        "type": "object"
+      },
+      "LeaderboardUser": {
+        "description": "A person on the board \u2014 the least-privilege user payload, never more.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "title": "LeaderboardUser",
         "type": "object"
       },
       "LicenseIn": {
@@ -7048,56 +7491,6 @@
           }
         },
         "title": "McpSettingsPayload",
-        "type": "object"
-      },
-      "McpToolOut": {
-        "properties": {
-          "annotations": {
-            "additionalProperties": true,
-            "title": "Annotations",
-            "type": "object"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "dry_run_supported": {
-            "default": false,
-            "title": "Dry Run Supported",
-            "type": "boolean"
-          },
-          "input_schema": {
-            "additionalProperties": true,
-            "title": "Input Schema",
-            "type": "object"
-          },
-          "method": {
-            "title": "Method",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "required_permission": {
-            "title": "Required Permission",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "description",
-          "method",
-          "path",
-          "input_schema",
-          "annotations",
-          "required_permission"
-        ],
-        "title": "McpToolOut",
         "type": "object"
       },
       "MessageFlowUpdate": {
@@ -7919,29 +8312,6 @@
               }
             ],
             "title": "Data"
-          },
-          "entity_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entity Id"
-          },
-          "entity_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entity Type"
           },
           "event_type": {
             "title": "Event Type",
@@ -13264,6 +13634,17 @@
             ],
             "title": "Created By"
           },
+          "created_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created Via"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -13440,6 +13821,17 @@
               }
             ],
             "title": "Updated At"
+          },
+          "updated_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated Via"
           }
         },
         "required": [
@@ -16518,11 +16910,9 @@
           "dashboard_default_tab": {
             "anyOf": [
               {
-                "enum": [
-                  "overview",
-                  "workspace",
-                  "admin"
-                ],
+                "maxLength": 60,
+                "minLength": 1,
+                "pattern": "^[a-z0-9_-]+$",
                 "type": "string"
               },
               {
@@ -16884,19 +17274,6 @@
         "title": "UserUpdate",
         "type": "object"
       },
-      "ValidateBody": {
-        "properties": {
-          "xml": {
-            "title": "Xml",
-            "type": "string"
-          }
-        },
-        "required": [
-          "xml"
-        ],
-        "title": "ValidateBody",
-        "type": "object"
-      },
       "ValidateRequest": {
         "properties": {
           "formula": {
@@ -16954,19 +17331,6 @@
           "type"
         ],
         "title": "ValidationError",
-        "type": "object"
-      },
-      "ValueChainEnabledPayload": {
-        "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled"
-        ],
-        "title": "ValueChainEnabledPayload",
         "type": "object"
       },
       "VendorAnalysisOut": {
@@ -17388,6 +17752,69 @@
           }
         },
         "title": "WebPortalUpdate",
+        "type": "object"
+      },
+      "WidgetLayout": {
+        "additionalProperties": false,
+        "properties": {
+          "h": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "H",
+            "type": "integer"
+          },
+          "minH": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minh"
+          },
+          "minW": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minw"
+          },
+          "w": {
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "W",
+            "type": "integer"
+          },
+          "x": {
+            "maximum": 11.0,
+            "minimum": 0.0,
+            "title": "X",
+            "type": "integer"
+          },
+          "y": {
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "title": "WidgetLayout",
         "type": "object"
       },
       "WorkspaceTransferOut": {
@@ -19897,45 +20324,6 @@
         ]
       }
     },
-    "/api/v1/archimate/validate": {
-      "post": {
-        "operationId": "validate_api_v1_archimate_validate_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ValidateBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Validate",
-        "tags": [
-          "archimate"
-        ]
-      }
-    },
     "/api/v1/auth/forgot-password": {
       "post": {
         "description": "Initiate a password reset \u2014 or first-time password setup \u2014 for a local account.\n\nAnti-enumeration: always returns `{\"ok\": True}` regardless of whether the\nemail matches a user. An email is only sent for an active local account when\nSMTP is configured, and its shape depends on the account's state:\n\n- The account already has a password \u2192 a one-hour **reset** link.\n- The account has no password but a setup token (created without a\n  password, e.g. via a stakeholder invite left un-emailed) \u2192 a **set-password**\n  link so the user can self-serve on first login. A missing setup token is\n  minted here so the account is never permanently locked out.\n\nSSO-only accounts (no password, marked `auth_provider=\"sso\"`) get nothing.",
@@ -20656,47 +21044,6 @@
         "summary": "Bookmark Odata Feed",
         "tags": [
           "bookmarks"
-        ]
-      }
-    },
-    "/api/v1/bpm/organizations/{organization_id}/processes": {
-      "get": {
-        "description": "Reverse lookup of list_elements above: every BusinessProcess with at\nleast one BPMN element (step) linked to this Organization via\nprocess_element_organizations, plus which specific elements. Only the\nforward direction (process -> elements -> organizations) existed before\n\u2014 added for turbo-ea-ext-organization's per-step impact aggregation.",
-        "operationId": "list_processes_by_organization_api_v1_bpm_organizations__organization_id__processes_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "organization_id",
-            "required": true,
-            "schema": {
-              "title": "Organization Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Processes By Organization",
-        "tags": [
-          "bpm"
         ]
       }
     },
@@ -23008,6 +23355,25 @@
             }
           },
           {
+            "description": "Keep only cards created through this channel: `web` (the web UI), `mcp` (an AI agent through the MCP server), `api` (a direct API call), `ext` (an extension) or `system` (a background job).",
+            "in": "query",
+            "name": "created_via",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(mcp|web|api|ext|system)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Keep only cards created through this channel: `web` (the web UI), `mcp` (an AI agent through the MCP server), `api` (a direct API call), `ext` (an extension) or `system` (a background job).",
+              "title": "Created Via"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -24084,15 +24450,17 @@
         ]
       }
     },
-    "/api/v1/cards/{card_id}/cost-history": {
+    "/api/v1/cards/{card_id}/data-quality": {
       "get": {
-        "operationId": "list_cost_history_api_v1_cards__card_id__cost_history_get",
+        "description": "What the card's data-quality score is made of, and what would raise it (#1334).\n\nComputed by the scorer that writes ``cards.data_quality``, so the two never\ndisagree. Gated like the card's other sub-reads: a card the caller may not\nread is 404. The payload names no other card \u2014 relation factors carry\nmetamodel keys only, as the approval gate's 400 does.",
+        "operationId": "get_data_quality_breakdown_api_v1_cards__card_id__data_quality_get",
         "parameters": [
           {
             "in": "path",
             "name": "card_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Card Id",
               "type": "string"
             }
@@ -24103,7 +24471,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CostHistoryList"
+                  "$ref": "#/components/schemas/DataQualityBreakdown"
                 }
               }
             },
@@ -24120,114 +24488,9 @@
             "description": "Validation Error"
           }
         },
-        "summary": "List Cost History",
+        "summary": "Get Data Quality Breakdown",
         "tags": [
-          "cost-history"
-        ]
-      },
-      "put": {
-        "operationId": "upsert_cost_history_api_v1_cards__card_id__cost_history_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "card_id",
-            "required": true,
-            "schema": {
-              "title": "Card Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CostHistoryRow"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CostHistoryRow"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Upsert Cost History",
-        "tags": [
-          "cost-history"
-        ]
-      }
-    },
-    "/api/v1/cards/{card_id}/cost-history/{fiscal_year}/{field_key}": {
-      "delete": {
-        "operationId": "delete_cost_history_api_v1_cards__card_id__cost_history__fiscal_year___field_key__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "card_id",
-            "required": true,
-            "schema": {
-              "title": "Card Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "fiscal_year",
-            "required": true,
-            "schema": {
-              "maximum": 2200,
-              "minimum": 1900,
-              "title": "Fiscal Year",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "field_key",
-            "required": true,
-            "schema": {
-              "title": "Field Key",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Delete Cost History",
-        "tags": [
-          "cost-history"
+          "cards"
         ]
       }
     },
@@ -24372,60 +24635,6 @@
           }
         },
         "summary": "Descendant Relation Summary",
-        "tags": [
-          "cards"
-        ]
-      }
-    },
-    "/api/v1/cards/{card_id}/display-attributes": {
-      "get": {
-        "description": "Return only the selected, schema-declared display values for one Card.",
-        "operationId": "get_display_attributes_api_v1_cards__card_id__display_attributes_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "card_id",
-            "required": true,
-            "schema": {
-              "title": "Card Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "fields",
-            "required": false,
-            "schema": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "title": "Fields",
-              "type": "array"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Display Attributes",
         "tags": [
           "cards"
         ]
@@ -26031,6 +26240,969 @@
         ]
       }
     },
+    "/api/v1/dashboards": {
+      "get": {
+        "description": "The dashboards the caller sees as homepage tabs, in tab order.",
+        "operationId": "list_dashboards_api_v1_dashboards_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Dashboards",
+        "tags": [
+          "dashboards"
+        ]
+      },
+      "post": {
+        "operationId": "create_dashboard_api_v1_dashboards_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/kpi": {
+      "get": {
+        "description": "One KPI value and, for an unrestricted reader, its trend; ``base`` for\na narrowed count, the fiscal year for a cost.",
+        "operationId": "dashboard_kpi_api_v1_dashboards_kpi_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by_2",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By 2"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric",
+            "required": false,
+            "schema": {
+              "default": "count",
+              "maxLength": 10,
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Approval Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lifecycle_phase",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lifecycle Phase"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subtype",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subtype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "relation_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relation Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "flags",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 300,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Flags"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dashboard Kpi",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/kpi-history": {
+      "get": {
+        "description": "A KPI's daily snapshots (empty for a restricted reader), and the fiscal\nyear for a cost.",
+        "operationId": "dashboard_kpi_history_api_v1_dashboards_kpi_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 90,
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by_2",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By 2"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric",
+            "required": false,
+            "schema": {
+              "default": "count",
+              "maxLength": 10,
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Approval Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lifecycle_phase",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lifecycle Phase"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subtype",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subtype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "relation_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relation Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "flags",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 300,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Flags"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dashboard Kpi History",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/leaderboard": {
+      "get": {
+        "description": "The Data quality leaderboard widget: the ``top`` people holding at least\n``min_cards`` readable cards, ranked by the average data quality of those\ncards or by how many they hold. ``card_types`` / ``roles`` (repeatable)\nnarrow by key; ``counting_roles_only`` keeps the roles that count for data\nquality. A person is ``{id, display_name}`` only.",
+        "operationId": "dashboard_leaderboard_api_v1_dashboards_leaderboard_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "rank_by",
+            "required": false,
+            "schema": {
+              "default": "average_quality",
+              "enum": [
+                "average_quality",
+                "card_count"
+              ],
+              "title": "Rank By",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_cards",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Min Cards",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_types",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Card Types",
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "roles",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50,
+              "title": "Roles",
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "counting_roles_only",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Counting Roles Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "top",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Top",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaderboardResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dashboard Leaderboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/query": {
+      "get": {
+        "description": "Rows for a chart widget: ``{dimension, dimension_2, rows, total}``, plus\n``labels`` (card id \u2192 name) for a card-keyed dimension \u2014 whose ``top``\nlargest cards are kept and the rest folded into ``__other__``, or dropped\nfor an average or a share; ``folded`` (``{top, cards}``, only when a card\nwas not kept) says how many \u2014 and ``fiscal_year`` / ``fiscal_year_start``\nfor a cost.",
+        "operationId": "dashboard_query_api_v1_dashboards_query_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "top",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Top",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by_2",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By 2"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric",
+            "required": false,
+            "schema": {
+              "default": "count",
+              "maxLength": 10,
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Approval Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lifecycle_phase",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lifecycle Phase"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subtype",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subtype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "relation_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relation Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "flags",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 300,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Flags"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dashboard Query",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/{dashboard_id}": {
+      "delete": {
+        "operationId": "delete_dashboard_api_v1_dashboards__dashboard_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      },
+      "patch": {
+        "operationId": "update_dashboard_api_v1_dashboards__dashboard_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/{dashboard_id}/duplicate": {
+      "post": {
+        "operationId": "duplicate_dashboard_api_v1_dashboards__dashboard_id__duplicate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DashboardDuplicate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Duplicate Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/{dashboard_id}/reset": {
+      "post": {
+        "operationId": "reset_dashboard_api_v1_dashboards__dashboard_id__reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
     "/api/v1/diagram-groups": {
       "get": {
         "operationId": "list_groups_api_v1_diagram_groups_get",
@@ -26244,22 +27416,6 @@
           },
           {
             "in": "query",
-            "name": "viewpoint_key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Viewpoint Key"
-            }
-          },
-          {
-            "in": "query",
             "name": "sort_by",
             "required": false,
             "schema": {
@@ -26275,16 +27431,6 @@
             "schema": {
               "default": "desc",
               "title": "Sort Dir",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "kind",
-            "required": false,
-            "schema": {
-              "default": "drawio",
-              "title": "Kind",
               "type": "string"
             }
           }
@@ -26500,154 +27646,6 @@
           }
         },
         "summary": "Diagram Sso Callback",
-        "tags": [
-          "diagrams"
-        ]
-      }
-    },
-    "/api/v1/diagrams/viewpoints-for-tab": {
-      "get": {
-        "description": "Every non-hidden ArchiMate Viewpoint relevant to one of the three\ndiagram-creation dashboard tabs (business/application/technology).\n\nA viewpoint appears in a tab when at least one of its allowed objects'\n``EnterpriseObject.layer`` falls in that tab's layer set (``TAB_LAYERS``)\n-- so a viewpoint spanning two tabs' layers (e.g. Implementation and\nDeployment, application + technology) appears in both. Authenticated\nread, like ``GET /metamodel/viewpoints`` -- any user who can create a\ndiagram needs this, not just metamodel admins.",
-        "operationId": "list_viewpoints_for_tab_api_v1_diagrams_viewpoints_for_tab_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "tab",
-            "required": true,
-            "schema": {
-              "title": "Tab",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Viewpoints For Tab",
-        "tags": [
-          "diagrams"
-        ]
-      }
-    },
-    "/api/v1/diagrams/viewpoints-for-tab/{viewpoint_key}/examples/{example_id}": {
-      "get": {
-        "description": "The full Exchange XML for one example, to seed a new diagram's starting content.\n\n``viewpoints-for-tab`` only returns ``{id, name}`` per example so that list stays\ncheap; the creation dashboard fetches this lazily, only for the example card the\nuser actually clicks.",
-        "operationId": "get_viewpoint_tab_example_api_v1_diagrams_viewpoints_for_tab__viewpoint_key__examples__example_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "viewpoint_key",
-            "required": true,
-            "schema": {
-              "title": "Viewpoint Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "example_id",
-            "required": true,
-            "schema": {
-              "title": "Example Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Viewpoint Tab Example",
-        "tags": [
-          "diagrams"
-        ]
-      }
-    },
-    "/api/v1/diagrams/viewpoints-for-tab/{viewpoint_key}/suggested-cards": {
-      "get": {
-        "description": "Card types to suggest creating from a viewpoint's card-detail tab, each\npaired with the Enterprise Object (ArchiMate element) type it resolves to\nso a caller can draw a node for a card of that type without a second\nround trip.\n\nCard types come from the explicit ``(viewpoint_key, tab)`` override\n(``ArchimateViewpointTabCard``) when one exists; otherwise every card\ntype mapped to the viewpoint's allowed objects -- the \"no override\nneeded for single-tab viewpoints\" default from spec \u00a75. ``tab`` is\noptional: the override only applies per-tab, but the fallback is\nalready tab-independent (every object the viewpoint allows, regardless\nof tab), so the unscoped diagram-creation entry point (no tab at all)\ngets the fallback straight away. Either way, the paired\n``enterprise_object_key`` always comes from ``EnterpriseObjectCardMapping``\nrestricted to this viewpoint's own allowed objects (the override table\nhas no element-type column of its own) -- ``None`` when a card type\nisn't actually mapped to any object this viewpoint allows, which only\nan inconsistent override can produce.",
-        "operationId": "suggested_cards_for_viewpoint_tab_api_v1_diagrams_viewpoints_for_tab__viewpoint_key__suggested_cards_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "viewpoint_key",
-            "required": true,
-            "schema": {
-              "title": "Viewpoint Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "tab",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tab"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Suggested Cards For Viewpoint Tab",
         "tags": [
           "diagrams"
         ]
@@ -27687,32 +28685,6 @@
         ]
       }
     },
-    "/api/v1/extensions/mcp-manifest": {
-      "get": {
-        "description": "Public, unauthenticated \u2014 consumed by the mcp-server process at its\nown startup, before any MCP client has authenticated, so it cannot go\nthrough the get_current_user-gated /extensions/status. Mirrors the\npublic GET /settings/mcp/status pattern. No secrets are exposed: tool\nschemas are the same data already shipped inside the (signature-\nverified) bundle. Visibility follows the same enabled+usable rule as\nevery other extension surface \u2014 disabled or unlicensed extensions\nsimply don't appear.",
-        "operationId": "extensions_mcp_manifest_api_v1_extensions_mcp_manifest_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ExtensionMcpManifestOut"
-                  },
-                  "title": "Response Extensions Mcp Manifest Api V1 Extensions Mcp Manifest Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Extensions Mcp Manifest",
-        "tags": [
-          "Extensions"
-        ]
-      }
-    },
     "/api/v1/extensions/status": {
       "get": {
         "description": "Least-privilege list of enabled extensions for any authenticated user.",
@@ -28133,26 +29105,6 @@
         ]
       }
     },
-    "/api/v1/metamodel/card-type-archimate-mapping": {
-      "get": {
-        "description": "Every card type's (and subtype's) current ArchiMate element type\nmapping, resolved from the EnterpriseObjectCardMapping bridge table --\nthe n:m replacement for the old single ``CardType.archimate_type``\ncolumn. Consumed by the MCP server's ``get_archimate_mapping`` tool.\n\nAuthenticated read, like ``GET /enterprise-objects`` \u2014 no\n``admin.metamodel`` gate, since this only reports the live mapping.\nExcludes hidden/soft-deleted types and orders by ``sort_order``, same as\n``GET /metamodel/types`` (the endpoint this one is meant to sit beside\nfor the MCP tool, which should not see a type a `DELETE /types/{key}`\nsoft-delete hid from everywhere else).",
-        "operationId": "get_card_type_archimate_mapping_api_v1_metamodel_card_type_archimate_mapping_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Card Type Archimate Mapping",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
     "/api/v1/metamodel/categories": {
       "get": {
         "description": "Every card type category, in layer order. Any signed-in user may read\nit \u2014 every surface that draws layers needs the labels and colours.",
@@ -28496,237 +29448,6 @@
           }
         },
         "summary": "Update Compliance Regulation",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/enterprise-objects": {
-      "get": {
-        "description": "List the ArchiMate Enterprise Object registry with their card mappings.\n\nAuthenticated read, like ``GET /types`` \u2014 the drawing palette calls this\nfor any user who can edit a diagram, not just admins who manage the\nmetamodel, so there is no ``admin.metamodel`` gate here.",
-        "operationId": "list_enterprise_objects_api_v1_metamodel_enterprise_objects_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "include_hidden",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Hidden",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Enterprise Objects",
-        "tags": [
-          "metamodel"
-        ]
-      },
-      "post": {
-        "description": "Create a custom Enterprise Object. Always ``is_standard=False`` and\n``is_locked=False`` \u2014 the standard registry rows only ever come from\n``seed_enterprise_objects``.",
-        "operationId": "create_enterprise_object_api_v1_metamodel_enterprise_objects_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Enterprise Object",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/enterprise-objects/{key}": {
-      "patch": {
-        "operationId": "update_enterprise_object_api_v1_metamodel_enterprise_objects__key__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Update Enterprise Object",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/enterprise-objects/{key}/card-mappings": {
-      "post": {
-        "description": "Add one card-type (or card-type+subtype) mapping row to an Enterprise Object.",
-        "operationId": "add_card_mapping_api_v1_metamodel_enterprise_objects__key__card_mappings_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Add Card Mapping",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/enterprise-objects/{key}/card-mappings/{mapping_id}": {
-      "delete": {
-        "operationId": "remove_card_mapping_api_v1_metamodel_enterprise_objects__key__card_mappings__mapping_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "mapping_id",
-            "required": true,
-            "schema": {
-              "title": "Mapping Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Remove Card Mapping",
         "tags": [
           "metamodel"
         ]
@@ -30373,410 +31094,6 @@
         "summary": "Stakeholder Role Usage",
         "tags": [
           "stakeholder-roles"
-        ]
-      }
-    },
-    "/api/v1/metamodel/viewpoints": {
-      "get": {
-        "description": "List the ArchiMate Viewpoint catalog with their allowed objects.\n\nAuthenticated read, like ``list_enterprise_objects`` \u2014 the\ndiagram-creation picker calls this for any user who can create a\ndiagram, not just admins who manage the metamodel, so there is no\n``admin.metamodel`` gate here.",
-        "operationId": "list_viewpoints_api_v1_metamodel_viewpoints_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "include_hidden",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Hidden",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Viewpoints",
-        "tags": [
-          "metamodel"
-        ]
-      },
-      "post": {
-        "description": "Create a custom Viewpoint. Always ``is_standard=False`` \u2014 the standard\nregistry rows only ever come from ``seed_viewpoints``.",
-        "operationId": "create_viewpoint_api_v1_metamodel_viewpoints_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Viewpoint",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/viewpoints/{key}": {
-      "delete": {
-        "operationId": "delete_viewpoint_api_v1_metamodel_viewpoints__key__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Delete Viewpoint",
-        "tags": [
-          "metamodel"
-        ]
-      },
-      "get": {
-        "operationId": "get_viewpoint_api_v1_metamodel_viewpoints__key__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Viewpoint",
-        "tags": [
-          "metamodel"
-        ]
-      },
-      "patch": {
-        "operationId": "update_viewpoint_api_v1_metamodel_viewpoints__key__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Update Viewpoint",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/viewpoints/{key}/examples": {
-      "post": {
-        "description": "Upload an example diagram for a Viewpoint.\n\n``xml`` may be Archi's native ``.archimate`` export (auto-converted via\n``convert_archi_native_to_exchange``) or ArchiMate Exchange Format XML\ndirectly -- either way it is run through ``validate_exchange()`` before\nanything is persisted; on any issue this is a 422 with the validator's\nown issue list and nothing is saved.",
-        "operationId": "upload_viewpoint_example_api_v1_metamodel_viewpoints__key__examples_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Upload Viewpoint Example",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/viewpoints/{key}/examples/{example_id}": {
-      "delete": {
-        "operationId": "delete_viewpoint_example_api_v1_metamodel_viewpoints__key__examples__example_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "example_id",
-            "required": true,
-            "schema": {
-              "title": "Example Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Delete Viewpoint Example",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/viewpoints/{key}/objects": {
-      "post": {
-        "description": "Add one allowed Enterprise Object to a Viewpoint's allowed-objects list.",
-        "operationId": "add_viewpoint_object_api_v1_metamodel_viewpoints__key__objects_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Add Viewpoint Object",
-        "tags": [
-          "metamodel"
-        ]
-      }
-    },
-    "/api/v1/metamodel/viewpoints/{key}/objects/{enterprise_object_key}": {
-      "delete": {
-        "operationId": "remove_viewpoint_object_api_v1_metamodel_viewpoints__key__objects__enterprise_object_key__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "key",
-            "required": true,
-            "schema": {
-              "title": "Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "enterprise_object_key",
-            "required": true,
-            "schema": {
-              "title": "Enterprise Object Key",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Remove Viewpoint Object",
-        "tags": [
-          "metamodel"
         ]
       }
     },
@@ -34490,46 +34807,6 @@
         ]
       }
     },
-    "/api/v1/reports/bpm/element-data-object-map": {
-      "get": {
-        "description": "Which BPMN elements use which data objects \u2014 grouped by data object.",
-        "operationId": "element_data_object_map_api_v1_reports_bpm_element_data_object_map_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Element Data Object Map",
-        "tags": [
-          "reports"
-        ]
-      }
-    },
-    "/api/v1/reports/bpm/element-it-component-map": {
-      "get": {
-        "description": "Which BPMN elements use which IT components \u2014 grouped by IT component.",
-        "operationId": "element_it_component_map_api_v1_reports_bpm_element_it_component_map_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Element It Component Map",
-        "tags": [
-          "reports"
-        ]
-      }
-    },
     "/api/v1/reports/bpm/process-application-matrix": {
       "get": {
         "description": "Process \u00d7 Application cross-reference grid (process-level + element-level links).",
@@ -34714,95 +34991,9 @@
         ]
       }
     },
-    "/api/v1/reports/cost-sankey": {
-      "get": {
-        "description": "Cost flow: cost items -> cards, with groups in the middle when ``group_by`` is set.\n\nTakes the treemap's parameters and validation (see ``cost_treemap``); the flow is\nbuilt by ``services/cost_report.py::build_cost_sankey``.",
-        "operationId": "cost_sankey_api_v1_reports_cost_sankey_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "type",
-            "required": false,
-            "schema": {
-              "default": "Application",
-              "title": "Type",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "cost_field",
-            "required": false,
-            "schema": {
-              "default": "costTotalAnnual",
-              "title": "Cost Field",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "group_by",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Group By"
-            }
-          },
-          {
-            "in": "query",
-            "name": "fiscal_year",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 2200,
-                  "minimum": 1900,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Fiscal Year"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Cost Sankey",
-        "tags": [
-          "reports"
-        ]
-      }
-    },
     "/api/v1/reports/cost-treemap": {
       "get": {
-        "description": "Cost treemap over one or several card types, optionally grouped.\n\n``type`` is one card type key or a comma-separated list; each must exist and\ncarry a cost field. ``group_by`` is ``field:<key>`` (a single-valued field of\nthe type(s)) or ``rel:<relationTypeKey>`` (the one card linked through an\nat-most-one relation); every item then carries a ``group`` (``__other__``\nwhen it has none) and ``groups`` sums them. A bare field key is read as\n``field:<key>``; any other value is ignored. A refused grouping is 400.\n``components`` lists the cost fields concurring to ``cost_field``.\n\nTakes an optional ``fiscal_year``: the current year is served from live\nattributes for the cards live in it (full annual cost, no pro-rating, see\n``is_live_in_fiscal_year``); any other year lists the cards with a cost\nrecorded for it (``app/services/cost_report.py::cards_with_cost``). The\nresponse names the requested ``fiscal_year``, the ``current_fiscal_year``\nand the workspace's start month (``fiscal_year_start``).",
+        "description": "Cost treemap: items with cost, optionally grouped by a related type.\n\nCosts are annual and shown for the current fiscal year only: a card counts,\nat its full annual cost, when the current fiscal year falls between the one\nit goes ``active`` in and the one its ``endOfLife`` falls in, both included \u2014\nno pro-rating, so a card retired in an earlier fiscal year is left out. A\ncard carries one annual figure, so projecting it onto other years would\nonly restate today's number; that is why there is no year parameter. The\nrule applies to the primary cards and, in ``aggregate`` mode, to the related\ncards being summed, so a retired IT Component stops adding to its\nApplication's total. The response names the fiscal year (``fiscal_year``)\nand the workspace's start month (``fiscal_year_start``).\n\nWhen ``aggregate`` is non-empty, each entry is a ``\"<typeKey>:<costFieldKey>\"``\npair identifying a cost field on a related card type. The endpoint sums that\nfield across each primary card's related cards (relations resolved\nbidirectionally, parallel relations de-duped) and adds the per-pair totals.\nBecause every pair targets a different card type **or** a different cost field\non the same type, no related card contributes more than once to a given\nprimary card's roll-up. This lets a type that has no cost field of its own\n(e.g. Provider) display costs sourced from related Applications, IT\nComponents, etc., even all of them at once.\n\nWhen ``parent_card_id`` is set, the primary card set is restricted to cards\nthat have at least one relation (in either direction) to that parent. This\npowers the treemap drill-down \u2014 clicking a parent rectangle re-queries with\nthe related type as ``type`` and the parent's id as ``parent_card_id``.",
         "operationId": "cost_treemap_api_v1_reports_cost_treemap_get",
         "parameters": [
           {
@@ -34843,20 +35034,38 @@
           },
           {
             "in": "query",
-            "name": "fiscal_year",
+            "name": "aggregate",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "maximum": 2200,
-                  "minimum": 1900,
-                  "type": "integer"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Fiscal Year"
+              "title": "Aggregate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "parent_card_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Parent Card Id"
             }
           }
         ],
@@ -35531,77 +35740,6 @@
           }
         },
         "summary": "Stakeholder Directory",
-        "tags": [
-          "reports"
-        ]
-      }
-    },
-    "/api/v1/reports/value-chain": {
-      "get": {
-        "description": "Band/box model for the Value Chain page, layout already resolved.\n\nOne query per card type and one per relation type: the page used to fan\nout a /relations call per category box and per core value stream, which\nis what this replaces. All logic lives in ``build_chain_payload``.",
-        "operationId": "value_chain_api_v1_reports_value_chain_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Value Chain",
-        "tags": [
-          "reports"
-        ]
-      }
-    },
-    "/api/v1/reports/value-chain/{category_id}": {
-      "get": {
-        "description": "Four-band Value Stream map of one process category (the drill-down).\n\nOne query per card type and one per relation type for the whole\nlandscape: the page used to issue /relations calls per root and per leaf\nand one /bpm/.../elements call per process. All logic lives in\n``build_stream_payload``.",
-        "operationId": "value_stream_api_v1_reports_value_chain__category_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "category_id",
-            "required": true,
-            "schema": {
-              "title": "Category Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "related",
-            "required": false,
-            "schema": {
-              "default": "none",
-              "title": "Related",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Value Stream",
         "tags": [
           "reports"
         ]
@@ -38862,64 +39000,6 @@
         ]
       }
     },
-    "/api/v1/settings/archimate-enabled": {
-      "get": {
-        "description": "Public endpoint \u2014 the ArchiMate module flag (off unless an admin enables it).",
-        "operationId": "get_archimate_enabled_api_v1_settings_archimate_enabled_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Archimate Enabled",
-        "tags": [
-          "settings"
-        ]
-      },
-      "patch": {
-        "description": "Admin endpoint \u2014 enable or disable the ArchiMate module.",
-        "operationId": "update_archimate_enabled_api_v1_settings_archimate_enabled_patch",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ArchimateEnabledPayload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Update Archimate Enabled",
-        "tags": [
-          "settings"
-        ]
-      }
-    },
     "/api/v1/settings/archive-retention-days": {
       "get": {
         "description": "Public endpoint \u2014 days an archived card is kept before auto-purge.\n\n``0`` means archived cards are kept indefinitely (auto-purge disabled).",
@@ -39772,6 +39852,64 @@
         ]
       }
     },
+    "/api/v1/settings/gamification-enabled": {
+      "get": {
+        "description": "Whether saves that raise a card's data-quality score play the reward animation.\n\nOff by default: the animated score, the flying gain and the sticky score\nbar only appear once an administrator turns them on. The value also rides\nalong on ``GET /settings/bootstrap``; this read is the hook's fallback.",
+        "operationId": "get_gamification_enabled_api_v1_settings_gamification_enabled_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Gamification Enabled",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Admin endpoint \u2014 turn the gamified data-quality feedback on or off.",
+        "operationId": "update_gamification_enabled_api_v1_settings_gamification_enabled_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GamificationEnabledPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Gamification Enabled",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/v1/settings/grc-enabled": {
       "get": {
         "description": "Public endpoint \u2014 returns whether the GRC module is enabled.",
@@ -40609,64 +40747,6 @@
           }
         },
         "summary": "Get Update Status",
-        "tags": [
-          "settings"
-        ]
-      }
-    },
-    "/api/v1/settings/value-chain-enabled": {
-      "get": {
-        "description": "Public endpoint \u2014 returns the raw Value Chain module flag.\n\nDeliberately NOT combined with ``bpmEnabled``: the Settings page must show\nthe switch's own position even while BPM is off. The conjunction is a\nfrontend concern.",
-        "operationId": "get_value_chain_enabled_api_v1_settings_value_chain_enabled_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Value Chain Enabled",
-        "tags": [
-          "settings"
-        ]
-      },
-      "patch": {
-        "description": "Admin endpoint \u2014 enable or disable the Value Chain module.",
-        "operationId": "update_value_chain_enabled_api_v1_settings_value_chain_enabled_patch",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ValueChainEnabledPayload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Update Value Chain Enabled",
         "tags": [
           "settings"
         ]

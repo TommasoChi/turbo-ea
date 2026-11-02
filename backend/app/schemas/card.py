@@ -176,6 +176,14 @@ class CardResponse(BaseModel):
     archived_at: datetime | None = None
     created_by: str | None = None
     updated_by: str | None = None
+    # The channel behind the create / the last change (``web``, ``mcp``,
+    # ``api``, ``ext``, ``system``); None for cards made before migration 157.
+    created_via: str | None = None
+    updated_via: str | None = None
+    # Display names of ``created_by`` / ``updated_by``. Filled only by
+    # ``GET /cards/{id}``; list rows resolve names through the client's user map.
+    created_by_name: str | None = None
+    updated_by_name: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     # When the card's custom logo was last written, or None when it has none —
@@ -274,6 +282,42 @@ class DescendantRelationsResponse(BaseModel):
     # current page — it powers the "N cards · via M sub-items" header, which
     # would be misleading if it only counted the visible rows.
     via_total: int = 0
+
+
+class DataQualityFactor(BaseModel):
+    """One slot of a card's data-quality score (#1334).
+
+    Metamodel only: a relation factor names its relation type and the other
+    end's card *type*, never another card.
+    """
+
+    kind: Literal["field", "description", "lifecycle", "relation", "tag_group", "stakeholders"]
+    # Field key, relation type key, tag group id, or the bucket name.
+    key: str
+    weight: float
+    filled: bool
+    # The score the card would reach with this slot filled too (unmet only).
+    score_if_filled: float | None = None
+    # How many points filling this slot adds to the score (unmet only).
+    gain: float | None = None
+    section: str | None = None
+    side: Literal["source", "target"] | None = None
+    other_type_key: str | None = None
+    label: str | None = None
+    name: str | None = None
+
+
+class DataQualityBreakdown(BaseModel):
+    """Why a card scores what it scores, factor by factor (#1334)."""
+
+    score: float
+    # The weighted ratio before the mandatory-field gate pins it to 0.
+    ungated_score: float
+    total_weight: float
+    filled_weight: float
+    # Keys of the empty required fields that hold the score at 0.
+    blocked_by_required: list[str]
+    factors: list[DataQualityFactor]
 
 
 class CardTypeCount(BaseModel):

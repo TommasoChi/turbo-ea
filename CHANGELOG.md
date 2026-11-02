@@ -5,100 +5,21 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.181.0] - 2026-10-30
+## [2.187.0] - 2026-11-02
 
 ### Added
 
 - **The cost report can be built on Initiatives and on an Application + IT Component view.** Initiatives offer their budget and actual cost fields, and the combined view shows both types in one chart.
 - **Group by is available on every cost view, by a card field or by a linked card.** Cards with no value go to Unspecified and no cost is counted twice.
-
-### Changed
-
-- **The cost Sankey now takes the same filters as the treemap and draws cost items, groups and cards.**
-- **The cost history chart shows only on the Forecast year, with every cost field that makes up the total.**
-- **Full screen on the cost report fills the whole screen.**
-
-## [2.180.0] - 2026-10-29
-
-### Added
-
 - **The cost report's fiscal-year picker offers a Forecast year.** Next fiscal year can be picked next to the current and past ones, and the trend chart adds a forecast bar while it is selected.
 - **Fiscal years in the cost report are named `FY26 - Current`, `FY27 - Forecast`, `FY25`…** in the picker, the toolbar chip and the trend chart.
-
-### Changed
-
-- **A past or forecast year in the cost report lists every card with a cost recorded for it,** even if the card was retired since or is not yet active.
-- **A card's cost history now also accepts next fiscal year,** to enter a forecast.
-
-## [2.179.9] - 2026-10-29
-
-### Fixed
-
-- **A cost-history entry now takes a fiscal year from five years back to the current one and a cost of zero or more.** A year outside that range, a negative cost, or a value such as `NaN` is refused with a clear message instead of an error page; the cost reports and the delete route refuse an absurd year the same way.
-- **Refreshing the session no longer ends a "View as role" session.** The impersonated role is kept across the token refresh.
-- **The IT-component and data-object maps in the BPM reports only list the cards and processes you may read.**
-- **A dry-run of a workspace import no longer changes the running email configuration.**
-
-### Security
-
-- **Creating a to-do on a card you cannot read is now refused** (404), like every other card endpoint.
-- **A cookie-authenticated write from another site is refused.** Requests that carry an `Origin` that is neither one of the allowed origins nor this site's own host get a 403; API clients using a token are unaffected.
-- **A published web portal no longer lets a visitor probe a hidden description or tag:** searching ignores the description and the tag filter is ignored while the portal hides them; a malformed id in a filter is ignored instead of failing.
-- **Names shown inside confirmation dialogs (cards, roles, fields, sections) are escaped** so a name containing markup is displayed as text.
-
-## [2.179.8] - 2026-10-29
-
-### Fixed
-
-- **AI description suggestions and portfolio insights no longer keep a database connection busy while they wait for the AI provider.** A slow local model could hold several connections for tens of seconds each and make every other request queue behind them.
-- **The cost trend chart now cancels the requests of the previous selection** when you change the fiscal years, instead of letting them finish in the background.
-
-## [2.179.7] - 2026-10-23
-
-### Added
-
 - **ArchiMate diagrams are now visible on the main Diagrams page.** Previously only reachable from the Architecture Studio admin list. The gallery's filter sidebar gets a new Type filter (All / Draw.io / ArchiMate -- the ArchiMate option only shown to someone who may view at least one layer), and picking ArchiMate reveals a cascading Layer -> Viewpoint filter. `GET /diagrams` gains a `viewpoint_key` filter and returns each row's `viewpoint_key`; `kind=all` now silently drops an ArchiMate row the caller can't see on any of its layers, rather than mixing it in regardless of permission. ArchiMate diagrams are assignable to a Group exactly like Draw.io ones (the group machinery was already kind-agnostic) and open in Architecture Studio, not the Draw.io viewer.
 - **A diagram linked to a card now always shows up in that card's Resources tab, for ArchiMate too.** The new single "Linked cards" multi-select (see Changed below) feeds `card_ids` into every ArchiMate diagram-creation path (the create dialog, the scoped per-layer entry points, and the Architecture Studio sandbox), the same `diagram_cards` link Draw.io's own Linked Cards field has always populated.
-
-### Changed
-
-- **ArchiMate diagram creation: one "Linked cards" multi-select replaces the two-step Card type -> Card picker**, mirroring Draw.io's own create-diagram field exactly (same component, same grouping by type). Picking one or more cards materializes each as a real, card-linked node on whichever starter (blank or an example) is picked next.
-- **The ArchiMate palette's "Other" category (Grouping, Location, the junctions) is now always offered, regardless of the diagram's viewpoint.** No standard viewpoint lists these in its allowed-objects -- filtering this layer too meant `Grouping` could never appear in a viewpoint-scoped diagram, only `Location`. The viewpoint's allowed-objects list still exists for every other layer.
-- **The 28 seeded Viewpoint Catalog examples dropped their "Figure NN: " prefix** (e.g. "Figure 9: Organization View" -> "Organization View"). A migration renames the already-seeded rows in place so existing environments don't end up with duplicates.
-
-## [2.179.6] - 2026-10-22
-
-### Added
-
 - **Optionally pick a card to materialize as a node when creating a new ArchiMate diagram.** After picking a viewpoint, the picker now offers (always optional, for both the blank starter and every example) a card-type selector -- scoped to the card types suggested for that viewpoint -- followed by a specific-card search. The picked card is added as a real, card-linked node on the starting diagram, not just a metadata link. `GET /diagrams/viewpoints-for-tab/{key}/suggested-cards` now pairs each suggested card type with the ArchiMate element type it resolves to, and `tab` is now optional (the unscoped create-diagram dialog has none to send; the fallback was already tab-independent).
-
-## [2.179.5] - 2026-10-22
-
-### Added
-
 - **New ArchiMate diagram defaults to the picked viewpoint's name.** The create-diagram dialog no longer blocks the viewpoint picker behind a typed name; picking a viewpoint (or a blank/example starter) now defaults the diagram's name to that viewpoint's own name when the field was left empty, still editable beforehand.
 - **Standard ArchiMate elements now honor an admin-customized Enterprise Object color.** Previously only custom Enterprise Objects respected `EnterpriseObject.color`; the 60+ standard ArchiMate element types always rendered with a hardcoded per-layer color regardless of an admin's edit. An unedited element (still at its seeded default color) renders unchanged.
-
-## [2.179.4] - 2026-10-22
-
-### Added
-
 - **28 starter examples for the ArchiMate Viewpoint Catalog.** Seeded from the TOGAF ADM / ArchiSurance reference walkthrough (`docs/data/viewpoint-examples/`), one figure per standard viewpoint whose own diagram has more than 8 objects, trimmed to just the elements and relationships that figure's view actually uses (the source files are cumulative across figures) and converted to Exchange Format XML ahead of time. New `app/services/archimate/viewpoint_example_seed.py`, same insert-once pattern as `viewpoint_seed.py`; fixtures bundled under `app/services/archimate/viewpoint_examples/*.xml`.
-
-## [2.179.3] - 2026-10-22
-
-### Fixed
-
-- **`relation_table.json` now ships with the installed backend package.** `backend/pyproject.toml`'s `[tool.setuptools.package-data]` only declared `app/services/data/*.json`, missing `app/services/archimate/relation_table.json` entirely — a plain `pip install .` (the Docker image's own build step) silently dropped it, and `is_relationship_allowed()` (used by `validate_exchange()` — `POST /archimate/validate`, every ArchiMate diagram create/update) raised `FileNotFoundError` the first time it ran.
-
-## [2.179.2] - 2026-10-22
-
-### Added
-
 - **ArchiMate Viewpoint Catalog**: every new ArchiMate diagram now picks a viewpoint — one of the 23 standard ArchiMate 3.1 viewpoints or an admin-defined custom one — which restricts the designer palette to that viewpoint's allowed object types. Admins manage the catalog from a new **Viewpoint Catalog** tab in Architecture Studio (alongside Card Mapping), including example diagrams per viewpoint. Pre-existing ArchiMate diagrams keep an unrestricted palette. New per-layer permissions (`archimatediagrams.business/application/technology.view/manage/publish`) replace the single `diagrams.*` gate for ArchiMate diagrams, and the nav splits into Business, Application & Data, and Technology Architecture entries. The MCP server's `create_archimate_diagram` tool requires a `viewpoint_key`, and a new `list_viewpoints` tool lists the catalog.
-
-## [2.179.1] - 2026-10-21
-
 A fork release. Takes the next free patch number above upstream's own
 `v2.179.0` tag, pulled in by this sync. The fork's own unreleased work
 (previously numbered 2.175.1 through 2.179.0, colliding one-for-one with
@@ -107,7 +28,155 @@ upstream's own same-numbered releases pulled in here) is renumbered to
 
 ### Changed
 
+- **The cost Sankey now takes the same filters as the treemap and draws cost items, groups and cards.**
+- **The cost history chart shows only on the Forecast year, with every cost field that makes up the total.**
+- **Full screen on the cost report fills the whole screen.**
+- **A past or forecast year in the cost report lists every card with a cost recorded for it,** even if the card was retired since or is not yet active.
+- **A card's cost history now also accepts next fiscal year,** to enter a forecast.
+- **ArchiMate diagram creation: one "Linked cards" multi-select replaces the two-step Card type -> Card picker**, mirroring Draw.io's own create-diagram field exactly (same component, same grouping by type). Picking one or more cards materializes each as a real, card-linked node on whichever starter (blank or an example) is picked next.
+- **The ArchiMate palette's "Other" category (Grouping, Location, the junctions) is now always offered, regardless of the diagram's viewpoint.** No standard viewpoint lists these in its allowed-objects -- filtering this layer too meant `Grouping` could never appear in a viewpoint-scoped diagram, only `Location`. The viewpoint's allowed-objects list still exists for every other layer.
+- **The 28 seeded Viewpoint Catalog examples dropped their "Figure NN: " prefix** (e.g. "Figure 9: Organization View" -> "Organization View"). A migration renames the already-seeded rows in place so existing environments don't end up with duplicates.
 - **With PPM off, EA Delivery now sits under IT Governance as "EA Governance".** The top bar used to promote EA Delivery to an entry of its own whenever PPM was disabled; it now joins the IT Governance menu (the GRC page stays its first entry, extension pages follow). If GRC is off, or a role cannot open IT Governance, EA Delivery still appears as a top-level entry, so nobody loses the page. With PPM on nothing changes: EA Delivery remains a tab of PPM. URLs are unchanged.
+
+### Fixed
+
+- **A cost-history entry now takes a fiscal year from five years back to the current one and a cost of zero or more.** A year outside that range, a negative cost, or a value such as `NaN` is refused with a clear message instead of an error page; the cost reports and the delete route refuse an absurd year the same way.
+- **Refreshing the session no longer ends a "View as role" session.** The impersonated role is kept across the token refresh.
+- **The IT-component and data-object maps in the BPM reports only list the cards and processes you may read.**
+- **A dry-run of a workspace import no longer changes the running email configuration.**
+- **AI description suggestions and portfolio insights no longer keep a database connection busy while they wait for the AI provider.** A slow local model could hold several connections for tens of seconds each and make every other request queue behind them.
+- **The cost trend chart now cancels the requests of the previous selection** when you change the fiscal years, instead of letting them finish in the background.
+- **`relation_table.json` now ships with the installed backend package.** `backend/pyproject.toml`'s `[tool.setuptools.package-data]` only declared `app/services/data/*.json`, missing `app/services/archimate/relation_table.json` entirely — a plain `pip install .` (the Docker image's own build step) silently dropped it, and `is_relationship_allowed()` (used by `validate_exchange()` — `POST /archimate/validate`, every ArchiMate diagram create/update) raised `FileNotFoundError` the first time it ran.
+
+### Security
+
+- **Creating a to-do on a card you cannot read is now refused** (404), like every other card endpoint.
+- **A cookie-authenticated write from another site is refused.** Requests that carry an `Origin` that is neither one of the allowed origins nor this site's own host get a 403; API clients using a token are unaffected.
+- **A published web portal no longer lets a visitor probe a hidden description or tag:** searching ignores the description and the tag filter is ignored while the portal hides them; a malformed id in a filter is ignored instead of failing.
+- **Names shown inside confirmation dialogs (cards, roles, fields, sections) are escaped** so a name containing markup is displayed as text.
+
+## [2.186.3] - 2026-11-02
+
+### Security
+- Confirmation dialogs (restore, archive and delete a card; archive a role; delete a field, section or stakeholder role) now escape the names they quote, so a card or label named with HTML can no longer inject markup into the page.
+
+### Fixed
+- The stakeholder-roles list endpoint now requires a signed-in user instead of answering anonymous requests.
+
+## [2.186.2] - 2026-11-01
+
+### Changed
+- Upgraded the bundled DrawIO editor from v31.5.3 to v32.6.9.
+- Upgraded `bpmn-js` from 18.31.0 to 18.31.1.
+
+## [2.186.1] - 2026-10-31
+
+### Fixed
+- The Description, Lifecycle and attribute section headers on a card, and the permission group headers in role management, are no longer a button nested in a button, which browsers flagged and screen readers announced twice.
+- Saving a report thumbnail or exporting a report no longer logs three font-stylesheet errors in the browser console.
+
+## [2.186.0] - 2026-10-31
+
+### Changed
+- UI SDK 1.33: extension charts can now draw scatter plots and shaded reference areas through the shared chart loader (`loadECharts`); the deprecated `loadRecharts` and `useChartTheme` entries are removed and the Recharts library is no longer shipped.
+
+## [2.185.0] - 2026-10-31
+
+### Added
+- A **Data quality leaderboard** dashboard widget ranks the people who hold stakeholder roles by the average data quality of their cards, or by how many cards they hold, from a minimum number of cards; it can be narrowed to some card types or roles, counts only the roles that count for data quality by default, never counts a card the reader cannot see, and ships on the Overview dashboard of new installations (existing ones add it from **Add widget** or get it with **Reset to default**).
+
+## [2.184.1] - 2026-10-31
+
+### Fixed
+- The Business Process card type's fallback colour (shown where the metamodel defines none, such as the compliance filter chips) was an older palette's orange instead of the seeded green every other BPM surface uses.
+
+### Security
+- Updated the frontend build's transitive development dependencies `qs` (to 6.17.1), `fast-uri` (to 3.1.9) and `zod` (to 4.6.7) to clear the open Dependabot and `npm audit` advisories; none of them ships in the application images.
+- Two dashboard test helpers built a regular expression from a label without escaping every metacharacter (CodeQL "Incomplete string escaping"); they now escape all of them.
+
+## [2.184.0] - 2026-10-30
+
+### Added
+- A card's data quality score now says what to fill: hovering it lists the three things that would raise it most and how many points each would add; clicking it opens the full breakdown as a side panel that stays open while you edit, with what already counts and, while empty required fields hold the score at 0%, which fields those are and what the score would be without them; each item is a link that opens the section where it is filled in edit mode, on that field (or the add dialog for a relation, the tag editor, or the add-stakeholder form).
+- TurboRPG mode (gamified data quality), an option administrators can turn on in Settings → General: saving a change that raises a card's data quality sends a glowing +X% flying from the section you saved to the score, which flashes and glows on impact and fills up like a health bar; a slim score bar follows you down the card page — click its score to open the breakdown; reaching the green band or 100% earns a short burst of confetti, and clearing data makes the points fly off the bar back to the section. Off by default; users with reduced motion turned on see the change without animation.
+
+### Fixed
+- A yes/no field set to **No** now counts as filled for the data quality score, like any other maintained value; it used to score as empty, so the breakdown promised a gain that choosing No never delivered. Scores are recomputed when the server starts.
+
+### Changed
+- Related cards on a card's page are real links: middle-click, Ctrl/Cmd-click or right-click → *Open in new tab* on a relation, a hierarchy parent, child or breadcrumb, a Lineage predecessor or successor, a row of the **+N in sub-items** list, a stakeholder's hover card or a BPM step's linked process now opens it in a new browser tab, while a plain click still opens it in place.
+
+## [2.183.0] - 2026-10-30
+
+### Changed
+- The BPM dashboard's process-type, maturity and automation charts, the process assessment trend and the PPM cumulative cost charts are drawn with the same ECharts engine as the dashboards and reports; Recharts is no longer used by the application (the extension SDK keeps `loadRecharts` until UI SDK 2.0).
+
+### Fixed
+- BPM maturity and automation charts showed raw option keys (`fullyAutomated`, `defined`, …) instead of the translated option labels and dropped every other axis label; the maturity and risk chips in the top-risk table showed raw keys too.
+- The PPM cost charts lost their value-axis labels and clipped the budget-line labels in right-to-left locales.
+- Dates formatted by the workspace date format used the browser's language for the month name, so an Arabic (or German, …) interface showed English months and right-to-left pages read them in the wrong order; the month now follows the interface language.
+- The PPM cumulative cost charts labelled only every other month in right-to-left locales; every month is labelled.
+- The BPM dashboard's risk and maturity chips always used white text, unreadable on the yellow "Defined" maturity; the text colour now follows the chip's fill.
+- The BPM dashboard's risk chips fall back to the same severity scale as the Process Navigator when a risk level option has no colour (they previously used their own red/orange/green scale), and show the translated option label instead of the raw key. Process cards and drawers whose type or overlay colour is pale now show dark text and controls on the header instead of white.
+
+## [2.182.0] - 2026-10-30
+
+### Added
+- UI SDK 1.32: `loadECharts` resolves the ECharts wrapper, the theme-aware chart chrome and the option helpers core's dashboards and reports draw with; `loadRecharts` and `useChartTheme` are deprecated and will be removed at UI SDK 2.0.
+
+### Changed
+- The Cost report treemap and the Data Quality report's completeness and end-of-life coverage charts are drawn with the same ECharts engine as the homepage dashboards: one look in light and dark mode, mirrored correctly in right-to-left locales, and crisp in PowerPoint exports.
+
+### Fixed
+- Counts in Arabic and Russian fell back to English for most numbers (for example "58 total items" in a Data Quality tooltip) because the plural forms for the few, many, two and zero categories were missing; every plural string now carries the full set for both languages.
+
+## [2.181.0] - 2026-10-28
+
+### Added
+- **Editable homepage dashboards**: administrators can click **Customize** on the homepage to drag, resize and remove widgets on a 12-column grid, then **Save** or **Discard** the changes. A widget resizes from its right or bottom edge, by mouse or by touch, and the widget beside it adjusts as you drag: it narrows when its neighbour grows and widens back when it shrinks. A widget snaps to the grid as you resize it, the landing area is marked in blue, and the page keeps room under the last row so it can be dragged taller. On a narrower window the widgets reflow to six columns, and on a phone to one, instead of piling up. **Undo** and **Redo** step through the changes made since Customize was opened (Ctrl+Z / Ctrl+Shift+Z). A new permission, **Manage homepage dashboards** (`admin.dashboards`), granted to the Admin role by default, controls who may do this.
+- **Add widget** catalogue, grouped as KPIs, Charts, Overview, My Workspace and Admin: any built-in widget can be placed on any dashboard, and a widget removed by mistake, such as Recent activity, is restored by adding it again.
+- **KPI tiles** of your own: count cards of a type (optionally by subtype, approval status or lifecycle phase), or sum or average a number, cost or percentage field. Each tile keeps a trend arrow, which starts the day after the tile is saved.
+- **Chart widgets** drawn as bar, column, stacked column, line, pie, donut, a banded gauge (a share, a score or a count against a target, with warn and good thresholds), heatmap (two dimensions), treemap or sankey (a relation type, with a dimension of your choice at each end, down to the cards themselves), grouping cards by type, subtype, approval status, lifecycle phase, data quality, month created, a single-select or yes/no field, a related card (Applications per Organization), each card of a type (a treemap of cost per application), EOL coverage, or go-live and end-of-life month. Four ready-made charts — applications per organization, end-of-life calendar, stale cards by type, Organization → Application — sit in the catalogue. A click on a bar, slice or card node opens the inventory, report or card behind it, **Show values on the chart** prints the figures on bars, columns, tiles and cells, and a chart keyed by card says under the chart when only its largest cards are shown.
+- **Measures, filters and shares** on charts and KPI tiles: sum or average the relations of a type per card or data quality; narrow to orphaned, stale, without stakeholders, missing an end-of-life, or cards that have or lack a relation of a type; show a share of the unfiltered count. KPI tiles can show a 30-day sparkline and an "of N" or share figure. Cost sums count only the cards live in the current fiscal year, like the Cost report, and name the year.
+- **Module tiles**: risks by level and status, open and overdue risks, compliance scores by regulation, PPM schedule health and initiatives at risk, BPM maturity and processes without a diagram, offered when the module is on and you hold its permission.
+- New dashboards, **Duplicate** of an existing one, and **Access** by role: each dashboard can be limited to chosen roles, or left open to everyone; the Admin dashboard ships with Access set to the roles that may manage users, and the settings name the permissions its widgets need.
+- **Hide**, reorder and **Reset to default** for dashboards: a built-in dashboard can always be restored to the widgets Turbo EA ships with, and a custom one can be deleted. Every dashboard change is recorded in the Security & admin audit log, and dashboards travel with a workspace transfer.
+
+### Changed
+- The homepage tabs Overview, My Workspace and Admin are now dashboards built from widgets; they look as before until an administrator changes them, and upgrades never overwrite a customized dashboard.
+- The trend caption under the KPI tiles now shows the comparison window actually used, instead of always saying 30 days while the history is shorter.
+
+## [2.180.3] - 2026-10-28
+
+### Fixed
+- Roles with keys longer than 20 characters can now be assigned to users, used in SSO invitations and set as the default sign-up role; saving such a user used to fail with a server error ([#1330](https://github.com/vincentmakes/turbo-ea/issues/1330)).
+
+
+## [2.180.2] - 2026-10-28
+
+### Changed
+- Maintenance of extension license handling.
+
+## [2.180.1] - 2026-10-28
+
+### Fixed
+- **Manage relation values** on Business Process → Application saves again: hiding a built-in Usage value or adding a value was always refused with "cannot be edited" ([#1327](https://github.com/vincentmakes/turbo-ea/issues/1327)).
+- When **Manage relation values** refuses a change to a built-in type or value, the message is now in the user's language and names the value by its label.
+- Relation attributes are translated in every language: the Usage values of Business Process → Application (Creates, Reads, Updates, Deletes, Orchestrates), Usage Type, Support Type, the Create / Read / Update / Delete flags and Annual Cost. Existing installations receive them on the next restart.
+- Arabic: four relation verbs showed the name of an attribute (“usage type”, “support type”, “usage”) instead of the verb; they now read *uses*, *supports* and *is supported by*.
+
+## [2.180.0] - 2026-10-28
+
+### Added
+- Every record an AI tool creates through the MCP server now says so: cards, diagrams, risks, decisions (ADRs), statements of architecture work, comments and process-flow versions carry the channel that made them (**web**, **MCP**, API, extension or system) next to the person who made them. The card header, the inventory (two optional columns and an **Origin** filter), a card's History tab, the diagrams gallery and each module's created-by column show a **via MCP** marker; nothing is shown for records made in the web UI.
+- Creating or editing a diagram from an AI tool now has a real dry run: the backend checks the permission, the card links and what the user may read, then rolls everything back and returns the verified preview, including which card links an edit would add or remove.
+
+### Changed
+- Every call an AI tool makes through the MCP server, previews included, is now one mutation batch in **Admin → Audit log → Changes**. A preview shows as a *Dry run* batch, so an administrator can see what an agent proposed as well as what it committed. Previously the diagram, BPMN import, comment, ADR signing and lifecycle tools recorded nothing on preview, and three of them recorded nothing on commit either.
+- Diagram creation, edits and deletion are now recorded in the Changes audit log — from the web UI as well as from an AI tool. Rolling back a batch deletes a diagram it created, unless the diagram has been published since; a diagram edit is reported as not reversible, because the previous canvas is not kept.
+
+### Fixed
+- The MCP `create_diagram` tool's preview no longer skips the backend: card links are verified before anything is committed, instead of being rejected only on commit.
 
 ## [2.179.0] - 2026-10-26
 

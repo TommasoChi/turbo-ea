@@ -4,7 +4,7 @@ La pagina **Impostazioni** sotto **Admin → Impostazioni** (`/admin/settings`) 
 
 | Scheda | URL | Cosa controlla | Guida completa |
 |--------|-----|----------------|----------------|
-| **Generale** | `/admin/settings?tab=general` | Aspetto (logo, favicon, valuta, formato data, lingue abilitate, anno fiscale), invio email, **interruttori dei moduli** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Questa pagina |
+| **Generale** | `/admin/settings?tab=general` | Aspetto (logo, favicon, valuta, formato data, lingue abilitate, anno fiscale), invio email, **interruttori dei moduli** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button, Modalità TurboRPG) | Questa pagina |
 | **Autenticazione** | `/admin/settings?tab=authentication` | Provider SSO, registrazione, politica delle password | [Autenticazione & SSO](sso.md) |
 | **IA** | `/admin/settings?tab=ai` | Provider LLM, modello, backend di ricerca web, interruttori di suggerimento IA per tipo di card | [Funzionalità IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Collegamento in massa dei prodotti a voci di endoflife.date | [Fine vita (EOL)](eol.md) |
@@ -232,6 +232,26 @@ Come il controllo delle versioni, questo è **solo informativo**: non viene scar
 Mostra o nascondi il pulsante **Sostieni** nel menu utente (avatar). Quando è nascosto, gli utenti non vedono più il pulsante Sostieni nel loro menu del profilo. Il pulsante Sostieni — e la finestra che spiega come sostenere Turbo EA — rimane sempre disponibile da questo pannello delle impostazioni, così gli amministratori possono comunque raggiungerlo anche quando è nascosto dal menu.
 
 Se la tua azienda sostiene Turbo EA e desidera che il suo logo venga mostrato su turbo-ea.org, scrivi a [sponsorship@turbo-ea.org](mailto:sponsorship@turbo-ea.org).
+
+## TurboRPG (qualità dei dati gamificata)
+
+![Interruttore della modalità TurboRPG](../assets/img/it/95c_admin_impostazioni_gamification.png)
+
+La **modalità TurboRPG** trasforma la qualità dei dati in un gioco. Attivatela per celebrare ogni salvataggio che migliora la qualità dei dati di una scheda. È **disattivata** per impostazione predefinita e vale per tutti; non esiste un'impostazione per singolo utente.
+
+Quando è attiva, il salvataggio di una modifica che aumenta il punteggio di una scheda riproduce una breve ricompensa nella pagina della scheda e nel pannello di anteprima della scheda, come quando si guadagna salute in un gioco:
+
+- un **+X%** verde luminoso (i punti aggiunti dal salvataggio) lascia la sezione salvata — la sua intestazione, dove si trova il pulsante Salva — e vola ad arco fino all'**anello della qualità dei dati**;
+- all'**impatto** l'anello lampeggia, un alone e un bagliore del colore del punteggio si diffondono da esso, un riflesso lo attraversa, si ingrandisce, il suo riempimento cresce fino al nuovo punteggio come una barra della salute, e il numero conta in crescendo;
+- nella pagina della scheda, una volta scorsa l'intestazione della scheda, una sottile **barra del punteggio** resta fissata sotto la barra superiore con il nome e il punteggio della scheda; finché è visibile, il guadagno vola verso di essa. Fate clic sul punteggio della barra — il chip con il chevron — per aprire lo stesso dettaglio della qualità dei dati dell'anello.
+
+Un salvataggio fatto dall'intestazione (il nome o il sottotipo) o dalla sezione End of Life non ha alcuna sezione da cui partire, quindi il **+X%** si limita a salire sopra l'anello.
+
+Due momenti contano come **traguardi** e ricevono una breve pioggia di coriandoli con una didascalia: il raggiungimento della fascia verde (**80%** e oltre, *Completo!*) e il raggiungimento del **100%** (*Punteggio perfetto!*).
+
+Un salvataggio che **cancella o rimuove dati** e abbassa il punteggio riproduce l'inverso attenuato, in modo che si legga come punti che se ne vanno e non come una penalità: un **−X%** rosso vola via dall'anello tornando alla sezione, la barra si svuota — la larghezza persa resta rossa per un istante — e il numero conta alla rovescia e si attenua brevemente. Non ci sono lampi, aloni né coriandoli.
+
+Gli utenti che hanno attivato la **riduzione del movimento** nel sistema operativo non vedono alcun movimento: nulla vola, il punteggio si aggiorna subito e per due secondi compare un'etichetta **+X%** (o **−X%** rosso) statica. Gli screen reader annunciano ogni modifica una sola volta (ad esempio *+6,7% di qualità dei dati* o *−6,7% di qualità dei dati*).
 
 ## Impostazioni TurboLens
 

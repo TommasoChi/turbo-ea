@@ -12,9 +12,14 @@ Le haut de la fiche affiche :
 - **Nom de la fiche** -- Modifiable en ligne
 - **Alias** -- L'autre nom de la fiche, affiché sous le titre lorsqu'il est renseigné. Le crayon d'édition du titre permet de modifier le nom et l'alias ensemble. Les alias sont pris en compte par tous les champs de recherche : une fiche se retrouve donc par le nom réellement employé dans votre organisation.
 - **Sous-type** -- Classification secondaire (le cas échéant)
+- **Pastille d'origine** -- Affichée lorsque la fiche n'a pas été créée dans l'interface web : **MCP** pour une fiche créée par un assistant IA via le [serveur MCP](../admin/mcp.md), **API** pour un script ou une intégration, **Extension** pour une extension installée, **Système** pour une tâche de fond. Survolez-la pour voir qui a créé la fiche et quand — la personne reste le créateur ; la pastille indique le canal utilisé. Les fiches créées dans l'interface web, ainsi que celles créées avant que Turbo EA ne consigne le canal, n'affichent aucune pastille.
 - **Badge de statut d'approbation** -- Brouillon, Approuvé, Cassé ou Rejeté
 - **Bouton de suggestion IA** -- Cliquez pour générer une description avec l'IA (visible lorsque l'IA est activée pour ce type de fiche et que l'utilisateur a la permission de modification)
-- **Anneau de qualité des données** -- Indicateur visuel de complétude des informations (0-100%)
+- **Anneau de qualité des données** -- Indicateur visuel de complétude des informations (0-100 %). Survolez-le pour voir les trois éléments qui augmenteraient le plus le score, chacun avec le nombre de points qu'il ajouterait (par exemple *Renseigner Criticité métier +12,5 %*). Cliquez dessus (ou donnez-lui le focus et appuyez sur Entrée) pour ouvrir le détail complet dans un panneau à droite de la page, qui reste ouvert pendant que vous modifiez : chaque élément restant à renseigner, classé selon sa contribution, et une liste **Déjà comptabilisé** de ce qui est en place. Chaque élément restant à renseigner est un lien : un clic ouvre la section où il se renseigne **en mode édition**, avec ce champ sélectionné (ou la boîte de dialogue **Ajouter une relation** pour le type de relation, l'éditeur de tags, ou le formulaire d'ajout de l'onglet **Parties prenantes**), le panneau restant ouvert. Sans le droit de modifier cette partie de la fiche, le lien ouvre seulement la section et y fait défiler la page. Tant qu'un champ obligatoire est vide, le score reste à 0 % ; le détail nomme ces champs et indique le score sans eux. Fermez le panneau avec le bouton **Fermer** de son en-tête ; votre navigateur mémorise s'il est ouvert, il est donc encore là sur la fiche suivante. Sur une fenêtre de moins de 900 px de large, il s'ouvre à la place sous forme de tiroir, qui se ferme lorsque vous suivez l'un de ses liens.
+
+![Panneau de détail de la qualité des données](../assets/img/fr/63_fiche_qualite_donnees_detail.png)
+
+Lorsqu'un administrateur active le [mode TurboRPG](../admin/settings.md#turborpg-qualité-des-données-gamifiée) (qualité des données gamifiée), chaque enregistrement qui augmente le score est célébré comme un gain de vie dans un jeu : un **+X%** lumineux quitte la section que vous venez d'enregistrer, file vers le score et le frappe – l'anneau s'illumine et rayonne, son remplissage grandit jusqu'au nouveau score et le chiffre s'incrémente. Dès que vous dépassez l'en-tête, une fine barre de score épinglée sous la barre supérieure garde le score en vue et le gain s'y pose à la place. Cliquez sur le score de la barre — la pastille avec le chevron — pour ouvrir le même détail que celui de l'anneau. L'entrée dans la zone verte (80%) et l'atteinte de 100% sont des paliers avec une courte pluie de confettis. Effacer ou supprimer des données joue l'inverse atténué : un **−X%** rouge quitte le score et retourne vers la section, et la barre se vide et décompte, sans éclat ni confettis. Si la réduction des animations est activée dans votre système d'exploitation, rien ne s'envole ; vous voyez à la place un **+X%** ou **−X%** statique.
 - **Menu d'actions** -- Archiver, supprimer et actions d'approbation. Contient aussi une option en un clic **Observer cette fiche** (lorsque le type de fiche définit un rôle Observateur) qui permet à tout utilisateur disposant d'un accès en lecture de suivre la fiche sans passer par l'onglet Parties prenantes.
 
 ### Logo personnalisé
@@ -115,6 +120,7 @@ Pour les types de fiches qui prennent en charge la hiérarchie (par ex. Organisa
 
 - **Parent** -- Le parent de la fiche dans la hiérarchie (cliquer pour naviguer)
 - **Enfants** -- Liste des fiches enfants (cliquer sur l'une d'elles pour naviguer)
+- **Ouvrir dans un nouvel onglet** -- Le parent, les enfants et le fil d'Ariane sont des liens : clic du milieu ou Ctrl/Cmd-clic (ou clic droit → *Ouvrir dans un nouvel onglet*) pour ouvrir cette fiche dans un nouvel onglet du navigateur tout en gardant la fiche actuelle en place
 - **Grouper par sous-type** — Lorsqu'une fiche a de nombreux enfants de sous-types différents (par exemple des unités opérationnelles, des régions et des équipes sous une même société), ils sont automatiquement regroupés en sections repliables par sous-type, chacune avec son nombre, suivies d'une section **Aucun sous-type** pour les enfants non classés. Le bouton grouper/liste à côté du nombre d'**enfants** bascule entre la vue groupée et la liste simple.
 - **Fil d'Ariane hiérarchique** -- Affiche le chemin complet de la racine à la fiche actuelle
 - **Type de lien** -- Lorsqu'un administrateur a configuré des types de lien pour ce type de fiche, chaque lien parent-enfant peut être qualifié -- par exemple une filiale *commerciale* et une autre *vente*. Le libellé appartient à la fiche enfant : la fiche parente l'affiche à côté de chaque enfant, et la fiche enfant à côté de son parent. Retirer une fiche ou la remonter au niveau supérieur efface son libellé, et la modification est consignée dans l'onglet **Historique**.
@@ -123,7 +129,7 @@ Pour les types de fiches qui prennent en charge la hiérarchie (par ex. Organisa
 
 Affiche toutes les connexions avec d'autres fiches, groupées par type de relation. Pour chaque relation :
 
-- **Nom de la fiche liée** -- Cliquer pour naviguer vers la fiche liée
+- **Nom de la fiche liée** -- Cliquer pour naviguer vers la fiche liée. Clic du milieu ou Ctrl/Cmd-clic (ou clic droit → *Ouvrir dans un nouvel onglet*) pour l'ouvrir plutôt dans un nouvel onglet du navigateur — cela fonctionne aussi dans la liste **+N dans les sous-éléments**, dans les listes de filiation (Lineage) et dans la fiche survolée d'une partie prenante
 - **Type de relation** -- La nature de la connexion (par ex. « utilise », « s'exécute sur », « dépend de »)
 - **Ajouter une relation** -- Cliquez sur **+** pour ouvrir la boîte de dialogue de cette relation. Elle liste les fiches correspondantes au fil de la saisie (les meilleures correspondances d'abord, d'autres se chargent au défilement) et masque celles déjà liées, avec une légende indiquant leur nombre. Cliquer sur une fiche la lie aussitôt et elle apparaît sous forme de puce en haut -- cliquez sur le **×** d'une puce pour annuler cet ajout. La boîte de dialogue reste ouverte pour en ajouter autant que vous voulez, et sur téléphone elle s'ouvre en plein écran. Les relations sans section propre sont accessibles via le bouton **Ajouter une relation** en bas de la section. Lorsque le type lié est hiérarchique (capacité métier, organisation, etc.), la boîte de dialogue l'affiche sous forme d'arborescence indentée plutôt qu'en liste alphabétique, ce qui permet de choisir une sous-capacité par sa branche. La recherche conserve les parents d'un résultat pour le contexte, et les fiches non sélectionnables (déjà liées, tout juste ajoutées, ou la fiche elle-même) restent à leur place en grisé afin que les niveaux alentour restent lisibles.
 - **Tri** -- Les fiches liées sont listées par ordre alphabétique
@@ -167,7 +173,7 @@ Si la fiche est liée à un produit [endoflife.date]( (via [Administration EOL](
 
 - **Ajouter des commentaires** -- Laissez des notes, questions ou décisions concernant le composant
 - **Réponses en fil** -- Répondez à des commentaires spécifiques pour créer des fils de conversation
-- **Horodatages** -- Voyez quand chaque commentaire a été publié et par qui
+- **Horodatages** -- Voyez quand chaque commentaire a été publié et par qui. Un commentaire publié par un assistant IA via le serveur MCP porte une pastille **MCP** à côté de l'auteur
 - **Liens** -- Une adresse web dans un commentaire est cliquable et s'ouvre dans un nouvel onglet
 
 ## Onglet Tâches
@@ -205,6 +211,8 @@ Le chemin d'invitation nécessite la permission **`users.invite`**, une forme d�
 ## Onglet Historique
 
 ![Historique des modifications de la fiche](../assets/img/fr/08_fiche_historique.png)
+
+Une modification qui ne vient pas de l'interface web porte une pastille à côté du nom de la personne : **MCP** lorsqu'un assistant IA l'a effectuée via le [serveur MCP](../admin/mcp.md) au nom de cette personne, **API**, **Extension** ou **Système** dans les autres cas.
 
 Affiche la **piste d'audit complète** des modifications apportées à la fiche : **qui** a effectué la modification, **quand** elle a été effectuée, et **ce qui** a été modifié (valeur précédente vs nouvelle valeur). Cela permet une traçabilité complète de toutes les modifications au fil du temps.
 

@@ -30,6 +30,7 @@ const h = vi.hoisted(() => ({
   currencyInvalidate: vi.fn(),
   invalidateAppTitle: vi.fn(),
   invalidateSponsorButtonEnabled: vi.fn(),
+  invalidateGamificationEnabled: vi.fn(),
   invalidateArchiveRetentionDays: vi.fn(),
   invalidateAuditLogRetentionDays: vi.fn(),
   invalidateLoginBranding: vi.fn(),
@@ -62,6 +63,12 @@ vi.mock("@/hooks/useSponsorButtonEnabled", async () => {
     "@/hooks/useSponsorButtonEnabled",
   );
   return { ...actual, invalidateSponsorButtonEnabled: h.invalidateSponsorButtonEnabled };
+});
+vi.mock("@/hooks/useGamificationEnabled", async () => {
+  const actual = await vi.importActual<typeof import("@/hooks/useGamificationEnabled")>(
+    "@/hooks/useGamificationEnabled",
+  );
+  return { ...actual, invalidateGamificationEnabled: h.invalidateGamificationEnabled };
 });
 vi.mock("@/hooks/useArchiveRetentionDays", async () => {
   const actual = await vi.importActual<typeof import("@/hooks/useArchiveRetentionDays")>(
@@ -153,6 +160,7 @@ const BOOTSTRAP = {
   grc_enabled: true,
   archimate_enabled: false,
   sponsor_button_enabled: true,
+  gamification_enabled: false as boolean | undefined,
   update_check_enabled: true,
   announce_upgrades_enabled: true,
   extension_notices_enabled: true,
@@ -700,6 +708,50 @@ describe("SettingsAdmin — module toggles", () => {
     await screen.findByText(t("settings.sponsorButton.disabledSuccess"));
     expect(mockApi.callsOf("patch", "/settings/sponsor-button-enabled")[0].body).toEqual({ enabled: false });
     expect(h.invalidateSponsorButtonEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it("turns TurboRPG mode (gamified data quality) on and broadcasts the flag", async () => {
+    const { user } = await renderGeneral();
+    mockApi.on("patch", "/settings/gamification-enabled", {});
+    const card = section("TurboRPG mode");
+    expect(card.getByText(t("settings.gamification.disabled"))).toBeInTheDocument();
+    expect(card.getByText(/^Saves that raise a card.s data quality are celebrated: a glowing \+X% flies/)).toBe(
+      card.getByText(t("settings.gamification.description")),
+    );
+    const toggle = card.getByRole("checkbox", { name: t("settings.gamification.off") });
+    expect(toggle).not.toBeChecked();
+
+    await user.click(toggle);
+
+    await screen.findByText("TurboRPG mode enabled");
+    expect(mockApi.callsOf("patch", "/settings/gamification-enabled")[0].body).toEqual({ enabled: true });
+    expect(h.invalidateGamificationEnabled).toHaveBeenCalledWith(true);
+    expect(card.getByText(t("settings.gamification.enabled"))).toBeInTheDocument();
+    expect(card.getByRole("checkbox", { name: t("settings.gamification.on") })).toBeChecked();
+  });
+
+  it("turns TurboRPG mode off when the bootstrap says it is on", async () => {
+    scriptLoad({ bootstrap: { gamification_enabled: true } });
+    const { user } = await renderGeneral();
+    mockApi.on("patch", "/settings/gamification-enabled", {});
+    const card = section(t("settings.gamification.title"));
+    await user.click(card.getByRole("checkbox", { name: t("settings.gamification.on") }));
+    await screen.findByText("TurboRPG mode disabled");
+    expect(mockApi.callsOf("patch", "/settings/gamification-enabled")[0].body).toEqual({ enabled: false });
+    expect(h.invalidateGamificationEnabled).toHaveBeenCalledWith(false);
+    expect(card.getByText(t("settings.gamification.disabled"))).toBeInTheDocument();
+  });
+
+  it("keeps the gamification switch where it was when the save fails", async () => {
+    const { user } = await renderGeneral();
+    mockApi.fail("patch", "/settings/gamification-enabled", 500);
+    const card = section(t("settings.gamification.title"));
+    await user.click(card.getByRole("checkbox", { name: t("settings.gamification.off") }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "PATCH /settings/gamification-enabled failed",
+    );
+    expect(card.getByRole("checkbox", { name: t("settings.gamification.off") })).not.toBeChecked();
+    expect(h.invalidateGamificationEnabled).not.toHaveBeenCalled();
   });
 });
 

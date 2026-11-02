@@ -112,10 +112,52 @@ export const HEALTH_COLORS = {
   bad: STATUS_COLORS.error,
 } as const;
 
+// ── EOL coverage (where a card's End-of-Life data comes from) ────────────
+// Deliberately not the EOL *status* palette: these say whether anything is
+// recorded at all, not how urgent an end of life is, so they avoid red/amber.
+
+export const EOL_COVERAGE_COLORS = {
+  linked: "#1976d2",
+  manual: "#3949ab",
+  missing: STATUS_COLORS.neutral,
+} as const;
+
 export const RAG_COLORS = {
   red: "#d32f2f",
   amber: "#f57c00",
   green: "#2e7d32",
+} as const;
+
+/** End-of-life warning — an application, component or capability whose end of
+ *  life has passed or is near (reports, card lists, the Process Navigator
+ *  drawer) — orange 900. Not the BusinessProcess card-type colour, which
+ *  shares the value today. */
+export const EOL_WARNING_COLOR = "#e65100";
+
+// ── Print pages (a bare browser window outside the MUI theme) ────────────
+
+/** Inks of every print page the app opens in a new window (`lib/printDocument.ts`,
+ *  the BPM process-flow print): white paper, outside the MUI theme and dark mode. */
+export const PRINT_COLORS = {
+  text: "#333333",
+  muted: "#888888",
+  rule: "#dddddd",
+  panel: "#f5f5f5",
+  control: "#cccccc", // border of the secondary (Close) button, table rules
+  paper: "#ffffff", // also the text on a filled (fully-signed) badge
+  // The document print (`DOCUMENT_PRINT_CSS`): headings, body ink, the
+  // signature block's rule, cards and badges.
+  heading: "#1a1a2e", // h1 title
+  ink: "#222222", // body text
+  subheading: "#444444", // h3
+  inkSecondary: "#666666", // a signature's detail line
+  ruleLight: "#e0e0e0", // the rule above the signatures
+  panelLight: "#fafafa", // a pending signature card
+  success: "#2e7d32", // signed: badge text, fully-signed fill, approved status
+  successLight: "#66bb6a", // an approved signature card's border
+  successPale: "#f1f8e9", // an approved signature card's fill
+  successTint: "#e8f5e9", // the "signed" badge's fill
+  warning: "#ed6c02", // a pending signature's status
 } as const;
 
 // ── Notification-type accents (NotificationBell) ─────────────────────────
@@ -210,7 +252,7 @@ export const CARD_TYPE_COLORS = {
   Organization: "#2889ff",
   BusinessCapability: "#003399",
   BusinessContext: "#fe6690",
-  BusinessProcess: "#e65100",
+  BusinessProcess: "#028f00",
   Application: "#0f7eb5",
   Interface: "#02afa4",
   DataObject: "#774fcc",
@@ -287,10 +329,190 @@ export const CATEGORICAL_COLORS = [
   "#d32f2f",
 ] as const;
 
+// ── Dashboard charts (ECharts) ──────────────────────────────────────────
+
+/**
+ * Fixed-order categorical hues for dashboard charts, selected per mode (the
+ * dark column is the same eight hues stepped for the dark paper, not a flip).
+ * Assign by slot index in a fixed order, never cycled: a ninth category folds
+ * into "Other". The order is part of the colour-blind safety — validated with
+ * the dataviz palette script against `surface.*.paper` (light: worst adjacent
+ * CVD ΔE 9.1, normal-vision 19.6; dark: 8.4 / 19.3). Three light slots sit
+ * under 3:1 on white, so dashboard charts always carry a tooltip and a legend
+ * or direct labels. Status dimensions use their status tokens instead.
+ */
+export const CHART_CATEGORICAL = {
+  light: ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"],
+  dark: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"],
+} as const;
+
+/** The Cost report treemap's tile fills: a sequential blue ramp, cycled by
+ *  cost rank (index 0 is the most expensive card), kept from the original
+ *  Cost report so the look does not change. */
+export const COST_TREEMAP_COLORS = [
+  "#1565c0",
+  "#1976d2",
+  "#1e88e5",
+  "#2196f3",
+  "#42a5f5",
+  "#64b5f6",
+  "#90caf9",
+  "#bbdefb",
+  "#0d47a1",
+  "#1565c0",
+] as const;
+
+/** Label text printed on a dark, saturated chart fill (the cost treemap's
+ *  blue tiles), and its translucent variant for a secondary line. */
+export const CHART_LABEL_ON_DARK = "#ffffff";
+export const CHART_LABEL_ON_DARK_MUTED = "rgba(255,255,255,0.8)";
+
+/** Single-hue sequential ramp ends (low → high) for heatmaps and their
+ *  legend, per mode, anchored on the brand blue so a heatmap reads as the
+ *  app's own colour. Light: Material Blue 50 (`#e3f2fd`, recedes into the
+ *  white paper) → `brand.primary` (`#1976d2`, 4.6:1 on white). Dark: a deep
+ *  navy (`#1e3a5f`, recedes into the dark paper) → `brand.primaryLight`
+ *  (Material Blue 200), the brand's legible variant on dark surfaces. */
+export const CHART_SEQUENTIAL = {
+  light: ["#e3f2fd", brand.primary],
+  dark: ["#1e3a5f", brand.primaryLight],
+} as const;
+
+/** Accent colours of the homepage KPI tiles — the values the Overview,
+ *  My Workspace and Admin tiles have always used, named once here. */
+export const DASHBOARD_KPI_COLORS = {
+  total: brand.primary,
+  completion: STATUS_COLORS.success,
+  approved: RAG_COLORS.green,
+  broken: RAG_COLORS.amber,
+  favorites: "#f5a623",
+  stakeholders: brand.primary,
+  todos: "#43a047",
+  surveys: "#7b1fa2",
+  activeUsers: "#43a047",
+  noStakeholders: "#ef6c00",
+  overdue: RAG_COLORS.red,
+  stuck: "#7b1fa2",
+  /** Overall data quality: ≥ 75 %, ≥ 50 %, below. */
+  qualityGood: "#43a047",
+  qualityFair: "#f5a623",
+  qualityPoor: RAG_COLORS.red,
+} as const;
+
+/** The BPM process-assessment trend: one categorical hue per scored
+ *  dimension, keyed by the assessment field it plots — not a status scale. */
+export const BPM_ASSESSMENT_COLORS = {
+  overall_score: brand.primary,
+  efficiency: "#4caf50",
+  effectiveness: "#ff9800",
+  compliance: "#9c27b0",
+  automation: "#00bcd4",
+} as const;
+
+// ── BPM ─────────────────────────────────────────────────────────────────
+// The BPM screens' own hues, kept at the values they have always rendered.
+// A token is referenced only where the hue IS that token's meaning (a data
+// object is the DataObject card); a hue that merely shares a value stays a literal.
+
+/** BPMN element-type icon colours, keyed by element family (resolved per
+ *  element type in `features/bpm/elementTypes.ts`). This is the BPMN icon
+ *  palette and is deliberately literal, not references to the brand, severity,
+ *  RAG or card-type tokens that happen to share a value today: re-tuning one of
+ *  those (e.g. correcting the BusinessProcess fallback to the seeded `#028f00`)
+ *  must not repaint a BPMN element. */
+export const BPMN_ELEMENT_COLORS = {
+  task: "#1976d2", // task, user task — blue 700
+  service: "#7b1fa2", // service task — purple 700
+  script: "#00695c", // script task — teal 800
+  rule: "#e65100", // business-rule task, boundary event — orange 900
+  messaging: "#0097a7", // send / receive task — cyan 700
+  manual: "#795548", // manual task — brown 500
+  subprocess: "#512da8", // call activity, sub-process, transaction, ad-hoc — deep purple 700
+  gateway: "#f57c00", // every gateway, intermediate events — orange 700
+  start: "#2e7d32", // start event — green 800
+  end: "#c62828", // end event — red 800
+  data: CARD_TYPE_COLORS.DataObject, // data object / data store references — #774fcc
+  unknown: "#999999", // an element type the app does not know yet
+} as const;
+
+/** A Process Navigator card with no value for the chosen colour overlay, or a value no option knows. */
+export const BPM_UNSET_COLOR = "#bdbdbd";
+
+/** The BusinessProcess type colour as seeded (`seed.py`, pinned by `tokens.test.ts`): the
+ *  called-process badge, its link dot and the navigator header fallback, which also render
+ *  where no metamodel is loaded (portals). */
+export const BPM_CALLED_PROCESS_COLOR = CARD_TYPE_COLORS.BusinessProcess;
+
+/** Fill the read-only BPMN viewer paints behind an automated task — green 50. */
+export const BPM_HIGHLIGHT_FILL = "#e8f5e9";
+
+/** Message-flow rows (Process Flow → Message flows) share the messaging elements' hue. */
+export const BPM_MESSAGE_FLOW_COLOR = BPMN_ELEMENT_COLORS.messaging;
+
+/** Process-flow accent — the diagram icon on a navigator card and its "published flow" state, and
+ *  the "Auto" chip on an automated step. Purple 700, the service-task hue, but a different meaning. */
+export const BPM_FLOW_ACCENT_COLOR = "#7b1fa2";
+
+/** Hue of the faint wash behind an automated step in the navigator's step list (drawn at 4 %
+ *  alpha) — deep purple 400. */
+export const BPM_AUTOMATED_STEP_TINT = "#7e57c2";
+
+/** Outline of a link dot on the BPMN canvas, so a pale card-type colour still reads on white. */
+export const BPM_LINK_DOT_OUTLINE = "rgba(0,0,0,0.25)";
+
+/** Process-type option colours as seeded (`seed.py` `PROCESS_TYPE_OPTIONS`): the fallback while
+ *  the metamodel loads. Literals that mirror the seed, deliberately not tied to the brand token
+ *  that happens to share a value. */
+export const BPM_PROCESS_TYPE_COLORS = {
+  core: "#1976d2", // blue 700
+  support: "#607d8b", // blue grey 500
+  management: "#9c27b0", // purple 500
+} as const;
+
+/** Dark-mode values for the `--bio-*` variables of `@bpmn-io/properties-panel`, whose stylesheet
+ *  ships light values only (applied in `features/bpm/bpmnStyles.ts`). The danger / warning /
+ *  focus variables are left alone: they are contrast colours that read on either surface. */
+export const BPMN_DARK_THEME = {
+  "--bio-surface": surface.dark.paper, // #1e1e1e
+  "--bio-surface-overlay": surface.dark.paper, // #1e1e1e
+  "--bio-surface-subtle": "#232323",
+  "--bio-surface-medium": "#2a2a2a",
+  "--bio-surface-strong": "#333333",
+  "--bio-surface-inverted": "#e0e0e0",
+  "--bio-text": "hsl(0, 0%, 92%)",
+  "--bio-text-subtle": "hsl(0, 0%, 72%)",
+  "--bio-text-subtlest": "hsl(0, 0%, 58%)",
+  "--bio-text-on-inverted": "hsl(0, 0%, 12%)",
+  "--bio-border": "hsl(0, 0%, 32%)",
+  "--bio-border-subtle": "hsl(0, 0%, 26%)",
+  "--bio-border-disabled": "hsl(0, 0%, 22%)",
+  "--bio-border-input": "hsl(0, 0%, 38%)",
+  "--bio-primary-surface": "hsl(205, 60%, 18%)",
+  "--bio-primary-surface-strong": "hsl(205, 60%, 26%)",
+  "--bio-danger-surface": "hsl(360, 50%, 22%)",
+  "--bio-danger-surface-subtle": "hsl(360, 40%, 16%)",
+  "--bio-warning-surface": "hsl(38, 50%, 18%)",
+  "--bio-shadow": "hsla(0, 0%, 0%, 60%)",
+  "--bio-shadow-subtle": "hsla(0, 0%, 0%, 35%)",
+} as const;
+
 // ── Non-color tokens ────────────────────────────────────────────────────
 
 /** Border radius scale (px). MUI's `borderRadius` `sx` prop also accepts numbers from the spacing scale. */
 export const radius = { sm: 4, md: 8, lg: 12 } as const;
+
+/**
+ * Shadows for an outlined card in an arrange mode (the dashboard's customize
+ * mode). `soft` is the resting cue that the card can be picked up and moved;
+ * `lifted` says it is in hand while it is dragged. Both are faint and widely
+ * diffused on purpose — a large blur at a low alpha reads as a card floating
+ * well above the page rather than a rim around it; the card keeps its
+ * outlined border, and the shadow only adds to it.
+ */
+export const CARD_SHADOW = {
+  soft: "0 8px 24px rgba(0, 0, 0, 0.06)",
+  lifted: "0 16px 40px rgba(0, 0, 0, 0.14)",
+} as const;
 
 /** Spacing aliases for the MUI scale (1 unit = 8px by default). */
 export const spacing = { xs: 0.5, sm: 1, md: 1.5, lg: 2, xl: 3 } as const;

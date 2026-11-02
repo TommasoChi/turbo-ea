@@ -1487,11 +1487,16 @@ async def test_card_reference_survives_export_and_reimport(db):
     card.reference = "APP-0042"
     card.alias = "BIL"
     card.external_id = "ext-7"
+    # The channel that created it (migration 157) travels too: the applier
+    # builds the row from explicit kwargs, so the column constant alone would
+    # export it and drop it on import.
+    card.created_via = "mcp"
     await db.flush()
 
     raw = await build_bundle(db)
     row = next(r for r in parse_bundle(raw).rows(schema.SHEET_CARDS) if r["name"] == "Billing")
     assert (row["reference"], row["alias"], row["external_id"]) == ("APP-0042", "BIL", "ext-7")
+    assert row["created_via"] == "mcp"
 
     await db.execute(delete(Card).where(Card.name == "Billing"))
     await db.flush()
@@ -1503,6 +1508,9 @@ async def test_card_reference_survives_export_and_reimport(db):
         "BIL",
         "ext-7",
     )
+    # ``created_via`` is the exported channel; ``updated_via`` is not exported
+    # and is stamped by the import itself — outside any request, ``system``.
+    assert (restored.created_via, restored.updated_via) == ("mcp", "system")
 
 
 async def _billing_bundle_then_a_clash(db, reference_config):
@@ -1641,6 +1649,73 @@ async def test_card_type_categories_roundtrip(db):
     assert (section.created, section.updated) == (0, 0)
     assert section.skipped == 5
     assert section.skip_reasons == {"identical": 5}
+
+
+async def test_dashboards_roundtrip(db):
+    """Dashboards travel as config: a custom one deleted on the target comes
+    back whole — roles, JSON widgets, hidden flag — a built-in one an admin
+    edited is restored to the bundle's layout, and a re-import is all-skip."""
+    from app.models.dashboard import Dashboard
+    from app.services.dashboard_service import seed_dashboards
+
+    user = await create_user(db, email="dash-ws@test.com", role="admin")
+    await seed_dashboards(db)
+    widgets = [
+        {
+            "id": "kpi-apps",
+            "type": "kpi",
+            "title": "Apps",
+            "config": {"query": {"card_type": "Application"}, "good_direction": "up"},
+            "layout": {"x": 0, "y": 0, "w": 3, "h": 2},
+        }
+    ]
+    db.add(
+        Dashboard(
+            key="sales-a1b2c3",
+            name="Sales",
+            description="Pipeline",
+            icon="trending_up",
+            is_hidden=True,
+            sort_order=4,
+            allowed_roles=["viewer", "member"],
+            widgets=widgets,
+            translations={},
+        )
+    )
+    await db.flush()
+    overview = (await db.execute(select(Dashboard).where(Dashboard.key == "overview"))).scalar_one()
+    seeded_overview = list(overview.widgets)
+
+    raw = await build_bundle(db)
+    assert {r["key"] for r in parse_bundle(raw).rows(schema.SHEET_DASHBOARDS)} == {
+        "overview",
+        "workspace",
+        "admin",
+        "sales-a1b2c3",
+    }
+
+    await db.execute(delete(Dashboard).where(Dashboard.key == "sales-a1b2c3"))
+    overview.widgets = []
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+    section = next(s for s in result.sections if s.sheet == schema.SHEET_DASHBOARDS)
+    assert (section.created, section.updated) == (1, 1)
+    rows = {d.key: d for d in (await db.execute(select(Dashboard))).scalars().all()}
+    sales = rows["sales-a1b2c3"]
+    assert (sales.name, sales.description, sales.icon) == ("Sales", "Pipeline", "trending_up")
+    assert (sales.is_hidden, sales.sort_order, sales.built_in) == (True, 4, False)
+    assert sales.allowed_roles == ["viewer", "member"]
+    assert sales.widgets == widgets
+    await db.refresh(rows["overview"])
+    assert rows["overview"].widgets == seeded_overview
+    assert rows["overview"].built_in is True
+
+    again = await apply_bundle(db, parse_bundle(raw), user)
+    section = next(s for s in again.sections if s.sheet == schema.SHEET_DASHBOARDS)
+    assert (section.created, section.updated) == (0, 0)
+    assert section.skip_reasons == {"identical": 4}
 
 
 async def test_card_type_bundle_without_categories_sheet_adopts_the_category(db):

@@ -103,6 +103,8 @@ Le score de **qualité des données** d'une fiche mesure de manière pondérée 
 
 **Les champs obligatoires priment sur le score.** Tant qu'un champ obligatoire d'une fiche reste vide, son score reste à **0** quelles que soient les pondérations — le calcul pondéré ne s'applique qu'une fois tous les champs obligatoires remplis (les champs booléens et en lecture seule sont exemptés ; voir le réglage **Obligatoire** ci-dessus).
 
+Un champ est considéré comme renseigné dès qu'il contient une valeur. Pour un champ Oui / Non, **Oui** comme **Non** comptent — seul **Aucun** est vide — et un champ numérique compte lorsqu'il contient 0.
+
 L'importance de chaque facteur se règle avec un simple curseur à quatre niveaux, qui affiche aussi le nombre sous-jacent :
 
 - **Ignorer (0)** – entièrement exclu du score.
@@ -113,6 +115,8 @@ L'importance de chaque facteur se règle avec un simple curseur à quatre niveau
 Le panneau liste les cinq **facteurs intégrés** – **Description**, **Cycle de vie** (selon qu'une date de cycle de vie est renseignée), **Relations obligatoires**, **Étiquettes obligatoires** et **Rôles des parties prenantes** (un seul emplacement, satisfait dès qu'une personne est affectée à la fiche dans un rôle qui compte pour la qualité des données) – suivis de chaque champ regroupé par section, avec le même curseur. Par exemple, réglez le **Cycle de vie** sur *Ignorer* pour un type dont les fiches ne portent légitimement jamais de dates, afin qu'elles ne soient pas pénalisées.
 
 Une barre de **composition du score** en haut du panneau montre la part de chaque facteur dans le score maximal possible, pour voir d'un coup d'œil quels facteurs dominent. Dans la mise en page de la fiche de l'onglet **Principal**, chaque champ – ainsi que les sections intégrées Description, Cycle de vie et Relations – affiche un petit badge avec son niveau actuel, pour voir la pondération sans quitter cet onglet.
+
+Les utilisateurs voient le résultat facteur par facteur sur la fiche elle-même : le survol de l'anneau de qualité des données liste les éléments qui augmenteraient le plus le score, et un clic ouvre le détail complet (voir [Détail d'une fiche](../guide/card-details.md#en-tete-de-la-fiche)).
 
 Modifier une importance recalcule immédiatement le score de chaque fiche existante de ce type. Les nouveaux champs sont *Normale* par défaut et comptent donc dans le score dès que vous les ajoutez.
 

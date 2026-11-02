@@ -6,21 +6,11 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { createRef } from "react";
 
-vi.mock("@/api/client", () =>
-  import("@/test/apiMock").then((m) => m.apiClientModule()),
-);
-vi.mock("@/hooks/useMetamodel", () =>
-  import("@/test/hooks").then((m) => m.useMetamodelModule()),
-);
-vi.mock("@/hooks/useCurrency", () =>
-  import("@/test/hooks").then((m) => m.useCurrencyModule()),
-);
-vi.mock("@/hooks/useAuth", () =>
-  import("@/test/hooks").then((m) => m.useAuthModule()),
-);
-vi.mock("@/hooks/useIsRtl", () =>
-  import("@/test/hooks").then((m) => m.useIsRtlModule()),
-);
+vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
+vi.mock("@/hooks/useMetamodel", () => import("@/test/hooks").then((m) => m.useMetamodelModule()));
+vi.mock("@/hooks/useCurrency", () => import("@/test/hooks").then((m) => m.useCurrencyModule()));
+vi.mock("@/hooks/useAuth", () => import("@/test/hooks").then((m) => m.useAuthModule()));
+vi.mock("@/hooks/useIsRtl", () => import("@/test/hooks").then((m) => m.useIsRtlModule()));
 
 const saved = vi.hoisted(() => ({
   config: null as Record<string, unknown> | null,
@@ -42,30 +32,16 @@ vi.mock("@/hooks/useSavedReport", () => ({
 }));
 
 vi.mock("@/hooks/useThumbnailCapture", () => ({
-  useThumbnailCapture: () => ({
-    chartRef: createRef(),
-    thumbnail: undefined,
-    captureAndSave: () => {},
-  }),
+  useThumbnailCapture: () => ({ chartRef: createRef(), thumbnail: undefined, captureAndSave: () => {} }),
 }));
 vi.mock("@/features/reports/SaveReportDialog", () => ({ default: () => null }));
 vi.mock("@/components/CardDetailSidePanel", () => ({ default: () => null }));
-vi.mock("recharts", () => ({
-  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  Treemap: () => <div data-testid="treemap" />,
-  Tooltip: () => null,
-}));
+vi.mock("@/components/charts/EChart", () => import("@/test/echartMock").then((m) => m.echartModule()));
 
 import { mockApi } from "@/test/apiMock";
 import { hookState, withMetamodel } from "@/test/hooks";
 import { userWith } from "@/test/render";
-import {
-  makeCardType,
-  makeField,
-  makeSection,
-} from "@/test/fixtures/metamodel";
+import { makeCardType, makeField, makeSection } from "@/test/fixtures/metamodel";
 import CostReport from "./CostReport";
 
 /** An edited metamodel: the starting type no longer carries `costTotalAnnual`. */
@@ -80,9 +56,9 @@ const APP_WITHOUT_TOTAL = makeCardType({
   ],
 });
 
-const ITC_TYPE = makeCardType({
-  key: "ITComponent",
-  label: "IT Component",
+const PROJECT_TYPE = makeCardType({
+  key: "Project",
+  label: "Project",
   fields_schema: [
     makeSection({
       section: "Budget",
@@ -127,23 +103,18 @@ beforeEach(() => {
 
 describe("CostReport restore", () => {
   it("keeps a restored cost field of another type when the starting type lacks costTotalAnnual", async () => {
-    withMetamodel([APP_WITHOUT_TOTAL, ITC_TYPE], []);
-    saved.config = { cardTypeKey: "ITComponent", costField: "opex" };
+    withMetamodel([APP_WITHOUT_TOTAL, PROJECT_TYPE], []);
+    saved.config = { cardTypeKey: "Project", costField: "opex" };
     renderCost();
-    await screen.findByTestId("treemap");
+    await screen.findAllByTestId("echart");
     await waitFor(() =>
-      expect(lastPersisted()).toMatchObject({
-        cardTypeKey: "ITComponent",
-        costField: "opex",
-      }),
+      expect(lastPersisted()).toMatchObject({ cardTypeKey: "Project", costField: "opex" }),
     );
-    expect(
-      screen.getByRole("combobox", { name: /cost field/i }),
-    ).toHaveTextContent("Opex");
-    const itcFields = treemapCalls()
-      .filter((p) => p.get("type") === "ITComponent")
+    expect(screen.getByRole("combobox", { name: /cost field/i })).toHaveTextContent("Opex");
+    const projectFields = treemapCalls()
+      .filter((p) => p.get("type") === "Project")
       .map((p) => p.get("cost_field"));
-    expect(itcFields).toEqual(["opex"]);
+    expect(projectFields).toEqual(["opex"]);
   });
 
   it("keeps a restored cost field of the starting type when it lacks costTotalAnnual", async () => {
@@ -153,34 +124,26 @@ describe("CostReport restore", () => {
         ...APP_WITHOUT_TOTAL.fields_schema,
         makeSection({
           section: "Run",
-          fields: [
-            makeField({ key: "runCost", label: "Run Cost", type: "cost" }),
-          ],
+          fields: [makeField({ key: "runCost", label: "Run Cost", type: "cost" })],
         }),
       ],
     });
     withMetamodel([appTwo], []);
     saved.config = { costField: "runCost" };
     renderCost();
-    await screen.findByTestId("treemap");
-    await waitFor(() =>
-      expect(lastPersisted()).toMatchObject({ costField: "runCost" }),
-    );
-    expect(
-      screen.getByRole("combobox", { name: /cost field/i }),
-    ).toHaveTextContent("Run Cost");
+    await screen.findAllByTestId("echart");
+    await waitFor(() => expect(lastPersisted()).toMatchObject({ costField: "runCost" }));
+    expect(screen.getByRole("combobox", { name: /cost field/i })).toHaveTextContent("Run Cost");
     const fields = treemapCalls().map((p) => p.get("cost_field"));
     expect(fields[fields.length - 1]).toBe("runCost");
     expect(fields).not.toContain("appCost");
   });
 
   it("still picks the type's first cost field when nothing was restored", async () => {
-    withMetamodel([APP_WITHOUT_TOTAL, ITC_TYPE], []);
+    withMetamodel([APP_WITHOUT_TOTAL, PROJECT_TYPE], []);
     renderCost();
-    await screen.findByTestId("treemap");
-    await waitFor(() =>
-      expect(lastPersisted()).toMatchObject({ costField: "appCost" }),
-    );
+    await screen.findAllByTestId("echart");
+    await waitFor(() => expect(lastPersisted()).toMatchObject({ costField: "appCost" }));
     const fields = treemapCalls().map((p) => p.get("cost_field"));
     expect(fields[fields.length - 1]).toBe("appCost");
   });

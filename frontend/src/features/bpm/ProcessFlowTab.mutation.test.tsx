@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useLocation } from "react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
@@ -89,6 +89,8 @@ import ProcessFlowTab from "./ProcessFlowTab";
 import { mockApi } from "@/test/apiMock";
 import { hookState, withMetamodel } from "@/test/hooks";
 import { makeCardType } from "@/test/fixtures/metamodel";
+import { alpha } from "@mui/material/styles";
+import { PRINT_COLORS, STATUS_COLORS, brand } from "@/theme/tokens";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -234,10 +236,17 @@ function deferred<T = unknown>() {
   return { promise, resolve, reject };
 }
 
+/** Where the router is, so a link click can be asserted on (the Calls chip). */
+function LocationProbe() {
+  const loc = useLocation();
+  return <div data-testid="location">{loc.pathname + loc.search}</div>;
+}
+
 function ui(props: Record<string, unknown> = {}) {
   return (
     <MemoryRouter>
       <ProcessFlowTab processId="proc-1" processName="Order Process" {...props} />
+      <LocationProbe />
     </MemoryRouter>
   );
 }
@@ -914,8 +923,11 @@ describe("ProcessFlowTab published view", () => {
 
   it("drills into a linked process from its chip without opening the picker", async () => {
     const { user } = await renderPublished();
-    await user.click(within(cellOf(rowOf("Run Credit Check"), "Business Process")).getByText("Credit Check"));
-    expect(mockNavigate).toHaveBeenCalledWith("/cards/bp-7?tab=1");
+    const chip = within(cellOf(rowOf("Run Credit Check"), "Business Process")).getByText("Credit Check");
+    // A real link (#1335), so middle-click opens the callee in a new tab.
+    expect(chip.closest("a")).toHaveAttribute("href", "/cards/bp-7?tab=1");
+    await user.click(chip);
+    expect(screen.getByTestId("location")).toHaveTextContent("/cards/bp-7?tab=1");
     expect(screen.queryByPlaceholderText("Search Business Process...")).toBeNull();
     expect(screen.queryByRole("combobox")).toBeNull();
   });
@@ -1182,6 +1194,25 @@ describe("ProcessFlowTab printing", () => {
     expect(printWindow.print).toHaveBeenCalled();
     listeners["turbo-close-btn:click"]();
     expect(printWindow.close).toHaveBeenCalled();
+  });
+
+  it("inks the print page from the design tokens — it is a bare window outside the theme", async () => {
+    const { user } = await renderPublished();
+    await user.click(screen.getByRole("button", { name: /Print \/ PDF/ }));
+    await waitFor(() => expect(printWindow.document.close).toHaveBeenCalled());
+    const ok = STATUS_COLORS.success;
+    expect(written).toContain(`border-bottom: 2px solid ${ok};`);
+    expect(written).toContain(`.header h1 { font-size: 18px; color: ${PRINT_COLORS.text}; }`);
+    expect(written).toContain(`background: ${alpha(ok, 0.1)}; border: 1px solid ${ok};`);
+    expect(written).toContain(`fill: ${ok};`);
+    expect(written).toContain(`.watermark span { color: ${ok};`);
+    expect(written).toContain(`border-top: 1px solid ${PRINT_COLORS.rule};`);
+    expect(written).toContain(`color: ${PRINT_COLORS.muted}; }`);
+    expect(written).toContain(`background:${PRINT_COLORS.panel};border-bottom:1px solid ${PRINT_COLORS.rule}`);
+    expect(written).toContain(`background:${brand.primary};color:${PRINT_COLORS.paper};border:none`);
+    expect(written).toContain(
+      `background:${PRINT_COLORS.paper};color:${PRINT_COLORS.text};border:1px solid ${PRINT_COLORS.control};`,
+    );
   });
 
   it("escapes the process name and the approver it writes into the print page", async () => {

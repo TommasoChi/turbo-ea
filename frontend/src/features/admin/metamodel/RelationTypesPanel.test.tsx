@@ -383,3 +383,18 @@ describe("RelationTypesPanel — ArchiMate mapping (archimate_type/archimate_acc
     );
   });
 });
+
+describe("RelationTypesPanel — delete confirmation", () => {
+  it("states the number of relation instances a delete would remove, in bold", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockResolvedValue({ instance_count: 7 } as never);
+    renderPanel({ scopeTypeKey: "Organization" });
+
+    await user.click(within(rowFor("uses")).getByRole("button", { name: /^delete$/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.querySelector("strong")).toHaveTextContent(/^7$/);
+    expect(api.get).toHaveBeenCalledWith("/metamodel/relation-types/relOrgToApp/instance-count");
+  });
+});

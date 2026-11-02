@@ -102,6 +102,8 @@ Der **Datenqualitätswert** einer Karte ist ein gewichtetes Maß für ihre Volls
 
 **Pflichtfelder haben Vorrang vor der Bewertung.** Solange ein Pflichtfeld einer Karte leer ist, bleibt ihr Wert unabhängig von den Gewichtungen bei **0** — die gewichtete Berechnung greift erst, wenn alle Pflichtfelder ausgefüllt sind (boolesche und schreibgeschützte Felder sind ausgenommen; siehe die Einstellung **Pflichtfeld** oben).
 
+Ein Feld gilt als ausgefüllt, sobald es einen Wert enthält. Bei einem Ja/Nein-Feld zählen sowohl **Ja** als auch **Nein** – nur **Keine** gilt als leer –, und ein Zahlenfeld zählt, wenn es 0 enthält.
+
 Die Wichtigkeit jedes Faktors wird mit einem einfachen Schieberegler über vier Stufen festgelegt, der auch die zugrunde liegende Zahl anzeigt:
 
 - **Ignorieren (0)** – vollständig aus dem Wert ausgeschlossen.
@@ -112,6 +114,8 @@ Die Wichtigkeit jedes Faktors wird mit einem einfachen Schieberegler über vier 
 Der Bereich listet die fünf **integrierten Faktoren** – **Beschreibung**, **Lebenszyklus** (ob ein Lebenszyklusdatum gesetzt ist), **Pflichtbeziehungen**, **Pflicht-Tags** und **Stakeholder-Rollen** (ein einziger Slot, erfüllt, sobald der Karte jemand in einer Rolle zugewiesen ist, die zur Datenqualität zählt) – gefolgt von jedem Feld, gruppiert nach seinem Abschnitt, jeweils mit demselben Schieberegler. Setzen Sie zum Beispiel den **Lebenszyklus** auf *Ignorieren* für einen Typ, dessen Karten berechtigterweise nie Datumsangaben tragen, damit sie nicht abgewertet werden.
 
 Ein Balken zur **Wertzusammensetzung** oben im Bereich zeigt den Anteil jedes Faktors am maximal möglichen Wert, sodass Sie auf einen Blick sehen, welche Faktoren dominieren. Im Karten-Layout der Registerkarte **Allgemein** zeigt jedes Feld – sowie die integrierten Abschnitte Beschreibung, Lebenszyklus und Beziehungen – ein kleines Abzeichen mit seiner aktuellen Stufennummer, sodass Sie die Gewichtung sehen, ohne die Registerkarte zu verlassen.
+
+Benutzer sehen das Ergebnis Faktor für Faktor direkt auf der Karte: Fährt man mit der Maus über den Datenqualitätsring, werden die Slots aufgelistet, die den Wert am stärksten erhöhen würden; ein Klick öffnet die vollständige Aufschlüsselung (siehe [Kartendetails](../guide/card-details.md#kartenkopf)).
 
 Das Ändern einer Wichtigkeit bewertet sofort jede vorhandene Karte dieses Typs neu. Neue Felder sind standardmäßig *Normal* und zählen somit zur Bewertung, sobald Sie sie hinzufügen.
 

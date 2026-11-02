@@ -10,7 +10,8 @@ from xml.etree.ElementTree import ParseError
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy import Text, delete, func, literal, or_, select, update
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -670,6 +671,21 @@ def _sanitize_relation_attribute_schema(schema: object) -> list[dict]:
     return out
 
 
+def _locked_relation_value(
+    code: str, message: str, attribute: object, value: object = None
+) -> HTTPException:
+    """A 403 for an edit of a built-in relation attribute or value.
+
+    ``error`` is a stable code the admin UI translates (``relationValueErrors.ts``),
+    naming ``attribute`` / ``value`` by their labels; ``message`` stays the
+    English sentence for API and MCP callers.
+    """
+    detail: dict = {"error": code, "message": message, "attribute": attribute}
+    if value is not None:
+        detail["value"] = value
+    return HTTPException(403, detail=detail)
+
+
 def _merge_relation_attributes_schema(existing: object, incoming: object) -> list[dict]:
     """Validate + merge an incoming ``attributes_schema`` against the stored one.
 
@@ -680,7 +696,8 @@ def _merge_relation_attributes_schema(existing: object, incoming: object) -> lis
     client can never escalate a custom value into a locked one.
 
     Raises ``HTTPException(403)`` when a built-in field/option is removed or its
-    locked attributes are mutated.
+    locked attributes are mutated; ``detail.error`` names which (see
+    ``_locked_relation_value``).
     """
     existing_list = existing if isinstance(existing, list) else []
     incoming_list = incoming if isinstance(incoming, list) else []
@@ -696,7 +713,11 @@ def _merge_relation_attributes_schema(existing: object, incoming: object) -> lis
     # Every built-in field must survive the edit.
     for fkey in existing_fields:
         if fkey not in incoming_by_key:
-            raise HTTPException(403, f"Built-in relation attribute '{fkey}' cannot be removed.")
+            raise _locked_relation_value(
+                "relation_attribute_required",
+                f"Built-in relation attribute '{fkey}' cannot be removed.",
+                fkey,
+            )
 
     merged: list[dict] = []
     for field in incoming_list:
@@ -718,9 +739,10 @@ def _merge_relation_attributes_schema(existing: object, incoming: object) -> lis
             if attr == "options":
                 continue
             if field.get(attr) != base.get(attr):
-                raise HTTPException(
-                    403,
+                raise _locked_relation_value(
+                    "relation_attribute_locked",
                     f"Built-in relation attribute '{field['key']}' cannot be edited.",
+                    field["key"],
                 )
         f = dict(base)
         f["built_in"] = True
@@ -742,9 +764,11 @@ def _merge_field_options(base_field: dict, incoming_field: dict, target: dict) -
 
     for okey in base_opts:
         if okey not in incoming_keys:
-            raise HTTPException(
-                403,
+            raise _locked_relation_value(
+                "relation_value_required",
                 f"Built-in relation value '{okey}' cannot be removed (hide it instead).",
+                base_field.get("key"),
+                okey,
             )
 
     merged_opts: list[dict] = []
@@ -758,14 +782,68 @@ def _merge_field_options(base_field: dict, incoming_field: dict, target: dict) -
         # Built-in option: locked except `hidden`.
         for attr in ("key", "label", "color", "translations"):
             if opt.get(attr) != base_opt.get(attr):
-                raise HTTPException(
-                    403,
+                raise _locked_relation_value(
+                    "relation_value_locked",
                     f"Built-in relation value '{opt['key']}' cannot be edited (hide it instead).",
+                    base_field.get("key"),
+                    opt["key"],
                 )
         merged_opts.append({**base_opt, "built_in": True, "hidden": bool(opt.get("hidden", False))})
 
     target["options"] = merged_opts
     return target
+
+
+def _untouched_card_update(*where):
+    """``UPDATE cards`` for attribute clean-up that leaves the card undated.
+
+    Stripping a value the metamodel no longer defines is not an edit to the
+    card: ``updated_at`` and ``updated_via`` are set to themselves so their
+    ``onupdate`` defaults never fire (``app/services/derived_writes.py``).
+    Session sync is off — no card loaded by this request is read afterwards.
+    """
+    return (
+        update(Card)
+        .where(*where)
+        .values(updated_at=Card.updated_at, updated_via=Card.updated_via)
+        .execution_options(synchronize_session=False)
+    )
+
+
+def _strip_attribute_stmt(type_key: str, field_key: str):
+    """Remove ``field_key`` from every card of the type that has it."""
+    return _untouched_card_update(Card.type == type_key, Card.attributes.has_key(field_key)).values(
+        attributes=Card.attributes.op("-")(literal(field_key, Text))
+    )
+
+
+def _clear_single_select_stmt(type_key: str, field_key: str, opt_key: str):
+    """Remove a single-select value where it is the removed option."""
+    return _untouched_card_update(
+        Card.type == type_key, Card.attributes[field_key].astext == opt_key
+    ).values(attributes=Card.attributes.op("-")(literal(field_key, Text)))
+
+
+def _drop_multi_select_option_stmt(type_key: str, field_key: str, opt_key: str):
+    """Filter ``opt_key`` out of a multiple-select array, leaving ``[]`` when it
+    was the only value."""
+    elem = func.jsonb_array_elements(Card.attributes[field_key], type_=JSONB).column_valued()
+    # ``elem #>> '{}'`` is the element as text, so a non-string element that
+    # prints as the option key is dropped too.
+    kept = (
+        select(func.jsonb_agg(elem))
+        .where(elem.op("#>>", return_type=Text)(literal([], ARRAY(Text))) != opt_key)
+        .scalar_subquery()
+    )
+    return _untouched_card_update(
+        Card.type == type_key, Card.attributes[field_key].contains([opt_key])
+    ).values(
+        attributes=func.jsonb_set(
+            Card.attributes,
+            literal([field_key], ARRAY(Text)),
+            func.coalesce(kept, literal([], JSONB)),
+        )
+    )
 
 
 async def _cleanup_removed_fields_and_options(
@@ -807,13 +885,7 @@ async def _cleanup_removed_fields_and_options(
                 type_key,
             )
             continue
-        result = await db.execute(
-            text(
-                "UPDATE cards SET attributes = attributes - :field_key "
-                "WHERE type = :type_key AND attributes ? :field_key"
-            ),
-            {"type_key": type_key, "field_key": fk},
-        )
+        result = await db.execute(_strip_attribute_stmt(type_key, fk))
         if result.rowcount:
             logger.info(
                 "Cleaned up removed field '%s' from %d card(s) of type '%s'",
@@ -840,38 +912,10 @@ async def _cleanup_removed_fields_and_options(
         for opt_key in removed_opts:
             if field_type == "single_select":
                 # Set to null where the current value matches
-                result = await db.execute(
-                    text(
-                        "UPDATE cards SET attributes = attributes - :field_key "
-                        "WHERE type = :type_key AND attributes ->> :field_key = :opt_key"
-                    ),
-                    {"type_key": type_key, "field_key": fk, "opt_key": opt_key},
-                )
+                result = await db.execute(_clear_single_select_stmt(type_key, fk, opt_key))
             else:
                 # multiple_select: remove the option from the array
-                result = await db.execute(
-                    text(
-                        "UPDATE cards "
-                        "SET attributes = jsonb_set("
-                        "  attributes, ARRAY[:field_key],"
-                        "  COALESCE("
-                        "    (SELECT jsonb_agg(elem) "
-                        "     FROM jsonb_array_elements("
-                        "       attributes->:field_key) elem"
-                        "     WHERE elem #>> '{}' != :opt_key),"
-                        "    '[]'::jsonb"
-                        "  )"
-                        ") WHERE type = :type_key "
-                        "AND attributes->:field_key "
-                        "@> (:opt_json)::jsonb"
-                    ),
-                    {
-                        "type_key": type_key,
-                        "field_key": fk,
-                        "opt_key": opt_key,
-                        "opt_json": f'["{opt_key}"]',
-                    },
-                )
+                result = await db.execute(_drop_multi_select_option_stmt(type_key, fk, opt_key))
             if result.rowcount:
                 logger.info(
                     "Cleaned up removed option '%s' from field '%s' on %d card(s) of type '%s'",
@@ -1124,16 +1168,13 @@ async def get_option_usage(
     if field_type == "multiple_select":
         # JSONB array contains: attributes->'fieldKey' @> '["optionKey"]'
         count_result = await db.execute(
-            text(
-                "SELECT count(*) FROM cards "
-                "WHERE type = :type_key AND status = 'ACTIVE' "
-                "AND attributes->:field_key @> :option_json::jsonb"
-            ),
-            {
-                "type_key": key,
-                "field_key": field_key,
-                "option_json": f'["{option_key}"]',
-            },
+            select(func.count())
+            .select_from(Card)
+            .where(
+                Card.type == key,
+                Card.status == "ACTIVE",
+                Card.attributes[field_key].contains([option_key]),
+            )
         )
     else:
         # single_select: attributes->>'fieldKey' = 'optionKey'

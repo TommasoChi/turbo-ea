@@ -12,9 +12,14 @@ La parte superiore della card mostra:
 - **Nome della card** — Modificabile in linea
 - **Alias** — L'altro nome della card, mostrato sotto il titolo quando è impostato. La matita di modifica del titolo consente di cambiare nome e alias insieme. Gli alias sono considerati da ogni casella di ricerca, così una card si ritrova con il nome realmente usato nella vostra organizzazione.
 - **Sottotipo** — Classificazione secondaria (se applicabile)
+- **Chip di origine** — Mostrato quando la card non è stata creata nell'interfaccia web: **MCP** per una card creata da un assistente IA tramite il [server MCP](../admin/mcp.md), **API** per uno script o un'integrazione, **Estensione** per un'estensione installata, **Sistema** per un job in background. Passateci sopra il mouse per vedere chi ha creato la card e quando: la persona resta il creatore; il chip indica quale canale ha usato. Le card create nell'interfaccia web, e quelle create prima che Turbo EA registrasse il canale, non mostrano alcun chip.
 - **Badge dello stato di approvazione** — Draft, Approved, Broken o Rejected
 - **Pulsante suggerimento AI** — Cliccate per generare una descrizione con AI (visibile quando l'AI è abilitata per questo tipo di card e l'utente ha il permesso di modifica)
-- **Anello della qualità dei dati** — Indicatore visivo della completezza delle informazioni (0-100%)
+- **Anello della qualità dei dati** — Indicatore visivo della completezza delle informazioni (0-100%). Passate il cursore sopra per vedere le tre cose che aumenterebbero di più il punteggio, ciascuna con i punti che aggiungerebbe (ad esempio *Compila Criticità aziendale +12,5%*). Cliccate (oppure date il focus e premete Invio) per aprire il dettaglio completo in un pannello a destra della pagina che resta aperto mentre modificate: ogni elemento ancora da compilare, ordinato per quanto contribuisce, e un elenco **Già conteggiato** di ciò che è già presente. Ogni elemento ancora da compilare è un link: cliccandolo si apre la sezione in cui si compila **in modalità di modifica**, con quel campo a fuoco (oppure la finestra **Aggiungi relazione** per il tipo di relazione, l'editor dei tag o il modulo di aggiunta della scheda **Stakeholder**), mentre il pannello resta aperto. Senza il diritto di modificare quella parte della scheda, il link apre soltanto la sezione e la pagina scorre fino ad essa. Finché un campo obbligatorio è vuoto, il punteggio resta a 0%; il dettaglio indica quei campi e mostra quale sarebbe il punteggio senza di essi. Chiudete il pannello con il pulsante **Chiudi** nella sua intestazione; il browser ricorda se è aperto, quindi lo ritrovate sulla scheda successiva. In una finestra più stretta di 900 px si apre invece come cassetto, che si chiude quando seguite uno dei suoi link.
+
+![Pannello con il dettaglio della qualità dei dati](../assets/img/it/63_scheda_qualita_dati_dettaglio.png)
+
+Quando un amministratore attiva la [modalità TurboRPG](../admin/settings.md#turborpg-qualità-dei-dati-gamificata) (qualità dei dati gamificata), ogni salvataggio che aumenta il punteggio viene celebrato come un guadagno di salute in un gioco: un **+X%** luminoso lascia la sezione appena salvata, vola fino al punteggio e lo colpisce — l'anello lampeggia e si illumina, il suo riempimento cresce fino al nuovo punteggio e il numero conta in crescendo. Una volta scorsa l'intestazione, una sottile barra del punteggio fissata sotto la barra superiore mantiene il punteggio in vista e il guadagno atterra su di essa. Fate clic sul punteggio della barra — il chip con il chevron — per aprire lo stesso dettaglio dell'anello. Il raggiungimento della fascia verde (80%) e del 100% sono traguardi con una breve pioggia di coriandoli. Cancellare o rimuovere dati riproduce l'inverso attenuato: un **−X%** rosso vola via dal punteggio tornando alla sezione, e la barra si svuota e conta alla rovescia, senza lampi né coriandoli. Con la riduzione del movimento attiva nel sistema operativo nulla vola; vedete invece un **+X%** o **−X%** statico.
 - **Menu azioni** — Archiviazione, eliminazione e azioni di approvazione. Include anche un'azione con un clic **Osserva questa scheda** (quando il tipo di scheda definisce un ruolo Osservatore) che consente a qualsiasi utente con permessi di lettura di seguire la scheda senza passare dalla scheda Stakeholder.
 
 ### Logo personalizzato
@@ -115,6 +120,7 @@ Per i tipi di card che supportano la gerarchia (es. Organization, Business Capab
 
 - **Genitore** — Il genitore della card nella gerarchia (cliccate per navigare)
 - **Figli** — Elenco delle card figlie (cliccate su qualsiasi per navigare)
+- **Apri in una nuova scheda** — Genitore, figli e breadcrumb sono link: cliccate con il tasto centrale oppure con Ctrl/Cmd (o clic destro → *Apri in una nuova scheda*) per aprire quella card in una nuova scheda del browser lasciando questa dov'è
 - **Raggruppa per sottotipo** — Quando una card ha molti figli di sottotipi diversi (ad esempio business unit, regioni e team sotto un'unica società), vengono raggruppati automaticamente in sezioni comprimibili per sottotipo, ciascuna con il proprio conteggio, con una sezione finale **Nessun sottotipo** per i figli non classificati. Il pulsante raggruppa/elenco accanto al conteggio dei **figli** passa dalla vista raggruppata all'elenco semplice.
 - **Breadcrumb gerarchico** — Mostra il percorso completo dalla radice alla card corrente
 - **Tipo di collegamento** — Quando un amministratore ha configurato i tipi di collegamento per questo tipo di card, ogni collegamento padre-figlio può essere etichettato — ad esempio una controllata *commerciale* e un'altra di *vendita*. L'etichetta appartiene alla card figlia: la card padre la mostra accanto a ogni figlia, e la card figlia accanto al proprio padre. Rimuovere una card o spostarla al livello superiore ne cancella l'etichetta, e la modifica viene registrata nella scheda **Cronologia**.
@@ -123,7 +129,7 @@ Per i tipi di card che supportano la gerarchia (es. Organization, Business Capab
 
 Mostra tutte le connessioni con altre card, raggruppate per tipo di relazione. Per ogni relazione:
 
-- **Nome della card correlata** — Cliccate per navigare alla card correlata
+- **Nome della card correlata** — Cliccate per navigare alla card correlata. Cliccate con il tasto centrale o con Ctrl/Cmd (o clic destro → *Apri in una nuova scheda*) per aprirla invece in una nuova scheda del browser — lo stesso vale per l'elenco **+N nei sottoelementi**, per gli elenchi di Lineage e per la hover card di uno stakeholder
 - **Tipo di relazione** — La natura della connessione (es. "utilizza", "funziona su", "dipende da")
 - **Aggiungi relazione** — Cliccate su **+** per aprire la finestra di quella relazione. Elenca le carte corrispondenti mentre digitate (le corrispondenze migliori per prime, altre si caricano scorrendo) e nasconde quelle già collegate, con una didascalia che ne indica il numero. Cliccando una carta la collegate subito e compare come chip in alto: cliccate la **×** di un chip per annullare quell'aggiunta. La finestra resta aperta per aggiungerne quante volete e su smartphone si apre a schermo intero. Le relazioni senza una sezione propria si raggiungono dal pulsante **Aggiungi relazione** in fondo alla sezione. Quando il tipo collegato è gerarchico (capacità di business, organizzazione e simili), la finestra lo mostra come un albero indentato anziché come elenco alfabetico, così potete scegliere una sotto-capacità dal suo ramo. La ricerca mantiene visibili i genitori di ogni corrispondenza come contesto e le carte non selezionabili (già collegate, appena aggiunte o la carta stessa) restano al loro posto in grigio, così i livelli intorno restano leggibili.
 - **Ordinamento** — Le carte collegate sono elencate in ordine alfabetico per nome
@@ -167,7 +173,7 @@ Se la card è collegata a un prodotto [endoflife.date]( (tramite [Amministrazion
 
 - **Aggiungi commenti** — Lasciate note, domande o decisioni sul componente
 - **Risposte con thread** — Rispondete a commenti specifici per creare conversazioni con thread
-- **Timestamp** — Visualizzate quando ogni commento è stato pubblicato e da chi
+- **Timestamp** — Visualizzate quando ogni commento è stato pubblicato e da chi. Un commento pubblicato da un assistente IA tramite il server MCP riporta un chip **MCP** accanto all'autore
 - **Link** — Un indirizzo web in un commento è cliccabile e si apre in una nuova scheda
 
 ## Scheda Todo
@@ -205,6 +211,8 @@ Il percorso di invito richiede il permesso **`users.invite`**, una forma delegat
 ## Scheda Cronologia
 
 ![Cronologia modifiche della card](../assets/img/it/08_scheda_cronologia.png)
+
+Una modifica che non proviene dall'interfaccia web riporta un chip accanto al nome della persona: **MCP** quando un assistente IA l'ha effettuata tramite il [server MCP](../admin/mcp.md) per conto di quella persona, altrimenti **API**, **Estensione** o **Sistema**.
 
 Mostra il **registro di audit completo** delle modifiche apportate alla card: **chi** ha effettuato la modifica, **quando** è stata fatta e **cosa** è stato modificato (valore precedente vs. nuovo valore). Questo consente la completa tracciabilità di tutte le modifiche nel tempo.
 

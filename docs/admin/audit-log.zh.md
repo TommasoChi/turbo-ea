@@ -4,7 +4,7 @@
 
 | 子标签页 | URL | 记录内容 |
 |----------|-----|----------|
-| **变更** | `/admin/settings?tab=audit-log` | 对全景的每一次写入——卡片、关系、风险、标签、干系人角色、决策草稿——按变更批次分组，附带逐事件差异和**回滚** |
+| **变更** | `/admin/settings?tab=audit-log` | 对全景的每一次写入——卡片、关系、风险、标签、干系人角色、决策草稿、图表——按变更批次分组，附带逐事件差异和**回滚** |
 | **安全与管理** | `/admin/settings?tab=audit-log&view=security` | 登录和退出、失败的尝试、锁定、SSO 和代理会话、密码事件、角色模拟以及每一项管理操作 |
 
 两者有意分开。**变更**是一个工作工具——用来查看并撤销错误的写入——只保留较短的历史。**安全与管理**是一条证据链：其中的条目既不能编辑也不能删除，默认保留一年。
@@ -24,7 +24,11 @@
 | **AI 工具** | 通过 [MCP 服务器](mcp.md)连接的 AI 助手 |
 | **扩展** | 已安装的[扩展](extensions.md)，记录为 `ext:<key>` 批次 |
 
-点击某个批次即可打开其侧栏：逐事件差异显示每个字段的旧值和新值，**回滚**会撤销该批次对卡片、关系、风险、干系人角色、标签和决策草稿所做的写入。
+点击某个批次即可打开其侧栏：逐事件差异显示每个字段的旧值和新值，**回滚**会撤销该批次对卡片、关系、风险、干系人角色、标签和决策草稿所做的写入，并删除它所创建的图表（除非该图表此后已发布）。图表的编辑和删除同样会被列出，但无法回滚：之前的画布不会被保留。图表事件记录哪些卡片链接发生了变化以及画布的大小，绝不记录图纸本身。
+
+AI 工具通过 MCP 服务器发出的每一次调用在这里都是一个批次，包括其**演练**：预览会显示为*演练*批次，因此既能看到代理提议了什么，也能看到它提交了什么。
+
+批次被清除后，渠道仍保留在记录本身上。卡片、图表、风险、架构决策、SoAW、评论和 BPM 流程版本会记住它们**创建**和最后**修改**所经由的渠道，并显示在执行操作的人员旁边。凡不是在网页界面中完成的操作都会显示一个徽章——**MCP**、**API**、**扩展**或**系统**——出现在卡片头部、历史标签页、清单（**创建渠道** / **修改渠道**列和**来源**筛选）、图表库、风险登记册以及各模块的「创建者」显示中。在记录该信息之前创建的记录不显示徽章。
 
 批次保留 **`MUTATION_BATCH_RETENTION_DAYS`** 天（一个环境变量，默认 **15**），之后自动清除。批次清除后，事件本身仍保留在每张卡片的「历史」标签页中。
 
@@ -150,6 +154,7 @@
 | **工作区迁移与平台迁移** | `admin.workspace.import.uploaded`, `.applied`, `.completed`, `.discarded`; `admin.migration.uploaded`, `.field_mappings.updated`, `.applied`, `.deleted` | 上传的[工作区包](workspace-transfer.md)及其导入的开始、完成或丢弃；上传的[平台迁移](migration.md)及其字段映射的编辑、应用或删除 |
 | **集成** | `admin.servicenow.connection.*`, `admin.servicenow.mapping.*`, `admin.servicenow.sync.pulled`, `.pushed`, `.applied` | ServiceNow 连接（凭据已遮蔽）和映射；每一次拉取、推送以及暂存记录的应用 |
 | **公开暴露** | `admin.web_portal.created`, `.updated`, `.deleted`; `admin.diagram.published`, `.unpublished` | [Web 门户](web-portals.md)和已发布的图表——所有让数据无需账户即可访问的内容 |
+| **主页仪表盘** | `admin.dashboard.created`, `.updated`, `.deleted`, `.duplicated`, `.reset` | [仪表盘](../guide/dashboard.md#customizing-dashboards)的创建、编辑、删除、复制或重置为默认，并记录更改的名称、描述、图标、可见性、顺序和访问角色；每个添加或移除的小部件都按名称列出（移动或调整小部件大小不会被记录） |
 | **调查** | `admin.survey.sent`, `admin.survey.closed` | 发送给收件人或已关闭的调查 |
 | **运维访问** | `admin.ops.rescue_access.granted`, `.revoked` | 通过[运维 API](ops-api.md) 授予或撤销的救援访问，与现有的 `ops.*` 事件一同记录 |
 

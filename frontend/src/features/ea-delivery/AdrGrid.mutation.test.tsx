@@ -251,6 +251,27 @@ describe("AdrGrid columns", () => {
     expect(gridStub.cellValue("createdBy", DRAFT)).toBe("Ada");
   });
 
+  it("marks a decision an AI agent created beside its author, and a web one not at all", () => {
+    renderGrid();
+    const agent = renderCell("createdBy", { ...DRAFT, created_via: "mcp" })!;
+    expect(agent.getByText("Ada")).toBeInTheDocument();
+    expect(agent.getByText("MCP").closest("[data-origin]")).toHaveAttribute("data-origin", "mcp");
+    agent.unmount();
+
+    const web = renderCell("createdBy", { ...DRAFT, created_via: "web" })!;
+    expect(web.getByText("Ada")).toBeInTheDocument();
+    expect(web.container.querySelector("[data-origin]")).toBeNull();
+    web.unmount();
+
+    expect(gridStub.colDef("createdBy").cellRenderer({ data: undefined })).toBeNull();
+  });
+
+  it("shows only the channel when the author is unknown", () => {
+    renderGrid();
+    const orphan = renderCell("createdBy", { ...DRAFT, creator_name: null, created_via: "mcp" })!;
+    expect(orphan.container.textContent).toBe("smart_toyMCP");
+  });
+
   it("hides every hideable column the chooser lists", () => {
     const hideable = NATURAL.filter((id) => id !== "reference" && id !== "title");
     renderGrid({ hiddenColumns: new Set(hideable) });

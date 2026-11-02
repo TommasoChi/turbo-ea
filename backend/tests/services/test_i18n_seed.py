@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.seed import CARD_TYPE_CATEGORIES, RELATIONS, TYPES
+from app.services.seed import CARD_TYPE_CATEGORIES, DASHBOARD_NAMES, RELATIONS, TYPES
 
 SUPPORTED_LOCALES = ["de", "fr", "es", "it", "pt", "zh", "ru", "da", "ar"]
 
@@ -355,6 +355,32 @@ class TestRelationTranslations:
             )
 
 
+def _relation_attribute_entries():
+    """Every attribute field and option on a built-in relation, as a pytest param."""
+    for r in RELATIONS:
+        for field in r.get("attributes_schema") or []:
+            yield pytest.param(field, id=f"{r['key']}.{field['key']}")
+            for opt in field.get("options") or []:
+                yield pytest.param(opt, id=f"{r['key']}.{field['key']}.{opt['key']}")
+
+
+class TestRelationAttributeTranslations:
+    """Relation attributes are labelled in card detail, the inventory and the
+    value editor like any field. Business Process → Application's Usage and its
+    values, the CRUD flags and the support / usage types shipped without
+    translations and read in English in every locale (#1327)."""
+
+    @pytest.mark.parametrize("entry", list(_relation_attribute_entries()))
+    def test_translated_to_all_locales(self, entry):
+        translations = entry.get("translations") or {}
+        missing = [
+            loc
+            for loc in SUPPORTED_LOCALES
+            if not (isinstance(translations.get(loc), str) and translations[loc].strip())
+        ]
+        assert not missing, f"'{entry['label']}' has no translation for {missing}"
+
+
 # ---------------------------------------------------------------------------
 # A parent's translation must not be one of its children's
 # ---------------------------------------------------------------------------
@@ -411,6 +437,14 @@ def _parent_child_pairs():
         for item in r.get("attributes_schema") or []:
             for f in item.get("fields") or [item]:
                 attrs += _field_entries(f)
+                # Business Process → Application's Usage read «Orchestriert», like
+                # its last value, in every language when it was first translated.
+                if f.get("options"):
+                    yield (
+                        f"relation '{r['key']}' attribute '{f['key']}'",
+                        _entry(f.get("label"), f.get("translations")),
+                        _option_entries(f),
+                    )
         if attrs:
             yield f"relation '{r['key']}'", _entry(r["label"], r.get("translations")), attrs
 
@@ -467,4 +501,21 @@ class TestCardTypeCategoryTranslations:
             )
             assert value != category["label"], (
                 f"Category '{category['key']}' '{locale}' is the untranslated English label"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Built-in homepage dashboards
+# ---------------------------------------------------------------------------
+
+
+class TestDashboardNameTranslations:
+    @pytest.mark.parametrize("entry", [pytest.param(d, id=d["key"]) for d in DASHBOARD_NAMES])
+    def test_dashboard_name_translated_to_all_locales(self, entry):
+        """Every built-in dashboard names its tab in every non-English locale."""
+        translations = entry.get("translations", {})
+        for locale in SUPPORTED_LOCALES:
+            value = translations.get(locale)
+            assert isinstance(value, str) and value.strip(), (
+                f"Dashboard '{entry['key']}' missing '{locale}' translation"
             )

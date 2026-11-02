@@ -25,16 +25,23 @@ import Tooltip from "@mui/material/Tooltip";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useResolveLabel, useFieldLabel } from "@/hooks/useResolveLabel";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
+import { focusFieldControl, useEditRequest } from "@/hooks/useEditRequest";
+import {
+  SECTION_SCROLL_MARGIN,
+  SECTION_SCROLL_MARGIN_TOP,
+  customSectionAnchor,
+  type SectionEditRequest,
+} from "@/features/cards/dataQualityJump";
 import { ApiError } from "@/api/client";
 import type { Card, FieldDef, SectionDef } from "@/types";
 
 // ── Section: Type-specific attributes ───────────────────────────
 const VENDOR_ELIGIBLE_TYPES = ["ITComponent", "Application"];
 
-// The app's fixed AppBar is 64px tall; the section root carries this as
-// scroll-margin-top so a post-save scrollIntoView({block:"start"}) lands the
-// header just below the bar instead of under it.
-const SCROLL_MARGIN_TOP = 72;
+// The app's fixed AppBar is 64px tall; the section root carries
+// SECTION_SCROLL_MARGIN_TOP as scroll-margin-top so a post-save
+// scrollIntoView({block:"start"}) lands the header just below the bar instead
+// of under it.
 
 function AttributeSection({
   section,
@@ -47,6 +54,8 @@ function AttributeSection({
   hiddenFieldKeys,
   canViewCosts = true,
   onDirtyChange,
+  expandOn,
+  editOn,
 }: {
   section: SectionDef & { defaultExpanded?: boolean; columns?: 1 | 2 };
   card: Card;
@@ -58,6 +67,10 @@ function AttributeSection({
   hiddenFieldKeys?: Set<string>;
   canViewCosts?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
+  /** A new value expands the section (a data-quality jump). */
+  expandOn?: number;
+  /** A data-quality jump: open in edit mode, focused on its field. */
+  editOn?: SectionEditRequest;
 }) {
   const { t } = useTranslation(["cards", "common", "validation"]);
   const { fmt, symbol } = useCurrency();
@@ -175,7 +188,7 @@ function AttributeSection({
         const { top } = el.getBoundingClientRect();
         // Only when the header is NOT already visibly positioned: above the
         // fixed app bar line (its scroll-margin offset) or below the viewport.
-        if (top < SCROLL_MARGIN_TOP || top > window.innerHeight) {
+        if (top < SECTION_SCROLL_MARGIN_TOP || top > window.innerHeight) {
           el.scrollIntoView({ block: "start", behavior: "auto" });
         }
       }
@@ -243,7 +256,23 @@ function AttributeSection({
 
   const [expanded, setExpanded] = useSyncedExpanded(
     initialExpanded ?? section.defaultExpanded !== false,
+    expandOn,
   );
+
+  // A data-quality jump opens the section in edit mode, with every field shown
+  // (a badge filter could hide the one asked for), then focuses that field's
+  // first control once the edit view has rendered.
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  useEditRequest(editOn, canEdit, (request) => {
+    setBadgeFilter(null);
+    setEditing(true);
+    setFocusKey(request.fieldKey ?? null);
+  });
+  useLayoutEffect(() => {
+    if (!editing || focusKey === null) return;
+    focusFieldControl(rootRef.current, focusKey);
+    setFocusKey(null);
+  }, [editing, focusKey]);
 
   // Read-only field grid
   const renderReadGrid = (fields: FieldDef[]) => (
@@ -301,16 +330,17 @@ function AttributeSection({
             ) : null}
           </Box>
         ) : isVendorField(field) ? (
-          <VendorField
-            key={field.key}
-            value={(attrs[field.key] as string) ?? ""}
-            onChange={(v) => setAttr(field.key, v)}
-            cardTypeKey={card.type}
-            fsId={card.id}
-            onRelationChange={onRelationChange}
-          />
+          <Box key={field.key} data-field-key={field.key}>
+            <VendorField
+              value={(attrs[field.key] as string) ?? ""}
+              onChange={(v) => setAttr(field.key, v)}
+              cardTypeKey={card.type}
+              fsId={card.id}
+              onRelationChange={onRelationChange}
+            />
+          </Box>
         ) : (
-          <Box key={field.key} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+          <Box key={field.key} data-field-key={field.key} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
             {field.badge ? (
               <Box>
                 <Chip size="small" color="primary" variant="outlined" label={rl(field.badge, field.badgeTranslations)} sx={{ height: 18, fontSize: "0.6rem" }} />
@@ -404,12 +434,19 @@ function AttributeSection({
   return (
     <Accordion
       ref={rootRef}
+      id={customSectionAnchor(section.section)}
       expanded={expanded}
       onChange={(_, v) => setExpanded(v)}
       disableGutters
-      sx={{ scrollMarginTop: `${SCROLL_MARGIN_TOP}px` }}
+      sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
     >
-      <AccordionSummary expandIcon={<MaterialSymbol icon="expand_more" size={20} />}>
+      <AccordionSummary
+        // A div, not the default <button>: the summary holds the edit icon
+        // button, and a button may not contain a button.
+        // ButtonBase keeps role="button", tabindex and Enter/Space.
+        component="div"
+        expandIcon={<MaterialSymbol icon="expand_more" size={20} />}
+      >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
           <MaterialSymbol icon="tune" size={20} />
           <Typography fontWeight={600}>{rl(section.section, section.translations)}</Typography>

@@ -104,6 +104,8 @@ A card's **data quality** score is a weighted measure of how complete it is. Eve
 
 **Mandatory fields override the score.** While any required field on a card is still empty, its score is pinned to **0** regardless of the weights — the weighted calculation only applies once every required field is filled (boolean and read-only fields are exempt; see the **Required** setting above).
 
+A field counts as filled as soon as it holds a value. For a yes/no field both **Yes** and **No** count — only **None** is empty — and a number field counts when it holds 0.
+
 Each factor has an importance set with a simple slider across four tiers, which also shows the underlying number:
 
 - **Ignore (0)** — excluded from the score entirely.
@@ -114,6 +116,8 @@ Each factor has an importance set with a simple slider across four tiers, which 
 The panel lists the five **built-in factors** — **Description**, **Lifecycle** (whether any lifecycle date is set), **mandatory Relations**, **mandatory Tags**, and **Stakeholder roles** (a single slot, filled as soon as anyone is assigned to the card in a role that counts toward data quality) — followed by every field grouped by its section, each with the same slider. For example, set **Lifecycle** to *Ignore* for a type whose cards legitimately never carry dates, so they are not penalized.
 
 A **score composition** bar at the top of the tab shows each factor's share of the maximum possible score, so you can see at a glance which factors dominate. In the **Main** tab's card layout, each field — and the built-in Description, Lifecycle and Relations sections — shows a small badge with its current tier number, so you can see the weighting without leaving that tab.
+
+Users see the result factor by factor on the card itself: hovering the data quality ring lists the slots that would raise the score most, and clicking it opens the full breakdown (see [Card Details](../guide/card-details.md#card-header)).
 
 Changing any importance immediately re-scores every existing card of that type. New fields default to *Normal*, so they count toward the score as soon as you add them.
 

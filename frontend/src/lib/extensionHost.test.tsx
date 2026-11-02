@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +31,7 @@ vi.mock("@/features/reports/LayeredDependencyView", () => ({
 
 import { api } from "@/api/client";
 import { AuthProvider } from "@/hooks/AuthContext";
+import { itSourceScan } from "@/test/sourceScan";
 import type { User } from "@/types";
 import {
   ExtensionBoundary,
@@ -155,10 +159,12 @@ describe("extensionHost", () => {
     expect(sdk.MetricCard).toBeDefined();
     expect(sdk.ReportLegend).toBeDefined();
     expect(sdk.UserMultiSelect).toBeDefined();
+    expect(typeof sdk.useThumbnailCapture).toBe("function");
+    // The 1.8 chart loader and the 1.9 chart theme hook — removed at UI SDK
+    // 1.33; `loadECharts` is the only chart stack.
+    expect(sdk.loadRecharts).toBeUndefined();
+    expect(sdk.useChartTheme).toBeUndefined();
     expect(typeof sdk.useExtensionAuth).toBe("function");
-    expect(typeof sdk.loadRecharts).toBe("function");
-    // SDK 1.9 — theme-aware chart chrome
-    expect(typeof sdk.useChartTheme).toBe("function");
     expect(typeof sdk.useThumbnailCapture).toBe("function");
     // SDK 1.14 — docx document-builder loader
     expect(typeof sdk.loadDocx).toBe("function");
@@ -212,6 +218,34 @@ describe("extensionHost", () => {
     expect(sdk.PHASES).toEqual(["plan", "phaseIn", "active", "phaseOut", "endOfLife"]);
     expect(typeof sdk.getPhaseLabels).toBe("function");
     expect(typeof sdk.buildGanttArrowPath).toBe("function");
+    // SDK 1.32 — the ECharts stack core's dashboards and reports draw with,
+    // and since 1.33 the only one.
+    expect(typeof sdk.loadECharts).toBe("function");
+  });
+
+  it("loadECharts resolves core's chart wrapper, theme chrome and option helpers", async () => {
+    initExtensionHost();
+    const sdk = window.TurboEA?.sdk as Record<string, unknown>;
+    const loaded = (await (sdk.loadECharts as () => Promise<Record<string, unknown>>)()) ?? {};
+    expect(typeof loaded.EChart).toBe("function");
+    expect(typeof loaded.useEChartsTheme).toBe("function");
+    expect(typeof loaded.buildEChartsChrome).toBe("function");
+    // Report charts render at this backing-store scale so a PNG export at
+    // pixelRatio 2 stays crisp; the class is what print/export CSS targets.
+    expect(loaded.EXPORT_DPR).toBe(2);
+    expect(loaded.ECHART_CLASS).toBe("echart-container");
+    const chrome = loaded.chrome as Record<string, unknown>;
+    expect(typeof chrome.tooltip).toBe("function");
+    expect(typeof chrome.escapeHtml).toBe("function");
+  });
+
+  // A static import would drag ECharts into the eager main bundle.
+  itSourceScan("never imports the chart layer statically", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "extensionHost.tsx"), "utf-8");
+    expect(source).not.toMatch(/^\s*import\s[^;]*?from\s+["']@\/components\/charts/m);
+    expect(source).not.toMatch(/^\s*import\s+["']@\/components\/charts/m);
+    // The loader is there, as a dynamic import.
+    expect(source).toContain('import("@/components/charts/EChart")');
   });
 
   it("loadReportExport resolves core's own report exporters", async () => {
@@ -637,7 +671,7 @@ describe("extensionHost", () => {
 
   it("pins the current UI SDK version", () => {
     // Fork note: UI_SDK_VERSION is pinned at 1.19 (frozen — see CLAUDE.md). Upstream
-    // has since moved this to 1.31; the new surface is present without the constant.
+    // has since moved this to 1.33; the new surface is present without the constant.
     expect(UI_SDK_VERSION).toBe("1.19");
   });
 

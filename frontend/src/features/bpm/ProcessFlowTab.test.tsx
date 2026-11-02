@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useLocation } from "react-router";
 
 /* ── mocks ─────────────────────────────────────────────────────── */
 
@@ -162,10 +162,17 @@ const mockArchived = [
   },
 ];
 
+/** Where the router is, so a link click can be asserted on (the Calls chip). */
+function LocationProbe() {
+  const loc = useLocation();
+  return <div data-testid="location">{loc.pathname + loc.search}</div>;
+}
+
 function renderTab(props = {}) {
   return render(
     <MemoryRouter>
       <ProcessFlowTab processId="proc-1" processName="Order Process" {...props} />
+      <LocationProbe />
     </MemoryRouter>,
   );
 }
@@ -347,6 +354,26 @@ describe("ProcessFlowTab", () => {
       await waitFor(() => {
         expect(screen.getByText("No draft process flows.")).toBeInTheDocument();
       });
+    });
+
+    it("marks a draft an AI agent imported with the MCP chip, and a web one not at all", async () => {
+      const drafts = [{ ...mockDrafts[0], created_via: "mcp" }, { ...mockDrafts[1], created_via: "web" }];
+      vi.mocked(api.get).mockImplementation((url: string) => {
+        if (url.includes("/flow/permissions")) return Promise.resolve(mockPerms);
+        if (url.includes("/flow/published")) return Promise.resolve(mockPublished);
+        if (url.includes("/message-flows")) return Promise.resolve(mockMessageFlows);
+        if (url.includes("/elements")) return Promise.resolve(mockElements);
+        if (url.includes("/flow/drafts")) return Promise.resolve(drafts);
+        if (url.includes("/flow/archived")) return Promise.resolve(mockArchived);
+        return Promise.reject(new Error(`no mock for ${url}`));
+      });
+      const { container } = renderTab();
+      await waitForLoad();
+      await userEvent.click(screen.getByText("Drafts"));
+
+      const chip = await screen.findByText("MCP");
+      expect(chip.closest("[data-origin]")).toHaveAttribute("data-origin", "mcp");
+      expect(container.querySelectorAll("[data-origin]")).toHaveLength(1);
     });
 
     it("has New Draft from Template button", async () => {
@@ -540,8 +567,14 @@ describe("ProcessFlowTab", () => {
       mockWith([callActivity]);
       renderTab();
       await waitFor(() => expect(screen.getByText("Credit Check")).toBeInTheDocument());
+      expect(screen.getByText("Credit Check").closest("a")).toHaveAttribute(
+        "href",
+        `/cards/${CALLEE}?tab=1`,
+      );
       await userEvent.click(screen.getByText("Credit Check"));
-      expect(mockNavigate).toHaveBeenCalledWith(`/cards/${CALLEE}?tab=1`);
+      expect(screen.getByTestId("location")).toHaveTextContent(`/cards/${CALLEE}?tab=1`);
+      // The cell behind the chip did not open its picker.
+      expect(screen.queryByRole("combobox")).toBeNull();
     });
 
     it("removing the chip clears the link", async () => {
@@ -550,7 +583,9 @@ describe("ProcessFlowTab", () => {
       renderTab();
       await waitFor(() => expect(screen.getByText("Credit Check")).toBeInTheDocument());
       const chip = screen.getByText("Credit Check").closest(".MuiChip-root")!;
-      await userEvent.click(chip.querySelector(".MuiChip-deleteIcon") as Element);
+      // The delete icon sits inside the chip's link: removing must not also
+      // follow it, so the click's default is prevented (dispatch returns false).
+      expect(fireEvent.click(chip.querySelector(".MuiChip-deleteIcon") as Element)).toBe(false);
       await waitFor(() => {
         expect(api.put).toHaveBeenCalledWith("/bpm/processes/proc-1/elements/el4", {
           business_process_id: "",

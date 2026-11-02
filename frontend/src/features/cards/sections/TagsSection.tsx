@@ -16,6 +16,12 @@ import { useTranslation } from "react-i18next";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import TagPicker from "@/components/TagPicker";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
+import { useEditRequest } from "@/hooks/useEditRequest";
+import {
+  SECTION_SCROLL_MARGIN,
+  sectionAnchor,
+  type SectionEditRequest,
+} from "@/features/cards/dataQualityJump";
 import { api } from "@/api/client";
 import type { Card, TagGroup, TagRef } from "@/types";
 import { readableTextColor } from "@/lib/color";
@@ -25,6 +31,10 @@ interface Props {
   onUpdate: () => void;
   canEdit?: boolean;
   initialExpanded?: boolean;
+  /** A new value expands the section (a data-quality jump). */
+  expandOn?: number;
+  /** A data-quality jump: open the tag editor once the tag groups are in. */
+  editOn?: SectionEditRequest;
 }
 
 export default function TagsSection({
@@ -32,9 +42,11 @@ export default function TagsSection({
   onUpdate,
   canEdit = true,
   initialExpanded = true,
+  expandOn,
+  editOn,
 }: Props) {
   const { t } = useTranslation(["cards", "common"]);
-  const [expanded, setExpanded] = useSyncedExpanded(initialExpanded);
+  const [expanded, setExpanded] = useSyncedExpanded(initialExpanded, expandOn);
   const [groups, setGroups] = useState<TagGroup[]>([]);
   const [editOpen, setEditOpen] = useState(false);
   const [draftIds, setDraftIds] = useState<string[]>([]);
@@ -69,6 +81,12 @@ export default function TagsSection({
     setEditOpen(true);
   };
 
+  // A data-quality jump opens the same editor as the edit button, once there
+  // is one: the groups load after mount. The picker lists every group; it is
+  // not narrowed to the one the jump came from.
+  const canOpenEditor = canEdit && applicableGroups.length > 0;
+  useEditRequest(editOn, canOpenEditor, openEdit);
+
   const save = async () => {
     setSaving(true);
     try {
@@ -90,7 +108,12 @@ export default function TagsSection({
   };
 
   return (
-    <Accordion expanded={expanded} onChange={(_, v) => setExpanded(v)} sx={{ mb: 2 }}>
+    <Accordion
+      id={sectionAnchor("tags")}
+      expanded={expanded}
+      onChange={(_, v) => setExpanded(v)}
+      sx={{ mb: 2, scrollMarginTop: SECTION_SCROLL_MARGIN }}
+    >
       <AccordionSummary expandIcon={<MaterialSymbol icon="expand_more" size={20} />}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
           <Typography variant="subtitle1" fontWeight={600}>
@@ -168,7 +191,7 @@ export default function TagsSection({
               </>
             )}
           </Box>
-          {canEdit && applicableGroups.length > 0 && (
+          {canOpenEditor && (
             <IconButton
               size="small"
               aria-label={t("tags.edit")}

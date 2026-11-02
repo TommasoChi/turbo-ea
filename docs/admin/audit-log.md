@@ -4,7 +4,7 @@ The **Audit log** at **Admin → Settings → Audit log** (`/admin/settings?tab=
 
 | Sub-tab | URL | What it records |
 |---------|-----|-----------------|
-| **Changes** | `/admin/settings?tab=audit-log` | Every write to the landscape — cards, relations, risks, tags, stakeholder roles, draft decisions — grouped into mutation batches, with a per-event diff and a **Rollback** |
+| **Changes** | `/admin/settings?tab=audit-log` | Every write to the landscape — cards, relations, risks, tags, stakeholder roles, draft decisions, diagrams — grouped into mutation batches, with a per-event diff and a **Rollback** |
 | **Security & admin** | `/admin/settings?tab=audit-log&view=security` | Sign-ins and sign-outs, failed attempts, lockouts, SSO and proxy sessions, password events, role impersonation and every administrative action |
 
 The two are kept apart on purpose. **Changes** is a working tool — it exists so you can see and undo a bad write — and it keeps a short history. **Security & admin** is an evidence trail: its entries cannot be edited or deleted, and it is kept for a year by default.
@@ -24,7 +24,11 @@ The **Changes** sub-tab is the mutation-batch ledger. Every mutating write lands
 | **AI tool** | An AI assistant connected through the [MCP server](mcp.md) |
 | **Extension** | An installed [extension](extensions.md), recorded as an `ext:<key>` batch |
 
-Click a batch to open its drawer: the per-event diff shows each field's old and new value, and **Rollback** reverts the card, relation, risk, stakeholder-role, tag and draft-decision writes it made.
+Click a batch to open its drawer: the per-event diff shows each field's old and new value, and **Rollback** reverts the card, relation, risk, stakeholder-role, tag and draft-decision writes it made, and deletes a diagram it created (unless the diagram has been published since). Diagram edits and deletions are listed too, but cannot be rolled back: the previous canvas is not kept. A diagram event records which card links changed and how large the canvas is, never the drawing itself.
+
+Every call an AI tool makes through the MCP server is a batch here, including its **dry runs**: a preview appears as a *Dry run* batch, so you can see what an agent proposed as well as what it committed.
+
+The channel also stays on the records themselves after their batch is purged. Cards, diagrams, risks, architecture decisions, SoAWs, comments and BPM flow versions remember the channel they were **created via** and last **modified via**, next to the person who did it. Anything not made in the web interface shows a chip — **MCP**, **API**, **Extension** or **System** — in the card header, the History tab, the Inventory (**Created via** / **Modified via** columns and the **Origin** filter), the diagrams gallery, the Risk Register and each module's "created by" display. Records created before this was recorded show no chip.
 
 Batches are kept for **`MUTATION_BATCH_RETENTION_DAYS`** days (an environment variable, default **15**) and then purged automatically. The events themselves stay on each card's **History** tab after the batch is gone.
 
@@ -150,6 +154,7 @@ A save that changes nothing is not recorded, and neither is a user editing their
 | **Workspace transfer & migration** | `admin.workspace.import.uploaded`, `.applied`, `.completed`, `.discarded`; `admin.migration.uploaded`, `.field_mappings.updated`, `.applied`, `.deleted` | A [workspace bundle](workspace-transfer.md) uploaded, its import started, finished or discarded; a [platform migration](migration.md) uploaded, its field mappings edited, applied or deleted |
 | **Integrations** | `admin.servicenow.connection.*`, `admin.servicenow.mapping.*`, `admin.servicenow.sync.pulled`, `.pushed`, `.applied` | ServiceNow connections, with credentials masked, and mappings; every pull, push and apply of staged records |
 | **Public exposure** | `admin.web_portal.created`, `.updated`, `.deleted`; `admin.diagram.published`, `.unpublished` | [Web portals](web-portals.md) and published diagrams — everything that makes data reachable without an account |
+| **Homepage dashboards** | `admin.dashboard.created`, `.updated`, `.deleted`, `.duplicated`, `.reset` | [Dashboards](../guide/dashboard.md#customizing-dashboards) created, edited, deleted, duplicated or reset to their default, with the changed name, description, icon, visibility, order and access roles; each widget added or removed is listed by name (moving or resizing a widget is not recorded) |
 | **Surveys** | `admin.survey.sent`, `admin.survey.closed` | A survey sent to its recipients, or closed |
 | **Operator access** | `admin.ops.rescue_access.granted`, `.revoked` | Rescue access granted or revoked through the [operations API](ops-api.md), recorded alongside the existing `ops.*` events |
 

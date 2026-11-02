@@ -60,6 +60,8 @@ from app.schemas.card import (
     CardRestoreResponse,
     CardTypeCount,
     CardUpdate,
+    DataQualityBreakdown,
+    DataQualityFactor,
     DescendantRelationRow,
     DescendantRelationsResponse,
     DescendantRelationSummaryEntry,
@@ -114,7 +116,7 @@ from app.services.card_write_service import (
     emit_hierarchy_cascade_events,
 )
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
-from app.services.data_quality import calc_data_quality
+from app.services.data_quality import calc_data_quality, calc_data_quality_breakdown
 from app.services.event_bus import event_bus
 from app.services.lifecycle import lifecycle_rank
 from app.services.permission_service import PermissionService
@@ -171,6 +173,8 @@ def _card_to_response(
         archived_at=card.archived_at,
         created_by=str(card.created_by) if card.created_by else None,
         updated_by=str(card.updated_by) if card.updated_by else None,
+        created_via=card.created_via,
+        updated_via=card.updated_via,
         created_at=card.created_at,
         updated_at=card.updated_at,
         logo_updated_at=logo_updated_at,
@@ -262,6 +266,7 @@ _ALLOWED_SORT_COLUMNS = {
     "created_at",
     "updated_at",
     "subtype",
+    "created_via",
 }
 
 
@@ -302,6 +307,15 @@ async def list_cards(
         False,
         description=(
             "Keep only cards not updated in the last 90 days (`card_flags.STALE_AFTER_DAYS`)."
+        ),
+    ),
+    created_via: str | None = Query(
+        None,
+        pattern="^(mcp|web|api|ext|system)$",
+        description=(
+            "Keep only cards created through this channel: `web` (the web UI), "
+            "`mcp` (an AI agent through the MCP server), `api` (a direct API "
+            "call), `ext` (an extension) or `system` (a background job)."
         ),
     ),
     page: int = Query(1, ge=1),
@@ -400,6 +414,9 @@ async def list_cards(
     if stale:
         q = q.where(stale_condition())
         count_q = count_q.where(stale_condition())
+    if created_via:
+        q = q.where(Card.created_via == created_via)
+        count_q = count_q.where(Card.created_via == created_via)
 
     # Sorting — H9: whitelist sort columns
     effective_sort = sort_by if sort_by in _ALLOWED_SORT_COLUMNS else "name"
@@ -1115,7 +1132,24 @@ async def get_card(
     card = result.scalar_one_or_none()
     if not card:
         raise HTTPException(404, "Card not found")
-    return await _card_response_with_cost_check(db, user, card)
+    response = await _card_response_with_cost_check(db, user, card)
+    # The header's provenance chip names the person beside the channel: one
+    # query for both ids, and only ``display_name`` — never more of the user.
+    names = await _user_display_names(db, card.created_by, card.updated_by)
+    response.created_by_name = names.get(card.created_by)
+    response.updated_by_name = names.get(card.updated_by)
+    return response
+
+
+async def _user_display_names(
+    db: AsyncSession, *user_ids: uuid.UUID | None
+) -> dict[uuid.UUID, str]:
+    """``{user_id: display_name}`` for the given ids, in one query."""
+    ids = {uid for uid in user_ids if uid is not None}
+    if not ids:
+        return {}
+    rows = await db.execute(select(User.id, User.display_name).where(User.id.in_(ids)))
+    return {uid: name for uid, name in rows.all()}
 
 
 def _schema_attribute_keys(fields_schema: list[dict] | None) -> set[str]:
@@ -1234,6 +1268,51 @@ async def get_hierarchy(
         "level": depth + 1,
         "parent_label": card.parent_label,
     }
+
+
+@router.get("/{card_id}/data-quality", response_model=DataQualityBreakdown)
+async def get_data_quality_breakdown(
+    card_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """What the card's data-quality score is made of, and what would raise it (#1334).
+
+    Computed by the scorer that writes ``cards.data_quality``, so the two never
+    disagree. Gated like the card's other sub-reads: a card the caller may not
+    read is 404. The payload names no other card — relation factors carry
+    metamodel keys only, as the approval gate's 400 does.
+    """
+    await _require_card_read(db, user, card_id)
+    card = (await db.execute(select(Card).where(Card.id == card_id))).scalar_one_or_none()
+    if not card:
+        raise HTTPException(404, "Card not found")
+    breakdown = await calc_data_quality_breakdown(db, card)
+    if breakdown is None:
+        raise HTTPException(404, "Card type not found")
+    return DataQualityBreakdown(
+        score=breakdown.score,
+        ungated_score=breakdown.ungated_score,
+        total_weight=breakdown.total_weight,
+        filled_weight=breakdown.filled_weight,
+        blocked_by_required=breakdown.blocked_by_required,
+        factors=[
+            DataQualityFactor(
+                kind=f.kind,
+                key=f.key,
+                weight=f.weight,
+                filled=f.filled,
+                score_if_filled=None if f.filled else breakdown.score_if_filled(f),
+                gain=None if f.filled else breakdown.gain(f),
+                section=f.section,
+                side=f.side,
+                other_type_key=f.other_type_key,
+                label=f.label,
+                name=f.name,
+            )
+            for f in breakdown.factors
+        ],
+    )
 
 
 @router.get("/{card_id}/relation-summary", response_model=CardRelationSummaryResponse)
