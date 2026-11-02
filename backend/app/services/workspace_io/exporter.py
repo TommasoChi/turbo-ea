@@ -125,7 +125,7 @@ CARD_COLUMNS = (
     "status",
     "lifecycle",
     "attributes",
-    # The channel that created the card (migration 157). ``updated_via`` is
+    # The channel that created the card (migration 170). ``updated_via`` is
     # deliberately not carried: the import re-stamps it, like ``updated_by``.
     "created_via",
 )

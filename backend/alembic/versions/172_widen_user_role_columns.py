@@ -17,8 +17,8 @@ row holds a key longer than 20 characters, and that is intended: truncating the
 value would orphan ``fk_users_role_key`` and silently change who holds which
 role.
 
-Revision ID: 159
-Revises: 158
+Revision ID: 172
+Revises: 171
 Create Date: 2026-10-28
 """
 

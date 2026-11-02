@@ -20,11 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Standard ArchiMate elements now honor an admin-customized Enterprise Object color.** Previously only custom Enterprise Objects respected `EnterpriseObject.color`; the 60+ standard ArchiMate element types always rendered with a hardcoded per-layer color regardless of an admin's edit. An unedited element (still at its seeded default color) renders unchanged.
 - **28 starter examples for the ArchiMate Viewpoint Catalog.** Seeded from the TOGAF ADM / ArchiSurance reference walkthrough (`docs/data/viewpoint-examples/`), one figure per standard viewpoint whose own diagram has more than 8 objects, trimmed to just the elements and relationships that figure's view actually uses (the source files are cumulative across figures) and converted to Exchange Format XML ahead of time. New `app/services/archimate/viewpoint_example_seed.py`, same insert-once pattern as `viewpoint_seed.py`; fixtures bundled under `app/services/archimate/viewpoint_examples/*.xml`.
 - **ArchiMate Viewpoint Catalog**: every new ArchiMate diagram now picks a viewpoint — one of the 23 standard ArchiMate 3.1 viewpoints or an admin-defined custom one — which restricts the designer palette to that viewpoint's allowed object types. Admins manage the catalog from a new **Viewpoint Catalog** tab in Architecture Studio (alongside Card Mapping), including example diagrams per viewpoint. Pre-existing ArchiMate diagrams keep an unrestricted palette. New per-layer permissions (`archimatediagrams.business/application/technology.view/manage/publish`) replace the single `diagrams.*` gate for ArchiMate diagrams, and the nav splits into Business, Application & Data, and Technology Architecture entries. The MCP server's `create_archimate_diagram` tool requires a `viewpoint_key`, and a new `list_viewpoints` tool lists the catalog.
-A fork release. Takes the next free patch number above upstream's own
-`v2.179.0` tag, pulled in by this sync. The fork's own unreleased work
-(previously numbered 2.175.1 through 2.179.0, colliding one-for-one with
-upstream's own same-numbered releases pulled in here) is renumbered to
-2.179.1-2.179.7, oldest first, rather than reordered.
+A fork release that syncs upstream 2.186.3 (ECharts charts, dashboards, MCP write audit) and ports the fork's cost report to ECharts.
 
 ### Changed
 

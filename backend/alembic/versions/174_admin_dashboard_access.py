@@ -15,7 +15,7 @@ migration (an admin's layout is theirs). Idempotent. When no active role holds
 hide again who sees the dashboard, and the access it states is the access the
 widgets already grant.
 
-Revision ID: 161
+Revision ID: 174
 Revises: 173
 Create Date: 2026-10-29
 """

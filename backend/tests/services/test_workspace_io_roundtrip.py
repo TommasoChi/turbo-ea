@@ -1487,7 +1487,7 @@ async def test_card_reference_survives_export_and_reimport(db):
     card.reference = "APP-0042"
     card.alias = "BIL"
     card.external_id = "ext-7"
-    # The channel that created it (migration 157) travels too: the applier
+    # The channel that created it (migration 170) travels too: the applier
     # builds the row from explicit kwargs, so the column constant alone would
     # export it and drop it on import.
     card.created_via = "mcp"

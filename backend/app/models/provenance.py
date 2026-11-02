@@ -16,7 +16,7 @@ stamps them without per-route code. ``derived_writes.pin_updated_at`` pins
 ``updated_via`` alongside ``updated_at`` so derived-value maintenance does not
 re-stamp the channel.
 
-A NULL value means the row predates migration 157; it renders as nothing.
+A NULL value means the row predates migration 170; it renders as nothing.
 """
 
 from __future__ import annotations

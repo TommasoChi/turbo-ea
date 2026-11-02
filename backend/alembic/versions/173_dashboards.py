@@ -11,8 +11,8 @@ Two tables:
   keyed by the KPI's canonical query string, so a KPI an admin adds shows a
   trend like the four built-in ones (which keep ``kpi_snapshots``).
 
-Revision ID: 160
-Revises: 159
+Revision ID: 173
+Revises: 172
 Create Date: 2026-10-28
 """
 

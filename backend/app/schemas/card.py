@@ -177,7 +177,7 @@ class CardResponse(BaseModel):
     created_by: str | None = None
     updated_by: str | None = None
     # The channel behind the create / the last change (``web``, ``mcp``,
-    # ``api``, ``ext``, ``system``); None for cards made before migration 157.
+    # ``api``, ``ext``, ``system``); None for cards made before migration 170.
     created_via: str | None = None
     updated_via: str | None = None
     # Display names of ``created_by`` / ``updated_by``. Filled only by

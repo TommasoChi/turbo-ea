@@ -58,7 +58,7 @@ export function buildCostSankeyOption(
   const ctx: ChartChromeContext = { theme: o.chrome, isRtl: o.isRtl, valueFormatter: o.format };
   const nameOf = new Map(nodes.map((n) => [n.id, n.name]));
   // The last column's labels sit right of its bars: keep room for them.
-  const hasOutgoing = new Set(links.map((l) => nodes[l.source]?.id));
+  const hasOutgoing = new Set(links.map((l) => nodes[l.source].id));
   const inset = sankeyInset(
     nodes.filter((n) => !hasOutgoing.has(n.id)).map((n) => shortenSankeyLabel(n.name)),
   );

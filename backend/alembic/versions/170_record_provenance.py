@@ -13,8 +13,8 @@ nothing. A workspace-transfer bundle exported before 170 carries no
 ``created_via`` column, so its cards (and the generic module rows) import
 with ``created_via`` stamped by the importing request.
 
-Revision ID: 157
-Revises: 156
+Revision ID: 170
+Revises: 169
 """
 
 from collections.abc import Sequence

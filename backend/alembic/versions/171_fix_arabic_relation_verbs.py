@@ -13,7 +13,7 @@ the wrong value we shipped, so an admin's own wording survives. Nothing but
 ``translations.label.ar`` is touched. Idempotent; downgrade is a no-op —
 reverting would reinstate words that name the wrong thing.
 
-Revision ID: 158
+Revision ID: 171
 Revises: 170
 Create Date: 2026-10-28
 """
