@@ -313,7 +313,7 @@ def test_frontend_source_scans_skip_inside_the_stryker_sandbox():
     readers = sorted(
         p.relative_to(frontend).as_posix()
         for p in (frontend / "src").rglob("*.test.ts*")
-        if re.search(r"(readFileSync|readdirSync|walkSources)", p.read_text(encoding="utf-8"))
+        if re.search(r"\b(readFileSync|readdirSync|walkSources)\b", p.read_text(encoding="utf-8"))
     )
     assert readers, "the scan found no file reader at all"
     unmarked = [
