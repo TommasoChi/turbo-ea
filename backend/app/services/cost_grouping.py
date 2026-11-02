@@ -146,4 +146,6 @@ async def _by_relation(
         .all()
     )
     names = {c.id: c.name for c in linked}
-    return {c.id: names.get(links.get(c.id), OTHER_GROUP) for c in cards}
+    return {
+        c.id: names.get(links[c.id], OTHER_GROUP) if c.id in links else OTHER_GROUP for c in cards
+    }

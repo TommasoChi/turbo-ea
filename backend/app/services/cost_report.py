@@ -50,7 +50,7 @@ async def cards_with_cost(
         )
         return [(c, cost) for c, cost in costed if cost]
 
-    result = await db.execute(
+    history = await db.execute(
         select(Card, CardCostHistory.value)
         .join(CardCostHistory, CardCostHistory.card_id == Card.id)
         .where(
@@ -62,7 +62,7 @@ async def cards_with_cost(
             *read_scope.where(Card, mode="module"),
         )
     )
-    return [(card, value) for card, value in result.all()]
+    return [(card, value) for card, value in history.all()]
 
 
 MAX_TYPE_KEYS = 5
