@@ -8,6 +8,7 @@ paths:
   - "backend/app/api/v1/reports.py"
   - "backend/app/api/v1/eol.py"
   - "frontend/src/features/reports/Cost*"
+  - "frontend/src/features/reports/cost*"
   - "frontend/src/features/reports/Eol*"
   - "frontend/src/features/reports/DataQuality*"
   - "frontend/src/features/reports/portfolioHelpers.ts"
