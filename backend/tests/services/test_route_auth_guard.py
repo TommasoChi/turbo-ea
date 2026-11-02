@@ -87,7 +87,7 @@ PUBLIC: dict[str, str] = {
     "settings.py:get_mcp_status": "MCP clients probe availability before OAuth; no secrets",
     "settings.py:get_value_chain_enabled": "module toggle the shell reads at boot",
     "settings.py:get_archimate_enabled": "module toggle the shell reads at boot",
-    "extensions.py:extensions_mcp_manifest": "the MCP server reads it at startup, before any client signs in; no secrets",
+    "extensions.py:extensions_mcp_manifest": "the MCP server reads it at startup, before any sign-in",
     # -- Published artefacts: the entry points in front of their access gates.
     "diagrams.py:get_diagram_gate": "names the access mode an embed page must satisfy; no XML",
     "diagrams.py:diagram_sso_callback": "exchanges the IdP's code for a diagram-scoped cookie",
