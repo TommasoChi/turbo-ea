@@ -1,20 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Box from "@mui/material/Box";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  ResponsiveContainer,
-  Tooltip as RTooltip,
-  Legend,
-} from "recharts";
+import EChart from "@/components/charts/EChart";
+import { useEChartsTheme } from "@/components/charts/echartsTheme";
 import { api } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
+import { useCurrency } from "@/hooks/useCurrency";
 import { costFiscalYearName } from "@/lib/fiscalYear";
-import { CATEGORICAL_COLORS } from "@/theme/tokens";
-
-type TrendRow = { fiscalYear: number } & Record<string, number>;
+import { buildCostTrendOption, type CostTrendRow } from "./costTrendOption";
 
 /** Stacked history of the cost field's components (the keys of its calculation), one bar per year. */
 export default function CostTrendChart({
@@ -30,7 +22,9 @@ export default function CostTrendChart({
   years: number[];
   currentFiscalYear: number;
 }) {
-  const [rows, setRows] = useState<TrendRow[]>([]);
+  const [rows, setRows] = useState<CostTrendRow[]>([]);
+  const chrome = useEChartsTheme();
+  const { fmt } = useCurrency();
 
   useAbortableEffect(
     async ({ signal, isCurrent }) => {
@@ -44,7 +38,7 @@ export default function CostTrendChart({
               ),
             ),
           ).then((responses) => {
-            const row: TrendRow = { fiscalYear: year };
+            const row: CostTrendRow = { fiscalYear: year };
             components.forEach((component, i) => {
               row[component] = responses[i].total;
             });
@@ -58,27 +52,20 @@ export default function CostTrendChart({
     [typeParam, costField, components.join(","), years],
   );
 
+  const option = useMemo(
+    () =>
+      buildCostTrendOption(rows, components, {
+        chrome,
+        isRtl: chrome.isRtl,
+        format: (v) => fmt.format(v),
+        yearLabel: (year) => costFiscalYearName(year, currentFiscalYear),
+      }),
+    [rows, components, chrome, fmt, currentFiscalYear],
+  );
+
   return (
     <Box data-testid="cost-trend-chart">
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={rows}>
-          <XAxis
-            dataKey="fiscalYear"
-            tickFormatter={(year: number) => costFiscalYearName(year, currentFiscalYear)}
-          />
-          <YAxis />
-          {components.map((component, i) => (
-            <Bar
-              key={component}
-              dataKey={component}
-              stackId="cost"
-              fill={CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length]}
-            />
-          ))}
-          <RTooltip />
-          <Legend />
-        </BarChart>
-      </ResponsiveContainer>
+      <EChart option={option} style={{ height: 300 }} ariaLabel={components.join(", ")} />
     </Box>
   );
 }

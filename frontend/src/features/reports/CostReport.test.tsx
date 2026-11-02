@@ -41,31 +41,8 @@ vi.mock("@/hooks/useCurrency", () => ({
     invalidate: () => {},
   }),
 }));
-// jsdom has no layout, so ResponsiveContainer would give the Sankey a 0x0 box.
-const sankeyDataSeen: { current: unknown } = vi.hoisted(() => ({ current: null }));
-vi.mock("recharts", async () => {
-  const actual = await vi.importActual<typeof import("recharts")>("recharts");
-  const { cloneElement } = await import("react");
-  return {
-    ...actual,
-    // Records the data the page hands the Sankey: the DOM does not carry link values.
-    Sankey: (props: React.ComponentProps<typeof actual.Sankey>) => {
-      sankeyDataSeen.current = props.data;
-      return <actual.Sankey {...props} />;
-    },
-    ResponsiveContainer: ({
-      children,
-      height,
-    }: {
-      children: React.ReactElement;
-      height?: number | string;
-    }) => (
-      <div data-testid="responsive-container" data-height={String(height)}>
-        {cloneElement(children, { width: 900, height: 450 } as never)}
-      </div>
-    ),
-  };
-});
+// jsdom has no canvas: the charts are the shared test double, and a test reads the option the page built.
+vi.mock("@/components/charts/EChart", () => import("@/test/echartMock").then((m) => m.echartModule()));
 vi.mock("./SaveReportDialog", () => ({ default: () => null }));
 // The report hides everything behind `costs.view`.
 vi.mock("@/hooks/useAuth", () => ({
@@ -106,6 +83,7 @@ import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useSavedReport } from "@/hooks/useSavedReport";
 import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
+import { echartState } from "@/test/echartMock";
 
 const APP_TYPE = {
   key: "Application",
@@ -162,6 +140,7 @@ let consumedConfig: Record<string, unknown> | null = { view: "table" };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  echartState.reset();
   consumedConfig = { view: "table" };
   fyStart = 1;
 
@@ -523,23 +502,18 @@ describe("CostReport card-type selector and Sankey view", () => {
     });
     const { findByTestId, findByRole } = renderCost();
     await userEvent.click(await findByRole("button", { name: /sankey chart view/i }));
-    const panel = await findByTestId("cost-sankey-panel");
-    await waitFor(() => expect(panel.querySelectorAll("rect").length).toBe(3));
-    const texts = [...panel.querySelectorAll("text")].map((n) => n.textContent);
-    expect(texts).toEqual(expect.arrayContaining(["Total Annual Cost", "EMEA", "CRM"]));
-    const x = (name: string) =>
-      Number(
-        [...panel.querySelectorAll("rect")].find(
-          (r) => r.parentElement?.querySelector("title")?.textContent === name,
-        )!.getAttribute("x"),
-      );
-    expect(x("Total Annual Cost")).toBeLessThan(x("EMEA"));
-    const fill = (name: string) =>
-      [...panel.querySelectorAll("rect")]
-        .find((r) => r.parentElement?.querySelector("title")?.textContent === name)!
-        .getAttribute("fill");
-    expect(fill("Total Annual Cost")).not.toBe(fill("EMEA"));
-    expect(x("EMEA")).toBeLessThan(x("CRM"));
+    await findByTestId("cost-sankey-panel");
+    const s = echartState.last().option.series[0];
+    const label = (id: string) => s.label.formatter({ name: id });
+    const ids: string[] = s.data.map((d: { name: string }) => d.name);
+    // Item and group nodes are named for what they are; the flow runs item -> group -> card.
+    expect(ids.map(label)).toEqual(["Total Annual Cost", "EMEA", "CRM"]);
+    expect(s.links.map((l: { source: string; target: string }) => [label(l.source), label(l.target)])).toEqual([
+      ["Total Annual Cost", "EMEA"],
+      ["EMEA", "CRM"],
+    ]);
+    const fill = (id: string) => s.data.find((d: { name: string }) => d.name === id).itemStyle.color;
+    expect(fill(ids[0])).not.toBe(fill(ids[1]));
   });
 
   it("shows the no-data message for an empty Sankey payload", async () => {
@@ -739,21 +713,21 @@ describe("CostReport trend chart", () => {
     ).toBe(true);
   });
 
-  it("treemap container is 100% high in fullscreen and 450 otherwise", async () => {
+  it("treemap fills the panel in fullscreen and is 450 high otherwise", async () => {
     await ready();
-    const height = () => screen.getByTestId("responsive-container").getAttribute("data-height");
-    expect(height()).toBe("450");
+    const style = () => echartState.last().style;
+    expect(style()).toEqual({ height: 450 });
     const panel = screen.getByTestId("fullscreen-panel");
     Object.defineProperty(document, "fullscreenElement", { value: panel, configurable: true });
     await act(async () => {
       document.dispatchEvent(new Event("fullscreenchange"));
     });
-    expect(height()).toBe("100%");
+    expect(style()).toEqual({ flex: 1, minHeight: 0 });
     Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
     await act(async () => {
       document.dispatchEvent(new Event("fullscreenchange"));
     });
-    expect(height()).toBe("450");
+    expect(style()).toEqual({ height: 450 });
   });
 });
 
@@ -789,6 +763,19 @@ describe("CostReport Sankey from per-card costs", () => {
     nodes: { name: string }[];
     links: { source: number; target: number; value: number }[];
   };
+  // The Sankey option names a node by its id; its label formatter maps back to the card's name.
+  const sankeySeen = (): Seen => {
+    const s = echartState.last().option.series[0];
+    const ids: string[] = s.data.map((d: { name: string }) => d.name);
+    return {
+      nodes: ids.map((id) => ({ name: s.label.formatter({ name: id }) })),
+      links: s.links.map((l: { source: string; target: string; value: number }) => ({
+        source: ids.indexOf(l.source),
+        target: ids.indexOf(l.target),
+        value: l.value,
+      })),
+    };
+  };
   const flow = (d: Seen, from: string, to: string) =>
     d.links.find((l) => d.nodes[l.source].name === from && d.nodes[l.target].name === to)?.value;
 
@@ -798,10 +785,10 @@ describe("CostReport Sankey from per-card costs", () => {
     renderCost();
     await screen.findByTestId("cost-sankey-panel");
     await waitFor(() => {
-      const d = sankeyDataSeen.current as Seen;
+      const d = sankeySeen();
       expect(d.nodes.map((n) => n.name)).not.toContain("Hosting");
     });
-    const d = sankeyDataSeen.current as Seen;
+    const d = sankeySeen();
     expect(d.links).toHaveLength(2);
     expect(flow(d, "Licences", "G")).toBe(100);
     expect(flow(d, "G", "CRM")).toBe(100);
@@ -812,7 +799,7 @@ describe("CostReport Sankey from per-card costs", () => {
     mockSankey();
     renderCost();
     await screen.findByTestId("cost-sankey-panel");
-    const d = sankeyDataSeen.current as Seen;
+    const d = sankeySeen();
     const g = d.nodes.findIndex((n) => n.name === "G");
     const sum = (f: (l: Seen["links"][number]) => boolean) =>
       d.links.filter(f).reduce((n, l) => n + l.value, 0);

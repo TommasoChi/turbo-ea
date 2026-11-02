@@ -2,35 +2,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import CostTrendChart from "./CostTrendChart";
 
-let axisFormatter: ((v: number) => string) | undefined;
-
 vi.mock("@/api/client", () => ({ api: { get: vi.fn() }, isAbortError: () => false }));
-vi.mock("recharts", () => ({
-  BarChart: ({ data, children }: { data: unknown; children?: React.ReactNode }) => (
-    <div>
-      <div data-testid="rows">{JSON.stringify(data)}</div>
-      {children}
-    </div>
-  ),
-  Bar: ({ dataKey, fill }: { dataKey: string; fill: string }) => (
-    <i data-testid="bar" data-fill={fill}>
-      {dataKey}
-    </i>
-  ),
-  XAxis: ({ tickFormatter }: { tickFormatter?: (v: number) => string }) => {
-    axisFormatter = tickFormatter;
-    return null;
-  },
-  YAxis: () => null,
-  Tooltip: () => null,
-  Legend: () => null,
-  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+vi.mock("@/hooks/useCurrency", () => ({
+  useCurrency: () => ({ fmt: { format: (v: number) => `$${v}` } }),
 }));
+// jsdom has no canvas: the chart is the shared test double, and a test reads the option the page built.
+vi.mock("@/components/charts/EChart", () => import("@/test/echartMock").then((m) => m.echartModule()));
 import { api } from "@/api/client";
+import { echartState } from "@/test/echartMock";
 
-const rowsOf = () => JSON.parse(screen.getByTestId("rows").textContent ?? "[]");
+/** What the chart plots: each component's per-year totals, in year order. */
+const rowsOf = () =>
+  Object.fromEntries(
+    echartState.last().option.series.map((s: { name: string; data: number[] }) => [s.name, s.data]),
+  );
+const yearLabels = () => echartState.last().option.xAxis.data as string[];
 const yearOf = (path: string) => new URLSearchParams(path.split("?")[1]).get("fiscal_year")!;
-const barKeys = () => screen.queryAllByTestId("bar").map((b) => b.textContent);
+const barKeys = () => (echartState.props.length ? echartState.last().option.series.map((s: { name: string }) => s.name) : []);
 
 const COMPONENTS = ["licenseCost", "serviceCost"];
 const props = (over: Partial<React.ComponentProps<typeof CostTrendChart>> = {}) => ({
@@ -44,6 +32,7 @@ const props = (over: Partial<React.ComponentProps<typeof CostTrendChart>> = {}) 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  echartState.reset();
   vi.mocked(api.get).mockImplementation((path: string) => {
     const p = new URLSearchParams(path.split("?")[1]);
     const totals: Record<string, number> = {
@@ -71,17 +60,16 @@ describe("CostTrendChart", () => {
       "/reports/cost-treemap?type=Application&cost_field=serviceCost&fiscal_year=2026",
     );
     await waitFor(() =>
-      expect(rowsOf()).toEqual([
-        { fiscalYear: 2025, licenseCost: 100, serviceCost: 50 },
-        { fiscalYear: 2026, licenseCost: 120, serviceCost: 60 },
-      ]),
+      expect(rowsOf()).toEqual({ licenseCost: [100, 120], serviceCost: [50, 60] }),
     );
   });
 
   it("draws one bar per component, keyed by the technical key, with distinct colours", async () => {
     render(<CostTrendChart {...props()} />);
     await waitFor(() => expect(barKeys()).toEqual(COMPONENTS));
-    const fills = screen.getAllByTestId("bar").map((b) => b.getAttribute("data-fill"));
+    const fills = echartState
+      .last()
+      .option.series.map((s: { itemStyle: { color: string } }) => s.itemStyle.color);
     expect(new Set(fills).size).toBe(2);
   });
 
@@ -104,10 +92,8 @@ describe("CostTrendChart", () => {
 
   it("labels the axis with FY names", async () => {
     render(<CostTrendChart {...props({ years: [2025, 2026, 2027] })} />);
-    await waitFor(() => expect(axisFormatter).toBeDefined());
-    expect(axisFormatter!(2027)).toBe("FY27 - Forecast");
-    expect(axisFormatter!(2026)).toBe("FY26 - Current");
-    expect(axisFormatter!(2025)).toBe("FY25");
+    await waitFor(() => expect(yearLabels()).toHaveLength(3));
+    expect(yearLabels()).toEqual(["FY25", "FY26 - Current", "FY27 - Forecast"]);
   });
 
   it("never sends a group_by param", async () => {
@@ -148,7 +134,7 @@ describe("CostTrendChart", () => {
     await waitFor(() => expect(pending).toHaveLength(4));
 
     settle("2026", 7);
-    const latest = [{ fiscalYear: 2026, licenseCost: 7, serviceCost: 7 }];
+    const latest = { licenseCost: [7], serviceCost: [7] };
     await waitFor(() => expect(rowsOf()).toEqual(latest));
 
     await act(async () => {

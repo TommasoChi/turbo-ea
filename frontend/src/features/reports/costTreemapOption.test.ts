@@ -1,15 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildEChartsChrome } from "@/components/charts/echartsTheme";
-import { CHART_LABEL_ON_DARK, CHART_LABEL_ON_DARK_MUTED, COST_TREEMAP_COLORS } from "@/theme/tokens";
+import {
+  CHART_LABEL_ON_DARK,
+  CHART_LABEL_ON_DARK_MUTED,
+  COST_DELTA_DOWN,
+  COST_DELTA_UP,
+  COST_TREEMAP_COLORS,
+} from "@/theme/tokens";
 import {
   TILE_NAME_MIN,
   TILE_VALUE_MIN,
   buildCostTreemapOption,
   chartTileRect,
   costTooltipHtml,
+  deltaBadge,
   tileLabelFormatter,
   tileLabelTier,
   treemapColor,
+  type CostTreemapGroup,
   type CostTreemapItem,
   type CostTreemapOptions,
 } from "./costTreemapOption";
@@ -397,5 +405,96 @@ describe("chartTileRect", () => {
       ),
     ).toBeUndefined();
     expect(chartTileRect({}, 0)).toBeUndefined();
+  });
+});
+
+describe("deltaBadge", () => {
+  it("says nothing when no year is picked", () => {
+    expect(deltaBadge(undefined, "new")).toBe("");
+  });
+
+  it("marks a rise with an up arrow and a signed percentage, rounded", () => {
+    expect(deltaBadge(0.204, "new")).toBe("{up|▲ +20%}");
+    expect(deltaBadge(0, "new")).toBe("{up|▲ +0%}");
+  });
+
+  it("marks a fall with a down arrow and the minus sign of the percentage", () => {
+    expect(deltaBadge(-0.126, "new")).toBe("{down|▼ -13%}");
+  });
+
+  it("calls a card with no current-year cost to diff against new", () => {
+    expect(deltaBadge(null, "new")).toBe("{up|▲ new}");
+  });
+});
+
+describe("the change badge on a tile", () => {
+  const withDelta: CostTreemapItem[] = [
+    { id: "erp", name: "ERP", cost: 500, index: 0, deltaPct: 0.2 },
+    { id: "old", name: "Old", cost: 100, index: 1, deltaPct: null },
+    { id: "crm", name: "CRM", cost: 100, index: 2 },
+  ];
+
+  it("prints after the cost on a tile that fits the cost, with the datum's change", () => {
+    const s = seriesOf(build(withDelta, { deltaNew: "new" }));
+    const [erp, old, crm] = s.data;
+    expect(s.label.formatter({ name: "ERP", value: 500, data: erp })).toBe("ERP\n{value|$500} {up|▲ +20%}");
+    expect(s.label.formatter({ name: "Old", value: 100, data: old })).toBe("Old\n{value|$100} {up|▲ new}");
+    expect(s.label.formatter({ name: "CRM", value: 100, data: crm })).toBe("CRM\n{value|$100}");
+  });
+
+  it("is left off a tile that only fits its name", () => {
+    const s = seriesOf(build(withDelta, { tileRect: () => ({ width: 60, height: 35 }), deltaNew: "new" }));
+    expect(s.label.formatter({ dataIndex: 0, name: "ERP", value: 500, data: s.data[0] })).toBe("ERP");
+  });
+
+  it("is coloured by a rise or a fall", () => {
+    const rich = seriesOf(build(withDelta)).label.rich;
+    expect(rich.up).toMatchObject({ color: COST_DELTA_UP });
+    expect(rich.down).toMatchObject({ color: COST_DELTA_DOWN });
+  });
+});
+
+describe("grouped treemap", () => {
+  const groups: CostTreemapGroup[] = [
+    {
+      name: "Gold",
+      cost: 15,
+      index: 0,
+      items: [
+        { id: "a", name: "Alpha", cost: 10, index: 0 },
+        { id: "b", name: "Beta", cost: 5, index: 0 },
+      ],
+    },
+    { name: "Silver", cost: 3, index: 1, items: [{ id: "c", name: "Gamma", cost: 3, index: 1 }] },
+    { name: "Empty", cost: 0, index: 2, items: [{ id: "z", name: "Zero", cost: 0, index: 2 }] },
+  ];
+  const grouped = () => seriesOf(build([], { groups }));
+
+  it("frames each group around its cards, in the group's colour, and skips a group with no tile", () => {
+    const data = grouped().data;
+    expect(data.map((g: any) => [g.name, g.value, g.children.length])).toEqual([
+      ["Gold", 15, 2],
+      ["Silver", 3, 1],
+    ]);
+    expect(data[0].itemStyle).toMatchObject({ color: treemapColor(0), borderWidth: 4 });
+    expect(data[1].children[0].itemStyle.color).toBe(treemapColor(1));
+  });
+
+  it("titles each group in a strip over its frame, and only when grouped", () => {
+    expect(grouped().upperLabel).toMatchObject({ show: true, color: CHART_LABEL_ON_DARK });
+    expect(seriesOf(build()).upperLabel).toBeUndefined();
+  });
+
+  it("names the group in the tooltip of a card", () => {
+    const tip = build([], { groups }).tooltip.formatter;
+    const card = grouped().data[0].children[0];
+    expect(tip({ data: card })).toContain("Gold");
+    expect(tip({ data: card })).toContain("$10");
+  });
+
+  it("leaves the group line out of a card's tooltip when the report is not grouped", () => {
+    const html = costTooltipHtml({ name: "ERP", cost: 500 }, opts());
+    expect(html).not.toContain("opacity:.7\">Gold");
+    expect(costTooltipHtml({ name: "ERP", cost: 500, group: "Gold" }, opts())).toContain("Gold");
   });
 });

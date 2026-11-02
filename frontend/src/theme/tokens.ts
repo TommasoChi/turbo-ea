@@ -364,6 +364,10 @@ export const COST_TREEMAP_COLORS = [
 
 /** Label text printed on a dark, saturated chart fill (the cost treemap's
  *  blue tiles), and its translucent variant for a secondary line. */
+/** The change badge on a Cost treemap tile: a rise, a fall (light enough to read on the blues). */
+export const COST_DELTA_UP = "#a5d6a7";
+export const COST_DELTA_DOWN = "#ef9a9a";
+
 export const CHART_LABEL_ON_DARK = "#ffffff";
 export const CHART_LABEL_ON_DARK_MUTED = "rgba(255,255,255,0.8)";
 

@@ -34,7 +34,13 @@ import {
   treemapLabel,
   type ChartChromeContext,
 } from "@/components/charts/chrome";
-import { CHART_LABEL_ON_DARK, CHART_LABEL_ON_DARK_MUTED, COST_TREEMAP_COLORS } from "@/theme/tokens";
+import {
+  CHART_LABEL_ON_DARK,
+  CHART_LABEL_ON_DARK_MUTED,
+  COST_DELTA_DOWN,
+  COST_DELTA_UP,
+  COST_TREEMAP_COLORS,
+} from "@/theme/tokens";
 
 /** A tile's fill, cycling the palette by position. */
 export function treemapColor(index: number): string {
@@ -48,6 +54,22 @@ export interface CostTreemapItem {
   name: string;
   cost: number;
   index: number;
+  /**
+   * Change against the current fiscal year's cost, as a signed ratio: absent
+   * when no year is picked (no badge), null when the card has no current-year
+   * cost to diff against ("new").
+   */
+  deltaPct?: number | null;
+}
+
+/** A group of cards: a framed block in the treemap, titled with its name. */
+export interface CostTreemapGroup {
+  name: string;
+  cost: number;
+  /** Position of the group by cost, largest first — picks the group's colour. */
+  index: number;
+  /** The group's cards, largest first. */
+  items: CostTreemapItem[];
 }
 
 export interface CostTreemapOptions {
@@ -67,6 +89,10 @@ export interface CostTreemapOptions {
    * while the chart cannot say, and then the tile prints its name and cost.
    */
   tileRect?: (dataIndex: number) => { width: number; height: number } | undefined;
+  /** The word for a card with no current-year cost to diff against. */
+  deltaNew?: string;
+  /** Cards drawn in framed groups instead of as a flat run of tiles. */
+  groups?: CostTreemapGroup[];
 }
 
 /**
@@ -96,6 +122,15 @@ export interface TileLabelParams {
   dataIndex?: number;
   name?: string;
   value?: unknown;
+  data?: { deltaPct?: number | null };
+}
+
+/** The change badge of a tile, as rich text: "▲ +12%", "▼ -3%" or "▲ new"; "" when none. */
+export function deltaBadge(deltaPct: number | null | undefined, deltaNew: string): string {
+  if (deltaPct === undefined) return "";
+  if (deltaPct === null) return `{up|▲ ${deltaNew}}`;
+  const pct = Math.round(deltaPct * 100);
+  return deltaPct >= 0 ? `{up|▲ +${pct}%}` : `{down|▼ ${pct}%}`;
 }
 
 /**
@@ -103,14 +138,16 @@ export interface TileLabelParams {
  * it out in. A tile whose rectangle is unknown prints its name and cost.
  */
 export function tileLabelFormatter(
-  o: Pick<CostTreemapOptions, "format" | "tileRect">,
+  o: Pick<CostTreemapOptions, "format" | "tileRect" | "deltaNew">,
 ): (p: TileLabelParams) => string {
   return (p) => {
     const r = o.tileRect?.(p.dataIndex ?? -1);
     const tier = r ? tileLabelTier(r.width, r.height) : "full";
     if (tier === "none") return "";
     const name = p.name ?? "";
-    return tier === "name" ? name : `${name}\n{value|${o.format(Number(p.value ?? 0))}}`;
+    if (tier === "name") return name;
+    const badge = deltaBadge(p.data?.deltaPct, o.deltaNew ?? "");
+    return `${name}\n{value|${o.format(Number(p.value ?? 0))}}${badge && ` ${badge}`}`;
   };
 }
 
@@ -162,16 +199,27 @@ export interface CostTreemapDatum {
   id?: string;
   index: number;
   itemStyle: { color: string };
+  deltaPct?: number | null;
+  /** The group the card sits in, when the report is grouped. */
+  group?: string;
+}
+
+/** A group's datum: its frame, holding its cards. */
+export interface CostTreemapGroupDatum {
+  name: string;
+  value: number;
+  children: CostTreemapDatum[];
+  itemStyle: { color: string; borderColor: string; borderWidth: number; gapWidth: number };
 }
 
 /** The hover tooltip of one tile: its name, its cost and, against a non-zero total, its share. */
 export function costTooltipHtml(
-  d: { name: string; cost: number },
+  d: { name: string; cost: number; group?: string },
   o: Pick<CostTreemapOptions, "format" | "panelTotal" | "percentOfTotal">,
 ): string {
-  let html =
-    `<div style="font-weight:700">${escapeHtml(d.name)}</div>` +
-    `<div style="font-size:12px">${escapeHtml(o.format(d.cost))}</div>`;
+  let html = `<div style="font-weight:700">${escapeHtml(d.name)}</div>`;
+  if (d.group) html += `<div style="font-size:12px;opacity:.7">${escapeHtml(d.group)}</div>`;
+  html += `<div style="font-size:12px">${escapeHtml(o.format(d.cost))}</div>`;
   if (o.panelTotal > 0) {
     const pct = ((d.cost / o.panelTotal) * 100).toFixed(1);
     html += `<div style="font-size:12px;opacity:.7">${escapeHtml(o.percentOfTotal(pct))}</div>`;
@@ -183,20 +231,48 @@ export function costTooltipHtml(
 export function buildCostTreemapOption(items: CostTreemapItem[], o: CostTreemapOptions): EChartsCoreOption {
   // The chrome's figures read in the report's currency.
   const ctx: ChartChromeContext = { theme: o.chrome, isRtl: o.isRtl, valueFormatter: o.format };
-  const data: CostTreemapDatum[] = items.filter((d) => d.cost > 0).map((d) => ({
+  const leaf = (d: CostTreemapItem, colorIndex: number, group?: string): CostTreemapDatum => ({
     name: d.name,
     value: d.cost,
     id: d.id,
     index: d.index,
-    itemStyle: { color: treemapColor(d.index) },
-  }));
+    itemStyle: { color: treemapColor(colorIndex) },
+    ...(d.deltaPct !== undefined && { deltaPct: d.deltaPct }),
+    ...(group !== undefined && { group }),
+  });
+  // Grouped: each group is a frame holding its cards, which take the frame's colour.
+  const data: (CostTreemapDatum | CostTreemapGroupDatum)[] = o.groups
+    ? o.groups
+        .map((g) => ({
+          name: g.name,
+          value: g.cost,
+          children: g.items.filter((d) => d.cost > 0).map((d) => leaf(d, g.index, g.name)),
+          itemStyle: {
+            color: treemapColor(g.index),
+            borderColor: ctx.theme.surface,
+            borderWidth: 4,
+            gapWidth: 2,
+          },
+        }))
+        .filter((g) => g.children.length > 0)
+    : items.filter((d) => d.cost > 0).map((d) => leaf(d, d.index));
+  const tileLabel = treemapLabel(ctx, {
+    showValues: true,
+    color: CHART_LABEL_ON_DARK,
+    fontSize: 11,
+    fontWeight: 600,
+    valueFontSize: 10,
+    valueColor: CHART_LABEL_ON_DARK_MUTED,
+  }) as { rich: Record<string, unknown> };
   return {
     ...base(ctx),
     tooltip: tooltip(ctx, {
       trigger: "item",
-      formatter: (p: { data?: CostTreemapDatum } | undefined) => {
+      formatter: (p: { data?: CostTreemapDatum | CostTreemapGroupDatum } | undefined) => {
         const d = p?.data;
-        return d ? costTooltipHtml({ name: d.name, cost: d.value }, o) : "";
+        if (!d) return "";
+        const group = "group" in d ? d.group : undefined;
+        return costTooltipHtml({ name: d.name, cost: d.value, group }, o);
       },
     }),
     series: [
@@ -221,20 +297,32 @@ export function buildCostTreemapOption(items: CostTreemapItem[], o: CostTreemapO
           // The chrome's tile label for its styling (colours, sizes, the
           // truncation and the cost line's rich style); the text itself
           // comes from the tile's own rectangle.
-          ...treemapLabel(ctx, {
-            showValues: true,
-            color: CHART_LABEL_ON_DARK,
-            fontSize: 11,
-            fontWeight: 600,
-            valueFontSize: 10,
-            valueColor: CHART_LABEL_ON_DARK_MUTED,
-          }),
+          ...tileLabel,
           formatter: tileLabelFormatter(o),
+          // The change badge reads on the tile's blue in a lighter green or red.
+          rich: {
+            ...tileLabel.rich,
+            up: { color: COST_DELTA_UP, fontSize: 10, fontWeight: 700 },
+            down: { color: COST_DELTA_DOWN, fontSize: 10, fontWeight: 700 },
+          },
           // Anchored at the tile's leading top corner — the right one in RTL.
           position: o.isRtl ? "insideTopRight" : "insideTopLeft",
           align: o.isRtl ? "right" : "left",
           padding: [6, 6],
         },
+        // A group's title sits in a strip over the frame, above its cards.
+        ...(o.groups && {
+          upperLabel: {
+            show: true,
+            height: 18,
+            color: CHART_LABEL_ON_DARK,
+            fontSize: 11,
+            fontWeight: 600,
+            overflow: "truncate",
+            align: o.isRtl ? "right" : "left",
+            padding: [0, 6],
+          },
+        }),
         data,
       },
     ],
