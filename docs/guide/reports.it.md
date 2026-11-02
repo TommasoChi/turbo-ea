@@ -162,19 +162,49 @@ Il **Report Costi** fornisce un'analisi finanziaria del vostro panorama tecnolog
 
 - **Vista treemap** — Rettangoli annidati dimensionati per costo, con raggruppamento opzionale (es. per organizzazione o capability)
 - **Vista grafico a barre** — Confronto dei costi tra componenti
-- **Tipo di scheda** — Scegliete il tipo di scheda su cui costruire il report (Applicazione, Componente IT, Fornitore, …).
+- **Vista Sankey** — Lo stesso report disegnato come flusso di costo (vedi [Vista Sankey](#sankey-view))
+- **Tipo di scheda** — Scegliete il tipo di scheda su cui costruire il report: **Applicazione**, **Componente IT**, **Applicazione + Componente IT** (entrambi i tipi in un solo grafico, ogni scheda con il proprio costo) o **Iniziativa**. Le iniziative seguono le stesse regole dell'anno fiscale delle applicazioni.
+- **Campo di costo** — Scegliete quale campo di costo viene sommato. L'elenco mostra i campi di costo del tipo di scheda scelto; per Iniziativa offre **costBudget** (il predefinito) e **costActual**, che non vengono mai sommati. Per l'opzione combinata sono offerti solo i campi di costo presenti in entrambi i tipi.
+
+Tutte le viste condividono la stessa barra degli strumenti, gli stessi filtri, lo stesso anno fiscale e lo stesso campo di costo, quindi cambiare vista modifica solo il disegno.
+
+### Raggruppa per
+
+**Raggruppa per** è disponibile nella treemap, nella tabella e nel Sankey. Una scheda viene raggruppata in base a:
+
+- il valore di un **campo della scheda** (solo campi a valore singolo; i campi a scelta multipla non sono offerti, perché collocherebbero una scheda in due gruppi), oppure
+- una **scheda collegata**, indicata dal nome della scheda collegata, tramite una relazione in cui ogni scheda ha **al massimo una** scheda collegata di quel tipo. Le relazioni molti-a-molti non sono mai offerte, quindi un costo non può mai finire in due gruppi.
+
+Le schede senza valore, o senza scheda collegata, vanno nel gruppo **Unspecified**. Per l'opzione combinata **Applicazione + Componente IT** sono offerti solo i campi presenti in entrambi i tipi; il selettore è disabilitato quando non ce ne sono. Il raggruppamento non conta mai un costo due volte e non ne scarta mai nessuno.
 
 ### Anno fiscale
 
-I costi sono annuali, quindi il report li mostra per **l'anno fiscale corrente**, indicato da un chip nella barra degli strumenti, ad esempio **Anno fiscale corrente: AF 2026** (oppure *AF 2025–2026* quando il vostro anno fiscale non inizia a gennaio). Il costo annuale di una scheda conta **per intero** quando l'anno fiscale corrente cade tra quello in cui la scheda diventa **Attivo** e quello in cui cade la sua **Fine vita**, entrambi inclusi. Nulla viene calcolato pro rata: un'applicazione dismessa a novembre porta ancora l'intero costo annuale quest'anno. Una scheda la cui Fine vita cadeva in un anno fiscale precedente non viene conteggiata.
+I costi sono annuali, quindi il report viene costruito per un **anno fiscale** alla volta. Un selettore **Anno fiscale** nella barra degli strumenti offre sei voci, dalla più recente:
 
-Le date del ciclo di vita mancanti vengono interpretate come nei report con il viaggio nel tempo:
+| Voce | Cosa mostra |
+|---|---|
+| **FY27 - Forecast** | L'anno fiscale successivo, da importi inseriti a mano (vedi sotto). |
+| **FY26 - Current** | L'anno fiscale corrente, dagli attributi di costo attuali delle schede. È il valore predefinito. |
+| **FY25** … **FY22** | I quattro anni fiscali precedenti quello corrente, dai costi registrati per essi. |
 
-- **Nessuna data Attivo, ma una data di Pianificazione o di Introduzione** — la scheda è ancora pianificata e non viene conteggiata.
-- **Nessuna data di Fine vita** — la scheda conta a partire dall'anno in cui diventa attiva.
-- **Nessuna data del ciclo di vita** — la scheda conta.
+Un anno fiscale si chiama **FY** più le ultime due cifre dell'anno in cui **termina**, qualunque sia il mese in cui inizia il vostro anno fiscale: un anno fiscale da luglio 2025 a giugno 2026 è **FY26**. Un chip nella barra degli strumenti ripete la selezione, ad esempio **Anno fiscale: FY26 - Current**. *Current* e *Forecast* non vengono tradotti.
 
-La regola vale per tutta la pagina — i totali, la treemap, la tabella, le aggregazioni per **Origine dei costi** (un Componente IT dismesso smette di sommarsi al totale della sua Applicazione) e il drill-down — e l'anno fiscale compare nell'intestazione di stampa. Non è possibile scegliere altri anni: una scheda porta un solo importo annuale e i costi reali cambiano da un anno all'altro, quindi lo stesso importo mostrato per un altro anno sarebbe fuorviante. Un amministratore stabilisce il mese di inizio dell'anno fiscale in [Impostazioni → Generale](../admin/settings.md).
+**Gli importi previsionali si inseriscono a mano.** Aprite una scheda, andate alla sua cronologia dei costi e digitate il costo pianificato per l'anno fiscale successivo, come registrate un anno passato. Solo l'anno fiscale **successivo** può essere registrato come previsione, e la registrazione richiede lo stesso permesso di quella di un anno passato. Quando quell'anno diventa quello corrente, il report legge invece gli attributi attuali, e l'importo attuale della scheda sostituisce quello digitato.
+
+#### Quali schede compaiono
+
+- **Anno corrente** — Il costo annuale di una scheda conta **per intero** quando l'anno fiscale corrente cade tra quello in cui la scheda diventa **Attivo** e quello in cui cade la sua **Fine vita**, entrambi inclusi. Nulla viene calcolato pro rata: un'applicazione dismessa a novembre porta ancora l'intero costo annuale quest'anno. Una scheda la cui Fine vita cadeva in un anno fiscale precedente non viene conteggiata. Le date del ciclo di vita mancanti vengono interpretate come nei report con il viaggio nel tempo:
+    - **Nessuna data Attivo, ma una data di Pianificazione o di Introduzione** — la scheda è ancora pianificata e non viene conteggiata.
+    - **Nessuna data di Fine vita** — la scheda conta a partire dall'anno in cui diventa attiva.
+    - **Nessuna data del ciclo di vita** — la scheda conta.
+- **Qualsiasi altro anno (passato o previsionale)** — Compare ogni scheda attiva con un **costo registrato per quell'anno**, anche se è stata dismessa da allora o diventa attiva solo più avanti. Una scheda senza costo registrato per quell'anno non compare.
+- **Le schede archiviate** non compaiono mai, in nessun anno.
+
+La regola vale per tutta la pagina — i totali, la treemap, la tabella, le aggregazioni per **Origine dei costi** e il drill-down — e l'anno fiscale selezionato compare nell'intestazione di stampa.
+
+Quando scegliete un anno diverso da **Current**, un **grafico di tendenza** mostra il costo dell'anno corrente e dei quattro precedenti. Quando l'anno selezionato è **Forecast**, il grafico mostra anche una barra per esso.
+
+Un amministratore stabilisce il mese di inizio dell'anno fiscale in [Impostazioni → Generale](../admin/settings.md).
 
 ### Origine dei costi
 
@@ -207,6 +237,14 @@ Quando almeno un'Origine costi è attiva, i rettangoli del treemap diventano **c
 La selezione dell'Origine costi e gli altri filtri vengono mantenuti durante il drill-down, e il livello di drill-down fa parte della configurazione del report salvato: salvando un report mentre si è in drill-down lo si riapre direttamente a quel livello. Senza un'Origine costi attiva, un clic su un rettangolo apre invece il pannello laterale della card (non c'è nulla da scomporre).
 
 **Limitare a schede specifiche** — Il chip accanto al selettore del tipo apre un selettore: scegli una o più schede e la treemap, i totali e la tabella si limiteranno a quelle e a tutto ciò che si trova sotto di esse. Il chip è nascosto mentre sei all'interno di un rettangolo, poiché quel dettaglio ti ha già portato a un altro tipo di scheda; esci e l'ambito è ancora lì.
+
+### Vista Sankey {#sankey-view}
+
+Il Sankey accetta gli stessi filtri della treemap: tipo di scheda, ambito delle schede, campo di costo, anno fiscale e Raggruppa per. Disegna a sinistra le **voci di costo** (i campi di costo che compongono il totale), a destra le **schede** e, quando è scelto un Raggruppa per, al centro i **gruppi**: le voci di costo confluiscono nei gruppi e i gruppi confluiscono nelle loro schede. Senza Raggruppa per il flusso va direttamente dalle voci di costo alle schede. Un costo viene contato una sola volta: un Componente IT usato da più applicazioni non viene ripetuto.
+
+### Schermo intero
+
+Il pulsante schermo intero sulla treemap e sul Sankey fa occupare al grafico tutto lo schermo, in larghezza e in altezza, senza deformarlo.
 
 ## Report Matrice
 

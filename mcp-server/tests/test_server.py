@@ -331,14 +331,14 @@ class TestReportTools:
     async def test_get_cost_treemap_with_group(self, fake_token):
         patcher, mock = _patched_get({"groups": []})
         with patcher:
-            await server.get_cost_treemap(group_by="BusinessCapability")
+            await server.get_cost_treemap(group_by="rel:relAppToBC")
         _assert_called_with(
             mock,
             "/reports/cost-treemap",
             params={
                 "type": "Application",
                 "cost_field": "costTotalAnnual",
-                "group_by": "BusinessCapability",
+                "group_by": "rel:relAppToBC",
             },
         )
 

@@ -14,7 +14,6 @@ from sqlalchemy.orm import aliased, selectinload
 from app.api.deps import get_current_user
 from app.database import get_db
 from app.models.card import Card
-from app.models.card_cost_history import CardCostHistory
 from app.models.card_type import CardType
 from app.models.event import Event
 from app.models.process_element import ProcessElement, ProcessElementOrganization
@@ -45,7 +44,14 @@ from app.services.card_read_scope import (
     event_read_filters,
     scrub_event_payloads,
 )
+from app.services.cost_components import cost_components
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
+from app.services.cost_grouping import assign_groups, parse_group_by
+from app.services.cost_report import (
+    build_cost_sankey,
+    cards_with_cost_for_types,
+    parse_type_keys,
+)
 from app.services.cost_value import cost_value
 from app.services.eol_service import (
     eol_status,
@@ -1415,6 +1421,35 @@ async def cost_report(
     return {"items": items, "total": total, "fiscal_year": fy, "fiscal_year_start": fy_start}
 
 
+async def _validated_cost_request(
+    db: AsyncSession, type: str, cost_field: str
+) -> tuple[list[str], set[str]]:
+    """Validate a cost report's ``type`` / ``cost_field``; return the type keys and field keys."""
+    # M-3: Validate cost_field format
+    if not _SAFE_KEY_RE.match(cost_field):
+        raise HTTPException(400, f"Invalid cost_field: {cost_field!r}")
+    try:
+        type_keys = parse_type_keys(type)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    type_defs = {
+        t.key: t
+        for t in (await db.execute(select(CardType).where(CardType.key.in_(type_keys))))
+        .scalars()
+        .all()
+    }
+    field_keys: set[str] = set()
+    for key in type_keys:
+        if key not in type_defs:
+            raise HTTPException(400, f"Unknown card type: {key!r}")
+        if not cost_field_keys_from_card_schema(type_defs[key].fields_schema):
+            raise HTTPException(400, f"Card type {key!r} has no cost field")
+        field_keys |= {
+            f["key"] for s in type_defs[key].fields_schema or [] for f in s.get("fields", [])
+        }
+    return type_keys, field_keys
+
+
 @router.get("/cost-treemap")
 async def cost_treemap(
     db: AsyncSession = Depends(get_db),
@@ -1424,111 +1459,63 @@ async def cost_treemap(
     group_by: str | None = Query(None),
     fiscal_year: int | None = Query(None, ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR),
 ):
-    """Cost treemap: items with cost, optionally grouped by a related type.
+    """Cost treemap over one or several card types, optionally grouped.
 
-    Costs are annual and shown for the current fiscal year only: a card counts,
-    at its full annual cost, when the current fiscal year falls between the one
-    it goes ``active`` in and the one its ``endOfLife`` falls in, both included —
-    no pro-rating, so a card retired in an earlier fiscal year is left out. A
-    card carries one annual figure, so projecting it onto other years would
-    only restate today's number; that is why there is no year parameter. The
-    response names the fiscal year (``fiscal_year``) and the workspace's start
-    month (``fiscal_year_start``).
+    ``type`` is one card type key or a comma-separated list; each must exist and
+    carry a cost field. ``group_by`` is ``field:<key>`` (a single-valued field of
+    the type(s)) or ``rel:<relationTypeKey>`` (the one card linked through an
+    at-most-one relation); every item then carries a ``group`` (``__other__``
+    when it has none) and ``groups`` sums them. A bare field key is read as
+    ``field:<key>``; any other value is ignored. A refused grouping is 400.
+    ``components`` lists the cost fields concurring to ``cost_field``.
+
+    Takes an optional ``fiscal_year``: the current year is served from live
+    attributes for the cards live in it (full annual cost, no pro-rating, see
+    ``is_live_in_fiscal_year``); any other year lists the cards with a cost
+    recorded for it (``app/services/cost_report.py::cards_with_cost``). The
+    response names the requested ``fiscal_year``, the ``current_fiscal_year``
+    and the workspace's start month (``fiscal_year_start``).
     """
     # See `cost_report` above: `costs.view` alone gates a report that is
     # nothing but costs.
     await PermissionService.require_permission(db, user, "costs.view")
-    # M-3: Validate cost_field format
-    if not _SAFE_KEY_RE.match(cost_field):
-        raise HTTPException(400, f"Invalid cost_field: {cost_field!r}")
+    type_keys, field_keys = await _validated_cost_request(db, type, cost_field)
+
     fy_start = await get_fiscal_year_start(db)
     fy = current_fiscal_year(fy_start)
     read_scope = await CardReadScope.load(db, user)
-    result = await db.execute(
-        select(Card).where(
-            Card.type == type, Card.status == "ACTIVE", *read_scope.where(Card, mode="module")
-        )
-    )
-    sheets = [
-        c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
-    ]
-
     target_fy = fiscal_year if fiscal_year is not None else fy
-    history_by_card: dict[tuple[uuid.UUID, str], CardCostHistory] = {}
-    if target_fy != fy and sheets:
-        hist_result = await db.execute(
-            select(CardCostHistory).where(
-                CardCostHistory.card_id.in_([c.id for c in sheets]),
-                CardCostHistory.fiscal_year == target_fy,
-                CardCostHistory.field_key == cost_field,
-            )
-        )
-        history_by_card = {(row.card_id, row.field_key): row for row in hist_result.scalars().all()}
+    sheets = await cards_with_cost_for_types(
+        db, read_scope, type_keys, cost_field, target_fy, fy, fy_start
+    )
 
-    items: list[dict] = []
-    total = 0.0
-
-    for card in sheets:
-        if target_fy == fy:
-            cost = cost_value((card.attributes or {}).get(cost_field))
-        else:
-            history = history_by_card.get((card.id, cost_field))
-            cost = history.value if history is not None else 0.0
-        if not cost:
-            continue
-        items.append(
-            {
-                "id": str(card.id),
-                "name": card.name,
-                "cost": cost,
-                "lifecycle": card.lifecycle,
-                "attributes": card.attributes,
-            }
-        )
-        total += cost
+    items: list[dict] = [
+        {
+            "id": str(card.id),
+            "name": card.name,
+            "type": card.type,
+            "cost": cost,
+            "lifecycle": card.lifecycle,
+            "attributes": card.attributes,
+        }
+        for card, cost in sheets
+    ]
+    total = sum(cost for _, cost in sheets)
     items.sort(key=lambda x: x["cost"], reverse=True)
 
     groups = None
-    if group_by:
-        # Get group cards
-        grp_result = await db.execute(
-            select(Card).where(
-                Card.type == group_by,
-                Card.status == "ACTIVE",
-                *read_scope.where(Card, mode="module"),
+    grouping = parse_group_by(group_by, field_keys)
+    if grouping:
+        try:
+            assigned = await assign_groups(
+                db, read_scope, [c for c, _ in sheets], grouping, type_keys
             )
-        )
-        grp_sheets = grp_result.scalars().all()
-        grp_map = {str(g.id): g.name for g in grp_sheets}
-
-        # Get relations
-        sheet_ids = [card.id for card in sheets]
-        grp_ids = [g.id for g in grp_sheets]
-        rels_result = await db.execute(
-            select(Relation).where(
-                ((Relation.source_id.in_(sheet_ids)) & (Relation.target_id.in_(grp_ids)))
-                | ((Relation.source_id.in_(grp_ids)) & (Relation.target_id.in_(sheet_ids)))
-            )
-        )
-        rels = rels_result.scalars().all()
-
-        # Build item -> group name mapping
-        item_group: dict[str, str] = {}
-        for r in rels:
-            sid, tid = str(r.source_id), str(r.target_id)
-            if tid in grp_map:
-                item_group[sid] = grp_map[tid]
-            elif sid in grp_map:
-                item_group[tid] = grp_map[sid]
-
-        for item in items:
-            item["group"] = item_group.get(item["id"], "Ungrouped")
-
-        # Build group summaries
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
         groups_dict: dict[str, float] = {}
         for item in items:
-            g = item["group"]
-            groups_dict[g] = groups_dict.get(g, 0) + item["cost"]
+            item["group"] = assigned[uuid.UUID(item["id"])]
+            groups_dict[item["group"]] = groups_dict.get(item["group"], 0) + item["cost"]
         groups = [
             {"name": k, "cost": v} for k, v in sorted(groups_dict.items(), key=lambda x: -x[1])
         ]
@@ -1537,7 +1524,9 @@ async def cost_treemap(
         "items": items,
         "total": total,
         "groups": groups,
+        "components": await cost_components(db, type_keys, cost_field),
         "fiscal_year": target_fy,
+        "current_fiscal_year": fy,
         "fiscal_year_start": fy_start,
     }
 
@@ -1546,154 +1535,39 @@ async def cost_treemap(
 async def cost_sankey(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
+    type: str = Query("Application"),
     cost_field: str = Query("costTotalAnnual"),
     group_by: str | None = Query(None),
     fiscal_year: int | None = Query(None, ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR),
 ):
-    """Cost flow between Application and ITComponent, via app_to_itc relations.
+    """Cost flow: cost items -> cards, with groups in the middle when ``group_by`` is set.
 
-    Two-level flow (``group_by`` unset): one node per Application and one per
-    ITComponent with ``cost_field`` > 0, one link per ``app_to_itc`` relation
-    between two visible nodes, link value = the ITComponent end's cost (an
-    ITComponent related to several Applications fans the same value out on
-    each link rather than being divided or deduped — a Sankey draws one flow
-    per relation, so this cannot double-count the way a summed total would).
-
-    Three-level flow (``group_by`` names a card type related to Application):
-    Application -> group node -> ITComponent. A ``group_by`` value naming a
-    type with no relation to any visible Application silently falls back to
-    the two-level flow instead of erroring, so a stale saved-report config
-    degrades gracefully.
+    Takes the treemap's parameters and validation (see ``cost_treemap``); the flow is
+    built by ``services/cost_report.py::build_cost_sankey``.
     """
     await PermissionService.require_permission(db, user, "costs.view")
-    if not _SAFE_KEY_RE.match(cost_field):
-        raise HTTPException(400, f"Invalid cost_field: {cost_field!r}")
-    if group_by is not None and not _SAFE_KEY_RE.match(group_by):
-        raise HTTPException(400, f"Invalid group_by: {group_by!r}")
-
+    type_keys, field_keys = await _validated_cost_request(db, type, cost_field)
     fy_start = await get_fiscal_year_start(db)
     fy = current_fiscal_year(fy_start)
     target_fy = fiscal_year if fiscal_year is not None else fy
     read_scope = await CardReadScope.load(db, user)
-
-    async def costed_cards(type_key: str) -> dict[uuid.UUID, tuple[str, float]]:
-        result = await db.execute(
-            select(Card).where(
-                Card.type == type_key,
-                Card.status == "ACTIVE",
-                *read_scope.where(Card, mode="module"),
-            )
+    try:
+        flow = await build_cost_sankey(
+            db,
+            read_scope,
+            type_keys,
+            cost_field,
+            parse_group_by(group_by, field_keys),
+            target_fy,
+            fy,
+            fy_start,
         )
-        live_cards = [
-            c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
-        ]
-        history_by_card: dict[uuid.UUID, CardCostHistory] = {}
-        if target_fy != fy and live_cards:
-            hist_result = await db.execute(
-                select(CardCostHistory).where(
-                    CardCostHistory.card_id.in_([c.id for c in live_cards]),
-                    CardCostHistory.fiscal_year == target_fy,
-                    CardCostHistory.field_key == cost_field,
-                )
-            )
-            history_by_card = {row.card_id: row for row in hist_result.scalars().all()}
-
-        out = {}
-        for c in live_cards:
-            if target_fy == fy:
-                cost = cost_value((c.attributes or {}).get(cost_field))
-            else:
-                history = history_by_card.get(c.id)
-                cost = history.value if history is not None else 0.0
-            if cost:
-                out[c.id] = (c.name, cost)
-        return out
-
-    apps = await costed_cards("Application")
-    itcs = await costed_cards("ITComponent")
-    if not apps or not itcs:
-        return {
-            "nodes": [],
-            "links": [],
-            "total": 0.0,
-            "fiscal_year": target_fy,
-            "fiscal_year_start": fy_start,
-        }
-
-    rel_result = await db.execute(
-        select(Relation).where(
-            ((Relation.source_id.in_(apps)) & (Relation.target_id.in_(itcs)))
-            | ((Relation.source_id.in_(itcs)) & (Relation.target_id.in_(apps)))
-        )
-    )
-    app_itc_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
-    for r in rel_result.scalars().all():
-        if r.source_id in apps and r.target_id in itcs:
-            app_itc_pairs.add((r.source_id, r.target_id))
-        elif r.target_id in apps and r.source_id in itcs:
-            app_itc_pairs.add((r.target_id, r.source_id))
-
-    group_cards: dict[uuid.UUID, tuple[str, float]] = {}
-    app_group: dict[uuid.UUID, uuid.UUID] = {}
-    if group_by:
-        grp_result = await db.execute(
-            select(Card).where(
-                Card.type == group_by,
-                Card.status == "ACTIVE",
-                *read_scope.where(Card, mode="module"),
-            )
-        )
-        grp_ids = {c.id: c.name for c in grp_result.scalars().all()}
-        if grp_ids:
-            rel2 = await db.execute(
-                select(Relation).where(
-                    ((Relation.source_id.in_(apps)) & (Relation.target_id.in_(grp_ids)))
-                    | ((Relation.source_id.in_(grp_ids)) & (Relation.target_id.in_(apps)))
-                )
-            )
-            for r in rel2.scalars().all():
-                if r.source_id in apps and r.target_id in grp_ids:
-                    app_group[r.source_id] = r.target_id
-                elif r.target_id in apps and r.source_id in grp_ids:
-                    app_group[r.target_id] = r.source_id
-            for gid in set(app_group.values()):
-                group_cards[gid] = (grp_ids[gid], 0.0)
-    # No Application actually links to a group_by card -> fall back silently.
-    has_groups = bool(app_group)
-
-    nodes: list[dict] = []
-    index_of: dict[uuid.UUID, int] = {}
-
-    def add_node(card_id: uuid.UUID, name: str, type_key: str) -> int:
-        if card_id not in index_of:
-            index_of[card_id] = len(nodes)
-            nodes.append({"id": str(card_id), "name": name, "type": type_key})
-        return index_of[card_id]
-
-    links: list[dict] = []
-    total = 0.0
-    for app_id, itc_id in app_itc_pairs:
-        itc_name, itc_cost = itcs[itc_id]
-        app_name, _ = apps[app_id]
-        if has_groups and app_id in app_group:
-            gid = app_group[app_id]
-            g_name, _ = group_cards[gid]
-            a_idx = add_node(app_id, app_name, "Application")
-            g_idx = add_node(gid, g_name, group_by)
-            i_idx = add_node(itc_id, itc_name, "ITComponent")
-            links.append({"source": a_idx, "target": g_idx, "value": apps[app_id][1]})
-            links.append({"source": g_idx, "target": i_idx, "value": itc_cost})
-        else:
-            a_idx = add_node(app_id, app_name, "Application")
-            i_idx = add_node(itc_id, itc_name, "ITComponent")
-            links.append({"source": a_idx, "target": i_idx, "value": itc_cost})
-        total += itc_cost
-
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     return {
-        "nodes": nodes,
-        "links": links,
-        "total": total,
+        **flow,
         "fiscal_year": target_fy,
+        "current_fiscal_year": fy,
         "fiscal_year_start": fy_start,
     }
 

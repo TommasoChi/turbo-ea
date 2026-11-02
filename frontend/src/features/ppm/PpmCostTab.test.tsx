@@ -28,6 +28,9 @@ import { todayIsoDate } from "@/lib/dates";
 import { resetFiscalYearStart } from "@/hooks/useFiscalYearStart";
 import i18n from "@/i18n";
 import PpmCostTab from "./PpmCostTab";
+import { pinEnglishNumberFormat } from "@/test/englishNumbers";
+
+pinEnglishNumberFormat();
 
 function cost(overrides: Partial<PpmCostLine> & { id: string }): PpmCostLine {
   return {

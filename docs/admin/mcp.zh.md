@@ -243,7 +243,7 @@ MCP 服务器提供 **56 个工具**，分为两组：**35 个读取工具** 用
 | 工具 | 描述 |
 |------|------|
 | `get_portfolio_report` | 某卡片类型的气泡图数据（默认：功能契合 × 技术契合） |
-| `get_cost_treemap` | 成本树形图，可选按相关类型分组 |
+| `get_cost_treemap` | 一个或多个类型的成本树形图，可选按字段（`field:<key>`）或关联卡片（`rel:<key>`）分组 |
 | `get_capability_heatmap` | 业务能力的层次热图 |
 | `get_data_quality_report` | 按卡片类型的完整度分布 |
 | `get_value_chain` | 价值链的条带和方框；传入 `category_id` 则返回某个流程类别的价值流地图；可选参数 `related`（`applications`、`dataObjects`、`organization`）会附带相关项目。需要权限 `bpm.value_chain` |

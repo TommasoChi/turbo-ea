@@ -347,6 +347,7 @@ beforeEach(() => {
     items: ITEMS,
     total: 700,
     fiscal_year: 2026,
+    current_fiscal_year: 2026,
     fiscal_year_start: 1,
   });
 });
@@ -470,7 +471,7 @@ describe("CostReport print parameters", () => {
     await waitFor(() =>
       expect(printParams()).toEqual([
         ["Type", "Application"],
-        ["Fiscal year", "FY 2026"],
+        ["Fiscal year", "FY26 - Current"],
       ]),
     );
   });
@@ -505,7 +506,7 @@ describe("CostReport print parameters", () => {
     await waitFor(() =>
       expect(printParams()).toEqual([
         ["Type", "Application"],
-        ["Fiscal year", "FY 2026"],
+        ["Fiscal year", "FY26 - Current"],
         ["Cost Field", "Total Annual Cost"],
       ]),
     );
@@ -522,20 +523,23 @@ describe("CostReport print parameters", () => {
     await waitFor(() =>
       expect(printParams()).toEqual([
         ["Type", "Application"],
-        ["Fiscal year", "FY 2026"],
+        ["Fiscal year", "FY26 - Current"],
         ["Group By", "Business Criticality"],
         ["View", "Table"],
       ]),
     );
   });
 
-  it("states a grouping field it no longer knows by its key and lists the rows ungrouped", async () => {
+  it("drops a grouping field it no longer knows and lists the rows ungrouped", async () => {
     saved.config = { view: "table", groupBy: "retired" };
     renderCost();
     await screen.findByRole("table");
     await waitFor(() =>
-      expect(printParams()).toContainEqual(["Group By", "retired"]),
+      expect(saved.persistConfig).toHaveBeenLastCalledWith(
+        expect.objectContaining({ groupBy: "" }),
+      ),
     );
+    expect(printParams().map(([label]) => label)).not.toContain("Group By");
     expect(
       rowTexts()
         .slice(1)
@@ -945,7 +949,7 @@ describe("CostReport reset", () => {
 /* ------------------------------------------------------------------ */
 
 describe("CostReport toolbar", () => {
-  it("offers None plus each single-select and yes/no field as a grouping, in table view only", async () => {
+  it("offers None plus each single-select and yes/no field as a grouping, in every view", async () => {
     saved.config = { view: "table" };
     renderCost();
     await screen.findByRole("table");
@@ -960,23 +964,26 @@ describe("CostReport toolbar", () => {
       screen.getByRole("button", { name: /treemap chart view/i }),
     );
     await screen.findByTestId("treemap");
-    expect(
-      screen.queryByRole("combobox", { name: /group by/i }),
-    ).not.toBeInTheDocument();
+    expect(await optionsOf(/group by/i)).toEqual([
+      "None",
+      "Business Criticality",
+      "Cloud Hosted",
+    ]);
   });
 
-  it("drops the grouping picker when the new type has nothing to group by", async () => {
+  it("disables the grouping picker when the new type has nothing to group by", async () => {
     saved.config = { view: "table" };
     renderCost();
     await screen.findByRole("combobox", { name: /group by/i });
-    await pickOption(/card type/i, /IT Component/);
+    await pickOption(/card type/i, /^IT Component$/);
     await waitFor(() =>
       expect(lastTreemapParams().get("type")).toBe("ITComponent"),
     );
     await waitFor(() =>
-      expect(
-        screen.queryByRole("combobox", { name: /group by/i }),
-      ).not.toBeInTheDocument(),
+      expect(screen.getByRole("combobox", { name: /group by/i })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      ),
     );
   });
 
@@ -1002,12 +1009,12 @@ describe("CostReport toolbar", () => {
     saved.config = {
       cardTypeKey: "ITComponent",
       view: "table",
-      groupBy: "tier",
+      groupBy: "field:tier",
     };
     mockApi.on("get", "/reports/cost-treemap*", {
       items: [
-        { id: "g", name: "Gold One", cost: 30, attributes: { tier: "gold" } },
-        { id: "n", name: "No Attributes", cost: 10 },
+        { id: "g", name: "Gold One", cost: 30, group: "gold" },
+        { id: "n", name: "No Attributes", cost: 10, group: "__other__" },
       ],
       total: 40,
     });
@@ -1039,24 +1046,14 @@ describe("CostReport toolbar", () => {
     saved.config = {
       cardTypeKey: "ITComponent",
       view: "table",
-      groupBy: "managed",
+      groupBy: "field:managed",
     };
     mockApi.on("get", "/reports/cost-treemap*", {
       items: [
-        {
-          id: "y",
-          name: "Managed One",
-          cost: 50,
-          attributes: { managed: true },
-        },
-        { id: "f", name: "Self Run", cost: 30, attributes: { managed: false } },
-        {
-          id: "l",
-          name: "Legacy Yes",
-          cost: 10,
-          attributes: { managed: "Yes" },
-        },
-        { id: "n", name: "No Attributes", cost: 10 },
+        { id: "y", name: "Managed One", cost: 50, group: "true" },
+        { id: "f", name: "Self Run", cost: 30, group: "false" },
+        { id: "l", name: "Legacy Yes", cost: 10, group: "true" },
+        { id: "n", name: "No Attributes", cost: 10, group: "__other__" },
       ],
       total: 100,
     });
@@ -1091,6 +1088,7 @@ describe("CostReport toolbar", () => {
     expect(await optionsOf(/card type/i)).toEqual([
       "Application",
       "IT Component",
+      "Application + IT Component",
     ]);
   });
 
@@ -1100,6 +1098,7 @@ describe("CostReport toolbar", () => {
     expect(await optionsOf(/card type/i)).toEqual([
       "Application",
       "IT Component",
+      "Application + IT Component",
     ]);
   });
 });
@@ -1150,18 +1149,21 @@ describe("CostReport table", () => {
       name: "Alpha",
       cost: 500,
       attributes: { businessCriticality: "missionCritical" },
+      group: "missionCritical",
     },
     {
       id: "z",
       name: "Zulu",
       cost: 10,
       attributes: { businessCriticality: "missionCritical" },
+      group: "missionCritical",
     },
     {
       id: "m",
       name: "Mango",
       cost: 900,
       attributes: { businessCriticality: "missionCritical" },
+      group: "missionCritical",
     },
   ];
 
@@ -1170,7 +1172,7 @@ describe("CostReport table", () => {
       items: GROUP_ITEMS,
       total: 1410,
     });
-    saved.config = { view: "table", groupBy: "businessCriticality" };
+    saved.config = { view: "table", groupBy: "field:businessCriticality" };
     renderCost();
     await screen.findByRole("table");
     await waitFor(() =>

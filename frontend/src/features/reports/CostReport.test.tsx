@@ -9,7 +9,7 @@
  * must say which year that is and never ask for another.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { createRef } from "react";
@@ -41,12 +41,66 @@ vi.mock("@/hooks/useCurrency", () => ({
     invalidate: () => {},
   }),
 }));
+// jsdom has no layout, so ResponsiveContainer would give the Sankey a 0x0 box.
+const sankeyDataSeen: { current: unknown } = vi.hoisted(() => ({ current: null }));
+vi.mock("recharts", async () => {
+  const actual = await vi.importActual<typeof import("recharts")>("recharts");
+  const { cloneElement } = await import("react");
+  return {
+    ...actual,
+    // Records the data the page hands the Sankey: the DOM does not carry link values.
+    Sankey: (props: React.ComponentProps<typeof actual.Sankey>) => {
+      sankeyDataSeen.current = props.data;
+      return <actual.Sankey {...props} />;
+    },
+    ResponsiveContainer: ({
+      children,
+      height,
+    }: {
+      children: React.ReactElement;
+      height?: number | string;
+    }) => (
+      <div data-testid="responsive-container" data-height={String(height)}>
+        {cloneElement(children, { width: 900, height: 450 } as never)}
+      </div>
+    ),
+  };
+});
 vi.mock("./SaveReportDialog", () => ({ default: () => null }));
 // The report hides everything behind `costs.view`.
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { permissions: { "costs.view": true } } }),
 }));
 vi.mock("@/components/CardDetailSidePanel", () => ({ default: () => null }));
+// The trend chart's own fetching is tested in CostTrendChart.test.tsx; here only the years it is given.
+const trendYearsSeen: number[][] = []; // every `years` array the stub was rendered with
+vi.mock("./CostTrendChart", () => ({
+  default: ({
+    years,
+    currentFiscalYear,
+    typeParam,
+    costField,
+    components,
+  }: {
+    years: number[];
+    currentFiscalYear: number;
+    typeParam: string;
+    costField: string;
+    components: string[];
+  }) => {
+    trendYearsSeen.push(years);
+    return (
+      <div
+        data-testid="cost-trend-chart"
+        data-years={years.join(",")}
+        data-current={currentFiscalYear}
+        data-type={typeParam}
+        data-field={costField}
+        data-components={components.join(",")}
+      />
+    );
+  },
+}));
 
 import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -100,6 +154,10 @@ const COST_ITEMS = [
 
 let fyStart = 1;
 
+/** The server echoes the REQUESTED year as `fiscal_year` (2026 when none is asked for). */
+const requestedYear = (path: string) =>
+  Number(new URL(path, "http://x").searchParams.get("fiscal_year") ?? 2026);
+
 let consumedConfig: Record<string, unknown> | null = { view: "table" };
 
 beforeEach(() => {
@@ -112,7 +170,9 @@ beforeEach(() => {
       return Promise.resolve({
         items: COST_ITEMS,
         total: 620,
-        fiscal_year: 2026,
+        components: ["licenseCost", "serviceCost"],
+        fiscal_year: requestedYear(path),
+        current_fiscal_year: 2026,
         fiscal_year_start: fyStart,
       }) as never;
     }
@@ -124,7 +184,8 @@ beforeEach(() => {
         ],
         links: [{ source: 0, target: 1, value: 100 }],
         total: 100,
-        fiscal_year: 2026,
+        fiscal_year: requestedYear(path),
+        current_fiscal_year: 2026,
         fiscal_year_start: fyStart,
       }) as never;
     }
@@ -225,27 +286,84 @@ describe("CostReport scope filter", () => {
   });
 });
 
+const treemapPaths = () =>
+  vi
+    .mocked(api.get)
+    .mock.calls.map(([path]) => String(path))
+    .filter((path) => path.startsWith("/reports/cost-treemap"));
+const hasYear = (y: string) => (path: string) => path.includes(`fiscal_year=${y}`);
+
+async function openPicker() {
+  const picker = screen.getAllByRole("combobox", { name: /fiscal year/i })[0];
+  await userEvent.click(picker);
+  return screen.findByRole("listbox");
+}
+async function optionNames() {
+  const listbox = await openPicker();
+  const names = within(listbox)
+    .getAllByRole("option")
+    .map((o) => o.textContent);
+  await userEvent.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+  return names;
+}
+async function pick(name: string) {
+  const listbox = await openPicker();
+  await userEvent.click(within(listbox).getByRole("option", { name }));
+}
+
 describe("CostReport fiscal year", () => {
   const indicator = () =>
     document.querySelector('[data-testid="cost-fiscal-year"]');
 
+  it("explains the live-card rule on the chip only while Current is selected", async () => {
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    await userEvent.hover(indicator() as Element);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      /Annual costs of the cards live in this fiscal year/,
+    );
+    await userEvent.unhover(indicator() as Element);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
+
+    await pick("FY25");
+    await waitFor(() => expect(indicator()).toHaveTextContent("FY25"));
+    await userEvent.hover(indicator() as Element);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
   it("names the current fiscal year the figures are for", async () => {
     renderCost();
     await waitFor(() => expect(indicator()).not.toBeNull());
-    expect(indicator()).toHaveTextContent("Current fiscal year: FY 2026");
+    expect(indicator()).toHaveTextContent("Fiscal year: FY26 - Current");
     expect(
-      within(toolbar()).getByText("Current fiscal year: FY 2026"),
+      within(toolbar()).getByText("Fiscal year: FY26 - Current"),
     ).toBeInTheDocument();
+    expect(document.querySelector(".report-print-params")).toHaveTextContent(
+      "FY26 - Current",
+    );
   });
 
-  it("names a fiscal year that straddles two calendar years by both", async () => {
+  it("names the year the same whatever month the fiscal year starts in", async () => {
     fyStart = 10;
     renderCost();
     await waitFor(() =>
-      expect(indicator()).toHaveTextContent(
-        "Current fiscal year: FY 2025–2026",
-      ),
+      expect(indicator()).toHaveTextContent("Fiscal year: FY26 - Current"),
     );
+  });
+
+  it("names a picked past year without a suffix, in the chip and the parameters line", async () => {
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    await pick("FY25");
+    await waitFor(() =>
+      expect(indicator()).toHaveTextContent("Fiscal year: FY25"),
+    );
+    expect(indicator()).not.toHaveTextContent("Current");
+    const params = document.querySelector(".report-print-params");
+    expect(params).toHaveTextContent("FY25");
+    expect(params).not.toHaveTextContent("FY25 - ");
   });
 
   it("never asks the server for a particular year", async () => {
@@ -270,21 +388,88 @@ describe("CostReport fiscal year", () => {
     await waitFor(() =>
       expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0),
     );
-    const user = userEvent.setup();
-    const picker = screen.getAllByRole("combobox", { name: /fiscal year/i })[0];
-    await user.click(picker);
-    const listbox = await screen.findByRole("listbox");
-    await user.click(within(listbox).getByRole("option", { name: "2025" }));
+    await pick("FY25");
 
-    await waitFor(() => {
-      const calls = vi
-        .mocked(api.get)
-        .mock.calls.map(([path]) => String(path))
-        .filter((path) => path.startsWith("/reports/cost-treemap"));
-      expect(calls.some((path) => path.includes("fiscal_year=2025"))).toBe(
-        true,
-      );
-    });
+    await waitFor(() => expect(treemapPaths().some(hasYear("2025"))).toBe(true));
+  });
+
+  it("offers forecast, current and four past years in that order", async () => {
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    expect(await optionNames()).toEqual([
+      "FY27 - Forecast",
+      "FY26 - Current",
+      "FY25",
+      "FY24",
+      "FY23",
+      "FY22",
+    ]);
+  });
+
+  it("selecting the forecast requests fiscal_year=2027", async () => {
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    await pick("FY27 - Forecast");
+    await waitFor(() => expect(treemapPaths().some(hasYear("2027"))).toBe(true));
+  });
+
+  it("selecting current requests no fiscal_year", async () => {
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    await pick("FY25");
+    await waitFor(() => expect(treemapPaths().some(hasYear("2025"))).toBe(true));
+    vi.mocked(api.get).mockClear();
+    await pick("FY26 - Current");
+    await waitFor(() => expect(treemapPaths().length).toBeGreaterThan(0));
+    for (const path of treemapPaths()) expect(path).not.toContain("fiscal_year");
+  });
+
+  it("keeps the list anchored on the current year after picking a past year", async () => {
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    const before = await optionNames();
+    await pick("FY24");
+    await waitFor(() => expect(treemapPaths().some(hasYear("2024"))).toBe(true));
+    await waitFor(() =>
+      expect(indicator()).toHaveTextContent("Fiscal year: FY24"),
+    );
+    expect(await optionNames()).toEqual(before);
+  });
+
+  it("opens on Current when a saved year equals the current year", async () => {
+    consumedConfig = { view: "table", fiscalYearParam: 2026 };
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("combobox", { name: /fiscal year/i })[0],
+      ).toHaveTextContent("FY26 - Current"),
+    );
+    await waitFor(() => expect(treemapPaths().length).toBeGreaterThan(1));
+    expect(treemapPaths().at(-1)).not.toContain("fiscal_year");
+  });
+
+  it("opens on Current when a saved year is outside the offered years", async () => {
+    consumedConfig = { view: "table", fiscalYearParam: 2010 };
+    renderCost();
+    await waitFor(() => expect(indicator()).not.toBeNull());
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("combobox", { name: /fiscal year/i })[0],
+      ).toHaveTextContent("FY26 - Current"),
+    );
+    expect(treemapPaths().at(-1)).not.toContain("fiscal_year");
+  });
+
+  it("keeps a saved year that is among the offered ones", async () => {
+    consumedConfig = { view: "table", fiscalYearParam: 2027 };
+    renderCost();
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("combobox", { name: /fiscal year/i })[0],
+      ).toHaveTextContent("FY27 - Forecast"),
+    );
+    expect(treemapPaths().some(hasYear("2027"))).toBe(true);
   });
 });
 
@@ -297,7 +482,11 @@ describe("CostReport card-type selector and Sankey view", () => {
     const select = getByLabelText(/card type/i);
     await userEvent.click(select);
     const options = (await findAllByRole("option")).map((o) => o.textContent);
-    expect(options.sort()).toEqual(["Application", "IT Component"].sort());
+    expect(options).toEqual([
+      "Application",
+      "IT Component",
+      "Application + IT Component",
+    ]);
   });
 
   it("renders a Sankey toggle button and switches the panel on click", async () => {
@@ -310,6 +499,60 @@ describe("CostReport card-type selector and Sankey view", () => {
     });
     await userEvent.click(sankeyBtn);
     expect(await findByTestId("cost-sankey-panel")).toBeInTheDocument();
+  });
+
+  it("renders cost item, group and card nodes from the payload, groups between", async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.startsWith("/reports/cost-sankey"))
+        return Promise.resolve({
+          nodes: [
+            { id: "item:costTotalAnnual", name: "Licences", type: "CostItem" },
+            { id: "group:EMEA", name: "EMEA", type: "Group" },
+            { id: "crm", name: "CRM", type: "Application" },
+          ],
+          links: [
+            { source: 0, target: 1, value: 100 },
+            { source: 1, target: 2, value: 100 },
+          ],
+          total: 100,
+          fiscal_year: 2026,
+          current_fiscal_year: 2026,
+          fiscal_year_start: 1,
+        }) as never;
+      return Promise.resolve({ items: COST_ITEMS, total: 620, fiscal_year: 2026, current_fiscal_year: 2026, fiscal_year_start: 1 }) as never;
+    });
+    const { findByTestId, findByRole } = renderCost();
+    await userEvent.click(await findByRole("button", { name: /sankey chart view/i }));
+    const panel = await findByTestId("cost-sankey-panel");
+    await waitFor(() => expect(panel.querySelectorAll("rect").length).toBe(3));
+    const texts = [...panel.querySelectorAll("text")].map((n) => n.textContent);
+    expect(texts).toEqual(expect.arrayContaining(["Total Annual Cost", "EMEA", "CRM"]));
+    const x = (name: string) =>
+      Number(
+        [...panel.querySelectorAll("rect")].find(
+          (r) => r.parentElement?.querySelector("title")?.textContent === name,
+        )!.getAttribute("x"),
+      );
+    expect(x("Total Annual Cost")).toBeLessThan(x("EMEA"));
+    const fill = (name: string) =>
+      [...panel.querySelectorAll("rect")]
+        .find((r) => r.parentElement?.querySelector("title")?.textContent === name)!
+        .getAttribute("fill");
+    expect(fill("Total Annual Cost")).not.toBe(fill("EMEA"));
+    expect(x("EMEA")).toBeLessThan(x("CRM"));
+  });
+
+  it("shows the no-data message for an empty Sankey payload", async () => {
+    vi.mocked(api.get).mockImplementation((path: string) =>
+      Promise.resolve(
+        path.startsWith("/reports/cost-sankey")
+          ? { nodes: [], links: [], total: 0, fiscal_year: 2026, current_fiscal_year: 2026, fiscal_year_start: 1 }
+          : { items: COST_ITEMS, total: 620, fiscal_year: 2026, current_fiscal_year: 2026, fiscal_year_start: 1 },
+      ) as never,
+    );
+    const { findByText, findByRole } = renderCost();
+    await userEvent.click(await findByRole("button", { name: /sankey chart view/i }));
+    expect(await findByText("No cost data found.")).toBeInTheDocument();
   });
 
   it("no longer renders the cost-source (aggregate) control", async () => {
@@ -435,14 +678,166 @@ describe("CostReport custom columns", () => {
 });
 
 describe("CostReport trend chart", () => {
-  it("shows the trend chart above the treemap once a past fiscal year is picked", async () => {
+  const ready = async () => {
     consumedConfig = { view: "chart" };
     renderCost();
     await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
-    expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
+  };
+  const pickYear = async (name: string) => {
     const picker = screen.getAllByRole("combobox", { name: /fiscal year/i })[0];
     await userEvent.click(picker);
-    await userEvent.click(await screen.findByRole("option", { name: /2025/ }));
-    expect(await screen.findByTestId("cost-trend-chart")).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("option", { name }));
+  };
+
+  it("chart hidden on Current and on a past year", async () => {
+    await ready();
+    expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
+    await pickYear("FY25");
+    await waitFor(() =>
+      expect(screen.getAllByRole("combobox", { name: /fiscal year/i })[0]).toHaveTextContent("FY25"),
+    );
+    expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
+  });
+
+  it("chart shown on Forecast with the components, five past years oldest first", async () => {
+    await ready();
+    await pickYear("FY27 - Forecast");
+    const trend = await screen.findByTestId("cost-trend-chart");
+    expect(trend).toHaveAttribute("data-years", "2022,2023,2024,2025,2026,2027");
+    expect(trend).toHaveAttribute("data-current", "2026");
+    expect(trend).toHaveAttribute("data-components", "licenseCost,serviceCost");
+    expect(trend).toHaveAttribute("data-field", "costTotalAnnual");
+  });
+
+  it("chart hidden when the response carries no components", async () => {
+    const base = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation(async (path: string, ...rest: never[]) => {
+      const r = (await base(path, ...rest)) as Record<string, unknown>;
+      return path.startsWith("/reports/cost-treemap") ? { ...r, components: [] } : r;
+    });
+    await ready();
+    await pickYear("FY27 - Forecast");
+    await waitFor(() =>
+      expect(screen.getAllByRole("combobox", { name: /fiscal year/i })[0]).toHaveTextContent("Forecast"),
+    );
+    expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
+  });
+
+  it("chart refetches when the card type changes", async () => {
+    await ready();
+    await pickYear("FY27 - Forecast");
+    expect(await screen.findByTestId("cost-trend-chart")).toHaveAttribute("data-type", "Application");
+    await userEvent.click(screen.getByLabelText(/card type/i));
+    await userEvent.click(await screen.findByRole("option", { name: "IT Component" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("cost-trend-chart")).toHaveAttribute("data-type", "ITComponent"),
+    );
+    expect(
+      vi.mocked(api.get).mock.calls.some(
+        ([p]) => String(p).startsWith("/reports/cost-treemap") && String(p).includes("type=ITComponent"),
+      ),
+    ).toBe(true);
+  });
+
+  it("treemap container is 100% high in fullscreen and 450 otherwise", async () => {
+    await ready();
+    const height = () => screen.getByTestId("responsive-container").getAttribute("data-height");
+    expect(height()).toBe("450");
+    const panel = screen.getByTestId("fullscreen-panel");
+    Object.defineProperty(document, "fullscreenElement", { value: panel, configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    expect(height()).toBe("100%");
+    Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    expect(height()).toBe("450");
+  });
+});
+
+
+describe("CostReport Sankey from per-card costs", () => {
+  const NODES = [
+    { id: "item:lic", name: "Licences", type: "CostItem" },
+    { id: "item:host", name: "Hosting", type: "CostItem" },
+    { id: "group:G", name: "G", type: "Group" },
+    { id: "crm", name: "CRM", type: "Application", cost: 100, costs: { lic: 100 } },
+    { id: "erp", name: "ERP", type: "Application", cost: 100, costs: { host: 100 } },
+  ];
+  const LINKS = [
+    { source: 0, target: 2, value: 100 },
+    { source: 1, target: 2, value: 100 },
+    { source: 2, target: 3, value: 100 },
+    { source: 2, target: 4, value: 100 },
+  ];
+  const mockSankey = (nodes = NODES, links = LINKS) =>
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.startsWith("/reports/cost-sankey"))
+        return Promise.resolve({
+          nodes,
+          links,
+          total: 200,
+          fiscal_year: 2026,
+          current_fiscal_year: 2026,
+          fiscal_year_start: 1,
+        }) as never;
+      return Promise.resolve({ items: HIERARCHY, total: HIERARCHY.length }) as never;
+    });
+  type Seen = {
+    nodes: { name: string }[];
+    links: { source: number; target: number; value: number }[];
+  };
+  const flow = (d: Seen, from: string, to: string) =>
+    d.links.find((l) => d.nodes[l.source].name === from && d.nodes[l.target].name === to)?.value;
+
+  it("re-sums the item -> group flows over the cards the scope keeps", async () => {
+    consumedConfig = { view: "sankey", scopeIds: ["crm"] };
+    mockSankey();
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    await waitFor(() => {
+      const d = sankeyDataSeen.current as Seen;
+      expect(d.nodes.map((n) => n.name)).not.toContain("Hosting");
+    });
+    const d = sankeyDataSeen.current as Seen;
+    expect(d.links).toHaveLength(2);
+    expect(flow(d, "Licences", "G")).toBe(100);
+    expect(flow(d, "G", "CRM")).toBe(100);
+  });
+
+  it("keeps in = out for every group when unscoped", async () => {
+    consumedConfig = { view: "sankey" };
+    mockSankey();
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    const d = sankeyDataSeen.current as Seen;
+    const g = d.nodes.findIndex((n) => n.name === "G");
+    const sum = (f: (l: Seen["links"][number]) => boolean) =>
+      d.links.filter(f).reduce((n, l) => n + l.value, 0);
+    expect(sum((l) => l.target === g)).toBe(sum((l) => l.source === g));
+  });
+
+  it("fills the summary tiles from the kept card nodes in Sankey view", async () => {
+    consumedConfig = { view: "sankey" };
+    mockSankey(
+      [
+        { id: "item:lic", name: "Licences", type: "CostItem" },
+        { id: "crm", name: "CRM", type: "Application", cost: 100, costs: { lic: 100 } },
+        { id: "erp", name: "ERP", type: "Application", cost: 50, costs: { lic: 50 } },
+      ],
+      [
+        { source: 0, target: 1, value: 100 },
+        { source: 0, target: 2, value: 50 },
+      ],
+    );
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    const tile = (label: string) =>
+      screen.getByText(label).closest(".MuiPaper-root") as HTMLElement;
+    expect(within(tile("Total Cost")).getByText("$150")).toBeInTheDocument();
+    expect(within(tile("Items")).getByText("2")).toBeInTheDocument();
+    expect(within(tile("Top Cost Driver")).getByText("CRM")).toBeInTheDocument();
   });
 });

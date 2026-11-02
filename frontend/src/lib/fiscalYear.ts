@@ -23,3 +23,25 @@ export function fiscalYearLabel(fy: number, startMonth: number, t: TFunction): s
     ? t("common:fiscalYear.single", { year: fy })
     : t("common:fiscalYear.span", { from: fy - 1, to: fy });
 }
+
+/**
+ * The cost report's year picker names a year "FY26", tagging the current one
+ * "Current" and the next "Forecast". Plain English on purpose: these are
+ * fixed report labels, not translated strings.
+ */
+export function costFiscalYearName(fy: number, currentFy: number): string {
+  const name = `FY${String(fy % 100).padStart(2, "0")}`;
+  if (fy === currentFy) return `${name} - Current`;
+  return fy === currentFy + 1 ? `${name} - Forecast` : name;
+}
+
+/** Picker entries: forecast, current (`value: null` = no year sent), then four past years. */
+export function costFiscalYearOptions(
+  currentFy: number,
+): { value: number | null; label: string }[] {
+  const years = [currentFy + 1, currentFy, ...[1, 2, 3, 4].map((n) => currentFy - n)];
+  return years.map((fy) => ({
+    value: fy === currentFy ? null : fy,
+    label: costFiscalYearName(fy, currentFy),
+  }));
+}

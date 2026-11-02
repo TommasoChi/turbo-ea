@@ -26,6 +26,9 @@ import { hookState } from "@/test/hooks";
 import { RAG_COLORS, STATUS_COLORS } from "@/theme/tokens";
 import i18n from "@/i18n";
 import PpmOverviewTab from "./PpmOverviewTab";
+import { pinEnglishNumberFormat } from "@/test/englishNumbers";
+
+pinEnglishNumberFormat();
 
 const CARD = {
   id: "i1",

@@ -34716,9 +34716,19 @@
     },
     "/api/v1/reports/cost-sankey": {
       "get": {
-        "description": "Cost flow between Application and ITComponent, via app_to_itc relations.\n\nTwo-level flow (``group_by`` unset): one node per Application and one per\nITComponent with ``cost_field`` > 0, one link per ``app_to_itc`` relation\nbetween two visible nodes, link value = the ITComponent end's cost (an\nITComponent related to several Applications fans the same value out on\neach link rather than being divided or deduped \u2014 a Sankey draws one flow\nper relation, so this cannot double-count the way a summed total would).\n\nThree-level flow (``group_by`` names a card type related to Application):\nApplication -> group node -> ITComponent. A ``group_by`` value naming a\ntype with no relation to any visible Application silently falls back to\nthe two-level flow instead of erroring, so a stale saved-report config\ndegrades gracefully.",
+        "description": "Cost flow: cost items -> cards, with groups in the middle when ``group_by`` is set.\n\nTakes the treemap's parameters and validation (see ``cost_treemap``); the flow is\nbuilt by ``services/cost_report.py::build_cost_sankey``.",
         "operationId": "cost_sankey_api_v1_reports_cost_sankey_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "default": "Application",
+              "title": "Type",
+              "type": "string"
+            }
+          },
           {
             "in": "query",
             "name": "cost_field",
@@ -34792,7 +34802,7 @@
     },
     "/api/v1/reports/cost-treemap": {
       "get": {
-        "description": "Cost treemap: items with cost, optionally grouped by a related type.\n\nCosts are annual and shown for the current fiscal year only: a card counts,\nat its full annual cost, when the current fiscal year falls between the one\nit goes ``active`` in and the one its ``endOfLife`` falls in, both included \u2014\nno pro-rating, so a card retired in an earlier fiscal year is left out. A\ncard carries one annual figure, so projecting it onto other years would\nonly restate today's number; that is why there is no year parameter. The\nresponse names the fiscal year (``fiscal_year``) and the workspace's start\nmonth (``fiscal_year_start``).",
+        "description": "Cost treemap over one or several card types, optionally grouped.\n\n``type`` is one card type key or a comma-separated list; each must exist and\ncarry a cost field. ``group_by`` is ``field:<key>`` (a single-valued field of\nthe type(s)) or ``rel:<relationTypeKey>`` (the one card linked through an\nat-most-one relation); every item then carries a ``group`` (``__other__``\nwhen it has none) and ``groups`` sums them. A bare field key is read as\n``field:<key>``; any other value is ignored. A refused grouping is 400.\n``components`` lists the cost fields concurring to ``cost_field``.\n\nTakes an optional ``fiscal_year``: the current year is served from live\nattributes for the cards live in it (full annual cost, no pro-rating, see\n``is_live_in_fiscal_year``); any other year lists the cards with a cost\nrecorded for it (``app/services/cost_report.py::cards_with_cost``). The\nresponse names the requested ``fiscal_year``, the ``current_fiscal_year``\nand the workspace's start month (``fiscal_year_start``).",
         "operationId": "cost_treemap_api_v1_reports_cost_treemap_get",
         "parameters": [
           {

@@ -162,19 +162,49 @@ The **Cost Report** provides financial analysis of your technology landscape:
 
 - **Treemap view** — Nested rectangles sized by cost, with optional grouping (e.g., by organization or capability)
 - **Bar chart view** — Cost comparison across components
-- **Card Type** — Pick which card type the report is built around (Application, IT Component, Provider, …).
+- **Sankey view** — The same report drawn as a flow of cost (see [Sankey view](#sankey-view))
+- **Card Type** — Pick which card type the report is built around: **Application**, **IT Component**, **Application + IT Component** (both types in one chart, each card with its own cost) or **Initiative**. Initiatives follow the same fiscal-year rules as Applications.
+- **Cost field** — Pick which cost field is summed. The list shows the cost fields of the chosen card type; for Initiative it offers **costBudget** (the default) and **costActual**, which are never added together. For the combined option only the cost fields that exist in both types are offered.
+
+All views share the same toolbar, filters, fiscal year and cost field, so switching view only changes the drawing.
+
+### Group by
+
+**Group by** is available in the treemap, the table and the Sankey. A card is grouped either by:
+
+- the value of a **field on the card** (single-valued fields only; multiple-choice fields are not offered, since they would put a card in two groups), or
+- a **linked card**, named by the linked card's name, through a relation in which each card has **at most one** linked card of that type. Many-to-many relations are never offered, so a cost can never land in two groups.
+
+Cards with no value, or no linked card, go to the group **Unspecified**. For the combined **Application + IT Component** option only the fields that exist in both types are offered; the picker is disabled when there are none. Grouping never counts a cost twice and never drops one.
 
 ### Fiscal year
 
-Costs are annual, so the report shows them for **the current fiscal year** — a chip in the toolbar names it, for example **Current fiscal year: FY 2026** (or *FY 2025–2026* when your fiscal year does not start in January). A card's annual cost counts **in full** when the current fiscal year falls between the one the card goes **Active** in and the one its **End of Life** falls in, both included. Nothing is pro-rated: an application retiring in November still carries its whole annual cost this year. A card whose End of Life fell in an earlier fiscal year is left out.
+Costs are annual, so the report is built for one **fiscal year** at a time. A **Fiscal year** picker in the toolbar offers six entries, newest first:
 
-Missing lifecycle dates are read as in the time-travel reports:
+| Entry | What it shows |
+|---|---|
+| **FY27 - Forecast** | Next fiscal year, from figures typed in by hand (see below). |
+| **FY26 - Current** | The current fiscal year, from the cards' live cost attributes. This is the default. |
+| **FY25** … **FY22** | The four fiscal years before the current one, from the costs recorded for them. |
 
-- **No Active date, but a Plan or Phase In date** — the card is still planned and is not counted.
-- **No End of Life date** — the card counts from the year it goes Active.
-- **No lifecycle dates at all** — the card counts.
+A fiscal year is named **FY** plus the last two digits of the year it **ends** in, whatever month your fiscal year starts in: a fiscal year running from July 2025 to June 2026 is **FY26**. A chip in the toolbar repeats the selection, for example **Fiscal year: FY26 - Current**. *Current* and *Forecast* are not translated.
 
-The rule applies to everything on the page — the totals, the treemap, the table, **Cost Source** roll-ups (a retired IT Component stops adding to its Application's total) and drill-downs — and the fiscal year is printed in the report header. There is no picker for other years: a card carries one annual figure, and real costs change from one year to the next, so the same number shown against another year would mislead. An administrator sets the month the fiscal year starts in under [Settings → General](../admin/settings.md#fiscal-year-start).
+**Forecast figures are entered by hand.** Open a card, go to its cost history and type the planned cost for next fiscal year, the same way you record a past year. Only the **next** fiscal year can be recorded as a forecast, and recording it needs the same permission as recording a past year. When that year becomes the current one, the report reads the live attributes instead, and the card's live figure replaces what was typed.
+
+#### Which cards appear
+
+- **Current year** — A card's annual cost counts **in full** when the current fiscal year falls between the one the card goes **Active** in and the one its **End of Life** falls in, both included. Nothing is pro-rated: an application retiring in November still carries its whole annual cost this year. A card whose End of Life fell in an earlier fiscal year is left out. Missing lifecycle dates are read as in the time-travel reports:
+    - **No Active date, but a Plan or Phase In date** — the card is still planned and is not counted.
+    - **No End of Life date** — the card counts from the year it goes Active.
+    - **No lifecycle dates at all** — the card counts.
+- **Any other year (past or forecast)** — Every active card that has a **cost recorded for that year** appears, even if it has been retired since or only becomes active later. A card with no recorded cost for that year does not appear.
+- **Archived cards** never appear, in any year.
+
+The rule applies to everything on the page — the totals, the treemap, the table, **Cost Source** roll-ups and drill-downs — and the selected fiscal year is printed in the report header.
+
+While **Forecast** is the selected year, a **history chart** shows the cost across the current year, the four before it and the forecast year. It is not shown for any other year. Each bar is stacked, with one segment per cost field that makes up the total cost; the legend and tooltip use the technical field names (for example `softwareLicensingCost`).
+
+An administrator sets the month the fiscal year starts in under [Settings → General](../admin/settings.md#fiscal-year-start).
 
 ### Cost Source
 
@@ -207,6 +237,14 @@ Whenever at least one Cost Source is active, the treemap rectangles are **clicka
 The Cost Source selection and other filters are preserved as you drill, and the drilled level is part of the saved-report config — saving a report while drilled in re-opens directly at that level. With **no** Cost Source active, clicking a rectangle opens the card side panel instead (there's nothing to break down).
 
 **Scoping to specific cards** — The chip beside the card-type selector opens a picker: select one or more cards and the treemap, the totals and the table all narrow to those and everything beneath them. The chip is hidden while you are drilled into a rectangle, since a drill has already moved you to a different card type; leave the drill and the scope is still there.
+
+### Sankey view
+
+The Sankey takes the same filters as the treemap: card type, card scope, cost field, fiscal year and Group by. It draws **cost items** on the left (the cost fields that make up the total), the **cards** on the right and, when a Group by is chosen, the **groups** in the middle: cost items flow into groups and groups flow into their cards. Without a Group by the flow goes straight from cost items to cards. A cost is counted once: an IT Component used by several applications is not repeated.
+
+### Full screen
+
+The full-screen button on the treemap and the Sankey makes the chart fill the whole screen, in width and height, without distorting it.
 
 ## Matrix Report
 

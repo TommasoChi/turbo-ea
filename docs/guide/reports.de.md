@@ -162,19 +162,49 @@ Der **Kostenbericht** bietet eine finanzielle Analyse Ihrer Technologielandschaf
 
 - **Treemap-Ansicht** — Verschachtelte Rechtecke, nach Kosten dimensioniert, mit optionaler Gruppierung (z.B. nach Organisation oder Fähigkeit)
 - **Balkendiagramm-Ansicht** — Kostenvergleich über Komponenten hinweg
-- **Kartentyp** — Wählen Sie, um welchen Kartentyp der Bericht aufgebaut wird (Anwendung, IT-Komponente, Anbieter, …).
+- **Sankey-Ansicht** — Derselbe Bericht als Kostenfluss gezeichnet (siehe [Sankey-Ansicht](#sankey-view))
+- **Kartentyp** — Wählen Sie, um welchen Kartentyp der Bericht aufgebaut wird: **Anwendung**, **IT-Komponente**, **Anwendung + IT-Komponente** (beide Typen in einem Diagramm, jede Karte mit ihren eigenen Kosten) oder **Initiative**. Für Initiativen gelten dieselben Geschäftsjahresregeln wie für Anwendungen.
+- **Kostenfeld** — Wählen Sie, welches Kostenfeld summiert wird. Die Liste zeigt die Kostenfelder des gewählten Kartentyps; für Initiative stehen **costBudget** (Vorgabe) und **costActual** zur Wahl, die nie addiert werden. Für die kombinierte Option werden nur die Kostenfelder angeboten, die in beiden Typen vorhanden sind.
+
+Alle Ansichten teilen sich dieselbe Werkzeugleiste, dieselben Filter, dasselbe Geschäftsjahr und dasselbe Kostenfeld; ein Wechsel der Ansicht ändert also nur die Darstellung.
+
+### Gruppieren nach
+
+**Gruppieren nach** ist in der Treemap, der Tabelle und im Sankey verfügbar. Eine Karte wird gruppiert nach:
+
+- dem Wert eines **Feldes der Karte** (nur Felder mit einem einzelnen Wert; Mehrfachauswahlfelder werden nicht angeboten, da sie eine Karte in zwei Gruppen einordnen würden), oder
+- einer **verknüpften Karte**, benannt nach dem Namen der verknüpften Karte, über eine Beziehung, in der jede Karte **höchstens eine** verknüpfte Karte dieses Typs hat. Viele-zu-viele-Beziehungen werden nie angeboten, sodass Kosten nie in zwei Gruppen landen können.
+
+Karten ohne Wert oder ohne verknüpfte Karte kommen in die Gruppe **Unspecified**. Für die kombinierte Option **Anwendung + IT-Komponente** werden nur die Felder angeboten, die in beiden Typen vorhanden sind; gibt es keine, ist die Auswahl deaktiviert. Die Gruppierung zählt Kosten nie doppelt und lässt keine weg.
 
 ### Geschäftsjahr
 
-Kosten sind jährlich, daher zeigt der Bericht sie für **das aktuelle Geschäftsjahr** — ein Chip in der Werkzeugleiste nennt es, zum Beispiel **Aktuelles Geschäftsjahr: GJ 2026** (oder *GJ 2025–2026*, wenn Ihr Geschäftsjahr nicht im Januar beginnt). Die Jahreskosten einer Karte zählen **in voller Höhe**, wenn das aktuelle Geschäftsjahr zwischen dem liegt, in dem die Karte **Aktiv** wird, und dem, in das ihr **End of Life** fällt, beide eingeschlossen. Nichts wird anteilig verrechnet: Eine Anwendung, die im November ausläuft, trägt in diesem Jahr noch ihre vollen Jahreskosten. Eine Karte, deren End of Life in einem früheren Geschäftsjahr lag, zählt nicht mit.
+Kosten sind jährlich, daher wird der Bericht jeweils für ein **Geschäftsjahr** erstellt. Eine Auswahl **Geschäftsjahr** in der Werkzeugleiste bietet sechs Einträge, der neueste zuerst:
 
-Fehlende Lebenszyklusdaten werden wie in den Zeitreise-Berichten gelesen:
+| Eintrag | Was angezeigt wird |
+|---|---|
+| **FY27 - Forecast** | Nächstes Geschäftsjahr, aus von Hand eingegebenen Werten (siehe unten). |
+| **FY26 - Current** | Das aktuelle Geschäftsjahr, aus den Live-Kostenattributen der Karten. Das ist die Vorgabe. |
+| **FY25** … **FY22** | Die vier Geschäftsjahre vor dem aktuellen, aus den dafür erfassten Kosten. |
 
-- **Kein Aktiv-Datum, aber ein Planungs- oder Einführungsdatum** — die Karte ist noch geplant und zählt nicht.
-- **Kein End-of-Life-Datum** — die Karte zählt ab dem Jahr, in dem sie aktiv wird.
-- **Überhaupt keine Lebenszyklusdaten** — die Karte zählt.
+Ein Geschäftsjahr heißt **FY** plus die letzten zwei Ziffern des Jahres, in dem es **endet**, unabhängig davon, in welchem Monat Ihr Geschäftsjahr beginnt: Ein Geschäftsjahr von Juli 2025 bis Juni 2026 ist **FY26**. Ein Chip in der Werkzeugleiste wiederholt die Auswahl, zum Beispiel **Geschäftsjahr: FY26 - Current**. *Current* und *Forecast* werden nicht übersetzt.
 
-Die Regel gilt für alles auf der Seite — die Summen, die Treemap, die Tabelle, **Kostenquellen**-Aggregationen (eine ausgelaufene IT-Komponente zählt nicht mehr zur Summe ihrer Anwendung) und Drilldowns —, und das Geschäftsjahr wird im Berichtskopf gedruckt. Eine Auswahl anderer Jahre gibt es nicht: Eine Karte trägt einen einzigen Jahreswert, und echte Kosten ändern sich von Jahr zu Jahr, sodass dieselbe Zahl für ein anderes Jahr in die Irre führen würde. In welchem Monat das Geschäftsjahr beginnt, legt ein Administrator unter [Einstellungen → Allgemein](../admin/settings.md) fest.
+**Prognosewerte werden von Hand eingegeben.** Öffnen Sie eine Karte, gehen Sie zu ihrem Kostenverlauf und tragen Sie die geplanten Kosten für das nächste Geschäftsjahr ein, genauso wie Sie ein vergangenes Jahr erfassen. Nur das **nächste** Geschäftsjahr kann als Prognose erfasst werden, und dafür ist dieselbe Berechtigung nötig wie für ein vergangenes Jahr. Wird dieses Jahr zum aktuellen, liest der Bericht stattdessen die Live-Attribute, und der Live-Wert der Karte ersetzt den eingegebenen.
+
+#### Welche Karten erscheinen
+
+- **Aktuelles Jahr** — Die Jahreskosten einer Karte zählen **in voller Höhe**, wenn das aktuelle Geschäftsjahr zwischen dem liegt, in dem die Karte **Aktiv** wird, und dem, in das ihr **End of Life** fällt, beide eingeschlossen. Nichts wird anteilig verrechnet: Eine Anwendung, die im November ausläuft, trägt in diesem Jahr noch ihre vollen Jahreskosten. Eine Karte, deren End of Life in einem früheren Geschäftsjahr lag, zählt nicht mit. Fehlende Lebenszyklusdaten werden wie in den Zeitreise-Berichten gelesen:
+    - **Kein Aktiv-Datum, aber ein Planungs- oder Einführungsdatum** — die Karte ist noch geplant und zählt nicht.
+    - **Kein End-of-Life-Datum** — die Karte zählt ab dem Jahr, in dem sie aktiv wird.
+    - **Überhaupt keine Lebenszyklusdaten** — die Karte zählt.
+- **Jedes andere Jahr (vergangen oder Prognose)** — Jede aktive Karte mit **für dieses Jahr erfassten Kosten** erscheint, auch wenn sie inzwischen außer Betrieb genommen wurde oder erst später aktiv wird. Eine Karte ohne erfasste Kosten für dieses Jahr erscheint nicht.
+- **Archivierte Karten** erscheinen nie, in keinem Jahr.
+
+Die Regel gilt für alles auf der Seite — die Summen, die Treemap, die Tabelle, **Kostenquellen**-Aggregationen und Drilldowns —, und das ausgewählte Geschäftsjahr wird im Berichtskopf gedruckt.
+
+Wenn Sie ein anderes Jahr als **Current** wählen, zeigt ein **Trenddiagramm** die Kosten über das aktuelle Jahr und die vier davor. Ist **Forecast** das ausgewählte Jahr, zeigt das Diagramm zusätzlich einen Balken dafür.
+
+In welchem Monat das Geschäftsjahr beginnt, legt ein Administrator unter [Einstellungen → Allgemein](../admin/settings.md) fest.
 
 ### Kostenquelle
 
@@ -207,6 +237,14 @@ Sobald mindestens eine Kostenquelle aktiv ist, sind die Treemap-Rechtecke **ankl
 Die Kostenquellen-Auswahl und andere Filter bleiben beim Drilldown erhalten, und die Drilldown-Ebene ist Teil der gespeicherten Berichtskonfiguration — wer einen Bericht im hineingezoomten Zustand speichert, öffnet ihn direkt auf dieser Ebene wieder. Wenn **keine** Kostenquelle aktiv ist, öffnet ein Klick auf ein Rechteck stattdessen das Karten-Seitenpanel (es gibt nichts aufzuschlüsseln).
 
 **Auf bestimmte Karten eingrenzen** — Der Chip neben der Kartentyp-Auswahl öffnet eine Auswahl: Wählen Sie eine oder mehrere Karten, und Treemap, Summen und Tabelle zeigen nur diese und alles darunter. Während Sie in ein Rechteck hineingezoomt haben, wird der Chip ausgeblendet, da eine Detailansicht bereits zu einem anderen Kartentyp gewechselt ist; verlassen Sie sie, ist die Eingrenzung weiterhin aktiv.
+
+### Sankey-Ansicht {#sankey-view}
+
+Das Sankey übernimmt dieselben Filter wie die Treemap: Kartentyp, Kartenauswahl, Kostenfeld, Geschäftsjahr und Gruppieren nach. Links zeichnet es die **Kostenposten** (die Kostenfelder, aus denen die Summe besteht), rechts die **Karten** und, wenn ein Gruppieren nach gewählt ist, in der Mitte die **Gruppen**: Kostenposten fließen in Gruppen, und Gruppen fließen in ihre Karten. Ohne Gruppieren nach fließt es direkt von den Kostenposten zu den Karten. Jede Kostenposition wird nur einmal gezählt: Eine IT-Komponente, die von mehreren Anwendungen genutzt wird, wird nicht wiederholt.
+
+### Vollbild
+
+Die Vollbild-Schaltfläche an der Treemap und am Sankey lässt das Diagramm in Breite und Höhe den ganzen Bildschirm ausfüllen, ohne es zu verzerren.
 
 ## Matrixbericht
 

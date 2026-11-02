@@ -116,6 +116,7 @@ async def env(db):
         label="Application to Business Capability",
         source_type_key="Application",
         target_type_key="BusinessCapability",
+        cardinality="1:n",
         reverse_label="Business Capability to Application",
     )
     await create_relation_type(
@@ -1219,7 +1220,7 @@ class TestCostTreemap:
             params={
                 "type": "Application",
                 "cost_field": "costTotalAnnual",
-                "group_by": "BusinessCapability",
+                "group_by": "rel:app_to_bc",
             },
             headers=auth_headers(admin),
         )
@@ -1227,13 +1228,13 @@ class TestCostTreemap:
         data = resp.json()
         assert len(data["items"]) == 2
         assert data["groups"] is not None
-        assert len(data["groups"]) == 2  # Marketing + Ungrouped
+        assert len(data["groups"]) == 2  # Marketing + Other
 
         # Verify group assignment
         ad_item = next(i for i in data["items"] if i["name"] == "Ad Platform")
         standalone_item = next(i for i in data["items"] if i["name"] == "Standalone")
         assert ad_item["group"] == "Marketing"
-        assert standalone_item["group"] == "Ungrouped"
+        assert standalone_item["group"] == "__other__"
 
     async def test_cost_treemap_invalid_cost_field_400(self, client, db, env):
         """Invalid cost_field format returns 400."""
@@ -1322,9 +1323,11 @@ class TestCostTreemap:
         )
         assert resp.json()["items"] == []
 
-    async def test_a_retired_cards_history_row_does_not_resurrect_it_for_a_past_year(
+    async def test_a_retired_card_with_a_history_row_appears_in_that_past_year(
         self, client, db, env
     ):
+        """Superseded rule: a year other than the current one lists every card with a
+        recorded cost for it, whatever its lifecycle (cost-report fiscal-year picker spec)."""
         from app.models.card_cost_history import CardCostHistory
 
         admin = env["admin"]
@@ -1346,7 +1349,7 @@ class TestCostTreemap:
             params={"type": "Application", "fiscal_year": 2024},
             headers=auth_headers(admin),
         )
-        assert resp.json()["items"] == []
+        assert [(i["name"], i["cost"]) for i in resp.json()["items"]] == [("Old", 500)]
 
 
 # ---------------------------------------------------------------------------

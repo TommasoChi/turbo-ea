@@ -10,6 +10,9 @@ vi.mock("@/api/client", () => ({
 }));
 
 import { api } from "@/api/client";
+import { pinEnglishNumberFormat } from "@/test/englishNumbers";
+
+pinEnglishNumberFormat();
 
 // Reset module-level cache between tests by re-importing
 beforeEach(() => {

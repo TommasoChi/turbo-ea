@@ -53,8 +53,13 @@ if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
 fi
 
+# Linux/macOS venvs have bin/, Windows venvs (Git Bash) have Scripts/.
 # shellcheck source=/dev/null
-source "$VENV_DIR/bin/activate"
+if [ -f "$VENV_DIR/bin/activate" ]; then
+    source "$VENV_DIR/bin/activate"
+else
+    source "$VENV_DIR/Scripts/activate"
+fi
 
 if ! python -c "import pytest" 2>/dev/null; then
     echo "==> Installing dev dependencies (first run, may take a moment)..."

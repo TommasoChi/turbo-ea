@@ -162,19 +162,49 @@ Le **Rapport Coûts** fournit une analyse financière de votre paysage technolog
 
 - **Vue treemap** -- Rectangles imbriqués dimensionnés par coût, avec regroupement optionnel (par ex. par organisation ou capacité)
 - **Vue graphique à barres** -- Comparaison des coûts entre composants
-- **Type de fiche** -- Choisissez le type de fiche autour duquel le rapport est construit (Application, Composant IT, Fournisseur, …).
+- **Vue Sankey** -- Le même rapport dessiné comme un flux de coûts (voir [Vue Sankey](#sankey-view))
+- **Type de fiche** -- Choisissez le type de fiche autour duquel le rapport est construit : **Application**, **Composant IT**, **Application + Composant IT** (les deux types dans un même graphique, chaque fiche avec son propre coût) ou **Initiative**. Les initiatives suivent les mêmes règles d'exercice fiscal que les applications.
+- **Champ de coût** -- Choisissez le champ de coût qui est additionné. La liste affiche les champs de coût du type de fiche choisi ; pour Initiative, elle propose **costBudget** (par défaut) et **costActual**, qui ne sont jamais additionnés. Pour l'option combinée, seuls les champs de coût présents dans les deux types sont proposés.
+
+Toutes les vues partagent la même barre d'outils, les mêmes filtres, le même exercice fiscal et le même champ de coût : changer de vue ne modifie donc que le dessin.
+
+### Regrouper par
+
+**Regrouper par** est disponible dans le treemap, le tableau et le Sankey. Une fiche est regroupée soit selon :
+
+- la valeur d'un **champ de la fiche** (champs à valeur unique uniquement ; les champs à choix multiple ne sont pas proposés, car ils placeraient une fiche dans deux groupes), soit selon
+- une **fiche liée**, désignée par le nom de cette fiche, via une relation dans laquelle chaque fiche a **au plus une** fiche liée de ce type. Les relations plusieurs-à-plusieurs ne sont jamais proposées, si bien qu'un coût ne peut jamais tomber dans deux groupes.
+
+Les fiches sans valeur ou sans fiche liée vont dans le groupe **Unspecified**. Pour l'option combinée **Application + Composant IT**, seuls les champs présents dans les deux types sont proposés ; le sélecteur est désactivé quand il n'y en a aucun. Le regroupement ne compte jamais un coût deux fois et n'en perd aucun.
 
 ### Exercice fiscal
 
-Les coûts sont annuels : le rapport les présente donc pour **l'exercice fiscal en cours**, qu'une puce de la barre d'outils nomme, par exemple **Exercice fiscal en cours : EF 2026** (ou *EF 2025–2026* lorsque votre exercice ne commence pas en janvier). Le coût annuel d'une fiche compte **en totalité** lorsque l'exercice en cours se situe entre celui où la fiche devient **Actif** et celui où tombe sa **Fin de vie**, les deux inclus. Rien n'est calculé au prorata : une application retirée en novembre porte encore la totalité de son coût annuel cette année. Une fiche dont la Fin de vie tombait dans un exercice antérieur n'est pas comptée.
+Les coûts sont annuels : le rapport est donc établi pour un **exercice fiscal** à la fois. Un sélecteur **Exercice fiscal** dans la barre d'outils propose six entrées, la plus récente en premier :
 
-Les dates de cycle de vie manquantes sont interprétées comme dans les rapports dotés du voyage dans le temps :
+| Entrée | Ce qu'elle affiche |
+|---|---|
+| **FY27 - Forecast** | L'exercice suivant, à partir de montants saisis à la main (voir ci-dessous). |
+| **FY26 - Current** | L'exercice en cours, à partir des attributs de coût actuels des fiches. C'est la valeur par défaut. |
+| **FY25** … **FY22** | Les quatre exercices précédant l'exercice en cours, à partir des coûts enregistrés pour eux. |
 
-- **Pas de date Actif, mais une date de Planification ou de Mise en service** — la fiche est encore planifiée et n'est pas comptée.
-- **Pas de date de Fin de vie** — la fiche compte à partir de l'exercice où elle devient active.
-- **Aucune date de cycle de vie** — la fiche compte.
+Un exercice fiscal se nomme **FY** suivi des deux derniers chiffres de l'année où il **se termine**, quel que soit le mois où débute votre exercice : un exercice allant de juillet 2025 à juin 2026 est **FY26**. Une puce de la barre d'outils rappelle la sélection, par exemple **Exercice fiscal : FY26 - Current**. *Current* et *Forecast* ne sont pas traduits.
 
-La règle s'applique à toute la page — les totaux, le treemap, le tableau, les agrégations par **Source des coûts** (un composant IT retiré cesse de s'ajouter au total de son application) et le forage — et l'exercice figure dans l'en-tête imprimé. Il n'existe pas de choix d'un autre exercice : une fiche ne porte qu'un seul montant annuel, et les coûts réels varient d'une année à l'autre, si bien que le même montant affiché pour un autre exercice induirait en erreur. Le mois de début de l'exercice est défini par un administrateur dans [Paramètres → Général](../admin/settings.md).
+**Les montants prévisionnels se saisissent à la main.** Ouvrez une fiche, allez à son historique des coûts et saisissez le coût prévu pour l'exercice suivant, comme vous enregistrez un exercice passé. Seul l'exercice **suivant** peut être enregistré comme prévision, et cet enregistrement requiert la même permission que celui d'un exercice passé. Lorsque cet exercice devient l'exercice en cours, le rapport lit à la place les attributs actuels, et le montant actuel de la fiche remplace celui qui avait été saisi.
+
+#### Quelles fiches apparaissent
+
+- **Exercice en cours** — Le coût annuel d'une fiche compte **en totalité** lorsque l'exercice en cours se situe entre celui où la fiche devient **Actif** et celui où tombe sa **Fin de vie**, les deux inclus. Rien n'est calculé au prorata : une application retirée en novembre porte encore la totalité de son coût annuel cette année. Une fiche dont la Fin de vie tombait dans un exercice antérieur n'est pas comptée. Les dates de cycle de vie manquantes sont interprétées comme dans les rapports dotés du voyage dans le temps :
+    - **Pas de date Actif, mais une date de Planification ou de Mise en service** — la fiche est encore planifiée et n'est pas comptée.
+    - **Pas de date de Fin de vie** — la fiche compte à partir de l'exercice où elle devient active.
+    - **Aucune date de cycle de vie** — la fiche compte.
+- **Tout autre exercice (passé ou prévisionnel)** — Toute fiche active ayant un **coût enregistré pour cet exercice** apparaît, même si elle a été retirée depuis ou ne devient active que plus tard. Une fiche sans coût enregistré pour cet exercice n'apparaît pas.
+- **Les fiches archivées** n'apparaissent jamais, quel que soit l'exercice.
+
+La règle s'applique à toute la page — les totaux, le treemap, le tableau, les agrégations par **Source des coûts** et le forage — et l'exercice sélectionné figure dans l'en-tête imprimé.
+
+Lorsque vous choisissez un exercice autre que **Current**, un **graphique de tendance** montre le coût sur l'exercice en cours et les quatre précédents. Tant que **Forecast** est l'exercice sélectionné, le graphique affiche aussi une barre pour celui-ci.
+
+Le mois de début de l'exercice est défini par un administrateur dans [Paramètres → Général](../admin/settings.md).
 
 ### Source des coûts
 
@@ -207,6 +237,14 @@ Dès qu'au moins une Source de coût est active, les rectangles du treemap devie
 La sélection de Source de coût et les autres filtres sont préservés pendant le forage, et le niveau de forage fait partie de la configuration du rapport sauvegardé — sauvegarder un rapport en cours de forage le rouvre directement à ce niveau. Sans Source de coût active, un clic sur un rectangle ouvre plutôt le panneau latéral de la fiche (il n'y a rien à décomposer).
 
 **Limiter à certaines fiches** — La puce voisine du sélecteur de type ouvre un sélecteur : choisissez une ou plusieurs fiches et la treemap, les totaux et le tableau se limitent à celles-ci et à tout ce qui se trouve en dessous. La puce disparaît lorsque vous avez zoomé dans un rectangle, puisqu'un tel zoom vous a déjà déplacé vers un autre type de fiche ; quittez-le et le périmètre est toujours là.
+
+### Vue Sankey {#sankey-view}
+
+Le Sankey reprend les mêmes filtres que le treemap : type de fiche, périmètre de fiches, champ de coût, exercice fiscal et Regrouper par. Il dessine à gauche les **postes de coût** (les champs de coût qui composent le total), à droite les **fiches** et, lorsqu'un Regrouper par est choisi, au milieu les **groupes** : les postes de coût alimentent les groupes, et les groupes alimentent leurs fiches. Sans Regrouper par, le flux va directement des postes de coût aux fiches. Un coût n'est compté qu'une fois : un composant IT utilisé par plusieurs applications n'est pas répété.
+
+### Plein écran
+
+Le bouton plein écran du treemap et du Sankey fait occuper tout l'écran au graphique, en largeur et en hauteur, sans le déformer.
 
 ## Rapport Matrice
 

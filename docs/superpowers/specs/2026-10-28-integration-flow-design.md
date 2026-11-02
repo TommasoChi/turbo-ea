@@ -4,7 +4,7 @@
 
 ## Goal
 
-A new page under **Application & Data** — "Integration Flow" — that **automatically generates** the kind of diagram Aruba's architects today draw **by hand** in drawio (reference: `TeamSystem HR -Togaf`, `http://localhost:8920/diagrams/dd906061-e084-481d-85e1-f9e5e0301a62`, viewed live during this session): which `Application` sends which `DataObject` to which other `Application`, through which `Interface`, optionally via an integration-middleware `ITComponent`.
+A new page under **Application & Data** — "Integration Flow" — that **automatically generates** the kind of diagram Company's architects today draw **by hand** in drawio (reference: `TeamSystem HR -Togaf`, `http://localhost:8920/diagrams/dd906061-e084-481d-85e1-f9e5e0301a62`, viewed live during this session): which `Application` sends which `DataObject` to which other `Application`, through which `Interface`, optionally via an integration-middleware `ITComponent`.
 
 ## Current state (verified, not assumed)
 

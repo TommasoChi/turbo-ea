@@ -162,19 +162,49 @@ El **Informe de Costos** proporciona un análisis financiero de su panorama tecn
 
 - **Vista de mapa de árbol** — Rectángulos anidados dimensionados por costo, con agrupación opcional (por ejemplo, por organización o capacidad)
 - **Vista de gráfico de barras** — Comparación de costos entre componentes
-- **Tipo de tarjeta** — Elija el tipo de tarjeta sobre el que se construye el informe (Aplicación, Componente TI, Proveedor, …).
+- **Vista Sankey** — El mismo informe dibujado como un flujo de costes (véase [Vista Sankey](#sankey-view))
+- **Tipo de tarjeta** — Elija el tipo de tarjeta sobre el que se construye el informe: **Aplicación**, **Componente TI**, **Aplicación + Componente TI** (ambos tipos en un mismo gráfico, cada tarjeta con su propio coste) o **Iniciativa**. Las iniciativas siguen las mismas reglas de año fiscal que las aplicaciones.
+- **Campo de coste** — Elija qué campo de coste se suma. La lista muestra los campos de coste del tipo de tarjeta elegido; para Iniciativa ofrece **costBudget** (el predeterminado) y **costActual**, que nunca se suman. Para la opción combinada solo se ofrecen los campos de coste que existen en ambos tipos.
+
+Todas las vistas comparten la misma barra de herramientas, los mismos filtros, el mismo año fiscal y el mismo campo de coste, de modo que cambiar de vista solo cambia el dibujo.
+
+### Agrupar por
+
+**Agrupar por** está disponible en el mapa de árbol, la tabla y el Sankey. Una tarjeta se agrupa por:
+
+- el valor de un **campo de la tarjeta** (solo campos de valor único; no se ofrecen los campos de selección múltiple, porque situarían una tarjeta en dos grupos), o
+- una **tarjeta vinculada**, designada por el nombre de esa tarjeta, a través de una relación en la que cada tarjeta tiene **como máximo una** tarjeta vinculada de ese tipo. Nunca se ofrecen las relaciones de muchos a muchos, de modo que un coste nunca puede caer en dos grupos.
+
+Las tarjetas sin valor, o sin tarjeta vinculada, van al grupo **Unspecified**. Para la opción combinada **Aplicación + Componente TI** solo se ofrecen los campos que existen en ambos tipos; el selector queda desactivado cuando no hay ninguno. La agrupación nunca cuenta un coste dos veces ni descarta ninguno.
 
 ### Año fiscal
 
-Los costes son anuales, por lo que el informe los muestra para **el año fiscal actual**, que un chip de la barra de herramientas indica, por ejemplo **Año fiscal actual: AF 2026** (o *AF 2025–2026* cuando su año fiscal no empieza en enero). El coste anual de una tarjeta cuenta **íntegramente** cuando el año fiscal actual se sitúa entre aquel en que la tarjeta pasa a **Activo** y aquel en que cae su **Fin de vida**, ambos incluidos. No se prorratea nada: una aplicación que se retira en noviembre sigue aportando todo su coste anual este año. Una tarjeta cuyo Fin de vida cayó en un año fiscal anterior no se cuenta.
+Los costes son anuales, por lo que el informe se elabora para un **año fiscal** cada vez. Un selector **Año fiscal** en la barra de herramientas ofrece seis entradas, la más reciente primero:
 
-Las fechas de ciclo de vida que faltan se interpretan igual que en los informes con viaje en el tiempo:
+| Entrada | Qué muestra |
+|---|---|
+| **FY27 - Forecast** | El año fiscal siguiente, a partir de cifras introducidas a mano (véase más abajo). |
+| **FY26 - Current** | El año fiscal actual, a partir de los atributos de coste vigentes de las tarjetas. Es el valor predeterminado. |
+| **FY25** … **FY22** | Los cuatro años fiscales anteriores al actual, a partir de los costes registrados para ellos. |
 
-- **Sin fecha Activo, pero con fecha de Planificación o de Introducción** — la tarjeta sigue planificada y no se cuenta.
-- **Sin fecha de Fin de vida** — la tarjeta cuenta a partir del año en que pasa a Activo.
-- **Sin ninguna fecha de ciclo de vida** — la tarjeta cuenta.
+Un año fiscal se llama **FY** más las dos últimas cifras del año en que **termina**, sea cual sea el mes en que empiece su año fiscal: un año fiscal que va de julio de 2025 a junio de 2026 es **FY26**. Un chip en la barra de herramientas repite la selección, por ejemplo **Año fiscal: FY26 - Current**. *Current* y *Forecast* no se traducen.
 
-La regla se aplica a toda la página — los totales, el mapa de árbol, la tabla, los agregados por **Origen de los costes** (un Componente TI retirado deja de sumar al total de su Aplicación) y el desglose — y el año fiscal figura en la cabecera impresa. No hay selector de otros años: una tarjeta tiene un único importe anual y los costes reales cambian de un año a otro, así que la misma cifra mostrada para otro año induciría a error. Un administrador define el mes en que empieza el año fiscal en [Configuración → General](../admin/settings.md).
+**Las cifras de previsión se introducen a mano.** Abra una tarjeta, vaya a su historial de costes y escriba el coste previsto para el año fiscal siguiente, igual que registra un año pasado. Solo el **siguiente** año fiscal puede registrarse como previsión, y hacerlo requiere el mismo permiso que registrar un año pasado. Cuando ese año pasa a ser el actual, el informe lee en su lugar los atributos vigentes, y la cifra vigente de la tarjeta sustituye a la que se había escrito.
+
+#### Qué tarjetas aparecen
+
+- **Año actual** — El coste anual de una tarjeta cuenta **íntegramente** cuando el año fiscal actual se sitúa entre aquel en que la tarjeta pasa a **Activo** y aquel en que cae su **Fin de vida**, ambos incluidos. No se prorratea nada: una aplicación que se retira en noviembre sigue aportando todo su coste anual este año. Una tarjeta cuyo Fin de vida cayó en un año fiscal anterior no se cuenta. Las fechas de ciclo de vida que faltan se interpretan igual que en los informes con viaje en el tiempo:
+    - **Sin fecha Activo, pero con fecha de Planificación o de Introducción** — la tarjeta sigue planificada y no se cuenta.
+    - **Sin fecha de Fin de vida** — la tarjeta cuenta a partir del año en que pasa a Activo.
+    - **Sin ninguna fecha de ciclo de vida** — la tarjeta cuenta.
+- **Cualquier otro año (pasado o de previsión)** — Aparece toda tarjeta activa que tenga un **coste registrado para ese año**, aunque se haya retirado después o solo pase a estar activa más adelante. Una tarjeta sin coste registrado para ese año no aparece.
+- **Las tarjetas archivadas** no aparecen nunca, en ningún año.
+
+La regla se aplica a toda la página — los totales, el mapa de árbol, la tabla, los agregados por **Origen de los costes** y el desglose — y el año fiscal seleccionado figura en la cabecera impresa.
+
+Cuando elige un año distinto de **Current**, un **gráfico de tendencia** muestra el coste del año actual y de los cuatro anteriores. Mientras **Forecast** es el año seleccionado, el gráfico muestra además una barra para él.
+
+Un administrador define el mes en que empieza el año fiscal en [Configuración → General](../admin/settings.md).
 
 ### Origen de los costes
 
@@ -207,6 +237,14 @@ Siempre que haya al menos un Origen de los costes activo, los rectángulos del m
 La selección de Origen de los costes y los demás filtros se conservan al profundizar, y el nivel de desglose forma parte de la configuración del informe guardado: guardar un informe mientras se está profundizando lo abre directamente en ese nivel. Sin un Origen de costes activo, hacer clic en un rectángulo abre en su lugar el panel lateral de la tarjeta (no hay nada que desglosar).
 
 **Limitar a tarjetas concretas** — El chip contiguo al selector de tipo abre un selector: elija una o varias tarjetas y el treemap, los totales y la tabla se limitarán a esas y a todo lo que hay debajo. El chip se oculta mientras esté dentro de un rectángulo, ya que ese detalle le ha llevado a otro tipo de tarjeta; salga de él y el alcance seguirá ahí.
+
+### Vista Sankey {#sankey-view}
+
+El Sankey admite los mismos filtros que el mapa de árbol: tipo de tarjeta, ámbito de tarjetas, campo de coste, año fiscal y Agrupar por. Dibuja a la izquierda las **partidas de coste** (los campos de coste que componen el total), a la derecha las **tarjetas** y, cuando se elige un Agrupar por, en el centro los **grupos**: las partidas de coste fluyen hacia los grupos y los grupos fluyen hacia sus tarjetas. Sin Agrupar por, el flujo va directamente de las partidas de coste a las tarjetas. Un coste se cuenta una sola vez: un componente TI usado por varias aplicaciones no se repite.
+
+### Pantalla completa
+
+El botón de pantalla completa del mapa de árbol y del Sankey hace que el gráfico ocupe toda la pantalla, a lo ancho y a lo alto, sin deformarlo.
 
 ## Informe de Matriz
 

@@ -162,19 +162,49 @@ Skift til **lagdelt afhængighedsvisning** ved hjælp af view-mode-knapperne i v
 
 - **Treemap-visning** — Indlejrede rektangler størrelses-justeret efter omkostning, med valgfri gruppering (f.eks. efter organisation eller kompetence)
 - **Bar chart-visning** — Omkostnings­sammenligning på tværs af komponenter
-- **Card Type** — Vælg hvilken korttype rapporten er bygget omkring (Application, IT Component, Provider, …).
+- **Sankey-visning** — Den samme rapport tegnet som et omkostningsflow (se [Sankey-visning](#sankey-view))
+- **Card Type** — Vælg hvilken korttype rapporten er bygget omkring: **Application**, **IT Component**, **Application + IT Component** (begge typer i ét diagram, hvert kort med sin egen omkostning) eller **Initiative**. Initiativer følger de samme regnskabsårsregler som applikationer.
+- **Omkostningsfelt** — Vælg hvilket omkostningsfelt der summeres. Listen viser omkostningsfelterne for den valgte korttype; for Initiative tilbyder den **costBudget** (standard) og **costActual**, som aldrig lægges sammen. For den kombinerede mulighed tilbydes kun de omkostningsfelter, der findes i begge typer.
+
+Alle visninger deler samme værktøjslinje, filtre, regnskabsår og omkostningsfelt, så et skift af visning ændrer kun tegningen.
+
+### Gruppér efter
+
+**Gruppér efter** er tilgængelig i treemap'et, tabellen og Sankey. Et kort grupperes enten efter:
+
+- værdien af et **felt på kortet** (kun felter med én værdi; felter med flervalg tilbydes ikke, da de ville placere et kort i to grupper), eller
+- et **tilknyttet kort**, navngivet efter det tilknyttede korts navn, via en relation hvor hvert kort har **højst ét** tilknyttet kort af den type. Mange-til-mange-relationer tilbydes aldrig, så en omkostning aldrig kan havne i to grupper.
+
+Kort uden værdi eller uden tilknyttet kort kommer i gruppen **Unspecified**. For den kombinerede mulighed **Application + IT Component** tilbydes kun de felter, der findes i begge typer; vælgeren er deaktiveret, når der ingen er. Grupperingen tæller aldrig en omkostning to gange og taber aldrig nogen.
 
 ### Regnskabsår
 
-Omkostninger er årlige, så rapporten viser dem for **det indeværende regnskabsår** — en chip i værktøjslinjen angiver det, for eksempel **Regnskabsår 2026 (indeværende)** (eller *Regnskabsår 2025–2026 (indeværende)*, når jeres regnskabsår ikke starter i januar). Et korts årlige omkostning tæller **fuldt ud**, når det indeværende regnskabsår ligger mellem det år, hvor kortet bliver **Aktiv**, og det år, hvor dets **Udløb** falder, begge inklusive. Intet fordeles forholdsmæssigt: En applikation, der udfases i november, bærer stadig hele sin årlige omkostning i år. Et kort, hvis udløb faldt i et tidligere regnskabsår, tælles ikke med.
+Omkostninger er årlige, så rapporten opbygges for ét **regnskabsår** ad gangen. En **Regnskabsår**-vælger i værktøjslinjen tilbyder seks valg, det nyeste først:
 
-Manglende livscyklusdatoer læses som i rapporterne med tidsrejse:
+| Valg | Hvad det viser |
+|---|---|
+| **FY27 - Forecast** | Næste regnskabsår, ud fra tal indtastet i hånden (se nedenfor). |
+| **FY26 - Current** | Det indeværende regnskabsår, ud fra kortenes aktuelle omkostningsattributter. Det er standardvalget. |
+| **FY25** … **FY22** | De fire regnskabsår før det indeværende, ud fra de omkostninger, der er registreret for dem. |
 
-- **Ingen Aktiv-dato, men en Planlagt- eller Indfasning-dato** — kortet er stadig planlagt og tælles ikke med.
-- **Ingen Udløb-dato** — kortet tæller fra det år, hvor det bliver aktivt.
-- **Ingen livscyklusdatoer overhovedet** — kortet tæller.
+Et regnskabsår hedder **FY** plus de sidste to cifre i det år, det **slutter** i, uanset hvilken måned jeres regnskabsår starter i: Et regnskabsår fra juli 2025 til juni 2026 er **FY26**. En chip i værktøjslinjen gentager valget, for eksempel **Regnskabsår: FY26 - Current**. *Current* og *Forecast* oversættes ikke.
 
-Reglen gælder for alt på siden — totalerne, treemap'et, tabellen, **Omkostningskilde**-sammentællinger (en udfaset IT-komponent holder op med at tælle med i sin applikations total) og drill-down — og regnskabsåret udskrives i rapportens sidehoved. Der er ingen mulighed for at vælge andre år: Et kort har ét årligt beløb, og de reelle omkostninger ændrer sig fra år til år, så det samme tal vist for et andet år ville være misvisende. En administrator angiver, hvilken måned regnskabsåret starter i, under [Indstillinger → Generelt](../admin/settings.md).
+**Prognosetal indtastes i hånden.** Åbn et kort, gå til dets omkostningshistorik, og skriv de planlagte omkostninger for næste regnskabsår, på samme måde som når I registrerer et tidligere år. Kun det **næste** regnskabsår kan registreres som prognose, og det kræver samme tilladelse som at registrere et tidligere år. Når det år bliver det indeværende, læser rapporten i stedet de aktuelle attributter, og kortets aktuelle tal erstatter det indtastede.
+
+#### Hvilke kort der vises
+
+- **Indeværende år** — Et korts årlige omkostning tæller **fuldt ud**, når det indeværende regnskabsår ligger mellem det år, hvor kortet bliver **Aktiv**, og det år, hvor dets **Udløb** falder, begge inklusive. Intet fordeles forholdsmæssigt: En applikation, der udfases i november, bærer stadig hele sin årlige omkostning i år. Et kort, hvis udløb faldt i et tidligere regnskabsår, tælles ikke med. Manglende livscyklusdatoer læses som i rapporterne med tidsrejse:
+    - **Ingen Aktiv-dato, men en Planlagt- eller Indfasning-dato** — kortet er stadig planlagt og tælles ikke med.
+    - **Ingen Udløb-dato** — kortet tæller fra det år, hvor det bliver aktivt.
+    - **Ingen livscyklusdatoer overhovedet** — kortet tæller.
+- **Ethvert andet år (tidligere eller prognose)** — Alle aktive kort med en **registreret omkostning for det år** vises, også selvom de siden er udfaset eller først bliver aktive senere. Et kort uden registreret omkostning for det år vises ikke.
+- **Arkiverede kort** vises aldrig, i noget år.
+
+Reglen gælder for alt på siden — totalerne, treemap'et, tabellen, **Omkostningskilde**-sammentællinger og drill-down — og det valgte regnskabsår udskrives i rapportens sidehoved.
+
+Når I vælger et andet år end **Current**, viser et **trenddiagram** omkostningerne for det indeværende år og de fire foregående. Så længe **Forecast** er det valgte år, viser diagrammet også en søjle for det.
+
+En administrator angiver, hvilken måned regnskabsåret starter i, under [Indstillinger → Generelt](../admin/settings.md).
 
 ### Cost Source
 
@@ -207,6 +237,14 @@ Når mindst én Cost Source er aktiv, er treemap-rektanglerne **klikbare**. Klik
 Cost Source-valget og andre filtre bevares, mens du driller, og det drillede niveau er en del af den gemte rapports konfiguration — at gemme en rapport, mens du har drillet ind, genåbner direkte på det niveau. Uden **nogen** Cost Source aktiv åbner klik på et rektangel kort-sidepanelet i stedet (der er intet at bryde ned).
 
 **Afgrænsning til bestemte kort** — Chippen ved siden af korttypevælgeren åbner en vælger: vælg et eller flere kort, og træstrukturen, totalerne og tabellen afgrænses til disse og alt under dem. Chippen skjules, mens du er inde i et rektangel, da det allerede har flyttet dig til en anden korttype; forlad det, og afgrænsningen er der stadig.
+
+### Sankey-visning {#sankey-view}
+
+Sankey tager de samme filtre som treemap'et: korttype, kortudvalg, omkostningsfelt, regnskabsår og Gruppér efter. Det tegner **omkostningsposter** til venstre (de omkostningsfelter, der udgør totalen), **kortene** til højre og, når der er valgt en Gruppér efter, **grupperne** i midten: omkostningsposter flyder ind i grupper, og grupper flyder ind i deres kort. Uden Gruppér efter går flowet direkte fra omkostningsposter til kort. En omkostning tælles kun én gang: En IT Component, der bruges af flere applikationer, gentages ikke.
+
+### Fuld skærm
+
+Fuldskærmsknappen på treemap'et og Sankey får diagrammet til at fylde hele skærmen i bredde og højde uden at fortrække det.
 
 ## Matrixrapport
 

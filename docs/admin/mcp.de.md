@@ -243,7 +243,7 @@ Der Server stellt 35 Lese-Werkzeuge in acht Gruppen bereit.
 | Werkzeug | Beschreibung |
 |----------|-------------|
 | `get_portfolio_report` | Bubble-Chart-Daten für einen Kartentyp (Default: funktionaler × technischer Fit) |
-| `get_cost_treemap` | Treemap der Kosten, optional gruppiert nach verwandtem Typ |
+| `get_cost_treemap` | Treemap der Kosten über einen oder mehrere Typen, optional gruppiert nach einem Feld (`field:<key>`) oder einer verknüpften Karte (`rel:<key>`) |
 | `get_capability_heatmap` | Hierarchische Business-Capability-Heatmap |
 | `get_data_quality_report` | Vollständigkeits-Aufschlüsselung pro Kartentyp |
 | `get_value_chain` | Bänder und Kästen der Wertschöpfungskette oder, mit `category_id`, die Wertstromkarte einer Prozesskategorie; optional ergänzt `related` (`applications`, `dataObjects`, `organization`) verknüpfte Elemente. Erfordert die Berechtigung `bpm.value_chain` |

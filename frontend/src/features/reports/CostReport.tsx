@@ -35,27 +35,36 @@ import CardScopeFilter from "@/components/CardScopeFilter";
 import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
 import { useCurrency, type CurrencyFormatter } from "@/hooks/useCurrency";
 import { useIsRtl } from "@/hooks/useIsRtl";
+import CostSankeyNode from "./CostSankeyNode";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useTypeLabel,
   useFieldLabel,
   useOptionLabel,
+  useRelationLabel,
 } from "@/hooks/useResolveLabel";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
+import { resolveFacetField } from "@/lib/fieldFacets";
+import { surface } from "@/theme/tokens";
 import {
-  facetValues,
-  pickGroupableFields,
-  resolveFacetField,
-} from "@/lib/fieldFacets";
-import { fiscalYearLabel } from "@/lib/fiscalYear";
+  COMBINED_KEY,
+  commonCostFields,
+  commonGroupableFields,
+  relationGroupOptions,
+  typeKeysOf,
+  typeParam,
+} from "./costReportOptions";
+import { costFiscalYearName, costFiscalYearOptions } from "@/lib/fiscalYear";
 import { formatFieldValue, EMPTY_VALUE, type FieldMeta } from "@/lib/cardDisplayFields";
 import { costValue } from "@/lib/costValue";
 import type { FieldDef } from "@/types";
 
-const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent"] as const;
+const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent", "Initiative"] as const;
+/** The server's group for a card with no value (and for an ungrouped report). */
+const OTHER_GROUP = "__other__";
 type CostView = "chart" | "sankey" | "table";
 
 interface CostItem {
@@ -63,21 +72,32 @@ interface CostItem {
   name: string;
   cost: number;
   attributes?: Record<string, unknown>;
+  /** Raw group value, present when the request grouped. */
+  group?: string;
 }
 
 interface CostTreemapResponse {
   items: CostItem[];
   total: number;
-  /** The current fiscal year — the only one the report shows. */
+  /** Technical keys of the cost fields that add up to the total. */
+  components?: string[];
+  /** The fiscal year the figures are for (the one requested). */
   fiscal_year?: number;
+  /** The fiscal year that contains today, whatever year was requested. */
+  current_fiscal_year?: number;
   /** Month (1-12) the workspace's fiscal year starts in. */
   fiscal_year_start?: number;
 }
+
+const EMPTY_COMPONENTS: string[] = [];
 
 interface SankeyNode {
   id: string;
   name: string;
   type: string;
+  /** Card nodes only: the card's total and its value per cost item (incl. `__other__`). */
+  cost?: number;
+  costs?: Record<string, number>;
 }
 
 interface SankeyLink {
@@ -91,6 +111,7 @@ interface CostSankeyResponse {
   links: SankeyLink[];
   total: number;
   fiscal_year?: number;
+  current_fiscal_year?: number;
   fiscal_year_start?: number;
 }
 
@@ -107,13 +128,6 @@ function fiscalYearOf(r: {
   return r.fiscal_year != null && r.fiscal_year_start != null
     ? { year: r.fiscal_year, start: r.fiscal_year_start }
     : null;
-}
-
-function pickCostFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
-  const out: FieldDef[] = [];
-  for (const s of schema)
-    for (const f of s.fields) if (f.type === "cost") out.push(f);
-  return out;
 }
 
 function pickAllFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
@@ -156,6 +170,8 @@ const TreemapContent = ({
   onCellClick,
   isRtl,
   deltaPct,
+  children,
+  caption,
 }: {
   x: number;
   y: number;
@@ -172,12 +188,33 @@ const TreemapContent = ({
    * badge), null = no current-year baseline to diff against ("new"), a
    * number = the signed ratio. */
   deltaPct?: number | null;
+  /** Present on a group node, which holds the cards drawn above it. */
+  children?: unknown[];
+  /** The group's name, on the first (largest) card of each group. */
+  caption?: string;
 }) => {
   const { t } = useTranslation("reports");
   if (width < 4 || height < 4) return null;
   const showLabel = width > 50 && height > 30;
   const showCost = width > 70 && height > 45;
   const handleClick = id && onCellClick ? () => onCellClick(id) : undefined;
+  if (Array.isArray(children)) {
+    // A group: its frame only. Its name is the caption of its largest card,
+    // since the cards are drawn over the frame.
+    return (
+      <g>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          fill={treemapColor(index)}
+          stroke={surface.light.paper}
+          strokeWidth={4}
+        />
+      </g>
+    );
+  }
   // In RTL, anchor the cell labels at the top-right corner so they read correctly.
   const labelX = isRtl ? x + width - 6 : x + 6;
   const textDir = isRtl
@@ -198,10 +235,23 @@ const TreemapContent = ({
         strokeWidth={2}
         rx={3}
       />
+      {showLabel && caption && (
+        <text
+          x={labelX}
+          y={y + 12}
+          fontSize={9}
+          fill={surface.light.paper}
+          opacity={0.8}
+          style={{ pointerEvents: "none" }}
+          {...textDir}
+        >
+          {caption}
+        </text>
+      )}
       {showLabel && (
         <text
           x={labelX}
-          y={y + 16}
+          y={y + (caption ? 25 : 16)}
           fontSize={11}
           fontWeight={600}
           fill="#fff"
@@ -216,7 +266,7 @@ const TreemapContent = ({
       {showCost && (
         <text
           x={labelX}
-          y={y + 30}
+          y={y + (caption ? 39 : 30)}
           fontSize={10}
           fill="rgba(255,255,255,0.8)"
           style={{ pointerEvents: "none" }}
@@ -252,20 +302,11 @@ const TreemapContent = ({
 
 export default function CostReport() {
   const { t } = useTranslation(["reports", "common"]);
-  const { types, loading: ml } = useMetamodel();
+  const { types, relationTypes, loading: ml } = useMetamodel();
   // Report type pickers offer only the types the user may see.
   const readableTypes = useReadableCardTypes("module");
-  // Sankey connects exactly these two types; Treemap/Table also pick one at a
-  // time from this same restricted list (no `aggregate` roll-up left to need
-  // any other type).
-  const costReportTypes = useMemo(
-    () =>
-      readableTypes.filter((tp) =>
-        COST_REPORT_TYPE_KEYS.includes(tp.key as never),
-      ),
-    [readableTypes],
-  );
   const typeLabel = useTypeLabel();
+  const relLabel = useRelationLabel();
   const fieldLabel = useFieldLabel();
   const optLabel = useOptionLabel();
   const { fmt } = useCurrency();
@@ -274,15 +315,45 @@ export default function CostReport() {
   const canViewCostsGlobally = !!(
     user?.permissions?.["*"] || user?.permissions?.["costs.view"]
   );
+  const typeOptions = useMemo(() => {
+    const byKey = new Map(readableTypes.map((tp) => [tp.key, tp]));
+    const app = byKey.get("Application");
+    const itc = byKey.get("ITComponent");
+    const out: { key: string; label: string }[] = [];
+    if (app) out.push({ key: app.key, label: typeLabel(app) });
+    if (itc) out.push({ key: itc.key, label: typeLabel(itc) });
+    if (app && itc)
+      out.push({
+        key: COMBINED_KEY,
+        label: t("cost.combinedType", {
+          first: typeLabel(app),
+          second: typeLabel(itc),
+        }),
+      });
+    const ini = byKey.get("Initiative");
+    if (ini) out.push({ key: ini.key, label: typeLabel(ini) });
+    return out;
+  }, [readableTypes, typeLabel, t]);
   const saved = useSavedReport("cost");
   const { chartRef, thumbnail, captureAndSave } = useThumbnailCapture(() =>
     saved.setSaveDialogOpen(true),
   );
+  // A type key, or COMBINED_KEY for Applications and IT Components together.
   const [cardTypeKey, setCardTypeKey] = useState("Application");
+  const typeKeys = useMemo(() => typeKeysOf(cardTypeKey), [cardTypeKey]);
+  const combined = typeKeys.length > 1;
   const [sidePanelCardId, setSidePanelCardId] = useState<string | null>(null);
   const [costField, setCostField] = useState("costTotalAnnual");
   const [groupBy, setGroupBy] = useState("");
   const [rawItems, setRawItems] = useState<CostItem[] | null>(null);
+  // The cost field keys that add up to the total, from the treemap response.
+  // Tagged with the type and field they answer, so a stale list never meets a new selection.
+  const [componentsFor, setComponentsFor] = useState<{ key: string; list: string[] }>({
+    key: "",
+    list: [],
+  });
+  const components =
+    componentsFor.key === `${cardTypeKey}|${costField}` ? componentsFor.list : EMPTY_COMPONENTS;
   // Current-year baseline, fetched only when a past fiscal year is selected —
   // the treemap delta badge diffs against it (id -> cost).
   const [baselineCosts, setBaselineCosts] = useState<Map<string, number>>(
@@ -303,27 +374,53 @@ export default function CostReport() {
   // request shape byte-for-byte); a picked value asks the server for a past
   // year's card_cost_history row instead of live attributes.
   const [fiscalYearParam, setFiscalYearParam] = useState<number | null>(null);
-  const fiscalYearOptions = useMemo(() => {
-    const current = fiscalYear?.year ?? new Date().getFullYear();
-    return Array.from({ length: 5 }, (_, i) => current - i);
-  }, [fiscalYear]);
+  // The fiscal year containing today, from the server. NOT `fiscalYear.year`,
+  // which is the requested year: anchoring the picker on it re-centred the list
+  // every time a past year was picked.
+  const [currentFiscalYear, setCurrentFiscalYear] = useState(() =>
+    new Date().getFullYear(),
+  );
+  const fiscalYearOptions = useMemo(
+    () => costFiscalYearOptions(currentFiscalYear),
+    [currentFiscalYear],
+  );
+  // The history chart shows on the Forecast year only: the four years before the current one,
+  // the current one and the forecast, oldest first. Memoised: the chart refetches when the identity changes.
+  const showForecast = fiscalYearParam === currentFiscalYear + 1;
+  const trendYears = useMemo(
+    () => Array.from({ length: 6 }, (_, i) => currentFiscalYear - 4 + i),
+    [currentFiscalYear],
+  );
+  // Learn the current year from a response, and fall back to "Current" when the
+  // requested year is that one or is not among the offered years (a saved
+  // report from an earlier year).
+  const adoptCurrentFiscalYear = useCallback((cy: number | undefined) => {
+    if (cy == null) return;
+    setCurrentFiscalYear(cy);
+    setFiscalYearParam((p) =>
+      p != null && !costFiscalYearOptions(cy).some((o) => o.value === p) ? null : p,
+    );
+  }, []);
 
   // Narrow the treemap to chosen cards and everything beneath them (#954).
-  const scope = useCardScope({ typeKey: cardTypeKey, enabled: true });
+  // A scope belongs to one type, so the combined option has none.
+  const scope = useCardScope({ typeKey: combined ? null : cardTypeKey, enabled: true });
   const { scopeIds, setScopeIds, effectiveScopeIds } = scope;
 
-  const typeDef = useMemo(
-    () => types.find((t) => t.key === cardTypeKey),
-    [types, cardTypeKey],
+  // One schema per selected type; empty until every one of them is known.
+  const schemas = useMemo(() => {
+    const defs = typeKeys.map((k) => types.find((tp) => tp.key === k));
+    return defs.every(Boolean) ? defs.map((d) => d!.fields_schema) : [];
+  }, [types, typeKeys]);
+  const costFields = useMemo(
+    () => commonCostFields(schemas).map((f) => ({ ...f, label: fieldLabel(f) })),
+    [schemas, fieldLabel],
   );
-  const costFields = useMemo(() => {
-    const raw = typeDef ? pickCostFields(typeDef.fields_schema) : [];
-    return raw.map((f) => ({ ...f, label: fieldLabel(f) }));
-  }, [typeDef, fieldLabel]);
+  // Extra table columns come from one type's fields: none for the combined option.
   const allFields = useMemo(() => {
-    const raw = typeDef ? pickAllFields(typeDef.fields_schema) : [];
+    const raw = schemas.length === 1 ? pickAllFields(schemas[0]) : [];
     return raw.map((f) => ({ ...f, label: fieldLabel(f) }));
-  }, [typeDef, fieldLabel]);
+  }, [schemas, fieldLabel]);
   const [extraColumns, setExtraColumns] = useState<string[]>([]);
 
   // Drop picked columns the current type no longer defines (card-type
@@ -345,13 +442,24 @@ export default function CostReport() {
     }
   }, [costFields]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A selection the user may not read (a saved combined option whose IT
+  // Component is hidden, an Initiative they cannot see) falls back.
+  useEffect(() => {
+    if (ml || typeOptions.length === 0) return;
+    if (!typeOptions.some((o) => o.key === cardTypeKey))
+      setCardTypeKey(
+        typeOptions.some((o) => o.key === "Application") ? "Application" : typeOptions[0].key,
+      );
+  }, [ml, typeOptions, cardTypeKey]);
+
   // Load saved report config
   useEffect(() => {
     const cfg = saved.consumeConfig();
     if (cfg) {
       const restoredType =
         typeof cfg.cardTypeKey === "string" &&
-        COST_REPORT_TYPE_KEYS.includes(cfg.cardTypeKey as never)
+        (cfg.cardTypeKey === COMBINED_KEY ||
+          COST_REPORT_TYPE_KEYS.includes(cfg.cardTypeKey as never))
           ? cfg.cardTypeKey
           : undefined;
       if (restoredType) setCardTypeKey(restoredType);
@@ -370,7 +478,7 @@ export default function CostReport() {
         );
       // Set for the restored type, so the scope is read as that type's from
       // the render the type lands on.
-      if (Array.isArray(cfg.scopeIds)) {
+      if (Array.isArray(cfg.scopeIds) && restoredType !== COMBINED_KEY) {
         setScopeIds(
           (cfg.scopeIds as unknown[]).filter(
             (v): v is string => typeof v === "string",
@@ -416,9 +524,8 @@ export default function CostReport() {
   // multi-select cannot put a card in exactly one group). A yes/no field is
   // given Yes / No options, so its groups are named rather than "true".
   const groupableFields = useMemo<FieldDef[]>(() => {
-    if (!typeDef) return [];
     const yesNo = { yes: t("common:labels.yes"), no: t("common:labels.no") };
-    return pickGroupableFields(typeDef.fields_schema).map((f) =>
+    return commonGroupableFields(schemas).map((f) =>
       resolveFacetField(
         {
           ...f,
@@ -428,7 +535,25 @@ export default function CostReport() {
         yesNo,
       ),
     );
-  }, [typeDef, fieldLabel, optLabel, t]);
+  }, [schemas, fieldLabel, optLabel, t]);
+
+  // What the Group by selector offers: `field:<key>` and `rel:<key>` values.
+  const groupOptions = useMemo(
+    () => [
+      ...groupableFields.map((f) => ({ value: `field:${f.key}`, label: f.label })),
+      ...relationGroupOptions(relationTypes, typeKeys, relLabel),
+    ],
+    [groupableFields, relationTypes, typeKeys, relLabel],
+  );
+  // A saved bare field key becomes `field:<key>`; one that is not offered is dropped.
+  const effectiveGroupBy = useMemo(() => {
+    const offered = (v: string) => groupOptions.some((o) => o.value === v);
+    if (offered(groupBy)) return groupBy;
+    return groupBy && offered(`field:${groupBy}`) ? `field:${groupBy}` : "";
+  }, [groupBy, groupOptions]);
+  useEffect(() => {
+    if (!ml && effectiveGroupBy !== groupBy) setGroupBy(effectiveGroupBy);
+  }, [ml, effectiveGroupBy, groupBy]);
 
   useAbortableEffect(
     async ({ signal, isCurrent }) => {
@@ -439,8 +564,11 @@ export default function CostReport() {
         return;
       }
       if (view === "sankey") {
-        const p = new URLSearchParams({ cost_field: costField });
-        if (groupBy) p.set("group_by", groupBy);
+        const p = new URLSearchParams({
+          type: typeParam(cardTypeKey),
+          cost_field: costField,
+        });
+        if (effectiveGroupBy) p.set("group_by", effectiveGroupBy);
         if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
         const r = await api.get<CostSankeyResponse>(
           `/reports/cost-sankey?${p}`,
@@ -450,11 +578,13 @@ export default function CostReport() {
         setSankeyData(r);
         setRawItems(null);
         setFiscalYear((prev) => fiscalYearOf(r) ?? prev);
+        adoptCurrentFiscalYear(r.current_fiscal_year);
       } else {
         const p = new URLSearchParams({
-          type: cardTypeKey,
+          type: typeParam(cardTypeKey),
           cost_field: costField,
         });
+        if (effectiveGroupBy) p.set("group_by", effectiveGroupBy);
         if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
         const r = await api.get<CostTreemapResponse>(
           `/reports/cost-treemap?${p}`,
@@ -462,11 +592,13 @@ export default function CostReport() {
         );
         if (!isCurrent()) return;
         setRawItems(r.items);
+        setComponentsFor({ key: `${cardTypeKey}|${costField}`, list: r.components ?? [] });
         setSankeyData(null);
         setFiscalYear((prev) => fiscalYearOf(r) ?? prev);
+        adoptCurrentFiscalYear(r.current_fiscal_year);
       }
     },
-    [cardTypeKey, costField, groupBy, view, canViewCostsGlobally, fiscalYearParam],
+    [cardTypeKey, costField, effectiveGroupBy, view, canViewCostsGlobally, fiscalYearParam],
   );
 
   // Delta badge baseline: the current fiscal year's per-card costs, fetched
@@ -483,7 +615,10 @@ export default function CostReport() {
         setBaselineCosts(new Map());
         return;
       }
-      const p = new URLSearchParams({ type: cardTypeKey, cost_field: costField });
+      const p = new URLSearchParams({
+        type: typeParam(cardTypeKey),
+        cost_field: costField,
+      });
       const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, {
         signal,
       });
@@ -497,7 +632,11 @@ export default function CostReport() {
   // it has no prior year to diff against, so the YoY fetch is skipped rather
   // than sent for a year outside the picker's own range.
   const minFiscalYearOption = useMemo(
-    () => (fiscalYearOptions.length > 0 ? Math.min(...fiscalYearOptions) : null),
+    () =>
+      Math.min(
+        // "Current" (null) is not a requestable year: it is never the earliest.
+        ...fiscalYearOptions.flatMap((o) => (o.value == null ? [] : [o.value])),
+      ),
     [fiscalYearOptions],
   );
 
@@ -510,14 +649,13 @@ export default function CostReport() {
         !canViewCostsGlobally ||
         view !== "table" ||
         fiscalYearParam == null ||
-        minFiscalYearOption == null ||
         fiscalYearParam <= minFiscalYearOption
       ) {
         setPriorYearCosts(new Map());
         return;
       }
       const p = new URLSearchParams({
-        type: cardTypeKey,
+        type: typeParam(cardTypeKey),
         cost_field: costField,
         fiscal_year: String(fiscalYearParam - 1),
       });
@@ -548,54 +686,117 @@ export default function CostReport() {
     [items],
   );
 
-  const groupedField = useMemo(
-    () => groupableFields.find((f) => f.key === groupBy),
-    [groupableFields, groupBy],
+  // The page names a group: the server sends the raw value (an option key,
+  // "true"/"false", a linked card's name, or "__other__").
+  const groupLabel = useCallback(
+    (raw: string | undefined) => {
+      if (!raw || raw === OTHER_GROUP) return t("cost.unspecified");
+      const key = effectiveGroupBy.startsWith("field:")
+        ? effectiveGroupBy.slice(6)
+        : null;
+      const opt = groupableFields
+        .find((f) => f.key === key)
+        ?.options?.find((o) => o.key === raw);
+      return opt?.label ?? raw;
+    },
+    [effectiveGroupBy, groupableFields, t],
   );
 
   const groups = useMemo(() => {
-    if (!groupBy || !groupedField) return null;
-    const optionMap = new Map<string, string>();
-    for (const o of groupedField.options ?? []) optionMap.set(o.key, o.label);
+    if (!effectiveGroupBy) return null;
+    // Keyed by the raw value: two raw values may share a label.
     const map = new Map<
       string,
-      { label: string; items: CostItem[]; cost: number }
+      { key: string; label: string; items: CostItem[]; cost: number }
     >();
     for (const item of items) {
-      const raw = (item.attributes as Record<string, unknown> | undefined)?.[
-        groupBy
-      ];
-      const val = facetValues(groupedField, raw)[0] ?? "";
-      const label = optionMap.get(val) || val || t("cost.unspecified");
-      const g = map.get(label) || { label, items: [], cost: 0 };
+      const key = item.group ?? OTHER_GROUP;
+      const g = map.get(key) || { key, label: groupLabel(key), items: [], cost: 0 };
       g.items.push(item);
       g.cost += item.cost;
-      map.set(label, g);
+      map.set(key, g);
     }
     return [...map.values()].sort((a, b) => b.cost - a.cost);
-  }, [items, groupBy, groupedField, t]);
+  }, [items, effectiveGroupBy, groupLabel]);
+
+  // A cost-item node: the cost field's label, or "Other costs" for what the
+  // components leave of a card's total.
+  const itemLabel = useCallback(
+    (key: string, fallback: string) =>
+      key === OTHER_GROUP
+        ? t("cost.otherCostItem")
+        : (costFields.find((f) => f.key === key)?.label ?? fallback),
+    [costFields, t],
+  );
+
+  // Scope applies to the Sankey here: hide the cards outside it, then every
+  // cost-item and group node left without a card below it.
+  const sankeyView = useMemo(() => {
+    if (!sankeyData) return null;
+    const closure = scope.closure;
+    const isCard = (n: SankeyNode) => n.type !== "CostItem" && n.type !== "Group";
+    const keep = sankeyData.nodes.map((n) => !isCard(n) || !closure || closure.has(n.id));
+    // Scoped: an item -> group flow is the sum of the kept cards' own values for that item.
+    const flowValue = (l: SankeyLink) => {
+      if (!closure || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
+      const item = sankeyData.nodes[l.source].id.replace(/^item:/, "");
+      return sankeyData.links
+        .filter((c) => c.source === l.target && keep[c.target])
+        .reduce((n, c) => n + (sankeyData.nodes[c.target].costs?.[item] ?? 0), 0);
+    };
+    const values = sankeyData.links.map(flowValue);
+    if (closure) {
+      // item -> group -> card: the first pass drops groups, the second items.
+      for (let pass = 0; pass < 2; pass++)
+        sankeyData.nodes.forEach((n, i) => {
+          if (!isCard(n))
+            keep[i] = sankeyData.links.some(
+              (l, k) => l.source === i && keep[l.target] && values[k] > 0,
+            );
+        });
+    }
+    const index = new Map<number, number>();
+    const nodes: SankeyNode[] = [];
+    sankeyData.nodes.forEach((n, i) => {
+      if (!keep[i]) return;
+      index.set(i, nodes.length);
+      nodes.push(
+        n.type === "Group"
+          ? { ...n, name: groupLabel(n.id.replace(/^group:/, "")) }
+          : n.type === "CostItem"
+            ? { ...n, name: itemLabel(n.id.replace(/^item:/, ""), n.name) }
+            : n,
+      );
+    });
+    const links = sankeyData.links.flatMap((l, k) =>
+      keep[l.source] && keep[l.target] && (!closure || values[k] > 0)
+        ? [{ ...l, value: values[k], source: index.get(l.source)!, target: index.get(l.target)! }]
+        : [],
+    );
+    return { ...sankeyData, nodes, links };
+  }, [sankeyData, scope.closure, groupLabel, itemLabel]);
 
   const printParams = useMemo(() => {
     const params: { label: string; value: string }[] = [];
-    const tp = types.find((tp) => tp.key === cardTypeKey);
-    const tpLabel = typeLabel(tp) || cardTypeKey;
-    if (view !== "sankey")
-      params.push({ label: t("common:labels.type"), value: tpLabel });
+    const tpLabel =
+      typeOptions.find((o) => o.key === cardTypeKey)?.label || cardTypeKey;
+    params.push({ label: t("common:labels.type"), value: tpLabel });
     // Always stated: every figure on the page is for this one fiscal year.
     if (fiscalYear) {
       params.push({
         label: t("cost.fiscalYear"),
-        value: fiscalYearLabel(fiscalYear.year, fiscalYear.start, t),
+        value: costFiscalYearName(fiscalYear.year, currentFiscalYear),
       });
     }
-    if (costFields.length > 1 && view !== "sankey") {
+    if (costFields.length > 1) {
       const cfLabel =
         costFields.find((f) => f.key === costField)?.label || costField;
       params.push({ label: t("cost.costField"), value: cfLabel });
     }
-    if (groupBy) {
+    if (effectiveGroupBy) {
       const gLabel =
-        groupableFields.find((f) => f.key === groupBy)?.label || groupBy;
+        groupOptions.find((o) => o.value === effectiveGroupBy)?.label ||
+        effectiveGroupBy;
       params.push({ label: t("cost.groupBy"), value: gLabel });
     }
     if (view === "table")
@@ -609,16 +810,16 @@ export default function CostReport() {
     return params;
   }, [
     cardTypeKey,
-    types,
+    typeOptions,
     costField,
     costFields,
-    groupBy,
-    groupableFields,
+    effectiveGroupBy,
+    groupOptions,
     view,
     effectiveScopeIds,
     fiscalYear,
+    currentFiscalYear,
     t,
-    typeLabel,
   ]);
 
   const handleRectClick = useCallback((id: string) => {
@@ -667,29 +868,52 @@ export default function CostReport() {
       </Box>
     );
 
-  const sortedAllItems = [...items].sort((a, b) => b.cost - a.cost);
-  const topDriver = sortedAllItems.length > 0 ? sortedAllItems[0] : null;
-  const avgCost = items.length > 0 ? total / items.length : 0;
+  // The Sankey view loads no treemap items: its tiles read the card nodes it keeps.
+  const summaryCards: { name: string; cost: number }[] =
+    view === "sankey"
+      ? (sankeyView?.nodes ?? [])
+          .filter((n) => n.cost !== undefined)
+          .map((n) => ({ name: n.name, cost: n.cost! }))
+      : items;
+  const summaryTotal = summaryCards.reduce((sum, c) => sum + c.cost, 0);
+  const topDriver = summaryCards.reduce<{ name: string; cost: number } | null>(
+    (top, c) => (!top || c.cost > top.cost ? c : top),
+    null,
+  );
+  const avgCost = summaryCards.length > 0 ? summaryTotal / summaryCards.length : 0;
 
-  const treemapData = [...items]
-    .sort((a, b) => b.cost - a.cost)
-    .map((d, i) => {
-      const baseline = baselineCosts.get(d.id);
-      const deltaPct =
-        fiscalYearParam == null
-          ? undefined
-          : baseline && baseline > 0
-            ? (d.cost - baseline) / baseline
-            : null;
-      return {
-        name: d.name,
-        size: d.cost,
-        cost: d.cost,
-        id: d.id,
-        index: i,
-        deltaPct,
-      };
-    });
+  const treemapLeaf = (d: CostItem, i: number) => {
+    const baseline = baselineCosts.get(d.id);
+    const deltaPct =
+      fiscalYearParam == null
+        ? undefined
+        : baseline && baseline > 0
+          ? (d.cost - baseline) / baseline
+          : null;
+    return {
+      name: d.name,
+      size: d.cost,
+      cost: d.cost,
+      id: d.id,
+      index: i,
+      deltaPct,
+    };
+  };
+  // Grouped: each group is a parent node holding its cards.
+  const treemapData = groups
+    ? groups.map((g, gi) => ({
+        name: g.label,
+        cost: g.cost,
+        index: gi,
+        children: [...g.items]
+          .sort((a, b) => b.cost - a.cost)
+          .map((d, di) => ({
+            ...treemapLeaf(d, gi),
+            group: g.label,
+            caption: di === 0 ? g.label : undefined,
+          })),
+      }))
+    : [...items].sort((a, b) => b.cost - a.cost).map(treemapLeaf);
 
   const sort = (k: string) => {
     setSortD(sortK === k && sortD === "asc" ? "desc" : "asc");
@@ -707,7 +931,7 @@ export default function CostReport() {
   };
   const fieldMeta = (key: string): FieldMeta | undefined => {
     const f = allFields.find((fd) => fd.key === key);
-    return f ? ({ ...f, typeKeys: [cardTypeKey] } as FieldMeta) : undefined;
+    return f ? ({ ...f, typeKeys } as FieldMeta) : undefined;
   };
   const extraCell = (item: CostItem) =>
     extraColumns.map((key) => (
@@ -734,7 +958,9 @@ export default function CostReport() {
     payload,
   }: {
     active?: boolean;
-    payload?: { payload: { name: string; cost: number; size: number } }[];
+    payload?: {
+      payload: { name: string; cost: number; size: number; group?: string };
+    }[];
   }) => {
     if (!active || !payload?.[0]) return null;
     const d = payload[0].payload;
@@ -743,6 +969,11 @@ export default function CostReport() {
         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
           {d.name}
         </Typography>
+        {d.group && (
+          <Typography variant="caption" color="text.secondary" display="block">
+            {d.group}
+          </Typography>
+        )}
         <Typography variant="caption" display="block">
           {fmt.format(d.cost)}
         </Typography>
@@ -780,23 +1011,21 @@ export default function CostReport() {
       printParams={printParams}
       toolbar={
         <>
-          {view !== "sankey" && (
-            <TextField
-              select
-              size="small"
-              label={t("cost.cardType")}
-              value={cardTypeKey}
-              onChange={(e) => setCardTypeKey(e.target.value)}
-              sx={{ minWidth: 150 }}
-            >
-              {costReportTypes.map((tp) => (
-                <MenuItem key={tp.key} value={tp.key}>
-                  {typeLabel(tp)}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
-          {view !== "sankey" && (
+          <TextField
+            select
+            size="small"
+            label={t("cost.cardType")}
+            value={cardTypeKey}
+            onChange={(e) => setCardTypeKey(e.target.value)}
+            sx={{ minWidth: 150 }}
+          >
+            {typeOptions.map((o) => (
+              <MenuItem key={o.key} value={o.key}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          {!combined && (
             <CardScopeFilter
               types={cardTypeKey}
               value={effectiveScopeIds}
@@ -808,7 +1037,7 @@ export default function CostReport() {
               tooltip={t("cost.scopeTooltip")}
             />
           )}
-          {view !== "sankey" && costFields.length > 1 && (
+          {costFields.length > 1 && (
             <TextField
               select
               size="small"
@@ -825,24 +1054,25 @@ export default function CostReport() {
             </TextField>
           )}
 
-          {(view === "table" || view === "sankey") &&
-            groupableFields.length > 0 && (
-              <TextField
-                select
-                size="small"
-                label={t("cost.groupBy")}
-                value={groupBy}
-                onChange={(e) => setGroupBy(e.target.value)}
-                sx={{ minWidth: 150 }}
-              >
-                <MenuItem value="">{t("common:labels.none")}</MenuItem>
-                {groupableFields.map((f) => (
-                  <MenuItem key={f.key} value={f.key}>
-                    {f.label}
-                  </MenuItem>
-                ))}
-              </TextField>
-            )}
+          <TextField
+            select
+            size="small"
+            label={t("cost.groupBy")}
+            value={effectiveGroupBy}
+            onChange={(e) => setGroupBy(e.target.value)}
+            disabled={groupOptions.length === 0}
+            helperText={
+              groupOptions.length === 0 ? t("cost.groupByUnavailable") : undefined
+            }
+            sx={{ minWidth: 150 }}
+          >
+            <MenuItem value="">{t("cost.groupByNone")}</MenuItem>
+            {groupOptions.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
 
           {view === "table" && allFields.length > 0 && (
             <TextField
@@ -879,6 +1109,8 @@ export default function CostReport() {
             size="small"
             label={t("cost.fiscalYear")}
             value={fiscalYearParam ?? ""}
+            // "" is the "Current" entry; without this MUI shows it as blank.
+            slotProps={{ select: { displayEmpty: true } }}
             onChange={(e) =>
               setFiscalYearParam(
                 e.target.value === "" ? null : Number(e.target.value),
@@ -886,21 +1118,25 @@ export default function CostReport() {
             }
             sx={{ minWidth: 130 }}
           >
-            <MenuItem value="">{t("cost.fiscalYearPickerCurrent")}</MenuItem>
-            {fiscalYearOptions.map((y) => (
-              <MenuItem key={y} value={y}>
-                {y}
+            {fiscalYearOptions.map((o) => (
+              <MenuItem key={o.label} value={o.value ?? ""}>
+                {o.label}
               </MenuItem>
             ))}
           </TextField>
 
           {fiscalYear && (
-            <Tooltip title={t("cost.fiscalYearHelp")} arrow placement="bottom">
+            // The live-card rule only describes the current year; other years list every card with a recorded cost.
+            <Tooltip
+              title={fiscalYearParam == null ? t("cost.fiscalYearHelp") : ""}
+              arrow
+              placement="bottom"
+            >
               <Chip
                 variant="outlined"
                 icon={<MaterialSymbol icon="calendar_month" size={18} />}
                 label={t("cost.fiscalYearIndicator", {
-                  fy: fiscalYearLabel(fiscalYear.year, fiscalYear.start, t),
+                  fy: costFiscalYearName(fiscalYear.year, currentFiscalYear),
                 })}
                 data-testid="cost-fiscal-year"
               />
@@ -913,14 +1149,14 @@ export default function CostReport() {
       <Box sx={{ display: "flex", gap: 2, mb: 3, flexWrap: "wrap" }}>
         <MetricCard
           label={t("cost.totalCost")}
-          value={fmt.format(total)}
+          value={fmt.format(summaryTotal)}
           icon="payments"
           iconColor="#2e7d32"
           color="#2e7d32"
         />
         <MetricCard
           label={t("cost.items")}
-          value={items.length}
+          value={summaryCards.length}
           icon="inventory_2"
         />
         <MetricCard
@@ -932,7 +1168,7 @@ export default function CostReport() {
           <MetricCard
             label={t("cost.topCostDriver")}
             value={topDriver.name}
-            subtitle={`${fmt.format(topDriver.cost)} (${total > 0 ? ((topDriver.cost / total) * 100).toFixed(0) : 0}%)`}
+            subtitle={`${fmt.format(topDriver.cost)} (${summaryTotal > 0 ? ((topDriver.cost / summaryTotal) * 100).toFixed(0) : 0}%)`}
             icon="trending_up"
             iconColor="#e65100"
           />
@@ -948,17 +1184,21 @@ export default function CostReport() {
           </Box>
         ) : (
           <>
-            {fiscalYearParam != null && (
+            {showForecast && components.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <CostTrendChart
-                  cardTypeKey={cardTypeKey}
-                  years={fiscalYearOptions}
+                  typeParam={typeParam(cardTypeKey)}
+                  costField={costField}
+                  components={components}
+                  years={trendYears}
+                  currentFiscalYear={currentFiscalYear}
                 />
               </Box>
             )}
             <FullscreenPanel label={t("cost.fullscreen")}>
-            <Paper variant="outlined" sx={{ p: 1 }}>
-              <ResponsiveContainer width="100%" height={450}>
+            {(isFullscreen) => (
+            <Paper variant="outlined" sx={{ p: 1, ...(isFullscreen && { flex: 1, minHeight: 0 }) }}>
+              <ResponsiveContainer width="100%" height={isFullscreen ? "100%" : 450}>
                 <Treemap
                   data={treemapData}
                   dataKey="size"
@@ -983,11 +1223,12 @@ export default function CostReport() {
                 </Treemap>
               </ResponsiveContainer>
             </Paper>
+            )}
             </FullscreenPanel>
           </>
         )
       ) : view === "sankey" ? (
-        !sankeyData || sankeyData.nodes.length === 0 ? (
+        !sankeyView || sankeyView.nodes.length === 0 ? (
           <Box sx={{ py: 8, textAlign: "center" }}>
             <Typography color="text.secondary">
               {t("cost.noCostData")}
@@ -995,15 +1236,23 @@ export default function CostReport() {
           </Box>
         ) : (
           <FullscreenPanel label={t("cost.fullscreen")}>
-            <Paper
-              variant="outlined"
-              sx={{ p: 1 }}
-              data-testid="cost-sankey-panel"
-            >
-              <ResponsiveContainer width="100%" height={450}>
-                <Sankey data={sankeyData} nodeWidth={14} nodePadding={20} />
-              </ResponsiveContainer>
-            </Paper>
+            {(isFullscreen) => (
+              <Paper
+                variant="outlined"
+                sx={{ p: 1, ...(isFullscreen && { flex: 1, minHeight: 0 }) }}
+                data-testid="cost-sankey-panel"
+              >
+                <ResponsiveContainer width="100%" height={isFullscreen ? "100%" : 450}>
+                  <Sankey
+                    data={sankeyView}
+                    nodeWidth={14}
+                    nodePadding={20}
+                    margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+                    node={<CostSankeyNode isRtl={isRtl} />}
+                  />
+                </ResponsiveContainer>
+              </Paper>
+            )}
           </FullscreenPanel>
         )
       ) : (
@@ -1050,7 +1299,7 @@ export default function CostReport() {
                     });
                     return [
                       <TableRow
-                        key={`grp-${g.label}`}
+                        key={`grp-${g.key}`}
                         sx={{ bgcolor: "action.hover" }}
                       >
                         <TableCell

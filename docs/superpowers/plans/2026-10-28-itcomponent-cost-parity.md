@@ -5,7 +5,7 @@
 **Goal:** Give IT Component the same three cost-breakdown fields and the same
 calculated `costTotalAnnual` Application already has (on this instance, as
 live admin data only), by migration — so both types are on equal, portable
-footing for every install, not just `turbo-ea-aruba`.
+footing for every install, not just the local test instance.
 
 **Architecture:** One Alembic migration, Python-side fetch-mutate-update over
 `card_types.fields_schema` (JSONB) for `Application` and `ITComponent`

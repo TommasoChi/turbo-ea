@@ -162,19 +162,49 @@ O **Relatório de Custos** fornece análise financeira do seu cenário tecnológ
 
 - **Visualização treemap** — Retângulos aninhados dimensionados por custo, com agrupamento opcional (ex.: por organização ou capacidade)
 - **Visualização em gráfico de barras** — Comparação de custos entre componentes
-- **Tipo de cartão** — Escolha o tipo de cartão em torno do qual o relatório é construído (Aplicação, Componente de TI, Fornecedor, …).
+- **Vista Sankey** — O mesmo relatório desenhado como um fluxo de custos (ver [Vista Sankey](#sankey-view))
+- **Tipo de cartão** — Escolha o tipo de cartão em torno do qual o relatório é construído: **Aplicação**, **Componente de TI**, **Aplicação + Componente de TI** (os dois tipos num só gráfico, cada cartão com o seu próprio custo) ou **Iniciativa**. As iniciativas seguem as mesmas regras de ano fiscal que as aplicações.
+- **Campo de custo** — Escolha qual campo de custo é somado. A lista mostra os campos de custo do tipo de cartão escolhido; para Iniciativa oferece **costBudget** (o predefinido) e **costActual**, que nunca são somados. Para a opção combinada só são oferecidos os campos de custo que existem nos dois tipos.
+
+Todas as vistas partilham a mesma barra de ferramentas, os mesmos filtros, o mesmo ano fiscal e o mesmo campo de custo, pelo que mudar de vista só altera o desenho.
+
+### Agrupar por
+
+**Agrupar por** está disponível no treemap, na tabela e no Sankey. Um cartão é agrupado por:
+
+- o valor de um **campo do cartão** (apenas campos de valor único; os campos de escolha múltipla não são oferecidos, pois colocariam um cartão em dois grupos), ou
+- um **cartão associado**, designado pelo nome desse cartão, através de uma relação em que cada cartão tem **no máximo um** cartão associado desse tipo. As relações de muitos para muitos nunca são oferecidas, pelo que um custo nunca pode cair em dois grupos.
+
+Os cartões sem valor, ou sem cartão associado, vão para o grupo **Unspecified**. Para a opção combinada **Aplicação + Componente de TI** só são oferecidos os campos que existem nos dois tipos; o seletor fica desativado quando não há nenhum. O agrupamento nunca conta um custo duas vezes nem descarta nenhum.
 
 ### Ano fiscal
 
-Os custos são anuais, por isso o relatório mostra-os para **o ano fiscal atual**, indicado por um chip na barra de ferramentas, por exemplo **Ano fiscal atual: AF 2026** (ou *AF 2025–2026* quando o seu ano fiscal não começa em janeiro). O custo anual de um cartão conta **na íntegra** quando o ano fiscal atual se situa entre aquele em que o cartão passa a **Ativo** e aquele em que cai o seu **Fim de vida**, ambos incluídos. Nada é calculado pro rata: uma aplicação desativada em novembro continua a contar com todo o custo anual este ano. Um cartão cujo Fim de vida caiu num ano fiscal anterior não é contabilizado.
+Os custos são anuais, por isso o relatório é elaborado para um **ano fiscal** de cada vez. Um seletor **Ano fiscal** na barra de ferramentas oferece seis entradas, a mais recente primeiro:
 
-As datas de ciclo de vida em falta são interpretadas tal como nos relatórios com viagem no tempo:
+| Entrada | O que mostra |
+|---|---|
+| **FY27 - Forecast** | O ano fiscal seguinte, a partir de valores introduzidos manualmente (ver abaixo). |
+| **FY26 - Current** | O ano fiscal atual, a partir dos atributos de custo em vigor dos cartões. É o valor predefinido. |
+| **FY25** … **FY22** | Os quatro anos fiscais anteriores ao atual, a partir dos custos registados para eles. |
 
-- **Sem data Ativo, mas com uma data de Planejamento ou de Entrada** — o cartão continua planeado e não é contabilizado.
-- **Sem data de Fim de vida** — o cartão conta a partir do ano em que passa a Ativo.
-- **Sem quaisquer datas de ciclo de vida** — o cartão conta.
+Um ano fiscal chama-se **FY** mais os dois últimos dígitos do ano em que **termina**, seja qual for o mês em que o seu ano fiscal começa: um ano fiscal de julho de 2025 a junho de 2026 é **FY26**. Um chip na barra de ferramentas repete a seleção, por exemplo **Ano fiscal: FY26 - Current**. *Current* e *Forecast* não são traduzidos.
 
-A regra aplica-se a toda a página — aos totais, ao treemap, à tabela, às agregações por **Origem dos custos** (um Componente de TI desativado deixa de somar ao total da sua Aplicação) e ao detalhamento — e o ano fiscal aparece no cabeçalho impresso. Não há seleção de outros anos: um cartão tem um único valor anual e os custos reais mudam de um ano para o outro, pelo que o mesmo valor mostrado para outro ano induziria em erro. Um administrador define o mês de início do ano fiscal em [Configurações → Geral](../admin/settings.md).
+**Os valores de previsão são introduzidos manualmente.** Abra um cartão, vá ao seu histórico de custos e escreva o custo planeado para o ano fiscal seguinte, tal como regista um ano passado. Só o **próximo** ano fiscal pode ser registado como previsão, e o registo exige a mesma permissão que o de um ano passado. Quando esse ano passa a ser o atual, o relatório lê em vez disso os atributos em vigor, e o valor em vigor do cartão substitui o que foi escrito.
+
+#### Que cartões aparecem
+
+- **Ano atual** — O custo anual de um cartão conta **na íntegra** quando o ano fiscal atual se situa entre aquele em que o cartão passa a **Ativo** e aquele em que cai o seu **Fim de vida**, ambos incluídos. Nada é calculado pro rata: uma aplicação desativada em novembro continua a contar com todo o custo anual este ano. Um cartão cujo Fim de vida caiu num ano fiscal anterior não é contabilizado. As datas de ciclo de vida em falta são interpretadas tal como nos relatórios com viagem no tempo:
+    - **Sem data Ativo, mas com uma data de Planejamento ou de Entrada** — o cartão continua planeado e não é contabilizado.
+    - **Sem data de Fim de vida** — o cartão conta a partir do ano em que passa a Ativo.
+    - **Sem quaisquer datas de ciclo de vida** — o cartão conta.
+- **Qualquer outro ano (passado ou de previsão)** — Aparece todo o cartão ativo que tenha um **custo registado para esse ano**, mesmo que tenha sido desativado entretanto ou só fique ativo mais tarde. Um cartão sem custo registado para esse ano não aparece.
+- **Os cartões arquivados** nunca aparecem, em nenhum ano.
+
+A regra aplica-se a toda a página — aos totais, ao treemap, à tabela, às agregações por **Origem dos custos** e ao detalhamento — e o ano fiscal selecionado aparece no cabeçalho impresso.
+
+Quando escolhe um ano diferente de **Current**, um **gráfico de tendência** mostra o custo do ano atual e dos quatro anteriores. Enquanto **Forecast** for o ano selecionado, o gráfico mostra também uma barra para ele.
+
+Um administrador define o mês de início do ano fiscal em [Configurações → Geral](../admin/settings.md).
 
 ### Origem dos custos
 
@@ -207,6 +237,14 @@ Sempre que pelo menos uma Origem de custos estiver ativa, os retângulos do mapa
 A seleção de Origem de custos e os restantes filtros são preservados durante o detalhamento, e o nível de detalhamento faz parte da configuração do relatório guardado — guardar um relatório enquanto se está a detalhar reabre-o diretamente nesse nível. Sem uma Origem de custos ativa, um clique num retângulo abre antes o painel lateral do cartão (não há nada a decompor).
 
 **Limitar a cartões específicos** — O chip ao lado do seletor de tipo abre um seletor: escolha um ou mais cartões e o treemap, os totais e a tabela limitam-se a esses e a tudo o que está abaixo deles. O chip fica oculto enquanto estiver dentro de um retângulo, pois esse detalhe já o levou a outro tipo de cartão; saia dele e o âmbito continua lá.
+
+### Vista Sankey {#sankey-view}
+
+O Sankey aceita os mesmos filtros que o treemap: tipo de cartão, âmbito de cartões, campo de custo, ano fiscal e Agrupar por. Desenha à esquerda os **itens de custo** (os campos de custo que compõem o total), à direita os **cartões** e, quando se escolhe um Agrupar por, ao centro os **grupos**: os itens de custo fluem para os grupos e os grupos fluem para os seus cartões. Sem Agrupar por, o fluxo vai diretamente dos itens de custo para os cartões. Um custo é contado uma só vez: um Componente de TI usado por várias aplicações não é repetido.
+
+### Ecrã inteiro
+
+O botão de ecrã inteiro no treemap e no Sankey faz o gráfico ocupar todo o ecrã, em largura e altura, sem o deformar.
 
 ## Relatório de Matriz
 
