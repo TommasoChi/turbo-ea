@@ -41,6 +41,21 @@ def _route_writes_through_batch(patch_response: dict):
     return post_router, patch_router, post_calls, patch_calls
 
 
+def _routed_post(responses: dict):
+    """A POST router: the mutation batch's own calls are answered, every other path by ``responses``."""
+    calls: list = []
+
+    async def post(path, json=None):
+        if path.endswith("/commit"):
+            return {"id": "B-001", "committed_at": "now"}
+        if path.startswith("/mutation-batches"):
+            return {"id": "B-001", "dry_run": (json or {}).get("dry_run", False)}
+        calls.append((path, json))
+        return responses[path]
+
+    return AsyncMock(side_effect=post), calls
+
+
 class TestGetArchimateMapping:
     @pytest.mark.asyncio
     async def test_combines_types_and_relations_into_a_compact_mapping(self, fake_token):
@@ -162,16 +177,16 @@ class TestGetArchimateMapping:
 class TestCreateArchimateDiagram:
     @pytest.mark.asyncio
     async def test_dry_run_validates_and_never_creates(self, fake_token):
-        post = AsyncMock(
-            return_value={
-                "valid": False,
-                "issues": [{"code": "unknown_element_type", "message": "m", "ref": "a"}],
-            }
-        )
+        verdict = {
+            "valid": False,
+            "issues": [{"code": "unknown_element_type", "message": "m", "ref": "a"}],
+        }
+        post, calls = _routed_post({"/archimate/validate": verdict})
         with patch.object(server.TurboEAClient, "post", post):
             out = json.loads(await server.create_archimate_diagram("A", XML, "layered"))
-        post.assert_awaited_once_with("/archimate/validate", json={"xml": XML})
+        assert calls == [("/archimate/validate", {"xml": XML})]
         assert out["dry_run"] is True and out["valid"] is False
+        assert out["batch_id"] == "B-001"
         assert out["issues"][0]["code"] == "unknown_element_type"
         assert out["would_create"] == {
             "name": "A",
@@ -183,7 +198,7 @@ class TestCreateArchimateDiagram:
 
     @pytest.mark.asyncio
     async def test_dry_run_echoes_the_description_and_links(self, fake_token):
-        post = AsyncMock(return_value={"valid": True, "issues": []})
+        post, _ = _routed_post({"/archimate/validate": {"valid": True, "issues": []}})
         with patch.object(server.TurboEAClient, "post", post):
             out = json.loads(
                 await server.create_archimate_diagram(
@@ -196,7 +211,7 @@ class TestCreateArchimateDiagram:
 
     @pytest.mark.asyncio
     async def test_commit_posts_the_diagram_with_kind_format_and_viewpoint(self, fake_token):
-        post = AsyncMock(return_value={"id": "d1"})
+        post, calls = _routed_post({"/diagrams": {"id": "d1"}})
         with patch.object(server.TurboEAClient, "post", post):
             out = json.loads(
                 await server.create_archimate_diagram(
@@ -208,25 +223,27 @@ class TestCreateArchimateDiagram:
                     dry_run=False,
                 )
             )
-        post.assert_awaited_once_with(
-            "/diagrams",
-            json={
-                "name": "A",
-                "description": "x",
-                "kind": "archimate",
-                "viewpoint_key": "layered",
-                "data": {"format": "archimate-exchange-3.1", "xml": XML},
-                "card_ids": ["c1"],
-            },
-        )
-        assert out == {"id": "d1"}
+        assert calls == [
+            (
+                "/diagrams",
+                {
+                    "name": "A",
+                    "description": "x",
+                    "kind": "archimate",
+                    "viewpoint_key": "layered",
+                    "data": {"format": "archimate-exchange-3.1", "xml": XML},
+                    "card_ids": ["c1"],
+                },
+            )
+        ]
+        assert out == {"id": "d1", "batch_id": "B-001"}
 
     @pytest.mark.asyncio
     async def test_commit_without_description_or_links_sends_null_and_empty(self, fake_token):
-        post = AsyncMock(return_value={"id": "d1"})
+        post, calls = _routed_post({"/diagrams": {"id": "d1"}})
         with patch.object(server.TurboEAClient, "post", post):
             await server.create_archimate_diagram("A", XML, "layered", dry_run=False)
-        body = post.await_args.kwargs["json"]
+        body = calls[0][1]
         assert body["description"] is None and body["card_ids"] == []
         assert body["viewpoint_key"] == "layered"
 
@@ -300,7 +317,7 @@ class TestUpdateArchimateDiagram:
                 "card_ids": ["c1"],
             }
         )
-        post = AsyncMock(return_value={"valid": True, "issues": []})
+        post, calls = _routed_post({"/archimate/validate": {"valid": True, "issues": []}})
         patch_mock = AsyncMock()
         with (
             patch.object(server.TurboEAClient, "get", get),
@@ -311,10 +328,10 @@ class TestUpdateArchimateDiagram:
                 await server.update_archimate_diagram("d1", exchange_xml=XML, name="B")
             )
         get.assert_awaited_once_with("/diagrams/d1")
-        post.assert_awaited_once_with("/archimate/validate", json={"xml": XML})
+        assert calls == [("/archimate/validate", {"xml": XML})]
         patch_mock.assert_not_called()
         assert out["dry_run"] is True and out["valid"] is True and out["issues"] == []
-        assert out["diagram_id"] == "d1"
+        assert out["diagram_id"] == "d1" and out["batch_id"] == "B-001"
         assert out["would_update"] == {
             "data": {"format": "archimate-exchange-3.1", "xml": XML},
             "name": "B",
@@ -331,7 +348,7 @@ class TestUpdateArchimateDiagram:
         get = AsyncMock(
             return_value={"kind": "archimate", "name": "A", "data": {"xml": XML}, "card_ids": []}
         )
-        post = AsyncMock()
+        post, calls = _routed_post({})
         with (
             patch.object(server.TurboEAClient, "get", get),
             patch.object(server.TurboEAClient, "post", post),
@@ -339,7 +356,7 @@ class TestUpdateArchimateDiagram:
             out = json.loads(
                 await server.update_archimate_diagram("d1", name="B", linked_card_ids=[])
             )
-        post.assert_not_called()
+        assert calls == []
         assert "valid" not in out and "issues" not in out
         assert out["would_update"] == {"name": "B", "card_ids": []}
 

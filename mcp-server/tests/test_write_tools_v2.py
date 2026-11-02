@@ -763,6 +763,8 @@ class TestUpdateDiagramDryRun:
         with (
             patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=post)),
             patch.object(server.TurboEAClient, "patch", AsyncMock(side_effect=patch_)),
+            # update_diagram first looks the diagram up to refuse an ArchiMate one.
+            patch.object(server.TurboEAClient, "get", AsyncMock(return_value={"kind": "drawio"})),
         ):
             out = await server.update_diagram(diagram_id="D1", drawio_xml=xml, name="New name")
         assert calls["patch"] == [
@@ -796,6 +798,8 @@ class TestUpdateDiagramDryRun:
         with (
             patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=post)),
             patch.object(server.TurboEAClient, "patch", AsyncMock(side_effect=patch_)),
+            # update_diagram first looks the diagram up to refuse an ArchiMate one.
+            patch.object(server.TurboEAClient, "get", AsyncMock(return_value={"kind": "drawio"})),
         ):
             out = await server.update_diagram(diagram_id="D1", name="n")
         data = _parse(out)
@@ -817,6 +821,8 @@ class TestUpdateDiagramDryRun:
         with (
             patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=post)),
             patch.object(server.TurboEAClient, "patch", AsyncMock(side_effect=patch_)),
+            # update_diagram first looks the diagram up to refuse an ArchiMate one.
+            patch.object(server.TurboEAClient, "get", AsyncMock(return_value={"kind": "drawio"})),
         ):
             out = await server.update_diagram(diagram_id="D1", name="n", dry_run=False)
         assert _parse(out) == {"id": "D1", "batch_id": "B-001"}
@@ -837,6 +843,8 @@ class TestUpdateDiagramDryRun:
         with (
             patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=post)),
             patch.object(server.TurboEAClient, "patch", AsyncMock(side_effect=patch_)),
+            # update_diagram first looks the diagram up to refuse an ArchiMate one.
+            patch.object(server.TurboEAClient, "get", AsyncMock(return_value={"kind": "drawio"})),
         ):
             await server.update_diagram(diagram_id="D1", drawio_xml="<x/>", dry_run=False)
         assert calls["post"][-1] == (

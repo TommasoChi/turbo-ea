@@ -1771,6 +1771,10 @@ async def update_diagram(
         payload["description"] = description
     if linked_card_ids is not None:
         payload["card_ids"] = list(linked_card_ids)
+    # An ArchiMate diagram is refused on a preview and on a commit alike, before any batch opens.
+    current = await TurboEAClient(token).get(f"/diagrams/{diagram_id}")
+    if isinstance(current, dict) and current.get("kind") == "archimate":
+        return f"Error: diagram {diagram_id} is an ArchiMate diagram; use update_archimate_diagram."
     async with mutation_batch(
         token,
         tool_name="update_diagram",
@@ -1937,32 +1941,32 @@ async def update_archimate_diagram(
         payload["card_ids"] = list(linked_card_ids)
     # One GET for both paths: a commit must refuse a DrawIO diagram like the dry
     # run does (a name-only PATCH would otherwise go through), before any batch opens.
-    client = TurboEAClient(token)
-    current = await client.get(f"/diagrams/{diagram_id}")
-    if isinstance(current, dict) and current.get("kind") != "archimate":
+    current = await TurboEAClient(token).get(f"/diagrams/{diagram_id}")
+    if isinstance(current, dict) and current.get("kind") == "drawio":
         return f"Error: diagram {diagram_id} is a DrawIO diagram; use update_diagram."
-    if dry_run:
-        preview: dict = {"dry_run": True, "diagram_id": diagram_id, "would_update": payload}
-        if isinstance(current, dict):
-            current_xml = (current.get("data") or {}).get("xml") or ""
-            preview["current"] = {
-                "name": current.get("name"),
-                "description": current.get("description"),
-                "card_ids": current.get("card_ids"),
-                "xml_chars": len(current_xml),
-            }
-        if exchange_xml:
-            verdict = await client.post("/archimate/validate", json={"xml": exchange_xml})
-            preview["valid"] = verdict["valid"]
-            preview["issues"] = verdict["issues"]
-        return _fmt(preview)
     async with mutation_batch(
         token,
         tool_name="update_archimate_diagram",
         row_count=1,
-        dry_run=False,
+        dry_run=dry_run,
     ) as batch:
         client = batch.client()
+        if dry_run:
+            preview: dict = {"dry_run": True, "diagram_id": diagram_id, "would_update": payload}
+            if isinstance(current, dict):
+                current_xml = (current.get("data") or {}).get("xml") or ""
+                preview["current"] = {
+                    "name": current.get("name"),
+                    "description": current.get("description"),
+                    "card_ids": current.get("card_ids"),
+                    "xml_chars": len(current_xml),
+                }
+            if exchange_xml:
+                verdict = await client.post("/archimate/validate", json={"xml": exchange_xml})
+                preview["valid"] = verdict["valid"]
+                preview["issues"] = verdict["issues"]
+            batch.summary = {"diagram_id": diagram_id, "status": "previewed"}
+            return _fmt({**preview, **_preview_fields(batch)})
         data = await client.patch(f"/diagrams/{diagram_id}", json=payload)
         if isinstance(data, dict):
             data["batch_id"] = batch.batch_id
@@ -3931,35 +3935,46 @@ async def create_archimate_diagram(
     if (disabled := _writes_disabled_message()) is not None:
         return disabled
     linked_card_ids = list(linked_card_ids or [])
-    client = TurboEAClient(token)
-    if dry_run:
-        verdict = await client.post("/archimate/validate", json={"xml": exchange_xml})
-        return _fmt(
-            {
-                "dry_run": True,
-                "valid": verdict["valid"],
-                "issues": verdict["issues"],
-                "would_create": {
-                    "name": name,
-                    "description": description,
-                    "linked_card_ids": linked_card_ids,
-                    "kind": "archimate",
-                    "viewpoint_key": viewpoint_key,
-                },
-            }
+    async with mutation_batch(
+        token,
+        tool_name="create_archimate_diagram",
+        row_count=1,
+        dry_run=dry_run,
+    ) as batch:
+        client = batch.client()
+        if dry_run:
+            verdict = await client.post("/archimate/validate", json={"xml": exchange_xml})
+            batch.summary = {"diagram_id": None, "status": "previewed"}
+            return _fmt(
+                {
+                    "dry_run": True,
+                    "valid": verdict["valid"],
+                    "issues": verdict["issues"],
+                    "would_create": {
+                        "name": name,
+                        "description": description,
+                        "linked_card_ids": linked_card_ids,
+                        "kind": "archimate",
+                        "viewpoint_key": viewpoint_key,
+                    },
+                    **_preview_fields(batch),
+                }
+            )
+        data = await client.post(
+            "/diagrams",
+            json={
+                "name": name,
+                "description": description or None,
+                "kind": "archimate",
+                "viewpoint_key": viewpoint_key,
+                "data": {"format": _ARCHIMATE_FORMAT, "xml": exchange_xml},
+                "card_ids": linked_card_ids,
+            },
         )
-    data = await client.post(
-        "/diagrams",
-        json={
-            "name": name,
-            "description": description or None,
-            "kind": "archimate",
-            "viewpoint_key": viewpoint_key,
-            "data": {"format": _ARCHIMATE_FORMAT, "xml": exchange_xml},
-            "card_ids": linked_card_ids,
-        },
-    )
-    return _fmt(data)
+        if isinstance(data, dict):
+            data["batch_id"] = batch.batch_id
+            batch.summary = {"diagram_id": data.get("id")}
+        return _fmt(data)
 
 
 @mcp.tool(annotations=_WRITE_ADDITIVE_ANNOT)

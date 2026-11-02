@@ -85,6 +85,9 @@ PUBLIC: dict[str, str] = {
     "settings.py:get_enabled_locales": "the login page's language picker",
     "settings.py:get_principles_display": "a display toggle; a boolean with nothing behind it",
     "settings.py:get_mcp_status": "MCP clients probe availability before OAuth; no secrets",
+    "settings.py:get_value_chain_enabled": "module toggle the shell reads at boot",
+    "settings.py:get_archimate_enabled": "module toggle the shell reads at boot",
+    "extensions.py:extensions_mcp_manifest": "the MCP server reads it at startup, before any client signs in; no secrets",
     # -- Published artefacts: the entry points in front of their access gates.
     "diagrams.py:get_diagram_gate": "names the access mode an embed page must satisfy; no XML",
     "diagrams.py:diagram_sso_callback": "exchanges the IdP's code for a diagram-scoped cookie",

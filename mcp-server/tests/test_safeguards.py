@@ -311,6 +311,8 @@ class _Backend:
             if dry and rows > 2:
                 resp["confirm_token"] = "TOK-1"
             return resp
+        if path == "/archimate/validate":
+            return {"valid": True, "issues": []}
         return {
             "results": [],
             "upserted": 0,
@@ -676,6 +678,7 @@ _BATCH_TOOLS_EXPECTED = [
     "assign_stakeholders",
     "clear_card_logos",
     "create_adr",
+    "create_archimate_diagram",
     "create_cards_bulk",
     "create_diagram",
     "create_risks",
@@ -685,6 +688,7 @@ _BATCH_TOOLS_EXPECTED = [
     "sign_adr",
     "transition_card_lifecycle",
     "update_adr",
+    "update_archimate_diagram",
     "update_cards_bulk",
     "update_diagram",
     "update_risks",
@@ -718,6 +722,12 @@ _BATCH_TOOL_CALLS = {
         name="D", drawio_xml="<mxGraphModel/>", dry_run=dry_run
     ),
     "update_diagram": lambda dry_run: server.update_diagram(
+        diagram_id="D1", name="n", dry_run=dry_run
+    ),
+    "create_archimate_diagram": lambda dry_run: server.create_archimate_diagram(
+        name="D", exchange_xml="<model/>", viewpoint_key="layered", dry_run=dry_run
+    ),
+    "update_archimate_diagram": lambda dry_run: server.update_archimate_diagram(
         diagram_id="D1", name="n", dry_run=dry_run
     ),
     "import_bpmn": lambda dry_run: server.import_bpmn(
