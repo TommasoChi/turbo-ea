@@ -7,8 +7,6 @@ from app.services.cost_history import sync_current_fy_history
 from app.services.fiscal_year import current_fiscal_year, get_fiscal_year_start
 from tests.conftest import auth_headers, create_card, create_card_type, create_role, create_user
 
-pytestmark = pytest.mark.anyio
-
 
 async def test_a_row_is_unique_per_card_fiscal_year_field(db):
     card = await create_card(db, card_type="Application", name="ERP")
