@@ -187,3 +187,29 @@ async def test_recompute_derived_uses_fallback_tco(db):
     await _row(db, card, CUR - 1, {"lic": _it(10), "ams": _it(4)})
     await svc.recompute_derived(db, card)
     assert card.attributes == {"x": 1, "costTotalAnnual": 14}
+
+
+async def test_delete_item_outside_put_window(db):
+    card = await _setup(db)
+    await _row(db, card, CUR - 8, {"lic": _it(3), "ams": _it(2)})
+    await svc.delete_item(db, card.id, CUR - 8, "lic")
+    assert (await svc.get_year_row(db, card.id, CUR - 8, SM)).tco == 2
+
+
+async def test_editable_is_get_or_create_and_keeps_existing_items(db):
+    from sqlalchemy import func, select
+
+    card = await _setup(db)
+    await _row(db, card, CUR - 1, {"lic": _it(10)})
+    first = await svc._editable(db, card.id, CUR, SM)
+    assert first.items["lic"]["amount"] == 10
+    first.items = {**first.items, "ams": _it(4)}
+    await db.flush()
+    second = await svc._editable(db, card.id, CUR, SM)
+    assert second.id == first.id and set(second.items) == {"lic", "ams"}
+    n = await db.scalar(
+        select(func.count())
+        .select_from(CardCost)
+        .where(CardCost.card_id == card.id, CardCost.fiscal_year == CUR)
+    )
+    assert n == 1

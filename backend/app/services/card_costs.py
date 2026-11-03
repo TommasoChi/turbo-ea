@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -79,12 +80,13 @@ def _shifted(items: dict, years: int) -> dict:
     }
 
 
-async def _row(db: AsyncSession, card_id: uuid.UUID, fy: int) -> CardCost | None:
-    return (
-        await db.execute(
-            select(CardCost).where(CardCost.card_id == card_id, CardCost.fiscal_year == fy)
-        )
-    ).scalar_one_or_none()
+async def _row(
+    db: AsyncSession, card_id: uuid.UUID, fy: int, lock: bool = False
+) -> CardCost | None:
+    stmt = select(CardCost).where(CardCost.card_id == card_id, CardCost.fiscal_year == fy)
+    if lock:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
 async def _fallback_row(db: AsyncSession, card_id: uuid.UUID, fy: int) -> CardCost | None:
@@ -165,13 +167,21 @@ def _check_window(fy: int, start_month: int) -> None:
 
 
 async def _editable(db: AsyncSession, card_id: uuid.UUID, fy: int, start_month: int) -> CardCost:
-    """The year's row, created (with the fallback set materialised) if missing."""
-    row = await _row(db, card_id, fy)
+    """The year's row, locked FOR UPDATE; created (fallback set materialised) if missing.
+
+    The insert is ON CONFLICT DO NOTHING and the row is re-selected FOR UPDATE, so the
+    loser of a concurrent first edit re-reads the winner's row instead of failing.
+    """
+    row = await _row(db, card_id, fy, lock=True)
     if row is None:
         items, _, _ = await _resolve(db, card_id, fy, start_month)
-        row = CardCost(card_id=card_id, fiscal_year=fy, items=items)
-        db.add(row)
-        await db.flush()
+        await db.execute(
+            pg_insert(CardCost)
+            .values(card_id=card_id, fiscal_year=fy, items=items)
+            .on_conflict_do_nothing(index_elements=["card_id", "fiscal_year"])
+        )
+        row = await _row(db, card_id, fy, lock=True)
+    assert row is not None
     return row
 
 
@@ -209,7 +219,6 @@ async def upsert_item(
 
 async def delete_item(db: AsyncSession, card_id: uuid.UUID, fiscal_year: int, key: str) -> None:
     sm = await get_fiscal_year_start(db)
-    _check_window(fiscal_year, sm)
     row = await _editable(db, card_id, fiscal_year, sm)
     row.items = {k: v for k, v in (row.items or {}).items() if k != key}
     await db.flush()
