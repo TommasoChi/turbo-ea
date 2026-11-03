@@ -25,6 +25,17 @@ metamodel.
 
 ## What the user sees (agreed with the user, with mockups)
 
+Mockups (static HTML, open in a browser; they show the layout the user chose, not final styling):
+
+- [`costs-section.html`](2026-11-03-card-cost-items-assets/costs-section.html): the Costs
+  section, layout B (stacked bar + one tile per item), including an archived item and a year
+  shown in fallback after a fiscal-year rollover.
+- [`edit-dialog.html`](2026-11-03-card-cost-items-assets/edit-dialog.html): the modal edit dialog
+  (variant B) and the "add item" state.
+
+Where the text below and a mockup differ, the text wins (the mockups were redrawn after the
+decisions on items from a catalogue and annual-only amounts).
+
 A **Costs** section on the card, only for card types Application and IT Component
 (a constant in code, like `EOL_TYPES`; not a metamodel flag in this work).
 
