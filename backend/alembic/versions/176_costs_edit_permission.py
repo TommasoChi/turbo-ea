@@ -1,13 +1,14 @@
-"""Costs permissions default to the admin role only.
+"""Add the costs.edit permission, False on the seeded non-admin roles.
 
-``costs.view`` was granted to ``bpm_admin`` and ``member`` by 069; from now on
-only admin holds it (stakeholders still see costs on their own cards). The new
-``costs.edit`` key is written as ``false`` on the seeded non-admin roles. Custom
-roles are untouched.
+Only ``costs.edit`` is written; ``costs.view`` and every other key are left
+exactly as stored. Wildcard roles (admin) and roles that already carry the key
+are skipped; custom roles are untouched (a missing key reads as False).
 
 Revision ID: 176
 Revises: 175
 """
+
+import json
 
 from sqlalchemy import text
 
@@ -21,35 +22,30 @@ depends_on = None
 _ROLES = ("bpm_admin", "member", "viewer")
 
 
+def plan_patch(perms):
+    """The permissions with ``costs.edit: false`` added, or None for no change."""
+    if not isinstance(perms, dict) or perms.get("*") or "costs.edit" in perms:
+        return None
+    return {**perms, "costs.edit": False}
+
+
 def upgrade() -> None:
     bind = op.get_bind()
-    for key in _ROLES:
-        bind.execute(
-            text(
-                """
-                UPDATE roles
-                SET permissions = COALESCE(permissions, '{}'::jsonb)
-                              || jsonb_build_object('costs.edit', false)
-                              || jsonb_build_object('costs.view', false)
-                WHERE key = :key
-                """
-            ),
-            {"key": key},
-        )
+    rows = bind.execute(
+        text("SELECT key, permissions FROM roles WHERE key = ANY(:keys)"), {"keys": list(_ROLES)}
+    ).all()
+    for key, perms in rows:
+        patched = plan_patch(perms)
+        if patched is not None:
+            bind.execute(
+                text("UPDATE roles SET permissions = CAST(:p AS jsonb) WHERE key = :key"),
+                {"p": json.dumps(patched), "key": key},
+            )
 
 
 def downgrade() -> None:
     bind = op.get_bind()
-    for key in _ROLES:
-        bind.execute(
-            text("UPDATE roles SET permissions = permissions - 'costs.edit' WHERE key = :key"),
-            {"key": key},
-        )
-    for key in ("bpm_admin", "member"):
-        bind.execute(
-            text(
-                "UPDATE roles SET permissions = permissions || jsonb_build_object('costs.view', true)"
-                " WHERE key = :key"
-            ),
-            {"key": key},
-        )
+    bind.execute(
+        text("UPDATE roles SET permissions = permissions - 'costs.edit' WHERE key = ANY(:keys)"),
+        {"keys": list(_ROLES)},
+    )

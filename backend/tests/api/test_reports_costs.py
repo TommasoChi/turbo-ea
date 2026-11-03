@@ -18,7 +18,7 @@ from tests.cost_item_helpers import add_costs
 @pytest.fixture
 async def report_env(db):
     await create_role(db, key="admin", permissions={"*": True})
-    await create_role(db, key="member", permissions={**MEMBER_PERMISSIONS, "costs.view": True})
+    await create_role(db, key="member", permissions=MEMBER_PERMISSIONS)
     await create_role(db, key="viewer", permissions=VIEWER_PERMISSIONS)
     await create_card_type(
         db,
