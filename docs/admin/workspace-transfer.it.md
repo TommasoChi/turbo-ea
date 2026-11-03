@@ -12,6 +12,7 @@ L'esportazione cattura il workspace completo come bundle `.zip` contenente una c
 - **Configurazione** — ruoli, ruoli stakeholder per tipo, gruppi di tag e tag, campi calcolati, principi EA e regolamenti di compliance.
 - **Impostazioni** — valuta, formato data, feature flag, branding di login, locale abilitate e il resto delle impostazioni generali dell'applicazione.
 - **Utenti** — email, nome visualizzato, ruolo e flag di attività (usati per ricollegare proprietà e assegnazioni sul target). Nessuna password né identità SSO.
+- **Elementi di costo** — il catalogo delle elementi di costo (chiavi, etichette, traduzioni, flag di archiviazione) e le elementi di costo di ogni Applicazione o Componente IT per anno fiscale.
 - **Inventario** — ogni carta (con la sua gerarchia, ciclo di vita e attributi), tag delle carte e relazioni.
 - **Contesto delle carte** — stakeholder, collegamenti a documenti, commenti, todo e allegati di file.
 - **Dati dei moduli** — BPM (diagrammi di processo, elementi, versioni di flusso, valutazioni), PPM (report di stato, costi, budget, rischi, attività, WBS, dipendenze), il registro dei rischi GRC (rischi, attività di mitigazione e relative occorrenze, collegamenti alle carte), le rilevazioni di conformità GRC (con le esecuzioni di analisi a cui fanno riferimento), decisioni architetturali e Statement of Architecture Work, diagrammi a mano libera, report salvati, segnalibri (viste salvate dell'inventario, incluse le loro condivisioni), portali web e sondaggi.
@@ -62,6 +63,7 @@ L'importazione è **idempotente**: il metamodello e la configurazione sono abbin
 - Gli utenti sintetici referenziati dal bundle vengono creati **disattivati**; attivateli in **Amministrazione → Utenti** secondo necessità.
 - **I dati di proprietà degli utenti seguono l'utente, abbinato per email.** Todo, viste salvate, preferiti e altri dati personali appartengono all'account la cui email corrisponde a quella nel bundle. Se accedete al target con un'email diversa da quella usata sull'origine, i vostri elementi personali sembreranno mancare — sono collegati all'account corrispondente (eventualmente disattivato). Accedete con la stessa email, oppure attivate l'account corrispondente in **Amministrazione → Utenti**.
 - Le viste salvate private sono visibili solo al loro proprietario; le viste condivise e pubbliche seguono le rispettive impostazioni di visibilità.
+- **I bundle esportati prima della funzione delle elementi di costo (versione 2.188.0)** contengono il costo totale di Applicazioni e Componenti IT ma nessuna elemento di costo, quindi quel totale viene scartato al successivo ricalcolo del costo. Esporta di nuovo dall'origine aggiornata prima di importare.
 
 ## Ripartire da zero
 

@@ -21,6 +21,8 @@
 | **Kartentyp** | Die Kategorie, zu der eine Karte gehört (z.B. Anwendung, Geschäftsprozess, Organisation) |
 | **Kategorie (Architekturebene)** | Die EA-Ebene, unter der ein Kartentyp gruppiert wird — Strategie & Transformation, Geschäftsarchitektur, Anwendung & Daten, Technische Architektur oder eine von einem Administrator erstellte. Kategorien bestimmen die Reihenfolge der Ebenen im Typfilter des Inventars, im Metamodell-Graphen und in den Bahnen der Abhängigkeitsansicht; die vier vordefinierten sind gesperrt |
 | **Konfidenzwert** | Eine Bewertung von 0–100%, die angibt, wie zuverlässig eine KI-generierte Beschreibung ist |
+| **Kostenelement** | Eine Zeile der jährlichen Kosten einer Anwendung oder IT-Komponente (zum Beispiel Hosting), entnommen dem Katalog unter Admin > Metamodell > Kostenelemente. Die TCO einer Karte sind die Summe ihrer Elemente für das Geschäftsjahr |
+| **TCO (Gesamtbetriebskosten)** | Die jährlichen Gesamtkosten einer Anwendung oder IT-Komponente für ein Geschäftsjahr, stets aus ihren Kostenelementen abgeleitet und nie von Hand eingegeben |
 | **Kostenposition** | Ein Budget- oder Ist-Kosteneintrag (CapEx/OpEx) in einer PPM-Initiative zur Verfolgung finanzieller Ausgaben |
 | **Datenqualität** | Ein Vollständigkeitswert von 0–100%, basierend auf ausgefüllten Feldern und deren konfigurierten Gewichtungen |
 | **Dateianhang** | Eine binäre Datei (Dokumente, Tabellen, Präsentationen, OpenDocument- und ältere Office-Dateien, Bilder, Archive, Outlook- und E-Mail-Nachrichten, CSV, Markdown, JSON und XML – bis zu 20 MB), die direkt über den Ressourcen-Tab auf eine Karte hochgeladen wird |

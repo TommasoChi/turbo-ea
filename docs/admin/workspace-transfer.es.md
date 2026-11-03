@@ -12,6 +12,7 @@ La exportación captura el workspace completo como un paquete `.zip` que contien
 - **Configuración** — roles, roles de partes interesadas por tipo, grupos de etiquetas y etiquetas, campos calculados, principios de EA y regulaciones de cumplimiento.
 - **Ajustes** — moneda, formato de fecha, indicadores de funciones, personalización de la pantalla de inicio de sesión, idiomas habilitados y el resto de los ajustes generales de la aplicación.
 - **Usuarios** — correo electrónico, nombre para mostrar, rol e indicador de actividad (se usan para revincular la propiedad y las asignaciones en el destino). Sin contraseñas ni identidades SSO.
+- **Partidas de coste** — el catálogo de partidas de coste (claves, etiquetas, traducciones, indicador de archivado) y las partidas de coste de cada Aplicación o Componente de TI por año fiscal.
 - **Inventario** — cada tarjeta (con su jerarquía, ciclo de vida y atributos), etiquetas de tarjeta y relaciones.
 - **Contexto de tarjeta** — partes interesadas, enlaces a documentos, comentarios, tareas pendientes y archivos adjuntos.
 - **Datos de módulos** — BPM (diagramas de proceso, elementos, versiones de flujo, evaluaciones), PPM (informes de estado, costes, presupuestos, riesgos, tareas, WBS, dependencias), el registro de riesgos de GRC (riesgos, tareas de mitigación y sus ocurrencias, enlaces a tarjetas), los hallazgos de cumplimiento de GRC (con las ejecuciones de análisis a las que hacen referencia), decisiones de arquitectura y Statements of Architecture Work, diagramas de dibujo libre, informes guardados, marcadores (vistas guardadas del inventario, incluidas sus comparticiones), portales web y encuestas.
@@ -62,6 +63,7 @@ La importación es **idempotente**: el metamodelo y la configuración se emparej
 - Los usuarios sintéticos referenciados por el paquete se crean **desactivados**; actívelos en **Administración → Usuarios** según sea necesario.
 - **Los datos propiedad del usuario siguen al usuario, emparejado por correo electrónico.** Las tareas pendientes, las vistas guardadas, los favoritos y otros datos personales pertenecen a la cuenta cuyo correo electrónico coincide con el del paquete. Si inicia sesión en el destino con un correo distinto al que usó en el origen, sus elementos personales parecerán haber desaparecido — están vinculados a la cuenta coincidente (posiblemente desactivada). Inicie sesión con el mismo correo, o active la cuenta coincidente en **Administración → Usuarios**.
 - Las vistas guardadas privadas solo son visibles para su propietario; las vistas compartidas y públicas siguen sus ajustes de visibilidad.
+- **Los paquetes exportados antes de la función de partidas de coste (versión 2.188.0)** incluyen el coste total de las Aplicaciones y los Componentes de TI pero ninguna partida de coste, por lo que ese total se descarta la próxima vez que se recalcule el coste. Vuelva a exportar desde el origen actualizado antes de importar.
 
 ## Empezar de cero
 

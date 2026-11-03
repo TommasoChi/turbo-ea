@@ -282,6 +282,14 @@ Damit der [ArchiMate-Editor](../guide/archimate.md) Diagramme mit Karten verknü
 
 Element- und Beziehungsnamen sind die des Open-Group-Austauschformats. Die Standardwerte stammen aus dem Seed; die vollständigen Standardtabellen stehen unter [Die Zuordnung](../guide/archimate.md#mapping).
 
+## Kostenelemente
+
+**Kostenelemente** sind der Katalog der Kostenzeilen, die Karten vom Typ Anwendung und IT-Komponente tragen können (siehe den [Kostenabschnitt](../guide/card-details.md#kostenabschnitt-anwendung-und-it-komponente)). Sie verwalten ihn unter **Admin > Metamodell > Kostenelemente**.
+
+Jedes Element hat einen festen **Schlüssel**, eine **Bezeichnung** und optionale **Übersetzungen** der Bezeichnung. Elemente werden **archiviert**, nicht gelöscht: Ein archiviertes Element kann einer Karte nicht mehr hinzugefügt werden, bereits erfasste Beträge zählen aber weiterhin zu den TCO und im [Kostenbericht](../guide/reports.md#kostenbericht).
+
+Für die Erfassung von Beträgen auf einer Karte ist `costs.edit` nötig (oder eine Stakeholder-Rolle, die die Karte bearbeiten darf); für Änderungen am Katalog ist die Berechtigung zur Metamodell-Verwaltung nötig.
+
 ## Berechnungen
 
 Berechnete Felder verwenden vom Administrator definierte Formeln, um Werte automatisch zu berechnen, wenn Karten gespeichert werden. Siehe [Berechnungen](calculations.md) für die vollständige Anleitung.

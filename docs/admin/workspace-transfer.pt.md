@@ -12,6 +12,7 @@ A exportação captura o workspace completo como um pacote `.zip` contendo uma p
 - **Configuração** — papéis, papéis de partes interessadas por tipo, grupos de tags e tags, campos calculados, princípios de EA e regulamentos de conformidade.
 - **Configurações** — moeda, formato de data, feature flags, branding de login, locales habilitados e o restante das configurações gerais da aplicação.
 - **Usuários** — e-mail, nome de exibição, papel e flag de ativo (usados para revincular propriedade e atribuições no destino). Sem senhas ou identidades SSO.
+- **Itens de custo** — o catálogo de itens de custo (chaves, rótulos, traduções, indicador de arquivamento) e os itens de custo de cada Aplicação ou Componente de TI por ano fiscal.
 - **Inventário** — cada card (com sua hierarquia, ciclo de vida e atributos), tags de card e relações.
 - **Contexto do card** — partes interessadas, links de documentos, comentários, tarefas e anexos de arquivo.
 - **Dados de módulos** — BPM (diagramas de processo, elementos, versões de fluxo, avaliações), PPM (relatórios de status, custos, orçamentos, riscos, tarefas, WBS, dependências), o registro de riscos do GRC (riscos, tarefas de mitigação e ocorrências, vínculos de card), as descobertas de conformidade do GRC (com as execuções de análise que elas referenciam), decisões de arquitetura e Statements of Architecture Work, diagramas de desenho livre, relatórios salvos, marcadores (visualizações salvas do inventário, incluindo seus compartilhamentos), portais web e pesquisas.
@@ -62,6 +63,7 @@ A importação é **idempotente**: metamodelo e configuração são correspondid
 - Usuários sintéticos referenciados pelo pacote são criados **desativados**; ative-os em **Administração → Usuários** conforme necessário.
 - **Dados pertencentes ao usuário seguem o usuário, correspondido por e-mail.** Tarefas, visualizações salvas, favoritos e outros dados pessoais pertencem à conta cujo e-mail corresponde ao do pacote. Se você entrar no destino com um e-mail diferente do que usou na origem, seus itens pessoais parecerão estar faltando — eles estão vinculados à conta correspondente (possivelmente desativada). Entre com o mesmo e-mail, ou ative a conta correspondente em **Administração → Usuários**.
 - Visualizações salvas privadas são visíveis apenas para o proprietário; visualizações compartilhadas e públicas seguem suas configurações de visibilidade.
+- **Os pacotes exportados antes da funcionalidade de itens de custo (versão 2.188.0)** contêm o custo total das Aplicações e dos Componentes de TI, mas nenhum item de custo, pelo que esse total é descartado na próxima vez que o custo for recalculado. Exporte novamente a partir da origem atualizada antes de importar.
 
 ## Começando do zero
 

@@ -20,6 +20,8 @@
 | **Type de fiche** | La catégorie à laquelle appartient une fiche (par ex. Application, Processus Métier, Organisation) |
 | **Catégorie (couche d'architecture)** | La couche EA sous laquelle un type de fiche est regroupé — Stratégie et transformation, Architecture métier, Application et données, Architecture technique, ou une couche créée par un administrateur. Les catégories ordonnent les couches dans le filtre de types de l'inventaire, le graphe du métamodèle et les couloirs de la vue des dépendances ; les quatre catégories intégrées sont verrouillées |
 | **Score de confiance** | Une note de 0 à 100% indiquant la fiabilité d'une description générée par IA |
+| **Poste de coûts** | Une ligne du coût annuel d'une Application ou d'un Composant IT (par exemple l'hébergement), issue du catalogue sous Admin > Métamodèle > Postes de coûts. Le TCO d'une fiche est la somme de ses postes pour l'exercice |
+| **TCO (coût total de possession)** | Le coût annuel total d'une Application ou d'un Composant IT pour un exercice, toujours dérivé de ses postes de coûts et jamais saisi à la main |
 | **Ligne de coût** | Une entrée de budget ou de coût réel (CapEx/OpEx) dans une initiative PPM, utilisée pour suivre les dépenses financières |
 | **Qualité des données** | Un score de complétude de 0 à 100% basé sur les champs remplis et leurs poids configurés |
 | **Diagramme** | Un diagramme d'architecture visuel créé avec l'éditeur DrawIO intégré |

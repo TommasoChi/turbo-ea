@@ -25,6 +25,8 @@
 | **Filvedhæftning** | En binær fil (dokumenter, regneark, præsentationer, OpenDocument- og ældre Office-filer, billeder, arkiver, Outlook- og e-mailbeskeder, CSV, Markdown, JSON og XML — op til 20 MB) uploadet direkte til et kort via fanen Ressourcer |
 | **Regnskabsår** | 12-månedersperioden, der bruges til budgettering og økonomisk rapportering. Kan konfigureres via Admin > Indstillinger — startmåneden (januar til december) bestemmer, hvordan PPM-budgetlinjer grupperes |
 | **DrawIO** | Det indlejrede open source-diagramværktøj, der bruges til visuelle arkitekturdiagrammer |
+| **Omkostningspost** | Én linje af en applikations eller IT-komponents årlige omkostninger (for eksempel hosting), hentet fra kataloget under Admin > Metamodel > Omkostningsposter. Et korts TCO er summen af dets poster for regnskabsåret |
+| **TCO (samlede ejeromkostninger)** | De samlede årlige omkostninger for en applikation eller IT-komponent i et regnskabsår, altid udledt af dens omkostningsposter og aldrig indtastet i hånden |
 | **Omkostningslinje** | En budget- eller faktisk omkostningspost (CapEx/OpEx) i et PPM-initiativ, brugt til at spore økonomiske udgifter |
 | **Enterprise Architecture (EA)** | Disciplinen, der organiserer og dokumenterer en organisations forretnings- og teknologistruktur |
 | **EOL (End of Life)** | Datoen, hvor et teknologiprodukt mister leverandørsupport. Spores via integration med endoflife.date |

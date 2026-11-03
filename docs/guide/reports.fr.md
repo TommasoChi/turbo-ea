@@ -189,7 +189,7 @@ Les coûts sont annuels : le rapport est donc établi pour un **exercice fiscal*
 
 Un exercice fiscal se nomme **FY** suivi des deux derniers chiffres de l'année où il **se termine**, quel que soit le mois où débute votre exercice : un exercice allant de juillet 2025 à juin 2026 est **FY26**. Une puce de la barre d'outils rappelle la sélection, par exemple **Exercice fiscal : FY26 - Current**. *Current* et *Forecast* ne sont pas traduits.
 
-**Les montants prévisionnels se saisissent à la main.** Ouvrez une fiche, allez à son historique des coûts et saisissez le coût prévu pour l'exercice suivant, comme vous enregistrez un exercice passé. Seul l'exercice **suivant** peut être enregistré comme prévision, et cet enregistrement requiert la même permission que celui d'un exercice passé. Lorsque cet exercice devient l'exercice en cours, le rapport lit à la place les attributs actuels, et le montant actuel de la fiche remplace celui qui avait été saisi.
+**Les coûts des Applications et des Composants IT proviennent des postes de coûts de la fiche.** Chaque poste du catalogue (y compris archivé) est une composante de coût à part entière dans la carte arborescente, le Sankey, la tendance et le tableau, et le Forecast est l'exercice Forecast de la [section Coûts](card-details.md#section-coûts-application-et-composant-it) de la fiche. Pour les autres types de fiche (Initiative, Fournisseur), l'exercice suivant se saisit à la main dans l'historique des coûts de la fiche, ce qui requiert la même permission que l'enregistrement d'un exercice passé. Lorsque cet exercice devient l'exercice courant, le rapport lit à la place les attributs en direct, et la valeur en direct de la fiche remplace celle saisie.
 
 #### Quelles fiches apparaissent
 
@@ -202,7 +202,7 @@ Un exercice fiscal se nomme **FY** suivi des deux derniers chiffres de l'année 
 
 La règle s'applique à toute la page — les totaux, le treemap, le tableau, les agrégations par **Source des coûts** et le forage — et l'exercice sélectionné figure dans l'en-tête imprimé.
 
-Lorsque vous choisissez un exercice autre que **Current**, un **graphique de tendance** montre le coût sur l'exercice en cours et les quatre précédents. Tant que **Forecast** est l'exercice sélectionné, le graphique affiche aussi une barre pour celui-ci.
+Lorsque **Forecast** est l'exercice sélectionné, un **graphique d'historique** affiche le coût sur l'exercice courant, les quatre précédents et l'exercice de prévision. Il n'est affiché pour aucun autre exercice. Chaque barre est empilée, avec un segment par composante de coût : un poste de coûts pour les Applications et les Composants IT, sinon un champ de coût (la légende et l'infobulle utilisent alors le nom technique du champ, par exemple `softwareLicensingCost`).
 
 Le mois de début de l'exercice est défini par un administrateur dans [Paramètres → Général](../admin/settings.md).
 

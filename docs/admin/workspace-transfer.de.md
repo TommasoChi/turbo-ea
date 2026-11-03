@@ -12,6 +12,7 @@ Der Export erfasst den vollständigen Workspace als `.zip`-Bundle, das eine Exce
 - **Konfiguration** — Rollen, typspezifische Stakeholder-Rollen, Tag-Gruppen und Tags, berechnete Felder, EA-Prinzipien und Compliance-Regulierungen.
 - **Einstellungen** — Währung, Datumsformat, Feature-Flags, Login-Branding, aktivierte Sprachen und die übrigen allgemeinen Anwendungseinstellungen.
 - **Benutzer** — E-Mail, Anzeigename, Rolle und Aktiv-Flag (verwendet, um Eigentümerschaft und Zuweisungen auf dem Ziel neu zu verknüpfen). Keine Passwörter oder SSO-Identitäten.
+- **Kostenelemente** — der Katalog der Kostenelemente (Schlüssel, Bezeichnungen, Übersetzungen, Archiv-Kennzeichen) und die Kostenelemente jeder Anwendung oder IT-Komponente je Geschäftsjahr.
 - **Inventar** — jede Karte (mit ihrer Hierarchie, ihrem Lifecycle und ihren Attributen), Karten-Tags und Beziehungen.
 - **Karten-Kontext** — Stakeholder, Dokument-Links, Kommentare, Todos und Datei-Anhänge.
 - **Moduldaten** — BPM (Prozessdiagramme, Elemente, Flow-Versionen, Assessments), PPM (Statusberichte, Kosten, Budgets, Risiken, Aufgaben, WBS, Abhängigkeiten), das GRC-Risikoregister (Risiken, Mitigationsaufgaben und -occurrences, Kartenverknüpfungen), GRC-Compliance-Befunde (mit den Analyseläufen, auf die sie verweisen), Architektur-Entscheidungen und Statements of Architecture Work, Freihand-Diagramme, gespeicherte Berichte, Lesezeichen (gespeicherte Inventar-Ansichten, einschließlich ihrer Freigaben), Web-Portale und Umfragen.
@@ -62,6 +63,7 @@ Der Import ist **idempotent**: Metamodell und Konfiguration werden über den Sch
 - Vom Bundle referenzierte synthetische Benutzer werden **deaktiviert** erstellt; aktivieren Sie sie bei Bedarf unter **Admin → Benutzer**.
 - **Benutzereigene Daten folgen dem Benutzer, abgeglichen über die E-Mail.** Todos, gespeicherte Ansichten, Favoriten und andere persönliche Daten gehören zu dem Konto, dessen E-Mail mit der im Bundle übereinstimmt. Wenn Sie sich auf dem Ziel mit einer anderen E-Mail anmelden als auf der Quelle, scheinen Ihre persönlichen Elemente zu fehlen — sie hängen am (möglicherweise deaktivierten) passenden Konto. Melden Sie sich mit derselben E-Mail an oder aktivieren Sie das zugeordnete Konto unter **Admin → Benutzer**.
 - Private gespeicherte Ansichten sind nur für ihren Eigentümer sichtbar; geteilte und öffentliche Ansichten folgen ihren Sichtbarkeitseinstellungen.
+- **Vor der Funktion Kostenelemente (Version 2.188.0) exportierte Bundles** enthalten die Gesamtkosten von Anwendungen und IT-Komponenten, aber keine Kostenelemente; diese Gesamtkosten gehen bei der nächsten Neuberechnung der Kosten verloren. Exportieren Sie vor dem Import erneut aus der aktualisierten Quelle.
 
 ## Von vorn beginnen
 

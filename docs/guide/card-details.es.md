@@ -116,6 +116,21 @@ Dependiendo del tipo de ficha, verá secciones adicionales con **campos personal
 
 Los campos marcados como **calculados** muestran una insignia y no pueden editarse manualmente — sus valores son calculados por [fórmulas definidas por el administrador](../admin/calculations.es.md).
 
+### Sección de Costes (Aplicación y Componente de TI)
+
+Las Aplicaciones y los Componentes de TI registran su coste como una lista de **partidas de coste** (por ejemplo licencias, alojamiento, soporte), no como un único número escrito a mano. La sección **Costes** muestra un año fiscal cada vez, con un navegador **‹ ›** sobre seis años: los cuatro anteriores al actual, el actual y el **Forecast**.
+
+- **TCO** — El coste total de propiedad del año es la suma de sus partidas. Nunca se escribe a mano.
+- **Gráfico y tarjetas** — Una barra apilada muestra cómo se reparte el TCO entre las partidas. Cada partida tiene una tarjeta con su **importe anual** y su **fecha de renovación**; una renovación en los próximos 90 días se muestra en naranja. Los costes son siempre anuales.
+- **Añadir y editar** — Una partida se añade, edita o elimina en un cuadro de diálogo. Las partidas proceden del catálogo que gestiona un administrador en [Metamodelo → Partidas de coste](../admin/metamodel.md#partidas-de-coste).
+- **Copiar a Forecast** — Copia las partidas del año que está viendo al año Forecast, para empezar un plan a partir de las cifras actuales.
+
+**Un nuevo año fiscal.** Cuando cambia el año fiscal y una ficha aún no tiene costes para el nuevo año actual, la sección muestra las partidas del año anterior marcadas como **sin confirmar**, con sus fechas de renovación adelantadas. Siguen así hasta que alguien las confirme o edite un importe. El Forecast y los años pasados nunca recurren a otro año.
+
+**Quién puede ver y editar los costes.** Puede **ver** los costes con el permiso `costs.view`, o si tiene cualquier rol de parte interesada en la ficha. Puede **editar** los costes con el permiso `costs.edit`, o si tiene en la ficha un rol de parte interesada que permita editarla (por ejemplo Responsable). Los observadores solo pueden ver. Por defecto, solo los administradores tienen `costs.edit`; los roles existentes conservan `costs.view`.
+
+El campo **Coste anual total** (`costTotalAnnual`) de la ficha se deriva de las partidas del año actual y es de solo lectura: la cuadrícula, la importación de hojas de cálculo, el arrastre de relleno, la API, MCP, ServiceNow y LeanIX ya no pueden establecerlo, y cualquier valor enviado se sobrescribe. Una ficha sin partidas de coste tiene el campo de coste vacío, no 0. Las Iniciativas y los Proveedores conservan sus campos de coste habituales.
+
 ### Sección de Jerarquía
 
 Para tipos de ficha que soportan jerarquía (por ejemplo, Organización, Capacidad de Negocio, Aplicación):
@@ -217,6 +232,8 @@ La ruta de invitación requiere el permiso **`users.invite`**, una forma delegad
 Un cambio que no procede de la interfaz web lleva una insignia junto al nombre de la persona: **MCP** cuando un asistente de IA lo realizó a través del [servidor MCP](../admin/mcp.md) en nombre de esa persona; **API**, **Extensión** o **Sistema** en los demás casos.
 
 Muestra el **registro completo de auditoría** de los cambios realizados en la ficha: **quién** hizo el cambio, **cuándo** se realizó y **qué** se modificó (valor anterior vs. valor nuevo). Esto permite la trazabilidad completa de todas las modificaciones a lo largo del tiempo.
+
+Un cambio en los costes de la ficha aparece como **Costes actualizados** con un resumen legible de las partidas afectadas. Los importes solo se muestran a los usuarios que pueden ver los costes de esa ficha, y un cambio de costes no se puede revertir desde el registro de auditoría.
 
 Todo lo que mueve la fecha **Modificado** de la ficha aparece aquí: una edición manual, una importación desde hoja de cálculo, una migración de plataforma o sincronización con ServiceNow, un cambio de etiqueta, una edición masiva, o un movimiento jerárquico que arrastró esta ficha. El mantenimiento del sistema no cambia ninguno de los dos: recalcular las puntuaciones de calidad de datos, volver a ejecutar los campos calculados y rellenar niveles jerárquicos o identificadores de ficha dejan intactos el historial y la fecha **Modificado**.
 

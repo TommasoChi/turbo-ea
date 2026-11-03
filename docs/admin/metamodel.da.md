@@ -282,6 +282,14 @@ For at [ArchiMate-editoren](../guide/archimate.md) kan knytte diagrammer til kor
 
 Element- og relationsnavnene er dem fra Open Groups udvekslingsformat. Standardværdierne kommer fra seed; de fulde standardtabeller findes i [Mappingen](../guide/archimate.md#mapping).
 
+## Omkostningsposter
+
+**Omkostningsposter** er kataloget over omkostningslinjer, som kort af typen Applikation og IT-komponent kan have (se [omkostningssektionen](../guide/card-details.md#omkostningssektion-applikation-og-it-komponent)). Det administreres under **Admin > Metamodel > Omkostningsposter**.
+
+Hver post har en fast **nøgle**, en **etiket** og valgfri **oversættelser** af etiketten. Poster **arkiveres**, de slettes ikke: en arkiveret post kan ikke længere føjes til et kort, men beløb, der allerede er indtastet, tæller stadig med i TCO og i [omkostningsrapporten](../guide/reports.md#omkostningsrapport).
+
+Indtastning af beløb på et kort kræver `costs.edit` (eller en stakeholder-rolle, der må redigere kortet); ændring af kataloget kræver tilladelsen til administration af metamodellen.
+
 ## Beregninger
 
 Beregnede felter bruger admin-definerede formler til automatisk at beregne værdier, når kort gemmes. Se [Beregninger](calculations.md) for den fulde vejledning.

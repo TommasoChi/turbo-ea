@@ -283,6 +283,14 @@ Para que el [editor ArchiMate](../guide/archimate.md) pueda vincular diagramas c
 
 Los nombres de elementos y relaciones son los del formato de intercambio de Open Group. Los valores predeterminados proceden del seed; las tablas completas están en [La asignación](../guide/archimate.md#mapping).
 
+## Partidas de coste
+
+Las **partidas de coste** son el catálogo de líneas de coste que pueden llevar las fichas de Aplicación y Componente de TI (véase la [sección de Costes](../guide/card-details.md#sección-de-costes-aplicación-y-componente-de-ti)). Se gestiona en **Admin > Metamodelo > Partidas de coste**.
+
+Cada partida tiene una **clave** estable, una **etiqueta** y **traducciones** opcionales de la etiqueta. Las partidas se **archivan**, no se eliminan: una partida archivada ya no se puede añadir a una ficha, pero los importes ya introducidos siguen contando en el TCO y en el [Informe de costes](../guide/reports.md#informe-de-costos).
+
+Introducir importes en una ficha requiere `costs.edit` (o un rol de parte interesada que pueda editar la ficha); cambiar el catálogo requiere el permiso de administración del metamodelo.
+
 ## Cálculos
 
 Los campos calculados usan fórmulas definidas por el administrador para calcular automáticamente valores cuando se guardan fichas. Ver [Cálculos](calculations.es.md) para la guía completa.

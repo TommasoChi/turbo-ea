@@ -283,6 +283,14 @@ Pour que l'[éditeur ArchiMate](../guide/archimate.md) puisse lier les diagramme
 
 Les noms d'éléments et de relations sont ceux du format d'échange de l'Open Group. Les valeurs par défaut proviennent du seed ; les tables complètes se trouvent dans [La correspondance](../guide/archimate.md#mapping).
 
+## Postes de coûts
+
+Les **postes de coûts** forment le catalogue des lignes de coûts que peuvent porter les fiches Application et Composant IT (voir la [section Coûts](../guide/card-details.md#section-coûts-application-et-composant-it)). Vous le gérez sous **Admin > Métamodèle > Postes de coûts**.
+
+Chaque poste a une **clé** stable, un **libellé** et des **traductions** facultatives du libellé. Les postes sont **archivés**, jamais supprimés : un poste archivé ne peut plus être ajouté à une fiche, mais les montants déjà saisis continuent d'être comptés dans le TCO et dans le [rapport des coûts](../guide/reports.md#rapport-coûts).
+
+La saisie de montants sur une fiche requiert `costs.edit` (ou un rôle de partie prenante autorisé à modifier la fiche) ; la modification du catalogue requiert la permission d'administration du métamodèle.
+
 ## Calculs
 
 Les champs calculés utilisent des formules définies par l'administrateur pour calculer automatiquement des valeurs lorsque les fiches sont sauvegardées. Voir [Calculs](calculations.md) pour le guide complet.

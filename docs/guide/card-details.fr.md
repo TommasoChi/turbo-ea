@@ -114,6 +114,21 @@ Selon le type de fiche, vous verrez des sections supplémentaires avec des **cha
 
 Les champs marqués comme **calculés** affichent un badge et ne peuvent pas être modifiés manuellement -- leurs valeurs sont calculées par des [formules définies par l'administrateur](../admin/calculations.md).
 
+### Section Coûts (Application et composant IT)
+
+Les Applications et les Composants IT enregistrent leurs coûts sous la forme d'une liste de **postes de coûts** (par exemple licences, hébergement, support), et non comme un seul nombre saisi. La section **Coûts** affiche un exercice à la fois, avec un navigateur **‹ ›** sur six ans : les quatre années précédant l'exercice courant, l'exercice courant et le **Forecast**.
+
+- **TCO** — Le coût total de possession de l'exercice est la somme de ses postes. Il n'est jamais saisi à la main.
+- **Graphique et vignettes** — Une barre empilée montre la répartition du TCO entre les postes. Chaque poste a une vignette avec son **montant annuel** et sa **date de renouvellement** ; un renouvellement dans les 90 jours s'affiche en orange. Les coûts sont toujours annuels.
+- **Ajout et modification** — Un poste s'ajoute, se modifie ou se supprime dans une boîte de dialogue. Les postes proviennent du catalogue géré par un administrateur sous [Métamodèle → Postes de coûts](../admin/metamodel.md#postes-de-coûts).
+- **Copier vers Forecast** — Copie les postes de l'exercice affiché dans l'exercice Forecast, pour démarrer un plan à partir des chiffres actuels.
+
+**Un nouvel exercice.** Lorsque l'exercice change et qu'une fiche n'a pas encore de coûts pour le nouvel exercice courant, la section affiche les postes de l'exercice précédent marqués **non confirmés**, avec leurs dates de renouvellement avancées. Ils le restent jusqu'à ce que quelqu'un les confirme ou modifie un montant. Le Forecast et les exercices passés ne se rabattent jamais sur un autre exercice.
+
+**Qui peut voir et modifier les coûts.** Vous pouvez **consulter** les coûts avec la permission `costs.view`, ou si vous avez un rôle de partie prenante quelconque sur la fiche. Vous pouvez **modifier** les coûts avec la permission `costs.edit`, ou si vous avez sur la fiche un rôle de partie prenante autorisant la modification de la fiche (par exemple Responsable). Les observateurs peuvent seulement consulter. Par défaut, seuls les administrateurs détiennent `costs.edit` ; les rôles existants conservent `costs.view`.
+
+Le champ **Coût annuel total** (`costTotalAnnual`) de la fiche est dérivé des postes de l'exercice courant et est en lecture seule : la grille, l'import de tableur, la recopie par glissement, l'API, MCP, ServiceNow et LeanIX ne peuvent plus le définir, et toute valeur envoyée est écrasée. Une fiche sans poste de coûts a un champ de coût vide, pas 0. Les Initiatives et les Fournisseurs conservent leurs champs de coût habituels.
+
 ### Section Hiérarchie
 
 Pour les types de fiches qui prennent en charge la hiérarchie (par ex. Organisation, Capacité Métier, Application) :
@@ -215,6 +230,8 @@ Le chemin d'invitation nécessite la permission **`users.invite`**, une forme d�
 Une modification qui ne vient pas de l'interface web porte une pastille à côté du nom de la personne : **MCP** lorsqu'un assistant IA l'a effectuée via le [serveur MCP](../admin/mcp.md) au nom de cette personne, **API**, **Extension** ou **Système** dans les autres cas.
 
 Affiche la **piste d'audit complète** des modifications apportées à la fiche : **qui** a effectué la modification, **quand** elle a été effectuée, et **ce qui** a été modifié (valeur précédente vs nouvelle valeur). Cela permet une traçabilité complète de toutes les modifications au fil du temps.
+
+Une modification des coûts de la fiche apparaît sous la forme **Coûts mis à jour**, avec un résumé lisible des postes concernés. Les montants ne sont visibles que des utilisateurs autorisés à voir les coûts de cette fiche, et une modification de coûts ne peut pas être annulée depuis le journal d'audit.
 
 Tout ce qui déplace la date **Modifié** de la fiche apparaît ici — une modification manuelle, un import de tableur, une migration de plateforme ou une synchronisation ServiceNow, un changement d'étiquette, une modification en masse, ou un déplacement hiérarchique qui a entraîné cette fiche. La maintenance système ne change ni l'un ni l'autre : le recalcul des scores de qualité des données, la ré-exécution des champs calculés et le remplissage des niveaux hiérarchiques ou des identifiants de fiche laissent l'historique et la date **Modifié** intacts.
 
