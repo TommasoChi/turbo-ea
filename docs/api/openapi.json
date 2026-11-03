@@ -2666,6 +2666,30 @@
         "title": "CardBulkUpdate",
         "type": "object"
       },
+      "CardCostsOut": {
+        "properties": {
+          "catalogue": {
+            "items": {
+              "$ref": "#/components/schemas/CostItemTypeOut"
+            },
+            "title": "Catalogue",
+            "type": "array"
+          },
+          "years": {
+            "items": {
+              "$ref": "#/components/schemas/YearCostsOut"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "required": [
+          "years",
+          "catalogue"
+        ],
+        "title": "CardCostsOut",
+        "type": "object"
+      },
       "CardCountsResponse": {
         "properties": {
           "by_type": {
@@ -4768,6 +4792,197 @@
           "value"
         ],
         "title": "CostHistoryRow",
+        "type": "object"
+      },
+      "CostItemTypeCreate": {
+        "properties": {
+          "key": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "CostItemTypeCreate",
+        "type": "object"
+      },
+      "CostItemTypeOut": {
+        "properties": {
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "translations": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Translations",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "label",
+          "sort_order",
+          "archived"
+        ],
+        "title": "CostItemTypeOut",
+        "type": "object"
+      },
+      "CostItemTypeUpdate": {
+        "properties": {
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations"
+          }
+        },
+        "title": "CostItemTypeUpdate",
+        "type": "object"
+      },
+      "CostItemWrite": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "renewal_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renewal Date"
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "title": "CostItemWrite",
+        "type": "object"
+      },
+      "CostLineOut": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "renewal_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renewal Date"
+          }
+        },
+        "required": [
+          "key",
+          "amount"
+        ],
+        "title": "CostLineOut",
         "type": "object"
       },
       "CurrencyPayload": {
@@ -18156,6 +18371,58 @@
         "title": "WorkspaceTransferOut",
         "type": "object"
       },
+      "YearCostsOut": {
+        "properties": {
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "fallback_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback From"
+          },
+          "fiscal_year": {
+            "title": "Fiscal Year",
+            "type": "integer"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "is_forecast": {
+            "title": "Is Forecast",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CostLineOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "tco": {
+            "title": "Tco",
+            "type": "number"
+          }
+        },
+        "required": [
+          "fiscal_year",
+          "is_current",
+          "is_forecast",
+          "confirmed",
+          "items",
+          "tco"
+        ],
+        "title": "YearCostsOut",
+        "type": "object"
+      },
       "app__api__v1__migration__StagedRecordOut": {
         "properties": {
           "action": {
@@ -24889,6 +25156,344 @@
         ]
       }
     },
+    "/api/v1/cards/{card_id}/costs": {
+      "get": {
+        "operationId": "get_card_costs_api_v1_cards__card_id__costs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardCostsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Card Costs",
+        "tags": [
+          "card-costs"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/costs/{fiscal_year}": {
+      "get": {
+        "operationId": "get_card_costs_year_api_v1_cards__card_id__costs__fiscal_year__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearCostsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Card Costs Year",
+        "tags": [
+          "card-costs"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/costs/{fiscal_year}/confirm": {
+      "post": {
+        "operationId": "confirm_card_cost_year_api_v1_cards__card_id__costs__fiscal_year__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearCostsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Card Cost Year",
+        "tags": [
+          "card-costs"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/costs/{fiscal_year}/items/{key}": {
+      "delete": {
+        "operationId": "delete_card_cost_item_api_v1_cards__card_id__costs__fiscal_year__items__key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Card Cost Item",
+        "tags": [
+          "card-costs"
+        ]
+      },
+      "put": {
+        "operationId": "put_card_cost_item_api_v1_cards__card_id__costs__fiscal_year__items__key__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CostItemWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearCostsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Card Cost Item",
+        "tags": [
+          "card-costs"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/costs/{fiscal_year}/items/{key}/copy-to-forecast": {
+      "post": {
+        "operationId": "copy_card_cost_to_forecast_api_v1_cards__card_id__costs__fiscal_year__items__key__copy_to_forecast_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearCostsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Copy Card Cost To Forecast",
+        "tags": [
+          "card-costs"
+        ]
+      }
+    },
     "/api/v1/cards/{card_id}/data-quality": {
       "get": {
         "description": "What the card's data-quality score is made of, and what would raise it (#1334).\n\nComputed by the scorer that writes ``cards.data_quality``, so the two never\ndisagree. Gated like the card's other sub-reads: a card the caller may not\nread is 404. The payload names no other card \u2014 relation factors carry\nmetamodel keys only, as the approval gate's 400 does.",
@@ -30161,6 +30766,113 @@
           }
         },
         "summary": "Update Compliance Regulation",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/cost-item-types": {
+      "get": {
+        "description": "The whole catalogue (archived lines included, flagged). Any signed-in\nuser may read it: card cost sections need the labels.",
+        "operationId": "list_cost_item_types_api_v1_metamodel_cost_item_types_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Cost Item Types",
+        "tags": [
+          "metamodel"
+        ]
+      },
+      "post": {
+        "operationId": "create_cost_item_type_api_v1_metamodel_cost_item_types_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CostItemTypeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Cost Item Type",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/cost-item-types/{key}": {
+      "patch": {
+        "operationId": "update_cost_item_type_api_v1_metamodel_cost_item_types__key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CostItemTypeUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Cost Item Type",
         "tags": [
           "metamodel"
         ]

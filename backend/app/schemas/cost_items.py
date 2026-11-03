@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from pydantic import BaseModel, Field
 
 KEY_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{0,63}$"
@@ -16,3 +18,39 @@ class CostItemTypeUpdate(BaseModel):
     translations: dict[str, str] | None = None
     archived: bool | None = None
     sort_order: int | None = None
+
+
+class CostItemTypeOut(BaseModel):
+    id: str
+    key: str
+    label: str
+    sort_order: int
+    archived: bool
+    translations: dict[str, str] = {}
+
+
+class CostLineOut(BaseModel):
+    key: str
+    amount: float
+    renewal_date: date | None = None
+    archived: bool = False
+
+
+class YearCostsOut(BaseModel):
+    fiscal_year: int
+    is_current: bool
+    is_forecast: bool
+    confirmed: bool
+    fallback_from: int | None = None
+    items: list[CostLineOut]
+    tco: float
+
+
+class CardCostsOut(BaseModel):
+    years: list[YearCostsOut]
+    catalogue: list[CostItemTypeOut]
+
+
+class CostItemWrite(BaseModel):
+    amount: float
+    renewal_date: date | None = None
