@@ -25,8 +25,8 @@ async def biz_env(db):
     await create_role(db, key="viewer", label="Viewer", permissions=VIEWER_PERMISSIONS)
     await create_card_type(
         db,
-        key="Application",
-        label="Application",
+        key="Provider",
+        label="Provider",
         fields_schema=[
             {
                 "section": "General",
@@ -78,7 +78,7 @@ class TestDataQualityCalculation:
         admin = biz_env["admin"]
         resp = await client.post(
             "/api/v1/cards",
-            json={"type": "Application", "name": "Empty App"},
+            json={"type": "Provider", "name": "Empty App"},
             headers=auth_headers(admin),
         )
         assert resp.status_code == 201
@@ -93,7 +93,7 @@ class TestDataQualityCalculation:
         resp = await client.post(
             "/api/v1/cards",
             json={
-                "type": "Application",
+                "type": "Provider",
                 "name": "Partial App",
                 "attributes": {"costTotalAnnual": 50000},
             },
@@ -110,7 +110,7 @@ class TestDataQualityCalculation:
         resp = await client.post(
             "/api/v1/cards",
             json={
-                "type": "Application",
+                "type": "Provider",
                 "name": "Described",
                 "description": "This app manages orders.",
             },
@@ -126,7 +126,7 @@ class TestDataQualityCalculation:
         resp = await client.post(
             "/api/v1/cards",
             json={
-                "type": "Application",
+                "type": "Provider",
                 "name": "Lifecycle App",
                 "lifecycle": {"active": "2024-01-01"},
             },
@@ -142,7 +142,7 @@ class TestDataQualityCalculation:
         resp = await client.post(
             "/api/v1/cards",
             json={
-                "type": "Application",
+                "type": "Provider",
                 "name": "Website Only",
                 "attributes": {"website": "https://example.com"},
             },
@@ -159,7 +159,7 @@ class TestDataQualityCalculation:
         resp1 = await client.post(
             "/api/v1/cards",
             json={
-                "type": "Application",
+                "type": "Provider",
                 "name": "Vendor App",
                 "attributes": {"vendor": "Acme Corp"},
             },
@@ -175,7 +175,7 @@ class TestDataQualityCalculation:
         resp = await client.post(
             "/api/v1/cards",
             json={
-                "type": "Application",
+                "type": "Provider",
                 "name": "Full App",
                 "description": "Complete application",
                 "lifecycle": {"active": "2024-01-01"},
@@ -238,7 +238,7 @@ class TestDataQualityCalculation:
         resp = await client.post(
             "/api/v1/cards",
             json={
-                "type": "Application",
+                "type": "Provider",
                 "name": "Empty Strings",
                 "attributes": {"vendor": ""},
             },
@@ -253,7 +253,7 @@ class TestDataQualityCalculation:
         # Create empty card
         resp = await client.post(
             "/api/v1/cards",
-            json={"type": "Application", "name": "Evolving App"},
+            json={"type": "Provider", "name": "Evolving App"},
             headers=auth_headers(admin),
         )
         card_id = resp.json()["id"]
@@ -275,7 +275,7 @@ class TestDataQualityCalculation:
         resp = await client.post(
             "/api/v1/cards",
             json={
-                "type": "Application",
+                "type": "Provider",
                 "name": "Whitespace Desc",
                 "description": "   ",
             },
@@ -290,7 +290,7 @@ class TestDataQualityCalculation:
         resp = await client.post(
             "/api/v1/cards",
             json={
-                "type": "Application",
+                "type": "Provider",
                 "name": "Bad Lifecycle",
                 "lifecycle": {"unknownPhase": "2024-01-01"},
             },
@@ -311,7 +311,7 @@ class TestApprovalStatusBreaking:
         """Helper: create card then set status to APPROVED."""
         resp = await client.post(
             "/api/v1/cards",
-            json={"type": "Application", "name": "Approved App", **extra},
+            json={"type": "Provider", "name": "Approved App", **extra},
             headers=auth_headers(admin),
         )
         card_id = resp.json()["id"]
@@ -407,7 +407,7 @@ class TestApprovalStatusBreaking:
         admin = biz_env["admin"]
         resp = await client.post(
             "/api/v1/cards",
-            json={"type": "Application", "name": "Draft App"},
+            json={"type": "Provider", "name": "Draft App"},
             headers=auth_headers(admin),
         )
         card_id = resp.json()["id"]
@@ -426,7 +426,7 @@ class TestApprovalStatusBreaking:
         admin = biz_env["admin"]
         resp = await client.post(
             "/api/v1/cards",
-            json={"type": "Application", "name": "Rejected App"},
+            json={"type": "Provider", "name": "Rejected App"},
             headers=auth_headers(admin),
         )
         card_id = resp.json()["id"]

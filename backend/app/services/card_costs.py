@@ -259,6 +259,25 @@ async def recompute_derived(db: AsyncSession, card: Card) -> None:
     card.attributes = {**(card.attributes or {}), DERIVED_KEY: yc.tco}
 
 
+async def recompute_all(db: AsyncSession) -> int:
+    """Refresh the derived total of every cost-bearing card; returns how many changed.
+
+    Writes only where the value differs. The caller wraps it in ``derived_maintenance``.
+    shortcut: one TCO lookup per card, batch it past ~50k cards.
+    """
+    sm = await get_fiscal_year_start(db)
+    fy = current_fiscal_year(sm)
+    cards = (await db.execute(select(Card).where(Card.type.in_(COST_ITEM_TYPES)))).scalars().all()
+    changed = 0
+    for card in cards:
+        total = (await get_year_row(db, card.id, fy, sm)).tco
+        if (card.attributes or {}).get(DERIVED_KEY) != total:
+            card.attributes = {**(card.attributes or {}), DERIVED_KEY: total}
+            changed += 1
+    await db.flush()
+    return changed
+
+
 async def apply_write(
     db: AsyncSession,
     card: Card,

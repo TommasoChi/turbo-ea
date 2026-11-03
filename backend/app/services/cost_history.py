@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.card import Card
 from app.models.card_cost_history import CardCostHistory
 from app.models.card_type import CardType
+from app.services.card_costs import COST_ITEM_TYPES
 from app.services.cost_value import cost_value
 from app.services.fiscal_year import current_fiscal_year, get_fiscal_year_start
 
@@ -18,7 +19,7 @@ async def sync_current_fy_history(db: AsyncSession, card: Card) -> None:
     type_def = (
         await db.execute(select(CardType).where(CardType.key == card.type))
     ).scalar_one_or_none()
-    if type_def is None:
+    if type_def is None or card.type in COST_ITEM_TYPES:  # their history lives in card_costs
         return
     cost_keys = [
         f["key"]

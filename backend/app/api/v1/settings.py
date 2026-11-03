@@ -22,10 +22,11 @@ from app.models.compliance_regulation import ComplianceRegulation
 from app.models.relation_type import RelationType
 from app.models.resource_type import ResourceType
 from app.models.user import User
-from app.services import audit_changes, audit_labels, audit_log, card_type_categories
+from app.services import audit_changes, audit_labels, audit_log, card_costs, card_type_categories
 from app.services.ai_service import DEFAULT_AZURE_API_VERSION
 from app.services.app_identity import DEFAULT_APP_TITLE
 from app.services.bedrock import is_valid_region
+from app.services.derived_writes import derived_maintenance
 from app.services.email_backends.base import (
     ALLOWED_METHODS as ALLOWED_EMAIL_METHODS,
 )
@@ -1474,6 +1475,9 @@ async def update_fiscal_year_start(
     general["fiscalYearStart"] = body.month
     row.general_settings = general
     await _audit_setting(db, user, "fiscal-year-start", old, general["fiscalYearStart"])
+    await db.flush()
+    with derived_maintenance(db):  # "current year" moved: refresh derived cost totals
+        await card_costs.recompute_all(db)
     await db.commit()
 
     return {"month": body.month}

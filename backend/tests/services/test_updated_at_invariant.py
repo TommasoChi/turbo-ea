@@ -405,7 +405,7 @@ class TestImportPathsRecordThemselves:
         assert events[0].user_id == env["user"].id
         changes = events[0].data["changes"]
         assert changes["name"] == {"old": "NexaCore ERP", "new": "NexaCore ERP v2"}
-        assert changes["attributes"]["new"] == {"criticality": "high"}
+        assert changes["attributes"]["new"] == {"criticality": "high", "costTotalAnnual": 0}
 
     async def test_ppm_cost_rollup_records_itself(self, db, env, client):
         from tests.conftest import create_card_type

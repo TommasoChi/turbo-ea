@@ -56,6 +56,7 @@ from app.services.archimate.archi_native_import import convert_archi_native_to_e
 from app.services.archimate.card_type_mapping import get_card_type_mapping
 from app.services.archimate.taxonomy import TAB_LAYERS
 from app.services.archimate.validate import MAX_XML_BYTES, validate_exchange
+from app.services.card_costs import COST_ITEM_TYPES, DERIVED_KEY
 from app.services.extensions.registry import extension_registry
 from app.services.hierarchy import (
     HIERARCHY_LEVEL_KEY,
@@ -1383,6 +1384,23 @@ async def create_type(
     return _serialize_type(t)
 
 
+def _guard_derived_cost_field(key: str, old: list | None, new: list | None) -> None:
+    """``costTotalAnnual`` on Application / ITComponent is derived from the card costs."""
+    if key not in COST_ITEM_TYPES:
+        return
+
+    def field_type(schema: list | None) -> str | None:
+        for sec in schema or []:
+            for f in sec.get("fields") or []:
+                if f.get("key") == DERIVED_KEY:
+                    return f.get("type")
+        return None
+
+    was = field_type(old)
+    if was is not None and field_type(new) != was:
+        raise HTTPException(400, f"'{DERIVED_KEY}' is derived from card costs: keep it as is")
+
+
 @router.patch("/types/{key}")
 async def update_type(
     key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
@@ -1426,6 +1444,7 @@ async def update_type(
 
     # ── Clean up card attributes when fields or options are removed ──
     if "fields_schema" in body:
+        _guard_derived_cost_field(key, t.fields_schema, body["fields_schema"])
         await _cleanup_removed_fields_and_options(
             db,
             key,

@@ -31,7 +31,7 @@ async def cost_env(db):
     await create_role(db, key="viewer", permissions=VIEWER_PERMISSIONS)
     await create_card_type(
         db,
-        key="Application",
+        key="Provider",
         fields_schema=[
             {
                 "section": "Costs",
@@ -48,13 +48,13 @@ async def cost_env(db):
     member = await create_user(db, email="member@test.com", role="member")
     card = await create_card(
         db,
-        card_type="Application",
+        card_type="Provider",
         name="App1",
         attributes={"costTotalAnnual": 1234, "name2": "x"},
     )
     other_card = await create_card(
         db,
-        card_type="Application",
+        card_type="Provider",
         name="App2",
         attributes={"costTotalAnnual": 5678, "name2": "y"},
     )
@@ -172,7 +172,7 @@ class TestPatchDropsCostsWhenForbidden:
         # without the global costs.view permission. Wire a stakeholder role
         # definition that grants edit + view.
         srd = StakeholderRoleDefinition(
-            card_type_key="Application",
+            card_type_key="Provider",
             key="full_editor",
             label="Full Editor",
             permissions={"card.view": True, "card.edit": True},

@@ -77,8 +77,8 @@ async def survey_env(db):
 
     await create_card_type(
         db,
-        key="Application",
-        label="Application",
+        key="Provider",
+        label="Provider",
         fields_schema=[
             {
                 "section": "General",
@@ -105,7 +105,7 @@ async def survey_env(db):
         ],
     )
     await create_stakeholder_role_def(
-        db, card_type_key="Application", key="responsible", label="Responsible"
+        db, card_type_key="Provider", key="responsible", label="Responsible"
     )
 
     admin = await create_user(db, email="admin@test.com", role="admin")
@@ -114,7 +114,7 @@ async def survey_env(db):
 
     card = await create_card(
         db,
-        card_type="Application",
+        card_type="Provider",
         name="Survey Test App",
         user_id=admin.id,
         attributes={"costTotalAnnual": 50000, "riskLevel": "medium"},
@@ -142,7 +142,7 @@ async def _create_draft_survey(
         "name": "Workflow Test Survey",
         "description": "Testing the full survey workflow",
         "message": "Please review and update your application data.",
-        "target_type_key": "Application",
+        "target_type_key": "Provider",
         "target_roles": target_roles if target_roles is not None else ["responsible"],
         "fields": fields if fields is not None else SURVEY_FIELDS,
     }
@@ -276,7 +276,7 @@ class TestSendNotificationFanOut:
 
         second = await create_card(
             db,
-            card_type="Application",
+            card_type="Provider",
             name="Second App",
             user_id=admin.id,
             attributes={"costTotalAnnual": 2000, "riskLevel": "low"},
@@ -478,7 +478,7 @@ class TestGetResponseForm:
         assert data["survey"]["name"] == "Workflow Test Survey"
         assert data["card"]["id"] == str(card.id)
         assert data["card"]["name"] == "Survey Test App"
-        assert data["card"]["type"] == "Application"
+        assert data["card"]["type"] == "Provider"
 
         # Fields should include current values from card attributes
         assert len(data["fields"]) == 2
@@ -508,7 +508,7 @@ class TestGetResponseForm:
         card = survey_env["card"]
 
         # Add a custom-typed field carrying config + help to the Application type.
-        ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+        ct = (await db.execute(select(CardType).where(CardType.key == "Provider"))).scalar_one()
         ct.fields_schema[0]["fields"].append(
             {
                 "key": "autonomyRating",
@@ -1208,7 +1208,7 @@ class TestCardIdsFilter:
         # Second Application without the right stakeholder — should be excluded
         await create_card(
             db,
-            card_type="Application",
+            card_type="Provider",
             name="Other App",
             user_id=admin.id,
             attributes={"costTotalAnnual": 1000, "riskLevel": "low"},
@@ -1246,7 +1246,7 @@ class TestCardIdsFilter:
         # Create a second Application with the same stakeholder role assigned
         other = await create_card(
             db,
-            card_type="Application",
+            card_type="Provider",
             name="Other App With Stakeholder",
             user_id=admin.id,
             attributes={"costTotalAnnual": 1000, "riskLevel": "low"},
@@ -1327,7 +1327,7 @@ async def relation_survey_env(db, survey_env):
         key="relAppToITC",
         label="Uses",
         reverse_label="Used by",
-        source_type_key="Application",
+        source_type_key="Provider",
         target_type_key="ITComponent",
     )
     card = survey_env["card"]
@@ -1492,7 +1492,7 @@ class TestNotUpdatedForFilter:
     async def _app_with_owner(self, db, admin, member, name, *, age_days):
         card = await create_card(
             db,
-            card_type="Application",
+            card_type="Provider",
             name=name,
             user_id=admin.id,
             attributes={"costTotalAnnual": 1000, "riskLevel": "low"},
@@ -1646,7 +1646,7 @@ class TestPreviewPayload:
     async def _app_with_roles(self, db, admin, user, name, roles):
         card = await create_card(
             db,
-            card_type="Application",
+            card_type="Provider",
             name=name,
             user_id=admin.id,
             attributes={"costTotalAnnual": 1000, "riskLevel": "low"},
@@ -1661,7 +1661,7 @@ class TestPreviewPayload:
         so a second entry would break the send — but carrying both roles."""
         admin, member = survey_env["admin"], survey_env["member"]
         await create_stakeholder_role_def(
-            db, card_type_key="Application", key="observer", label="Observer"
+            db, card_type_key="Provider", key="observer", label="Observer"
         )
         # survey_env's card already has member as 'responsible'; add a second role.
         db.add(Stakeholder(card_id=survey_env["card"].id, user_id=member.id, role="observer"))
@@ -1680,7 +1680,7 @@ class TestPreviewPayload:
     async def test_untargeted_roles_are_excluded(self, client, db, survey_env):
         admin, member = survey_env["admin"], survey_env["member"]
         await create_stakeholder_role_def(
-            db, card_type_key="Application", key="observer", label="Observer"
+            db, card_type_key="Provider", key="observer", label="Observer"
         )
         db.add(Stakeholder(card_id=survey_env["card"].id, user_id=member.id, role="observer"))
         await db.flush()
@@ -1744,7 +1744,7 @@ class TestSkippedCards:
     async def _app(self, db, admin, name, *, owner=None, role="responsible"):
         card = await create_card(
             db,
-            card_type="Application",
+            card_type="Provider",
             name=name,
             user_id=admin.id,
             attributes={"costTotalAnnual": 1000, "riskLevel": "low"},
@@ -1774,7 +1774,7 @@ class TestSkippedCards:
     ):
         admin, viewer = survey_env["admin"], survey_env["viewer"]
         await create_stakeholder_role_def(
-            db, card_type_key="Application", key="observer", label="Observer"
+            db, card_type_key="Provider", key="observer", label="Observer"
         )
         await self._app(db, admin, "Watched Only", owner=viewer, role="observer")
 
@@ -1849,7 +1849,7 @@ class TestSurveyAudit:
         assert sent.json()["targets_created"] == 1
         assert sent_row.details == {
             "context": {
-                "card_type": "Application",
+                "card_type": "Provider",
                 "roles": ["Responsible"],
                 "matched_cards": 1,
                 "cards": 1,
@@ -1859,7 +1859,7 @@ class TestSurveyAudit:
         }
         assert closed_row.action == "admin.survey.closed"
         assert closed_row.target_id == survey_id
-        assert closed_row.details == {"context": {"card_type": "Application"}}
+        assert closed_row.details == {"context": {"card_type": "Provider"}}
 
     async def test_card_type_and_roles_are_recorded_by_label(self, client, db, survey_env):
         from app.models.card_type import CardType
@@ -1871,7 +1871,7 @@ class TestSurveyAudit:
             await _create_draft_survey(client, admin, target_roles=["responsible", "gone"])
         )["id"]
         app_type = (
-            await db.execute(select(CardType).where(CardType.key == "Application"))
+            await db.execute(select(CardType).where(CardType.key == "Provider"))
         ).scalar_one()
         app_type.label = "Business Application"
         role = (

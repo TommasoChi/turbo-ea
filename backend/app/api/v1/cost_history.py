@@ -13,6 +13,7 @@ from app.models.card import Card
 from app.models.card_cost_history import CardCostHistory
 from app.models.card_type import CardType
 from app.models.user import User
+from app.services.card_costs import COST_ITEM_TYPES
 from app.services.card_read_scope import require_card_readable
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.fiscal_year import (
@@ -58,6 +59,11 @@ async def _cost_field_keys_for_card(db: AsyncSession, card: Card) -> frozenset[s
     return cost_field_keys_from_card_schema(type_def.fields_schema if type_def else None)
 
 
+def _reject_cost_item_type(card: Card) -> None:
+    if card.type in COST_ITEM_TYPES:
+        raise HTTPException(409, "use_cost_items")
+
+
 @router.get("/cards/{card_id}/cost-history", response_model=CostHistoryList)
 async def list_cost_history(
     card_id: str,
@@ -86,6 +92,7 @@ async def upsert_cost_history(
     user: User = Depends(get_current_user),
 ):
     card = await _load_card_for_edit(db, user, card_id)
+    _reject_cost_item_type(card)
     oldest, newest = fiscal_year_window(await get_fiscal_year_start(db))
     if not oldest <= body.fiscal_year <= newest:
         raise HTTPException(422, f"fiscal_year must be between {oldest} and {newest}")
@@ -127,6 +134,7 @@ async def delete_cost_history(
     user: User = Depends(get_current_user),
 ):
     card = await _load_card_for_edit(db, user, card_id)
+    _reject_cost_item_type(card)
     row = (
         await db.execute(
             select(CardCostHistory).where(
