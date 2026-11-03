@@ -40,6 +40,17 @@ def uses_items(type_key: str, cost_field: str) -> bool:
     return type_key in COST_ITEM_TYPES and cost_field == DERIVED_KEY
 
 
+async def is_item_field(db: AsyncSession, type_key: str, cost_field: str) -> bool:
+    """``cost_field`` is the item total or a catalogue item (archived too) on an item type."""
+    if type_key not in COST_ITEM_TYPES:
+        return False
+    if cost_field == DERIVED_KEY:
+        return True
+    return (
+        await db.execute(select(CostItemType.id).where(CostItemType.key == cost_field))
+    ).first() is not None
+
+
 async def item_labels(db: AsyncSession) -> dict[str, dict]:
     """``{key: {label, translations}}`` for the whole catalogue, archived items included."""
     rows = (await db.execute(select(CostItemType))).scalars().all()
@@ -58,7 +69,7 @@ async def item_costs_by_card(
     cond = (
         CardCost.fiscal_year <= fiscal_year
         if fiscal_year == cur
-        else CardCost.fiscal_year == (fiscal_year)
+        else CardCost.fiscal_year == fiscal_year
     )
     by_card: dict[uuid.UUID, dict[int, dict]] = {}
     if card_ids:
@@ -89,7 +100,9 @@ async def _item_cards(
     target_fy: int,
     current_fy: int,
     fy_start: int,
-) -> list[tuple[Card, YearCosts]]:
+    line: str | None = None,
+) -> list[tuple[Card, float]]:
+    """Live/readable cards of the type with their TCO, or with one item's amount (``line``)."""
     cards = (
         (
             await db.execute(
@@ -106,7 +119,13 @@ async def _item_cards(
     if target_fy == current_fy:
         cards = [c for c in cards if is_live_in_fiscal_year(c.lifecycle, current_fy, fy_start)]
     costs = await item_costs_by_card(db, [c.id for c in cards], target_fy, fy_start)
-    return [(c, costs[c.id]) for c in cards if costs[c.id].tco]
+    amount = {
+        c.id: costs[c.id].tco
+        if line is None
+        else sum(i.amount for i in costs[c.id].items if i.key == line)
+        for c in cards
+    }
+    return [(c, amount[c.id]) for c in cards if amount[c.id]]
 
 
 async def cards_with_cost(
@@ -119,9 +138,16 @@ async def cards_with_cost(
     fy_start: int,
 ) -> list[tuple[Card, float]]:
     """The cards of ``type_key`` that count in ``target_fy``, each with its cost."""
-    if uses_items(type_key, cost_field):
-        item_rows = await _item_cards(db, read_scope, type_key, target_fy, current_fy, fy_start)
-        return [(c, yc.tco) for c, yc in item_rows]
+    if await is_item_field(db, type_key, cost_field):
+        return await _item_cards(
+            db,
+            read_scope,
+            type_key,
+            target_fy,
+            current_fy,
+            fy_start,
+            None if cost_field == DERIVED_KEY else cost_field,
+        )
     if target_fy == current_fy:
         result = await db.execute(
             select(Card).where(
@@ -218,7 +244,13 @@ async def build_cost_sankey(
     if item_mode:
         item_yc = await item_costs_by_card(db, list(per_card), target_fy, fy_start)
         for card_id, (_, _, costs) in per_card.items():
-            costs.update({i.key: i.amount for i in item_yc[card_id].items if i.amount})
+            costs.update(
+                {
+                    i.key: i.amount
+                    for i in item_yc[card_id].items
+                    if i.amount and i.key in components
+                }
+            )
     elif split and target_fy == current_fy:
         # `totals` already holds the live cards: read each item off their attributes
         for card, _, costs in per_card.values():

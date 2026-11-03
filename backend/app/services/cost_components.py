@@ -24,7 +24,9 @@ async def _type_components(db: AsyncSession, type_key: str, cost_field: str) -> 
     if type_key in COST_ITEM_TYPES and cost_field == DERIVED_KEY:
         # the catalogue, archived items included: their recorded amounts still add up
         rows = await db.execute(
-            select(CostItemType.key).order_by(CostItemType.sort_order, CostItemType.label)
+            select(CostItemType.key).order_by(
+                CostItemType.sort_order, CostItemType.label, CostItemType.key
+            )
         )
         return list(rows.scalars().all())
     calc = (

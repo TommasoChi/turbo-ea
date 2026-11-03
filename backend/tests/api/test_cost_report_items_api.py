@@ -182,3 +182,46 @@ async def test_hidden_card_type_leaks_nothing(client, db, env):
         assert "SecretERP" not in resp.text and str(app.id) not in resp.text
     admin = await _get(client, env, "cost-treemap", type="Application")
     assert "SecretERP" in admin.text
+
+
+async def test_per_item_cost_field_reads_that_item_for_current_and_past(client, db, env):
+    await cost_item_types.create_item(db, "other", "Other")
+    app = await create_card(db, card_type="Application", name="ERP")
+    other = await create_card(db, card_type="Application", name="CRM")
+    await _costs(db, app, CUR, lic=100, sup=50, other=7)
+    await _costs(db, app, CUR - 1, lic=70, sup=5)
+    await _costs(db, other, CUR, sup=9)
+    await cost_item_types.update_item(db, "sup", archived=True)
+
+    async def total(field, **p):
+        resp = await _get(client, env, "cost-treemap", type="Application", cost_field=field, **p)
+        assert resp.status_code == 200
+        return resp.json()
+
+    assert (await total("lic"))["total"] == 100
+    assert [i["name"] for i in (await total("lic"))["items"]] == ["ERP"]
+    assert (await total("lic", fiscal_year=CUR - 1))["total"] == 70
+    assert (await total("sup"))["total"] == 59  # archived item still reported
+    assert (await total("other"))["total"] == 7
+    for fy in (CUR, CUR - 1):
+        parts = 0
+        for k in ("lic", "sup", "other"):
+            parts += (await total(k, fiscal_year=fy))["total"]
+        assert parts == (await total("costTotalAnnual", fiscal_year=fy))["total"]
+
+
+async def test_per_item_cost_field_needs_costs_view(client, db, env):
+    app = await create_card(db, card_type="Application", name="ERP")
+    await _costs(db, app, CUR, lic=100)
+    resp = await _get(
+        client, env, "cost-treemap", user="nocost", type="Application", cost_field="lic"
+    )
+    assert resp.status_code == 403
+    assert "ERP" not in resp.text
+
+
+async def test_sankey_ignores_a_line_missing_from_the_catalogue(client, db, env):
+    app = await create_card(db, card_type="Application", name="ERP")
+    await _costs(db, app, CUR, lic=100, ghost=5)  # `ghost` was never in the catalogue
+    flow = (await _get(client, env, "cost-sankey", type="Application")).json()
+    assert {n["id"] for n in flow["nodes"] if n["type"] == "CostItem"} == {"item:lic"}
