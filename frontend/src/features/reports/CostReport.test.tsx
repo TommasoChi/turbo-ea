@@ -58,12 +58,14 @@ vi.mock("./CostTrendChart", () => ({
     typeParam,
     costField,
     components,
+    labelOf,
   }: {
     years: number[];
     currentFiscalYear: number;
     typeParam: string;
     costField: string;
     components: string[];
+    labelOf?: (key: string) => string;
   }) => {
     trendYearsSeen.push(years);
     return (
@@ -74,6 +76,7 @@ vi.mock("./CostTrendChart", () => ({
         data-type={typeParam}
         data-field={costField}
         data-components={components.join(",")}
+        data-labels={components.map((c) => labelOf?.(c) ?? c).join(",")}
       />
     );
   },
@@ -683,6 +686,27 @@ describe("CostReport trend chart", () => {
     expect(trend).toHaveAttribute("data-field", "costTotalAnnual");
   });
 
+  it("labels the components from the report's catalogue labels, not the raw keys", async () => {
+    const base = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation(async (path: string, ...rest: never[]) => {
+      const r = (await base(path, ...rest)) as Record<string, unknown>;
+      return path.startsWith("/reports/cost-treemap")
+        ? {
+            ...r,
+            components: ["lic", "archivedItem"],
+            item_labels: {
+              lic: { label: "Licences", translations: { it: { label: "Licenze" } } },
+              archivedItem: { label: "Legacy support", translations: {} },
+            },
+          }
+        : r;
+    });
+    await ready();
+    await pickYear("FY27 - Forecast");
+    const trend = await screen.findByTestId("cost-trend-chart");
+    expect(trend).toHaveAttribute("data-labels", "Licences,Legacy support");
+  });
+
   it("chart hidden when the response carries no components", async () => {
     const base = vi.mocked(api.get).getMockImplementation()!;
     vi.mocked(api.get).mockImplementation(async (path: string, ...rest: never[]) => {
@@ -792,6 +816,40 @@ describe("CostReport Sankey from per-card costs", () => {
     expect(d.links).toHaveLength(2);
     expect(flow(d, "Licences", "G")).toBe(100);
     expect(flow(d, "G", "CRM")).toBe(100);
+  });
+
+  it("names a cost item from the report's labels even when the schema does not know the key", async () => {
+    consumedConfig = { view: "sankey" };
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.startsWith("/reports/cost-sankey"))
+        return Promise.resolve({
+          nodes: [
+            { id: "item:lic", name: "lic", type: "CostItem" },
+            { id: "item:old", name: "old", type: "CostItem" },
+            { id: "crm", name: "CRM", type: "Application", cost: 150, costs: { lic: 100, old: 50 } },
+          ],
+          links: [
+            { source: 0, target: 2, value: 100 },
+            { source: 1, target: 2, value: 50 },
+          ],
+          total: 150,
+          item_labels: {
+            lic: { label: "Licences", translations: {} },
+            old: { label: "Legacy", translations: {} },
+          },
+          fiscal_year: 2026,
+          current_fiscal_year: 2026,
+          fiscal_year_start: 1,
+        }) as never;
+      return Promise.resolve({ items: HIERARCHY, total: HIERARCHY.length }) as never;
+    });
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    await waitFor(() => {
+      const d = sankeySeen();
+      expect(d.nodes.map((n) => n.name)).toEqual(expect.arrayContaining(["Licences", "Legacy"]));
+    });
+    expect(sankeySeen().nodes.map((n) => n.name)).not.toContain("lic");
   });
 
   it("keeps in = out for every group when unscoped", async () => {

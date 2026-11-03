@@ -61,6 +61,7 @@ import {
 import { costFiscalYearName, costFiscalYearOptions } from "@/lib/fiscalYear";
 import { formatFieldValue, EMPTY_VALUE, type FieldMeta } from "@/lib/cardDisplayFields";
 import { costValue } from "@/lib/costValue";
+import { reportItemLabel, type ReportItemLabel } from "@/lib/costItems";
 import type { FieldDef } from "@/types";
 
 const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent", "Initiative"] as const;
@@ -82,6 +83,8 @@ interface CostTreemapResponse {
   total: number;
   /** Technical keys of the cost fields that add up to the total. */
   components?: string[];
+  /** Catalogue cost items by key: the labels of the components that are cost items. */
+  item_labels?: Record<string, ReportItemLabel>;
   /** The fiscal year the figures are for (the one requested). */
   fiscal_year?: number;
   /** The fiscal year that contains today, whatever year was requested. */
@@ -111,6 +114,7 @@ interface CostSankeyResponse {
   nodes: SankeyNode[];
   links: SankeyLink[];
   total: number;
+  item_labels?: Record<string, ReportItemLabel>;
   fiscal_year?: number;
   current_fiscal_year?: number;
   fiscal_year_start?: number;
@@ -280,7 +284,7 @@ function CostSankeyPanel({ nodes, links, fullscreen, chrome, fmt }: CostSankeyPa
 /* ------------------------------------------------------------------ */
 
 export default function CostReport() {
-  const { t } = useTranslation(["reports", "common"]);
+  const { t, i18n } = useTranslation(["reports", "common"]);
   const { types, relationTypes, loading: ml } = useMetamodel();
   // Report type pickers offer only the types the user may see.
   const readableTypes = useReadableCardTypes("module");
@@ -344,6 +348,7 @@ export default function CostReport() {
     new Map(),
   );
   const [sankeyData, setSankeyData] = useState<CostSankeyResponse | null>(null);
+  const [itemLabels, setItemLabels] = useState<Record<string, ReportItemLabel>>({});
   const [view, setView] = useState<CostView>("chart");
   const [sortK, setSortK] = useState("cost");
   const [sortD, setSortD] = useState<"asc" | "desc">("desc");
@@ -555,6 +560,7 @@ export default function CostReport() {
         );
         if (!isCurrent()) return;
         setSankeyData(r);
+        setItemLabels(r.item_labels ?? {});
         setRawItems(null);
         setFiscalYear((prev) => fiscalYearOf(r) ?? prev);
         adoptCurrentFiscalYear(r.current_fiscal_year);
@@ -571,6 +577,7 @@ export default function CostReport() {
         );
         if (!isCurrent()) return;
         setRawItems(r.items);
+        setItemLabels(r.item_labels ?? {});
         setComponentsFor({ key: `${cardTypeKey}|${costField}`, list: r.components ?? [] });
         setSankeyData(null);
         setFiscalYear((prev) => fiscalYearOf(r) ?? prev);
@@ -698,14 +705,20 @@ export default function CostReport() {
     return [...map.values()].sort((a, b) => b.cost - a.cost);
   }, [items, effectiveGroupBy, groupLabel]);
 
-  // A cost-item node: the cost field's label, or "Other costs" for what the
+  // A cost item's label: the catalogue's (the report sends it, archived items
+  // included), else the schema field's. Undefined when neither knows the key.
+  const knownItemLabel = useCallback(
+    (key: string) =>
+      reportItemLabel(itemLabels, key, i18n.language) ??
+      costFields.find((f) => f.key === key)?.label,
+    [itemLabels, costFields, i18n.language],
+  );
+  // A cost-item node: the item's label, or "Other costs" for what the
   // components leave of a card's total.
   const itemLabel = useCallback(
     (key: string, fallback: string) =>
-      key === OTHER_GROUP
-        ? t("cost.otherCostItem")
-        : (costFields.find((f) => f.key === key)?.label ?? fallback),
-    [costFields, t],
+      key === OTHER_GROUP ? t("cost.otherCostItem") : (knownItemLabel(key) ?? fallback),
+    [knownItemLabel, t],
   );
 
   // Scope applies to the Sankey here: hide the cards outside it, then every
@@ -768,8 +781,7 @@ export default function CostReport() {
       });
     }
     if (costFields.length > 1) {
-      const cfLabel =
-        costFields.find((f) => f.key === costField)?.label || costField;
+      const cfLabel = knownItemLabel(costField) || costField;
       params.push({ label: t("cost.costField"), value: cfLabel });
     }
     if (effectiveGroupBy) {
@@ -792,6 +804,7 @@ export default function CostReport() {
     typeOptions,
     costField,
     costFields,
+    knownItemLabel,
     effectiveGroupBy,
     groupOptions,
     view,
@@ -1122,6 +1135,7 @@ export default function CostReport() {
                   typeParam={typeParam(cardTypeKey)}
                   costField={costField}
                   components={components}
+                  labelOf={(key) => knownItemLabel(key) ?? key}
                   years={trendYears}
                   currentFiscalYear={currentFiscalYear}
                 />

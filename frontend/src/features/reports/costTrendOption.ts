@@ -27,6 +27,8 @@ export interface CostTrendOptions {
   format: (v: number) => string;
   /** A fiscal year as the report names it (`FY26 - Current`). */
   yearLabel: (year: number) => string;
+  /** A component's display label; the key itself when omitted. */
+  componentLabel?: (component: string) => string;
 }
 
 export function buildCostTrendOption(
@@ -34,6 +36,7 @@ export function buildCostTrendOption(
   components: string[],
   o: CostTrendOptions,
 ): EChartsCoreOption {
+  const nameOf = (component: string) => o.componentLabel?.(component) ?? component;
   const ctx: ChartChromeContext = { theme: o.chrome, isRtl: o.isRtl, valueFormatter: o.format };
   return {
     ...base(ctx),
@@ -43,7 +46,7 @@ export function buildCostTrendOption(
       axisPointer: { type: "shadow", shadowStyle: { color: ctx.theme.hover } },
       valueFormatter: (v: unknown) => o.format(Number(v ?? 0)),
     }),
-    legend: legend(ctx, components),
+    legend: legend(ctx, components.map(nameOf)),
     xAxis: {
       type: "category",
       inverse: o.isRtl,
@@ -60,7 +63,7 @@ export function buildCostTrendOption(
     },
     series: components.map((component, i) => ({
       type: "bar",
-      name: component,
+      name: nameOf(component),
       stack: "cost",
       barMaxWidth: BAR_MAX_THICKNESS,
       emphasis: { focus: "series" },

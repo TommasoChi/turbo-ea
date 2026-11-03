@@ -35,6 +35,19 @@ describe("buildCostTrendOption", () => {
     expect(series.map((s: any) => s.itemStyle.color)).toEqual(CATEGORICAL_COLORS.slice(0, 2));
   });
 
+  it("names the series and the legend by the given label, keeping the data keyed by component", () => {
+    const o = buildCostTrendOption(ROWS, COMPONENTS, {
+      chrome,
+      isRtl: false,
+      format: (v) => `$${v}`,
+      yearLabel: (y) => `FY${y}`,
+      componentLabel: (c) => `L:${c}`,
+    }) as any;
+    expect(o.series.map((s: any) => s.name)).toEqual(["L:licenseCost", "L:serviceCost"]);
+    expect(o.legend.data).toEqual(["L:licenseCost", "L:serviceCost"]);
+    expect(o.series[0].data).toEqual([100, 120]);
+  });
+
   it("plots each year's total per component, and zero where a year lacks one", () => {
     const { series } = build();
     expect(series[0].data).toEqual([100, 120]);

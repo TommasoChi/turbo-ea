@@ -102,6 +102,29 @@ describe("HistoryTab — document link edits (#1166)", () => {
   /* `url` and `type` are the link's own fields. Without the override the row
    * would show the raw key, or borrow the label of a card attribute that
    * happens to be keyed `type`. */
+  it("names a costs update, its summary and its cost-items change", async () => {
+    vi.mocked(api.get).mockResolvedValue([
+      {
+        id: "evt-4",
+        event_type: "card.costs_updated",
+        created_at: "2026-09-30T10:00:00Z",
+        user_id: "u1",
+        user_display_name: "Vincent",
+        data: {
+          summary: "Licences FY26",
+          changes: { cost_items: { old: ["lic"], new: ["lic", "sup"] } },
+        },
+      },
+    ]);
+
+    renderTab();
+
+    expect(await screen.findByText("Costs updated")).toBeInTheDocument();
+    expect(screen.getByText("Licences FY26")).toBeInTheDocument();
+    expect(screen.getByText("Cost items")).toBeInTheDocument();
+    expect(screen.getByText("lic, sup")).toBeInTheDocument();
+  });
+
   it("labels a link's url and type rows as the link dialog does", async () => {
     vi.mocked(api.get).mockResolvedValue([
       {

@@ -42,6 +42,7 @@ function getFieldLabels(t: (key: string) => string): Record<string, string> {
     alias: t("history.fields.alias"),
     external_id: t("history.fields.externalId"),
     approval_status: t("history.fields.approvalStatus"),
+    cost_items: t("history.fields.costItems"),
   };
 }
 
@@ -253,7 +254,8 @@ function HistoryTab({ fsId, cardType }: { fsId: string; cardType?: string }) {
                   (relations, stakeholders, risks, documents, files). Renders
                   clickable peer cards for relations, links to the risk page
                   for risk events, etc. Falls back to plain summary text. */}
-              {rows.length === 0 && (
+              {/* A costs update lists its changes AND the backend's one-line summary. */}
+              {(rows.length === 0 || (e.event_type === "card.costs_updated" && summary)) && (
                 <EventDetailView
                   detail={eventDetailModel(e.event_type, e.data, summary)}
                   typeIconFor={typeIconFor}
