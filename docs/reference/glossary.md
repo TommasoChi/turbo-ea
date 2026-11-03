@@ -25,6 +25,8 @@
 | **File Attachment** | A binary file (documents, spreadsheets, presentations, OpenDocument and legacy Office files, images, archives, Outlook and e-mail messages, CSV, Markdown, JSON and XML — up to 20 MB) uploaded directly to a card via the Resources tab |
 | **Fiscal Year** | The 12-month period used for budgeting and financial reporting. Configurable via Admin > Settings — the start month (January through December) determines how PPM budget lines are grouped |
 | **DrawIO** | The embedded open-source diagramming tool used for visual architecture diagrams |
+| **Cost Item** | One line of an Application or IT Component's annual cost (for example hosting), taken from the catalogue in Admin > Metamodel > Cost items. A card's TCO is the sum of its items for the fiscal year |
+| **TCO (Total Cost of Ownership)** | The total annual cost of an Application or IT Component for a fiscal year, always derived from its cost items and never typed by hand |
 | **Cost Line** | A budget or actual cost entry (CapEx/OpEx) in a PPM initiative, used to track financial spending |
 | **Enterprise Architecture (EA)** | The discipline that organizes and documents an organization's business and technology structure |
 | **EOL (End of Life)** | The date when a technology product loses vendor support. Tracked via integration with endoflife.date |

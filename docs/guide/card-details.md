@@ -114,6 +114,21 @@ Depending on the card type, you will see additional sections with **custom field
 
 Fields marked as **calculated** show a badge and cannot be edited manually — their values are computed by [admin-defined formulas](../admin/calculations.md).
 
+### Costs Section (Application and IT Component)
+
+Applications and IT Components record their cost as a list of **cost items** (for example licences, hosting, support), not as a single typed number. The **Costs** section shows one fiscal year at a time, with a **‹ ›** navigator over six years: the four before the current one, the current one and the **Forecast**.
+
+- **TCO** — The total cost of ownership of the year is the sum of its items. It is never typed by hand.
+- **Chart and tiles** — A stacked bar shows how the TCO splits across items. Each item has a tile with its **annual amount** and **renewal date**; a renewal within 90 days is shown in orange. Costs are always annual.
+- **Adding and editing** — Add, edit or delete an item in a dialog. Items come from the catalogue an administrator manages under [Metamodel → Cost items](../admin/metamodel.md#cost-items).
+- **Copy to Forecast** — Copies the items of the year you are viewing into the Forecast year, to start a plan from the current figures.
+
+**A new fiscal year.** When the fiscal year changes and a card has no costs for the new current year yet, the section shows the previous year's items marked **not confirmed**, with their renewal dates moved forward. They stay that way until someone confirms them or edits an amount. The Forecast and past years never fall back to another year.
+
+**Who can see and edit costs.** You can **view** costs with the `costs.view` permission, or when you hold any stakeholder role on the card. You can **edit** costs with the `costs.edit` permission, or when you hold a stakeholder role on the card that allows editing the card (for example Responsible). Observers can only view. By default only administrators hold `costs.edit`; existing roles keep `costs.view`.
+
+The card's **Total annual cost** field (`costTotalAnnual`) is derived from the current year's items and is read-only: the grid, spreadsheet import, drag-fill, the API, MCP, ServiceNow and LeanIX can no longer set it, and a value sent is overwritten. A card with no cost items has an empty cost field, not 0. Initiatives and Providers keep their ordinary cost fields.
+
 ### Hierarchy Section
 
 For card types that support hierarchy (e.g., Organization, Business Capability, Application):
@@ -215,6 +230,8 @@ The invite path requires the **`users.invite`** permission, a delegated form of 
 Shows the **complete audit trail** of changes made to the card: **who** made the change, **when** it was made, and **what** was modified (previous value vs. new value). This enables full traceability of all modifications over time.
 
 A change that did not come from the web interface carries a chip beside the person's name: **MCP** when an AI assistant made it through the [MCP server](../admin/mcp.md) on that person's behalf, **API**, **Extension** or **System** otherwise.
+
+A change to the card's costs appears as **Costs updated** with a readable summary of the items touched. Amounts are shown only to users who can see costs on that card, and a cost change cannot be rolled back from the audit log.
 
 Everything that moves the card's **Modified** date appears here — an edit by hand, a spreadsheet import, a platform migration or ServiceNow sync, a tag change, a bulk edit, or a hierarchy move that pulled this card along. System housekeeping changes neither: recalculating data-quality scores, re-running calculated fields, and backfilling hierarchy levels or card IDs leave both the history and the **Modified** date alone.
 
