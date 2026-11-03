@@ -81,7 +81,7 @@ function mockGet(r: CardCostsResponse | Error) {
     () => (r instanceof Error ? Promise.reject(r) : Promise.resolve(r)) as never,
   );
 }
-const renderSection = (canEdit = true) => render(<CostsSection cardId="c1" canEdit={canEdit} />);
+const renderSection = () => render(<CostsSection cardId="c1" />);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -178,7 +178,7 @@ describe("CostsSection", () => {
     mockGet(response());
     const user = userEvent.setup();
     const onChanged = vi.fn();
-    render(<CostsSection cardId="c1" canEdit onChanged={onChanged} />);
+    render(<CostsSection cardId="c1" onChanged={onChanged} />);
     await user.click(await screen.findByTestId("cost-tile-sup"));
     await user.click(await screen.findByRole("button", { name: "Save" }));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
@@ -186,9 +186,9 @@ describe("CostsSection", () => {
   });
 
   it("is read-only without edit rights: no Add, no Confirm, tiles do not open", async () => {
-    mockGet(response());
+    mockGet(response({ can_edit: false }));
     const user = userEvent.setup();
-    renderSection(false);
+    renderSection();
     await user.click(await screen.findByRole("button", { name: "Next fiscal year" }));
     expect(screen.queryByRole("button", { name: "+ Add item" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Confirm/ })).toBeNull();
@@ -196,11 +196,12 @@ describe("CostsSection", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("is read-only when the server says the caller cannot edit", async () => {
-    mockGet(response({ can_edit: false }));
-    renderSection(true);
-    await screen.findByTestId("cost-tile-lic");
-    expect(screen.queryByRole("button", { name: "+ Add item" })).toBeNull();
+  it("offers edit controls whenever the server says can_edit", async () => {
+    mockGet(response({ can_edit: true }));
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: "Next fiscal year" }));
+    expect(screen.getByRole("button", { name: "+ Add item" })).toBeTruthy();
   });
 
   it.each([403, 404])("renders nothing when the server answers %i", async (status) => {

@@ -29,8 +29,6 @@ import { buildCostsStackedBarOption } from "./costsStackedBarOption";
 
 interface Props {
   cardId: string;
-  /** The caller's own edit right on the card; the server's `can_edit` must agree. */
-  canEdit: boolean;
   initialExpanded?: boolean;
   expandOn?: number;
   /** After an edit, confirm or delete went through (the card's derived total changed). */
@@ -45,7 +43,6 @@ type DialogState = { line: CostLine | null } | null;
  */
 export default function CostsSection({
   cardId,
-  canEdit,
   initialExpanded = true,
   expandOn,
   onChanged,
@@ -95,7 +92,7 @@ export default function CostsSection({
     years.findIndex((y) => y.fiscal_year === (picked ?? currentFy)),
   );
   const year = years[idx];
-  const editable = canEdit && data.can_edit;
+  const editable = data.can_edit; // the server decides (costs.edit, not inventory.edit)
   const present = new Set(year.items.map((i) => i.key));
   const addable: CostItemType[] = data.catalogue.filter((c) => !c.archived && !present.has(c.key));
   const reload = () => {

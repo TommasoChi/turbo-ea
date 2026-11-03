@@ -496,7 +496,6 @@ export default function CardDetailContent({
         <ErrorBoundary key={key} label="Costs" inline>
           <CostsSection
             cardId={card.id}
-            canEdit={perms.can_edit}
             initialExpanded={exp}
             expandOn={expandOn(sectionAnchor("costs"))}
             onChanged={refreshFrom(sectionAnchor("costs"))}
