@@ -33,7 +33,20 @@ describe("useCalculatedFields", () => {
     });
 
     expect(api.get).toHaveBeenCalledWith("/calculations/calculated-fields");
-    expect(result.current.calculatedFields).toEqual(mockFields);
+    expect(result.current.calculatedFields).toEqual({
+      ...mockFields,
+      ITComponent: ["licenseExpiry", "costTotalAnnual"],
+    });
+  });
+
+  it("treats the derived cost total of a cost-item type as calculated, others not", async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({});
+    const { useCalculatedFields } = await import("./useCalculatedFields");
+    const { result } = renderHook(() => useCalculatedFields());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isCalculated("Application", "costTotalAnnual")).toBe(true);
+    expect(result.current.isCalculated("ITComponent", "costTotalAnnual")).toBe(true);
+    expect(result.current.isCalculated("Initiative", "costTotalAnnual")).toBe(false);
   });
 
   it("isCalculated returns true for calculated fields", async () => {
@@ -92,7 +105,11 @@ describe("useCalculatedFields", () => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(result.current.calculatedFields).toEqual({});
+    // Nothing from the server, but the derived cost total stays locked.
+    expect(result.current.calculatedFields).toEqual({
+      Application: ["costTotalAnnual"],
+      ITComponent: ["costTotalAnnual"],
+    });
     expect(result.current.isCalculated("Application", "cost")).toBe(false);
   });
 });

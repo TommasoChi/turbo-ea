@@ -25,6 +25,7 @@
  *       child while the parent's own file id is dropped, so the executor can
  *       never remap it (see `excelImport.execute.test.ts`).
  */
+import { withDerivedCostFields } from "@/lib/costItems";
 import { describe, expect, it } from "vitest";
 
 import { fieldLabel } from "@/hooks/useResolveLabel";
@@ -791,6 +792,14 @@ describe("validateImport — attributes", () => {
       row: 2,
       column: `attr_${field}`,
       message: warn("readOnlyFieldIgnored", { row: 2, field: label("Application", field) }),
+    });
+
+    it("never stores the derived cost total of a cost-item type once it counts as calculated", () => {
+      const r = oneCreate(app({ attr_costTotalAnnual: "5000" }), {
+        calculated: withDerivedCostFields({}),
+      });
+      expect(r.warnings).toEqual([ignored("costTotalAnnual")]);
+      expect(r.creates[0].data.attributes).not.toHaveProperty("costTotalAnnual");
     });
 
     it("warns on a create that supplies a read-only value, and never stores it", () => {

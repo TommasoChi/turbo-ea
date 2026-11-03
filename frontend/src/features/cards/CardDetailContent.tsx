@@ -49,6 +49,8 @@ import {
   useExtensionFieldVisibilityProviders,
 } from "@/lib/extensionHost";
 import SoAWTab from "@/features/cards/sections/SoAWTab";
+import CostsSection from "@/features/cards/sections/CostsSection";
+import { DERIVED_COST_FIELD, isCostItemType } from "@/lib/costItems";
 import {
   customSectionAnchor,
   sectionAnchor,
@@ -319,6 +321,10 @@ export default function CardDetailContent({
     extHiddenByKey,
     fieldVisibilityProviders.map((p) => p.extKey),
   );
+  // The cost items are the source of a cost-item type's total: the derived
+  // attribute is not shown (nor editable) next to them.
+  const hasCostItems = isCostItemType(card.type);
+  if (hasCostItems) hiddenFieldKeys.add(DERIVED_COST_FIELD);
 
   const customSections = customSectionsOf(typeConfig?.fields_schema);
   const descExtraSection = (typeConfig?.fields_schema || []).find(
@@ -339,6 +345,7 @@ export default function CardDetailContent({
   const sectionOrder = buildSectionOrder(sc as Record<string, unknown>, customSections.length, {
     hierarchy: !!typeConfig?.has_hierarchy,
     successors: !!typeConfig?.has_successors,
+    costs: hasCostItems,
   });
 
   // Saves name the section they came from (`onSaveOrigin`) right before the
@@ -479,6 +486,20 @@ export default function CardDetailContent({
             onDirtyChange={dirtyCb("lifecycle")}
             expandOn={expandOn(sectionAnchor("lifecycle"))}
             editOn={editOn(sectionAnchor("lifecycle"))}
+          />
+        </ErrorBoundary>
+      );
+    }
+    if (key === "costs") {
+      if (!hasCostItems) return null;
+      return (
+        <ErrorBoundary key={key} label="Costs" inline>
+          <CostsSection
+            cardId={card.id}
+            canEdit={perms.can_edit}
+            initialExpanded={exp}
+            expandOn={expandOn(sectionAnchor("costs"))}
+            onChanged={refreshFrom(sectionAnchor("costs"))}
           />
         </ErrorBoundary>
       );

@@ -3240,3 +3240,33 @@ export interface ValueStreamRoot {
 export interface ValueStreamResponse {
   roots: ValueStreamRoot[];
 }
+
+// ── Card cost items (GET /cards/{id}/costs) ──────────────────────────────
+export interface CostItemType {
+  id: string;
+  key: string;
+  label: string;
+  sort_order: number;
+  archived: boolean;
+  translations: TranslationMap;
+}
+export interface CostLine {
+  key: string;
+  amount: number;
+  renewal_date: string | null;
+  archived: boolean;
+}
+export interface YearCosts {
+  fiscal_year: number;
+  is_current: boolean;
+  is_forecast: boolean;
+  confirmed: boolean;
+  fallback_from: number | null;
+  items: CostLine[];
+  tco: number;
+}
+export interface CardCostsResponse {
+  can_edit: boolean;
+  years: YearCosts[];
+  catalogue: CostItemType[];
+}

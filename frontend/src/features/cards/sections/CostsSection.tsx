@@ -1,0 +1,298 @@
+import { useMemo, useState } from "react";
+import Accordion from "@mui/material/Accordion";
+import AccordionSummary from "@mui/material/AccordionSummary";
+import AccordionDetails from "@mui/material/AccordionDetails";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import ButtonBase from "@mui/material/ButtonBase";
+import IconButton from "@mui/material/IconButton";
+import Typography from "@mui/material/Typography";
+import { useTranslation } from "react-i18next";
+import { api, apiErrorMessage } from "@/api/client";
+import EChart from "@/components/charts/EChart";
+import { useEChartsTheme } from "@/components/charts/echartsTheme";
+import MaterialSymbol from "@/components/MaterialSymbol";
+import { useApiQuery } from "@/hooks/useApiQuery";
+import { useCurrency } from "@/hooks/useCurrency";
+import { useDateFormat } from "@/hooks/useDateFormat";
+import { useFieldLabel } from "@/hooks/useResolveLabel";
+import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
+import { todayIsoDate } from "@/lib/dates";
+import { costFiscalYearName } from "@/lib/fiscalYear";
+import { isRenewalNear, shortFiscalYear } from "@/lib/costItems";
+import { SECTION_SCROLL_MARGIN, sectionAnchor } from "@/features/cards/dataQualityJump";
+import { CATEGORICAL_COLORS, EOL_WARNING_COLOR, STATUS_COLORS } from "@/theme/tokens";
+import type { CardCostsResponse, CostItemType, CostLine } from "@/types";
+import CostItemDialog from "./CostItemDialog";
+import { buildCostsStackedBarOption } from "./costsStackedBarOption";
+
+interface Props {
+  cardId: string;
+  /** The caller's own edit right on the card; the server's `can_edit` must agree. */
+  canEdit: boolean;
+  initialExpanded?: boolean;
+  expandOn?: number;
+  /** After an edit, confirm or delete went through (the card's derived total changed). */
+  onChanged?: () => void;
+}
+
+type DialogState = { line: CostLine | null } | null;
+
+/**
+ * The Costs section: the card's cost items per fiscal year. Rendered only when
+ * the server answers (a 403/404 means no access or not a cost-bearing card).
+ */
+export default function CostsSection({
+  cardId,
+  canEdit,
+  initialExpanded = true,
+  expandOn,
+  onChanged,
+}: Props) {
+  const { t } = useTranslation("cards");
+  const { fmt } = useCurrency();
+  const { formatDate } = useDateFormat();
+  const chrome = useEChartsTheme();
+  const fieldLabel = useFieldLabel();
+  const [expanded, setExpanded] = useSyncedExpanded(initialExpanded, expandOn);
+  const [version, setVersion] = useState(0);
+  const { data, error } = useApiQuery<CardCostsResponse>(`/cards/${cardId}/costs`, {
+    refetchKey: version,
+  });
+  const [picked, setPicked] = useState<number | null>(null);
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const today = useMemo(() => todayIsoDate(), []);
+
+  const catalogue = data?.catalogue;
+  const byKey = useMemo(() => new Map((catalogue ?? []).map((c) => [c.key, c])), [catalogue]);
+  // A colour per catalogue item, stable across years; archived items are grey.
+  const colorOf = (key: string): string => {
+    const item = byKey.get(key);
+    if (!item || item.archived) return STATUS_COLORS.neutral;
+    const i = (catalogue ?? []).filter((c) => !c.archived).indexOf(item);
+    return CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length];
+  };
+  // Catalogue rows always carry a label; a key with no row is not expected.
+  const labelOf = (key: string): string => {
+    const item = byKey.get(key);
+    return item ? fieldLabel(item) : key;
+  };
+
+  if (error || !data) return null;
+
+  const years = data.years;
+  const currentFy = years.find((y) => y.is_current)?.fiscal_year ?? years[0].fiscal_year;
+  const forecastFy = years.find((y) => y.is_forecast)?.fiscal_year ?? currentFy + 1;
+  const idx = Math.max(
+    0,
+    years.findIndex((y) => y.fiscal_year === (picked ?? currentFy)),
+  );
+  const year = years[idx];
+  const editable = canEdit && data.can_edit;
+  const unset = new Set(year.items.map((i) => i.key));
+  const addable: CostItemType[] = data.catalogue.filter((c) => !c.archived && !unset.has(c.key));
+  const reload = () => {
+    setVersion((v) => v + 1);
+    onChanged?.();
+  };
+
+  const confirmYear = async () => {
+    setActionError(null);
+    try {
+      await api.post(`/cards/${cardId}/costs/${year.fiscal_year}/confirm`);
+      reload();
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("costs.confirmFailed")));
+    }
+  };
+
+  const barOption = buildCostsStackedBarOption(
+    year.items.map((i) => ({
+      key: i.key,
+      label: labelOf(i.key),
+      amount: i.amount,
+      color: colorOf(i.key),
+    })),
+    {
+      chrome,
+      isRtl: chrome.isRtl,
+      format: (v) => fmt.format(v),
+      faded: !year.confirmed,
+    },
+  );
+
+  const nav = (step: number) => setPicked(years[idx + step].fiscal_year);
+
+  return (
+    <Accordion
+      id={sectionAnchor("costs")}
+      expanded={expanded}
+      onChange={(_, v) => setExpanded(v)}
+      disableGutters
+      sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
+    >
+      <AccordionSummary component="div" expandIcon={<MaterialSymbol icon="expand_more" size={20} />}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
+          <MaterialSymbol icon="payments" size={20} />
+          <Typography fontWeight={600}>{t("costs.title")}</Typography>
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 0.5 }}>
+          <IconButton
+            size="small"
+            aria-label={t("costs.previousYear")}
+            disabled={idx === 0}
+            onClick={() => nav(-1)}
+          >
+            <MaterialSymbol icon="chevron_left" size={20} />
+          </IconButton>
+          <Typography fontWeight={600} sx={{ minWidth: 150, textAlign: "center" }}>
+            {costFiscalYearName(year.fiscal_year, currentFy)}
+          </Typography>
+          <IconButton
+            size="small"
+            aria-label={t("costs.nextYear")}
+            disabled={idx === years.length - 1}
+            onClick={() => nav(1)}
+          >
+            <MaterialSymbol icon="chevron_right" size={20} />
+          </IconButton>
+        </Box>
+
+        {!year.confirmed && (
+          <Alert
+            severity="warning"
+            sx={{ my: 1 }}
+            action={
+              editable ? (
+                <Button color="inherit" size="small" onClick={confirmYear}>
+                  {t("costs.confirm", { year: shortFiscalYear(year.fiscal_year) })}
+                </Button>
+              ) : undefined
+            }
+          >
+            {t("costs.fallbackBanner", {
+              year: shortFiscalYear(year.fiscal_year),
+              from: year.fallback_from != null ? shortFiscalYear(year.fallback_from) : "",
+            })}
+          </Alert>
+        )}
+        {actionError && (
+          <Alert severity="error" sx={{ mb: 1 }}>
+            {actionError}
+          </Alert>
+        )}
+
+        <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 1 }}>
+          <Typography variant="h5" fontWeight={700}>
+            {fmt.format(year.tco)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {!year.confirmed && year.fallback_from != null
+              ? t("costs.tcoFrom", { year: shortFiscalYear(year.fallback_from) })
+              : t("costs.tco")}
+          </Typography>
+        </Box>
+
+        {year.items.length > 0 ? (
+          <>
+            <Box sx={{ height: 14, my: 1, borderRadius: 0.5, overflow: "hidden" }}>
+              <EChart option={barOption} style={{ height: 14 }} ariaLabel={t("costs.barLabel")} />
+            </Box>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                gap: 1,
+                opacity: year.confirmed ? 1 : 0.75,
+              }}
+            >
+              {year.items.map((line) => {
+                const near = isRenewalNear(line.renewal_date, today);
+                return (
+                  <ButtonBase
+                    key={line.key}
+                    disabled={!editable}
+                    onClick={() => setDialog({ line })}
+                    data-testid={`cost-tile-${line.key}`}
+                    sx={{
+                      display: "block",
+                      textAlign: "start",
+                      p: 1.25,
+                      borderRadius: 1,
+                      border: 1,
+                      borderStyle: line.archived ? "dashed" : "solid",
+                      borderColor: near && !line.archived ? EOL_WARNING_COLOR : "divider",
+                      bgcolor: line.archived ? "action.hover" : "transparent",
+                      color: line.archived ? "text.secondary" : "text.primary",
+                      "&.Mui-disabled": { pointerEvents: "auto" },
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ color: colorOf(line.key), display: "block" }}>
+                      {"● "}
+                      {labelOf(line.key)}
+                      {line.archived ? ` (${t("costs.archived")})` : ""}
+                    </Typography>
+                    <Typography fontWeight={600}>{fmt.format(line.amount)}</Typography>
+                    {line.archived ? (
+                      <Typography variant="caption" color="text.secondary">
+                        {t("costs.archivedCounted")}
+                      </Typography>
+                    ) : (
+                      line.renewal_date && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: near ? EOL_WARNING_COLOR : "text.secondary",
+                            fontWeight: near ? 600 : 400,
+                          }}
+                        >
+                          {t("costs.renewal", { date: formatDate(line.renewal_date) })}
+                        </Typography>
+                      )
+                    )}
+                  </ButtonBase>
+                );
+              })}
+            </Box>
+          </>
+        ) : (
+          <Typography variant="body2" color="text.secondary" sx={{ my: 1 }}>
+            {t("costs.empty")}
+          </Typography>
+        )}
+
+        {editable && addable.length > 0 && (
+          <Button
+            fullWidth
+            size="small"
+            variant="outlined"
+            sx={{ mt: 1.5, borderStyle: "dashed" }}
+            onClick={() => setDialog({ line: null })}
+          >
+            {`+ ${t("costs.addItem")}`}
+          </Button>
+        )}
+
+        {dialog && (
+          <CostItemDialog
+            cardId={cardId}
+            fiscalYear={year.fiscal_year}
+            forecastYear={forecastFy}
+            line={dialog.line}
+            options={addable}
+            labelOf={labelOf}
+            onClose={() => setDialog(null)}
+            onChanged={() => {
+              setDialog(null);
+              reload();
+            }}
+          />
+        )}
+      </AccordionDetails>
+    </Accordion>
+  );
+}

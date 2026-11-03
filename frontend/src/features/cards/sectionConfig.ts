@@ -98,6 +98,7 @@ export const DEFAULT_SECTION_ORDER = [
   "description",
   "eol",
   "lifecycle",
+  "costs",
   "__custom__",
   "hierarchy",
   "successors",
@@ -113,13 +114,15 @@ export const DEFAULT_SECTION_ORDER = [
  * A stored `__order` wins. Custom sections it does not name go at its end;
  * `successors` and `tags`, which postdate the orders of existing installs,
  * are spliced in just before `relations` (or appended when there is none);
- * `hierarchy` and `successors` drop out for a type that has no such section.
+ * `hierarchy` and `successors` drop out for a type that has no such section;
+ * `costs` (cost-item types only) is spliced in after `lifecycle` when the stored
+ * order predates it, and drops out for every other type.
  * With no stored order, `DEFAULT_SECTION_ORDER` applies.
  */
 export function buildSectionOrder(
   sectionConfig: Record<string, unknown> | undefined,
   customCount: number,
-  has: { hierarchy: boolean; successors: boolean },
+  has: { hierarchy: boolean; successors: boolean; costs?: boolean },
 ): string[] {
   const customKeys = Array.from({ length: customCount }, (_, i) => `custom:${i}`);
   const stored = sectionConfig?.__order;
@@ -134,14 +137,22 @@ export function buildSectionOrder(
     };
     if (!named.has("successors") && has.successors) beforeRelations("successors");
     if (!named.has("tags")) beforeRelations("tags");
+    if (has.costs && !named.has("costs")) {
+      const at = order.indexOf("lifecycle");
+      order.splice(at >= 0 ? at + 1 : 0, 0, "costs");
+    }
     return order.filter(
-      (k) => (k !== "hierarchy" || has.hierarchy) && (k !== "successors" || has.successors),
+      (k) =>
+        (k !== "hierarchy" || has.hierarchy) &&
+        (k !== "successors" || has.successors) &&
+        (k !== "costs" || has.costs),
     );
   }
   return DEFAULT_SECTION_ORDER.flatMap((key) => {
     if (key === "__custom__") return customKeys;
     if (key === "hierarchy" && !has.hierarchy) return [];
     if (key === "successors" && !has.successors) return [];
+    if (key === "costs" && !has.costs) return [];
     return [key];
   });
 }

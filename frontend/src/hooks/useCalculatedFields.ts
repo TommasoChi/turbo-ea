@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/api/client";
+import { withDerivedCostFields } from "@/lib/costItems";
 import type { CalculatedFieldsMap } from "@/types";
 
 /**
@@ -66,12 +67,16 @@ export function useCalculatedFields() {
     };
   }, []);
 
+  // The cost-item types' derived total is always read-only (the items are the
+  // source), whether or not a calculation targets it: grid, import and card all read this.
+  const withCost = useMemo(() => withDerivedCostFields(fields), [fields]);
+
   const isCalculated = useCallback(
     (typeKey: string, fieldKey: string): boolean => {
-      return (fields[typeKey] || []).includes(fieldKey);
+      return (withCost[typeKey] || []).includes(fieldKey);
     },
-    [fields],
+    [withCost],
   );
 
-  return { calculatedFields: fields, loading, isCalculated };
+  return { calculatedFields: withCost, loading, isCalculated };
 }

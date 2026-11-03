@@ -1221,6 +1221,7 @@
   "cardLayout.builtinSections.description": "Description",
   "cardLayout.builtinSections.eol": "End of Life",
   "cardLayout.builtinSections.lifecycle": "Lifecycle",
+  "cardLayout.builtinSections.costs": "Costs",
   "cardLayout.builtinSections.hierarchy": "Hierarchy",
   "cardLayout.builtinSections.successors": "Lineage",
   "cardLayout.builtinSections.tags": "Tags",
