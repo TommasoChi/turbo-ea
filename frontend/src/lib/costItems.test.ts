@@ -4,7 +4,6 @@ import {
   RENEWAL_NEAR_DAYS,
   isCostItemType,
   isRenewalNear,
-  reportItemLabel,
   shortFiscalYear,
   withDerivedCostFields,
 } from "./costItems";
@@ -40,17 +39,5 @@ describe("cost item types", () => {
     expect(m.ITComponent).toEqual(["costTotalAnnual"]);
     expect(m.Initiative).toEqual(["x"]);
     expect(withDerivedCostFields(m).Application).toEqual(["riskScore", "costTotalAnnual"]);
-  });
-});
-
-describe("reportItemLabel", () => {
-  const labels = { lic: { label: "Licences", translations: { it: { label: "Licenze" } } } };
-  it("prefers the locale translation, then the label", () => {
-    expect(reportItemLabel(labels, "lic", "it")).toBe("Licenze");
-    expect(reportItemLabel(labels, "lic", "de")).toBe("Licences");
-  });
-  it("is undefined for a key the report does not know", () => {
-    expect(reportItemLabel(labels, "zzz", "it")).toBeUndefined();
-    expect(reportItemLabel(undefined, "lic")).toBeUndefined();
   });
 });

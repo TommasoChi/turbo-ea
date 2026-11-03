@@ -13,6 +13,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { createRef } from "react";
+import i18n from "@/i18n";
 import CostReport from "./CostReport";
 
 vi.mock("react-router", async () => {
@@ -141,7 +142,8 @@ const requestedYear = (path: string) =>
 
 let consumedConfig: Record<string, unknown> | null = { view: "table" };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
   vi.clearAllMocks();
   echartState.reset();
   consumedConfig = { view: "table" };
@@ -695,7 +697,7 @@ describe("CostReport trend chart", () => {
             ...r,
             components: ["lic", "archivedItem"],
             item_labels: {
-              lic: { label: "Licences", translations: { it: { label: "Licenze" } } },
+              lic: { label: "Licences", translations: { it: "Licenze" } },
               archivedItem: { label: "Legacy support", translations: {} },
             },
           }
@@ -820,6 +822,7 @@ describe("CostReport Sankey from per-card costs", () => {
 
   it("names a cost item from the report's labels even when the schema does not know the key", async () => {
     consumedConfig = { view: "sankey" };
+    await i18n.changeLanguage("it");
     vi.mocked(api.get).mockImplementation((path: string) => {
       if (path.startsWith("/reports/cost-sankey"))
         return Promise.resolve({
@@ -834,7 +837,7 @@ describe("CostReport Sankey from per-card costs", () => {
           ],
           total: 150,
           item_labels: {
-            lic: { label: "Licences", translations: {} },
+            lic: { label: "Licences", translations: { it: "Licenze" } },
             old: { label: "Legacy", translations: {} },
           },
           fiscal_year: 2026,
@@ -847,9 +850,10 @@ describe("CostReport Sankey from per-card costs", () => {
     await screen.findByTestId("cost-sankey-panel");
     await waitFor(() => {
       const d = sankeySeen();
-      expect(d.nodes.map((n) => n.name)).toEqual(expect.arrayContaining(["Licences", "Legacy"]));
+      expect(d.nodes.map((n) => n.name)).toEqual(expect.arrayContaining(["Licenze", "Legacy"]));
     });
     expect(sankeySeen().nodes.map((n) => n.name)).not.toContain("lic");
+    await i18n.changeLanguage("en");
   });
 
   it("keeps in = out for every group when unscoped", async () => {

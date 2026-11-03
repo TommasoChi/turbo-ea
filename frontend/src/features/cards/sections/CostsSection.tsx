@@ -9,13 +9,14 @@ import ButtonBase from "@mui/material/ButtonBase";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import { useTranslation } from "react-i18next";
-import { api, apiErrorMessage } from "@/api/client";
+import { api, ApiError, apiErrorMessage } from "@/api/client";
 import EChart from "@/components/charts/EChart";
 import { useEChartsTheme } from "@/components/charts/echartsTheme";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useDateFormat } from "@/hooks/useDateFormat";
+import { useIsRtl } from "@/hooks/useIsRtl";
 import { useFieldLabel } from "@/hooks/useResolveLabel";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
 import { todayIsoDate } from "@/lib/dates";
@@ -55,6 +56,7 @@ export default function CostsSection({
   const { formatDate } = useDateFormat();
   const chrome = useEChartsTheme();
   const fieldLabel = useFieldLabel();
+  const isRtl = useIsRtl();
   const [expanded, setExpanded] = useSyncedExpanded(initialExpanded, expandOn);
   const [version, setVersion] = useState(0);
   const { data, error } = useApiQuery<CardCostsResponse>(`/cards/${cardId}/costs`, {
@@ -80,7 +82,10 @@ export default function CostsSection({
     return item ? fieldLabel(item) : key;
   };
 
-  if (error || !data) return null;
+  // 403/404: no access or not a cost-bearing card, so the section does not exist for this user.
+  if (error instanceof ApiError && (error.status === 403 || error.status === 404)) return null;
+  if (error && !data) return <Alert severity="error">{t("costs.loadFailed")}</Alert>;
+  if (!data) return null;
 
   const years = data.years;
   const currentFy = years.find((y) => y.is_current)?.fiscal_year ?? years[0].fiscal_year;
@@ -147,7 +152,7 @@ export default function CostsSection({
             disabled={idx === 0}
             onClick={() => nav(-1)}
           >
-            <MaterialSymbol icon="chevron_left" size={20} />
+            <MaterialSymbol icon={isRtl ? "chevron_right" : "chevron_left"} size={20} />
           </IconButton>
           <Typography fontWeight={600} sx={{ minWidth: 150, textAlign: "center" }}>
             {costFiscalYearName(year.fiscal_year, currentFy)}
@@ -158,7 +163,7 @@ export default function CostsSection({
             disabled={idx === years.length - 1}
             onClick={() => nav(1)}
           >
-            <MaterialSymbol icon="chevron_right" size={20} />
+            <MaterialSymbol icon={isRtl ? "chevron_left" : "chevron_right"} size={20} />
           </IconButton>
         </Box>
 
@@ -245,6 +250,7 @@ export default function CostsSection({
                       line.renewal_date && (
                         <Typography
                           variant="caption"
+                          data-near={near ? "true" : "false"}
                           sx={{
                             color: near ? EOL_WARNING_COLOR : "text.secondary",
                             fontWeight: near ? 600 : 400,
@@ -286,8 +292,8 @@ export default function CostsSection({
             options={addable}
             labelOf={labelOf}
             onClose={() => setDialog(null)}
-            onChanged={() => {
-              setDialog(null);
+            onChanged={(opts) => {
+              if (!opts?.keepOpen) setDialog(null);
               reload();
             }}
           />

@@ -73,6 +73,17 @@ describe("CostItemDialog", () => {
     );
   });
 
+  it("reloads the section but keeps the dialog when the saved amount's copy fails", async () => {
+    const { user, onChanged } = setup();
+    vi.mocked(api.post).mockRejectedValueOnce(new Error("year_out_of_range"));
+    await user.click(screen.getByRole("checkbox", { name: "Copy to Forecast (FY27)" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/The amount was saved\. year_out_of_range/)).toBeInTheDocument();
+    expect(api.put).toHaveBeenCalled();
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(onChanged).toHaveBeenCalledWith({ keepOpen: true });
+  });
+
   it("does not offer the copy on the Forecast year itself", () => {
     setup({ fiscalYear: 2027 });
     expect(screen.queryByRole("checkbox")).toBeNull();

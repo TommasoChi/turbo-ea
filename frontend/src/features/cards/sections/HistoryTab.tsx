@@ -202,7 +202,10 @@ function HistoryTab({ fsId, cardType }: { fsId: string; cardType?: string }) {
       {events.map((e) => {
         const meta = eventMeta(e.event_type, t);
         const changes = e.data?.changes as Record<string, unknown> | undefined;
-        const rows = changes
+        const summary = typeof e.data?.summary === "string" ? (e.data.summary as string) : null;
+        // A costs update says what changed in the backend's own words (item labels);
+        // its raw key-list rows are only the fallback when there is no summary.
+        const rows = changes && !(e.event_type === "card.costs_updated" && summary)
           ? parseChanges(changes, {
               fields: fieldLabelsFor(e.event_type, fieldLabels, resourceLabels),
               phases: phaseLabels,
@@ -210,7 +213,6 @@ function HistoryTab({ fsId, cardType }: { fsId: string; cardType?: string }) {
               statuses: statusLabels,
             })
           : [];
-        const summary = typeof e.data?.summary === "string" ? (e.data.summary as string) : null;
         // A send, or a change written by applying an answer: name the survey.
         const survey = eventSurvey(e.event_type, e.data);
 
@@ -254,8 +256,7 @@ function HistoryTab({ fsId, cardType }: { fsId: string; cardType?: string }) {
                   (relations, stakeholders, risks, documents, files). Renders
                   clickable peer cards for relations, links to the risk page
                   for risk events, etc. Falls back to plain summary text. */}
-              {/* A costs update lists its changes AND the backend's one-line summary. */}
-              {(rows.length === 0 || (e.event_type === "card.costs_updated" && summary)) && (
+              {rows.length === 0 && (
                 <EventDetailView
                   detail={eventDetailModel(e.event_type, e.data, summary)}
                   typeIconFor={typeIconFor}

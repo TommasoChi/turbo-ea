@@ -2228,6 +2228,8 @@
   "securityLog.actionLabels.admin_stakeholder_role_archived": "Stakeholder role archived",
   "securityLog.actionLabels.admin_stakeholder_role_restored": "Stakeholder role restored",
   "securityLog.actionLabels.admin_settings_updated": "Setting changed",
+  "securityLog.actionLabels.admin_metamodel_cost_item_type_created": "Cost item created",
+  "securityLog.actionLabels.admin_metamodel_cost_item_type_updated": "Cost item updated",
   "securityLog.actionLabels.admin_metamodel_type_created": "Card type created",
   "securityLog.actionLabels.admin_metamodel_type_updated": "Card type updated",
   "securityLog.actionLabels.admin_metamodel_type_deleted": "Card type deleted",

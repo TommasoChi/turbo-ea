@@ -4,6 +4,13 @@ import userEvent from "@testing-library/user-event";
 
 vi.mock("@/api/client", () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  ApiError: class ApiError extends Error {
+    status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.status = status;
+    }
+  },
   apiErrorMessage: (e: unknown, f: string) => (e instanceof Error && e.message ? e.message : f),
   isAbortError: () => false,
 }));
@@ -15,7 +22,8 @@ vi.mock("@/hooks/useDateFormat", () => ({
 }));
 vi.mock("@/components/charts/EChart", () => import("@/test/echartMock").then((m) => m.echartModule()));
 
-import { api } from "@/api/client";
+import { api, ApiError } from "@/api/client";
+import i18n from "@/i18n";
 import { echartState } from "@/test/echartMock";
 import { toIsoDate } from "@/lib/dates";
 import type { CardCostsResponse, YearCosts } from "@/types";
@@ -112,9 +120,10 @@ describe("CostsSection", () => {
     renderSection();
     const near = await screen.findByTestId("cost-tile-lic");
     const far = screen.getByTestId("cost-tile-sup");
-    const weightOf = (el: HTMLElement) => getComputedStyle(within(el).getByText(/renewal/)).fontWeight;
-    expect(weightOf(near)).toBe("600");
-    expect(weightOf(far)).toBe("400");
+    const nearOf = (el: HTMLElement) =>
+      within(el).getByText(/renewal/).getAttribute("data-near");
+    expect(nearOf(near)).toBe("true");
+    expect(nearOf(far)).toBe("false");
   });
 
   it("navigates between the six years, disabling the arrows at the ends", async () => {
@@ -194,10 +203,29 @@ describe("CostsSection", () => {
     expect(screen.queryByRole("button", { name: "+ Add item" })).toBeNull();
   });
 
-  it("renders nothing when the server refuses (403/404)", async () => {
-    mockGet(new Error("Not found"));
+  it.each([403, 404])("renders nothing when the server answers %i", async (status) => {
+    mockGet(new ApiError("refused", status, null));
     const { container } = renderSection();
     await waitFor(() => expect(api.get).toHaveBeenCalled());
     await waitFor(() => expect(container).toBeEmptyDOMElement());
+  });
+
+  it("shows an inline error, not nothing, when loading fails otherwise", async () => {
+    mockGet(new ApiError("boom", 500, null));
+    renderSection();
+    expect(await screen.findByText("Could not load the costs of this card.")).toBeInTheDocument();
+  });
+
+  it("swaps the year arrows in a right-to-left language", async () => {
+    mockGet(response());
+    await i18n.changeLanguage("ar");
+    try {
+      renderSection();
+      const icons = () =>
+        screen.getAllByRole("button").map((b) => b.textContent).filter((x) => x?.startsWith("chevron"));
+      await waitFor(() => expect(icons()).toEqual(["chevron_right", "chevron_left"]));
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 });

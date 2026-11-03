@@ -32,20 +32,3 @@ export function withDerivedCostFields(map: Record<string, string[]>): Record<str
   }
   return out;
 }
-
-/** One entry of a cost report's `item_labels` (`translations` is `{locale: {label}}`). */
-export interface ReportItemLabel {
-  label: string;
-  translations?: Record<string, { label?: string }>;
-}
-
-/** The report's label for a cost item key in `locale`, or `undefined` when the key is unknown. */
-export function reportItemLabel(
-  labels: Record<string, ReportItemLabel> | undefined,
-  key: string,
-  locale?: string,
-): string | undefined {
-  const entry = labels?.[key];
-  if (!entry) return undefined;
-  return (locale && entry.translations?.[locale]?.label) || entry.label;
-}

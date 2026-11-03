@@ -30,7 +30,7 @@ interface Props {
   labelOf: (key: string) => string;
   onClose: () => void;
   /** After a save or delete went through; the section reloads. */
-  onChanged: () => void;
+  onChanged: (opts?: { keepOpen?: boolean }) => void;
 }
 
 export default function CostItemDialog({
@@ -52,6 +52,7 @@ export default function CostItemDialog({
   const [copy, setCopy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const editing = line !== null;
   const base = `/cards/${cardId}/costs/${fiscalYear}/items/${key}`;
@@ -71,11 +72,28 @@ export default function CostItemDialog({
     }
   };
 
-  const save = () =>
-    run(async () => {
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    setCopyError(null);
+    try {
       await api.put(base, { amount: amountNumber, renewal_date: renewal || null });
-      if (copy) await api.post(`${base}/copy-to-forecast`);
-    }, t("costs.dialog.saveFailed"));
+    } catch (e) {
+      setError(apiErrorMessage(e, t("costs.dialog.saveFailed")));
+      setBusy(false);
+      return;
+    }
+    if (!copy) return onChanged();
+    try {
+      await api.post(`${base}/copy-to-forecast`);
+      onChanged();
+    } catch (e) {
+      // The amount is stored: reload the section behind, keep the dialog to say the copy failed.
+      onChanged({ keepOpen: true });
+      setCopyError(apiErrorMessage(e, t("costs.dialog.copyFailed")));
+      setBusy(false);
+    }
+  };
 
   const remove = () => run(() => api.delete(base), t("costs.dialog.deleteFailed"));
 
@@ -88,6 +106,11 @@ export default function CostItemDialog({
       </DialogTitle>
       <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "8px !important" }}>
         {error && <Alert severity="error">{error}</Alert>}
+        {copyError && (
+          <Alert severity="warning">
+            {t("costs.dialog.savedCopyFailed")} {copyError}
+          </Alert>
+        )}
         {editing ? (
           <TextField
             label={t("costs.dialog.item")}
