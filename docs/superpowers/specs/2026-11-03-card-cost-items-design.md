@@ -1,6 +1,6 @@
 # Card cost items — costs as a standard object of the card
 
-**Status:** draft. Read by a fresh Opus builder-check on 2026-11-03; two questions wait for the user (see "Questions for the user"). **Branch:** `feat/cost-history-in-card`.
+**Status:** draft, to be approved by the user. Read by a fresh Opus builder-check on 2026-11-03; the user answered its two open questions (decisions 7 and 8). **Branch:** `feat/cost-history-in-card`.
 
 ## Intent
 
@@ -65,6 +65,15 @@ Costs are **always annual**: an item has no period.
 6. Only Application and IT Component move to the new object. Initiative
    (`costBudget`, `costActual`) and Provider (`costTotalAnnual`) keep their `cost`
    fields and `card_cost_history`.
+7. **New fiscal year (decided by the user).** The Forecast row of a year is the current-year
+   row of the next one (same fiscal-year number). For a card whose current year has no row,
+   the section and the cost report show the items of the most recent earlier year that has
+   them, marked "from FY25, not confirmed", never stored, until someone confirms or edits
+   them. This keeps what happens today (the value in `attributes` simply stays and the
+   first save copies it into the new year).
+8. **An archived item still counts in the TCO (decided by the user).** It cannot be added to
+   a year; it is greyed on a tile that still holds an amount; its amounts keep counting, so
+   an admin action never changes a historic TCO.
 
 ## Goals
 
@@ -171,25 +180,14 @@ Costs are **always annual**: an item has no period.
   the cost of these two types.
 - **The derived copy never disagrees with the section.** It is recomputed on every cost save, on
   every card write of the two types, and when the fiscal year changes (see the user's question 1).
+- **Item picker.** In the edit dialog the item is chosen from the catalogue (the mockup showed a
+  free name field; that is dropped). "Copy to Forecast" copies amount and renewal date to the
+  next year and overwrites an existing value for that item; the renewal date moves forward by
+  one year.
+- **Catalogue editing** is part of the metamodel admin and needs `admin.metamodel`.
 - **Workspace transfer.** The new tables and the catalogue follow the checklist in
   `.claude/rules/workspace-transfer.md`. The success check below runs on a `pg_dump` copy of the
   live database, not on a workspace-transfer bundle.
-
-## Questions for the user
-
-These two change what the user sees. They are asked in one round; this section is replaced by the
-answers.
-
-1. **What happens on the first day of a new fiscal year?** Today the current value lives in
-   `attributes` and simply stays, so the new year inherits last year's cost. With one row per year,
-   the new current year has no row unless someone copied the Forecast into it. Either it starts at
-   0 (the Forecast row is the plan; "copy to Forecast" is how you pre-fill), or it shows last
-   year's items until someone confirms them. Proposed: carry forward on read, marked "from FY25,
-   not confirmed", never stored.
-2. **Does an archived item still count in the TCO?** Proposed: yes. An archived item cannot be
-   added to a year, and it is greyed on the tiles that still hold an amount, but its amounts keep
-   counting, so an admin click never changes a historic TCO. Otherwise archiving lowers the TCO of
-   every year, and the derived `costTotalAnnual` of every card must be recomputed at once.
 
 ## Open points left to the builder
 
