@@ -8,18 +8,25 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card_type import CardType
+from app.models.cost_item_type import CostItemType
 from app.models.event import Event
 from app.models.user import User
 from app.services.audit_labels import cost_event_summaries
 from app.services.card_costs import COST_EVENT, DERIVED_KEY
 from app.services.cost_field_filter import cost_field_keys_from_card_schema, redact_event_costs
+from app.services.cost_items_migration import LEGACY_ITEMS
 from app.services.permission_service import PermissionService
 
 
 async def all_cost_keys(db: AsyncSession) -> frozenset[str]:
-    """``costTotalAnnual`` plus every cost-typed field key of any card type."""
+    """``costTotalAnnual``, every cost-typed field key of any card type, and the keys migration
+    175 moved out of the schema (legacy + catalogue): old ``card.updated`` diffs still name them."""
     schemas = (await db.execute(select(CardType.fields_schema))).scalars().all()
-    return frozenset({DERIVED_KEY}).union(*(cost_field_keys_from_card_schema(fs) for fs in schemas))
+    catalogue = (await db.execute(select(CostItemType.key))).scalars().all()
+    legacy = {k for k, _ in LEGACY_ITEMS}
+    return frozenset({DERIVED_KEY, *legacy, *catalogue}).union(
+        *(cost_field_keys_from_card_schema(fs) for fs in schemas)
+    )
 
 
 async def redact_cost_events(

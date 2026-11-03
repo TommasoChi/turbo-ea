@@ -36,6 +36,7 @@ def _stamps() -> list[sa.Column]:
 
 
 logger = logging.getLogger("alembic.runtime.migration")
+REPORT_CAP = 200  # entries kept in general_settings; the total is stored beside them
 
 
 def _data_body(conn) -> None:
@@ -98,14 +99,17 @@ def _data_body(conn) -> None:
         items, tco, changed = cim.build_current_year_items(attrs, item_keys)
         conn.execute(insert_cost, {"c": card.id, "y": current, "i": json.dumps(items)})
         # No line, no total: the field stays empty rather than reading as a filled 0.
+        # The per-line values now live in card_costs: drop the raw copies too, or a viewer
+        # without costs.view would read them (redaction finds cost keys through the schema).
+        base = "COALESCE(attributes, '{}'::jsonb) - CAST(:keys AS text[])"
         sql = (
-            "UPDATE cards SET attributes = COALESCE(attributes, '{}'::jsonb) "
+            f"UPDATE cards SET attributes = {base} "
             "|| jsonb_build_object('costTotalAnnual', CAST(:t AS float8)) WHERE id = :c"
             if items
-            else "UPDATE cards SET attributes = COALESCE(attributes, '{}'::jsonb) "
-            "- 'costTotalAnnual' WHERE id = :c"
+            else f"UPDATE cards SET attributes = {base} - 'costTotalAnnual' WHERE id = :c"
         )
-        conn.execute(text(sql), {"t": tco, "c": card.id} if items else {"c": card.id})
+        params = {"c": card.id, "keys": item_keys}
+        conn.execute(text(sql), {**params, "t": tco} if items else params)
         if changed:
             report.append(
                 {
@@ -158,7 +162,7 @@ def _data_body(conn) -> None:
         )
 
     for entry in report:
-        logger.warning(
+        logger.info(
             "cost items migration: card %s FY%s old total %s -> new TCO %s",
             entry["card_id"],
             entry["fiscal_year"],
@@ -166,13 +170,18 @@ def _data_body(conn) -> None:
             entry["new_tco"],
         )
     if report:
+        logger.warning(
+            "cost items migration: %d card-years changed their total (details in "
+            "general_settings.cost_items_migration_report)",
+            len(report),
+        )
         conn.execute(
             text(
                 "UPDATE app_settings SET general_settings = COALESCE(general_settings, '{}'::jsonb) "
                 "|| jsonb_build_object('cost_items_migration_report', CAST(:r AS jsonb)) "
                 "WHERE id = 'default'"
             ),
-            {"r": json.dumps(report)},
+            {"r": json.dumps({"total": len(report), "entries": report[:REPORT_CAP]})},
         )
 
 
@@ -213,6 +222,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """One-way for the data: this drops the two tables only. The item fields removed from the
+    Application / ITComponent schemas, their raw attribute values and the deleted or
+    deactivated ``costTotalAnnual`` calculations are not restored."""
     op.drop_index("ix_card_costs_card_id", table_name="card_costs")
     op.drop_table("card_costs")
     op.drop_table("cost_item_types")

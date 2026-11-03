@@ -4933,6 +4933,8 @@
       "CostItemWrite": {
         "properties": {
           "amount": {
+            "maximum": 1000000000000000.0,
+            "minimum": 0.0,
             "title": "Amount",
             "type": "number"
           },

@@ -104,7 +104,8 @@ async def test_window_six_years(db):
 async def test_upsert_in_fallback_materialises_set_then_applies(db):
     card = await _setup(db)
     await _row(db, card, CUR - 1, {"lic": _it(10), "ams": _it(4)})
-    yc = await svc.upsert_item(db, card.id, CUR, "lic", 12, None)
+    assert await svc.upsert_item(db, card.id, CUR, "lic", 12, None) is None
+    yc = await svc.get_year_row(db, card.id, CUR, SM)
     assert yc.confirmed and yc.fallback_from is None
     assert {line.key: line.amount for line in yc.items} == {"lic": 12, "ams": 4}
     assert yc.tco == 16
@@ -113,8 +114,7 @@ async def test_upsert_in_fallback_materialises_set_then_applies(db):
 async def test_confirm_year_stores_unchanged(db):
     card = await _setup(db)
     await _row(db, card, CUR - 1, {"lic": _it(10)})
-    yc = await svc.confirm_year(db, card.id, CUR)
-    assert yc.confirmed and yc.tco == 10
+    assert await svc.confirm_year(db, card.id, CUR) is None
     again = await svc.get_year_row(db, card.id, CUR, SM)
     assert again.confirmed and again.tco == 10
 
@@ -125,8 +125,8 @@ async def test_archived_new_item_refused_existing_editable(db):
         await svc.upsert_item(db, card.id, CUR, "old", 5, None)
     assert e.value.code == "archived_item"
     await _row(db, card, CUR, {"old": _it(5)})
-    yc = await svc.upsert_item(db, card.id, CUR, "old", 7, None)
-    assert yc.tco == 7
+    await svc.upsert_item(db, card.id, CUR, "old", 7, None)
+    assert (await svc.get_year_row(db, card.id, CUR, SM)).tco == 7
 
 
 async def test_unknown_item_and_negative_amount(db):
@@ -167,17 +167,19 @@ async def test_copy_to_forecast_overwrites_and_shifts(db):
     card = await _setup(db, archived=("old",))
     await _row(db, card, CUR, {"lic": _it(10, "2026-06-30"), "old": _it(5)})
     await _row(db, card, CUR + 1, {"lic": _it(99)})
-    yc = await svc.copy_to_forecast(db, card.id, CUR, "lic")
+    assert await svc.copy_to_forecast(db, card.id, CUR, "lic") is None
+    yc = await svc.get_year_row(db, card.id, CUR + 1, SM)
     assert yc.is_forecast and yc.items[0].amount == 10
     assert yc.items[0].renewal_date == date(2027, 6, 30)
-    yc = await svc.copy_to_forecast(db, card.id, CUR, "old")
-    assert yc.tco == 15
+    await svc.copy_to_forecast(db, card.id, CUR, "old")
+    assert (await svc.get_year_row(db, card.id, CUR + 1, SM)).tco == 15
 
 
 async def test_copy_to_forecast_feb29(db):
     card = await _setup(db)
     await _row(db, card, CUR, {"lic": _it(1, "2028-02-29")})
-    yc = await svc.copy_to_forecast(db, card.id, CUR, "lic")
+    await svc.copy_to_forecast(db, card.id, CUR, "lic")
+    yc = await svc.get_year_row(db, card.id, CUR + 1, SM)
     assert yc.items[0].renewal_date == date(2029, 2, 28)
 
 
@@ -220,3 +222,47 @@ async def test_editable_is_get_or_create_and_keeps_existing_items(db):
         .where(CardCost.card_id == card.id, CardCost.fiscal_year == CUR)
     )
     assert n == 1
+
+
+async def _row_count(db, card):
+    from sqlalchemy import func, select
+
+    return await db.scalar(
+        select(func.count()).select_from(CardCost).where(CardCost.card_id == card.id)
+    )
+
+
+async def test_delete_of_a_key_the_year_lacks_is_a_noop(db):
+    card = await _setup(db)
+    await _row(db, card, CUR - 8, {"lic": _it(3)})
+    assert await svc.delete_item(db, card.id, CUR - 8, "ams") is False
+    assert await svc.delete_item(db, card.id, 1990, "lic") is False  # no row in a locked year
+    assert await _row_count(db, card) == 1
+
+
+async def test_delete_of_a_fallback_key_still_materialises_the_year(db):
+    card = await _setup(db)
+    await _row(db, card, CUR - 1, {"lic": _it(10), "ams": _it(4)})
+    assert await svc.delete_item(db, card.id, CUR, "lic") is True
+    yc = await svc.get_year_row(db, card.id, CUR, SM)
+    assert yc.confirmed and [i.key for i in yc.items] == ["ams"]
+
+
+def test_display_window_is_one_year_shorter_than_the_put_window():
+    assert svc.WINDOW_PAST == 4 and svc.FISCAL_YEAR_LOOKBACK == 5
+    svc._check_window(CUR - svc.FISCAL_YEAR_LOOKBACK, SM)
+    with pytest.raises(svc.CostError):
+        svc._check_window(CUR - svc.FISCAL_YEAR_LOOKBACK - 1, SM)
+
+
+def test_shift_survives_a_stored_year_out_of_range():
+    assert svc._shift("9999-12-31", 1) == "9999-12-31"
+    assert svc._shift("0001-01-01", -1) == "0001-01-01"
+    assert svc._shift("2028-02-29", 1) == "2029-02-28"
+
+
+async def test_current_year_reads_a_legacy_out_of_range_renewal_date(db):
+    card = await _setup(db)
+    await _row(db, card, CUR - 1, {"lic": _it(10, "9999-12-31")})
+    yc = await svc.get_year_row(db, card.id, CUR, SM)
+    assert yc.items[0].renewal_date == date(9999, 12, 31)

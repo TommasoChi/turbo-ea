@@ -31,7 +31,9 @@ from app.services.fiscal_year import (
 )
 
 COST_ITEM_TYPES: frozenset[str] = frozenset({"Application", "ITComponent"})
-RENEWAL_NEAR_DAYS = 90
+# The card section shows current-4 .. current+1; writes accept FISCAL_YEAR_LOOKBACK (5) back,
+# and current-5 is readable only through GET /costs/{fy}.
+WINDOW_PAST = 4
 DERIVED_KEY = "costTotalAnnual"
 # Not "card.updated": rollback would replay its changes as card fields and no-op.
 COST_EVENT = "card.costs_updated"
@@ -71,7 +73,11 @@ def _shift(iso: str | None, years: int) -> str | None:
     try:
         return d.replace(year=d.year + years).isoformat()
     except ValueError:  # Feb 29 into a non-leap year
+        pass
+    try:
         return d.replace(year=d.year + years, day=28).isoformat()
+    except ValueError:  # shifted past year 1 / 9999: keep the stored date
+        return iso
 
 
 def _shifted(items: dict, years: int) -> dict:
@@ -184,7 +190,7 @@ async def get_window(db: AsyncSession, card_id: uuid.UUID, start_month: int) -> 
     cur = current_fiscal_year(start_month)
     return [
         await get_year_row(db, card_id, y, start_month)
-        for y in range(cur - 4, cur + FISCAL_YEAR_LOOKAHEAD + 1)
+        for y in range(cur - WINDOW_PAST, cur + FISCAL_YEAR_LOOKAHEAD + 1)
     ]
 
 
@@ -220,7 +226,7 @@ async def upsert_item(
     key: str,
     amount: float,
     renewal_date: date | None,
-) -> YearCosts:
+) -> None:
     sm = await get_fiscal_year_start(db)
     _check_window(fiscal_year, sm)
     if (
@@ -242,26 +248,27 @@ async def upsert_item(
         key: {"amount": amount, "renewal_date": renewal_date.isoformat() if renewal_date else None},
     }
     await db.flush()
-    return await get_year_row(db, card_id, fiscal_year, sm)
 
 
-async def delete_item(db: AsyncSession, card_id: uuid.UUID, fiscal_year: int, key: str) -> None:
+async def delete_item(db: AsyncSession, card_id: uuid.UUID, fiscal_year: int, key: str) -> bool:
+    """``False`` (nothing written) when the year does not hold the key; idempotent by design."""
     sm = await get_fiscal_year_start(db)
+    items, _, _ = await _resolve(db, card_id, fiscal_year, sm)
+    if key not in items:
+        return False
     row = await _editable(db, card_id, fiscal_year, sm)
     row.items = {k: v for k, v in (row.items or {}).items() if k != key}
     await db.flush()
+    return True
 
 
-async def confirm_year(db: AsyncSession, card_id: uuid.UUID, fiscal_year: int) -> YearCosts:
+async def confirm_year(db: AsyncSession, card_id: uuid.UUID, fiscal_year: int) -> None:
     sm = await get_fiscal_year_start(db)
     _check_window(fiscal_year, sm)
     await _editable(db, card_id, fiscal_year, sm)
-    return await get_year_row(db, card_id, fiscal_year, sm)
 
 
-async def copy_to_forecast(
-    db: AsyncSession, card_id: uuid.UUID, from_year: int, key: str
-) -> YearCosts:
+async def copy_to_forecast(db: AsyncSession, card_id: uuid.UUID, from_year: int, key: str) -> None:
     sm = await get_fiscal_year_start(db)
     forecast = current_fiscal_year(sm) + FISCAL_YEAR_LOOKAHEAD
     if from_year >= forecast:
@@ -273,7 +280,6 @@ async def copy_to_forecast(
     row = await _editable(db, card_id, forecast, sm)
     row.items = {**(row.items or {}), key: _shifted({key: src}, forecast - from_year)[key]}
     await db.flush()
-    return await get_year_row(db, card_id, forecast, sm)
 
 
 async def _declaring_types(db: AsyncSession) -> set[str]:
@@ -392,7 +398,8 @@ async def apply_write(
     sm = await get_fiscal_year_start(db)
     old_total = (card.attributes or {}).get(DERIVED_KEY)
     old = await get_year_row(db, card.id, fiscal_year, sm)
-    await op()
+    if await op() is False:  # a no-op write (delete of an absent key): no event, no refresh
+        return old
     await recompute_derived(db, card)
     new = await get_year_row(db, card.id, fiscal_year, sm)
     await event_bus.publish(

@@ -212,6 +212,11 @@ async def test_migration_moves_fields_and_history(db):
     assert len(rows) == 7  # the current-year history row is discarded
 
     assert (await db.get(Card, app_id)).attributes["costTotalAnnual"] == 200
+    # the per-line values live in card_costs now: no raw copy may outlive the schema fields
+    for cid in (app_id, over_id, nototal_id):
+        left = (await db.get(Card, cid)).attributes
+        assert not {*KEYS, "extraCost"} & set(left)
+    assert (await db.get(Card, app_id)).attributes == {"costTotalAnnual": 200}
     assert "costTotalAnnual" not in (await db.get(Card, empty_id)).attributes
 
     keys = {c.key for c in (await db.execute(select(CostItemType))).scalars()}
@@ -223,7 +228,9 @@ async def test_migration_moves_fields_and_history(db):
 
     settings = (await db.execute(select(AppSettings))).scalar_one()
     assert settings.general_settings["other"] == 1
-    report = settings.general_settings["cost_items_migration_report"]
+    stored = settings.general_settings["cost_items_migration_report"]
+    assert stored["total"] == 3
+    report = stored["entries"]
     key = lambda e: (e["card_id"], e["fiscal_year"])  # noqa: E731
     assert sorted(report, key=key) == sorted(
         [
@@ -275,9 +282,12 @@ async def test_infinite_past_total_does_not_abort_the_report(db):
     await db.flush()
     await _run(db)
     settings = (await db.execute(select(AppSettings))).scalar_one()
-    assert settings.general_settings["cost_items_migration_report"] == [
-        {"card_id": str(card_id), "fiscal_year": cur - 1, "old_total": None, "new_tco": 30}
-    ]
+    assert settings.general_settings["cost_items_migration_report"] == {
+        "total": 1,
+        "entries": [
+            {"card_id": str(card_id), "fiscal_year": cur - 1, "old_total": None, "new_tco": 30}
+        ],
+    }
 
 
 async def test_non_sum_total_calculation_is_deactivated_not_deleted(db):
@@ -305,3 +315,68 @@ async def test_non_sum_total_calculation_is_deactivated_not_deleted(db):
 
     calcs = {c.name: c.is_active for c in (await db.execute(select(Calculation))).scalars()}
     assert calcs == {"weird": False, "other field": True}
+
+
+async def test_report_is_capped_but_counts_everything(db, monkeypatch, caplog):
+    monkeypatch.setattr(mig, "REPORT_CAP", 2)
+    await create_card_type(db, key="Application", fields_schema=_schema(True))
+    for i in range(5):
+        await create_card(
+            db, card_type="Application", name=f"C{i}", attributes={"infrastruttureCost": 30}
+        )
+    db.add(AppSettings(id="default", general_settings={}))
+    await db.flush()
+    with caplog.at_level("INFO", logger="alembic.runtime.migration"):
+        await _run(db)
+    settings = (await db.execute(select(AppSettings))).scalar_one()
+    stored = settings.general_settings["cost_items_migration_report"]
+    assert stored["total"] == 5 and len(stored["entries"]) == 2
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1 and "5" in warnings[0].getMessage()
+
+
+async def test_viewer_never_reads_migrated_breakdown_or_old_event_diffs(client, db):
+    from app.core.permissions import VIEWER_PERMISSIONS
+    from app.services.event_bus import event_bus
+    from tests.conftest import auth_headers, create_role, create_user
+
+    await create_role(db, key="admin", permissions={"*": True})
+    await create_role(db, key="viewer", label="Viewer", permissions=VIEWER_PERMISSIONS)
+    admin = await create_user(db, email="a@mig.com", role="admin")
+    viewer = await create_user(db, email="v@mig.com", role="viewer")
+    await create_card_type(db, key="Application", fields_schema=_schema(True))
+    card = await create_card(
+        db,
+        card_type="Application",
+        name="A",
+        attributes={"softwareLicensingCost": 7777, "costTotalAnnual": 8000},
+        user_id=admin.id,
+    )
+    card_id, admin_id = card.id, admin.id
+    h = auth_headers(viewer)
+    db.add(AppSettings(id="default", general_settings={}))
+    await db.flush()
+    await _run(db)
+    await event_bus.publish(
+        "card.updated",
+        {
+            "id": str(card_id),
+            "changes": {
+                "attributes": {
+                    "old": {"softwareLicensingCost": 7777, "extraCost": 1, "note": "a"},
+                    "new": {"softwareLicensingCost": 8888, "extraCost": 2, "note": "b"},
+                }
+            },
+        },
+        db=db,
+        card_id=card_id,
+        user_id=admin_id,
+    )
+    await db.flush()
+    r = await client.get(f"/api/v1/cards/{card_id}", headers=h)
+    assert r.status_code == 200 and "softwareLicensingCost" not in r.text
+    assert "7777" not in r.text and "8000" not in r.text
+    r = await client.get(f"/api/v1/cards/{card_id}/history", headers=h)
+    assert r.status_code == 200
+    assert "softwareLicensingCost" not in r.text and "extraCost" not in r.text
+    assert '"note": "b"' in r.text or "'note': 'b'" in r.text or '"b"' in r.text

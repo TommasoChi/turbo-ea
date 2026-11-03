@@ -250,3 +250,26 @@ async def test_stakeholder_without_costs_view_can_read_others_cannot(client, db,
         assert r.status_code == 200
         r = await client.get(url(env["card"], path), headers=auth_headers(other))
         assert r.status_code == 403
+
+
+async def test_delete_of_an_absent_key_is_a_204_noop_without_row_or_event(client, db, env):
+    h = auth_headers(env["admin"])
+    r = await client.delete(url(env["card"], "/1990/items/lic"), headers=h)
+    assert r.status_code == 204
+    r = await client.delete(url(env["card"], f"/{CUR}/items/lic"), headers=h)
+    assert r.status_code == 204
+    rows = (await db.execute(select(CardCost).where(CardCost.card_id == env["card"].id))).all()
+    assert rows == []
+    assert cost_events(await events(db, env["card"])) == []
+
+
+async def test_put_422_amount_above_the_cap(client, env):
+    assert (await put(client, env, amount=1e15)).status_code == 200
+    assert (await put(client, env, amount=1.0000001e15)).status_code == 422
+    assert (await put(client, env, amount=1e308)).status_code == 422
+
+
+async def test_put_422_renewal_date_outside_1900_2200(client, env):
+    assert (await put(client, env, renewal_date="9999-12-31")).status_code == 422
+    assert (await put(client, env, renewal_date="1899-12-31")).status_code == 422
+    assert (await put(client, env, renewal_date="2200-12-31")).status_code == 200
