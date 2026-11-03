@@ -47,6 +47,7 @@ from app.services.card_read_scope import (
     scrub_event_payloads,
 )
 from app.services.cost_components import cost_components
+from app.services.cost_event_redaction import redact_cost_events
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.cost_grouping import assign_groups, parse_group_by
 from app.services.cost_report import (
@@ -206,6 +207,7 @@ async def dashboard(db: AsyncSession = Depends(get_db), user: User = Depends(get
         return None
 
     payloads = await scrub_event_payloads(db, read_scope, [e.data for e in events_list])
+    payloads = await redact_cost_events(db, user, events_list, payloads)
     recent_events = [
         {
             "id": str(e.id),

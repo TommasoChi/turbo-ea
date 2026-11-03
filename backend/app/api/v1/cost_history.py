@@ -71,6 +71,8 @@ async def list_cost_history(
     user: User = Depends(get_current_user),
 ):
     card = await _load_card_for_edit(db, user, card_id)
+    if not await PermissionService.can_view_costs(db, user, card.id):
+        raise HTTPException(403, "Not enough permissions")
     rows = (
         (await db.execute(select(CardCostHistory).where(CardCostHistory.card_id == card.id)))
         .scalars()

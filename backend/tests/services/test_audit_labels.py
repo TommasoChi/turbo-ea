@@ -96,12 +96,18 @@ async def test_category_labels_query_the_category_registry():
     assert "'Foo'" in sql and "'Ghost'" in sql
 
 
-async def test_cost_event_summary(db):
+async def test_cost_event_summaries(db):
     from app.services import cost_item_types
-    from app.services.audit_labels import cost_event_summary
+    from app.services.audit_labels import cost_event_summaries
 
     await cost_item_types.create_item(db, "lic", "Licences")
-    data = {"changes": {"cost_items": {"old": [], "new": ["lic", "zzz"]}}}
-    text = await cost_event_summary(db, "ERP", data)
-    assert text == "Costs of ERP changed (items: Licences, zzz)"
-    assert await cost_event_summary(db, "ERP", {"changes": {}}) == "Costs of ERP changed"
+    payloads = [
+        {"changes": {"cost_items": {"old": [], "new": ["lic", "zzz"]}}},
+        {"changes": {}},
+        None,
+    ]
+    assert await cost_event_summaries(db, "ERP", payloads) == [
+        "Costs of ERP changed (items: Licences, zzz)",
+        "Costs of ERP changed",
+        "Costs of ERP changed",
+    ]

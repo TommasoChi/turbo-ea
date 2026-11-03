@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.core.permissions import VIEWER_PERMISSIONS
+from app.core.permissions import MEMBER_PERMISSIONS, VIEWER_PERMISSIONS
 from app.models.stakeholder import Stakeholder
 from app.services import cost_item_types
 from app.services.event_bus import event_bus
@@ -85,7 +85,8 @@ async def test_history_redacts_for_non_cost_reader_and_labels_event(client, db, 
     evs = [e for e in r.json() if e["event_type"] == "card.costs_updated"]
     assert len(evs) == 1
     assert evs[0]["data"]["changes"] == {}
-    assert "4321" not in r.text and "lic" not in r.text
+    assert "4321" not in r.text
+    assert "cost_items" not in evs[0]["data"]["changes"]
     assert evs[0]["data"]["summary"] == "Costs of ERP changed"
     r = await client.get(h, headers=auth_headers(env["resp"]))
     ev = [e for e in r.json() if e["event_type"] == "card.costs_updated"][0]
@@ -120,3 +121,157 @@ async def test_history_redacts_attribute_diff(client, db, env):
     assert r.json()[0]["data"]["changes"]["attributes"]["new"]["costTotalAnnual"] == 22
     r = await client.get(h, headers=auth_headers(env["admin"]))
     assert r.json()[0]["data"]["changes"]["attributes"]["new"]["costTotalAnnual"] == 22
+
+
+async def _member(db, env, email="m@cp.com"):
+    await create_role(db, key="member", label="Member", permissions=MEMBER_PERMISSIONS)
+    return await create_user(db, email=email, role="member")
+
+
+async def test_default_member_cannot_edit_costs_without_stakeholder_role(client, db, env):
+    env["member"] = await _member(db, env)
+    assert (await put(client, env, "member")).status_code == 403
+    r = await client.get(url(env), headers=auth_headers(env["member"]))
+    assert r.status_code == 200 and r.json()["can_edit"] is False
+
+
+async def test_default_member_who_is_responsible_edits(client, db, env):
+    env["member"] = await _member(db, env)
+    db.add(Stakeholder(card_id=env["card"].id, user_id=env["member"].id, role="responsible"))
+    await db.flush()
+    assert (await put(client, env, "member")).status_code == 200
+    r = await client.get(url(env), headers=auth_headers(env["member"]))
+    assert r.json()["can_edit"] is True
+
+
+async def test_responsible_of_one_card_cannot_edit_another(client, db, env):
+    other = await create_card(db, card_type="Application", name="CRM", user_id=env["admin"].id)
+    r = await client.put(
+        f"/api/v1/cards/{other.id}/costs/{CUR}/items/lic",
+        json={"amount": 1},
+        headers=auth_headers(env["resp"]),
+    )
+    assert r.status_code == 403
+
+
+async def test_archived_stakeholder_role_grants_nothing(client, db, env):
+    await create_stakeholder_role_def(
+        db, key="old_owner", label="Old", permissions={"card.edit": True}, is_archived=True
+    )
+    user = await create_user(db, email="old@cp.com", role="viewer")
+    db.add(Stakeholder(card_id=env["card"].id, user_id=user.id, role="old_owner"))
+    await db.flush()
+    env["old"] = user
+    assert (await put(client, env, "old")).status_code == 403
+
+
+async def test_hidden_card_write_is_404(client, db, env):
+    from sqlalchemy import update
+
+    from app.models.card_type import CardType
+
+    await db.execute(
+        update(CardType)
+        .where(CardType.key == "Application")
+        .values(role_permissions={"inv": {"inventory.view": False}})
+    )
+    await db.flush()
+    assert (await put(client, env, "inv")).status_code == 404
+
+
+async def _feed_env(db, env):
+    """A cost event plus an attribute-diff event on the card, and a reader without cost access."""
+    await create_role(
+        db, key="feedreader", label="FR", permissions={**VIEWER_PERMISSIONS, "admin.events": True}
+    )
+    env["reader"] = await create_user(db, email="fr@cp.com", role="feedreader")
+    card = env["card"]
+    await event_bus.publish(
+        "card.updated",
+        {
+            "id": str(card.id),
+            "changes": {
+                "attributes": {"old": {"costTotalAnnual": 11}, "new": {"costTotalAnnual": 22}}
+            },
+        },
+        db=db,
+        card_id=card.id,
+        user_id=env["admin"].id,
+    )
+    await db.flush()
+    return card
+
+
+def _no_amounts(text):
+    return "4321" not in text and '"costTotalAnnual": 22' not in text and "cost_items" not in text
+
+
+async def test_dashboard_recent_events_redacted(client, db, env):
+
+    await put(client, env, "admin")
+    await _feed_env(db, env)
+    r = await client.get("/api/v1/reports/dashboard", headers=auth_headers(env["reader"]))
+    assert r.status_code == 200
+    evs = r.json()["recent_events"]
+    assert {e["event_type"] for e in evs} >= {"card.costs_updated", "card.updated"}
+    assert _no_amounts(str(evs))
+    r = await client.get("/api/v1/reports/dashboard", headers=auth_headers(env["admin"]))
+    assert "4321" in str(r.json()["recent_events"])
+
+
+async def test_my_cards_feed_redacted_unless_stakeholder(client, db, env):
+    from app.models.user_favorite import UserFavorite
+
+    await put(client, env, "admin")
+    await _feed_env(db, env)
+    db.add(UserFavorite(user_id=env["reader"].id, card_id=env["card"].id))
+    await db.flush()
+    r = await client.get("/api/v1/events/my-cards", headers=auth_headers(env["reader"]))
+    assert r.status_code == 200 and len(r.json()) >= 2
+    assert _no_amounts(r.text)
+    r = await client.get("/api/v1/events/my-cards", headers=auth_headers(env["resp"]))
+    assert "4321" in r.text
+
+
+async def test_admin_events_feed_redacted_without_cost_access(client, db, env):
+    await put(client, env, "admin")
+    card = await _feed_env(db, env)
+    r = await client.get(f"/api/v1/events?card_id={card.id}", headers=auth_headers(env["reader"]))
+    assert r.status_code == 200
+    assert {e["event_type"] for e in r.json()} >= {"card.costs_updated", "card.updated"}
+    assert _no_amounts(r.text)
+    r = await client.get(f"/api/v1/events?card_id={card.id}", headers=auth_headers(env["admin"]))
+    assert "4321" in r.text
+
+
+async def test_mutation_batch_events_redacted_without_cost_access(client, db, env):
+    from sqlalchemy import select
+
+    from app.models.event import Event
+
+    await put(client, env, "admin")
+    await _feed_env(db, env)
+    batch_id = (
+        await db.execute(
+            select(Event.batch_id).where(
+                Event.card_id == env["card"].id, Event.event_type == "card.costs_updated"
+            )
+        )
+    ).scalar_one()
+    assert batch_id is not None
+    path = f"/api/v1/mutation-batches/{batch_id}/events"
+    r = await client.get(path, headers=auth_headers(env["reader"]))
+    assert r.status_code == 200 and r.json()["events"]
+    assert _no_amounts(r.text)
+    r = await client.get(path, headers=auth_headers(env["admin"]))
+    assert "4321" in r.text
+
+
+async def test_legacy_cost_history_read_needs_cost_view(client, db, env):
+    await create_role(
+        db, key="editor", label="E", permissions={"inventory.view": True, "inventory.edit": True}
+    )
+    editor = await create_user(db, email="ed@cp.com", role="editor")
+    path = f"/api/v1/cards/{env['card'].id}/cost-history"
+    assert (await client.get(path, headers=auth_headers(editor))).status_code == 403
+    assert (await client.get(path, headers=auth_headers(env["admin"]))).status_code == 200

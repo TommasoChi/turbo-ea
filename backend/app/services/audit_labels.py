@@ -94,19 +94,24 @@ async def cost_item_labels(db: AsyncSession, keys: Iterable[str | None]) -> dict
     return {key: label for key, label in rows.all() if label}
 
 
-async def cost_event_summary(db: AsyncSession, card_name: str, data: dict | None) -> str:
-    """ "Costs of <card> changed (items: <labels>)" for a ``card.costs_updated`` payload.
+async def cost_event_summaries(
+    db: AsyncSession, card_name: str, payloads: Iterable[dict | None]
+) -> list[str]:
+    """Readable "Costs of <card> changed (items: <labels>)" per ``card.costs_updated`` payload.
 
-    Item labels, not keys; the items part is left out when the payload carries
-    no ``cost_items`` (redacted for the reader).
+    Item labels, not keys, resolved in one query for the whole list; the items part
+    is left out when a payload carries no ``cost_items`` (redacted for the reader).
     """
-    items = ((data or {}).get("changes") or {}).get("cost_items") or {}
-    keys = sorted({*(items.get("old") or []), *(items.get("new") or [])})
+    keysets = []
+    for data in payloads:
+        items = ((data or {}).get("changes") or {}).get("cost_items") or {}
+        keysets.append(sorted({*(items.get("old") or []), *(items.get("new") or [])}))
+    labels = await cost_item_labels(db, [k for keys in keysets for k in keys])
     text = f"Costs of {card_name} changed"
-    if not keys:
-        return text
-    labels = await cost_item_labels(db, keys)
-    return f"{text} (items: {', '.join(labels.get(k, k) for k in keys)})"
+    return [
+        f"{text} (items: {', '.join(labels.get(k, k) for k in keys)})" if keys else text
+        for keys in keysets
+    ]
 
 
 def clip_text(text: str | None, limit: int = AUDIT_TEXT_LIMIT) -> str | None:
