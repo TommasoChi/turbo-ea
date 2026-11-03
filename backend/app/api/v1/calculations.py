@@ -405,6 +405,7 @@ async def activate_calculation(
     calc = result.scalar_one_or_none()
     if not calc:
         raise HTTPException(404, "Calculation not found")
+    _reject_derived_target(calc.target_type_key, calc.target_field_key)
 
     # Check for cycles before activating
     cycle = await detect_cycles(db, calc)

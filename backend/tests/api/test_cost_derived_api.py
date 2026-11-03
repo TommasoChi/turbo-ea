@@ -161,3 +161,40 @@ async def test_calculation_targeting_the_derived_total_is_refused(client, env):
         headers=h,
     )
     assert r.status_code == 400 and r.json()["detail"] == "cost_total_is_derived"
+
+
+async def _legacy_calc(db, active: bool):
+    from app.models.calculation import Calculation
+
+    calc = Calculation(
+        name="legacy",
+        target_type_key="Application",
+        target_field_key="costTotalAnnual",
+        formula="7",
+        is_active=active,
+    )
+    db.add(calc)
+    await db.commit()
+    return calc
+
+
+async def test_activating_a_legacy_calculation_on_the_derived_total_is_refused(client, db, env):
+    calc = await _legacy_calc(db, active=False)
+    r = await client.post(
+        f"/api/v1/calculations/{calc.id}/activate", headers=auth_headers(env["admin"])
+    )
+    assert r.status_code == 400 and r.json()["detail"] == "cost_total_is_derived"
+
+
+async def test_bulk_recalculate_does_not_overwrite_the_derived_total(client, db, env):
+    await _legacy_calc(db, active=True)
+    card = await create_card(db, card_type="Application", name="A", user_id=env["admin"].id)
+    db.add(CardCost(card_id=card.id, fiscal_year=CUR, items={"lic": {"amount": 30}}))
+    await db.commit()
+    h = auth_headers(env["admin"])
+    r = await client.patch(f"/api/v1/cards/{card.id}", json={"description": "x"}, headers=h)
+    assert r.json()["attributes"]["costTotalAnnual"] == 30
+    r = await client.post("/api/v1/calculations/recalculate/Application", headers=h)
+    assert r.status_code == 200, r.text
+    r = await client.get(f"/api/v1/cards/{card.id}", headers=h)
+    assert r.json()["attributes"]["costTotalAnnual"] == 30
