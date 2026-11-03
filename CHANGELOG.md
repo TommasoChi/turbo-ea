@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Total annual cost of Applications and IT Components is now calculated from the cost items** and read-only everywhere (grid, import, drag-fill, API, MCP, ServiceNow, LeanIX); a card without items has an empty cost.
 - **The Cost Report reads cost items** for these two types, one component per catalogue item.
 - **Existing costs are migrated on upgrade** from the old cost fields and cost history; years whose total changed are listed in the migration report.
+- **Members no longer edit the costs of Applications and IT Components by default.** Editing needs the new `costs.edit` permission or a stakeholder role that may edit the card (Responsible); a role with only inventory edit can no longer change costs.
+- **The migration report is stored in the `cost_items_migration_report` general setting** (no screen shows it).
 
 ### Removed
 
