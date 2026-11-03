@@ -226,3 +226,24 @@ Folded in from the fresh-Opus plan review (2026-11-03), all decided without the 
 - **`GET /cards/{id}/costs/{fiscal_year}`** added so the `current-5` row is readable.
 - **Workspace transfer** follows the rule file (`EntitySection` for `card_costs`, generic `ConfigSection` for the catalogue).
 - **Copy-to-forecast of an archived item** is allowed when it already has an amount in the source year.
+
+### Task 11: Costs permissions, audit and history (added 2026-11-03 at the user's request; execute BEFORE Task 8)
+
+**Files:**
+- Modify: `backend/app/core/permissions.py` (new key `costs.edit` in the `costs` group; default True for the admin role only, False for every other built-in role; `costs.view` keeps its defaults), `backend/app/services/permission_service.py` (new `can_edit_costs`), `backend/app/api/v1/card_costs.py` (write gate), `backend/app/services/card_costs.py` (response carries `can_edit`), `backend/app/services/rollback_service.py`, `backend/app/services/audit_labels.py`, `backend/app/api/v1/cards.py` (history redaction), `docs/api/openapi.json`
+- Create: migration `backend/alembic/versions/176_costs_edit_permission.py` if the registry requires stored role rows to be updated (read how `costs.view` reached existing roles; an admin role is usually computed — follow the precedent, do not invent one)
+- Test: `backend/tests/api/test_card_costs_api.py`, `backend/tests/services/test_permission_service*.py`, rollback and history tests
+
+**Interfaces:**
+- Produces `PermissionService.can_edit_costs(db, user, card_id) -> bool`: True when the user holds app-level `costs.edit`, OR holds a stakeholder role on that card whose permissions give `card.edit` (Responsible, Process owner, any role with `card.edit` true). A stakeholder role with `card.edit` false (Observer) does NOT edit costs. App-level `inventory.edit` alone does NOT grant cost editing. Reading stays `can_view_costs` (`costs.view` OR any stakeholder on the card).
+- Write routes of Task 4 use `can_edit_costs` instead of `_load_card_for_edit` + `costs.view`; the card must still be readable (404 when hidden by `CardReadScope`); a reader who may not edit gets 403. `GET /cards/{id}/costs` and `/costs/{fy}` add `can_edit: bool` for the caller. Mutating admin text for the new key goes in the permission descriptions; the existing `costs.view` description keeps "stakeholders see costs on their own cards".
+
+**Audit and history:**
+- Event type `card.costs_updated` (Task 4) gets a person-readable audit label (`audit_labels`, "Costs of <card> changed: items <labels>"), and a defined rollback behaviour: rolling back restores the previous items of the affected year through `card_costs` (so the derived total is recomputed) — implement a planner branch in `rollback_service` that reads the `cost_items` key lists... **if the keys-only payload cannot restore amounts, the event must also carry the previous year row under a redacted-for-history key used only by the rollback planner; if that is judged too heavy by the implementer, keep `unsupported` and state it in the report (the user decides).**
+- `GET /cards/{id}/history` (and SSE) redacts `costTotalAnnual` and `cost_items` in the event changes for a caller who may not view costs on that card (same rule as `can_view_costs`); a test proves a caller without costs access sees the event but not the values.
+
+- [ ] **Step 1: Write failing tests**: `can_edit_costs` true for admin, true for a Responsible stakeholder on the card, false for an Observer stakeholder, false for a member with only `inventory.edit`, false for a stranger; PUT 403 for a viewer-stakeholder, 200 for Responsible; GET returns `can_edit` accordingly; history redaction; audit label text; rollback behaviour as decided.
+- [ ] **Step 2: Run** the new tests. Expected: FAIL.
+- [ ] **Step 3: Implement** as above; regenerate `docs/api/openapi.json`.
+- [ ] **Step 4: Run** new tests + `tests/services/test_permission_keys*.py`, route auth guard, read-scope guard. Expected: PASS.
+- [ ] **Step 5: Commit** `feat(costs): costs.edit permission, cost audit and history redaction`.
