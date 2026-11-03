@@ -196,3 +196,36 @@ class TestPatchDropsCostsWhenForbidden:
         )
         assert r.status_code == 200, r.text
         assert r.json()["attributes"].get("costTotalAnnual") == 9999
+
+
+class TestApplicationDerivedTotalRedaction:
+    async def test_viewer_without_costs_view_or_stakeholder_role_never_sees_the_total(
+        self, client, db, cost_env
+    ):
+        from app.models.card_cost import CardCost
+        from app.services.fiscal_year import current_fiscal_year
+
+        await create_card_type(
+            db,
+            key="Application",
+            fields_schema=[
+                {"section": "Costs", "fields": [{"key": "costTotalAnnual", "type": "cost"}]}
+            ],
+        )
+        app = await create_card(db, card_type="Application", name="Derived")
+        db.add(
+            CardCost(
+                card_id=app.id,
+                fiscal_year=current_fiscal_year(1),
+                items={"lic": {"amount": 70}},
+            )
+        )
+        await db.flush()
+        from app.services import card_costs
+
+        await card_costs.recompute_derived(db, app)
+        assert app.attributes["costTotalAnnual"] == 70
+        for user, seen in (("admin", True), ("viewer", False)):
+            r = await client.get(f"/api/v1/cards/{app.id}", headers=auth_headers(cost_env[user]))
+            assert r.status_code == 200
+            assert ("costTotalAnnual" in r.json()["attributes"]) is seen

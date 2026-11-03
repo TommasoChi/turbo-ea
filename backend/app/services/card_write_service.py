@@ -50,7 +50,7 @@ from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.services import card_approval, card_lifecycle, card_reference, notification_service
 from app.services.calculation_engine import run_calculations_for_card
-from app.services.card_costs import COST_ITEM_TYPES, recompute_derived
+from app.services.card_costs import COST_ITEM_TYPES, DERIVED_KEY, recompute_derived
 from app.services.card_uniqueness import check_sibling_name_unique
 from app.services.cost_history import sync_current_fy_history
 from app.services.cost_value import is_numeric_text
@@ -1031,6 +1031,12 @@ async def update_card(
     # Recalculate completion. Must run *after* the calculations, or a
     # weighted calculated field is scored on its previous value.
     card.data_quality = await calc_data_quality(db, card)
+    if card.type in COST_ITEM_TYPES and "attributes" in changes:
+        # History records what was stored, not the total the caller sent
+        new_attrs = {k: v for k, v in changes["attributes"]["new"].items() if k != DERIVED_KEY}
+        if DERIVED_KEY in (card.attributes or {}):
+            new_attrs[DERIVED_KEY] = card.attributes[DERIVED_KEY]
+        changes["attributes"]["new"] = new_attrs
 
     def _serialize_val(v: object) -> object:
         """Convert a value to something JSON-serialisable."""

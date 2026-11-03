@@ -8,7 +8,7 @@ from app.models.card_cost import CardCost
 from app.services import card_costs as svc
 from app.services import cost_item_types as cat
 from app.services.fiscal_year import current_fiscal_year
-from tests.conftest import create_card
+from tests.conftest import create_card, create_card_type
 
 SM = 1
 CUR = current_fiscal_year(SM)
@@ -19,6 +19,13 @@ async def _setup(db, archived=()):
         await cat.create_item(db, key, key.upper(), None)
     for key in archived:
         await cat.update_item(db, key, archived=True)
+    await create_card_type(
+        db,
+        key="Application",
+        fields_schema=[
+            {"section": "Cost", "fields": [{"key": "costTotalAnnual", "type": "cost", "weight": 0}]}
+        ],
+    )
     return await create_card(db)
 
 

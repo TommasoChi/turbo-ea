@@ -154,12 +154,7 @@ async def test_a_created_card_carries_every_given_field(db, env):
     )
     assert (card.parent_id, card.parent_label) == (parent.id, "sales")
     assert card.lifecycle == {"active": "2024-01-01"}
-    assert card.attributes == {
-        "website": "https://billing",
-        "owner": "Ann",
-        "hierarchyLevel": 2,
-        "costTotalAnnual": 0,
-    }
+    assert card.attributes == {"website": "https://billing", "owner": "Ann", "hierarchyLevel": 2}
     assert (card.external_id, card.alias) == ("ext-1", "BIL")
     assert card.approval_status == "DRAFT"
     assert card.created_by == card.updated_by == env["user"].id
@@ -168,7 +163,7 @@ async def test_a_created_card_carries_every_given_field(db, env):
 
 async def test_a_bare_create_takes_the_defaults(db, env):
     card = await svc.create_card(db, ext_actor(), type_key="ITComponent", name="Server")
-    assert card.lifecycle == {} and card.attributes == {"costTotalAnnual": 0}
+    assert card.lifecycle == {} and card.attributes == {}
     assert card.parent_id is None and card.parent_label is None
     assert card.created_by is None and card.updated_by is None
 
@@ -281,7 +276,7 @@ async def test_undeclared_attributes_are_kept_unless_strict(db, env):
     card = await svc.create_card(
         db, env["actor"], type_key="ITComponent", name="Server", attributes={"made_up": 1}
     )
-    assert card.attributes == {"made_up": 1, "costTotalAnnual": 0}
+    assert card.attributes == {"made_up": 1}
 
 
 async def test_undeclared_attributes_on_a_typed_card_need_strict_mode_to_fail(db, env):
@@ -383,7 +378,7 @@ async def test_an_update_records_every_change_and_announces_it(db, env, publishe
         "card_id": card.id,
         "user_id": env["user"].id,
     }
-    assert card.attributes == {"owner": "Bob", "hierarchyLevel": 2, "costTotalAnnual": 0}
+    assert card.attributes == {"owner": "Bob", "hierarchyLevel": 2}
     assert notified == [
         {
             "kind": "card_updated",
@@ -510,7 +505,7 @@ async def test_cost_fields_are_free_without_ppm_lines_or_on_other_types(db, env)
     comp = await create_card(db, card_type="ITComponent", name="S", attributes={"costBudget": 1})
     await create_budget_line(db, initiative_id=comp.id, amount=100)
     await svc.update_card(db, env["actor"], comp, {"attributes": {"costBudget": 9}})
-    assert comp.attributes == {"costBudget": 9, "costTotalAnnual": 0}
+    assert comp.attributes == {"costBudget": 9}
 
 
 async def test_a_reparent_into_its_own_subtree_is_refused(db, env):

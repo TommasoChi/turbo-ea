@@ -212,7 +212,7 @@ async def test_migration_moves_fields_and_history(db):
     assert len(rows) == 7  # the current-year history row is discarded
 
     assert (await db.get(Card, app_id)).attributes["costTotalAnnual"] == 200
-    assert (await db.get(Card, empty_id)).attributes["costTotalAnnual"] == 0
+    assert "costTotalAnnual" not in (await db.get(Card, empty_id)).attributes
 
     keys = {c.key for c in (await db.execute(select(CostItemType))).scalars()}
     assert keys == {*KEYS, "extraCost", "other"}

@@ -57,6 +57,7 @@ from app.models.stakeholder import Stakeholder
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
 from app.services import card_type_categories
+from app.services.card_costs import COST_ITEM_TYPES, recompute_derived
 from app.services.event_bus import event_bus
 from app.services.relation_orientation import orient_endpoints
 
@@ -305,6 +306,8 @@ async def _apply_single_card(
         )
         db.add(card)
         await db.flush()
+        if card.type in COST_ITEM_TYPES:  # an imported total never outlives the cost section
+            await recompute_derived(db, card)
         staged.target_id = card.id
         # A migration apply writes cards, so it moves their Modified date — it
         # owes the History tab an entry like any other write path (#995).
@@ -362,6 +365,8 @@ async def _apply_single_card(
         if parent_id is not None:
             card.parent_id = parent_id
 
+        if card.type in COST_ITEM_TYPES:
+            await recompute_derived(db, card)
         after = {
             "name": card.name,
             "description": card.description,

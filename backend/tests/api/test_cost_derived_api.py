@@ -35,14 +35,14 @@ async def test_patch_derived_key_is_overwritten_on_the_same_save(client, db, env
     assert r.json()["attributes"]["costTotalAnnual"] == 30
 
 
-async def test_create_stores_derived_zero(client, env):
+async def test_create_without_cost_lines_stores_no_total(client, env):
     r = await client.post(
         "/api/v1/cards",
         json={"type": "Application", "name": "N", "attributes": {"costTotalAnnual": 999}},
         headers=auth_headers(env["admin"]),
     )
     assert r.status_code == 201, r.text
-    assert r.json()["attributes"]["costTotalAnnual"] == 0
+    assert "costTotalAnnual" not in r.json()["attributes"]
 
 
 async def test_provider_keeps_its_own_value(client, db, env):
@@ -60,7 +60,7 @@ async def test_metamodel_cannot_remove_or_retype_derived_field_on_cost_item_type
     r = await client.patch(
         "/api/v1/metamodel/types/Application", json={"fields_schema": NO_COST}, headers=h
     )
-    assert r.status_code == 400, r.text
+    assert r.status_code == 400 and r.json()["detail"] == "use_cost_items", r.text
     retyped = [{"section": "Cost", "fields": [{"key": "costTotalAnnual", "type": "text"}]}]
     r = await client.patch(
         "/api/v1/metamodel/types/Application", json={"fields_schema": retyped}, headers=h
@@ -113,3 +113,51 @@ async def test_fiscal_year_start_change_recomputes_fallback_cards(client, db, en
     assert r.status_code == 200, r.text
     await db.refresh(card)
     assert card.attributes["costTotalAnnual"] == 40
+
+
+async def test_history_records_the_stored_total_not_the_sent_one(client, db, env):
+    card = await create_card(db, card_type="Application", name="A", user_id=env["admin"].id)
+    db.add(CardCost(card_id=card.id, fiscal_year=CUR, items={"lic": {"amount": 30}}))
+    await db.commit()
+    r = await client.patch(
+        f"/api/v1/cards/{card.id}",
+        json={"attributes": {"costTotalAnnual": 999}},
+        headers=auth_headers(env["admin"]),
+    )
+    assert r.status_code == 200, r.text
+    from sqlalchemy import select
+
+    from app.models.event import Event
+
+    ev = (
+        (
+            await db.execute(
+                select(Event).where(Event.card_id == card.id, Event.event_type == "card.updated")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert ev and ev[-1].data["changes"]["attributes"]["new"]["costTotalAnnual"] == 30
+
+
+async def test_calculation_targeting_the_derived_total_is_refused(client, env):
+    h = auth_headers(env["admin"])
+    body = {
+        "name": "c",
+        "target_type_key": "Application",
+        "target_field_key": "costTotalAnnual",
+        "formula": "1",
+    }
+    r = await client.post("/api/v1/calculations", json=body, headers=h)
+    assert r.status_code == 400 and r.json()["detail"] == "cost_total_is_derived"
+    ok = await client.post(
+        "/api/v1/calculations", json={**body, "target_type_key": "Provider"}, headers=h
+    )
+    assert ok.status_code == 201, ok.text
+    r = await client.patch(
+        f"/api/v1/calculations/{ok.json()['id']}",
+        json={"target_type_key": "Application"},
+        headers=h,
+    )
+    assert r.status_code == 400 and r.json()["detail"] == "cost_total_is_derived"

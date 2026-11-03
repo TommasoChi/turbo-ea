@@ -97,13 +97,15 @@ def _data_body(conn) -> None:
         attrs = card.attributes or {}
         items, tco, changed = cim.build_current_year_items(attrs, item_keys)
         conn.execute(insert_cost, {"c": card.id, "y": current, "i": json.dumps(items)})
-        conn.execute(
-            text(
-                "UPDATE cards SET attributes = COALESCE(attributes, '{}'::jsonb) "
-                "|| jsonb_build_object('costTotalAnnual', CAST(:t AS float8)) WHERE id = :c"
-            ),
-            {"t": tco, "c": card.id},
+        # No line, no total: the field stays empty rather than reading as a filled 0.
+        sql = (
+            "UPDATE cards SET attributes = COALESCE(attributes, '{}'::jsonb) "
+            "|| jsonb_build_object('costTotalAnnual', CAST(:t AS float8)) WHERE id = :c"
+            if items
+            else "UPDATE cards SET attributes = COALESCE(attributes, '{}'::jsonb) "
+            "- 'costTotalAnnual' WHERE id = :c"
         )
+        conn.execute(text(sql), {"t": tco, "c": card.id} if items else {"c": card.id})
         if changed:
             report.append(
                 {

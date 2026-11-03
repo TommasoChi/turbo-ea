@@ -26,7 +26,13 @@ async def env(db):
     admin = await create_user(db, email="a@costs-api.com", role="admin")
     viewer = await create_user(db, email="v@costs-api.com", role="viewer")
     nocost = await create_user(db, email="n@costs-api.com", role="nocost")
-    await create_card_type(db, key="Application")
+    await create_card_type(
+        db,
+        key="Application",
+        fields_schema=[
+            {"section": "Cost", "fields": [{"key": "costTotalAnnual", "type": "cost", "weight": 0}]}
+        ],
+    )
     await create_card_type(db, key="Process", label="Process")
     await cost_item_types.create_item(db, "lic", "Licences")
     await cost_item_types.create_item(db, "old", "Old")
@@ -132,7 +138,7 @@ async def test_delete_item(client, db, env):
     r = await client.delete(path, headers=auth_headers(env["admin"]))
     assert r.status_code == 204
     await db.refresh(env["card"])
-    assert env["card"].attributes["costTotalAnnual"] == 0
+    assert "costTotalAnnual" not in env["card"].attributes  # no lines left: empty, not 0
 
 
 async def test_confirm_creates_row(client, db, env):

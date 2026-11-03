@@ -1398,7 +1398,7 @@ def _guard_derived_cost_field(key: str, old: list | None, new: list | None) -> N
 
     was = field_type(old)
     if was is not None and field_type(new) != was:
-        raise HTTPException(400, f"'{DERIVED_KEY}' is derived from card costs: keep it as is")
+        raise HTTPException(400, "use_cost_items")
 
 
 @router.patch("/types/{key}")

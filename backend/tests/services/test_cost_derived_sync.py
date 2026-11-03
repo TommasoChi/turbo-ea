@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
+from app.models.card import Card
 from app.models.card_cost import CardCost
 from app.models.card_cost_history import CardCostHistory
 from app.services import card_costs as svc
@@ -85,3 +86,97 @@ async def test_direct_attribute_write_then_recompute_matches_section(db):
     app.attributes = {**app.attributes, "costTotalAnnual": 999}
     await svc.recompute_derived(db, app)
     assert app.attributes["costTotalAnnual"] == 12
+
+
+async def test_no_lines_removes_the_key_and_zero_amount_line_keeps_it(db):
+    await _setup(db)
+    app = await create_card(db, card_type="Application", attributes={"costTotalAnnual": 5, "x": 1})
+    await svc.recompute_derived(db, app)
+    assert app.attributes == {"x": 1}
+    db.add(CardCost(card_id=app.id, fiscal_year=CUR, items={"lic": {"amount": 0}}))
+    await db.flush()
+    await svc.recompute_derived(db, app)
+    assert app.attributes == {"x": 1, "costTotalAnnual": 0}
+
+
+async def test_type_without_the_field_is_left_alone(db):
+    await create_card_type(db, key="Application", fields_schema=[])
+    app = await create_card(db, card_type="Application", attributes={"x": 1})
+    await svc.recompute_derived(db, app)
+    assert app.attributes == {"x": 1}
+    assert await svc.recompute_all(db) == 0
+
+
+async def test_concurrent_attribute_edit_between_compute_and_write_survives(db):
+    await _setup(db)
+    app = await create_card(db, card_type="Application", attributes={"x": 1})
+    db.add(CardCost(card_id=app.id, fiscal_year=CUR, items={"lic": {"amount": 8}}))
+    await db.flush()
+    targets = await svc.stale_totals(db)
+    assert targets == {app.id: 8}
+    await db.execute(update(Card).where(Card.id == app.id).values(attributes={"x": 2}))
+    assert await svc.write_totals(db, targets) == 1
+    assert app.attributes == {"x": 2, "costTotalAnnual": 8}
+
+
+async def test_platform_migration_apply_recomputes_the_total(db):
+    import uuid
+
+    from app.models.migration import Migration, StagedRecord
+    from app.services.migration.apply import _apply_single_card
+    from tests.conftest import create_user
+
+    await _setup(db)
+    user = await create_user(db, email="m@cost-derived.com", role="admin")
+    mig = Migration(
+        name="a.xlsx",
+        file_hash=uuid.uuid4().hex,
+        source_type="leanix",
+        status="previewed",
+        created_by=user.id,
+    )
+    db.add(mig)
+    app = await create_card(db, card_type="Application", attributes={})
+    db.add(CardCost(card_id=app.id, fiscal_year=CUR, items={"lic": {"amount": 30}}))
+    await db.flush()
+
+    def staged(action, **kw):
+        row = StagedRecord(
+            migration_id=mig.id,
+            source_type="leanix",
+            entity_kind="card",
+            source_id=uuid.uuid4().hex,
+            action=action,
+            source_data={
+                "payload": {
+                    "type": "Application",
+                    "name": kw.get("name", app.name),
+                    "attributes": {"costTotalAnnual": 999},
+                }
+            },
+            **{k: v for k, v in kw.items() if k == "target_id"},
+        )
+        db.add(row)
+        return row
+
+    upd = staged("update", target_id=app.id)
+    await db.flush()
+    await _apply_single_card(db, upd, user)
+    assert app.attributes["costTotalAnnual"] == 30
+
+    new = staged("create", name="Brand new")
+    await db.flush()
+    await _apply_single_card(db, new, user)
+    created = await db.get(Card, new.target_id)
+    assert "costTotalAnnual" not in created.attributes  # 999 dropped: it has no cost lines
+
+
+async def test_workspace_import_finalize_recomputes_the_total(db):
+    from app.services.workspace_io.applier import _finalize_cards
+
+    await _setup(db)
+    app = await create_card(db, card_type="Application", attributes={"costTotalAnnual": 999})
+    db.add(CardCost(card_id=app.id, fiscal_year=CUR, items={"lic": {"amount": 30}}))
+    await db.flush()
+    await _finalize_cards(db)
+    assert app.attributes["costTotalAnnual"] == 30

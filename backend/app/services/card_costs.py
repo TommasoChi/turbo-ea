@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
 from app.models.card_cost import CardCost
+from app.models.card_type import CardType
 from app.models.cost_item_type import CostItemType
 from app.services.cost_value import cost_value
 from app.services.event_bus import event_bus
@@ -252,30 +253,108 @@ async def copy_to_forecast(
     return await get_year_row(db, card_id, forecast, sm)
 
 
+async def _declaring_types(db: AsyncSession) -> set[str]:
+    """Cost-item types whose schema declares the derived field (otherwise nothing is written)."""
+    rows = (
+        await db.execute(
+            select(CardType.key, CardType.fields_schema).where(CardType.key.in_(COST_ITEM_TYPES))
+        )
+    ).all()
+    return {
+        k
+        for k, schema in rows
+        if any(
+            f.get("key") == DERIVED_KEY
+            for sec in schema or []
+            for f in (sec.get("fields") or [] if isinstance(sec, dict) else [])
+        )
+    }
+
+
+async def _target_total(db: AsyncSession, card_id: uuid.UUID, fy: int, sm: int) -> float | None:
+    """The derived value for a year: ``None`` (key absent) when the year has no lines."""
+    yc = await get_year_row(db, card_id, fy, sm)
+    return yc.tco if yc.items else None
+
+
+def _with_total(attrs: dict | None, total: float | None) -> dict:
+    out = {k: v for k, v in (attrs or {}).items() if k != DERIVED_KEY}
+    if total is not None:
+        out[DERIVED_KEY] = total
+    return out
+
+
 async def recompute_derived(db: AsyncSession, card: Card) -> None:
-    """Write the current-year TCO (fallback included) into ``attributes.costTotalAnnual``."""
+    """Write the current-year TCO (fallback included) into ``attributes.costTotalAnnual``.
+
+    No cost lines: the key is removed (an empty field, not a zero). A type whose schema does
+    not declare the field is left untouched.
+    """
+    if card.type not in await _declaring_types(db):
+        return
     sm = await get_fiscal_year_start(db)
-    yc = await get_year_row(db, card.id, current_fiscal_year(sm), sm)
-    card.attributes = {**(card.attributes or {}), DERIVED_KEY: yc.tco}
+    total = await _target_total(db, card.id, current_fiscal_year(sm), sm)
+    if (card.attributes or {}).get(DERIVED_KEY) != total or (
+        total is None and DERIVED_KEY in (card.attributes or {})
+    ):
+        card.attributes = _with_total(card.attributes, total)
+
+
+async def stale_totals(db: AsyncSession) -> dict[uuid.UUID, float | None]:
+    """Phase 1 of ``recompute_all``: ``{card id: target}`` for cards whose stored value differs.
+
+    Reads only; nothing is mutated, so a concurrent edit cannot be overwritten from here.
+    """
+    sm = await get_fiscal_year_start(db)
+    fy = current_fiscal_year(sm)
+    declaring = await _declaring_types(db)
+    rows = (
+        await db.execute(select(Card.id, Card.attributes).where(Card.type.in_(declaring)))
+    ).all()
+    out: dict[uuid.UUID, float | None] = {}
+    for card_id, attrs in rows:
+        total = await _target_total(db, card_id, fy, sm)
+        have = (attrs or {}).get(DERIVED_KEY)
+        if have != total or (total is None and DERIVED_KEY in (attrs or {})):
+            out[card_id] = total
+    return out
+
+
+async def write_totals(db: AsyncSession, targets: dict[uuid.UUID, float | None]) -> int:
+    """Phase 2: lock the stale cards and merge the key into their *fresh* attributes.
+
+    shortcut: one lookup per card in phase 1, batch it past ~50k cards.
+    """
+    if not targets:
+        return 0
+    cards = (
+        (
+            await db.execute(
+                select(Card)
+                .where(Card.id.in_(targets))
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    changed = 0
+    for card in cards:
+        fresh = _with_total(card.attributes, targets[card.id])
+        if fresh != (card.attributes or {}):
+            card.attributes = fresh
+            changed += 1
+    await db.flush()
+    return changed
 
 
 async def recompute_all(db: AsyncSession) -> int:
     """Refresh the derived total of every cost-bearing card; returns how many changed.
 
-    Writes only where the value differs. The caller wraps it in ``derived_maintenance``.
-    shortcut: one TCO lookup per card, batch it past ~50k cards.
+    The caller wraps it in ``derived_maintenance`` and commits.
     """
-    sm = await get_fiscal_year_start(db)
-    fy = current_fiscal_year(sm)
-    cards = (await db.execute(select(Card).where(Card.type.in_(COST_ITEM_TYPES)))).scalars().all()
-    changed = 0
-    for card in cards:
-        total = (await get_year_row(db, card.id, fy, sm)).tco
-        if (card.attributes or {}).get(DERIVED_KEY) != total:
-            card.attributes = {**(card.attributes or {}), DERIVED_KEY: total}
-            changed += 1
-    await db.flush()
-    return changed
+    return await write_totals(db, await stale_totals(db))
 
 
 async def apply_write(

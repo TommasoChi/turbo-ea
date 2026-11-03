@@ -327,12 +327,7 @@ class TestPullApply:
         await _assert_stats_persisted(db, run)
 
         assert card.description == "Billing desc"
-        assert card.attributes == {
-            "criticality": "critical",
-            "keep": 1,
-            "origin": "servicenow",
-            "costTotalAnnual": 0,
-        }
+        assert card.attributes == {"criticality": "critical", "keep": 1, "origin": "servicenow"}
         assert card.lifecycle == {"plan": "2020-01-01", "active": "2021-05-01"}
         assert entry.last_synced_at is not None
         (event,) = await _events(db, "card.updated")
