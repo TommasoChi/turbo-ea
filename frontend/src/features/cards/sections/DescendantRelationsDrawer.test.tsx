@@ -5,7 +5,9 @@
  * nothing is fetched until it opens, rows carry their `via` provenance, and
  * there is no add/unlink affordance anywhere in it.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", () => ({
@@ -33,9 +35,11 @@ vi.mock("@/hooks/useMetamodel", () => ({
 }));
 
 const navigate = vi.fn();
-vi.mock("react-router", () => ({
-  useNavigate: () => navigate,
-}));
+// Partial mock: rows are router links (#1335), so `Link` must stay real.
+vi.mock("react-router", async () => {
+  const actual = await vi.importActual("react-router");
+  return { ...actual, useNavigate: () => navigate };
+});
 
 import { api } from "@/api/client";
 import i18n from "@/i18n";
@@ -85,15 +89,31 @@ afterEach(async () => {
   if (i18n.language !== "en") await i18n.changeLanguage("en");
 });
 
-function renderDrawer(open = true, isSource = true) {
+function LocationProbe() {
+  return <div data-testid="location">{useLocation().pathname}</div>;
+}
+
+/**
+ * jsdom cannot follow a real link: a click the app leaves to the browser
+ * (Ctrl / Cmd / Shift) would log "Not implemented: navigation". Stop the
+ * default on `document`, after React's root listener has seen the click.
+ */
+function stopBrowserNavigation(e: Event) {
+  e.preventDefault();
+}
+
+function renderDrawer(open = true, isSource = true, onClose: () => void = () => {}) {
   return render(
-    <DescendantRelationsDrawer
-      open={open}
-      onClose={() => {}}
-      cardId="root-1"
-      rt={rt}
-      isSource={isSource}
-    />,
+    <MemoryRouter initialEntries={["/cards/root-1"]}>
+      <DescendantRelationsDrawer
+        open={open}
+        onClose={onClose}
+        cardId="root-1"
+        rt={rt}
+        isSource={isSource}
+      />
+      <LocationProbe />
+    </MemoryRouter>,
   );
 }
 
@@ -243,7 +263,7 @@ describe("DescendantRelationsDrawer", () => {
     // Row text starts with the card name, then icon ligatures and chips, so
     // assert on the prefix rather than trying to tokenise the whole row.
     const rowTexts = Array.from(
-      document.body.querySelectorAll(".MuiListItemButton-root"),
+      document.body.querySelectorAll("li.MuiListItem-root"),
     ).map((el) => el.textContent ?? "");
     expect(rowTexts).toHaveLength(3);
     expect(rowTexts[0].startsWith("Zeta")).toBe(true);
@@ -267,6 +287,60 @@ describe("DescendantRelationsDrawer", () => {
     await waitFor(() =>
       expect(screen.getByText(/No cards are linked through sub-items/i)).toBeInTheDocument(),
     );
+  });
+
+  describe("opening a card (#1335)", () => {
+    it("makes each row a link, closing the drawer on a plain click", async () => {
+      vi.mocked(api.get).mockResolvedValue(payload);
+      const onClose = vi.fn();
+      renderDrawer(true, true, onClose);
+      const row = (await screen.findByText("Billing Engine")).closest("a");
+      expect(row).toHaveAttribute("href", "/cards/a1");
+
+      await userEvent.click(screen.getByText("Billing Engine"));
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("location")).toHaveTextContent("/cards/a1");
+    });
+
+    it("leaves the drawer open on a Ctrl-click — the card opens in a new tab", async () => {
+      vi.mocked(api.get).mockResolvedValue(payload);
+      const onClose = vi.fn();
+      renderDrawer(true, true, onClose);
+      const name = await screen.findByText("Billing Engine");
+      document.addEventListener("click", stopBrowserNavigation);
+      fireEvent.click(name, { ctrlKey: true });
+      document.removeEventListener("click", stopBrowserNavigation);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByTestId("location")).toHaveTextContent("/cards/root-1");
+    });
+
+    it("makes each via chip its own link, beside the row's — never inside it", async () => {
+      vi.mocked(api.get).mockResolvedValue(payload);
+      const onClose = vi.fn();
+      renderDrawer(true, true, onClose);
+      const chip = (await screen.findByText("Direct Debit")).closest("a");
+      expect(chip).toHaveAttribute("href", "/cards/s2");
+      // No link nests in another: the chip's anchor has no anchor above it.
+      expect(chip?.parentElement?.closest("a")).toBeNull();
+      expect(screen.getByText("Billing Engine").closest("a")?.querySelector("a")).toBeNull();
+
+      await userEvent.click(screen.getByText("Direct Debit"));
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(screen.getByTestId("location")).toHaveTextContent("/cards/s2");
+    });
+
+    it("leaves the drawer open when a via chip is Cmd-clicked — the card opens in a new tab", async () => {
+      vi.mocked(api.get).mockResolvedValue(payload);
+      const onClose = vi.fn();
+      renderDrawer(true, true, onClose);
+      const chip = await screen.findByText("Direct Debit");
+      document.addEventListener("click", stopBrowserNavigation);
+      fireEvent.click(chip, { metaKey: true });
+      document.removeEventListener("click", stopBrowserNavigation);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByTestId("location")).toHaveTextContent("/cards/root-1");
+    });
   });
 
   it("surfaces a load failure without crashing", async () => {

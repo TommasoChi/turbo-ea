@@ -4,7 +4,7 @@ La page **Paramètres** sous **Admin → Paramètres** (`/admin/settings`) est l
 
 | Onglet | URL | Ce qu'il contrôle | Guide complet |
 |--------|-----|-------------------|---------------|
-| **Général** | `/admin/settings?tab=general` | Apparence (logo, favicon, devise, format de date, langues activées, année fiscale), envoi d'e-mails, **bascules de modules** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Cette page |
+| **Général** | `/admin/settings?tab=general` | Apparence (logo, favicon, devise, format de date, langues activées, année fiscale), envoi d'e-mails, **bascules de modules** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button, Mode TurboRPG) | Cette page |
 | **Authentification** | `/admin/settings?tab=authentication` | Fournisseurs SSO, inscription, politique de mot de passe | [Authentification & SSO](sso.md) |
 | **IA** | `/admin/settings?tab=ai` | Fournisseur LLM, modèle, backend de recherche web, bascules de suggestion IA par type de fiche | [Capacités IA](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Liaison en masse des produits aux entrées endoflife.date | [Fin de vie (EOL)](eol.md) |
@@ -232,6 +232,26 @@ Comme la vérification des versions, ceci relève **uniquement de l'information*
 Affichez ou masquez le bouton **Soutenir** dans le menu utilisateur (avatar). Lorsqu'il est masqué, les utilisateurs ne voient plus le bouton Soutenir dans leur menu de profil. Le bouton Soutenir — et la boîte de dialogue expliquant comment soutenir Turbo EA — reste toujours disponible depuis ce panneau de paramètres, de sorte que les administrateurs peuvent toujours y accéder même lorsqu'il est masqué du menu.
 
 Si votre entreprise sponsorise Turbo EA et souhaite que son logo soit mis en avant sur turbo-ea.org, contactez-nous à [sponsorship@turbo-ea.org](mailto:sponsorship@turbo-ea.org).
+
+## TurboRPG (qualité des données gamifiée)
+
+![Activation du mode TurboRPG](../assets/img/fr/95c_admin_parametres_gamification.png)
+
+Le **mode TurboRPG** transforme la qualité des données en jeu. Activez cette option pour célébrer chaque enregistrement qui améliore la qualité des données d'une fiche. Elle est **désactivée** par défaut et s'applique à tout le monde ; il n'existe pas de réglage par utilisateur.
+
+Lorsqu'elle est active, l'enregistrement d'une modification qui augmente le score d'une fiche déclenche une courte récompense sur la page de la fiche et dans le panneau d'aperçu de la fiche, comme lorsqu'on gagne de la vie dans un jeu :
+
+- un **+X%** vert lumineux (les points ajoutés par l'enregistrement) quitte la section enregistrée – plus précisément son en-tête, où se trouve le bouton Enregistrer – et file en arc de cercle vers l'**anneau de qualité des données** ;
+- à l'**impact**, l'anneau s'illumine, un halo et une lueur de la couleur du score s'en diffusent, un reflet le balaie, il pulse, son remplissage grandit jusqu'au nouveau score comme une barre de vie, et le chiffre s'incrémente ;
+- sur la page de la fiche, dès que vous dépassez l'en-tête de la fiche, une fine **barre de score** reste épinglée sous la barre supérieure avec le nom et le score de la fiche ; tant qu'elle est affichée, le gain s'envole vers elle à la place. Cliquez sur le score de la barre — la pastille avec le chevron — pour ouvrir le même détail de la qualité des données que celui de l'anneau.
+
+Un enregistrement effectué depuis l'en-tête (le nom ou le sous-type) ou depuis la section End of Life n'a pas de section d'où partir : le **+X%** s'élève alors simplement au-dessus de l'anneau.
+
+Deux moments comptent comme des **paliers** et déclenchent une courte pluie de confettis accompagnée d'une légende : l'entrée dans la zone verte (**80%** et plus, *Terminé !*) et l'atteinte de **100%** (*Score parfait !*).
+
+Un enregistrement qui **efface ou supprime des données** et fait baisser le score joue l'inverse atténué, de sorte que l'on y voit des points qui partent plutôt qu'une pénalité : un **−X%** rouge quitte l'anneau et retourne vers la section, la barre se vide – la largeur perdue reste affichée en rouge un court instant – et le chiffre décompte et s'estompe brièvement. Il n'y a ni éclat, ni halo, ni confettis.
+
+Les utilisateurs qui ont activé la **réduction des animations** dans leur système d'exploitation ne voient aucun mouvement : rien ne s'envole, le score est mis à jour immédiatement et une étiquette **+X%** (ou **−X%** rouge) statique s'affiche pendant deux secondes. Les lecteurs d'écran annoncent chaque changement une seule fois (par exemple *+6,7% de qualité des données* ou *−6,7% de qualité des données*).
 
 ## Paramètres TurboLens
 

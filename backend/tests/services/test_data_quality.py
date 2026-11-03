@@ -47,6 +47,15 @@ async def test_untuned_matches_legacy_behavior(db):
     assert await calc_data_quality(db, card) == 50.0
 
 
+async def test_a_card_whose_type_is_gone_scores_zero_and_has_no_breakdown(db):
+    """No CardType row behind the card: nothing to score, and nothing to explain."""
+    from app.services.data_quality import calc_data_quality_breakdown
+
+    card = await create_card(db, card_type="GhostType", attributes={"a": "x"})
+    assert await calc_data_quality_breakdown(db, card) is None
+    assert await calc_data_quality(db, card) == 0.0
+
+
 async def test_field_set_to_ignore_is_excluded(db):
     """Weight 0 ('Ignore') drops the field from both numerator and denominator."""
     schema = [
@@ -766,3 +775,362 @@ class TestLoadScoringContext:
         ctx = await load_scoring_context(db, "Application")
         statements.clear()
         assert await load_scoring_facts(db, ctx, []) == {}
+
+
+# ── The breakdown behind the score (#1334) ──────────────────────────
+
+
+_BREAKDOWN_SCHEMA = [
+    {
+        "section": "Details",
+        "fields": [
+            {"key": "a", "label": "A", "type": "text", "weight": 1, "required": True},
+            {"key": "b", "label": "B", "type": "text", "weight": 2},
+            {"key": "c", "label": "C", "type": "text", "weight": 0},
+            {"key": "secret", "label": "Secret", "type": "text", "weight": 1},
+        ],
+    },
+    {
+        "section": "More",
+        "fields": [
+            {"key": "flag", "label": "Flag", "type": "boolean", "required": True},
+            {"key": "calc", "label": "Calc", "type": "number", "required": True, "readonly": True},
+        ],
+    },
+]
+
+
+def _breakdown_ctx(**overrides):
+    """Every bucket on. For a `saas` card: fields a 1 + b 2 + flag 1 + calc 1
+    (c weighs 0, `secret` is hidden) + description 1 + lifecycle 1 + relations
+    2 × relB (relA is exempt) + tags 1 + stakeholders 3 = 13."""
+    subtypes = [
+        {
+            "key": "saas",
+            "label": "SaaS",
+            "optional_relations": ["relA"],
+            "hidden_fields": ["secret"],
+        }
+    ]
+    dq = {"description": 1, "lifecycle": 1, "relations": 2, "tags": 1, "stakeholders": 3}
+    return _ctx(
+        **{"fields_schema": _BREAKDOWN_SCHEMA, "subtypes": subtypes, "dq_cfg": dq, **overrides}
+    )
+
+
+class TestScoreBreakdown:
+    def _card(self, **kwargs):
+        from app.models.card import Card
+
+        base = {"type": "Application", "name": "X", "subtype": "saas", "attributes": {"a": "x"}}
+        base.update(kwargs)
+        return Card(**base)
+
+    async def test_lists_every_slot_with_its_weight_and_state(self):
+        from app.services.card_completeness import LinkFacts
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, group = _breakdown_ctx()
+        facts = CardFacts(links=LinkFacts(tag_groups=frozenset({group})))
+        card = self._card(lifecycle={"active": "2024-01-01"})
+        bd = score_breakdown(card, ctx, facts)
+
+        rows = [(f.kind, f.key, f.weight, f.filled) for f in bd.factors]
+        assert rows == [
+            ("field", "a", 1, True),
+            ("field", "b", 2, False),
+            ("field", "flag", 1, False),
+            ("field", "calc", 1, False),
+            ("description", "description", 1.0, False),
+            ("lifecycle", "lifecycle", 1.0, True),
+            ("relation", "relB", 2.0, False),
+            ("tag_group", str(group), 1.0, True),
+            ("stakeholders", "stakeholders", 3.0, False),
+        ]
+        # The weights are the denominator, the filled ones the numerator.
+        assert bd.total_weight == 13.0
+        assert sum(f.weight for f in bd.factors) == bd.total_weight
+        assert bd.filled_weight == 3.0
+        assert sum(f.weight for f in bd.factors if f.filled) == bd.filled_weight
+        assert bd.blocked_by_required == []
+        assert bd.score == bd.ungated_score == 23.1
+
+    async def test_carries_the_metamodel_detail_each_kind_needs(self):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, group = _breakdown_ctx()
+        bd = score_breakdown(self._card(subtype=None), ctx, CardFacts())
+        by_key = {f.key: f for f in bd.factors}
+        assert by_key["a"].section == "Details"
+        assert by_key["calc"].section == "More"
+        rel_a, rel_b = by_key["relA"], by_key["relB"]
+        assert (rel_a.side, rel_a.other_type_key, rel_a.label) == ("source", "Organization", "owns")
+        assert (rel_b.side, rel_b.other_type_key, rel_b.label) == ("target", "Interface", "uses")
+        assert by_key[str(group)].name == "Criticality"
+        # A field slot carries no relation detail, and vice versa.
+        assert by_key["a"].side is None and by_key["a"].name is None
+        assert rel_a.section is None and rel_a.name is None
+
+    async def test_a_hidden_field_and_an_exempt_side_are_no_slot(self):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, _ = _breakdown_ctx()
+        keys = [f.key for f in score_breakdown(self._card(), ctx, CardFacts()).factors]
+        assert "secret" not in keys
+        assert "c" not in keys  # weight 0
+        assert "relA" not in keys  # exempt for `saas`
+        assert keys.count("relB") == 1
+        # Without the subtype both come back.
+        keys = [f.key for f in score_breakdown(self._card(subtype=None), ctx, CardFacts()).factors]
+        assert "secret" in keys and "relA" in keys
+
+    async def test_one_relation_slot_per_applicable_side(self):
+        from app.services.card_completeness import LinkFacts
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, _ = _breakdown_ctx()
+        links = LinkFacts(sides=frozenset({("relA", "source")}))
+        bd = score_breakdown(self._card(subtype=None), ctx, CardFacts(links=links))
+        rels = [(f.key, f.filled) for f in bd.factors if f.kind == "relation"]
+        assert rels == [("relA", True), ("relB", False)]
+
+    async def test_switched_off_buckets_add_no_slot(self):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, _ = _breakdown_ctx(
+            dq_cfg={"description": 0, "lifecycle": 0, "relations": 0, "tags": 0, "stakeholders": 3}
+        )
+        kinds = {f.kind for f in score_breakdown(self._card(), ctx, CardFacts()).factors}
+        assert kinds == {"field", "stakeholders"}
+
+    async def test_stakeholders_slot_only_with_counting_roles(self):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, _ = _breakdown_ctx(counting_role_keys=())
+        kinds = [f.kind for f in score_breakdown(self._card(), ctx, CardFacts()).factors]
+        assert "stakeholders" not in kinds
+        ctx, _ = _breakdown_ctx()
+        held = CardFacts(holds_counting_stakeholder=True)
+        (slot,) = [
+            f for f in score_breakdown(self._card(), ctx, held).factors if f.kind == "stakeholders"
+        ]
+        assert slot.filled is True and slot.weight == 3.0
+
+    async def test_the_required_gate_pins_the_score_but_keeps_the_breakdown(self):
+        from app.services.data_quality import CardFacts, score_breakdown, score_card
+
+        ctx, _ = _breakdown_ctx()
+        card = self._card(attributes={"b": "y"}, description="Described")
+        bd = score_breakdown(card, ctx, CardFacts())
+        # `a` is required and empty; `flag` (boolean) and `calc` (readonly) are exempt.
+        assert bd.blocked_by_required == ["a"]
+        assert bd.score == 0.0
+        assert score_card(card, ctx, CardFacts()) == 0.0
+        # b 2 + description 1 of 13.
+        assert bd.ungated_score == 23.1
+        assert len(bd.factors) == 9
+        # A hidden required field does not gate.
+        ctx2, _ = _ctx(
+            fields_schema=[
+                {"section": "S", "fields": [{"key": "secret", "type": "text", "required": True}]}
+            ],
+            subtypes=[{"key": "saas", "hidden_fields": ["secret"]}],
+        )
+        assert (
+            score_breakdown(self._card(attributes={}), ctx2, CardFacts()).blocked_by_required == []
+        )
+
+    async def test_lists_every_empty_required_field_in_schema_order(self):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        schema = [
+            {
+                "section": "S",
+                "fields": [
+                    {"key": "x", "type": "text", "required": True},
+                    {"key": "y", "type": "multiple_select", "required": True},
+                    {"key": "z", "type": "text", "required": True},
+                ],
+            }
+        ]
+        ctx, _ = _ctx(fields_schema=schema, mandatory=None, counting_role_keys=())
+        card = self._card(subtype=None, attributes={"x": "", "y": [], "z": "set"})
+        assert score_breakdown(card, ctx, CardFacts()).blocked_by_required == ["x", "y"]
+
+    async def test_score_if_filled_adds_the_slot_to_the_ungated_ratio(self):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, group = _breakdown_ctx()
+        bd = score_breakdown(self._card(lifecycle={"active": "2024-01-01"}), ctx, CardFacts())
+        # filled a 1 + lifecycle 1 = 2 of 13.
+        assert (bd.filled_weight, bd.total_weight) == (2.0, 13.0)
+        gains = {f.key: bd.score_if_filled(f) for f in bd.factors if not f.filled}
+        assert gains == {
+            "b": 30.8,  # (2 + 2) / 13
+            "flag": 23.1,  # (2 + 1) / 13
+            "calc": 23.1,
+            "description": 23.1,
+            "relB": 30.8,  # (2 + 2) / 13
+            str(group): 23.1,
+            "stakeholders": 38.5,  # (2 + 3) / 13
+        }
+
+    async def test_score_if_filled_rounds_to_one_decimal(self):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        schema = [
+            {
+                "section": "S",
+                "fields": [{"key": k, "type": "text"} for k in ("p", "q", "r")],
+            }
+        ]
+        ctx, _ = _ctx(fields_schema=schema, mandatory=None, counting_role_keys=())
+        card = self._card(subtype=None, attributes={"p": "set"})
+        bd = score_breakdown(card, ctx, CardFacts())
+        assert bd.ungated_score == 33.3
+        (q, r) = [f for f in bd.factors if not f.filled]
+        # 2 / 3 → 66.666… → 66.7, never truncated to 66.6 nor left unrounded.
+        assert bd.score_if_filled(q) == 66.7
+        assert bd.score_if_filled(r) == 66.7
+
+    async def test_score_if_filled_with_nothing_to_score_is_zero(self):
+        from app.services.data_quality import Factor, ScoreBreakdown
+
+        empty = ScoreBreakdown(0.0, 0.0, 0.0, 0.0, [], [])
+        assert empty.score_if_filled(Factor("field", "a", 1.0, False)) == 0.0
+        assert empty.gain(Factor("field", "a", 1.0, False)) == 0.0
+
+    async def test_gain_is_the_slot_weight_over_the_total(self):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, _ = _breakdown_ctx()
+        bd = score_breakdown(self._card(), ctx, CardFacts())
+        by_key = {f.key: f for f in bd.factors}
+        # Of 13: b weighs 2, relB 2, stakeholders 3, a 1 — rounded to one decimal.
+        assert bd.gain(by_key["b"]) == 15.4
+        assert bd.gain(by_key["relB"]) == 15.4
+        assert bd.gain(by_key["stakeholders"]) == 23.1
+        assert bd.gain(by_key["a"]) == 7.7
+        # Gain and target agree: filling b alone lands on ungated + gain (to rounding).
+        assert (
+            abs(bd.score_if_filled(by_key["b"]) - (bd.ungated_score + bd.gain(by_key["b"]))) < 0.11
+        )
+
+    async def test_nothing_to_score_is_an_empty_breakdown(self):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, _ = _ctx(mandatory=None, counting_role_keys=())
+        bd = score_breakdown(self._card(subtype=None, attributes={}), ctx, CardFacts())
+        assert bd.factors == []
+        assert (bd.total_weight, bd.filled_weight) == (0.0, 0.0)
+        assert (bd.ungated_score, bd.score) == (0.0, 0.0)
+        assert bd.blocked_by_required == []
+
+    @pytest.mark.parametrize("phase", ["plan", "phaseIn", "active", "phaseOut", "endOfLife"])
+    async def test_any_one_lifecycle_phase_fills_the_slot(self, phase):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, _ = _breakdown_ctx()
+        card = self._card(lifecycle={phase: "2025-01-01"})
+        (slot,) = [
+            f for f in score_breakdown(card, ctx, CardFacts()).factors if f.kind == "lifecycle"
+        ]
+        assert slot.filled is True
+
+    @pytest.mark.parametrize(
+        "lifecycle", [None, {}, {"foo": "2025-01-01"}, {"active": ""}, {"active": None}]
+    )
+    async def test_no_dated_phase_leaves_the_lifecycle_slot_empty(self, lifecycle):
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        ctx, _ = _breakdown_ctx()
+        card = self._card(lifecycle=lifecycle)
+        (slot,) = [
+            f for f in score_breakdown(card, ctx, CardFacts()).factors if f.kind == "lifecycle"
+        ]
+        assert slot.filled is False
+
+    async def test_a_field_counts_on_zero_yes_and_no_but_not_on_blank_or_cleared(self):
+        """An explicit No is a maintained yes/no field (three states since #1266): it
+        counts, like 0; only None, "" and [] are empty."""
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        keys = ("zero", "no", "yes", "blank", "cleared", "missing")
+        schema = [
+            {
+                "section": "S",
+                "fields": [
+                    {"key": k, "type": "boolean" if k in ("no", "yes") else "text"} for k in keys
+                ],
+            }
+        ]
+        ctx, _ = _ctx(fields_schema=schema, mandatory=None, counting_role_keys=())
+        card = self._card(
+            subtype=None,
+            attributes={"zero": 0, "no": False, "yes": True, "blank": "", "cleared": []},
+        )
+        bd = score_breakdown(card, ctx, CardFacts())
+        assert {f.key: f.filled for f in bd.factors} == {
+            "zero": True,
+            "no": True,
+            "yes": True,
+            "blank": False,
+            "cleared": False,
+            "missing": False,
+        }
+        assert (bd.total_weight, bd.filled_weight, bd.score) == (6.0, 3.0, 50.0)
+        # Setting the No delivers exactly the gain the breakdown promised for it.
+        before = score_breakdown(
+            self._card(subtype=None, attributes={"zero": 0, "yes": True}), ctx, CardFacts()
+        )
+        (slot,) = [f for f in before.factors if f.key == "no"]
+        assert slot.filled is False
+        assert before.score + before.gain(slot) == bd.score
+
+    async def test_each_mandatory_tag_group_is_its_own_slot(self):
+        import uuid as _uuid
+
+        from app.services.card_completeness import LinkFacts, MandatoryConfig, MandatoryTagGroup
+        from app.services.data_quality import CardFacts, score_breakdown
+
+        g1, g2 = _uuid.uuid4(), _uuid.uuid4()
+        ctx, _ = _ctx(
+            mandatory=MandatoryConfig(
+                sides=(),
+                tag_groups=(MandatoryTagGroup(g1, "Criticality"), MandatoryTagGroup(g2, "Hosting")),
+            ),
+            counting_role_keys=(),
+            dq_cfg={"description": 0, "lifecycle": 0, "relations": 0, "tags": 4, "stakeholders": 0},
+        )
+        facts = CardFacts(links=LinkFacts(tag_groups=frozenset({g2})))
+        bd = score_breakdown(self._card(subtype=None), ctx, facts)
+        assert [(f.key, f.name, f.weight, f.filled) for f in bd.factors] == [
+            (str(g1), "Criticality", 4.0, False),
+            (str(g2), "Hosting", 4.0, True),
+        ]
+        # Two groups × the bucket weight in the denominator, the held one in the numerator.
+        assert (bd.total_weight, bd.filled_weight, bd.score) == (8.0, 4.0, 50.0)
+        assert bd.score_if_filled(bd.factors[0]) == 100.0
+
+    async def test_matches_score_card_on_every_existing_fixture(self):
+        from app.models.card import Card
+        from app.services.card_completeness import LinkFacts
+        from app.services.data_quality import CardFacts, score_breakdown, score_card
+
+        ctx, group = _ctx()
+        links = LinkFacts(sides=frozenset({("relA", "source")}), tag_groups=frozenset({group}))
+        cases = [
+            (ctx, Card(type="Application", name="X"), CardFacts(links=links)),
+            (ctx, Card(type="Application", name="X"), CardFacts(holds_counting_stakeholder=True)),
+            (ctx, Card(type="Application", name="X", subtype="saas"), CardFacts()),
+            (
+                _ctx(mandatory=None, counting_role_keys=(), fields_schema=_SCHEMA)[0],
+                Card(type="Application", name="X", attributes={"a": "x"}),
+                CardFacts(),
+            ),
+            (_breakdown_ctx()[0], self._card(), CardFacts()),
+            (_breakdown_ctx()[0], self._card(attributes={}), CardFacts()),
+        ]
+        expected = [37.5, 37.5, 0.0, 50.0, 7.7, 0.0]
+        for (c, card, facts), want in zip(cases, expected, strict=True):
+            assert score_breakdown(card, c, facts).score == score_card(card, c, facts) == want

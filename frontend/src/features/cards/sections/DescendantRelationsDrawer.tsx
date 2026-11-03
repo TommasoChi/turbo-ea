@@ -10,10 +10,15 @@
  * Deliberately read-only — no add, no unlink, no attribute editing. The rows
  * belong to the descendant that owns them, so `relations` stays the single
  * source of truth for every edge; you unlink from the child, never from here.
- * The `via` chips name that owning descendant and navigate to it.
+ * The `via` chips name that owning descendant and open it.
+ *
+ * A row's name and each of its `via` chips is a real link to its card, so
+ * middle-click and Ctrl/Cmd-click open it in a new tab. The chips sit beside
+ * the name link, not inside it — an `<a>` may not hold another `<a>` — so the
+ * row is a plain list item rather than one whole-row button.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link as RouterLink } from "react-router";
 import { useTranslation } from "react-i18next";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
@@ -23,7 +28,7 @@ import Divider from "@mui/material/Divider";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
-import ListItemButton from "@mui/material/ListItemButton";
+import ListItem from "@mui/material/ListItem";
 import Pagination from "@mui/material/Pagination";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
@@ -32,6 +37,7 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import { PHASE_COLORS, getCurrentPhase } from "@/components/LifecycleBadge";
 import { api } from "@/api/client";
 import { isHexColor, readableTypeColor } from "@/lib/color";
+import { isModifiedClick } from "@/lib/modifiedClick";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useTypeLabel, useRelationLabel, useSubtypeLabel } from "@/hooks/useResolveLabel";
 import { SubtypeBucket, useCollapsedBuckets } from "./SubtypeBucket";
@@ -60,7 +66,6 @@ export default function DescendantRelationsDrawer({
   isSource: boolean;
 }) {
   const { t } = useTranslation(["cards", "common"]);
-  const navigate = useNavigate();
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
   const { getType } = useMetamodel();
@@ -107,9 +112,10 @@ export default function DescendantRelationsDrawer({
     if (!open) setPage(1);
   }, [open]);
 
-  const goTo = (id: string) => {
-    onClose();
-    navigate(`/cards/${id}`);
+  /** A plain click on a link closes the drawer; a modified or middle click
+   * opens the card in a new tab and leaves the drawer up. */
+  const closeOnPlainClick = (e: React.MouseEvent) => {
+    if (!isModifiedClick(e)) onClose();
   };
 
   // Two-level grouping: subtype (outer, collapsible) → lifecycle phase (inner,
@@ -146,13 +152,24 @@ export default function DescendantRelationsDrawer({
     const rowType = getType(row.type);
     const phase = getCurrentPhase(row.lifecycle);
     return (
-    <ListItemButton
+    <ListItem
       key={row.id}
-      onClick={() => goTo(row.id)}
-      sx={{ alignItems: "flex-start", py: 1 }}
+      sx={{ flexDirection: "column", alignItems: "stretch", gap: 0.5, py: 1 }}
     >
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+      <Box sx={{ minWidth: 0 }}>
+        <Box
+          component={RouterLink}
+          to={`/cards/${row.id}`}
+          onClick={closeOnPlainClick}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.75,
+            color: "inherit",
+            textDecoration: "none",
+            "&:hover .row-name": { textDecoration: "underline" },
+          }}
+        >
           {rowType && (
             <Box
               sx={{
@@ -164,7 +181,7 @@ export default function DescendantRelationsDrawer({
               }}
             />
           )}
-          <Typography variant="body2" fontWeight={500} noWrap>
+          <Typography className="row-name" variant="body2" fontWeight={500} noWrap>
             {row.name}
           </Typography>
           {/* Lifecycle as a colour dot rather than a badge — the phase name
@@ -223,10 +240,10 @@ export default function DescendantRelationsDrawer({
                   size="small"
                   label={v.name}
                   variant="outlined"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    goTo(v.id);
-                  }}
+                  component={RouterLink}
+                  to={`/cards/${v.id}`}
+                  clickable
+                  onClick={closeOnPlainClick}
                   sx={{
                     height: 18,
                     fontSize: "0.65rem",
@@ -243,7 +260,7 @@ export default function DescendantRelationsDrawer({
           })}
         </Box>
       </Box>
-    </ListItemButton>
+    </ListItem>
     );
   };
 

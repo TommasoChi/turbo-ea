@@ -1,7 +1,6 @@
-export type DashboardTabKey = "overview" | "workspace" | "admin";
-
 export interface UiPreferences {
-  dashboard_default_tab?: DashboardTabKey;
+  /** Key of the dashboard the homepage opens on (a built-in or custom one). */
+  dashboard_default_tab?: string;
   // Enabled Draw.io "More Shapes" libraries the user chose to remember, in the
   // order Draw.io reports them. Restored as the embedded editor's `libs` param.
   diagram_libraries?: string[];
@@ -492,6 +491,12 @@ export interface Card {
   created_by?: string;
   updated_by?: string;
   created_at?: string;
+  /** Channel behind the create / last change: web | mcp | api | ext | system (null = before tracking). */
+  created_via?: string | null;
+  updated_via?: string | null;
+  /** Display names of created_by / updated_by — only on GET /cards/{id}. */
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
   updated_at?: string;
   /** When this card's custom logo was last written, or null when it has none —
    *  or when its type has logos switched off, so no client-side rule is needed
@@ -704,6 +709,39 @@ export interface DescendantRelationsResponse {
   via_total: number;
 }
 
+/** One slot of a card's data-quality score (`GET /cards/{id}/data-quality`, #1334). */
+export interface DataQualityFactor {
+  kind: "field" | "description" | "lifecycle" | "relation" | "tag_group" | "stakeholders";
+  /** Field key, relation type key, tag group id, or the bucket name. */
+  key: string;
+  weight: number;
+  filled: boolean;
+  /** The score the card would reach with this slot filled too; null once it counts. */
+  score_if_filled: number | null;
+  /** How many points filling this slot adds to the score; null once it counts. */
+  gain: number | null;
+  /** Field: the section it sits in. */
+  section?: string | null;
+  /** Relation: which end this card is on, and the other end's card type. */
+  side?: "source" | "target" | null;
+  other_type_key?: string | null;
+  label?: string | null;
+  /** Tag group: its name. */
+  name?: string | null;
+}
+
+/** Why a card scores what it scores, factor by factor (#1334). */
+export interface DataQualityBreakdown {
+  score: number;
+  /** The weighted ratio before empty required fields pin the score at 0. */
+  ungated_score: number;
+  total_weight: number;
+  filled_weight: number;
+  /** Keys of the empty required fields holding the score at 0. */
+  blocked_by_required: string[];
+  factors: DataQualityFactor[];
+}
+
 export interface Comment {
   id: string;
   card_id: string;
@@ -712,6 +750,9 @@ export interface Comment {
   content: string;
   parent_id?: string;
   created_at?: string;
+  /** Channel behind the create / last change: web | mcp | api | ext | system (null = before tracking). */
+  created_via?: string | null;
+  updated_via?: string | null;
   updated_at?: string;
   replies: Comment[];
 }
@@ -865,6 +906,191 @@ export interface DashboardData {
   lifecycle_distribution: Record<string, number>;
   recent_events: EventEntry[];
   trends?: DashboardTrends;
+}
+
+// ---------------------------------------------------------------------------
+// Editable homepage dashboards
+// ---------------------------------------------------------------------------
+
+/** Every widget type a dashboard may hold. Mirrors `WIDGET_TYPES` in
+ *  `backend/app/services/dashboard_defaults.py` (pinned by `registry.test.ts`). */
+export type WidgetType =
+  | "kpi"
+  | "chart"
+  | "recent_activity"
+  | "browse_by_type"
+  | "needs_attention"
+  | "my_favorites"
+  | "my_saved_reports"
+  | "my_roles"
+  | "my_todos"
+  | "my_pending_surveys"
+  | "my_created"
+  | "my_cards_activity"
+  | "top_contributors"
+  | "stakeholder_coverage"
+  | "idle_users"
+  | "approval_pipeline"
+  | "system_activity"
+  | "unassigned_todos"
+  | "stakeholder_directory"
+  | "quality_leaderboard";
+
+/** How the Data quality leaderboard ranks people. */
+export type LeaderboardRankBy = "average_quality" | "card_count";
+
+/** One person on the Data quality leaderboard (`GET /dashboards/leaderboard`).
+ *  The user is `{id, display_name}` only — the least-privilege payload. */
+export interface QualityLeaderboardRow {
+  /** Ties on the ranked figure share a rank (1, 2, 2, 4). */
+  rank: number;
+  user: { id: string; display_name: string };
+  /** Distinct readable cards the person holds a counted role on. */
+  cards: number;
+  /** Average data quality of those cards, 0–100, one decimal. */
+  average_quality: number;
+}
+
+export interface QualityLeaderboardResult {
+  rows: QualityLeaderboardRow[];
+  /** How many people reach `min_cards`, before `top` cuts the list. */
+  total_people: number;
+  rank_by: LeaderboardRankBy;
+  min_cards: number;
+  card_types: string[];
+  roles: string[];
+  counting_roles_only: boolean;
+  top: number;
+}
+
+export interface WidgetLayout {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+}
+
+export interface DashboardWidget {
+  id: string;
+  type: WidgetType;
+  title: string | null;
+  config: Record<string, unknown>;
+  layout: WidgetLayout;
+}
+
+export interface Dashboard {
+  id: string;
+  key: string;
+  name: string;
+  translations: Record<string, string>;
+  description: string | null;
+  icon: string | null;
+  built_in: boolean;
+  is_hidden: boolean;
+  sort_order: number;
+  widgets: DashboardWidget[];
+  /** Present for managers only. `[]` means every role. */
+  allowed_roles?: string[];
+  can_manage: boolean;
+}
+
+/** `share` = the narrowed count as a percentage of the same query without its
+ *  approval / lifecycle / flag filters (no `metric_field`). */
+export type DashboardMetric = "count" | "sum" | "avg" | "share";
+
+/** `type`, `subtype`, `approval_status`, `lifecycle_phase`,
+ *  `data_quality_bucket`, `created_month`, `field:<key>`, `eol_coverage`,
+ *  `stakeholders`, `phase_month:<phase>`, `related:<rt>[__out|__in]`, or —
+ *  on a sankey side only — `card`. */
+export type DashboardDimension = string;
+
+export interface DashboardQuery {
+  card_type?: string | null;
+  group_by?: DashboardDimension | null;
+  group_by_2?: DashboardDimension | null;
+  metric?: DashboardMetric | null;
+  metric_field?: string | null;
+  approval_status?: string | null;
+  lifecycle_phase?: string | null;
+  subtype?: string | null;
+  relation_type?: string | null;
+  /** Comma-separated health / governance flags, canonical (sorted, unique):
+   *  `orphaned`, `stale`, `with_stakeholders`, `without_stakeholders`,
+   *  `eol_linked`, `eol_manual`, `eol_missing`, `related:<rt>`,
+   *  `unrelated:<rt>`. */
+  flags?: string | null;
+}
+
+export type DashboardChartKind =
+  | "bar"
+  | "column"
+  | "line"
+  | "pie"
+  | "donut"
+  | "gauge"
+  | "heatmap"
+  | "treemap"
+  | "sankey"
+  | "stacked_column";
+
+export interface DashboardKeyRow {
+  key: string;
+  value: number;
+}
+
+export interface DashboardFlowRow {
+  source: string;
+  target: string;
+  value: number;
+}
+
+export interface DashboardCellRow {
+  x: string;
+  y: string;
+  value: number;
+}
+
+export type DashboardQueryRow = DashboardKeyRow | DashboardFlowRow | DashboardCellRow;
+
+export interface DashboardQueryResult {
+  dimension: DashboardDimension | null;
+  dimension_2: DashboardDimension | null;
+  rows: DashboardQueryRow[];
+  total: number;
+  /** Card names of the keys of a card-keyed dimension (`related:`, a sankey
+   *  side on `card`), resolved through the caller's read scope. */
+  labels?: Record<string, string>;
+  /** Present when the metric sums or averages a cost field. */
+  fiscal_year?: number;
+  fiscal_year_start?: number;
+  /** Present when a card-keyed result kept only its `top` largest cards:
+   *  `cards` is how many more were folded into Other (a count or sum), or
+   *  dropped (an average or share, where a merged Other would be wrong). */
+  folded?: { top: number; cards: number };
+}
+
+export interface DashboardKpiTrend {
+  current?: number;
+  previous: number | null;
+  delta_abs: number | null;
+  delta_pct: number | null;
+  comparison_days: number;
+  snapshot_date?: string | null;
+}
+
+export interface DashboardKpi {
+  value: number;
+  trend: DashboardKpiTrend | null;
+  /** Count of the same query without its narrowing filters (count metric only). */
+  base?: number;
+  fiscal_year?: number;
+  fiscal_year_start?: number;
+}
+
+export interface DashboardKpiHistory {
+  points: { date: string; value: number }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1022,6 +1248,9 @@ export interface SoAW {
   sections: Record<string, SoAWSectionData>;
   created_by?: string;
   created_at?: string;
+  /** Channel behind the create / last change: web | mcp | api | ext | system (null = before tracking). */
+  created_via?: string | null;
+  updated_via?: string | null;
   updated_at?: string;
   revision_number: number;
   parent_id: string | null;
@@ -1054,6 +1283,9 @@ export interface ArchitectureDecision {
   parent_id: string | null;
   linked_cards?: { id: string; name: string; type: string }[];
   created_at: string | null;
+  /** Channel behind the create / last change: web | mcp | api | ext | system (null = before tracking). */
+  created_via?: string | null;
+  updated_via?: string | null;
   updated_at: string | null;
 }
 
@@ -1401,6 +1633,9 @@ export interface DiagramSummary {
   created_by_name?: string | null;
   is_favorite?: boolean;
   created_at?: string;
+  /** Channel behind the create / last change: web | mcp | api | ext | system (null = before tracking). */
+  created_via?: string | null;
+  updated_via?: string | null;
   updated_at?: string;
 }
 
@@ -1712,6 +1947,9 @@ export interface ProcessFlowVersion {
   created_by?: string;
   created_by_name?: string;
   created_at?: string;
+  /** Channel behind the create / last change: web | mcp | api | ext | system (null = before tracking). */
+  created_via?: string | null;
+  updated_via?: string | null;
   submitted_by?: string;
   submitted_by_name?: string;
   submitted_at?: string;
@@ -2447,6 +2685,9 @@ export interface Risk {
 
   created_by: string | null;
   created_at: string | null;
+  /** Channel behind the create / last change: web | mcp | api | ext | system (null = before tracking). */
+  created_via?: string | null;
+  updated_via?: string | null;
   updated_at: string | null;
 
   cards: RiskCardLink[];

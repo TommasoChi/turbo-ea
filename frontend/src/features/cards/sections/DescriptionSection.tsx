@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import LinkifiedText from "@/components/LinkifiedText";
@@ -24,6 +24,12 @@ import {
 import Chip from "@mui/material/Chip";
 import { useFieldLabel } from "@/hooks/useResolveLabel";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
+import { focusFieldControl, useEditRequest } from "@/hooks/useEditRequest";
+import {
+  SECTION_SCROLL_MARGIN,
+  sectionAnchor,
+  type SectionEditRequest,
+} from "@/features/cards/dataQualityJump";
 import { ApiError } from "@/api/client";
 import type { Card, FieldDef } from "@/types";
 
@@ -39,6 +45,8 @@ function DescriptionSection({
   aiBusy = false,
   onDirtyChange,
   calculatedFieldKeys = [],
+  expandOn,
+  editOn,
 }: {
   card: Card;
   onSave: (u: Record<string, unknown>) => Promise<void>;
@@ -56,14 +64,36 @@ function DescriptionSection({
    * editor path for a card's attributes and must not diverge from the first.
    */
   calculatedFieldKeys?: string[];
+  /** A new value expands the section (a data-quality jump). */
+  expandOn?: number;
+  /** A data-quality jump: open in edit mode, focused on the description or
+   *  on the `__description` field it names. */
+  editOn?: SectionEditRequest;
 }) {
   const { t } = useTranslation(["cards", "common", "validation"]);
   const fieldLabel = useFieldLabel();
-  const [expanded, setExpanded] = useSyncedExpanded(initialExpanded);
+  const [expanded, setExpanded] = useSyncedExpanded(initialExpanded, expandOn);
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState(card.description || "");
   const [attrs, setAttrs] = useState<Record<string, unknown>>(card.attributes || {});
   const [saveError, setSaveError] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+
+  // A data-quality jump opens the edit view, then focuses what it asked for
+  // once that view has rendered: a `__description` field by key, otherwise the
+  // description itself. `undefined` = nothing pending.
+  const [focusKey, setFocusKey] = useState<string | null | undefined>(undefined);
+  useEditRequest(editOn, canEdit, (request) => {
+    setEditing(true);
+    setFocusKey(request.fieldKey ?? null);
+  });
+  useLayoutEffect(() => {
+    if (!editing || focusKey === undefined) return;
+    if (focusKey === null) descriptionRef.current?.focus();
+    else focusFieldControl(rootRef.current, focusKey);
+    setFocusKey(undefined);
+  }, [editing, focusKey]);
 
   // Re-sync the draft from the card prop only while NOT editing, so saving
   // another section (which replaces the whole card object in the parent) can't
@@ -135,8 +165,21 @@ function DescriptionSection({
   };
 
   return (
-    <Accordion expanded={expanded} onChange={(_, v) => setExpanded(v)} disableGutters>
-      <AccordionSummary expandIcon={<MaterialSymbol icon="expand_more" size={20} />}>
+    <Accordion
+      ref={rootRef}
+      id={sectionAnchor("description")}
+      expanded={expanded}
+      onChange={(_, v) => setExpanded(v)}
+      disableGutters
+      sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
+    >
+      <AccordionSummary
+        // A div, not the default <button>: the summary holds icon buttons
+        // (edit, AI suggest), and a button may not contain a button.
+        // ButtonBase keeps role="button", tabindex and Enter/Space.
+        component="div"
+        expandIcon={<MaterialSymbol icon="expand_more" size={20} />}
+      >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
           <MaterialSymbol icon="description" size={20} />
           <Typography fontWeight={600}>{t("description.title")}</Typography>
@@ -178,6 +221,7 @@ function DescriptionSection({
               fullWidth
               label={t("common:labels.description")}
               value={description}
+              inputRef={descriptionRef}
               onChange={(e) => setDescription(e.target.value)}
               multiline
               rows={4}
@@ -192,7 +236,7 @@ function DescriptionSection({
                   <Chip size="small" label={calculatedFieldKeys.includes(field.key) ? t("attributes.calculated") : t("attributes.auto")} sx={{ height: 18, fontSize: "0.6rem", ml: 0.5 }} />
                 </Box>
               ) : (
-                <Box key={field.key} sx={{ mb: 2 }}>
+                <Box key={field.key} data-field-key={field.key} sx={{ mb: 2 }}>
                   <FieldEditor field={field} value={attrs[field.key]} onChange={(v) => setAttrs((prev) => ({ ...prev, [field.key]: v }))} error={fieldErrors[field.key]} />
                 </Box>
               ),

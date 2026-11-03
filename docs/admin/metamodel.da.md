@@ -102,6 +102,8 @@ Et korts **datakvalitetsscore** er et vægtet mål for, hvor komplet det er. Hve
 
 **Påkrævede felter tilsidesætter scoren.** Så længe et påkrævet felt på et kort er tomt, forbliver dets score på **0** uanset vægtene — den vægtede beregning gælder først, når alle påkrævede felter er udfyldt (boolske og skrivebeskyttede felter er undtaget; se indstillingen **Påkrævet** ovenfor).
 
+Et felt tæller som udfyldt, så snart det har en værdi. For et Ja/Nej-felt tæller både **Ja** og **Nej** — kun **Ingen** er tomt — og et talfelt tæller, når det indeholder 0.
+
 Hver faktors vigtighed angives med en enkel skyder over fire niveauer, der også viser det underliggende tal:
 
 - **Ignorér (0)** – udelukket helt fra scoren.
@@ -112,6 +114,8 @@ Hver faktors vigtighed angives med en enkel skyder over fire niveauer, der også
 Panelet viser de fem **indbyggede faktorer** – **Beskrivelse**, **Livscyklus** (om der er angivet en livscyklusdato), **obligatoriske relationer**, **obligatoriske tags** og **Interessentroller** (én enkelt plads, som er opfyldt, så snart nogen er tildelt kortet i en rolle, der tæller med i datakvaliteten) – efterfulgt af hvert felt grupperet efter sin sektion, hver med den samme skyder. Sæt for eksempel **Livscyklus** til *Ignorér* for en type, hvis kort legitimt aldrig har datoer, så de ikke straffes.
 
 En **scorens sammensætning**-bjælke øverst i panelet viser hver faktors andel af den maksimalt mulige score, så du med et blik kan se, hvilke faktorer der dominerer. I kortlayoutet på fanen **Generelt** viser hvert felt – og de indbyggede sektioner Beskrivelse, Livscyklus og Relationer – et lille mærke med sit aktuelle niveaunummer, så du kan se vægtningen uden at forlade fanen.
+
+Brugerne ser resultatet faktor for faktor på selve kortet: når man holder musen over datakvalitetsringen, vises de punkter, der ville hæve scoren mest, og et klik åbner den fulde opdeling (se [Kortdetaljer](../guide/card-details.md#kortets-sidehoved)).
 
 Ændring af en vigtighed genberegner straks scoren for alle eksisterende kort af den type. Nye felter er som standard *Normal* og tæller derfor med i scoren, så snart du tilføjer dem.
 

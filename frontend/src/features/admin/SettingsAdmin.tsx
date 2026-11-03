@@ -35,6 +35,7 @@ import { invalidateGrcEnabled } from "@/hooks/useGrcEnabled";
 import { invalidateArchimateEnabled } from "@/hooks/useArchimateEnabled";
 import { invalidateValueChainEnabled } from "@/hooks/useValueChainEnabled";
 import { invalidateSponsorButtonEnabled } from "@/hooks/useSponsorButtonEnabled";
+import { invalidateGamificationEnabled } from "@/hooks/useGamificationEnabled";
 import SponsorshipDialog from "@/components/SponsorshipDialog";
 import { brand } from "@/theme";
 import { invalidateFileUploadsEnabled } from "@/hooks/useFileUploadsEnabled";
@@ -167,6 +168,8 @@ interface GeneralSettingsBootstrap {
   /** Absent on a backend that predates the ArchiMate module. */
   archimate_enabled?: boolean;
   sponsor_button_enabled: boolean;
+  /** Absent on a backend older than the gamified data quality option. */
+  gamification_enabled?: boolean;
   update_check_enabled: boolean;
   announce_upgrades_enabled: boolean;
   extension_notices_enabled: boolean;
@@ -279,6 +282,9 @@ function GeneralTab() {
   // Sponsor button toggle state (gates the avatar-menu button only)
   const [sponsorButtonEnabled, setSponsorButtonEnabled] = useState(true);
   const [savingSponsorButton, setSavingSponsorButton] = useState(false);
+  // Gamified data quality (off by default)
+  const [gamificationEnabled, setGamificationEnabled] = useState(false);
+  const [savingGamification, setSavingGamification] = useState(false);
   const [updateCheckEnabled, setUpdateCheckEnabled] = useState(true);
   const [savingUpdateCheck, setSavingUpdateCheck] = useState(false);
   const [announceUpgrades, setAnnounceUpgrades] = useState(true);
@@ -388,6 +394,7 @@ function GeneralTab() {
         setGrcEnabled(general.grc_enabled);
         setArchimateEnabled(general.archimate_enabled ?? false);
         setSponsorButtonEnabled(general.sponsor_button_enabled);
+        setGamificationEnabled(general.gamification_enabled === true);
         setUpdateCheckEnabled(general.update_check_enabled);
         setAnnounceUpgrades(general.announce_upgrades_enabled);
         setExtensionNotices(general.extension_notices_enabled);
@@ -656,6 +663,25 @@ function GeneralTab() {
       setError(e instanceof Error ? e.message : t("common:errors.generic"));
     } finally {
       setSavingSponsorButton(false);
+    }
+  };
+
+  const handleGamificationToggle = async (enabled: boolean) => {
+    setSavingGamification(true);
+    setError("");
+    try {
+      await api.patch("/settings/gamification-enabled", { enabled });
+      setGamificationEnabled(enabled);
+      invalidateGamificationEnabled(enabled);
+      setSnack(
+        enabled
+          ? t("settings.gamification.enabledSuccess")
+          : t("settings.gamification.disabledSuccess"),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("common:errors.generic"));
+    } finally {
+      setSavingGamification(false);
     }
   };
 
@@ -1865,6 +1891,46 @@ function GeneralTab() {
         />
       </Paper>
       <SponsorshipDialog open={sponsorDialogOpen} onClose={() => setSponsorDialogOpen(false)} />
+
+      {/* Gamified data quality toggle */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
+          <Box component="span" sx={{ display: "inline-flex", color: "text.secondary" }}>
+            <MaterialSymbol icon="celebration" size={22} />
+          </Box>
+          <Typography variant="h6" fontWeight={600}>
+            {t("settings.gamification.title")}
+          </Typography>
+          <Chip
+            label={
+              gamificationEnabled
+                ? t("settings.gamification.enabled")
+                : t("settings.gamification.disabled")
+            }
+            size="small"
+            color={gamificationEnabled ? "success" : "default"}
+            sx={{ ml: 1 }}
+          />
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {t("settings.gamification.description")}
+        </Typography>
+        <FormControlLabel
+          sx={{ display: "flex" }}
+          control={
+            <Switch
+              checked={gamificationEnabled}
+              onChange={(e) => handleGamificationToggle(e.target.checked)}
+              disabled={savingGamification}
+            />
+          }
+          label={
+            gamificationEnabled
+              ? t("settings.gamification.on")
+              : t("settings.gamification.off")
+          }
+        />
+      </Paper>
 
       {/* ── Email ─────────────────────────────────────────────────── */}
       <SectionHeader>{t("settings.section.email")}</SectionHeader>

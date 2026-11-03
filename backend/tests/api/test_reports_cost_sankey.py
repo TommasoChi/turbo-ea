@@ -16,8 +16,6 @@ from tests.conftest import (
     create_user,
 )
 
-pytestmark = pytest.mark.anyio
-
 COST_FIELDS = [
     {"section": "Cost", "fields": [{"key": "costTotalAnnual", "type": "cost", "weight": 0}]}
 ]

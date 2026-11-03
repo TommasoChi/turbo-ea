@@ -12,9 +12,14 @@ Toppen af kortet viser:
 - **Kortnavn** — Redigerbar inline
 - **Alias** — Kortets andet navn, vist under titlen når det er sat. Blyanten ved titlen ændrer navn og alias samtidig. Alias matches af alle søgefelter, så et kort kan findes med det navn, din organisation faktisk bruger.
 - **Undertype** — Sekundær klassifikation (hvis relevant)
+- **Oprindelses-chip** — Vises, når kortet ikke er oprettet i webgrænsefladen: **MCP** for et kort, en AI-assistent har oprettet via [MCP-serveren](../admin/mcp.md), **API** for et script eller en integration, **Udvidelse** for en installeret udvidelse, **System** for et baggrundsjob. Hold musen over den for at se, hvem der oprettede kortet og hvornår — personen er stadig skaberen; chippen angiver, hvilken kanal vedkommende brugte. Kort oprettet i webgrænsefladen og kort oprettet, før Turbo EA registrerede kanalen, viser ingen chip.
 - **Godkendelsesstatus-badge** — Draft, Approved, Broken eller Rejected
 - **AI suggest-knap** — Klik for at generere en beskrivelse med AI (synlig når AI er aktiveret for denne korttype, og brugeren har redigeringstilladelse)
-- **Datakvalitets­ring** — Visuel indikator for informationsfuldstændighed (0–100%)
+- **Datakvalitets­ring** — Visuel indikator for informationsfuldstændighed (0–100%). Hold musen over den for at se de tre ting, der ville hæve scoren mest, hver med hvor mange point den ville tilføje (for eksempel *Udfyld Forretningskritikalitet +12,5%*). Klik på den (eller giv den fokus og tryk Enter) for at åbne den fulde opdeling som et panel til højre på siden, der forbliver åbent, mens du redigerer: hvert punkt, der stadig mangler, sorteret efter hvor meget det bidrager med, og en liste **Allerede talt med** over det, der er på plads. Hvert punkt, der stadig mangler, er et link: Et klik åbner det afsnit, hvor det udfyldes, **i redigeringstilstand** med det felt i fokus (eller dialogen **Tilføj relation** for relationstypen, tag-editoren eller tilføjelsesformularen under fanen **Stakeholders**), og panelet forbliver åbent. Uden ret til at redigere den del af kortet åbner linket kun afsnittet og ruller derhen. Så længe et obligatorisk felt er tomt, forbliver scoren 0%; opdelingen nævner disse felter og viser, hvad scoren ville være uden dem. Luk panelet med knappen **Luk** i dets overskrift; din browser husker, om det er åbent, så det stadig er der på det næste kort. I et vindue, der er smallere end 900 px, åbner det i stedet som en skuffe, der lukker, når du følger et af dens links.
+
+![Panel med opdeling af datakvaliteten](../assets/img/da/63_card_data_quality_breakdown.png)
+
+Når en administrator slår [TurboRPG-tilstand](../admin/settings.md#turborpg-gamificeret-datakvalitet) (gamificeret datakvalitet) til, fejres hver gemning, der hæver scoren, som at få liv i et spil: et glødende **+X%** forlader den sektion, du netop har gemt, flyver til scoren og rammer den – ringen blinker og gløder, dens fyld vokser til den nye score, og tallet tæller op. Når du er scrollet forbi overskriften, holder en slank scorebjælke hæftet under den øverste bjælke scoren i syne, og gevinsten lander på den i stedet. Klik på barens score – chippen med pilen – for at åbne den samme opdeling som ved ringen. At nå det grønne bånd (80%) og at nå 100% er milepæle med et kort konfettiregn. Rydning eller fjernelse af data afspiller den dæmpede omvendte version: et rødt **−X%** flyver fra scoren tilbage til sektionen, og bjælken tømmes og tæller ned, uden blink og konfetti. Hvis reduceret bevægelse er slået til i dit operativsystem, flyver intet; du ser i stedet en statisk **+X%** eller **−X%**.
 - **Handlingsmenu** — Arkivér, slet og godkendelseshandlinger. Indeholder også en ét-klik **Observe this card**-skifter (når korttypen definerer en Observer-rolle), så enhver bruger med læseadgang kan følge kortet uden at skulle gå gennem Stakeholders-fanen.
 
 ### Eget logo
@@ -112,6 +117,7 @@ For korttyper der understøtter hierarki (f.eks. Organization, Business Capabili
 
 - **Parent** — Kortets forælder i hierarkiet (klik for at navigere)
 - **Children** — Liste over barnekort (klik på et for at navigere)
+- **Åbn i ny fane** — Forælder, børn og brødkrumme er links: midterklik eller Ctrl/Cmd-klik på et (eller højreklik → *Åbn i ny fane*) for at åbne det kort i en ny browserfane, mens dette forbliver, hvor det er
 - **Gruppér efter undertype** — Når et kort har mange underordnede kort af forskellige undertyper (for eksempel forretningsenheder, regioner og teams under ét selskab), grupperes de automatisk i sammenfoldelige undertypesektioner med et antal, med en afsluttende sektion **Ingen undertype** til uklassificerede kort. Brug gruppér/liste-knappen ved siden af antallet af **underordnede** kort til at skifte mellem grupperet visning og flad liste.
 - **Hierarki-brødkrumme** — Viser den fulde sti fra rod til aktuelt kort
 - **Forbindelsestype** — Når en administrator har konfigureret forbindelsestyper for denne korttype, kan hver forælder-barn-forbindelse få en etiket — for eksempel ét datterselskab, der er *kommercielt*, og et andet, der står for *salg*. Etiketten hører til barnekortet: forælderkortet viser den ud for hvert barn, og barnekortet ud for sin forælder. Fjernes et kort, eller flyttes det til øverste niveau, ryddes etiketten, og ændringen registreres under fanen **Historik**.
@@ -120,7 +126,7 @@ For korttyper der understøtter hierarki (f.eks. Organization, Business Capabili
 
 Viser alle forbindelser til andre kort, grupperet efter relations­type. For hver relation:
 
-- **Relateret kortnavn** — Klik for at navigere til det relaterede kort
+- **Relateret kortnavn** — Klik for at navigere til det relaterede kort. Midterklik eller Ctrl/Cmd-klik (eller højreklik → *Åbn i ny fane*) åbner det i stedet i en ny browserfane — det samme virker i listen **+N i underelementer**, i lineage-listerne og i en interessents hover-kort
 - **Relations­type** — Forbindelsens karakter (f.eks. "uses", "runs on", "depends on")
 - **Tilføj relation** — Klik på **+** for at åbne dialogen for den relation. Den viser matchende kort, mens du skriver (de bedste match først, flere hentes, når du ruller), og skjuler dem, der allerede er tilknyttet, med en billedtekst der viser hvor mange. Et klik på et kort tilknytter det med det samme, og det vises som en chip øverst — klik på chippens **×** for at fortryde den tilføjelse. Dialogen forbliver åben, så du kan tilføje så mange du vil, og på telefon åbner den i fuld skærm. Relationer uden deres eget afsnit nås fra knappen **Tilføj relation** nederst i afsnittet. Når den tilknyttede type er hierarkisk (forretningsevne, organisation og lignende), viser dialogen den som et indrykket træ i stedet for en alfabetisk liste, så du kan vælge en underevne ud fra dens gren. Søgningen bevarer et træfs overordnede kort som kontekst, og kort du ikke kan vælge (allerede tilknyttet, netop tilføjet eller kortet selv) bliver liggende nedtonet, så niveauerne omkring dem stadig kan læses.
 - **Sortering** — Relaterede kort vises alfabetisk efter navn
@@ -164,7 +170,7 @@ Hvis kortet er linket til et [endoflife.date](https://endoflife.date/)-produkt (
 
 - **Tilføj kommentarer** — Efterlad noter, spørgsmål eller beslutninger om komponenten
 - **Trådede svar** — Svar på specifikke kommentarer for at oprette samtaletråde
-- **Tidsstempler** — Se hvornår hver kommentar blev sendt og af hvem
+- **Tidsstempler** — Se hvornår hver kommentar blev sendt og af hvem. En kommentar, som en AI-assistent har sendt via MCP-serveren, har en **MCP**-chip ved siden af forfatteren
 - **Links** — En webadresse i en kommentar kan klikkes på og åbner i en ny fane
 
 ## Todos-fane
@@ -202,6 +208,8 @@ Invitations-stien kræver tilladelsen **`users.invite`**, en delegeret form af `
 ## History-fane
 
 ![Kortets ændringshistorik](../assets/img/da/08_card_history.png)
+
+En ændring, der ikke kom fra webgrænsefladen, har en chip ved siden af personens navn: **MCP**, når en AI-assistent foretog den via [MCP-serveren](../admin/mcp.md) på personens vegne, ellers **API**, **Udvidelse** eller **System**.
 
 Viser det **komplette audit-spor** over ændringer foretaget på kortet: **hvem** der foretog ændringen, **hvornår** den blev foretaget, og **hvad** der blev ændret (tidligere værdi vs. ny værdi). Dette giver fuld sporbarhed over alle ændringer over tid.
 

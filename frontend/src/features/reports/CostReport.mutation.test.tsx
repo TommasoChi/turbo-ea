@@ -80,70 +80,8 @@ vi.mock("@/components/CardDetailSidePanel", () => ({
     props.open ? <div data-testid="side-panel">{props.cardId}</div> : null,
 }));
 
-/** Cell sizes by card name; anything unlisted is drawn large (300×100). */
-const chart = vi.hoisted(() => ({
-  sizes: {} as Record<string, [number, number]>,
-}));
-
-vi.mock("recharts", async () => {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const { createContext, useContext } =
-    await vi.importActual<typeof import("react")>("react");
-  const Data = createContext<any[]>([]);
-  return {
-    ResponsiveContainer: ({ children, height }: any) => (
-      <div data-testid="chart-container" data-height={String(height)}>
-        {children}
-      </div>
-    ),
-    Treemap: ({ data, content, children }: any) => (
-      <div data-testid="treemap">
-        <svg>
-          {data.map((d: any, i: number) => {
-            const [width, height] = chart.sizes[d.name] ?? [300, 100];
-            return (
-              <g key={i} data-cell={d.name}>
-                {cloneElement(content as ReactElement<any>, {
-                  ...d,
-                  x: 10,
-                  y: 10,
-                  width,
-                  height,
-                })}
-              </g>
-            );
-          })}
-        </svg>
-        <Data.Provider value={data}>{children}</Data.Provider>
-      </div>
-    ),
-    Tooltip: ({ content }: any) => {
-      const data = useContext(Data);
-      return (
-        <div data-testid="treemap-tooltip">
-          {data.map((d: any, i: number) => (
-            <div key={i} data-tip={d.name}>
-              {cloneElement(content, {
-                active: true,
-                payload: [{ payload: d }],
-              })}
-            </div>
-          ))}
-          <div data-tip="inactive">
-            {cloneElement(content, {
-              active: false,
-              payload: [{ payload: data[0] }],
-            })}
-          </div>
-          <div data-tip="nopayload">
-            {cloneElement(content, { active: true })}
-          </div>
-        </div>
-      );
-    },
-  };
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-});
+// jsdom has no canvas: the charts are drawn as DOM read from the option the page built.
+vi.mock("@/components/charts/EChart", () => import("@/test/costChartMock").then((m) => m.costChartModule()));
 
 import { mockApi } from "@/test/apiMock";
 import { hookState, withMetamodel } from "@/test/hooks";
@@ -261,10 +199,6 @@ const toolbar = () => document.querySelector(".report-toolbar") as HTMLElement;
 const metricValue = (label: string) =>
   screen.getByText(label).closest(".MuiPaper-root")!.querySelector("h5")!
     .textContent;
-const cell = (name: string) =>
-  document.querySelector(`[data-cell="${name}"]`) as Element;
-const tip = (name: string) =>
-  document.querySelector(`[data-tip="${name}"]`) as HTMLElement;
 const rowTexts = () =>
   screen.getAllByRole("row").map((r) => r.textContent ?? "");
 
@@ -340,7 +274,6 @@ beforeEach(() => {
   saved.setSaveDialogOpen = vi.fn();
   saved.resetAll = vi.fn();
   saved.persistConfig = vi.fn();
-  chart.sizes = {};
 
   mockApi.on("get", "/cards*", { items: HIERARCHY, total: HIERARCHY.length });
   mockApi.on("get", "/reports/cost-treemap*", {
@@ -562,109 +495,26 @@ describe("CostReport print parameters", () => {
 /* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
-/*  Treemap cells and tooltip                                           */
+/*  Treemap tooltip                                                     */
 /* ------------------------------------------------------------------ */
 
-describe("CostReport treemap cells", () => {
-  // [name, cost, size] — costs fix the order, so each cell's palette index too.
-  const SIZED: [string, number, [number, number]][] = [
-    ["Big", 1100, [300, 100]],
-    ["W4", 1000, [4, 100]],
-    ["W3", 900, [3, 100]],
-    ["H4", 800, [100, 4]],
-    ["H3", 700, [100, 3]],
-    ["L51", 600, [51, 31]],
-    ["L50", 500, [50, 100]],
-    ["L30", 400, [100, 30]],
-    ["C71", 300, [71, 46]],
-    ["ABCDEFGHIJ", 200, [70, 100]],
-    ["C45", 100, [100, 45]],
-  ];
-
-  beforeEach(() => {
-    chart.sizes = Object.fromEntries(SIZED.map(([n, , s]) => [n, s]));
-    mockApi.on("get", "/reports/cost-treemap*", {
-      items: SIZED.map(([name, cost]) => ({
-        id: name.toLowerCase(),
-        name,
-        cost,
-      })),
-      total: 6600,
-    });
-  });
-
-  const drawn = (name: string) => cell(name).querySelector("rect") !== null;
-  const texts = (name: string) =>
-    Array.from(cell(name).querySelectorAll("text"));
-
-  it("draws, labels and prices each cell according to its size", async () => {
-    renderCost();
-    await screen.findByText("Big", { selector: "text" });
-
-    // Too small in either direction: nothing at all.
-    expect(drawn("W3")).toBe(false);
-    expect(drawn("H3")).toBe(false);
-    expect(drawn("W4")).toBe(true);
-    expect(drawn("H4")).toBe(true);
-    expect(texts("W4")).toHaveLength(0);
-    expect(texts("H4")).toHaveLength(0);
-
-    // A label needs more than 50 wide and 30 high.
-    expect(texts("L51").map((t) => t.textContent)).toEqual(["L51"]);
-    expect(texts("L50")).toHaveLength(0);
-    expect(texts("L30")).toHaveLength(0);
-
-    // A cost line needs more than 70 wide and 45 high.
-    expect(texts("C71").map((t) => t.textContent)).toEqual(["C71", "$300"]);
-    expect(texts("C45").map((t) => t.textContent)).toEqual(["C45"]);
-    // A name exactly as long as the cell fits is shown whole.
-    expect(texts("ABCDEFGHIJ").map((t) => t.textContent)).toEqual([
-      "ABCDEFGHIJ",
-    ]);
-  });
-
-  it("places the label and the cost in the cell's top-left corner", async () => {
-    renderCost();
-    await screen.findByText("Big", { selector: "text" });
-    const [label, cost] = texts("Big");
-    expect(label).toHaveAttribute("x", "16");
-    expect(label).toHaveAttribute("y", "26");
-    expect(cost).toHaveTextContent("$1100");
-    expect(cost).toHaveAttribute("x", "16");
-    expect(cost).toHaveAttribute("y", "40");
-  });
-
-  it("cycles the palette by position", async () => {
-    renderCost();
-    await screen.findByText("Big", { selector: "text" });
-    const fill = (name: string) =>
-      cell(name).querySelector("rect")!.getAttribute("fill");
-    expect(fill("Big")).toBe("#1565c0");
-    expect(fill("W4")).toBe("#1976d2");
-    expect(fill("C45")).toBe("#1565c0");
-  });
-});
-
+// What a tile prints at each size, and the palette cycle, are the option's own
+// rules (costTreemapOption.test.ts); here only what the page hands the chart.
 describe("CostReport treemap tooltip", () => {
-  it("names the hovered card, its cost and its share, and nothing when inactive", async () => {
+  it("names the hovered card, its cost and its share of the total", async () => {
     renderCost();
-    await screen.findByTestId("treemap-tooltip");
-    expect(tip("ERP")).toHaveTextContent("ERP");
-    expect(tip("ERP")).toHaveTextContent("$500");
+    const tooltip = await screen.findByTestId("treemap-tooltip");
     // 500 of 700.
-    expect(tip("ERP")).toHaveTextContent("ERP$50071.4% of total");
-    expect(tip("inactive")).toBeEmptyDOMElement();
-    expect(tip("nopayload")).toBeEmptyDOMElement();
+    expect(tooltip).toHaveTextContent("ERP$50071.4% of total");
   });
 
-  it("leaves the share out when the panel totals nothing", async () => {
+  it("draws no tile for a card that costs nothing", async () => {
     mockApi.on("get", "/reports/cost-treemap*", {
       items: [{ id: "z", name: "Zero", cost: 0 }],
       total: 0,
     });
     renderCost();
-    await screen.findByTestId("treemap-tooltip");
-    expect(tip("Zero").textContent).toBe("Zero$0");
+    expect(await screen.findByTestId("treemap-tooltip")).toBeEmptyDOMElement();
   });
 });
 
@@ -1124,16 +974,6 @@ describe("CostReport summary and panels", () => {
     renderCost();
     await screen.findByTestId("treemap");
     expect(screen.getByText("$0 (0%)")).toBeInTheDocument();
-  });
-
-  it("gives the panel the full height", async () => {
-    renderCost();
-    await screen.findByTestId("treemap");
-    expect(
-      screen
-        .getAllByTestId("chart-container")
-        .map((c) => c.getAttribute("data-height")),
-    ).toEqual(["450"]);
   });
 });
 

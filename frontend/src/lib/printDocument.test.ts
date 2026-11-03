@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { PRINT_COLORS, brand } from "@/theme/tokens";
 import {
+  DOCUMENT_PRINT_CSS,
   buildPrintHtml,
   documentHeader,
   escapeHtml,
@@ -17,6 +19,65 @@ import {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+});
+
+describe("DOCUMENT_PRINT_CSS", () => {
+  it("inks the document with the shared print palette", () => {
+    expect(PRINT_COLORS).toMatchObject({
+      text: "#333333",
+      muted: "#888888",
+      panel: "#f5f5f5",
+      control: "#cccccc",
+    });
+    expect(DOCUMENT_PRINT_CSS).toContain(`.doc-print h2 { font-size: 16pt; color: ${PRINT_COLORS.text};`);
+    expect(DOCUMENT_PRINT_CSS).toContain(
+      `.doc-print th, .doc-print td { border: 1px solid ${PRINT_COLORS.control};`,
+    );
+    expect(DOCUMENT_PRINT_CSS).toContain(`.doc-print th { background: ${PRINT_COLORS.panel};`);
+    expect(DOCUMENT_PRINT_CSS).toContain(
+      `.doc-signatures .sig-card { padding: 12px; border: 1px solid ${PRINT_COLORS.control};`,
+    );
+    expect(DOCUMENT_PRINT_CSS).toContain(
+      `.doc-signatures .sig-card.pending { border-color: ${PRINT_COLORS.control};`,
+    );
+    expect(DOCUMENT_PRINT_CSS).toContain(
+      `font-size: 8pt; color: ${PRINT_COLORS.muted}; border-top: 1px solid ${PRINT_COLORS.control};`,
+    );
+    expect(DOCUMENT_PRINT_CSS).not.toMatch(/\$\{|undefined/);
+  });
+
+  it("inks the headings, the body and the signature block from tokens", () => {
+    const P = PRINT_COLORS;
+    for (const fragment of [
+      `body.doc-print { font-family: 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 40px auto; color: ${P.ink};`,
+      `.doc-print h1 { font-size: 22pt; color: ${P.heading}; border-bottom: 2px solid ${brand.primary};`,
+      `.doc-print h3 { font-size: 13pt; color: ${P.subheading};`,
+      `.doc-signatures { margin-top: 36px; border-top: 2px solid ${P.ruleLight};`,
+      `.sig-badge.signed { background: ${P.successTint}; color: ${P.success}; }`,
+      `.sig-badge.fully-signed { background: ${P.success}; color: ${P.paper}; }`,
+      `.sig-card.approved { border-color: ${P.successLight}; background: ${P.successPale}; }`,
+      `.sig-card.pending { border-color: ${P.control}; background: ${P.panelLight}; }`,
+      `.sig-status.approved { color: ${P.success}; }`,
+      `.sig-status.pending { color: ${P.warning}; }`,
+      `.sig-detail { font-size: 9pt; color: ${P.inkSecondary}; }`,
+      `.sig-card.approved { border-color: ${P.successLight}; background: ${P.successPale} !important;`,
+    ]) {
+      expect(DOCUMENT_PRINT_CSS).toContain(fragment);
+    }
+  });
+
+  it("holds no colour that is not a token", () => {
+    const tokens = new Set<string>([...Object.values(PRINT_COLORS), brand.primary]);
+    const used = DOCUMENT_PRINT_CSS.match(/#[0-9a-f]{3,8}\b/gi) ?? [];
+    expect(used.length).toBeGreaterThan(0);
+    expect(used.filter((c) => !tokens.has(c))).toEqual([]);
+    // Every print token the stylesheet was given is drawn somewhere: none is dead.
+    const documentTokens = [
+      "text", "muted", "panel", "control", "paper", "heading", "ink", "subheading", "inkSecondary",
+      "ruleLight", "panelLight", "success", "successLight", "successPale", "successTint", "warning",
+    ] as const;
+    for (const key of documentTokens) expect(used, key).toContain(PRINT_COLORS[key]);
+  });
 });
 
 describe("printDocument fragment builders", () => {

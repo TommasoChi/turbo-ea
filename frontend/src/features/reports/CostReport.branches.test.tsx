@@ -105,62 +105,8 @@ const CELL_SIZES = [
   [3, 3],
 ];
 
-vi.mock("recharts", async () => {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const { createContext, useContext } =
-    await vi.importActual<typeof import("react")>("react");
-  const Data = createContext<any[]>([]);
-  return {
-    ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
-    Treemap: ({ data, content, children }: any) => (
-      <div data-testid="treemap">
-        <svg>
-          {data.flatMap((d: any) => [d, ...(d.children ?? [])]).map((d: any, i: number) => {
-            const [width, height] = CELL_SIZES[i % CELL_SIZES.length];
-            return cloneElement(content as ReactElement<any>, {
-              key: d.id ?? d.name,
-              ...d,
-              x: 10,
-              y: 10,
-              width,
-              height,
-            });
-          })}
-        </svg>
-        <Data.Provider value={data}>{children}</Data.Provider>
-      </div>
-    ),
-    Tooltip: ({ content }: any) => {
-      const data = useContext(Data);
-      if (!content) return null; // CostTrendChart's plain <RTooltip /> (no content render-prop)
-      return (
-        <div data-testid="treemap-tooltip">
-          {cloneElement(content, {
-            active: true,
-            payload: [{ payload: data[0] }],
-          })}
-          {cloneElement(content, { active: false })}
-        </div>
-      );
-    },
-    // CostTrendChart's stacked bar chart — not under test here, just needs
-    // to render without crashing when a past fiscal year is selected.
-    Sankey: ({ data }: any) => (
-      <div
-        data-testid="sankey"
-        data-nodes={JSON.stringify(data.nodes.map((n: any) => n.id))}
-        data-names={JSON.stringify(data.nodes.map((n: any) => n.name))}
-        data-links={JSON.stringify(data.links)}
-      />
-    ),
-    BarChart: ({ children }: any) => <div>{children}</div>,
-    Bar: () => null,
-    XAxis: () => null,
-    YAxis: () => null,
-    Legend: () => null,
-  };
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-});
+// jsdom has no canvas: the charts are drawn as DOM read from the option the page built.
+vi.mock("@/components/charts/EChart", () => import("@/test/costChartMock").then((m) => m.costChartModule()));
 
 import { mockApi } from "@/test/apiMock";
 import { hookState, withMetamodel } from "@/test/hooks";
@@ -335,20 +281,10 @@ describe("CostReport treemap", () => {
     expect(
       within(svg as unknown as HTMLElement).getByText("$500"),
     ).toBeInTheDocument();
-    // CRM (100) is medium — a label but no cost line; HR (80) is too small to draw.
-    expect(
-      within(svg as unknown as HTMLElement).getByText("CRM"),
-    ).toBeInTheDocument();
-    expect(
-      within(svg as unknown as HTMLElement).queryByText("$100"),
-    ).not.toBeInTheDocument();
-    expect(
-      within(svg as unknown as HTMLElement).queryByText("HR"),
-    ).not.toBeInTheDocument();
-    // Fourth item (CRM Web Portal) cycles back to large: its name fits there.
-    expect(
-      within(svg as unknown as HTMLElement).getByText("CRM Web Portal"),
-    ).toBeInTheDocument();
+    // Every card is a tile; which ones print a name or a cost is the chart's own
+    // fit-to-the-tile rule, tested in costTreemapOption.test.ts.
+    for (const name of ["CRM", "HR", "CRM Web Portal"])
+      expect(within(svg as unknown as HTMLElement).getByText(name)).toBeInTheDocument();
 
     expect(metric("Total Cost")).toHaveTextContent("$700");
     expect(metric("Items")).toHaveTextContent("4");
@@ -362,27 +298,6 @@ describe("CostReport treemap", () => {
     const tip = await screen.findByTestId("treemap-tooltip");
     expect(await within(tip).findByText("ERP")).toBeInTheDocument();
     expect(within(tip).getByText("$500")).toBeInTheDocument();
-  });
-
-  it("truncates a name that does not fit its cell", async () => {
-    mockApi.on("get", "/reports/cost-treemap*", {
-      items: [
-        { id: "a", name: "Big", cost: 900 },
-        { id: "b", name: "A Very Long Application Name", cost: 50 },
-      ],
-      total: 950,
-    });
-    renderCost();
-    await screen.findByTestId("treemap");
-    expect(screen.getByText("A Very …")).toBeInTheDocument();
-  });
-
-  it("anchors the labels on the right in a right-to-left locale", async () => {
-    hookState.isRtl = true;
-    renderCost();
-    const label = await screen.findByText("ERP", { selector: "text" });
-    expect(label).toHaveAttribute("text-anchor", "end");
-    expect(label).toHaveAttribute("x", String(10 + 300 - 6));
   });
 
   it("opens the card's side panel when a cell is clicked", async () => {
@@ -410,7 +325,7 @@ describe("CostReport treemap", () => {
     });
     renderCost();
     await screen.findByTestId("treemap");
-    expect(screen.getByText(/\+20%/)).toBeInTheDocument(); // (600-500)/500
+    expect(await screen.findByText(/\+20%/)).toBeInTheDocument(); // (600-500)/500
   });
 
   it("handles a card with no current-year baseline as 100% growth from zero, not a crash", async () => {
@@ -423,7 +338,7 @@ describe("CostReport treemap", () => {
     });
     renderCost();
     await screen.findByTestId("treemap");
-    expect(screen.getByText(/new/i)).toBeInTheDocument();
+    expect(await screen.findByText(/new/i)).toBeInTheDocument();
   });
 });
 

@@ -12,9 +12,14 @@ La parte superior de la ficha muestra:
 - **Nombre de la ficha** — Editable en línea
 - **Alias** — El otro nombre de la ficha, mostrado bajo el título cuando está definido. El lápiz de edición del título permite cambiar el nombre y el alias a la vez. Los alias se tienen en cuenta en todos los cuadros de búsqueda, de modo que una ficha se encuentra por el nombre que su organización usa realmente.
 - **Subtipo** — Clasificación secundaria (si aplica)
+- **Insignia de origen** — Se muestra cuando la ficha no se creó en la interfaz web: **MCP** para una ficha creada por un asistente de IA a través del [servidor MCP](../admin/mcp.md), **API** para un script o una integración, **Extensión** para una extensión instalada, **Sistema** para una tarea en segundo plano. Pase el cursor sobre ella para ver quién creó la ficha y cuándo: la persona sigue siendo el creador; la insignia indica qué canal usó. Las fichas creadas en la interfaz web, y las creadas antes de que Turbo EA registrara el canal, no muestran insignia.
 - **Insignia de estado de aprobación** — Borrador, Aprobado, Roto o Rechazado
 - **Botón de sugerencia IA** — Haga clic para generar una descripción con IA (visible cuando la IA está habilitada para este tipo de ficha y el usuario tiene permiso de edición)
-- **Anillo de calidad de datos** — Indicador visual de la completitud de la información (0–100%)
+- **Anillo de calidad de datos** — Indicador visual de la completitud de la información (0–100%). Pase el cursor por encima para ver las tres cosas que más aumentarían la puntuación, cada una con los puntos que añadiría (por ejemplo *Completar Criticidad del negocio +12,5%*). Haga clic en él (o enfóquelo y pulse Intro) para abrir el desglose completo en un panel a la derecha de la página que permanece abierto mientras edita: cada elemento aún por completar, ordenado según lo que aporta, y una lista **Ya contabilizado** con lo que ya está en su sitio. Cada elemento aún por completar es un enlace: al hacer clic se abre la sección donde se completa **en modo de edición**, con ese campo enfocado (o el cuadro de diálogo **Añadir relación** para el tipo de relación, el editor de etiquetas o el formulario de alta de la pestaña **Partes Interesadas**), y el panel sigue abierto. Sin derecho a editar esa parte de la ficha, el enlace solo abre la sección y se desplaza hasta ella. Mientras un campo obligatorio esté vacío, la puntuación se mantiene en 0%; el desglose nombra esos campos y muestra cuál sería la puntuación sin ellos. Cierre el panel con el botón **Cerrar** de su cabecera; su navegador recuerda si está abierto, así que sigue ahí en la ficha siguiente. En una ventana de menos de 900 px de ancho se abre en su lugar como un cajón lateral, que se cierra al seguir uno de sus enlaces.
+
+![Panel con el desglose de la calidad de datos](../assets/img/es/63_ficha_calidad_datos_desglose.png)
+
+Cuando un administrador activa el [modo TurboRPG](../admin/settings.md#turborpg-calidad-de-datos-gamificada) (calidad de datos gamificada), cada guardado que aumenta la puntuación se celebra como si se ganara vida en un videojuego: un **+X%** brillante sale de la sección que acaba de guardar, vuela hasta la puntuación y la golpea: el anillo destella y resplandece, su relleno crece hasta la nueva puntuación y la cifra va contando hacia arriba. Una vez que se desplaza más allá de la cabecera, una fina barra de puntuación anclada bajo la barra superior mantiene la puntuación a la vista y la mejora aterriza en ella. Haga clic en la puntuación de la barra —el chip con el chevrón— para abrir el mismo desglose que el anillo. Alcanzar la franja verde (80%) y el 100% son hitos con una breve lluvia de confeti. Borrar o eliminar datos reproduce el inverso atenuado: un **−X%** rojo sale de la puntuación de vuelta a la sección, y la barra se vacía y cuenta hacia atrás, sin destello ni confeti. Con la reducción de movimiento activada en su sistema operativo no vuela nada; en su lugar ve un **+X%** o **−X%** estático.
 - **Menú de acciones** — Archivar, eliminar y acciones de aprobación. También incluye una acción de un clic **Observar esta ficha** (cuando el tipo de ficha define un rol Observador), para que cualquier usuario con permiso de lectura pueda seguir la ficha sin pasar por la pestaña de Partes interesadas.
 
 ### Logotipo personalizado
@@ -117,6 +122,7 @@ Para tipos de ficha que soportan jerarquía (por ejemplo, Organización, Capacid
 
 - **Padre** — La ficha padre en la jerarquía (haga clic para navegar)
 - **Hijos** — Lista de fichas hijas (haga clic en cualquiera para navegar)
+- **Abrir en una pestaña nueva** — El padre, los hijos y la ruta jerárquica son enlaces: haga clic con el botón central o Ctrl/Cmd-clic (o clic derecho → *Abrir en una pestaña nueva*) para abrir esa ficha en una nueva pestaña del navegador sin perder la actual
 - **Agrupar por subtipo** — Cuando una ficha tiene muchos hijos de distintos subtipos (por ejemplo unidades de negocio, regiones y equipos bajo una misma empresa), se agrupan automáticamente en secciones plegables por subtipo, cada una con su recuento, con una sección final **Sin subtipo** para los hijos sin clasificar. El botón agrupar/lista junto al recuento de **hijos** alterna entre la vista agrupada y la lista plana.
 - **Ruta jerárquica** — Muestra la ruta completa desde la raíz hasta la ficha actual
 - **Tipo de vínculo** — Cuando un administrador ha configurado tipos de vínculo para este tipo de ficha, cada vínculo padre-hijo puede etiquetarse — por ejemplo, una filial *comercial* y otra de *ventas*. La etiqueta pertenece a la ficha hija: la ficha padre la muestra junto a cada hija, y la ficha hija junto a su padre. Quitar una ficha o moverla al nivel superior borra su etiqueta, y el cambio queda registrado en la pestaña **Historial**.
@@ -125,7 +131,7 @@ Para tipos de ficha que soportan jerarquía (por ejemplo, Organización, Capacid
 
 Muestra todas las conexiones con otras fichas, agrupadas por tipo de relación. Para cada relación:
 
-- **Nombre de la ficha relacionada** — Haga clic para navegar a la ficha relacionada
+- **Nombre de la ficha relacionada** — Haga clic para navegar a la ficha relacionada. Haga clic con el botón central o Ctrl/Cmd-clic (o clic derecho → *Abrir en una pestaña nueva*) para abrirla en una pestaña nueva del navegador — funciona igual en la lista **+N en subelementos**, en las listas de linaje y en la tarjeta emergente de un interesado
 - **Tipo de relación** — La naturaleza de la conexión (por ejemplo, «utiliza», «se ejecuta en», «depende de»)
 - **Agregar relación** — Haga clic en **+** para abrir el diálogo de esa relación. Lista las tarjetas coincidentes mientras escribe (las mejores coincidencias primero, y se cargan más al desplazarse) y oculta las ya vinculadas, con un texto que indica cuántas son. Al hacer clic en una tarjeta se vincula de inmediato y aparece como una etiqueta arriba: haga clic en la **×** de una etiqueta para deshacer esa adición. El diálogo permanece abierto para añadir tantas como quiera, y en el móvil se abre a pantalla completa. Las relaciones sin sección propia se alcanzan desde el botón **Agregar relación** al final de la sección. Cuando el tipo vinculado es jerárquico (capacidad de negocio, organización, etc.), el diálogo lo muestra como un árbol indentado en lugar de una lista alfabética, de modo que puede elegir una subcapacidad por su rama. La búsqueda mantiene visibles los padres de cada coincidencia como contexto, y las tarjetas que no se pueden elegir (ya vinculadas, recién añadidas o la propia tarjeta) permanecen en su sitio en gris para que los niveles a su alrededor sigan leyéndose bien.
 - **Orden** — Las tarjetas relacionadas se listan alfabéticamente por nombre
@@ -169,7 +175,7 @@ Si la ficha está vinculada a un producto de [endoflife.date](https://endoflife.
 
 - **Agregar comentarios** — Deje notas, preguntas o decisiones sobre el componente
 - **Respuestas en hilo** — Responda a comentarios específicos para crear hilos de conversación
-- **Marcas de tiempo** — Vea cuándo se publicó cada comentario y por quién
+- **Marcas de tiempo** — Vea cuándo se publicó cada comentario y por quién. Un comentario publicado por un asistente de IA a través del servidor MCP lleva una insignia **MCP** junto al autor
 - **Enlaces** — Una dirección web en un comentario es clicable y se abre en una pestaña nueva
 
 ## Pestaña de Tareas
@@ -207,6 +213,8 @@ La ruta de invitación requiere el permiso **`users.invite`**, una forma delegad
 ## Pestaña de Historial
 
 ![Historial de Cambios de una Ficha](../assets/img/es/08_ficha_historial.png)
+
+Un cambio que no procede de la interfaz web lleva una insignia junto al nombre de la persona: **MCP** cuando un asistente de IA lo realizó a través del [servidor MCP](../admin/mcp.md) en nombre de esa persona; **API**, **Extensión** o **Sistema** en los demás casos.
 
 Muestra el **registro completo de auditoría** de los cambios realizados en la ficha: **quién** hizo el cambio, **cuándo** se realizó y **qué** se modificó (valor anterior vs. valor nuevo). Esto permite la trazabilidad completa de todas las modificaciones a lo largo del tiempo.
 

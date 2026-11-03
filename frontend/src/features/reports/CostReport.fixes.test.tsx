@@ -50,12 +50,10 @@ vi.mock("@/hooks/useThumbnailCapture", () => ({
 }));
 vi.mock("@/features/reports/SaveReportDialog", () => ({ default: () => null }));
 vi.mock("@/components/CardDetailSidePanel", () => ({ default: () => null }));
-vi.mock("recharts", () => ({
-  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  Treemap: () => <div data-testid="treemap" />,
-  Tooltip: () => null,
+// jsdom has no canvas; these tests only need to know that the chart mounted.
+vi.mock("@/components/charts/EChart", () => ({
+  default: () => <div data-testid="treemap" />,
+  EXPORT_DPR: 2,
 }));
 
 import { mockApi } from "@/test/apiMock";

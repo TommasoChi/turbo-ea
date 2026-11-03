@@ -103,6 +103,8 @@ La puntuación de **calidad de datos** de una tarjeta mide de forma ponderada cu
 
 **Los campos obligatorios prevalecen sobre la puntuación.** Mientras algún campo obligatorio de una tarjeta siga vacío, su puntuación permanece en **0** independientemente de los pesos: el cálculo ponderado solo se aplica una vez completados todos los campos obligatorios (los campos booleanos y de solo lectura están exentos; consulta el ajuste **Requerido** más arriba).
 
+Un campo cuenta como completado en cuanto contiene un valor. En un campo Sí / No cuentan tanto **Sí** como **No** — solo **Ninguno** está vacío — y un campo numérico cuenta cuando contiene 0.
+
 La importancia de cada factor se establece con un control deslizante simple de cuatro niveles, que también muestra el número subyacente:
 
 - **Ignorar (0)**: excluido por completo de la puntuación.
@@ -113,6 +115,8 @@ La importancia de cada factor se establece con un control deslizante simple de c
 El panel enumera los cinco **factores integrados** —**Descripción**, **Ciclo de vida** (si hay alguna fecha de ciclo de vida establecida), **Relaciones obligatorias** , **Etiquetas obligatorias** y **Roles de partes interesadas** (una sola casilla, que se cumple en cuanto se asigna a alguien a la tarjeta en un rol que cuenta para la calidad de datos)— seguidos de cada campo agrupado por su sección, todos con el mismo control deslizante. Por ejemplo, establezca el **Ciclo de vida** en *Ignorar* para un tipo cuyas tarjetas legítimamente nunca llevan fechas, para que no se penalicen.
 
 Una barra de **composición de la puntuación** en la parte superior del panel muestra la proporción de cada factor en la puntuación máxima posible, para ver de un vistazo qué factores dominan. En el diseño de la tarjeta de la pestaña **Main**, cada campo —y las secciones integradas Descripción, Ciclo de vida y Relaciones— muestra una pequeña insignia con su nivel actual, para ver la ponderación sin salir de esa pestaña.
+
+Los usuarios ven el resultado factor por factor en la propia ficha: al pasar el cursor por el aro de calidad de datos se listan los elementos que más aumentarían la puntuación, y al hacer clic se abre el desglose completo (véase [Detalle de la Ficha](../guide/card-details.md#encabezado-de-la-ficha)).
 
 Cambiar cualquier importancia vuelve a puntuar inmediatamente todas las tarjetas existentes de ese tipo. Los campos nuevos son *Normal* de forma predeterminada, por lo que cuentan para la puntuación en cuanto los agrega.
 

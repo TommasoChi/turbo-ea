@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
@@ -16,13 +16,17 @@ import TableRow from "@mui/material/TableRow";
 import TableSortLabel from "@mui/material/TableSortLabel";
 import Tooltip from "@mui/material/Tooltip";
 import Chip from "@mui/material/Chip";
-import {
-  Treemap,
-  Sankey,
-  ResponsiveContainer,
-  Tooltip as RTooltip,
-} from "recharts";
+import type { ECharts, EChartsCoreOption } from "echarts/core";
+import EChart, { EXPORT_DPR, type EChartClickParams } from "@/components/charts/EChart";
+import { useEChartsTheme, type EChartsThemeValue } from "@/components/charts/echartsTheme";
 import ReportShell from "./ReportShell";
+import {
+  buildCostTreemapOption,
+  chartTileRect,
+  type CostTreemapGroup,
+  type CostTreemapItem,
+} from "./costTreemapOption";
+import { buildCostSankeyOption } from "./costSankeyOption";
 import SaveReportDialog from "./SaveReportDialog";
 import CostTrendChart from "./CostTrendChart";
 import MetricCard from "./MetricCard";
@@ -33,9 +37,7 @@ import { useSavedReport } from "@/hooks/useSavedReport";
 import { applyScope, useCardScope } from "@/hooks/useCardScope";
 import CardScopeFilter from "@/components/CardScopeFilter";
 import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
-import { useCurrency, type CurrencyFormatter } from "@/hooks/useCurrency";
-import { useIsRtl } from "@/hooks/useIsRtl";
-import CostSankeyNode from "./CostSankeyNode";
+import { useCurrency } from "@/hooks/useCurrency";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useTypeLabel,
@@ -48,7 +50,6 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { resolveFacetField } from "@/lib/fieldFacets";
-import { surface } from "@/theme/tokens";
 import {
   COMBINED_KEY,
   commonCostFields,
@@ -137,164 +138,142 @@ function pickAllFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Treemap helpers                                                     */
+/*  One treemap panel                                                  */
 /* ------------------------------------------------------------------ */
 
-const COLORS = [
-  "#1565c0",
-  "#1976d2",
-  "#1e88e5",
-  "#2196f3",
-  "#42a5f5",
-  "#64b5f6",
-  "#90caf9",
-  "#bbdefb",
-  "#0d47a1",
-  "#1565c0",
-];
-
-function treemapColor(index: number): string {
-  return COLORS[index % COLORS.length];
+interface CostTreemapPanelProps {
+  /** The cards that cost anything, largest first, when the report is not grouped. */
+  items: CostTreemapItem[];
+  /** The groups, each holding its cards, when the report is grouped. */
+  groups?: CostTreemapGroup[];
+  /** The report's total, each tile's share is read against. */
+  total: number;
+  /** The panel fills the screen (fullscreen) instead of a fixed height. */
+  fullscreen: boolean;
+  /** The chart chrome, with the reading direction. */
+  chrome: EChartsThemeValue;
+  fmt: { format: (v: number) => string };
+  onTileClick: (p: EChartClickParams) => void;
 }
 
-const TreemapContent = ({
-  x,
-  y,
-  width,
-  height,
-  name,
-  cost,
-  index,
-  id,
-  costFmt,
-  onCellClick,
-  isRtl,
-  deltaPct,
-  children,
-  caption,
-}: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  name: string;
-  cost: number;
-  index: number;
-  id?: string;
-  costFmt: CurrencyFormatter;
-  onCellClick?: (id: string) => void;
-  isRtl?: boolean;
-  /** YoY delta vs the current fiscal year: undefined = no year picked (no
-   * badge), null = no current-year baseline to diff against ("new"), a
-   * number = the signed ratio. */
-  deltaPct?: number | null;
-  /** Present on a group node, which holds the cards drawn above it. */
-  children?: unknown[];
-  /** The group's name, on the first (largest) card of each group. */
-  caption?: string;
-}) => {
-  const { t } = useTranslation("reports");
-  if (width < 4 || height < 4) return null;
-  const showLabel = width > 50 && height > 30;
-  const showCost = width > 70 && height > 45;
-  const handleClick = id && onCellClick ? () => onCellClick(id) : undefined;
-  if (Array.isArray(children)) {
-    // A group: its frame only. Its name is the caption of its largest card,
-    // since the cards are drawn over the frame.
-    return (
-      <g>
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          fill={treemapColor(index)}
-          stroke={surface.light.paper}
-          strokeWidth={4}
-        />
-      </g>
-    );
-  }
-  // In RTL, anchor the cell labels at the top-right corner so they read correctly.
-  const labelX = isRtl ? x + width - 6 : x + 6;
-  const textDir = isRtl
-    ? { textAnchor: "end" as const, direction: "rtl" as const }
-    : {};
-  return (
-    <g
-      onClick={handleClick}
-      style={handleClick ? { cursor: "pointer" } : undefined}
-    >
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        fill={treemapColor(index)}
-        stroke="#fff"
-        strokeWidth={2}
-        rx={3}
-      />
-      {showLabel && caption && (
-        <text
-          x={labelX}
-          y={y + 12}
-          fontSize={9}
-          fill={surface.light.paper}
-          opacity={0.8}
-          style={{ pointerEvents: "none" }}
-          {...textDir}
-        >
-          {caption}
-        </text>
-      )}
-      {showLabel && (
-        <text
-          x={labelX}
-          y={y + (caption ? 25 : 16)}
-          fontSize={11}
-          fontWeight={600}
-          fill="#fff"
-          style={{ pointerEvents: "none" }}
-          {...textDir}
-        >
-          {name.length > Math.floor(width / 7)
-            ? name.slice(0, Math.floor(width / 7) - 1) + "…"
-            : name}
-        </text>
-      )}
-      {showCost && (
-        <text
-          x={labelX}
-          y={y + (caption ? 39 : 30)}
-          fontSize={10}
-          fill="rgba(255,255,255,0.8)"
-          style={{ pointerEvents: "none" }}
-          {...textDir}
-        >
-          {costFmt.format(cost)}
-        </text>
-      )}
-      {deltaPct !== undefined && showLabel && (
-        <text
-          x={isRtl ? x + 6 : x + width - 6}
-          y={y + 16}
-          fontSize={10}
-          fontWeight={700}
-          fill={
-            deltaPct === null || deltaPct >= 0 ? "#a5d6a7" : "#ef9a9a"
-          }
-          textAnchor={isRtl ? "start" : "end"}
-          style={{ pointerEvents: "none" }}
-        >
-          {deltaPct === null
-            ? `▲ ${t("cost.deltaNew")}`
-            : `${deltaPct >= 0 ? "▲ +" : "▼ "}${Math.round(deltaPct * 100)}%`}
-        </text>
-      )}
-    </g>
+/**
+ * The report's treemap: one tile per card sized by its cost, or one framed
+ * block per group holding its cards. A tile prints what its rectangle fits (a
+ * name, a name and a cost, or nothing — `tileLabelTier`), read from the
+ * chart's own layout while ECharts renders it.
+ */
+function CostTreemapPanel({
+  items,
+  groups,
+  total,
+  fullscreen,
+  chrome,
+  fmt,
+  onTileClick,
+}: CostTreemapPanelProps) {
+  const { t } = useTranslation(["reports", "common"]);
+  const chartRef = useRef<ECharts | null>(null);
+  const onInit = useCallback((chart: ECharts) => {
+    chartRef.current = chart;
+  }, []);
+  // The label formatter calls this while ECharts renders each tile, after it
+  // laid the tile out — so a resize re-reads the real rectangles with no React work.
+  const tileRect = useCallback((dataIndex: number) => chartTileRect(chartRef.current, dataIndex), []);
+
+  // Memoised: a new option replaces the chart's whole option and replays its
+  // animation, so it is rebuilt only when the data or the theme change.
+  const option = useMemo(
+    () =>
+      buildCostTreemapOption(items, {
+        chrome,
+        isRtl: chrome.isRtl,
+        format: (v) => fmt.format(v),
+        panelTotal: total,
+        percentOfTotal: (pct) => t("cost.percentOfTotalValue", { pct }),
+        clickable: true,
+        tileRect,
+        deltaNew: t("cost.deltaNew"),
+        groups,
+      }),
+    [items, groups, chrome, fmt, total, t, tileRect],
   );
-};
+
+  return (
+    <CostChartFrame
+      option={option}
+      fullscreen={fullscreen}
+      ariaLabel={t("cost.title")}
+      onClick={onTileClick}
+      onInit={onInit}
+    />
+  );
+}
+
+/** The Paper around a cost chart: fixed height, or filling the fullscreen panel. */
+function CostChartFrame({
+  option,
+  fullscreen,
+  ariaLabel,
+  testId,
+  onClick,
+  onInit,
+}: {
+  option: EChartsCoreOption;
+  fullscreen: boolean;
+  ariaLabel: string;
+  testId?: string;
+  onClick?: (p: EChartClickParams) => void;
+  onInit?: (chart: ECharts) => void;
+}) {
+  return (
+    <Paper
+      variant="outlined"
+      sx={{ p: 1, ...(fullscreen && { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }) }}
+      data-testid={testId}
+    >
+      {/* Drawn at the export's pixel ratio so the PPTX / PNG capture stays crisp. */}
+      <EChart
+        option={option}
+        style={fullscreen ? { flex: 1, minHeight: 0 } : { height: 450 }}
+        devicePixelRatio={EXPORT_DPR}
+        ariaLabel={ariaLabel}
+        onClick={onClick}
+        onInit={onInit}
+      />
+    </Paper>
+  );
+}
+
+interface CostSankeyPanelProps {
+  nodes: SankeyNode[];
+  links: SankeyLink[];
+  /** The panel fills the screen (fullscreen) instead of a fixed height. */
+  fullscreen: boolean;
+  chrome: EChartsThemeValue;
+  fmt: { format: (v: number) => string };
+}
+
+/** The Sankey view: cost items -> groups -> cards. */
+function CostSankeyPanel({ nodes, links, fullscreen, chrome, fmt }: CostSankeyPanelProps) {
+  const { t } = useTranslation(["reports", "common"]);
+  const option = useMemo(
+    () =>
+      buildCostSankeyOption(nodes, links, {
+        chrome,
+        isRtl: chrome.isRtl,
+        format: (v) => fmt.format(v),
+      }),
+    [nodes, links, chrome, fmt],
+  );
+  return (
+    <CostChartFrame
+      option={option}
+      fullscreen={fullscreen}
+      ariaLabel={t("cost.sankeyChartView")}
+      testId="cost-sankey-panel"
+    />
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Main component                                                     */
@@ -310,7 +289,7 @@ export default function CostReport() {
   const fieldLabel = useFieldLabel();
   const optLabel = useOptionLabel();
   const { fmt } = useCurrency();
-  const isRtl = useIsRtl();
+  const chartTheme = useEChartsTheme();
   const { user } = useAuth();
   const canViewCostsGlobally = !!(
     user?.permissions?.["*"] || user?.permissions?.["costs.view"]
@@ -822,8 +801,10 @@ export default function CostReport() {
     t,
   ]);
 
-  const handleRectClick = useCallback((id: string) => {
-    setSidePanelCardId(id);
+  // A tile hands back the datum it was built from; a group frame has no card id and is inert.
+  const handleTileClick = useCallback((p: EChartClickParams) => {
+    const d = p.data as { id?: string } | undefined;
+    if (d?.id) setSidePanelCardId(d.id);
   }, []);
 
   if (!canViewCostsGlobally) {
@@ -882,7 +863,7 @@ export default function CostReport() {
   );
   const avgCost = summaryCards.length > 0 ? summaryTotal / summaryCards.length : 0;
 
-  const treemapLeaf = (d: CostItem, i: number) => {
+  const treemapLeaf = (d: CostItem, i: number): CostTreemapItem => {
     const baseline = baselineCosts.get(d.id);
     const deltaPct =
       fiscalYearParam == null
@@ -890,30 +871,16 @@ export default function CostReport() {
         : baseline && baseline > 0
           ? (d.cost - baseline) / baseline
           : null;
-    return {
-      name: d.name,
-      size: d.cost,
-      cost: d.cost,
-      id: d.id,
-      index: i,
-      deltaPct,
-    };
+    return { id: d.id, name: d.name, cost: d.cost, index: i, deltaPct };
   };
-  // Grouped: each group is a parent node holding its cards.
-  const treemapData = groups
-    ? groups.map((g, gi) => ({
-        name: g.label,
-        cost: g.cost,
-        index: gi,
-        children: [...g.items]
-          .sort((a, b) => b.cost - a.cost)
-          .map((d, di) => ({
-            ...treemapLeaf(d, gi),
-            group: g.label,
-            caption: di === 0 ? g.label : undefined,
-          })),
-      }))
-    : [...items].sort((a, b) => b.cost - a.cost).map(treemapLeaf);
+  // Grouped: each group is a frame holding its cards, which take the frame's colour.
+  const treemapGroups: CostTreemapGroup[] | undefined = groups?.map((g, gi) => ({
+    name: g.label,
+    cost: g.cost,
+    index: gi,
+    items: [...g.items].sort((x, y) => y.cost - x.cost).map((d) => treemapLeaf(d, gi)),
+  }));
+  const treemapItems = [...items].sort((x, y) => y.cost - x.cost).map(treemapLeaf);
 
   const sort = (k: string) => {
     setSortD(sortK === k && sortD === "asc" ? "desc" : "asc");
@@ -950,41 +917,6 @@ export default function CostReport() {
       <TableCell align="right">
         {pct == null ? EMPTY_VALUE : `${pct >= 0 ? "+" : ""}${(pct * 100).toFixed(1)}%`}
       </TableCell>
-    );
-  };
-
-  const Tip = ({
-    active,
-    payload,
-  }: {
-    active?: boolean;
-    payload?: {
-      payload: { name: string; cost: number; size: number; group?: string };
-    }[];
-  }) => {
-    if (!active || !payload?.[0]) return null;
-    const d = payload[0].payload;
-    return (
-      <Paper sx={{ p: 1.5 }} elevation={3}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-          {d.name}
-        </Typography>
-        {d.group && (
-          <Typography variant="caption" color="text.secondary" display="block">
-            {d.group}
-          </Typography>
-        )}
-        <Typography variant="caption" display="block">
-          {fmt.format(d.cost)}
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          {total > 0
-            ? t("cost.percentOfTotalValue", {
-                pct: ((d.cost / total) * 100).toFixed(1),
-              })
-            : ""}
-        </Typography>
-      </Paper>
     );
   };
 
@@ -1196,34 +1128,17 @@ export default function CostReport() {
               </Box>
             )}
             <FullscreenPanel label={t("cost.fullscreen")}>
-            {(isFullscreen) => (
-            <Paper variant="outlined" sx={{ p: 1, ...(isFullscreen && { flex: 1, minHeight: 0 }) }}>
-              <ResponsiveContainer width="100%" height={isFullscreen ? "100%" : 450}>
-                <Treemap
-                  data={treemapData}
-                  dataKey="size"
-                  stroke="#fff"
-                  animationDuration={300}
-                  content={
-                    <TreemapContent
-                      x={0}
-                      y={0}
-                      width={0}
-                      height={0}
-                      name=""
-                      cost={0}
-                      index={0}
-                      costFmt={fmt}
-                      onCellClick={handleRectClick}
-                      isRtl={isRtl}
-                    />
-                  }
-                >
-                  <RTooltip content={<Tip />} />
-                </Treemap>
-              </ResponsiveContainer>
-            </Paper>
-            )}
+              {(isFullscreen) => (
+                <CostTreemapPanel
+                  items={treemapItems}
+                  groups={treemapGroups}
+                  total={total}
+                  fullscreen={isFullscreen}
+                  chrome={chartTheme}
+                  fmt={fmt}
+                  onTileClick={handleTileClick}
+                />
+              )}
             </FullscreenPanel>
           </>
         )
@@ -1237,21 +1152,13 @@ export default function CostReport() {
         ) : (
           <FullscreenPanel label={t("cost.fullscreen")}>
             {(isFullscreen) => (
-              <Paper
-                variant="outlined"
-                sx={{ p: 1, ...(isFullscreen && { flex: 1, minHeight: 0 }) }}
-                data-testid="cost-sankey-panel"
-              >
-                <ResponsiveContainer width="100%" height={isFullscreen ? "100%" : 450}>
-                  <Sankey
-                    data={sankeyView}
-                    nodeWidth={14}
-                    nodePadding={20}
-                    margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
-                    node={<CostSankeyNode isRtl={isRtl} />}
-                  />
-                </ResponsiveContainer>
-              </Paper>
+              <CostSankeyPanel
+                nodes={sankeyView.nodes}
+                links={sankeyView.links}
+                fullscreen={isFullscreen}
+                chrome={chartTheme}
+                fmt={fmt}
+              />
             )}
           </FullscreenPanel>
         )

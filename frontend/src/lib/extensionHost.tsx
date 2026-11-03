@@ -28,44 +28,13 @@
  * (multi-select filter dropdown), and `sdk.CardDetailSidePanel` (card drawer)
  * — ReportShell/CardDetailSidePanel lazy-loaded with Suspense handled
  * internally. Since SDK 1.8 the sdk also carries `useCurrency` (workspace
- * currency formatting), `MetricCard` (KPI tile), `ReportLegend`,
- * `UserMultiSelect` (shared multi-user picker over GET /users), and
- * `loadRecharts` — an async loader returning the recharts module from core's
- * code-split chunk, so extensions never bundle a charting library. Since SDK
- * 1.9 `useChartTheme` returns the theme-aware Recharts chrome (grid stroke,
- * axis ticks, tooltip styling) core reports use, so extension charts match
- * core's look without hand-rolling it. Since SDK 1.11 `useThumbnailCapture`
- * captures a chart container as the PNG preview shown on saved-report cards
- * (html-to-image loads lazily on first capture). Since SDK 1.14
- * `loadHtmlToImage` exposes that same lazy html-to-image loader directly
- * (not wrapped in a hook) for callers that need to capture an arbitrary DOM
- * node chosen imperatively at call time. Also since SDK 1.14
- * `loadDocx` async-loads core's own `docx` — the library the SoAW and ADR
- * exporters already build their documents with — so an extension writes a
- * Word file from code (`Document`, `Paragraph`, `TextRun`, `ImageRun`,
- * `Packer`) instead of shipping a template and a second library to fill it.
- * Same "reuse the host's copy of a heavy library" rule as `loadRecharts`.
- * It replaced `loadDocxTemplater` (docxtemplater + pizzip +
- * docxtemplater-image): the template approach moved the document's layout
- * into a binary asset nobody could diff, needed its own EMU arithmetic for
- * images, and pinned three dependencies core itself never used. Also
- * since SDK 1.14, `sdk.ProcessDetailSidePanel` ({processId, open, onClose})
- * is a self-contained BPM process-detail drawer — Overview/Steps/Flow/Apps/
- * Data tabs, same visual language as ProcessNavigator's own drawer on /bpm —
- * for extensions rendering BusinessProcess boxes that want the BPM-flavored
- * panel instead of the generic CardDetailSidePanel. Lazy-wrapped like
- * CardDetailSidePanel (see components/ProcessDetailSidePanel.tsx). Also
- * since SDK 1.14, `sdk.ProcessFlowPreview` ({processId, open, onClose}) is
- * the FULLSCREEN BPMN flow dialog /bpm opens from its "schema" view-flow
- * icon — a distinct, narrower component (only fetches the card itself, not
- * the whole process tree) for a dedicated "view flow" action, as opposed to
- * ProcessDetailSidePanel's general "open this process" drawer. FORK-LOCAL,
- * not yet proposed upstream (2026-07-28): since SDK 1.15, `sdk.CardPicker`
- * re-exports the core's own single-select card picker (browse-on-open,
- * filter-as-you-type, infinite scroll) so an extension can offer the exact
- * same "pick an existing card" experience every core field uses, instead of
- * hand-rolling a narrower one. Statically imported (see the import comment
- * above CardPicker.tsx's import) — no code-split graph to lazy-wrap.
+ * currency formatting), `MetricCard` (KPI tile), `ReportLegend` and
+ * `UserMultiSelect` (shared multi-user picker over GET /users); its chart
+ * loader `loadRecharts` and 1.9's `useChartTheme` were deprecated at 1.32 and
+ * removed at 1.33 — `loadECharts` is the only chart stack. Since SDK 1.11
+ * `useThumbnailCapture` captures a chart container as the PNG preview shown
+ * on saved-report cards (html-to-image loads lazily on first capture). Since
+ * SDK 1.14
  * `CardScopeDialog` is the shared hierarchy-aware multi-select card picker
  * report scope controls are built on — pick cards and everything beneath them
  * comes with — plus its `dedupeScopeRoots` helper. Since SDK 1.15 the rest of
@@ -96,6 +65,15 @@
  * selects ONE card is built on — browse on open, rank as you type, page in
  * more as the list scrolls — so an extension dialog that links one card
  * behaves exactly like core's instead of hand-rolling an Autocomplete.
+ * Since SDK 1.32 `loadECharts` resolves the charting stack core draws every
+ * chart with (dashboards and reports) — the `EChart` wrapper with its
+ * `EXPORT_DPR` / `ECHART_CLASS` constants, `useEChartsTheme` /
+ * `buildEChartsChrome` (the MUI-derived chrome) and the pure `chrome` option
+ * helpers — from core's code-split chunk, so an extension chart matches
+ * core's in light, dark and right-to-left and never bundles a chart library.
+ * It is the only chart stack: since SDK 1.33 it also draws scatter plots and
+ * shaded reference areas (`markArea`), and the two deprecated chart entries of
+ * 1.8 / 1.9 are gone.
  *
  * Since SDK 1.12 the preferred way to add a plug point is the GENERIC SLOT
  * registry, not a new named extension point. An extension declares
@@ -138,7 +116,6 @@ import ReportLegend from "@/features/reports/ReportLegend";
 import SaveReportDialog from "@/features/reports/SaveReportDialog";
 import type { ReportShellProps } from "@/features/reports/ReportShell";
 import type { GEdge, GNode, LayerOverrides } from "@/features/reports/layeredDependencyLayout";
-import { useChartTheme } from "@/hooks/useChartTheme";
 import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -181,7 +158,7 @@ import { PHASES, getPhaseLabels } from "@/lib/lifecyclePhases";
 import { buildGanttArrowPath } from "@/features/ppm/ganttArrowPath";
 import type { ArchitectureDecision, Card, User } from "@/types";
 
-export const UI_SDK_VERSION = "1.19"; // fork: pinned (frozen). Upstream value is "1.31"; the surface is present without the constant following it.
+export const UI_SDK_VERSION = "1.19"; // fork: pinned (frozen). Upstream value is "1.33"; the surface is present without the constant following it.
 
 /**
  * Core nav groups an extension route may request placement into (instead of the
@@ -1228,10 +1205,9 @@ export function initExtensionHost(): void {
       // for a general "open this process" click.
       ProcessFlowPreview: ExtensionProcessFlowPreview,
       // SDK 1.8 — dashboard-building additions: currency formatting, KPI tile,
-      // legend, the shared multi-user picker, and a lazy Recharts loader so
-      // extension charts reuse core's code-split chunk instead of bundling
-      // their own copy (a static import here would drag Recharts into the
-      // eager main bundle — same caveat as ReportShell above).
+      // legend and the shared multi-user picker. (`loadRecharts` 1.8 and
+      // `useChartTheme` 1.9 were removed at 1.33 — charts go through
+      // `loadECharts`.)
       useCurrency,
       MetricCard,
       ReportLegend,
@@ -1251,11 +1227,6 @@ export function initExtensionHost(): void {
       PHASES,
       getPhaseLabels,
       buildGanttArrowPath,
-      loadRecharts: () => import("recharts"),
-      // SDK 1.9 — theme-aware Recharts chrome (grid/axis/tooltip), the same
-      // conventions core reports use, so extension charts cannot drift from
-      // core's look in either light or dark mode.
-      useChartTheme,
       useThumbnailCapture,
       // SDK 1.14 — same rationale as loadRecharts, for html-to-image (already
       // a core dependency via useThumbnailCapture). Exposed as a plain loader
@@ -1387,7 +1358,7 @@ export function initExtensionHost(): void {
       // `loadDependencyView` resolves the house dependency notation (the
       // Layered Dependency View) plus its layout engine from core's own
       // code-split chunk (React Flow + dagre ride along) — the same
-      // reuse-over-rebuild posture as `loadRecharts`/`loadAgGrid`, and the
+      // reuse-over-rebuild posture as `loadECharts`/`loadAgGrid`, and the
       // §3.10 rule applies: never substitute another graph library. The
       // layout module is handed back as a namespace so its node/edge
       // builders and helpers stay available without re-listing them here.
@@ -1424,7 +1395,7 @@ export function initExtensionHost(): void {
       // what is on screen" (rows and displayed columns read off the grid
       // API), the two readers are the leaf `lib/spreadsheet.ts` lifted out
       // of the card importer, and `xlsx` is the vendored library itself (the
-      // `loadRecharts` posture for a bare heavy dependency) so a caller can
+      // lazy-loader posture for a bare heavy dependency) so a caller can
       // append its own machine-readable sheet to the workbook core built.
       // An extension must never bundle a spreadsheet library of its own.
       loadSpreadsheet: () =>
@@ -1438,6 +1409,25 @@ export function initExtensionHost(): void {
           buildCurrentViewWorkbook: exp.buildCurrentViewWorkbook,
           parseWorkbook: sheet.parseWorkbook,
           readWorkbookSheets: sheet.readWorkbookSheets,
+        })),
+      // SDK 1.32 — the charting stack core draws every chart with (dashboards
+      // and reports): the ECharts wrapper, the MUI-derived chrome and the pure
+      // option helpers, resolved from the code-split chunk core already ships,
+      // so an extension never bundles a chart library. The only chart stack:
+      // since 1.33 it also serves scatter plots and shaded reference areas
+      // (`markArea`), and the deprecated 1.8 / 1.9 chart entries are gone.
+      loadECharts: () =>
+        Promise.all([
+          import("@/components/charts/EChart"),
+          import("@/components/charts/echartsTheme"),
+          import("@/components/charts/chrome"),
+        ]).then(([chart, theme, chrome]) => ({
+          EChart: chart.default,
+          EXPORT_DPR: chart.EXPORT_DPR,
+          ECHART_CLASS: chart.ECHART_CLASS,
+          useEChartsTheme: theme.useEChartsTheme,
+          buildEChartsChrome: theme.buildEChartsChrome,
+          chrome,
         })),
     },
     register: registerExtension,

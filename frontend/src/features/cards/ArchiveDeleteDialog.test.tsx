@@ -62,25 +62,30 @@ describe("ArchiveDeleteDialog", () => {
     expect(screen.queryByText(/cards linked via relationships/i)).not.toBeInTheDocument();
   });
 
-  it.each(["archive", "delete"] as const)("shows the card name as text when it is %sd", async (mode) => {
-    vi.mocked(api.get).mockResolvedValueOnce(baseImpact);
-    const hostile = '<img src="x" onerror="alert(1)">CRM';
-    render(
-      <ArchiveDeleteDialog
-        open
-        mode={mode}
-        scope="single"
-        cardId="card-1"
-        cardName={hostile}
-        onClose={() => {}}
-        onConfirmed={() => {}}
-      />,
-    );
-    const dialog = await screen.findByRole("dialog");
-    await waitFor(() => expect(dialog.querySelector("strong")).not.toBeNull());
-    expect(dialog.querySelector("strong")?.textContent).toBe(hostile);
-    expect(dialog.querySelector("img")).toBeNull();
-  });
+  it.each(["archive", "delete"] as const)(
+    "escapes HTML in the card name in the single-card %s confirm",
+    async (mode) => {
+      const name = '<img src="x" onerror="window.__xss=1">';
+      vi.mocked(api.get).mockResolvedValueOnce(baseImpact);
+      render(
+        <ArchiveDeleteDialog
+          open
+          mode={mode}
+          scope="single"
+          cardId="card-1"
+          cardName={name}
+          onClose={() => {}}
+          onConfirmed={() => {}}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByText(name)).toBeInTheDocument();
+      });
+      // Literal text inside the translation's <strong>, never live markup.
+      expect(screen.getByText(name).tagName).toBe("STRONG");
+      expect(document.body.querySelector("img")).toBeNull();
+    },
+  );
 
   it("hides reparent option when grandparent is null", async () => {
     vi.mocked(api.get).mockResolvedValueOnce({

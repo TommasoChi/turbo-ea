@@ -12,9 +12,14 @@ Der obere Bereich der Karte zeigt:
 - **Kartenname** — Inline bearbeitbar
 - **Alias** — Der zweite Name der Karte, unter dem Titel angezeigt, wenn gesetzt. Über das Bearbeiten-Symbol am Titel lassen sich Name und Alias gemeinsam ändern. Aliasse werden von jedem Suchfeld berücksichtigt, sodass eine Karte über den in Ihrer Organisation tatsächlich verwendeten Namen gefunden wird.
 - **Subtyp** — Sekundäre Klassifizierung (falls zutreffend)
+- **Herkunfts-Chip** — Wird angezeigt, wenn die Karte nicht in der Weboberfläche erstellt wurde: **MCP** für eine Karte, die ein KI-Assistent über den [MCP-Server](../admin/mcp.md) angelegt hat, **API** für ein Skript oder eine Integration, **Erweiterung** für eine installierte Erweiterung, **System** für einen Hintergrundjob. Fahren Sie mit der Maus darüber, um zu sehen, wer die Karte wann erstellt hat — die Person bleibt der Ersteller; der Chip nennt den genutzten Kanal. Karten, die in der Weboberfläche erstellt wurden, sowie Karten, die vor der Erfassung des Kanals durch Turbo EA angelegt wurden, zeigen keinen Chip.
 - **Genehmigungsstatus-Badge** — Entwurf, Genehmigt, Ungültig oder Abgelehnt
 - **KI-Vorschlags-Schaltfläche** — Klicken, um eine Beschreibung mit KI zu generieren (sichtbar, wenn KI für diesen Kartentyp aktiviert ist und der Benutzer Bearbeitungsrechte hat)
-- **Datenqualitätsring** — Visueller Indikator der Informationsvollständigkeit (0–100%)
+- **Datenqualitätsring** — Visueller Indikator der Informationsvollständigkeit (0–100%). Fahren Sie mit der Maus darüber, um die drei Punkte zu sehen, die den Wert am stärksten erhöhen würden, jeweils mit der Punktzahl, die sie hinzufügen würde (zum Beispiel *Geschäftskritikalität ausfüllen +12,5%*). Klicken Sie darauf (oder fokussieren Sie ihn und drücken Sie die Eingabetaste), um die vollständige Aufschlüsselung als Bereich rechts auf der Seite zu öffnen, der beim Bearbeiten geöffnet bleibt: jeder noch auszufüllende Slot, sortiert nach seinem Beitrag, und eine Liste **Bereits berücksichtigt** mit allem, was vorhanden ist. Jedes noch auszufüllende Element ist ein Link: Ein Klick öffnet den Abschnitt, in dem es ausgefüllt wird, **im Bearbeitungsmodus** und mit fokussiertem Feld (oder den Dialog **Beziehung hinzufügen** für den Beziehungstyp, den Tag-Editor oder das Hinzufügen-Formular des Tabs **Stakeholder**); der Bereich bleibt geöffnet. Ohne das Recht, diesen Teil der Karte zu bearbeiten, öffnet der Link den Abschnitt nur und scrollt dorthin. Solange ein Pflichtfeld leer ist, bleibt der Wert bei 0%; die Aufschlüsselung nennt diese Felder und zeigt, wie hoch der Wert ohne sie wäre. Schließen Sie den Bereich mit der Schaltfläche **Schließen** in seiner Kopfzeile; Ihr Browser merkt sich, ob er geöffnet ist, sodass er auch bei der nächsten Karte noch da ist. In einem Fenster, das schmaler als 900 px ist, öffnet er sich stattdessen als Seitenleiste, die sich schließt, wenn Sie einem ihrer Links folgen.
+
+![Bereich mit der Datenqualitäts-Aufschlüsselung](../assets/img/de/63_karte_datenqualitaet_aufschluesselung.png)
+
+Wenn ein Administrator den [TurboRPG-Modus](../admin/settings.md#turborpg-gamifizierte-datenqualität) (gamifizierte Datenqualität) aktiviert, wird jedes Speichern, das den Wert erhöht, wie ein Lebenspunkte-Gewinn in einem Spiel gefeiert: Ein leuchtendes **+X%** verlässt den gerade gespeicherten Abschnitt, fliegt zum Wert und trifft ihn – der Ring blitzt und leuchtet auf, seine Füllung wächst auf den neuen Wert, und die Zahl zählt hoch. Sobald Sie am Kopfbereich vorbeigescrollt haben, hält eine unter der oberen Leiste angeheftete schmale Wertungsleiste den Wert im Blick, und der Zuwachs landet stattdessen dort. Klicken Sie auf den Wert der Leiste – den Chip mit dem Pfeil –, um dieselbe Aufschlüsselung wie beim Ring zu öffnen. Das Erreichen des grünen Bereichs (80%) und von 100% sind Meilensteine mit einem kurzen Konfettiregen. Das Leeren oder Entfernen von Daten spielt die abgeschwächte Umkehrung ab: Ein rotes **−X%** fliegt vom Wert zurück zum Abschnitt, und die Leiste leert sich und zählt herunter, ohne Aufblitzen und Konfetti. Ist in Ihrem Betriebssystem reduzierte Bewegung aktiviert, fliegt nichts; Sie sehen stattdessen ein statisches **+X%** oder **−X%**.
 - **Aktionsmenü** — Archivieren, Löschen und Genehmigungsaktionen. Enthält außerdem eine Ein-Klick-Aktion **Diese Karte beobachten** (sofern der Kartentyp eine Beobachter-Rolle definiert), mit der jeder Benutzer mit Leserechten der Karte folgen kann, ohne den Stakeholder-Tab zu öffnen.
 
 ### Eigenes Logo
@@ -117,6 +122,7 @@ Für Kartentypen, die Hierarchie unterstützen (z.B. Organisation, Geschäftsfä
 
 - **Übergeordnete Karte** — Die übergeordnete Karte in der Hierarchie (klicken zum Navigieren)
 - **Untergeordnete Karten** — Liste der untergeordneten Karten (klicken zum Navigieren)
+- **In neuem Tab öffnen** — Übergeordnete Karte, untergeordnete Karten und Brotkrumen sind Links: Klicken Sie mit der mittleren Maustaste oder mit Strg/Cmd darauf (oder per Rechtsklick → *In neuem Tab öffnen*), um diese Karte in einem neuen Browser-Tab zu öffnen, während die aktuelle Karte geöffnet bleibt
 - **Nach Untertyp gruppieren** — Hat eine Karte viele untergeordnete Karten verschiedener Untertypen (zum Beispiel Geschäftsbereiche, Regionen und Teams unter einem Unternehmen), werden sie automatisch in einklappbare Untertyp-Abschnitte mit Anzahl gruppiert; ein abschließender Abschnitt **Kein Untertyp** sammelt nicht klassifizierte Karten. Mit dem Gruppieren/Listen-Schalter neben der Anzahl der **untergeordneten Karten** wechseln Sie zwischen gruppierter und einfacher Ansicht.
 - **Hierarchie-Brotkrumen** — Zeigt den vollständigen Pfad von der Wurzel zur aktuellen Karte
 - **Verbindungstyp** — Wenn eine Administratorin Verbindungstypen für diesen Kartentyp konfiguriert hat, lässt sich jede Eltern-Kind-Verbindung benennen — zum Beispiel eine Tochtergesellschaft als *Vertrieb* und eine andere als *Verkauf*. Die Bezeichnung gehört zur untergeordneten Karte: Auf der übergeordneten Karte steht sie neben jeder untergeordneten Karte, auf der untergeordneten neben ihrer übergeordneten. Wird eine Karte entfernt oder auf die oberste Ebene verschoben, entfällt ihre Bezeichnung; die Änderung wird im Tab **Verlauf** festgehalten.
@@ -125,7 +131,7 @@ Für Kartentypen, die Hierarchie unterstützen (z.B. Organisation, Geschäftsfä
 
 Zeigt alle Verbindungen zu anderen Karten, gruppiert nach Beziehungstyp. Für jede Beziehung:
 
-- **Name der verwandten Karte** — Klicken zum Navigieren zur verwandten Karte
+- **Name der verwandten Karte** — Klicken zum Navigieren zur verwandten Karte. Mit der mittleren Maustaste oder Strg/Cmd-Klick (oder per Rechtsklick → *In neuem Tab öffnen*) wird sie stattdessen in einem neuen Browser-Tab geöffnet — dasselbe funktioniert in der Liste **+N in Unterelementen**, in den Lineage-Listen und in der Hover-Karte eines Stakeholders
 - **Beziehungstyp** — Die Art der Verbindung (z.B. «nutzt», «läuft auf», «hängt ab von»)
 - **Beziehung hinzufügen** — Klicken Sie auf **+**, um den Dialog für diese Beziehung zu öffnen. Er listet passende Karten während der Eingabe auf (die besten Treffer zuerst, weitere werden beim Scrollen geladen) und blendet bereits verknüpfte Karten aus; eine Beschriftung nennt ihre Anzahl. Ein Klick auf eine Karte verknüpft sie sofort, und sie erscheint oben als Chip — ein Klick auf das **×** macht diese Zuordnung rückgängig. Der Dialog bleibt geöffnet, sodass Sie beliebig viele hinzufügen können; auf dem Smartphone öffnet er im Vollbild. Beziehungen ohne eigenen Abschnitt erreichen Sie über die Schaltfläche **Beziehung hinzufügen** am Ende des Abschnitts. Wenn der verknüpfte Typ hierarchisch ist — Business Capability, Organisation und Ähnliches —, zeigt der Dialog ihn als eingerückten Baum statt als alphabetische Liste, sodass Sie eine Teilfähigkeit über ihren Zweig auswählen können. Bei der Suche bleiben die übergeordneten Karten eines Treffers als Kontext sichtbar, und nicht auswählbare Karten (bereits verknüpft, gerade hinzugefügt oder die Karte selbst) bleiben ausgegraut an ihrem Platz, damit die Ebenen ringsum weiterhin stimmen.
 - **Sortierung** — Verwandte Karten werden alphabetisch nach Namen aufgelistet
@@ -169,7 +175,7 @@ Wenn die Karte mit einem [endoflife.date](https://endoflife.date/)-Produkt verkn
 
 - **Kommentare hinzufügen** — Notizen, Fragen oder Entscheidungen über die Komponente hinterlassen
 - **Verschachtelte Antworten** — Auf bestimmte Kommentare antworten, um Gesprächsfäden zu erstellen
-- **Zeitstempel** — Sehen, wann jeder Kommentar gepostet wurde und von wem
+- **Zeitstempel** — Sehen, wann jeder Kommentar gepostet wurde und von wem. Ein Kommentar, den ein KI-Assistent über den MCP-Server gepostet hat, trägt neben dem Autor einen **MCP**-Chip
 - **Links** — Eine Webadresse in einem Kommentar ist anklickbar und öffnet sich in einem neuen Tab
 
 ## Aufgaben-Tab
@@ -207,6 +213,8 @@ Der Einladungspfad erfordert die **`users.invite`**-Berechtigung, eine delegiert
 ## Verlauf-Tab
 
 ![Kartenänderungsverlauf](../assets/img/de/08_karten_historie.png)
+
+Eine Änderung, die nicht aus der Weboberfläche stammt, trägt neben dem Namen der Person einen Chip: **MCP**, wenn ein KI-Assistent sie im Auftrag dieser Person über den [MCP-Server](../admin/mcp.md) vorgenommen hat, sonst **API**, **Erweiterung** oder **System**.
 
 Zeigt die **vollständige Historie** der an der Karte vorgenommenen Änderungen: **Wer** hat die Änderung vorgenommen, **wann** wurde sie durchgeführt und **was** wurde geändert (vorheriger Wert vs. neuer Wert). Dies ermöglicht die vollständige Nachverfolgbarkeit aller Änderungen über die Zeit.
 

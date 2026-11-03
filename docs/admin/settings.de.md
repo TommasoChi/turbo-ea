@@ -4,7 +4,7 @@ Die **Einstellungen**-Seite unter **Admin → Einstellungen** (`/admin/settings`
 
 | Reiter | URL | Was er steuert | Vollständige Anleitung |
 |--------|-----|----------------|------------------------|
-| **Allgemein** | `/admin/settings?tab=general` | Erscheinungsbild (Logo, Favicon, Währung, Datumsformat, aktivierte Sprachen, Geschäftsjahr), E-Mail-Versand, **Modul-Schalter** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button) | Diese Seite |
+| **Allgemein** | `/admin/settings?tab=general` | Erscheinungsbild (Logo, Favicon, Währung, Datumsformat, aktivierte Sprachen, Geschäftsjahr), E-Mail-Versand, **Modul-Schalter** (BPM, PPM, GRC, ArchiMate, TurboLens, Sponsor button, TurboRPG-Modus) | Diese Seite |
 | **Authentifizierung** | `/admin/settings?tab=authentication` | SSO-Provider, Registrierung, Passwortrichtlinie | [Authentifizierung & SSO](sso.md) |
 | **KI** | `/admin/settings?tab=ai` | LLM-Provider, Modell, Websuch-Backend, Pro-Kartentyp-KI-Suggestionsschalter | [KI-Funktionen](ai.md) |
 | **EOL** | `/admin/settings?tab=eol` | Massen-Verknüpfung von Produkten zu endoflife.date-Einträgen | [End-of-Life (EOL)](eol.md) |
@@ -232,6 +232,26 @@ Wie die Release-Prüfung dient dies **nur der Information** — es wird nichts h
 Blenden Sie die **Sponsor**-Schaltfläche im Benutzermenü (Avatar) ein oder aus. Wenn sie ausgeblendet ist, sehen Benutzer die Sponsor-Schaltfläche nicht mehr in ihrem Profilmenü. Die Sponsor-Schaltfläche — und der Dialog, der erklärt, wie man Turbo EA unterstützt — bleibt in diesem Einstellungsbereich immer verfügbar, sodass Administratoren sie auch dann erreichen, wenn sie im Menü ausgeblendet ist.
 
 Wenn Ihr Unternehmen Turbo EA sponsert und sein Logo auf turbo-ea.org präsentieren möchte, wenden Sie sich an [sponsorship@turbo-ea.org](mailto:sponsorship@turbo-ea.org).
+
+## TurboRPG (gamifizierte Datenqualität)
+
+![Schalter für den TurboRPG-Modus](../assets/img/de/95c_admin_einstellungen_gamification.png)
+
+Der **TurboRPG-Modus** macht aus der Datenqualität ein Spiel. Aktivieren Sie diese Option, um jedes Speichern zu feiern, das die Datenqualität einer Karte verbessert. Sie ist standardmäßig **aus** und gilt für alle Benutzer; es gibt keine Einstellung pro Benutzer.
+
+Solange sie aktiv ist, löst das Speichern einer Änderung, die den Wert einer Karte erhöht, eine kurze Belohnung auf der Kartenseite und im Karten-Vorschaubereich aus, wie wenn man in einem Spiel Lebenspunkte gewinnt:
+
+- ein leuchtendes grünes **+X%** (die durch das Speichern hinzugewonnenen Punkte) verlässt den gespeicherten Abschnitt – genauer dessen Kopfzeile, in der die Schaltfläche „Speichern“ liegt – und fliegt in einem Bogen zum **Datenqualitätsring**;
+- beim **Aufprall** blitzt der Ring auf, ein Halo und ein Leuchten in der Farbe des Werts breiten sich von ihm aus, ein Glanz streicht darüber, er poppt auf, seine Füllung wächst wie eine Lebensleiste auf den neuen Wert, und die Zahl zählt hoch;
+- auf der Kartenseite bleibt, sobald Sie am Kartenkopf vorbeigescrollt haben, eine schmale **Wertungsleiste** mit Namen und Wert der Karte unter der oberen Leiste angeheftet; solange sie sichtbar ist, fliegt der Zuwachs stattdessen zu ihr. Klicken Sie auf den Wert der Leiste – den Chip mit dem Pfeil –, um dieselbe Aufschlüsselung der Datenqualität wie beim Ring zu öffnen.
+
+Ein Speichern über den Kartenkopf (Name oder Untertyp) oder über den Abschnitt „End of Life“ hat keinen Abschnitt, von dem aus geflogen werden könnte; das **+X%** steigt dann einfach über dem Ring auf.
+
+Zwei Momente zählen als **Meilensteine** und lösen einen kurzen Konfettiregen mit einer Beschriftung aus: das Erreichen des grünen Bereichs (**80%** und mehr, *Geschafft!*) und das Erreichen von **100%** (*Perfekte Punktzahl!*).
+
+Ein Speichern, das **Daten leert oder entfernt** und den Wert senkt, spielt die abgeschwächte Umkehrung ab, damit es wie ein Punkteverlust und nicht wie eine Strafe wirkt: Ein rotes **−X%** fliegt vom Ring zurück zum Abschnitt, die Leiste leert sich – die verlorene Breite bleibt kurz rot sichtbar – und die Zahl zählt herunter und wird kurz blasser. Es gibt kein Aufblitzen, keinen Halo und kein Konfetti.
+
+Benutzer, die in ihrem Betriebssystem **reduzierte Bewegung** aktiviert haben, sehen keine Bewegung: Nichts fliegt, der Wert wird sofort aktualisiert, und zwei Sekunden lang erscheint eine statische **+X%**-Angabe (bzw. ein rotes **−X%**). Screenreader kündigen jede Änderung einmal an (zum Beispiel *+6,7% Datenqualität* oder *−6,7% Datenqualität*).
 
 ## TurboLens-Einstellungen
 

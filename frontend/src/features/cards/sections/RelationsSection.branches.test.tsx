@@ -9,7 +9,7 @@
  * `AddRelationsDialog` and `DescendantRelationsDrawer` are stubbed to the props
  * the section passes them; each has its own tests.
  */
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { useLocation } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -53,7 +53,7 @@ import {
   makeRelationType,
   makeSubtype,
 } from "@/test/fixtures/metamodel";
-import { renderWithProviders } from "@/test/render";
+import { renderWithProviders, wrapWithProviders } from "@/test/render";
 import type { Relation, RelationType } from "@/types";
 import RelationsSection from "./RelationsSection";
 
@@ -191,7 +191,9 @@ describe("RelationsSection — rows", () => {
     const onCardUpdate = vi.fn();
     const { user } = renderSection({ onCardUpdate });
 
-    await user.click(await screen.findByText("Legal"));
+    // A real link (#1335): middle-click / Ctrl-click open the card in a new tab.
+    expect((await screen.findByText("Legal")).closest("a")).toHaveAttribute("href", "/cards/t-2");
+    await user.click(screen.getByText("Legal"));
     expect(screen.getByTestId("location")).toHaveTextContent("/cards/t-2");
 
     const financeRow = screen.getByText("Finance").closest("li") as HTMLElement;
@@ -273,6 +275,8 @@ describe("RelationsSection — rows", () => {
     routeRelations([{ ...rel("1", "x"), target: undefined } as unknown as Relation]);
     renderSection();
     expect(await screen.findByText("Unknown")).toBeInTheDocument();
+    // Nothing to open, so no link to follow.
+    expect(screen.getByText("Unknown").closest("a")).toBeNull();
   });
 
   it("collapses and re-expands the section", async () => {
@@ -573,5 +577,150 @@ describe("RelationsSection — self-referencing type sides", () => {
     expect(await screen.findByText("Branch Office")).toBeInTheDocument();
     expect(screen.getByText("is site of")).toBeInTheDocument();
     expect(screen.queryByText("has site")).not.toBeInTheDocument();
+  });
+});
+
+describe("RelationsSection — data-quality jump anchors", () => {
+  const ORG_TO_APP = makeRelationType({
+    key: "orgToApp",
+    label: "runs",
+    reverse_label: "is run by",
+    source_type_key: "Organization",
+    target_type_key: "Application",
+    cardinality: "n:m",
+    ...SIDES,
+  } as Partial<RelationType> & { key: string });
+
+  it("carries the section id and one id per group, by type and side", async () => {
+    withMetamodel([APP, ORG], [APP_TO_ORG, ORG_TO_APP]);
+    const { container } = renderSection();
+    await waitFor(() =>
+      expect(container.querySelector("#card-relation-orgToApp-target")).not.toBeNull(),
+    );
+    const root = container.querySelector(".MuiAccordion-root")!;
+    expect(root.id).toBe("card-section-relations");
+    expect(container.querySelector("#card-relation-appToOrg-source")).not.toBeNull();
+    expect(container.querySelector("#card-relation-orgToApp-target")).not.toBeNull();
+    expect(container.querySelector("#card-relation-appToOrg-target")).toBeNull();
+    expect(container.querySelector("#card-relation-orgToApp-source")).toBeNull();
+  });
+
+  it("opens the collapsed section on a jump request", async () => {
+    const section = (expandOn?: number) =>
+      wrapWithProviders(
+        <RelationsSection fsId={FS} cardTypeKey="Application" initialExpanded={false} expandOn={expandOn} />,
+        { route: `/cards/${FS}` },
+      );
+    const { container, rerender } = render(section());
+    const summary = () => container.querySelector(".MuiAccordionSummary-root")!;
+    await waitFor(() => expect(summary().getAttribute("aria-expanded")).toBe("false"));
+    rerender(section(1));
+    await waitFor(() => expect(summary().getAttribute("aria-expanded")).toBe("true"));
+  });
+});
+
+describe("RelationsSection — a jump opens the Add dialog", () => {
+  const ORG_TO_ORG = makeRelationType({
+    key: "orgToOrg",
+    label: "has site",
+    reverse_label: "is site of",
+    source_type_key: "Organization",
+    target_type_key: "Organization",
+    cardinality: "n:m",
+    ...SIDES,
+  } as Partial<RelationType> & { key: string });
+
+  const request = (type: string, side: "source" | "target", nonce = 1) => ({
+    anchor: "card-section-relations",
+    nonce,
+    relation: { type, side },
+  });
+
+  function section(
+    props: Partial<{
+      editOn: ReturnType<typeof request>;
+      expandOn: number;
+      canManageRelations: boolean;
+      cardTypeKey: string;
+      fsId: string;
+    }> = {},
+  ) {
+    return wrapWithProviders(
+      <RelationsSection
+        fsId={props.fsId ?? FS}
+        cardTypeKey={props.cardTypeKey ?? "Application"}
+        initialExpanded={false}
+        canManageRelations={props.canManageRelations}
+        expandOn={props.expandOn}
+        editOn={props.editOn}
+      />,
+      { route: `/cards/${FS}` },
+    );
+  }
+
+  it("opens the add dialog for the slot's type and side on a jump", async () => {
+    withMetamodel([APP, ORG, ITF], [APP_TO_ORG, APP_TO_ITF]);
+    render(section({ editOn: request("appToItf", "source") }));
+    const dialog = await screen.findByTestId("add-dialog");
+    expect(dialog).toHaveAttribute("data-rt", "appToItf");
+    expect(dialog).toHaveAttribute("data-source", "true");
+  });
+
+  it("picks the side the slot names on a self-referencing type", async () => {
+    withMetamodel([ORG], [ORG_TO_ORG]);
+    routeRelations([], "hq");
+    render(
+      section({ cardTypeKey: "Organization", fsId: "hq", editOn: request("orgToOrg", "target") }),
+    );
+    const dialog = await screen.findByTestId("add-dialog");
+    expect(dialog).toHaveAttribute("data-rt", "orgToOrg");
+    expect(dialog).toHaveAttribute("data-source", "false");
+  });
+
+  it("waits for the relation list before opening it", async () => {
+    let answer: (rows: Relation[]) => void = () => {};
+    mockApi.on("get", `/relations?card_id=${FS}`, () => new Promise<Relation[]>((r) => (answer = r)));
+    const { container } = render(section({ editOn: request("appToOrg", "source") }));
+    await waitFor(() => expect(mockApi.callsOf("get", `/relations?card_id=${FS}`)).toHaveLength(1));
+    expect(screen.queryByTestId("add-dialog")).not.toBeInTheDocument();
+    await act(async () => answer([]));
+    expect(await screen.findByTestId("add-dialog")).toHaveAttribute("data-rt", "appToOrg");
+    expect(container.querySelector(".MuiAccordion-root")).not.toBeNull();
+  });
+
+  it("waits for the relation types before opening it", async () => {
+    withMetamodel([APP, ORG], []);
+    const { rerender } = render(section({ editOn: request("appToOrg", "source") }));
+    expect(await screen.findByText(/^No relations yet/)).toBeInTheDocument();
+    expect(screen.queryByTestId("add-dialog")).not.toBeInTheDocument();
+    withMetamodel([APP, ORG], [APP_TO_ORG]);
+    rerender(section({ editOn: request("appToOrg", "source") }));
+    expect(await screen.findByTestId("add-dialog")).toHaveAttribute("data-rt", "appToOrg");
+  });
+
+  it("expands only when the side is not applicable", async () => {
+    const { container } = render(
+      section({ expandOn: 1, editOn: request("appToOrg", "target") }),
+    );
+    const summary = () => container.querySelector(".MuiAccordionSummary-root")!;
+    await waitFor(() => expect(summary().getAttribute("aria-expanded")).toBe("true"));
+    expect(await screen.findByText("is used by")).toBeInTheDocument();
+    expect(screen.queryByTestId("add-dialog")).not.toBeInTheDocument();
+  });
+
+  it("does not open it without the right to manage relations", async () => {
+    render(section({ canManageRelations: false, editOn: request("appToOrg", "source") }));
+    expect(await screen.findByText("is used by")).toBeInTheDocument();
+    expect(screen.queryByTestId("add-dialog")).not.toBeInTheDocument();
+  });
+
+  it("acts once per jump: closing the dialog does not reopen it", async () => {
+    const jump = request("appToOrg", "source");
+    const { rerender } = render(section({ editOn: jump }));
+    const close = await screen.findByText("add-close-none");
+    act(() => close.click());
+    expect(screen.queryByTestId("add-dialog")).not.toBeInTheDocument();
+    rerender(section({ editOn: jump }));
+    expect(screen.queryByTestId("add-dialog")).not.toBeInTheDocument();
   });
 });

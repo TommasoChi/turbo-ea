@@ -103,6 +103,8 @@ Il punteggio di **qualità dei dati** di una card misura in modo ponderato quant
 
 **I campi obbligatori prevalgono sul punteggio.** Finché un campo obbligatorio di una card resta vuoto, il suo punteggio rimane a **0** indipendentemente dai pesi — il calcolo ponderato si applica solo quando tutti i campi obbligatori sono compilati (i campi booleani e in sola lettura sono esenti; vedi l'impostazione **Obbligatorio** sopra).
 
+Un campo conta come compilato non appena contiene un valore. Per un campo Sì / No contano sia **Sì** sia **No** — solo **Nessuno** è vuoto — e un campo numerico conta quando contiene 0.
+
 L'importanza di ciascun fattore si imposta con un semplice cursore a quattro livelli, che mostra anche il numero sottostante:
 
 - **Ignora (0)** — escluso completamente dal punteggio.
@@ -113,6 +115,8 @@ L'importanza di ciascun fattore si imposta con un semplice cursore a quattro liv
 Il pannello elenca i cinque **fattori integrati** — **Descrizione**, **Ciclo di vita** (se è impostata almeno una data del ciclo di vita), **Relazioni obbligatorie**, **Tag obbligatori** e **Ruoli degli stakeholder** (un solo slot, soddisfatto non appena qualcuno viene assegnato alla scheda in un ruolo che conta per la qualità dei dati) — seguiti da ogni campo raggruppato per sezione, ciascuno con lo stesso cursore. Ad esempio, imposta il **Ciclo di vita** su *Ignora* per un tipo le cui card legittimamente non riportano mai date, così da non penalizzarle.
 
 Una barra di **composizione del punteggio** in cima al pannello mostra la quota di ciascun fattore sul punteggio massimo possibile, per vedere a colpo d'occhio quali fattori dominano. Nel layout della card della scheda **Generale**, ogni campo — e le sezioni integrate Descrizione, Ciclo di vita e Relazioni — mostra un piccolo badge con il livello attuale, per vedere la ponderazione senza lasciare quella scheda.
+
+Gli utenti vedono il risultato fattore per fattore sulla card stessa: passando il cursore sull'anello della qualità dei dati compaiono gli elementi che aumenterebbero di più il punteggio, e un clic apre il dettaglio completo (vedere [Dettaglio card](../guide/card-details.md#intestazione-della-card)).
 
 La modifica di qualsiasi importanza ricalcola immediatamente il punteggio di ogni card esistente di quel tipo. I nuovi campi sono *Normale* per impostazione predefinita e quindi contano per il punteggio non appena li aggiungi.
 

@@ -79,6 +79,7 @@ Each of these loads automatically when you touch its files; read it first when y
 - ArchiMate (Architecture Studio, Viewpoint Catalog, Enterprise Objects) → `.claude/rules/archimate.md` · Value Chain / Value Stream → `.claude/rules/value-chain.md`
 - Specs and plans under `docs/superpowers/` are read by a fresh agent before they reach the user → `.claude/rules/spec-and-plan-review.md`
 - Helm, managed containers, Terraform, Docker images, signing → `.claude/rules/deploy.md`
+- Homepage dashboards: widget registry parity, no ids in widget config, trends → `.claude/rules/dashboards.md`
 
 ### Frontend Conventions
 - Route-level pages use `lazy()` imports in `App.tsx` for code splitting.
@@ -104,7 +105,7 @@ Each of these loads automatically when you touch its files; read it first when y
 ### Internationalization (i18n)
 - **All user-facing strings must use translation keys**, never hardcoded English text. Use `useTranslation()` from `react-i18next` with the appropriate namespace.
 - **16 namespaces**: `common`, `auth`, `nav`, `inventory`, `cards`, `reports`, `admin`, `bpm`, `ppm`, `diagrams`, `delivery`, `grc`, `notifications`, `validation`, `valuechain`, `archimate`. Use the namespace that matches the feature area.
-- **10 supported locales**: `en` (English, baseline), `de` (German), `fr` (French), `es` (Spanish), `it` (Italian), `pt` (Portuguese), `zh` (Chinese Simplified), `ru` (Russian), `da` (Danish), `ar` (Arabic — **right-to-left**; see `RTL_LOCALES` / `isRtlLocale` in `frontend/src/i18n/index.ts`). Components built on third-party widgets that don't inherit the document `dir` (AG Grid, Recharts) must opt into RTL themselves via the `useIsRtl()` hook (`frontend/src/hooks/useIsRtl.ts`).
+- **10 supported locales**: `en` (English, baseline), `de` (German), `fr` (French), `es` (Spanish), `it` (Italian), `pt` (Portuguese), `zh` (Chinese Simplified), `ru` (Russian), `da` (Danish), `ar` (Arabic — **right-to-left**; see `RTL_LOCALES` / `isRtlLocale` in `frontend/src/i18n/index.ts`). Components built on third-party widgets that don't inherit the document `dir` (AG Grid, ECharts) must opt into RTL themselves via the `useIsRtl()` hook (`frontend/src/hooks/useIsRtl.ts`).
 - **English is the source of truth**. All keys must exist in `frontend/src/i18n/locales/en/{namespace}.json` first. The i18n config uses `fallbackLng: "en"` and `returnEmptyString: false`, so missing or empty translations gracefully fall back to English.
 - **Interpolation**: Use `{{variable}}` syntax for dynamic values (e.g., `"Selected {{count}} cards"`). Preserve these placeholders exactly when translating.
 - **Plurals**: i18next uses `_one` / `_other` suffixes (e.g., `"count_one": "{{count}} item"`, `"count_other": "{{count}} items"`). All locales need both forms.
@@ -131,6 +132,7 @@ Author **English only**: `frontend/src/i18n/locales/en/*.json`, the English `lab
 
 ### Testing Conventions
 - **Before `finishing-a-development-branch` / opening a PR, run a `ponytail-review` pass on the whole branch diff — once, not per plan task.** Apply every Must/Should fix it finds (with its own test if the fix changes behavior), then re-run the suite. This catches bloat/lean issues the correctness-focused final branch reviewer doesn't target; it is separate from, and runs after, that reviewer.
+- **The review chain before a PR runs in this order, each step by a fresh agent (never the one that wrote the code):** tests green → `simplify` (it edits the code) → re-run the tests of the files it touched → `ponytail-review` → `security-review`. `code-review` stays on request, never mandatory.
 - **Reviews and audits (`ponytail-review`, `security-review`, `ponytail-audit`, `security-audit`) read code and tests and skip user docs**: `docs/**` (specs and plans included), `CHANGELOG.md`, `README.md` and the non-English `frontend/src/i18n/locales/*` (parity tests cover them). Never skip `CLAUDE.md`, `AGENTS.md`, `.claude/rules/**`, `.claude/agents/**`, `.claude/skills/**`: agents execute them.
 - **Every new feature and every bug fix must include tests. This is a requirement, not a preference.** A change without tests is not finished: do not call it done and do not open a PR for it. What that means for each kind of change:
   - **Bug fix**: a regression test that fails on the code before the fix and passes after it. Reproduce the bug in a test first, then fix it.
@@ -200,7 +202,7 @@ Every feature or UI change updates the user manual (`docs/`, MkDocs Material, En
 ```
 ┌───────────────────────────────────────────────────────────┐
 │  Browser                                                  │
-│  React 19 + MUI 6 + React Router 8 + Recharts + AG Grid  │
+│  React 19 + MUI 6 + React Router 8 + ECharts + AG Grid    │
 │  Vite dev server (port 5173) / Nginx in production        │
 └──────────────────────────┬────────────────────────────────┘
                            │  /api/* (proxy)
@@ -220,7 +222,7 @@ Every feature or UI change updates the user manual (`docs/`, MkDocs Material, En
 └─────────────────────────────┘  └─────────────────────────────┘
 ```
 
-**DrawIO** is self-hosted inside the frontend Docker image (cloned at build time from `jgraph/drawio` v31.5.3) and served under `/drawio/` by Nginx.
+**DrawIO** is self-hosted inside the frontend Docker image (cloned at build time from `jgraph/drawio` v32.6.9) and served under `/drawio/` by Nginx.
 
 ---
 

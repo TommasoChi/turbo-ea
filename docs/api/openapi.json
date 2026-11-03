@@ -3255,6 +3255,28 @@
             ],
             "title": "Created By"
           },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "created_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created Via"
+          },
           "data_quality": {
             "title": "Data Quality",
             "type": "number"
@@ -3403,6 +3425,28 @@
               }
             ],
             "title": "Updated By"
+          },
+          "updated_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By Name"
+          },
+          "updated_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated Via"
           }
         },
         "required": [
@@ -4737,6 +4781,389 @@
         "title": "CurrencyPayload",
         "type": "object"
       },
+      "DashboardCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_roles": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Allowed Roles",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "pattern": "^[a-z0-9_]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "widgets": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardWidgetIn"
+            },
+            "maxItems": 60,
+            "title": "Widgets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "DashboardCreate",
+        "type": "object"
+      },
+      "DashboardDuplicate": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "DashboardDuplicate",
+        "type": "object"
+      },
+      "DashboardUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_roles": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Roles"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "pattern": "^[a-z0-9_]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "is_hidden": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Hidden"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "widgets": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DashboardWidgetIn"
+                },
+                "maxItems": 60,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Widgets"
+          }
+        },
+        "title": "DashboardUpdate",
+        "type": "object"
+      },
+      "DashboardWidgetIn": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/components/schemas/WidgetLayout"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "type": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "layout"
+        ],
+        "title": "DashboardWidgetIn",
+        "type": "object"
+      },
+      "DataQualityBreakdown": {
+        "description": "Why a card scores what it scores, factor by factor (#1334).",
+        "properties": {
+          "blocked_by_required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked By Required",
+            "type": "array"
+          },
+          "factors": {
+            "items": {
+              "$ref": "#/components/schemas/DataQualityFactor"
+            },
+            "title": "Factors",
+            "type": "array"
+          },
+          "filled_weight": {
+            "title": "Filled Weight",
+            "type": "number"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "total_weight": {
+            "title": "Total Weight",
+            "type": "number"
+          },
+          "ungated_score": {
+            "title": "Ungated Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "score",
+          "ungated_score",
+          "total_weight",
+          "filled_weight",
+          "blocked_by_required",
+          "factors"
+        ],
+        "title": "DataQualityBreakdown",
+        "type": "object"
+      },
+      "DataQualityFactor": {
+        "description": "One slot of a card's data-quality score (#1334).\n\nMetamodel only: a relation factor names its relation type and the other\nend's card *type*, never another card.",
+        "properties": {
+          "filled": {
+            "title": "Filled",
+            "type": "boolean"
+          },
+          "gain": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gain"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "field",
+              "description",
+              "lifecycle",
+              "relation",
+              "tag_group",
+              "stakeholders"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "other_type_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other Type Key"
+          },
+          "score_if_filled": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score If Filled"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "enum": [
+                  "source",
+                  "target"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "weight",
+          "filled"
+        ],
+        "title": "DataQualityFactor",
+        "type": "object"
+      },
       "DateFormatPayload": {
         "properties": {
           "date_format": {
@@ -4915,6 +5342,11 @@
             ],
             "title": "Description"
           },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
           "kind": {
             "default": "drawio",
             "title": "Kind",
@@ -5068,6 +5500,11 @@
               }
             ],
             "title": "Description"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
           },
           "kind": {
             "anyOf": [
@@ -6365,6 +6802,19 @@
         "title": "ForgotPasswordRequest",
         "type": "object"
       },
+      "GamificationEnabledPayload": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "GamificationEnabledPayload",
+        "type": "object"
+      },
       "GrcEnabledPayload": {
         "properties": {
           "enabled": {
@@ -6538,6 +6988,112 @@
           "instance_id"
         ],
         "title": "InstanceOut",
+        "type": "object"
+      },
+      "LeaderboardResponse": {
+        "description": "The ``top`` ranked people; ``total_people`` is how many reach\n``min_cards`` before ``top`` cuts the list.",
+        "properties": {
+          "card_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Card Types",
+            "type": "array"
+          },
+          "counting_roles_only": {
+            "default": true,
+            "title": "Counting Roles Only",
+            "type": "boolean"
+          },
+          "min_cards": {
+            "default": 3,
+            "title": "Min Cards",
+            "type": "integer"
+          },
+          "rank_by": {
+            "default": "average_quality",
+            "enum": [
+              "average_quality",
+              "card_count"
+            ],
+            "title": "Rank By",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "top": {
+            "default": 10,
+            "title": "Top",
+            "type": "integer"
+          },
+          "total_people": {
+            "title": "Total People",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total_people"
+        ],
+        "title": "LeaderboardResponse",
+        "type": "object"
+      },
+      "LeaderboardRow": {
+        "properties": {
+          "average_quality": {
+            "title": "Average Quality",
+            "type": "number"
+          },
+          "cards": {
+            "title": "Cards",
+            "type": "integer"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/LeaderboardUser"
+          }
+        },
+        "required": [
+          "rank",
+          "user",
+          "cards",
+          "average_quality"
+        ],
+        "title": "LeaderboardRow",
+        "type": "object"
+      },
+      "LeaderboardUser": {
+        "description": "A person on the board \u2014 the least-privilege user payload, never more.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "title": "LeaderboardUser",
         "type": "object"
       },
       "LicenseIn": {
@@ -13264,6 +13820,17 @@
             ],
             "title": "Created By"
           },
+          "created_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created Via"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -13440,6 +14007,17 @@
               }
             ],
             "title": "Updated At"
+          },
+          "updated_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated Via"
           }
         },
         "required": [
@@ -16518,11 +17096,9 @@
           "dashboard_default_tab": {
             "anyOf": [
               {
-                "enum": [
-                  "overview",
-                  "workspace",
-                  "admin"
-                ],
+                "maxLength": 60,
+                "minLength": 1,
+                "pattern": "^[a-z0-9_-]+$",
                 "type": "string"
               },
               {
@@ -17388,6 +17964,69 @@
           }
         },
         "title": "WebPortalUpdate",
+        "type": "object"
+      },
+      "WidgetLayout": {
+        "additionalProperties": false,
+        "properties": {
+          "h": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "H",
+            "type": "integer"
+          },
+          "minH": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minh"
+          },
+          "minW": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minw"
+          },
+          "w": {
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "W",
+            "type": "integer"
+          },
+          "x": {
+            "maximum": 11.0,
+            "minimum": 0.0,
+            "title": "X",
+            "type": "integer"
+          },
+          "y": {
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "title": "WidgetLayout",
         "type": "object"
       },
       "WorkspaceTransferOut": {
@@ -23008,6 +23647,25 @@
             }
           },
           {
+            "description": "Keep only cards created through this channel: `web` (the web UI), `mcp` (an AI agent through the MCP server), `api` (a direct API call), `ext` (an extension) or `system` (a background job).",
+            "in": "query",
+            "name": "created_via",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(mcp|web|api|ext|system)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Keep only cards created through this channel: `web` (the web UI), `mcp` (an AI agent through the MCP server), `api` (a direct API call), `ext` (an extension) or `system` (a background job).",
+              "title": "Created Via"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -24228,6 +24886,50 @@
         "summary": "Delete Cost History",
         "tags": [
           "cost-history"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/data-quality": {
+      "get": {
+        "description": "What the card's data-quality score is made of, and what would raise it (#1334).\n\nComputed by the scorer that writes ``cards.data_quality``, so the two never\ndisagree. Gated like the card's other sub-reads: a card the caller may not\nread is 404. The payload names no other card \u2014 relation factors carry\nmetamodel keys only, as the approval gate's 400 does.",
+        "operationId": "get_data_quality_breakdown_api_v1_cards__card_id__data_quality_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataQualityBreakdown"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Data Quality Breakdown",
+        "tags": [
+          "cards"
         ]
       }
     },
@@ -26028,6 +26730,969 @@
         "summary": "Security Overview",
         "tags": [
           "Compliance"
+        ]
+      }
+    },
+    "/api/v1/dashboards": {
+      "get": {
+        "description": "The dashboards the caller sees as homepage tabs, in tab order.",
+        "operationId": "list_dashboards_api_v1_dashboards_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Dashboards",
+        "tags": [
+          "dashboards"
+        ]
+      },
+      "post": {
+        "operationId": "create_dashboard_api_v1_dashboards_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/kpi": {
+      "get": {
+        "description": "One KPI value and, for an unrestricted reader, its trend; ``base`` for\na narrowed count, the fiscal year for a cost.",
+        "operationId": "dashboard_kpi_api_v1_dashboards_kpi_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by_2",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By 2"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric",
+            "required": false,
+            "schema": {
+              "default": "count",
+              "maxLength": 10,
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Approval Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lifecycle_phase",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lifecycle Phase"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subtype",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subtype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "relation_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relation Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "flags",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 300,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Flags"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dashboard Kpi",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/kpi-history": {
+      "get": {
+        "description": "A KPI's daily snapshots (empty for a restricted reader), and the fiscal\nyear for a cost.",
+        "operationId": "dashboard_kpi_history_api_v1_dashboards_kpi_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 90,
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by_2",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By 2"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric",
+            "required": false,
+            "schema": {
+              "default": "count",
+              "maxLength": 10,
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Approval Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lifecycle_phase",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lifecycle Phase"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subtype",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subtype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "relation_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relation Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "flags",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 300,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Flags"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dashboard Kpi History",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/leaderboard": {
+      "get": {
+        "description": "The Data quality leaderboard widget: the ``top`` people holding at least\n``min_cards`` readable cards, ranked by the average data quality of those\ncards or by how many they hold. ``card_types`` / ``roles`` (repeatable)\nnarrow by key; ``counting_roles_only`` keeps the roles that count for data\nquality. A person is ``{id, display_name}`` only.",
+        "operationId": "dashboard_leaderboard_api_v1_dashboards_leaderboard_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "rank_by",
+            "required": false,
+            "schema": {
+              "default": "average_quality",
+              "enum": [
+                "average_quality",
+                "card_count"
+              ],
+              "title": "Rank By",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_cards",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Min Cards",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_types",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Card Types",
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "roles",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50,
+              "title": "Roles",
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "counting_roles_only",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Counting Roles Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "top",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Top",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaderboardResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dashboard Leaderboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/query": {
+      "get": {
+        "description": "Rows for a chart widget: ``{dimension, dimension_2, rows, total}``, plus\n``labels`` (card id \u2192 name) for a card-keyed dimension \u2014 whose ``top``\nlargest cards are kept and the rest folded into ``__other__``, or dropped\nfor an average or a share; ``folded`` (``{top, cards}``, only when a card\nwas not kept) says how many \u2014 and ``fiscal_year`` / ``fiscal_year_start``\nfor a cost.",
+        "operationId": "dashboard_query_api_v1_dashboards_query_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "top",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Top",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by_2",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By 2"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric",
+            "required": false,
+            "schema": {
+              "default": "count",
+              "maxLength": 10,
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Approval Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lifecycle_phase",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lifecycle Phase"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subtype",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subtype"
+            }
+          },
+          {
+            "in": "query",
+            "name": "relation_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relation Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "flags",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 300,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Flags"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dashboard Query",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/{dashboard_id}": {
+      "delete": {
+        "operationId": "delete_dashboard_api_v1_dashboards__dashboard_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      },
+      "patch": {
+        "operationId": "update_dashboard_api_v1_dashboards__dashboard_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/{dashboard_id}/duplicate": {
+      "post": {
+        "operationId": "duplicate_dashboard_api_v1_dashboards__dashboard_id__duplicate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DashboardDuplicate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Duplicate Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/v1/dashboards/{dashboard_id}/reset": {
+      "post": {
+        "operationId": "reset_dashboard_api_v1_dashboards__dashboard_id__reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Dashboard",
+        "tags": [
+          "dashboards"
         ]
       }
     },
@@ -39767,6 +41432,64 @@
           }
         },
         "summary": "Update Fiscal Year Start",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/gamification-enabled": {
+      "get": {
+        "description": "Whether saves that raise a card's data-quality score play the reward animation.\n\nOff by default: the animated score, the flying gain and the sticky score\nbar only appear once an administrator turns them on. The value also rides\nalong on ``GET /settings/bootstrap``; this read is the hook's fallback.",
+        "operationId": "get_gamification_enabled_api_v1_settings_gamification_enabled_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Gamification Enabled",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Admin endpoint \u2014 turn the gamified data-quality feedback on or off.",
+        "operationId": "update_gamification_enabled_api_v1_settings_gamification_enabled_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GamificationEnabledPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Gamification Enabled",
         "tags": [
           "settings"
         ]

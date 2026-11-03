@@ -5,6 +5,8 @@ These tests require a PostgreSQL test database and an HTTP test client.
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 from sqlalchemy import select
 
@@ -535,6 +537,46 @@ class TestFieldUsage:
         )
         assert response.status_code == 200
         assert response.json()["card_count"] == 1
+
+    async def test_option_usage_multiple_select(self, client, db, metamodel_env):
+        """Counts active cards of the type whose array holds the option."""
+        admin = metamodel_env["admin"]
+        tags_field = {
+            "key": "tags",
+            "type": "multiple_select",
+            "options": [{"key": "a", "label": "A"}, {"key": "b", "label": "B"}],
+        }
+        schema = [{"section": "General", "fields": [tags_field]}]
+        await create_card_type(db, key="Application", label="Application", fields_schema=schema)
+        await create_card_type(db, key="ITComponent", label="IT Component", fields_schema=schema)
+        for name, tags, kwargs in (
+            ("Both", ["a", "b"], {}),
+            ("Only A", ["a"], {}),
+            ("Only B", ["b"], {}),
+            ("Archived A", ["a"], {"status": "ARCHIVED"}),
+        ):
+            await create_card(
+                db, card_type="Application", name=name, attributes={"tags": tags}, **kwargs
+            )
+        await create_card(db, card_type="ITComponent", name="Other", attributes={"tags": ["a"]})
+        await create_card(db, card_type="Application", name="Bare", attributes={})
+
+        response = await client.get(
+            "/api/v1/metamodel/types/Application/option-usage",
+            params={"field_key": "tags", "option_key": "a"},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 200
+        assert response.json() == {"field_key": "tags", "option_key": "a", "card_count": 2}
+
+    async def test_option_usage_requires_admin_metamodel(self, client, db, metamodel_env):
+        await create_card_type(db, key="Application", label="Application")
+        response = await client.get(
+            "/api/v1/metamodel/types/Application/option-usage",
+            params={"field_key": "tags", "option_key": "a"},
+            headers=auth_headers(metamodel_env["viewer"]),
+        )
+        assert response.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -1147,6 +1189,12 @@ class TestRelationAttributeValues:
             headers=auth_headers(admin),
         )
         assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "error": "relation_value_locked",
+            "message": "Built-in relation value 'owner' cannot be edited (hide it instead).",
+            "attribute": "usageType",
+            "value": "owner",
+        }
 
     async def test_remove_builtin_value_rejected(self, client, db, metamodel_env):
         admin = metamodel_env["admin"]
@@ -1162,6 +1210,12 @@ class TestRelationAttributeValues:
             headers=auth_headers(admin),
         )
         assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "error": "relation_value_required",
+            "message": "Built-in relation value 'user' cannot be removed (hide it instead).",
+            "attribute": "usageType",
+            "value": "user",
+        }
 
     async def test_remove_builtin_field_rejected(self, client, db, metamodel_env):
         admin = metamodel_env["admin"]
@@ -1173,6 +1227,11 @@ class TestRelationAttributeValues:
             headers=auth_headers(admin),
         )
         assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "error": "relation_attribute_required",
+            "message": "Built-in relation attribute 'usageType' cannot be removed.",
+            "attribute": "usageType",
+        }
 
     async def test_hide_builtin_value_allowed(self, client, db, metamodel_env):
         admin = metamodel_env["admin"]
@@ -1197,6 +1256,121 @@ class TestRelationAttributeValues:
         opts = {o["key"]: o for o in response.json()["attributes_schema"][0]["options"]}
         assert opts["user"]["hidden"] is True
         assert opts["owner"].get("hidden", False) is False
+
+    async def test_edit_builtin_attribute_rejected_with_its_code(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await self._make_builtin_rel(db)
+
+        renamed = self._schema_with(self.BUILTIN_SCHEMA[0]["options"])
+        renamed[0]["label"] = "Kind"
+        response = await client.patch(
+            "/api/v1/metamodel/relation-types/relOrgToApp",
+            json={"attributes_schema": renamed},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "error": "relation_attribute_locked",
+            "message": "Built-in relation attribute 'usageType' cannot be edited.",
+            "attribute": "usageType",
+        }
+
+    # Business Process → Application's Usage values ship with no colour (#1327).
+    COLOURLESS_SCHEMA = [
+        {
+            "key": "usageType",
+            "label": "Usage",
+            "type": "single_select",
+            "built_in": True,
+            "options": [
+                {"key": "creates", "label": "Creates", "built_in": True},
+                {"key": "reads", "label": "Reads", "built_in": True},
+            ],
+        },
+    ]
+
+    async def _make_colourless_rel(self, db):
+        await create_card_type(db, key="BusinessProcess", label="Business Process")
+        await create_card_type(db, key="Application", label="Application")
+        rt = await create_relation_type(
+            db,
+            key="relProcessToApp",
+            source_type_key="BusinessProcess",
+            target_type_key="Application",
+            built_in=True,
+        )
+        rt.attributes_schema = copy.deepcopy(self.COLOURLESS_SCHEMA)
+        await db.flush()
+
+    async def test_colourless_builtin_value_can_be_hidden(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await self._make_colourless_rel(db)
+
+        schema = copy.deepcopy(self.COLOURLESS_SCHEMA)
+        schema[0]["options"][0]["hidden"] = True
+        response = await client.patch(
+            "/api/v1/metamodel/relation-types/relProcessToApp",
+            json={"attributes_schema": schema},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 200
+        opts = response.json()["attributes_schema"][0]["options"]
+        assert opts[0] == {"key": "creates", "label": "Creates", "built_in": True, "hidden": True}
+        assert "color" not in opts[1]
+
+    async def test_colourless_builtin_field_takes_a_custom_value(self, client, db, metamodel_env):
+        admin = metamodel_env["admin"]
+        await self._make_colourless_rel(db)
+
+        schema = copy.deepcopy(self.COLOURLESS_SCHEMA)
+        schema[0]["options"].append(
+            {"key": "approves", "label": "Approves", "color": "#1976d2", "built_in": True}
+        )
+        response = await client.patch(
+            "/api/v1/metamodel/relation-types/relProcessToApp",
+            json={"attributes_schema": schema},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 200
+        added = response.json()["attributes_schema"][0]["options"][2]
+        assert added == {
+            "key": "approves",
+            "label": "Approves",
+            "color": "#1976d2",
+            "built_in": False,
+        }
+
+    async def test_colour_on_a_colourless_builtin_value_stays_locked(
+        self, client, db, metamodel_env
+    ):
+        """What the dialog used to send: the lock itself is unchanged."""
+        admin = metamodel_env["admin"]
+        await self._make_colourless_rel(db)
+
+        schema = copy.deepcopy(self.COLOURLESS_SCHEMA)
+        schema[0]["options"][1]["color"] = "#1976d2"
+        response = await client.patch(
+            "/api/v1/metamodel/relation-types/relProcessToApp",
+            json={"attributes_schema": schema},
+            headers=auth_headers(admin),
+        )
+        assert response.status_code == 403
+        detail = response.json()["detail"]
+        assert detail["error"] == "relation_value_locked"
+        assert (detail["attribute"], detail["value"]) == ("usageType", "reads")
+
+    async def test_viewer_cannot_hide_a_builtin_value(self, client, db, metamodel_env):
+        await self._make_colourless_rel(db)
+
+        schema = copy.deepcopy(self.COLOURLESS_SCHEMA)
+        schema[0]["options"][0]["hidden"] = True
+        response = await client.patch(
+            "/api/v1/metamodel/relation-types/relProcessToApp",
+            json={"attributes_schema": schema},
+            headers=auth_headers(metamodel_env["viewer"]),
+        )
+        assert response.status_code == 403
+        assert "error" not in response.json()["detail"]
 
     async def test_add_new_dimension_to_relation_without_one(self, client, db, metamodel_env):
         admin = metamodel_env["admin"]

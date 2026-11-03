@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Accordion from "@mui/material/Accordion";
@@ -16,6 +16,12 @@ import { PHASES, getPhaseLabels, lifecycleOrderIssues } from "@/lib/lifecyclePha
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { todayIsoDate } from "@/lib/dates";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
+import { focusFirstControl, useEditRequest } from "@/hooks/useEditRequest";
+import {
+  SECTION_SCROLL_MARGIN,
+  sectionAnchor,
+  type SectionEditRequest,
+} from "@/features/cards/dataQualityJump";
 import type { Card } from "@/types";
 
 const PHASE_PALETTE: Record<string, string> = {
@@ -42,6 +48,8 @@ function LifecycleSection({
   initialExpanded = true,
   onDirtyChange,
   phaseAnnotation,
+  expandOn,
+  editOn,
 }: {
   card: Card;
   onSave: (u: Record<string, unknown>) => Promise<void>;
@@ -55,16 +63,35 @@ function LifecycleSection({
    * the component renders what it is given and knows nothing about why.
    */
   phaseAnnotation?: (phase: string) => PhaseAnnotation | null | undefined;
+  /** A new value expands the section (a data-quality jump). */
+  expandOn?: number;
+  /** A data-quality jump: open in edit mode, on the first undated phase. */
+  editOn?: SectionEditRequest;
 }) {
   const { t } = useTranslation(["cards", "common"]);
   const theme = useTheme();
   const { formatDate } = useDateFormat();
   const phaseLabels = getPhaseLabels(t);
-  const [expanded, setExpanded] = useSyncedExpanded(initialExpanded);
+  const [expanded, setExpanded] = useSyncedExpanded(initialExpanded, expandOn);
   const [editing, setEditing] = useState(false);
   const [lifecycle, setLifecycle] = useState<Record<string, string>>(
     card.lifecycle || {}
   );
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // A data-quality jump opens the edit row, then focuses the first phase still
+  // without a date once that row has rendered.
+  const [focusPending, setFocusPending] = useState(false);
+  useEditRequest(editOn, canEdit, () => {
+    setEditing(true);
+    setFocusPending(true);
+  });
+  useLayoutEffect(() => {
+    if (!editing || !focusPending) return;
+    const phase = PHASES.find((p) => !lifecycle[p]);
+    if (phase) focusFirstControl(rootRef.current?.querySelector(`[data-phase="${phase}"]`));
+    setFocusPending(false);
+  }, [editing, focusPending, lifecycle]);
 
   // Re-sync the draft from the card prop only while NOT editing, so saving
   // another section (which replaces the whole card object in the parent) can't
@@ -100,8 +127,21 @@ function LifecycleSection({
   };
 
   return (
-    <Accordion expanded={expanded} onChange={(_, v) => setExpanded(v)} disableGutters>
-      <AccordionSummary expandIcon={<MaterialSymbol icon="expand_more" size={20} />}>
+    <Accordion
+      ref={rootRef}
+      id={sectionAnchor("lifecycle")}
+      expanded={expanded}
+      onChange={(_, v) => setExpanded(v)}
+      disableGutters
+      sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
+    >
+      <AccordionSummary
+        // A div, not the default <button>: the summary holds the edit icon
+        // button, and a button may not contain a button.
+        // ButtonBase keeps role="button", tabindex and Enter/Space.
+        component="div"
+        expandIcon={<MaterialSymbol icon="expand_more" size={20} />}
+      >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
           <MaterialSymbol icon="timeline" size={20} />
           <Typography fontWeight={600}>{t("lifecycle.title")}</Typography>
@@ -304,7 +344,7 @@ function LifecycleSection({
                 const annotation = phaseAnnotation?.(phase);
                 const warning = orderWarning(phase);
                 return (
-                  <Box key={phase} sx={{ maxWidth: 170 }}>
+                  <Box key={phase} data-phase={phase} sx={{ maxWidth: 170 }}>
                     <DateField
                       label={phaseLabels[phase]}
                       size="small"

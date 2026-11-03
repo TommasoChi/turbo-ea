@@ -292,7 +292,9 @@ export const DOC_PAGES: PageDef[] = [
   {
     id: "01_dashboard",
     route: "/",
-    waitFor: ".recharts-responsive-container",
+    // The homepage is a react-grid-layout grid of widgets; charts are ECharts
+    // canvases.
+    waitFor: ".react-grid-item canvas",
     actions: [{ type: "wait", ms: 800 }],
     filenames: {
       en: "01_dashboard",
@@ -308,7 +310,7 @@ export const DOC_PAGES: PageDef[] = [
   {
     id: "02_dashboard_bottom",
     route: "/",
-    waitFor: ".recharts-responsive-container",
+    waitFor: ".react-grid-item canvas",
     // Scroll partway down so the chart row (Cards by Type, Approval Status,
     // Data Quality, Lifecycle) is the focal point — going all the way to
     // "bottom" lands on the activity feed alone, which is not what the doc
@@ -327,6 +329,56 @@ export const DOC_PAGES: PageDef[] = [
       pt: "02_painel_inferior",
       zh: "02_dashboard_bottom",
       ru: "02_panel_upravleniya_nizhniy",
+    },
+  },
+  {
+    // Customize mode: the admin toggle next to the dashboard tabs turns on the
+    // drag handles, resize corners and per-widget configure / remove buttons.
+    id: "03_dashboard_customize",
+    route: "/",
+    waitFor: ".react-grid-item canvas",
+    actions: [
+      { type: "wait", ms: 800 },
+      {
+        type: "click",
+        selector: [
+          buttonSelector(...i18nLabels("common:dashboard.customize.customize")),
+          ariaSelector("button", ...i18nLabels("common:dashboard.customize.customize")),
+        ].join(", "),
+      },
+      { type: "wait", ms: 800 },
+    ],
+    filenames: {
+      en: "03_dashboard_customize",
+      de: "03_dashboard_anpassen",
+      fr: "03_tableau_de_bord_personnaliser",
+      es: "03_panel_personalizar",
+      it: "03_dashboard_personalizza",
+      pt: "03_painel_personalizar",
+      zh: "03_dashboard_customize",
+      ru: "03_panel_upravleniya_nastroyka",
+    },
+  },
+  {
+    // The Data quality leaderboard ships at the bottom of the Overview
+    // dashboard; scroll to it and clip to its grid cell.
+    id: "04_dashboard_quality_leaderboard",
+    route: "/",
+    waitFor: '[data-testid="quality-leaderboard"]',
+    actions: [
+      { type: "scroll", target: '[data-testid="quality-leaderboard"]' },
+      { type: "wait", ms: 600 },
+    ],
+    clipSelector: '.react-grid-item:has([data-testid="quality-leaderboard"])',
+    filenames: {
+      en: "04_dashboard_quality_leaderboard",
+      de: "04_dashboard_qualitaets_rangliste",
+      fr: "04_tableau_de_bord_classement_qualite",
+      es: "04_panel_clasificacion_calidad",
+      it: "04_dashboard_classifica_qualita",
+      pt: "04_painel_classificacao_qualidade",
+      zh: "04_dashboard_quality_leaderboard",
+      ru: "04_panel_reyting_kachestva",
     },
   },
 
@@ -438,7 +490,7 @@ export const DOC_PAGES: PageDef[] = [
   {
     id: "09_reports_menu",
     route: "/reports/portfolio",
-    waitFor: ".recharts-responsive-container, .MuiPaper-root",
+    waitFor: ".echart-container, .MuiPaper-root",
     actions: [
       { type: "wait", ms: 600 },
       // Click the Reports dropdown button in the nav bar to show the menu
@@ -753,7 +805,7 @@ export const DOC_PAGES: PageDef[] = [
   {
     id: "19_user_menu",
     route: "/",
-    waitFor: ".recharts-responsive-container",
+    waitFor: ".echart-container",
     actions: [
       { type: "wait", ms: 400 },
       // Click the user avatar / profile button in the top-right
@@ -1092,7 +1144,7 @@ export const DOC_PAGES: PageDef[] = [
   {
     id: "33_report_data_quality",
     route: "/reports/data-quality",
-    waitFor: ".MuiPaper-root, .recharts-responsive-container",
+    waitFor: ".MuiPaper-root, .echart-container",
     actions: [{ type: "wait", ms: 800 }],
     filenames: {
       en: "33_report_data_quality",
@@ -1110,7 +1162,7 @@ export const DOC_PAGES: PageDef[] = [
   {
     id: "34_report_cost",
     route: "/reports/cost",
-    waitFor: ".recharts-responsive-container, [class*='Cost']",
+    waitFor: ".echart-container, [class*='Cost']",
     actions: [{ type: "wait", ms: 800 }],
     filenames: {
       en: "34_report_cost",
@@ -1953,6 +2005,28 @@ export const DOC_PAGES: PageDef[] = [
   // ── TurboLens: Dashboard ────────────────────────────────────────────────
   // /turbolens honours ?tab=, so no locale-dependent click is needed. The
   // overview KPIs are computed from card data — no AI run required.
+  // The data quality breakdown panel (#1334): a click on the header's
+  // score pill docks it, found by its test id so no label text is needed.
+  {
+    id: "63_card_data_quality_breakdown",
+    route: "/cards/{{cardId:sampleApp}}",
+    waitFor: "[data-testid='data-quality-pill']",
+    actions: [
+      { type: "wait", ms: 600 },
+      { type: "click", selector: "[data-testid='data-quality-pill']" },
+      { type: "wait", ms: 900 },
+    ],
+    filenames: {
+      en: "63_card_data_quality_breakdown",
+      de: "63_karte_datenqualitaet_aufschluesselung",
+      fr: "63_fiche_qualite_donnees_detail",
+      es: "63_ficha_calidad_datos_desglose",
+      it: "63_scheda_qualita_dati_dettaglio",
+      pt: "63_ficha_qualidade_dados_detalhamento",
+      zh: "63_card_data_quality_breakdown",
+      ru: "63_kartochka_kachestvo_dannyh_detalizatsiya",
+    },
+  },
   {
     id: "75_turbolens_dashboard",
     route: "/turbolens?tab=dashboard",
@@ -2035,7 +2109,7 @@ export const DOC_PAGES: PageDef[] = [
   {
     id: "81_notification_preferences",
     route: "/",
-    waitFor: ".recharts-responsive-container, .MuiPaper-root",
+    waitFor: ".echart-container, .MuiPaper-root",
     actions: [
       { type: "wait", ms: 600 },
       {
@@ -2243,6 +2317,33 @@ export const DOC_PAGES: PageDef[] = [
       pt: "95_admin_config_modulos",
       zh: "95_admin_settings_modules",
       ru: "95_admin_nastroyki_moduli",
+    },
+  },
+  // The Gamified data quality toggle (#1334 follow-up), centred like the
+  // modules shot; the capture run turns the setting on first so the chip reads On.
+  {
+    id: "95c_admin_settings_gamification",
+    route: "/admin/settings",
+    waitFor: ".MuiPaper-root",
+    actions: [
+      { type: "wait", ms: 800 },
+      {
+        type: "scroll",
+        target: i18nLabels("admin:settings.gamification.title")
+          .map((l) => `h6:has-text("${hasTextArg(l)}")`)
+          .join(", "),
+      },
+      { type: "wait", ms: 400 },
+    ],
+    filenames: {
+      en: "95c_admin_settings_gamification",
+      de: "95c_admin_einstellungen_gamification",
+      fr: "95c_admin_parametres_gamification",
+      es: "95c_admin_config_gamificacion",
+      it: "95c_admin_impostazioni_gamification",
+      pt: "95c_admin_config_gamificacao",
+      zh: "95c_admin_settings_gamification",
+      ru: "95c_admin_nastroyki_gamifikatsiya",
     },
   },
   {
@@ -2613,7 +2714,7 @@ export const MARKETING_PAGES: PageDef[] = [
   {
     id: "dashboard",
     route: "/",
-    waitFor: ".recharts-responsive-container",
+    waitFor: ".echart-container",
     actions: [{ type: "wait", ms: 800 }],
     viewport: { width: 1200, height: 700 },
     filenames: { en: "dashboard" },
@@ -2728,7 +2829,7 @@ export const MARKETING_PAGES: PageDef[] = [
   {
     id: "portfolio-report",
     route: "/reports/portfolio",
-    waitFor: ".recharts-responsive-container",
+    waitFor: ".echart-container",
     actions: [{ type: "wait", ms: 800 }],
     viewport: { width: 800, height: 500 },
     filenames: { en: "portfolio-report" },
@@ -2744,7 +2845,7 @@ export const MARKETING_PAGES: PageDef[] = [
   {
     id: "lifecycle-roadmap",
     route: "/reports/lifecycle",
-    waitFor: ".recharts-responsive-container, [class*='Lifecycle']",
+    waitFor: ".echart-container, [class*='Lifecycle']",
     actions: [{ type: "wait", ms: 800 }],
     viewport: { width: 800, height: 500 },
     filenames: { en: "lifecycle-roadmap" },
@@ -2760,7 +2861,7 @@ export const MARKETING_PAGES: PageDef[] = [
   {
     id: "cost-treemap",
     route: "/reports/cost",
-    waitFor: ".recharts-responsive-container, [class*='Cost']",
+    waitFor: ".echart-container, [class*='Cost']",
     actions: [{ type: "wait", ms: 800 }],
     viewport: { width: 800, height: 500 },
     filenames: { en: "cost-treemap" },
@@ -2776,7 +2877,7 @@ export const MARKETING_PAGES: PageDef[] = [
   {
     id: "data-quality",
     route: "/reports/data-quality",
-    waitFor: ".MuiPaper-root, .recharts-responsive-container",
+    waitFor: ".MuiPaper-root, .echart-container",
     actions: [{ type: "wait", ms: 800 }],
     viewport: { width: 800, height: 500 },
     filenames: { en: "data-quality" },

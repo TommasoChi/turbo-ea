@@ -294,6 +294,7 @@ def test_vitest_does_not_flood_the_step_summary():
 # A frontend test that reads files off disk, and why it may skip the marker.
 READS_NO_SOURCE = {
     "src/features/reports/linkChangeGlyphs.test.ts": "reads SVG assets in node_modules",
+    "src/lib/fontStylesheetLinks.test.ts": "reads frontend/index.html, which Stryker never mutates",
 }
 
 
@@ -301,7 +302,9 @@ def test_frontend_source_scans_skip_inside_the_stryker_sandbox():
     """In Stryker's sandbox the files being mutated are instrumented copies, so a
     test reading src/ as text fails the initial run and aborts the chunk (the
     t() key scan did, on src/i18n/index.ts). Every such test goes through
-    src/test/sourceScan.ts, which skips under the flag the Stryker config sets."""
+    src/test/sourceScan.ts, which skips under the flag the Stryker config sets.
+    A reader is a test calling readFileSync / readdirSync directly, or the
+    shared walkSources helper (src/test/sourceScanners.ts) that wraps them."""
     frontend = ROOT / "frontend"
     stryker_vitest = (frontend / "vitest.stryker.config.ts").read_text(encoding="utf-8")
     assert 'MUTATION_SANDBOX: "1"' in stryker_vitest
@@ -310,7 +313,7 @@ def test_frontend_source_scans_skip_inside_the_stryker_sandbox():
     readers = sorted(
         p.relative_to(frontend).as_posix()
         for p in (frontend / "src").rglob("*.test.ts*")
-        if re.search(r"\b(readFileSync|readdirSync)\b", p.read_text(encoding="utf-8"))
+        if re.search(r"\b(readFileSync|readdirSync|walkSources)\b", p.read_text(encoding="utf-8"))
     )
     assert readers, "the scan found no file reader at all"
     unmarked = [

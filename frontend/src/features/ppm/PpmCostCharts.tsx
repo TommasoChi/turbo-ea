@@ -21,29 +21,13 @@ import MenuItem from "@mui/material/MenuItem";
 import FormControl from "@mui/material/FormControl";
 import { useTheme } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ReferenceLine,
-  ResponsiveContainer,
-} from "recharts";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import EChart from "@/components/charts/EChart";
+import { useEChartsTheme } from "@/components/charts/echartsTheme";
 import { useCurrency } from "@/hooks/useCurrency";
-import { useChartTheme } from "@/hooks/useChartTheme";
-import { useIsRtl } from "@/hooks/useIsRtl";
+import { shortMonth } from "@/hooks/useDateFormat";
 import { useFiscalYearStart } from "@/hooks/useFiscalYearStart";
 import { fiscalYearLabel } from "@/lib/fiscalYear";
-import {
-  makeRtlAxisTick,
-  rtlLegendItemStyle,
-  rtlTooltipStyle,
-  mirrorChartMargin,
-} from "@/lib/rechartsRtl";
 import type { PpmCostLine, PpmBudgetLine } from "@/types";
 import {
   availableFiscalYears,
@@ -62,6 +46,11 @@ import {
   saveCostChartPrefs,
   resolveFiscalYear,
 } from "./costChartPrefs";
+import {
+  buildCumulativeOption,
+  type BudgetReference,
+  type CumulativeLine,
+} from "./cumulativeChartOption";
 
 interface Props {
   costLines: PpmCostLine[];
@@ -71,15 +60,11 @@ interface Props {
 const CHART_HEIGHT = 260;
 /** Three stacked charts at 260px is most of a phone screen; shrink on xs. */
 const CHART_HEIGHT_SX = { xs: 200, sm: CHART_HEIGHT };
-/** Dotted budget reference lines, distinct from the solid actuals. */
-const BUDGET_DASH = "6 4";
 
 export default function PpmCostCharts({ costLines, budgetLines }: Props) {
   const { t, i18n } = useTranslation("ppm");
   const theme = useTheme();
   const { fmt, fmtShort } = useCurrency();
-  const chart = useChartTheme();
-  const isRtl = useIsRtl();
   const { month: fyStart } = useFiscalYearStart();
   const headingId = useId();
 
@@ -151,6 +136,37 @@ export default function PpmCostCharts({ costLines, budgetLines }: Props) {
   const capexColor = theme.palette.primary.main;
   const opexColor = theme.palette.secondary.main;
 
+  // Each chart's lines and budget references, memoised: `CumulativeChart`
+  // builds its option from them in a `useMemo`, and a fresh array on every
+  // render here would rebuild that option — and redraw the chart — each time.
+  const categoryLines = useMemo<CumulativeLine[]>(
+    () => [
+      { key: "capex", name: t("cumulativeCapex"), color: capexColor },
+      { key: "opex", name: t("cumulativeOpex"), color: opexColor },
+    ],
+    [t, capexColor, opexColor],
+  );
+  const totalLines = useMemo<CumulativeLine[]>(
+    () => [{ key: "total", name: t("cumulativeSpend"), color: capexColor }],
+    [t, capexColor],
+  );
+  const fyCategoryReferences = useMemo(
+    () => categoryReferences(fyBudget, t("capexBudgetLine"), t("opexBudgetLine"), capexColor, opexColor),
+    [fyBudget, t, capexColor, opexColor],
+  );
+  const fyTotalReferences = useMemo<BudgetReference[]>(
+    () =>
+      fyBudget.total > 0
+        ? [{ value: fyBudget.total, name: t("totalBudgetLine"), color: capexColor }]
+        : [],
+    [fyBudget, t, capexColor],
+  );
+  const projectReferences = useMemo(
+    () =>
+      categoryReferences(projectBudget, t("capexBudgetLine"), t("opexBudgetLine"), capexColor, opexColor),
+    [projectBudget, t, capexColor, opexColor],
+  );
+
   // Nothing to plot at all — leave the tab as it was rather than showing an
   // empty frame.
   if (costLines.length === 0 && budgetLines.length === 0) return null;
@@ -205,19 +221,9 @@ export default function PpmCostCharts({ costLines, budgetLines }: Props) {
             <CumulativeChart
               data={fySeries}
               labelledBy={`${headingId}-cat`}
-              lines={[
-                { key: "capex", name: t("cumulativeCapex"), color: capexColor },
-                { key: "opex", name: t("cumulativeOpex"), color: opexColor },
-              ]}
-              references={[
-                ...(fyBudget.capex > 0
-                  ? [{ value: fyBudget.capex, name: t("capexBudgetLine"), color: capexColor }]
-                  : []),
-                ...(fyBudget.opex > 0
-                  ? [{ value: fyBudget.opex, name: t("opexBudgetLine"), color: opexColor }]
-                  : []),
-              ]}
-              {...{ theme: chart, isRtl, fmt, fmtShort, locale: i18n.language, emptyLabel: t("noChartData") }}
+              lines={categoryLines}
+              references={fyCategoryReferences}
+              {...{ fmt, fmtShort, locale: i18n.language, emptyLabel: t("noChartData") }}
             />
           </Box>
 
@@ -229,13 +235,9 @@ export default function PpmCostCharts({ costLines, budgetLines }: Props) {
             <CumulativeChart
               data={fySeries}
               labelledBy={`${headingId}-total`}
-              lines={[{ key: "total", name: t("cumulativeSpend"), color: capexColor }]}
-              references={
-                fyBudget.total > 0
-                  ? [{ value: fyBudget.total, name: t("totalBudgetLine"), color: capexColor }]
-                  : []
-              }
-              {...{ theme: chart, isRtl, fmt, fmtShort, locale: i18n.language, emptyLabel: t("noChartData") }}
+              lines={totalLines}
+              references={fyTotalReferences}
+              {...{ fmt, fmtShort, locale: i18n.language, emptyLabel: t("noChartData") }}
             />
           </Box>
         </Box>
@@ -248,19 +250,9 @@ export default function PpmCostCharts({ costLines, budgetLines }: Props) {
           <CumulativeChart
             data={projectSeries}
             labelledBy={`${headingId}-proj`}
-            lines={[
-              { key: "capex", name: t("cumulativeCapex"), color: capexColor },
-              { key: "opex", name: t("cumulativeOpex"), color: opexColor },
-            ]}
-            references={[
-              ...(projectBudget.capex > 0
-                ? [{ value: projectBudget.capex, name: t("capexBudgetLine"), color: capexColor }]
-                : []),
-              ...(projectBudget.opex > 0
-                ? [{ value: projectBudget.opex, name: t("opexBudgetLine"), color: opexColor }]
-                : []),
-            ]}
-            {...{ theme: chart, isRtl, fmt, fmtShort, locale: i18n.language, emptyLabel: t("noChartData") }}
+            lines={categoryLines}
+            references={projectReferences}
+            {...{ fmt, fmtShort, locale: i18n.language, emptyLabel: t("noChartData") }}
           />
         </Box>
 
@@ -274,54 +266,64 @@ export default function PpmCostCharts({ costLines, budgetLines }: Props) {
   );
 }
 
+/** The dotted CapEx and OpEx budget lines, each only when that budget is set. */
+function categoryReferences(
+  budget: { capex: number; opex: number },
+  capexName: string,
+  opexName: string,
+  capexColor: string,
+  opexColor: string,
+): BudgetReference[] {
+  return [
+    ...(budget.capex > 0 ? [{ value: budget.capex, name: capexName, color: capexColor }] : []),
+    ...(budget.opex > 0 ? [{ value: budget.opex, name: opexName, color: opexColor }] : []),
+  ];
+}
+
 /* ── Shared chart body ───────────────────────────────────────────────── */
-
-interface LineSpec {
-  key: "capex" | "opex" | "total";
-  name: string;
-  color: string;
-}
-
-interface RefSpec {
-  value: number;
-  name: string;
-  color: string;
-}
 
 function CumulativeChart(props: {
   data: MonthPoint[];
-  lines: LineSpec[];
-  references: RefSpec[];
+  lines: CumulativeLine[];
+  references: BudgetReference[];
   labelledBy: string;
-  theme: ReturnType<typeof useChartTheme>;
-  isRtl: boolean;
   fmt: { format: (v: number) => string };
   fmtShort: (v: number) => string;
   locale: string;
   emptyLabel: string;
 }) {
-  const { data, lines, references, labelledBy, theme, isRtl, fmt, fmtShort, locale, emptyLabel } =
-    props;
+  const { data, lines, references, labelledBy, fmt, fmtShort, locale, emptyLabel } = props;
+  const theme = useEChartsTheme();
 
   // Append the year whenever the range crosses a calendar boundary, so
   // "Jan" is never ambiguous on a multi-year axis.
   const multiYear = useMemo(() => new Set(data.map((d) => d.year)).size > 1, [data]);
-  const labelFor = useMemo(() => {
-    const monthFmt = new Intl.DateTimeFormat(locale, { month: "short" });
-    return (p: MonthPoint) => {
+  // `shortMonth` pins the Gregorian calendar (the months are Gregorian ones:
+  // `ar-SA` would otherwise name Hijri months), strips the bidi marks and
+  // survives a bad locale tag — the same month names as every formatted date.
+  const labelFor = useMemo(
+    () => (p: MonthPoint) => {
       // Day 1 at noon: safe from any timezone rolling the date backwards.
-      const label = monthFmt.format(new Date(p.year, p.month - 1, 1, 12));
+      const label = shortMonth(new Date(p.year, p.month - 1, 1, 12), locale);
       return multiYear ? `${label} '${String(p.year).slice(-2)}` : label;
-    };
-  }, [locale, multiYear]);
-
-  const chartData = useMemo(
-    () => data.map((p) => ({ ...p, label: labelFor(p) })),
-    [data, labelFor],
+    },
+    [locale, multiYear],
   );
 
-  const hasAnyPoint = data.some((p) => p.total !== null);
-  if (chartData.length === 0 || !hasAnyPoint) {
+  const labels = useMemo(() => data.map(labelFor), [data, labelFor]);
+
+  const option = useMemo(() => {
+    const { isRtl, ...chrome } = theme;
+    return buildCumulativeOption(data, labels, lines, references, {
+      chrome,
+      isRtl,
+      format: (v) => fmt.format(v),
+      formatShort: fmtShort,
+    });
+  }, [data, labels, lines, references, theme, fmt, fmtShort]);
+
+  // No month at all, or none reached yet: nothing to draw.
+  if (!data.some((p) => p.total !== null)) {
     return (
       <Box
         display="flex"
@@ -341,84 +343,11 @@ function CumulativeChart(props: {
     );
   }
 
-  const rtlTick = makeRtlAxisTick(theme.axisTick.fill, theme.axisTick.fontSize);
-
+  // The chart container is the image, named by the heading above it.
   return (
-    <Box
-      sx={{ height: CHART_HEIGHT_SX }}
-      aria-labelledby={labelledBy}
-      role="img"
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart
-          data={chartData}
-          margin={mirrorChartMargin({ top: 8, right: 16, bottom: 0, left: 8 }, isRtl)}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke={theme.gridStroke} />
-          <XAxis
-            dataKey="label"
-            tick={theme.axisTick}
-            tickLine={false}
-            reversed={isRtl}
-            interval="preserveStartEnd"
-            minTickGap={12}
-          />
-          <YAxis
-            tick={isRtl ? rtlTick : theme.axisTick}
-            tickLine={false}
-            // Measured from the rendered ticks (Recharts 3.7): a fixed width
-            // clipped long labels ("CHF12000k" before fmtShort learned "M",
-            // and still a four-digit "CHF9999k" just under a million).
-            width="auto"
-            orientation={isRtl ? "right" : "left"}
-            tickFormatter={(v: number) => fmtShort(v)}
-          />
-          <Tooltip
-            {...theme.tooltipProps}
-            contentStyle={{ ...theme.tooltipProps.contentStyle, ...rtlTooltipStyle(isRtl) }}
-            formatter={(value: number | string | undefined) =>
-              typeof value === "number" ? fmt.format(value) : (value ?? "")
-            }
-          />
-          <Legend
-            formatter={(value: string) => (
-              <span style={rtlLegendItemStyle(isRtl, theme.axisTick.fill)}>{value}</span>
-            )}
-          />
-          {references.map((r) => (
-            <ReferenceLine
-              key={`${r.name}-${r.value}`}
-              y={r.value}
-              stroke={r.color}
-              strokeDasharray={BUDGET_DASH}
-              strokeOpacity={0.8}
-              ifOverflow="extendDomain"
-              // Budget lines get no legend entry, so label them in place —
-              // otherwise a dotted line is unidentifiable.
-              label={{
-                value: r.name,
-                position: isRtl ? "insideTopLeft" : "insideTopRight",
-                fill: r.color,
-                fontSize: 11,
-              }}
-            />
-          ))}
-          {lines.map((l) => (
-            <Line
-              key={l.key}
-              type="monotone"
-              dataKey={l.key}
-              name={l.name}
-              stroke={l.color}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
+    // Stryker disable next-line ObjectLiteral: a responsive height; jsdom evaluates no media query, so no test can read it
+    <Box sx={{ height: CHART_HEIGHT_SX }}>
+      <EChart option={option} labelledBy={labelledBy} />
     </Box>
   );
 }

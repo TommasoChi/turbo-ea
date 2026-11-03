@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router";
+
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Accordion from "@mui/material/Accordion";
@@ -21,6 +21,13 @@ import { useMetamodel } from "@/hooks/useMetamodel";
 import { useOptionalAuthUser } from "@/hooks/AuthContext";
 import { readableCardTypes } from "@/hooks/useReadableCardTypes";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
+import { useEditRequest } from "@/hooks/useEditRequest";
+import {
+  SECTION_SCROLL_MARGIN,
+  relationGroupAnchor,
+  sectionAnchor,
+  type SectionEditRequest,
+} from "@/features/cards/dataQualityJump";
 import {
   useResolveLabel,
   useTypeLabel,
@@ -200,7 +207,6 @@ function RelationGroup({
   const relLabel = useRelationLabel();
   const subtypeLabel = useSubtypeLabel();
   const { getType } = useMetamodel();
-  const navigate = useNavigate();
   const [attrsAnchor, setAttrsAnchor] = useState<HTMLElement | null>(null);
   const [attrsRelation, setAttrsRelation] = useState<Relation | null>(null);
   const [rollupOpen, setRollupOpen] = useState(false);
@@ -364,7 +370,7 @@ function RelationGroup({
       >
         <ClickableCardName
           name={other?.name || t("relations.unknown")}
-          onClick={() => other && navigate(`/cards/${other.id}`)}
+          to={other ? `/cards/${other.id}` : undefined}
           dotColor={oType?.color}
         />
         {alsoVerbs && (
@@ -460,12 +466,14 @@ function RelationGroup({
 
   return (
     <Box
+      id={relationGroupAnchor(rt.key, isSource ? "source" : "target")}
       sx={{
         border: "1px solid",
         borderColor: "divider",
         borderRadius: 1,
         overflow: "hidden",
         mb: 1.5,
+        scrollMarginTop: SECTION_SCROLL_MARGIN,
       }}
     >
       {/* Group header */}
@@ -640,6 +648,8 @@ function RelationsSection({
   canManageRelations = true,
   initialExpanded = false,
   onCardUpdate,
+  expandOn,
+  editOn,
 }: {
   fsId: string;
   cardTypeKey: string;
@@ -654,6 +664,10 @@ function RelationsSection({
    *  so adding or removing one moves the score in the header pill — which the
    *  section's own relation reload cannot refresh. */
   onCardUpdate?: () => void;
+  /** A new value expands the section (a data-quality jump). */
+  expandOn?: number;
+  /** A data-quality jump: open the Add dialog for its relation type and side. */
+  editOn?: SectionEditRequest;
 }) {
   const { t, i18n } = useTranslation(["cards", "common"]);
   const typeLabel = useTypeLabel();
@@ -732,7 +746,7 @@ function RelationsSection({
   // opens), and `useSyncedExpanded` re-syncs when `initialExpanded` changes —
   // the metamodel's section_config arrives asynchronously, so a config that
   // lands after mount still opens the section.
-  const [expanded, setExpanded] = useSyncedExpanded(initialExpanded);
+  const [expanded, setExpanded] = useSyncedExpanded(initialExpanded, expandOn);
   const [rollup, setRollup] = useState<Record<string, number>>({});
   const isHierarchical = getType(cardTypeKey)?.has_hierarchy ?? false;
 
@@ -887,6 +901,16 @@ function RelationsSection({
     setAddOpen(true);
   };
 
+  // A data-quality jump opens the Add dialog its group's `+` opens, once the
+  // relations and the relation types are in. A side this card does not have
+  // (the metamodel changed since the score) leaves the jump an expand only.
+  useEditRequest(editOn, canManageRelations && loaded && sides.length > 0, ({ relation }) => {
+    const side = sides.find(
+      ({ rt, isSource }) => rt.key === relation?.type && isSource === (relation.side === "source"),
+    );
+    if (side) openAddDialog(side);
+  });
+
   const handleAddClosed = (addedCount: number) => {
     setAddOpen(false);
     // One reconcile per batch rather than per add: picks up what the client
@@ -898,9 +922,11 @@ function RelationsSection({
 
   return (
     <Accordion
+      id={sectionAnchor("relations")}
       expanded={expanded}
       onChange={(_, v) => setExpanded(v)}
       disableGutters
+      sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
     >
       <AccordionSummary expandIcon={<MaterialSymbol icon="expand_more" size={20} />}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>

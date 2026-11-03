@@ -3,8 +3,6 @@ import pytest
 from app.services.fiscal_year import current_fiscal_year
 from tests.conftest import auth_headers, create_card, create_card_type, create_role, create_user
 
-pytestmark = pytest.mark.anyio
-
 # With the default January start the fiscal year is the calendar year.
 THIS_YEAR = current_fiscal_year(1)
 YEAR = THIS_YEAR - 1
