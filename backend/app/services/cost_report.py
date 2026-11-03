@@ -22,6 +22,7 @@ from app.services.card_costs import (
     COST_ITEM_TYPES,
     DERIVED_KEY,
     YearCosts,
+    archived_keys,
     resolve_year,
     year_costs,
 )
@@ -80,9 +81,7 @@ async def item_costs_by_card(
         )
         for card_id, fy, items in rows.all():
             by_card.setdefault(card_id, {})[fy] = items or {}
-    archived = {
-        k: a for k, a in (await db.execute(select(CostItemType.key, CostItemType.archived))).all()
-    }
+    archived = await archived_keys(db)
     out: dict[uuid.UUID, YearCosts] = {}
     for card_id in card_ids:
         years = by_card.get(card_id, {})

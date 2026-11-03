@@ -988,7 +988,7 @@ async def _finalize_cards(db) -> None:
     then the data-quality score is derived from the final attribute state.
     """
     from app.services.calculation_engine import run_calculations_for_card
-    from app.services.card_costs import COST_ITEM_TYPES, recompute_derived
+    from app.services.card_costs import recompute_derived
     from app.services.card_write_service import _get_ppm_exclusions
     from app.services.data_quality import calc_data_quality
     from app.services.derived_writes import derived_maintenance
@@ -1004,8 +1004,7 @@ async def _finalize_cards(db) -> None:
             for card in cards:
                 ppm_excl = await _get_ppm_exclusions(db, card)
                 await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
-                if card.type in COST_ITEM_TYPES:
-                    await recompute_derived(db, card)
+                await recompute_derived(db, card)
                 score = await calc_data_quality(db, card)
                 if card.data_quality != score:
                     card.data_quality = score

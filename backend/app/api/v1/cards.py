@@ -117,9 +117,7 @@ from app.services.card_write_service import (
     emit_hierarchy_cascade_events,
 )
 from app.services.cost_event_redaction import add_cost_summaries, redact_cost_events
-from app.services.cost_field_filter import (
-    cost_field_keys_from_card_schema,
-)
+from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.data_quality import calc_data_quality, calc_data_quality_breakdown
 from app.services.event_bus import event_bus
 from app.services.lifecycle import lifecycle_rank

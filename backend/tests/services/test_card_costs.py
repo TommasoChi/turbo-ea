@@ -41,7 +41,7 @@ def _it(amount, renewal=None):
 async def test_tco_counts_archived(db):
     card = await _setup(db, archived=("old",))
     await _row(db, card, CUR, {"lic": _it(10), "old": _it(5)})
-    yc = await svc.get_year_costs(db, card.id, CUR, SM)
+    yc = await svc.get_year_row(db, card.id, CUR, SM)
     assert yc.tco == 15
     assert {line.key: line.archived for line in yc.items} == {"lic": False, "old": True}
     assert yc.confirmed and yc.is_current and not yc.is_forecast
@@ -50,10 +50,10 @@ async def test_tco_counts_archived(db):
 async def test_empty_row_does_not_fall_back_but_missing_row_does(db):
     card = await _setup(db)
     await _row(db, card, CUR - 1, {"lic": _it(10)})
-    missing = await svc.get_year_costs(db, card.id, CUR, SM)
+    missing = await svc.get_year_row(db, card.id, CUR, SM)
     assert (missing.tco, missing.confirmed, missing.fallback_from) == (10, False, CUR - 1)
     await _row(db, card, CUR, {})
-    empty = await svc.get_year_costs(db, card.id, CUR, SM)
+    empty = await svc.get_year_row(db, card.id, CUR, SM)
     assert (empty.tco, empty.confirmed, empty.fallback_from, empty.items) == (0, True, None, [])
 
 
@@ -61,27 +61,27 @@ async def test_forecast_and_past_without_row_stay_empty(db):
     card = await _setup(db)
     await _row(db, card, CUR, {"lic": _it(10)})
     await _row(db, card, CUR - 3, {"lic": _it(1)})
-    fc = await svc.get_year_costs(db, card.id, CUR + 1, SM)
+    fc = await svc.get_year_row(db, card.id, CUR + 1, SM)
     assert fc.is_forecast and fc.tco == 0 and fc.fallback_from is None
-    past = await svc.get_year_costs(db, card.id, CUR - 2, SM)
+    past = await svc.get_year_row(db, card.id, CUR - 2, SM)
     assert past.tco == 0 and past.fallback_from is None
 
 
 async def test_no_earlier_row_is_empty(db):
     card = await _setup(db)
-    yc = await svc.get_year_costs(db, card.id, CUR, SM)
+    yc = await svc.get_year_row(db, card.id, CUR, SM)
     assert yc.tco == 0 and yc.items == [] and yc.fallback_from is None and not yc.confirmed
 
 
 async def test_fallback_renewal_shifted_by_skipped_years(db):
     card = await _setup(db)
     await _row(db, card, CUR - 1, {"lic": _it(10, "2026-12-31")})
-    yc = await svc.get_year_costs(db, card.id, CUR, SM)
+    yc = await svc.get_year_row(db, card.id, CUR, SM)
     assert yc.items[0].renewal_date == date(2027, 12, 31)
     await db.delete(await db.get(CardCost, (await _id(db, card, CUR - 1))))
     await db.flush()
     await _row(db, card, CUR - 2, {"lic": _it(10, "2026-12-31")})
-    yc = await svc.get_year_costs(db, card.id, CUR, SM)
+    yc = await svc.get_year_row(db, card.id, CUR, SM)
     assert yc.items[0].renewal_date == date(2028, 12, 31) and yc.fallback_from == CUR - 2
 
 
@@ -115,7 +115,7 @@ async def test_confirm_year_stores_unchanged(db):
     await _row(db, card, CUR - 1, {"lic": _it(10)})
     yc = await svc.confirm_year(db, card.id, CUR)
     assert yc.confirmed and yc.tco == 10
-    again = await svc.get_year_costs(db, card.id, CUR, SM)
+    again = await svc.get_year_row(db, card.id, CUR, SM)
     assert again.confirmed and again.tco == 10
 
 
@@ -160,7 +160,7 @@ async def test_delete_item(db):
     card = await _setup(db)
     await _row(db, card, CUR, {"lic": _it(3), "ams": _it(2)})
     await svc.delete_item(db, card.id, CUR, "lic")
-    assert (await svc.get_year_costs(db, card.id, CUR, SM)).tco == 2
+    assert (await svc.get_year_row(db, card.id, CUR, SM)).tco == 2
 
 
 async def test_copy_to_forecast_overwrites_and_shifts(db):

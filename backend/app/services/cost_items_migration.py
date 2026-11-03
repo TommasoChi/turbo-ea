@@ -44,7 +44,7 @@ def _details(values: dict, item_keys: list[str]) -> dict[str, dict]:
         if key == OTHER_KEY:
             continue
         amount = _num(values.get(key))
-        if amount is not None and amount > 0:
+        if amount is not None:
             out[key] = _item(amount)
     return out
 

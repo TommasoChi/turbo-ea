@@ -64,10 +64,6 @@ class YearCosts:
     tco: float = 0.0
 
 
-def tco(items: list[CostLine]) -> float:
-    return sum(i.amount for i in items)
-
-
 def _shift(iso: str | None, years: int) -> str | None:
     if not iso:
         return None
@@ -105,7 +101,7 @@ async def _fallback_row(db: AsyncSession, card_id: uuid.UUID, fy: int) -> CardCo
     ).scalar_one_or_none()
 
 
-async def _archived_keys(db: AsyncSession) -> dict[str, bool]:
+async def archived_keys(db: AsyncSession) -> dict[str, bool]:
     rows = await db.execute(select(CostItemType.key, CostItemType.archived))
     return {k: a for k, a in rows.all()}
 
@@ -152,7 +148,7 @@ def year_costs(
         confirmed=confirmed,
         fallback_from=fallback_from,
         items=lines,
-        tco=tco(lines),
+        tco=sum(i.amount for i in lines),
     )
 
 
@@ -180,11 +176,8 @@ async def get_year_row(
         fb,
         fiscal_year,
         current_fiscal_year(start_month),
-        await _archived_keys(db),
+        await archived_keys(db),
     )
-
-
-get_year_costs = get_year_row
 
 
 async def get_window(db: AsyncSession, card_id: uuid.UUID, start_month: int) -> list[YearCosts]:
@@ -237,7 +230,7 @@ async def upsert_item(
         or amount < 0
     ):
         raise CostError("invalid_amount", "Amount must be a non-negative number")
-    archived = await _archived_keys(db)
+    archived = await archived_keys(db)
     if key not in archived:
         raise CostError("unknown_item", f"Unknown cost item '{key}'")
     current, _, _ = await _resolve(db, card_id, fiscal_year, sm)
@@ -320,14 +313,13 @@ async def recompute_derived(db: AsyncSession, card: Card) -> None:
     No cost lines: the key is removed (an empty field, not a zero). A type whose schema does
     not declare the field is left untouched.
     """
-    if card.type not in await _declaring_types(db):
+    if card.type not in COST_ITEM_TYPES or card.type not in await _declaring_types(db):
         return
     sm = await get_fiscal_year_start(db)
     total = await _target_total(db, card.id, current_fiscal_year(sm), sm)
-    if (card.attributes or {}).get(DERIVED_KEY) != total or (
-        total is None and DERIVED_KEY in (card.attributes or {})
-    ):
-        card.attributes = _with_total(card.attributes, total)
+    fresh = _with_total(card.attributes, total)
+    if fresh != (card.attributes or {}):
+        card.attributes = fresh
 
 
 async def stale_totals(db: AsyncSession) -> dict[uuid.UUID, float | None]:
@@ -344,8 +336,7 @@ async def stale_totals(db: AsyncSession) -> dict[uuid.UUID, float | None]:
     out: dict[uuid.UUID, float | None] = {}
     for card_id, attrs in rows:
         total = await _target_total(db, card_id, fy, sm)
-        have = (attrs or {}).get(DERIVED_KEY)
-        if have != total or (total is None and DERIVED_KEY in (attrs or {})):
+        if _with_total(attrs, total) != (attrs or {}):
             out[card_id] = total
     return out
 

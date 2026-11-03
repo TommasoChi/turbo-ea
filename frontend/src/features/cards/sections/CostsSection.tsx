@@ -16,7 +16,6 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useDateFormat } from "@/hooks/useDateFormat";
-import { useIsRtl } from "@/hooks/useIsRtl";
 import { useFieldLabel } from "@/hooks/useResolveLabel";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
 import { todayIsoDate } from "@/lib/dates";
@@ -56,7 +55,6 @@ export default function CostsSection({
   const { formatDate } = useDateFormat();
   const chrome = useEChartsTheme();
   const fieldLabel = useFieldLabel();
-  const isRtl = useIsRtl();
   const [expanded, setExpanded] = useSyncedExpanded(initialExpanded, expandOn);
   const [version, setVersion] = useState(0);
   const { data, error } = useApiQuery<CardCostsResponse>(`/cards/${cardId}/costs`, {
@@ -69,12 +67,14 @@ export default function CostsSection({
 
   const catalogue = data?.catalogue;
   const byKey = useMemo(() => new Map((catalogue ?? []).map((c) => [c.key, c])), [catalogue]);
-  // A colour per catalogue item, stable across years; archived items are grey.
+  // A colour per active catalogue item, stable across years; archived items are grey.
+  const colorIndex = useMemo(
+    () => new Map((catalogue ?? []).filter((c) => !c.archived).map((c, i) => [c.key, i])),
+    [catalogue],
+  );
   const colorOf = (key: string): string => {
-    const item = byKey.get(key);
-    if (!item || item.archived) return STATUS_COLORS.neutral;
-    const i = (catalogue ?? []).filter((c) => !c.archived).indexOf(item);
-    return CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length];
+    const i = colorIndex.get(key);
+    return i === undefined ? STATUS_COLORS.neutral : CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length];
   };
   // Catalogue rows always carry a label; a key with no row is not expected.
   const labelOf = (key: string): string => {
@@ -96,8 +96,8 @@ export default function CostsSection({
   );
   const year = years[idx];
   const editable = canEdit && data.can_edit;
-  const unset = new Set(year.items.map((i) => i.key));
-  const addable: CostItemType[] = data.catalogue.filter((c) => !c.archived && !unset.has(c.key));
+  const present = new Set(year.items.map((i) => i.key));
+  const addable: CostItemType[] = data.catalogue.filter((c) => !c.archived && !present.has(c.key));
   const reload = () => {
     setVersion((v) => v + 1);
     onChanged?.();
@@ -152,7 +152,7 @@ export default function CostsSection({
             disabled={idx === 0}
             onClick={() => nav(-1)}
           >
-            <MaterialSymbol icon={isRtl ? "chevron_right" : "chevron_left"} size={20} />
+            <MaterialSymbol icon={chrome.isRtl ? "chevron_right" : "chevron_left"} size={20} />
           </IconButton>
           <Typography fontWeight={600} sx={{ minWidth: 150, textAlign: "center" }}>
             {costFiscalYearName(year.fiscal_year, currentFy)}
@@ -163,7 +163,7 @@ export default function CostsSection({
             disabled={idx === years.length - 1}
             onClick={() => nav(1)}
           >
-            <MaterialSymbol icon={isRtl ? "chevron_left" : "chevron_right"} size={20} />
+            <MaterialSymbol icon={chrome.isRtl ? "chevron_left" : "chevron_right"} size={20} />
           </IconButton>
         </Box>
 

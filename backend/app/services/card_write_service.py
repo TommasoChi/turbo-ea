@@ -121,8 +121,7 @@ async def recalculate_and_rescore(db: AsyncSession, card: Card) -> None:
     Flushes nothing and commits nothing — the caller owns the transaction.
     """
     await run_calculations_for_card(db, card, exclude_fields=await _get_ppm_exclusions(db, card))
-    if card.type in COST_ITEM_TYPES:
-        await recompute_derived(db, card)
+    await recompute_derived(db, card)
     card.data_quality = await calc_data_quality(db, card)
 
 
@@ -846,8 +845,7 @@ async def create_card(
     # Run calculated fields (skip PPM-managed cost fields if PPM data exists)
     ppm_excl = await _get_ppm_exclusions(db, card)
     await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
-    if card.type in COST_ITEM_TYPES:
-        await recompute_derived(db, card)
+    await recompute_derived(db, card)
     await sync_current_fy_history(db, card)
     await _recalc_changed_descendants(db, changed_levels, card.id)
 
@@ -1021,8 +1019,7 @@ async def update_card(
     # Run calculated fields (skip PPM-managed cost fields if PPM data exists)
     ppm_excl = await _get_ppm_exclusions(db, card)
     await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
-    if card.type in COST_ITEM_TYPES:
-        await recompute_derived(db, card)
+    await recompute_derived(db, card)
     await sync_current_fy_history(db, card)
     # Re-run calcs for descendants whose level moved (after the card's own
     # run, so a child formula reading a parent's computed field sees it fresh)
