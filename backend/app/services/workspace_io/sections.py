@@ -255,7 +255,12 @@ ENTITY_SECTIONS: tuple[EntitySection, ...] = (
     ),
     EntitySection("AdrCards", ArchitectureDecisionCard, card_fk_columns=("card_id",)),
     # Per-card, per-year cost items; keys name ``CostItemTypes`` rows (applied earlier).
-    EntitySection("CardCosts", CardCost, card_fk_columns=("card_id",)),
+    EntitySection(
+        "CardCosts",
+        CardCost,
+        card_fk_columns=("card_id",),
+        natural_key=("card_id", "fiscal_year"),
+    ),
     EntitySection(
         "Soaws",
         SoAW,

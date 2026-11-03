@@ -47,3 +47,29 @@ async def test_cost_items_roundtrip(db):
 
     again = await apply_bundle(db, parse_bundle(raw), user)
     assert next(s for s in again.sections if s.sheet == "CardCosts").created == 0
+
+
+async def test_import_matches_an_existing_row_on_card_and_year(db):
+    """A target that already holds a row for the card/year (own primary key) takes the
+    bundle's items instead of failing the whole apply on ``uq_card_costs_card_year``."""
+    user = await create_user(db, email="cost-ws2@test.com", role="admin")
+    await create_card_type(db, key="Application", label="Application")
+    card = await create_card(db, card_type="Application", name="Billing", user_id=user.id)
+    card_id = card.id
+    db.add(CostItemType(key="licences", label="Licences"))
+    db.add(CardCost(card_id=card_id, fiscal_year=2026, items={"licences": {"amount": 5}}))
+    await db.flush()
+    raw = await build_bundle(db)
+
+    await db.execute(delete(CardCost))
+    db.add(CardCost(card_id=card_id, fiscal_year=2026, items={"licences": {"amount": 1}}))
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+    section = next(s for s in result.sections if s.sheet == "CardCosts")
+    assert (section.created, section.updated) == (0, 1)
+
+    db.expire_all()
+    rows = (await db.execute(select(CardCost).where(CardCost.card_id == card_id))).scalars().all()
+    assert [r.items for r in rows] == [{"licences": {"amount": 5}}]

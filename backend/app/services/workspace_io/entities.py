@@ -97,6 +97,10 @@ class EntitySection:
     # ``test_workspace_io_id_bearing_columns`` requires every JSON / text /
     # asset column to be listed here or allowlisted with a reason.
     id_bearing_columns: tuple[str, ...] = ()
+    # A unique key other than the PK (columns after FK resolution). A row that matches
+    # an existing one on it, under another PK, replaces that row's other value columns
+    # instead of violating the constraint at flush.
+    natural_key: tuple[str, ...] = ()
 
     def value_columns(self) -> list[str]:
         managed = (
@@ -389,6 +393,9 @@ async def apply_entity_section(
     for obj in existing_objs:
         existing_by_pk[tuple(getattr(obj, c) for c in pk_cols)] = obj
 
+    nk = section.natural_key
+    existing_by_nk = {tuple(getattr(o, c) for c in nk): o for o in existing_objs} if nk else {}
+
     for row in _topo_rows(rows, section):
         # Build the full row first — a PK column can itself be a card FK (the
         # association tables RiskCard / AdrCard), so the PK isn't knowable until
@@ -445,6 +452,19 @@ async def apply_entity_section(
             sr.failed += 1
             continue
         current = existing_by_pk.get(pk_vals)
+        if current is None and nk:
+            match = existing_by_nk.get(tuple(kwargs.get(c) for c in nk))
+            if match is not None:
+                changed = False
+                for col in value_cols:
+                    if col not in pk_cols and getattr(match, col) != kwargs[col]:
+                        setattr(match, col, kwargs[col])
+                        changed = True
+                if changed:
+                    sr.updated += 1
+                else:
+                    sr.skip("already_present")
+                continue
         if current is not None:
             if rewrite is not None and remap is not None:
                 original = {c: copy.deepcopy(kwargs.get(c)) for c in section.id_bearing_columns}
@@ -460,5 +480,7 @@ async def apply_entity_section(
         obj = model(**kwargs)
         db.add(obj)
         existing_by_pk[pk_vals] = obj
+        if nk:
+            existing_by_nk[tuple(kwargs.get(c) for c in nk)] = obj
         sr.created += 1
     await db.flush()
