@@ -41,6 +41,7 @@ from app.models.resource_type import ResourceType
 from app.models.role import Role
 from app.models.stakeholder import Stakeholder
 from app.models.user import User
+from app.schemas.cost_items import CostItemTypeCreate, CostItemTypeUpdate
 from app.services import (
     audit_changes,
     audit_labels,
@@ -48,6 +49,7 @@ from app.services import (
     card_reference,
     card_type_categories,
     card_type_delete,
+    cost_item_types,
 )
 from app.services.archimate import taxonomy
 from app.services.archimate.archi_native_import import convert_archi_native_to_exchange
@@ -3572,3 +3574,84 @@ async def delete_card_type_category(
     )
     await db.delete(c)
     await db.commit()
+
+
+# ── Cost item catalogue ───────────────────────────────────────────────
+#
+# The lines a card's yearly cost is broken into. The key is fixed at create
+# time; a line is archived, never deleted. Logic: ``services/cost_item_types``.
+
+_COST_ITEM_AUDIT_SCALARS = ("label", "archived", "sort_order")
+
+
+@router.get("/cost-item-types")
+async def list_cost_item_types(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """The whole catalogue (archived lines included, flagged). Any signed-in
+    user may read it: card cost sections need the labels."""
+    rows = await cost_item_types.list_items(db)
+    return [cost_item_types.serialize(r) for r in rows]
+
+
+@router.post("/cost-item-types", status_code=201)
+async def create_cost_item_type(
+    body: CostItemTypeCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    try:
+        row = await cost_item_types.create_item(
+            db, body.key, body.label.strip(), _clean_translations(body.translations)
+        )
+    except cost_item_types.CostItemError as exc:
+        status = 409 if exc.code == "duplicate_key" else 422
+        raise HTTPException(status, detail={"error": exc.code, "message": str(exc)}) from exc
+    await audit_log.record(
+        db,
+        action="admin.metamodel.cost_item_type.created",
+        category="admin",
+        actor=user,
+        target=("cost_item_type", row.key, row.label),
+    )
+    await db.commit()
+    await db.refresh(row)
+    return cost_item_types.serialize(row)
+
+
+@router.patch("/cost-item-types/{key}")
+async def update_cost_item_type(
+    key: str,
+    body: CostItemTypeUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await PermissionService.require_permission(db, user, "admin.metamodel")
+    row = await cost_item_types.get_item(db, key)
+    if row is None:
+        raise HTTPException(404, "Cost item not found")
+    updates = body.model_dump(exclude_unset=True)
+    if updates.get("label") is not None:
+        updates["label"] = updates["label"].strip()
+    if "translations" in updates:
+        updates["translations"] = _clean_translations(updates["translations"])
+    changes = audit_log.diff(row, updates, keys=_COST_ITEM_AUDIT_SCALARS)
+    items = _label_translation_items(
+        row.translations, updates.get("translations", row.translations)
+    )
+    await cost_item_types.update_item(db, key, **updates)
+    if changes or items:
+        await audit_log.record(
+            db,
+            action="admin.metamodel.cost_item_type.updated",
+            category="admin",
+            actor=user,
+            target=("cost_item_type", row.key, row.label),
+            changes=changes,
+            items=items,
+        )
+    await db.commit()
+    await db.refresh(row)
+    return cost_item_types.serialize(row)

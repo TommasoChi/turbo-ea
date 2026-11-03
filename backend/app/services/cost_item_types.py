@@ -1,0 +1,88 @@
+"""The cost-item catalogue (``cost_item_types``). The key is fixed at create
+time and a row is archived, never deleted. Flushes, never commits."""
+
+from __future__ import annotations
+
+import re
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.cost_item_type import CostItemType
+
+KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+
+
+class CostItemError(Exception):
+    """``code`` is one of ``invalid_key``, ``duplicate_key``, ``not_found``."""
+
+    def __init__(self, code: str, message: str = "") -> None:
+        super().__init__(message or code)
+        self.code = code
+
+
+def serialize(row: CostItemType) -> dict:
+    return {
+        "id": str(row.id),
+        "key": row.key,
+        "label": row.label,
+        "sort_order": row.sort_order,
+        "archived": row.archived,
+        "translations": row.translations or {},
+    }
+
+
+async def get_item(db: AsyncSession, key: str) -> CostItemType | None:
+    return (
+        await db.execute(select(CostItemType).where(CostItemType.key == key))
+    ).scalar_one_or_none()
+
+
+async def list_items(db: AsyncSession, include_archived: bool = True) -> list[CostItemType]:
+    stmt = select(CostItemType).order_by(CostItemType.sort_order, CostItemType.label)
+    if not include_archived:
+        stmt = stmt.where(CostItemType.archived.is_(False))
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def create_item(
+    db: AsyncSession, key: str, label: str, translations: dict | None = None
+) -> CostItemType:
+    if not isinstance(key, str) or not KEY_RE.match(key):
+        raise CostItemError("invalid_key", f"Invalid cost item key '{key}'")
+    if await get_item(db, key) is not None:
+        raise CostItemError("duplicate_key", f"Cost item '{key}' already exists")
+    current = (await db.execute(select(func.max(CostItemType.sort_order)))).scalar()
+    row = CostItemType(
+        key=key,
+        label=label,
+        sort_order=(current if current is not None else -1) + 1,
+        archived=False,
+        translations=translations or {},
+    )
+    db.add(row)
+    await db.flush()
+    return row
+
+
+async def update_item(
+    db: AsyncSession,
+    key: str,
+    label: str | None = None,
+    translations: dict | None = None,
+    archived: bool | None = None,
+    sort_order: int | None = None,
+) -> CostItemType:
+    row = await get_item(db, key)
+    if row is None:
+        raise CostItemError("not_found", f"Cost item '{key}' not found")
+    if label is not None:
+        row.label = label
+    if translations is not None:
+        row.translations = translations
+    if archived is not None:
+        row.archived = archived
+    if sort_order is not None:
+        row.sort_order = sort_order
+    await db.flush()
+    return row
