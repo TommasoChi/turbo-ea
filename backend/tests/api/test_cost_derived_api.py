@@ -198,3 +198,50 @@ async def test_bulk_recalculate_does_not_overwrite_the_derived_total(client, db,
     assert r.status_code == 200, r.text
     r = await client.get(f"/api/v1/cards/{card.id}", headers=h)
     assert r.json()["attributes"]["costTotalAnnual"] == 30
+
+
+async def test_calculation_reads_the_fresh_derived_total_on_a_card_save(client, db, env):
+    from app.models.calculation import Calculation
+
+    db.add(
+        Calculation(
+            name="double",
+            target_type_key="Application",
+            target_field_key="doubleCost",
+            formula="data.costTotalAnnual * 2",
+            is_active=True,
+        )
+    )
+    card = await create_card(db, card_type="Application", name="A", user_id=env["admin"].id)
+    db.add(CardCost(card_id=card.id, fiscal_year=CUR, items={"lic": {"amount": 30}}))
+    await db.commit()
+    r = await client.patch(
+        f"/api/v1/cards/{card.id}",
+        json={"description": "x"},
+        headers=auth_headers(env["admin"]),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["attributes"]["doubleCost"] == 60
+
+
+async def test_cost_write_rescores_data_quality(client, db, env):
+    from sqlalchemy import update
+
+    from app.models.card_type import CardType
+
+    weighted = [
+        {"section": "Cost", "fields": [{"key": "costTotalAnnual", "type": "cost", "weight": 1}]}
+    ]
+    await db.execute(
+        update(CardType).where(CardType.key == "Application").values(fields_schema=weighted)
+    )
+    card = await create_card(db, card_type="Application", name="A", user_id=env["admin"].id)
+    card.data_quality = 0
+    card_id = card.id
+    await db.commit()
+    h = auth_headers(env["admin"])
+    r = await client.put(
+        f"/api/v1/cards/{card_id}/costs/{CUR}/items/lic", json={"amount": 30}, headers=h
+    )
+    assert r.status_code == 200, r.text
+    assert (await client.get(f"/api/v1/cards/{card_id}", headers=h)).json()["data_quality"] > 0

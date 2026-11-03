@@ -269,7 +269,7 @@ async def build_cost_sankey(
             per_card[card_id][2][item] = value
     for _, card_total, costs in per_card.values():
         rest = card_total - sum(costs.values())
-        if split and not item_mode and rest > 0:
+        if split and rest > 0:
             costs[OTHER_ITEM] = rest
     cards = sorted(per_card.values(), key=lambda cc: -cc[1])
     groups = (

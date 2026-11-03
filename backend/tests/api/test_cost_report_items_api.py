@@ -220,8 +220,12 @@ async def test_per_item_cost_field_needs_costs_view(client, db, env):
     assert "ERP" not in resp.text
 
 
-async def test_sankey_ignores_a_line_missing_from_the_catalogue(client, db, env):
+async def test_sankey_puts_a_line_missing_from_the_catalogue_under_other(client, db, env):
     app = await create_card(db, card_type="Application", name="ERP")
     await _costs(db, app, CUR, lic=100, ghost=5)  # `ghost` was never in the catalogue
     flow = (await _get(client, env, "cost-sankey", type="Application")).json()
-    assert {n["id"] for n in flow["nodes"] if n["type"] == "CostItem"} == {"item:lic"}
+    assert {n["id"] for n in flow["nodes"] if n["type"] == "CostItem"} == {
+        "item:lic",
+        "item:__other__",
+    }
+    assert sum(link["value"] for link in flow["links"]) == flow["total"] == 105

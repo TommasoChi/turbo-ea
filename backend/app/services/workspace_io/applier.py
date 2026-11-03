@@ -323,6 +323,7 @@ async def _run(
             schema.SHEET_CARD_TAGS,
             schema.SHEET_RELATIONS,
             schema.SHEET_CALCULATIONS,
+            "CardCosts",
         }:
             await _finalize_cards(db)
     finally:
@@ -1003,8 +1004,8 @@ async def _finalize_cards(db) -> None:
             cards = (await db.execute(select(Card).where(Card.id.in_(chunk)))).scalars().all()
             for card in cards:
                 ppm_excl = await _get_ppm_exclusions(db, card)
+                await recompute_derived(db, card)  # first: a formula may read costTotalAnnual
                 await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
-                await recompute_derived(db, card)
                 score = await calc_data_quality(db, card)
                 if card.data_quality != score:
                     card.data_quality = score

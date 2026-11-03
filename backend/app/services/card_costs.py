@@ -400,7 +400,9 @@ async def apply_write(
     old = await get_year_row(db, card.id, fiscal_year, sm)
     if await op() is False:  # a no-op write (delete of an absent key): no event, no refresh
         return old
-    await recompute_derived(db, card)
+    from app.services.card_write_service import recalculate_and_rescore  # import cycle
+
+    await recalculate_and_rescore(db, card)
     new = await get_year_row(db, card.id, fiscal_year, sm)
     await event_bus.publish(
         COST_EVENT,
