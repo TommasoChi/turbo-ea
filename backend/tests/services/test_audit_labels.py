@@ -94,3 +94,14 @@ async def test_category_labels_query_the_category_registry():
     sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
     assert "FROM card_type_categories" in sql
     assert "'Foo'" in sql and "'Ghost'" in sql
+
+
+async def test_cost_event_summary(db):
+    from app.services import cost_item_types
+    from app.services.audit_labels import cost_event_summary
+
+    await cost_item_types.create_item(db, "lic", "Licences")
+    data = {"changes": {"cost_items": {"old": [], "new": ["lic", "zzz"]}}}
+    text = await cost_event_summary(db, "ERP", data)
+    assert text == "Costs of ERP changed (items: Licences, zzz)"
+    assert await cost_event_summary(db, "ERP", {"changes": {}}) == "Costs of ERP changed"

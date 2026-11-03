@@ -7,7 +7,12 @@ import uuid
 from app.core.permissions import MEMBER_PERMISSIONS, VIEWER_PERMISSIONS
 from app.models.stakeholder import Stakeholder
 from app.services.permission_service import PermissionService
-from tests.conftest import create_card, create_role, create_user
+from tests.conftest import (
+    create_card,
+    create_role,
+    create_stakeholder_role_def,
+    create_user,
+)
 
 
 async def _make_stakeholder(db, *, user, card, role="responsible"):
@@ -144,3 +149,42 @@ class TestEffectivePermissionsIncludesCanViewCosts:
 
         eff = await PermissionService.get_effective_card_permissions(db, user, card.id)
         assert eff["effective"]["can_view_costs"] is False
+
+
+class TestCanEditCosts:
+    async def _roles(self, db):
+        for key, edit in (("resp_c", True), ("process_owner_c", True), ("observer_c", False)):
+            await create_stakeholder_role_def(
+                db, key=key, label=key, permissions={"card.view": True, "card.edit": edit}
+            )
+
+    async def test_admin_and_app_level_grant(self, db, app_card_type):
+        await create_role(db, key="admin", permissions={"*": True})
+        await create_role(db, key="ce", permissions={"costs.edit": True})
+        card = await create_card(db, card_type="Application")
+        for role in ("admin", "ce"):
+            user = await create_user(db, role=role, email=f"{role}@ce.com")
+            assert await PermissionService.can_edit_costs(db, user, card.id) is True
+
+    async def test_edit_roles_work_when_profile_cannot_edit_cards(self, db, app_card_type):
+        await self._roles(db)
+        await create_role(db, key="ro", permissions={"inventory.view": True})
+        mine = await create_card(db, card_type="Application")
+        other = await create_card(db, card_type="Application")
+        for role in ("resp_c", "process_owner_c"):
+            user = await create_user(db, role="ro", email=f"{role}@x.com")
+            await _make_stakeholder(db, user=user, card=mine, role=role)
+            assert await PermissionService.can_edit_costs(db, user, mine.id) is True
+            assert await PermissionService.can_edit_costs(db, user, other.id) is False
+
+    async def test_observer_inventory_edit_only_and_stranger_cannot(self, db, app_card_type):
+        await self._roles(db)
+        await create_role(
+            db, key="ie", permissions={"inventory.view": True, "inventory.edit": True}
+        )
+        card = await create_card(db, card_type="Application")
+        obs = await create_user(db, role="ie", email="obs@x.com")
+        await _make_stakeholder(db, user=obs, card=card, role="observer_c")
+        member = await create_user(db, role="ie", email="m@x.com")
+        assert await PermissionService.can_edit_costs(db, obs, card.id) is False
+        assert await PermissionService.can_edit_costs(db, member, card.id) is False

@@ -15,15 +15,18 @@ from app.api.deps import get_current_user
 from app.core.security import decode_access_token
 from app.database import async_session, get_db
 from app.models.card import Card
+from app.models.card_type import CardType
 from app.models.event import Event
 from app.models.stakeholder import Stakeholder
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
+from app.services.card_costs import DERIVED_KEY
 from app.services.card_read_scope import (
     CardReadScope,
     event_read_filters,
     scrub_event_payloads,
 )
+from app.services.cost_field_filter import cost_field_keys_from_card_schema, redact_event_costs
 from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
 
@@ -93,6 +96,14 @@ async def event_stream(request: Request, token: str = Query("")):
             raise HTTPException(status_code=401, detail="Account access has expired")
 
         is_events_admin = await PermissionService.has_app_permission(db, user, "admin.events")
+        # An audit reader without landscape-wide costs.view gets the events minus cost values
+        # (a stakeholder-only cost reader is treated as without: no per-card lookup mid-stream).
+        redact_keys: frozenset[str] | None = None
+        if not await PermissionService.has_app_permission(db, user, "costs.view"):
+            schemas = (await db.execute(select(CardType.fields_schema))).scalars().all()
+            redact_keys = frozenset({DERIVED_KEY}).union(
+                *(cost_field_keys_from_card_schema(fs) for fs in schemas)
+            )
         user_id = str(user.id)
     # Session closed: its connection is back in the pool before the stream opens.
 
@@ -101,6 +112,8 @@ async def event_stream(request: Request, token: str = Query("")):
             if await request.is_disconnected():
                 break
             if _event_visible_to(is_events_admin, message, user_id):
+                if redact_keys is not None and isinstance(message.get("data"), dict):
+                    message = {**message, "data": redact_event_costs(message["data"], redact_keys)}
                 yield f"data: {json.dumps(message, default=str)}\n\n"
 
     return StreamingResponse(

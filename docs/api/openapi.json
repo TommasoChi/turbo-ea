@@ -2668,6 +2668,10 @@
       },
       "CardCostsOut": {
         "properties": {
+          "can_edit": {
+            "title": "Can Edit",
+            "type": "boolean"
+          },
           "catalogue": {
             "items": {
               "$ref": "#/components/schemas/CostItemTypeOut"
@@ -2684,6 +2688,7 @@
           }
         },
         "required": [
+          "can_edit",
           "years",
           "catalogue"
         ],
@@ -18371,6 +18376,63 @@
         "title": "WorkspaceTransferOut",
         "type": "object"
       },
+      "YearCostsDetailOut": {
+        "properties": {
+          "can_edit": {
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "fallback_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback From"
+          },
+          "fiscal_year": {
+            "title": "Fiscal Year",
+            "type": "integer"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "is_forecast": {
+            "title": "Is Forecast",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CostLineOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "tco": {
+            "title": "Tco",
+            "type": "number"
+          }
+        },
+        "required": [
+          "fiscal_year",
+          "is_current",
+          "is_forecast",
+          "confirmed",
+          "items",
+          "tco",
+          "can_edit"
+        ],
+        "title": "YearCostsDetailOut",
+        "type": "object"
+      },
       "YearCostsOut": {
         "properties": {
           "confirmed": {
@@ -25228,7 +25290,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/YearCostsOut"
+                  "$ref": "#/components/schemas/YearCostsDetailOut"
                 }
               }
             },

@@ -4,13 +4,20 @@ import uuid
 from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, parse_uuid
-from app.api.v1.cost_history import _load_card_for_edit
 from app.database import get_db
+from app.models.card import Card
 from app.models.user import User
-from app.schemas.cost_items import KEY_PATTERN, CardCostsOut, CostItemWrite, YearCostsOut
+from app.schemas.cost_items import (
+    KEY_PATTERN,
+    CardCostsOut,
+    CostItemWrite,
+    YearCostsDetailOut,
+    YearCostsOut,
+)
 from app.services import card_costs, cost_item_types
 from app.services.card_costs import COST_ITEM_TYPES, CostError, YearCosts
 from app.services.card_read_scope import require_card_readable
@@ -24,11 +31,15 @@ _FY = Path(ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR)
 _STATUS = {"archived_item": 409}
 
 
-async def _require_costs(db: AsyncSession, user: User, card_type: str) -> None:
-    """Writes: the app-level ``costs.view`` plus a cost-bearing type."""
-    await PermissionService.require_permission(db, user, "costs.view")
+async def _load_for_edit(db: AsyncSession, user: User, card_id: str) -> Card:
+    """Writes: ``costs.edit`` or a card-editing stakeholder role on this card."""
+    card_uuid = parse_uuid(card_id)
+    card_type = await require_card_readable(db, user, card_uuid, mode="module")
     if card_type not in COST_ITEM_TYPES:
         raise HTTPException(404, "Card not found")
+    if not await PermissionService.can_edit_costs(db, user, card_uuid):
+        raise HTTPException(403, "Not enough permissions")
+    return (await db.execute(select(Card).where(Card.id == card_uuid))).scalar_one()
 
 
 async def _load_for_read(db: AsyncSession, user: User, card_id: str) -> uuid.UUID:
@@ -53,8 +64,7 @@ async def _write(
     fiscal_year: int,
     op: Callable[[uuid.UUID], Awaitable[object]],
 ) -> YearCostsOut:
-    card = await _load_card_for_edit(db, user, card_id)
-    await _require_costs(db, user, card.type)
+    card = await _load_for_edit(db, user, card_id)
     try:
         new = await card_costs.apply_write(db, card, user.id, fiscal_year, lambda: op(card.id))
     except CostError as e:
@@ -72,12 +82,13 @@ async def get_card_costs(
     card_uuid = await _load_for_read(db, user, card_id)
     years = await card_costs.get_window(db, card_uuid, await get_fiscal_year_start(db))
     return CardCostsOut(
+        can_edit=await PermissionService.can_edit_costs(db, user, card_uuid),
         years=[_out(y) for y in years],
         catalogue=[cost_item_types.serialize(r) for r in await cost_item_types.list_items(db)],
     )
 
 
-@router.get("/cards/{card_id}/costs/{fiscal_year}", response_model=YearCostsOut)
+@router.get("/cards/{card_id}/costs/{fiscal_year}", response_model=YearCostsDetailOut)
 async def get_card_costs_year(
     card_id: str,
     fiscal_year: int = _FY,
@@ -85,8 +96,10 @@ async def get_card_costs_year(
     user: User = Depends(get_current_user),
 ):
     card_uuid = await _load_for_read(db, user, card_id)
-    return _out(
-        await card_costs.get_year_row(db, card_uuid, fiscal_year, await get_fiscal_year_start(db))
+    row = await card_costs.get_year_row(db, card_uuid, fiscal_year, await get_fiscal_year_start(db))
+    return YearCostsDetailOut(
+        **_out(row).model_dump(),
+        can_edit=await PermissionService.can_edit_costs(db, user, card_uuid),
     )
 
 

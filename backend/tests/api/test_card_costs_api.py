@@ -164,7 +164,7 @@ async def test_copy_to_forecast(client, env):
 async def test_event_history_shows_keys_only(client, env):
     await put(client, env, amount=987.65, renewal_date="2031-02-03")
     r = await client.get(
-        f"/api/v1/cards/{env['card'].id}/history", headers=auth_headers(env["viewer"])
+        f"/api/v1/cards/{env['card'].id}/history", headers=auth_headers(env["admin"])
     )
     assert r.status_code == 200
     ev = [e for e in r.json() if e["data"].get("source") == "card_costs"][0]

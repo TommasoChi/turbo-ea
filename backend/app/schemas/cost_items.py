@@ -46,7 +46,12 @@ class YearCostsOut(BaseModel):
     tco: float
 
 
+class YearCostsDetailOut(YearCostsOut):
+    can_edit: bool
+
+
 class CardCostsOut(BaseModel):
+    can_edit: bool
     years: list[YearCostsOut]
     catalogue: list[CostItemTypeOut]
 

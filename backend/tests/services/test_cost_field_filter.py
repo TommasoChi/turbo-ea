@@ -109,3 +109,26 @@ def test_strip_costs_from_relation_attributes():
         FakeRT(), {"technicalSuitability": "fit", "costTotalAnnual": 42}
     )
     assert out == {"technicalSuitability": "fit"}
+
+
+def test_redact_event_costs_both_shapes_and_passthrough():
+    from app.services.cost_field_filter import redact_event_costs
+
+    keys = frozenset({"costTotalAnnual"})
+    data = {
+        "id": "x",
+        "changes": {
+            "costTotalAnnual": {"old": 1, "new": 2},
+            "cost_items": {"old": [], "new": ["a"]},
+            "name": {"old": "a", "new": "b"},
+            "attributes": {"old": {"costTotalAnnual": 1, "n": 1}, "new": {"costTotalAnnual": 2}},
+        },
+    }
+    out = redact_event_costs(data, keys)
+    assert out["changes"] == {
+        "name": {"old": "a", "new": "b"},
+        "attributes": {"old": {"n": 1}, "new": {}},
+    }
+    assert "costTotalAnnual" in data["changes"]  # input untouched
+    assert redact_event_costs({"id": "x"}, keys) == {"id": "x"}
+    assert redact_event_costs(None, keys) is None

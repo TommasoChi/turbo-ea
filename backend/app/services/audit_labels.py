@@ -94,6 +94,21 @@ async def cost_item_labels(db: AsyncSession, keys: Iterable[str | None]) -> dict
     return {key: label for key, label in rows.all() if label}
 
 
+async def cost_event_summary(db: AsyncSession, card_name: str, data: dict | None) -> str:
+    """ "Costs of <card> changed (items: <labels>)" for a ``card.costs_updated`` payload.
+
+    Item labels, not keys; the items part is left out when the payload carries
+    no ``cost_items`` (redacted for the reader).
+    """
+    items = ((data or {}).get("changes") or {}).get("cost_items") or {}
+    keys = sorted({*(items.get("old") or []), *(items.get("new") or [])})
+    text = f"Costs of {card_name} changed"
+    if not keys:
+        return text
+    labels = await cost_item_labels(db, keys)
+    return f"{text} (items: {', '.join(labels.get(k, k) for k in keys)})"
+
+
 def clip_text(text: str | None, limit: int = AUDIT_TEXT_LIMIT) -> str | None:
     """``text`` cut to ``limit`` characters, the last one an ellipsis; shorter
     text (and ``None``) unchanged."""

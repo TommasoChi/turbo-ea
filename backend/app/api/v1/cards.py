@@ -82,6 +82,7 @@ from app.services import (
 )
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_completeness import missing_mandatory
+from app.services.card_costs import COST_EVENT, DERIVED_KEY
 from app.services.card_flags import orphaned_condition, stale_condition
 from app.services.card_logo_service import logo_updated_map
 from app.services.card_read_scope import (
@@ -115,7 +116,11 @@ from app.services.card_write_service import (
     _walk_ancestor_chain,  # noqa: F401
     emit_hierarchy_cascade_events,
 )
-from app.services.cost_field_filter import cost_field_keys_from_card_schema
+from app.services.cost_field_filter import (
+    cost_field_keys_for_card_type,
+    cost_field_keys_from_card_schema,
+    redact_event_costs,
+)
 from app.services.data_quality import calc_data_quality, calc_data_quality_breakdown
 from app.services.event_bus import event_bus
 from app.services.lifecycle import lifecycle_rank
@@ -3089,7 +3094,15 @@ async def get_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
-    await _require_card_read(db, user, parse_uuid(card_id))
+    card_uuid = parse_uuid(card_id)
+    card_type_key = await _require_card_read(db, user, card_uuid)
+    # A caller who may not view this card's costs gets the events without the values.
+    cost_keys = None
+    if not await PermissionService.can_view_costs(db, user, card_uuid):
+        card_type = (
+            await db.execute(select(CardType).where(CardType.key == card_type_key))
+        ).scalar_one_or_none()
+        cost_keys = cost_field_keys_for_card_type(card_type) | {DERIVED_KEY}
     # A relation event names its peer; drop the ones whose peer is hidden from
     # the caller, so History does not list a card the Relations section omits.
     read_scope = await CardReadScope.load(db, user)
@@ -3108,6 +3121,14 @@ async def get_history(
     result = await db.execute(q)
     events = result.scalars().all()
     payloads = await scrub_event_payloads(db, read_scope, [e.data for e in events])
+    if cost_keys is not None:
+        payloads = [redact_event_costs(p, cost_keys) for p in payloads]
+    card_name = None
+    if any(e.event_type == COST_EVENT for e in events):
+        card_name = (await db.execute(select(Card.name).where(Card.id == card_uuid))).scalar_one()
+    for e, data in zip(events, payloads):
+        if e.event_type == COST_EVENT and isinstance(data, dict):
+            data["summary"] = await audit_labels.cost_event_summary(db, card_name, data)
     return [
         {
             "id": str(e.id),
