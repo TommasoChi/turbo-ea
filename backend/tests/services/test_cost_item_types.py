@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.services import cost_item_types as svc
+from tests.conftest import create_card_type
 
 
 async def test_create_ok(db):
@@ -45,3 +46,23 @@ async def test_sort_order_appends(db):
     a = await svc.create_item(db, "a", "A", None)
     b = await svc.create_item(db, "b", "B", None)
     assert b.sort_order == a.sort_order + 1
+
+
+async def test_reserved_card_column_and_cost_items(db):
+    for key in ("description", "cost_items"):
+        with pytest.raises(svc.CostItemError) as e:
+            await svc.create_item(db, key, "X", None)
+        assert e.value.code == "reserved_key"
+
+
+async def test_reserved_field_key_of_a_card_type(db):
+    await create_card_type(
+        db,
+        key="Application",
+        fields_schema=[
+            {"section": "S", "fields": [{"key": "businessCriticality", "type": "text"}]}
+        ],
+    )
+    with pytest.raises(svc.CostItemError) as e:
+        await svc.create_item(db, "businessCriticality", "X", None)
+    assert e.value.code == "reserved_key"

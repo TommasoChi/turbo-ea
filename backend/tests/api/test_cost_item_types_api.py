@@ -46,7 +46,7 @@ async def test_duplicate_409(client, env):
     assert r.status_code == 409
 
 
-@pytest.mark.parametrize("key", ["1x", "a b"])
+@pytest.mark.parametrize("key", ["1x", "a b", "description", "cost_items"])
 async def test_bad_key_422(client, env, key):
     r = await client.post(BASE, json={"key": key, "label": "L"}, headers=auth_headers(env["admin"]))
     assert r.status_code == 422

@@ -8,6 +8,8 @@ import re
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.card import Card
+from app.models.card_type import CardType
 from app.models.cost_item_type import CostItemType
 from app.services import cost_items_migration as cim
 
@@ -15,7 +17,7 @@ KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
 
 class CostItemError(Exception):
-    """``code`` is one of ``invalid_key``, ``duplicate_key``, ``not_found``."""
+    """``code`` is one of ``invalid_key``, ``reserved_key``, ``duplicate_key``, ``not_found``."""
 
     def __init__(self, code: str, message: str = "") -> None:
         super().__init__(message or code)
@@ -66,6 +68,13 @@ async def create_item(
 ) -> CostItemType:
     if not isinstance(key, str) or not KEY_RE.match(key):
         raise CostItemError("invalid_key", f"Invalid cost item key '{key}'")
+    # Keys are permanent and the redactors drop a catalogue key from every event diff, so one
+    # that equals a card column or a field key would hide that diff for everyone.
+    reserved = {*Card.__table__.columns.keys(), "cost_items"}
+    for schema in (await db.execute(select(CardType.fields_schema))).scalars():
+        reserved.update(f.get("key") for sec in schema or [] for f in sec.get("fields", []))
+    if key in reserved:
+        raise CostItemError("reserved_key", f"'{key}' is a card column or field key")
     if await get_item(db, key) is not None:
         raise CostItemError("duplicate_key", f"Cost item '{key}' already exists")
     current = (await db.execute(select(func.max(CostItemType.sort_order)))).scalar()

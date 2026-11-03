@@ -191,6 +191,12 @@ async def test_migration_moves_fields_and_history(db):
             CardCostHistory(
                 card_id=itc.id, fiscal_year=cur + 1, field_key="costTotalAnnual", value=10
             ),
+            CardCostHistory(
+                card_id=itc.id, fiscal_year=cur - 5, field_key="costTotalAnnual", value=20
+            ),
+            CardCostHistory(
+                card_id=itc.id, fiscal_year=cur - 5, field_key="infrastruttureCost", value=20
+            ),
         ]
     )
     db.add(AppSettings(id="default", general_settings={"other": 1}))
@@ -209,7 +215,8 @@ async def test_migration_moves_fields_and_history(db):
     assert rows[(empty_id, cur)] == {}
     assert rows[(itc_id, cur)] == {"other": 90}
     assert rows[(itc_id, cur + 1)] == {"other": 10}
-    assert len(rows) == 7  # the current-year history row is discarded
+    assert rows[(itc_id, cur - 5)] == {"infrastruttureCost": 20}  # the oldest year of the window
+    assert len(rows) == 8  # the current-year history row is discarded
 
     assert (await db.get(Card, app_id)).attributes["costTotalAnnual"] == 200
     # the per-line values live in card_costs now: no raw copy may outlive the schema fields
