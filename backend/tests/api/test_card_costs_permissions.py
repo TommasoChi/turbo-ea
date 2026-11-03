@@ -202,8 +202,17 @@ async def _feed_env(db, env):
     return card
 
 
-def _no_amounts(text):
-    return "4321" not in text and '"costTotalAnnual": 22' not in text and "cost_items" not in text
+def _assert_no_amounts(evs, need_diff=True):
+    """Every event is there, none carries a cost value; the attribute diff survives, emptied."""
+    diffs = 0
+    for e in evs:
+        ch = e["data"].get("changes", {})
+        assert "costTotalAnnual" not in ch and "cost_items" not in ch
+        attrs = ch.get("attributes")
+        if attrs is not None:
+            diffs += 1
+            assert all("costTotalAnnual" not in attrs[side] for side in ("old", "new"))
+    assert diffs >= int(need_diff)
 
 
 async def test_dashboard_recent_events_redacted(client, db, env):
@@ -214,7 +223,7 @@ async def test_dashboard_recent_events_redacted(client, db, env):
     assert r.status_code == 200
     evs = r.json()["recent_events"]
     assert {e["event_type"] for e in evs} >= {"card.costs_updated", "card.updated"}
-    assert _no_amounts(str(evs))
+    _assert_no_amounts(evs)
     r = await client.get("/api/v1/reports/dashboard", headers=auth_headers(env["admin"]))
     assert "4321" in str(r.json()["recent_events"])
 
@@ -228,7 +237,7 @@ async def test_my_cards_feed_redacted_unless_stakeholder(client, db, env):
     await db.flush()
     r = await client.get("/api/v1/events/my-cards", headers=auth_headers(env["reader"]))
     assert r.status_code == 200 and len(r.json()) >= 2
-    assert _no_amounts(r.text)
+    _assert_no_amounts(r.json())
     r = await client.get("/api/v1/events/my-cards", headers=auth_headers(env["resp"]))
     assert "4321" in r.text
 
@@ -239,7 +248,7 @@ async def test_admin_events_feed_redacted_without_cost_access(client, db, env):
     r = await client.get(f"/api/v1/events?card_id={card.id}", headers=auth_headers(env["reader"]))
     assert r.status_code == 200
     assert {e["event_type"] for e in r.json()} >= {"card.costs_updated", "card.updated"}
-    assert _no_amounts(r.text)
+    _assert_no_amounts(r.json())
     r = await client.get(f"/api/v1/events?card_id={card.id}", headers=auth_headers(env["admin"]))
     assert "4321" in r.text
 
@@ -262,7 +271,7 @@ async def test_mutation_batch_events_redacted_without_cost_access(client, db, en
     path = f"/api/v1/mutation-batches/{batch_id}/events"
     r = await client.get(path, headers=auth_headers(env["reader"]))
     assert r.status_code == 200 and r.json()["events"]
-    assert _no_amounts(r.text)
+    _assert_no_amounts(r.json()["events"], need_diff=False)
     r = await client.get(path, headers=auth_headers(env["admin"]))
     assert "4321" in r.text
 
@@ -275,3 +284,17 @@ async def test_legacy_cost_history_read_needs_cost_view(client, db, env):
     path = f"/api/v1/cards/{env['card'].id}/cost-history"
     assert (await client.get(path, headers=auth_headers(editor))).status_code == 403
     assert (await client.get(path, headers=auth_headers(env["admin"]))).status_code == 200
+
+
+async def test_admin_dashboard_activity_redacted_without_cost_access(client, db, env):
+    await put(client, env, "admin")
+    await _feed_env(db, env)
+    await create_role(db, key="usersadm", label="UA", permissions={"admin.users": True})
+    ua = await create_user(db, email="ua@cp.com", role="usersadm")
+    r = await client.get("/api/v1/reports/admin-dashboard", headers=auth_headers(ua))
+    assert r.status_code == 200
+    evs = [e for e in r.json()["recent_activity"] if e["card_id"] == str(env["card"].id)]
+    assert {e["event_type"] for e in evs} >= {"card.costs_updated", "card.updated"}
+    _assert_no_amounts(evs)
+    r = await client.get("/api/v1/reports/admin-dashboard", headers=auth_headers(env["admin"]))
+    assert "4321" in str(r.json()["recent_activity"])

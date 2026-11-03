@@ -616,6 +616,7 @@ async def admin_dashboard_summary(
     sys_payloads = await scrub_event_payloads(
         db, await CardReadScope.load(db, user), [e.data for e in sys_events_list]
     )
+    sys_payloads = await redact_cost_events(db, user, sys_events_list, sys_payloads)
     recent_activity = [
         {
             "id": str(e.id),
