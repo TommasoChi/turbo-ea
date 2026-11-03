@@ -44,7 +44,7 @@ def test_current_residual_goes_to_other():
         "infrastruttureCost": 20,
         "costTotalAnnual": 200,
     }
-    assert amounts(cim.build_current_year_items(attrs, KEYS)) == {
+    assert amounts(cim.build_current_year_items(attrs, KEYS)[0]) == {
         "softwareLicensingCost": 100,
         "applicationManagementServicesCost": 40,
         "infrastruttureCost": 20,
@@ -54,18 +54,36 @@ def test_current_residual_goes_to_other():
 
 def test_current_details_above_total_have_no_other():
     attrs = {"softwareLicensingCost": 120, "costTotalAnnual": 100}
-    assert amounts(cim.build_current_year_items(attrs, KEYS)) == {"softwareLicensingCost": 120}
+    items, tco, changed = cim.build_current_year_items(attrs, KEYS)
+    assert (amounts(items), tco, changed) == ({"softwareLicensingCost": 120}, 120, True)
+
+
+def test_current_details_without_total_change():
+    items, tco, changed = cim.build_current_year_items({"infrastruttureCost": 30}, KEYS)
+    assert (amounts(items), tco, changed) == ({"infrastruttureCost": 30}, 30, True)
+
+
+def test_current_consistent_year_is_unchanged():
+    attrs = {"softwareLicensingCost": 60, "costTotalAnnual": 100}
+    assert cim.build_current_year_items(attrs, KEYS)[1:] == (100, False)
+
+
+def test_numeric_text_counts_and_non_finite_is_ignored():
+    items, tco, _ = cim.build_current_year_items({"softwareLicensingCost": "100"}, KEYS)
+    assert (amounts(items), tco) == ({"softwareLicensingCost": 100}, 100)
+    inf = float("inf")
+    assert cim.build_current_year_items({"costTotalAnnual": inf}, KEYS) == ({}, 0, False)
+    assert cim.build_past_year_items({"softwareLicensingCost": inf}, KEYS) == ({}, 0, False)
 
 
 def test_current_only_total_goes_to_other():
-    assert amounts(cim.build_current_year_items({"costTotalAnnual": 90}, KEYS)) == {"other": 90}
+    assert amounts(cim.build_current_year_items({"costTotalAnnual": 90}, KEYS)[0]) == {"other": 90}
 
 
 def test_current_nothing_or_zero_gives_no_items():
-    assert cim.build_current_year_items({}, KEYS) == {}
-    assert (
-        cim.build_current_year_items({"softwareLicensingCost": 0, "costTotalAnnual": 0}, KEYS) == {}
-    )
+    assert cim.build_current_year_items({}, KEYS) == ({}, 0, False)
+    zero = {"softwareLicensingCost": 0, "costTotalAnnual": 0}
+    assert cim.build_current_year_items(zero, KEYS) == ({}, 0, False)
 
 
 def test_past_consistent_year_is_unchanged():
@@ -150,6 +168,15 @@ async def test_migration_moves_fields_and_history(db):
     itc = await create_card(
         db, card_type="ITComponent", name="Itc", attributes={"costTotalAnnual": 90}
     )
+    over = await create_card(
+        db,
+        card_type="ITComponent",
+        name="Over",
+        attributes={"softwareLicensingCost": 120, "costTotalAnnual": 100},
+    )
+    nototal = await create_card(
+        db, card_type="ITComponent", name="NoTotal", attributes={"infrastruttureCost": 30}
+    )
     db.add_all(
         [
             CardCostHistory(
@@ -170,6 +197,7 @@ async def test_migration_moves_fields_and_history(db):
     await db.flush()
 
     app_id, empty_id, itc_id = app.id, empty.id, itc.id
+    over_id, nototal_id = over.id, nototal.id
     await _run(db)
 
     rows = {
@@ -181,7 +209,7 @@ async def test_migration_moves_fields_and_history(db):
     assert rows[(empty_id, cur)] == {}
     assert rows[(itc_id, cur)] == {"other": 90}
     assert rows[(itc_id, cur + 1)] == {"other": 10}
-    assert len(rows) == 5  # the current-year history row is discarded
+    assert len(rows) == 7  # the current-year history row is discarded
 
     assert (await db.get(Card, app_id)).attributes["costTotalAnnual"] == 200
     assert (await db.get(Card, empty_id)).attributes["costTotalAnnual"] == 0
@@ -196,9 +224,15 @@ async def test_migration_moves_fields_and_history(db):
     settings = (await db.execute(select(AppSettings))).scalar_one()
     assert settings.general_settings["other"] == 1
     report = settings.general_settings["cost_items_migration_report"]
-    assert report == [
-        {"card_id": str(app_id), "fiscal_year": cur - 1, "old_total": 50, "new_tco": 70}
-    ]
+    key = lambda e: (e["card_id"], e["fiscal_year"])  # noqa: E731
+    assert sorted(report, key=key) == sorted(
+        [
+            {"card_id": str(app_id), "fiscal_year": cur - 1, "old_total": 50, "new_tco": 70},
+            {"card_id": str(over_id), "fiscal_year": cur, "old_total": 100, "new_tco": 120},
+            {"card_id": str(nototal_id), "fiscal_year": cur, "old_total": None, "new_tco": 30},
+        ],
+        key=key,
+    )
 
 
 async def test_second_run_changes_nothing(db):

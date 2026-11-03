@@ -9,6 +9,8 @@ from __future__ import annotations
 import copy
 import re
 
+from app.services.cost_value import cost_value
+
 MIGRATED_TYPES = ("Application", "ITComponent")
 TOTAL_KEY = "costTotalAnnual"
 OTHER_KEY = "other"
@@ -22,9 +24,9 @@ OTHER_LABEL = "Other costs"
 
 
 def _num(value) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return float(value)
+    """A positive finite amount, numeric text included (as ``cost_value`` reads it); else None."""
+    amount = cost_value(value)
+    return float(amount) if amount > 0 else None
 
 
 def _item(amount: float) -> dict:
@@ -46,17 +48,23 @@ def _sum(items: dict[str, dict]) -> float:
     return sum(i["amount"] for i in items.values())
 
 
+def _build(values: dict, item_keys: list[str], total_key: str):
+    items = _details(values, item_keys)
+    total = _num(values.get(total_key))
+    details = _sum(items)
+    if total is not None and total - details > 0:
+        items[OTHER_KEY] = _item(total - details)
+    changed = bool(items) and (total is None or details > total)
+    return items, _sum(items), changed
+
+
 def build_current_year_items(
     attributes: dict, item_keys: list[str], total_key: str = TOTAL_KEY
-) -> dict[str, dict]:
-    """Items for the current fiscal year from card attributes. The positive difference
-    between the old total and the details lands in ``other``."""
-    items = _details(attributes, item_keys)
-    total = _num(attributes.get(total_key)) or 0.0
-    residual = total - _sum(items)
-    if residual > 0:
-        items[OTHER_KEY] = _item(residual)
-    return items
+) -> tuple[dict[str, dict], float, bool]:
+    """Items for the current fiscal year from card attributes, as ``(items, new_tco, changed)``.
+    The positive difference between the old total and the details lands in ``other``;
+    ``changed`` when the TCO differs from the old total (details exceed it, or no total)."""
+    return _build(attributes, item_keys, total_key)
 
 
 def build_past_year_items(
@@ -66,14 +74,7 @@ def build_past_year_items(
 
     Returns ``(items, new_tco, changed)``; ``changed`` when the TCO differs from the old
     total: details exceed the total, or only details were recorded."""
-    items = _details(history, item_keys)
-    total = _num(history.get(TOTAL_KEY))
-    details = _sum(items)
-    if total is not None and total - details > 0:
-        items[OTHER_KEY] = _item(total - details)
-    new_tco = _sum(items)
-    changed = bool(items) and (total is None or details > total)
-    return items, new_tco, changed
+    return _build(history, item_keys, TOTAL_KEY)
 
 
 def cost_field_keys(fields_schema: list) -> list[str]:

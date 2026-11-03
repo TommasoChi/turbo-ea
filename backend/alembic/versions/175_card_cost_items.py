@@ -16,6 +16,7 @@ from sqlalchemy.sql import text
 
 from alembic import op
 from app.services import cost_items_migration as cim
+from app.services.cost_value import cost_value
 from app.services.fiscal_year import current_fiscal_year
 
 revision: str = "175"
@@ -95,15 +96,25 @@ def _data_body(conn) -> None:
     ).fetchall()
     for card in cards:
         attrs = card.attributes or {}
-        items = cim.build_current_year_items(attrs, item_keys)
+        items, tco, changed = cim.build_current_year_items(attrs, item_keys)
         conn.execute(insert_cost, {"c": card.id, "y": current, "i": json.dumps(items)})
         conn.execute(
             text(
                 "UPDATE cards SET attributes = COALESCE(attributes, '{}'::jsonb) "
                 "|| jsonb_build_object('costTotalAnnual', CAST(:t AS float8)) WHERE id = :c"
             ),
-            {"t": sum(i["amount"] for i in items.values()), "c": card.id},
+            {"t": tco, "c": card.id},
         )
+        if changed:
+            old = cost_value(attrs.get(cim.TOTAL_KEY))
+            report.append(
+                {
+                    "card_id": str(card.id),
+                    "fiscal_year": current,
+                    "old_total": old if old > 0 else None,
+                    "new_tco": tco,
+                }
+            )
         for year in sorted(years_by_card.get(card.id, [])):
             if year == current:
                 continue  # the current year is served from attributes
