@@ -53,7 +53,7 @@ from app.services.migration.staging import (
     stage_tags,
     stage_users_and_subscriptions,
 )
-from tests.conftest import create_card, create_role, create_user
+from tests.conftest import create_card, create_card_type, create_role, create_user
 from tests.migration_helpers import (
     InMemorySource,
     empty_snapshot,
@@ -197,7 +197,8 @@ class TestStageCards:
         assert row.action == "update" and row.target_id == existing.id
         assert row.diff["name"] == {"old": "Old name", "new": "Salesforce"}
         assert "description" not in row.diff  # unchanged fields are not in the diff
-        assert row.diff["attributes"]["costTotalAnnual"] == {"old": None, "new": 1200.5}
+        # costTotalAnnual is derived from cost items on an Application: not a change
+        assert "costTotalAnnual" not in row.diff.get("attributes", {})
         assert row.diff["lifecycle"]["new"] == {"plan": "2019-01-01", "active": "2020-01-01"}
 
     async def test_an_identical_card_is_a_skip(self, db, env):
@@ -672,7 +673,7 @@ class TestApply:
         await apply_migration(db, m1, env["admin"])
         app1 = next(e for e in snap.entities if e.source_id == "app-1")
         app1.description = "CRM, now with AI"
-        app1.custom_fields["costTotalAnnual"] = 2000
+        app1.custom_fields["costTotalAnnual"] = 2000  # derived on an Application: ignored
         snap.documents[0].name = "Runbook v2"
         snap.comments[0].body = "Renewal postponed"
 
@@ -686,16 +687,40 @@ class TestApply:
 
         card = await _one(db, Card, external_id="app-1")
         assert card.description == "CRM, now with AI"
-        assert card.attributes["costTotalAnnual"] == 2000
+        assert "costTotalAnnual" not in card.attributes  # derived from items, never imported
         assert card.attributes["regions"] == ["emea", "apac"]  # untouched keys survive the merge
         assert card.updated_by == env["admin"].id
         (event,) = await _all(db, Event, event_type="card.updated")
         assert event.data["changes"]["description"] == {"old": "CRM", "new": "CRM, now with AI"}
-        assert event.data["changes"]["attributes"]["old"]["costTotalAnnual"] == 1200.5
+        assert "attributes" not in event.data["changes"]  # the ignored total moved nothing
         (doc,) = await _all(db, Document, card_id=card.id)
         assert doc.name == "Runbook v2"
         (comment,) = await _all(db, Comment, card_id=card.id)
         assert comment.content == "Renewal postponed"
+
+    async def test_an_imported_total_is_ignored_on_cost_item_types_only(self, db, env):
+        await create_card_type(db, key="Initiative", label="Initiative")
+        snap = empty_snapshot()
+        snap.entities.append(
+            SourceEntity("app-9", "Application", "App", custom_fields={"costTotalAnnual": 500})
+        )
+        snap.entities.append(
+            SourceEntity("ini-9", "Initiative", "Ini", custom_fields={"costTotalAnnual": 700})
+        )
+        src = source_for(
+            snap, type_mapping={**{k: k for k in BUILTIN_TYPES}, "Initiative": "Initiative"}
+        )
+        m = await _migration(db, env)
+        await stage_cards(db, m, src, snap)
+        await apply_migration(db, m, env["admin"])
+        app = await _one(db, Card, external_id="app-9")
+        ini = await _one(db, Card, external_id="ini-9")
+        assert "costTotalAnnual" not in app.attributes
+        assert ini.attributes["costTotalAnnual"] == 700
+
+        m2 = await _migration(db, env)
+        stats = await stage_cards(db, m2, src, snap)
+        assert stats["skip"] == 2 and stats["update"] == 0
 
     async def test_documents_and_comments_survive_an_identity_map_wipe(self, db, env):
         m1, snap, src = await _staged_sample(db, env)

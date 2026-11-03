@@ -43,6 +43,7 @@ from app.models.relation import Relation as RelationModel
 from app.models.tag import Tag as TagModel
 from app.models.tag import TagGroup
 from app.models.user import User
+from app.services.card_costs import COST_ITEM_TYPES, DERIVED_KEY
 from app.services.migration.protocol import MigrationSource
 from app.services.migration.snapshot import MigrationSnapshot, SourceEntity
 
@@ -146,6 +147,8 @@ def compute_card_diff(payload: dict[str, Any], existing: Card) -> dict[str, dict
     old_attrs = existing.attributes or {}
     attr_diff = {}
     for k, v in new_attrs.items():
+        if k == DERIVED_KEY and existing.type in COST_ITEM_TYPES:
+            continue  # derived from cost items; an imported total is overwritten on apply
         if old_attrs.get(k) != v:
             attr_diff[k] = {"old": old_attrs.get(k), "new": v}
     if attr_diff:
