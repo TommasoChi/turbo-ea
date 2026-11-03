@@ -1,6 +1,6 @@
 # Card cost items — costs as a standard object of the card
 
-**Status:** draft (not yet reviewed by the user). **Branch:** `feat/cost-history-in-card`.
+**Status:** draft. Read by a fresh Opus builder-check on 2026-11-03; two questions wait for the user (see "Questions for the user"). **Branch:** `feat/cost-history-in-card`.
 
 ## Intent
 
@@ -112,6 +112,23 @@ Costs are **always annual**: an item has no period.
 - This is fork-only work on a fork that merges `upstream/main`; keep the footprint in
   shared upstream files small to keep later syncs cheap.
 
+## Facts checked against the code
+
+- The three breakdown fields (`softwareLicensingCost`, `applicationManagementServicesCost`,
+  `infrastruttureCost`) and the `Calculation` that sums them on Application are **live admin
+  data of this instance**, not in `seed.py` (see the docstring of migration `168`). IT Component
+  got them from `168`, only if its "Cost" section exists. A fresh install or a test database
+  has only `costTotalAnnual` on both types, with no calculation. Migration `175` and the cost
+  report must handle every combination: fields present or absent, calculation present or absent.
+- `GET /cards/{id}/cost-history` uses the edit gate (`_load_card_for_edit`) and never checks
+  `costs.view`.
+- `card_cost_history` is not carried by workspace transfer today (`workspace_io/` has no
+  reference to it).
+- `FISCAL_YEAR_LOOKBACK = 5` in `fiscal_year.py`: the API accepts `current-5` … `current+1`
+  today. The cost report's picker already offers six years, `current-4` … `current+1`.
+- The calculation engine writes a calculated field's value into `attributes` on every card
+  save, whatever a client sent for it; that is the precedent for a derived `costTotalAnnual`.
+
 ## Agent's calls (to be confirmed by the user)
 
 - **Where the catalogue lives.** One global registry in the metamodel admin (a precedent
@@ -134,6 +151,45 @@ Costs are **always annual**: an item has no period.
 - **Catalogue seed.** The three old fields become the first items: software licensing,
   application management services, infrastructure (the existing key
   `infrastruttureCost` carries a typo that is not reproduced in the new keys).
+
+- **Inconsistent past history.** For a past year the migration builds items from the detail
+  rows of `card_cost_history` and puts `total − sum(details)` in `other` when that is positive.
+  A year with only details gets the sum of the details as its TCO. A year whose details exceed
+  its total keeps the details (the TCO becomes the sum, which differs from the old total). Every
+  such year is written to a migration report (card, year, old total, new TCO) so nothing changes
+  silently; "TCO unchanged" holds for every year except those listed.
+- **Window.** The section shows six years (`current-4` … `current+1`). The API keeps the window
+  it has today (`current-5` … `current+1`); a row at `current-5` migrates and stays readable
+  through the API but is not reachable with ‹ ›.
+- **Gates.** Reading costs needs `costs.view` and card read scope (the card is 404 when the caller
+  cannot read it); writing needs what `PUT /cards/{id}/cost-history` needs today. The new read
+  endpoint does not copy the edit gate of the old one.
+- **Direct writes to `attributes.costTotalAnnual`** (card PATCH, Excel import, grid bulk and
+  drag-fill, MCP, ServiceNow, LeanIX, extensions) are accepted and then overwritten with the
+  derived TCO on the same save, exactly as a calculated field is overwritten today. They do not
+  fail and they do not change the cost. The docs say that an import or sync can no longer set
+  the cost of these two types.
+- **The derived copy never disagrees with the section.** It is recomputed on every cost save, on
+  every card write of the two types, and when the fiscal year changes (see the user's question 1).
+- **Workspace transfer.** The new tables and the catalogue follow the checklist in
+  `.claude/rules/workspace-transfer.md`. The success check below runs on a `pg_dump` copy of the
+  live database, not on a workspace-transfer bundle.
+
+## Questions for the user
+
+These two change what the user sees. They are asked in one round; this section is replaced by the
+answers.
+
+1. **What happens on the first day of a new fiscal year?** Today the current value lives in
+   `attributes` and simply stays, so the new year inherits last year's cost. With one row per year,
+   the new current year has no row unless someone copied the Forecast into it. Either it starts at
+   0 (the Forecast row is the plan; "copy to Forecast" is how you pre-fill), or it shows last
+   year's items until someone confirms them. Proposed: carry forward on read, marked "from FY25,
+   not confirmed", never stored.
+2. **Does an archived item still count in the TCO?** Proposed: yes. An archived item cannot be
+   added to a year, and it is greyed on the tiles that still hold an amount, but its amounts keep
+   counting, so an admin click never changes a historic TCO. Otherwise archiving lowers the TCO of
+   every year, and the derived `costTotalAnnual` of every card must be recomputed at once.
 
 ## Open points left to the builder
 
