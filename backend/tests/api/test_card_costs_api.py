@@ -176,3 +176,71 @@ async def test_get_single_year(client, env):
     assert r.json()["items"][0]["amount"] == 33
     r = await client.get(url(env["card"], f"/{CUR}"), headers=auth_headers(env["nocost"]))
     assert r.status_code == 403
+
+
+def cost_events(evs):
+    return [e for e in evs if e.event_type == "card.costs_updated"]
+
+
+async def test_cost_write_is_its_own_event_type(client, db, env):
+    await put(client, env, amount=5)
+    evs = await events(db, env["card"])
+    assert [e.event_type for e in evs if e.data.get("source") == "card_costs"] == [
+        "card.costs_updated"
+    ]
+    assert not [e for e in evs if e.event_type == "card.updated"]
+
+
+async def test_refused_write_leaves_no_row_and_no_event(client, db, env):
+    assert (await put(client, env, key="old")).status_code == 409
+    assert (await put(client, env, amount=-1)).status_code == 422
+    rows = (await db.execute(select(CardCost).where(CardCost.card_id == env["card"].id))).all()
+    assert rows == []
+    assert cost_events(await events(db, env["card"])) == []
+
+
+async def test_hidden_card_404_on_year_read_and_write(client, db, env):
+    await db.execute(
+        update(CardType)
+        .where(CardType.key == "Application")
+        .values(role_permissions={"viewer": {"inventory.view": False}})
+    )
+    await db.flush()
+    h = auth_headers(env["viewer"])
+    assert (await client.get(url(env["card"], f"/{CUR}"), headers=h)).status_code == 404
+    r = await client.put(url(env["card"], f"/{CUR}/items/lic"), json={"amount": 1}, headers=h)
+    assert r.status_code == 404
+
+
+async def test_event_old_total_is_the_pre_op_value(client, db, env):
+    await put(client, env, amount=10)
+    await put(client, env, amount=25)
+    evs = cost_events(await events(db, env["card"]))
+    totals = [e.data["changes"]["costTotalAnnual"] for e in evs]
+    assert totals == [{"old": None, "new": 10.0}, {"old": 10.0, "new": 25.0}]
+
+
+async def test_copy_and_confirm_event_keys(client, db, env):
+    h = auth_headers(env["admin"])
+    await put(client, env, amount=70)
+    await client.post(url(env["card"], f"/{CUR}/items/lic/copy-to-forecast"), headers=h)
+    await client.post(url(env["card"], f"/{CUR - 1}/confirm"), headers=h)
+    evs = cost_events(await events(db, env["card"]))
+    assert [e.data["changes"]["cost_items"] for e in evs] == [
+        {"old": [], "new": ["lic"]},
+        {"old": [], "new": ["lic"]},
+        {"old": [], "new": []},
+    ]
+
+
+async def test_stakeholder_without_costs_view_can_read_others_cannot(client, db, env):
+    from app.models.stakeholder import Stakeholder
+
+    other = await create_user(db, email="o@costs-api.com", role="nocost")
+    db.add(Stakeholder(card_id=env["card"].id, user_id=env["nocost"].id, role="responsible"))
+    await db.flush()
+    for path in ("", f"/{CUR}"):
+        r = await client.get(url(env["card"], path), headers=auth_headers(env["nocost"]))
+        assert r.status_code == 200
+        r = await client.get(url(env["card"], path), headers=auth_headers(other))
+        assert r.status_code == 403

@@ -90,6 +90,7 @@ def test_the_declined_and_dedupe_tables():
         "todo.": "Todos are requests to people; reopening or deleting one is not an undo.",
         "notification.": "A notification has already been delivered.",
         "risk.removed": "A deleted risk cannot be rebuilt — no snapshot is recorded.",
+        "card.costs_updated": "Cost items are not card fields; edit them back on the Costs tab.",
         "diagram.updated": "The previous canvas is not snapshotted.",
         "diagram.deleted": "A deleted diagram cannot be rebuilt — no snapshot is recorded.",
     }
@@ -633,3 +634,19 @@ async def test_an_unpublished_diagram_is_deleted():
     db = _OneRowSession(diagram)
     assert await rs._apply_delete_diagram(db, DIAGRAM_OP) == {**DIAGRAM_OP, "status": "ok"}
     assert db.deleted == [diagram]
+
+
+def test_a_cost_event_is_unsupported_not_a_silent_field_restore():
+    plan = rs._plan_inverse(
+        ev(
+            "card.costs_updated",
+            {
+                "changes": {
+                    "costTotalAnnual": {"old": 1, "new": 2},
+                    "cost_items": {"old": [], "new": ["a"]},
+                }
+            },
+        )
+    )
+    assert plan["op"] == "unsupported"
+    assert plan["event_id"] == str(EID)

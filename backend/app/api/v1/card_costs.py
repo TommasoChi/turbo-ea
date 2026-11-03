@@ -10,22 +10,22 @@ from app.api.deps import get_current_user, parse_uuid
 from app.api.v1.cost_history import _load_card_for_edit
 from app.database import get_db
 from app.models.user import User
-from app.schemas.cost_items import CardCostsOut, CostItemWrite, YearCostsOut
+from app.schemas.cost_items import KEY_PATTERN, CardCostsOut, CostItemWrite, YearCostsOut
 from app.services import card_costs, cost_item_types
 from app.services.card_costs import COST_ITEM_TYPES, CostError, YearCosts
 from app.services.card_read_scope import require_card_readable
-from app.services.event_bus import event_bus
 from app.services.fiscal_year import MAX_FISCAL_YEAR, MIN_FISCAL_YEAR, get_fiscal_year_start
 from app.services.permission_service import PermissionService
 
 router = APIRouter(tags=["card-costs"])
 
-_KEY = Path(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+_KEY = Path(pattern=KEY_PATTERN)
 _FY = Path(ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR)
 _STATUS = {"archived_item": 409}
 
 
 async def _require_costs(db: AsyncSession, user: User, card_type: str) -> None:
+    """Writes: the app-level ``costs.view`` plus a cost-bearing type."""
     await PermissionService.require_permission(db, user, "costs.view")
     if card_type not in COST_ITEM_TYPES:
         raise HTTPException(404, "Card not found")
@@ -34,7 +34,11 @@ async def _require_costs(db: AsyncSession, user: User, card_type: str) -> None:
 async def _load_for_read(db: AsyncSession, user: User, card_id: str) -> uuid.UUID:
     card_uuid = parse_uuid(card_id)
     card_type = await require_card_readable(db, user, card_uuid, mode="module")
-    await _require_costs(db, user, card_type)
+    # Reads follow how costTotalAnnual is redacted: costs.view or a stakeholder of the card.
+    if not await PermissionService.can_view_costs(db, user, card_uuid):
+        raise HTTPException(403, "Not enough permissions")
+    if card_type not in COST_ITEM_TYPES:
+        raise HTTPException(404, "Card not found")
     return card_uuid
 
 
@@ -47,40 +51,14 @@ async def _write(
     user: User,
     card_id: str,
     fiscal_year: int,
-    op: Callable[[uuid.UUID], Awaitable[YearCosts | None]],
+    op: Callable[[uuid.UUID], Awaitable[object]],
 ) -> YearCostsOut:
     card = await _load_card_for_edit(db, user, card_id)
     await _require_costs(db, user, card.type)
-    sm = await get_fiscal_year_start(db)
-    old_total = (card.attributes or {}).get(card_costs.DERIVED_KEY)
-    old = await card_costs.get_year_row(db, card.id, fiscal_year, sm)
     try:
-        await op(card.id)
+        new = await card_costs.apply_write(db, card, user.id, fiscal_year, lambda: op(card.id))
     except CostError as e:
         raise HTTPException(_STATUS.get(e.code, 422), e.code) from e
-    await card_costs.recompute_derived(db, card)
-    new = await card_costs.get_year_row(db, card.id, fiscal_year, sm)
-    # Keys only: an event is readable without costs.view, so no amount or date goes in it.
-    await event_bus.publish(
-        "card.updated",
-        {
-            "id": str(card.id),
-            "source": "card_costs",
-            "changes": {
-                card_costs.DERIVED_KEY: {
-                    "old": old_total,
-                    "new": (card.attributes or {}).get(card_costs.DERIVED_KEY),
-                },
-                "cost_items": {
-                    "old": [i.key for i in old.items],
-                    "new": [i.key for i in new.items],
-                },
-            },
-        },
-        db=db,
-        card_id=card.id,
-        user_id=user.id,
-    )
     await db.commit()
     return _out(new)
 

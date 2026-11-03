@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -20,6 +21,7 @@ from app.models.card import Card
 from app.models.card_cost import CardCost
 from app.models.cost_item_type import CostItemType
 from app.services.cost_value import cost_value
+from app.services.event_bus import event_bus
 from app.services.fiscal_year import (
     FISCAL_YEAR_LOOKAHEAD,
     FISCAL_YEAR_LOOKBACK,
@@ -30,6 +32,8 @@ from app.services.fiscal_year import (
 COST_ITEM_TYPES: frozenset[str] = frozenset({"Application", "ITComponent"})
 RENEWAL_NEAR_DAYS = 90
 DERIVED_KEY = "costTotalAnnual"
+# Not "card.updated": rollback would replay its changes as card fields and no-op.
+COST_EVENT = "card.costs_updated"
 
 
 class CostError(Exception):
@@ -253,3 +257,40 @@ async def recompute_derived(db: AsyncSession, card: Card) -> None:
     sm = await get_fiscal_year_start(db)
     yc = await get_year_row(db, card.id, current_fiscal_year(sm), sm)
     card.attributes = {**(card.attributes or {}), DERIVED_KEY: yc.tco}
+
+
+async def apply_write(
+    db: AsyncSession,
+    card: Card,
+    user_id: uuid.UUID,
+    fiscal_year: int,
+    op: Callable[[], Awaitable[object]],
+) -> YearCosts:
+    """Run ``op``, refresh the derived total and publish the cost event. Flush only.
+
+    The event carries item keys, never amounts or dates: it is readable without costs.view.
+    """
+    sm = await get_fiscal_year_start(db)
+    old_total = (card.attributes or {}).get(DERIVED_KEY)
+    old = await get_year_row(db, card.id, fiscal_year, sm)
+    await op()
+    await recompute_derived(db, card)
+    new = await get_year_row(db, card.id, fiscal_year, sm)
+    await event_bus.publish(
+        COST_EVENT,
+        {
+            "id": str(card.id),
+            "source": "card_costs",
+            "changes": {
+                DERIVED_KEY: {"old": old_total, "new": card.attributes.get(DERIVED_KEY)},
+                "cost_items": {
+                    "old": [i.key for i in old.items],
+                    "new": [i.key for i in new.items],
+                },
+            },
+        },
+        db=db,
+        card_id=card.id,
+        user_id=user_id,
+    )
+    return new
