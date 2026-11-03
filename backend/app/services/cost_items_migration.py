@@ -114,4 +114,4 @@ def formula_sums_only(formula: str, item_keys: list[str]) -> bool:
         return False
     rest = re.sub(r"data\.\w+", "", formula)
     rest = re.sub(r"^\s*present\s*=", "", rest)
-    return not re.search(r"[A-Za-z_]", rest)
+    return not re.search(r"[^\s+]", rest)  # only "+" may join the references

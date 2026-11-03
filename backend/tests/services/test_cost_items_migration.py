@@ -278,3 +278,30 @@ async def test_infinite_past_total_does_not_abort_the_report(db):
     assert settings.general_settings["cost_items_migration_report"] == [
         {"card_id": str(card_id), "fiscal_year": cur - 1, "old_total": None, "new_tco": 30}
     ]
+
+
+async def test_non_sum_total_calculation_is_deactivated_not_deleted(db):
+    await create_card_type(db, key="Application", fields_schema=_schema(True))
+    db.add_all(
+        [
+            Calculation(
+                name="weird",
+                target_type_key="Application",
+                target_field_key="costTotalAnnual",
+                formula="present = data.softwareLicensingCost*2",
+                is_active=True,
+            ),
+            Calculation(
+                name="other field",
+                target_type_key="Application",
+                target_field_key="somethingElse",
+                formula="present = 1",
+                is_active=True,
+            ),
+        ]
+    )
+    await db.flush()
+    await _run(db)
+
+    calcs = {c.name: c.is_active for c in (await db.execute(select(Calculation))).scalars()}
+    assert calcs == {"weird": False, "other field": True}

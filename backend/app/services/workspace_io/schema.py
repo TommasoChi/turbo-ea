@@ -25,6 +25,7 @@ from typing import Any
 from app.models.calculation import Calculation
 from app.models.card_type_category import CardTypeCategory
 from app.models.compliance_regulation import ComplianceRegulation
+from app.models.cost_item_type import CostItemType
 from app.models.dashboard import Dashboard
 from app.models.ea_principle import EAPrinciple
 from app.models.resource_type import ResourceType
@@ -60,6 +61,7 @@ SHEET_COMPLIANCE_REGS = "ComplianceRegs"
 SHEET_RESOURCE_TYPES = "ResourceTypes"
 SHEET_CARD_TYPE_CATEGORIES = "CardTypeCategories"
 SHEET_DASHBOARDS = "Dashboards"
+SHEET_COST_ITEM_TYPES = "CostItemTypes"
 SHEET_SETTINGS = "Settings"
 SHEET_USERS = "Users"
 SHEET_CARDS = "Cards"
@@ -319,5 +321,14 @@ CONFIG_SECTIONS: tuple[ConfigSection, ...] = (
             "widgets",
         ),
         json_columns=frozenset({"translations", "allowed_roles", "widgets"}),
+    ),
+    # The cost-item catalogue. Applied before the ``CardCosts`` entity section,
+    # whose ``items`` are keyed by these ``key``s (it holds no ids).
+    ConfigSection(
+        sheet=SHEET_COST_ITEM_TYPES,
+        model=CostItemType,
+        natural_key=("key",),
+        columns=("key", "label", "sort_order", "archived", "translations"),
+        json_columns=frozenset({"translations"}),
     ),
 )

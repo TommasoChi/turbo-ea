@@ -148,6 +148,14 @@ def _data_body(conn) -> None:
         ).fetchall():
             if cim.formula_sums_only(calc.formula, item_keys):
                 conn.execute(text("DELETE FROM calculations WHERE id = :i"), {"i": calc.id})
+        # Any other formula would overwrite the derived total on the next run.
+        conn.execute(
+            text(
+                "UPDATE calculations SET is_active = false "
+                "WHERE target_type_key = :k AND target_field_key = 'costTotalAnnual'"
+            ),
+            {"k": type_key},
+        )
 
     for entry in report:
         logger.warning(

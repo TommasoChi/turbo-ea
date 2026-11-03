@@ -6968,6 +6968,11 @@ async def seed_metamodel(db: AsyncSession) -> None:
 
     await seed_default_categories(db)
 
+    # ── Cost-item catalogue (starter lines on a fresh install; insert-only) ──
+    from app.services.cost_item_types import seed_default_items
+
+    await seed_default_items(db)
+
     # ── Built-in homepage dashboards (Overview, My Workspace, Admin; insert-only) ──
     from app.services.dashboard_service import seed_dashboards
 

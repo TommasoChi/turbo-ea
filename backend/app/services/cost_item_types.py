@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cost_item_type import CostItemType
+from app.services import cost_items_migration as cim
 
 KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
@@ -30,6 +31,21 @@ def serialize(row: CostItemType) -> dict:
         "archived": row.archived,
         "translations": row.translations or {},
     }
+
+
+async def seed_default_items(db: AsyncSession) -> int:
+    """Insert the four starter lines on a catalogue that has none (fresh install, where
+    migration 175 never ran). Insert-only on an empty table: a catalogue an admin or an import
+    has shaped is never topped up. Flushes, never commits; returns the rows inserted."""
+    if (await db.execute(select(CostItemType.id).limit(1))).first() is not None:
+        return 0
+    lines = [*cim.LEGACY_ITEMS, (cim.OTHER_KEY, cim.OTHER_LABEL)]
+    for order, (key, label) in enumerate(lines):
+        db.add(
+            CostItemType(key=key, label=label, sort_order=order, archived=False, translations={})
+        )
+    await db.flush()
+    return len(lines)
 
 
 async def get_item(db: AsyncSession, key: str) -> CostItemType | None:
