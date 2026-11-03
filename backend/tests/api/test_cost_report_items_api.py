@@ -31,7 +31,7 @@ async def env(db):
     await create_card_type(db, key="Application", fields_schema=COST_FIELDS)
     await create_card_type(db, key="ITComponent", fields_schema=COST_FIELDS)
     await create_card_type(db, key="Provider", fields_schema=COST_FIELDS)
-    await cost_item_types.create_item(db, "lic", "Licences", {"it": {"label": "Licenze"}})
+    await cost_item_types.create_item(db, "lic", "Licences", {"it": "Licenze"})
     await cost_item_types.create_item(db, "sup", "Support")
     return {"admin": admin, "viewer": viewer, "nocost": nocost}
 
@@ -62,7 +62,7 @@ async def test_treemap_total_is_sum_of_items_current_and_past(client, db, env):
     assert cur["components"] == ["lic", "sup"]
     assert cur["item_labels"]["lic"] == {
         "label": "Licences",
-        "translations": {"it": {"label": "Licenze"}},
+        "translations": {"it": "Licenze"},
     }
     past = (await _get(client, env, "cost-treemap", type="Application", fiscal_year=CUR - 1)).json()
     assert past["total"] == 70

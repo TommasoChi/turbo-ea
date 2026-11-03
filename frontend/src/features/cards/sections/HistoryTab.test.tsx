@@ -102,7 +102,7 @@ describe("HistoryTab — document link edits (#1166)", () => {
   /* `url` and `type` are the link's own fields. Without the override the row
    * would show the raw key, or borrow the label of a card attribute that
    * happens to be keyed `type`. */
-  it("names a costs update by its summary and hides the raw key-list rows", async () => {
+  it("names a costs update by its summary, keeps the total row and hides the raw key list", async () => {
     vi.mocked(api.get).mockResolvedValue([
       {
         id: "evt-4",
@@ -112,7 +112,10 @@ describe("HistoryTab — document link edits (#1166)", () => {
         user_display_name: "Vincent",
         data: {
           summary: "Licences FY26",
-          changes: { cost_items: { old: ["lic"], new: ["lic", "sup"] } },
+          changes: {
+            costTotalAnnual: { old: 100, new: 150 },
+            cost_items: { old: ["lic"], new: ["lic", "sup"] },
+          },
         },
       },
     ]);
@@ -121,6 +124,8 @@ describe("HistoryTab — document link edits (#1166)", () => {
 
     expect(await screen.findByText("Costs updated")).toBeInTheDocument();
     expect(screen.getByText("Licences FY26")).toBeInTheDocument();
+    expect(screen.getByText("100")).toBeInTheDocument();
+    expect(screen.getByText("150")).toBeInTheDocument();
     expect(screen.queryByText("Cost items")).not.toBeInTheDocument();
     expect(screen.queryByText("lic, sup")).not.toBeInTheDocument();
   });
