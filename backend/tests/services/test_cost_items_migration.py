@@ -244,3 +244,37 @@ async def test_second_run_changes_nothing(db):
     await _run(db)
     row = (await db.execute(select(CardCost).where(CardCost.card_id == card_id))).scalar_one()
     assert row.items == {"other": {"amount": 1}}
+
+
+def test_old_total_is_normalised_for_the_report():
+    assert cim.old_total({"costTotalAnnual": "100"}) == 100.0
+    assert cim.old_total({"costTotalAnnual": -5}) is None
+    assert cim.old_total({"costTotalAnnual": float("inf")}) is None
+    assert cim.old_total({}) is None
+
+
+async def test_infinite_past_total_does_not_abort_the_report(db):
+    cur = current_fiscal_year(1)
+    await create_card_type(db, key="Application", fields_schema=_schema(False))
+    card = await create_card(db, card_type="Application", attributes={})
+    card_id = card.id
+    db.add_all(
+        [
+            CardCostHistory(
+                card_id=card_id,
+                fiscal_year=cur - 1,
+                field_key="costTotalAnnual",
+                value=float("inf"),
+            ),
+            CardCostHistory(
+                card_id=card_id, fiscal_year=cur - 1, field_key="infrastruttureCost", value=30
+            ),
+        ]
+    )
+    db.add(AppSettings(id="default", general_settings={}))
+    await db.flush()
+    await _run(db)
+    settings = (await db.execute(select(AppSettings))).scalar_one()
+    assert settings.general_settings["cost_items_migration_report"] == [
+        {"card_id": str(card_id), "fiscal_year": cur - 1, "old_total": None, "new_tco": 30}
+    ]

@@ -16,7 +16,6 @@ from sqlalchemy.sql import text
 
 from alembic import op
 from app.services import cost_items_migration as cim
-from app.services.cost_value import cost_value
 from app.services.fiscal_year import current_fiscal_year
 
 revision: str = "175"
@@ -106,12 +105,11 @@ def _data_body(conn) -> None:
             {"t": tco, "c": card.id},
         )
         if changed:
-            old = cost_value(attrs.get(cim.TOTAL_KEY))
             report.append(
                 {
                     "card_id": str(card.id),
                     "fiscal_year": current,
-                    "old_total": old if old > 0 else None,
+                    "old_total": cim.old_total(attrs),
                     "new_tco": tco,
                 }
             )
@@ -127,7 +125,7 @@ def _data_body(conn) -> None:
                     {
                         "card_id": str(card.id),
                         "fiscal_year": year,
-                        "old_total": past.get(cim.TOTAL_KEY),
+                        "old_total": cim.old_total(past),
                         "new_tco": tco,
                     }
                 )

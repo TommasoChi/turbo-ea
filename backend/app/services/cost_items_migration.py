@@ -29,6 +29,11 @@ def _num(value) -> float | None:
     return float(amount) if amount > 0 else None
 
 
+def old_total(values: dict) -> float | None:
+    """The recorded total as the report shows it: positive and finite, else None."""
+    return _num(values.get(TOTAL_KEY))
+
+
 def _item(amount: float) -> dict:
     return {"amount": amount, "renewal_date": None}
 
