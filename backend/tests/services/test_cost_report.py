@@ -24,14 +24,19 @@ def _d(year: int, month: int = 6, day: int = 15) -> str:
 
 async def _admin(db) -> User:
     await create_role(db, key="admin", permissions={"*": True})
-    await create_card_type(db, key="Application")
+    await create_card_type(db, key="Workload")
     return await create_user(db, email="admin@test.com", role="admin")
 
 
 async def _app(db, name, cost=None, lifecycle=None, status="ACTIVE"):
     attrs = {} if cost is None else {FIELD: cost}
     return await create_card(
-        db, name=name, attributes=attrs, lifecycle=lifecycle or {}, status=status
+        db,
+        card_type="Workload",
+        name=name,
+        attributes=attrs,
+        lifecycle=lifecycle or {},
+        status=status,
     )
 
 
@@ -42,7 +47,7 @@ async def _hist(db, card, year, value, field=FIELD):
 
 async def _run(db, user, year, field=FIELD):
     scope = await CardReadScope.load(db, user)
-    rows = await cards_with_cost(db, scope, "Application", field, year, FY, 1)
+    rows = await cards_with_cost(db, scope, "Workload", field, year, FY, 1)
     return {c.name: v for c, v in rows}
 
 
@@ -108,7 +113,7 @@ async def test_a_card_the_reader_may_not_see_is_left_out(db):
 
     assert await _run(db, viewer, FY - 1) == {"Secret": 10}
 
-    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    ct = (await db.execute(select(CardType).where(CardType.key == "Workload"))).scalar_one()
     ct.role_permissions = {"viewer": {"inventory.view": False}}
     await db.flush()
     PermissionService.invalidate_type_permission_cache()
@@ -129,11 +134,9 @@ async def test_only_the_requested_field_counts(db):
 
 async def _two_types(db):
     admin = await _admin(db)
-    await create_card_type(db, key="ITComponent", label="IT Component")
+    await create_card_type(db, key="Asset", label="IT Component")
     await _app(db, "App", 10)
-    await create_card(
-        db, card_type="ITComponent", name="Comp", attributes={FIELD: 20}, lifecycle={}
-    )
+    await create_card(db, card_type="Asset", name="Comp", attributes={FIELD: 20}, lifecycle={})
     return admin
 
 
@@ -141,9 +144,7 @@ async def test_cards_with_cost_for_types_joins_two_types(db):
     admin = await _two_types(db)
     scope = await CardReadScope.load(db, admin)
 
-    rows = await cards_with_cost_for_types(
-        db, scope, ["Application", "ITComponent"], FIELD, FY, FY, 1
-    )
+    rows = await cards_with_cost_for_types(db, scope, ["Workload", "Asset"], FIELD, FY, FY, 1)
 
     assert [(c.name, v) for c, v in rows] == [("App", 10), ("Comp", 20)]
 
@@ -152,20 +153,18 @@ async def test_hidden_type_is_omitted(db):
     await _two_types(db)
     await create_role(db, key="viewer", permissions={"inventory.view": True}, is_system=False)
     viewer = await create_user(db, email="viewer@test.com", role="viewer")
-    ct = (await db.execute(select(CardType).where(CardType.key == "ITComponent"))).scalar_one()
+    ct = (await db.execute(select(CardType).where(CardType.key == "Asset"))).scalar_one()
     ct.role_permissions = {"viewer": {"inventory.view": False}}
     await db.flush()
     PermissionService.invalidate_type_permission_cache()
     scope = await CardReadScope.load(db, viewer)
 
-    rows = await cards_with_cost_for_types(
-        db, scope, ["Application", "ITComponent"], FIELD, FY, FY, 1
-    )
+    rows = await cards_with_cost_for_types(db, scope, ["Workload", "Asset"], FIELD, FY, FY, 1)
 
     assert [c.name for c, _ in rows] == ["App"]
 
 
-@pytest.mark.parametrize("raw", ["Application,", "", "Application,,ITComponent", " , "])
+@pytest.mark.parametrize("raw", ["Workload,", "", "Workload,,Asset", " , "])
 def test_parse_type_keys_rejects_empty_entry(raw):
     with pytest.raises(ValueError):
         parse_type_keys(raw)
@@ -173,11 +172,11 @@ def test_parse_type_keys_rejects_empty_entry(raw):
 
 def test_parse_type_keys_rejects_duplicate():
     with pytest.raises(ValueError):
-        parse_type_keys("Application,Application")
+        parse_type_keys("Workload,Workload")
 
 
 def test_parse_type_keys_splits_and_strips():
-    assert parse_type_keys("Application, ITComponent") == ["Application", "ITComponent"]
+    assert parse_type_keys("Workload, Asset") == ["Workload", "Asset"]
 
 
 def test_parse_type_keys_accepts_the_cap():

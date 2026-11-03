@@ -122,18 +122,51 @@ def _lines(items: dict, archived: dict[str, bool]) -> list[CostLine]:
     ]
 
 
+def resolve_year(
+    row_items: dict | None, prev: tuple[int, dict] | None, fy: int, cur: int
+) -> tuple[dict, bool, int | None]:
+    """``(items, confirmed, fallback_from)`` from a year's row and the latest earlier one.
+
+    A row (even an empty one) is confirmed; only the *current* year with no row falls back.
+    """
+    if row_items is not None:
+        return row_items, True, None
+    if fy == cur and prev is not None:
+        return _shifted(prev[1], fy - prev[0]), False, prev[0]
+    return {}, False, None
+
+
+def year_costs(
+    items: dict,
+    confirmed: bool,
+    fallback_from: int | None,
+    fy: int,
+    cur: int,
+    archived: dict[str, bool],
+) -> YearCosts:
+    lines = _lines(items, archived)
+    return YearCosts(
+        fiscal_year=fy,
+        is_current=fy == cur,
+        is_forecast=fy == cur + FISCAL_YEAR_LOOKAHEAD,
+        confirmed=confirmed,
+        fallback_from=fallback_from,
+        items=lines,
+        tco=tco(lines),
+    )
+
+
 async def _resolve(
     db: AsyncSession, card_id: uuid.UUID, fy: int, start_month: int
 ) -> tuple[dict, bool, int | None]:
     """``(items, confirmed, fallback_from)`` for one year."""
     row = await _row(db, card_id, fy)
-    if row is not None:
-        return row.items or {}, True, None
-    if fy == current_fiscal_year(start_month):
-        prev = await _fallback_row(db, card_id, fy)
-        if prev is not None:
-            return _shifted(prev.items or {}, fy - prev.fiscal_year), False, prev.fiscal_year
-    return {}, False, None
+    cur = current_fiscal_year(start_month)
+    prev = None
+    if row is None and fy == cur:
+        p = await _fallback_row(db, card_id, fy)
+        prev = (p.fiscal_year, p.items or {}) if p is not None else None
+    return resolve_year(None if row is None else row.items or {}, prev, fy, cur)
 
 
 async def get_year_row(
@@ -141,16 +174,13 @@ async def get_year_row(
 ) -> YearCosts:
     """Any single year, no window limit."""
     items, confirmed, fb = await _resolve(db, card_id, fiscal_year, start_month)
-    lines = _lines(items, await _archived_keys(db))
-    cur = current_fiscal_year(start_month)
-    return YearCosts(
-        fiscal_year=fiscal_year,
-        is_current=fiscal_year == cur,
-        is_forecast=fiscal_year == cur + FISCAL_YEAR_LOOKAHEAD,
-        confirmed=confirmed,
-        fallback_from=fb,
-        items=lines,
-        tco=tco(lines),
+    return year_costs(
+        items,
+        confirmed,
+        fb,
+        fiscal_year,
+        current_fiscal_year(start_month),
+        await _archived_keys(db),
     )
 
 

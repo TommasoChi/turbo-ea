@@ -21,6 +21,7 @@ from tests.conftest import (
     create_role,
     create_user,
 )
+from tests.cost_item_helpers import add_costs
 
 FIELDS = [
     {
@@ -109,6 +110,7 @@ class TestReadersTolerateStoredText:
             app = await create_card(
                 db, card_type="Application", name=name, attributes={"costTotalAnnual": cost}
             )
+            await add_costs(db, app, other=cost)
             await create_relation(
                 db, type_key="relAppToCapability", source_id=app.id, target_id=cap.id
             )

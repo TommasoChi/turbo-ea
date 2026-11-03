@@ -27,6 +27,7 @@ from app.models.tag import CardTag, Tag, TagGroup
 from app.models.todo import Todo
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
+from app.services.card_costs import COST_EVENT, COST_ITEM_TYPES, DERIVED_KEY
 from app.services.card_flags import (
     EOL_BUCKETS,
     EOL_TYPES,
@@ -50,7 +51,9 @@ from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.cost_grouping import assign_groups, parse_group_by
 from app.services.cost_report import (
     build_cost_sankey,
+    cards_with_cost,
     cards_with_cost_for_types,
+    item_labels,
     parse_type_keys,
 )
 from app.services.cost_value import cost_value
@@ -457,6 +460,7 @@ async def admin_dashboard_summary(
                     (
                         "card.created",
                         "card.updated",
+                        COST_EVENT,
                         "card.archived",
                         "card.restored",
                         "card.approval_status.approve",
@@ -1399,24 +1403,30 @@ async def cost_report(
     fy = current_fiscal_year(fy_start)
 
     read_scope = await CardReadScope.load(db, user)
-    result = await db.execute(
-        select(Card).where(
-            Card.type == type, Card.status == "ACTIVE", *read_scope.where(Card, mode="module")
+    if type in COST_ITEM_TYPES:
+        # cost items, not the cached attribute: one definition with the treemap
+        costed = await cards_with_cost(db, read_scope, type, DERIVED_KEY, fy, fy, fy_start)
+        items = [{"id": str(c.id), "name": c.name, "cost": cost} for c, cost in costed]
+        total = sum(cost for _, cost in costed)
+    else:
+        result = await db.execute(
+            select(Card).where(
+                Card.type == type, Card.status == "ACTIVE", *read_scope.where(Card, mode="module")
+            )
         )
-    )
-    sheets = [
-        c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
-    ]
-    items = []
-    total = 0
-    for card in sheets:
-        attrs = card.attributes or {}
-        cost = 0
-        for ck in cost_field_keys:
-            cost += cost_value(attrs.get(ck))
-        if cost:
-            items.append({"id": str(card.id), "name": card.name, "cost": cost})
-            total += cost
+        sheets = [
+            c for c in result.scalars().all() if is_live_in_fiscal_year(c.lifecycle, fy, fy_start)
+        ]
+        items = []
+        total = 0
+        for card in sheets:
+            attrs = card.attributes or {}
+            cost = 0
+            for ck in cost_field_keys:
+                cost += cost_value(attrs.get(ck))
+            if cost:
+                items.append({"id": str(card.id), "name": card.name, "cost": cost})
+                total += cost
     items.sort(key=lambda x: x["cost"], reverse=True)
     return {"items": items, "total": total, "fiscal_year": fy, "fiscal_year_start": fy_start}
 
@@ -1525,6 +1535,7 @@ async def cost_treemap(
         "total": total,
         "groups": groups,
         "components": await cost_components(db, type_keys, cost_field),
+        "item_labels": await item_labels(db),
         "fiscal_year": target_fy,
         "current_fiscal_year": fy,
         "fiscal_year_start": fy_start,
@@ -1566,6 +1577,7 @@ async def cost_sankey(
         raise HTTPException(400, str(exc)) from exc
     return {
         **flow,
+        "item_labels": await item_labels(db),
         "fiscal_year": target_fy,
         "current_fiscal_year": fy,
         "fiscal_year_start": fy_start,

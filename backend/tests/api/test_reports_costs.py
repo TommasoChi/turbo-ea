@@ -12,6 +12,7 @@ from tests.conftest import (
     create_role,
     create_user,
 )
+from tests.cost_item_helpers import add_costs
 
 
 @pytest.fixture
@@ -41,8 +42,11 @@ async def report_env(db):
     member = await create_user(db, email="member@test.com", role="member")
     viewer = await create_user(db, email="viewer@test.com", role="viewer")
     costs_only = await create_user(db, email="costs@test.com", role="costs_only")
-    await create_card(db, card_type="Application", name="A", attributes={"costTotalAnnual": 100})
-    await create_card(db, card_type="Application", name="B", attributes={"costTotalAnnual": 200})
+    for name, cost in (("A", 100), ("B", 200)):
+        card = await create_card(
+            db, card_type="Application", name=name, attributes={"costTotalAnnual": cost}
+        )
+        await add_costs(db, card, other=cost)
     return {
         "admin": admin,
         "member": member,
