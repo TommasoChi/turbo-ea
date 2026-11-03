@@ -50,9 +50,10 @@ Costs are **always annual**: an item has no period.
    shared by the cost-bearing types. An item has a stable `key`, a label with the same
    nine-locale translations as a field, and an `archived` flag. The key never changes;
    the label can.
-3. **Removing an item from the catalogue archives it, it does not delete data.** An
-   archived item disappears from the card sections and from the reports; its stored
-   amounts stay and come back if the item is un-archived. This mirrors how
+3. **Removing an item from the catalogue archives it, it does not delete data.** An archived item can no longer be added to a year. Where a card has no amount for it, it is
+   not shown; where it has, it is shown greyed and it counts (decision 8) in the card section, in
+   the TCO and in the reports, where it stays as its own cost item so that the pieces still add
+   up to the total. Un-archiving makes it addable again. This mirrors how
    extension-owned fields are handled today when an extension is disabled
    (`_cleanup_removed_fields_and_options` skips them and preserves the values). No
    admin click may erase the historic amounts of past fiscal years.
@@ -83,7 +84,8 @@ Costs are **always annual**: an item has no period.
   items of the catalogue are its cost items / components.
 - Renewal dates are stored, shown on the card, and queryable.
 - The existing amounts survive the migration exactly: each card's TCO for each year is
-  unchanged by it.
+  unchanged by it, except the years listed in the migration report (see the call on
+  inconsistent past history).
 
 ## Non-goals (this work)
 
@@ -133,8 +135,8 @@ Costs are **always annual**: an item has no period.
   `costs.view`.
 - `card_cost_history` is not carried by workspace transfer today (`workspace_io/` has no
   reference to it).
-- `FISCAL_YEAR_LOOKBACK = 5` in `fiscal_year.py`: the API accepts `current-5` … `current+1`
-  today. The cost report's picker already offers six years, `current-4` … `current+1`.
+- `FISCAL_YEAR_LOOKBACK = 5` in `fiscal_year.py`: `PUT /cards/{id}/cost-history` accepts
+  `current-5` … `current+1` today; `GET` and `DELETE` apply no window. The cost report's picker already offers six years, `current-4` … `current+1`.
 - The calculation engine writes a calculated field's value into `attributes` on every card
   save, whatever a client sent for it; that is the precedent for a derived `costTotalAnnual`.
 
@@ -155,11 +157,13 @@ Costs are **always annual**: an item has no period.
   ("Other costs"), seeded by the migration, so its TCO is preserved exactly.
 - **Renewal "near".** Orange when the renewal date is within 90 days; one constant, not
   a setting.
-- **Window.** The API accepts exactly the six years the section shows
-  (`current-4` … `current+1`); older history rows migrate but are not shown.
-- **Catalogue seed.** The three old fields become the first items: software licensing,
-  application management services, infrastructure (the existing key
-  `infrastruttureCost` carries a typo that is not reproduced in the new keys).
+- **Catalogue seed.** The three old fields become the first items and keep their keys
+  (`softwareLicensingCost`, `applicationManagementServicesCost`, `infrastruttureCost`; the typo is
+  part of the key and is kept, so that saved reports, portals, MCP calls and formulas that name
+  them keep resolving); the labels are clean. On the live instance these are the only cost
+  fields besides `costTotalAnnual` on the two types (66 Applications, 74 IT Components) and no
+  saved report names a cost field. Any other cost-typed field the migration finds on those two
+  types becomes an item the same way.
 
 - **Inconsistent past history.** For a past year the migration builds items from the detail
   rows of `card_cost_history` and puts `total − sum(details)` in `other` when that is positive.
@@ -167,9 +171,9 @@ Costs are **always annual**: an item has no period.
   its total keeps the details (the TCO becomes the sum, which differs from the old total). Every
   such year is written to a migration report (card, year, old total, new TCO) so nothing changes
   silently; "TCO unchanged" holds for every year except those listed.
-- **Window.** The section shows six years (`current-4` … `current+1`). The API keeps the window
-  it has today (`current-5` … `current+1`); a row at `current-5` migrates and stays readable
-  through the API but is not reachable with ‹ ›.
+- **Window.** The section shows six years (`current-4` … `current+1`). Writing keeps the window
+  of today (`current-5` … `current+1`, enforced on `PUT` only); a row at `current-5` migrates
+  and stays readable through the API but is not reachable with ‹ ›.
 - **Gates.** Reading costs needs `costs.view` and card read scope (the card is 404 when the caller
   cannot read it); writing needs what `PUT /cards/{id}/cost-history` needs today. The new read
   endpoint does not copy the edit gate of the old one.
@@ -179,12 +183,37 @@ Costs are **always annual**: an item has no period.
   fail and they do not change the cost. The docs say that an import or sync can no longer set
   the cost of these two types.
 - **The derived copy never disagrees with the section.** It is recomputed on every cost save, on
-  every card write of the two types, and when the fiscal year changes (see the user's question 1).
+  every card write of the two types, and when the fiscal year changes (a daily maintenance pass, like the loops in `main.py`, and an
+  immediate recompute when the fiscal-year start month is saved).
 - **Item picker.** In the edit dialog the item is chosen from the catalogue (the mockup showed a
   free name field; that is dropped). "Copy to Forecast" copies amount and renewal date to the
-  next year and overwrites an existing value for that item; the renewal date moves forward by
-  one year.
+  Forecast year, whichever year is shown (it is offered when the shown year is before it), and
+  overwrites an existing value for that item; the renewal date moves forward by the number of
+  years between the two.
 - **Catalogue editing** is part of the metamodel admin and needs `admin.metamodel`.
+- **The migration confirms the current year.** For every Application and IT Component it writes a
+  row for the current fiscal year, with no items when the card had no cost. "No row" and "an
+  empty row" are different states: only "no row" falls back (decision 7), so on the day of the
+  migration no card falls back and the cost report gives the same totals as before. Fallback
+  applies after a fiscal-year rollover.
+- **Confirming a fallback year.** Editing or adding any item on a year in fallback first writes the
+  whole fallback set into that year's row (amounts as shown, renewal dates moved forward by the
+  years skipped), then applies the edit; the section header also offers a "Confirm FYnn" action
+  that does only the first step. While a year is in fallback, the derived `costTotalAnnual` equals
+  the TCO shown.
+- **`costTotalAnnual` stays in the schema.** It remains a `cost`-typed field of the two types (so
+  the `costs.view` redaction of `cost_field_filter.py` and every consumer keep working), read-only,
+  and an admin cannot delete or retype it on those two types. `sync_current_fy_history` skips these
+  two types: their history lives in the new table and `costTotalAnnual` has no `card_cost_history`
+  row, so the TCO exists in one place only.
+- **What migrates.** The current year comes from `attributes`; the history row of the current
+  year is discarded (the reports serve the current year from `attributes` today). Past years and
+  the Forecast year (`current+1`) come from `card_cost_history`; the `costTotalAnnual` history rows
+  only supply the total used for the residual in `other`.
+- **Mixed cost requests.** A request over types where only some use items is allowed. The cost
+  field it can use is the one they all share (the TCO, `costTotalAnnual`), and the item breakdown
+  exists only for the types that use items; this follows the intersection already done in
+  `cost_components.py`.
 - **Workspace transfer.** The new tables and the catalogue follow the checklist in
   `.claude/rules/workspace-transfer.md`. The success check below runs on a `pg_dump` copy of the
   live database, not on a workspace-transfer bundle.
@@ -202,7 +231,8 @@ Costs are **always annual**: an item has no period.
   `dashboard_query.py`, `ppm_portfolio_service.py`, `saved_reports.py`,
   `web_portals.py`, `servicenow.py`, `turbolens*.py`, `process_map_service.py`,
   the MCP tool `get_cost_treemap`, the LeanIX mapping, the data-quality weight of the
-  cost field, the inventory grid and the Excel import/export.
+  cost field, the inventory grid and the Excel import/export; the demo seeders (`seed_demo*.py`) and the test
+  fixtures, which today write `costTotalAnnual` into card attributes and must create items instead.
 - What the card type editor shows for the removed fields on those two types, and the
   migration's downgrade.
 - Whether the migration backfills a `card_cost_history` row for a year that had items.
@@ -210,7 +240,8 @@ Costs are **always annual**: an item has no period.
 ## Success
 
 On a copy of the live workspace, after the migration: every Application and IT
-Component shows the same TCO for each of its years as before; the cost report gives
+Component shows the same TCO for each of its years as before (except the years in the migration
+report); the cost report gives
 the same totals for each year and each view; an admin can add, rename and archive an
 item without losing a past amount; a user can step ‹ › through six years and edit any
 of them; the renewal date of an item is visible on the tile.
