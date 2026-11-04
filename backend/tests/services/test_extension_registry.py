@@ -274,3 +274,111 @@ class TestRequireExtensionGate:
             )
         )
         assert await _get(gate_app) == 200
+
+
+async def _gate_response(app: FastAPI):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        return await client.get("/probe")
+
+
+class TestRequireExtensionGateExactContract:
+    async def test_not_installed_detail_is_exact_even_with_a_license(self, gate_app):
+        extension_registry.set_license(
+            make_license(Entitlement(extension_key="sample-ext", expires_at=None))
+        )
+        response = await _gate_response(gate_app)
+        assert (response.status_code, response.json()) == (404, {"detail": "Not found"})
+
+    async def test_removed_wins_over_disabled(self, gate_app):
+        extension_registry.load_installed([make_info(status="removed", enabled=False)])
+        response = await _gate_response(gate_app)
+        assert (response.status_code, response.json()) == (404, {"detail": "Not found"})
+
+    async def test_only_the_gated_key_is_looked_up(self, gate_app):
+        extension_registry.load_installed([make_info(key="another-ext")])
+        extension_registry.set_license(
+            make_license(Entitlement(extension_key="another-ext", expires_at=None))
+        )
+        assert (await _gate_response(gate_app)).status_code == 404
+
+    async def test_disabled_flag_is_403_with_detail(self, gate_app):
+        extension_registry.load_installed([make_info(enabled=False, status="installed")])
+        extension_registry.set_license(
+            make_license(Entitlement(extension_key="sample-ext", expires_at=None))
+        )
+        response = await _gate_response(gate_app)
+        assert (response.status_code, response.json()) == (
+            403,
+            {"detail": "Extension is disabled"},
+        )
+
+    async def test_disabled_status_is_403_even_when_flag_is_enabled(self, gate_app):
+        extension_registry.load_installed([make_info(enabled=True, status="disabled")])
+        extension_registry.set_license(
+            make_license(Entitlement(extension_key="sample-ext", expires_at=None))
+        )
+        response = await _gate_response(gate_app)
+        assert (response.status_code, response.json()) == (
+            403,
+            {"detail": "Extension is disabled"},
+        )
+
+    async def test_disabled_is_reported_before_license_problems(self, gate_app):
+        extension_registry.load_installed([make_info(enabled=False)])
+        response = await _gate_response(gate_app)  # no license at all
+        assert response.json() == {"detail": "Extension is disabled"}
+
+    async def test_unlicensed_detail_is_exact(self, gate_app):
+        extension_registry.load_installed([make_info()])
+        response = await _gate_response(gate_app)
+        assert (response.status_code, response.json()) == (
+            403,
+            {"detail": "Extension license is expired or missing"},
+        )
+
+    async def test_expired_detail_is_exact(self, gate_app):
+        extension_registry.load_installed([make_info()])
+        extension_registry.set_license(
+            make_license(
+                Entitlement(
+                    extension_key="sample-ext",
+                    expires_at=datetime.now(timezone.utc) - timedelta(days=400),
+                )
+            )
+        )
+        response = await _gate_response(gate_app)
+        assert (response.status_code, response.json()) == (
+            403,
+            {"detail": "Extension license is expired or missing"},
+        )
+
+    async def test_entitlement_for_other_extension_does_not_unlock(self, gate_app):
+        extension_registry.load_installed([make_info()])
+        extension_registry.set_license(
+            make_license(Entitlement(extension_key="another-ext", expires_at=None))
+        )
+        assert (await _gate_response(gate_app)).status_code == 403
+
+    @pytest.mark.parametrize("delta_days", [10, -10])
+    async def test_active_and_grace_pass(self, gate_app, delta_days):
+        extension_registry.load_installed([make_info()])
+        extension_registry.set_license(
+            make_license(
+                Entitlement(
+                    extension_key="sample-ext",
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=delta_days),
+                )
+            )
+        )
+        response = await _gate_response(gate_app)
+        assert (response.status_code, response.json()) == (200, {"ok": True})
+
+    async def test_perpetual_and_free_pass(self, gate_app):
+        extension_registry.load_installed([make_info()])
+        extension_registry.set_license(
+            make_license(Entitlement(extension_key="sample-ext", expires_at=None))
+        )
+        assert (await _gate_response(gate_app)).status_code == 200
+        extension_registry.clear()
+        extension_registry.load_installed([make_info(manifest={"free": True})])
+        assert (await _gate_response(gate_app)).status_code == 200
