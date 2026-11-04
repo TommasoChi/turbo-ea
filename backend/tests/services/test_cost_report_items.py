@@ -108,7 +108,8 @@ async def test_item_costs_query_filters_on_the_cards_and_the_year(db, monkeypatc
     monkeypatch.setattr(db, "execute", spy)
     await item_costs_by_card(db, [cards[0].id], CUR, 1)
     await item_costs_by_card(db, [cards[0].id], CUR - 2, 1)
-    current, past = seen[0], seen[2]
+    seen = [s for s in seen if "FROM card_costs" in s]
+    current, past = seen[0], seen[-1]
     assert "card_costs.card_id IN" in current and "card_costs.fiscal_year <=" in current
     assert "card_costs.card_id IN" in past and "card_costs.fiscal_year =" in past
     assert "<=" not in past

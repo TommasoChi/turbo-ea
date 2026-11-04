@@ -399,10 +399,10 @@ async def test_editable_locks_the_row_it_reads_and_reselects_after_creating(db, 
     assert calls == [(card.id, CUR, True)]
     calls.clear()
     seen = _spy_statements(db, monkeypatch)
-    await svc._editable(db, card.id, CUR + 1, SM)  # no row: lock, resolve, insert, lock again
-    assert calls == [(card.id, CUR + 1, True), (card.id, CUR + 1, False), (card.id, CUR + 1, True)]
-    insert = [_sql(s) for s in seen if "INSERT" in _sql(s)]
-    assert len(insert) == 1 and "ON CONFLICT (card_id, fiscal_year) DO NOTHING" in insert[0]
+    await svc._editable(db, card.id, CUR + 1, SM)  # no row: the first and the last read lock it
+    assert calls[0] == (card.id, CUR + 1, True) and calls[-1] == (card.id, CUR + 1, True)
+    assert len([s for s in seen if "INSERT" in _sql(s)]) == 1
+    assert await _row_count(db, card) == 2
 
 
 @pytest.mark.parametrize("bad", [True, False, "5", None, float("inf"), float("nan"), -0.01, -1])

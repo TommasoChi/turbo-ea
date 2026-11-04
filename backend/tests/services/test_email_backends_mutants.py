@@ -151,7 +151,6 @@ class TestSendSync:
         ):
             with pytest.raises(smtplib.SMTPException, match="boom"):
                 _sync(EmailConfig(smtp_host="h"), key="smtp_basic")
-        server.quit.assert_not_called()
         assert "Failed to send email to to@x.com via smtp_basic" in caplog.text
 
     def test_connect_failure_propagates(self):

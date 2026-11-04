@@ -531,7 +531,8 @@ class TestDownload:
         )
         cd = r.headers["content-disposition"]
         assert cd.startswith('attachment; filename="we_ird_ na?ve.pdf"; ')
-        assert cd.endswith(f"filename*=UTF-8''{quote('we"ird\\ naïve.pdf', safe='')}")
+        raw_name = 'we"ird\\ naïve.pdf'
+        assert cd.endswith(f"filename*=UTF-8''{quote(raw_name, safe='')}")
         assert "%20" in cd and "%22" in cd and "%5C" in cd
 
     async def test_permission_and_404s(self, client, db, env):

@@ -115,5 +115,5 @@ async def test_a_failure_is_logged_and_retried_after_an_hour(monkeypatch, caplog
     with caplog.at_level(logging.INFO, logger="app.main"):
         await h.run()
     assert h.sleeps == [120.0, 3600, 120.0]
-    assert "commit" not in h.events[: h.events.index("recompute") + 3]
+    assert "commit" not in h.events
     assert "Error in cost rollover loop" in caplog.messages

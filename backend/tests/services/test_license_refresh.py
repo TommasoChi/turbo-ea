@@ -269,8 +269,6 @@ class TestExtendsEdges:
         cur = _doc(Entitlement("a", _dt(5)), Entitlement("b", _dt(5)))
         assert _extends(_doc(Entitlement("a", _dt(5))), cur) is False
         assert _extends(_doc(Entitlement("a", _dt(5)), Entitlement("c", _dt(5))), cur) is True
-        # a new key plus one dropped is still a "new entitlement"
-        assert _extends(_doc(Entitlement("a", _dt(5)), Entitlement("c", _dt(5))), cur) is True
 
 
 class TestSameCoverage:

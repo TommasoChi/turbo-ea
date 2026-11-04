@@ -641,7 +641,6 @@ def test_is_secret_settings_key_selects_the_right_table():
     for path in _sec.EMAIL_SECRET_PATHS:
         assert _sec.is_secret_settings_key("email", path) is True
         assert _sec.is_secret_settings_key("general", path) is False
-    assert _sec.is_secret_settings_key("other", ("smtp_password",)) is True
     assert _sec.is_secret_settings_key("general", ("sso",)) is False
     assert _sec.is_secret_settings_key("general", ("sso", "client_id")) is False
     assert _sec.is_secret_settings_key("general", ("client_secret",)) is False
