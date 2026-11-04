@@ -59,6 +59,7 @@ async def create_document(
         db, user, "documents.manage", card_uuid, "card.manage_documents"
     ):
         raise HTTPException(403, "Not enough permissions")
+    await require_card_readable(db, user, card_uuid, mode="module")
     doc = Document(
         card_id=card_uuid,
         name=body.name,
@@ -110,6 +111,8 @@ async def update_document(
         db, user, "documents.manage", doc.card_id, "card.manage_documents"
     ):
         raise HTTPException(403, "Not enough permissions")
+    if doc.card_id is not None:
+        await require_card_readable(db, user, doc.card_id, mode="module")
 
     data = body.model_dump(exclude_unset=True)
     changes = {
@@ -156,6 +159,8 @@ async def delete_document(
         db, user, "documents.manage", doc.card_id, "card.manage_documents"
     ):
         raise HTTPException(403, "Not enough permissions")
+    if doc.card_id is not None:
+        await require_card_readable(db, user, doc.card_id, mode="module")
     await event_bus.publish(
         "document.removed",
         {
