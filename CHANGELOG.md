@@ -5,6 +5,13 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.188.3] - 2026-11-04
+
+### Fixed
+
+- **Replacing, renaming or deleting a file attachment, and adding, changing or deleting a document link, now follow the same visibility rule as reading them.** A user whose only access to a card is a stakeholder role without view rights on a hidden card type gets "Card not found", as they already did when listing.
+- **Adding a document link to a card that does not exist now answers "Card not found" (404) instead of a server error (500).**
+
 ## [2.188.1] - 2026-11-04
 
 ### Fixed
