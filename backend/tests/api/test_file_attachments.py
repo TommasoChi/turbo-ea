@@ -459,10 +459,11 @@ class TestUpdateFile:
         assert resp.json()["category"] is None
 
         events = await _events(db, card.id, "file.updated")
-        assert [e.data["changes"] for e in events] == [
-            {"category": {"old": None, "new": "security"}},
-            {"category": {"old": "security", "new": None}},
-        ]
+        # No ORDER BY and both events share the transaction's created_at: compare unordered.
+        changes = [e.data["changes"] for e in events]
+        assert len(changes) == 2
+        assert {"category": {"old": None, "new": "security"}} in changes
+        assert {"category": {"old": "security", "new": None}} in changes
 
     async def test_noop_writes_no_event(self, client, db, file_env):
         admin, card = file_env["admin"], file_env["card"]
