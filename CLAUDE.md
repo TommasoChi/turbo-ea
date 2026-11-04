@@ -10,16 +10,6 @@ Self-hosted Enterprise Architecture Management platform that creates a **digital
 
 **Current version**: see `/VERSION` (single source of truth for backend + frontend).
 
-## Quick Start
-
-```bash
-cp .env.example .env          # Edit secrets and DB credentials
-docker compose pull
-docker compose up -d          # Starts db + backend + frontend + edge nginx
-```
-
-The first user to register automatically gets the `admin` role. Set `SEED_DEMO=true` to pre-populate with the NexaTech Industries demo dataset. Add `--profile ai` to include the bundled Ollama container for AI description suggestions
-
 ---
 
 ## AI Assistant Guidelines
@@ -203,18 +193,6 @@ The codebase uses **"cards"** throughout (models, routes, UI). Earlier documenta
 
 ---
 
-## Version Management
-
-Single source of truth: `/VERSION` file at project root.
-
-- **Backend**: `config.py` reads VERSION → exports `APP_VERSION` → exposed in `/api/health`
-- **Frontend**: `vite.config.ts` reads VERSION → injects `__APP_VERSION__` global → displayed in user menu (AppLayout)
-- **Docker**: Both Dockerfiles `COPY VERSION ./VERSION` before building
-- **Local dev**: Frontend checks `../VERSION` (from frontend dir) then `./VERSION` (Docker)
-- **Packaging metadata**: `backend/pyproject.toml` and `frontend/package.json` use a static `"0.0.0"` placeholder — do not bump them. This avoids triggering CI path filters on version-only changes.
-
----
-
 ## Development
 
 ### Local Development (without Docker)
@@ -233,23 +211,6 @@ uvicorn app.main:app --reload --port 8000
 cd frontend
 npm install
 npm run dev    # Vite dev server on port 5173, proxies /api to :8000
-```
-
-### Linting & Testing
-
-**Backend:**
-```bash
-cd backend
-ruff check .          # Lint (rules: E, F, I, N, W; line-length: 100)
-ruff format .         # Auto-format
-pytest                # Run tests (asyncio_mode=auto)
-```
-
-**Frontend:**
-```bash
-cd frontend
-npm run lint          # ESLint
-npm run build         # TypeScript check + Vite build
 ```
 
 ### Database Reset
