@@ -55,3 +55,19 @@ async def test_bad_key_422(client, env, key):
 async def test_patch_unknown_404(client, env):
     r = await client.patch(f"{BASE}/nope", json={"label": "x"}, headers=auth_headers(env["admin"]))
     assert r.status_code == 404
+
+
+@pytest.mark.parametrize("value", [1180591620717411303424, 2147483648, -1])
+async def test_patch_sort_order_out_of_range_422(client, env, value):
+    h = auth_headers(env["admin"])
+    await client.post(BASE, json={"key": "lic", "label": "L"}, headers=h)
+    r = await client.patch(f"{BASE}/lic", json={"sort_order": value}, headers=h)
+    assert r.status_code == 422
+
+
+@pytest.mark.parametrize("value", [0, 3, 2147483647])
+async def test_patch_sort_order_in_range(client, env, value):
+    h = auth_headers(env["admin"])
+    await client.post(BASE, json={"key": "lic", "label": "L"}, headers=h)
+    r = await client.patch(f"{BASE}/lic", json={"sort_order": value}, headers=h)
+    assert r.status_code == 200 and r.json()["sort_order"] == value

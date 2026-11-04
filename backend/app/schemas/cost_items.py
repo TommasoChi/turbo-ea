@@ -17,7 +17,7 @@ class CostItemTypeUpdate(BaseModel):
     label: str | None = Field(None, min_length=1, max_length=100)
     translations: dict[str, str] | None = None
     archived: bool | None = None
-    sort_order: int | None = None
+    sort_order: int | None = Field(None, ge=0, le=2147483647)
 
 
 class CostItemTypeOut(BaseModel):
