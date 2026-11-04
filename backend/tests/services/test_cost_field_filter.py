@@ -132,3 +132,28 @@ def test_redact_event_costs_both_shapes_and_passthrough():
     assert "costTotalAnnual" in data["changes"]  # input untouched
     assert redact_event_costs({"id": "x"}, keys) == {"id": "x"}
     assert redact_event_costs(None, keys) is None
+
+
+# ── mutation hardening: redact_event_costs keeps the rest of the payload ──────────────────────
+
+
+def test_redact_event_costs_keeps_the_other_payload_keys_and_non_dict_sides():
+    from app.services.cost_field_filter import redact_event_costs
+
+    data = {
+        "source": "card_costs",
+        "changes": {
+            "costTotalAnnual": {"old": 1, "new": 2},
+            "cost_items": {"old": [], "new": ["a"]},
+            "name": {"old": "a", "new": "b"},
+            "attributes": {"old": None, "new": {"costTotalAnnual": 2, "x": 1}},
+        },
+    }
+    assert redact_event_costs(data, frozenset({"costTotalAnnual"})) == {
+        "source": "card_costs",
+        "changes": {
+            "name": {"old": "a", "new": "b"},
+            "attributes": {"old": None, "new": {"x": 1}},
+        },
+    }
+    assert redact_event_costs(None, frozenset()) is None
