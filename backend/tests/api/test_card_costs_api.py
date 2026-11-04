@@ -273,3 +273,43 @@ async def test_put_422_renewal_date_outside_1900_2200(client, env):
     assert (await put(client, env, renewal_date="9999-12-31")).status_code == 422
     assert (await put(client, env, renewal_date="1899-12-31")).status_code == 422
     assert (await put(client, env, renewal_date="2200-12-31")).status_code == 200
+
+
+# ── mutation hardening: error bodies and the event's author ───────────────────────────────────
+
+
+async def test_wrong_type_is_404_card_not_found_on_read_and_write(client, db, env):
+    other = await create_card(db, card_type="Process", name="P", user_id=env["admin"].id)
+    h = auth_headers(env["admin"])
+    r = await client.get(url(other), headers=h)
+    assert (r.status_code, r.json()["detail"]) == (404, "Card not found")
+    r = await client.put(url(other, f"/{CUR}/items/lic"), json={"amount": 1}, headers=h)
+    assert (r.status_code, r.json()["detail"]) == (404, "Card not found")
+
+
+async def test_missing_card_is_404_card_not_found(client, env):
+    r = await client.get(
+        "/api/v1/cards/00000000-0000-0000-0000-000000000000/costs",
+        headers=auth_headers(env["admin"]),
+    )
+    assert (r.status_code, r.json()["detail"]) == (404, "Card not found")
+
+
+async def test_missing_permission_is_403_with_the_standard_message(client, env):
+    r = await client.get(url(env["card"]), headers=auth_headers(env["nocost"]))
+    assert (r.status_code, r.json()["detail"]) == (403, "Not enough permissions")
+    r = await put(client, env, user="viewer")
+    assert (r.status_code, r.json()["detail"]) == (403, "Not enough permissions")
+
+
+async def test_refused_write_detail_is_the_error_code(client, env):
+    assert (await put(client, env, key="nope")).json()["detail"] == "unknown_item"
+    assert (await put(client, env, fy=CUR - 9)).json()["detail"] == "year_out_of_range"
+    r = await put(client, env, key="old")
+    assert (r.status_code, r.json()["detail"]) == (409, "archived_item")
+
+
+async def test_cost_event_is_authored_by_the_writer(client, db, env):
+    await put(client, env, amount=5)
+    evs = cost_events(await events(db, env["card"]))
+    assert [e.user_id for e in evs] == [env["admin"].id]

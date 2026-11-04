@@ -448,3 +448,200 @@ def test_a_card_matches_its_source_id_only_within_its_own_type():
     assert applier._card_by_source_id(here, "Application", None) is None
     assert applier._card_by_source_id(here, "Application", "not-an-id") is None
     assert applier._card_by_source_id({}, "Application", cid) is None
+
+
+# ---------------------------------------------------------------------------
+# workspace_io.secrets: exact contract of the secret-exclusion authority.
+# ---------------------------------------------------------------------------
+import copy as _copy  # noqa: E402
+
+import pytest as _pytest  # noqa: E402
+
+from app.services.workspace_io import secrets as _sec  # noqa: E402
+
+
+def test_secret_path_tables_are_exact():
+    assert _sec.GENERAL_SECRET_PATHS == (("sso", "client_secret"), ("ai", "apiKey"))
+    assert _sec.EMAIL_SECRET_PATHS == (
+        ("smtp_password",),
+        ("oauth_client_secret",),
+        ("service_account_json",),
+    )
+    assert _sec.INSTANCE_LOCAL_FK_COLUMNS == frozenset(
+        {"owner_id", "created_by", "updated_by", "archived_by", "user_id", "created_by_id"}
+    )
+    assert isinstance(_sec.INSTANCE_LOCAL_FK_COLUMNS, frozenset)
+
+
+@_pytest.mark.parametrize(
+    "key,expected",
+    [
+        ("ext.my-ext.secret.token", True),
+        ("ext.my-ext.secret.a.b", True),  # name may itself contain dots
+        ("ext.my-ext.secret.", True),
+        ("ext.secret.secret.x", True),  # an extension named "secret" with a real secret
+        ("ext.secret.token", False),  # extension named "secret": ordinary setting
+        ("ext.my-ext.setting.token", False),
+        ("ext.my-ext.secret", False),  # only three segments
+        ("ext.my-ext", False),
+        ("xext.my-ext.secret.token", False),
+        ("EXT.my-ext.secret.token", False),
+        ("ext.my-ext.SECRET.token", False),
+        ("ext.my-ext.secrets.token", False),
+        ("my-ext.secret.token.x", False),
+        ("", False),
+    ],
+)
+def test_is_extension_secret_key(key, expected):
+    assert _sec.is_extension_secret_key(key) is expected
+
+
+class TestDropPath:
+    def test_drops_a_nested_leaf_only(self):
+        blob = {"a": {"b": 1, "c": 2}, "d": 3}
+        _sec._drop_path(blob, ("a", "b"))
+        assert blob == {"a": {"c": 2}, "d": 3}
+
+    def test_drops_a_top_level_key(self):
+        blob = {"a": 1, "b": 2}
+        _sec._drop_path(blob, ("a",))
+        assert blob == {"b": 2}
+
+    def test_missing_intermediate_or_leaf_is_a_noop(self):
+        blob = {"a": {"b": 1}}
+        _sec._drop_path(blob, ("x", "y"))
+        _sec._drop_path(blob, ("a", "zzz"))
+        _sec._drop_path(blob, ("a", "b", "c"))
+        assert blob == {"a": {"b": 1}}
+
+    def test_non_dict_intermediate_is_tolerated(self):
+        blob = {"a": "text", "l": [1, 2]}
+        _sec._drop_path(blob, ("a", "b"))
+        _sec._drop_path(blob, ("l", "b"))
+        assert blob == {"a": "text", "l": [1, 2]}
+
+    def test_leaf_on_non_dict_parent_is_a_noop(self):
+        blob = {"a": {"b": ["x"]}}
+        _sec._drop_path(blob, ("a", "b", "c"))
+        assert blob == {"a": {"b": ["x"]}}
+
+
+class TestScrubEncrypted:
+    def test_removes_enc_values_at_any_depth_and_inside_lists(self):
+        node = {
+            "keep": "plain",
+            "gone": "enc:abc",
+            "nested": {"gone": "enc:x", "keep": 1, "deeper": {"gone": "enc:y", "k": [1]}},
+            "items": [{"gone": "enc:z", "keep": "a"}, "enc:list-item-kept-as-element", 3],
+        }
+        assert _sec._scrub_encrypted(node) == {
+            "keep": "plain",
+            "nested": {"keep": 1, "deeper": {"k": [1]}},
+            "items": [{"keep": "a"}, "enc:list-item-kept-as-element", 3],
+        }
+
+    def test_only_string_values_with_the_prefix_are_removed(self):
+        node = {
+            "empty": "",
+            "num": 5,
+            "none": None,
+            "flag": False,
+            "upper": "ENC:abc",
+            "mid": "x enc:abc",
+            "nonstr": ["enc:a"],
+        }
+        assert _sec._scrub_encrypted(node) == node
+
+    def test_scalars_pass_through_and_input_is_not_mutated(self):
+        assert _sec._scrub_encrypted("enc:top") == "enc:top"
+        assert _sec._scrub_encrypted(7) == 7
+        assert _sec._scrub_encrypted(None) is None
+        node = {"a": "enc:q", "b": [{"c": "enc:r"}]}
+        before = _copy.deepcopy(node)
+        _sec._scrub_encrypted(node)
+        assert node == before
+
+
+class TestStripSecretsContract:
+    def test_none_inputs_give_two_empty_dicts(self):
+        general, email = _sec.strip_secrets(None, None)
+        assert general == {} and email == {}
+        assert isinstance(general, dict) and isinstance(email, dict)
+        general["x"] = 1  # fresh dicts, not shared
+        assert _sec.strip_secrets(None, None)[0] == {}
+
+    def test_each_known_credential_path_is_removed_and_siblings_kept(self):
+        general = {
+            "sso": {"client_secret": "plain-secret", "client_id": "id", "enabled": True},
+            "ai": {"apiKey": "k", "model": "m"},
+            "theme": "dark",
+        }
+        email = {
+            "smtp_password": "p",
+            "oauth_client_secret": "o",
+            "service_account_json": "{}",
+            "smtp_host": "h",
+            "from": "a@b.c",
+        }
+        clean_general, clean_email = _sec.strip_secrets(general, email)
+        assert clean_general == {
+            "sso": {"client_id": "id", "enabled": True},
+            "ai": {"model": "m"},
+            "theme": "dark",
+        }
+        assert clean_email == {"smtp_host": "h", "from": "a@b.c"}
+
+    def test_each_email_path_is_independent(self):
+        for key in ("smtp_password", "oauth_client_secret", "service_account_json"):
+            _, clean = _sec.strip_secrets(None, {key: "v", "keep": 1})
+            assert clean == {"keep": 1}
+
+    def test_credential_paths_are_not_cross_applied_between_blobs(self):
+        general, email = _sec.strip_secrets(
+            {"smtp_password": "x", "sso": {"client_secret": "y"}},
+            {"sso": {"client_secret": "z"}, "ai": {"apiKey": "k"}},
+        )
+        assert general == {"smtp_password": "x", "sso": {}}
+        assert email == {"sso": {"client_secret": "z"}, "ai": {"apiKey": "k"}}
+
+    def test_extension_secrets_dropped_from_general_only(self):
+        general = {
+            "ext.a.secret.token": "plain-text-planted",
+            "ext.a.secret.empty": "",
+            "ext.a.setting.x": 1,
+            "ext.secret.mode": "on",
+        }
+        email = {"ext.a.secret.token": "kept-in-email"}
+        clean_general, clean_email = _sec.strip_secrets(general, email)
+        assert clean_general == {"ext.a.setting.x": 1, "ext.secret.mode": "on"}
+        assert clean_email == email
+
+    def test_remaining_enc_values_are_scrubbed_in_both_blobs(self):
+        general, email = _sec.strip_secrets(
+            {"future": {"secret": "enc:g", "ok": 1}, "list": [{"t": "enc:h"}]},
+            {"nested": {"x": "enc:e", "y": "fine"}},
+        )
+        assert general == {"future": {"ok": 1}, "list": [{}]}
+        assert email == {"nested": {"y": "fine"}}
+
+    def test_inputs_are_never_mutated(self):
+        general = {"sso": {"client_secret": "s", "k": [1]}, "ext.a.secret.t": "v", "e": "enc:1"}
+        email = {"smtp_password": "p", "n": {"x": "enc:2"}}
+        g0, e0 = _copy.deepcopy(general), _copy.deepcopy(email)
+        out_g, _ = _sec.strip_secrets(general, email)
+        assert general == g0 and email == e0
+        out_g["sso"]["k"].append(2)
+        assert general["sso"]["k"] == [1]
+
+
+def test_is_secret_settings_key_selects_the_right_table():
+    for path in _sec.GENERAL_SECRET_PATHS:
+        assert _sec.is_secret_settings_key("general", path) is True
+        assert _sec.is_secret_settings_key("email", path) is False
+    for path in _sec.EMAIL_SECRET_PATHS:
+        assert _sec.is_secret_settings_key("email", path) is True
+        assert _sec.is_secret_settings_key("general", path) is False
+    assert _sec.is_secret_settings_key("general", ("sso",)) is False
+    assert _sec.is_secret_settings_key("general", ("sso", "client_id")) is False
+    assert _sec.is_secret_settings_key("general", ("client_secret",)) is False
+    assert _sec.is_secret_settings_key("General", ("sso", "client_secret")) is False

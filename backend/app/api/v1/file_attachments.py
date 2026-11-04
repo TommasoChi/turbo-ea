@@ -140,6 +140,7 @@ async def upload_file_attachment(
         db, user, "documents.manage", card_uuid, "card.manage_documents"
     ):
         raise HTTPException(403, "Not enough permissions")
+    await require_card_readable(db, user, card_uuid, mode="module")
 
     await _require_uploads_enabled(db)
     fmt, data = await _read_validated_upload(file)

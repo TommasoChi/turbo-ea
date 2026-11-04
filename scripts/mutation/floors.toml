@@ -120,6 +120,21 @@ mcp = 97
 "backend/app/services/cost_items_migration.py" = 88   # migration 175 data move; 90.5% of 158
 "backend/app/services/cost_event_redaction.py" = 87   # amounts hidden from event feeds; 89.3% of 56
 
+# Test-hardening pass on the branch test/mutation-hardening-costs-and-critical, 2026-11-04. Prudent floors: the
+# CI mutation run had not measured the new tests yet; raise each to about 2 points under its measured score after it.
+"backend/app/core/ops_auth.py" = 88   # ops request signature, replay and clock skew
+"backend/app/services/extensions/license.py" = 88   # extension licence verification and states
+"backend/app/services/extensions/license_refresh.py" = 85   # licence renewal from the store
+"backend/app/services/extensions/gate.py" = 88   # extension route gate
+"backend/app/services/workspace_io/secrets.py" = 88   # secrets kept out of workspace bundles
+"backend/app/services/stakeholder_service.py" = 88   # stakeholder assignments
+"backend/app/api/v1/roles.py" = 80   # roles; handlers are not mutated, helpers only
+"backend/app/api/v1/stakeholder_roles.py" = 80   # stakeholder roles; helpers only
+"backend/app/api/v1/file_attachments.py" = 80   # attachments; helpers only
+"backend/app/services/email_backends/smtp.py" = 85   # SMTP and XOAUTH2 sending
+"backend/app/services/email_backends/graph.py" = 85   # Microsoft Graph sending
+"backend/app/services/email_backends/runtime.py" = 88   # email settings to runtime config
+
 # Frontend, measured with Stryker (static mutants ignored) on 2026-10-05.
 # linkify, richHtml, routePermissions, dragFill and portfolioHelpers were
 # re-measured on 2026-10-09 at 100% against their own unit tests.
