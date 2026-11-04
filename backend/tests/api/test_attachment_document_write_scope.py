@@ -239,3 +239,17 @@ class TestAdminDocuments:
 
     async def test_create_on_missing_card_is_404_not_500(self, client, db, env):
         _assert_hidden(await _create_doc(client, env["admin"], uuid.uuid4()))
+
+    async def test_entity_document_without_a_card_still_works(self, client, db, env):
+        doc = Document(
+            card_id=None,
+            entity_type="risk",
+            entity_id=uuid.uuid4(),
+            name="entity doc",
+            url="https://example.com/e",
+        )
+        db.add(doc)
+        await db.flush()
+        a = env["admin"]
+        assert (await _patch_doc(client, a, doc.id)).status_code == 200
+        assert (await _delete_doc(client, a, doc.id)).status_code == 204

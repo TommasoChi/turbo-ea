@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **Replacing, renaming or deleting a file attachment, and adding, changing or deleting a document link, now follow the same visibility rule as reading them.** A user whose only access to a card is a stakeholder role without view rights on a hidden card type gets "Card not found", as they already did when listing.
+- **Replacing, editing or deleting a file attachment, and adding, changing or deleting a document link, now follow the same visibility rule as reading them.** A user whose only access to a card is a stakeholder role without view rights, on a card whose type is hidden from their role, gets "Card not found", as they already did when listing.
 - **Adding a document link to a card that does not exist now answers "Card not found" (404) instead of a server error (500).**
 
 ## [2.188.1] - 2026-11-04

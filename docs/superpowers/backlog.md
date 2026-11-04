@@ -33,3 +33,11 @@ Things noticed while working on `fix/cost-report` that are out of scope for it. 
 **Why it matters.** Robustness, not security: noisy 500s in the logs and a wrong status for the client. Seen in `list_file_attachments` and `upload_file_attachment`; the same pattern is across `app/api/v1/`.
 
 **Size.** Medium and mechanical: grep `uuid.UUID(` in `app/api/v1/`, switch to `parse_uuid`, one regression test per file (or a guard test that forbids the bare call), in one dedicated PR.
+
+## Card read scope on comment and stakeholder writes
+
+**What.** `comments.py` (create, update, delete) and `stakeholders.py` (add, change, remove) check `check_permission(app_perm, card_id, card_perm)` and never call `require_card_readable`. A stakeholder holding `card.create_comments`, `card.manage_comments` or `card.manage_stakeholders` without `card.view`, on a card whose type is View-denied for their app role, can still write there; `create_comment` even sends notifications that carry the card's name, and the stakeholder POST answers 404 only for a card that does not exist, so it also confirms existence. Same gap that 2.188.2 and 2.188.3 closed for attachments and documents.
+
+**Why it matters.** The card-read-scope rule says a card the caller may not read does not exist for them. `tests/services/test_card_read_scope_guard.py` cannot see this: it only scans modules that query `Card` and lack any scope marker, `comments.py` and `stakeholders.py` already import `require_card_readable` for their GET handlers, and the sentinel sweep calls GET routes only. Not affected: relation PATCH/DELETE (`_relation_readable`), todos, the observe endpoints.
+
+**Size.** Small: one or two lines after each permission check plus a hidden-type test per endpoint, modelled on `tests/api/test_attachment_document_write_scope.py`. Worth adding a guard that fails a write handler taking a card id without the scope.
