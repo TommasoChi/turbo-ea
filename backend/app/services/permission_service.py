@@ -371,6 +371,18 @@ class PermissionService:
         return await PermissionService.is_stakeholder_of(db, user, card_id)
 
     @staticmethod
+    async def can_edit_costs(db: AsyncSession, user: User, card_id: UUID) -> bool:
+        """Return True if the user may edit the cost items of this card.
+
+        Rule: app-level `costs.edit`, or a stakeholder role on THIS card whose
+        permissions give `card.edit` (Observer does not). App-level
+        `inventory.edit` alone grants nothing here.
+        """
+        if await PermissionService.has_app_permission(db, user, "costs.edit"):
+            return True
+        return await PermissionService.has_card_permission(db, user, card_id, "card.edit")
+
+    @staticmethod
     async def card_ids_with_cost_access(
         db: AsyncSession, user: User, candidate_card_ids: Iterable[UUID]
     ) -> set[UUID]:

@@ -35,6 +35,7 @@ import RelationsTabContent from "./metamodel/RelationsTabContent";
 import ArchitectureStudioTab from "./metamodel/ArchitectureStudioTab";
 import CategoryCombobox from "./metamodel/CategoryCombobox";
 import ManageCategoriesDialog from "./metamodel/ManageCategoriesDialog";
+import ManageCostItemsDialog from "./metamodel/ManageCostItemsDialog";
 import { categoryErrorMessage } from "./metamodel/categoryErrors";
 import { useCardTypeCategories } from "@/hooks/useCardTypeCategories";
 import { categoryDisplayName, defaultNewTypeCategory } from "@/lib/cardTypeOrder";
@@ -91,6 +92,7 @@ export default function MetamodelAdmin() {
   const [createTypeOpen, setCreateTypeOpen] = useState(false);
   const [createTypeError, setCreateTypeError] = useState<string | null>(null);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
+  const [manageCostItemsOpen, setManageCostItemsOpen] = useState(false);
   const [newType, setNewType] = useState<NewTypeDraft>(() => emptyNewType(null));
 
   /* ---- Data fetching ---- */
@@ -212,6 +214,13 @@ export default function MetamodelAdmin() {
                 onClick={() => setManageCategoriesOpen(true)}
               >
                 {t("metamodel.categories.manage")}
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<MaterialSymbol icon="payments" size={18} />}
+                onClick={() => setManageCostItemsOpen(true)}
+              >
+                {t("metamodel.costItems.manage")}
               </Button>
               <Button
                 variant="contained"
@@ -462,6 +471,10 @@ export default function MetamodelAdmin() {
         open={manageCategoriesOpen}
         onClose={() => setManageCategoriesOpen(false)}
         types={types}
+      />
+      <ManageCostItemsDialog
+        open={manageCostItemsOpen}
+        onClose={() => setManageCostItemsOpen(false)}
       />
 
       {/* ============================================================ */}

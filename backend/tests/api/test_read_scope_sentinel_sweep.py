@@ -57,6 +57,10 @@ UNMAPPED_PARAMS = {
         "::test_a_denied_related_type_yields_no_related_items"
     ),
     "conn_id": "ServiceNow admin",
+    "fiscal_year": (
+        "card costs by year — the sweep's list route /cards/{card_id}/costs stays in; the hidden "
+        "card 404 is covered by tests/api/test_card_costs_api.py::test_hidden_card_is_404"
+    ),
     "initiative_id": "PPM — no Initiative seeded",
     "install_id": "extension admin",
     "mapping_id": "ServiceNow admin",

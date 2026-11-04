@@ -323,6 +323,7 @@ async def _run(
             schema.SHEET_CARD_TAGS,
             schema.SHEET_RELATIONS,
             schema.SHEET_CALCULATIONS,
+            "CardCosts",
         }:
             await _finalize_cards(db)
     finally:
@@ -988,6 +989,7 @@ async def _finalize_cards(db) -> None:
     then the data-quality score is derived from the final attribute state.
     """
     from app.services.calculation_engine import run_calculations_for_card
+    from app.services.card_costs import recompute_derived
     from app.services.card_write_service import _get_ppm_exclusions
     from app.services.data_quality import calc_data_quality
     from app.services.derived_writes import derived_maintenance
@@ -1002,6 +1004,7 @@ async def _finalize_cards(db) -> None:
             cards = (await db.execute(select(Card).where(Card.id.in_(chunk)))).scalars().all()
             for card in cards:
                 ppm_excl = await _get_ppm_exclusions(db, card)
+                await recompute_derived(db, card)  # first: a formula may read costTotalAnnual
                 await run_calculations_for_card(db, card, exclude_fields=ppm_excl)
                 score = await calc_data_quality(db, card)
                 if card.data_quality != score:

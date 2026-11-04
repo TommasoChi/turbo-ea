@@ -24,6 +24,8 @@ from app.services.card_read_scope import (
     event_read_filters,
     scrub_event_payloads,
 )
+from app.services.cost_event_redaction import all_cost_keys, redact_cost_events
+from app.services.cost_field_filter import redact_event_costs
 from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
 
@@ -93,6 +95,11 @@ async def event_stream(request: Request, token: str = Query("")):
             raise HTTPException(status_code=401, detail="Account access has expired")
 
         is_events_admin = await PermissionService.has_app_permission(db, user, "admin.events")
+        # An audit reader without landscape-wide costs.view gets the events minus cost values
+        # (a stakeholder-only cost reader is treated as without: no per-card lookup mid-stream).
+        redact_keys: frozenset[str] | None = None
+        if not await PermissionService.has_app_permission(db, user, "costs.view"):
+            redact_keys = await all_cost_keys(db)
         user_id = str(user.id)
     # Session closed: its connection is back in the pool before the stream opens.
 
@@ -101,6 +108,8 @@ async def event_stream(request: Request, token: str = Query("")):
             if await request.is_disconnected():
                 break
             if _event_visible_to(is_events_admin, message, user_id):
+                if redact_keys is not None and isinstance(message.get("data"), dict):
+                    message = {**message, "data": redact_event_costs(message["data"], redact_keys)}
                 yield f"data: {json.dumps(message, default=str)}\n\n"
 
     return StreamingResponse(
@@ -161,6 +170,7 @@ async def list_my_card_events(
     payloads = await scrub_event_payloads(
         db, await CardReadScope.load(db, user), [e.data for e in events_list]
     )
+    payloads = await redact_cost_events(db, user, events_list, payloads)
     return [
         {
             "id": str(e.id),
@@ -190,7 +200,8 @@ async def list_events(
 
         q = q.where(Event.card_id == _uuid.UUID(card_id))
     q = q.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(q)
+    rows = list((await db.execute(q)).scalars().all())
+    payloads = await redact_cost_events(db, user, rows, [e.data for e in rows])
     return [
         {
             "id": str(e.id),
@@ -198,10 +209,10 @@ async def list_events(
             "entity_type": e.entity_type,
             "entity_id": str(e.entity_id) if e.entity_id else None,
             "event_type": e.event_type,
-            "data": e.data,
+            "data": data,
             "user_id": str(e.user_id) if e.user_id else None,
             "user_display_name": e.user.display_name if e.user else None,
             "created_at": e.created_at.isoformat() if e.created_at else None,
         }
-        for e in result.scalars().all()
+        for e, data in zip(rows, payloads)
     ]

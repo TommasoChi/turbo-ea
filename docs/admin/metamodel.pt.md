@@ -283,6 +283,14 @@ Para que o [editor ArchiMate](../guide/archimate.md) possa associar diagramas a 
 
 Os nomes de elementos e relacionamentos são os do formato de intercâmbio da Open Group. Os valores predefinidos vêm do seed; as tabelas completas estão em [O mapeamento](../guide/archimate.md#mapping).
 
+## Itens de custo
+
+Os **itens de custo** são o catálogo de linhas de custo que os cards de Aplicação e Componente de TI podem ter (veja a [seção de Custos](../guide/card-details.md#seção-de-custos-aplicação-e-componente-de-ti)). Gerencia-se em **Admin > Metamodelo > Itens de custo**.
+
+Cada item tem uma **chave** estável, um **rótulo** e **traduções** opcionais do rótulo. Os itens são **arquivados**, não eliminados: um item arquivado já não pode ser adicionado a um card, mas os montantes já introduzidos continuam a contar no TCO e no [Relatório de custos](../guide/reports.md#relatório-de-custos).
+
+Introduzir montantes num card requer `costs.edit` (ou um papel de parte interessada que possa editar o card); alterar o catálogo requer a permissão de administração do metamodelo.
+
 ## Cálculos
 
 Campos calculados usam fórmulas definidas pelo administrador para computar automaticamente valores quando cards são salvos. Veja [Cálculos](calculations.md) para o guia completo.

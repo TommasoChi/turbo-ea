@@ -23,6 +23,7 @@ from tests.conftest import (
     create_role,
     create_user,
 )
+from tests.cost_item_helpers import add_costs
 
 COST_FIELDS = [
     {"section": "Cost", "fields": [{"key": "costTotalAnnual", "type": "cost", "weight": 0}]}
@@ -64,13 +65,16 @@ async def env(db):
 
 
 async def _app(db, name, cost, lifecycle=None, card_type="Application"):
-    return await create_card(
+    card = await create_card(
         db,
         card_type=card_type,
         name=name,
         attributes={"costTotalAnnual": cost},
         lifecycle=lifecycle or {},
     )
+    if cost:
+        await add_costs(db, card, other=cost)
+    return card
 
 
 async def _treemap(client, env, **params):
@@ -174,10 +178,7 @@ class TestCostEndpointCurrentFiscalYear:
 
 
 async def _hist(db, card, year, value):
-    db.add(
-        CardCostHistory(card_id=card.id, fiscal_year=year, field_key="costTotalAnnual", value=value)
-    )
-    await db.flush()
+    await add_costs(db, card, year=year, other=value)
 
 
 async def _sankey(client, env, **params):
@@ -224,7 +225,13 @@ class TestPastAndForecastYearsListCardsWithARecordedCost:
     async def test_the_current_year_is_unchanged_treemap(self, client, db, env):
         await _app(db, "Retired", 1000, {"endOfLife": _d(THIS_YEAR - 1)})
         running = await _app(db, "Running", 200)
-        await _hist(db, running, THIS_YEAR, 999)  # history is not read for the current year
+        # the legacy history table is not read at all for these types
+        db.add(
+            CardCostHistory(
+                card_id=running.id, fiscal_year=THIS_YEAR, field_key="costTotalAnnual", value=999
+            )
+        )
+        await db.flush()
 
         data = await _treemap(client, env, fiscal_year=THIS_YEAR)
         assert _names(data) == ["Running"]
@@ -240,7 +247,7 @@ class TestPastAndForecastYearsListCardsWithARecordedCost:
         await _hist(db, itc, THIS_YEAR - 2, 60)
 
         data = await _sankey(client, env, fiscal_year=THIS_YEAR - 2)
-        assert sorted(n["name"] for n in data["nodes"]) == ["App", "costTotalAnnual"]
+        assert sorted(n["name"] for n in data["nodes"]) == ["App", "other"]
         assert data["total"] == 40
         assert (await _sankey(client, env))["nodes"] == []
 
@@ -253,7 +260,7 @@ class TestPastAndForecastYearsListCardsWithARecordedCost:
         await _hist(db, itc, THIS_YEAR + 1, 60)
 
         data = await _sankey(client, env, fiscal_year=THIS_YEAR + 1)
-        assert sorted(n["name"] for n in data["nodes"]) == ["App", "costTotalAnnual"]
+        assert sorted(n["name"] for n in data["nodes"]) == ["App", "other"]
         assert data["total"] == 40
 
     async def test_the_current_year_is_unchanged_sankey(self, client, db, env):
@@ -261,7 +268,7 @@ class TestPastAndForecastYearsListCardsWithARecordedCost:
         await _app_itc_pair(db, {"endOfLife": _d(THIS_YEAR - 1)}, {"endOfLife": _d(THIS_YEAR - 1)})
 
         data = await _sankey(client, env, fiscal_year=THIS_YEAR)
-        assert sorted(n["name"] for n in data["nodes"]) == ["App", "costTotalAnnual"]
+        assert sorted(n["name"] for n in data["nodes"]) == ["App", "other"]
         assert data["total"] == 100
 
 

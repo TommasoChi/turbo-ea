@@ -21,6 +21,7 @@ import sqlalchemy as sa
 from app.models.architecture_decision import ArchitectureDecision
 from app.models.architecture_decision_card import ArchitectureDecisionCard
 from app.models.bookmark import Bookmark
+from app.models.card_cost import CardCost
 from app.models.card_logo import CardLogo
 from app.models.comment import Comment
 from app.models.diagram import Diagram
@@ -253,6 +254,13 @@ ENTITY_SECTIONS: tuple[EntitySection, ...] = (
         self_parent_column="parent_id",
     ),
     EntitySection("AdrCards", ArchitectureDecisionCard, card_fk_columns=("card_id",)),
+    # Per-card, per-year cost items; keys name ``CostItemTypes`` rows (applied earlier).
+    EntitySection(
+        "CardCosts",
+        CardCost,
+        card_fk_columns=("card_id",),
+        natural_key=("card_id", "fiscal_year"),
+    ),
     EntitySection(
         "Soaws",
         SoAW,

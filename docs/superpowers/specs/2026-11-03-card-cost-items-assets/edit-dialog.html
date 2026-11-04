@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edit cost item dialog - mockup (variant B)</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; background: #f2f3f5; color: #222; margin: 0; padding: 24px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.note { color: #666; margin: 0 0 18px; max-width: 760px; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .dialog { background: #fff; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 18px; width: 420px; }
+  .dialog h2 { font-size: 15px; margin: 0 0 12px; }
+  label { display: block; font-size: 11px; color: #777; margin-bottom: 2px; }
+  .field { border: 1px solid #bbb; border-radius: 4px; padding: 5px 8px; margin-bottom: 10px; background: #fff; }
+  .field.focus { border-color: #1976d2; }
+  .field.fixed { background: #f4f4f4; color: #555; }
+  .check { font-size: 12px; color: #555; margin-bottom: 12px; }
+  .actions { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+  .actions .del { color: #c62828; }
+  .actions .cancel { color: #777; margin-right: 14px; }
+  .actions .save { color: #1976d2; font-weight: 700; }
+  .cap { font-size: 12px; color: #555; margin-top: 8px; max-width: 420px; }
+</style>
+</head>
+<body>
+<h1>Edit cost item dialog - variant B (modal dialog)</h1>
+<p class="note">Mockup agreed in the design session of 2026-11-03. Spec:
+<code>../2026-11-03-card-cost-items-design.md</code>. Opened by clicking a tile of the Costs section
+(see <code>costs-section.html</code>).</p>
+
+<div class="row">
+  <div>
+    <div class="dialog">
+      <h2>Edit cost item &middot; FY26</h2>
+      <label>Item</label>
+      <div class="field fixed">Infrastructure (hosting &amp; cloud)</div>
+      <label>Annual amount (&euro;)</label>
+      <div class="field focus">40,000</div>
+      <label>Renewal date</label>
+      <div class="field">01/03/2027 &#128197;</div>
+      <div class="check">&#9744; Copy to Forecast (FY27)</div>
+      <div class="actions"><span class="del">&#128465; Delete</span><span><span class="cancel">Cancel</span><span class="save">Save</span></span></div>
+    </div>
+    <div class="cap">Editing: the item is fixed. "Copy to Forecast" copies amount and renewal date to the Forecast year
+    (the renewal date moves forward by the years between the two) and overwrites an existing value for that item.
+    It is offered on every year before the Forecast year.</div>
+  </div>
+
+  <div>
+    <div class="dialog">
+      <h2>Add cost item &middot; FY26</h2>
+      <label>Item</label>
+      <div class="field focus">Choose an item &#9662;</div>
+      <label>Annual amount (&euro;)</label>
+      <div class="field">&nbsp;</div>
+      <label>Renewal date</label>
+      <div class="field">&nbsp;</div>
+      <div class="check">&#9744; Copy to Forecast (FY27)</div>
+      <div class="actions"><span></span><span><span class="cancel">Cancel</span><span class="save">Save</span></span></div>
+    </div>
+    <div class="cap">Adding: the item is chosen from the catalogue, listing only the active items not yet set for that year
+    (an archived item cannot be added). The catalogue is managed by the admin in the metamodel.</div>
+  </div>
+</div>
+</body>
+</html>

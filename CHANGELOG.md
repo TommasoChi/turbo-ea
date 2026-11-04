@@ -5,6 +5,32 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.188.0] - 2026-11-03
+
+### Added
+
+- **Applications and IT Components record their cost as items.** A Costs section on the card shows six fiscal years (four past, current, Forecast) with a stacked bar, one tile per item with annual amount and renewal date, add/edit/delete, and Copy to Forecast.
+- **Cost item catalogue.** Administrators manage the cost items under Admin > Metamodel > Cost items, with translated labels; archived items cannot be added but keep counting in existing totals.
+- **New `costs.edit` permission.** Costs can be edited with `costs.edit` or by a stakeholder role that may edit the card; observers view only.
+- **Costs updated in the card History**, with a readable summary.
+- **Costs carry over to a new fiscal year.** Until confirmed, last year's items show as not confirmed with renewal dates moved forward.
+
+### Changed
+
+- **Total annual cost of Applications and IT Components is now calculated from the cost items** and read-only everywhere (grid, import, drag-fill, API, MCP, ServiceNow, LeanIX); a card without items has an empty cost.
+- **The Cost Report reads cost items** for these two types, one component per catalogue item.
+- **Existing costs are migrated on upgrade** from the old cost fields and cost history; years whose total changed are listed in the migration report.
+- **Members no longer edit the costs of Applications and IT Components by default.** Editing needs the new `costs.edit` permission or a stakeholder role that may edit the card (Responsible); a role with only inventory edit can no longer change costs.
+- **The migration report is stored in the `cost_items_migration_report` general setting** (no screen shows it).
+
+### Removed
+
+- **The old breakdown cost fields, their calculation and the cost-history editor** no longer apply to Applications and IT Components.
+
+### Security
+
+- **Cost amounts are no longer visible in activity feeds or card history to users without cost access on the card**, and the legacy cost-history read now requires cost access.
+
 ## [2.187.0] - 2026-11-02
 
 ### Added

@@ -12,6 +12,7 @@ The export captures the full workspace as a `.zip` bundle containing one Excel w
 - **Configuration** — roles, per-type stakeholder roles, tag groups and tags, calculated fields, EA principles, and compliance regulations.
 - **Settings** — currency, date format, feature flags, login branding, enabled locales, and the rest of the general application settings.
 - **Users** — email, display name, role, and active flag (used to re-link ownership and assignments on the target). No passwords or SSO identities.
+- **Cost items** — the cost item catalogue (keys, labels, translations, archived flag) and each Application or IT Component's cost items per fiscal year.
 - **Inventory** — every card (with its hierarchy, lifecycle, and attributes), card tags, and relations.
 - **Card context** — stakeholders, document links, comments, todos, and file attachments.
 - **Module data** — BPM (process diagrams, elements, flow versions, assessments), PPM (status reports, costs, budgets, risks, tasks, WBS, dependencies), the GRC risk register (risks, mitigation tasks and occurrences, card links), GRC compliance findings (with the analysis runs they reference), architecture decisions and Statements of Architecture Work, free-draw diagrams, saved reports, bookmarks (saved inventory views, including their shares), web portals, and surveys.
@@ -62,6 +63,7 @@ Import is **idempotent**: metamodel and configuration are matched by key, cards 
 - Synthetic users referenced by the bundle are created **deactivated**; activate them under **Admin → Users** as needed.
 - **User-owned data follows the user, matched by email.** Todos, saved views, favorites, and other personal data belong to the account whose email matches the one in the bundle. If you log into the target with a different email than you used on the source, your personal items will appear to be missing — they are attached to the (possibly deactivated) matching account. Log in with the same email, or activate the matched account under **Admin → Users**.
 - Private saved views are visible only to their owner; shared and public views follow their visibility settings.
+- **Bundles exported before the cost items feature (version 2.188.0)** carry the total cost of Applications and IT Components but no cost items, so that total is dropped the next time the cost is recalculated. Export again from the upgraded source before importing.
 
 ## Starting over
 

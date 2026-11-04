@@ -101,6 +101,7 @@ ID_FREE_COLUMNS: dict[tuple[str, str], str] = {
     ("Surveys", "message"): PROSE,
     ("Surveys", "target_roles"): KEYS,
     ("Surveys", "fields"): KEYS,
+    ("CardCosts", "items"): "amounts and renewal dates keyed by cost-item key, no ids",
 }
 
 

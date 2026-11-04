@@ -43,6 +43,7 @@ from app.services.calculation_ppm import (
     get_fiscal_year_start,
     needs_ppm,
 )
+from app.services.card_costs import COST_ITEM_TYPES, DERIVED_KEY
 from app.services.derived_writes import derived_maintenance
 from app.services.fiscal_year import current_fiscal_year
 from app.services.hierarchy import compute_hierarchy_level
@@ -712,6 +713,8 @@ async def run_calculations_for_card(
         for calc in result.scalars().all()
         if not (exclude_field and calc.target_field_key == exclude_field)
         and not (exclude_fields and calc.target_field_key in exclude_fields)
+        # The cost total is derived from the cost lines; a legacy calculation must not write it.
+        and not (card.type in COST_ITEM_TYPES and calc.target_field_key == DERIVED_KEY)
     ]
     if not calcs:
         return []

@@ -189,7 +189,7 @@ Os custos são anuais, por isso o relatório é elaborado para um **ano fiscal**
 
 Um ano fiscal chama-se **FY** mais os dois últimos dígitos do ano em que **termina**, seja qual for o mês em que o seu ano fiscal começa: um ano fiscal de julho de 2025 a junho de 2026 é **FY26**. Um chip na barra de ferramentas repete a seleção, por exemplo **Ano fiscal: FY26 - Current**. *Current* e *Forecast* não são traduzidos.
 
-**Os valores de previsão são introduzidos manualmente.** Abra um cartão, vá ao seu histórico de custos e escreva o custo planeado para o ano fiscal seguinte, tal como regista um ano passado. Só o **próximo** ano fiscal pode ser registado como previsão, e o registo exige a mesma permissão que o de um ano passado. Quando esse ano passa a ser o atual, o relatório lê em vez disso os atributos em vigor, e o valor em vigor do cartão substitui o que foi escrito.
+**Os custos das Aplicações e dos Componentes de TI vêm dos itens de custo do card.** Cada item do catálogo (incluindo os arquivados) é um componente de custo próprio no treemap, no Sankey, na tendência e na tabela, e o Forecast é o ano Forecast da [seção de Custos](card-details.md#seção-de-custos-aplicação-e-componente-de-ti) do card. Para os outros tipos de card (Iniciativa, Fornecedor), o próximo ano fiscal é introduzido manualmente no histórico de custos do card, o que requer a mesma permissão que registar um ano passado. Quando esse ano passa a ser o atual, o relatório lê em vez disso os atributos em direto, e o valor em direto do card substitui o digitado.
 
 #### Que cartões aparecem
 
@@ -202,7 +202,7 @@ Um ano fiscal chama-se **FY** mais os dois últimos dígitos do ano em que **ter
 
 A regra aplica-se a toda a página — aos totais, ao treemap, à tabela, às agregações por **Origem dos custos** e ao detalhamento — e o ano fiscal selecionado aparece no cabeçalho impresso.
 
-Quando escolhe um ano diferente de **Current**, um **gráfico de tendência** mostra o custo do ano atual e dos quatro anteriores. Enquanto **Forecast** for o ano selecionado, o gráfico mostra também uma barra para ele.
+Quando **Forecast** é o ano selecionado, um **gráfico de histórico** mostra o custo do ano atual, dos quatro anteriores e do ano de previsão. Não é mostrado para nenhum outro ano. Cada barra é empilhada, com um segmento por componente de custo: um item de custo nas Aplicações e nos Componentes de TI, caso contrário um campo de custo (a legenda e a dica usam então o nome técnico do campo, por exemplo `softwareLicensingCost`).
 
 Um administrador define o mês de início do ano fiscal em [Configurações → Geral](../admin/settings.md).
 

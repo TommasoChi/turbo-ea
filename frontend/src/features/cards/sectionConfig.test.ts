@@ -269,6 +269,42 @@ describe("buildSectionOrder", () => {
   });
 });
 
+describe("buildSectionOrder costs", () => {
+  const cost = { hierarchy: false, successors: false, costs: true };
+  const none = { hierarchy: false, successors: false };
+
+  it("puts costs after lifecycle in the built-in order of a cost-item type only", () => {
+    expect(buildSectionOrder(undefined, 1, cost)).toEqual([
+      "description",
+      "eol",
+      "lifecycle",
+      "costs",
+      "custom:0",
+      "tags",
+      "relations",
+    ]);
+    expect(buildSectionOrder(undefined, 0, none)).not.toContain("costs");
+  });
+
+  it("splices costs after lifecycle into a stored order that predates it", () => {
+    const sc = { __order: ["description", "lifecycle", "relations"] };
+    expect(buildSectionOrder(sc, 0, cost)).toEqual([
+      "description",
+      "lifecycle",
+      "costs",
+      "tags",
+      "relations",
+    ]);
+    expect(buildSectionOrder(sc, 0, none)).toEqual(["description", "lifecycle", "tags", "relations"]);
+  });
+
+  it("keeps a stored costs where the admin put it, and drops it for another type", () => {
+    const sc = { __order: ["costs", "description", "tags", "relations"] };
+    expect(buildSectionOrder(sc, 0, cost)).toEqual(["costs", "description", "tags", "relations"]);
+    expect(buildSectionOrder(sc, 0, none)).toEqual(["description", "tags", "relations"]);
+  });
+});
+
 describe("customSectionsOf", () => {
   it("drops the description extras section", () => {
     const schema: SectionDef[] = [

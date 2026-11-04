@@ -386,6 +386,33 @@ async def _kpi_snapshot_loop() -> None:
             await asyncio.sleep(3600)
 
 
+async def _cost_rollover_loop() -> None:
+    """Refresh derived cost totals shortly after 00:00 UTC: the fiscal year may have rolled."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.database import async_session
+    from app.services import card_costs
+    from app.services.derived_writes import derived_maintenance
+
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            next_run = now.replace(hour=0, minute=5, second=0, microsecond=0)
+            if next_run <= now:
+                next_run += timedelta(days=1)
+            await asyncio.sleep((next_run - now).total_seconds())
+            async with async_session() as db:
+                with derived_maintenance(db):
+                    changed = await card_costs.recompute_all(db)
+                await db.commit()
+            logger.info("Cost rollover refreshed %d card(s)", changed)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Error in cost rollover loop")
+            await asyncio.sleep(3600)
+
+
 async def _license_refresh_loop() -> None:
     """Daily loop that auto-renews the extension license from the store.
 
@@ -1089,6 +1116,7 @@ async def lifespan(app: FastAPI):
     await _ensure_initial_kpi_snapshot()
     await _ensure_initial_dashboard_kpi_snapshot()
     kpi_task = asyncio.create_task(_kpi_snapshot_loop())
+    cost_rollover_task = asyncio.create_task(_cost_rollover_loop())
 
     # Start the daily mitigation-task promotion loop that lifts
     # scheduled cycles to open once their lead window opens.
@@ -1145,6 +1173,11 @@ async def lifespan(app: FastAPI):
     kpi_task.cancel()
     try:
         await kpi_task
+    except asyncio.CancelledError:
+        pass
+    cost_rollover_task.cancel()
+    try:
+        await cost_rollover_task
     except asyncio.CancelledError:
         pass
     promote_task.cancel()

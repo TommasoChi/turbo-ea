@@ -42,6 +42,7 @@ function getFieldLabels(t: (key: string) => string): Record<string, string> {
     alias: t("history.fields.alias"),
     external_id: t("history.fields.externalId"),
     approval_status: t("history.fields.approvalStatus"),
+    cost_items: t("history.fields.costItems"),
   };
 }
 
@@ -201,15 +202,20 @@ function HistoryTab({ fsId, cardType }: { fsId: string; cardType?: string }) {
       {events.map((e) => {
         const meta = eventMeta(e.event_type, t);
         const changes = e.data?.changes as Record<string, unknown> | undefined;
-        const rows = changes
-          ? parseChanges(changes, {
+        const summary = typeof e.data?.summary === "string" ? (e.data.summary as string) : null;
+        // A costs update says which items changed in the backend's own words (labels):
+        // with that summary the raw `cost_items` key list is dropped, the total's old/new stays.
+        const costsSummary = e.event_type === "card.costs_updated" && summary;
+        const shownChanges =
+          changes && costsSummary ? Object.fromEntries(Object.entries(changes).filter(([k]) => k !== "cost_items")) : changes;
+        const rows = shownChanges
+          ? parseChanges(shownChanges, {
               fields: fieldLabelsFor(e.event_type, fieldLabels, resourceLabels),
               phases: phaseLabels,
               attributes: attrLabels,
               statuses: statusLabels,
             })
           : [];
-        const summary = typeof e.data?.summary === "string" ? (e.data.summary as string) : null;
         // A send, or a change written by applying an answer: name the survey.
         const survey = eventSurvey(e.event_type, e.data);
 
@@ -253,7 +259,7 @@ function HistoryTab({ fsId, cardType }: { fsId: string; cardType?: string }) {
                   (relations, stakeholders, risks, documents, files). Renders
                   clickable peer cards for relations, links to the risk page
                   for risk events, etc. Falls back to plain summary text. */}
-              {rows.length === 0 && (
+              {(rows.length === 0 || costsSummary) && (
                 <EventDetailView
                   detail={eventDetailModel(e.event_type, e.data, summary)}
                   typeIconFor={typeIconFor}

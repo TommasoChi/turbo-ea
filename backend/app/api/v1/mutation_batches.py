@@ -54,6 +54,7 @@ from app.schemas.mutation_batch import (
     MutationBatchOpen,
     MutationBatchOut,
 )
+from app.services.cost_event_redaction import redact_cost_events
 from app.services.event_bus import request_origin
 from app.services.mutation_batch_service import (
     CONFIRM_TOKEN_THRESHOLD,
@@ -298,6 +299,7 @@ async def get_batch_history(
         .order_by(Event.created_at.asc())
     )
     events = list((await db.execute(q)).scalars().all())
+    payloads = await redact_cost_events(db, user, events, [e.data for e in events])
 
     return MutationBatchHistory(
         batch=MutationBatchOut(
@@ -307,7 +309,7 @@ async def get_batch_history(
             MutationBatchEvent(
                 id=e.id,
                 event_type=e.event_type,
-                data=e.data,
+                data=data,
                 card_id=e.card_id,
                 entity_type=e.entity_type,
                 entity_id=e.entity_id,
@@ -315,7 +317,7 @@ async def get_batch_history(
                 user_display_name=e.user.display_name if e.user else None,
                 created_at=e.created_at,
             )
-            for e in events
+            for e, data in zip(events, payloads)
         ],
     )
 

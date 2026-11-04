@@ -21,6 +21,7 @@ from tests.conftest import (
     create_role,
     create_user,
 )
+from tests.cost_item_helpers import add_costs
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -1080,6 +1081,15 @@ class TestRoadmap:
 # ---------------------------------------------------------------------------
 
 
+async def _costed(db, **kwargs):
+    """A card whose ``costTotalAnnual`` attribute is also recorded as a cost item."""
+    card = await create_card(db, **kwargs)
+    cost = (kwargs.get("attributes") or {}).get("costTotalAnnual")
+    if cost:
+        await add_costs(db, card, other=cost)
+    return card
+
+
 class TestCost:
     async def test_cost_empty(self, client, db, env):
         """Cost report returns empty items and zero total with no cards."""
@@ -1096,14 +1106,14 @@ class TestCost:
     async def test_cost_with_data(self, client, db, env):
         """Cost report aggregates cost fields and sorts descending."""
         admin = env["admin"]
-        await create_card(
+        await _costed(
             db,
             card_type="Application",
             name="Expensive App",
             user_id=admin.id,
             attributes={"costTotalAnnual": 200000},
         )
-        await create_card(
+        await _costed(
             db,
             card_type="Application",
             name="Cheap App",
@@ -1111,7 +1121,7 @@ class TestCost:
             attributes={"costTotalAnnual": 5000},
         )
         # Card with no cost should not appear
-        await create_card(
+        await _costed(
             db,
             card_type="Application",
             name="Free App",
@@ -1166,14 +1176,14 @@ class TestCostTreemap:
     async def test_cost_treemap_with_data(self, client, db, env):
         """Cost treemap returns items sorted by cost descending."""
         admin = env["admin"]
-        await create_card(
+        await _costed(
             db,
             card_type="Application",
             name="Big App",
             user_id=admin.id,
             attributes={"costTotalAnnual": 100000},
         )
-        await create_card(
+        await _costed(
             db,
             card_type="Application",
             name="Small App",
@@ -1196,17 +1206,15 @@ class TestCostTreemap:
     async def test_cost_treemap_with_group_by(self, client, db, env):
         """Cost treemap with group_by adds group labels to items."""
         admin = env["admin"]
-        bc = await create_card(
-            db, card_type="BusinessCapability", name="Marketing", user_id=admin.id
-        )
-        app1 = await create_card(
+        bc = await _costed(db, card_type="BusinessCapability", name="Marketing", user_id=admin.id)
+        app1 = await _costed(
             db,
             card_type="Application",
             name="Ad Platform",
             user_id=admin.id,
             attributes={"costTotalAnnual": 75000},
         )
-        await create_card(
+        await _costed(
             db,
             card_type="Application",
             name="Standalone",
@@ -1255,10 +1263,8 @@ class TestCostTreemap:
         assert resp.status_code == 403
 
     async def test_cost_treemap_reads_a_past_year_from_history(self, client, db, env):
-        from app.models.card_cost_history import CardCostHistory
-
         admin = env["admin"]
-        app1 = await create_card(
+        app1 = await _costed(
             db,
             card_type="Application",
             name="ERP",
@@ -1266,12 +1272,7 @@ class TestCostTreemap:
             attributes={"costTotalAnnual": 999},  # today's live value — must NOT be shown
             lifecycle={"active": "2020-01-01"},
         )
-        db.add(
-            CardCostHistory(
-                card_id=app1.id, fiscal_year=2024, field_key="costTotalAnnual", value=321
-            )
-        )
-        await db.flush()
+        await add_costs(db, app1, year=2024, other=321)
         resp = await client.get(
             "/api/v1/reports/cost-treemap",
             params={"type": "Application", "fiscal_year": 2024},
@@ -1288,7 +1289,7 @@ class TestCostTreemap:
         from app.services.fiscal_year import current_fiscal_year
 
         admin = env["admin"]
-        await create_card(
+        await _costed(
             db,
             card_type="Application",
             name="ERP",
@@ -1308,7 +1309,7 @@ class TestCostTreemap:
         self, client, db, env
     ):
         admin = env["admin"]
-        await create_card(
+        await _costed(
             db,
             card_type="Application",
             name="ERP",
@@ -1328,22 +1329,15 @@ class TestCostTreemap:
     ):
         """Superseded rule: a year other than the current one lists every card with a
         recorded cost for it, whatever its lifecycle (cost-report fiscal-year picker spec)."""
-        from app.models.card_cost_history import CardCostHistory
-
         admin = env["admin"]
-        app1 = await create_card(
+        app1 = await _costed(
             db,
             card_type="Application",
             name="Old",
             user_id=admin.id,
             lifecycle={"active": "2018-01-01", "endOfLife": "2022-12-31"},
         )
-        db.add(
-            CardCostHistory(
-                card_id=app1.id, fiscal_year=2024, field_key="costTotalAnnual", value=500
-            )
-        )
-        await db.flush()
+        await add_costs(db, app1, year=2024, other=500)
         resp = await client.get(
             "/api/v1/reports/cost-treemap",
             params={"type": "Application", "fiscal_year": 2024},

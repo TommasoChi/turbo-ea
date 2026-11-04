@@ -114,6 +114,21 @@ A seconda del tipo di card, vedrete sezioni aggiuntive con **campi personalizzat
 
 I campi contrassegnati come **calcolati** mostrano un badge e non possono essere modificati manualmente — i loro valori sono calcolati da [formule definite dall'amministratore](../admin/calculations.md).
 
+### Sezione Costi (Applicazione e Componente IT)
+
+Le Applicazioni e i Componenti IT registrano il proprio costo come elenco di **elementi di costo** (ad esempio licenze, hosting, supporto), non come un unico numero digitato. La sezione **Costi** mostra un anno fiscale alla volta, con un navigatore **‹ ›** su sei anni: i quattro precedenti a quello corrente, quello corrente e il **Forecast**.
+
+- **TCO** — Il costo totale di proprietà dell'anno è la somma deli suoi elementi. Non viene mai digitato a mano.
+- **Grafico e riquadri** — Una barra impilata mostra come il TCO si ripartisce tra gli elementi. Ogni elemento ha un riquadro con il suo **importo annuo** e la **data di rinnovo**; un rinnovo entro 90 giorni è mostrato in arancione. I costi sono sempre annuali.
+- **Aggiunta e modifica** — Un elemento si aggiunge, modifica o elimina in una finestra di dialogo. Gli elementi provengono dal catalogo che un amministratore gestisce in [Metamodello → Elementi di costo](../admin/metamodel.md#elementi-di-costo).
+- **Copia in Forecast** — Copia gli elementi dell'anno che stai visualizzando nell'anno Forecast, per avviare un piano a partire dalle cifre attuali.
+
+**Un nuovo anno fiscale.** Quando l'anno fiscale cambia e una card non ha ancora costi per il nuovo anno corrente, la sezione mostra gli elementi dell'anno precedente contrassegnati come **non confermati**, con le date di rinnovo spostate in avanti. Restano tali finché qualcuno non le conferma o modifica un importo. Il Forecast e gli anni passati non ripiegano mai su un altro anno.
+
+**Chi può vedere e modificare i costi.** Puoi **visualizzare** i costi con il permesso `costs.view`, oppure se hai un qualsiasi ruolo di stakeholder sulla card. Puoi **modificare** i costi con il permesso `costs.edit`, oppure se hai sulla card un ruolo di stakeholder che consente di modificarla (ad esempio Responsabile). Gli osservatori possono solo visualizzare. Per impostazione predefinita solo gli amministratori hanno `costs.edit`; i ruoli esistenti mantengono `costs.view`.
+
+Il campo **Costo annuo totale** (`costTotalAnnual`) della card è derivato dalgli elementi dell'anno corrente ed è di sola lettura: griglia, importazione da foglio di calcolo, trascinamento del riempimento, API, MCP, ServiceNow e LeanIX non possono più impostarlo, e un valore inviato viene sovrascritto. Una card senza elementi di costo ha il campo di costo vuoto, non 0. Le Iniziative e i Fornitori mantengono i loro normali campi di costo.
+
 ### Sezione Gerarchia
 
 Per i tipi di card che supportano la gerarchia (es. Organization, Business Capability, Application):
@@ -215,6 +230,8 @@ Il percorso di invito richiede il permesso **`users.invite`**, una forma delegat
 Una modifica che non proviene dall'interfaccia web riporta un chip accanto al nome della persona: **MCP** quando un assistente IA l'ha effettuata tramite il [server MCP](../admin/mcp.md) per conto di quella persona, altrimenti **API**, **Estensione** o **Sistema**.
 
 Mostra il **registro di audit completo** delle modifiche apportate alla card: **chi** ha effettuato la modifica, **quando** è stata fatta e **cosa** è stato modificato (valore precedente vs. nuovo valore). Questo consente la completa tracciabilità di tutte le modifiche nel tempo.
+
+Una modifica ai costi della card compare come **Costi aggiornati** con un riepilogo leggibile delgli elementi coinvolte. Gli importi sono mostrati solo agli utenti che possono vedere i costi di quella card, e una modifica ai costi non può essere annullata dal registro di audit.
 
 Tutto ciò che sposta la data **Modificato** della card compare qui: una modifica manuale, un'importazione da foglio di calcolo, una migrazione di piattaforma o una sincronizzazione ServiceNow, un cambio di tag, una modifica di massa, o uno spostamento gerarchico che ha trascinato questa card. La manutenzione di sistema non cambia né l'una né l'altra: il ricalcolo dei punteggi di qualità dei dati, la riesecuzione dei campi calcolati e il popolamento dei livelli gerarchici o degli identificativi delle card lasciano intatti la cronologia e la data **Modificato**.
 

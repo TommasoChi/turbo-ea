@@ -21,6 +21,8 @@
 | **Tipo de Ficha** | La categoría a la que pertenece una ficha (ej., Aplicación, Proceso de Negocio, Organización) |
 | **Categoría (capa de arquitectura)** | La capa de EA en la que se agrupa un tipo de ficha: Estrategia y Transformación, Arquitectura de Negocio, Aplicación y Datos, Arquitectura Técnica o una creada por un administrador. Las categorías ordenan las capas en el filtro de tipos del inventario, el grafo del metamodelo y los carriles de la vista de dependencias; las cuatro integradas están bloqueadas |
 | **Puntuación de Confianza** | Una calificación de 0–100% que indica la fiabilidad de una descripción generada por IA |
+| **Partida de coste** | Una línea del coste anual de una Aplicación o Componente de TI (por ejemplo, alojamiento), tomada del catálogo en Admin > Metamodelo > Partidas de coste. El TCO de una ficha es la suma de sus partidas del año fiscal |
+| **TCO (coste total de propiedad)** | El coste anual total de una Aplicación o Componente de TI en un año fiscal, siempre derivado de sus partidas de coste y nunca escrito a mano |
 | **Línea de costo** | Una entrada de presupuesto o costo real (CapEx/OpEx) en una iniciativa PPM, utilizada para rastrear el gasto financiero |
 | **Calidad de Datos** | Una puntuación de completitud de 0–100% basada en campos completados y sus pesos configurados |
 | **Archivo adjunto** | Un archivo binario (documentos, hojas de cálculo, presentaciones, archivos OpenDocument y de Office heredados, imágenes, archivos comprimidos, mensajes de Outlook y correo electrónico, CSV, Markdown, JSON y XML: hasta 20 MB) cargado directamente a una ficha mediante la pestaña Recursos |

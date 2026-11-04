@@ -189,7 +189,7 @@ Costs are annual, so the report is built for one **fiscal year** at a time. A **
 
 A fiscal year is named **FY** plus the last two digits of the year it **ends** in, whatever month your fiscal year starts in: a fiscal year running from July 2025 to June 2026 is **FY26**. A chip in the toolbar repeats the selection, for example **Fiscal year: FY26 - Current**. *Current* and *Forecast* are not translated.
 
-**Forecast figures are entered by hand.** Open a card, go to its cost history and type the planned cost for next fiscal year, the same way you record a past year. Only the **next** fiscal year can be recorded as a forecast, and recording it needs the same permission as recording a past year. When that year becomes the current one, the report reads the live attributes instead, and the card's live figure replaces what was typed.
+**Application and IT Component costs come from the card's cost items.** Each catalogue item (archived ones included) is its own cost component in the treemap, Sankey, trend and table, and the Forecast is the Forecast year of the card's [Costs section](card-details.md#costs-section-application-and-it-component). For other card types (Initiative, Provider) the next fiscal year is entered by hand in the card's cost history, which needs the same permission as recording a past year. When that year becomes the current one, the report reads the live attributes instead, and the card's live figure replaces what was typed.
 
 #### Which cards appear
 
@@ -202,7 +202,7 @@ A fiscal year is named **FY** plus the last two digits of the year it **ends** i
 
 The rule applies to everything on the page — the totals, the treemap, the table, **Cost Source** roll-ups and drill-downs — and the selected fiscal year is printed in the report header.
 
-While **Forecast** is the selected year, a **history chart** shows the cost across the current year, the four before it and the forecast year. It is not shown for any other year. Each bar is stacked, with one segment per cost field that makes up the total cost; the legend and tooltip use the technical field names (for example `softwareLicensingCost`).
+While **Forecast** is the selected year, a **history chart** shows the cost across the current year, the four before it and the forecast year. It is not shown for any other year. Each bar is stacked, with one segment per cost component: a cost item for Applications and IT Components, otherwise a cost field (the legend and tooltip then use the technical field name, for example `softwareLicensingCost`).
 
 An administrator sets the month the fiscal year starts in under [Settings → General](../admin/settings.md#fiscal-year-start).
 

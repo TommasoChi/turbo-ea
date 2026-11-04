@@ -34,22 +34,22 @@ INIT_FIELDS = _schema(("costBudget", "cost"))
 async def env(db):
     await create_role(db, key="admin", permissions={"*": True})
     admin = await create_user(db, email="admin@test.com", role="admin")
-    await create_card_type(db, key="Application", fields_schema=APP_FIELDS)
-    await create_card_type(db, key="ITComponent", fields_schema=ITC_FIELDS)
+    await create_card_type(db, key="Workload", fields_schema=APP_FIELDS)
+    await create_card_type(db, key="Asset", fields_schema=ITC_FIELDS)
     await create_card_type(db, key="Initiative", fields_schema=INIT_FIELDS)
     await create_card_type(db, key="Organization", fields_schema=[])
     await create_relation_type(
         db,
         key="relAppToOrg",
-        source_type_key="Application",
+        source_type_key="Workload",
         target_type_key="Organization",
         cardinality="1:n",
     )
     await create_relation_type(
         db,
         key="relAppToITC",
-        source_type_key="Application",
-        target_type_key="ITComponent",
+        source_type_key="Workload",
+        target_type_key="Asset",
         cardinality="n:m",
     )
     return {"admin": admin}
@@ -58,7 +58,7 @@ async def env(db):
 async def _get(client, env, expect=200, **params):
     resp = await client.get(
         "/api/v1/reports/cost-treemap",
-        params={"type": "Application", **params},
+        params={"type": "Workload", **params},
         headers=auth_headers(env["admin"]),
     )
     assert resp.status_code == expect, resp.text
@@ -66,18 +66,16 @@ async def _get(client, env, expect=200, **params):
 
 
 async def _app(db, name, cost, **attrs):
-    return await create_card(
-        db, card_type="Application", name=name, attributes={TOTAL: cost, **attrs}
-    )
+    return await create_card(db, card_type="Workload", name=name, attributes={TOTAL: cost, **attrs})
 
 
 async def test_two_types_return_both_with_type(client, db, env):
     await _app(db, "App", 100)
-    await create_card(db, card_type="ITComponent", name="Itc", attributes={TOTAL: 50})
-    data = await _get(client, env, type="Application,ITComponent")
+    await create_card(db, card_type="Asset", name="Itc", attributes={TOTAL: 50})
+    data = await _get(client, env, type="Workload,Asset")
     assert {(i["name"], i["type"]) for i in data["items"]} == {
-        ("App", "Application"),
-        ("Itc", "ITComponent"),
+        ("App", "Workload"),
+        ("Itc", "Asset"),
     }
     assert data["total"] == 150
     assert data["groups"] is None
@@ -86,13 +84,13 @@ async def test_two_types_return_both_with_type(client, db, env):
 async def test_single_type_unchanged(client, db, env):
     await _app(db, "App", 100)
     data = await _get(client, env)
-    assert [i["type"] for i in data["items"]] == ["Application"]
+    assert [i["type"] for i in data["items"]] == ["Workload"]
     assert data["components"] == [TOTAL]
     assert {"fiscal_year", "current_fiscal_year", "fiscal_year_start"} <= set(data)
     assert "group" not in data["items"][0]
 
 
-@pytest.mark.parametrize("bad", ["Application,", "Application,Bogus", "Bogus", "Organization"])
+@pytest.mark.parametrize("bad", ["Workload,", "Workload,Bogus", "Bogus", "Organization"])
 async def test_bad_type_list_is_400(client, env, bad):
     await _get(client, env, expect=400, type=bad)
 
@@ -100,15 +98,15 @@ async def test_bad_type_list_is_400(client, env, bad):
 async def test_hidden_type_cards_omitted_for_restricted_reader(client, db, env):
     await create_role(db, key="reader", permissions={"costs.view": True}, is_system=False)
     reader = await create_user(db, email="r@test.com", role="reader")
-    ct = (await db.execute(select(CardType).where(CardType.key == "ITComponent"))).scalar_one()
+    ct = (await db.execute(select(CardType).where(CardType.key == "Asset"))).scalar_one()
     ct.role_permissions = {"reader": {"inventory.view": False}}
     await db.flush()
     PermissionService.invalidate_type_permission_cache()
     await _app(db, "App", 100)
-    await create_card(db, card_type="ITComponent", name="Itc", attributes={TOTAL: 50})
+    await create_card(db, card_type="Asset", name="Itc", attributes={TOTAL: 50})
     resp = await client.get(
         "/api/v1/reports/cost-treemap",
-        params={"type": "Application,ITComponent"},
+        params={"type": "Workload,Asset"},
         headers=auth_headers(reader),
     )
     assert resp.status_code == 200, resp.text
@@ -168,13 +166,13 @@ async def test_components_follow_active_calculation(client, db, env):
     db.add(
         Calculation(
             name="c",
-            target_type_key="Application",
+            target_type_key="Workload",
             target_field_key=TOTAL,
             formula="present = data.costA + data.costB",
             is_active=True,
         )
     )
-    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    ct = (await db.execute(select(CardType).where(CardType.key == "Workload"))).scalar_one()
     ct.fields_schema = _schema((TOTAL, "cost"), ("costA", "cost"), ("costB", "cost"))
     await db.flush()
     await _app(db, "A", 100)
@@ -204,7 +202,7 @@ async def test_group_by_hidden_relation_or_type_is_400(client, db, env, report):
     for _ in range(2):
         resp = await client.get(
             f"/api/v1/reports/{report}",
-            params={"type": "Application", "group_by": "rel:relAppToOrg"},
+            params={"type": "Workload", "group_by": "rel:relAppToOrg"},
             headers=auth_headers(env["admin"]),
         )
         assert resp.status_code == 400, resp.text
@@ -221,7 +219,7 @@ async def test_group_by_hidden_relation_or_type_is_400(client, db, env, report):
 async def test_six_types_is_400(client, env, report):
     resp = await client.get(
         f"/api/v1/reports/{report}",
-        params={"type": "Application,ITComponent,Initiative,A,B,C"},
+        params={"type": "Workload,Asset,Initiative,A,B,C"},
         headers=auth_headers(env["admin"]),
     )
     assert resp.status_code == 400, resp.text

@@ -111,6 +111,21 @@ Afhængigt af korttypen vil du se yderligere sektioner med **brugerdefinerede fe
 
 Felter markeret som **calculated** viser et badge og kan ikke redigeres manuelt — deres værdier beregnes af [admin-definerede formler](../admin/calculations.md).
 
+### Omkostningssektion (Applikation og IT-komponent)
+
+Applikationer og IT-komponenter registrerer deres omkostninger som en liste af **omkostningsposter** (for eksempel licenser, hosting, support) og ikke som ét indtastet tal. Sektionen **Omkostninger** viser ét regnskabsår ad gangen, med en **‹ ›**-navigator over seks år: de fire før det nuværende, det nuværende og **Forecast**.
+
+- **TCO** — Årets samlede ejeromkostninger er summen af dets poster. De indtastes aldrig i hånden.
+- **Diagram og felter** — En stablet bjælke viser, hvordan TCO fordeler sig på posterne. Hver post har et felt med sit **årlige beløb** og sin **fornyelsesdato**; en fornyelse inden for 90 dage vises med orange. Omkostninger er altid årlige.
+- **Tilføjelse og redigering** — En post tilføjes, redigeres eller slettes i en dialog. Posterne kommer fra kataloget, som en administrator vedligeholder under [Metamodel → Omkostningsposter](../admin/metamodel.md#omkostningsposter).
+- **Kopiér til Forecast** — Kopierer posterne fra det år, du ser på, til Forecast-året, så du kan begynde en plan ud fra de nuværende tal.
+
+**Et nyt regnskabsår.** Når regnskabsåret skifter, og et kort endnu ikke har omkostninger for det nye nuværende år, viser sektionen det forrige års poster markeret som **ikke bekræftet**, med fornyelsesdatoerne rykket frem. De forbliver sådan, indtil nogen bekræfter dem eller redigerer et beløb. Forecast og tidligere år falder aldrig tilbage på et andet år.
+
+**Hvem kan se og redigere omkostninger.** Du kan **se** omkostninger med tilladelsen `costs.view` eller hvis du har en vilkårlig stakeholder-rolle på kortet. Du kan **redigere** omkostninger med tilladelsen `costs.edit` eller hvis du har en stakeholder-rolle på kortet, der tillader redigering af kortet (for eksempel Ansvarlig). Observatører kan kun se. Som standard har kun administratorer `costs.edit`; eksisterende roller beholder `costs.view`.
+
+Kortets felt **Samlede årlige omkostninger** (`costTotalAnnual`) udledes af det nuværende års poster og er skrivebeskyttet: gitteret, regnearksimport, træk-udfyld, API'et, MCP, ServiceNow og LeanIX kan ikke længere sætte det, og en sendt værdi overskrives. Et kort uden omkostningsposter har et tomt omkostningsfelt, ikke 0. Initiativer og udbydere beholder deres almindelige omkostningsfelter.
+
 ### Hierarki-sektion
 
 For korttyper der understøtter hierarki (f.eks. Organization, Business Capability, Application):
@@ -212,6 +227,8 @@ Invitations-stien kræver tilladelsen **`users.invite`**, en delegeret form af `
 En ændring, der ikke kom fra webgrænsefladen, har en chip ved siden af personens navn: **MCP**, når en AI-assistent foretog den via [MCP-serveren](../admin/mcp.md) på personens vegne, ellers **API**, **Udvidelse** eller **System**.
 
 Viser det **komplette audit-spor** over ændringer foretaget på kortet: **hvem** der foretog ændringen, **hvornår** den blev foretaget, og **hvad** der blev ændret (tidligere værdi vs. ny værdi). Dette giver fuld sporbarhed over alle ændringer over tid.
+
+En ændring af kortets omkostninger vises som **Omkostninger opdateret** med et læsbart resumé af de berørte poster. Beløb vises kun for brugere, der kan se omkostningerne på det kort, og en omkostningsændring kan ikke rulles tilbage fra revisionsloggen.
 
 Alt, der flytter kortets **Ændret**-dato, vises her — en manuel redigering, et regnearksimport, en platformsmigrering eller ServiceNow-synkronisering, en tag-ændring, en masseredigering eller en hierarkiflytning, der trak dette kort med. Systemvedligeholdelse ændrer ingen af delene: genberegning af datakvalitetsscorer, genkørsel af beregnede felter og udfyldning af hierarkiniveauer eller kort-id'er lader både historikken og **Ændret**-datoen være i fred.
 

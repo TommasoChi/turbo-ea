@@ -75,7 +75,7 @@ OBSERVER_FIELD = {
 async def env(db, survey_env):  # noqa: F811
     """``survey_env`` plus an observer role, observers and a lifecycle."""
     await create_stakeholder_role_def(
-        db, card_type_key="Application", key="observer", label="Observer"
+        db, card_type_key="Provider", key="observer", label="Observer"
     )
     card = survey_env["card"]
     card.lifecycle = {"plan": "2024-01-01", "active": "2024-06-01"}
@@ -146,7 +146,7 @@ class TestFieldValidation:
             "/api/v1/surveys",
             json={
                 "name": "Bad",
-                "target_type_key": "Application",
+                "target_type_key": "Provider",
                 "fields": [{**row, "action": "maintain"}],
             },
             headers=auth_headers(env["admin"]),
@@ -482,7 +482,7 @@ class TestApply:
         applier = await create_user(db, email="applier@test.com", role="survey_admin")
         card = env["card"]
         second = await create_card(
-            db, card_type="Application", name="Second App", attributes={"riskLevel": "low"}
+            db, card_type="Provider", name="Second App", attributes={"riskLevel": "low"}
         )
         db.add(Stakeholder(card_id=second.id, user_id=env["member"].id, role="responsible"))
         await db.flush()
@@ -521,7 +521,7 @@ class TestApply:
         # a stakeholder in a role that carries ``card.manage_stakeholders``.
         await create_stakeholder_role_def(
             db,
-            card_type_key="Application",
+            card_type_key="Provider",
             key="steward",
             label="Steward",
             permissions={"card.manage_stakeholders": True},
@@ -551,7 +551,7 @@ class TestApply:
             db,
             key="relAppToInterface",
             label="provides",
-            source_type_key="Application",
+            source_type_key="Provider",
             target_type_key="Interface",
         )
         iface = await create_card(db, card_type="Interface", name="Orders API")
@@ -583,7 +583,7 @@ class TestApply:
         admin, member = env["admin"], env["member"]
         second = await create_card(
             db,
-            card_type="Application",
+            card_type="Provider",
             name="Second App",
             attributes={"costTotalAnnual": 1, "riskLevel": "low"},
         )
@@ -695,7 +695,7 @@ class TestApplyFailures:
         a response's savepoint is still a refused response, not a lost request."""
         admin, member = env["admin"], env["member"]
         second = await create_card(
-            db, card_type="Application", name="Second App", attributes={"riskLevel": "low"}
+            db, card_type="Provider", name="Second App", attributes={"riskLevel": "low"}
         )
         db.add(Stakeholder(card_id=second.id, user_id=member.id, role="responsible"))
         await db.flush()
@@ -772,7 +772,7 @@ class TestApplyFailures:
         watcher = await create_user(db, email="watcher@test.com", display_name="Watcher")
         db.add(Stakeholder(card_id=card.id, user_id=watcher.id, role="observer"))
         second = await create_card(
-            db, card_type="Application", name="Second App", attributes={"riskLevel": "low"}
+            db, card_type="Provider", name="Second App", attributes={"riskLevel": "low"}
         )
         db.add(Stakeholder(card_id=second.id, user_id=member.id, role="responsible"))
         db.add(Stakeholder(card_id=second.id, user_id=watcher.id, role="responsible"))
@@ -828,7 +828,7 @@ class TestDelete:
         )
         await _apply(client, env["admin"], sid, [rid])
         # A second, still-pending request on another card.
-        other = await create_card(db, card_type="Application", name="Pending App")
+        other = await create_card(db, card_type="Provider", name="Pending App")
         db.add(SurveyResponse(survey_id=uuid.UUID(sid), card_id=other.id, user_id=env["member"].id))
         db.add(
             Notification(

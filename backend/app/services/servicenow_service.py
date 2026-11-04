@@ -25,6 +25,7 @@ from app.models.servicenow import (
     SnowStagedRecord,
     SnowSyncRun,
 )
+from app.services.card_costs import recompute_derived
 from app.services.card_lifecycle import archive_cards_in_place
 from app.services.event_bus import event_bus
 
@@ -830,6 +831,8 @@ class SyncEngine:
                 attrs = dict(card.attributes or {})
                 attrs[attr_key] = new_val
                 card.attributes = attrs
+        # a mapped costTotalAnnual must not outlive the cost section
+        await recompute_derived(self.db, card)
 
         # Update identity map timestamp
         id_result = await self.db.execute(

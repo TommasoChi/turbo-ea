@@ -113,6 +113,21 @@ Dependendo do tipo de card, você verá seções adicionais com **campos persona
 
 Campos marcados como **calculados** mostram um badge e não podem ser editados manualmente — seus valores são computados por [fórmulas definidas pelo administrador](../admin/calculations.md).
 
+### Seção de Custos (Aplicação e Componente de TI)
+
+As Aplicações e os Componentes de TI registam o seu custo como uma lista de **itens de custo** (por exemplo licenças, alojamento, suporte), e não como um único número digitado. A seção **Custos** mostra um ano fiscal de cada vez, com um navegador **‹ ›** ao longo de seis anos: os quatro anteriores ao atual, o atual e o **Forecast**.
+
+- **TCO** — O custo total de propriedade do ano é a soma dos seus itens. Nunca é digitado à mão.
+- **Gráfico e blocos** — Uma barra empilhada mostra como o TCO se distribui pelos itens. Cada item tem um bloco com o seu **montante anual** e a **data de renovação**; uma renovação nos próximos 90 dias é mostrada a laranja. Os custos são sempre anuais.
+- **Adicionar e editar** — Um item é adicionado, editado ou eliminado numa caixa de diálogo. Os itens vêm do catálogo que um administrador gere em [Metamodelo → Itens de custo](../admin/metamodel.md#itens-de-custo).
+- **Copiar para Forecast** — Copia os itens do ano que está a ver para o ano Forecast, para iniciar um plano a partir dos valores atuais.
+
+**Um novo ano fiscal.** Quando o ano fiscal muda e um card ainda não tem custos para o novo ano atual, a seção mostra os itens do ano anterior marcados como **não confirmados**, com as datas de renovação avançadas. Ficam assim até alguém os confirmar ou editar um montante. O Forecast e os anos passados nunca recorrem a outro ano.
+
+**Quem pode ver e editar os custos.** Pode **ver** os custos com a permissão `costs.view`, ou se tiver qualquer papel de parte interessada no card. Pode **editar** os custos com a permissão `costs.edit`, ou se tiver no card um papel de parte interessada que permita editá-lo (por exemplo Responsável). Os observadores só podem ver. Por predefinição, só os administradores têm `costs.edit`; os papéis existentes mantêm `costs.view`.
+
+O campo **Custo anual total** (`costTotalAnnual`) do card é derivado dos itens do ano atual e é só de leitura: a grelha, a importação de folha de cálculo, o arrastar para preencher, a API, o MCP, o ServiceNow e o LeanIX já não o podem definir, e qualquer valor enviado é substituído. Um card sem itens de custo tem o campo de custo vazio, não 0. As Iniciativas e os Fornecedores mantêm os seus campos de custo habituais.
+
 ### Seção de Hierarquia
 
 Para tipos de card que suportam hierarquia (ex.: Organização, Capacidade de Negócio, Aplicação):
@@ -214,6 +229,8 @@ O caminho de convite requer a permissão **`users.invite`**, uma forma delegada 
 Uma alteração que não veio da interface web traz um chip ao lado do nome da pessoa: **MCP** quando um assistente de IA a fez pelo [servidor MCP](../admin/mcp.md) em nome dessa pessoa, ou **API**, **Extensão** ou **Sistema** nos demais casos.
 
 Mostra a **trilha de auditoria completa** das alterações feitas no card: **quem** fez a alteração, **quando** foi feita e **o que** foi modificado (valor anterior vs. novo valor). Isso permite total rastreabilidade de todas as modificações ao longo do tempo.
+
+Uma alteração aos custos do card aparece como **Custos atualizados**, com um resumo legível dos itens afetados. Os montantes só são mostrados aos utilizadores que podem ver os custos desse card, e uma alteração de custos não pode ser revertida a partir do registo de auditoria.
 
 Tudo o que move a data **Modificado** do card aparece aqui: uma edição manual, uma importação de planilha, uma migração de plataforma ou sincronização com o ServiceNow, uma alteração de etiqueta, uma edição em massa, ou uma movimentação hierárquica que arrastou este card. A manutenção do sistema não altera nenhum dos dois: recalcular as pontuações de qualidade dos dados, reexecutar os campos calculados e preencher níveis hierárquicos ou identificadores de card deixam o histórico e a data **Modificado** intactos.
 

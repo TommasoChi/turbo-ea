@@ -12,6 +12,7 @@ from app.models.base import Base
 from app.models.bookmark import Bookmark
 from app.models.calculation import Calculation
 from app.models.card import Card
+from app.models.card_cost import CardCost
 from app.models.card_cost_history import CardCostHistory
 from app.models.card_logo import CardLogo
 from app.models.card_type import CardType
@@ -19,6 +20,7 @@ from app.models.card_type_category import CardTypeCategory
 from app.models.catalogue_cache import CatalogueCache
 from app.models.comment import Comment
 from app.models.compliance_regulation import ComplianceRegulation
+from app.models.cost_item_type import CostItemType
 from app.models.dashboard import Dashboard, DashboardKpiSnapshot
 from app.models.diagram import Diagram
 from app.models.diagram_favorite import DiagramFavorite
@@ -180,6 +182,8 @@ __all__ = [
     "UserFavorite",
     "ResourceType",
     "CardTypeCategory",
+    "CardCost",
+    "CostItemType",
     "Dashboard",
     "DashboardKpiSnapshot",
     "OpsRequestNonce",

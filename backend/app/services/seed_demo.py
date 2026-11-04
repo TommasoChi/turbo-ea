@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.architecture_decision import ArchitectureDecision
 from app.models.architecture_decision_card import ArchitectureDecisionCard
 from app.models.card import Card
+from app.models.card_cost import CardCost
 from app.models.relation import Relation
 from app.models.soaw import SoAW
 from app.models.tag import CardTag, Tag, TagGroup
@@ -7233,6 +7234,36 @@ def _compute_data_quality(d: dict, type_schemas: dict[str, list]) -> float:
 SEEDER_KEY = "base"
 
 
+_COST_SPLIT = (("softwareLicensingCost", 50), ("applicationManagementServicesCost", 30))
+
+
+def _demo_cost_items(total: float) -> dict:
+    """Split a demo total into the three starter lines; the parts add back to the total."""
+    parts: dict[str, float] = {}
+    left = total
+    for key, pct in _COST_SPLIT:
+        parts[key] = total * pct // 100
+        left -= parts[key]
+    parts["infrastruttureCost"] = left
+    return {k: {"amount": v, "renewal_date": None} for k, v in parts.items() if v > 0}
+
+
+async def _seed_demo_costs(db: AsyncSession, totals: dict[uuid.UUID, float]) -> None:
+    """Cost items for the current fiscal year; ``costTotalAnnual`` is then derived from them."""
+    from app.services.card_costs import recompute_derived
+    from app.services.cost_item_types import seed_default_items
+    from app.services.fiscal_year import current_fiscal_year, get_fiscal_year_start
+
+    await seed_default_items(db)
+    year = current_fiscal_year(await get_fiscal_year_start(db))
+    for card_id, total in totals.items():
+        db.add(CardCost(card_id=card_id, fiscal_year=year, items=_demo_cost_items(total)))
+    await db.flush()
+    for card in (await db.execute(select(Card).where(Card.id.in_(totals)))).scalars():
+        await recompute_derived(db, card)
+    await db.flush()
+
+
 async def seed_demo_data(db: AsyncSession) -> dict:
     """Insert full demo dataset. Returns counts. Safe to re-run (skips if data exists)."""
     if await demo_seed_completed(db, SEEDER_KEY):
@@ -7277,10 +7308,18 @@ async def seed_demo_data(db: AsyncSession) -> dict:
     for d in all_fs:
         d["data_quality"] = _compute_data_quality(d, type_schemas)
 
-    # Insert cards (parents first – lists are ordered that way)
+    # The cost total of Application / IT Component is derived from cost items, so the card is
+    # inserted without it and ``_seed_demo_costs`` rebuilds it (the module dicts stay untouched).
+    cost_totals: dict[uuid.UUID, float] = {}
     for d in all_fs:
+        attrs = d.get("attributes", {})
+        if d["type"] in ("Application", "ITComponent") and "costTotalAnnual" in attrs:
+            if attrs["costTotalAnnual"] > 0:
+                cost_totals[d["id"]] = attrs["costTotalAnnual"]
+            d = {**d, "attributes": {k: v for k, v in attrs.items() if k != "costTotalAnnual"}}
         db.add(Card(**d))
     await db.flush()
+    await _seed_demo_costs(db, cost_totals)
 
     # Insert relations
     for r in RELATIONS:

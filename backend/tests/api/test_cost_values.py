@@ -21,6 +21,7 @@ from tests.conftest import (
     create_role,
     create_user,
 )
+from tests.cost_item_helpers import add_costs
 
 FIELDS = [
     {
@@ -39,6 +40,7 @@ async def env(db):
     await create_role(db, key="admin", permissions={"*": True})
     admin = await create_user(db, email="costs-admin@example.com", role="admin")
     await create_card_type(db, key="Application", fields_schema=FIELDS)
+    await create_card_type(db, key="Provider", fields_schema=FIELDS)
     await create_card_type(db, key="BusinessCapability", fields_schema=[])
     await create_relation_type(
         db,
@@ -52,7 +54,7 @@ async def env(db):
 def _post(client, env, attributes, name="Priced"):
     return client.post(
         "/api/v1/cards",
-        json={"type": "Application", "name": name, "attributes": attributes},
+        json={"type": "Provider", "name": name, "attributes": attributes},
         headers=auth_headers(env["admin"]),
     )
 
@@ -108,6 +110,7 @@ class TestReadersTolerateStoredText:
             app = await create_card(
                 db, card_type="Application", name=name, attributes={"costTotalAnnual": cost}
             )
+            await add_costs(db, app, other=cost)
             await create_relation(
                 db, type_key="relAppToCapability", source_id=app.id, target_id=cap.id
             )

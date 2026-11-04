@@ -13,10 +13,12 @@ from app.api.v1 import (
     bpm_workflow,
     calculations,
     capability_catalogue,
+    card_costs,
     card_logos,
     cards,
     comments,
     cost_history,
+    cost_item_types,
     dashboards,
     diagram_groups,
     diagrams,
@@ -60,6 +62,7 @@ from app.api.v1 import (
 api_router = APIRouter()
 api_router.include_router(auth.router)
 api_router.include_router(metamodel.router)
+api_router.include_router(cost_item_types.router)
 api_router.include_router(cards.router)
 api_router.include_router(relations.router)
 api_router.include_router(stakeholders.router)
@@ -67,6 +70,7 @@ api_router.include_router(comments.router)
 api_router.include_router(todos.router)
 api_router.include_router(tags.router)
 api_router.include_router(documents.router)
+api_router.include_router(card_costs.router)
 api_router.include_router(cost_history.router)
 api_router.include_router(bookmarks.router)
 api_router.include_router(saved_reports.router)

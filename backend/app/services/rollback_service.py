@@ -296,6 +296,7 @@ _DECLINED: dict[str, str] = {
     "todo.": "Todos are requests to people; reopening or deleting one is not an undo.",
     "notification.": "A notification has already been delivered.",
     "risk.removed": "A deleted risk cannot be rebuilt — no snapshot is recorded.",
+    "card.costs_updated": "Cost changes cannot be rolled back; edit the cost items instead.",
     "diagram.updated": "The previous canvas is not snapshotted.",
     "diagram.deleted": "A deleted diagram cannot be rebuilt — no snapshot is recorded.",
 }

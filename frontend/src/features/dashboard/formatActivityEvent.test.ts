@@ -55,6 +55,12 @@ describe("formatActivityEvent", () => {
     expect(out.cardName).toBe("NexaCore ERP");
   });
 
+  it("classifies card.costs_updated as an update, not as an unknown event", () => {
+    const out = formatActivityEvent({ ...baseEvent, event_type: "card.costs_updated" }, t);
+    expect(out.category).toBe("update");
+    expect(out.cardLink).toBe("/cards/card-123");
+  });
+
   it("falls back to data.id when card_id is missing", () => {
     const out = formatActivityEvent(
       { ...baseEvent, card_id: undefined },

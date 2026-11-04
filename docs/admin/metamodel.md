@@ -284,6 +284,14 @@ To let the [ArchiMate editor](../guide/archimate.md) link diagrams to cards, the
 
 Element and relationship names are those of the Open Group exchange format. The defaults come from the seed (metamodel mapping migration); the full default tables are in [The mapping](../guide/archimate.md#mapping).
 
+## Cost items
+
+**Cost items** are the catalogue of cost lines that Application and IT Component cards can carry (see the [Costs section](../guide/card-details.md#costs-section-application-and-it-component)). Manage it under **Admin > Metamodel > Cost items**.
+
+Each item has a stable **key**, a **label** and optional **translations** of the label. Items are **archived**, not deleted: an archived item can no longer be added to a card, but amounts already entered keep counting in the TCO and in the [Cost Report](../guide/reports.md#cost-report).
+
+Entering amounts on a card needs `costs.edit` (or a stakeholder role that may edit the card); changing the catalogue needs the metamodel administration permission.
+
 ## Calculations
 
 Calculated fields use admin-defined formulas to automatically compute values when cards are saved. See [Calculations](calculations.md) for the full guide.

@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card_type import CardType
 from app.models.card_type_category import CardTypeCategory
+from app.models.cost_item_type import CostItemType
 from app.models.role import Role
 
 # The longest free text (a description, a rationale) one side of an audit
@@ -80,6 +81,37 @@ async def category_labels(db: AsyncSession, keys: Iterable[str | None]) -> dict[
         select(CardTypeCategory.key, CardTypeCategory.label).where(CardTypeCategory.key.in_(wanted))
     )
     return {key: label for key, label in rows.all() if label}
+
+
+async def cost_item_labels(db: AsyncSession, keys: Iterable[str | None]) -> dict[str, str]:
+    """``{cost item key: label}`` for ``keys``, in one query (none when empty)."""
+    wanted = _wanted(keys)
+    if not wanted:
+        return {}
+    rows = await db.execute(
+        select(CostItemType.key, CostItemType.label).where(CostItemType.key.in_(wanted))
+    )
+    return {key: label for key, label in rows.all() if label}
+
+
+async def cost_event_summaries(
+    db: AsyncSession, card_name: str, payloads: Iterable[dict | None]
+) -> list[str]:
+    """Readable "Costs of <card> changed (items: <labels>)" per ``card.costs_updated`` payload.
+
+    Item labels, not keys, resolved in one query for the whole list; the items part
+    is left out when a payload carries no ``cost_items`` (redacted for the reader).
+    """
+    keysets = []
+    for data in payloads:
+        items = ((data or {}).get("changes") or {}).get("cost_items") or {}
+        keysets.append(sorted({*(items.get("old") or []), *(items.get("new") or [])}))
+    labels = await cost_item_labels(db, [k for keys in keysets for k in keys])
+    text = f"Costs of {card_name} changed"
+    return [
+        f"{text} (items: {', '.join(labels.get(k, k) for k in keys)})" if keys else text
+        for keys in keysets
+    ]
 
 
 def clip_text(text: str | None, limit: int = AUDIT_TEXT_LIMIT) -> str | None:

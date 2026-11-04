@@ -1,0 +1,389 @@
+"""Tests for migration 175's data move (cost fields and history -> cost items).
+
+First block: the pure helpers in ``app.services.cost_items_migration`` (no DB). Second
+block: end to end on the test database. ``upgrade()`` itself also creates the tables
+(which ``create_all`` already built), so the test drives the revision's data step
+``_data_body`` through ``AsyncConnection.run_sync`` -- the same pattern as the 168 test.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+from sqlalchemy import select
+
+from app.models.app_settings import AppSettings
+from app.models.calculation import Calculation
+from app.models.card import Card
+from app.models.card_cost import CardCost
+from app.models.card_cost_history import CardCostHistory
+from app.models.card_type import CardType
+from app.models.cost_item_type import CostItemType
+from app.services import cost_items_migration as cim
+from app.services.fiscal_year import current_fiscal_year
+from tests.conftest import create_card, create_card_type
+
+_MIG_PATH = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "175_card_cost_items.py"
+_spec = importlib.util.spec_from_file_location("mig175", _MIG_PATH)
+mig = importlib.util.module_from_spec(_spec)
+assert _spec and _spec.loader
+_spec.loader.exec_module(mig)
+
+KEYS = ["softwareLicensingCost", "applicationManagementServicesCost", "infrastruttureCost"]
+
+
+def amounts(items):
+    return {k: v["amount"] for k, v in items.items()}
+
+
+def test_current_residual_goes_to_other():
+    attrs = {
+        "softwareLicensingCost": 100,
+        "applicationManagementServicesCost": 40,
+        "infrastruttureCost": 20,
+        "costTotalAnnual": 200,
+    }
+    assert amounts(cim.build_current_year_items(attrs, KEYS)[0]) == {
+        "softwareLicensingCost": 100,
+        "applicationManagementServicesCost": 40,
+        "infrastruttureCost": 20,
+        "other": 40,
+    }
+
+
+def test_current_details_above_total_have_no_other():
+    attrs = {"softwareLicensingCost": 120, "costTotalAnnual": 100}
+    items, tco, changed = cim.build_current_year_items(attrs, KEYS)
+    assert (amounts(items), tco, changed) == ({"softwareLicensingCost": 120}, 120, True)
+
+
+def test_current_details_without_total_change():
+    items, tco, changed = cim.build_current_year_items({"infrastruttureCost": 30}, KEYS)
+    assert (amounts(items), tco, changed) == ({"infrastruttureCost": 30}, 30, True)
+
+
+def test_current_consistent_year_is_unchanged():
+    attrs = {"softwareLicensingCost": 60, "costTotalAnnual": 100}
+    assert cim.build_current_year_items(attrs, KEYS)[1:] == (100, False)
+
+
+def test_numeric_text_counts_and_non_finite_is_ignored():
+    items, tco, _ = cim.build_current_year_items({"softwareLicensingCost": "100"}, KEYS)
+    assert (amounts(items), tco) == ({"softwareLicensingCost": 100}, 100)
+    inf = float("inf")
+    assert cim.build_current_year_items({"costTotalAnnual": inf}, KEYS) == ({}, 0, False)
+    assert cim.build_past_year_items({"softwareLicensingCost": inf}, KEYS) == ({}, 0, False)
+
+
+def test_current_only_total_goes_to_other():
+    assert amounts(cim.build_current_year_items({"costTotalAnnual": 90}, KEYS)[0]) == {"other": 90}
+
+
+def test_current_nothing_or_zero_gives_no_items():
+    assert cim.build_current_year_items({}, KEYS) == ({}, 0, False)
+    zero = {"softwareLicensingCost": 0, "costTotalAnnual": 0}
+    assert cim.build_current_year_items(zero, KEYS) == ({}, 0, False)
+
+
+def test_past_consistent_year_is_unchanged():
+    items, tco, changed = cim.build_past_year_items(
+        {"softwareLicensingCost": 60, "costTotalAnnual": 100}, KEYS
+    )
+    assert amounts(items) == {"softwareLicensingCost": 60, "other": 40}
+    assert (tco, changed) == (100, False)
+
+
+def test_past_details_above_total_changes():
+    items, tco, changed = cim.build_past_year_items(
+        {"softwareLicensingCost": 80, "infrastruttureCost": 40, "costTotalAnnual": 100}, KEYS
+    )
+    assert "other" not in items
+    assert (tco, changed) == (120, True)
+
+
+def test_past_only_details_changes():
+    _, tco, changed = cim.build_past_year_items({"infrastruttureCost": 30}, KEYS)
+    assert (tco, changed) == (30, True)
+
+
+def test_past_only_total_and_empty():
+    items, tco, changed = cim.build_past_year_items({"costTotalAnnual": 90}, KEYS)
+    assert (amounts(items), tco, changed) == ({"other": 90}, 90, False)
+    assert cim.build_past_year_items({}, KEYS) == ({}, 0, False)
+
+
+def test_formula_only_references_the_item_keys():
+    f = "present = data.softwareLicensingCost+data.infrastruttureCost"
+    assert cim.formula_sums_only(f, KEYS)
+    assert not cim.formula_sums_only(f + "+data.mystery", KEYS)
+    assert not cim.formula_sums_only("data.softwareLicensingCost*relations.x", KEYS)
+    assert not cim.formula_sums_only("1+1", KEYS)
+
+
+def test_strip_item_fields():
+    schema = [{"section": "Cost", "fields": [{"key": "costTotalAnnual"}, {"key": KEYS[0]}]}]
+    out = cim.strip_item_fields(schema, KEYS)
+    assert [f["key"] for f in out[0]["fields"]] == ["costTotalAnnual"]
+    assert cim.strip_item_fields(out, KEYS) is None
+
+
+# --- end to end -------------------------------------------------------------
+
+
+def _schema(with_breakdown: bool):
+    fields = [{"key": "costTotalAnnual", "label": "Total", "type": "cost"}]
+    if with_breakdown:
+        fields += [{"key": k, "label": k, "type": "cost"} for k in KEYS]
+        fields.append({"key": "extraCost", "label": "Extra", "type": "cost"})
+    return [{"section": "Cost", "fields": fields}]
+
+
+async def _run(db):
+    conn = await db.connection()
+    await conn.run_sync(mig._data_body)
+    db.expire_all()
+
+
+async def test_migration_moves_fields_and_history(db):
+    cur = current_fiscal_year(1)
+    await create_card_type(db, key="Application", fields_schema=_schema(True))
+    await create_card_type(db, key="ITComponent", fields_schema=_schema(False))
+    db.add(
+        Calculation(
+            name="sum",
+            target_type_key="Application",
+            target_field_key="costTotalAnnual",
+            formula="present = data.softwareLicensingCost+data.infrastruttureCost",
+            is_active=True,
+        )
+    )
+    app = await create_card(
+        db,
+        card_type="Application",
+        name="A",
+        attributes={"softwareLicensingCost": 100, "extraCost": 5, "costTotalAnnual": 200},
+    )
+    empty = await create_card(db, card_type="ITComponent", name="Empty", attributes={})
+    itc = await create_card(
+        db, card_type="ITComponent", name="Itc", attributes={"costTotalAnnual": 90}
+    )
+    over = await create_card(
+        db,
+        card_type="ITComponent",
+        name="Over",
+        attributes={"softwareLicensingCost": 120, "costTotalAnnual": 100},
+    )
+    nototal = await create_card(
+        db, card_type="ITComponent", name="NoTotal", attributes={"infrastruttureCost": 30}
+    )
+    db.add_all(
+        [
+            CardCostHistory(
+                card_id=app.id, fiscal_year=cur - 1, field_key="costTotalAnnual", value=50
+            ),
+            CardCostHistory(
+                card_id=app.id, fiscal_year=cur - 1, field_key="infrastruttureCost", value=70
+            ),
+            CardCostHistory(
+                card_id=app.id, fiscal_year=cur, field_key="costTotalAnnual", value=999
+            ),
+            CardCostHistory(
+                card_id=itc.id, fiscal_year=cur + 1, field_key="costTotalAnnual", value=10
+            ),
+            CardCostHistory(
+                card_id=itc.id, fiscal_year=cur - 5, field_key="costTotalAnnual", value=20
+            ),
+            CardCostHistory(
+                card_id=itc.id, fiscal_year=cur - 5, field_key="infrastruttureCost", value=20
+            ),
+        ]
+    )
+    db.add(AppSettings(id="default", general_settings={"other": 1}))
+    await db.flush()
+
+    app_id, empty_id, itc_id = app.id, empty.id, itc.id
+    over_id, nototal_id = over.id, nototal.id
+    await _run(db)
+
+    rows = {
+        (r.card_id, r.fiscal_year): amounts(r.items)
+        for r in (await db.execute(select(CardCost))).scalars()
+    }
+    assert rows[(app_id, cur)] == {"softwareLicensingCost": 100, "extraCost": 5, "other": 95}
+    assert rows[(app_id, cur - 1)] == {"infrastruttureCost": 70}  # details exceed total
+    assert rows[(empty_id, cur)] == {}
+    assert rows[(itc_id, cur)] == {"other": 90}
+    assert rows[(itc_id, cur + 1)] == {"other": 10}
+    assert rows[(itc_id, cur - 5)] == {"infrastruttureCost": 20}  # the oldest year of the window
+    assert len(rows) == 8  # the current-year history row is discarded
+
+    assert (await db.get(Card, app_id)).attributes["costTotalAnnual"] == 200
+    # the per-line values live in card_costs now: no raw copy may outlive the schema fields
+    for cid in (app_id, over_id, nototal_id):
+        left = (await db.get(Card, cid)).attributes
+        assert not {*KEYS, "extraCost"} & set(left)
+    assert (await db.get(Card, app_id)).attributes == {"costTotalAnnual": 200}
+    assert "costTotalAnnual" not in (await db.get(Card, empty_id)).attributes
+
+    keys = {c.key for c in (await db.execute(select(CostItemType))).scalars()}
+    assert keys == {*KEYS, "extraCost", "other"}
+
+    schema = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    assert [f["key"] for f in schema.fields_schema[0]["fields"]] == ["costTotalAnnual"]
+    assert (await db.execute(select(Calculation))).scalars().all() == []
+
+    settings = (await db.execute(select(AppSettings))).scalar_one()
+    assert settings.general_settings["other"] == 1
+    stored = settings.general_settings["cost_items_migration_report"]
+    assert stored["total"] == 3
+    report = stored["entries"]
+    key = lambda e: (e["card_id"], e["fiscal_year"])  # noqa: E731
+    assert sorted(report, key=key) == sorted(
+        [
+            {"card_id": str(app_id), "fiscal_year": cur - 1, "old_total": 50, "new_tco": 70},
+            {"card_id": str(over_id), "fiscal_year": cur, "old_total": 100, "new_tco": 120},
+            {"card_id": str(nototal_id), "fiscal_year": cur, "old_total": None, "new_tco": 30},
+        ],
+        key=key,
+    )
+
+
+async def test_second_run_changes_nothing(db):
+    await create_card_type(db, key="Application", fields_schema=_schema(False))
+    card = await create_card(db, card_type="Application", attributes={"costTotalAnnual": 40})
+    card_id = card.id
+    await _run(db)
+    await db.execute(CardCost.__table__.update().values(items={"other": {"amount": 1}}))
+    await _run(db)
+    row = (await db.execute(select(CardCost).where(CardCost.card_id == card_id))).scalar_one()
+    assert row.items == {"other": {"amount": 1}}
+
+
+def test_old_total_is_normalised_for_the_report():
+    assert cim.old_total({"costTotalAnnual": "100"}) == 100.0
+    assert cim.old_total({"costTotalAnnual": -5}) is None
+    assert cim.old_total({"costTotalAnnual": float("inf")}) is None
+    assert cim.old_total({}) is None
+
+
+async def test_infinite_past_total_does_not_abort_the_report(db):
+    cur = current_fiscal_year(1)
+    await create_card_type(db, key="Application", fields_schema=_schema(False))
+    card = await create_card(db, card_type="Application", attributes={})
+    card_id = card.id
+    db.add_all(
+        [
+            CardCostHistory(
+                card_id=card_id,
+                fiscal_year=cur - 1,
+                field_key="costTotalAnnual",
+                value=float("inf"),
+            ),
+            CardCostHistory(
+                card_id=card_id, fiscal_year=cur - 1, field_key="infrastruttureCost", value=30
+            ),
+        ]
+    )
+    db.add(AppSettings(id="default", general_settings={}))
+    await db.flush()
+    await _run(db)
+    settings = (await db.execute(select(AppSettings))).scalar_one()
+    assert settings.general_settings["cost_items_migration_report"] == {
+        "total": 1,
+        "entries": [
+            {"card_id": str(card_id), "fiscal_year": cur - 1, "old_total": None, "new_tco": 30}
+        ],
+    }
+
+
+async def test_non_sum_total_calculation_is_deactivated_not_deleted(db):
+    await create_card_type(db, key="Application", fields_schema=_schema(True))
+    db.add_all(
+        [
+            Calculation(
+                name="weird",
+                target_type_key="Application",
+                target_field_key="costTotalAnnual",
+                formula="present = data.softwareLicensingCost*2",
+                is_active=True,
+            ),
+            Calculation(
+                name="other field",
+                target_type_key="Application",
+                target_field_key="somethingElse",
+                formula="present = 1",
+                is_active=True,
+            ),
+        ]
+    )
+    await db.flush()
+    await _run(db)
+
+    calcs = {c.name: c.is_active for c in (await db.execute(select(Calculation))).scalars()}
+    assert calcs == {"weird": False, "other field": True}
+
+
+async def test_report_is_capped_but_counts_everything(db, monkeypatch, caplog):
+    monkeypatch.setattr(mig, "REPORT_CAP", 2)
+    await create_card_type(db, key="Application", fields_schema=_schema(True))
+    for i in range(5):
+        await create_card(
+            db, card_type="Application", name=f"C{i}", attributes={"infrastruttureCost": 30}
+        )
+    db.add(AppSettings(id="default", general_settings={}))
+    await db.flush()
+    with caplog.at_level("INFO", logger="alembic.runtime.migration"):
+        await _run(db)
+    settings = (await db.execute(select(AppSettings))).scalar_one()
+    stored = settings.general_settings["cost_items_migration_report"]
+    assert stored["total"] == 5 and len(stored["entries"]) == 2
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1 and "5" in warnings[0].getMessage()
+
+
+async def test_viewer_never_reads_migrated_breakdown_or_old_event_diffs(client, db):
+    from app.core.permissions import VIEWER_PERMISSIONS
+    from app.services.event_bus import event_bus
+    from tests.conftest import auth_headers, create_role, create_user
+
+    await create_role(db, key="admin", permissions={"*": True})
+    await create_role(db, key="viewer", label="Viewer", permissions=VIEWER_PERMISSIONS)
+    admin = await create_user(db, email="a@mig.com", role="admin")
+    viewer = await create_user(db, email="v@mig.com", role="viewer")
+    await create_card_type(db, key="Application", fields_schema=_schema(True))
+    card = await create_card(
+        db,
+        card_type="Application",
+        name="A",
+        attributes={"softwareLicensingCost": 7777, "costTotalAnnual": 8000},
+        user_id=admin.id,
+    )
+    card_id, admin_id = card.id, admin.id
+    h = auth_headers(viewer)
+    db.add(AppSettings(id="default", general_settings={}))
+    await db.flush()
+    await _run(db)
+    await event_bus.publish(
+        "card.updated",
+        {
+            "id": str(card_id),
+            "changes": {
+                "attributes": {
+                    "old": {"softwareLicensingCost": 7777, "extraCost": 1, "note": "a"},
+                    "new": {"softwareLicensingCost": 8888, "extraCost": 2, "note": "b"},
+                }
+            },
+        },
+        db=db,
+        card_id=card_id,
+        user_id=admin_id,
+    )
+    await db.flush()
+    r = await client.get(f"/api/v1/cards/{card_id}", headers=h)
+    assert r.status_code == 200 and "softwareLicensingCost" not in r.text
+    assert "7777" not in r.text and "8000" not in r.text
+    r = await client.get(f"/api/v1/cards/{card_id}/history", headers=h)
+    assert r.status_code == 200
+    assert "softwareLicensingCost" not in r.text and "extraCost" not in r.text
+    assert '"note": "b"' in r.text or "'note': 'b'" in r.text or '"b"' in r.text

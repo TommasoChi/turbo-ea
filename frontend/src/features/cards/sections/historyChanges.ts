@@ -10,6 +10,8 @@
  * is dropped here, silently — this is the only reader.
  */
 
+import { STATUS_COLORS } from "@/theme/tokens";
+
 /** What an empty value reads as. */
 export const NO_VALUE = "—";
 
@@ -23,6 +25,11 @@ export interface EventMeta {
 export const EVENT_META: Record<string, EventMeta> = {
   "card.created": { labelKey: "history.events.created", icon: "add_circle", color: "#4caf50" },
   "card.updated": { labelKey: "history.events.updated", icon: "edit", color: "#1976d2" },
+  "card.costs_updated": {
+    labelKey: "history.events.costsUpdated",
+    icon: "payments",
+    color: STATUS_COLORS.info,
+  },
   "card.archived": { labelKey: "history.events.archived", icon: "archive", color: "#ff9800" },
   "card.restored": { labelKey: "history.events.restored", icon: "restore", color: "#4caf50" },
   "card.deleted": { labelKey: "history.events.deleted", icon: "delete", color: "#f44336" },

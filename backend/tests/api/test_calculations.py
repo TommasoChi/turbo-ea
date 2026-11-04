@@ -44,7 +44,7 @@ async def calc_env(db):
                 "section": "General",
                 "fields": [
                     {
-                        "key": "costTotalAnnual",
+                        "key": "costBudget",
                         "label": "Annual Cost",
                         "type": "cost",
                         "weight": 1,
@@ -72,7 +72,7 @@ class TestCreateCalculation:
             json={
                 "name": "Total Cost",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "42",
             },
             headers=auth_headers(admin),
@@ -90,7 +90,7 @@ class TestCreateCalculation:
             json={
                 "name": "Blocked",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "1+1",
             },
             headers=auth_headers(member),
@@ -104,7 +104,7 @@ class TestCreateCalculation:
             json={
                 "name": "Blocked",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "1+1",
             },
             headers=auth_headers(viewer),
@@ -126,7 +126,7 @@ class TestListCalculations:
             json={
                 "name": "Calc A",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "1",
             },
             headers=auth_headers(admin),
@@ -136,7 +136,7 @@ class TestListCalculations:
             json={
                 "name": "Calc B",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "2",
             },
             headers=auth_headers(admin),
@@ -158,7 +158,7 @@ class TestListCalculations:
             json={
                 "name": "App Calc",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "1",
             },
             headers=auth_headers(admin),
@@ -192,7 +192,7 @@ class TestDeleteCalculation:
             json={
                 "name": "Delete Me",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "0",
             },
             headers=auth_headers(admin),
@@ -222,7 +222,7 @@ class TestDeleteCalculation:
             json={
                 "name": "Protected",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "0",
             },
             headers=auth_headers(admin),
@@ -284,7 +284,7 @@ class TestActivateDeactivate:
             json={
                 "name": "Toggle Me",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "42",
             },
             headers=auth_headers(admin),
@@ -321,8 +321,8 @@ def _payload(**overrides):
     body = {
         "name": "Test calc",
         "target_type_key": "Application",
-        "target_field_key": "costTotalAnnual",
-        "formula": "data.costTotalAnnual * 2",
+        "target_field_key": "costBudget",
+        "formula": "data.costBudget * 2",
     }
     body.update(overrides)
     return body
@@ -335,13 +335,13 @@ class TestUnknownFieldValidation:
         # a bare "Evaluation error".
         resp = await client.post(
             BASE,
-            json=_payload(formula="data.CostTotalAnnual * 2"),
+            json=_payload(formula="data.CostBudget * 2"),
             headers=auth_headers(calc_env["admin"]),
         )
         assert resp.status_code == 400
         detail = resp.json()["detail"]
-        assert "CostTotalAnnual" in detail
-        assert "costTotalAnnual" in detail  # the suggestion
+        assert "CostBudget" in detail
+        assert "costBudget" in detail  # the suggestion
 
     async def test_known_key_is_accepted(self, client, db, calc_env):
         resp = await client.post(BASE, json=_payload(), headers=auth_headers(calc_env["admin"]))
@@ -392,7 +392,7 @@ class TestUnknownFieldValidation:
         calc = Calculation(
             name="Legacy",
             target_type_key="Application",
-            target_field_key="costTotalAnnual",
+            target_field_key="costBudget",
             formula="data.longGoneField + 1",
         )
         db.add(calc)
@@ -423,19 +423,19 @@ class TestFormulaWarnings:
         # sums to 0 forever. A warning is the only way the author can find out.
         resp = await client.post(
             BASE,
-            json=_payload(formula='SUM(PLUCK(relations.relAppToITC, "costTotalAnnual"))'),
+            json=_payload(formula='SUM(PLUCK(relations.relAppToITC, "costBudget"))'),
             headers=auth_headers(calc_env["admin"]),
         )
         assert resp.status_code == 201
         warnings = resp.json()["warnings"]
         assert len(warnings) == 1
-        assert "attributes.costTotalAnnual" in warnings[0]
+        assert "attributes.costBudget" in warnings[0]
 
     async def test_validate_endpoint_reports_warnings(self, client, db, calc_env):
         resp = await client.post(
             f"{BASE}/validate",
             json={
-                "formula": 'SUM(PLUCK(children, "costTotalAnnual"))',
+                "formula": 'SUM(PLUCK(children, "costBudget"))',
                 "target_type_key": "Application",
             },
             headers=auth_headers(calc_env["admin"]),
@@ -518,10 +518,10 @@ class TestRecalculateReport:
 
     async def test_reports_per_calculation_and_names_the_failing_card(self, client, db, calc_env):
         headers = auth_headers(calc_env["admin"])
-        # `data.costTotalAnnual * 2` succeeds where the field is filled in and
+        # `data.costBudget * 2` succeeds where the field is filled in and
         # raises on an empty one, which is exactly the reported situation.
         calc_id = await _activate(client, headers)
-        await create_card(db, name="Filled", attributes={"costTotalAnnual": 10})
+        await create_card(db, name="Filled", attributes={"costBudget": 10})
         await create_card(db, name="Empty", attributes={})
 
         resp = await client.post(f"{BASE}/recalculate/Application", headers=headers)
@@ -545,7 +545,7 @@ class TestRecalculateReport:
         assert group["cards_truncated"] is False
         assert [c["name"] for c in group["cards"]] == ["Empty"]
         # The engine's diagnosis travels through, not a bare "failed".
-        assert "costTotalAnnual" in group["error"]
+        assert "costBudget" in group["error"]
 
     async def test_identical_errors_collapse_into_one_group(self, client, db, calc_env):
         headers = auth_headers(calc_env["admin"])
@@ -584,13 +584,13 @@ class TestRecalculateReport:
         calc_id = await _activate(client, headers)
         for i in range(3):
             await create_card(db, name=f"Empty {i}", attributes={})
-        await create_card(db, name="Filled", attributes={"costTotalAnnual": 10})
+        await create_card(db, name="Filled", attributes={"costBudget": 10})
 
         await client.post(f"{BASE}/recalculate/Application", headers=headers)
 
         row = await client.get(f"{BASE}/{calc_id}", headers=headers)
         assert row.json()["last_error"]
-        assert "costTotalAnnual" in row.json()["last_error"]
+        assert "costBudget" in row.json()["last_error"]
 
     async def test_clean_run_clears_last_error(self, client, db, calc_env):
         headers = auth_headers(calc_env["admin"])
@@ -602,7 +602,7 @@ class TestRecalculateReport:
         # Remove the offending card and run again — the row must go back to OK.
         await db.delete(empty)
         await db.flush()
-        await create_card(db, name="Filled", attributes={"costTotalAnnual": 10})
+        await create_card(db, name="Filled", attributes={"costBudget": 10})
 
         resp = await client.post(f"{BASE}/recalculate/Application", headers=headers)
         assert resp.json()["calculations_failed"] == 0
@@ -646,7 +646,7 @@ class TestCalculationAudit:
             json={
                 "name": "Total Cost",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "42",
             },
             headers=headers,
@@ -734,7 +734,7 @@ class TestCalculationAudit:
             f"/api/v1/calculations/{calc_id}",
             json={
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "name": "App cost",
             },
             headers=headers,
@@ -772,7 +772,7 @@ class TestCalculationAudit:
                 "target_field": {"old": "unlabelled", "new": "Annual Cost"},
             }
         }
-        # ``costTotalAnnual`` is not a field of IT Component: named by its key.
+        # ``costBudget`` is not a field of IT Component: named by its key.
         assert type_row.details == {
             "changes": {"target_type": {"old": "Application", "new": "IT Component"}}
         }
@@ -789,7 +789,7 @@ class TestCalculationAudit:
             json={
                 "name": "Total Cost",
                 "target_type_key": "Application",
-                "target_field_key": "costTotalAnnual",
+                "target_field_key": "costBudget",
                 "formula": "42",
             },
             headers=headers,

@@ -13,12 +13,15 @@ export default function CostTrendChart({
   typeParam,
   costField,
   components,
+  labelOf,
   years,
   currentFiscalYear,
 }: {
   typeParam: string;
   costField: string;
   components: string[];
+  /** A component's display label; the key itself when omitted. */
+  labelOf?: (component: string) => string;
   years: number[];
   currentFiscalYear: number;
 }) {
@@ -59,13 +62,14 @@ export default function CostTrendChart({
         isRtl: chrome.isRtl,
         format: (v) => fmt.format(v),
         yearLabel: (year) => costFiscalYearName(year, currentFiscalYear),
+        componentLabel: labelOf,
       }),
-    [rows, components, chrome, fmt, currentFiscalYear],
+    [rows, components, chrome, fmt, currentFiscalYear, labelOf],
   );
 
   return (
     <Box data-testid="cost-trend-chart">
-      <EChart option={option} style={{ height: 300 }} ariaLabel={components.join(", ")} />
+      <EChart option={option} style={{ height: 300 }} ariaLabel={components.map((c) => labelOf?.(c) ?? c).join(", ")} />
     </Box>
   );
 }

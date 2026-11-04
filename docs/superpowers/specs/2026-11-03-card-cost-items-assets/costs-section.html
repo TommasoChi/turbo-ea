@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Costs section of the card - mockup (layout B)</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; background: #f2f3f5; color: #222; margin: 0; padding: 24px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.note { color: #666; margin: 0 0 18px; max-width: 760px; }
+  .panel { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; max-width: 760px; margin-bottom: 22px; }
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .head strong { font-size: 16px; }
+  .nav { display: flex; align-items: center; gap: 6px; }
+  .nav .arrow { border: 1px solid #bbb; border-radius: 4px; padding: 1px 9px; background: #fff; }
+  .nav .arrow.off { color: #bbb; }
+  .nav .year { font-weight: 600; min-width: 150px; text-align: center; }
+  .tco { font-size: 24px; font-weight: 700; }
+  .tco small { font-size: 12px; color: #777; font-weight: 400; margin-left: 6px; }
+  .delta { color: #2e7d32; font-size: 12px; margin-left: 10px; }
+  .bar { display: flex; height: 14px; border-radius: 3px; overflow: hidden; margin: 8px 0 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tile { border: 1px solid #ddd; border-radius: 6px; padding: 9px; }
+  .tile .name { font-size: 11px; }
+  .tile .amt { font-weight: 600; font-size: 15px; }
+  .tile .ren { font-size: 11px; color: #777; }
+  .tile.soon { border-color: #e65100; }
+  .tile.soon .ren { color: #e65100; font-weight: 600; }
+  .tile.archived { background: #f4f4f4; color: #888; border-style: dashed; }
+  .add { margin-top: 10px; border: 1px dashed #bbb; border-radius: 6px; padding: 7px; text-align: center; color: #1976d2; font-size: 12px; }
+  .banner { background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+  .banner button { border: 1px solid #1976d2; background: #fff; color: #1976d2; border-radius: 4px; padding: 3px 10px; }
+  .legend { color: #555; font-size: 12px; max-width: 760px; }
+</style>
+</head>
+<body>
+<h1>Costs section of the card - layout B (stacked bar + tiles)</h1>
+<p class="note">Mockup agreed in the design session of 2026-11-03. Spec:
+<code>../2026-11-03-card-cost-items-design.md</code>. Example card: IT Component "ERP Finance".
+Amounts are annual. Tiles open the edit dialog (see <code>edit-dialog.html</code>).</p>
+
+<div class="panel">
+  <div class="head">
+    <strong>Costs</strong>
+    <span class="nav"><span class="arrow">&lsaquo;</span><span class="year">FY26 &middot; Current</span><span class="arrow">&rsaquo;</span></span>
+  </div>
+  <div><span class="tco">&euro; 184,000<small>TCO</small></span><span class="delta">&#9650; +6% vs FY25</span></div>
+  <div class="bar">
+    <div style="width:61%;background:#1565c0"></div><div style="width:22%;background:#42a5f5"></div><div style="width:13%;background:#90caf9"></div><div style="width:4%;background:#bdbdbd"></div>
+  </div>
+  <div class="tiles">
+    <div class="tile"><div class="name" style="color:#1565c0">&#9679; Software licensing</div><div class="amt">&euro; 112,000</div><div class="ren">renewal 31/12/2026</div></div>
+    <div class="tile"><div class="name" style="color:#42a5f5">&#9679; Infrastructure (hosting &amp; cloud)</div><div class="amt">&euro; 40,000</div><div class="ren">renewal 01/03/2027</div></div>
+    <div class="tile soon"><div class="name" style="color:#90caf9">&#9679; Application management services</div><div class="amt">&euro; 24,000</div><div class="ren">renewal 30/06/2026 &middot; in 8 months</div></div>
+    <div class="tile archived"><div class="name">&#9679; Legacy support (archived)</div><div class="amt">&euro; 8,000</div><div class="ren">still counted in the TCO</div></div>
+  </div>
+  <div class="add">+ Add item</div>
+</div>
+
+<div class="panel">
+  <div class="head">
+    <strong>Costs</strong>
+    <span class="nav"><span class="arrow">&lsaquo;</span><span class="year">FY27 &middot; Current</span><span class="arrow off">&rsaquo;</span></span>
+  </div>
+  <div class="banner"><span>No amounts entered for FY27 yet. Showing the items of FY26, not confirmed.</span><button type="button">Confirm FY27</button></div>
+  <div><span class="tco">&euro; 184,000<small>TCO (from FY26)</small></span></div>
+  <div class="bar">
+    <div style="width:61%;background:#1565c0;opacity:.55"></div><div style="width:22%;background:#42a5f5;opacity:.55"></div><div style="width:13%;background:#90caf9;opacity:.55"></div><div style="width:4%;background:#bdbdbd;opacity:.55"></div>
+  </div>
+  <div class="tiles" style="opacity:.75">
+    <div class="tile"><div class="name">&#9679; Software licensing</div><div class="amt">&euro; 112,000</div><div class="ren">renewal 31/12/2027</div></div>
+    <div class="tile"><div class="name">&#9679; Infrastructure (hosting &amp; cloud)</div><div class="amt">&euro; 40,000</div><div class="ren">renewal 01/03/2028</div></div>
+    <div class="tile"><div class="name">&#9679; Application management services</div><div class="amt">&euro; 24,000</div><div class="ren">renewal 30/06/2027</div></div>
+  </div>
+</div>
+
+<p class="legend">First panel: the current year. Second panel: the first days of a new fiscal year for a card
+with no row for it: the previous year's items are shown (renewal dates moved forward by the years skipped),
+marked as not confirmed, and are only stored when someone confirms or edits them. The navigator always offers six
+years: the four before the current one, the current one, and the Forecast year.</p>
+</body>
+</html>

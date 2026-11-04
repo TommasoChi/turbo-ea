@@ -116,6 +116,21 @@ Abhängig vom Kartentyp werden Sie zusätzliche Abschnitte mit **benutzerdefinie
 
 Als **berechnet** markierte Felder zeigen ein Badge und können nicht manuell bearbeitet werden — ihre Werte werden durch [vom Administrator definierte Formeln](../admin/calculations.md) berechnet.
 
+### Kostenabschnitt (Anwendung und IT-Komponente)
+
+Anwendungen und IT-Komponenten erfassen ihre Kosten als Liste von **Kostenelementen** (zum Beispiel Lizenzen, Hosting, Support), nicht als einzelne eingetippte Zahl. Der Abschnitt **Kosten** zeigt jeweils ein Geschäftsjahr, mit einem **‹ ›**-Navigator über sechs Jahre: die vier Jahre vor dem aktuellen, das aktuelle Jahr und das **Forecast**.
+
+- **TCO** — Die Gesamtbetriebskosten des Jahres sind die Summe seiner Elemente. Sie werden nie von Hand eingegeben.
+- **Diagramm und Kacheln** — Ein gestapelter Balken zeigt, wie sich die TCO auf die Elemente verteilen. Jedes Element hat eine Kachel mit seinem **Jahresbetrag** und **Verlängerungsdatum**; eine Verlängerung innerhalb von 90 Tagen wird orange dargestellt. Kosten sind immer jährlich.
+- **Hinzufügen und Bearbeiten** — Ein Element wird in einem Dialog hinzugefügt, bearbeitet oder gelöscht. Die Elemente stammen aus dem Katalog, den ein Administrator unter [Metamodell → Kostenelemente](../admin/metamodel.md#kostenelemente) verwaltet.
+- **In Forecast kopieren** — Kopiert die Elemente des angezeigten Jahres in das Forecast-Jahr, um einen Plan auf Basis der aktuellen Zahlen zu beginnen.
+
+**Ein neues Geschäftsjahr.** Wechselt das Geschäftsjahr und hat eine Karte für das neue aktuelle Jahr noch keine Kosten, zeigt der Abschnitt die Elemente des Vorjahres als **nicht bestätigt**, mit vorgerückten Verlängerungsdaten. Sie bleiben so, bis jemand sie bestätigt oder einen Betrag ändert. Forecast und vergangene Jahre greifen nie auf ein anderes Jahr zurück.
+
+**Wer Kosten sehen und bearbeiten darf.** Kosten **ansehen** können Sie mit der Berechtigung `costs.view` oder wenn Sie eine beliebige Stakeholder-Rolle auf der Karte haben. Kosten **bearbeiten** können Sie mit der Berechtigung `costs.edit` oder wenn Sie eine Stakeholder-Rolle auf der Karte haben, die das Bearbeiten der Karte erlaubt (zum Beispiel Verantwortlich). Beobachter können nur ansehen. Standardmäßig besitzen nur Administratoren `costs.edit`; bestehende Rollen behalten `costs.view`.
+
+Das Feld **Jährliche Gesamtkosten** (`costTotalAnnual`) der Karte wird aus den Elementen des aktuellen Jahres abgeleitet und ist schreibgeschützt: Raster, Tabellenimport, Drag-Fill, API, MCP, ServiceNow und LeanIX können es nicht mehr setzen, und ein gesendeter Wert wird überschrieben. Eine Karte ohne Kostenelemente hat ein leeres Kostenfeld, nicht 0. Initiativen und Anbieter behalten ihre gewöhnlichen Kostenfelder.
+
 ### Hierarchieabschnitt
 
 Für Kartentypen, die Hierarchie unterstützen (z.B. Organisation, Geschäftsfähigkeit, Anwendung):
@@ -217,6 +232,8 @@ Der Einladungspfad erfordert die **`users.invite`**-Berechtigung, eine delegiert
 Eine Änderung, die nicht aus der Weboberfläche stammt, trägt neben dem Namen der Person einen Chip: **MCP**, wenn ein KI-Assistent sie im Auftrag dieser Person über den [MCP-Server](../admin/mcp.md) vorgenommen hat, sonst **API**, **Erweiterung** oder **System**.
 
 Zeigt die **vollständige Historie** der an der Karte vorgenommenen Änderungen: **Wer** hat die Änderung vorgenommen, **wann** wurde sie durchgeführt und **was** wurde geändert (vorheriger Wert vs. neuer Wert). Dies ermöglicht die vollständige Nachverfolgbarkeit aller Änderungen über die Zeit.
+
+Eine Änderung an den Kosten der Karte erscheint als **Kosten aktualisiert** mit einer lesbaren Zusammenfassung der betroffenen Elemente. Beträge sehen nur Benutzer, die die Kosten dieser Karte einsehen dürfen, und eine Kostenänderung kann nicht über das Audit-Protokoll zurückgesetzt werden.
 
 Alles, was das Datum **Geändert** der Karte verschiebt, erscheint hier — eine manuelle Bearbeitung, ein Tabellen-Import, eine Plattform-Migration oder ServiceNow-Synchronisierung, eine Tag-Änderung, eine Massenbearbeitung oder eine Hierarchie-Verschiebung, die diese Karte mitgezogen hat. Systemseitige Wartung ändert beides nicht: Die Neuberechnung von Datenqualitätswerten, das erneute Ausführen berechneter Felder sowie das Nachfüllen von Hierarchieebenen oder Karten-IDs lassen Historie und **Geändert**-Datum unberührt.
 

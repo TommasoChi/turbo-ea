@@ -12,6 +12,7 @@ L'export capture le workspace complet dans un bundle `.zip` contenant un classeu
 - **Configuration** — rôles, rôles de parties prenantes par type, groupes de tags et tags, champs calculés, principes EA et réglementations de conformité.
 - **Paramètres** — devise, format de date, indicateurs de fonctionnalité, image de marque de connexion, langues activées, et le reste des paramètres généraux de l'application.
 - **Utilisateurs** — e-mail, nom affiché, rôle et indicateur d'activité (utilisés pour re-lier la propriété et les affectations sur la cible). Aucun mot de passe ni identité SSO.
+- **Postes de coûts** — le catalogue des postes de coûts (clés, libellés, traductions, indicateur d'archivage) et les postes de coûts de chaque Application ou Composant IT par exercice.
 - **Inventaire** — chaque fiche (avec sa hiérarchie, son cycle de vie et ses attributs), les tags de fiches et les relations.
 - **Contexte de fiche** — parties prenantes, liens vers documents, commentaires, tâches et pièces jointes.
 - **Données des modules** — BPM (diagrammes de processus, éléments, versions de flux, évaluations), PPM (rapports de statut, coûts, budgets, risques, tâches, WBS, dépendances), le registre des risques GRC (risques, tâches d'atténuation et occurrences, liaisons de fiches), les constats de conformité GRC (avec les exécutions d'analyse qu'ils référencent), décisions d'architecture et Statements of Architecture Work, diagrammes en dessin libre, rapports enregistrés, favoris (vues enregistrées de l'inventaire, y compris leurs partages), portails web et enquêtes.
@@ -62,6 +63,7 @@ L'import est **idempotent** : le métamodèle et la configuration sont appariés
 - Les utilisateurs synthétiques référencés par le bundle sont créés **désactivés** ; activez-les sous **Administration → Utilisateurs** selon vos besoins.
 - **Les données appartenant aux utilisateurs suivent l'utilisateur, apparié par e-mail.** Les tâches, vues enregistrées, fiches favorites et autres données personnelles appartiennent au compte dont l'e-mail correspond à celui du bundle. Si vous vous connectez à la cible avec un e-mail différent de celui utilisé sur la source, vos éléments personnels sembleront manquants — ils sont rattachés au compte correspondant (éventuellement désactivé). Connectez-vous avec le même e-mail, ou activez le compte correspondant sous **Administration → Utilisateurs**.
 - Les vues enregistrées privées ne sont visibles que par leur propriétaire ; les vues partagées et publiques suivent leurs paramètres de visibilité.
+- **Les bundles exportés avant la fonctionnalité des postes de coûts (version 2.188.0)** contiennent le coût total des Applications et des Composants IT mais aucun poste de coûts ; ce total est donc supprimé lors du prochain recalcul du coût. Exportez à nouveau depuis la source mise à niveau avant d'importer.
 
 ## Repartir de zéro
 

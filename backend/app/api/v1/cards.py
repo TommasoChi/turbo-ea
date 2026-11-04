@@ -82,6 +82,7 @@ from app.services import (
 )
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_completeness import missing_mandatory
+from app.services.card_costs import COST_EVENT
 from app.services.card_flags import orphaned_condition, stale_condition
 from app.services.card_logo_service import logo_updated_map
 from app.services.card_read_scope import (
@@ -115,6 +116,7 @@ from app.services.card_write_service import (
     _walk_ancestor_chain,  # noqa: F401
     emit_hierarchy_cascade_events,
 )
+from app.services.cost_event_redaction import add_cost_summaries, redact_cost_events
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.data_quality import calc_data_quality, calc_data_quality_breakdown
 from app.services.event_bus import event_bus
@@ -3089,7 +3091,8 @@ async def get_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
-    await _require_card_read(db, user, parse_uuid(card_id))
+    card_uuid = parse_uuid(card_id)
+    await _require_card_read(db, user, card_uuid)
     # A relation event names its peer; drop the ones whose peer is hidden from
     # the caller, so History does not list a card the Relations section omits.
     read_scope = await CardReadScope.load(db, user)
@@ -3108,6 +3111,10 @@ async def get_history(
     result = await db.execute(q)
     events = result.scalars().all()
     payloads = await scrub_event_payloads(db, read_scope, [e.data for e in events])
+    payloads = await redact_cost_events(db, user, events, payloads)
+    if any(e.event_type == COST_EVENT for e in events):
+        card_name = (await db.execute(select(Card.name).where(Card.id == card_uuid))).scalar_one()
+        payloads = await add_cost_summaries(db, card_name, events, payloads)
     return [
         {
             "id": str(e.id),

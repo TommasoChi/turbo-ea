@@ -189,7 +189,7 @@ Omkostninger er årlige, så rapporten opbygges for ét **regnskabsår** ad gang
 
 Et regnskabsår hedder **FY** plus de sidste to cifre i det år, det **slutter** i, uanset hvilken måned jeres regnskabsår starter i: Et regnskabsår fra juli 2025 til juni 2026 er **FY26**. En chip i værktøjslinjen gentager valget, for eksempel **Regnskabsår: FY26 - Current**. *Current* og *Forecast* oversættes ikke.
 
-**Prognosetal indtastes i hånden.** Åbn et kort, gå til dets omkostningshistorik, og skriv de planlagte omkostninger for næste regnskabsår, på samme måde som når I registrerer et tidligere år. Kun det **næste** regnskabsår kan registreres som prognose, og det kræver samme tilladelse som at registrere et tidligere år. Når det år bliver det indeværende, læser rapporten i stedet de aktuelle attributter, og kortets aktuelle tal erstatter det indtastede.
+**Omkostninger for applikationer og IT-komponenter kommer fra kortets omkostningsposter.** Hver post i kataloget (også arkiverede) er sin egen omkostningskomponent i trækortet, Sankey-diagrammet, trenden og tabellen, og Forecast er Forecast-året i kortets [omkostningssektion](card-details.md#omkostningssektion-applikation-og-it-komponent). For andre korttyper (Initiative, Udbyder) indtastes det næste regnskabsår i hånden i kortets omkostningshistorik, hvilket kræver samme tilladelse som registrering af et tidligere år. Når det år bliver det nuværende, læser rapporten i stedet de levende attributter, og kortets levende tal erstatter det indtastede.
 
 #### Hvilke kort der vises
 
@@ -202,7 +202,7 @@ Et regnskabsår hedder **FY** plus de sidste to cifre i det år, det **slutter**
 
 Reglen gælder for alt på siden — totalerne, treemap'et, tabellen, **Omkostningskilde**-sammentællinger og drill-down — og det valgte regnskabsår udskrives i rapportens sidehoved.
 
-Når I vælger et andet år end **Current**, viser et **trenddiagram** omkostningerne for det indeværende år og de fire foregående. Så længe **Forecast** er det valgte år, viser diagrammet også en søjle for det.
+Når **Forecast** er det valgte år, viser et **historikdiagram** omkostningerne over det nuværende år, de fire før det og prognoseåret. Det vises ikke for noget andet år. Hver bjælke er stablet med ét segment pr. omkostningskomponent: en omkostningspost for applikationer og IT-komponenter, ellers et omkostningsfelt (forklaringen og værktøjstippet bruger så det tekniske feltnavn, for eksempel `softwareLicensingCost`).
 
 En administrator angiver, hvilken måned regnskabsåret starter i, under [Indstillinger → Generelt](../admin/settings.md).
 

@@ -238,6 +238,10 @@ APP_PERMISSIONS: dict[str, dict] = {
                 "View cost fields on cards and cost reports "
                 "(stakeholders see costs on their own cards regardless)"
             ),
+            "costs.edit": (
+                "Edit the cost items of any card "
+                "(stakeholders whose role can edit a card edit that card's costs regardless)"
+            ),
         },
     },
     "users": {
@@ -699,6 +703,7 @@ BPM_ADMIN_PERMISSIONS: dict[str, bool] = {
     "ai.suggest": True,
     "ai.portfolio_insights": True,
     "costs.view": True,
+    "costs.edit": False,
     "notifications.manage": True,
     "users.invite": True,
     "admin.users": False,
@@ -782,6 +787,7 @@ MEMBER_PERMISSIONS: dict[str, bool] = {
     "ai.suggest": True,
     "ai.portfolio_insights": True,
     "costs.view": True,
+    "costs.edit": False,
     "notifications.manage": True,
     "users.invite": False,
     "admin.users": False,
@@ -865,6 +871,7 @@ VIEWER_PERMISSIONS: dict[str, bool] = {
     "ai.suggest": False,
     "ai.portfolio_insights": False,
     "costs.view": False,
+    "costs.edit": False,
     "notifications.manage": True,
     "users.invite": False,
     "admin.users": False,

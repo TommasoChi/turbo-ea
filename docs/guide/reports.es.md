@@ -189,7 +189,7 @@ Los costes son anuales, por lo que el informe se elabora para un **año fiscal**
 
 Un año fiscal se llama **FY** más las dos últimas cifras del año en que **termina**, sea cual sea el mes en que empiece su año fiscal: un año fiscal que va de julio de 2025 a junio de 2026 es **FY26**. Un chip en la barra de herramientas repite la selección, por ejemplo **Año fiscal: FY26 - Current**. *Current* y *Forecast* no se traducen.
 
-**Las cifras de previsión se introducen a mano.** Abra una tarjeta, vaya a su historial de costes y escriba el coste previsto para el año fiscal siguiente, igual que registra un año pasado. Solo el **siguiente** año fiscal puede registrarse como previsión, y hacerlo requiere el mismo permiso que registrar un año pasado. Cuando ese año pasa a ser el actual, el informe lee en su lugar los atributos vigentes, y la cifra vigente de la tarjeta sustituye a la que se había escrito.
+**Los costes de Aplicaciones y Componentes de TI proceden de las partidas de coste de la ficha.** Cada partida del catálogo (incluidas las archivadas) es un componente de coste propio en el mapa de árbol, el Sankey, la tendencia y la tabla, y el Forecast es el año Forecast de la [sección de Costes](card-details.md#sección-de-costes-aplicación-y-componente-de-ti) de la ficha. Para los demás tipos de ficha (Iniciativa, Proveedor), el próximo año fiscal se introduce a mano en el historial de costes de la ficha, lo que requiere el mismo permiso que registrar un año pasado. Cuando ese año pasa a ser el actual, el informe lee en su lugar los atributos en vivo, y la cifra en vivo de la ficha sustituye a la escrita.
 
 #### Qué tarjetas aparecen
 
@@ -202,7 +202,7 @@ Un año fiscal se llama **FY** más las dos últimas cifras del año en que **te
 
 La regla se aplica a toda la página — los totales, el mapa de árbol, la tabla, los agregados por **Origen de los costes** y el desglose — y el año fiscal seleccionado figura en la cabecera impresa.
 
-Cuando elige un año distinto de **Current**, un **gráfico de tendencia** muestra el coste del año actual y de los cuatro anteriores. Mientras **Forecast** es el año seleccionado, el gráfico muestra además una barra para él.
+Cuando **Forecast** es el año seleccionado, un **gráfico de historial** muestra el coste del año actual, los cuatro anteriores y el año de previsión. No se muestra para ningún otro año. Cada barra está apilada, con un segmento por componente de coste: una partida de coste para Aplicaciones y Componentes de TI, y en otro caso un campo de coste (la leyenda y la información emergente usan entonces el nombre técnico del campo, por ejemplo `softwareLicensingCost`).
 
 Un administrador define el mes en que empieza el año fiscal en [Configuración → General](../admin/settings.md).
 

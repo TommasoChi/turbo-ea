@@ -12,6 +12,7 @@ Eksporten fanger hele arbejdsområdet som et `.zip`-bundt, der indeholder én Ex
 - **Konfiguration** — roller, per-type-interessentroller, tag-grupper og tags, beregnede felter, EA-principper og compliance-regulativer.
 - **Indstillinger** — valuta, datoformat, feature-flags, login-branding, aktiverede sprog og resten af de generelle applikationsindstillinger.
 - **Brugere** — e-mail, visningsnavn, rolle og aktiv-flag (bruges til at genlinke ejerskab og tildelinger på målet). Ingen adgangskoder eller SSO-identiteter.
+- **Omkostningsposter** — kataloget over omkostningsposter (nøgler, etiketter, oversættelser, arkiveringsflag) og hver applikations eller IT-komponents omkostningsposter pr. regnskabsår.
 - **Inventar** — hvert kort (med dets hierarki, livscyklus og egenskaber), kort-tags og relationer.
 - **Kort-kontekst** — interessenter, dokumentlinks, kommentarer, todos og filvedhæftninger.
 - **Moduldata** — BPM (procesdiagrammer, elementer, flow-versioner, vurderinger), PPM (statusrapporter, omkostninger, budgetter, risici, opgaver, WBS, afhængigheder), GRC-risikoregistret (risici, afhjælpningsopgaver og forekomster, kort-links), GRC-compliance-fund (med de analysekørsler, de refererer til), arkitekturbeslutninger og Statements of Architecture Work, fritegnede diagrammer, gemte rapporter, bogmærker (gemte inventarvisninger, inklusive deres delinger), webportaler og spørgeundersøgelser.
@@ -62,6 +63,7 @@ Import er **idempotent**: metamodel og konfiguration matches efter nøgle, kort 
 - Syntetiske brugere, som bundtet refererer til, oprettes **deaktiveret**; aktivér dem under **Admin → Brugere** efter behov.
 - **Brugerejede data følger brugeren, matchet efter e-mail.** Todos, gemte visninger, favoritter og andre personlige data tilhører den konto, hvis e-mail matcher den i bundtet. Hvis du logger ind på målet med en anden e-mail, end du brugte på kilden, vil dine personlige elementer se ud til at mangle — de er knyttet til den (muligvis deaktiverede) matchende konto. Log ind med den samme e-mail, eller aktivér den matchede konto under **Admin → Brugere**.
 - Private gemte visninger er kun synlige for deres ejer; delte og offentlige visninger følger deres synlighedsindstillinger.
+- **Bundles eksporteret før funktionen omkostningsposter (version 2.188.0)** indeholder de samlede omkostninger for applikationer og IT-komponenter, men ingen omkostningsposter, så det beløb droppes, næste gang omkostningerne genberegnes. Eksportér igen fra den opgraderede kilde, før du importerer.
 
 ## Start forfra
 

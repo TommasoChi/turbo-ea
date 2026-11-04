@@ -283,6 +283,14 @@ Perché l'[editor ArchiMate](../guide/archimate.md) possa collegare i diagrammi 
 
 I nomi di elementi e relazioni sono quelli del formato di scambio dell'Open Group. I valori predefiniti provengono dal seed; le tabelle complete sono in [La mappatura](../guide/archimate.md#mapping).
 
+## Elementi di costo
+
+Le **elementi di costo** sono il catalogo delle righe di costo che le card Applicazione e Componente IT possono avere (vedi la [sezione Costi](../guide/card-details.md#sezione-costi-applicazione-e-componente-it)). Si gestisce in **Admin > Metamodello > Elementi di costo**.
+
+Ogni elemento ha una **chiave** stabile, un'**etichetta** e **traduzioni** facoltative dell'etichetta. Gli elementi vengono **archiviati**, non eliminate: un elemento archiviato non può più essere aggiunta a una card, ma gli importi già inseriti continuano a contare nel TCO e nel [Report dei costi](../guide/reports.md#report-costi).
+
+Inserire importi su una card richiede `costs.edit` (o un ruolo di stakeholder che può modificare la card); modificare il catalogo richiede il permesso di amministrazione del metamodello.
+
 ## Calcoli
 
 I campi calcolati utilizzano formule definite dall'amministratore per calcolare automaticamente i valori quando le card vengono salvate. Vedi [Calcoli](calculations.md) per la guida completa.

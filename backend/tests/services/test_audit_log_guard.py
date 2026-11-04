@@ -53,6 +53,7 @@ PURE_ADMIN_MODULES = (
     "stakeholder_roles.py",
     "settings.py",
     "metamodel.py",
+    "cost_item_types.py",
     "tags.py",
     "calculations.py",
     "extensions.py",

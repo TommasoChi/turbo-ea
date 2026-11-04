@@ -189,7 +189,7 @@ Kosten sind jährlich, daher wird der Bericht jeweils für ein **Geschäftsjahr*
 
 Ein Geschäftsjahr heißt **FY** plus die letzten zwei Ziffern des Jahres, in dem es **endet**, unabhängig davon, in welchem Monat Ihr Geschäftsjahr beginnt: Ein Geschäftsjahr von Juli 2025 bis Juni 2026 ist **FY26**. Ein Chip in der Werkzeugleiste wiederholt die Auswahl, zum Beispiel **Geschäftsjahr: FY26 - Current**. *Current* und *Forecast* werden nicht übersetzt.
 
-**Prognosewerte werden von Hand eingegeben.** Öffnen Sie eine Karte, gehen Sie zu ihrem Kostenverlauf und tragen Sie die geplanten Kosten für das nächste Geschäftsjahr ein, genauso wie Sie ein vergangenes Jahr erfassen. Nur das **nächste** Geschäftsjahr kann als Prognose erfasst werden, und dafür ist dieselbe Berechtigung nötig wie für ein vergangenes Jahr. Wird dieses Jahr zum aktuellen, liest der Bericht stattdessen die Live-Attribute, und der Live-Wert der Karte ersetzt den eingegebenen.
+**Die Kosten von Anwendungen und IT-Komponenten stammen aus den Kostenelementen der Karte.** Jedes Katalogelement (auch archivierte) ist im Treemap, im Sankey, im Trend und in der Tabelle eine eigene Kostenkomponente, und das Forecast ist das Forecast-Jahr des [Kostenabschnitts](card-details.md#kostenabschnitt-anwendung-und-it-komponente) der Karte. Für andere Kartentypen (Initiative, Anbieter) wird das nächste Geschäftsjahr von Hand im Kostenverlauf der Karte eingegeben, wofür dieselbe Berechtigung nötig ist wie für ein vergangenes Jahr. Wird dieses Jahr zum aktuellen, liest der Bericht stattdessen die Live-Attribute, und der Live-Wert der Karte ersetzt den eingegebenen.
 
 #### Welche Karten erscheinen
 
@@ -202,7 +202,7 @@ Ein Geschäftsjahr heißt **FY** plus die letzten zwei Ziffern des Jahres, in de
 
 Die Regel gilt für alles auf der Seite — die Summen, die Treemap, die Tabelle, **Kostenquellen**-Aggregationen und Drilldowns —, und das ausgewählte Geschäftsjahr wird im Berichtskopf gedruckt.
 
-Wenn Sie ein anderes Jahr als **Current** wählen, zeigt ein **Trenddiagramm** die Kosten über das aktuelle Jahr und die vier davor. Ist **Forecast** das ausgewählte Jahr, zeigt das Diagramm zusätzlich einen Balken dafür.
+Ist **Forecast** das ausgewählte Jahr, zeigt ein **Verlaufsdiagramm** die Kosten über das aktuelle Jahr, die vier davor und das Forecast-Jahr. Für jedes andere Jahr wird es nicht angezeigt. Jeder Balken ist gestapelt, mit einem Segment je Kostenkomponente: ein Kostenelement bei Anwendungen und IT-Komponenten, sonst ein Kostenfeld (Legende und Tooltip verwenden dann den technischen Feldnamen, zum Beispiel `softwareLicensingCost`).
 
 In welchem Monat das Geschäftsjahr beginnt, legt ein Administrator unter [Einstellungen → Allgemein](../admin/settings.md) fest.
 

@@ -20,6 +20,8 @@
 | **Tipo di card** | La categoria a cui appartiene una card (es. Application, Business Process, Organization) |
 | **Categoria (livello architetturale)** | Il livello EA in cui è raggruppato un tipo di card: Strategia e trasformazione, Architettura aziendale, Applicazioni e dati, Architettura tecnologica o uno creato da un amministratore. Le categorie ordinano i livelli nel filtro dei tipi dell'inventario, nel grafo del metamodello e nelle corsie della vista delle dipendenze; le quattro predefinite sono bloccate |
 | **Punteggio di affidabilità** | Una valutazione 0-100% che indica quanto è affidabile una descrizione generata dall'AI |
+| **Elemento di costo** | Una riga del costo annuo di un'Applicazione o di un Componente IT (ad esempio l'hosting), presa dal catalogo in Admin > Metamodello > Elementi di costo. Il TCO di una card è la somma deli suoi elementi per l'anno fiscale |
+| **TCO (costo totale di proprietà)** | Il costo annuo totale di un'Applicazione o di un Componente IT per un anno fiscale, sempre derivato dalle sue elementi di costo e mai digitato a mano |
 | **Voce di costo** | Una voce di budget o costo effettivo (CapEx/OpEx) in un'iniziativa PPM, utilizzata per monitorare le spese finanziarie |
 | **Qualità dei dati** | Un punteggio di completezza 0-100% basato sui campi compilati e sui loro pesi configurati |
 | **Diagramma** | Un diagramma architetturale visivo creato con l'editor DrawIO integrato |

@@ -9,7 +9,7 @@ from tests.conftest import auth_headers, create_card, create_card_type, create_r
 
 
 async def test_a_row_is_unique_per_card_fiscal_year_field(db):
-    card = await create_card(db, card_type="Application", name="ERP")
+    card = await create_card(db, card_type="Provider", name="ERP")
     db.add(
         CardCostHistory(card_id=card.id, fiscal_year=2025, field_key="costTotalAnnual", value=100)
     )
@@ -32,13 +32,13 @@ async def _history_rows(db, card_id):
 async def test_syncs_a_cost_field_to_the_current_fiscal_year(db):
     await create_card_type(
         db,
-        key="Application",
+        key="Provider",
         fields_schema=[
             {"section": "Cost", "fields": [{"key": "costTotalAnnual", "type": "cost", "weight": 0}]}
         ],
     )
     card = await create_card(
-        db, card_type="Application", name="ERP", attributes={"costTotalAnnual": 500}
+        db, card_type="Provider", name="ERP", attributes={"costTotalAnnual": 500}
     )
     await sync_current_fy_history(db, card)
     rows = await _history_rows(db, card.id)
@@ -52,7 +52,7 @@ async def test_syncs_a_cost_field_to_the_current_fiscal_year(db):
 async def test_upserting_one_field_does_not_touch_another_fields_row(db):
     await create_card_type(
         db,
-        key="Application",
+        key="Provider",
         fields_schema=[
             {
                 "section": "Cost",
@@ -65,7 +65,7 @@ async def test_upserting_one_field_does_not_touch_another_fields_row(db):
     )
     card = await create_card(
         db,
-        card_type="Application",
+        card_type="Provider",
         name="ERP",
         attributes={"costTotalAnnual": 500, "infrastruttureCost": 100},
     )
@@ -79,13 +79,13 @@ async def test_upserting_one_field_does_not_touch_another_fields_row(db):
 async def test_clearing_a_cost_field_zeroes_its_current_year_history_row(db):
     await create_card_type(
         db,
-        key="Application",
+        key="Provider",
         fields_schema=[
             {"section": "Cost", "fields": [{"key": "costTotalAnnual", "type": "cost", "weight": 0}]}
         ],
     )
     card = await create_card(
-        db, card_type="Application", name="ERP", attributes={"costTotalAnnual": 500}
+        db, card_type="Provider", name="ERP", attributes={"costTotalAnnual": 500}
     )
     await sync_current_fy_history(db, card)
     card.attributes = {}
@@ -101,7 +101,7 @@ async def env(db):
     admin = await create_user(db, email="admin@cost-history-sync.com", role="admin")
     await create_card_type(
         db,
-        key="Application",
+        key="Provider",
         fields_schema=[
             {"section": "Cost", "fields": [{"key": "costTotalAnnual", "type": "cost", "weight": 0}]}
         ],
@@ -113,7 +113,7 @@ async def test_update_card_calls_the_sync_hook(client, db, env):
     """Integration check that the hook actually fires from the write path,
     not just when called directly — covers the card_write_service.py wiring."""
     admin = env["admin"]
-    card = await create_card(db, card_type="Application", name="ERP", user_id=admin.id)
+    card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
     resp = await client.patch(
         f"/api/v1/cards/{card.id}",
         json={"attributes": {"costTotalAnnual": 42}},

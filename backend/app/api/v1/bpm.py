@@ -581,7 +581,9 @@ async def update_element(
             .join(ProcessElementOrganization, ProcessElementOrganization.organization_id == Card.id)
             .where(ProcessElementOrganization.element_id == elem.id)
         )
-        org_ids = read_scope.keep_hidden(dict(existing_orgs.all()), org_ids, mode="module")
+        org_ids = read_scope.keep_hidden(
+            {r[0]: r[1] for r in existing_orgs.all()}, org_ids, mode="module"
+        )
         if org_ids:
             found = await db.execute(
                 select(Card.id).where(
