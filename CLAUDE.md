@@ -80,6 +80,7 @@ Each of these loads automatically when you touch its files; read it first when y
 - Specs and plans under `docs/superpowers/` are read by a fresh agent before they reach the user → `.claude/rules/spec-and-plan-review.md`
 - Helm, managed containers, Terraform, Docker images, signing → `.claude/rules/deploy.md`
 - Homepage dashboards: widget registry parity, no ids in widget config, trends → `.claude/rules/dashboards.md`
+- **At every release tag run the `security-audit` skill and a full-repo `ponytail-audit`** (never per-PR) → `.claude/rules/release-audit.md`
 - Costs of Application / IT Component as catalogue items (TCO, derived total, `costs.edit`, event redaction) → `.claude/rules/cost-items.md`
 
 ### Frontend Conventions
@@ -166,10 +167,6 @@ cd frontend && npm test          # watch mode
 cd frontend && npm run test:run  # single run (CI mode)
 ```
 
-### Release Security Audit
-- **Run the `security-audit` skill (project-scoped, `.claude/skills/security-audit/`) whenever a release tag is cut on this repo, or on explicit request.** Multi-phase, multi-agent audit — expect it to take several minutes and real token spend; this is a procedure to run deliberately before a release ships, not a background check. No automatic hook triggers it (git tag/push events outside Claude Code are invisible to hooks, and a long multi-agent run has no safe pass/fail to gate a command on) — treat "we're cutting a tag" as the cue to invoke it yourself in the session doing the release.
-- **Also run a full-repo `ponytail-audit` on the same cadence — a release tag, or on explicit request** — never per-PR (the per-PR `ponytail-review` diff gate above already covers that). Show every finding, then fix every Must and Should before the release ships.
-
 ### VAPT (Active Security Testing)
 - **Run a VAPT pass automatically whenever a PR adds a route or a table (a new path in `backend/app/api/v1/` or a new model/migration), or touches permission/auth/session code, or on explicit request — independent of `/VERSION`.** Testing-your-own-application only (this repo, this user's local deploy instance — never a third-party or production target). → `.claude/rules/vapt.md`
 
@@ -200,30 +197,7 @@ Every feature or UI change updates the user manual (`docs/`, MkDocs Material, En
 
 ## Architecture Overview
 
-```
-┌───────────────────────────────────────────────────────────┐
-│  Browser                                                  │
-│  React 19 + MUI 6 + React Router 8 + ECharts + AG Grid    │
-│  Vite dev server (port 5173) / Nginx in production        │
-└──────────────────────────┬────────────────────────────────┘
-                           │  /api/* (proxy)
-┌──────────────────────────▼────────────────────────────────┐
-│  FastAPI Backend (Python 3.12, uvicorn, port 8000)        │
-│  SQLAlchemy 2 (async) + Alembic migrations                │
-│  RBAC permissions + JWT auth (HS256, bcrypt, PyJWT)       │
-│  SSE event stream for real-time updates                   │
-│  Rate limiting (slowapi) + field encryption (Fernet)      │
-│  AI suggestions via Ollama-compatible LLM + web search    │
-└──────────────┬───────────────────────┬────────────────────┘
-               │                       │  /api/chat, /api/tags
-┌──────────────▼──────────────┐  ┌─────▼──────────────────────┐
-│  PostgreSQL (asyncpg driver)│  │  Ollama (optional, ai       │
-│  Bundled `db` service in    │  │  profile) or external LLM   │
-│  the compose network        │  │  provider on port 11434     │
-└─────────────────────────────┘  └─────────────────────────────┘
-```
-
-**DrawIO** is self-hosted inside the frontend Docker image (cloned at build time from `jgraph/drawio` v32.6.9) and served under `/drawio/` by Nginx.
+FastAPI backend (SQLAlchemy 2 async, Alembic) + PostgreSQL + React SPA, Nginx in production. The diagram and the DrawIO note are in `dev/ARCHITECTURE.md`.
 
 ---
 
