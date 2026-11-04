@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **Uploading a file to a card that does not exist now answers "Card not found" (404) instead of a server error (500).**
+- **Uploading a file to a card that does not exist now answers "Card not found" (404) instead of a server error (500).** The upload also follows the same visibility rule as the attachment list: a user whose only access is a stakeholder role without view rights on a hidden card type gets "Card not found".
 
 ## [2.188.1] - 2026-11-04
 

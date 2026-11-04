@@ -188,6 +188,14 @@ class TestUpload:
         await _stewardship(db, env, env["viewer"])
         assert (await _post(client, env["viewer"], env["card"])).status_code == 201
 
+    async def test_stakeholder_without_card_view_on_a_hidden_type_gets_404(self, client, db, env):
+        # card.manage_documents alone does not make a View-denied card readable (as for the list).
+        await _hide_type(db, "viewer")
+        await _stewardship(db, env, env["viewer"])
+        r = await _post(client, env["viewer"], env["card"])
+        assert (r.status_code, r.json()["detail"]) == (404, "Card not found")
+        assert await _events(db, env["card"].id, "file.uploaded") == []
+
     async def test_no_documents_permission_is_refused(self, client, db, env):
         r = await _post(client, env["nodocs"], env["card"])
         assert r.status_code == 403
