@@ -66,8 +66,9 @@ async def update_cost_item_type(
     row = await cost_item_types.get_item(db, key)
     if row is None:
         raise HTTPException(404, "Cost item not found")
-    updates = body.model_dump(exclude_unset=True)
-    if updates.get("label") is not None:
+    # A null means "leave as is" (update_item ignores it); keep it out of the audit diff too.
+    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    if "label" in updates:
         updates["label"] = updates["label"].strip()
     if "translations" in updates:
         updates["translations"] = _clean_translations(updates["translations"])
