@@ -99,6 +99,20 @@ mcp = 97
 # hardening pass before joining this list.
 "backend/app/services/value_chain_report.py" = 95     # Value Chain/Stream report payload
 
+# Critical modules added from the nightly of 2026-11-03 (run 41729646662), each floor about 2 points
+# under its measured score; a file under 100 mutants keeps a wider margin.
+"backend/app/services/portal_visibility.py" = 97   # what a public portal shows
+"backend/app/services/portal_card_filters.py" = 97   # which cards a public portal lists
+"backend/app/services/audit_log.py" = 96   # the Security & admin log
+"backend/app/api/v1/audit_log.py" = 96   # reading the Security & admin log
+"backend/app/services/ppm_rollup.py" = 95   # PPM budget and cost totals
+"backend/app/services/audit_changes.py" = 94   # how an event diff is read
+"backend/app/services/mutation_batch_service.py" = 92   # MCP mutation batches
+"backend/app/services/survey_service.py" = 91   # surveys
+"backend/app/services/calculation_ppm.py" = 90   # PPM calculations
+"backend/app/core/extension_signing.py" = 88   # extension signature checks
+"backend/app/services/survey_apply.py" = 87   # applying survey answers
+
 # Frontend, measured with Stryker (static mutants ignored) on 2026-10-05.
 # linkify, richHtml, routePermissions, dragFill and portfolioHelpers were
 # re-measured on 2026-10-09 at 100% against their own unit tests.
