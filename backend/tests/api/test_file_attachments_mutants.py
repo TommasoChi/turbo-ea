@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from urllib.parse import quote
 
 import pytest
@@ -229,6 +230,12 @@ class TestUpload:
     async def test_bad_upload_publishes_nothing(self, client, db, env):
         await _post(client, env["admin"], env["card"], name="evil.exe")
         assert await _events(db, env["card"].id, "file.uploaded") == []
+
+    async def test_unknown_card_is_404_not_a_foreign_key_500(self, client, db, env):
+        ghost = SimpleNamespace(id=uuid.uuid4())
+        r = await _post(client, env["admin"], ghost)
+        assert (r.status_code, r.json()["detail"]) == (404, "Card not found")
+        assert await _events(db, ghost.id, "file.uploaded") == []
 
 
 class TestReplace:
