@@ -2,12 +2,38 @@
 
 > **These are the USER's own instructions — not the agent's memory.** Before ANY change to this file:
 > **(1) ask the user**, **(2) say exactly which lines you want to change and WHY**, **(3) wait for a clear yes.**
-> Never add, reword or remove on your own initiative. Every byte is loaded into every session at the user's
-> expense: bloating it costs the user money and cleanup time.
+> Never add, reword or remove on your own initiative.
 
 # Turbo EA architecture reference
 
 > Reference material moved out of `CLAUDE.md`: not loaded into agent sessions. The code is the source of truth; when a table here disagrees with it, fix the table.
+
+## Architecture Overview
+
+```
+┌───────────────────────────────────────────────────────────┐
+│  Browser                                                  │
+│  React 19 + MUI 6 + React Router 8 + ECharts + AG Grid    │
+│  Vite dev server (port 5173) / Nginx in production        │
+└──────────────────────────┬────────────────────────────────┘
+                           │  /api/* (proxy)
+┌──────────────────────────▼────────────────────────────────┐
+│  FastAPI Backend (Python 3.12, uvicorn, port 8000)        │
+│  SQLAlchemy 2 (async) + Alembic migrations                │
+│  RBAC permissions + JWT auth (HS256, bcrypt, PyJWT)       │
+│  SSE event stream for real-time updates                   │
+│  Rate limiting (slowapi) + field encryption (Fernet)      │
+│  AI suggestions via Ollama-compatible LLM + web search    │
+└──────────────┬───────────────────────┬────────────────────┘
+               │                       │  /api/chat, /api/tags
+┌──────────────▼──────────────┐  ┌─────▼──────────────────────┐
+│  PostgreSQL (asyncpg driver)│  │  Ollama (optional, ai       │
+│  Bundled `db` service in    │  │  profile) or external LLM   │
+│  the compose network        │  │  provider on port 11434     │
+└─────────────────────────────┘  └─────────────────────────────┘
+```
+
+**DrawIO** is self-hosted inside the frontend Docker image (cloned at build time from `jgraph/drawio` v32.6.9) and served under `/drawio/` by Nginx.
 
 ## Project Structure
 
