@@ -109,4 +109,4 @@ def redact_event_costs(data: dict | None, cost_keys: frozenset[str]) -> dict | N
             side: {k: v for k, v in val.items() if k not in drop} if isinstance(val, dict) else val
             for side, val in attrs.items()
         }
-    return {**data, "changes": out}
+    return {**(data or {}), "changes": out}

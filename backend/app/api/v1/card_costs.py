@@ -14,6 +14,7 @@ from app.models.user import User
 from app.schemas.cost_items import (
     KEY_PATTERN,
     CardCostsOut,
+    CostItemTypeOut,
     CostItemWrite,
     YearCostsDetailOut,
     YearCostsOut,
@@ -84,7 +85,10 @@ async def get_card_costs(
     return CardCostsOut(
         can_edit=await PermissionService.can_edit_costs(db, user, card_uuid),
         years=[_out(y) for y in years],
-        catalogue=[cost_item_types.serialize(r) for r in await cost_item_types.list_items(db)],
+        catalogue=[
+            CostItemTypeOut(**cost_item_types.serialize(r))
+            for r in await cost_item_types.list_items(db)
+        ],
     )
 
 

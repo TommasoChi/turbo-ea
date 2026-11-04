@@ -50,10 +50,12 @@ def _details(values: dict, item_keys: list[str]) -> dict[str, dict]:
 
 
 def _sum(items: dict[str, dict]) -> float:
-    return sum(i["amount"] for i in items.values())
+    return float(sum(i["amount"] for i in items.values()))
 
 
-def _build(values: dict, item_keys: list[str], total_key: str):
+def _build(
+    values: dict, item_keys: list[str], total_key: str
+) -> tuple[dict[str, dict], float, bool]:
     items = _details(values, item_keys)
     total = _num(values.get(total_key))
     details = _sum(items)

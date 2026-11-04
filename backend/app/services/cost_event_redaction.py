@@ -59,5 +59,5 @@ async def add_cost_summaries(
     out = list(payloads)
     summaries = await cost_event_summaries(db, card_name, [payloads[i] for i in idx])
     for i, text in zip(idx, summaries):
-        out[i] = {**payloads[i], "summary": text}
+        out[i] = {**(payloads[i] or {}), "summary": text}
     return out

@@ -410,7 +410,7 @@ async def apply_write(
             "id": str(card.id),
             "source": "card_costs",
             "changes": {
-                DERIVED_KEY: {"old": old_total, "new": card.attributes.get(DERIVED_KEY)},
+                DERIVED_KEY: {"old": old_total, "new": (card.attributes or {}).get(DERIVED_KEY)},
                 "cost_items": {
                     "old": [i.key for i in old.items],
                     "new": [i.key for i in new.items],

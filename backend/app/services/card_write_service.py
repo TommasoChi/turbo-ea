@@ -1031,8 +1031,9 @@ async def update_card(
     if card.type in COST_ITEM_TYPES and "attributes" in changes:
         # History records what was stored, not the total the caller sent
         new_attrs = {k: v for k, v in changes["attributes"]["new"].items() if k != DERIVED_KEY}
-        if DERIVED_KEY in (card.attributes or {}):
-            new_attrs[DERIVED_KEY] = card.attributes[DERIVED_KEY]
+        stored = card.attributes or {}
+        if DERIVED_KEY in stored:
+            new_attrs[DERIVED_KEY] = stored[DERIVED_KEY]
         changes["attributes"]["new"] = new_attrs
 
     def _serialize_val(v: object) -> object:
