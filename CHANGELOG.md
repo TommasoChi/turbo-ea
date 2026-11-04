@@ -5,6 +5,12 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.188.1] - 2026-11-04
+
+### Fixed
+
+- **Saving a cost item with empty fields no longer writes a false entry in the Security & admin log.**
+
 ## [2.188.0] - 2026-11-03
 
 ### Added

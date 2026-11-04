@@ -71,3 +71,19 @@ async def test_patch_sort_order_in_range(client, env, value):
     await client.post(BASE, json={"key": "lic", "label": "L"}, headers=h)
     r = await client.patch(f"{BASE}/lic", json={"sort_order": value}, headers=h)
     assert r.status_code == 200 and r.json()["sort_order"] == value
+
+
+async def test_patch_with_null_fields_changes_nothing_and_logs_nothing(client, env, db):
+    from sqlalchemy import select
+
+    from app.models.audit_log import AuditLogEntry
+
+    h = auth_headers(env["admin"])
+    await client.post(BASE, json={"key": "lic", "label": "Licences"}, headers=h)
+    action = "admin.metamodel.cost_item_type.updated"
+    r = await client.patch(
+        f"{BASE}/lic", json={"label": None, "archived": None, "sort_order": None}, headers=h
+    )
+    assert r.status_code == 200 and r.json()["label"] == "Licences"
+    rows = (await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == action))).all()
+    assert rows == []

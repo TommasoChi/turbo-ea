@@ -113,6 +113,13 @@ mcp = 97
 "backend/app/core/extension_signing.py" = 88   # extension signature checks
 "backend/app/services/survey_apply.py" = 87   # applying survey answers
 
+# Cost items (PR #50), measured on that PR's mutation run (every line of these files was changed there),
+# each floor about 2 points under the score.
+"backend/app/services/card_costs.py" = 85   # TCO, derived total, cost writes; 87.8% of 590
+"backend/app/services/cost_report.py" = 88   # cost report payload; 90.7% of 172
+"backend/app/services/cost_items_migration.py" = 88   # migration 175 data move; 90.5% of 158
+"backend/app/services/cost_event_redaction.py" = 87   # amounts hidden from event feeds; 89.3% of 56
+
 # Frontend, measured with Stryker (static mutants ignored) on 2026-10-05.
 # linkify, richHtml, routePermissions, dragFill and portfolioHelpers were
 # re-measured on 2026-10-09 at 100% against their own unit tests.
