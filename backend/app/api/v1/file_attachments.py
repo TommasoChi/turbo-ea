@@ -65,6 +65,10 @@ async def _load_for_manage(db: AsyncSession, user: User, attachment_id: str) -> 
         db, user, "documents.manage", attachment.card_id, "card.manage_documents"
     ):
         raise HTTPException(403, "Not enough permissions")
+    # A card the caller may not read does not exist for them (404, not 403).
+    # An entity attachment (card_id NULL) hangs off no card, so has no scope.
+    if attachment.card_id is not None:
+        await require_card_readable(db, user, attachment.card_id, mode="module")
     return attachment
 
 
