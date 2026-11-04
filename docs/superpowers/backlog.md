@@ -17,3 +17,19 @@ Things noticed while working on `fix/cost-report` that are out of scope for it. 
 **Why it matters.** The history chart on Forecast sends one full treemap request per year per cost field (4 fields = 24 requests, each with every card's attributes) and the Sankey rereads all cards once per cost item. With thousands of cards the report is slow and loads the backend. The same payload would also give the Sankey the true per-item values after the scope filter, which it estimates today.
 
 **Size.** Medium: a new response shape, so a new route (OpenAPI regeneration, VAPT), then a frontend rewrite of how `CostReport.tsx`, `CostTrendChart.tsx` and the Sankey read their data. `GET /reports/cost-treemap` stays for the MCP tool. Estimated payload under 1 MB for 2,000 cards × 4 fields × 6 years (not measured). Needs its own spec and plan.
+
+## Existence oracle: 403 for a hidden card, 404 for a missing one
+
+**What.** On endpoints that check the permission first and the card scope second (`upload_file_attachment`, `comments.create` and similar), a caller who holds the app-level permission gets 403 for an existing card whose type is hidden from them and 404 for an id that does not exist, so the two cases can be told apart. The remedy is to call `require_card_readable` before the permission check.
+
+**Why it matters.** The card-read-scope rule says a hidden card does not exist for the caller. Low risk: the caller must already know the card's UUID, and before 2.188.2 the same probe returned 403 versus 500. Found by the security review of the upload 404 fix.
+
+**Size.** Small per endpoint, but it reorders checks on endpoints that already have many tests: do it one endpoint at a time, with its permission-denial tests updated.
+
+## A malformed card id is a 500, not a 404 or 422
+
+**What.** Many route handlers start with `uuid.UUID(card_id)`, which raises `ValueError` on a malformed id, and no global handler turns it into a client error, so the answer is 500. `parse_uuid` (in `app/api/`) already does the conversion properly and is the helper to use everywhere.
+
+**Why it matters.** Robustness, not security: noisy 500s in the logs and a wrong status for the client. Seen in `list_file_attachments` and `upload_file_attachment`; the same pattern is across `app/api/v1/`.
+
+**Size.** Medium and mechanical: grep `uuid.UUID(` in `app/api/v1/`, switch to `parse_uuid`, one regression test per file (or a guard test that forbids the bare call), in one dedicated PR.
