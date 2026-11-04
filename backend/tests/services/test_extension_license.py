@@ -315,3 +315,386 @@ class TestLicenseAdjustments:
             assert fingerprint == fingerprint.lower()
             int(fingerprint, 16)
             assert cap.utcoffset() == timedelta(0)
+
+
+# ---------------------------------------------------------------------------
+# Exact-contract tests: constants, every error message, tolerant parsing, the
+# adjustment table and the entitlement-state boundaries.
+# ---------------------------------------------------------------------------
+from app.services.extensions.license import (  # noqa: E402
+    DEFAULT_GRACE_DAYS,
+    LicenseDocument,
+)
+
+
+def _envelope(private, payload_bytes: bytes, **extra) -> str:
+    env = {
+        "schema": LICENSE_SCHEMA,
+        "payload": base64.b64encode(payload_bytes).decode(),
+        "signature": base64.b64encode(private.sign(payload_bytes)).decode(),
+    }
+    env.update(extra)
+    return json.dumps(env)
+
+
+def _err(text, public_b64) -> str:
+    with pytest.raises(LicenseError) as exc:
+        parse_and_verify(text, public_key_b64=public_b64)
+    return str(exc.value)
+
+
+def test_constants():
+    assert LICENSE_SCHEMA == "turboea-license/1"
+    assert DEFAULT_GRACE_DAYS == 30
+
+
+def test_adjustment_table_is_pinned():
+    table = license_module._LICENSE_ADJUSTMENTS
+    assert len(table) == 4
+    assert set(table.values()) == {datetime(2026, 12, 1, tzinfo=timezone.utc)}
+    assert all(v.tzinfo is timezone.utc for v in table.values())
+
+
+def test_dataclass_defaults():
+    ent = Entitlement(extension_key="x")
+    assert ent.expires_at is None and ent.auto_renew is None and ent.trial is None
+    doc = LicenseDocument(licensee="L", customer_id="c", issued_at=None, grace_days=3)
+    assert doc.entitlements == []
+    assert doc.key_id == "" and doc.raw_text == "" and doc.renewal_key == ""
+    assert doc.instance_id == ""
+    # default lists are not shared between instances
+    assert LicenseDocument("a", "b", None, 1).entitlements is not doc.entitlements
+
+
+def test_entitlement_for_returns_first_match():
+    first = Entitlement(extension_key="x", expires_at=None)
+    second = Entitlement(extension_key="x", expires_at=datetime(2030, 1, 1, tzinfo=timezone.utc))
+    doc = LicenseDocument("L", "c", None, 1, entitlements=[Entitlement("y"), first, second])
+    assert doc.entitlement_for("x") is first
+    assert doc.entitlement_for("X") is None  # case-sensitive
+    assert doc.entitlement_for("") is None
+
+
+class TestErrorMessages:
+    def test_no_trusted_keys(self, monkeypatch):
+        private, _ = make_keypair()
+        monkeypatch.setattr("app.core.extension_signing.DEFAULT_VENDOR_PUBLIC_KEYS", {})
+        with pytest.raises(LicenseError) as exc:
+            parse_and_verify(make_license(private, PAYLOAD))
+        assert str(exc.value) == (
+            "This build has no extension vendor key configured — licenses cannot be verified"
+        )
+
+    def test_pinned_empty_string_key_is_still_a_key(self):
+        private, _ = make_keypair()
+        # "" is a pinned (useless) key: the error is the signature one, not "no vendor key".
+        assert _err(make_license(private, PAYLOAD), "") == (
+            "Invalid license: signature verification failed"
+        )
+
+    @pytest.mark.parametrize("text", ["not json", "", None])
+    def test_not_json(self, text):
+        _, pub = make_keypair()
+        assert _err(text, pub) == "Invalid license: not valid JSON"
+
+    @pytest.mark.parametrize("text", ["[]", '"str"', "1", "null"])
+    def test_not_object(self, text):
+        _, pub = make_keypair()
+        assert _err(text, pub) == "Invalid license: envelope must be a JSON object"
+
+    @pytest.mark.parametrize(
+        "env", [{}, {"schema": "turboea-license/2"}, {"schema": "TURBOEA-LICENSE/1"}]
+    )
+    def test_bad_schema(self, env):
+        _, pub = make_keypair()
+        assert _err(json.dumps(env), pub) == "Invalid license: unsupported or missing schema"
+
+    @pytest.mark.parametrize(
+        "env",
+        [
+            {"signature": "AA=="},
+            {"payload": "e30="},
+            {"payload": 1, "signature": "AA=="},
+            {"payload": "e30=", "signature": None},
+        ],
+    )
+    def test_missing_payload_or_signature(self, env):
+        _, pub = make_keypair()
+        text = json.dumps({"schema": LICENSE_SCHEMA, **env})
+        assert _err(text, pub) == "Invalid license: missing payload or signature"
+
+    @pytest.mark.parametrize("payload", ["!!!", "e30", "e3 0=", "e30=\n"])
+    def test_payload_not_base64_is_strict(self, payload):
+        _, pub = make_keypair()
+        text = json.dumps({"schema": LICENSE_SCHEMA, "payload": payload, "signature": "AA=="})
+        assert _err(text, pub) == "Invalid license: payload is not valid base64"
+
+    def test_signature_failure(self):
+        private, pub = make_keypair()
+        other, _ = make_keypair()
+        text = _envelope(private, b"{}")
+        env = json.loads(text)
+        env["signature"] = base64.b64encode(other.sign(b"{}")).decode()
+        assert _err(json.dumps(env), pub) == "Invalid license: signature verification failed"
+
+    def test_payload_not_json_after_valid_signature(self):
+        private, pub = make_keypair()
+        assert _err(_envelope(private, b"not json"), pub) == (
+            "Invalid license: payload is not valid JSON"
+        )
+        assert _err(_envelope(private, b"\xff\xfe"), pub) == (
+            "Invalid license: payload is not valid JSON"
+        )
+
+    def test_payload_not_object(self):
+        private, pub = make_keypair()
+        assert _err(_envelope(private, b"[1]"), pub) == (
+            "Invalid license: payload must be a JSON object"
+        )
+
+    @pytest.mark.parametrize("licensee", [None, "", "  \t", 5])
+    def test_missing_licensee(self, licensee):
+        private, pub = make_keypair()
+        payload = dict(PAYLOAD, licensee=licensee)
+        assert _err(make_license(private, payload), pub) == "Invalid license: missing licensee"
+
+    @pytest.mark.parametrize("grace", [-1, "30", 1.5, True, False, None])
+    def test_bad_grace_days(self, grace):
+        private, pub = make_keypair()
+        assert _err(make_license(private, dict(PAYLOAD, grace_days=grace)), pub) == (
+            "Invalid license: grace_days must be a non-negative integer"
+        )
+
+    def test_bad_entitlements_container(self):
+        private, pub = make_keypair()
+        assert _err(make_license(private, dict(PAYLOAD, entitlements={})), pub) == (
+            "Invalid license: entitlements must be a list"
+        )
+
+    def test_entitlement_errors_are_numbered_from_one(self):
+        private, pub = make_keypair()
+        good = {"extension_key": "ok"}
+        text = make_license(private, dict(PAYLOAD, entitlements=["nope"]))
+        assert _err(text, pub) == "Invalid license: entitlement #1 must be an object"
+        text = make_license(private, dict(PAYLOAD, entitlements=[good, 7]))
+        assert _err(text, pub) == "Invalid license: entitlement #2 must be an object"
+        for bad in ({}, {"extension_key": " "}, {"extension_key": 3}):
+            text = make_license(private, dict(PAYLOAD, entitlements=[good, bad]))
+            assert _err(text, pub) == "Invalid license: entitlement #2 is missing extension_key"
+
+    def test_entitlement_expires_at_errors_name_the_entitlement(self):
+        private, pub = make_keypair()
+        ents = [{"extension_key": "a"}, {"extension_key": "b", "expires_at": 5}]
+        assert _err(make_license(private, dict(PAYLOAD, entitlements=ents)), pub) == (
+            "Invalid license: entitlement #2 expires_at must be an ISO 8601 string"
+        )
+        ents = [{"extension_key": "a", "expires_at": "nope"}]
+        assert _err(make_license(private, dict(PAYLOAD, entitlements=ents)), pub) == (
+            "Invalid license: entitlement #1 expires_at is not a valid ISO 8601 date"
+        )
+
+    def test_issued_at_errors(self):
+        private, pub = make_keypair()
+        assert _err(make_license(private, dict(PAYLOAD, issued_at=1)), pub) == (
+            "Invalid license: issued_at must be an ISO 8601 string"
+        )
+        assert _err(make_license(private, dict(PAYLOAD, issued_at="x")), pub) == (
+            "Invalid license: issued_at is not a valid ISO 8601 date"
+        )
+
+
+class TestTolerantParsing:
+    def _parse(self, payload, **env):
+        private, pub = make_keypair()
+        payload_bytes = json.dumps(payload).encode()
+        return parse_and_verify(_envelope(private, payload_bytes, **env), public_key_b64=pub)
+
+    def test_zero_grace_days_is_valid(self):
+        assert self._parse(dict(PAYLOAD, grace_days=0)).grace_days == 0
+
+    def test_empty_entitlements_and_defaults(self):
+        payload = {"licensee": "L"}
+        doc = self._parse(payload)
+        assert doc.entitlements == []
+        assert doc.grace_days == DEFAULT_GRACE_DAYS
+        assert doc.customer_id == ""
+        assert doc.issued_at is None
+        assert doc.renewal_key == ""
+        assert doc.instance_id == ""
+        assert doc.key_id == ""
+
+    def test_values_are_stripped_and_stringified(self):
+        doc = self._parse(
+            {
+                "licensee": "  ACME  ",
+                "customer_id": None,
+                "renewal_key": "rk-1",
+                "instance_id": "  TEA-AAAA-BBBB-CCCC \n",
+                "entitlements": [{"extension_key": "  ext  "}],
+            },
+            key_id="vendor-9",
+        )
+        assert doc.licensee == "ACME"
+        assert doc.customer_id == ""
+        assert doc.renewal_key == "rk-1"
+        assert doc.instance_id == "TEA-AAAA-BBBB-CCCC"
+        assert doc.key_id == "vendor-9"
+        assert doc.entitlements[0].extension_key == "ext"
+        assert doc.entitlement_for("ext") is not None
+
+    def test_null_key_id_becomes_empty(self):
+        assert self._parse({"licensee": "L"}, key_id=None).key_id == ""
+
+    def test_raw_text_is_the_exact_input(self):
+        private, pub = make_keypair()
+        text = _envelope(private, json.dumps({"licensee": "L"}).encode())
+        assert parse_and_verify(text, public_key_b64=pub).raw_text == text
+
+    def test_datetime_forms(self):
+        ents = [
+            {"extension_key": "z", "expires_at": "2027-01-01T00:00:00Z"},
+            {"extension_key": "naive", "expires_at": "2027-01-01T00:00:00"},
+            {"extension_key": "plus", "expires_at": "2027-01-01T02:00:00+02:00"},
+            {"extension_key": "date", "expires_at": "2027-01-01"},
+        ]
+        doc = self._parse(
+            {"licensee": "L", "entitlements": ents, "issued_at": "2026-01-01T00:00:00"}
+        )
+        utc = timezone.utc
+        assert doc.issued_at == datetime(2026, 1, 1, tzinfo=utc)
+        assert doc.issued_at.tzinfo is not None
+        for key in ("z", "naive", "plus", "date"):
+            got = doc.entitlement_for(key).expires_at
+            assert got == datetime(2027, 1, 1, tzinfo=utc)
+            assert got.tzinfo is not None
+        # a real offset is preserved (not forced to UTC), only a missing one is added
+        plus = doc.entitlement_for("plus").expires_at
+        assert plus.utcoffset() == timedelta(hours=2)
+        assert doc.entitlement_for("naive").expires_at.utcoffset() == timedelta(0)
+
+    def test_extension_key_must_be_string_not_truthy(self):
+        private, pub = make_keypair()
+        for bad in (True, ["a"]):
+            text = make_license(private, dict(PAYLOAD, entitlements=[{"extension_key": bad}]))
+            assert _err(text, pub) == "Invalid license: entitlement #1 is missing extension_key"
+
+    def test_auto_renew_and_trial_flags_are_independent(self):
+        ents = [{"extension_key": "a", "auto_renew": True, "trial": False}]
+        doc = self._parse({"licensee": "L", "entitlements": ents})
+        ent = doc.entitlement_for("a")
+        assert ent.auto_renew is True and ent.trial is False
+
+
+class TestVerifierWiring:
+    def test_key_id_and_artifact_are_forwarded(self, monkeypatch):
+        private, pub = make_keypair()
+        calls = []
+
+        def spy(payload, signature_b64, key_id, trusted, *, artifact=None):
+            calls.append((payload, signature_b64, key_id, trusted, artifact))
+            return True
+
+        monkeypatch.setattr(license_module, "verify_with_trusted", spy)
+        payload_bytes = json.dumps({"licensee": "L"}).encode()
+        text = _envelope(private, payload_bytes, key_id="vendor-2")
+        parse_and_verify(text, public_key_b64=pub)
+        assert calls == [
+            (payload_bytes, json.loads(text)["signature"], "vendor-2", {"test": pub}, "license")
+        ]
+
+        calls.clear()
+        parse_and_verify(_envelope(private, payload_bytes), public_key_b64=pub)
+        assert calls[0][2] is None  # absent key_id -> try-all fallback
+
+    def test_trusted_set_comes_from_baked_keys_when_not_pinned(self, monkeypatch):
+        private, pub = make_keypair()
+        monkeypatch.setattr(
+            "app.core.extension_signing.DEFAULT_VENDOR_PUBLIC_KEYS", {"vendor-1": pub}
+        )
+        doc = parse_and_verify(make_license(private, PAYLOAD))
+        assert doc.licensee == "ACME Corp"
+
+    def test_signature_is_checked_before_payload_is_parsed(self):
+        private, pub = make_keypair()
+        other, _ = make_keypair()
+        env = json.loads(_envelope(private, b"not json"))
+        env["signature"] = base64.b64encode(other.sign(b"not json")).decode()
+        # forged signature over garbage must fail on the signature, not the JSON
+        assert _err(json.dumps(env), pub) == "Invalid license: signature verification failed"
+
+
+class TestAdjustmentEdges:
+    CAP = datetime(2026, 12, 1, tzinfo=timezone.utc)
+
+    def _capped(self, monkeypatch, entitlements):
+        private, pub = make_keypair()
+        text = make_license(private, {"licensee": "L", "entitlements": entitlements})
+        sig = base64.b64decode(json.loads(text)["signature"])
+        monkeypatch.setitem(
+            license_module._LICENSE_ADJUSTMENTS, hashlib.sha256(sig).hexdigest(), self.CAP
+        )
+        return parse_and_verify(text, public_key_b64=pub)
+
+    def test_one_second_past_cap_is_capped_one_second_before_is_kept(self, monkeypatch):
+        doc = self._capped(
+            monkeypatch,
+            [
+                {"extension_key": "after", "expires_at": "2026-12-01T00:00:01Z"},
+                {"extension_key": "before", "expires_at": "2026-11-30T23:59:59Z"},
+            ],
+        )
+        assert doc.entitlement_for("after").expires_at == self.CAP
+        assert doc.entitlement_for("before").expires_at == datetime(
+            2026, 11, 30, 23, 59, 59, tzinfo=timezone.utc
+        )
+
+    def test_cap_preserves_other_entitlement_fields(self, monkeypatch):
+        doc = self._capped(
+            monkeypatch,
+            [
+                {
+                    "extension_key": "k",
+                    "expires_at": None,
+                    "auto_renew": True,
+                    "trial": True,
+                }
+            ],
+        )
+        ent = doc.entitlement_for("k")
+        assert ent.expires_at == self.CAP
+        assert ent.auto_renew is True and ent.trial is True
+        assert ent.extension_key == "k"
+
+
+class TestStateEdges:
+    EXP = datetime(2027, 7, 1, tzinfo=timezone.utc)
+    ENT = Entitlement(extension_key="x", expires_at=EXP)
+
+    def test_one_second_after_expiry_is_grace(self):
+        assert entitlement_state(self.ENT, 30, now=self.EXP + timedelta(seconds=1)) == "grace"
+
+    def test_one_second_before_expiry_is_active(self):
+        assert entitlement_state(self.ENT, 30, now=self.EXP - timedelta(seconds=1)) == "active"
+
+    def test_exactly_deadline_is_grace_one_second_later_is_expired(self):
+        end = self.EXP + timedelta(days=7)
+        assert entitlement_state(self.ENT, 7, now=end) == "grace"
+        assert entitlement_state(self.ENT, 7, now=end + timedelta(seconds=1)) == "expired"
+        # grace_days is days, not seconds or hours
+        assert entitlement_state(self.ENT, 7, now=self.EXP + timedelta(days=6, hours=23)) == "grace"
+
+    def test_zero_grace_at_expiry_is_active_then_expired(self):
+        assert entitlement_state(self.ENT, 0, now=self.EXP) == "active"
+
+    def test_now_defaults_to_the_current_time(self):
+        past = Entitlement("x", expires_at=datetime.now(timezone.utc) - timedelta(days=400))
+        future = Entitlement("x", expires_at=datetime.now(timezone.utc) + timedelta(days=400))
+        recent = Entitlement("x", expires_at=datetime.now(timezone.utc) - timedelta(days=2))
+        assert entitlement_state(past, 30) == "expired"
+        assert entitlement_state(future, 30) == "active"
+        assert entitlement_state(recent, 30) == "grace"
+        assert entitlement_state(Entitlement("x"), 0) == "active"
+
+    def test_grace_until_scales_with_days(self):
+        assert grace_until(self.ENT, 0) == self.EXP
+        assert grace_until(self.ENT, 1) == self.EXP + timedelta(days=1)
