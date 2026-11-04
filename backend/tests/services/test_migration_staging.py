@@ -254,3 +254,39 @@ def test_looks_like_email_rejects_obvious_garbage() -> None:
     assert not _looks_like_email("alice@")
     assert not _looks_like_email("alice@@example.com")
     assert not _looks_like_email("alice example@example.com")
+
+
+def _existing_with_total(card_type: str) -> MagicMock:
+    existing = MagicMock()
+    existing.name = "App"
+    existing.description = None
+    existing.subtype = None
+    existing.external_id = "fs-1"
+    existing.type = card_type
+    existing.lifecycle = {}
+    existing.attributes = {"costTotalAnnual": 1, "vendor": "old"}
+    return existing
+
+
+def _payload(existing: MagicMock) -> dict:
+    return {
+        "name": "App",
+        "description": None,
+        "subtype": None,
+        "lifecycle": {},
+        "attributes": {"costTotalAnnual": 2, "vendor": "new"},
+    }
+
+
+def test_compute_card_diff_ignores_the_derived_total_on_a_cost_item_type() -> None:
+    existing = _existing_with_total("Application")
+    diff = compute_card_diff(_payload(existing), existing)
+    # The total is skipped, and the attribute after it is still compared.
+    assert diff["attributes"] == {"vendor": {"old": "old", "new": "new"}}
+
+
+def test_compute_card_diff_keeps_the_total_on_other_types() -> None:
+    existing = _existing_with_total("Provider")
+    diff = compute_card_diff(_payload(existing), existing)
+    assert diff["attributes"]["costTotalAnnual"] == {"old": 1, "new": 2}
+    assert diff["attributes"]["vendor"] == {"old": "old", "new": "new"}

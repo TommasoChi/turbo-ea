@@ -57,7 +57,7 @@ from app.models.stakeholder import Stakeholder
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
 from app.services import card_type_categories
-from app.services.card_costs import COST_ITEM_TYPES, DERIVED_KEY, recompute_derived
+from app.services.card_costs import recompute_derived
 from app.services.event_bus import event_bus
 from app.services.relation_orientation import orient_endpoints
 
@@ -286,12 +286,6 @@ async def _apply_single_card(
                 "attributes": new_attrs,
                 "lifecycle": new_lifecycle,
             }
-    if payload.get("type") in COST_ITEM_TYPES and DERIVED_KEY in (payload.get("attributes") or {}):
-        # Derived from the card's cost items: an imported total is ignored, never written.
-        payload = {
-            **payload,
-            "attributes": {k: v for k, v in payload["attributes"].items() if k != DERIVED_KEY},
-        }
     parent_id = await _resolve_parent_card_id(db, staged)
 
     if staged.action == "create":
