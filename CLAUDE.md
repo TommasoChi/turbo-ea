@@ -2,7 +2,7 @@
 
 > **These are the USER's own instructions — not the agent's memory.** Before ANY change to this file:
 > **(1) ask the user**, **(2) say exactly which lines you want to change and WHY**, **(3) wait for a clear yes.**
-> Never add, reword or remove on your own initiative. Every byte is loaded into every session at the user's expense.
+> Never add, reword or remove on your own initiative.
 
 # Turbo EA
 
