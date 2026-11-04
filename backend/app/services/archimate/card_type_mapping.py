@@ -99,7 +99,7 @@ async def get_card_type_mapping(db: AsyncSession, card_types: list[dict]) -> lis
         )
         .where(EnterpriseObject.is_hidden == False)  # noqa: E712
     )
-    mappings: list[MappingRow] = list(result.all())
+    mappings: list[MappingRow] = [(r[0], r[1], r[2]) for r in result.all()]
 
     out = []
     for t in card_types:

@@ -80,6 +80,7 @@ Each of these loads automatically when you touch its files; read it first when y
 - Specs and plans under `docs/superpowers/` are read by a fresh agent before they reach the user → `.claude/rules/spec-and-plan-review.md`
 - Helm, managed containers, Terraform, Docker images, signing → `.claude/rules/deploy.md`
 - Homepage dashboards: widget registry parity, no ids in widget config, trends → `.claude/rules/dashboards.md`
+- Costs of Application / IT Component as catalogue items (TCO, derived total, `costs.edit`, event redaction) → `.claude/rules/cost-items.md`
 
 ### Frontend Conventions
 - Route-level pages use `lazy()` imports in `App.tsx` for code splitting.
