@@ -111,3 +111,23 @@ async def test_mixed_types_calculated_and_plain(db):
     await _calc(db, "Workload", "x = data.a")
     # Workload -> [a]; Asset -> [TOTAL]; nothing shared
     assert await cost_components(db, ["Workload", "Asset"], TOTAL) == []
+
+
+async def test_catalogue_components_follow_sort_order_then_label_then_key(db):
+    from app.models.cost_item_type import CostItemType
+    from app.services.cost_components import _type_components
+
+    for key, label, order in (
+        ("late", "Aaa", 5),
+        ("k2", "Same", 1),
+        ("k1", "Same", 1),
+        ("zed", "Alpha", 1),
+    ):
+        db.add(CostItemType(key=key, label=label, sort_order=order))
+    await db.flush()
+    assert await _type_components(db, "Application", "costTotalAnnual") == [
+        "zed",
+        "k1",
+        "k2",
+        "late",
+    ]

@@ -8,6 +8,7 @@ block: end to end on the test database. ``upgrade()`` itself also creates the ta
 
 from __future__ import annotations
 
+import copy
 import importlib.util
 from pathlib import Path
 
@@ -387,3 +388,80 @@ async def test_viewer_never_reads_migrated_breakdown_or_old_event_diffs(client, 
     assert r.status_code == 200
     assert "softwareLicensingCost" not in r.text and "extraCost" not in r.text
     assert '"note": "b"' in r.text or "'note': 'b'" in r.text or '"b"' in r.text
+
+
+# ── mutation hardening: thresholds, item shape and schema edge cases ──────────────────────────
+
+
+def test_amounts_between_zero_and_one_count():
+    items, tco, _ = cim.build_current_year_items({"softwareLicensingCost": 0.5}, KEYS)
+    assert (amounts(items), tco) == ({"softwareLicensingCost": 0.5}, 0.5)
+    assert cim.old_total({"costTotalAnnual": 0.5}) == 0.5
+    assert cim.old_total({"costTotalAnnual": 0}) is None
+
+
+def test_every_item_carries_a_null_renewal_date():
+    items, _, _ = cim.build_current_year_items(
+        {"softwareLicensingCost": 60, "costTotalAnnual": 100}, KEYS
+    )
+    assert items == {
+        "softwareLicensingCost": {"amount": 60, "renewal_date": None},
+        "other": {"amount": 40, "renewal_date": None},
+    }
+
+
+def test_other_in_the_key_list_is_skipped_not_a_stop():
+    items, tco, _ = cim.build_current_year_items(
+        {"other": 5, "softwareLicensingCost": 7}, ["other", "softwareLicensingCost"]
+    )
+    assert (amounts(items), tco) == ({"softwareLicensingCost": 7}, 7)
+
+
+def test_a_residual_below_one_still_lands_in_other():
+    items, tco, changed = cim.build_current_year_items(
+        {"softwareLicensingCost": 100, "costTotalAnnual": 100.5}, KEYS
+    )
+    assert (amounts(items), tco, changed) == (
+        {"softwareLicensingCost": 100, "other": 0.5},
+        100.5,
+        False,
+    )
+
+
+def test_cost_field_keys_skips_the_total_and_tolerates_odd_sections():
+    schema = [
+        "junk",
+        {"section": "no fields"},
+        {
+            "section": "Cost",
+            "fields": [
+                {"key": "costTotalAnnual", "type": "cost"},
+                {"key": "licence", "type": "cost"},
+                {"key": "note", "type": "text"},
+            ],
+        },
+    ]
+    assert cim.cost_field_keys(schema) == ["licence"]
+    assert cim.cost_field_keys(None) == []
+
+
+def test_strip_item_fields_copies_and_tolerates_odd_sections():
+    schema = [
+        "junk",
+        {"section": "no fields"},
+        {"section": "Cost", "fields": [{"key": "costTotalAnnual"}, {"key": KEYS[0]}]},
+    ]
+    before = copy.deepcopy(schema)
+    out = cim.strip_item_fields(schema, KEYS)
+    assert out is not None
+    assert [f["key"] for f in out[2]["fields"]] == ["costTotalAnnual"]
+    assert schema == before  # the input is left alone
+    assert cim.strip_item_fields(None, KEYS) is None
+    assert cim.strip_item_fields([{"section": "x"}], KEYS) is None
+
+
+def test_formula_may_reference_exactly_the_whole_key_list():
+    assert cim.formula_sums_only("data.a + data.b", ["a", "b"])
+    assert cim.formula_sums_only("data.a", ["a"])
+    assert not cim.formula_sums_only(None, ["a"])
+    assert not cim.formula_sums_only("", ["a"])
