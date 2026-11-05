@@ -981,3 +981,23 @@ describe("CostReport cost-type selector", () => {
     });
   });
 });
+
+describe("CostReport per-card breakdown request", () => {
+  const sankeyCalls = () =>
+    vi.mocked(api.get).mock.calls.map(([p]) => String(p)).filter((p) => p.startsWith("/reports/cost-sankey"));
+
+  it("fetches the TCO breakdown from the Sankey endpoint in the table view", async () => {
+    consumedConfig = { view: "table" };
+    renderCost();
+    await waitFor(() => expect(sankeyCalls().length).toBeGreaterThan(0));
+    expect(sankeyCalls()[0]).toContain("cost_field=costTotalAnnual");
+    expect(sankeyCalls()[0]).toContain("type=Application");
+  });
+
+  it("does not fetch it in the treemap view before a drill", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
+    expect(sankeyCalls()).toHaveLength(0);
+  });
+});

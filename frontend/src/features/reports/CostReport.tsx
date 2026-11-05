@@ -31,6 +31,7 @@ import SaveReportDialog from "./SaveReportDialog";
 import CostTrendChart, { type TrendSelection } from "./CostTrendChart";
 import CostDrillBar from "./CostDrillBar";
 import { crumbsOf, type Drill } from "./costDrill";
+import { useCostBreakdown } from "./useCostBreakdown";
 import { OTHERS_KEY } from "./costColors";
 import MetricCard from "./MetricCard";
 import FullscreenPanel from "./FullscreenPanel";
@@ -775,6 +776,14 @@ export default function CostReport() {
   useEffect(() => {
     setDrill((d) => (d.group === undefined && d.cardId === undefined ? d : {}));
   }, [cardTypeKey, costField, effectiveGroupBy, fiscalYearParam, scopeIds]);
+  // The table's item columns and a drilled card need the per-item breakdown; no costs.view, no request.
+  // The result is read by the table and the drilled views (wired next); until then only the request runs.
+  useCostBreakdown({
+    enabled: canViewCostsGlobally && (view === "table" || drill.cardId !== undefined),
+    typeParam: typeParam(cardTypeKey),
+    groupBy: effectiveGroupBy,
+    fiscalYear: fiscalYearParam,
+  });
   const trendSelection = useMemo<TrendSelection | undefined>(() => {
     if (drill.cardId !== undefined) return { kind: "card", id: drill.cardId };
     if (drill.group === undefined) return undefined;
