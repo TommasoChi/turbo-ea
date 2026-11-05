@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "@/api/client";
+import { api, isAbortError } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 
 export interface CardBreakdown {
@@ -19,10 +19,9 @@ interface SankeyBreakdownResponse {
 export function useCostBreakdown(args: {
   enabled: boolean;
   typeParam: string;
-  groupBy: string;
   fiscalYear: number | null;
 }): { breakdown: Map<string, CardBreakdown> | null } {
-  const { enabled, typeParam, groupBy, fiscalYear } = args;
+  const { enabled, typeParam, fiscalYear } = args;
   const [breakdown, setBreakdown] = useState<Map<string, CardBreakdown> | null>(null);
 
   useAbortableEffect(
@@ -30,9 +29,15 @@ export function useCostBreakdown(args: {
       setBreakdown(null);
       if (!enabled) return;
       const p = new URLSearchParams({ type: typeParam, cost_field: "costTotalAnnual" });
-      if (groupBy) p.set("group_by", groupBy);
       if (fiscalYear != null) p.set("fiscal_year", String(fiscalYear));
-      const r = await api.get<SankeyBreakdownResponse>(`/reports/cost-sankey?${p}`, { signal });
+      let r: SankeyBreakdownResponse;
+      try {
+        r = await api.get<SankeyBreakdownResponse>(`/reports/cost-sankey?${p}`, { signal });
+      } catch (err) {
+        // An empty map ends the loading state; a superseded request stays silent.
+        if (isCurrent() && !isAbortError(err)) setBreakdown(new Map());
+        return;
+      }
       if (!isCurrent()) return;
       const map = new Map<string, CardBreakdown>();
       for (const n of r.nodes) {
@@ -41,7 +46,7 @@ export function useCostBreakdown(args: {
       }
       setBreakdown(map);
     },
-    [enabled, typeParam, groupBy, fiscalYear],
+    [enabled, typeParam, fiscalYear],
   );
 
   return { breakdown };

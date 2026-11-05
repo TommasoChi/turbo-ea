@@ -836,10 +836,12 @@ export default function CostReport() {
   // also renders in the Sankey view, where the treemap `components` are not loaded.
   const trendComponents = useMemo(
     () =>
-      sortedCatalogue && sortedCatalogue.length > 0 && allCostItemTypes
-        ? sortedCatalogue.map((c) => c.key)
+      allCostItemTypes
+        ? costField === "costTotalAnnual"
+          ? (sortedCatalogue?.map((c) => c.key) ?? [])
+          : [costField]
         : components,
-    [sortedCatalogue, allCostItemTypes, components],
+    [sortedCatalogue, allCostItemTypes, costField, components],
   );
   const [drill, setDrill] = useState<Drill>({});
   // A drill names ids that exist only under the current selection.
@@ -848,9 +850,9 @@ export default function CostReport() {
   }, [cardTypeKey, costField, effectiveGroupBy, fiscalYearParam, scopeIds]);
   // The table's item columns and a drilled card need the per-item breakdown; no costs.view, no request.
   const { breakdown } = useCostBreakdown({
-    enabled: canViewCostsGlobally && (view === "table" || drill.cardId !== undefined),
+    enabled:
+      canViewCostsGlobally && (view === "table" || (view === "chart" && drill.cardId !== undefined)),
     typeParam: typeParam(cardTypeKey),
-    groupBy: effectiveGroupBy,
     fiscalYear: fiscalYearParam,
   });
   // A drilled card: one tile per cost item (catalogue order), the first 8 coloured, the rest merged.
@@ -890,9 +892,9 @@ export default function CostReport() {
       crumbsOf(drill, {
         root: t("cost.breadcrumbRoot"),
         group: (k) => (k === OTHERS_KEY ? t("cost.others") : groupLabel(k)),
-        card: (id) => rawItems?.find((i) => i.id === id)?.name ?? id,
+        card: (id) => colorItems.find((i) => i.id === id)?.name ?? id,
       }),
-    [drill, t, groupLabel, rawItems],
+    [drill, t, groupLabel, colorItems],
   );
   const drillBar = (
     <CostDrillBar crumbs={crumbs} onSelect={setDrill} hint={t("cost.drillHint")} />
@@ -1120,13 +1122,8 @@ export default function CostReport() {
       </Box>
     );
 
-  // The Sankey view loads no treemap items: its tiles read the card nodes it keeps.
-  const summaryCards: { name: string; cost: number }[] =
-    view === "sankey"
-      ? (sankeyView?.nodes ?? [])
-          .filter((n) => n.cost !== undefined)
-          .map((n) => ({ name: n.name, cost: n.cost! }))
-      : items;
+  // Every view reads the scoped cards; the metric strip does not follow the drill.
+  const summaryCards = colorItems;
   const summaryTotal = summaryCards.reduce((sum, c) => sum + c.cost, 0);
   const topDriver = summaryCards.reduce<{ name: string; cost: number } | null>(
     (top, c) => (!top || c.cost > top.cost ? c : top),
@@ -1148,7 +1145,7 @@ export default function CostReport() {
       cost: d.cost,
       index: i,
       deltaPct,
-      color: colorPlan.cardColors.get(d.id),
+      color: colorPlan.cardColors.get(d.id) ?? cardColor(d.name, chartTheme.categorical),
       typeLabel: typeLabelOf(d.type),
     };
   };

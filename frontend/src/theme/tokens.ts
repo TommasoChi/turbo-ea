@@ -346,22 +346,6 @@ export const CHART_CATEGORICAL = {
   dark: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"],
 } as const;
 
-/** The Cost report treemap's tile fills: a sequential blue ramp, cycled by
- *  cost rank (index 0 is the most expensive card), kept from the original
- *  Cost report so the look does not change. */
-export const COST_TREEMAP_COLORS = [
-  "#1565c0",
-  "#1976d2",
-  "#1e88e5",
-  "#2196f3",
-  "#42a5f5",
-  "#64b5f6",
-  "#90caf9",
-  "#bbdefb",
-  "#0d47a1",
-  "#1565c0",
-] as const;
-
 /** Label text printed on a dark, saturated chart fill (the cost treemap's
  *  blue tiles), and its translucent variant for a secondary line. */
 /** The change badge on a Cost treemap tile: a rise, a fall (light enough to read on the blues). */

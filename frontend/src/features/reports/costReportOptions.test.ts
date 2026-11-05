@@ -87,7 +87,7 @@ describe("relationGroupOptions", () => {
 describe("costFieldChoices", () => {
   const item = (key: string, sort_order: number, archived = false) =>
     ({ id: key, key, label: key.toUpperCase(), sort_order, archived, translations: {} }) as CostItemType;
-  const cat = [item("b", 2), item("old", 3, true), item("a", 1)];
+  const cat = [item("a", 1), item("b", 2), item("old", 3, true)]; // the caller sorts
   const labelOf = (i: CostItemType) => i.label;
   it("offers TCO then the catalogue in sort order, archived included, for cost-item types", () => {
     expect(

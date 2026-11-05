@@ -12,7 +12,7 @@
  * its side panel). The tooltip names the card, its cost and — when the panel
  * totals anything — its share of the panel's own total, so a drilled level
  * with one panel per source reads each share against its own scale. The
- * fills and label colours are tokens (`COST_TREEMAP_COLORS`,
+ * fills come from the page's colour plan and label colours are tokens (
  * `CHART_LABEL_ON_DARK*` in `@/theme/tokens`).
  *
  * A tile prints only what fits it. ECharts truncates each label line to the
@@ -42,14 +42,9 @@ import {
   COST_DELTA_DOWN_ON_LIGHT,
   COST_DELTA_UP,
   COST_DELTA_UP_ON_LIGHT,
-  COST_TREEMAP_COLORS,
 } from "@/theme/tokens";
 import { inkOn } from "./costColors";
 
-/** A tile's fill, cycling the palette by position. */
-export function treemapColor(index: number): string {
-  return COST_TREEMAP_COLORS[index % COST_TREEMAP_COLORS.length];
-}
 
 /** One card on the treemap; `index` is its position by cost, largest first. */
 export interface CostTreemapItem {
@@ -64,8 +59,8 @@ export interface CostTreemapItem {
    * cost to diff against ("new").
    */
   deltaPct?: number | null;
-  /** The tile's fill; the blue ramp by `index` when absent. */
-  color?: string;
+  /** The tile's fill. */
+  color: string;
   /** The card type's label, printed under the name and named in the tooltip. */
   typeLabel?: string;
 }
@@ -75,8 +70,8 @@ export interface CostTreemapGroup {
   /** The group's key as a click hands it back (`__others__` for the folded groups). */
   key: string;
   name: string;
-  /** The frame's fill; the blue ramp by `index` when absent. */
-  color?: string;
+  /** The frame's fill. */
+  color: string;
   cost: number;
   /** Position of the group by cost, largest first — picks the group's colour. */
   index: number;
@@ -265,8 +260,8 @@ export function buildCostTreemapOption(items: CostTreemapItem[], o: CostTreemapO
     color: CHART_LABEL_ON_LIGHT,
     rich: richStyles(CHART_LABEL_ON_LIGHT, COST_DELTA_UP_ON_LIGHT, COST_DELTA_DOWN_ON_LIGHT),
   };
-  const leaf = (d: CostTreemapItem, colorIndex: number, group?: string): CostTreemapDatum => {
-    const color = d.color ?? treemapColor(colorIndex);
+  const leaf = (d: CostTreemapItem, group?: string): CostTreemapDatum => {
+    const color = d.color;
     return {
       name: d.name,
       value: d.cost,
@@ -276,7 +271,7 @@ export function buildCostTreemapOption(items: CostTreemapItem[], o: CostTreemapO
       ...(d.deltaPct !== undefined && { deltaPct: d.deltaPct }),
       ...(group !== undefined && { group }),
       ...(d.typeLabel !== undefined && { typeLabel: d.typeLabel }),
-      ...(d.color !== undefined && inkOn(color) === CHART_LABEL_ON_LIGHT && { label: lightLabel }),
+      ...(inkOn(color) === CHART_LABEL_ON_LIGHT && { label: lightLabel }),
     };
   };
   // Grouped: each group is a frame holding its cards, which take the frame's colour.
@@ -286,17 +281,17 @@ export function buildCostTreemapOption(items: CostTreemapItem[], o: CostTreemapO
           key: g.key,
           name: g.name,
           value: g.cost,
-          children: g.items.filter((d) => d.cost > 0).map((d) => leaf(d, g.index, g.name)),
-          ...(g.color !== undefined && { upperLabel: { color: inkOn(g.color) } }),
+          children: g.items.filter((d) => d.cost > 0).map((d) => leaf(d, g.name)),
+          upperLabel: { color: inkOn(g.color) },
           itemStyle: {
-            color: g.color ?? treemapColor(g.index),
+            color: g.color,
             borderColor: ctx.theme.surface,
             borderWidth: 4,
             gapWidth: 2,
           },
         }))
         .filter((g) => g.children.length > 0)
-    : items.filter((d) => d.cost > 0).map((d) => leaf(d, d.index));
+    : items.filter((d) => d.cost > 0).map((d) => leaf(d));
   const tileLabel = treemapLabel(ctx, {
     showValues: true,
     color: CHART_LABEL_ON_DARK,

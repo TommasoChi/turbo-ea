@@ -15,7 +15,7 @@ const RESPONSE = {
   links: [],
   total: 22,
 };
-const args = (over = {}) => ({ enabled: true, typeParam: "Application", groupBy: "", fiscalYear: null, ...over });
+const args = (over = {}) => ({ enabled: true, typeParam: "Application", fiscalYear: null, ...over });
 
 beforeEach(() => {
   vi.mocked(api.get).mockResolvedValue(RESPONSE as never);
@@ -30,15 +30,22 @@ describe("useCostBreakdown", () => {
     expect(result.current.breakdown!.get("a")).toEqual({ total: 15, items: { lic: 10, __other__: 5 } });
   });
 
-  it("asks the Sankey endpoint for the TCO with group_by and fiscal_year", async () => {
-    renderHook(() => useCostBreakdown(args({ groupBy: "field:tier", fiscalYear: 2027 })));
+  it("asks the Sankey endpoint for the TCO and fiscal_year", async () => {
+    renderHook(() => useCostBreakdown(args({ fiscalYear: 2027 })));
     await waitFor(() => expect(api.get).toHaveBeenCalled());
     const q = new URLSearchParams(String(vi.mocked(api.get).mock.calls[0][0]).split("?")[1]);
     expect(String(vi.mocked(api.get).mock.calls[0][0])).toMatch(/^\/reports\/cost-sankey\?/);
     expect(q.get("type")).toBe("Application");
     expect(q.get("cost_field")).toBe("costTotalAnnual");
-    expect(q.get("group_by")).toBe("field:tier");
+    expect(q.has("group_by")).toBe(false);
     expect(q.get("fiscal_year")).toBe("2027");
+  });
+
+  it("ends the loading state with an empty map when the request fails", async () => {
+    vi.mocked(api.get).mockRejectedValue(new Error("boom"));
+    const { result } = renderHook(() => useCostBreakdown(args()));
+    await waitFor(() => expect(result.current.breakdown).not.toBeNull());
+    expect(result.current.breakdown!.size).toBe(0);
   });
 
   it("does not call the API when disabled", async () => {

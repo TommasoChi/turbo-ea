@@ -45,7 +45,7 @@ export function relationGroupOptions(
 }
 
 
-/** The cost-type selector: TCO plus one entry per catalogue item for Application / IT Component. */
+/** The cost-type selector: TCO plus one entry per catalogue item (already in sort order) for Application / IT Component. */
 export function costFieldChoices(
   typeKeys: string[],
   catalogue: CostItemType[],
@@ -56,8 +56,6 @@ export function costFieldChoices(
   if (typeKeys.length === 0 || !typeKeys.every(isCostItemType)) return schemaFields;
   return [
     { key: "costTotalAnnual", label: tcoLabel },
-    ...[...catalogue]
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((i) => ({ key: i.key, label: labelOf(i) })),
+    ...catalogue.map((i) => ({ key: i.key, label: labelOf(i) })),
   ];
 }

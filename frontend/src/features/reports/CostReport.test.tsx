@@ -1476,3 +1476,93 @@ describe("CostReport table per-item columns, TCO and drill", () => {
     expect(screen.getByTestId("cost-group-swatch-g1")).toHaveStyle({ backgroundColor: CHART_CATEGORICAL.light[0] });
   });
 });
+
+describe("CostReport review fixes", () => {
+  const meta = { fiscal_year: 2026, current_fiscal_year: 2026, fiscal_year_start: 1 };
+  const NODES = [
+    { id: "item:lic", name: "Licences", type: "CostItem" },
+    { id: "group:G", name: "G", type: "Group" },
+    { id: "crm", name: "CRM", type: "Application", cost: 100, costs: { lic: 100 } },
+    { id: "erp", name: "ERP", type: "Application", cost: 60, costs: { lic: 60 } },
+  ];
+  const LINKS = [
+    { source: 0, target: 1, value: 160 },
+    { source: 1, target: 2, value: 100 },
+    { source: 1, target: 3, value: 60 },
+  ];
+  const mockSankeyOnly = () =>
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.startsWith("/reports/cost-sankey"))
+        return Promise.resolve({ nodes: NODES, links: LINKS, total: 160, ...meta }) as never;
+      if (path.startsWith("/metamodel/cost-item-types")) return Promise.resolve(CATALOGUE) as never;
+      return Promise.resolve({ items: HIERARCHY, total: HIERARCHY.length }) as never;
+    });
+  const sankeyCalls = () =>
+    vi.mocked(api.get).mock.calls.map(([p]) => String(p)).filter((p) => p.startsWith("/reports/cost-sankey"));
+  const withTier = (tp: typeof APP_TYPE) => ({
+    ...tp,
+    fields_schema: [
+      ...tp.fields_schema,
+      {
+        section: "General",
+        fields: [{ key: "tier", label: "Tier", type: "single_select", options: [{ key: "gold", label: "Gold" }] }],
+      },
+    ],
+  });
+  const mockTier = () => {
+    const app = withTier(APP_TYPE);
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: [app, withTier(ITC_TYPE)],
+      relationTypes: [],
+      loading: false,
+      getType: (key: string) => (key === "Application" ? app : undefined),
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+    } as never);
+  };
+  const clickNode = (name: string) =>
+    act(() => echartState.byName("Sankey chart view").onClick!({ name, dataType: "node" }));
+
+  it("hands the trend only the selected cost item", async () => {
+    consumedConfig = { view: "table", costField: "support", fiscalYearParam: 2027 };
+    renderCost();
+    const trend = await screen.findByTestId("cost-trend-chart");
+    expect(trend).toHaveAttribute("data-components", "support");
+  });
+
+  it("names a drilled card in the breadcrumb in the Sankey view", async () => {
+    mockSankeyOnly();
+    consumedConfig = { view: "sankey" };
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    await clickNode("crm");
+    expect(await screen.findByRole("button", { name: /back/i })).toBeInTheDocument();
+    expect(screen.getAllByText("CRM").length).toBeGreaterThan(0);
+    expect(screen.queryByText("crm")).not.toBeInTheDocument();
+  });
+
+  it("requests no breakdown when a card is drilled in the Sankey view", async () => {
+    mockSankeyOnly();
+    consumedConfig = { view: "sankey" };
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    const before = sankeyCalls().length;
+    await clickNode("crm");
+    await screen.findByRole("button", { name: /back/i });
+    expect(sankeyCalls()).toHaveLength(before);
+  });
+
+  it("flows a drilled card's own cost from the item to its group, not the group sum", async () => {
+    mockTier();
+    mockSankeyOnly();
+    consumedConfig = { view: "sankey", groupBy: "field:tier" };
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    await clickNode("crm");
+    await waitFor(() => {
+      const links = echartState.byName("Sankey chart view").option.series[0].links;
+      const l = links.find((x: { source: string; target: string }) => x.source === "item:lic" && x.target === "group:G");
+      expect(l?.value).toBe(100);
+    });
+  });
+});

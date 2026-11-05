@@ -114,7 +114,6 @@ export default function EChart({
   clickRef.current = onClick;
   const contextRef = useRef(onContextMenu);
   contextRef.current = onContextMenu;
-  const hasContextMenu = useRef(onContextMenu !== undefined);
   const dprRef = useRef(devicePixelRatio);
   // Read at init only: a new callback identity never re-creates the chart.
   const initRef = useRef(onInit);
@@ -135,12 +134,12 @@ export default function EChart({
     const handleClick = (params: unknown) => clickRef.current?.(params as EChartClickParams);
     chart.on("click", handleClick);
     const handleContext = (params: unknown) => {
+      if (!contextRef.current) return;
       const p = params as EChartClickParams;
       p.event?.event?.preventDefault();
       contextRef.current?.(p);
     };
-    const withContext = hasContextMenu.current;
-    if (withContext) chart.on("contextmenu", handleContext);
+    chart.on("contextmenu", handleContext);
 
     let observer: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined") {
@@ -157,7 +156,7 @@ export default function EChart({
       observer?.disconnect();
       print?.removeEventListener("change", onPrintChange);
       chart.off("click", handleClick);
-      if (withContext) chart.off("contextmenu", handleContext);
+      chart.off("contextmenu", handleContext);
       chart.dispose();
       chartRef.current = null;
     };

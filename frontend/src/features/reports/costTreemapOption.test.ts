@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildEChartsChrome } from "@/components/charts/echartsTheme";
 import {
+  CHART_CATEGORICAL,
   CHART_LABEL_ON_DARK,
   CHART_LABEL_ON_DARK_MUTED,
   CHART_LABEL_ON_LIGHT,
@@ -8,7 +9,6 @@ import {
   COST_DELTA_DOWN_ON_LIGHT,
   COST_DELTA_UP,
   COST_DELTA_UP_ON_LIGHT,
-  COST_TREEMAP_COLORS,
 } from "@/theme/tokens";
 import {
   TILE_NAME_MIN,
@@ -19,7 +19,6 @@ import {
   deltaBadge,
   tileLabelFormatter,
   tileLabelTier,
-  treemapColor,
   type CostTreemapGroup,
   type CostTreemapItem,
   type CostTreemapOptions,
@@ -47,28 +46,17 @@ function opts(over: Partial<CostTreemapOptions> = {}): CostTreemapOptions {
   };
 }
 
+const P = CHART_CATEGORICAL.light;
+
 const ITEMS: CostTreemapItem[] = [
-  { id: "erp", name: "ERP", cost: 500, index: 0 },
-  { id: "crm", name: "CRM", cost: 100, index: 1 },
-  { name: "Unlinked", cost: 100, index: 2 },
+  { id: "erp", name: "ERP", cost: 500, index: 0, color: P[0] },
+  { id: "crm", name: "CRM", cost: 100, index: 1, color: P[1] },
+  { name: "Unlinked", cost: 100, index: 2, color: P[2] },
 ];
 
 const build = (items: CostTreemapItem[] = ITEMS, over: Partial<CostTreemapOptions> = {}) =>
   buildCostTreemapOption(items, opts(over)) as any;
 const seriesOf = (option: any) => option.series[0];
-
-describe("treemapColor", () => {
-  it("runs through the ten-blue token ramp, darkest first, and wraps by position", () => {
-    expect(COST_TREEMAP_COLORS).toHaveLength(10);
-    COST_TREEMAP_COLORS.forEach((c, i) => expect(treemapColor(i)).toBe(c));
-    expect(treemapColor(0)).toBe(COST_TREEMAP_COLORS[0]);
-    expect(treemapColor(8)).toBe(COST_TREEMAP_COLORS[8]);
-    expect(treemapColor(10)).toBe(COST_TREEMAP_COLORS[0]);
-    expect(treemapColor(11)).toBe(COST_TREEMAP_COLORS[1]);
-    expect(treemapColor(19)).toBe(COST_TREEMAP_COLORS[9]);
-    expect(treemapColor(20)).toBe(COST_TREEMAP_COLORS[0]);
-  });
-});
 
 describe("costTooltipHtml", () => {
   it("names the card, prices it and gives its share of the panel total to one decimal", () => {
@@ -127,18 +115,15 @@ describe("buildCostTreemapOption", () => {
   it("draws one tile per card, in the order given, coloured by position and carrying its id", () => {
     const series = seriesOf(build());
     expect(series.data).toEqual([
-      { name: "ERP", value: 500, id: "erp", index: 0, itemStyle: { color: COST_TREEMAP_COLORS[0] } },
-      { name: "CRM", value: 100, id: "crm", index: 1, itemStyle: { color: COST_TREEMAP_COLORS[1] } },
-      { name: "Unlinked", value: 100, id: undefined, index: 2, itemStyle: { color: COST_TREEMAP_COLORS[2] } },
+      { name: "ERP", value: 500, id: "erp", index: 0, itemStyle: { color: P[0] } },
+      { name: "CRM", value: 100, id: "crm", index: 1, itemStyle: { color: P[1] } },
+      { name: "Unlinked", value: 100, id: undefined, index: 2, itemStyle: { color: P[2] } },
     ]);
   });
 
-  it("colours a tile by its index, not its place in the list", () => {
-    const series = seriesOf(build([{ id: "x", name: "X", cost: 1, index: 10 }]));
-    expect(series.data[0].itemStyle.color).toBe(COST_TREEMAP_COLORS[0]);
-    expect(seriesOf(build([{ id: "x", name: "X", cost: 1, index: 8 }])).data[0].itemStyle.color).toBe(
-      COST_TREEMAP_COLORS[8],
-    );
+  it("fills a tile with the colour it is given", () => {
+    const series = seriesOf(build([{ id: "x", name: "X", cost: 1, index: 10, color: P[2] }]));
+    expect(series.data[0].itemStyle.color).toBe(P[2]);
   });
 
   it("is a still, single-level treemap filling the chart, leaving clicks to the page", () => {
@@ -242,11 +227,11 @@ describe("buildCostTreemapOption", () => {
   it("drops cards that cost nothing or less, keeping the rest in order", () => {
     const series = seriesOf(
       build([
-        { id: "a", name: "A", cost: 300, index: 0 },
-        { id: "z", name: "Zero", cost: 0, index: 1 },
-        { id: "b", name: "B", cost: 0.5, index: 2 },
-        { id: "n", name: "Negative", cost: -40, index: 3 },
-        { id: "c", name: "C", cost: 10, index: 4 },
+        { id: "a", name: "A", cost: 300, index: 0, color: P[0] },
+        { id: "z", name: "Zero", cost: 0, index: 1, color: P[1] },
+        { id: "b", name: "B", cost: 0.5, index: 2, color: P[2] },
+        { id: "n", name: "Negative", cost: -40, index: 3, color: P[3] },
+        { id: "c", name: "C", cost: 10, index: 4, color: P[4] },
       ]),
     );
     expect(series.data.map((d: any) => [d.name, d.value, d.index])).toEqual([
@@ -255,8 +240,8 @@ describe("buildCostTreemapOption", () => {
       ["C", 10, 4],
     ]);
     // A kept tile keeps the colour of its rank, not of its place after the drop.
-    expect(series.data[1].itemStyle.color).toBe(COST_TREEMAP_COLORS[2]);
-    expect(seriesOf(build([{ id: "z", name: "Zero", cost: 0, index: 0 }])).data).toEqual([]);
+    expect(series.data[1].itemStyle.color).toBe(P[2]);
+    expect(seriesOf(build([{ id: "z", name: "Zero", cost: 0, index: 0, color: P[0] }])).data).toEqual([]);
   });
 
   it("draws an empty panel as a treemap with no tiles", () => {
@@ -432,9 +417,9 @@ describe("deltaBadge", () => {
 
 describe("the change badge on a tile", () => {
   const withDelta: CostTreemapItem[] = [
-    { id: "erp", name: "ERP", cost: 500, index: 0, deltaPct: 0.2 },
-    { id: "old", name: "Old", cost: 100, index: 1, deltaPct: null },
-    { id: "crm", name: "CRM", cost: 100, index: 2 },
+    { id: "erp", name: "ERP", cost: 500, index: 0, color: P[0], deltaPct: 0.2 },
+    { id: "old", name: "Old", cost: 100, index: 1, color: P[1], deltaPct: null },
+    { id: "crm", name: "CRM", cost: 100, index: 2, color: P[2] },
   ];
 
   it("prints after the cost on a tile that fits the cost, with the datum's change", () => {
@@ -464,13 +449,14 @@ describe("grouped treemap", () => {
       name: "Gold",
       cost: 15,
       index: 0,
+      color: P[0],
       items: [
-        { id: "a", name: "Alpha", cost: 10, index: 0 },
-        { id: "b", name: "Beta", cost: 5, index: 0 },
+        { id: "a", name: "Alpha", cost: 10, index: 0, color: P[0] },
+        { id: "b", name: "Beta", cost: 5, index: 0, color: P[0] },
       ],
     },
-    { key: "silver", name: "Silver", cost: 3, index: 1, items: [{ id: "c", name: "Gamma", cost: 3, index: 1 }] },
-    { key: "empty", name: "Empty", cost: 0, index: 2, items: [{ id: "z", name: "Zero", cost: 0, index: 2 }] },
+    { key: "silver", name: "Silver", cost: 3, index: 1, color: P[1], items: [{ id: "c", name: "Gamma", cost: 3, index: 1, color: P[1] }] },
+    { key: "empty", name: "Empty", cost: 0, index: 2, color: P[2], items: [{ id: "z", name: "Zero", cost: 0, index: 2, color: P[2] }] },
   ];
   const grouped = () => seriesOf(build([], { groups }));
 
@@ -480,8 +466,8 @@ describe("grouped treemap", () => {
       ["Gold", 15, 2],
       ["Silver", 3, 1],
     ]);
-    expect(data[0].itemStyle).toMatchObject({ color: treemapColor(0), borderWidth: 4 });
-    expect(data[1].children[0].itemStyle.color).toBe(treemapColor(1));
+    expect(data[0].itemStyle).toMatchObject({ color: P[0], borderWidth: 4 });
+    expect(data[1].children[0].itemStyle.color).toBe(P[1]);
   });
 
   it("titles each group in a strip over its frame, and only when grouped", () => {
@@ -558,7 +544,7 @@ describe("cost report colours and type line", () => {
   });
 
   it("prints the type on the second line of a full tile only", () => {
-    const items: CostTreemapItem[] = [{ id: "a", name: "ERP", cost: 500, index: 0, typeLabel: "Application" }];
+    const items: CostTreemapItem[] = [{ id: "a", name: "ERP", cost: 500, index: 0, color: P[0], typeLabel: "Application" }];
     const full = seriesOf(build(items, { tileRect: () => ({ width: 300, height: 100 }) }));
     expect(full.label.formatter({ dataIndex: 0, name: "ERP", value: 500, data: full.data[0] })).toBe(
       "ERP\n{type|Application}\n{value|$500}",

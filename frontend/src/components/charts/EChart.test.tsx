@@ -85,9 +85,14 @@ describe("EChart", () => {
     expect(onContextMenu).toHaveBeenCalledWith(params);
   });
 
-  it("registers no contextmenu handler without the prop", () => {
+  it("leaves the native menu alone without the prop", () => {
     render(<EChart option={{}} />);
-    expect(chart.on.mock.calls.some((c) => c[0] === "contextmenu")).toBe(false);
+    const handler = chart.on.mock.calls.find((c) => c[0] === "contextmenu")?.[1] as (
+      p: unknown,
+    ) => void;
+    const preventDefault = vi.fn();
+    handler({ event: { event: { preventDefault } } });
+    expect(preventDefault).not.toHaveBeenCalled();
   });
 
   it("disposes the chart and stops listening on unmount", () => {
