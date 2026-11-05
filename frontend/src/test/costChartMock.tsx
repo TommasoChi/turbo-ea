@@ -20,6 +20,7 @@ import type { CSSProperties } from "react";
 interface Props {
   option: any;
   onClick?: (p: unknown) => void;
+  onContextMenu?: (p: unknown) => void;
   style?: CSSProperties;
 }
 
@@ -28,7 +29,7 @@ function leavesOf(data: any[]): any[] {
   return data.flatMap((d) => (d.children ? d.children : [d]));
 }
 
-function MockCostChart({ option, onClick }: Props) {
+function MockCostChart({ option, onClick, onContextMenu }: Props) {
   const s = option.series?.[0];
   if (s?.type === "sankey") {
     const ids: string[] = s.data.map((d: any) => d.name);
@@ -66,7 +67,11 @@ function MockCostChart({ option, onClick }: Props) {
             const [name, ...rest] = printed.split("\n");
             const rich = [...rest.join("\n").matchAll(/\{\w+\|([^}]*)\}/g)].map((m) => m[1]);
             return (
-              <g key={d.id ?? d.name} onClick={() => onClick?.({ data: d, name: d.name })}>
+              <g
+                key={d.id ?? d.name}
+                onClick={() => onClick?.({ data: d, name: d.name })}
+                onContextMenu={() => onContextMenu?.({ data: d, name: d.name })}
+              >
                 <text>{name}</text>
                 {rich.map((r, j) => (
                   <text key={j}>{r}</text>

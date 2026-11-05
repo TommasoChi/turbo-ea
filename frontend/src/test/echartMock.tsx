@@ -32,6 +32,7 @@ import { useLayoutEffect, useRef, type CSSProperties } from "react";
 export interface CapturedEChart {
   option: any;
   onClick?: (p: unknown) => void;
+  onContextMenu?: (p: unknown) => void;
   ariaLabel?: string;
   labelledBy?: string;
   style?: CSSProperties;

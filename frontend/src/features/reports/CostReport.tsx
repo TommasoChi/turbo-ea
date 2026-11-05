@@ -30,9 +30,18 @@ import { buildCostSankeyOption } from "./costSankeyOption";
 import SaveReportDialog from "./SaveReportDialog";
 import CostTrendChart, { type TrendSelection } from "./CostTrendChart";
 import CostDrillBar from "./CostDrillBar";
-import { crumbsOf, type Drill } from "./costDrill";
+import { applyDrill, crumbsOf, type Drill } from "./costDrill";
 import { useCostBreakdown } from "./useCostBreakdown";
-import { OTHERS_KEY } from "./costColors";
+import {
+  MAX_GROUP_HUES,
+  OTHERS_KEY,
+  assignGroupColors,
+  cardColor,
+  drillGroupKey,
+  memberShade,
+} from "./costColors";
+import CostLegend from "./CostLegend";
+import { CHART_OTHER, COST_UNSPECIFIED } from "@/theme/tokens";
 import MetricCard from "./MetricCard";
 import FullscreenPanel from "./FullscreenPanel";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -82,6 +91,8 @@ interface CostItem {
   attributes?: Record<string, unknown>;
   /** Raw group value, present when the request grouped. */
   group?: string;
+  /** The card's type key. */
+  type?: string;
 }
 
 interface CostTreemapResponse {
@@ -103,7 +114,6 @@ interface CostTreemapResponse {
 type ReportItemLabels = Record<string, { label: string; translations?: TranslationMap }>;
 
 const EMPTY_COMPONENTS: string[] = [];
-const EMPTY_FOLDED: Set<string> = new Set();
 
 interface SankeyNode {
   id: string;
@@ -168,6 +178,7 @@ interface CostTreemapPanelProps {
   chrome: EChartsThemeValue;
   fmt: { format: (v: number) => string };
   onTileClick: (p: EChartClickParams) => void;
+  onTileContextMenu: (p: EChartClickParams) => void;
 }
 
 /**
@@ -184,6 +195,7 @@ function CostTreemapPanel({
   chrome,
   fmt,
   onTileClick,
+  onTileContextMenu,
 }: CostTreemapPanelProps) {
   const { t } = useTranslation(["reports", "common"]);
   const chartRef = useRef<ECharts | null>(null);
@@ -218,6 +230,7 @@ function CostTreemapPanel({
       fullscreen={fullscreen}
       ariaLabel={t("cost.title")}
       onClick={onTileClick}
+      onContextMenu={onTileContextMenu}
       onInit={onInit}
     />
   );
@@ -744,6 +757,37 @@ export default function CostReport() {
     return [...map.values()].sort((a, b) => b.cost - a.cost);
   }, [items, effectiveGroupBy, groupLabel]);
 
+  // The one colour assignment of the page: treemap, Sankey and table all read it. Groups take their
+  // hue by scoped size, beyond the 8th they fold into Others, and a drill never changes it.
+  const colorPlan = useMemo(() => {
+    const cardColors = new Map<string, string>();
+    if (!groups) {
+      for (const it of items) cardColors.set(it.id, cardColor(it.name, chartTheme.categorical));
+      return { cardColors, groups: [], foldedKeys: new Set<string>() };
+    }
+    const { groups: coloured, foldedKeys } = assignGroupColors(groups, {
+      categorical: chartTheme.categorical,
+      other: CHART_OTHER[chartTheme.mode],
+      unspecified: COST_UNSPECIFIED[chartTheme.mode],
+      unspecifiedKey: OTHER_GROUP,
+    });
+    for (const g of coloured) {
+      const ranked = [...g.items].sort((a, b) => b.cost - a.cost);
+      ranked.forEach((it, i) => cardColors.set(it.id, memberShade(g.hue, i, ranked.length)));
+    }
+    return { cardColors, groups: coloured, foldedKeys };
+  }, [groups, items, chartTheme.categorical, chartTheme.mode]);
+  const { foldedKeys } = colorPlan;
+  const groupDisplayLabel = (key: string, label: string) =>
+    key === OTHERS_KEY ? t("cost.othersCount", { count: foldedKeys.size }) : label;
+  const typeLabelOf = useCallback(
+    (key?: string) => {
+      const tp = key ? types.find((x) => x.key === key) : undefined;
+      return tp ? typeLabel(tp) : undefined;
+    },
+    [types, typeLabel],
+  );
+
   // A cost item's label: the catalogue's (the report sends it, archived items
   // included), else the schema field's. Undefined when neither knows the key.
   const knownItemLabel = useCallback(
@@ -770,20 +814,44 @@ export default function CostReport() {
     return components;
   }, [catalogue, typeKeys, components]);
   const [drill, setDrill] = useState<Drill>({});
-  // Until the colour assignment is wired, no group is folded.
-  const foldedKeys = EMPTY_FOLDED;
   // A drill names ids that exist only under the current selection.
   useEffect(() => {
     setDrill((d) => (d.group === undefined && d.cardId === undefined ? d : {}));
   }, [cardTypeKey, costField, effectiveGroupBy, fiscalYearParam, scopeIds]);
   // The table's item columns and a drilled card need the per-item breakdown; no costs.view, no request.
-  // The result is read by the table and the drilled views (wired next); until then only the request runs.
-  useCostBreakdown({
+  const { breakdown } = useCostBreakdown({
     enabled: canViewCostsGlobally && (view === "table" || drill.cardId !== undefined),
     typeParam: typeParam(cardTypeKey),
     groupBy: effectiveGroupBy,
     fiscalYear: fiscalYearParam,
   });
+  // A drilled card: one tile per cost item (catalogue order), the first 8 coloured, the rest merged.
+  const cardItemTiles = useMemo<CostTreemapItem[] | null>(() => {
+    if (drill.cardId === undefined || !breakdown) return null;
+    const b = breakdown.get(drill.cardId);
+    if (!b) return [];
+    const has = (k: string) => (b.items[k] ?? 0) > 0;
+    const keys = [
+      ...trendComponents.filter(has),
+      ...Object.keys(b.items).filter((k) => !trendComponents.includes(k) && k !== OTHER_GROUP && has(k)),
+      ...(has(OTHER_GROUP) ? [OTHER_GROUP] : []),
+    ];
+    const tiles: CostTreemapItem[] = keys.slice(0, MAX_GROUP_HUES).map((k, i) => ({
+      name: k === OTHER_GROUP ? t("cost.otherCostItem") : trendLabelOf(k),
+      cost: b.items[k],
+      index: i,
+      color: chartTheme.categorical[i],
+    }));
+    const rest = keys.slice(MAX_GROUP_HUES);
+    if (rest.length > 0)
+      tiles.push({
+        name: t("cost.otherItems"),
+        cost: rest.reduce((sum, k) => sum + b.items[k], 0),
+        index: MAX_GROUP_HUES,
+        color: CHART_OTHER[chartTheme.mode],
+      });
+    return tiles;
+  }, [drill.cardId, breakdown, trendComponents, trendLabelOf, t, chartTheme.categorical, chartTheme.mode]);
   const trendSelection = useMemo<TrendSelection | undefined>(() => {
     if (drill.cardId !== undefined) return { kind: "card", id: drill.cardId };
     if (drill.group === undefined) return undefined;
@@ -919,8 +987,20 @@ export default function CostReport() {
     t,
   ]);
 
-  // A tile hands back the datum it was built from; a group frame has no card id and is inert.
-  const handleTileClick = useCallback((p: EChartClickParams) => {
+  // A tile hands back the datum it was built from. Left click drills (a card tile into the card, a
+  // group frame into the group); a cost-item tile has neither id nor key and is inert.
+  const handleTileClick = useCallback(
+    (p: EChartClickParams) => {
+      const d = p.data as { id?: string; key?: string } | undefined;
+      if (d?.id) {
+        const raw = effectiveGroupBy ? items.find((i) => i.id === d.id)?.group : undefined;
+        setDrill({ ...(raw !== undefined && { group: drillGroupKey(raw, foldedKeys) }), cardId: d.id });
+      } else if (d?.key) setDrill({ group: d.key });
+    },
+    [items, effectiveGroupBy, foldedKeys],
+  );
+  // Right click opens the card in the side panel.
+  const handleTileContextMenu = useCallback((p: EChartClickParams) => {
     const d = p.data as { id?: string } | undefined;
     if (d?.id) setSidePanelCardId(d.id);
   }, []);
@@ -989,16 +1069,45 @@ export default function CostReport() {
         : baseline && baseline > 0
           ? (d.cost - baseline) / baseline
           : null;
-    return { id: d.id, name: d.name, cost: d.cost, index: i, deltaPct };
+    return {
+      id: d.id,
+      name: d.name,
+      cost: d.cost,
+      index: i,
+      deltaPct,
+      color: colorPlan.cardColors.get(d.id),
+      typeLabel: typeLabelOf(d.type),
+    };
   };
-  // Grouped: each group is a frame holding its cards, which take the frame's colour.
-  const treemapGroups: CostTreemapGroup[] | undefined = groups?.map((g, gi) => ({
-    name: g.label,
-    cost: g.cost,
-    index: gi,
-    items: [...g.items].sort((x, y) => y.cost - x.cost).map((d) => treemapLeaf(d, gi)),
-  }));
-  const treemapItems = [...items].sort((x, y) => y.cost - x.cost).map(treemapLeaf);
+  const cardDrilled = drill.cardId !== undefined;
+  const groupDrilled = drill.group !== undefined && !cardDrilled;
+  // Grouped: each group is a frame holding its cards; the folded groups share one Others frame.
+  const treemapGroups: CostTreemapGroup[] | undefined =
+    groups && !groupDrilled && !cardDrilled
+      ? colorPlan.groups.map((g, gi) => ({
+          key: g.key,
+          name: groupDisplayLabel(g.key, g.label),
+          cost: g.cost,
+          index: gi,
+          color: g.hue,
+          items: [...g.items].sort((x, y) => y.cost - x.cost).map((d) => treemapLeaf(d, gi)),
+        }))
+      : undefined;
+  const treemapItems =
+    cardItemTiles ??
+    [...(groupDrilled ? applyDrill(items, drill, foldedKeys) : items)]
+      .sort((x, y) => y.cost - x.cost)
+      .map(treemapLeaf);
+  const treemapTotal = cardDrilled ? (breakdown?.get(drill.cardId!)?.total ?? 0) : total;
+  const legend = (
+    <CostLegend
+      entries={colorPlan.groups.map((g) => ({
+        key: g.key,
+        label: groupDisplayLabel(g.key, g.label),
+        color: g.hue,
+      }))}
+    />
+  );
 
   const sort = (k: string) => {
     setSortD(sortK === k && sortD === "asc" ? "desc" : "asc");
@@ -1235,19 +1344,27 @@ export default function CostReport() {
         ) : (
           <>
             {drillBar}
-            <FullscreenPanel label={t("cost.fullscreen")}>
-              {(isFullscreen) => (
-                <CostTreemapPanel
-                  items={treemapItems}
-                  groups={treemapGroups}
-                  total={total}
-                  fullscreen={isFullscreen}
-                  chrome={chartTheme}
-                  fmt={fmt}
-                  onTileClick={handleTileClick}
-                />
-              )}
-            </FullscreenPanel>
+            {cardDrilled && cardItemTiles === null ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <FullscreenPanel label={t("cost.fullscreen")}>
+                {(isFullscreen) => (
+                  <CostTreemapPanel
+                    items={treemapItems}
+                    groups={treemapGroups}
+                    total={treemapTotal}
+                    fullscreen={isFullscreen}
+                    chrome={chartTheme}
+                    fmt={fmt}
+                    onTileClick={handleTileClick}
+                    onTileContextMenu={handleTileContextMenu}
+                  />
+                )}
+              </FullscreenPanel>
+            )}
+            {legend}
             {trendChart}
           </>
         )

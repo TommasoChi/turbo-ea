@@ -3,8 +3,11 @@ import { buildEChartsChrome } from "@/components/charts/echartsTheme";
 import {
   CHART_LABEL_ON_DARK,
   CHART_LABEL_ON_DARK_MUTED,
+  CHART_LABEL_ON_LIGHT,
   COST_DELTA_DOWN,
+  COST_DELTA_DOWN_ON_LIGHT,
   COST_DELTA_UP,
+  COST_DELTA_UP_ON_LIGHT,
   COST_TREEMAP_COLORS,
 } from "@/theme/tokens";
 import {
@@ -457,6 +460,7 @@ describe("the change badge on a tile", () => {
 describe("grouped treemap", () => {
   const groups: CostTreemapGroup[] = [
     {
+      key: "gold",
       name: "Gold",
       cost: 15,
       index: 0,
@@ -465,8 +469,8 @@ describe("grouped treemap", () => {
         { id: "b", name: "Beta", cost: 5, index: 0 },
       ],
     },
-    { name: "Silver", cost: 3, index: 1, items: [{ id: "c", name: "Gamma", cost: 3, index: 1 }] },
-    { name: "Empty", cost: 0, index: 2, items: [{ id: "z", name: "Zero", cost: 0, index: 2 }] },
+    { key: "silver", name: "Silver", cost: 3, index: 1, items: [{ id: "c", name: "Gamma", cost: 3, index: 1 }] },
+    { key: "empty", name: "Empty", cost: 0, index: 2, items: [{ id: "z", name: "Zero", cost: 0, index: 2 }] },
   ];
   const grouped = () => seriesOf(build([], { groups }));
 
@@ -496,5 +500,74 @@ describe("grouped treemap", () => {
     const html = costTooltipHtml({ name: "ERP", cost: 500 }, opts());
     expect(html).not.toContain("opacity:.7\">Gold");
     expect(costTooltipHtml({ name: "ERP", cost: 500, group: "Gold" }, opts())).toContain("Gold");
+  });
+});
+
+describe("cost report colours and type line", () => {
+  const LIGHT = "#d9d7cf";
+  const DARK = "#2a78d6";
+
+  it("uses the colour an item carries instead of the blue ramp", () => {
+    const s = seriesOf(build([{ id: "a", name: "A", cost: 5, index: 0, color: DARK }]));
+    expect(s.data[0].itemStyle.color).toBe(DARK);
+  });
+
+  it("gives a group frame its raw key and its own colour", () => {
+    const groups: CostTreemapGroup[] = [
+      {
+        key: "k1",
+        name: "Gold",
+        cost: 5,
+        index: 0,
+        color: DARK,
+        items: [{ id: "a", name: "A", cost: 5, index: 0, color: DARK }],
+      },
+    ];
+    const frame = seriesOf(build([], { groups })).data[0];
+    expect(frame.key).toBe("k1");
+    expect(frame.itemStyle.color).toBe(DARK);
+  });
+
+  it("switches a light tile's label and badges to dark ink and leaves a dark tile on the series label", () => {
+    const s = seriesOf(
+      build([
+        { id: "l", name: "L", cost: 5, index: 0, color: LIGHT },
+        { id: "d", name: "D", cost: 5, index: 1, color: DARK },
+      ]),
+    );
+    const [light, dark] = s.data;
+    expect(light.label.color).toBe(CHART_LABEL_ON_LIGHT);
+    expect(light.label.rich.up.color).toBe(COST_DELTA_UP_ON_LIGHT);
+    expect(light.label.rich.down.color).toBe(COST_DELTA_DOWN_ON_LIGHT);
+    expect("label" in light && "formatter" in light.label).toBe(false);
+    expect("label" in dark).toBe(false);
+  });
+
+  it("colours a light group's strip title with dark ink", () => {
+    const groups: CostTreemapGroup[] = [
+      {
+        key: "k",
+        name: "G",
+        cost: 5,
+        index: 0,
+        color: LIGHT,
+        items: [{ id: "a", name: "A", cost: 5, index: 0, color: LIGHT }],
+      },
+    ];
+    expect(seriesOf(build([], { groups })).data[0].upperLabel.color).toBe(CHART_LABEL_ON_LIGHT);
+  });
+
+  it("prints the type on the second line of a full tile only", () => {
+    const items: CostTreemapItem[] = [{ id: "a", name: "ERP", cost: 500, index: 0, typeLabel: "Application" }];
+    const full = seriesOf(build(items, { tileRect: () => ({ width: 300, height: 100 }) }));
+    expect(full.label.formatter({ dataIndex: 0, name: "ERP", value: 500, data: full.data[0] })).toBe(
+      "ERP\n{type|Application}\n{value|$500}",
+    );
+    const nameOnly = seriesOf(build(items, { tileRect: () => ({ width: 60, height: 35 }) }));
+    expect(nameOnly.label.formatter({ dataIndex: 0, name: "ERP", value: 500, data: nameOnly.data[0] })).toBe("ERP");
+  });
+
+  it("names the type in the tooltip", () => {
+    expect(costTooltipHtml({ name: "ERP", cost: 5, typeLabel: "Application" }, opts())).toContain("Application");
   });
 });

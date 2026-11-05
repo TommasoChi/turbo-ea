@@ -255,6 +255,8 @@
   "cost.drillHint": "Click: analyse · Right click: open card",
   "cost.back": "Back",
   "cost.others": "Others",
+  "cost.othersCount": "Others ({{count}} groups)",
+  "cost.otherItems": "Other items",
   "cost.breadcrumbRoot": "All",
   "cost.groupBy": "Group By",
   "cost.columns": "Columns",

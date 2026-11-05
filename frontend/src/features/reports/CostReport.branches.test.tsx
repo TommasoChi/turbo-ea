@@ -301,9 +301,9 @@ describe("CostReport treemap", () => {
     expect(within(tip).getByText("$500")).toBeInTheDocument();
   });
 
-  it("opens the card's side panel when a cell is clicked", async () => {
+  it("opens the card's side panel when a cell is right-clicked", async () => {
     renderCost();
-    fireEvent.click(await screen.findByText("ERP", { selector: "text" }));
+    fireEvent.contextMenu(await screen.findByText("ERP", { selector: "text" }));
     expect(screen.getByTestId("side-panel")).toHaveTextContent("erp");
     fireEvent.click(screen.getByRole("button", { name: "close-panel" }));
     expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument();

@@ -15,6 +15,8 @@ import { MemoryRouter } from "react-router";
 import { createRef } from "react";
 import i18n from "@/i18n";
 import CostReport from "./CostReport";
+import { cardColor } from "./costColors";
+import { CHART_CATEGORICAL, CHART_OTHER, COST_UNSPECIFIED } from "@/theme/tokens";
 
 vi.mock("react-router", async () => {
   const actual = await vi.importActual("react-router");
@@ -49,7 +51,10 @@ vi.mock("./SaveReportDialog", () => ({ default: () => null }));
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { permissions: { "costs.view": true } } }),
 }));
-vi.mock("@/components/CardDetailSidePanel", () => ({ default: () => null }));
+vi.mock("@/components/CardDetailSidePanel", () => ({
+  default: ({ cardId, open }: { cardId: string | null; open: boolean }) =>
+    open ? <div data-testid="side-panel">{cardId}</div> : null,
+}));
 // The trend chart's own fetching is tested in CostTrendChart.test.tsx; here only the years it is given.
 const trendYearsSeen: number[][] = []; // every `years` array the stub was rendered with
 vi.mock("./CostTrendChart", () => ({
@@ -999,5 +1004,201 @@ describe("CostReport per-card breakdown request", () => {
     renderCost();
     await waitFor(() => expect(within(chart()).getAllByText("ERP").length).toBeGreaterThan(0));
     expect(sankeyCalls()).toHaveLength(0);
+  });
+});
+
+describe("CostReport treemap colours, type badge and drill", () => {
+  const TIER_FIELD = {
+    section: "General",
+    fields: [{ key: "tier", label: "Tier", type: "single_select", options: [{ key: "gold", label: "Gold" }] }],
+  };
+  const withTier = (tp: typeof APP_TYPE) => ({ ...tp, fields_schema: [...tp.fields_schema, TIER_FIELD] });
+  const useTierMetamodel = () => {
+    const app = withTier(APP_TYPE);
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: [app, withTier(ITC_TYPE)],
+      relationTypes: [],
+      loading: false,
+      getType: (key: string) => (key === "Application" ? app : undefined),
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+    } as never);
+  };
+  /** 10 one-card groups g1..g10, g1 the costliest. */
+  const TEN = Array.from({ length: 10 }, (_, i) => ({
+    id: `c${i + 1}`,
+    name: `Card ${i + 1}`,
+    type: "Application",
+    cost: 1000 - i * 10,
+    group: `g${i + 1}`,
+    attributes: {},
+  }));
+  const mockApi = (items: unknown[], sankeyNodes: unknown[] = []) =>
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.startsWith("/reports/cost-treemap"))
+        return Promise.resolve({
+          items,
+          total: 1,
+          components: ["licenses", "support"],
+          fiscal_year: 2026,
+          current_fiscal_year: 2026,
+          fiscal_year_start: 1,
+        }) as never;
+      if (path.startsWith("/reports/cost-sankey"))
+        return Promise.resolve({
+          nodes: sankeyNodes,
+          links: [],
+          total: 1,
+          fiscal_year: 2026,
+          current_fiscal_year: 2026,
+          fiscal_year_start: 1,
+        }) as never;
+      if (path.startsWith("/metamodel/cost-item-types")) return Promise.resolve(CATALOGUE) as never;
+      return Promise.resolve({ items: HIERARCHY, total: HIERARCHY.length }) as never;
+    });
+  const treemap = () => echartState.byName("Cost Analysis");
+  const clickTile = (data: unknown) => act(() => treemap().onClick!({ data }));
+  const rightClickTile = (data: unknown) => act(() => treemap().onContextMenu!({ data }));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- option trees are plain JSON
+  const series = (): any => treemap().option.series[0];
+  const backButton = () => screen.queryByRole("button", { name: /back/i });
+
+  it("left click on a tile drills into that card", async () => {
+    mockApi(TEN, [{ id: "c1", name: "Card 1", type: "Application", cost: 1000, costs: { licenses: 700, support: 300 } }]);
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    clickTile({ id: "c1" });
+    expect(await screen.findByRole("button", { name: /back/i })).toBeInTheDocument();
+    expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument();
+  });
+
+  it("right click on a tile opens the side panel", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    rightClickTile({ id: "erp" });
+    expect(await screen.findByTestId("side-panel")).toHaveTextContent("erp");
+    expect(backButton()).not.toBeInTheDocument();
+  });
+
+  it("drills a card to one tile per cost item, the rest merged into Other items", async () => {
+    mockApi(TEN, [
+      {
+        id: "c1",
+        name: "Card 1",
+        type: "Application",
+        cost: 1000,
+        costs: { licenses: 500, support: 300, a: 1, b: 1, c: 1, d: 1, e: 1, f: 1, g: 1, h: 1 },
+      },
+    ]);
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    clickTile({ id: "c1" });
+    await waitFor(() => {
+      const names = series().data.map((d: { name: string }) => d.name);
+      expect(names).toEqual(["Licenses", "Support", "a", "b", "c", "d", "e", "f", "Other items"]);
+    });
+    const colours = series().data.map((d: { itemStyle: { color: string } }) => d.itemStyle.color);
+    expect(colours.slice(0, 8)).toEqual([...CHART_CATEGORICAL.light]);
+    expect(colours[8]).toBe(CHART_OTHER.light);
+    // Item tiles carry no card id: clicking them is inert.
+    expect(series().data.every((d: { id?: string }) => d.id === undefined)).toBe(true);
+  });
+
+  it("resets the drill when the cost type changes", async () => {
+    mockApi(TEN, [{ id: "c1", name: "Card 1", type: "Application", cost: 1000, costs: { licenses: 1000 } }]);
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    clickTile({ id: "c1" });
+    await screen.findByRole("button", { name: /back/i });
+    await userEvent.click(screen.getByLabelText("Cost Field"));
+    await userEvent.click(await screen.findByRole("option", { name: "Licenses" }));
+    await waitFor(() => expect(backButton()).not.toBeInTheDocument());
+  });
+
+  it("gives each group its hue by size, folds the 9th and later into Others, keeps Unspecified apart", async () => {
+    useTierMetamodel();
+    mockApi([...TEN, { id: "u", name: "Loose", type: "Application", cost: 5, group: "__other__", attributes: {} }]);
+    consumedConfig = { view: "chart", groupBy: "field:tier" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    await waitFor(() => expect(series().data.length).toBe(10));
+    const frames = series().data as { key: string; name: string; value: number; itemStyle: { color: string } }[];
+    expect(frames.map((f) => f.key)).toEqual(["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8", "__others__", "__other__"]);
+    expect(frames.slice(0, 8).map((f) => f.itemStyle.color)).toEqual([...CHART_CATEGORICAL.light]);
+    expect(frames[8].value).toBe(920 + 910);
+    expect(frames[8].itemStyle.color).toBe(CHART_OTHER.light);
+    expect(frames[9].itemStyle.color).toBe(COST_UNSPECIFIED.light);
+    expect(frames[9].name).toBe("Unspecified");
+  });
+
+  it("lists the groups, Others and Unspecified in a legend", async () => {
+    useTierMetamodel();
+    mockApi([...TEN, { id: "u", name: "Loose", type: "Application", cost: 5, group: "__other__", attributes: {} }]);
+    consumedConfig = { view: "chart", groupBy: "field:tier" };
+    renderCost();
+    const legend = await screen.findByTestId("cost-legend");
+    expect(within(legend).getByText("g1")).toBeInTheDocument();
+    expect(within(legend).getByText("Others (2 groups)")).toBeInTheDocument();
+    expect(within(legend).getByText("Unspecified")).toBeInTheDocument();
+    expect(within(legend).queryByText("g9")).not.toBeInTheDocument();
+  });
+
+  it("shows no legend when the report is not grouped", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    expect(screen.queryByTestId("cost-legend")).not.toBeInTheDocument();
+  });
+
+  it("clicking a card inside a folded group drills with group Others", async () => {
+    useTierMetamodel();
+    mockApi(TEN);
+    consumedConfig = { view: "chart", groupBy: "field:tier" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    await waitFor(() => expect(series().data.length).toBe(9));
+    clickTile({ id: "c10" });
+    expect(await screen.findByRole("button", { name: /back/i })).toBeInTheDocument();
+    expect(screen.getByText("Others")).toBeInTheDocument();
+  });
+
+  it("clicking the Others frame drills into the folded members", async () => {
+    useTierMetamodel();
+    mockApi(TEN);
+    consumedConfig = { view: "chart", groupBy: "field:tier" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    await waitFor(() => expect(series().data.length).toBe(9));
+    clickTile({ key: "__others__", name: "Others" });
+    await waitFor(() => {
+      const names = series().data.map((d: { name: string }) => d.name);
+      expect(names).toEqual(["Card 9", "Card 10"]);
+    });
+  });
+
+  it("shows the card type on every tile, Application and IT Component alike in the combined view", async () => {
+    mockApi([
+      { id: "a", name: "App", type: "Application", cost: 10, attributes: {} },
+      { id: "i", name: "Comp", type: "ITComponent", cost: 5, attributes: {} },
+    ]);
+    consumedConfig = { view: "chart", cardTypeKey: "Application+ITComponent" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    await waitFor(() =>
+      expect(series().data.map((d: { typeLabel?: string }) => d.typeLabel)).toEqual(["Application", "IT Component"]),
+    );
+  });
+
+  it("colours an ungrouped tile by its name, the same on every render", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    await waitFor(() => expect(series().data.length).toBe(3));
+    const erp = series().data.find((d: { name: string }) => d.name === "ERP");
+    expect(erp.itemStyle.color).toBe(cardColor("ERP", CHART_CATEGORICAL.light));
   });
 });
