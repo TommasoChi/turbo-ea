@@ -252,7 +252,7 @@
   "cost.cardType": "Type de fiche",
   "cost.costField": "Champ de coût",
   "cost.tco": "TCO",
-  "cost.drillHint": "Clic : analyser · Clic droit : ouvrir la fiche",
+  "cost.drillHint": "Clic : ouvrir la fiche · Clic droit : analyser",
   "cost.back": "Retour",
   "cost.others": "Autres",
   "cost.othersCount": "Autres ({{count}} groupes)",

@@ -168,13 +168,13 @@ El **Informe de Costos** proporciona un análisis financiero de su panorama tecn
 
 Todas las vistas comparten la misma barra de herramientas, los mismos filtros, el mismo año fiscal y el mismo tipo de coste, de modo que cambiar de vista solo cambia el dibujo.
 
-**Gráfico de tendencia** — La tendencia del coste (el año actual, los cuatro anteriores y, cuando se selecciona, la **Forecast**) se muestra en las tres vistas, no solo en el treemap, y sigue el tipo de coste seleccionado.
+**Gráfico de tendencia** — La tendencia del coste (el año actual, los cuatro anteriores y, cuando se selecciona, la **Forecast**) se muestra encima del gráfico en las tres vistas, no solo en el treemap, y sigue el tipo de coste seleccionado.
 
 **Colores y leyenda** — Cada grupo tiene su propio tono; dentro de un grupo, un tono más oscuro significa una tarjeta más costosa. Más allá de los ocho grupos más costosos, el resto se pliega en un único grupo **Otros**, y las tarjetas sin valor en el campo de agrupación van a **Sin especificar**. La leyenda junto al gráfico lista los grupos con sus colores; el Sankey y la tabla usan los mismos colores.
 
-**Desglose** — Un **clic izquierdo** en un grupo o una tarjeta profundiza en él: el gráfico se limita a ese grupo (o tarjeta) y aparece una ruta de navegación encima. Haga clic en **Volver**, o en cualquier segmento de la ruta, para subir un nivel. Profundizar en **Otros** lista los grupos que se plegaron en él. Un **clic derecho** abre en cambio el panel lateral de la tarjeta. Una indicación sobre el gráfico recuerda ambos gestos.
+**Desglose** — Un **clic derecho** en un grupo o una tarjeta profundiza en él: el gráfico se limita a ese grupo (o tarjeta) y aparece una ruta de navegación encima. Haga clic en **Volver**, o en cualquier segmento de la ruta, para subir un nivel. Profundizar en **Otros** lista los grupos que se plegaron en él. Un **clic izquierdo** en una tarjeta abre en cambio su panel lateral (un clic izquierdo en un grupo no hace nada). Una indicación sobre el gráfico recuerda ambos gestos.
 
-**Tabla** — Además de las columnas de agrupación y de atributos, la tabla tiene una columna por partida de coste y una columna **TCO**. Ordenar por el tipo de coste seleccionado pone primero las más costosas. Las filas de cabecera de grupo y el total del pie muestran las sumas por partida, y cada cabecera de grupo lleva la muestra de su color. Una insignia con el icono y el nombre del tipo en la celda del nombre distingue Aplicaciones y Componentes TI en la vista combinada. Hacer clic en una fila profundiza en ella; el clic derecho abre la tarjeta.
+**Tabla** — Además de las columnas de agrupación y de atributos, la tabla tiene una columna por partida de coste y una columna **TCO**. Ordenar por el tipo de coste seleccionado pone primero las más costosas. Las filas de cabecera de grupo y el total del pie muestran las sumas por partida, y cada cabecera de grupo lleva la muestra de su color. Una insignia con el icono y el nombre del tipo en la celda del nombre distingue Aplicaciones y Componentes TI en la vista combinada. El clic derecho en una fila profundiza en ella; el clic abre la tarjeta.
 
 ### Agrupar por
 

@@ -252,7 +252,7 @@
   "cost.cardType": "Kartentyp",
   "cost.costField": "Kostenfeld",
   "cost.tco": "TCO",
-  "cost.drillHint": "Klick: Analyse · Rechtsklick: Karte öffnen",
+  "cost.drillHint": "Klick: Karte öffnen · Rechtsklick: Analyse",
   "cost.back": "Zurück",
   "cost.others": "Sonstige",
   "cost.othersCount": "Sonstige ({{count}} Gruppen)",

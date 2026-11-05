@@ -252,7 +252,7 @@
   "cost.cardType": "Tipo di scheda",
   "cost.costField": "Campo costo",
   "cost.tco": "TCO",
-  "cost.drillHint": "Clic: analizza · Clic destro: apri la scheda",
+  "cost.drillHint": "Clic: apri la scheda · Clic destro: analizza",
   "cost.back": "Indietro",
   "cost.others": "Altri",
   "cost.othersCount": "Altri ({{count}} gruppi)",

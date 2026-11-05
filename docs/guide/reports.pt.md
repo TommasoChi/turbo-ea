@@ -168,13 +168,13 @@ O **Relatório de Custos** fornece análise financeira do seu cenário tecnológ
 
 Todas as vistas partilham a mesma barra de ferramentas, os mesmos filtros, o mesmo ano fiscal e o mesmo tipo de custo, pelo que mudar de vista só altera o desenho.
 
-**Gráfico de tendência** — A tendência de custos (o ano atual, os quatro anteriores e, quando selecionada, a **Forecast**) é mostrada nas três vistas, e não apenas no treemap, e segue o tipo de custo selecionado.
+**Gráfico de tendência** — A tendência de custos (o ano atual, os quatro anteriores e, quando selecionada, a **Forecast**) é mostrada por cima do gráfico nas três vistas, e não apenas no treemap, e segue o tipo de custo selecionado.
 
 **Cores e legenda** — Cada grupo tem o seu próprio tom; dentro de um grupo, um tom mais escuro significa um cartão mais caro. Além dos oito grupos mais caros, os restantes ficam agrupados num único grupo **Outros**, e os cartões sem valor no campo de agrupamento vão para **Não especificado**. A legenda ao lado do gráfico lista os grupos com as suas cores; o Sankey e a tabela usam as mesmas cores.
 
-**Detalhe** — Um **clique esquerdo** num grupo ou num cartão aprofunda-o: o gráfico limita-se a esse grupo (ou cartão) e surge um caminho de navegação por cima. Clique em **Voltar**, ou em qualquer segmento do caminho, para subir um nível. Aprofundar **Outros** lista os grupos que nele foram agrupados. Um **clique direito** abre antes o painel lateral do cartão. Uma indicação por cima do gráfico lembra ambos os gestos.
+**Detalhe** — Um **clique direito** num grupo ou num cartão aprofunda-o: o gráfico limita-se a esse grupo (ou cartão) e surge um caminho de navegação por cima. Clique em **Voltar**, ou em qualquer segmento do caminho, para subir um nível. Aprofundar **Outros** lista os grupos que nele foram agrupados. Um **clique esquerdo** num cartão abre antes o seu painel lateral (um clique esquerdo num grupo não faz nada). Uma indicação por cima do gráfico lembra ambos os gestos.
 
-**Tabela** — Além das colunas de agrupamento e de atributos, a tabela tem uma coluna por item de custo e uma coluna **TCO**. Ordenar pelo tipo de custo selecionado coloca primeiro os mais caros. As linhas de cabeçalho de grupo e o total do rodapé mostram as somas por item, e cada cabeçalho de grupo traz a amostra da sua cor. Um emblema com o ícone e o nome do tipo na célula do nome distingue Aplicações e Componentes de TI na vista combinada. Clicar numa linha aprofunda-a; o clique direito abre o cartão.
+**Tabela** — Além das colunas de agrupamento e de atributos, a tabela tem uma coluna por item de custo e uma coluna **TCO**. Ordenar pelo tipo de custo selecionado coloca primeiro os mais caros. As linhas de cabeçalho de grupo e o total do rodapé mostram as somas por item, e cada cabeçalho de grupo traz a amostra da sua cor. Um emblema com o ícone e o nome do tipo na célula do nome distingue Aplicações e Componentes de TI na vista combinada. O clique direito numa linha aprofunda-a; o clique abre o cartão.
 
 ### Agrupar por
 

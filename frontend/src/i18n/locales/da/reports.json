@@ -252,7 +252,7 @@
   "cost.cardType": "Korttype",
   "cost.costField": "Omkostningsfelt",
   "cost.tco": "TCO",
-  "cost.drillHint": "Klik: analysér · Højreklik: åbn kortet",
+  "cost.drillHint": "Klik: åbn kortet · Højreklik: analysér",
   "cost.back": "Tilbage",
   "cost.others": "Andre",
   "cost.othersCount": "Andre ({{count}} grupper)",

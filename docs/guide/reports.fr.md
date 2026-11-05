@@ -168,13 +168,13 @@ Le **Rapport Coûts** fournit une analyse financière de votre paysage technolog
 
 Toutes les vues partagent la même barre d'outils, les mêmes filtres, le même exercice fiscal et le même type de coût : changer de vue ne modifie donc que le dessin.
 
-**Graphique de tendance** -- La tendance des coûts (l'exercice courant, les quatre précédents et, lorsqu'elle est sélectionnée, la **Forecast**) est affichée dans les trois vues, et pas seulement dans la carte arborescente, et suit le type de coût sélectionné.
+**Graphique de tendance** -- La tendance des coûts (l'exercice courant, les quatre précédents et, lorsqu'elle est sélectionnée, la **Forecast**) est affichée au-dessus du graphique dans les trois vues, et pas seulement dans la carte arborescente, et suit le type de coût sélectionné.
 
 **Couleurs et légende** -- Chaque groupe a sa propre teinte ; au sein d'un groupe, une teinte plus foncée signifie une fiche plus coûteuse. Au-delà des huit groupes les plus coûteux, les autres sont repliés dans un seul groupe **Autres**, et les fiches sans valeur pour le champ de regroupement vont dans **Non spécifié**. La légende à côté du graphique liste les groupes avec leurs couleurs ; le Sankey et le tableau utilisent les mêmes couleurs.
 
-**Exploration** -- Un **clic gauche** sur un groupe ou une fiche l'explore : le graphique se restreint à ce groupe (ou à cette fiche) et un fil d'Ariane apparaît au-dessus. Cliquez sur **Retour**, ou sur n'importe quel segment du fil d'Ariane, pour remonter d'un niveau. Explorer **Autres** liste les groupes qui y ont été repliés. Un **clic droit** ouvre à la place le panneau latéral de la fiche. Une indication au-dessus du graphique rappelle les deux gestes.
+**Exploration** -- Un **clic droit** sur un groupe ou une fiche l'explore : le graphique se restreint à ce groupe (ou à cette fiche) et un fil d'Ariane apparaît au-dessus. Cliquez sur **Retour**, ou sur n'importe quel segment du fil d'Ariane, pour remonter d'un niveau. Explorer **Autres** liste les groupes qui y ont été repliés. Un **clic gauche** sur une fiche ouvre à la place son panneau latéral (un clic gauche sur un groupe ne fait rien). Une indication au-dessus du graphique rappelle les deux gestes.
 
-**Tableau** -- En plus des colonnes de regroupement et d'attributs, le tableau a une colonne par poste de coûts et une colonne **TCO**. Le tri par type de coût sélectionné place les plus coûteuses en premier. Les lignes d'en-tête de groupe et le total en pied affichent les sommes par poste, et chaque en-tête de groupe porte la pastille de sa couleur. Un badge avec l'icône et le nom du type dans la cellule du nom distingue les Applications des Composants IT dans la vue combinée. Cliquer sur une ligne l'explore ; un clic droit ouvre la fiche.
+**Tableau** -- En plus des colonnes de regroupement et d'attributs, le tableau a une colonne par poste de coûts et une colonne **TCO**. Le tri par type de coût sélectionné place les plus coûteuses en premier. Les lignes d'en-tête de groupe et le total en pied affichent les sommes par poste, et chaque en-tête de groupe porte la pastille de sa couleur. Un badge avec l'icône et le nom du type dans la cellule du nom distingue les Applications des Composants IT dans la vue combinée. Un clic droit sur une ligne l'explore ; un clic ouvre la fiche.
 
 ### Regrouper par
 

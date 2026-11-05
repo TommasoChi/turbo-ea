@@ -260,7 +260,7 @@
   "cost.cardType": "Тип карточки",
   "cost.costField": "Поле стоимости",
   "cost.tco": "TCO",
-  "cost.drillHint": "Клик: анализ · Правый клик: открыть карточку",
+  "cost.drillHint": "Клик: открыть карточку · Правый клик: анализ",
   "cost.back": "Назад",
   "cost.others": "Прочее",
   "cost.othersCount": "Прочее ({{count}} групп)",

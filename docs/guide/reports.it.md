@@ -168,13 +168,13 @@ Il **Report Costi** fornisce un'analisi finanziaria del vostro panorama tecnolog
 
 Tutte le viste condividono la stessa barra degli strumenti, gli stessi filtri, lo stesso anno fiscale e lo stesso tipo di costo, quindi cambiare vista modifica solo il disegno.
 
-**Grafico di tendenza** — L'andamento dei costi (l'anno corrente, i quattro precedenti e, se selezionato, la **Forecast**) è mostrato in tutte e tre le viste, non solo nella treemap, e segue il tipo di costo selezionato.
+**Grafico di tendenza** — L'andamento dei costi (l'anno corrente, i quattro precedenti e, se selezionato, la **Forecast**) è mostrato sopra il grafico in tutte e tre le viste, non solo nella treemap, e segue il tipo di costo selezionato.
 
 **Colori e legenda** — Ogni gruppo ha una propria tinta; all'interno di un gruppo, una tonalità più scura indica una scheda più costosa. Oltre agli otto gruppi più costosi, gli altri sono raccolti in un unico gruppo **Altri**, e le schede senza valore per il campo di raggruppamento vanno in **Non specificato**. La legenda accanto al grafico elenca i gruppi con i loro colori; il Sankey e la tabella usano gli stessi colori.
 
-**Drill-down** — Un **clic sinistro** su un gruppo o una scheda lo approfondisce: il grafico si restringe a quel gruppo (o scheda) e sopra compare un breadcrumb. Fate clic su **Indietro**, o su un qualsiasi segmento del breadcrumb, per salire di un livello. Approfondire **Altri** elenca i gruppi che vi sono stati raccolti. Un **clic destro** apre invece il pannello laterale della scheda. Un suggerimento sopra il grafico ricorda entrambi i gesti.
+**Drill-down** — Un **clic destro** su un gruppo o una scheda lo approfondisce: il grafico si restringe a quel gruppo (o scheda) e sopra compare un breadcrumb. Fate clic su **Indietro**, o su un qualsiasi segmento del breadcrumb, per salire di un livello. Approfondire **Altri** elenca i gruppi che vi sono stati raccolti. Un **clic sinistro** su una scheda ne apre invece il pannello laterale (un clic sinistro su un gruppo non fa nulla). Un suggerimento sopra il grafico ricorda entrambi i gesti.
 
-**Tabella** — Oltre alle colonne di raggruppamento e di attributi, la tabella ha una colonna per ogni voce di costo e una colonna **TCO**. L'ordinamento per il tipo di costo selezionato mette per prime le più costose. Le righe di intestazione dei gruppi e il totale a piè di tabella mostrano le somme per voce, e ogni intestazione di gruppo reca il campione del suo colore. Un badge con l'icona e il nome del tipo nella cella del nome distingue Applicazioni e Componenti IT nella vista combinata. Un clic su una riga la approfondisce; il clic destro apre la scheda.
+**Tabella** — Oltre alle colonne di raggruppamento e di attributi, la tabella ha una colonna per ogni voce di costo e una colonna **TCO**. L'ordinamento per il tipo di costo selezionato mette per prime le più costose. Le righe di intestazione dei gruppi e il totale a piè di tabella mostrano le somme per voce, e ogni intestazione di gruppo reca il campione del suo colore. Un badge con l'icona e il nome del tipo nella cella del nome distingue Applicazioni e Componenti IT nella vista combinata. Un clic destro su una riga la approfondisce; il clic apre la scheda.
 
 ### Raggruppa per
 

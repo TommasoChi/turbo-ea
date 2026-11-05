@@ -168,13 +168,13 @@ Der **Kostenbericht** bietet eine finanzielle Analyse Ihrer Technologielandschaf
 
 Alle Ansichten teilen sich dieselbe Werkzeugleiste, dieselben Filter, dasselbe Geschäftsjahr und dieselbe Kostenart; ein Wechsel der Ansicht ändert also nur die Darstellung.
 
-**Trenddiagramm** — Der Kostentrend (das aktuelle Jahr, die vier davor und, wenn ausgewählt, der **Forecast**) wird in allen drei Ansichten angezeigt, nicht nur im Treemap, und folgt der ausgewählten Kostenart.
+**Trenddiagramm** — Der Kostentrend (das aktuelle Jahr, die vier davor und, wenn ausgewählt, der **Forecast**) wird oberhalb des Diagramms in allen drei Ansichten angezeigt, nicht nur im Treemap, und folgt der ausgewählten Kostenart.
 
 **Farben und Legende** — Jede Gruppe hat ihren eigenen Farbton; innerhalb einer Gruppe bedeutet ein dunklerer Ton eine teurere Karte. Über die acht teuersten Gruppen hinaus werden die übrigen in einer Gruppe **Sonstige** zusammengefasst, und Karten ohne Wert für das Gruppierungsfeld kommen in **Nicht angegeben**. Die Legende neben dem Diagramm listet die Gruppen mit ihren Farben auf; Sankey und Tabelle verwenden dieselben Farben.
 
-**Drill-down** — Ein **Linksklick** auf eine Gruppe oder eine Karte öffnet sie: Das Diagramm beschränkt sich auf diese Gruppe (oder Karte), und darüber erscheint ein Breadcrumb. Klicken Sie auf **Zurück** oder auf ein beliebiges Segment des Breadcrumbs, um eine Ebene nach oben zu gehen. Ein Drill-down in **Sonstige** listet die darin zusammengefassten Gruppen auf. Ein **Rechtsklick** öffnet stattdessen das Seitenpanel der Karte. Ein Hinweis über dem Diagramm erinnert an beide Gesten.
+**Drill-down** — Ein **Rechtsklick** auf eine Gruppe oder eine Karte öffnet sie: Das Diagramm beschränkt sich auf diese Gruppe (oder Karte), und darüber erscheint ein Breadcrumb. Klicken Sie auf **Zurück** oder auf ein beliebiges Segment des Breadcrumbs, um eine Ebene nach oben zu gehen. Ein Drill-down in **Sonstige** listet die darin zusammengefassten Gruppen auf. Ein **Linksklick** auf eine Karte öffnet stattdessen deren Seitenpanel (ein Linksklick auf eine Gruppe bewirkt nichts). Ein Hinweis über dem Diagramm erinnert an beide Gesten.
 
-**Tabelle** — Neben den Gruppierungs- und Attributspalten hat die Tabelle eine Spalte je Kostenelement und eine Spalte **TCO**. Die Sortierung nach der ausgewählten Kostenart stellt die teuersten zuerst. Gruppenkopfzeilen und die Summenzeile zeigen die Summen der Elemente, und jede Gruppenkopfzeile trägt das Farbfeld ihrer Farbe. Ein Badge mit Typsymbol und Typname in der Namenszelle unterscheidet Anwendungen und IT-Komponenten in der kombinierten Ansicht. Ein Klick auf eine Zeile öffnet den Drill-down; ein Rechtsklick öffnet die Karte.
+**Tabelle** — Neben den Gruppierungs- und Attributspalten hat die Tabelle eine Spalte je Kostenelement und eine Spalte **TCO**. Die Sortierung nach der ausgewählten Kostenart stellt die teuersten zuerst. Gruppenkopfzeilen und die Summenzeile zeigen die Summen der Elemente, und jede Gruppenkopfzeile trägt das Farbfeld ihrer Farbe. Ein Badge mit Typsymbol und Typname in der Namenszelle unterscheidet Anwendungen und IT-Komponenten in der kombinierten Ansicht. Ein Rechtsklick auf eine Zeile öffnet den Drill-down; ein Klick öffnet die Karte.
 
 ### Gruppieren nach
 

@@ -268,7 +268,7 @@
   "cost.cardType": "نوع البطاقة",
   "cost.costField": "حقل التكلفة",
   "cost.tco": "TCO",
-  "cost.drillHint": "نقرة: تحليل · نقر بزر الماوس الأيمن: فتح البطاقة",
+  "cost.drillHint": "نقرة: فتح البطاقة · نقر بزر الماوس الأيمن: تحليل",
   "cost.back": "رجوع",
   "cost.others": "أخرى",
   "cost.othersCount": "أخرى ({{count}} مجموعات)",

@@ -168,13 +168,13 @@ Skift til **lagdelt afhængighedsvisning** ved hjælp af view-mode-knapperne i v
 
 Alle visninger deler samme værktøjslinje, filtre, regnskabsår og omkostningstype, så et skift af visning ændrer kun tegningen.
 
-**Tendensdiagram** — Omkostningstendensen (det nuværende år, de fire før det og, når den er valgt, **Forecast**) vises i alle tre visninger, ikke kun i trækortet, og følger den valgte omkostningstype.
+**Tendensdiagram** — Omkostningstendensen (det nuværende år, de fire før det og, når den er valgt, **Forecast**) vises over diagrammet i alle tre visninger, ikke kun i trækortet, og følger den valgte omkostningstype.
 
 **Farver og forklaring** — Hver gruppe har sin egen farvetone; inden for en gruppe betyder en mørkere nuance et dyrere kort. Ud over de otte dyreste grupper foldes resten sammen i én gruppe **Andre**, og kort uden værdi i grupperingsfeltet havner i **Uspecificeret**. Forklaringen ved siden af diagrammet viser grupperne med deres farver; Sankey og tabellen bruger de samme farver.
 
-**Drill-down** — Et **venstreklik** på en gruppe eller et kort borer ned i det: diagrammet indsnævres til den gruppe (eller det kort), og en brødkrumme vises over det. Klik på **Tilbage**, eller på et vilkårligt segment i brødkrummen, for at gå et niveau op. Drill-down i **Andre** viser de grupper, der blev foldet ind i den. Et **højreklik** åbner i stedet kortets sidepanel. Et tip over diagrammet minder om begge handlinger.
+**Drill-down** — Et **højreklik** på en gruppe eller et kort borer ned i det: diagrammet indsnævres til den gruppe (eller det kort), og en brødkrumme vises over det. Klik på **Tilbage**, eller på et vilkårligt segment i brødkrummen, for at gå et niveau op. Drill-down i **Andre** viser de grupper, der blev foldet ind i den. Et **venstreklik** på et kort åbner i stedet dets sidepanel (et venstreklik på en gruppe gør ingenting). Et tip over diagrammet minder om begge handlinger.
 
-**Tabel** — Ud over grupperings- og attributkolonnerne har tabellen én kolonne pr. omkostningspost og en **TCO**-kolonne. Sortering efter den valgte omkostningstype sætter de dyreste først. Gruppeoverskrifter og totalen i bunden viser summerne pr. post, og hver gruppeoverskrift har en farveprøve. Et badge med typeikon og typenavn i navnecellen skelner mellem applikationer og IT-komponenter i den kombinerede visning. Et klik på en række borer ned i den; et højreklik åbner kortet.
+**Tabel** — Ud over grupperings- og attributkolonnerne har tabellen én kolonne pr. omkostningspost og en **TCO**-kolonne. Sortering efter den valgte omkostningstype sætter de dyreste først. Gruppeoverskrifter og totalen i bunden viser summerne pr. post, og hver gruppeoverskrift har en farveprøve. Et badge med typeikon og typenavn i navnecellen skelner mellem applikationer og IT-komponenter i den kombinerede visning. Et højreklik på en række borer ned i den; et klik åbner kortet.
 
 ### Gruppér efter
 
