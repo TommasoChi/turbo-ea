@@ -368,6 +368,16 @@ export const COST_TREEMAP_COLORS = [
 export const COST_DELTA_UP = "#a5d6a7";
 export const COST_DELTA_DOWN = "#ef9a9a";
 
+export const COST_DELTA_UP_ON_LIGHT = "#1b5e20";
+export const COST_DELTA_DOWN_ON_LIGHT = "#b71c1c";
+
+/** The folded "Others" group of a chart (past the eighth hue), per mode. */
+export const CHART_OTHER = { light: "#b4b2a8", dark: "#4b4a45" } as const;
+/** The Cost report's no-group bucket, lighter than `CHART_OTHER` so the two never read as one. */
+export const COST_UNSPECIFIED = { light: "#d9d7cf", dark: "#6a6860" } as const;
+
+/** Label text printed on a light chart fill. */
+export const CHART_LABEL_ON_LIGHT = "#0b0b0b";
 export const CHART_LABEL_ON_DARK = "#ffffff";
 export const CHART_LABEL_ON_DARK_MUTED = "rgba(255,255,255,0.8)";
 
