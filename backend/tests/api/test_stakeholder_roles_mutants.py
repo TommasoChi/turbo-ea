@@ -480,8 +480,13 @@ class TestUpdate:
         r = await client.patch(f"{BASE}/bee", json={"counts_for_quality": False}, headers=env["h"])
         assert r.json()["counts_for_quality"] is False
         assert spies["rescored"] == ["Application"]
-        rows = await _rows(db, "updated")
-        assert rows[-1].details["changes"] == {"counts_for_quality": {"old": True, "new": False}}
+        # No ORDER BY and every audit row of the test shares the transaction time: pick by content.
+        rows = [
+            r for r in await _rows(db, "updated") if "counts_for_quality" in r.details["changes"]
+        ]
+        assert [r.details["changes"] for r in rows] == [
+            {"counts_for_quality": {"old": True, "new": False}}
+        ]
 
     async def test_audit_changes_and_permission_items(self, client, db, env):
         await _srd(db, "bee", permissions={"card.view": True, "card.edit": True})
