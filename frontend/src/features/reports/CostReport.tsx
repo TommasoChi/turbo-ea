@@ -1175,15 +1175,93 @@ export default function CostReport() {
     />
   );
 
+  // One column per catalogue cost item (archived included) and the TCO; before the catalogue is in,
+  // the single column of the selected cost.
+  const TCO_KEY = "costTotalAnnual";
+  const tableCols =
+    Array.isArray(catalogue) && typeKeys.every(isCostItemType)
+      ? [
+          ...[...catalogue]
+            .sort((x, y) => x.sort_order - y.sort_order)
+            .map((c) => ({ key: c.key, label: trendLabelOf(c.key) })),
+          { key: TCO_KEY, label: t("cost.tco") },
+        ]
+      : [{ key: costField, label: t("cost.cost") }];
+  // A cell: from the breakdown when it knows the card; the selected cost falls back to the row's own
+  // figure; anything else is unknown (undefined, printed as a dash).
+  const cellValue = (d: CostItem, key: string): number | undefined => {
+    const b = breakdown?.get(d.id);
+    if (b) return key === TCO_KEY ? b.total : (b.items[key] ?? 0);
+    return key === costField ? d.cost : undefined;
+  };
+  // "cost" is what a saved report called the selected cost's column.
+  const activeSort = sortK === "cost" ? costField : sortK;
   const sort = (k: string) => {
-    setSortD(sortK === k && sortD === "asc" ? "desc" : "asc");
+    setSortD(activeSort === k && sortD === "asc" ? "desc" : "asc");
     setSortK(k);
   };
-  const sorted = [...items].sort((a, b) => {
+  const byColumn = (a: CostItem, b: CostItem) => {
     const d = sortD === "asc" ? 1 : -1;
-    if (sortK === "cost") return (a.cost - b.cost) * d;
-    return a.name.localeCompare(b.name) * d;
-  });
+    if (activeSort === "name") return a.name.localeCompare(b.name) * d;
+    return ((cellValue(a, activeSort) ?? 0) - (cellValue(b, activeSort) ?? 0)) * d;
+  };
+  const tableItems = cardDrilled
+    ? items.filter((i) => i.id === drill.cardId)
+    : groupDrilled
+      ? applyDrill(items, drill, foldedKeys)
+      : items;
+  const tableGroups =
+    groups && !cardDrilled
+      ? colorPlan.groups.filter((g) => !groupDrilled || g.key === drill.group)
+      : null;
+  const sorted = [...tableItems].sort(byColumn);
+  const sumCol = (members: CostItem[], key: string) =>
+    members.reduce((sum, m) => sum + (cellValue(m, key) ?? 0), 0);
+  const shownTotal = tableItems.reduce((sum, i) => sum + i.cost, 0);
+  const typeBadge = (d: CostItem) => {
+    const tp = types.find((x) => x.key === d.type);
+    return tp ? (
+      <Typography
+        component="span"
+        variant="caption"
+        color="text.secondary"
+        sx={{ ml: 1, display: "inline-flex", alignItems: "center", gap: 0.5, verticalAlign: "middle" }}
+      >
+        <MaterialSymbol icon={tp.icon} size={14} />
+        {typeLabel(tp)}
+      </Typography>
+    ) : null;
+  };
+  const cardRow = (d: CostItem, indent: boolean) => (
+    <TableRow
+      key={d.id}
+      hover
+      sx={{ cursor: "pointer" }}
+      onClick={() => handleTileClick({ data: { id: d.id } })}
+      onContextMenu={(e: React.MouseEvent) => {
+        e.preventDefault();
+        setSidePanelCardId(d.id);
+      }}
+    >
+      <TableCell sx={{ fontWeight: 500, ...(indent && { pl: 4 }) }}>
+        <span data-testid="cost-row-name">{d.name}</span>
+        {typeBadge(d)}
+      </TableCell>
+      {tableCols.map((c) => {
+        const v = cellValue(d, c.key);
+        return (
+          <TableCell key={c.key} align="right" sx={c.key === costField ? { fontWeight: 700 } : undefined}>
+            {v === undefined ? EMPTY_VALUE : fmt.format(v)}
+          </TableCell>
+        );
+      })}
+      <TableCell align="right">
+        {total > 0 ? `${((d.cost / total) * 100).toFixed(1)}%` : "—"}
+      </TableCell>
+      {fiscalYearParam != null && yoyCell(d)}
+      {extraCell(d)}
+    </TableRow>
+  );
 
   const yesNoLabels = {
     yes: t("common:labels.yes"),
@@ -1268,7 +1346,12 @@ export default function CostReport() {
               size="small"
               label={t("cost.costField")}
               value={costField}
-              onChange={(e) => setCostField(e.target.value)}
+              onChange={(e) => {
+                setCostField(e.target.value);
+                // The table sorts by the chosen cost, largest first.
+                setSortK(e.target.value);
+                setSortD("desc");
+              }}
               sx={{ minWidth: 160 }}
             >
               {costChoices.map((f) => (
@@ -1470,22 +1553,24 @@ export default function CostReport() {
               <TableRow>
                 <TableCell>
                   <TableSortLabel
-                    active={sortK === "name"}
-                    direction={sortK === "name" ? sortD : "asc"}
+                    active={activeSort === "name"}
+                    direction={activeSort === "name" ? sortD : "asc"}
                     onClick={() => sort("name")}
                   >
                     {t("common:labels.name")}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell align="right">
-                  <TableSortLabel
-                    active={sortK === "cost"}
-                    direction={sortK === "cost" ? sortD : "asc"}
-                    onClick={() => sort("cost")}
-                  >
-                    {t("cost.cost")}
-                  </TableSortLabel>
-                </TableCell>
+                {tableCols.map((c) => (
+                  <TableCell key={c.key} align="right">
+                    <TableSortLabel
+                      active={activeSort === c.key}
+                      direction={activeSort === c.key ? sortD : "asc"}
+                      onClick={() => sort(c.key)}
+                    >
+                      {c.label}
+                    </TableSortLabel>
+                  </TableCell>
+                ))}
                 <TableCell align="right">{t("cost.percentOfTotal")}</TableCell>
                 {fiscalYearParam != null && (
                   <TableCell align="right">{t("cost.yoyPercent")}</TableCell>
@@ -1498,125 +1583,77 @@ export default function CostReport() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {groups
-                ? groups.map((g) => {
-                    const groupSorted = [...g.items].sort((a, b) => {
-                      const d = sortD === "asc" ? 1 : -1;
-                      if (sortK === "cost") return (a.cost - b.cost) * d;
-                      return a.name.localeCompare(b.name) * d;
-                    });
-                    return [
-                      <TableRow
-                        key={`grp-${g.key}`}
-                        sx={{ bgcolor: "action.hover" }}
-                      >
-                        <TableCell
-                          sx={{ fontWeight: 700, fontSize: "0.85rem" }}
-                        >
-                          {g.label}
-                          <Typography
-                            component="span"
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ ml: 1 }}
-                          >
-                            ({g.items.length})
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 700 }}>
-                          {fmt.format(g.cost)}
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontWeight: 600, color: "text.secondary" }}
-                        >
-                          {total > 0
-                            ? `${((g.cost / total) * 100).toFixed(1)}%`
-                            : "—"}
-                        </TableCell>
-                        {fiscalYearParam != null && (
-                          <TableCell align="right" sx={{ fontWeight: 700 }} />
-                        )}
-                        {extraColumns.map((key) => (
-                          <TableCell
-                            key={key}
-                            align="right"
-                            sx={{ fontWeight: 700 }}
-                          >
-                            {fieldMeta(key)?.type === "cost"
-                              ? fmt.format(
-                                  g.items.reduce(
-                                    (s, it) =>
-                                      s +
-                                      costValue(
-                                        (
-                                          it.attributes as
-                                            | Record<string, unknown>
-                                            | undefined
-                                        )?.[key],
-                                      ),
-                                    0,
-                                  ),
-                                )
-                              : null}
-                          </TableCell>
-                        ))}
-                      </TableRow>,
-                      ...groupSorted.map((d) => (
-                        <TableRow
-                          key={d.id}
-                          hover
-                          sx={{ cursor: "pointer" }}
-                          onClick={() => setSidePanelCardId(d.id)}
-                        >
-                          <TableCell sx={{ fontWeight: 500, pl: 4 }}>
-                            {d.name}
-                          </TableCell>
-                          <TableCell align="right">
-                            {fmt.format(d.cost)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {total > 0
-                              ? `${((d.cost / total) * 100).toFixed(1)}%`
-                              : "—"}
-                          </TableCell>
-                          {fiscalYearParam != null && yoyCell(d)}
-                          {extraCell(d)}
-                        </TableRow>
-                      )),
-                    ];
-                  })
-                : sorted.map((d) => (
+              {tableGroups
+                ? tableGroups.map((g) => [
                     <TableRow
-                      key={d.id}
+                      key={`grp-${g.key}`}
                       hover
-                      sx={{ cursor: "pointer" }}
-                      onClick={() => setSidePanelCardId(d.id)}
+                      sx={{ bgcolor: "action.hover", cursor: "pointer" }}
+                      onClick={() => setDrill({ group: g.key })}
                     >
-                      <TableCell sx={{ fontWeight: 500 }}>{d.name}</TableCell>
-                      <TableCell align="right">{fmt.format(d.cost)}</TableCell>
-                      <TableCell align="right">
-                        {total > 0
-                          ? `${((d.cost / total) * 100).toFixed(1)}%`
-                          : "—"}
+                      <TableCell sx={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                        <Box
+                          component="span"
+                          data-testid={`cost-group-swatch-${g.key}`}
+                          sx={{
+                            display: "inline-block",
+                            width: 12,
+                            height: 12,
+                            borderRadius: 0.5,
+                            mr: 1,
+                            verticalAlign: "middle",
+                            bgcolor: g.hue,
+                          }}
+                        />
+                        {groupDisplayLabel(g.key, g.label)}
+                        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                          ({g.items.length})
+                        </Typography>
                       </TableCell>
-                      {fiscalYearParam != null && yoyCell(d)}
-                      {extraCell(d)}
-                    </TableRow>
-                  ))}
+                      {tableCols.map((c) => (
+                        <TableCell key={c.key} align="right" sx={{ fontWeight: 700 }}>
+                          {fmt.format(sumCol(g.items, c.key))}
+                        </TableCell>
+                      ))}
+                      <TableCell align="right" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                        {total > 0 ? `${((g.cost / total) * 100).toFixed(1)}%` : "—"}
+                      </TableCell>
+                      {fiscalYearParam != null && <TableCell align="right" sx={{ fontWeight: 700 }} />}
+                      {extraColumns.map((key) => (
+                        <TableCell key={key} align="right" sx={{ fontWeight: 700 }}>
+                          {fieldMeta(key)?.type === "cost"
+                            ? fmt.format(
+                                g.items.reduce(
+                                  (sum, it) =>
+                                    sum +
+                                    costValue(
+                                      (it.attributes as Record<string, unknown> | undefined)?.[key],
+                                    ),
+                                  0,
+                                ),
+                              )
+                            : null}
+                        </TableCell>
+                      ))}
+                    </TableRow>,
+                    ...[...g.items].sort(byColumn).map((d) => cardRow(d, true)),
+                  ])
+                : sorted.map((d) => cardRow(d, false))}
               <TableRow sx={{ bgcolor: "action.selected" }}>
-                <TableCell sx={{ fontWeight: 700 }}>
-                  {t("cost.total")}
-                </TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t("cost.total")}</TableCell>
+                {tableCols.map((c) => (
+                  <TableCell key={c.key} align="right" sx={{ fontWeight: 700 }}>
+                    {fmt.format(sumCol(tableItems, c.key))}
+                  </TableCell>
+                ))}
                 <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  {fmt.format(total)}
+                  {drill.group === undefined && !cardDrilled
+                    ? "100%"
+                    : total > 0
+                      ? `${((shownTotal / total) * 100).toFixed(1)}%`
+                      : "—"}
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  100%
-                </TableCell>
-                {fiscalYearParam != null && (
-                  <TableCell align="right" sx={{ fontWeight: 700 }} />
-                )}
+                {fiscalYearParam != null && <TableCell align="right" sx={{ fontWeight: 700 }} />}
                 {extraColumns.map((key) => (
                   <TableCell key={key} align="right" />
                 ))}

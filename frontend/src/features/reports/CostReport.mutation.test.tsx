@@ -1022,7 +1022,7 @@ describe("CostReport table", () => {
     await screen.findByRole("table");
     await waitFor(() =>
       expect(rowTexts()).toEqual([
-        "NameCost% of Total",
+        "NameTCO% of Total",
         "Mission Critical(3)$1410100.0%",
         "Mango$90063.8%",
         "Alpha$50035.5%",
@@ -1039,7 +1039,7 @@ describe("CostReport table", () => {
     expect(names()).toEqual(["Alpha", "Mango", "Zulu"]);
     fireEvent.click(screen.getByRole("button", { name: "Name" }));
     expect(names()).toEqual(["Zulu", "Mango", "Alpha"]);
-    fireEvent.click(screen.getByRole("button", { name: "Cost" }));
+    fireEvent.click(screen.getByRole("button", { name: "TCO" }));
     expect(names()).toEqual(["Zulu", "Alpha", "Mango"]);
   });
 
@@ -1048,7 +1048,7 @@ describe("CostReport table", () => {
     renderCost();
     await screen.findByRole("table");
     expect(rowTexts()).toEqual([
-      "NameCost% of Total",
+      "NameTCO% of Total",
       "ERP$50071.4%",
       "CRM$10014.3%",
       "HR$8011.4%",
@@ -1066,7 +1066,7 @@ describe("CostReport table", () => {
     renderCost();
     await screen.findByRole("table");
     expect(rowTexts()).toEqual([
-      "NameCost% of Total",
+      "NameTCO% of Total",
       "Zero$0—",
       "Total$0100%",
     ]);
@@ -1084,12 +1084,12 @@ describe("CostReport table", () => {
         cls.match(/iconDirection(\w*)/)?.[1],
       ];
     };
-    expect(state("Cost")).toEqual([true, "Desc"]);
+    expect(state("TCO")).toEqual([true, "Desc"]);
     expect(state("Name")).toEqual([false, "Asc"]);
 
     // Clicking the active descending column flips it to ascending.
-    fireEvent.click(screen.getByRole("button", { name: "Cost" }));
-    expect(state("Cost")).toEqual([true, "Asc"]);
+    fireEvent.click(screen.getByRole("button", { name: "TCO" }));
+    expect(state("TCO")).toEqual([true, "Asc"]);
     expect(
       rowTexts()
         .slice(1, 5)
@@ -1098,10 +1098,10 @@ describe("CostReport table", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Name" }));
     expect(state("Name")).toEqual([true, "Asc"]);
-    expect(state("Cost")).toEqual([false, "Asc"]);
+    expect(state("TCO")).toEqual([false, "Asc"]);
     fireEvent.click(screen.getByRole("button", { name: "Name" }));
     expect(state("Name")).toEqual([true, "Desc"]);
-    expect(state("Cost")).toEqual([false, "Asc"]);
+    expect(state("TCO")).toEqual([false, "Asc"]);
     await waitFor(() =>
       expect(saved.persistConfig).toHaveBeenLastCalledWith(
         expect.objectContaining({ sortK: "name", sortD: "desc" }),

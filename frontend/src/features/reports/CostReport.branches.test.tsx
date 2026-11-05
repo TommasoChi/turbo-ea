@@ -488,10 +488,11 @@ describe("CostReport table", () => {
     expect(rowNames()).toEqual(["CRM", "CRM Web Portal", "ERP", "HR", "Total"]);
     await user.click(screen.getByRole("button", { name: "Name" }));
     expect(rowNames()).toEqual(["HR", "ERP", "CRM Web Portal", "CRM", "Total"]);
-    await user.click(screen.getByRole("button", { name: "Cost" }));
+    await user.click(screen.getByRole("button", { name: "TCO" }));
     expect(rowNames()).toEqual(["CRM Web Portal", "HR", "CRM", "ERP", "Total"]);
 
-    await user.click(screen.getByRole("cell", { name: "ERP" }));
+    // Left click drills; right click opens the card.
+    fireEvent.contextMenu(screen.getByRole("cell", { name: /^ERP/ }));
     expect(screen.getByTestId("side-panel")).toHaveTextContent("erp");
   });
 
@@ -505,13 +506,13 @@ describe("CostReport table", () => {
     await waitFor(() =>
       expect(screen.getByText("Mission Critical")).toBeInTheDocument(),
     );
-    // Groups by cost desc: Mission Critical (600), Unspecified (80), then the
-    // unknown option key shown raw (20).
+    // Groups by cost desc: Mission Critical (600), then the unknown option key shown raw (20);
+    // the Unspecified bucket (80) always closes the list.
     const labels = screen.getAllByRole("row").map((r) => r.textContent ?? "");
     expect(labels.filter((l) => /\(\d\)/.test(l))).toEqual([
       "Mission Critical(2)$60085.7%",
-      "Unspecified(1)$8011.4%",
       "bogus(1)$202.9%",
+      "Unspecified(1)$8011.4%",
     ]);
 
     // Sorting applies within each group.
@@ -522,11 +523,11 @@ describe("CostReport table", () => {
     const mc = afterSort.findIndex((l) => l.startsWith("Mission Critical"));
     expect(afterSort[mc + 1]).toMatch(/^CRM/);
     expect(afterSort[mc + 2]).toMatch(/^ERP/);
-    await user.click(screen.getByRole("button", { name: "Cost" }));
+    await user.click(screen.getByRole("button", { name: "TCO" }));
     const byCost = screen.getAllByRole("row").map((r) => r.textContent ?? "");
     expect(byCost[mc + 1]).toMatch(/^CRM\$100/);
 
-    await user.click(screen.getByRole("cell", { name: "CRM Web Portal" }));
+    fireEvent.contextMenu(screen.getByRole("cell", { name: /^CRM Web Portal/ }));
     expect(screen.getByTestId("side-panel")).toHaveTextContent("web");
   });
 
