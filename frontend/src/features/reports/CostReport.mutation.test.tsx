@@ -120,6 +120,7 @@ const CONTRACT_TYPE = makeCardType({
 });
 
 /** Application with a second cost field, so a cost field picker exists. */
+const RUN_ITEM = { id: "r", key: "costRun", label: "Run Cost", sort_order: 1, archived: false, translations: {} };
 const APP_TWO_COSTS = makeCardType({
   ...APPLICATION_TYPE,
   fields_schema: [
@@ -262,6 +263,7 @@ async function optionsOf(label: RegExp): Promise<string[]> {
 
 beforeEach(() => {
   mockApi.reset();
+  mockApi.on("get", "/metamodel/cost-item-types", []);
   hookState.reset();
   hookState.auth.user = userWith("costs.view");
   withMetamodel(
@@ -323,6 +325,7 @@ describe("CostReport loading and requests", () => {
   });
 
   it("ignores a root answer that lands after a newer one", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", [RUN_ITEM]);
     withMetamodel([APP_TWO_COSTS], []);
     const stale = deferred<unknown>();
     mockApi.on("get", "/reports/cost-treemap*", (path: string) =>
@@ -336,7 +339,7 @@ describe("CostReport loading and requests", () => {
     await waitFor(() =>
       expect(lastTreemapParams().get("cost_field")).toBe("costRun"),
     );
-    await pickOption(/cost field/i, /Total Annual Cost/);
+    await pickOption(/cost field/i, /^TCO$/);
     await waitFor(() =>
       expect(lastTreemapParams().get("cost_field")).toBe("costTotalAnnual"),
     );
@@ -433,6 +436,7 @@ describe("CostReport print parameters", () => {
   });
 
   it("states the chosen cost field when the type has several", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", [RUN_ITEM]);
     withMetamodel([APP_TWO_COSTS, IT_COMPONENT_TYPE, CONTRACT_TYPE], RELATIONS);
     renderCost();
     await screen.findByTestId("treemap");
@@ -440,7 +444,7 @@ describe("CostReport print parameters", () => {
       expect(printParams()).toEqual([
         ["Type", "Application"],
         ["Fiscal year", "FY26 - Current"],
-        ["Cost Field", "Total Annual Cost"],
+        ["Cost Field", "TCO"],
       ]),
     );
     await pickOption(/cost field/i, /Run Cost/);
@@ -735,6 +739,7 @@ describe("CostReport saved configuration", () => {
   });
 
   it("restores a cost field other than the type's first", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", [RUN_ITEM]);
     withMetamodel([APP_TWO_COSTS], []);
     saved.config = { costField: "costRun" };
     renderCost();
@@ -743,7 +748,7 @@ describe("CostReport saved configuration", () => {
       expect(lastTreemapParams().get("cost_field")).toBe("costRun"),
     );
     expect(
-      screen.getByRole("combobox", { name: /cost field/i }),
+      await screen.findByRole("combobox", { name: /cost field/i }),
     ).toHaveTextContent("Run Cost");
   });
 });
@@ -1017,7 +1022,7 @@ describe("CostReport table", () => {
     await screen.findByRole("table");
     await waitFor(() =>
       expect(rowTexts()).toEqual([
-        "NameCost% of Total",
+        "NameTCO% of Total",
         "Mission Critical(3)$1410100.0%",
         "Mango$90063.8%",
         "Alpha$50035.5%",
@@ -1034,7 +1039,7 @@ describe("CostReport table", () => {
     expect(names()).toEqual(["Alpha", "Mango", "Zulu"]);
     fireEvent.click(screen.getByRole("button", { name: "Name" }));
     expect(names()).toEqual(["Zulu", "Mango", "Alpha"]);
-    fireEvent.click(screen.getByRole("button", { name: "Cost" }));
+    fireEvent.click(screen.getByRole("button", { name: "TCO" }));
     expect(names()).toEqual(["Zulu", "Alpha", "Mango"]);
   });
 
@@ -1043,7 +1048,7 @@ describe("CostReport table", () => {
     renderCost();
     await screen.findByRole("table");
     expect(rowTexts()).toEqual([
-      "NameCost% of Total",
+      "NameTCO% of Total",
       "ERP$50071.4%",
       "CRM$10014.3%",
       "HR$8011.4%",
@@ -1061,7 +1066,7 @@ describe("CostReport table", () => {
     renderCost();
     await screen.findByRole("table");
     expect(rowTexts()).toEqual([
-      "NameCost% of Total",
+      "NameTCO% of Total",
       "Zero$0—",
       "Total$0100%",
     ]);
@@ -1079,12 +1084,12 @@ describe("CostReport table", () => {
         cls.match(/iconDirection(\w*)/)?.[1],
       ];
     };
-    expect(state("Cost")).toEqual([true, "Desc"]);
+    expect(state("TCO")).toEqual([true, "Desc"]);
     expect(state("Name")).toEqual([false, "Asc"]);
 
     // Clicking the active descending column flips it to ascending.
-    fireEvent.click(screen.getByRole("button", { name: "Cost" }));
-    expect(state("Cost")).toEqual([true, "Asc"]);
+    fireEvent.click(screen.getByRole("button", { name: "TCO" }));
+    expect(state("TCO")).toEqual([true, "Asc"]);
     expect(
       rowTexts()
         .slice(1, 5)
@@ -1093,10 +1098,10 @@ describe("CostReport table", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Name" }));
     expect(state("Name")).toEqual([true, "Asc"]);
-    expect(state("Cost")).toEqual([false, "Asc"]);
+    expect(state("TCO")).toEqual([false, "Asc"]);
     fireEvent.click(screen.getByRole("button", { name: "Name" }));
     expect(state("Name")).toEqual([true, "Desc"]);
-    expect(state("Cost")).toEqual([false, "Asc"]);
+    expect(state("TCO")).toEqual([false, "Asc"]);
     await waitFor(() =>
       expect(saved.persistConfig).toHaveBeenLastCalledWith(
         expect.objectContaining({ sortK: "name", sortD: "desc" }),

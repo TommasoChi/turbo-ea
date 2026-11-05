@@ -225,6 +225,7 @@ async function pickOption(label: RegExp, option: RegExp) {
 
 beforeEach(() => {
   mockApi.reset();
+  mockApi.on("get", "/metamodel/cost-item-types", []);
   hookState.reset();
   hookState.auth.user = userWith("costs.view");
   withMetamodel(
@@ -300,7 +301,7 @@ describe("CostReport treemap", () => {
     expect(within(tip).getByText("$500")).toBeInTheDocument();
   });
 
-  it("opens the card's side panel when a cell is clicked", async () => {
+  it("opens the card's side panel when a cell is left-clicked", async () => {
     renderCost();
     fireEvent.click(await screen.findByText("ERP", { selector: "text" }));
     expect(screen.getByTestId("side-panel")).toHaveTextContent("erp");
@@ -361,49 +362,29 @@ describe("CostReport toolbar", () => {
     ],
   });
 
-  it("offers a cost field picker when the type has several cost fields", async () => {
+  it("offers a cost field picker built from the catalogue", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", [
+      { id: "1", key: "licenses", label: "Licenses", sort_order: 1, archived: false, translations: {} },
+    ]);
     withMetamodel([TWO_COSTS], []);
     renderCost();
     await screen.findByTestId("treemap");
     expect(lastTreemapParams().get("cost_field")).toBe("costTotalAnnual");
-    await pickOption(/cost field/i, /Run Cost/);
+    await pickOption(/cost field/i, /Licenses/);
     await waitFor(() =>
-      expect(lastTreemapParams().get("cost_field")).toBe("costRun"),
+      expect(lastTreemapParams().get("cost_field")).toBe("licenses"),
     );
   });
 
-  it("falls back to the new type's first cost field when the current one is not on it", async () => {
-    const ITC_TWO_COSTS = makeCardType({
-      key: "ITComponent",
-      label: "IT Component",
-      fields_schema: [
-        makeSection({
-          section: "Budget",
-          fields: [
-            makeField({ key: "capex", label: "Capex", type: "cost" }),
-            makeField({ key: "opex", label: "Opex", type: "cost" }),
-          ],
-        }),
-      ],
-    });
-    withMetamodel([TWO_COSTS, ITC_TWO_COSTS], []);
+  it("keeps TCO as the cost field when switching card type", async () => {
+    withMetamodel([TWO_COSTS, IT_COMPONENT_TYPE], []);
     renderCost();
     await screen.findByTestId("treemap");
     await pickOption(/card type/i, /^IT Component$/);
     await waitFor(() =>
       expect(lastTreemapParams().get("type")).toBe("ITComponent"),
     );
-    expect(lastTreemapParams().get("cost_field")).toBe("capex");
-  });
-
-  it("switches card type and picks that type's only cost field", async () => {
-    renderCost();
-    await screen.findByTestId("treemap");
-    await pickOption(/card type/i, /^IT Component$/);
-    await waitFor(() =>
-      expect(lastTreemapParams().get("type")).toBe("ITComponent"),
-    );
-    expect(lastTreemapParams().get("cost_field")).toBe("licenseCost");
+    expect(lastTreemapParams().get("cost_field")).toBe("costTotalAnnual");
   });
 
   it("saves through the thumbnail capture and closes the save dialog", async () => {
@@ -507,10 +488,11 @@ describe("CostReport table", () => {
     expect(rowNames()).toEqual(["CRM", "CRM Web Portal", "ERP", "HR", "Total"]);
     await user.click(screen.getByRole("button", { name: "Name" }));
     expect(rowNames()).toEqual(["HR", "ERP", "CRM Web Portal", "CRM", "Total"]);
-    await user.click(screen.getByRole("button", { name: "Cost" }));
+    await user.click(screen.getByRole("button", { name: "TCO" }));
     expect(rowNames()).toEqual(["CRM Web Portal", "HR", "CRM", "ERP", "Total"]);
 
-    await user.click(screen.getByRole("cell", { name: "ERP" }));
+    // Left click opens the card; right click drills.
+    fireEvent.click(screen.getByRole("cell", { name: /^ERP/ }));
     expect(screen.getByTestId("side-panel")).toHaveTextContent("erp");
   });
 
@@ -524,13 +506,13 @@ describe("CostReport table", () => {
     await waitFor(() =>
       expect(screen.getByText("Mission Critical")).toBeInTheDocument(),
     );
-    // Groups by cost desc: Mission Critical (600), Unspecified (80), then the
-    // unknown option key shown raw (20).
+    // Groups by cost desc: Mission Critical (600), then the unknown option key shown raw (20);
+    // the Unspecified bucket (80) always closes the list.
     const labels = screen.getAllByRole("row").map((r) => r.textContent ?? "");
     expect(labels.filter((l) => /\(\d\)/.test(l))).toEqual([
       "Mission Critical(2)$60085.7%",
-      "Unspecified(1)$8011.4%",
       "bogus(1)$202.9%",
+      "Unspecified(1)$8011.4%",
     ]);
 
     // Sorting applies within each group.
@@ -541,11 +523,11 @@ describe("CostReport table", () => {
     const mc = afterSort.findIndex((l) => l.startsWith("Mission Critical"));
     expect(afterSort[mc + 1]).toMatch(/^CRM/);
     expect(afterSort[mc + 2]).toMatch(/^ERP/);
-    await user.click(screen.getByRole("button", { name: "Cost" }));
+    await user.click(screen.getByRole("button", { name: "TCO" }));
     const byCost = screen.getAllByRole("row").map((r) => r.textContent ?? "");
     expect(byCost[mc + 1]).toMatch(/^CRM\$100/);
 
-    await user.click(screen.getByRole("cell", { name: "CRM Web Portal" }));
+    fireEvent.click(screen.getByRole("cell", { name: /^CRM Web Portal/ }));
     expect(screen.getByTestId("side-panel")).toHaveTextContent("web");
   });
 
@@ -730,7 +712,7 @@ describe("CostReport type, cost field and group by selectors", () => {
     });
   });
 
-  it("offers initiative and combined option", async () => {
+  it("offers the combined option and no initiative", async () => {
     renderCost();
     fireEvent.mouseDown(
       await screen.findByRole("combobox", { name: /card type/i }),
@@ -739,7 +721,6 @@ describe("CostReport type, cost field and group by selectors", () => {
       "Application",
       "IT Component",
       "Application + IT Component",
-      "Initiative",
     ]);
   });
 
@@ -749,7 +730,7 @@ describe("CostReport type, cost field and group by selectors", () => {
     fireEvent.mouseDown(
       await screen.findByRole("combobox", { name: /card type/i }),
     );
-    expect(await optionNames()).toEqual(["Application", "Initiative"]);
+    expect(await optionNames()).toEqual(["Application"]);
   });
 
   it("combined option sends type=Application,ITComponent", async () => {
@@ -981,7 +962,7 @@ describe("CostReport type, cost field and group by selectors", () => {
     await waitFor(() =>
       expect(
         JSON.parse(screen.getByTestId("sankey").getAttribute("data-names")!),
-      ).toEqual(["Other costs", "Gold", "Unspecified", "A"]),
+      ).toEqual(["Other costs", "Gold", "Unspecified", "A · Application"]),
     );
   });
 

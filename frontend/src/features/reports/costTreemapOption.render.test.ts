@@ -54,6 +54,7 @@ const ITEMS: CostTreemapItem[] = Array.from({ length: 45 }, (_, i) => ({
   name: `Application ${i}`,
   cost: Math.round(1_200_000 / (1 + i * 1.7)),
   index: i,
+  color: "#2a78d6",
 }));
 
 let chart: echarts.ECharts | null = null;
