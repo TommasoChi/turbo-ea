@@ -8,7 +8,7 @@ The cost report (`frontend/src/features/reports/CostReport.tsx`) lost its cost-t
 
 ## What the user sees
 
-1. **Initiatives are gone** from the report: the type switch offers Application and IT Component only (`COST_REPORT_TYPE_KEYS`). A dedicated Initiative cost page comes later, out of scope. No saved report can carry the Initiative type (the feature exists only on the user's machine), so no fallback is built.
+1. **Initiatives are gone** from the report: the type switch offers Application and IT Component only (`COST_REPORT_TYPE_KEYS`). A dedicated Initiative cost page comes later, out of scope. No saved report can carry the Initiative type (the feature exists only on the user's machine); the generic fallback at `CostReport.tsx:433-439` already covers it. Remove `Initiative` from `COST_REPORT_TYPE_KEYS` (`:66`) and from `typeOptions` (`:318-319`).
 2. **Cost-type selector is back, in every view.** Options come from the cost item catalogue: **TCO** (all items) plus one option per item (including archived ones, which still count in TCO). Today the selector renders only when the schema has more than one cost field, and after #50 only `costTotalAnnual` remains, so it is hidden.
 3. **TCO is always the sum of every catalogue item, archived ones included.** This is today's rule (`card_costs.year_costs`); nothing changes in the backend. The report must never show a TCO that differs from the card's.
 4. **Table view:** one column per cost item plus a TCO column that is the sum of them. The selector stays in the table view; it decides the initial sort column and the highlighted column.
@@ -31,13 +31,23 @@ Chosen proposal: **darker = costlier**. Open the mockup in a browser; where it a
   - "Other" grey: light `#b4b2a8`, dark `#4b4a45`.
 - **Grouped:** each group takes the next hue by size (largest group first), a group's members are shades of that hue, the costliest member darkest. Lightness steps come from mixing the hue with black/white (mockup: members from −22% to +40%; that range is indicative, tune on screen). Groups beyond the 8th, the smallest, fold into one grey **Others** group (in colour and in legend), its members shades of grey. A **legend** lists group → colour.
 - **Ungrouped:** each card gets a stable colour derived from its name (hash → one of the 8 hues × 3 lightness steps), so it does not change on reload or when a filter changes the count. No legend (names are on the tiles).
+- **Combined Application + IT Component view, ungrouped:** colour is per card as above; the type is shown by a type icon plus the type name as text (tile second line, Sankey node label, tooltip). Decided by the user.
 - **Sankey:** group node = group hue, card node = its shade, links take the source colour at ~45% opacity, cost-item nodes neutral grey.
 - Because contrast between tile colour and text is not guaranteed for every hue, tile text colour is chosen black/white by luminance, and the table view always exists.
-- Tokens: add the palette to `frontend/src/theme/tokens.ts` (no hardcoded hex elsewhere), dark values used under the dark theme.
+- Tokens: the 8 hues already exist as `CHART_CATEGORICAL` (`tokens.ts:344-347`, picked per theme by `chrome.categorical`, `echartsTheme.ts:54`): reuse them, add only the grey "Others" token. No hardcoded hex elsewhere.
+- **Fold is real**, in all three views: groups beyond the 8th become one "Others" frame/node/row with their summed total (Sankey: remap nodes and links), and a click on it drills into the folded members. The existing no-group bucket (`__other__`, "Unspecified", `CostReport.tsx:68`) stays a separate, hatched neutral entry with its own legend label, so there are never two identical "other"s.
+- Group size for the hue order is computed on the scoped totals, in every view, so a group keeps its hue across treemap, Sankey and table.
+- Delta badges (`COST_DELTA_UP/DOWN`, past years) follow the tile luminance like the text, so they stay readable on light shades.
 
 ## Trend data (no backend change)
 
-`CostTrendChart` today fetches `/reports/cost-treemap?type&cost_field&fiscal_year` per year and reads `total`. The same per-year responses already carry the per-card `items`, so a card's or a group's trend is computed client-side from those items. No card-id filter is added to the route.
+Verified against the code: the treemap `items` are cards with ONE `cost` each, not a per-item breakdown (`reports.py:1505-1515`); the per-card breakdown exists only in `/reports/cost-sankey` (`nodes[].costs`, `cost_report.py:302-304`). So:
+
+- **Trend:** `CostTrendChart` already calls the treemap route once per year × cost item (`cost_field=<item>`, `CostTrendChart.tsx:35-41`). A card's trend = its `cost` in each response, filtered by id. A group's trend = the sum of its members, so those calls also pass `group_by` (same route, no backend change). The trend respects the page's `CardScopeFilter` (computed client-side from the same items), so its total matches the page.
+- **Per-item breakdown of a card (table columns, drill-down tiles/links):** from `/reports/cost-sankey?cost_field=costTotalAnnual` (`nodes[].costs`), not from N treemap calls.
+- **Table rows:** always the cards with TCO > 0 in the year; the selector only sorts/highlights.
+- **Trend components (stack order, labels):** taken from the cost item catalogue ordered by `sort_order` (already needed for the selector), so the trend also renders in the Sankey view, where the treemap `components` are not loaded.
+- No card-id filter is added to any route; no backend, schema or OpenAPI change.
 
 ## Non-goals
 
@@ -59,3 +69,8 @@ Chosen proposal: **darker = costlier**. Open the mockup in a browser; where it a
 - The drill-down state is kept in component state, not in the URL.
 - Cost-item nodes in the Sankey stay neutral grey (the user asked colour for apps/groups only).
 - Table sort column on selector change: the chosen cost's column, descending.
+- The backend already accepts `cost_field=<item key>` (also archived ones), so the selector needs no backend change; `printParams` (`CostReport.tsx:786`, condition `costFields.length > 1`) is updated with it.
+- Shared `components/charts/EChart.tsx` gets an `onContextMenu` prop (ECharts `contextmenu` with the same datum, `preventDefault` on the native event). The treemap group frame datum gets the raw group `key` (labels can collide).
+- Sankey: left/right click on a cost-item node or a link does nothing; only group and card nodes react.
+- Table drill-down: on a card, the table shows that one row (all item columns already visible); on a group, the group's rows. The row click that opened the side panel becomes drill; right click opens the card.
+- Group-trend and "Others" are computed on the same scoped data as the page.
