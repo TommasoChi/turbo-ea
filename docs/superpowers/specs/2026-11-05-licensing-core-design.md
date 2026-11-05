@@ -1,6 +1,6 @@
 # Licensing in core — yearly history, forecast and report
 
-**Status:** draft, reviewed by a fresh Opus agent (builder check folded in below), awaiting the user's approval. **Branch:** `feat/licensing-core` (off `main`). **Depends on:** PR #58 (cost report refinements) being merged first: the report reuses its colour plan, legend, drill state, trend placement and click gestures.
+**Status:** approved by the user 2026-11-05 after two fresh-Opus builder checks (both folded in below; `ext.licensing.manage` to `licenses.edit` confirmed). **Branch:** `feat/licensing-core` (off `main`). **Depends on:** PR #58 (cost report refinements) being merged first: the report reuses its colour plan, legend, drill state, trend placement and click gestures.
 
 ## Intent
 
