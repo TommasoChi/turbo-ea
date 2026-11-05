@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 
 from app.schemas.cost_items import KEY_PATTERN
 
@@ -25,3 +25,49 @@ class LicenseTypeOut(BaseModel):
     sort_order: int
     archived: bool
     translations: dict[str, str] = {}
+
+
+class LicenseCellWrite(BaseModel):
+    licensed: StrictInt = Field(..., ge=0, le=1_000_000_000)
+    actual: StrictInt | None = Field(None, ge=0, le=1_000_000_000)
+
+
+class LicenseTypeResultOut(BaseModel):
+    key: str
+    licensed: int
+    actual: int | None
+    pct: float | None
+    no_licence: bool
+    status: str
+
+
+class MetricResultOut(BaseModel):
+    metric: str
+    types: list[LicenseTypeResultOut]
+    has_actual: bool
+    status: str
+    worst_pct: float | None
+    worst_no_licence: bool
+    licensed_total: int
+    actual_total: int | None
+
+
+class YearLicensesOut(BaseModel):
+    fiscal_year: int
+    is_current: bool
+    is_forecast: bool
+    confirmed: bool
+    fallback_from: int | None
+    metrics: list[MetricResultOut]
+    status: str | None
+
+
+class YearLicensesDetailOut(YearLicensesOut):
+    can_edit: bool
+
+
+class CardLicensesOut(BaseModel):
+    can_edit: bool
+    licensing_model: list[str]
+    years: list[YearLicensesOut]
+    catalogue: list[LicenseTypeOut]

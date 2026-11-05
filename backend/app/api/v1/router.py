@@ -14,6 +14,7 @@ from app.api.v1 import (
     calculations,
     capability_catalogue,
     card_costs,
+    card_licenses,
     card_logos,
     cards,
     comments,
@@ -73,6 +74,7 @@ api_router.include_router(todos.router)
 api_router.include_router(tags.router)
 api_router.include_router(documents.router)
 api_router.include_router(card_costs.router)
+api_router.include_router(card_licenses.router)
 api_router.include_router(cost_history.router)
 api_router.include_router(bookmarks.router)
 api_router.include_router(saved_reports.router)
