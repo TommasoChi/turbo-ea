@@ -53,6 +53,7 @@ import { resolveFacetField } from "@/lib/fieldFacets";
 import {
   COMBINED_KEY,
   commonCostFields,
+  costFieldChoices,
   commonGroupableFields,
   relationGroupOptions,
   typeKeysOf,
@@ -61,9 +62,11 @@ import {
 import { costFiscalYearName, costFiscalYearOptions } from "@/lib/fiscalYear";
 import { formatFieldValue, EMPTY_VALUE, type FieldMeta } from "@/lib/cardDisplayFields";
 import { costValue } from "@/lib/costValue";
-import type { FieldDef, TranslationMap } from "@/types";
+import { isCostItemType } from "@/lib/costItems";
+import { useApiQuery } from "@/hooks/useApiQuery";
+import type { CostItemType, FieldDef, TranslationMap } from "@/types";
 
-const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent", "Initiative"] as const;
+const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent"] as const;
 /** The server's group for a card with no value (and for an ungrouped report). */
 const OTHER_GROUP = "__other__";
 type CostView = "chart" | "sankey" | "table";
@@ -331,8 +334,6 @@ export default function CostReport() {
           second: typeLabel(itc),
         }),
       });
-    const ini = byKey.get("Initiative");
-    if (ini) out.push({ key: ini.key, label: typeLabel(ini) });
     return out;
   }, [readableTypes, typeLabel, t]);
   const saved = useSavedReport("cost");
@@ -418,6 +419,19 @@ export default function CostReport() {
     () => commonCostFields(schemas).map((f) => ({ ...f, label: fieldLabel(f) })),
     [schemas, fieldLabel],
   );
+  // Cost-item types pick TCO or one catalogue item; any signed-in user may read the catalogue.
+  const { data: catalogue } = useApiQuery<CostItemType[]>("/metamodel/cost-item-types");
+  const costChoices = useMemo(
+    () =>
+      costFieldChoices(
+        typeKeys,
+        Array.isArray(catalogue) ? catalogue : [],
+        costFields,
+        t("cost.tco"),
+        (i) => fieldLabel({ key: i.key, label: i.label, translations: i.translations }),
+      ),
+    [typeKeys, catalogue, costFields, t, fieldLabel],
+  );
   // Extra table columns come from one type's fields: none for the combined option.
   const allFields = useMemo(() => {
     const raw = schemas.length === 1 ? pickAllFields(schemas[0]) : [];
@@ -439,10 +453,12 @@ export default function CostReport() {
   // order, so on mount this effect's pick (made from the starting type's
   // fields) is queued first and the restored type + field overwrite it.
   useEffect(() => {
-    if (costFields.length > 0 && !costFields.some((f) => f.key === costField)) {
-      setCostField(costFields[0].key);
+    // A cost-item type's choices are incomplete until the catalogue is in: do not reset a restored item.
+    if (catalogue === undefined && typeKeys.length > 0 && typeKeys.every(isCostItemType)) return;
+    if (costChoices.length > 0 && !costChoices.some((f) => f.key === costField)) {
+      setCostField(costChoices[0].key);
     }
-  }, [costFields]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [costChoices, catalogue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A selection the user may not read (a saved combined option whose IT
   // Component is hidden, an Initiative they cannot see) falls back.
@@ -799,8 +815,9 @@ export default function CostReport() {
         value: costFiscalYearName(fiscalYear.year, currentFiscalYear),
       });
     }
-    if (costFields.length > 1) {
-      const cfLabel = knownItemLabel(costField) || costField;
+    if (costChoices.length > 1) {
+      const cfLabel =
+        costChoices.find((f) => f.key === costField)?.label || knownItemLabel(costField) || costField;
       params.push({ label: t("cost.costField"), value: cfLabel });
     }
     if (effectiveGroupBy) {
@@ -822,7 +839,7 @@ export default function CostReport() {
     cardTypeKey,
     typeOptions,
     costField,
-    costFields,
+    costChoices,
     knownItemLabel,
     effectiveGroupBy,
     groupOptions,
@@ -1001,7 +1018,7 @@ export default function CostReport() {
               tooltip={t("cost.scopeTooltip")}
             />
           )}
-          {costFields.length > 1 && (
+          {costChoices.length > 1 && (
             <TextField
               select
               size="small"
@@ -1010,7 +1027,7 @@ export default function CostReport() {
               onChange={(e) => setCostField(e.target.value)}
               sx={{ minWidth: 160 }}
             >
-              {costFields.map((f) => (
+              {costChoices.map((f) => (
                 <MenuItem key={f.key} value={f.key}>
                   {f.label}
                 </MenuItem>

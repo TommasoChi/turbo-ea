@@ -251,6 +251,7 @@
   "cost.fullscreen": "Fullscreen",
   "cost.cardType": "Card Type",
   "cost.costField": "Cost Field",
+  "cost.tco": "TCO",
   "cost.groupBy": "Group By",
   "cost.columns": "Columns",
   "cost.columnsNone": "None",

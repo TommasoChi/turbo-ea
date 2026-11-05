@@ -120,6 +120,7 @@ const CONTRACT_TYPE = makeCardType({
 });
 
 /** Application with a second cost field, so a cost field picker exists. */
+const RUN_ITEM = { id: "r", key: "costRun", label: "Run Cost", sort_order: 1, archived: false, translations: {} };
 const APP_TWO_COSTS = makeCardType({
   ...APPLICATION_TYPE,
   fields_schema: [
@@ -262,6 +263,7 @@ async function optionsOf(label: RegExp): Promise<string[]> {
 
 beforeEach(() => {
   mockApi.reset();
+  mockApi.on("get", "/metamodel/cost-item-types", []);
   hookState.reset();
   hookState.auth.user = userWith("costs.view");
   withMetamodel(
@@ -323,6 +325,7 @@ describe("CostReport loading and requests", () => {
   });
 
   it("ignores a root answer that lands after a newer one", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", [RUN_ITEM]);
     withMetamodel([APP_TWO_COSTS], []);
     const stale = deferred<unknown>();
     mockApi.on("get", "/reports/cost-treemap*", (path: string) =>
@@ -336,7 +339,7 @@ describe("CostReport loading and requests", () => {
     await waitFor(() =>
       expect(lastTreemapParams().get("cost_field")).toBe("costRun"),
     );
-    await pickOption(/cost field/i, /Total Annual Cost/);
+    await pickOption(/cost field/i, /^TCO$/);
     await waitFor(() =>
       expect(lastTreemapParams().get("cost_field")).toBe("costTotalAnnual"),
     );
@@ -433,6 +436,7 @@ describe("CostReport print parameters", () => {
   });
 
   it("states the chosen cost field when the type has several", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", [RUN_ITEM]);
     withMetamodel([APP_TWO_COSTS, IT_COMPONENT_TYPE, CONTRACT_TYPE], RELATIONS);
     renderCost();
     await screen.findByTestId("treemap");
@@ -440,7 +444,7 @@ describe("CostReport print parameters", () => {
       expect(printParams()).toEqual([
         ["Type", "Application"],
         ["Fiscal year", "FY26 - Current"],
-        ["Cost Field", "Total Annual Cost"],
+        ["Cost Field", "TCO"],
       ]),
     );
     await pickOption(/cost field/i, /Run Cost/);
@@ -735,6 +739,7 @@ describe("CostReport saved configuration", () => {
   });
 
   it("restores a cost field other than the type's first", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", [RUN_ITEM]);
     withMetamodel([APP_TWO_COSTS], []);
     saved.config = { costField: "costRun" };
     renderCost();
@@ -743,7 +748,7 @@ describe("CostReport saved configuration", () => {
       expect(lastTreemapParams().get("cost_field")).toBe("costRun"),
     );
     expect(
-      screen.getByRole("combobox", { name: /cost field/i }),
+      await screen.findByRole("combobox", { name: /cost field/i }),
     ).toHaveTextContent("Run Cost");
   });
 });

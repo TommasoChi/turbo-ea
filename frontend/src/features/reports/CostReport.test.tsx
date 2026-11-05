@@ -134,6 +134,11 @@ const COST_ITEMS = [
   { id: "erp", name: "ERP", cost: 500, attributes: {} },
 ];
 
+const CATALOGUE = [
+  { id: "2", key: "support", label: "Support", sort_order: 2, archived: true, translations: {} },
+  { id: "1", key: "licenses", label: "Licenses", sort_order: 1, archived: false, translations: {} },
+];
+
 let fyStart = 1;
 
 /** The server echoes the REQUESTED year as `fiscal_year` (2026 when none is asked for). */
@@ -172,6 +177,9 @@ beforeEach(async () => {
         current_fiscal_year: 2026,
         fiscal_year_start: fyStart,
       }) as never;
+    }
+    if (path.startsWith("/metamodel/cost-item-types")) {
+      return Promise.resolve(CATALOGUE) as never;
     }
     // The scope hook's own hierarchy fetch.
     return Promise.resolve({
@@ -888,5 +896,31 @@ describe("CostReport Sankey from per-card costs", () => {
     expect(within(tile("Total Cost")).getByText("$150")).toBeInTheDocument();
     expect(within(tile("Items")).getByText("2")).toBeInTheDocument();
     expect(within(tile("Top Cost Driver")).getByText("CRM")).toBeInTheDocument();
+  });
+});
+
+describe("CostReport cost-type selector", () => {
+  it("shows the cost-type selector with TCO and the catalogue items", async () => {
+    renderCost();
+    const select = await screen.findByLabelText("Cost Field");
+    await userEvent.click(select);
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toEqual(["TCO", "Licenses", "Support"]);
+  });
+
+  it("offers no Initiative type", async () => {
+    renderCost();
+    await screen.findByLabelText("Cost Field");
+    expect(screen.queryByText("Initiative")).not.toBeInTheDocument();
+  });
+
+  it("printParams lists the cost type", async () => {
+    renderCost();
+    await waitFor(() => {
+      const labels = Array.from(document.querySelectorAll(".report-print-params > *")).map(
+        (n) => n.textContent,
+      );
+      expect(labels.join("|")).toContain("Cost Field");
+    });
   });
 });

@@ -225,6 +225,7 @@ async function pickOption(label: RegExp, option: RegExp) {
 
 beforeEach(() => {
   mockApi.reset();
+  mockApi.on("get", "/metamodel/cost-item-types", []);
   hookState.reset();
   hookState.auth.user = userWith("costs.view");
   withMetamodel(
@@ -361,49 +362,29 @@ describe("CostReport toolbar", () => {
     ],
   });
 
-  it("offers a cost field picker when the type has several cost fields", async () => {
+  it("offers a cost field picker built from the catalogue", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", [
+      { id: "1", key: "licenses", label: "Licenses", sort_order: 1, archived: false, translations: {} },
+    ]);
     withMetamodel([TWO_COSTS], []);
     renderCost();
     await screen.findByTestId("treemap");
     expect(lastTreemapParams().get("cost_field")).toBe("costTotalAnnual");
-    await pickOption(/cost field/i, /Run Cost/);
+    await pickOption(/cost field/i, /Licenses/);
     await waitFor(() =>
-      expect(lastTreemapParams().get("cost_field")).toBe("costRun"),
+      expect(lastTreemapParams().get("cost_field")).toBe("licenses"),
     );
   });
 
-  it("falls back to the new type's first cost field when the current one is not on it", async () => {
-    const ITC_TWO_COSTS = makeCardType({
-      key: "ITComponent",
-      label: "IT Component",
-      fields_schema: [
-        makeSection({
-          section: "Budget",
-          fields: [
-            makeField({ key: "capex", label: "Capex", type: "cost" }),
-            makeField({ key: "opex", label: "Opex", type: "cost" }),
-          ],
-        }),
-      ],
-    });
-    withMetamodel([TWO_COSTS, ITC_TWO_COSTS], []);
+  it("keeps TCO as the cost field when switching card type", async () => {
+    withMetamodel([TWO_COSTS, IT_COMPONENT_TYPE], []);
     renderCost();
     await screen.findByTestId("treemap");
     await pickOption(/card type/i, /^IT Component$/);
     await waitFor(() =>
       expect(lastTreemapParams().get("type")).toBe("ITComponent"),
     );
-    expect(lastTreemapParams().get("cost_field")).toBe("capex");
-  });
-
-  it("switches card type and picks that type's only cost field", async () => {
-    renderCost();
-    await screen.findByTestId("treemap");
-    await pickOption(/card type/i, /^IT Component$/);
-    await waitFor(() =>
-      expect(lastTreemapParams().get("type")).toBe("ITComponent"),
-    );
-    expect(lastTreemapParams().get("cost_field")).toBe("licenseCost");
+    expect(lastTreemapParams().get("cost_field")).toBe("costTotalAnnual");
   });
 
   it("saves through the thumbnail capture and closes the save dialog", async () => {
@@ -730,7 +711,7 @@ describe("CostReport type, cost field and group by selectors", () => {
     });
   });
 
-  it("offers initiative and combined option", async () => {
+  it("offers the combined option and no initiative", async () => {
     renderCost();
     fireEvent.mouseDown(
       await screen.findByRole("combobox", { name: /card type/i }),
@@ -739,7 +720,6 @@ describe("CostReport type, cost field and group by selectors", () => {
       "Application",
       "IT Component",
       "Application + IT Component",
-      "Initiative",
     ]);
   });
 
@@ -749,7 +729,7 @@ describe("CostReport type, cost field and group by selectors", () => {
     fireEvent.mouseDown(
       await screen.findByRole("combobox", { name: /card type/i }),
     );
-    expect(await optionNames()).toEqual(["Application", "Initiative"]);
+    expect(await optionNames()).toEqual(["Application"]);
   });
 
   it("combined option sends type=Application,ITComponent", async () => {

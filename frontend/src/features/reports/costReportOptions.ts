@@ -1,5 +1,6 @@
 import { pickGroupableFields } from "@/lib/fieldFacets";
-import type { FieldDef, RelationType } from "@/types";
+import { isCostItemType } from "@/lib/costItems";
+import type { CostItemType, FieldDef, RelationType } from "@/types";
 
 /** The selector entry that reports Applications and IT Components together. */
 export const COMBINED_KEY = "Application+ITComponent";
@@ -43,3 +44,20 @@ export function relationGroupOptions(
     .map((rt) => ({ value: `rel:${rt.key}`, label: label(rt) }));
 }
 
+
+/** The cost-type selector: TCO plus one entry per catalogue item for Application / IT Component. */
+export function costFieldChoices(
+  typeKeys: string[],
+  catalogue: CostItemType[],
+  schemaFields: { key: string; label: string }[],
+  tcoLabel: string,
+  labelOf: (i: CostItemType) => string,
+): { key: string; label: string }[] {
+  if (typeKeys.length === 0 || !typeKeys.every(isCostItemType)) return schemaFields;
+  return [
+    { key: "costTotalAnnual", label: tcoLabel },
+    ...[...catalogue]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((i) => ({ key: i.key, label: labelOf(i) })),
+  ];
+}
