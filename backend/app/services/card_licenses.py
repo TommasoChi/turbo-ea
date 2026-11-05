@@ -130,7 +130,7 @@ async def get_window(db: AsyncSession, card: Card, start_month: int) -> list[Yea
     return [await get_year(db, card, y, start_month) for y in yearly_rows.window_years(cur)]
 
 
-def _check_count(name: str, value: object) -> None:
+def check_count(name: str, value: object) -> None:
     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_COUNT:
         raise LicenseError("invalid_count", f"{name} must be an integer from 0 to {MAX_COUNT}")
 
@@ -158,9 +158,9 @@ async def merge_cell(
     if key not in archived:
         raise LicenseError("unknown_type", f"Unknown license type '{key}'")
     if licensed is not UNSET:
-        _check_count("licensed", licensed)
+        check_count("licensed", licensed)
     if actual is not UNSET and actual is not None:
-        _check_count("actual", actual)
+        check_count("actual", actual)
         if fiscal_year == current_fiscal_year(sm) + FISCAL_YEAR_LOOKAHEAD:
             raise LicenseError("forecast_actual", "The Forecast year takes licensed counts only")
     current, _, _ = await _resolve(db, card_id, fiscal_year, sm)

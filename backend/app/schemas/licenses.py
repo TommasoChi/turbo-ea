@@ -121,3 +121,17 @@ class LicenseReportOut(BaseModel):
     aggregate: ReportAggregate | None
     rows: list[ReportRow]
     trend: list[ReportTrendYear]
+
+
+class ImportIssueOut(BaseModel):
+    row: int
+    component: str
+    reason: str
+    detail: str = ""
+
+
+class ImportResultOut(BaseModel):
+    matched: int
+    applied: int
+    skipped: list[ImportIssueOut]
+    flagged: list[ImportIssueOut]

@@ -3,23 +3,27 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable, Callable
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, parse_uuid
+from app.api.v1.file_attachments import read_validated_upload
 from app.database import get_db
 from app.models.card import Card
 from app.models.user import User
 from app.schemas.cost_items import KEY_PATTERN
 from app.schemas.licenses import (
     CardLicensesOut,
+    ImportIssueOut,
+    ImportResultOut,
     LicenseCellWrite,
     LicenseTypeOut,
     YearLicensesDetailOut,
     YearLicensesOut,
 )
-from app.services import card_licenses, license_types
+from app.services import card_licenses, license_import, license_types
 from app.services.card_licenses import LICENSE_TYPES, LicenseError, YearLicenses
 from app.services.card_read_scope import require_card_readable
 from app.services.fiscal_year import (
@@ -196,4 +200,37 @@ async def copy_card_license_to_forecast(
         card_id,
         forecast,
         lambda cid: card_licenses.copy_to_forecast(db, cid, fiscal_year, metric, key),
+    )
+
+
+@router.post("/licenses/import", response_model=ImportResultOut)
+async def import_licenses(
+    file: UploadFile,
+    dry_run: bool = Query(True),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Excel import of license counts. ``dry_run`` (the default) reports and writes nothing;
+    Apply re-sends the file and the server revalidates it. Needs the global ``licenses.edit``."""
+    await PermissionService.require_permission(db, user, "licenses.edit")
+    _, data = await read_validated_upload(file)
+    await db.commit()  # the connection goes back to the pool before the parse
+    try:
+        rows = await run_in_threadpool(license_import.parse_workbook, data)
+    except license_import.ImportFileError as e:
+        raise HTTPException(400, str(e)) from e
+    plan = await license_import.plan_import(db, user, rows)
+    applied = 0
+    if not dry_run:
+        try:
+            applied = await license_import.apply_import(db, user.id, plan)
+        except LicenseError as e:  # the catalogue changed between the plan and the write
+            await db.rollback()
+            raise HTTPException(409, e.code) from e
+        await db.commit()
+    return ImportResultOut(
+        matched=plan.matched,
+        applied=applied,
+        skipped=[ImportIssueOut(**vars(i)) for i in plan.skipped],
+        flagged=[ImportIssueOut(**vars(i)) for i in plan.flagged],
     )

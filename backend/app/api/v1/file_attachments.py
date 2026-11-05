@@ -82,7 +82,7 @@ async def _require_uploads_enabled(db: AsyncSession) -> None:
         raise HTTPException(403, "File uploads are disabled by the administrator")
 
 
-async def _read_validated_upload(file: UploadFile) -> tuple[AttachmentFormat, bytes]:
+async def read_validated_upload(file: UploadFile) -> tuple[AttachmentFormat, bytes]:
     """Read an upload the way every write path must: the extension picks the
     format, the size is bounded before trusting Content-Length, and the bytes
     prove the format. The declared content type decides nothing."""
@@ -149,7 +149,7 @@ async def upload_file_attachment(
     await require_card_readable(db, user, card_uuid, mode="module")
 
     await _require_uploads_enabled(db)
-    fmt, data = await _read_validated_upload(file)
+    fmt, data = await read_validated_upload(file)
 
     attachment = FileAttachment(
         card_id=card_uuid,
@@ -203,7 +203,7 @@ async def replace_file_attachment(
     """
     attachment = await _load_for_manage(db, user, attachment_id)
     await _require_uploads_enabled(db)
-    fmt, data = await _read_validated_upload(file)
+    fmt, data = await read_validated_upload(file)
 
     previous = {
         "name": attachment.name,
