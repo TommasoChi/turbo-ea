@@ -28,6 +28,7 @@ from app.models.compliance_regulation import ComplianceRegulation
 from app.models.cost_item_type import CostItemType
 from app.models.dashboard import Dashboard
 from app.models.ea_principle import EAPrinciple
+from app.models.license_type import LicenseType
 from app.models.resource_type import ResourceType
 from app.models.role import Role
 from app.models.stakeholder_role_definition import StakeholderRoleDefinition
@@ -62,6 +63,7 @@ SHEET_RESOURCE_TYPES = "ResourceTypes"
 SHEET_CARD_TYPE_CATEGORIES = "CardTypeCategories"
 SHEET_DASHBOARDS = "Dashboards"
 SHEET_COST_ITEM_TYPES = "CostItemTypes"
+SHEET_LICENSE_TYPES = "LicenseTypes"
 SHEET_SETTINGS = "Settings"
 SHEET_USERS = "Users"
 SHEET_CARDS = "Cards"
@@ -327,6 +329,14 @@ CONFIG_SECTIONS: tuple[ConfigSection, ...] = (
     ConfigSection(
         sheet=SHEET_COST_ITEM_TYPES,
         model=CostItemType,
+        natural_key=("key",),
+        columns=("key", "label", "sort_order", "archived", "translations"),
+        json_columns=frozenset({"translations"}),
+    ),
+    # The license-type catalogue; ``CardLicenses.items`` is keyed by these ``key``s.
+    ConfigSection(
+        sheet=SHEET_LICENSE_TYPES,
+        model=LicenseType,
         natural_key=("key",),
         columns=("key", "label", "sort_order", "archived", "translations"),
         json_columns=frozenset({"translations"}),
