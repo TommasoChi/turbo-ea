@@ -28,7 +28,20 @@ import {
 } from "./costTreemapOption";
 import { buildCostSankeyOption } from "./costSankeyOption";
 import SaveReportDialog from "./SaveReportDialog";
-import CostTrendChart from "./CostTrendChart";
+import CostTrendChart, { type TrendSelection } from "./CostTrendChart";
+import CostDrillBar from "./CostDrillBar";
+import { applyDrill, crumbsOf, type Drill } from "./costDrill";
+import { useCostBreakdown } from "./useCostBreakdown";
+import {
+  MAX_GROUP_HUES,
+  OTHERS_KEY,
+  assignGroupColors,
+  cardColor,
+  drillGroupKey,
+  memberShade,
+} from "./costColors";
+import CostLegend from "./CostLegend";
+import { CHART_OTHER, COST_UNSPECIFIED } from "@/theme/tokens";
 import MetricCard from "./MetricCard";
 import FullscreenPanel from "./FullscreenPanel";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -53,6 +66,8 @@ import { resolveFacetField } from "@/lib/fieldFacets";
 import {
   COMBINED_KEY,
   commonCostFields,
+  costFieldChoices,
+  isBuiltInFieldType,
   commonGroupableFields,
   relationGroupOptions,
   typeKeysOf,
@@ -61,9 +76,11 @@ import {
 import { costFiscalYearName, costFiscalYearOptions } from "@/lib/fiscalYear";
 import { formatFieldValue, EMPTY_VALUE, type FieldMeta } from "@/lib/cardDisplayFields";
 import { costValue } from "@/lib/costValue";
-import type { FieldDef, TranslationMap } from "@/types";
+import { isCostItemType } from "@/lib/costItems";
+import { useApiQuery } from "@/hooks/useApiQuery";
+import type { CostItemType, FieldDef, TranslationMap } from "@/types";
 
-const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent", "Initiative"] as const;
+const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent"] as const;
 /** The server's group for a card with no value (and for an ungrouped report). */
 const OTHER_GROUP = "__other__";
 type CostView = "chart" | "sankey" | "table";
@@ -75,6 +92,8 @@ interface CostItem {
   attributes?: Record<string, unknown>;
   /** Raw group value, present when the request grouped. */
   group?: string;
+  /** The card's type key. */
+  type?: string;
 }
 
 interface CostTreemapResponse {
@@ -104,6 +123,9 @@ interface SankeyNode {
   /** Card nodes only: the card's total and its value per cost item (incl. `__other__`). */
   cost?: number;
   costs?: Record<string, number>;
+  /** Set by the page for the chart: the node's fill and a card's type label. */
+  color?: string;
+  typeLabel?: string;
 }
 
 interface SankeyLink {
@@ -139,7 +161,7 @@ function fiscalYearOf(r: {
 
 function pickAllFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
   const out: FieldDef[] = [];
-  for (const s of schema) for (const f of s.fields) out.push(f);
+  for (const s of schema) for (const f of s.fields) if (isBuiltInFieldType(f.type)) out.push(f);
   return out;
 }
 
@@ -159,7 +181,8 @@ interface CostTreemapPanelProps {
   /** The chart chrome, with the reading direction. */
   chrome: EChartsThemeValue;
   fmt: { format: (v: number) => string };
-  onTileClick: (p: EChartClickParams) => void;
+  onTileOpen: (p: EChartClickParams) => void;
+  onTileDrill: (p: EChartClickParams) => void;
 }
 
 /**
@@ -175,7 +198,8 @@ function CostTreemapPanel({
   fullscreen,
   chrome,
   fmt,
-  onTileClick,
+  onTileOpen,
+  onTileDrill,
 }: CostTreemapPanelProps) {
   const { t } = useTranslation(["reports", "common"]);
   const chartRef = useRef<ECharts | null>(null);
@@ -209,7 +233,8 @@ function CostTreemapPanel({
       option={option}
       fullscreen={fullscreen}
       ariaLabel={t("cost.title")}
-      onClick={onTileClick}
+      onClick={onTileOpen}
+      onContextMenu={onTileDrill}
       onInit={onInit}
     />
   );
@@ -222,6 +247,7 @@ function CostChartFrame({
   ariaLabel,
   testId,
   onClick,
+  onContextMenu,
   onInit,
 }: {
   option: EChartsCoreOption;
@@ -229,6 +255,7 @@ function CostChartFrame({
   ariaLabel: string;
   testId?: string;
   onClick?: (p: EChartClickParams) => void;
+  onContextMenu?: (p: EChartClickParams) => void;
   onInit?: (chart: ECharts) => void;
 }) {
   return (
@@ -236,6 +263,7 @@ function CostChartFrame({
       variant="outlined"
       sx={{ p: 1, ...(fullscreen && { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }) }}
       data-testid={testId}
+      onContextMenu={onContextMenu ? (e: React.MouseEvent) => e.preventDefault() : undefined}
     >
       {/* Drawn at the export's pixel ratio so the PPTX / PNG capture stays crisp. */}
       <EChart
@@ -244,6 +272,7 @@ function CostChartFrame({
         devicePixelRatio={EXPORT_DPR}
         ariaLabel={ariaLabel}
         onClick={onClick}
+        onContextMenu={onContextMenu}
         onInit={onInit}
       />
     </Paper>
@@ -257,10 +286,20 @@ interface CostSankeyPanelProps {
   fullscreen: boolean;
   chrome: EChartsThemeValue;
   fmt: { format: (v: number) => string };
+  onNodeOpen?: (p: EChartClickParams) => void;
+  onNodeDrill?: (p: EChartClickParams) => void;
 }
 
 /** The Sankey view: cost items -> groups -> cards. */
-function CostSankeyPanel({ nodes, links, fullscreen, chrome, fmt }: CostSankeyPanelProps) {
+function CostSankeyPanel({
+  nodes,
+  links,
+  fullscreen,
+  chrome,
+  fmt,
+  onNodeOpen,
+  onNodeDrill,
+}: CostSankeyPanelProps) {
   const { t } = useTranslation(["reports", "common"]);
   const option = useMemo(
     () =>
@@ -277,6 +316,8 @@ function CostSankeyPanel({ nodes, links, fullscreen, chrome, fmt }: CostSankeyPa
       fullscreen={fullscreen}
       ariaLabel={t("cost.sankeyChartView")}
       testId="cost-sankey-panel"
+      onClick={onNodeOpen}
+      onContextMenu={onNodeDrill}
     />
   );
 }
@@ -315,8 +356,6 @@ export default function CostReport() {
           second: typeLabel(itc),
         }),
       });
-    const ini = byKey.get("Initiative");
-    if (ini) out.push({ key: ini.key, label: typeLabel(ini) });
     return out;
   }, [readableTypes, typeLabel, t]);
   const saved = useSavedReport("cost");
@@ -402,6 +441,25 @@ export default function CostReport() {
     () => commonCostFields(schemas).map((f) => ({ ...f, label: fieldLabel(f) })),
     [schemas, fieldLabel],
   );
+  // Cost-item types pick TCO or one catalogue item; any signed-in user may read the catalogue.
+  const { data: catalogue } = useApiQuery<CostItemType[]>("/metamodel/cost-item-types");
+  // Catalogue items in display order; null until the catalogue is in.
+  const sortedCatalogue = useMemo(
+    () => (Array.isArray(catalogue) ? [...catalogue].sort((a, b) => a.sort_order - b.sort_order) : null),
+    [catalogue],
+  );
+  const allCostItemTypes = typeKeys.every(isCostItemType);
+  const costChoices = useMemo(
+    () =>
+      costFieldChoices(
+        typeKeys,
+        sortedCatalogue ?? [],
+        costFields,
+        t("cost.tco"),
+        (i) => fieldLabel({ key: i.key, label: i.label, translations: i.translations }),
+      ),
+    [typeKeys, sortedCatalogue, costFields, t, fieldLabel],
+  );
   // Extra table columns come from one type's fields: none for the combined option.
   const allFields = useMemo(() => {
     const raw = schemas.length === 1 ? pickAllFields(schemas[0]) : [];
@@ -412,10 +470,11 @@ export default function CostReport() {
   // Drop picked columns the current type no longer defines (card-type
   // switch) — mirrors the removed aggregateOptions pruning effect.
   useEffect(() => {
-    setExtraColumns((prev) =>
-      prev.filter((key) => allFields.some((f) => f.key === key)),
-    );
-  }, [allFields]);
+    setExtraColumns((prev) => {
+      const next = prev.filter((key) => allFields.some((f) => f.key === key));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [allFields, extraColumns]);
 
   // Auto-select cost field when card type changes — only when the current one
   // is not on the type, so a restored field the type does carry is kept.
@@ -423,10 +482,12 @@ export default function CostReport() {
   // order, so on mount this effect's pick (made from the starting type's
   // fields) is queued first and the restored type + field overwrite it.
   useEffect(() => {
-    if (costFields.length > 0 && !costFields.some((f) => f.key === costField)) {
-      setCostField(costFields[0].key);
+    // A cost-item type's choices are incomplete until the catalogue is in: do not reset a restored item.
+    if (catalogue === undefined && typeKeys.length > 0 && allCostItemTypes) return;
+    if (costChoices.length > 0 && !costChoices.some((f) => f.key === costField)) {
+      setCostField(costChoices[0].key);
     }
-  }, [costFields]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [costChoices, catalogue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A selection the user may not read (a saved combined option whose IT
   // Component is hidden, an Initiative they cannot see) falls back.
@@ -690,6 +751,23 @@ export default function CostReport() {
     [effectiveGroupBy, groupableFields, t],
   );
 
+  // The Sankey view loads no treemap items: its scoped card nodes (with the group each hangs under)
+  // stand in for them, so group order, fold and colours are read off the same numbers in every view.
+  const sankeyCards = useMemo<CostItem[]>(() => {
+    if (!sankeyData) return [];
+    const groupOf = new Map<number, string>();
+    for (const l of sankeyData.links) {
+      const src = sankeyData.nodes[l.source];
+      if (src?.type === "Group") groupOf.set(l.target, src.id.replace(/^group:/, ""));
+    }
+    return sankeyData.nodes.flatMap((n, i) =>
+      n.type === "CostItem" || n.type === "Group" || (scope.closure && !scope.closure.has(n.id))
+        ? []
+        : [{ id: n.id, name: n.name, type: n.type, cost: n.cost ?? 0, group: groupOf.get(i) }],
+    );
+  }, [sankeyData, scope.closure]);
+  const colorItems = rawItems ? items : sankeyCards;
+
   const groups = useMemo(() => {
     if (!effectiveGroupBy) return null;
     // Keyed by the raw value: two raw values may share a label.
@@ -697,7 +775,7 @@ export default function CostReport() {
       string,
       { key: string; label: string; items: CostItem[]; cost: number }
     >();
-    for (const item of items) {
+    for (const item of colorItems) {
       const key = item.group ?? OTHER_GROUP;
       const g = map.get(key) || { key, label: groupLabel(key), items: [], cost: 0 };
       g.items.push(item);
@@ -705,7 +783,39 @@ export default function CostReport() {
       map.set(key, g);
     }
     return [...map.values()].sort((a, b) => b.cost - a.cost);
-  }, [items, effectiveGroupBy, groupLabel]);
+  }, [colorItems, effectiveGroupBy, groupLabel]);
+
+  // The one colour assignment of the page: treemap, Sankey and table all read it. Groups take their
+  // hue by scoped size, beyond the 8th they fold into Others, and a drill never changes it.
+  const colorPlan = useMemo(() => {
+    const cardColors = new Map<string, string>();
+    if (!groups) {
+      for (const it of colorItems) cardColors.set(it.id, cardColor(it.name, chartTheme.categorical));
+      return { cardColors, groupHues: new Map<string, string>(), groups: [], foldedKeys: new Set<string>() };
+    }
+    const { groups: coloured, foldedKeys } = assignGroupColors(groups, {
+      categorical: chartTheme.categorical,
+      other: CHART_OTHER[chartTheme.mode],
+      unspecified: COST_UNSPECIFIED[chartTheme.mode],
+      unspecifiedKey: OTHER_GROUP,
+    });
+    for (const g of coloured) {
+      const ranked = [...g.items].sort((a, b) => b.cost - a.cost);
+      ranked.forEach((it, i) => cardColors.set(it.id, memberShade(g.hue, i, ranked.length)));
+    }
+    const groupHues = new Map(coloured.map((g) => [g.key, g.hue]));
+    return { cardColors, groupHues, groups: coloured, foldedKeys };
+  }, [groups, colorItems, chartTheme.categorical, chartTheme.mode]);
+  const { foldedKeys } = colorPlan;
+  const groupDisplayLabel = (key: string, label: string) =>
+    key === OTHERS_KEY ? t("cost.othersCount", { count: foldedKeys.size }) : label;
+  const typeLabelOf = useCallback(
+    (key?: string) => {
+      const tp = key ? types.find((x) => x.key === key) : undefined;
+      return tp ? typeLabel(tp) : undefined;
+    },
+    [types, typeLabel],
+  );
 
   // A cost item's label: the catalogue's (the report sends it, archived items
   // included), else the schema field's. Undefined when neither knows the key.
@@ -715,7 +825,98 @@ export default function CostReport() {
       costFields.find((f) => f.key === key)?.label,
     [itemLabels, costFields, fieldLabel],
   );
-  const trendLabelOf = useCallback((key: string) => knownItemLabel(key) ?? key, [knownItemLabel]);
+  const trendLabelOf = useCallback(
+    (key: string) => {
+      const known = knownItemLabel(key);
+      if (known) return known;
+      const item = Array.isArray(catalogue) ? catalogue.find((c) => c.key === key) : undefined;
+      return item ? fieldLabel({ key, label: item.label, translations: item.translations }) : key;
+    },
+    [knownItemLabel, catalogue, fieldLabel],
+  );
+  // A cost-item type stacks the catalogue's items (archived included) in sort order, so the trend
+  // also renders in the Sankey view, where the treemap `components` are not loaded.
+  const trendComponents = useMemo(
+    () =>
+      allCostItemTypes
+        ? costField === "costTotalAnnual"
+          ? (sortedCatalogue?.map((c) => c.key) ?? [])
+          : [costField]
+        : components,
+    [sortedCatalogue, allCostItemTypes, costField, components],
+  );
+  const [drill, setDrill] = useState<Drill>({});
+  // A drill names ids that exist only under the current selection.
+  useEffect(() => {
+    setDrill((d) => (d.group === undefined && d.cardId === undefined ? d : {}));
+  }, [cardTypeKey, costField, effectiveGroupBy, fiscalYearParam, scopeIds]);
+  // The table's item columns and a drilled card need the per-item breakdown; no costs.view, no request.
+  const { breakdown } = useCostBreakdown({
+    enabled:
+      canViewCostsGlobally && (view === "table" || (view === "chart" && drill.cardId !== undefined)),
+    typeParam: typeParam(cardTypeKey),
+    fiscalYear: fiscalYearParam,
+  });
+  // A drilled card: one tile per cost item (catalogue order), the first 8 coloured, the rest merged.
+  const cardItemTiles = useMemo<CostTreemapItem[] | null>(() => {
+    if (drill.cardId === undefined || !breakdown) return null;
+    const b = breakdown.get(drill.cardId);
+    if (!b) return [];
+    const has = (k: string) => (b.items[k] ?? 0) > 0;
+    const keys = [
+      ...trendComponents.filter(has),
+      ...Object.keys(b.items).filter((k) => !trendComponents.includes(k) && k !== OTHER_GROUP && has(k)),
+      ...(has(OTHER_GROUP) ? [OTHER_GROUP] : []),
+    ];
+    const tiles: CostTreemapItem[] = keys.slice(0, MAX_GROUP_HUES).map((k, i) => ({
+      name: k === OTHER_GROUP ? t("cost.otherCostItem") : trendLabelOf(k),
+      cost: b.items[k],
+      index: i,
+      color: chartTheme.categorical[i],
+    }));
+    const rest = keys.slice(MAX_GROUP_HUES);
+    if (rest.length > 0)
+      tiles.push({
+        name: t("cost.otherItems"),
+        cost: rest.reduce((sum, k) => sum + b.items[k], 0),
+        index: MAX_GROUP_HUES,
+        color: CHART_OTHER[chartTheme.mode],
+      });
+    return tiles;
+  }, [drill.cardId, breakdown, trendComponents, trendLabelOf, t, chartTheme.categorical, chartTheme.mode]);
+  const trendSelection = useMemo<TrendSelection | undefined>(() => {
+    if (drill.cardId !== undefined) return { kind: "card", id: drill.cardId };
+    if (drill.group === undefined) return undefined;
+    return { kind: "group", keys: drill.group === OTHERS_KEY ? [...foldedKeys] : [drill.group] };
+  }, [drill, foldedKeys]);
+  const crumbs = useMemo(
+    () =>
+      crumbsOf(drill, {
+        root: t("cost.breadcrumbRoot"),
+        group: (k) => (k === OTHERS_KEY ? t("cost.others") : groupLabel(k)),
+        card: (id) => colorItems.find((i) => i.id === id)?.name ?? id,
+      }),
+    [drill, t, groupLabel, colorItems],
+  );
+  const drillBar = (
+    <CostDrillBar crumbs={crumbs} onSelect={setDrill} hint={t("cost.drillHint")} />
+  );
+  const trendChart =
+    showForecast && trendComponents.length > 0 ? (
+      <Box sx={{ mb: 3 }}>
+        <CostTrendChart
+          typeParam={typeParam(cardTypeKey)}
+          costField={costField}
+          components={trendComponents}
+          labelOf={trendLabelOf}
+          years={trendYears}
+          currentFiscalYear={currentFiscalYear}
+          groupBy={effectiveGroupBy}
+          selection={trendSelection}
+          scopeIds={scope.closure}
+        />
+      </Box>
+    ) : null;
   // A cost-item node: the item's label, or "Other costs" for what the
   // components leave of a card's total.
   const itemLabel = useCallback(
@@ -724,23 +925,28 @@ export default function CostReport() {
     [knownItemLabel, t],
   );
 
-  // Scope applies to the Sankey here: hide the cards outside it, then every
-  // cost-item and group node left without a card below it.
+  // Scope and drill apply to the Sankey here: hide the cards outside them, then every cost-item and
+  // group node left without a card below it; then the folded groups merge into one Others node.
+  const drillActive = drill.group !== undefined || drill.cardId !== undefined;
   const sankeyView = useMemo(() => {
     if (!sankeyData) return null;
     const closure = scope.closure;
+    const recompute = !!closure || drillActive;
+    const drillIds = drillActive ? new Set(applyDrill(sankeyCards, drill, foldedKeys).map((c) => c.id)) : null;
     const isCard = (n: SankeyNode) => n.type !== "CostItem" && n.type !== "Group";
-    const keep = sankeyData.nodes.map((n) => !isCard(n) || !closure || closure.has(n.id));
-    // Scoped: an item -> group flow is the sum of the kept cards' own values for that item.
+    const keep = sankeyData.nodes.map(
+      (n) => !isCard(n) || ((!closure || closure.has(n.id)) && (!drillIds || drillIds.has(n.id))),
+    );
+    // Recomputed: an item -> group flow is the sum of the kept cards' own values for that item.
     const flowValue = (l: SankeyLink) => {
-      if (!closure || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
+      if (!recompute || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
       const item = sankeyData.nodes[l.source].id.replace(/^item:/, "");
       return sankeyData.links
         .filter((c) => c.source === l.target && keep[c.target])
         .reduce((n, c) => n + (sankeyData.nodes[c.target].costs?.[item] ?? 0), 0);
     };
     const values = sankeyData.links.map(flowValue);
-    if (closure) {
+    if (recompute) {
       // item -> group -> card: the first pass drops groups, the second items.
       for (let pass = 0; pass < 2; pass++)
         sankeyData.nodes.forEach((n, i) => {
@@ -750,26 +956,47 @@ export default function CostReport() {
             );
         });
     }
+    const rawGroup = (n: SankeyNode) => n.id.replace(/^group:/, "");
+    const isFolded = (n: SankeyNode) => n.type === "Group" && foldedKeys.has(rawGroup(n));
     const index = new Map<number, number>();
     const nodes: SankeyNode[] = [];
+    let othersAt = -1;
     sankeyData.nodes.forEach((n, i) => {
       if (!keep[i]) return;
+      if (isFolded(n)) {
+        if (othersAt < 0) {
+          othersAt = nodes.length;
+          nodes.push({
+            id: `group:${OTHERS_KEY}`,
+            name: t("cost.others"),
+            type: "Group",
+            color: colorPlan.groupHues.get(OTHERS_KEY),
+          });
+        }
+        index.set(i, othersAt);
+        return;
+      }
       index.set(i, nodes.length);
       nodes.push(
         n.type === "Group"
-          ? { ...n, name: groupLabel(n.id.replace(/^group:/, "")) }
+          ? { ...n, name: groupLabel(rawGroup(n)), color: colorPlan.groupHues.get(rawGroup(n)) }
           : n.type === "CostItem"
             ? { ...n, name: itemLabel(n.id.replace(/^item:/, ""), n.name) }
-            : n,
+            : { ...n, color: colorPlan.cardColors.get(n.id), typeLabel: typeLabelOf(n.type) },
       );
     });
-    const links = sankeyData.links.flatMap((l, k) =>
-      keep[l.source] && keep[l.target] && (!closure || values[k] > 0)
-        ? [{ ...l, value: values[k], source: index.get(l.source)!, target: index.get(l.target)! }]
-        : [],
-    );
-    return { ...sankeyData, nodes, links };
-  }, [sankeyData, scope.closure, groupLabel, itemLabel]);
+    // Both ends are remapped, so the flows into and out of Others add up per (source, target).
+    const merged = new Map<string, SankeyLink>();
+    sankeyData.links.forEach((l, k) => {
+      if (!keep[l.source] || !keep[l.target] || (recompute && values[k] <= 0)) return;
+      const source = index.get(l.source)!;
+      const target = index.get(l.target)!;
+      const key = `${source}>${target}`;
+      const prev = merged.get(key);
+      merged.set(key, { source, target, value: (prev?.value ?? 0) + values[k] });
+    });
+    return { ...sankeyData, nodes, links: [...merged.values()] };
+  }, [sankeyData, sankeyCards, scope.closure, drill, drillActive, foldedKeys, colorPlan, groupLabel, itemLabel, typeLabelOf, t]);
 
   const printParams = useMemo(() => {
     const params: { label: string; value: string }[] = [];
@@ -783,8 +1010,9 @@ export default function CostReport() {
         value: costFiscalYearName(fiscalYear.year, currentFiscalYear),
       });
     }
-    if (costFields.length > 1) {
-      const cfLabel = knownItemLabel(costField) || costField;
+    if (costChoices.length > 1) {
+      const cfLabel =
+        costChoices.find((f) => f.key === costField)?.label || knownItemLabel(costField) || costField;
       params.push({ label: t("cost.costField"), value: cfLabel });
     }
     if (effectiveGroupBy) {
@@ -806,7 +1034,7 @@ export default function CostReport() {
     cardTypeKey,
     typeOptions,
     costField,
-    costFields,
+    costChoices,
     knownItemLabel,
     effectiveGroupBy,
     groupOptions,
@@ -817,8 +1045,39 @@ export default function CostReport() {
     t,
   ]);
 
-  // A tile hands back the datum it was built from; a group frame has no card id and is inert.
-  const handleTileClick = useCallback((p: EChartClickParams) => {
+  // A tile hands back the datum it was built from. Right click drills (a card tile into the card, a
+  // group frame into the group); a cost-item tile has neither id nor key and is inert.
+  const handleTileDrill = useCallback(
+    (p: EChartClickParams) => {
+      const d = p.data as { id?: string; key?: string } | undefined;
+      if (d?.id) {
+        const raw = effectiveGroupBy ? items.find((i) => i.id === d.id)?.group : undefined;
+        setDrill({ ...(raw !== undefined && { group: drillGroupKey(raw, foldedKeys) }), cardId: d.id });
+      } else if (d?.key) setDrill({ group: d.key });
+    },
+    [items, effectiveGroupBy, foldedKeys],
+  );
+  // Sankey nodes are named by id: `group:<key>`, `item:<key>`, or a card's id. Items and edges are inert.
+  const handleNodeDrill = useCallback(
+    (p: EChartClickParams) => {
+      const name = p.name;
+      if (p.dataType === "edge" || !name || name.startsWith("item:")) return;
+      if (name.startsWith("group:")) {
+        setDrill({ group: drillGroupKey(name.slice("group:".length), foldedKeys) });
+        return;
+      }
+      const raw = effectiveGroupBy ? sankeyCards.find((c) => c.id === name)?.group : undefined;
+      setDrill({ ...(raw !== undefined && { group: drillGroupKey(raw, foldedKeys) }), cardId: name });
+    },
+    [sankeyCards, effectiveGroupBy, foldedKeys],
+  );
+  const handleNodeOpen = useCallback((p: EChartClickParams) => {
+    const name = p.name;
+    if (p.dataType === "edge" || !name || name.startsWith("item:") || name.startsWith("group:")) return;
+    setSidePanelCardId(name);
+  }, []);
+  // Left click opens the card in the side panel; a group frame does nothing.
+  const handleTileOpen = useCallback((p: EChartClickParams) => {
     const d = p.data as { id?: string } | undefined;
     if (d?.id) setSidePanelCardId(d.id);
   }, []);
@@ -865,13 +1124,8 @@ export default function CostReport() {
       </Box>
     );
 
-  // The Sankey view loads no treemap items: its tiles read the card nodes it keeps.
-  const summaryCards: { name: string; cost: number }[] =
-    view === "sankey"
-      ? (sankeyView?.nodes ?? [])
-          .filter((n) => n.cost !== undefined)
-          .map((n) => ({ name: n.name, cost: n.cost! }))
-      : items;
+  // Every view reads the scoped cards; the metric strip does not follow the drill.
+  const summaryCards = colorItems;
   const summaryTotal = summaryCards.reduce((sum, c) => sum + c.cost, 0);
   const topDriver = summaryCards.reduce<{ name: string; cost: number } | null>(
     (top, c) => (!top || c.cost > top.cost ? c : top),
@@ -887,26 +1141,132 @@ export default function CostReport() {
         : baseline && baseline > 0
           ? (d.cost - baseline) / baseline
           : null;
-    return { id: d.id, name: d.name, cost: d.cost, index: i, deltaPct };
+    return {
+      id: d.id,
+      name: d.name,
+      cost: d.cost,
+      index: i,
+      deltaPct,
+      color: colorPlan.cardColors.get(d.id) ?? cardColor(d.name, chartTheme.categorical),
+      typeLabel: typeLabelOf(d.type),
+    };
   };
-  // Grouped: each group is a frame holding its cards, which take the frame's colour.
-  const treemapGroups: CostTreemapGroup[] | undefined = groups?.map((g, gi) => ({
-    name: g.label,
-    cost: g.cost,
-    index: gi,
-    items: [...g.items].sort((x, y) => y.cost - x.cost).map((d) => treemapLeaf(d, gi)),
-  }));
-  const treemapItems = [...items].sort((x, y) => y.cost - x.cost).map(treemapLeaf);
+  const cardDrilled = drill.cardId !== undefined;
+  const groupDrilled = drill.group !== undefined && !cardDrilled;
+  // Grouped: each group is a frame holding its cards; the folded groups share one Others frame.
+  const treemapGroups: CostTreemapGroup[] | undefined =
+    groups && !groupDrilled && !cardDrilled
+      ? colorPlan.groups.map((g, gi) => ({
+          key: g.key,
+          name: groupDisplayLabel(g.key, g.label),
+          cost: g.cost,
+          index: gi,
+          color: g.hue,
+          items: [...g.items].sort((x, y) => y.cost - x.cost).map((d) => treemapLeaf(d, gi)),
+        }))
+      : undefined;
+  const treemapItems =
+    cardItemTiles ??
+    [...(groupDrilled ? applyDrill(items, drill, foldedKeys) : items)]
+      .sort((x, y) => y.cost - x.cost)
+      .map(treemapLeaf);
+  const treemapTotal = cardDrilled ? (breakdown?.get(drill.cardId!)?.total ?? 0) : total;
+  const legend = (
+    <CostLegend
+      entries={colorPlan.groups.map((g) => ({
+        key: g.key,
+        label: groupDisplayLabel(g.key, g.label),
+        color: g.hue,
+      }))}
+    />
+  );
 
+  // One column per catalogue cost item (archived included) and the TCO; before the catalogue is in,
+  // the single column of the selected cost.
+  const TCO_KEY = "costTotalAnnual";
+  const tableCols =
+    sortedCatalogue && allCostItemTypes
+      ? [
+          ...sortedCatalogue.map((c) => ({ key: c.key, label: trendLabelOf(c.key) })),
+          { key: TCO_KEY, label: t("cost.tco") },
+        ]
+      : [{ key: costField, label: t("cost.cost") }];
+  // A cell: from the breakdown when it knows the card; the selected cost falls back to the row's own
+  // figure; anything else is unknown (undefined, printed as a dash).
+  const cellValue = (d: CostItem, key: string): number | undefined => {
+    const b = breakdown?.get(d.id);
+    if (b) return key === TCO_KEY ? b.total : (b.items[key] ?? 0);
+    return key === costField ? d.cost : undefined;
+  };
+  // "cost" is what a saved report called the selected cost's column.
+  const activeSort = sortK === "cost" ? costField : sortK;
   const sort = (k: string) => {
-    setSortD(sortK === k && sortD === "asc" ? "desc" : "asc");
+    setSortD(activeSort === k && sortD === "asc" ? "desc" : "asc");
     setSortK(k);
   };
-  const sorted = [...items].sort((a, b) => {
+  const byColumn = (a: CostItem, b: CostItem) => {
     const d = sortD === "asc" ? 1 : -1;
-    if (sortK === "cost") return (a.cost - b.cost) * d;
-    return a.name.localeCompare(b.name) * d;
-  });
+    if (activeSort === "name") return a.name.localeCompare(b.name) * d;
+    return ((cellValue(a, activeSort) ?? 0) - (cellValue(b, activeSort) ?? 0)) * d;
+  };
+  const tableItems = cardDrilled
+    ? items.filter((i) => i.id === drill.cardId)
+    : groupDrilled
+      ? applyDrill(items, drill, foldedKeys)
+      : items;
+  const tableGroups =
+    groups && !cardDrilled
+      ? colorPlan.groups.filter((g) => !groupDrilled || g.key === drill.group)
+      : null;
+  const sorted = [...tableItems].sort(byColumn);
+  const sumCol = (members: CostItem[], key: string) =>
+    members.reduce((sum, m) => sum + (cellValue(m, key) ?? 0), 0);
+  const shownTotal = tableItems.reduce((sum, i) => sum + i.cost, 0);
+  const pctOfTotal = (v: number) => (total > 0 ? `${((v / total) * 100).toFixed(1)}%` : "—");
+  const typeBadge = (d: CostItem) => {
+    const tp = types.find((x) => x.key === d.type);
+    return tp ? (
+      <Typography
+        component="span"
+        variant="caption"
+        color="text.secondary"
+        sx={{ ml: 1, display: "inline-flex", alignItems: "center", gap: 0.5, verticalAlign: "middle" }}
+      >
+        <MaterialSymbol icon={tp.icon} size={14} />
+        {typeLabel(tp)}
+      </Typography>
+    ) : null;
+  };
+  const cardRow = (d: CostItem, indent: boolean) => (
+    <TableRow
+      key={d.id}
+      hover
+      sx={{ cursor: "pointer" }}
+      onClick={() => setSidePanelCardId(d.id)}
+      onContextMenu={(e: React.MouseEvent) => {
+        e.preventDefault();
+        handleTileDrill({ data: { id: d.id } });
+      }}
+    >
+      <TableCell sx={{ fontWeight: 500, ...(indent && { pl: 4 }) }}>
+        <span data-testid="cost-row-name">{d.name}</span>
+        {typeBadge(d)}
+      </TableCell>
+      {tableCols.map((c) => {
+        const v = cellValue(d, c.key);
+        return (
+          <TableCell key={c.key} align="right" sx={c.key === costField ? { fontWeight: 700 } : undefined}>
+            {v === undefined ? EMPTY_VALUE : fmt.format(v)}
+          </TableCell>
+        );
+      })}
+      <TableCell align="right">
+        {pctOfTotal(d.cost)}
+      </TableCell>
+      {fiscalYearParam != null && yoyCell(d)}
+      {extraCell(d)}
+    </TableRow>
+  );
 
   const yesNoLabels = {
     yes: t("common:labels.yes"),
@@ -985,16 +1345,21 @@ export default function CostReport() {
               tooltip={t("cost.scopeTooltip")}
             />
           )}
-          {costFields.length > 1 && (
+          {costChoices.length > 1 && (
             <TextField
               select
               size="small"
               label={t("cost.costField")}
               value={costField}
-              onChange={(e) => setCostField(e.target.value)}
+              onChange={(e) => {
+                setCostField(e.target.value);
+                // The table sorts by the chosen cost, largest first.
+                setSortK(e.target.value);
+                setSortD("desc");
+              }}
               sx={{ minWidth: 160 }}
             >
-              {costFields.map((f) => (
+              {costChoices.map((f) => (
                 <MenuItem key={f.key} value={f.key}>
                   {f.label}
                 </MenuItem>
@@ -1123,6 +1488,8 @@ export default function CostReport() {
         )}
       </Box>
 
+      {trendChart}
+
       {view === "chart" ? (
         items.length === 0 ? (
           <Box sx={{ py: 8, textAlign: "center" }}>
@@ -1132,31 +1499,28 @@ export default function CostReport() {
           </Box>
         ) : (
           <>
-            {showForecast && components.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <CostTrendChart
-                  typeParam={typeParam(cardTypeKey)}
-                  costField={costField}
-                  components={components}
-                  labelOf={trendLabelOf}
-                  years={trendYears}
-                  currentFiscalYear={currentFiscalYear}
-                />
+            {drillBar}
+            {cardDrilled && cardItemTiles === null ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+                <CircularProgress />
               </Box>
+            ) : (
+              <FullscreenPanel label={t("cost.fullscreen")}>
+                {(isFullscreen) => (
+                  <CostTreemapPanel
+                    items={treemapItems}
+                    groups={treemapGroups}
+                    total={treemapTotal}
+                    fullscreen={isFullscreen}
+                    chrome={chartTheme}
+                    fmt={fmt}
+                    onTileOpen={handleTileOpen}
+                    onTileDrill={handleTileDrill}
+                  />
+                )}
+              </FullscreenPanel>
             )}
-            <FullscreenPanel label={t("cost.fullscreen")}>
-              {(isFullscreen) => (
-                <CostTreemapPanel
-                  items={treemapItems}
-                  groups={treemapGroups}
-                  total={total}
-                  fullscreen={isFullscreen}
-                  chrome={chartTheme}
-                  fmt={fmt}
-                  onTileClick={handleTileClick}
-                />
-              )}
-            </FullscreenPanel>
+            {legend}
           </>
         )
       ) : view === "sankey" ? (
@@ -1167,41 +1531,51 @@ export default function CostReport() {
             </Typography>
           </Box>
         ) : (
-          <FullscreenPanel label={t("cost.fullscreen")}>
-            {(isFullscreen) => (
-              <CostSankeyPanel
-                nodes={sankeyView.nodes}
-                links={sankeyView.links}
-                fullscreen={isFullscreen}
-                chrome={chartTheme}
-                fmt={fmt}
-              />
-            )}
-          </FullscreenPanel>
+          <>
+            {drillBar}
+            <FullscreenPanel label={t("cost.fullscreen")}>
+              {(isFullscreen) => (
+                <CostSankeyPanel
+                  nodes={sankeyView.nodes}
+                  links={sankeyView.links}
+                  fullscreen={isFullscreen}
+                  chrome={chartTheme}
+                  fmt={fmt}
+                  onNodeOpen={handleNodeOpen}
+                  onNodeDrill={handleNodeDrill}
+                />
+              )}
+            </FullscreenPanel>
+            {legend}
+          </>
         )
       ) : (
+        <>
+        {drillBar}
         <Paper variant="outlined" sx={{ overflow: "auto" }}>
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
                 <TableCell>
                   <TableSortLabel
-                    active={sortK === "name"}
-                    direction={sortK === "name" ? sortD : "asc"}
+                    active={activeSort === "name"}
+                    direction={activeSort === "name" ? sortD : "asc"}
                     onClick={() => sort("name")}
                   >
                     {t("common:labels.name")}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell align="right">
-                  <TableSortLabel
-                    active={sortK === "cost"}
-                    direction={sortK === "cost" ? sortD : "asc"}
-                    onClick={() => sort("cost")}
-                  >
-                    {t("cost.cost")}
-                  </TableSortLabel>
-                </TableCell>
+                {tableCols.map((c) => (
+                  <TableCell key={c.key} align="right">
+                    <TableSortLabel
+                      active={activeSort === c.key}
+                      direction={activeSort === c.key ? sortD : "asc"}
+                      onClick={() => sort(c.key)}
+                    >
+                      {c.label}
+                    </TableSortLabel>
+                  </TableCell>
+                ))}
                 <TableCell align="right">{t("cost.percentOfTotal")}</TableCell>
                 {fiscalYearParam != null && (
                   <TableCell align="right">{t("cost.yoyPercent")}</TableCell>
@@ -1214,125 +1588,76 @@ export default function CostReport() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {groups
-                ? groups.map((g) => {
-                    const groupSorted = [...g.items].sort((a, b) => {
-                      const d = sortD === "asc" ? 1 : -1;
-                      if (sortK === "cost") return (a.cost - b.cost) * d;
-                      return a.name.localeCompare(b.name) * d;
-                    });
-                    return [
-                      <TableRow
-                        key={`grp-${g.key}`}
-                        sx={{ bgcolor: "action.hover" }}
-                      >
-                        <TableCell
-                          sx={{ fontWeight: 700, fontSize: "0.85rem" }}
-                        >
-                          {g.label}
-                          <Typography
-                            component="span"
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ ml: 1 }}
-                          >
-                            ({g.items.length})
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 700 }}>
-                          {fmt.format(g.cost)}
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontWeight: 600, color: "text.secondary" }}
-                        >
-                          {total > 0
-                            ? `${((g.cost / total) * 100).toFixed(1)}%`
-                            : "—"}
-                        </TableCell>
-                        {fiscalYearParam != null && (
-                          <TableCell align="right" sx={{ fontWeight: 700 }} />
-                        )}
-                        {extraColumns.map((key) => (
-                          <TableCell
-                            key={key}
-                            align="right"
-                            sx={{ fontWeight: 700 }}
-                          >
-                            {fieldMeta(key)?.type === "cost"
-                              ? fmt.format(
-                                  g.items.reduce(
-                                    (s, it) =>
-                                      s +
-                                      costValue(
-                                        (
-                                          it.attributes as
-                                            | Record<string, unknown>
-                                            | undefined
-                                        )?.[key],
-                                      ),
-                                    0,
-                                  ),
-                                )
-                              : null}
-                          </TableCell>
-                        ))}
-                      </TableRow>,
-                      ...groupSorted.map((d) => (
-                        <TableRow
-                          key={d.id}
-                          hover
-                          sx={{ cursor: "pointer" }}
-                          onClick={() => setSidePanelCardId(d.id)}
-                        >
-                          <TableCell sx={{ fontWeight: 500, pl: 4 }}>
-                            {d.name}
-                          </TableCell>
-                          <TableCell align="right">
-                            {fmt.format(d.cost)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {total > 0
-                              ? `${((d.cost / total) * 100).toFixed(1)}%`
-                              : "—"}
-                          </TableCell>
-                          {fiscalYearParam != null && yoyCell(d)}
-                          {extraCell(d)}
-                        </TableRow>
-                      )),
-                    ];
-                  })
-                : sorted.map((d) => (
+              {tableGroups
+                ? tableGroups.map((g) => [
                     <TableRow
-                      key={d.id}
+                      key={`grp-${g.key}`}
                       hover
-                      sx={{ cursor: "pointer" }}
-                      onClick={() => setSidePanelCardId(d.id)}
+                      sx={{ bgcolor: "action.hover", cursor: "pointer" }}
+                      onContextMenu={(e: React.MouseEvent) => {
+                        e.preventDefault();
+                        setDrill({ group: g.key });
+                      }}
                     >
-                      <TableCell sx={{ fontWeight: 500 }}>{d.name}</TableCell>
-                      <TableCell align="right">{fmt.format(d.cost)}</TableCell>
-                      <TableCell align="right">
-                        {total > 0
-                          ? `${((d.cost / total) * 100).toFixed(1)}%`
-                          : "—"}
+                      <TableCell sx={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                        <Box
+                          component="span"
+                          data-testid={`cost-group-swatch-${g.key}`}
+                          sx={{
+                            display: "inline-block",
+                            width: 12,
+                            height: 12,
+                            borderRadius: 0.5,
+                            mr: 1,
+                            verticalAlign: "middle",
+                            bgcolor: g.hue,
+                          }}
+                        />
+                        {groupDisplayLabel(g.key, g.label)}
+                        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                          ({g.items.length})
+                        </Typography>
                       </TableCell>
-                      {fiscalYearParam != null && yoyCell(d)}
-                      {extraCell(d)}
-                    </TableRow>
-                  ))}
+                      {tableCols.map((c) => (
+                        <TableCell key={c.key} align="right" sx={{ fontWeight: 700 }}>
+                          {fmt.format(sumCol(g.items, c.key))}
+                        </TableCell>
+                      ))}
+                      <TableCell align="right" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                        {pctOfTotal(g.cost)}
+                      </TableCell>
+                      {fiscalYearParam != null && <TableCell align="right" sx={{ fontWeight: 700 }} />}
+                      {extraColumns.map((key) => (
+                        <TableCell key={key} align="right" sx={{ fontWeight: 700 }}>
+                          {fieldMeta(key)?.type === "cost"
+                            ? fmt.format(
+                                g.items.reduce(
+                                  (sum, it) =>
+                                    sum +
+                                    costValue(
+                                      (it.attributes as Record<string, unknown> | undefined)?.[key],
+                                    ),
+                                  0,
+                                ),
+                              )
+                            : null}
+                        </TableCell>
+                      ))}
+                    </TableRow>,
+                    ...[...g.items].sort(byColumn).map((d) => cardRow(d, true)),
+                  ])
+                : sorted.map((d) => cardRow(d, false))}
               <TableRow sx={{ bgcolor: "action.selected" }}>
-                <TableCell sx={{ fontWeight: 700 }}>
-                  {t("cost.total")}
-                </TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t("cost.total")}</TableCell>
+                {tableCols.map((c) => (
+                  <TableCell key={c.key} align="right" sx={{ fontWeight: 700 }}>
+                    {fmt.format(sumCol(tableItems, c.key))}
+                  </TableCell>
+                ))}
                 <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  {fmt.format(total)}
+                  {drill.group === undefined && !cardDrilled ? "100%" : pctOfTotal(shownTotal)}
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  100%
-                </TableCell>
-                {fiscalYearParam != null && (
-                  <TableCell align="right" sx={{ fontWeight: 700 }} />
-                )}
+                {fiscalYearParam != null && <TableCell align="right" sx={{ fontWeight: 700 }} />}
                 {extraColumns.map((key) => (
                   <TableCell key={key} align="right" />
                 ))}
@@ -1340,6 +1665,7 @@ export default function CostReport() {
             </TableBody>
           </Table>
         </Paper>
+        </>
       )}
       <CardDetailSidePanel
         cardId={sidePanelCardId}

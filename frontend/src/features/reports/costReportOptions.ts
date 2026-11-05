@@ -1,5 +1,14 @@
 import { pickGroupableFields } from "@/lib/fieldFacets";
-import type { FieldDef, RelationType } from "@/types";
+import { isCostItemType } from "@/lib/costItems";
+import type { BuiltInFieldType, CostItemType, FieldDef, RelationType } from "@/types";
+
+const BUILT_IN_FIELD_TYPES = new Set<string>([
+  "text", "multiline_text", "number", "cost", "boolean", "date",
+  "single_select", "multiple_select", "url", "percentage",
+] satisfies BuiltInFieldType[]);
+
+/** A scalar field type; extension types (`ext.*`) hold objects a table cell cannot show. */
+export const isBuiltInFieldType = (type: string): boolean => BUILT_IN_FIELD_TYPES.has(type);
 
 /** The selector entry that reports Applications and IT Components together. */
 export const COMBINED_KEY = "Application+ITComponent";
@@ -43,3 +52,18 @@ export function relationGroupOptions(
     .map((rt) => ({ value: `rel:${rt.key}`, label: label(rt) }));
 }
 
+
+/** The cost-type selector: TCO plus one entry per catalogue item (already in sort order) for Application / IT Component. */
+export function costFieldChoices(
+  typeKeys: string[],
+  catalogue: CostItemType[],
+  schemaFields: { key: string; label: string }[],
+  tcoLabel: string,
+  labelOf: (i: CostItemType) => string,
+): { key: string; label: string }[] {
+  if (typeKeys.length === 0 || !typeKeys.every(isCostItemType)) return schemaFields;
+  return [
+    { key: "costTotalAnnual", label: tcoLabel },
+    ...catalogue.map((i) => ({ key: i.key, label: labelOf(i) })),
+  ];
+}

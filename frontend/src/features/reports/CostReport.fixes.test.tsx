@@ -110,6 +110,7 @@ function renderCost() {
 
 beforeEach(() => {
   mockApi.reset();
+  mockApi.on("get", "/metamodel/cost-item-types", []);
   hookState.reset();
   hookState.auth.user = userWith("costs.view");
   saved.config = null;
@@ -123,8 +124,14 @@ beforeEach(() => {
   });
 });
 
+const CATALOGUE = [
+  { id: "1", key: "opex", label: "Opex", sort_order: 1, archived: false, translations: {} },
+  { id: "2", key: "runCost", label: "Run Cost", sort_order: 2, archived: false, translations: {} },
+];
+
 describe("CostReport restore", () => {
-  it("keeps a restored cost field of another type when the starting type lacks costTotalAnnual", async () => {
+  it("keeps a restored catalogue cost item of another type", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", CATALOGUE);
     withMetamodel([APP_WITHOUT_TOTAL, ITC_TYPE], []);
     saved.config = { cardTypeKey: "ITComponent", costField: "opex" };
     renderCost();
@@ -136,28 +143,17 @@ describe("CostReport restore", () => {
       }),
     );
     expect(
-      screen.getByRole("combobox", { name: /cost field/i }),
+      await screen.findByRole("combobox", { name: /cost field/i }),
     ).toHaveTextContent("Opex");
     const itcFields = treemapCalls()
       .filter((p) => p.get("type") === "ITComponent")
       .map((p) => p.get("cost_field"));
-    expect(itcFields).toEqual(["opex"]);
+    expect(itcFields[itcFields.length - 1]).toBe("opex");
   });
 
-  it("keeps a restored cost field of the starting type when it lacks costTotalAnnual", async () => {
-    const appTwo = makeCardType({
-      ...APP_WITHOUT_TOTAL,
-      fields_schema: [
-        ...APP_WITHOUT_TOTAL.fields_schema,
-        makeSection({
-          section: "Run",
-          fields: [
-            makeField({ key: "runCost", label: "Run Cost", type: "cost" }),
-          ],
-        }),
-      ],
-    });
-    withMetamodel([appTwo], []);
+  it("keeps a restored catalogue cost item of the starting type", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", CATALOGUE);
+    withMetamodel([APP_WITHOUT_TOTAL], []);
     saved.config = { costField: "runCost" };
     renderCost();
     await screen.findByTestId("treemap");
@@ -165,21 +161,21 @@ describe("CostReport restore", () => {
       expect(lastPersisted()).toMatchObject({ costField: "runCost" }),
     );
     expect(
-      screen.getByRole("combobox", { name: /cost field/i }),
+      await screen.findByRole("combobox", { name: /cost field/i }),
     ).toHaveTextContent("Run Cost");
     const fields = treemapCalls().map((p) => p.get("cost_field"));
     expect(fields[fields.length - 1]).toBe("runCost");
-    expect(fields).not.toContain("appCost");
   });
 
-  it("still picks the type's first cost field when nothing was restored", async () => {
+  it("picks TCO when nothing was restored", async () => {
+    mockApi.on("get", "/metamodel/cost-item-types", CATALOGUE);
     withMetamodel([APP_WITHOUT_TOTAL, ITC_TYPE], []);
     renderCost();
     await screen.findByTestId("treemap");
     await waitFor(() =>
-      expect(lastPersisted()).toMatchObject({ costField: "appCost" }),
+      expect(lastPersisted()).toMatchObject({ costField: "costTotalAnnual" }),
     );
     const fields = treemapCalls().map((p) => p.get("cost_field"));
-    expect(fields[fields.length - 1]).toBe("appCost");
+    expect(fields[fields.length - 1]).toBe("costTotalAnnual");
   });
 });

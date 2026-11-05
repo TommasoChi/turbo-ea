@@ -163,10 +163,18 @@ Il **Report Costi** fornisce un'analisi finanziaria del vostro panorama tecnolog
 - **Vista treemap** — Rettangoli annidati dimensionati per costo, con raggruppamento opzionale (es. per organizzazione o capability)
 - **Vista grafico a barre** — Confronto dei costi tra componenti
 - **Vista Sankey** — Lo stesso report disegnato come flusso di costo (vedi [Vista Sankey](#sankey-view))
-- **Tipo di scheda** — Scegliete il tipo di scheda su cui costruire il report: **Applicazione**, **Componente IT**, **Applicazione + Componente IT** (entrambi i tipi in un solo grafico, ogni scheda con il proprio costo) o **Iniziativa**. Le iniziative seguono le stesse regole dell'anno fiscale delle applicazioni.
-- **Campo di costo** — Scegliete quale campo di costo viene sommato. L'elenco mostra i campi di costo del tipo di scheda scelto; per Iniziativa offre **costBudget** (il predefinito) e **costActual**, che non vengono mai sommati. Per l'opzione combinata sono offerti solo i campi di costo presenti in entrambi i tipi.
+- **Tipo di scheda** — Scegliete il tipo di scheda su cui costruire il report: **Applicazione**, **Componente IT** o **Applicazione + Componente IT** (entrambi i tipi in un solo grafico, ogni scheda con il proprio costo). Le iniziative non fanno più parte del report dei costi.
+- **Tipo di costo** — Scegliete cosa viene sommato: **TCO** (il totale di tutte le voci di costo di ogni scheda) o una qualsiasi singola voce di costo del catalogo. Per l'opzione combinata sono offerti solo i tipi di costo presenti in entrambi i tipi.
 
-Tutte le viste condividono la stessa barra degli strumenti, gli stessi filtri, lo stesso anno fiscale e lo stesso campo di costo, quindi cambiare vista modifica solo il disegno.
+Tutte le viste condividono la stessa barra degli strumenti, gli stessi filtri, lo stesso anno fiscale e lo stesso tipo di costo, quindi cambiare vista modifica solo il disegno.
+
+**Grafico di tendenza** — L'andamento dei costi (l'anno corrente, i quattro precedenti e, se selezionato, la **Forecast**) è mostrato sopra il grafico in tutte e tre le viste, non solo nella treemap, e segue il tipo di costo selezionato.
+
+**Colori e legenda** — Ogni gruppo ha una propria tinta; all'interno di un gruppo, una tonalità più scura indica una scheda più costosa. Oltre agli otto gruppi più costosi, gli altri sono raccolti in un unico gruppo **Altri**, e le schede senza valore per il campo di raggruppamento vanno in **Non specificato**. La legenda accanto al grafico elenca i gruppi con i loro colori; il Sankey e la tabella usano gli stessi colori.
+
+**Drill-down** — Un **clic destro** su un gruppo o una scheda lo approfondisce: il grafico si restringe a quel gruppo (o scheda) e sopra compare un breadcrumb. Fate clic su **Indietro**, o su un qualsiasi segmento del breadcrumb, per salire di un livello. Approfondire **Altri** elenca i gruppi che vi sono stati raccolti. Un **clic sinistro** su una scheda ne apre invece il pannello laterale (un clic sinistro su un gruppo non fa nulla). Un suggerimento sopra il grafico ricorda entrambi i gesti.
+
+**Tabella** — Oltre alle colonne di raggruppamento e di attributi, la tabella ha una colonna per ogni voce di costo e una colonna **TCO**. L'ordinamento per il tipo di costo selezionato mette per prime le più costose. Le righe di intestazione dei gruppi e il totale a piè di tabella mostrano le somme per voce, e ogni intestazione di gruppo reca il campione del suo colore. Un badge con l'icona e il nome del tipo nella cella del nome distingue Applicazioni e Componenti IT nella vista combinata. Un clic destro su una riga la approfondisce; il clic apre la scheda.
 
 ### Raggruppa per
 
@@ -202,7 +210,7 @@ Un anno fiscale si chiama **FY** più le ultime due cifre dell'anno in cui **ter
 
 La regola vale per tutta la pagina — i totali, la treemap, la tabella, le aggregazioni per **Origine dei costi** e il drill-down — e l'anno fiscale selezionato compare nell'intestazione di stampa.
 
-Quando **Forecast** è l'anno selezionato, un **grafico storico** mostra il costo sull'anno corrente, i quattro precedenti e l'anno di previsione. Non è mostrato per nessun altro anno. Ogni barra è impilata, con un segmento per componente di costo: una elemento di costo per Applicazioni e Componenti IT, altrimenti un campo di costo (la legenda e il tooltip usano allora il nome tecnico del campo, ad esempio `softwareLicensingCost`).
+Quando **Forecast** è l'anno selezionato, il **grafico storico** mostra il costo sull'anno corrente, i quattro precedenti e l'anno di previsione. Ogni barra è impilata, con un segmento per componente di costo: una voce di costo per Applicazioni e Componenti IT, altrimenti un campo di costo (la legenda e il tooltip usano allora il nome tecnico del campo, ad esempio `softwareLicensingCost`).
 
 Un amministratore stabilisce il mese di inizio dell'anno fiscale in [Impostazioni → Generale](../admin/settings.md).
 

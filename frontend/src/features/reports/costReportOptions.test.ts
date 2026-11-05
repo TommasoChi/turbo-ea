@@ -6,8 +6,10 @@ import {
   commonCostFields,
   commonGroupableFields,
   relationGroupOptions,
+  costFieldChoices,
+  isBuiltInFieldType,
 } from "./costReportOptions";
-import type { FieldDef, RelationType } from "@/types";
+import type { CostItemType, FieldDef, RelationType } from "@/types";
 
 const f = (key: string, type = "text", extra: Partial<FieldDef> = {}) =>
   ({ key, label: key, type, ...extra }) as FieldDef;
@@ -81,4 +83,36 @@ describe("relationGroupOptions", () => {
     const rts = [rt("one", "Application", "Provider", "1:1")];
     expect(relationGroupOptions(rts, ["Application", "ITComponent"], label)).toEqual([]);
   });
+});
+
+describe("costFieldChoices", () => {
+  const item = (key: string, sort_order: number, archived = false) =>
+    ({ id: key, key, label: key.toUpperCase(), sort_order, archived, translations: {} }) as CostItemType;
+  const cat = [item("a", 1), item("b", 2), item("old", 3, true)]; // the caller sorts
+  const labelOf = (i: CostItemType) => i.label;
+  it("offers TCO then the catalogue in sort order, archived included, for cost-item types", () => {
+    expect(
+      costFieldChoices(["Application"], cat, [{ key: "x", label: "X" }], "TCO", labelOf),
+    ).toEqual([
+      { key: "costTotalAnnual", label: "TCO" },
+      { key: "a", label: "A" },
+      { key: "b", label: "B" },
+      { key: "old", label: "OLD" },
+    ]);
+    expect(costFieldChoices(["Application", "ITComponent"], cat, [], "TCO", labelOf)).toHaveLength(4);
+  });
+  it("returns the schema fields for other types", () => {
+    const fields = [{ key: "x", label: "X" }];
+    expect(costFieldChoices(["Initiative"], cat, fields, "TCO", labelOf)).toBe(fields);
+  });
+});
+
+describe("isBuiltInFieldType", () => {
+  it.each(["text", "multiline_text", "number", "cost", "boolean", "date", "single_select", "multiple_select", "url", "percentage"])(
+    "keeps %s",
+    (type) => expect(isBuiltInFieldType(type)).toBe(true),
+  );
+  it.each(["ext.licensing.multivalue", "ext.x", "", "unknown"])("drops %s", (type) =>
+    expect(isBuiltInFieldType(type)).toBe(false),
+  );
 });

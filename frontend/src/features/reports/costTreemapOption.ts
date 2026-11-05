@@ -12,7 +12,7 @@
  * its side panel). The tooltip names the card, its cost and — when the panel
  * totals anything — its share of the panel's own total, so a drilled level
  * with one panel per source reads each share against its own scale. The
- * fills and label colours are tokens (`COST_TREEMAP_COLORS`,
+ * fills come from the page's colour plan and label colours are tokens (
  * `CHART_LABEL_ON_DARK*` in `@/theme/tokens`).
  *
  * A tile prints only what fits it. ECharts truncates each label line to the
@@ -37,15 +37,14 @@ import {
 import {
   CHART_LABEL_ON_DARK,
   CHART_LABEL_ON_DARK_MUTED,
+  CHART_LABEL_ON_LIGHT,
   COST_DELTA_DOWN,
+  COST_DELTA_DOWN_ON_LIGHT,
   COST_DELTA_UP,
-  COST_TREEMAP_COLORS,
+  COST_DELTA_UP_ON_LIGHT,
 } from "@/theme/tokens";
+import { inkOn } from "./costColors";
 
-/** A tile's fill, cycling the palette by position. */
-export function treemapColor(index: number): string {
-  return COST_TREEMAP_COLORS[index % COST_TREEMAP_COLORS.length];
-}
 
 /** One card on the treemap; `index` is its position by cost, largest first. */
 export interface CostTreemapItem {
@@ -60,11 +59,19 @@ export interface CostTreemapItem {
    * cost to diff against ("new").
    */
   deltaPct?: number | null;
+  /** The tile's fill. */
+  color: string;
+  /** The card type's label, printed under the name and named in the tooltip. */
+  typeLabel?: string;
 }
 
 /** A group of cards: a framed block in the treemap, titled with its name. */
 export interface CostTreemapGroup {
+  /** The group's key as a click hands it back (`__others__` for the folded groups). */
+  key: string;
   name: string;
+  /** The frame's fill. */
+  color: string;
   cost: number;
   /** Position of the group by cost, largest first — picks the group's colour. */
   index: number;
@@ -122,7 +129,7 @@ export interface TileLabelParams {
   dataIndex?: number;
   name?: string;
   value?: unknown;
-  data?: { deltaPct?: number | null };
+  data?: { deltaPct?: number | null; typeLabel?: string };
 }
 
 /** The change badge of a tile, as rich text: "▲ +12%", "▼ -3%" or "▲ new"; "" when none. */
@@ -147,7 +154,8 @@ export function tileLabelFormatter(
     const name = p.name ?? "";
     if (tier === "name") return name;
     const badge = deltaBadge(p.data?.deltaPct, o.deltaNew ?? "");
-    return `${name}\n{value|${o.format(Number(p.value ?? 0))}}${badge && ` ${badge}`}`;
+    const type = p.data?.typeLabel ? `\n{type|${p.data.typeLabel}}` : "";
+    return `${name}${type}\n{value|${o.format(Number(p.value ?? 0))}}${badge && ` ${badge}`}`;
   };
 }
 
@@ -202,11 +210,16 @@ export interface CostTreemapDatum {
   deltaPct?: number | null;
   /** The group the card sits in, when the report is grouped. */
   group?: string;
+  typeLabel?: string;
+  /** Present on a light tile only: dark ink and the badge colours that read on light. */
+  label?: { color: string; rich: Record<string, unknown> };
 }
 
 /** A group's datum: its frame, holding its cards. */
 export interface CostTreemapGroupDatum {
+  key: string;
   name: string;
+  upperLabel?: { color: string };
   value: number;
   children: CostTreemapDatum[];
   itemStyle: { color: string; borderColor: string; borderWidth: number; gapWidth: number };
@@ -214,11 +227,12 @@ export interface CostTreemapGroupDatum {
 
 /** The hover tooltip of one tile: its name, its cost and, against a non-zero total, its share. */
 export function costTooltipHtml(
-  d: { name: string; cost: number; group?: string },
+  d: { name: string; cost: number; group?: string; typeLabel?: string },
   o: Pick<CostTreemapOptions, "format" | "panelTotal" | "percentOfTotal">,
 ): string {
   let html = `<div style="font-weight:700">${escapeHtml(d.name)}</div>`;
   if (d.group) html += `<div style="font-size:12px;opacity:.7">${escapeHtml(d.group)}</div>`;
+  if (d.typeLabel) html += `<div style="font-size:12px;opacity:.7">${escapeHtml(d.typeLabel)}</div>`;
   html += `<div style="font-size:12px">${escapeHtml(o.format(d.cost))}</div>`;
   if (o.panelTotal > 0) {
     const pct = ((d.cost / o.panelTotal) * 100).toFixed(1);
@@ -227,35 +241,57 @@ export function costTooltipHtml(
   return html;
 }
 
+/** The label's rich styles for one ink: the cost line, the type line and the two change badges. */
+function richStyles(ink: string, up: string, down: string): Record<string, unknown> {
+  return {
+    value: { color: ink, fontSize: 10, lineHeight: 16 },
+    type: { color: ink, fontSize: 10, lineHeight: 14 },
+    up: { color: up, fontSize: 10, fontWeight: 700 },
+    down: { color: down, fontSize: 10, fontWeight: 700 },
+  };
+}
+
 /** The treemap of one panel's cards. */
 export function buildCostTreemapOption(items: CostTreemapItem[], o: CostTreemapOptions): EChartsCoreOption {
   // The chrome's figures read in the report's currency.
   const ctx: ChartChromeContext = { theme: o.chrome, isRtl: o.isRtl, valueFormatter: o.format };
-  const leaf = (d: CostTreemapItem, colorIndex: number, group?: string): CostTreemapDatum => ({
-    name: d.name,
-    value: d.cost,
-    id: d.id,
-    index: d.index,
-    itemStyle: { color: treemapColor(colorIndex) },
-    ...(d.deltaPct !== undefined && { deltaPct: d.deltaPct }),
-    ...(group !== undefined && { group }),
-  });
+  // A light tile reads in dark ink; the series label (white) serves every dark one.
+  const lightLabel = {
+    color: CHART_LABEL_ON_LIGHT,
+    rich: richStyles(CHART_LABEL_ON_LIGHT, COST_DELTA_UP_ON_LIGHT, COST_DELTA_DOWN_ON_LIGHT),
+  };
+  const leaf = (d: CostTreemapItem, group?: string): CostTreemapDatum => {
+    const color = d.color;
+    return {
+      name: d.name,
+      value: d.cost,
+      id: d.id,
+      index: d.index,
+      itemStyle: { color },
+      ...(d.deltaPct !== undefined && { deltaPct: d.deltaPct }),
+      ...(group !== undefined && { group }),
+      ...(d.typeLabel !== undefined && { typeLabel: d.typeLabel }),
+      ...(inkOn(color) === CHART_LABEL_ON_LIGHT && { label: lightLabel }),
+    };
+  };
   // Grouped: each group is a frame holding its cards, which take the frame's colour.
   const data: (CostTreemapDatum | CostTreemapGroupDatum)[] = o.groups
     ? o.groups
         .map((g) => ({
+          key: g.key,
           name: g.name,
           value: g.cost,
-          children: g.items.filter((d) => d.cost > 0).map((d) => leaf(d, g.index, g.name)),
+          children: g.items.filter((d) => d.cost > 0).map((d) => leaf(d, g.name)),
+          upperLabel: { color: inkOn(g.color) },
           itemStyle: {
-            color: treemapColor(g.index),
+            color: g.color,
             borderColor: ctx.theme.surface,
             borderWidth: 4,
             gapWidth: 2,
           },
         }))
         .filter((g) => g.children.length > 0)
-    : items.filter((d) => d.cost > 0).map((d) => leaf(d, d.index));
+    : items.filter((d) => d.cost > 0).map((d) => leaf(d));
   const tileLabel = treemapLabel(ctx, {
     showValues: true,
     color: CHART_LABEL_ON_DARK,
@@ -272,7 +308,8 @@ export function buildCostTreemapOption(items: CostTreemapItem[], o: CostTreemapO
         const d = p?.data;
         if (!d) return "";
         const group = "group" in d ? d.group : undefined;
-        return costTooltipHtml({ name: d.name, cost: d.value, group }, o);
+        const typeLabel = "typeLabel" in d ? d.typeLabel : undefined;
+        return costTooltipHtml({ name: d.name, cost: d.value, group, typeLabel }, o);
       },
     }),
     series: [
@@ -302,6 +339,7 @@ export function buildCostTreemapOption(items: CostTreemapItem[], o: CostTreemapO
           // The change badge reads on the tile's blue in a lighter green or red.
           rich: {
             ...tileLabel.rich,
+            type: { color: CHART_LABEL_ON_DARK_MUTED, fontSize: 10, lineHeight: 14 },
             up: { color: COST_DELTA_UP, fontSize: 10, fontWeight: 700 },
             down: { color: COST_DELTA_DOWN, fontSize: 10, fontWeight: 700 },
           },

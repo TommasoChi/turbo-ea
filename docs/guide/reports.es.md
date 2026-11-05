@@ -163,10 +163,18 @@ El **Informe de Costos** proporciona un análisis financiero de su panorama tecn
 - **Vista de mapa de árbol** — Rectángulos anidados dimensionados por costo, con agrupación opcional (por ejemplo, por organización o capacidad)
 - **Vista de gráfico de barras** — Comparación de costos entre componentes
 - **Vista Sankey** — El mismo informe dibujado como un flujo de costes (véase [Vista Sankey](#sankey-view))
-- **Tipo de tarjeta** — Elija el tipo de tarjeta sobre el que se construye el informe: **Aplicación**, **Componente TI**, **Aplicación + Componente TI** (ambos tipos en un mismo gráfico, cada tarjeta con su propio coste) o **Iniciativa**. Las iniciativas siguen las mismas reglas de año fiscal que las aplicaciones.
-- **Campo de coste** — Elija qué campo de coste se suma. La lista muestra los campos de coste del tipo de tarjeta elegido; para Iniciativa ofrece **costBudget** (el predeterminado) y **costActual**, que nunca se suman. Para la opción combinada solo se ofrecen los campos de coste que existen en ambos tipos.
+- **Tipo de tarjeta** — Elija el tipo de tarjeta sobre el que se construye el informe: **Aplicación**, **Componente TI** o **Aplicación + Componente TI** (ambos tipos en un mismo gráfico, cada tarjeta con su propio coste). Las iniciativas ya no forman parte del informe de costes.
+- **Tipo de coste** — Elija qué se suma: **TCO** (el total de todas las partidas de coste de cada tarjeta) o cualquier partida de coste individual del catálogo. Para la opción combinada solo se ofrecen los tipos de coste que existen en ambos tipos.
 
-Todas las vistas comparten la misma barra de herramientas, los mismos filtros, el mismo año fiscal y el mismo campo de coste, de modo que cambiar de vista solo cambia el dibujo.
+Todas las vistas comparten la misma barra de herramientas, los mismos filtros, el mismo año fiscal y el mismo tipo de coste, de modo que cambiar de vista solo cambia el dibujo.
+
+**Gráfico de tendencia** — La tendencia del coste (el año actual, los cuatro anteriores y, cuando se selecciona, la **Forecast**) se muestra encima del gráfico en las tres vistas, no solo en el treemap, y sigue el tipo de coste seleccionado.
+
+**Colores y leyenda** — Cada grupo tiene su propio tono; dentro de un grupo, un tono más oscuro significa una tarjeta más costosa. Más allá de los ocho grupos más costosos, el resto se pliega en un único grupo **Otros**, y las tarjetas sin valor en el campo de agrupación van a **Sin especificar**. La leyenda junto al gráfico lista los grupos con sus colores; el Sankey y la tabla usan los mismos colores.
+
+**Desglose** — Un **clic derecho** en un grupo o una tarjeta profundiza en él: el gráfico se limita a ese grupo (o tarjeta) y aparece una ruta de navegación encima. Haga clic en **Volver**, o en cualquier segmento de la ruta, para subir un nivel. Profundizar en **Otros** lista los grupos que se plegaron en él. Un **clic izquierdo** en una tarjeta abre en cambio su panel lateral (un clic izquierdo en un grupo no hace nada). Una indicación sobre el gráfico recuerda ambos gestos.
+
+**Tabla** — Además de las columnas de agrupación y de atributos, la tabla tiene una columna por partida de coste y una columna **TCO**. Ordenar por el tipo de coste seleccionado pone primero las más costosas. Las filas de cabecera de grupo y el total del pie muestran las sumas por partida, y cada cabecera de grupo lleva la muestra de su color. Una insignia con el icono y el nombre del tipo en la celda del nombre distingue Aplicaciones y Componentes TI en la vista combinada. El clic derecho en una fila profundiza en ella; el clic abre la tarjeta.
 
 ### Agrupar por
 
@@ -202,7 +210,7 @@ Un año fiscal se llama **FY** más las dos últimas cifras del año en que **te
 
 La regla se aplica a toda la página — los totales, el mapa de árbol, la tabla, los agregados por **Origen de los costes** y el desglose — y el año fiscal seleccionado figura en la cabecera impresa.
 
-Cuando **Forecast** es el año seleccionado, un **gráfico de historial** muestra el coste del año actual, los cuatro anteriores y el año de previsión. No se muestra para ningún otro año. Cada barra está apilada, con un segmento por componente de coste: una partida de coste para Aplicaciones y Componentes de TI, y en otro caso un campo de coste (la leyenda y la información emergente usan entonces el nombre técnico del campo, por ejemplo `softwareLicensingCost`).
+Cuando **Forecast** es el año seleccionado, el **gráfico de historial** muestra el coste del año actual, los cuatro anteriores y el año de previsión. Cada barra está apilada, con un segmento por componente de coste: una partida de coste para Aplicaciones y Componentes de TI, y en otro caso un campo de coste (la leyenda y la información emergente usan entonces el nombre técnico del campo, por ejemplo `softwareLicensingCost`).
 
 Un administrador define el mes en que empieza el año fiscal en [Configuración → General](../admin/settings.md).
 

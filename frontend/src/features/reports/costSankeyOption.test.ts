@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEChartsChrome } from "@/components/charts/echartsTheme";
+import { STATUS_COLORS } from "@/theme/tokens";
 import {
   buildCostSankeyOption,
   costSankeyNodeColor,
@@ -87,5 +88,34 @@ describe("buildCostSankeyOption", () => {
   it("points the arrow the other way in a right-to-left locale", () => {
     const tip = build(NODES, LINKS, true).tooltip.formatter;
     expect(tip({ dataType: "edge", value: 1, data: { source: "item:lic", target: "group:EMEA" } })).toContain("←");
+  });
+});
+
+describe("cost report colours and type", () => {
+  it("lets a node's own colour win over the kind colour", () => {
+    const nodes: CostSankeyNodeIn[] = [
+      { id: "group:G", name: "G", type: "Group", color: "#123456" },
+      { id: "crm", name: "CRM", type: "Application", color: "#654321" },
+    ];
+    expect(build(nodes, []).series[0].data.map((d: any) => d.itemStyle.color)).toEqual(["#123456", "#654321"]);
+  });
+
+  it("draws cost-item nodes in neutral grey", () => {
+    expect(costSankeyNodeColor("CostItem")).toBe(STATUS_COLORS.neutral);
+  });
+
+  it("takes each flow's colour from its source", () => {
+    expect(build().series[0].lineStyle).toMatchObject({ color: "source", opacity: 0.45 });
+  });
+
+  it("appends the type to a card's label and names it in the tooltip", () => {
+    const nodes: CostSankeyNodeIn[] = [
+      { id: "crm", name: "CRM", type: "Application", typeLabel: "Application" },
+      { id: "item:lic", name: "Licences", type: "CostItem" },
+    ];
+    const o = build(nodes, []);
+    expect(o.series[0].label.formatter({ name: "crm" })).toBe("CRM · Application");
+    expect(o.series[0].label.formatter({ name: "item:lic" })).toBe("Licences");
+    expect(o.tooltip.formatter({ dataType: "node", name: "crm", value: 1 })).toBe("CRM · Application: $1");
   });
 });

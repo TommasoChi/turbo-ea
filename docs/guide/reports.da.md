@@ -163,10 +163,18 @@ Skift til **lagdelt afhængighedsvisning** ved hjælp af view-mode-knapperne i v
 - **Treemap-visning** — Indlejrede rektangler størrelses-justeret efter omkostning, med valgfri gruppering (f.eks. efter organisation eller kompetence)
 - **Bar chart-visning** — Omkostnings­sammenligning på tværs af komponenter
 - **Sankey-visning** — Den samme rapport tegnet som et omkostningsflow (se [Sankey-visning](#sankey-view))
-- **Card Type** — Vælg hvilken korttype rapporten er bygget omkring: **Application**, **IT Component**, **Application + IT Component** (begge typer i ét diagram, hvert kort med sin egen omkostning) eller **Initiative**. Initiativer følger de samme regnskabsårsregler som applikationer.
-- **Omkostningsfelt** — Vælg hvilket omkostningsfelt der summeres. Listen viser omkostningsfelterne for den valgte korttype; for Initiative tilbyder den **costBudget** (standard) og **costActual**, som aldrig lægges sammen. For den kombinerede mulighed tilbydes kun de omkostningsfelter, der findes i begge typer.
+- **Korttype** — Vælg hvilken korttype rapporten er bygget omkring: **Application**, **IT Component** eller **Application + IT Component** (begge typer i ét diagram, hvert kort med sin egen omkostning). Initiativer er ikke længere en del af omkostningsrapporten.
+- **Omkostningstype** — Vælg hvad der summeres: **TCO** (summen af alle omkostningsposter på hvert kort) eller en enkelt omkostningspost fra kataloget. For den kombinerede mulighed tilbydes kun de omkostningstyper, der findes i begge typer.
 
-Alle visninger deler samme værktøjslinje, filtre, regnskabsår og omkostningsfelt, så et skift af visning ændrer kun tegningen.
+Alle visninger deler samme værktøjslinje, filtre, regnskabsår og omkostningstype, så et skift af visning ændrer kun tegningen.
+
+**Tendensdiagram** — Omkostningstendensen (det nuværende år, de fire før det og, når den er valgt, **Forecast**) vises over diagrammet i alle tre visninger, ikke kun i trækortet, og følger den valgte omkostningstype.
+
+**Farver og forklaring** — Hver gruppe har sin egen farvetone; inden for en gruppe betyder en mørkere nuance et dyrere kort. Ud over de otte dyreste grupper foldes resten sammen i én gruppe **Andre**, og kort uden værdi i grupperingsfeltet havner i **Uspecificeret**. Forklaringen ved siden af diagrammet viser grupperne med deres farver; Sankey og tabellen bruger de samme farver.
+
+**Drill-down** — Et **højreklik** på en gruppe eller et kort borer ned i det: diagrammet indsnævres til den gruppe (eller det kort), og en brødkrumme vises over det. Klik på **Tilbage**, eller på et vilkårligt segment i brødkrummen, for at gå et niveau op. Drill-down i **Andre** viser de grupper, der blev foldet ind i den. Et **venstreklik** på et kort åbner i stedet dets sidepanel (et venstreklik på en gruppe gør ingenting). Et tip over diagrammet minder om begge handlinger.
+
+**Tabel** — Ud over grupperings- og attributkolonnerne har tabellen én kolonne pr. omkostningspost og en **TCO**-kolonne. Sortering efter den valgte omkostningstype sætter de dyreste først. Gruppeoverskrifter og totalen i bunden viser summerne pr. post, og hver gruppeoverskrift har en farveprøve. Et badge med typeikon og typenavn i navnecellen skelner mellem applikationer og IT-komponenter i den kombinerede visning. Et højreklik på en række borer ned i den; et klik åbner kortet.
 
 ### Gruppér efter
 
@@ -202,7 +210,7 @@ Et regnskabsår hedder **FY** plus de sidste to cifre i det år, det **slutter**
 
 Reglen gælder for alt på siden — totalerne, treemap'et, tabellen, **Omkostningskilde**-sammentællinger og drill-down — og det valgte regnskabsår udskrives i rapportens sidehoved.
 
-Når **Forecast** er det valgte år, viser et **historikdiagram** omkostningerne over det nuværende år, de fire før det og prognoseåret. Det vises ikke for noget andet år. Hver bjælke er stablet med ét segment pr. omkostningskomponent: en omkostningspost for applikationer og IT-komponenter, ellers et omkostningsfelt (forklaringen og værktøjstippet bruger så det tekniske feltnavn, for eksempel `softwareLicensingCost`).
+Når **Forecast** er det valgte år, viser **historikdiagrammet** omkostningerne over det nuværende år, de fire før det og prognoseåret. Hver bjælke er stablet med ét segment pr. omkostningskomponent: en omkostningspost for applikationer og IT-komponenter, ellers et omkostningsfelt (forklaringen og værktøjstippet bruger så det tekniske feltnavn, for eksempel `softwareLicensingCost`).
 
 En administrator angiver, hvilken måned regnskabsåret starter i, under [Indstillinger → Generelt](../admin/settings.md).
 

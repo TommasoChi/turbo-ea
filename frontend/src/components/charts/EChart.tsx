@@ -71,11 +71,14 @@ export interface EChartClickParams {
   value?: unknown;
   data?: unknown;
   dataIndex?: number;
+  event?: { event?: MouseEvent };
 }
 
 interface Props {
   option: EChartsCoreOption;
   onClick?: (params: EChartClickParams) => void;
+  /** Right click on a datum; the native context menu is suppressed. */
+  onContextMenu?: (params: EChartClickParams) => void;
   style?: CSSProperties;
   ariaLabel?: string;
   /** Id of the element that names the chart (its visible title). */
@@ -98,6 +101,7 @@ interface Props {
 export default function EChart({
   option,
   onClick,
+  onContextMenu,
   style,
   ariaLabel,
   labelledBy,
@@ -108,6 +112,8 @@ export default function EChart({
   const chartRef = useRef<ECharts | null>(null);
   const clickRef = useRef(onClick);
   clickRef.current = onClick;
+  const contextRef = useRef(onContextMenu);
+  contextRef.current = onContextMenu;
   const dprRef = useRef(devicePixelRatio);
   // Read at init only: a new callback identity never re-creates the chart.
   const initRef = useRef(onInit);
@@ -127,6 +133,13 @@ export default function EChart({
     initRef.current?.(chart);
     const handleClick = (params: unknown) => clickRef.current?.(params as EChartClickParams);
     chart.on("click", handleClick);
+    const handleContext = (params: unknown) => {
+      if (!contextRef.current) return;
+      const p = params as EChartClickParams;
+      p.event?.event?.preventDefault();
+      contextRef.current?.(p);
+    };
+    chart.on("contextmenu", handleContext);
 
     let observer: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined") {
@@ -143,6 +156,7 @@ export default function EChart({
       observer?.disconnect();
       print?.removeEventListener("change", onPrintChange);
       chart.off("click", handleClick);
+      chart.off("contextmenu", handleContext);
       chart.dispose();
       chartRef.current = null;
     };

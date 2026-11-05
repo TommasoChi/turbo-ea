@@ -13,13 +13,13 @@ import type { EChartsCoreOption } from "echarts/core";
 import type { EChartsChrome } from "@/components/charts/echartsTheme";
 import { base, escapeHtml, tooltip, type ChartChromeContext } from "@/components/charts/chrome";
 import { sankeyInset } from "@/features/dashboard/charts/buildOption";
-import { brand, CARD_TYPE_COLORS, CATEGORICAL_COLORS, DEFAULT_LAYER_COLOR } from "@/theme";
+import { CARD_TYPE_COLORS, CATEGORICAL_COLORS, DEFAULT_LAYER_COLOR, STATUS_COLORS } from "@/theme";
 
 const MAX_LABEL = 24;
 
 /** A node's colour by kind: cost item, group, or the card's type. */
 export function costSankeyNodeColor(type: string): string {
-  if (type === "CostItem") return brand.primary;
+  if (type === "CostItem") return STATUS_COLORS.neutral;
   if (type === "Group") return CATEGORICAL_COLORS[7];
   return CARD_TYPE_COLORS[type as keyof typeof CARD_TYPE_COLORS] ?? DEFAULT_LAYER_COLOR;
 }
@@ -28,6 +28,10 @@ export interface CostSankeyNodeIn {
   id: string;
   name: string;
   type: string;
+  /** The node's fill; the kind's colour when absent. */
+  color?: string;
+  /** A card's type label, appended to its label and named in the tooltip. */
+  typeLabel?: string;
 }
 
 export interface CostSankeyLinkIn {
@@ -49,6 +53,11 @@ export function shortenSankeyLabel(name: string): string {
   return name.length > MAX_LABEL ? `${name.slice(0, MAX_LABEL - 1)}…` : name;
 }
 
+/** What a node prints: its name, shortened, then its type for a card. */
+function nodeLabel(n: CostSankeyNodeIn): string {
+  return n.typeLabel ? `${shortenSankeyLabel(n.name)} · ${n.typeLabel}` : shortenSankeyLabel(n.name);
+}
+
 /** The Sankey of the kept nodes and links. */
 export function buildCostSankeyOption(
   nodes: CostSankeyNodeIn[],
@@ -56,11 +65,12 @@ export function buildCostSankeyOption(
   o: CostSankeyOptions,
 ): EChartsCoreOption {
   const ctx: ChartChromeContext = { theme: o.chrome, isRtl: o.isRtl, valueFormatter: o.format };
-  const nameOf = new Map(nodes.map((n) => [n.id, n.name]));
+  const nameOf = new Map(nodes.map((n) => [n.id, n.typeLabel ? `${n.name} · ${n.typeLabel}` : n.name]));
+  const labelOf = new Map(nodes.map((n) => [n.id, nodeLabel(n)]));
   // The last column's labels sit right of its bars: keep room for them.
   const hasOutgoing = new Set(links.map((l) => nodes[l.source].id));
   const inset = sankeyInset(
-    nodes.filter((n) => !hasOutgoing.has(n.id)).map((n) => shortenSankeyLabel(n.name)),
+    nodes.filter((n) => !hasOutgoing.has(n.id)).map(nodeLabel),
   );
   const arrow = o.isRtl ? "←" : "→";
   return {
@@ -96,11 +106,11 @@ export function buildCostSankeyOption(
         label: {
           color: ctx.theme.textPrimary,
           fontSize: 12,
-          formatter: (p: { name?: string }) => shortenSankeyLabel(nameOf.get(p.name ?? "") ?? ""),
+          formatter: (p: { name?: string }) => labelOf.get(p.name ?? "") ?? "",
         },
-        lineStyle: { color: "gradient", opacity: 0.35, curveness: 0.5 },
+        lineStyle: { color: "source", opacity: 0.45, curveness: 0.5 },
         itemStyle: { borderColor: ctx.theme.surface, borderWidth: 1 },
-        data: nodes.map((n) => ({ name: n.id, itemStyle: { color: costSankeyNodeColor(n.type) } })),
+        data: nodes.map((n) => ({ name: n.id, itemStyle: { color: n.color ?? costSankeyNodeColor(n.type) } })),
         links: links.map((l) => ({
           source: nodes[l.source].id,
           target: nodes[l.target].id,

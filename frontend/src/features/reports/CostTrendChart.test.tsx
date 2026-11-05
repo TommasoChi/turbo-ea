@@ -96,7 +96,7 @@ describe("CostTrendChart", () => {
     expect(yearLabels()).toEqual(["FY25", "FY26 - Current", "FY27 - Forecast"]);
   });
 
-  it("never sends a group_by param", async () => {
+  it("sends no group_by param without a groupBy prop", async () => {
     render(<CostTrendChart {...props({ years: [2025] })} />);
     await waitFor(() => expect(api.get).toHaveBeenCalled());
     for (const [p] of vi.mocked(api.get).mock.calls) expect(String(p)).not.toContain("group_by");
@@ -141,5 +141,52 @@ describe("CostTrendChart", () => {
       settle("2025", 99); // the superseded request lands last
     });
     expect(rowsOf()).toEqual(latest);
+  });
+});
+
+describe("CostTrendChart selection and scope", () => {
+  const ITEMS = [
+    { id: "a", cost: 10, group: "fin" },
+    { id: "b", cost: 5, group: "fin" },
+    { id: "c", cost: 7, group: "ops" },
+  ];
+  const withItems = () =>
+    vi.mocked(api.get).mockImplementation(() =>
+      Promise.resolve({ items: ITEMS, total: 999 }) as never,
+    );
+
+  it("sums only the selected card across years", async () => {
+    withItems();
+    render(<CostTrendChart {...props({ components: ["licenseCost"], years: [2025], selection: { kind: "card", id: "b" } })} />);
+    await waitFor(() => expect(rowsOf()).toEqual({ licenseCost: [5] }));
+  });
+
+  it("sums the group's members and sends group_by", async () => {
+    withItems();
+    render(
+      <CostTrendChart
+        {...props({ components: ["licenseCost"], years: [2025], groupBy: "field:dept", selection: { kind: "group", keys: ["fin"] } })}
+      />,
+    );
+    await waitFor(() => expect(rowsOf()).toEqual({ licenseCost: [15] }));
+    expect(String(vi.mocked(api.get).mock.calls[0][0])).toContain("group_by=field%3Adept");
+  });
+
+  it("sums several raw group keys (Others)", async () => {
+    withItems();
+    render(<CostTrendChart {...props({ components: ["licenseCost"], years: [2025], selection: { kind: "group", keys: ["fin", "ops"] } })} />);
+    await waitFor(() => expect(rowsOf()).toEqual({ licenseCost: [22] }));
+  });
+
+  it("respects the scope closure", async () => {
+    withItems();
+    render(<CostTrendChart {...props({ components: ["licenseCost"], years: [2025], scopeIds: new Set(["a", "c"]) })} />);
+    await waitFor(() => expect(rowsOf()).toEqual({ licenseCost: [17] }));
+  });
+
+  it("uses the response total without selection or scope", async () => {
+    withItems();
+    render(<CostTrendChart {...props({ components: ["licenseCost"], years: [2025] })} />);
+    await waitFor(() => expect(rowsOf()).toEqual({ licenseCost: [999] }));
   });
 });
