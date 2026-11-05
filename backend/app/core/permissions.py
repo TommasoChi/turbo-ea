@@ -244,6 +244,19 @@ APP_PERMISSIONS: dict[str, dict] = {
             ),
         },
     },
+    "licenses": {
+        "label": "Licensing",
+        "permissions": {
+            "licenses.view": (
+                "View license counts on cards and the Licensing report "
+                "(stakeholders see their own cards' licenses regardless)"
+            ),
+            "licenses.edit": (
+                "Edit and import the licenses of any card "
+                "(stakeholders whose role can edit a card edit that card's licenses regardless)"
+            ),
+        },
+    },
     "users": {
         "label": "Users",
         "permissions": {
@@ -704,6 +717,8 @@ BPM_ADMIN_PERMISSIONS: dict[str, bool] = {
     "ai.portfolio_insights": True,
     "costs.view": True,
     "costs.edit": False,
+    "licenses.view": True,
+    "licenses.edit": False,
     "notifications.manage": True,
     "users.invite": True,
     "admin.users": False,
@@ -788,6 +803,8 @@ MEMBER_PERMISSIONS: dict[str, bool] = {
     "ai.portfolio_insights": True,
     "costs.view": True,
     "costs.edit": False,
+    "licenses.view": True,
+    "licenses.edit": False,
     "notifications.manage": True,
     "users.invite": False,
     "admin.users": False,
@@ -872,6 +889,8 @@ VIEWER_PERMISSIONS: dict[str, bool] = {
     "ai.portfolio_insights": False,
     "costs.view": False,
     "costs.edit": False,
+    "licenses.view": False,
+    "licenses.edit": False,
     "notifications.manage": True,
     "users.invite": False,
     "admin.users": False,

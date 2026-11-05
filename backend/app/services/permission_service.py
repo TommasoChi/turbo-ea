@@ -360,41 +360,32 @@ class PermissionService:
         return result.scalar_one_or_none() is not None
 
     @staticmethod
-    async def can_view_costs(db: AsyncSession, user: User, card_id: UUID) -> bool:
-        """Return True if the user may see cost-typed fields on this card.
-
-        Rule: app-level `costs.view` grants access landscape-wide; otherwise
-        any stakeholder role on the card grants access to that card's costs.
-        """
-        if await PermissionService.has_app_permission(db, user, "costs.view"):
+    async def _can_view_domain(db: AsyncSession, user: User, card_id: UUID, perm: str) -> bool:
+        """View rule shared by costs and licenses: the app-level ``perm`` grants every
+        card; otherwise any stakeholder role on the card grants that card."""
+        if await PermissionService.has_app_permission(db, user, perm):
             return True
         return await PermissionService.is_stakeholder_of(db, user, card_id)
 
     @staticmethod
-    async def can_edit_costs(db: AsyncSession, user: User, card_id: UUID) -> bool:
-        """Return True if the user may edit the cost items of this card.
-
-        Rule: app-level `costs.edit`, or a stakeholder role on THIS card whose
-        permissions give `card.edit` (Observer does not). App-level
-        `inventory.edit` alone grants nothing here.
-        """
-        if await PermissionService.has_app_permission(db, user, "costs.edit"):
+    async def _can_edit_domain(db: AsyncSession, user: User, card_id: UUID, perm: str) -> bool:
+        """Edit rule shared by costs and licenses: the app-level ``perm``, or a stakeholder
+        role on THIS card whose permissions give `card.edit` (Observer does not).
+        App-level `inventory.edit` alone grants nothing here."""
+        if await PermissionService.has_app_permission(db, user, perm):
             return True
         return await PermissionService.has_card_permission(db, user, card_id, "card.edit")
 
     @staticmethod
-    async def card_ids_with_cost_access(
-        db: AsyncSession, user: User, candidate_card_ids: Iterable[UUID]
+    async def _card_ids_with_domain_access(
+        db: AsyncSession, user: User, candidate_card_ids: Iterable[UUID], perm: str
     ) -> set[UUID]:
-        """Bulk variant of `can_view_costs` for list endpoints.
-
-        Returns the subset of candidate card IDs the user can see costs for.
-        If the user has the global `costs.view` permission, returns all candidates.
-        """
+        """Bulk variant of `_can_view_domain` for list endpoints: the subset of the candidate
+        card IDs the user can see; all of them with the global ``perm``."""
         candidates = list({cid for cid in candidate_card_ids if cid is not None})
         if not candidates:
             return set()
-        if await PermissionService.has_app_permission(db, user, "costs.view"):
+        if await PermissionService.has_app_permission(db, user, perm):
             return set(candidates)
         result = await db.execute(
             select(Stakeholder.card_id).where(
@@ -403,6 +394,44 @@ class PermissionService:
             )
         )
         return {row[0] for row in result.all()}
+
+    @staticmethod
+    async def can_view_costs(db: AsyncSession, user: User, card_id: UUID) -> bool:
+        """May the user see cost-typed fields on this card (`costs.view` or a stakeholder)."""
+        return await PermissionService._can_view_domain(db, user, card_id, "costs.view")
+
+    @staticmethod
+    async def can_edit_costs(db: AsyncSession, user: User, card_id: UUID) -> bool:
+        """May the user edit this card's cost items (`costs.edit` or a card.edit stakeholder)."""
+        return await PermissionService._can_edit_domain(db, user, card_id, "costs.edit")
+
+    @staticmethod
+    async def card_ids_with_cost_access(
+        db: AsyncSession, user: User, candidate_card_ids: Iterable[UUID]
+    ) -> set[UUID]:
+        """Bulk variant of `can_view_costs` for list endpoints."""
+        return await PermissionService._card_ids_with_domain_access(
+            db, user, candidate_card_ids, "costs.view"
+        )
+
+    @staticmethod
+    async def can_view_licenses(db: AsyncSession, user: User, card_id: UUID) -> bool:
+        """May the user see this card's licenses (`licenses.view` or a stakeholder)."""
+        return await PermissionService._can_view_domain(db, user, card_id, "licenses.view")
+
+    @staticmethod
+    async def can_edit_licenses(db: AsyncSession, user: User, card_id: UUID) -> bool:
+        """May the user edit this card's licenses (`licenses.edit` or a card.edit stakeholder)."""
+        return await PermissionService._can_edit_domain(db, user, card_id, "licenses.edit")
+
+    @staticmethod
+    async def card_ids_with_license_access(
+        db: AsyncSession, user: User, candidate_card_ids: Iterable[UUID]
+    ) -> set[UUID]:
+        """Bulk variant of `can_view_licenses` for list endpoints."""
+        return await PermissionService._card_ids_with_domain_access(
+            db, user, candidate_card_ids, "licenses.view"
+        )
 
     @staticmethod
     async def get_effective_card_permissions(db: AsyncSession, user: User, card_id: UUID) -> dict:

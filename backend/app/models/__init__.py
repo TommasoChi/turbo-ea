@@ -14,6 +14,7 @@ from app.models.calculation import Calculation
 from app.models.card import Card
 from app.models.card_cost import CardCost
 from app.models.card_cost_history import CardCostHistory
+from app.models.card_license import CardLicense
 from app.models.card_logo import CardLogo
 from app.models.card_type import CardType
 from app.models.card_type_category import CardTypeCategory
@@ -37,6 +38,7 @@ from app.models.extension import (
 )
 from app.models.file_attachment import FileAttachment
 from app.models.kpi_snapshot import KpiSnapshot
+from app.models.license_type import LicenseType
 from app.models.migration import IdentityMap, Migration, StagedRecord
 from app.models.mutation_batch import MutationBatch
 from app.models.notification import Notification
@@ -184,6 +186,8 @@ __all__ = [
     "CardTypeCategory",
     "CardCost",
     "CostItemType",
+    "CardLicense",
+    "LicenseType",
     "Dashboard",
     "DashboardKpiSnapshot",
     "OpsRequestNonce",
