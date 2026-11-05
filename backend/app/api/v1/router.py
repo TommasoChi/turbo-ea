@@ -28,6 +28,7 @@ from app.api.v1 import (
     extensions,
     favorites,
     file_attachments,
+    license_types,
     metamodel,
     migration,
     mutation_batches,
@@ -63,6 +64,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router)
 api_router.include_router(metamodel.router)
 api_router.include_router(cost_item_types.router)
+api_router.include_router(license_types.router)
 api_router.include_router(cards.router)
 api_router.include_router(relations.router)
 api_router.include_router(stakeholders.router)

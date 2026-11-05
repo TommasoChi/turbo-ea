@@ -21,6 +21,7 @@ from app.models.card import Card
 from app.models.card_cost import CardCost
 from app.models.card_type import CardType
 from app.models.cost_item_type import CostItemType
+from app.services import item_catalogue
 from app.services.cost_value import cost_value
 from app.services.event_bus import event_bus
 from app.services.fiscal_year import (
@@ -108,8 +109,7 @@ async def _fallback_row(db: AsyncSession, card_id: uuid.UUID, fy: int) -> CardCo
 
 
 async def archived_keys(db: AsyncSession) -> dict[str, bool]:
-    rows = await db.execute(select(CostItemType.key, CostItemType.archived))
-    return {k: a for k, a in rows.all()}
+    return await item_catalogue.archived_keys(db, CostItemType)
 
 
 def _lines(items: dict, archived: dict[str, bool]) -> list[CostLine]:
