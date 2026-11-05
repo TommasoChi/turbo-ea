@@ -592,6 +592,41 @@ describe("CostReport custom columns", () => {
     expect(options).toContain("Total Annual Cost");
   });
 
+  it("does not offer extension-typed (object) fields in the Columns menu", async () => {
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: [
+        {
+          ...APP_TYPE,
+          fields_schema: [
+            ...APP_TYPE.fields_schema,
+            {
+              section: "Licensing",
+              fields: [
+                { key: "licensedUsers", label: "Licensed users", type: "ext.licensing.multivalue" },
+                { key: "alias", label: "Alias", type: "text" },
+              ],
+            },
+          ],
+        },
+        ITC_TYPE,
+      ],
+      relationTypes: [],
+      loading: false,
+      getType: () => APP_TYPE,
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+    } as never);
+    consumedConfig = { view: "table", extraColumns: ["licensedUsers"] };
+    renderCost();
+    const picker = await screen.findByRole("combobox", { name: /columns/i });
+    // The saved extension column is pruned.
+    await waitFor(() => expect(picker).not.toHaveTextContent("1"));
+    await userEvent.click(picker);
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toContain("Alias");
+    expect(options).not.toContain("Licensed users");
+  });
+
   it("persists and restores picked columns", async () => {
     consumedConfig = { view: "table", extraColumns: ["costTotalAnnual"] };
     renderCost();
@@ -705,6 +740,18 @@ describe("CostReport trend chart", () => {
     expect(trend).toHaveAttribute("data-field", "costTotalAnnual");
   });
 
+  it.each([
+    ["chart", () => screen.getByRole("img", { name: "Cost Analysis" })],
+    ["sankey", () => screen.getByTestId("cost-sankey-panel")],
+    ["table", () => screen.getByRole("table")],
+  ] as const)("renders the trend above the %s view", async (view, panel) => {
+    consumedConfig = { view, fiscalYearParam: 2027 };
+    renderCost();
+    const trend = await screen.findByTestId("cost-trend-chart");
+    await waitFor(() => expect(panel()).toBeInTheDocument());
+    expect(trend.compareDocumentPosition(panel()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("labels the components from the report's catalogue labels, not the raw keys", async () => {
     const base = vi.mocked(api.get).getMockImplementation()!;
     vi.mocked(api.get).mockImplementation(async (path: string, ...rest: never[]) => {
@@ -743,22 +790,6 @@ describe("CostReport trend chart", () => {
       expect(screen.getAllByRole("combobox", { name: /fiscal year/i })[0]).toHaveTextContent("Forecast"),
     );
     expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
-  });
-
-  it("shows the trend chart under the Sankey with Forecast", async () => {
-    consumedConfig = { view: "sankey", fiscalYearParam: 2027 };
-    renderCost();
-    const panel = await screen.findByTestId("cost-sankey-panel");
-    const trend = await screen.findByTestId("cost-trend-chart");
-    expect(panel.compareDocumentPosition(trend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("shows the trend chart under the table with Forecast", async () => {
-    consumedConfig = { view: "table", fiscalYearParam: 2027 };
-    renderCost();
-    const table = await screen.findByRole("table");
-    const trend = await screen.findByTestId("cost-trend-chart");
-    expect(table.compareDocumentPosition(trend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("passes the group-by to the trend chart", async () => {
@@ -1058,13 +1089,13 @@ describe("CostReport treemap colours, type badge and drill", () => {
       return Promise.resolve({ items: HIERARCHY, total: HIERARCHY.length }) as never;
     });
   const treemap = () => echartState.byName("Cost Analysis");
-  const clickTile = (data: unknown) => act(() => treemap().onClick!({ data }));
-  const rightClickTile = (data: unknown) => act(() => treemap().onContextMenu!({ data }));
+  const clickTile = (data: unknown) => act(() => treemap().onContextMenu!({ data }));
+  const rightClickTile = (data: unknown) => act(() => treemap().onClick!({ data }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- option trees are plain JSON
   const series = (): any => treemap().option.series[0];
   const backButton = () => screen.queryByRole("button", { name: /back/i });
 
-  it("left click on a tile drills into that card", async () => {
+  it("right click on a tile drills into that card", async () => {
     mockApi(TEN, [{ id: "c1", name: "Card 1", type: "Application", cost: 1000, costs: { licenses: 700, support: 300 } }]);
     consumedConfig = { view: "chart" };
     renderCost();
@@ -1074,7 +1105,7 @@ describe("CostReport treemap colours, type badge and drill", () => {
     expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument();
   });
 
-  it("right click on a tile opens the side panel", async () => {
+  it("left click on a tile opens the side panel and does not drill", async () => {
     consumedConfig = { view: "chart" };
     renderCost();
     await screen.findByRole("img", { name: "Cost Analysis" });
@@ -1299,39 +1330,39 @@ describe("CostReport Sankey colours, fold, drill and right click", () => {
     expect(series().label.formatter({ name: "c1" })).toBe("Card 1 · Application");
   });
 
-  it("left click on a group node drills into the group", async () => {
+  it("right click on a group node drills into the group", async () => {
     await open();
-    act(() => sankey().onClick!({ dataType: "node", name: "group:g1" }));
+    act(() => sankey().onContextMenu!({ dataType: "node", name: "group:g1" }));
     await waitFor(() => expect(backButton()).toBeInTheDocument());
     expect(ids().sort()).toEqual(["c1", "group:g1", "item:lic"]);
   });
 
-  it("left click on a node of the Others group drills with group Others", async () => {
+  it("right click on a node of the Others group drills with group Others", async () => {
     await open();
-    act(() => sankey().onClick!({ dataType: "node", name: "group:__others__" }));
+    act(() => sankey().onContextMenu!({ dataType: "node", name: "group:__others__" }));
     await waitFor(() => expect(backButton()).toBeInTheDocument());
     expect(ids().sort()).toEqual(["c10", "c9", "group:__others__", "item:lic"]);
   });
 
   it("drilled card Sankey shows only that card and its items", async () => {
     await open();
-    act(() => sankey().onClick!({ dataType: "node", name: "c2" }));
+    act(() => sankey().onContextMenu!({ dataType: "node", name: "c2" }));
     await waitFor(() => expect(ids().sort()).toEqual(["c2", "group:g2", "item:host"]));
     expect(linkValue("item:host", "group:g2")).toBe(990);
   });
 
-  it("right click on a card opens the side panel", async () => {
+  it("left click on a card opens the side panel", async () => {
     await open();
-    act(() => sankey().onContextMenu!({ dataType: "node", name: "c3" }));
+    act(() => sankey().onClick!({ dataType: "node", name: "c3" }));
     expect(await screen.findByTestId("side-panel")).toHaveTextContent("c3");
     expect(backButton()).not.toBeInTheDocument();
   });
 
-  it("does nothing on a click on a cost-item node, an edge or a right click on a group", async () => {
+  it("does nothing on a click on a cost-item node, an edge or a left click on a group", async () => {
     await open();
-    act(() => sankey().onClick!({ dataType: "node", name: "item:lic" }));
-    act(() => sankey().onClick!({ dataType: "edge", name: "item:lic > group:g1" }));
-    act(() => sankey().onContextMenu!({ dataType: "node", name: "group:g1" }));
+    act(() => sankey().onContextMenu!({ dataType: "node", name: "item:lic" }));
+    act(() => sankey().onContextMenu!({ dataType: "edge", name: "item:lic > group:g1" }));
+    act(() => sankey().onClick!({ dataType: "node", name: "group:g1" }));
     expect(backButton()).not.toBeInTheDocument();
     expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument();
   });
@@ -1406,17 +1437,17 @@ describe("CostReport table per-item columns, TCO and drill", () => {
     await waitFor(() => expect(bodyRows().map(nameOf)).toEqual(["CRM", "ERP"]));
   });
 
-  it("row click drills, right click opens the card", async () => {
+  it("row right click drills, left click opens the card", async () => {
     mockTable();
     consumedConfig = { view: "table" };
     renderCost();
     await screen.findByRole("table");
     await waitFor(() => expect(cellTexts(rowNamed("ERP"))[3]).toBe("$500"));
-    const notPrevented = fireEvent.contextMenu(rowNamed("ERP"));
-    expect(notPrevented).toBe(false);
+    fireEvent.click(rowNamed("ERP"));
     expect(await screen.findByTestId("side-panel")).toHaveTextContent("erp");
     expect(screen.queryByRole("button", { name: /back/i })).not.toBeInTheDocument();
-    fireEvent.click(rowNamed("ERP"));
+    const notPrevented = fireEvent.contextMenu(rowNamed("ERP"));
+    expect(notPrevented).toBe(false);
     expect(await screen.findByRole("button", { name: /back/i })).toBeInTheDocument();
   });
 
@@ -1426,7 +1457,7 @@ describe("CostReport table per-item columns, TCO and drill", () => {
     renderCost();
     await screen.findByRole("table");
     await waitFor(() => expect(cellTexts(rowNamed("ERP"))[3]).toBe("$500"));
-    fireEvent.click(rowNamed("ERP"));
+    fireEvent.contextMenu(rowNamed("ERP"));
     await waitFor(() => expect(bodyRows()).toHaveLength(1));
     expect(nameOf(bodyRows()[0])).toBe("ERP");
   });
@@ -1521,7 +1552,7 @@ describe("CostReport review fixes", () => {
     } as never);
   };
   const clickNode = (name: string) =>
-    act(() => echartState.byName("Sankey chart view").onClick!({ name, dataType: "node" }));
+    act(() => echartState.byName("Sankey chart view").onContextMenu!({ name, dataType: "node" }));
 
   it("hands the trend only the selected cost item", async () => {
     consumedConfig = { view: "table", costField: "support", fiscalYearParam: 2027 };

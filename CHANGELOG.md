@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **The Cost Report drills down.** A left click on a group or card narrows the chart to it with a breadcrumb and a Back button; a right click opens the card.
+- **The Cost Report drills down.** A right click on a group or card narrows the chart to it with a breadcrumb and a Back button; a left click opens the card.
 - **The Cost Report colours its groups and shows a legend.** Each group has its own hue, darker for costlier cards, with Others and Unspecified groups.
 - **The cost trend chart, with the Forecast, is available in the treemap, Sankey and table views.**
 - **The Cost Report table has a column per cost item and a TCO column.**

@@ -301,9 +301,9 @@ describe("CostReport treemap", () => {
     expect(within(tip).getByText("$500")).toBeInTheDocument();
   });
 
-  it("opens the card's side panel when a cell is right-clicked", async () => {
+  it("opens the card's side panel when a cell is left-clicked", async () => {
     renderCost();
-    fireEvent.contextMenu(await screen.findByText("ERP", { selector: "text" }));
+    fireEvent.click(await screen.findByText("ERP", { selector: "text" }));
     expect(screen.getByTestId("side-panel")).toHaveTextContent("erp");
     fireEvent.click(screen.getByRole("button", { name: "close-panel" }));
     expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument();
@@ -491,8 +491,8 @@ describe("CostReport table", () => {
     await user.click(screen.getByRole("button", { name: "TCO" }));
     expect(rowNames()).toEqual(["CRM Web Portal", "HR", "CRM", "ERP", "Total"]);
 
-    // Left click drills; right click opens the card.
-    fireEvent.contextMenu(screen.getByRole("cell", { name: /^ERP/ }));
+    // Left click opens the card; right click drills.
+    fireEvent.click(screen.getByRole("cell", { name: /^ERP/ }));
     expect(screen.getByTestId("side-panel")).toHaveTextContent("erp");
   });
 
@@ -527,7 +527,7 @@ describe("CostReport table", () => {
     const byCost = screen.getAllByRole("row").map((r) => r.textContent ?? "");
     expect(byCost[mc + 1]).toMatch(/^CRM\$100/);
 
-    fireEvent.contextMenu(screen.getByRole("cell", { name: /^CRM Web Portal/ }));
+    fireEvent.click(screen.getByRole("cell", { name: /^CRM Web Portal/ }));
     expect(screen.getByTestId("side-panel")).toHaveTextContent("web");
   });
 

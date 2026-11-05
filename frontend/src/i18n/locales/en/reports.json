@@ -252,7 +252,7 @@
   "cost.cardType": "Card Type",
   "cost.costField": "Cost Field",
   "cost.tco": "TCO",
-  "cost.drillHint": "Click: analyse · Right click: open card",
+  "cost.drillHint": "Click: open card · Right click: analyse",
   "cost.back": "Back",
   "cost.others": "Others",
   "cost.othersCount": "Others ({{count}} groups)",

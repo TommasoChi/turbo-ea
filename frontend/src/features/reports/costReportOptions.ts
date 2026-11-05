@@ -1,6 +1,14 @@
 import { pickGroupableFields } from "@/lib/fieldFacets";
 import { isCostItemType } from "@/lib/costItems";
-import type { CostItemType, FieldDef, RelationType } from "@/types";
+import type { BuiltInFieldType, CostItemType, FieldDef, RelationType } from "@/types";
+
+const BUILT_IN_FIELD_TYPES = new Set<string>([
+  "text", "multiline_text", "number", "cost", "boolean", "date",
+  "single_select", "multiple_select", "url", "percentage",
+] satisfies BuiltInFieldType[]);
+
+/** A scalar field type; extension types (`ext.*`) hold objects a table cell cannot show. */
+export const isBuiltInFieldType = (type: string): boolean => BUILT_IN_FIELD_TYPES.has(type);
 
 /** The selector entry that reports Applications and IT Components together. */
 export const COMBINED_KEY = "Application+ITComponent";

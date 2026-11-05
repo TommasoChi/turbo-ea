@@ -7,6 +7,7 @@ import {
   commonGroupableFields,
   relationGroupOptions,
   costFieldChoices,
+  isBuiltInFieldType,
 } from "./costReportOptions";
 import type { CostItemType, FieldDef, RelationType } from "@/types";
 
@@ -104,4 +105,14 @@ describe("costFieldChoices", () => {
     const fields = [{ key: "x", label: "X" }];
     expect(costFieldChoices(["Initiative"], cat, fields, "TCO", labelOf)).toBe(fields);
   });
+});
+
+describe("isBuiltInFieldType", () => {
+  it.each(["text", "multiline_text", "number", "cost", "boolean", "date", "single_select", "multiple_select", "url", "percentage"])(
+    "keeps %s",
+    (type) => expect(isBuiltInFieldType(type)).toBe(true),
+  );
+  it.each(["ext.licensing.multivalue", "ext.x", "", "unknown"])("drops %s", (type) =>
+    expect(isBuiltInFieldType(type)).toBe(false),
+  );
 });

@@ -67,6 +67,7 @@ import {
   COMBINED_KEY,
   commonCostFields,
   costFieldChoices,
+  isBuiltInFieldType,
   commonGroupableFields,
   relationGroupOptions,
   typeKeysOf,
@@ -160,7 +161,7 @@ function fiscalYearOf(r: {
 
 function pickAllFields(schema: { fields: FieldDef[] }[]): FieldDef[] {
   const out: FieldDef[] = [];
-  for (const s of schema) for (const f of s.fields) out.push(f);
+  for (const s of schema) for (const f of s.fields) if (isBuiltInFieldType(f.type)) out.push(f);
   return out;
 }
 
@@ -180,8 +181,8 @@ interface CostTreemapPanelProps {
   /** The chart chrome, with the reading direction. */
   chrome: EChartsThemeValue;
   fmt: { format: (v: number) => string };
-  onTileClick: (p: EChartClickParams) => void;
-  onTileContextMenu: (p: EChartClickParams) => void;
+  onTileOpen: (p: EChartClickParams) => void;
+  onTileDrill: (p: EChartClickParams) => void;
 }
 
 /**
@@ -197,8 +198,8 @@ function CostTreemapPanel({
   fullscreen,
   chrome,
   fmt,
-  onTileClick,
-  onTileContextMenu,
+  onTileOpen,
+  onTileDrill,
 }: CostTreemapPanelProps) {
   const { t } = useTranslation(["reports", "common"]);
   const chartRef = useRef<ECharts | null>(null);
@@ -232,8 +233,8 @@ function CostTreemapPanel({
       option={option}
       fullscreen={fullscreen}
       ariaLabel={t("cost.title")}
-      onClick={onTileClick}
-      onContextMenu={onTileContextMenu}
+      onClick={onTileOpen}
+      onContextMenu={onTileDrill}
       onInit={onInit}
     />
   );
@@ -285,8 +286,8 @@ interface CostSankeyPanelProps {
   fullscreen: boolean;
   chrome: EChartsThemeValue;
   fmt: { format: (v: number) => string };
-  onNodeClick?: (p: EChartClickParams) => void;
-  onNodeContextMenu?: (p: EChartClickParams) => void;
+  onNodeOpen?: (p: EChartClickParams) => void;
+  onNodeDrill?: (p: EChartClickParams) => void;
 }
 
 /** The Sankey view: cost items -> groups -> cards. */
@@ -296,8 +297,8 @@ function CostSankeyPanel({
   fullscreen,
   chrome,
   fmt,
-  onNodeClick,
-  onNodeContextMenu,
+  onNodeOpen,
+  onNodeDrill,
 }: CostSankeyPanelProps) {
   const { t } = useTranslation(["reports", "common"]);
   const option = useMemo(
@@ -315,8 +316,8 @@ function CostSankeyPanel({
       fullscreen={fullscreen}
       ariaLabel={t("cost.sankeyChartView")}
       testId="cost-sankey-panel"
-      onClick={onNodeClick}
-      onContextMenu={onNodeContextMenu}
+      onClick={onNodeOpen}
+      onContextMenu={onNodeDrill}
     />
   );
 }
@@ -469,10 +470,11 @@ export default function CostReport() {
   // Drop picked columns the current type no longer defines (card-type
   // switch) — mirrors the removed aggregateOptions pruning effect.
   useEffect(() => {
-    setExtraColumns((prev) =>
-      prev.filter((key) => allFields.some((f) => f.key === key)),
-    );
-  }, [allFields]);
+    setExtraColumns((prev) => {
+      const next = prev.filter((key) => allFields.some((f) => f.key === key));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [allFields, extraColumns]);
 
   // Auto-select cost field when card type changes — only when the current one
   // is not on the type, so a restored field the type does carry is kept.
@@ -901,7 +903,7 @@ export default function CostReport() {
   );
   const trendChart =
     showForecast && trendComponents.length > 0 ? (
-      <Box sx={{ mt: 2 }}>
+      <Box sx={{ mb: 3 }}>
         <CostTrendChart
           typeParam={typeParam(cardTypeKey)}
           costField={costField}
@@ -1043,9 +1045,9 @@ export default function CostReport() {
     t,
   ]);
 
-  // A tile hands back the datum it was built from. Left click drills (a card tile into the card, a
+  // A tile hands back the datum it was built from. Right click drills (a card tile into the card, a
   // group frame into the group); a cost-item tile has neither id nor key and is inert.
-  const handleTileClick = useCallback(
+  const handleTileDrill = useCallback(
     (p: EChartClickParams) => {
       const d = p.data as { id?: string; key?: string } | undefined;
       if (d?.id) {
@@ -1056,7 +1058,7 @@ export default function CostReport() {
     [items, effectiveGroupBy, foldedKeys],
   );
   // Sankey nodes are named by id: `group:<key>`, `item:<key>`, or a card's id. Items and edges are inert.
-  const handleNodeClick = useCallback(
+  const handleNodeDrill = useCallback(
     (p: EChartClickParams) => {
       const name = p.name;
       if (p.dataType === "edge" || !name || name.startsWith("item:")) return;
@@ -1069,13 +1071,13 @@ export default function CostReport() {
     },
     [sankeyCards, effectiveGroupBy, foldedKeys],
   );
-  const handleNodeContextMenu = useCallback((p: EChartClickParams) => {
+  const handleNodeOpen = useCallback((p: EChartClickParams) => {
     const name = p.name;
     if (p.dataType === "edge" || !name || name.startsWith("item:") || name.startsWith("group:")) return;
     setSidePanelCardId(name);
   }, []);
-  // Right click opens the card in the side panel.
-  const handleTileContextMenu = useCallback((p: EChartClickParams) => {
+  // Left click opens the card in the side panel; a group frame does nothing.
+  const handleTileOpen = useCallback((p: EChartClickParams) => {
     const d = p.data as { id?: string } | undefined;
     if (d?.id) setSidePanelCardId(d.id);
   }, []);
@@ -1240,10 +1242,10 @@ export default function CostReport() {
       key={d.id}
       hover
       sx={{ cursor: "pointer" }}
-      onClick={() => handleTileClick({ data: { id: d.id } })}
+      onClick={() => setSidePanelCardId(d.id)}
       onContextMenu={(e: React.MouseEvent) => {
         e.preventDefault();
-        setSidePanelCardId(d.id);
+        handleTileDrill({ data: { id: d.id } });
       }}
     >
       <TableCell sx={{ fontWeight: 500, ...(indent && { pl: 4 }) }}>
@@ -1486,6 +1488,8 @@ export default function CostReport() {
         )}
       </Box>
 
+      {trendChart}
+
       {view === "chart" ? (
         items.length === 0 ? (
           <Box sx={{ py: 8, textAlign: "center" }}>
@@ -1510,14 +1514,13 @@ export default function CostReport() {
                     fullscreen={isFullscreen}
                     chrome={chartTheme}
                     fmt={fmt}
-                    onTileClick={handleTileClick}
-                    onTileContextMenu={handleTileContextMenu}
+                    onTileOpen={handleTileOpen}
+                    onTileDrill={handleTileDrill}
                   />
                 )}
               </FullscreenPanel>
             )}
             {legend}
-            {trendChart}
           </>
         )
       ) : view === "sankey" ? (
@@ -1538,13 +1541,12 @@ export default function CostReport() {
                   fullscreen={isFullscreen}
                   chrome={chartTheme}
                   fmt={fmt}
-                  onNodeClick={handleNodeClick}
-                  onNodeContextMenu={handleNodeContextMenu}
+                  onNodeOpen={handleNodeOpen}
+                  onNodeDrill={handleNodeDrill}
                 />
               )}
             </FullscreenPanel>
             {legend}
-            {trendChart}
           </>
         )
       ) : (
@@ -1592,7 +1594,10 @@ export default function CostReport() {
                       key={`grp-${g.key}`}
                       hover
                       sx={{ bgcolor: "action.hover", cursor: "pointer" }}
-                      onClick={() => setDrill({ group: g.key })}
+                      onContextMenu={(e: React.MouseEvent) => {
+                        e.preventDefault();
+                        setDrill({ group: g.key });
+                      }}
                     >
                       <TableCell sx={{ fontWeight: 700, fontSize: "0.85rem" }}>
                         <Box
@@ -1660,7 +1665,6 @@ export default function CostReport() {
             </TableBody>
           </Table>
         </Paper>
-        {trendChart}
         </>
       )}
       <CardDetailSidePanel

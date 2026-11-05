@@ -168,13 +168,13 @@ The **Cost Report** provides financial analysis of your technology landscape:
 
 All views share the same toolbar, filters, fiscal year and cost field, so switching view only changes the drawing.
 
-**Trend chart** — The cost trend (the current year, the four before it and, when selected, the **Forecast**) is shown in all three views, not only in the treemap, and follows the selected cost type.
+**Trend chart** — The cost trend (the current year, the four before it and, when selected, the **Forecast**) is shown above the chart in all three views, not only in the treemap, and follows the selected cost type.
 
 **Colours and legend** — Each group has its own hue, and within a group a darker shade means a costlier card. Beyond the eight costliest groups, the rest are folded into one **Others** group, and cards with no value for the grouping field go to **Unspecified**. The legend beside the chart lists the groups with their colours; the Sankey and the table use the same colours.
 
-**Drill-down** — A **left click** on a group or a card drills into it: the chart narrows to that group (or card) and a breadcrumb appears above it. Click **Back**, or any segment of the breadcrumb, to go up one level. Drilling into **Others** lists the groups that were folded into it. A **right click** opens the card's side panel instead. A hint above the chart reminds you of both gestures.
+**Drill-down** — A **right click** on a group or a card drills into it: the chart narrows to that group (or card) and a breadcrumb appears above it. Click **Back**, or any segment of the breadcrumb, to go up one level. Drilling into **Others** lists the groups that were folded into it. A **left click** on a card opens its side panel instead (a left click on a group does nothing). A hint above the chart reminds you of both gestures.
 
-**Table** — Besides the grouping and the attribute columns, the table has one column per cost item and a **TCO** column. Sorting by the selected cost type puts the costliest first. Group header rows and the footer total show the item sums, and each group header carries the swatch of its colour. A badge with the type icon and name in the name cell tells Applications and IT Components apart in the combined view. Clicking a row drills into it; right clicking it opens the card.
+**Table** — Besides the grouping and the attribute columns, the table has one column per cost item and a **TCO** column. Sorting by the selected cost type puts the costliest first. Group header rows and the footer total show the item sums, and each group header carries the swatch of its colour. A badge with the type icon and name in the name cell tells Applications and IT Components apart in the combined view. Right clicking a row drills into it; clicking it opens the card.
 
 ### Group by
 
