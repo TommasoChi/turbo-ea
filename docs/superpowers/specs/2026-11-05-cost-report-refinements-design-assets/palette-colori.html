@@ -1,0 +1,230 @@
+<title>Colori report costi</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: tre proposte di sfumatura dei membri, ciascuna in chiaro e scuro, treemap + legenda + Sankey. */
+  :root { --bg:#f6f5f2; --fg:#16150f; --muted:#6a685f; --line:#dedcd3; --card:#ffffff; --accent:#1c5cab; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#121211; --fg:#eceae3; --muted:#a5a398; --line:#2e2d29; --card:#1b1b19; --accent:#6da7ec; color-scheme: dark } }
+  :root[data-theme="dark"] { --bg:#121211; --fg:#eceae3; --muted:#a5a398; --line:#2e2d29; --card:#1b1b19; --accent:#6da7ec; color-scheme: dark }
+  body { background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding-block:28px 56px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:28px; }
+  h1 { font-size:26px; line-height:1.2; margin:0 0 6px; text-wrap:balance; }
+  h2 { font-size:18px; margin:0 0 4px; }
+  p { margin:0; max-width:68ch; color:var(--muted); }
+  .lead p + p { margin-top:8px; }
+  .prop { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; display:flex; flex-direction:column; gap:16px; }
+  .prop header p { color:var(--muted); }
+  .modes { display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:16px; }
+  .panel { border-radius:8px; padding:14px; border:1px solid var(--line); min-width:0; }
+  .panel h3 { font-size:12px; letter-spacing:.06em; text-transform:uppercase; margin:0 0 10px; color:var(--ink2); font-weight:600; }
+  .tm { position:relative; height:250px; border-radius:4px; overflow:hidden; background:var(--s); }
+  .tile { position:absolute; box-sizing:border-box; border:2px solid var(--s); border-radius:3px; padding:5px 6px; overflow:hidden; font-size:11.5px; line-height:1.25; }
+  .tile b { display:block; font-weight:600; }
+  .tile span { opacity:.85; font-variant-numeric:tabular-nums; }
+  .legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:12px; font-size:12.5px; color:var(--ink); }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  .hint { margin-top:10px; font-size:12px; color:var(--ink2); }
+  .sc-light { --s:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --other:#b4b2a8; --otherInk:#0b0b0b; background:#fcfcfb; color:#0b0b0b;
+    --g1:#2a78d6; --g2:#eb6834; --g3:#1baf7a; --g4:#eda100; --g5:#e87ba4; --g6:#008300; --g7:#6250d6; --g8:#e34948; }
+  .sc-dark { --s:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --other:#4b4a45; --otherInk:#f0efec; background:#1a1a19; color:#f0efec;
+    --g1:#3987e5; --g2:#d95926; --g3:#199e70; --g4:#c98500; --g5:#d55181; --g6:#008300; --g7:#9085e9; --g8:#e66767; border-color:#2c2c2a; }
+  .sk { width:100%; height:auto; display:block; }
+  .sk text { font:11px system-ui, sans-serif; }
+  .twocol { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:16px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { padding:3px 8px; border-radius:4px; font-size:12px; }
+  .note { font-size:13px; color:var(--muted); }
+  .pick { font-size:14px; }
+  svg text { fill:currentColor; }
+</style>
+
+<main>
+  <header class="lead">
+    <h1>Colori del report costi</h1>
+    <p>Proposta scelta: otto tinte controllate per chi vede male i colori, in chiaro e in scuro. Dati di esempio, non reali.</p>
+    <p>Ogni gruppo ha una tinta; le sue applicazioni e IT Component sono varianti più chiare o più scure di quella tinta. I gruppi oltre l'ottavo, i più piccoli, finiscono nel grigio «Altri».</p>
+  </header>
+
+  <section class="prop" id="p3"></section>
+
+  <section class="prop">
+    <header>
+      <h2>Senza raggruppamento</h2>
+      <p>Ogni applicazione ha un colore stabile (derivato dal suo nome, quindi non cambia quando ricarichi). Con più di cento card non servirebbe una legenda: il nome è già sul riquadro.</p>
+    </header>
+    <div class="twocol">
+      <div class="panel sc-light"><h3>Chiaro</h3><div class="chips" id="chips-light"></div></div>
+      <div class="panel sc-dark"><h3>Scuro</h3><div class="chips" id="chips-dark"></div></div>
+    </div>
+  </section>
+
+  <p class="note pick">Indicativo: vale la regola (tinta per gruppo, piu scuro = piu costoso), non i pixel.</p>
+</main>
+
+<script>
+(function () {
+  var DATA = [
+    { name: 'Vendite', m: [['CRM', 420], ['Order Portal', 260], ['Pricing Engine', 150], ['Lead Scoring', 70]] },
+    { name: 'Finanza', m: [['SAP S/4HANA', 640], ['Billing', 210], ['Treasury', 130]] },
+    { name: 'Risorse Umane', m: [['Payroll', 190], ['Recruiting', 90], ['Learning', 60]] },
+    { name: 'Operazioni IT', m: [['Monitoring', 160], ['Service Desk', 140], ['Backup', 120], ['Patch Mgmt', 50]] },
+    { name: 'Altri', other: true, count: 6, m: [['Intranet', 40], ['Wiki', 25], ['Badge', 30], ['Mail Gateway', 35], ['VPN', 28], ['Archivio', 22]] }
+  ];
+  var ITEMS = ['Licenze', 'Infrastruttura', 'Gestione applicativa', 'Altro'];
+  var SPLIT = [0.38, 0.27, 0.25, 0.10];
+  var PAL = {
+    light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
+    dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
+  };
+  var OTHER = { light: '#b4b2a8', dark: '#4b4a45' };
+  function hex(c) { return [1, 3, 5].map(function (i) { return parseInt(c.slice(i, i + 2), 16); }); }
+  function toHex(a) { return '#' + a.map(function (v) { return ('0' + Math.round(v).toString(16)).slice(-2); }).join(''); }
+  function mix(c, t) {
+    var a = hex(c), tgt = t >= 0 ? 255 : 0, p = Math.abs(t);
+    return toHex(a.map(function (v) { return v + (tgt - v) * p; }));
+  }
+  function ink(c) { var a = hex(c); return (a[0] * 299 + a[1] * 587 + a[2] * 114) / 1000 > 150 ? '#0b0b0b' : '#ffffff'; }
+  // Quanto sfumare il membro i di n (0 = il più costoso).
+  var STYLES = {
+    1: function (i, n) { return n < 2 ? 0 : -0.28 + (i / (n - 1)) * 0.66; },   // ampio: dal più scuro al più chiaro
+    2: function (i, n) { return n < 2 ? 0 : -0.10 + (i / (n - 1)) * 0.28; },   // stretto: tinta del gruppo sempre in evidenza
+    3: function (i, n) { return n < 2 ? 0 : -0.22 + (i / (n - 1)) * 0.62; }    // ordinale: più scuro = più costoso
+  };
+  function tint(style, mode, gi, mi, n, other) {
+    if (other) return mix(OTHER[mode], mode === 'light' ? (mi / n) * 0.18 : -(mi / n) * 0.18);
+    var t = STYLES[style](mi, n);
+    // Nel proposta 1 e 2 l'ordine è per posizione; nella 3 è per costo (già ordinato).
+    return mix(PAL[mode][gi], t);
+  }
+  function squarify(items, x, y, w, h) {
+    var out = [], rest = items.slice().sort(function (a, b) { return b.v - a.v; });
+    var tot = rest.reduce(function (s, d) { return s + d.v; }, 0);
+    var area = w * h;
+    rest.forEach(function (d) { d.a = d.v / tot * area; });
+    function worst(row, side) {
+      var s = row.reduce(function (q, d) { return q + d.a; }, 0), mx = 0, mn = 1e9;
+      row.forEach(function (d) { mx = Math.max(mx, d.a); mn = Math.min(mn, d.a); });
+      return Math.max(side * side * mx / (s * s), s * s / (side * side * mn));
+    }
+    while (rest.length) {
+      var side = Math.min(w, h), row = [rest[0]], i = 1;
+      while (i < rest.length && worst(row.concat(rest[i]), side) <= worst(row, side)) { row.push(rest[i]); i++; }
+      var s = row.reduce(function (q, d) { return q + d.a; }, 0);
+      if (w >= h) {
+        var cw = s / h, cy = y;
+        row.forEach(function (d) { var ch = d.a / cw; out.push({ d: d, x: x, y: cy, w: cw, h: ch }); cy += ch; });
+        x += cw; w -= cw;
+      } else {
+        var rh = s / w, cx = x;
+        row.forEach(function (d) { var cw2 = d.a / rh; out.push({ d: d, x: cx, y: y, w: cw2, h: rh }); cx += cw2; });
+        y += rh; h -= rh;
+      }
+      rest = rest.slice(row.length);
+    }
+    return out;
+  }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  function treemap(style, mode) {
+    var W = 560, H = 250, items = [];
+    DATA.forEach(function (g, gi) {
+      var ms = g.m.slice().sort(function (a, b) { return b[1] - a[1]; });
+      ms.forEach(function (m, mi) { items.push({ v: m[1], name: m[0], g: gi, mi: mi, n: ms.length, other: !!g.other }); });
+    });
+    // Disposizione a gruppi: prima per gruppo, poi dentro il gruppo.
+    var groups = DATA.map(function (g, gi) { return { v: g.m.reduce(function (s, m) { return s + m[1]; }, 0), gi: gi }; });
+    var top = squarify(groups.map(function (g) { return { v: g.v, gi: g.gi }; }), 0, 0, W, H), tiles = '';
+    top.forEach(function (cell) {
+      var gi = cell.d.gi, g = DATA[gi];
+      var inner = squarify(items.filter(function (it) { return it.g === gi; }).map(function (it) { return { v: it.v, it: it }; }), cell.x, cell.y, cell.w, cell.h);
+      inner.forEach(function (c) {
+        var it = c.d.it, col = tint(style, mode, gi, it.mi, it.n, it.other);
+        tiles += '<div class="tile" style="left:' + (c.x / W * 100) + '%;top:' + (c.y / H * 100) + '%;width:' + (c.w / W * 100) + '%;height:' + (c.h / H * 100) +
+          '%;background:' + col + ';color:' + ink(col) + '"><b>' + esc(it.name) + '</b><span>' + it.v + ' k€</span></div>';
+      });
+    });
+    return '<div class="tm">' + tiles + '</div>';
+  }
+  function legend(mode) {
+    var h = '';
+    DATA.forEach(function (g, gi) {
+      var col = g.other ? OTHER[mode] : PAL[mode][gi];
+      h += '<span><i style="background:' + col + '"></i>' + esc(g.name) + (g.other ? ' (' + g.count + ' gruppi minori)' : '') + '</span>';
+    });
+    return '<div class="legend">' + h + '</div>';
+  }
+  function panel(style, mode) {
+    return '<div class="panel sc-' + mode + '"><h3>' + (mode === 'light' ? 'Chiaro' : 'Scuro') + '</h3>' + treemap(style, mode) + legend(mode) +
+      '<p class="hint">Clic: analizza questo elemento · Clic destro: apri la scheda</p></div>';
+  }
+  function sankey(style, mode) {
+    var W = 900, H = 300, P = 6, x0 = 10, x1 = 330, x2 = 620, nw = 14;
+    var total = DATA.reduce(function (s, g) { return s + g.m.reduce(function (q, m) { return q + m[1]; }, 0); }, 0);
+    var usable = H - P * 12, k = usable / total, y = 0, svg = '', gnodes = [], mnodes = [];
+    DATA.forEach(function (g, gi) {
+      var ms = g.m.slice().sort(function (a, b) { return b[1] - a[1]; }), gh = 0, gy = y;
+      ms.forEach(function (m, mi) {
+        var h = m[1] * k;
+        mnodes.push({ name: m[0], y: y, h: h, gi: gi, mi: mi, n: ms.length, other: !!g.other, v: m[1] });
+        y += h + 2; gh += h + 2;
+      });
+      gnodes.push({ name: g.name, y: gy, h: gh - 2, gi: gi, other: !!g.other });
+      y += P;
+    });
+    var col = function (gi, other) { return other ? OTHER[mode] : PAL[mode][gi]; };
+    var iy = [0, 0, 0, 0], ih = [0, 0, 0, 0], ytot = H - 10;
+    var itemTot = SPLIT.map(function (s) { return s * total; });
+    var gap = 14, avail = H - gap * 3, ky = avail / total, cy = 0, ipos = ITEMS.map(function (n, i) { var o = { y: cy, h: itemTot[i] * ky }; cy += o.h + gap; return o; });
+    var used = [0, 0, 0, 0];
+    gnodes.forEach(function (g) {
+      var mm = mnodes.filter(function (n) { return n.gi === g.gi; });
+      mm.forEach(function (n) {
+        var c0 = n.other ? OTHER[mode] : col(g.gi, false);
+        svg += '<path d="M' + (x1 + nw) + ',' + (g.y + (n.y - mm[0].y) + n.h / 2) + 'C' + ((x1 + nw + x1 + (x2 - x1)) / 2) + ',' + (g.y + (n.y - mm[0].y) + n.h / 2) + ' ' + ((x1 + nw + x2) / 2) + ',' + (n.y + n.h / 2) + ' ' + x2 + ',' + (n.y + n.h / 2) + '" stroke="' + c0 + '" stroke-opacity=".45" stroke-width="' + Math.max(1, n.h) + '" fill="none"/>';
+      });
+      svg += '<path d="M' + (x0 + nw) + ',' + (g.y + g.h / 2) + 'C' + ((x0 + x1) / 2) + ',' + (g.y + g.h / 2) + ' ' + ((x0 + x1) / 2) + ',' + (g.y + g.h / 2) + ' ' + x1 + ',' + (g.y + g.h / 2) + '" stroke="' + col(g.gi, g.other) + '" stroke-opacity=".45" stroke-width="' + Math.max(1, g.h) + '" fill="none"/>';
+    });
+    mnodes.forEach(function (n) {
+      var c = tint(style, mode, n.gi, n.mi, n.n, n.other);
+      svg += '<rect x="' + x2 + '" y="' + n.y + '" width="' + nw + '" height="' + Math.max(2, n.h) + '" rx="2" fill="' + c + '"/>';
+      if (n.h >= 12) svg += '<text x="' + (x2 + nw + 6) + '" y="' + (n.y + n.h / 2 + 4) + '">' + esc(n.name) + '</text>';
+      // collegamenti verso le voci di costo (grigio neutro)
+      SPLIT.forEach(function (s, i) {
+        var h = n.h * s, p = ipos[i], sy = n.y + SPLIT.slice(0, i).reduce(function (q, z) { return q + z; }, 0) * n.h + h / 2;
+        var ty = p.y + used[i] + h * (p.h / (itemTot[i] * k) || 1) / 2;
+        svg += '<path d="M' + (x2 + nw) + ',' + sy + 'C' + (x2 + 120) + ',' + sy + ' ' + (x2 + 150) + ',' + ty + ' ' + (W - 150) + ',' + ty + '" stroke="' + (mode === 'light' ? '#898781' : '#898781') + '" stroke-opacity=".28" stroke-width="' + Math.max(0.6, h) + '" fill="none"/>';
+        used[i] += h * (p.h / (itemTot[i] * k) || 1);
+      });
+    });
+    gnodes.forEach(function (g) {
+      svg += '<rect x="' + x0 + '" y="' + g.y + '" width="' + nw + '" height="' + g.h + '" rx="2" fill="' + col(g.gi, g.other) + '"/>';
+      svg += '<text x="' + (x0 + nw + 6) + '" y="' + (g.y + g.h / 2 + 4) + '">' + esc(g.name) + '</text>';
+    });
+    ITEMS.forEach(function (n, i) {
+      var p = ipos[i];
+      svg += '<rect x="' + (W - 150) + '" y="' + p.y + '" width="' + nw + '" height="' + Math.max(4, p.h) + '" rx="2" fill="' + (mode === 'light' ? '#898781' : '#898781') + '"/>';
+      svg += '<text x="' + (W - 150 + nw + 6) + '" y="' + (p.y + Math.max(4, p.h) / 2 + 4) + '">' + n + '</text>';
+    });
+    return '<div class="panel sc-' + mode + '"><h3>Sankey · ' + (mode === 'light' ? 'chiaro' : 'scuro') + '</h3><svg class="sk" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Sankey di esempio: gruppo, applicazione, voce di costo">' + svg + '</svg></div>';
+  }
+  var TXT = {
+    1: ['Proposta 1 · Sfumatura ampia', 'Le applicazioni di un gruppo vanno dal tono scuro al chiaro della stessa tinta. Si distinguono bene tra loro, ma la tinta del gruppo si riconosce un po\' meno nei toni estremi.'],
+    2: ['Proposta 2 · Sfumatura stretta', 'Le applicazioni restano vicine alla tinta del gruppo. Il gruppo si riconosce a colpo d\'occhio; per distinguere le applicazioni conta il nome sul riquadro e il bordo.'],
+    3: ['Proposta 3 · Più scuro, più costoso', 'Dentro il gruppo la sfumatura segue il costo: il tono più scuro è l\'applicazione più cara. Il colore porta un\'informazione in più, e la lettura non cambia scegliendo un altro tipo di costo.']
+  };
+  [3].forEach(function (s) {
+    document.getElementById('p' + s).innerHTML =
+      '<header><h2>' + TXT[s][0] + '</h2><p>' + TXT[s][1] + '</p></header>' +
+      '<div class="modes">' + panel(s, 'light') + panel(s, 'dark') + '</div>' +
+      '<div class="modes">' + sankey(s, 'light') + sankey(s, 'dark') + '</div>';
+  });
+  // Senza raggruppamento: colore stabile dal nome.
+  var apps = ['CRM', 'SAP S/4HANA', 'Billing', 'Order Portal', 'Payroll', 'Monitoring', 'Service Desk', 'Pricing Engine', 'Recruiting', 'Treasury', 'Backup', 'Learning', 'Intranet', 'Wiki', 'Mail Gateway', 'VPN'];
+  function h32(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  ['light', 'dark'].forEach(function (mode) {
+    document.getElementById('chips-' + mode).innerHTML = apps.map(function (a) {
+      var h = h32(a), c = mix(PAL[mode][h % 8], [-0.18, 0, 0.22][(h >> 4) % 3]);
+      return '<span class="chip" style="background:' + c + ';color:' + ink(c) + '">' + esc(a) + '</span>';
+    }).join('');
+  });
+})();
+</script>
