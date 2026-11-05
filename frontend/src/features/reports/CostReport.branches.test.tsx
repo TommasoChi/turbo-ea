@@ -961,7 +961,7 @@ describe("CostReport type, cost field and group by selectors", () => {
     await waitFor(() =>
       expect(
         JSON.parse(screen.getByTestId("sankey").getAttribute("data-names")!),
-      ).toEqual(["Other costs", "Gold", "Unspecified", "A"]),
+      ).toEqual(["Other costs", "Gold", "Unspecified", "A · Application"]),
     );
   });
 

@@ -122,6 +122,9 @@ interface SankeyNode {
   /** Card nodes only: the card's total and its value per cost item (incl. `__other__`). */
   cost?: number;
   costs?: Record<string, number>;
+  /** Set by the page for the chart: the node's fill and a card's type label. */
+  color?: string;
+  typeLabel?: string;
 }
 
 interface SankeyLink {
@@ -740,6 +743,23 @@ export default function CostReport() {
     [effectiveGroupBy, groupableFields, t],
   );
 
+  // The Sankey view loads no treemap items: its scoped card nodes (with the group each hangs under)
+  // stand in for them, so group order, fold and colours are read off the same numbers in every view.
+  const sankeyCards = useMemo<CostItem[]>(() => {
+    if (!sankeyData) return [];
+    const groupOf = new Map<number, string>();
+    for (const l of sankeyData.links) {
+      const src = sankeyData.nodes[l.source];
+      if (src?.type === "Group") groupOf.set(l.target, src.id.replace(/^group:/, ""));
+    }
+    return sankeyData.nodes.flatMap((n, i) =>
+      n.type === "CostItem" || n.type === "Group" || (scope.closure && !scope.closure.has(n.id))
+        ? []
+        : [{ id: n.id, name: n.name, type: n.type, cost: n.cost ?? 0, group: groupOf.get(i) }],
+    );
+  }, [sankeyData, scope.closure]);
+  const colorItems = rawItems ? items : sankeyCards;
+
   const groups = useMemo(() => {
     if (!effectiveGroupBy) return null;
     // Keyed by the raw value: two raw values may share a label.
@@ -747,7 +767,7 @@ export default function CostReport() {
       string,
       { key: string; label: string; items: CostItem[]; cost: number }
     >();
-    for (const item of items) {
+    for (const item of colorItems) {
       const key = item.group ?? OTHER_GROUP;
       const g = map.get(key) || { key, label: groupLabel(key), items: [], cost: 0 };
       g.items.push(item);
@@ -755,15 +775,15 @@ export default function CostReport() {
       map.set(key, g);
     }
     return [...map.values()].sort((a, b) => b.cost - a.cost);
-  }, [items, effectiveGroupBy, groupLabel]);
+  }, [colorItems, effectiveGroupBy, groupLabel]);
 
   // The one colour assignment of the page: treemap, Sankey and table all read it. Groups take their
   // hue by scoped size, beyond the 8th they fold into Others, and a drill never changes it.
   const colorPlan = useMemo(() => {
     const cardColors = new Map<string, string>();
     if (!groups) {
-      for (const it of items) cardColors.set(it.id, cardColor(it.name, chartTheme.categorical));
-      return { cardColors, groups: [], foldedKeys: new Set<string>() };
+      for (const it of colorItems) cardColors.set(it.id, cardColor(it.name, chartTheme.categorical));
+      return { cardColors, groupHues: new Map<string, string>(), groups: [], foldedKeys: new Set<string>() };
     }
     const { groups: coloured, foldedKeys } = assignGroupColors(groups, {
       categorical: chartTheme.categorical,
@@ -775,8 +795,9 @@ export default function CostReport() {
       const ranked = [...g.items].sort((a, b) => b.cost - a.cost);
       ranked.forEach((it, i) => cardColors.set(it.id, memberShade(g.hue, i, ranked.length)));
     }
-    return { cardColors, groups: coloured, foldedKeys };
-  }, [groups, items, chartTheme.categorical, chartTheme.mode]);
+    const groupHues = new Map(coloured.map((g) => [g.key, g.hue]));
+    return { cardColors, groupHues, groups: coloured, foldedKeys };
+  }, [groups, colorItems, chartTheme.categorical, chartTheme.mode]);
   const { foldedKeys } = colorPlan;
   const groupDisplayLabel = (key: string, label: string) =>
     key === OTHERS_KEY ? t("cost.othersCount", { count: foldedKeys.size }) : label;
@@ -893,23 +914,28 @@ export default function CostReport() {
     [knownItemLabel, t],
   );
 
-  // Scope applies to the Sankey here: hide the cards outside it, then every
-  // cost-item and group node left without a card below it.
+  // Scope and drill apply to the Sankey here: hide the cards outside them, then every cost-item and
+  // group node left without a card below it; then the folded groups merge into one Others node.
+  const drillActive = drill.group !== undefined || drill.cardId !== undefined;
   const sankeyView = useMemo(() => {
     if (!sankeyData) return null;
     const closure = scope.closure;
+    const recompute = !!closure || drillActive;
+    const drillIds = drillActive ? new Set(applyDrill(sankeyCards, drill, foldedKeys).map((c) => c.id)) : null;
     const isCard = (n: SankeyNode) => n.type !== "CostItem" && n.type !== "Group";
-    const keep = sankeyData.nodes.map((n) => !isCard(n) || !closure || closure.has(n.id));
-    // Scoped: an item -> group flow is the sum of the kept cards' own values for that item.
+    const keep = sankeyData.nodes.map(
+      (n) => !isCard(n) || ((!closure || closure.has(n.id)) && (!drillIds || drillIds.has(n.id))),
+    );
+    // Recomputed: an item -> group flow is the sum of the kept cards' own values for that item.
     const flowValue = (l: SankeyLink) => {
-      if (!closure || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
+      if (!recompute || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
       const item = sankeyData.nodes[l.source].id.replace(/^item:/, "");
       return sankeyData.links
         .filter((c) => c.source === l.target && keep[c.target])
         .reduce((n, c) => n + (sankeyData.nodes[c.target].costs?.[item] ?? 0), 0);
     };
     const values = sankeyData.links.map(flowValue);
-    if (closure) {
+    if (recompute) {
       // item -> group -> card: the first pass drops groups, the second items.
       for (let pass = 0; pass < 2; pass++)
         sankeyData.nodes.forEach((n, i) => {
@@ -919,26 +945,47 @@ export default function CostReport() {
             );
         });
     }
+    const rawGroup = (n: SankeyNode) => n.id.replace(/^group:/, "");
+    const isFolded = (n: SankeyNode) => n.type === "Group" && foldedKeys.has(rawGroup(n));
     const index = new Map<number, number>();
     const nodes: SankeyNode[] = [];
+    let othersAt = -1;
     sankeyData.nodes.forEach((n, i) => {
       if (!keep[i]) return;
+      if (isFolded(n)) {
+        if (othersAt < 0) {
+          othersAt = nodes.length;
+          nodes.push({
+            id: `group:${OTHERS_KEY}`,
+            name: t("cost.others"),
+            type: "Group",
+            color: colorPlan.groupHues.get(OTHERS_KEY),
+          });
+        }
+        index.set(i, othersAt);
+        return;
+      }
       index.set(i, nodes.length);
       nodes.push(
         n.type === "Group"
-          ? { ...n, name: groupLabel(n.id.replace(/^group:/, "")) }
+          ? { ...n, name: groupLabel(rawGroup(n)), color: colorPlan.groupHues.get(rawGroup(n)) }
           : n.type === "CostItem"
             ? { ...n, name: itemLabel(n.id.replace(/^item:/, ""), n.name) }
-            : n,
+            : { ...n, color: colorPlan.cardColors.get(n.id), typeLabel: typeLabelOf(n.type) },
       );
     });
-    const links = sankeyData.links.flatMap((l, k) =>
-      keep[l.source] && keep[l.target] && (!closure || values[k] > 0)
-        ? [{ ...l, value: values[k], source: index.get(l.source)!, target: index.get(l.target)! }]
-        : [],
-    );
-    return { ...sankeyData, nodes, links };
-  }, [sankeyData, scope.closure, groupLabel, itemLabel]);
+    // Both ends are remapped, so the flows into and out of Others add up per (source, target).
+    const merged = new Map<string, SankeyLink>();
+    sankeyData.links.forEach((l, k) => {
+      if (!keep[l.source] || !keep[l.target] || (recompute && values[k] <= 0)) return;
+      const source = index.get(l.source)!;
+      const target = index.get(l.target)!;
+      const key = `${source}>${target}`;
+      const prev = merged.get(key);
+      merged.set(key, { source, target, value: (prev?.value ?? 0) + values[k] });
+    });
+    return { ...sankeyData, nodes, links: [...merged.values()] };
+  }, [sankeyData, sankeyCards, scope.closure, drill, drillActive, foldedKeys, colorPlan, groupLabel, itemLabel, typeLabelOf, t]);
 
   const printParams = useMemo(() => {
     const params: { label: string; value: string }[] = [];
@@ -999,6 +1046,25 @@ export default function CostReport() {
     },
     [items, effectiveGroupBy, foldedKeys],
   );
+  // Sankey nodes are named by id: `group:<key>`, `item:<key>`, or a card's id. Items and edges are inert.
+  const handleNodeClick = useCallback(
+    (p: EChartClickParams) => {
+      const name = p.name;
+      if (p.dataType === "edge" || !name || name.startsWith("item:")) return;
+      if (name.startsWith("group:")) {
+        setDrill({ group: drillGroupKey(name.slice("group:".length), foldedKeys) });
+        return;
+      }
+      const raw = effectiveGroupBy ? sankeyCards.find((c) => c.id === name)?.group : undefined;
+      setDrill({ ...(raw !== undefined && { group: drillGroupKey(raw, foldedKeys) }), cardId: name });
+    },
+    [sankeyCards, effectiveGroupBy, foldedKeys],
+  );
+  const handleNodeContextMenu = useCallback((p: EChartClickParams) => {
+    const name = p.name;
+    if (p.dataType === "edge" || !name || name.startsWith("item:") || name.startsWith("group:")) return;
+    setSidePanelCardId(name);
+  }, []);
   // Right click opens the card in the side panel.
   const handleTileContextMenu = useCallback((p: EChartClickParams) => {
     const d = p.data as { id?: string } | undefined;
@@ -1386,9 +1452,12 @@ export default function CostReport() {
                   fullscreen={isFullscreen}
                   chrome={chartTheme}
                   fmt={fmt}
+                  onNodeClick={handleNodeClick}
+                  onNodeContextMenu={handleNodeContextMenu}
                 />
               )}
             </FullscreenPanel>
+            {legend}
             {trendChart}
           </>
         )

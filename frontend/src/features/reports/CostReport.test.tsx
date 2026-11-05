@@ -16,7 +16,7 @@ import { createRef } from "react";
 import i18n from "@/i18n";
 import CostReport from "./CostReport";
 import { cardColor } from "./costColors";
-import { CHART_CATEGORICAL, CHART_OTHER, COST_UNSPECIFIED } from "@/theme/tokens";
+import { CHART_CATEGORICAL, CHART_OTHER, COST_UNSPECIFIED, STATUS_COLORS } from "@/theme/tokens";
 
 vi.mock("react-router", async () => {
   const actual = await vi.importActual("react-router");
@@ -528,10 +528,10 @@ describe("CostReport card-type selector and Sankey view", () => {
     const label = (id: string) => s.label.formatter({ name: id });
     const ids: string[] = s.data.map((d: { name: string }) => d.name);
     // Item and group nodes are named for what they are; the flow runs item -> group -> card.
-    expect(ids.map(label)).toEqual(["Total Annual Cost", "EMEA", "CRM"]);
+    expect(ids.map(label)).toEqual(["Total Annual Cost", "EMEA", "CRM · Application"]);
     expect(s.links.map((l: { source: string; target: string }) => [label(l.source), label(l.target)])).toEqual([
       ["Total Annual Cost", "EMEA"],
-      ["EMEA", "CRM"],
+      ["EMEA", "CRM · Application"],
     ]);
     const fill = (id: string) => s.data.find((d: { name: string }) => d.name === id).itemStyle.color;
     expect(fill(ids[0])).not.toBe(fill(ids[1]));
@@ -864,7 +864,8 @@ describe("CostReport Sankey from per-card costs", () => {
     const s = echartState.last().option.series[0];
     const ids: string[] = s.data.map((d: { name: string }) => d.name);
     return {
-      nodes: ids.map((id) => ({ name: s.label.formatter({ name: id }) })),
+      // a card prints "Name · Type": the tests below read the name
+      nodes: ids.map((id) => ({ name: s.label.formatter({ name: id }).replace(/ · .*$/, "") })),
       links: s.links.map((l: { source: string; target: string; value: number }) => ({
         source: ids.indexOf(l.source),
         target: ids.indexOf(l.target),
@@ -1013,7 +1014,7 @@ describe("CostReport treemap colours, type badge and drill", () => {
     fields: [{ key: "tier", label: "Tier", type: "single_select", options: [{ key: "gold", label: "Gold" }] }],
   };
   const withTier = (tp: typeof APP_TYPE) => ({ ...tp, fields_schema: [...tp.fields_schema, TIER_FIELD] });
-  const useTierMetamodel = () => {
+  const mockTierMetamodel = () => {
     const app = withTier(APP_TYPE);
     vi.mocked(useMetamodel).mockReturnValue({
       types: [app, withTier(ITC_TYPE)],
@@ -1120,7 +1121,7 @@ describe("CostReport treemap colours, type badge and drill", () => {
   });
 
   it("gives each group its hue by size, folds the 9th and later into Others, keeps Unspecified apart", async () => {
-    useTierMetamodel();
+    mockTierMetamodel();
     mockApi([...TEN, { id: "u", name: "Loose", type: "Application", cost: 5, group: "__other__", attributes: {} }]);
     consumedConfig = { view: "chart", groupBy: "field:tier" };
     renderCost();
@@ -1136,7 +1137,7 @@ describe("CostReport treemap colours, type badge and drill", () => {
   });
 
   it("lists the groups, Others and Unspecified in a legend", async () => {
-    useTierMetamodel();
+    mockTierMetamodel();
     mockApi([...TEN, { id: "u", name: "Loose", type: "Application", cost: 5, group: "__other__", attributes: {} }]);
     consumedConfig = { view: "chart", groupBy: "field:tier" };
     renderCost();
@@ -1155,7 +1156,7 @@ describe("CostReport treemap colours, type badge and drill", () => {
   });
 
   it("clicking a card inside a folded group drills with group Others", async () => {
-    useTierMetamodel();
+    mockTierMetamodel();
     mockApi(TEN);
     consumedConfig = { view: "chart", groupBy: "field:tier" };
     renderCost();
@@ -1167,7 +1168,7 @@ describe("CostReport treemap colours, type badge and drill", () => {
   });
 
   it("clicking the Others frame drills into the folded members", async () => {
-    useTierMetamodel();
+    mockTierMetamodel();
     mockApi(TEN);
     consumedConfig = { view: "chart", groupBy: "field:tier" };
     renderCost();
@@ -1200,5 +1201,138 @@ describe("CostReport treemap colours, type badge and drill", () => {
     await waitFor(() => expect(series().data.length).toBe(3));
     const erp = series().data.find((d: { name: string }) => d.name === "ERP");
     expect(erp.itemStyle.color).toBe(cardColor("ERP", CHART_CATEGORICAL.light));
+  });
+});
+
+describe("CostReport Sankey colours, fold, drill and right click", () => {
+  const TIER_FIELD = {
+    section: "General",
+    fields: [{ key: "tier", label: "Tier", type: "single_select", options: [{ key: "gold", label: "Gold" }] }],
+  };
+  const mockTierMetamodel = () => {
+    const app = { ...APP_TYPE, fields_schema: [...APP_TYPE.fields_schema, TIER_FIELD] };
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: [app, ITC_TYPE],
+      relationTypes: [],
+      loading: false,
+      getType: (key: string) => (key === "Application" ? app : undefined),
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+    } as never);
+  };
+  // g1..g10, one card each, g1 the costliest; c2 pays "host", the others "lic".
+  const costOf = (i: number) => 1000 - (i - 1) * 10;
+  const itemOf = (i: number) => (i === 2 ? "host" : "lic");
+  const NODES = [
+    { id: "item:lic", name: "Licences", type: "CostItem" },
+    { id: "item:host", name: "Hosting", type: "CostItem" },
+    ...Array.from({ length: 10 }, (_, k) => ({ id: `group:g${k + 1}`, name: `g${k + 1}`, type: "Group" })),
+    ...Array.from({ length: 10 }, (_, k) => ({
+      id: `c${k + 1}`,
+      name: `Card ${k + 1}`,
+      type: "Application",
+      cost: costOf(k + 1),
+      costs: { [itemOf(k + 1)]: costOf(k + 1) },
+    })),
+  ];
+  const LINKS = [
+    ...Array.from({ length: 10 }, (_, k) => ({
+      source: itemOf(k + 1) === "lic" ? 0 : 1,
+      target: 2 + k,
+      value: costOf(k + 1),
+    })),
+    ...Array.from({ length: 10 }, (_, k) => ({ source: 2 + k, target: 12 + k, value: costOf(k + 1) })),
+  ];
+  const sankey = () => echartState.byName("Sankey chart view");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- option trees are plain JSON
+  const series = (): any => sankey().option.series[0];
+  const ids = (): string[] => series().data.map((d: { name: string }) => d.name);
+  const linkValue = (from: string, to: string) =>
+    series().links.find((l: { source: string; target: string }) => l.source === from && l.target === to)?.value;
+  const backButton = () => screen.queryByRole("button", { name: /back/i });
+
+  const open = async () => {
+    mockTierMetamodel();
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.startsWith("/reports/cost-sankey"))
+        return Promise.resolve({
+          nodes: NODES,
+          links: LINKS,
+          total: 1,
+          fiscal_year: 2026,
+          current_fiscal_year: 2026,
+          fiscal_year_start: 1,
+        }) as never;
+      if (path.startsWith("/metamodel/cost-item-types")) return Promise.resolve(CATALOGUE) as never;
+      return Promise.resolve({ items: HIERARCHY, total: HIERARCHY.length }) as never;
+    });
+    consumedConfig = { view: "sankey", groupBy: "field:tier" };
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    await waitFor(() => expect(ids().length).toBeGreaterThan(0));
+  };
+
+  it("folds the groups beyond the 8th into one Others node with summed links in both directions", async () => {
+    await open();
+    expect(ids()).toContain("group:__others__");
+    expect(ids()).not.toContain("group:g9");
+    expect(ids()).not.toContain("group:g10");
+    expect(linkValue("item:lic", "group:__others__")).toBe(920 + 910 - 0);
+    expect(linkValue("group:__others__", "c9")).toBe(920);
+    expect(linkValue("group:__others__", "c10")).toBe(910);
+  });
+
+  it("colours group nodes with the shared hues, Others grey, items neutral", async () => {
+    await open();
+    const colour = (id: string) =>
+      series().data.find((d: { name: string }) => d.name === id).itemStyle.color;
+    expect(colour("group:g1")).toBe(CHART_CATEGORICAL.light[0]);
+    expect(colour("group:g8")).toBe(CHART_CATEGORICAL.light[7]);
+    expect(colour("group:__others__")).toBe(CHART_OTHER.light);
+    expect(colour("item:lic")).toBe(STATUS_COLORS.neutral);
+    // a lone member keeps its group's hue
+    expect(colour("c1")).toBe(CHART_CATEGORICAL.light[0]);
+  });
+
+  it("prints the card type on a card node", async () => {
+    await open();
+    expect(series().label.formatter({ name: "c1" })).toBe("Card 1 · Application");
+  });
+
+  it("left click on a group node drills into the group", async () => {
+    await open();
+    act(() => sankey().onClick!({ dataType: "node", name: "group:g1" }));
+    await waitFor(() => expect(backButton()).toBeInTheDocument());
+    expect(ids().sort()).toEqual(["c1", "group:g1", "item:lic"]);
+  });
+
+  it("left click on a node of the Others group drills with group Others", async () => {
+    await open();
+    act(() => sankey().onClick!({ dataType: "node", name: "group:__others__" }));
+    await waitFor(() => expect(backButton()).toBeInTheDocument());
+    expect(ids().sort()).toEqual(["c10", "c9", "group:__others__", "item:lic"]);
+  });
+
+  it("drilled card Sankey shows only that card and its items", async () => {
+    await open();
+    act(() => sankey().onClick!({ dataType: "node", name: "c2" }));
+    await waitFor(() => expect(ids().sort()).toEqual(["c2", "group:g2", "item:host"]));
+    expect(linkValue("item:host", "group:g2")).toBe(990);
+  });
+
+  it("right click on a card opens the side panel", async () => {
+    await open();
+    act(() => sankey().onContextMenu!({ dataType: "node", name: "c3" }));
+    expect(await screen.findByTestId("side-panel")).toHaveTextContent("c3");
+    expect(backButton()).not.toBeInTheDocument();
+  });
+
+  it("does nothing on a click on a cost-item node, an edge or a right click on a group", async () => {
+    await open();
+    act(() => sankey().onClick!({ dataType: "node", name: "item:lic" }));
+    act(() => sankey().onClick!({ dataType: "edge", name: "item:lic > group:g1" }));
+    act(() => sankey().onContextMenu!({ dataType: "node", name: "group:g1" }));
+    expect(backButton()).not.toBeInTheDocument();
+    expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument();
   });
 });
