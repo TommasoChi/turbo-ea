@@ -551,7 +551,9 @@ async def _promote_recurring_tasks_loop() -> None:
 #   V2 (2.52.0) — the mandatory-field gate that pins incomplete cards to 0.
 #   V3 (2.59.0) — the stakeholders bucket became a single yes/no slot instead
 #                 of one slot per role defined on the card type.
-_DQ_RESCORE_FLAG = "dataQualityCanonicalRescoreDoneV3"
+#   V4 (2.190.0) — licensingModel became a built-in field and the licensing
+#                 extension's contributed fields left the schemas (migration 178).
+_DQ_RESCORE_FLAG = "dataQualityCanonicalRescoreDoneV4"
 
 
 async def _one_shot_upgrade_announcement() -> None:

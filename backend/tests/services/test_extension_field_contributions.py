@@ -17,6 +17,7 @@ from app.services.extensions.field_contributions import (
     _sanitize_field,
     apply_field_contributions,
     remove_field_contributions,
+    strip_ext_fields,
 )
 from tests.conftest import create_card, create_card_type
 from tests.teax_helpers import build_manifest, build_teax, make_keypair, trust_test_key
@@ -628,3 +629,38 @@ class TestSubtypeBundleValidation(TestBundleValidation):
         )
         with pytest.raises(BundleError, match="missing card_type"):
             read_bundle(path)
+
+
+class TestStripExtFields:
+    async def test_strip_ext_fields_matches_remove_field_contributions(self, db):
+        schema = [
+            {"section": "Core", "fields": [{"key": "a", "label": "A", "type": "text"}]},
+            {
+                "section": "Mixed",
+                "fields": [
+                    {"key": "b", "label": "B", "type": "text"},
+                    {"key": "c", "label": "C", "type": "text", "ext": EXT},
+                ],
+            },
+            {"section": "Gone", "ext": EXT, "fields": [{"key": "d", "type": "text", "ext": EXT}]},
+            {"section": "Last", "fields": [{"key": "e", "label": "E", "type": "text"}]},
+        ]
+        config = {"__order": ["description", "custom:0", "custom:1", "custom:2", "custom:3"]}
+        ct = await create_card_type(
+            db,
+            key="Application",
+            label="Application",
+            fields_schema=schema,
+            section_config=config,
+        )
+        out_schema, out_config, removed = strip_ext_fields(schema, config, EXT)
+        n = await remove_field_contributions(db, EXT)
+        assert (out_schema, out_config, removed) == (ct.fields_schema, ct.section_config, n)
+        assert removed == 2
+        assert out_config["__order"] == ["description", "custom:0", "custom:1", "custom:2"]
+
+    def test_nothing_to_strip_returns_the_input_unchanged(self):
+        schema = [{"section": "Core", "fields": [{"key": "a"}]}]
+        config = {"__order": ["custom:0"]}
+        assert strip_ext_fields(schema, config, EXT) == (schema, config, 0)
+        assert strip_ext_fields(schema, None, EXT)[1] is None

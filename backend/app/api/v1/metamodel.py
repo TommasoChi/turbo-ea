@@ -150,7 +150,7 @@ def _section_names(fields_schema: object) -> list:
     ``custom:N`` in ``section_config.__order`` indexes into. That index skips
     the ``__description`` pseudo-section (it renders inside Description, not as
     a section of its own), exactly as ``customSectionsOf`` on the frontend and
-    ``_reindex_section_order`` in ``services/extensions/field_contributions``."""
+    ``_reindexed_config`` in ``services/extensions/field_contributions``."""
     sections = fields_schema if isinstance(fields_schema, list) else []
     return [
         s.get("section")
