@@ -24,6 +24,7 @@ VALID_REPORT_TYPES = {
     "lifecycle",
     "dependencies",
     "cost",
+    "licensing",
     "matrix",
     "data-quality",
     "eol",

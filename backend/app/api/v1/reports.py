@@ -11,7 +11,7 @@ from sqlalchemy import and_, case, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, parse_uuid
 from app.database import get_db
 from app.models.card import Card
 from app.models.card_type import CardType
@@ -27,6 +27,7 @@ from app.models.tag import CardTag, Tag, TagGroup
 from app.models.todo import Todo
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
+from app.schemas.licenses import LicenseReportOut
 from app.services.card_costs import COST_EVENT, COST_ITEM_TYPES, DERIVED_KEY
 from app.services.card_flags import (
     EOL_BUCKETS,
@@ -40,11 +41,12 @@ from app.services.card_flags import (
     stale_condition,
     stale_cutoff,
 )
-from app.services.card_licenses import LICENSE_EVENT
+from app.services.card_licenses import LICENSE_EVENT, LICENSE_TYPES
 from app.services.card_logo_service import logo_updated_map
 from app.services.card_read_scope import (
     CardReadScope,
     event_read_filters,
+    require_card_readable,
     scrub_event_payloads,
 )
 from app.services.cost_components import cost_components
@@ -75,6 +77,9 @@ from app.services.kpi_snapshot_service import (
     compute_trend_block,
     get_comparison_snapshot,
 )
+from app.services.license_report import PLATFORM_TYPE
+from app.services.license_report import build_report as build_license_report
+from app.services.license_status import METRICS as LICENSE_METRICS
 from app.services.lifecycle import current_lifecycle_phase, is_live_in_fiscal_year
 from app.services.permission_service import PermissionService
 from app.services.portfolio_payload import (
@@ -89,6 +94,7 @@ from app.services.value_chain_report import (
     build_stream_payload,
     find_visible_category,
 )
+from app.services.yearly_rows import WINDOW_PAST
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -1587,6 +1593,67 @@ async def cost_sankey(
         "current_fiscal_year": fy,
         "fiscal_year_start": fy_start,
     }
+
+
+@router.get("/licensing", response_model=LicenseReportOut)
+async def licensing_report(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    type: str = Query("Application"),
+    metric: str = Query("users"),
+    fiscal_year: int | None = Query(None, ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR),
+    group_by: str | None = Query(None),
+    card_id: str | None = Query(None),
+):
+    """Licensed vs actual per license type: the rows of ``fiscal_year`` (default the current
+    one; the Forecast year is not selectable) and the six-year trend, for the cards of one type,
+    one picked card or the cards linked to a picked Platform (see ``services/license_report``).
+    """
+    await PermissionService.require_permission(db, user, "licenses.view")
+    if type not in LICENSE_TYPES:
+        raise HTTPException(400, f"Unknown license card type: {type!r}")
+    if metric not in LICENSE_METRICS:
+        raise HTTPException(400, f"Unknown metric: {metric!r}")
+    fy_start = await get_fiscal_year_start(db)
+    cur = current_fiscal_year(fy_start)
+    fy = cur if fiscal_year is None else fiscal_year
+    if fy > cur:
+        raise HTTPException(400, "forecast_not_selectable")
+    if fy < cur - WINDOW_PAST:
+        raise HTTPException(400, "fiscal_year_out_of_range")
+
+    read_scope = await CardReadScope.load(db, user)
+    picked = None
+    if card_id is not None:
+        picked = parse_uuid(card_id)
+        picked_type = await require_card_readable(db, user, picked, mode="module")
+        if picked_type not in LICENSE_TYPES | {PLATFORM_TYPE}:
+            raise HTTPException(400, f"Card type {picked_type!r} holds no licenses")
+    type_def = (await db.execute(select(CardType).where(CardType.key == type))).scalar_one_or_none()
+    field_keys = {
+        f["key"] for s in (type_def.fields_schema if type_def else None) or [] for f in s["fields"]
+    }
+    hidden: dict[str, frozenset[str]] = {}
+    if not await PermissionService.has_app_permission(db, user, "costs.view"):
+        for ct in (
+            (await db.execute(select(CardType).where(CardType.key.in_(LICENSE_TYPES))))
+            .scalars()
+            .all()
+        ):
+            hidden[ct.key] = cost_field_keys_from_card_schema(ct.fields_schema)
+    try:
+        return await build_license_report(
+            db,
+            read_scope,
+            type_key=type,
+            metric=metric,
+            fy=fy,
+            group_by=parse_group_by(group_by, field_keys),
+            card_id=picked,
+            hidden_attribute_keys=hidden,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/capability-heatmap")

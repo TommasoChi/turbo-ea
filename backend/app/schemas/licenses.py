@@ -71,3 +71,53 @@ class CardLicensesOut(BaseModel):
     licensing_model: list[str]
     years: list[YearLicensesOut]
     catalogue: list[LicenseTypeOut]
+
+
+class ReportTypeCell(BaseModel):
+    licensed: int
+    actual: int | None
+    pct: float | None
+    no_licence: bool
+    status: str
+
+
+class ReportRow(BaseModel):
+    id: str
+    name: str
+    type: str
+    attributes: dict
+    group: str | None = None
+    status: str | None
+    worst_pct: float | None
+    worst_no_licence: bool
+    licensed_total: int
+    actual_total: int | None
+    by_type: dict[str, ReportTypeCell]
+
+
+class ReportTrendCell(BaseModel):
+    licensed: int
+    actual: int | None
+
+
+class ReportTrendYear(BaseModel):
+    fiscal_year: int
+    cards: dict[str, dict[str, ReportTrendCell]]
+
+
+class ReportAggregate(BaseModel):
+    id: str
+    name: str
+    type: str
+
+
+class LicenseReportOut(BaseModel):
+    fiscal_year: int
+    current_fiscal_year: int
+    fiscal_year_start: int
+    metric: str
+    years: list[int]
+    license_types: list[LicenseTypeOut]
+    aggregate: ReportAggregate | None
+    rows: list[ReportRow]
+    trend: list[ReportTrendYear]
