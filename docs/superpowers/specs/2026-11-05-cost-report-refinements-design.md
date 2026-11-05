@@ -1,6 +1,6 @@
 # Cost report refinements — drill-down, colours, cost-type selector
 
-**Status:** draft, to be reviewed by a fresh Opus builder-check, then approved by the user. **Branch:** `feat/cost-report-refinements` (off `main`, 2.188.3). Frontend only; no new route, no OpenAPI change.
+**Status:** approved by the user 2026-11-05, after a fresh Opus builder-check. **Branch:** `feat/cost-report-refinements` (off `main`, 2.188.3). Frontend only; no new route, no OpenAPI change.
 
 ## Intent
 
