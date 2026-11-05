@@ -28,7 +28,10 @@ import {
 } from "./costTreemapOption";
 import { buildCostSankeyOption } from "./costSankeyOption";
 import SaveReportDialog from "./SaveReportDialog";
-import CostTrendChart from "./CostTrendChart";
+import CostTrendChart, { type TrendSelection } from "./CostTrendChart";
+import CostDrillBar from "./CostDrillBar";
+import { crumbsOf, type Drill } from "./costDrill";
+import { OTHERS_KEY } from "./costColors";
 import MetricCard from "./MetricCard";
 import FullscreenPanel from "./FullscreenPanel";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -99,6 +102,7 @@ interface CostTreemapResponse {
 type ReportItemLabels = Record<string, { label: string; translations?: TranslationMap }>;
 
 const EMPTY_COMPONENTS: string[] = [];
+const EMPTY_FOLDED: Set<string> = new Set();
 
 interface SankeyNode {
   id: string;
@@ -764,6 +768,30 @@ export default function CostReport() {
     }
     return components;
   }, [catalogue, typeKeys, components]);
+  const [drill, setDrill] = useState<Drill>({});
+  // Until the colour assignment is wired, no group is folded.
+  const foldedKeys = EMPTY_FOLDED;
+  // A drill names ids that exist only under the current selection.
+  useEffect(() => {
+    setDrill((d) => (d.group === undefined && d.cardId === undefined ? d : {}));
+  }, [cardTypeKey, costField, effectiveGroupBy, fiscalYearParam, scopeIds]);
+  const trendSelection = useMemo<TrendSelection | undefined>(() => {
+    if (drill.cardId !== undefined) return { kind: "card", id: drill.cardId };
+    if (drill.group === undefined) return undefined;
+    return { kind: "group", keys: drill.group === OTHERS_KEY ? [...foldedKeys] : [drill.group] };
+  }, [drill, foldedKeys]);
+  const crumbs = useMemo(
+    () =>
+      crumbsOf(drill, {
+        root: t("cost.breadcrumbRoot"),
+        group: (k) => (k === OTHERS_KEY ? t("cost.others") : groupLabel(k)),
+        card: (id) => rawItems?.find((i) => i.id === id)?.name ?? id,
+      }),
+    [drill, t, groupLabel, rawItems],
+  );
+  const drillBar = (
+    <CostDrillBar crumbs={crumbs} onSelect={setDrill} hint={t("cost.drillHint")} />
+  );
   const trendChart =
     showForecast && trendComponents.length > 0 ? (
       <Box sx={{ mt: 2 }}>
@@ -775,6 +803,7 @@ export default function CostReport() {
           years={trendYears}
           currentFiscalYear={currentFiscalYear}
           groupBy={effectiveGroupBy}
+          selection={trendSelection}
           scopeIds={scope.closure}
         />
       </Box>
@@ -1196,6 +1225,7 @@ export default function CostReport() {
           </Box>
         ) : (
           <>
+            {drillBar}
             <FullscreenPanel label={t("cost.fullscreen")}>
               {(isFullscreen) => (
                 <CostTreemapPanel
@@ -1221,6 +1251,7 @@ export default function CostReport() {
           </Box>
         ) : (
           <>
+            {drillBar}
             <FullscreenPanel label={t("cost.fullscreen")}>
               {(isFullscreen) => (
                 <CostSankeyPanel
@@ -1237,6 +1268,7 @@ export default function CostReport() {
         )
       ) : (
         <>
+        {drillBar}
         <Paper variant="outlined" sx={{ overflow: "auto" }}>
           <Table size="small" stickyHeader>
             <TableHead>
