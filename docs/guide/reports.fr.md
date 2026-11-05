@@ -163,10 +163,18 @@ Le **Rapport Coûts** fournit une analyse financière de votre paysage technolog
 - **Vue treemap** -- Rectangles imbriqués dimensionnés par coût, avec regroupement optionnel (par ex. par organisation ou capacité)
 - **Vue graphique à barres** -- Comparaison des coûts entre composants
 - **Vue Sankey** -- Le même rapport dessiné comme un flux de coûts (voir [Vue Sankey](#sankey-view))
-- **Type de fiche** -- Choisissez le type de fiche autour duquel le rapport est construit : **Application**, **Composant IT**, **Application + Composant IT** (les deux types dans un même graphique, chaque fiche avec son propre coût) ou **Initiative**. Les initiatives suivent les mêmes règles d'exercice fiscal que les applications.
-- **Champ de coût** -- Choisissez le champ de coût qui est additionné. La liste affiche les champs de coût du type de fiche choisi ; pour Initiative, elle propose **costBudget** (par défaut) et **costActual**, qui ne sont jamais additionnés. Pour l'option combinée, seuls les champs de coût présents dans les deux types sont proposés.
+- **Type de fiche** -- Choisissez le type de fiche autour duquel le rapport est construit : **Application**, **Composant IT** ou **Application + Composant IT** (les deux types dans un même graphique, chaque fiche avec son propre coût). Les initiatives ne font plus partie du rapport de coûts.
+- **Type de coût** -- Choisissez ce qui est additionné : **TCO** (le total de tous les postes de coûts de chaque fiche) ou un poste de coûts isolé du catalogue. Pour l'option combinée, seuls les types de coût présents dans les deux types sont proposés.
 
-Toutes les vues partagent la même barre d'outils, les mêmes filtres, le même exercice fiscal et le même champ de coût : changer de vue ne modifie donc que le dessin.
+Toutes les vues partagent la même barre d'outils, les mêmes filtres, le même exercice fiscal et le même type de coût : changer de vue ne modifie donc que le dessin.
+
+**Graphique de tendance** -- La tendance des coûts (l'exercice courant, les quatre précédents et, lorsqu'elle est sélectionnée, la **Forecast**) est affichée dans les trois vues, et pas seulement dans la carte arborescente, et suit le type de coût sélectionné.
+
+**Couleurs et légende** -- Chaque groupe a sa propre teinte ; au sein d'un groupe, une teinte plus foncée signifie une fiche plus coûteuse. Au-delà des huit groupes les plus coûteux, les autres sont repliés dans un seul groupe **Autres**, et les fiches sans valeur pour le champ de regroupement vont dans **Non spécifié**. La légende à côté du graphique liste les groupes avec leurs couleurs ; le Sankey et le tableau utilisent les mêmes couleurs.
+
+**Exploration** -- Un **clic gauche** sur un groupe ou une fiche l'explore : le graphique se restreint à ce groupe (ou à cette fiche) et un fil d'Ariane apparaît au-dessus. Cliquez sur **Retour**, ou sur n'importe quel segment du fil d'Ariane, pour remonter d'un niveau. Explorer **Autres** liste les groupes qui y ont été repliés. Un **clic droit** ouvre à la place le panneau latéral de la fiche. Une indication au-dessus du graphique rappelle les deux gestes.
+
+**Tableau** -- En plus des colonnes de regroupement et d'attributs, le tableau a une colonne par poste de coûts et une colonne **TCO**. Le tri par type de coût sélectionné place les plus coûteuses en premier. Les lignes d'en-tête de groupe et le total en pied affichent les sommes par poste, et chaque en-tête de groupe porte la pastille de sa couleur. Un badge avec l'icône et le nom du type dans la cellule du nom distingue les Applications des Composants IT dans la vue combinée. Cliquer sur une ligne l'explore ; un clic droit ouvre la fiche.
 
 ### Regrouper par
 
@@ -202,7 +210,7 @@ Un exercice fiscal se nomme **FY** suivi des deux derniers chiffres de l'année 
 
 La règle s'applique à toute la page — les totaux, le treemap, le tableau, les agrégations par **Source des coûts** et le forage — et l'exercice sélectionné figure dans l'en-tête imprimé.
 
-Lorsque **Forecast** est l'exercice sélectionné, un **graphique d'historique** affiche le coût sur l'exercice courant, les quatre précédents et l'exercice de prévision. Il n'est affiché pour aucun autre exercice. Chaque barre est empilée, avec un segment par composante de coût : un poste de coûts pour les Applications et les Composants IT, sinon un champ de coût (la légende et l'infobulle utilisent alors le nom technique du champ, par exemple `softwareLicensingCost`).
+Lorsque **Forecast** est l'exercice sélectionné, le **graphique d'historique** affiche le coût sur l'exercice courant, les quatre précédents et l'exercice de prévision. Chaque barre est empilée, avec un segment par composante de coût : un poste de coûts pour les Applications et les Composants IT, sinon un champ de coût (la légende et l'infobulle utilisent alors le nom technique du champ, par exemple `softwareLicensingCost`).
 
 Le mois de début de l'exercice est défini par un administrateur dans [Paramètres → Général](../admin/settings.md).
 
