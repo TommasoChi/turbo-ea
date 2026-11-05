@@ -13,7 +13,8 @@
 ## Global Constraints
 
 - English-only i18n keys in `frontend/src/i18n/locales/en/reports.json`; no other locale file opened (`/translate` runs before the PR).
-- No hardcoded hex outside `frontend/src/theme/tokens.ts`; palette = `CHART_CATEGORICAL[mode]` (8 hues, fixed order, never cycled) plus one new grey token.
+- No hardcoded hex outside `frontend/src/theme/tokens.ts` (`theme/rawColours.sourceScan.test.ts` counts exactly; never add a raw colour to `CostReport.tsx` or `costColors.ts`): palette = `CHART_CATEGORICAL[mode]` (8 hues, fixed order, never cycled). New tokens, all in `tokens.ts`: `CHART_OTHER = {light:"#b4b2a8",dark:"#4b4a45"}` (Others), `COST_UNSPECIFIED = {light:"#d9d7cf",dark:"#6a6860"}` (the no-group bucket), `CHART_LABEL_ON_LIGHT = "#0b0b0b"` (beside the existing `CHART_LABEL_ON_DARK`), `COST_DELTA_UP_ON_LIGHT = "#1b5e20"`, `COST_DELTA_DOWN_ON_LIGHT = "#b71c1c"`.
+- **One basis for group order and colour in all three views:** the group totals of the page's selected `costField` (treemap `items`, Sankey card `cost`, table rows are the same numbers), after scope. The table's per-item columns and TCO column come from the breakdown and never change colours or order.
 - Fetches in effects go through `useAbortableEffect` / `useApiQuery`; guard every `setState` with `isCurrent()`.
 - Card type labels via `useTypeLabel()`; never hardcode "Application".
 - Tests next to source; `vi.mock("@/api/client")`; `clearMocks` is global.
@@ -44,7 +45,7 @@
 **Files:** Modify `frontend/src/components/charts/EChart.tsx`; Test `EChart.test.tsx` (extend, or create beside it if absent).
 
 **Interfaces:**
-- Produces: `EChart` prop `onContextMenu?: (params: EChartClickParams) => void`. ECharts emits `contextmenu` with the same datum; the wrapper calls `params.event?.event?.preventDefault()` then the prop. When the prop is absent nothing is registered (native menu stays).
+- Produces: `EChart` prop `onContextMenu?: (params: EChartClickParams) => void`. ECharts emits `contextmenu` with the same datum; the wrapper calls `params.event?.event?.preventDefault()` then the prop. When the prop is absent nothing is registered. Add `event?: { event?: MouseEvent }` to `EChartClickParams` (`EChart.tsx:66-74`). `CostChartFrame` (`CostReport.tsx:220`) gets `onContextMenu`, forwards it, and sets `onContextMenu={(e) => e.preventDefault()}` on its `Paper` when a handler is given, so empty canvas space does not open the browser menu either. `CostSankeyPanel` (`:263`) gets `onNodeClick` / `onNodeContextMenu` props forwarded the same way.
 
 - [ ] Step 1: failing test `calls onContextMenu with the datum and prevents the native menu`: render `EChart` with a stubbed `echarts.init` chart (follow the file's existing mock style), fire the registered `contextmenu` handler with `{data:{id:"a"}, event:{event:{preventDefault}}}`, assert prop called with the params and `preventDefault` called once. Second test `registers no contextmenu handler without the prop`.
 - [ ] Step 2: run `npx vitest run src/components/charts/EChart.test.tsx` → FAIL.
@@ -53,22 +54,25 @@
 
 ### Task 2: Colour assignment
 
-**Files:** Modify `frontend/src/theme/tokens.ts` (add `CHART_OTHER = { light: "#b4b2a8", dark: "#4b4a45" } as const`); Create `costColors.ts`, `costColors.test.ts`.
+**Files:** Modify `frontend/src/theme/tokens.ts` (add the five tokens listed in Global Constraints); Create `costColors.ts`, `costColors.test.ts`.
 
 **Interfaces (produces):**
 ```ts
 export const MAX_GROUP_HUES = 8;
 export function shade(hex: string, t: number): string;        // t<0 toward black, t>0 toward white, |t|<=1
-export function inkOn(bg: string): "#0b0b0b" | "#ffffff";     // luminance threshold 150, as the mockup
+export function inkOn(bg: string): string;     // luminance (299r+587g+114b)/1000 > 150 -> CHART_LABEL_ON_LIGHT else CHART_LABEL_ON_DARK (tokens)
 export interface ColoredGroup<T> { key: string; label: string; cost: number; items: T[]; hue: string; folded: boolean }
+export const OTHERS_KEY = "__others__";
 export function assignGroupColors<T extends { cost: number }>(
   groups: { key: string; label: string; cost: number; items: T[] }[],
-  categorical: readonly string[], other: string, unspecifiedKey: string,
-): ColoredGroup<T>[];   // by cost desc: first 8 real groups get hues; the rest merge into ONE folded group {key:"__others__"} with `other` hue and summed items/cost; the unspecifiedKey group is never folded and never takes a hue (hue = other)
+  o: { categorical: readonly string[]; other: string; unspecified: string; unspecifiedKey: string },
+): { groups: ColoredGroup<T>[]; foldedKeys: Set<string> };
+export function drillGroupKey(rawKey: string, foldedKeys: Set<string>): string; // folded raw key -> OTHERS_KEY, else rawKey
+//    // by cost desc: first 8 real groups get hues; the rest merge into ONE folded group {key:"__others__"} with `other` hue and summed items/cost; the unspecifiedKey group is never folded and never takes a hue (hue = other)
 export function memberShade(hue: string, rank: number, n: number): string; // rank 0 = costliest = darkest; t from -0.22 (rank 0) to +0.40 (rank n-1); n<2 → hue
 export function cardColor(name: string, categorical: readonly string[]): string; // fnv1a(name) → hue (h % 8) × step [-0.18, 0, 0.22][(h>>4)%3]
 ```
-- [ ] Tests (write first, watch fail): `assignGroupColors` with 10 groups → 8 hued, 1 folded with summed cost and 2 groups' items; unspecified group keeps its own entry and the `other` hue; stable order by cost; `memberShade` rank 0 darker than rank n-1 (compare luminance), n=1 returns hue; `cardColor` same name → same colour, different names usually differ, always one of 24 values; `inkOn("#ffffff")` is dark, `inkOn("#2a78d6")` is white.
+- [ ] Tests (write first, watch fail): `assignGroupColors` with 10 groups → 8 hued, 1 folded with summed cost and 2 groups' items; unspecified group keeps its own entry with the `unspecified` hue, `foldedKeys` lists the merged raw keys; stable order by cost; `memberShade` rank 0 darker than rank n-1 (compare luminance), n=1 returns hue; `cardColor` same name → same colour, 200 distinct names yield ≥ 12 distinct colours, every value is one of the 24 (hue × step) combinations; `inkOn("#ffffff")` is dark, `inkOn("#2a78d6")` is white.
 - [ ] Implement; run; commit `feat(cost-report): colour assignment helpers`.
 
 ### Task 3: Selector from the catalogue, Initiative out
@@ -88,7 +92,7 @@ export function cardColor(name: string, categorical: readonly string[]): string;
 **Files:** Modify `CostTrendChart.tsx`, `costTrendOption.ts` (only if labels need it), `CostReport.tsx`; Tests `CostTrendChart.test.tsx`, `CostReport.test.tsx`.
 
 **Interfaces:**
-- `CostTrendChart` new props: `groupBy?: string` (passed through as `group_by`), `selection?: { kind: "card"; id: string } | { kind: "group"; key: string }`, `scopeIds?: Set<string> | null`. Row value for a component = `Σ response.items.cost` over items that pass: scope (`scopeIds` null = all) and selection (card → `item.id === id`; group → `item.group === key`; none → all). With no selection and no scope it equals the old `total`. Components come from the caller.
+- `CostTrendChart` new props: `groupBy?: string` (passed through as `group_by`), `selection?: { kind: "card"; id: string } | { kind: "group"; keys: string[] }` (group = raw keys; several for Others), `scopeIds?: Set<string> | null`. Row value for a component = `Σ response.items.cost` over items that pass: scope (`scopeIds` null = all) and selection (card → `item.id === id`; group → `keys.includes(item.group)`; none → all). With no selection and no scope it **uses the response `total`** (keeps the existing mocks and tests valid; type the call `api.get<{ total: number; items?: {id:string;cost:number;group?:string}[] }>`). Components come from the caller.
 - In `CostReport.tsx`: `trendComponents` = catalogue keys in `sort_order` for cost-item types (else `components`); render the chart when `showForecast && trendComponents.length > 0` **below** the treemap panel, the Sankey panel and the table (all three branches), passing `selection` from the drill state (Task 5; until then `undefined`), `groupBy={effectiveGroupBy}`, `scopeIds={scope.closure}`.
 
 - [ ] Tests first: `sums only the selected card across years`, `sums the group's members and sends group_by`, `respects the scope closure`, `total unchanged without selection or scope`; in `CostReport.test.tsx`: `shows the trend chart under the Sankey with Forecast`, `…under the table`.
@@ -104,13 +108,13 @@ export interface Drill { group?: string; cardId?: string }   // group = raw grou
 export type Crumb = { kind: "root" | "group" | "card"; label: string; target: Drill };
 export function crumbsOf(drill: Drill, labels: { root: string; group: (k: string) => string; card: (id: string) => string }): Crumb[];
 export function backOf(drill: Drill): Drill;       // card→(group if it had one else {}) ; group→{}
-export function applyDrill<T extends { id: string; group?: string }>(items: T[], drill: Drill, foldedKeys: Set<string>): T[]; // group "__others__" matches any item whose group is in foldedKeys
+export function applyDrill<T extends { id: string; group?: string }>(items: T[], drill: Drill, foldedKeys: Set<string>): T[]; // group OTHERS_KEY matches any item whose group is in foldedKeys; a group drill plus cardId requires both
 ```
 `CostDrillBar` props: `{ crumbs: Crumb[]; onSelect: (d: Drill) => void; hint: string }` — shows `‹ Back` (when more than root) and clickable crumbs, plus the hint line (always shown).
 
 - [ ] Tests first: `backOf` card-in-group → group, card without group → root; `applyDrill` for a group, for Others (folded keys), for a card; `CostDrillBar` renders crumbs, Back calls `onSelect(backOf)`, clicking root crumb resets, hint always present.
-- [ ] Implement; in `CostReport.tsx` add `const [drill, setDrill] = useState<Drill>({})` and an effect resetting it when `cardTypeKey`, `costField`, `effectiveGroupBy`, `fiscalYearParam` or `scopeIds` change; pass `selection` to the trend chart (card → `{kind:"card"}`, group only → `{kind:"group"}`; Others → no single selection: sum of folded groups — add `keys?: string[]` to the group selection: `{kind:"group"; keys: string[]}`); render `CostDrillBar` above each of the three views.
-- [ ] Tests in `CostReport.test.tsx`: `drill resets when the cost type changes`. Commit `feat(cost-report): drill state and breadcrumb`.
+- [ ] Implement; in `CostReport.tsx` add `const [drill, setDrill] = useState<Drill>({})` and an effect resetting it when `cardTypeKey`, `costField`, `effectiveGroupBy`, `fiscalYearParam` or `scopeIds` change; pass `selection` to the trend chart (card -> `{kind:"card"}`; group -> `{kind:"group", keys: drill.group === OTHERS_KEY ? [...foldedKeys] : [drill.group]}`); `foldedKeys` is an empty set until Tasks 7/8 wire `assignGroupColors` (so this task compiles and tests alone); render `CostDrillBar` above each of the three views.
+- [ ] Test in `costDrill.test.ts` only (the page-level reset test moves to Task 7, once a click can start a drill). Commit `feat(cost-report): drill state and breadcrumb`.
 
 ### Task 6: Per-card breakdown data
 
@@ -119,9 +123,9 @@ export function applyDrill<T extends { id: string; group?: string }>(items: T[],
 **Interfaces:**
 ```ts
 export function useCostBreakdown(args: { enabled: boolean; typeParam: string; groupBy: string; fiscalYear: number | null }):
-  { breakdown: Map<string, Record<string, number>> | null };  // cardId → {itemKey: cost}; null while loading/disabled
+  { breakdown: Map<string, { total: number; items: Record<string, number> }> | null };  // null while loading/disabled
 ```
-Fetches `/reports/cost-sankey?type&cost_field=costTotalAnnual[&group_by][&fiscal_year]` via `useAbortableEffect`, reads `nodes[].id` (card nodes: `type` not `CostItem`/`Group`) and `nodes[].costs`. `enabled` = `canViewCostsGlobally && (view === "table" || drill.cardId)`; when the page is already on the Sankey view with TCO, reuse nothing — the hook fires its own call (simple, one extra request).
+Fetches `/reports/cost-sankey?type&cost_field=costTotalAnnual[&group_by][&fiscal_year]`; per card `total` = node `cost` (includes the `__other__` residual, which has no column of its own) and `items` = node `costs` via `useAbortableEffect`, reads `nodes[].id` (card nodes: `type` not `CostItem`/`Group`) and `nodes[].costs`. `enabled` = `canViewCostsGlobally && (view === "table" || drill.cardId)`; when the page is already on the Sankey view with TCO, reuse nothing — the hook fires its own call (simple, one extra request).
 
 - [ ] Tests first: maps card nodes to costs, ignores group/item nodes, not called when `enabled=false`, drops a stale response (`isCurrent`).
 - [ ] Implement; commit `feat(cost-report): per-card item breakdown`.
@@ -131,13 +135,13 @@ Fetches `/reports/cost-sankey?type&cost_field=costTotalAnnual[&group_by][&fiscal
 **Files:** Modify `costTreemapOption.ts`, `CostReport.tsx`; Tests `costTreemapOption.test.ts`, `CostReport.test.tsx`.
 
 **Interfaces:**
-- `CostTreemapItem` gains `color?: string`, `typeKey?: string`, `typeLabel?: string`, `typeIcon?: string`. `CostTreemapGroup` gains `key: string`, `color?: string`. Datums carry `key` (group frame) and `typeLabel`. `leaf()` uses `d.color ?? treemapColor(...)`; group frame uses `g.color`; label text colour from `inkOn(color)` (formatter receives the datum's colour via `data.itemStyle.color`); delta badge colours switch to `inkOn`-aware pair (dark text pair on light tiles: add tokens `COST_DELTA_UP_ON_LIGHT/DOWN_ON_LIGHT` darker greens/reds). Tile second line = `typeLabel` (icon only when tier is "name" and the rect is too small → keep `tileLabelTier`; add tier handling: type line printed only in "full").
+- `CostTreemapItem` gains `color?: string`, `typeKey?: string`, `typeLabel?: string`, `typeIcon?: string`. `CostTreemapGroup` gains `key: string`, `color?: string`. Datums carry `key` (group frame) and `typeLabel`. `leaf()` uses `d.color ?? treemapColor(...)`; group frame uses `g.color`; label text colour from `inkOn(color)` (formatter receives the datum's colour via `data.itemStyle.color`); delta badge colours switch to `inkOn`-aware pair (dark text pair on light tiles: add tokens `COST_DELTA_UP_ON_LIGHT/DOWN_ON_LIGHT` darker greens/reds). Tile second line = `typeLabel`, printed only in the "full" tier (no icon-only tier: a canvas label cannot draw a Material Symbol; the icon appears as text-adjacent in the table cell, and the tooltip always names the type).
 - Tooltip adds `typeLabel`. Legend: `CostReport` renders `CostLegend` (below) from `assignGroupColors` output.
-- `CostReport.tsx`: build colours with `chartTheme.categorical`, `CHART_OTHER[mode]`; grouped → `assignGroupColors` then `memberShade(hue, rank, n)` per member; ungrouped → `cardColor(name, categorical)`. `onTileClick` (left): datum with `id` → `setDrill({group: item.group, cardId: id})`; datum with `key` and no id (frame) → `setDrill({group:key})`. `onContextMenu`: datum with `id` → `setSidePanelCardId`. Drilled to a card: tiles = one per non-zero item of `breakdown.get(cardId)` (colour from `CHART_CATEGORICAL` by catalogue sort position, labels from `trendLabelOf`), clicks inert. Drilled to a group: `applyDrill` on `items`.
-- `CostLegend` (small component in `CostReport.tsx` or own file): swatch + label per `ColoredGroup`, including "Others (N groups)"; not rendered when ungrouped.
+- `CostReport.tsx`: build colours with `chartTheme.categorical`, `CHART_OTHER[mode]`; grouped → `assignGroupColors` then `memberShade(hue, rank, n)` per member; ungrouped → `cardColor(name, categorical)`. `onTileClick` (left): datum with `id` → `setDrill({group: item.group && drillGroupKey(item.group, foldedKeys), cardId: id})`; datum with `key` and no id (frame) → `setDrill({group:key})`. `onContextMenu`: datum with `id` → `setSidePanelCardId`. Drilled to a card: tiles = one per non-zero item of `breakdown.get(cardId)` (colour = `chartTheme.categorical` by catalogue sort position for the first 8 items; the rest merge into one tile "Other items" in `CHART_OTHER`; labels from `trendLabelOf`), clicks inert. Drilled to a group: `applyDrill` on `items`.
+- `CostLegend` (own file `CostLegend.tsx` + test): swatch + label per `ColoredGroup`: real groups, "Others (N groups)" (`CHART_OTHER`), and the Unspecified bucket with its own label and `COST_UNSPECIFIED` swatch, so the two greys are never mistaken; not rendered when ungrouped.
 - Type badge data: `typeKey` from the card — `CostItem` response items lack the type; add it by mapping `item.type` if present, else from the combined-view id lookup: **check `reports.py:1505-1515` returns `type`** (it does: id, name, type, cost…); extend the frontend `CostItem` interface with `type?: string`. Icon/label via `useMetamodel().types` + `useTypeLabel()`.
 
-- [ ] Tests first (option): custom colours used; frame datum has `key`; label colour flips to dark ink on a light tile; type line shown only in `full` tier; (page): `left click on a tile drills into that card`, `right click on a tile opens the side panel`, `legend lists groups and Others at the 9th group`, `type badge shows Application / IT Component in the combined view`.
+- [ ] Tests first (option): custom colours used; frame datum has `key`; label colour flips to dark ink on a light tile; type line shown only in `full` tier; (page): `left click on a tile drills into that card`, `right click on a tile opens the side panel`, `drill resets when the cost type changes`, `clicking a card inside a folded group drills with group Others`, `legend lists groups and Others at the 9th group`, `type badge shows Application / IT Component in the combined view`.
 - [ ] Implement; commit `feat(cost-report): treemap colours, type badge, drill and right click`.
 
 ### Task 8: Sankey — colours, fold, clicks, drill
@@ -147,8 +151,8 @@ Fetches `/reports/cost-sankey?type&cost_field=costTotalAnnual[&group_by][&fiscal
 **Interfaces:**
 - `CostSankeyNodeIn` gains `color?: string` (used instead of `costSankeyNodeColor` when present; cost-item nodes stay neutral grey via a new token reuse of `CHART_OTHER`-like neutral → use `STATUS_COLORS.neutral`), `typeLabel?: string` appended to the card label (`Name · Type`) and the tooltip, `kind: "group" | "card" | "item"` derived from `type`.
 - `buildCostSankeyOption(nodes, links, o)` unchanged signature; `EChart` gets `onClick`/`onContextMenu` via `CostSankeyPanel` props `onNodeClick(p)` / `onNodeContextMenu(p)`; datum `name` = node id (`group:<key>`, card id, `item:<key>`): left click on `group:`/card → drill; on `item:` or an edge → ignored; right click on a card → side panel.
-- Fold in `sankeyView`: after scope filtering, groups beyond the 8th (by summed value, `__other__` excluded) merge into one node `group:__others__` named "Others": remap links whose target is a folded group, summing values per (source,target); card nodes keep their ids; colours from `assignGroupColors` + `memberShade` as in Task 7 (shared helper `colorizeGroups` in `costColors.ts` if duplication appears — extract then).
-- Drill filter in `sankeyView`: `keep` additionally restricts card nodes to `applyDrill`-selected ids (group → its member cards; card → that card), then the existing two-pass pruning drops empty groups/items.
+- Fold in `sankeyView`: applied **after** the scope/drill recomputation of `values[]`; groups beyond the 8th (by summed value, the `__other__` bucket excluded; same `assignGroupColors` result as Task 7) merge into one node `group:__others__` named "Others": remap BOTH link directions (item->group links with a folded target, and group->card links with a folded source), summing values per (source,target). The Sankey click handler strips the `group:` prefix and applies `drillGroupKey(key, foldedKeys)`; card nodes keep their ids; colours from `assignGroupColors` + `memberShade` as in Task 7, computed once in `CostReport` into a colour map shared by treemap, Sankey and table.
+- Drill filter in `sankeyView`: `keep` additionally restricts card nodes to `applyDrill`-selected ids (group → its member cards; card → that card), then pruning drops empty groups/items. **The existing guards must widen:** `if (closure)` at `CostReport.tsx:743`, `flowValue` (`:736`) and the link filter (`:767`) run today only with a scope; change each to `closure || drillActive` so a drill without scope recomputes item->group values and prunes empties.
 
 - [ ] Tests first (option): node `color` wins; item nodes grey; label includes type; (page): `Sankey left click drills into a group`, `right click on a card opens the side panel`, `click on a cost-item node does nothing`, `groups beyond the 8th fold into Others with summed links`, `drilled card Sankey shows only that card and its items`.
 - [ ] Implement; commit `feat(cost-report): Sankey colours, fold, drill and right click`.
@@ -158,7 +162,7 @@ Fetches `/reports/cost-sankey?type&cost_field=costTotalAnnual[&group_by][&fiscal
 **Files:** Modify `CostReport.tsx`; Test `CostReport.test.tsx`.
 
 - Columns (after Name): one per catalogue item (archived included, hidden when the column is all zero? **no** — show all, spec says one per item), then **TCO** (sum of the row's items = the row's `cost` when `costField` is TCO; always compute TCO from the breakdown so it never depends on the selector), then % of total, YoY, extra columns. Row cost cell for the selected `costField` is highlighted (`fontWeight: 700`); the initial `sortK` follows the selector (`useEffect` on `costField` sets `sortK` to that column key, `sortD` "desc").
-- Rows: cards with TCO > 0 from the breakdown (table view fetches `useCostBreakdown`, and still the treemap call for `items`/attributes/YoY; rows join on id, a card missing from the breakdown shows `—` in item columns). Group header rows show item sums too.
+- Rows: the treemap `items` exactly as today (cards with a non-zero value of the selected cost field, scope applied), so attributes, extra columns and YoY stay available; the breakdown is joined by card id (a card missing from it shows `—`). TCO column = `breakdown.total`; item columns = `breakdown.items[key]`. Group header rows show item sums too, a swatch with the group's colour (same map as the charts), and groups beyond the 8th appear as one "Others" header row (same fold); a drill on Others lists the folded members.
 - Row `onClick` → drill (card: `{group, cardId}`), `onContextMenu` (with `preventDefault`) → side panel; the type badge (icon + name) in the name cell; `CostDrillBar` above the table with the hint; drilled card → single row; drilled group → its rows.
 - Footer total row gets item sums.
 
