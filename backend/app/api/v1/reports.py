@@ -40,6 +40,7 @@ from app.services.card_flags import (
     stale_condition,
     stale_cutoff,
 )
+from app.services.card_licenses import LICENSE_EVENT
 from app.services.card_logo_service import logo_updated_map
 from app.services.card_read_scope import (
     CardReadScope,
@@ -463,6 +464,7 @@ async def admin_dashboard_summary(
                         "card.created",
                         "card.updated",
                         COST_EVENT,
+                        LICENSE_EVENT,
                         "card.archived",
                         "card.restored",
                         "card.approval_status.approve",

@@ -91,17 +91,16 @@ def strip_costs_from_relation_attributes(
 COST_ITEMS_KEY = "cost_items"
 
 
-def redact_event_costs(data: dict | None, cost_keys: frozenset[str]) -> dict | None:
-    """Copy of an event payload with cost values removed from its ``changes``.
+def strip_change_keys(data: dict | None, drop: frozenset[str]) -> dict | None:
+    """Copy of an event payload with the ``drop`` keys removed from its ``changes``.
 
-    Handles both shapes: ``changes[<cost key>]`` / ``changes["cost_items"]``
-    (the cost event, a calculation) and ``changes["attributes"]`` old/new dicts
-    (a generic card update). The event itself stays; only the values go.
+    Handles both shapes: ``changes[<key>]`` (a cost / license event, a calculation) and
+    ``changes["attributes"]`` old/new dicts (a generic card update). The event itself
+    stays; only the values go.
     """
     changes = data.get("changes") if isinstance(data, dict) else None
     if not isinstance(changes, dict):
         return data
-    drop = cost_keys | {COST_ITEMS_KEY}
     out = {k: v for k, v in changes.items() if k not in drop}
     attrs = out.get("attributes")
     if isinstance(attrs, dict):
@@ -110,3 +109,8 @@ def redact_event_costs(data: dict | None, cost_keys: frozenset[str]) -> dict | N
             for side, val in attrs.items()
         }
     return {**(data or {}), "changes": out}
+
+
+def redact_event_costs(data: dict | None, cost_keys: frozenset[str]) -> dict | None:
+    """Copy of an event payload with cost values removed from its ``changes``."""
+    return strip_change_keys(data, cost_keys | {COST_ITEMS_KEY})
