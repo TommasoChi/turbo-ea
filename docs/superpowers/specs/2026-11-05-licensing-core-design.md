@@ -1,6 +1,6 @@
 # Licensing in core — yearly history, forecast and report
 
-**Status:** approved by the user 2026-11-05 after two fresh-Opus builder checks (both folded in below; `ext.licensing.manage` to `licenses.edit` confirmed). **Branch:** `feat/licensing-core` (off `main`). **Depends on:** PR #58 (cost report refinements) being merged first: the report reuses its colour plan, legend, drill state, trend placement and click gestures.
+**Status:** approved by the user 2026-11-05 after two fresh-Opus builder checks (both folded in below; `ext.licensing.manage` to `licenses.edit` confirmed). **Branch:** `feat/licensing-core` (off `main`). **Base:** PR #58 (cost report refinements) is merged into `main` (2.189.0) and into this branch, so its helpers exist: `costColors.ts` (`CHART_CATEGORICAL` hue assignment, `OTHERS_KEY`, `inkOn`, `shade`, `cardColor`), `costDrill.ts` (`Drill`, `crumbsOf`, `backOf`, `applyDrill`), `CostDrillBar`, `CostLegend`, `isBuiltInFieldType` (`costReportOptions.ts`), the trend-above-the-view layout and the click gestures. The licensing report reuses or generalises them and does not copy them. `useCostBreakdown` and the cost option builders are cost-specific and not reusable (licensing has its own response shape). Next version: 2.190.0 (minor).
 
 ## Intent
 
@@ -63,6 +63,7 @@ Indicative mockups of every screen below (card section, report in its three view
 - **Permission copy order:** defaults first, then the copy of the `true` values only (`ext.licensing.view` to `licenses.view`, `ext.licensing.manage` to `licenses.edit`).
 - **Saved reports:** type `licensing`, same config pattern as `cost` (card type, metric, licence type, group-by, view, scope, year, picked card).
 - **Utilisation edge cases:** licensed 0 and actual 0 or missing is 0 % and "compliant"; no top-N, the chart scrolls.
+- **Colours after the merge of #58:** a licence type takes its hue from `CHART_CATEGORICAL` by catalogue `sort_order` (stable across filters and years, archived types keep theirs); beyond the 8th type the rest fold into one grey "Other types" (`CHART_OTHER`), like the cost items; tile and label ink by luminance (`inkOn`); no raw hex. Status colours are the semantic tokens (success, warning, error, neutral), never the categorical hues. The extra-columns menu reuses `isBuiltInFieldType`.
 - **Frontend route:** `/reports/licensing` is added to `ROUTE_PERMISSIONS` with `licenses.view`; a stakeholder without it sees the card section but not the report, as for costs.
 
 ## Non-goals
