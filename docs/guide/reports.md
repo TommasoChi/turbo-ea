@@ -163,10 +163,18 @@ The **Cost Report** provides financial analysis of your technology landscape:
 - **Treemap view** — Nested rectangles sized by cost, with optional grouping (e.g., by organization or capability)
 - **Bar chart view** — Cost comparison across components
 - **Sankey view** — The same report drawn as a flow of cost (see [Sankey view](#sankey-view))
-- **Card Type** — Pick which card type the report is built around: **Application**, **IT Component**, **Application + IT Component** (both types in one chart, each card with its own cost) or **Initiative**. Initiatives follow the same fiscal-year rules as Applications.
-- **Cost field** — Pick which cost field is summed. The list shows the cost fields of the chosen card type; for Initiative it offers **costBudget** (the default) and **costActual**, which are never added together. For the combined option only the cost fields that exist in both types are offered.
+- **Card Type** — Pick which card type the report is built around: **Application**, **IT Component** or **Application + IT Component** (both types in one chart, each card with its own cost). Initiatives are no longer part of the Cost Report.
+- **Cost type** — Pick what is summed: **TCO** (the total of all cost items of each card) or any single cost item of the catalogue. For the combined option only the cost types that exist in both types are offered.
 
 All views share the same toolbar, filters, fiscal year and cost field, so switching view only changes the drawing.
+
+**Trend chart** — The cost trend (the current year, the four before it and, when selected, the **Forecast**) is shown in all three views, not only in the treemap, and follows the selected cost type.
+
+**Colours and legend** — Each group has its own hue, and within a group a darker shade means a costlier card. Beyond the eight costliest groups, the rest are folded into one **Others** group, and cards with no value for the grouping field go to **Unspecified**. The legend beside the chart lists the groups with their colours; the Sankey and the table use the same colours.
+
+**Drill-down** — A **left click** on a group or a card drills into it: the chart narrows to that group (or card) and a breadcrumb appears above it. Click **Back**, or any segment of the breadcrumb, to go up one level. Drilling into **Others** lists the groups that were folded into it. A **right click** opens the card's side panel instead. A hint above the chart reminds you of both gestures.
+
+**Table** — Besides the grouping and the attribute columns, the table has one column per cost item and a **TCO** column. Sorting by the selected cost type puts the costliest first. Group header rows and the footer total show the item sums, and each group header carries the swatch of its colour. A badge with the type icon and name in the name cell tells Applications and IT Components apart in the combined view. Clicking a row drills into it; right clicking it opens the card.
 
 ### Group by
 
@@ -202,7 +210,7 @@ A fiscal year is named **FY** plus the last two digits of the year it **ends** i
 
 The rule applies to everything on the page — the totals, the treemap, the table, **Cost Source** roll-ups and drill-downs — and the selected fiscal year is printed in the report header.
 
-While **Forecast** is the selected year, a **history chart** shows the cost across the current year, the four before it and the forecast year. It is not shown for any other year. Each bar is stacked, with one segment per cost component: a cost item for Applications and IT Components, otherwise a cost field (the legend and tooltip then use the technical field name, for example `softwareLicensingCost`).
+While **Forecast** is the selected year, the **history chart** shows the cost across the current year, the four before it and the forecast year. Each bar is stacked, with one segment per cost component: a cost item for Applications and IT Components, otherwise a cost field (the legend and tooltip then use the technical field name, for example `softwareLicensingCost`).
 
 An administrator sets the month the fiscal year starts in under [Settings → General](../admin/settings.md#fiscal-year-start).
 

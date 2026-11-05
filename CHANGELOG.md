@@ -5,6 +5,23 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.189.0] - 2026-11-05
+
+### Added
+
+- **The Cost Report drills down.** A left click on a group or card narrows the chart to it with a breadcrumb and a Back button; a right click opens the card.
+- **The Cost Report colours its groups and shows a legend.** Each group has its own hue, darker for costlier cards, with Others and Unspecified groups.
+- **The cost trend chart, with the Forecast, is available in the treemap, Sankey and table views.**
+- **The Cost Report table has a column per cost item and a TCO column.**
+
+### Changed
+
+- **Initiatives are no longer part of the Cost Report.**
+
+### Fixed
+
+- **The cost-type selector is back in the Cost Report.** It had gone missing since 2.188.0.
+
 ## [2.188.3] - 2026-11-04
 
 ### Fixed
