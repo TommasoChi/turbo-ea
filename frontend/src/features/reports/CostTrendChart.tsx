@@ -51,7 +51,8 @@ export default function CostTrendChart({
   /** Cards in scope; null/undefined = all. */
   scopeIds?: Set<string> | null;
 }) {
-  const [rows, setRows] = useState<CostTrendRow[]>([]);
+  // Per year, each component's response; selection and scope filter it locally, without a refetch.
+  const [fetched, setFetched] = useState<{ fiscalYear: number; byComponent: [string, TrendResponse][] }[]>([]);
   const chrome = useEChartsTheme();
   const { fmt } = useCurrency();
 
@@ -68,19 +69,26 @@ export default function CostTrendChart({
                 { signal },
               ),
             ),
-          ).then((responses) => {
-            const row: CostTrendRow = { fiscalYear: year };
-            components.forEach((component, i) => {
-              row[component] = rowValue(responses[i], selection, scopeIds);
-            });
-            return row;
-          }),
+          ).then((responses) => ({
+            fiscalYear: year,
+            byComponent: components.map((c, i): [string, TrendResponse] => [c, responses[i]]),
+          })),
         ),
       );
-      if (isCurrent()) setRows(results);
+      if (isCurrent()) setFetched(results);
     },
     // costField: a new field can keep the same components yet must not show the old rows.
-    [typeParam, costField, components.join(","), years, groupBy, selection, scopeIds],
+    [typeParam, costField, components.join(","), years, groupBy],
+  );
+
+  const rows = useMemo<CostTrendRow[]>(
+    () =>
+      fetched.map(({ fiscalYear, byComponent }) => {
+        const row: CostTrendRow = { fiscalYear };
+        for (const [c, r] of byComponent) row[c] = rowValue(r, selection, scopeIds);
+        return row;
+      }),
+    [fetched, selection, scopeIds],
   );
 
   const option = useMemo(

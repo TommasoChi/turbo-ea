@@ -442,16 +442,22 @@ export default function CostReport() {
   );
   // Cost-item types pick TCO or one catalogue item; any signed-in user may read the catalogue.
   const { data: catalogue } = useApiQuery<CostItemType[]>("/metamodel/cost-item-types");
+  // Catalogue items in display order; null until the catalogue is in.
+  const sortedCatalogue = useMemo(
+    () => (Array.isArray(catalogue) ? [...catalogue].sort((a, b) => a.sort_order - b.sort_order) : null),
+    [catalogue],
+  );
+  const allCostItemTypes = typeKeys.every(isCostItemType);
   const costChoices = useMemo(
     () =>
       costFieldChoices(
         typeKeys,
-        Array.isArray(catalogue) ? catalogue : [],
+        sortedCatalogue ?? [],
         costFields,
         t("cost.tco"),
         (i) => fieldLabel({ key: i.key, label: i.label, translations: i.translations }),
       ),
-    [typeKeys, catalogue, costFields, t, fieldLabel],
+    [typeKeys, sortedCatalogue, costFields, t, fieldLabel],
   );
   // Extra table columns come from one type's fields: none for the combined option.
   const allFields = useMemo(() => {
@@ -475,7 +481,7 @@ export default function CostReport() {
   // fields) is queued first and the restored type + field overwrite it.
   useEffect(() => {
     // A cost-item type's choices are incomplete until the catalogue is in: do not reset a restored item.
-    if (catalogue === undefined && typeKeys.length > 0 && typeKeys.every(isCostItemType)) return;
+    if (catalogue === undefined && typeKeys.length > 0 && allCostItemTypes) return;
     if (costChoices.length > 0 && !costChoices.some((f) => f.key === costField)) {
       setCostField(costChoices[0].key);
     }
@@ -828,12 +834,13 @@ export default function CostReport() {
   );
   // A cost-item type stacks the catalogue's items (archived included) in sort order, so the trend
   // also renders in the Sankey view, where the treemap `components` are not loaded.
-  const trendComponents = useMemo(() => {
-    if (Array.isArray(catalogue) && catalogue.length > 0 && typeKeys.every(isCostItemType)) {
-      return [...catalogue].sort((a, b) => a.sort_order - b.sort_order).map((c) => c.key);
-    }
-    return components;
-  }, [catalogue, typeKeys, components]);
+  const trendComponents = useMemo(
+    () =>
+      sortedCatalogue && sortedCatalogue.length > 0 && allCostItemTypes
+        ? sortedCatalogue.map((c) => c.key)
+        : components,
+    [sortedCatalogue, allCostItemTypes, components],
+  );
   const [drill, setDrill] = useState<Drill>({});
   // A drill names ids that exist only under the current selection.
   useEffect(() => {
@@ -1179,11 +1186,9 @@ export default function CostReport() {
   // the single column of the selected cost.
   const TCO_KEY = "costTotalAnnual";
   const tableCols =
-    Array.isArray(catalogue) && typeKeys.every(isCostItemType)
+    sortedCatalogue && allCostItemTypes
       ? [
-          ...[...catalogue]
-            .sort((x, y) => x.sort_order - y.sort_order)
-            .map((c) => ({ key: c.key, label: trendLabelOf(c.key) })),
+          ...sortedCatalogue.map((c) => ({ key: c.key, label: trendLabelOf(c.key) })),
           { key: TCO_KEY, label: t("cost.tco") },
         ]
       : [{ key: costField, label: t("cost.cost") }];
@@ -1218,6 +1223,7 @@ export default function CostReport() {
   const sumCol = (members: CostItem[], key: string) =>
     members.reduce((sum, m) => sum + (cellValue(m, key) ?? 0), 0);
   const shownTotal = tableItems.reduce((sum, i) => sum + i.cost, 0);
+  const pctOfTotal = (v: number) => (total > 0 ? `${((v / total) * 100).toFixed(1)}%` : "—");
   const typeBadge = (d: CostItem) => {
     const tp = types.find((x) => x.key === d.type);
     return tp ? (
@@ -1256,7 +1262,7 @@ export default function CostReport() {
         );
       })}
       <TableCell align="right">
-        {total > 0 ? `${((d.cost / total) * 100).toFixed(1)}%` : "—"}
+        {pctOfTotal(d.cost)}
       </TableCell>
       {fiscalYearParam != null && yoyCell(d)}
       {extraCell(d)}
@@ -1616,7 +1622,7 @@ export default function CostReport() {
                         </TableCell>
                       ))}
                       <TableCell align="right" sx={{ fontWeight: 600, color: "text.secondary" }}>
-                        {total > 0 ? `${((g.cost / total) * 100).toFixed(1)}%` : "—"}
+                        {pctOfTotal(g.cost)}
                       </TableCell>
                       {fiscalYearParam != null && <TableCell align="right" sx={{ fontWeight: 700 }} />}
                       {extraColumns.map((key) => (
@@ -1647,11 +1653,7 @@ export default function CostReport() {
                   </TableCell>
                 ))}
                 <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  {drill.group === undefined && !cardDrilled
-                    ? "100%"
-                    : total > 0
-                      ? `${((shownTotal / total) * 100).toFixed(1)}%`
-                      : "—"}
+                  {drill.group === undefined && !cardDrilled ? "100%" : pctOfTotal(shownTotal)}
                 </TableCell>
                 {fiscalYearParam != null && <TableCell align="right" sx={{ fontWeight: 700 }} />}
                 {extraColumns.map((key) => (
