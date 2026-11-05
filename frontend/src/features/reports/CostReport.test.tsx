@@ -60,6 +60,7 @@ vi.mock("./CostTrendChart", () => ({
     costField,
     components,
     labelOf,
+    groupBy,
   }: {
     years: number[];
     currentFiscalYear: number;
@@ -67,6 +68,7 @@ vi.mock("./CostTrendChart", () => ({
     costField: string;
     components: string[];
     labelOf?: (key: string) => string;
+    groupBy?: string;
   }) => {
     trendYearsSeen.push(years);
     return (
@@ -76,6 +78,7 @@ vi.mock("./CostTrendChart", () => ({
         data-current={currentFiscalYear}
         data-type={typeParam}
         data-field={costField}
+        data-group-by={groupBy ?? ""}
         data-components={components.join(",")}
         data-labels={components.map((c) => labelOf?.(c) ?? c).join(",")}
       />
@@ -692,7 +695,8 @@ describe("CostReport trend chart", () => {
     const trend = await screen.findByTestId("cost-trend-chart");
     expect(trend).toHaveAttribute("data-years", "2022,2023,2024,2025,2026,2027");
     expect(trend).toHaveAttribute("data-current", "2026");
-    expect(trend).toHaveAttribute("data-components", "licenseCost,serviceCost");
+    // A cost-item type stacks the catalogue's items in sort_order, archived ones included.
+    expect(trend).toHaveAttribute("data-components", "licenses,support");
     expect(trend).toHaveAttribute("data-field", "costTotalAnnual");
   });
 
@@ -714,10 +718,15 @@ describe("CostReport trend chart", () => {
     await ready();
     await pickYear("FY27 - Forecast");
     const trend = await screen.findByTestId("cost-trend-chart");
-    expect(trend).toHaveAttribute("data-labels", "Licences,Legacy support");
+    // The catalogue (not the response's components) decides the bars; its labels name them.
+    expect(trend).toHaveAttribute("data-labels", "Licenses,Support");
   });
 
-  it("chart hidden when the response carries no components", async () => {
+  it("chart hidden when the catalogue is empty and the response carries no components", async () => {
+    const baseCat = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation(async (path: string, ...rest: never[]) =>
+      path.startsWith("/metamodel/cost-item-types") ? ([] as never) : baseCat(path, ...rest),
+    );
     const base = vi.mocked(api.get).getMockImplementation()!;
     vi.mocked(api.get).mockImplementation(async (path: string, ...rest: never[]) => {
       const r = (await base(path, ...rest)) as Record<string, unknown>;
@@ -729,6 +738,54 @@ describe("CostReport trend chart", () => {
       expect(screen.getAllByRole("combobox", { name: /fiscal year/i })[0]).toHaveTextContent("Forecast"),
     );
     expect(screen.queryByTestId("cost-trend-chart")).not.toBeInTheDocument();
+  });
+
+  it("shows the trend chart under the Sankey with Forecast", async () => {
+    consumedConfig = { view: "sankey", fiscalYearParam: 2027 };
+    renderCost();
+    const panel = await screen.findByTestId("cost-sankey-panel");
+    const trend = await screen.findByTestId("cost-trend-chart");
+    expect(panel.compareDocumentPosition(trend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows the trend chart under the table with Forecast", async () => {
+    consumedConfig = { view: "table", fiscalYearParam: 2027 };
+    renderCost();
+    const table = await screen.findByRole("table");
+    const trend = await screen.findByTestId("cost-trend-chart");
+    expect(table.compareDocumentPosition(trend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("passes the group-by to the trend chart", async () => {
+    const grouped = {
+      ...APP_TYPE,
+      fields_schema: [
+        ...APP_TYPE.fields_schema,
+        {
+          section: "General",
+          fields: [
+            {
+              key: "tier",
+              label: "Tier",
+              type: "single_select",
+              options: [{ key: "gold", label: "Gold" }],
+            },
+          ],
+        },
+      ],
+    };
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: [grouped, ITC_TYPE],
+      relationTypes: [],
+      loading: false,
+      getType: (key: string) => (key === "Application" ? grouped : undefined),
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+    } as never);
+    consumedConfig = { view: "chart", fiscalYearParam: 2027, groupBy: "field:tier" };
+    renderCost();
+    await screen.findByTestId("cost-trend-chart");
+    expect(screen.getByTestId("cost-trend-chart")).toHaveAttribute("data-group-by", "field:tier");
   });
 
   it("chart refetches when the card type changes", async () => {

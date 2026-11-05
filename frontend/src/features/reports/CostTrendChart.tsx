@@ -8,6 +8,24 @@ import { useCurrency } from "@/hooks/useCurrency";
 import { costFiscalYearName } from "@/lib/fiscalYear";
 import { buildCostTrendOption, type CostTrendRow } from "./costTrendOption";
 
+export type TrendSelection = { kind: "card"; id: string } | { kind: "group"; keys: string[] };
+
+interface TrendResponse {
+  total: number;
+  items?: { id: string; cost: number; group?: string }[];
+}
+
+/** One component's value for a year: the response total, or the sum of the items that pass scope and selection. */
+function rowValue(r: TrendResponse, selection?: TrendSelection, scopeIds?: Set<string> | null): number {
+  if (!selection && !scopeIds) return r.total;
+  return (r.items ?? []).reduce((sum, it) => {
+    if (scopeIds && !scopeIds.has(it.id)) return sum;
+    if (selection?.kind === "card" && it.id !== selection.id) return sum;
+    if (selection?.kind === "group" && !selection.keys.includes(it.group ?? "")) return sum;
+    return sum + it.cost;
+  }, 0);
+}
+
 /** Stacked history of the cost field's components (the keys of its calculation), one bar per year. */
 export default function CostTrendChart({
   typeParam,
@@ -16,6 +34,9 @@ export default function CostTrendChart({
   labelOf,
   years,
   currentFiscalYear,
+  groupBy,
+  selection,
+  scopeIds,
 }: {
   typeParam: string;
   costField: string;
@@ -24,6 +45,11 @@ export default function CostTrendChart({
   labelOf?: (component: string) => string;
   years: number[];
   currentFiscalYear: number;
+  /** Sent as `group_by` so group members can be told apart. */
+  groupBy?: string;
+  selection?: TrendSelection;
+  /** Cards in scope; null/undefined = all. */
+  scopeIds?: Set<string> | null;
 }) {
   const [rows, setRows] = useState<CostTrendRow[]>([]);
   const chrome = useEChartsTheme();
@@ -35,15 +61,17 @@ export default function CostTrendChart({
         years.map((year) =>
           Promise.all(
             components.map((component) =>
-              api.get<{ total: number }>(
-                `/reports/cost-treemap?type=${typeParam}&cost_field=${component}&fiscal_year=${year}`,
+              api.get<TrendResponse>(
+                `/reports/cost-treemap?type=${typeParam}&cost_field=${component}&fiscal_year=${year}${
+                  groupBy ? `&group_by=${encodeURIComponent(groupBy)}` : ""
+                }`,
                 { signal },
               ),
             ),
           ).then((responses) => {
             const row: CostTrendRow = { fiscalYear: year };
             components.forEach((component, i) => {
-              row[component] = responses[i].total;
+              row[component] = rowValue(responses[i], selection, scopeIds);
             });
             return row;
           }),
@@ -52,7 +80,7 @@ export default function CostTrendChart({
       if (isCurrent()) setRows(results);
     },
     // costField: a new field can keep the same components yet must not show the old rows.
-    [typeParam, costField, components.join(","), years],
+    [typeParam, costField, components.join(","), years, groupBy, selection, scopeIds],
   );
 
   const option = useMemo(

@@ -747,7 +747,38 @@ export default function CostReport() {
       costFields.find((f) => f.key === key)?.label,
     [itemLabels, costFields, fieldLabel],
   );
-  const trendLabelOf = useCallback((key: string) => knownItemLabel(key) ?? key, [knownItemLabel]);
+  const trendLabelOf = useCallback(
+    (key: string) => {
+      const known = knownItemLabel(key);
+      if (known) return known;
+      const item = Array.isArray(catalogue) ? catalogue.find((c) => c.key === key) : undefined;
+      return item ? fieldLabel({ key, label: item.label, translations: item.translations }) : key;
+    },
+    [knownItemLabel, catalogue, fieldLabel],
+  );
+  // A cost-item type stacks the catalogue's items (archived included) in sort order, so the trend
+  // also renders in the Sankey view, where the treemap `components` are not loaded.
+  const trendComponents = useMemo(() => {
+    if (Array.isArray(catalogue) && catalogue.length > 0 && typeKeys.every(isCostItemType)) {
+      return [...catalogue].sort((a, b) => a.sort_order - b.sort_order).map((c) => c.key);
+    }
+    return components;
+  }, [catalogue, typeKeys, components]);
+  const trendChart =
+    showForecast && trendComponents.length > 0 ? (
+      <Box sx={{ mt: 2 }}>
+        <CostTrendChart
+          typeParam={typeParam(cardTypeKey)}
+          costField={costField}
+          components={trendComponents}
+          labelOf={trendLabelOf}
+          years={trendYears}
+          currentFiscalYear={currentFiscalYear}
+          groupBy={effectiveGroupBy}
+          scopeIds={scope.closure}
+        />
+      </Box>
+    ) : null;
   // A cost-item node: the item's label, or "Other costs" for what the
   // components leave of a card's total.
   const itemLabel = useCallback(
@@ -1165,18 +1196,6 @@ export default function CostReport() {
           </Box>
         ) : (
           <>
-            {showForecast && components.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <CostTrendChart
-                  typeParam={typeParam(cardTypeKey)}
-                  costField={costField}
-                  components={components}
-                  labelOf={trendLabelOf}
-                  years={trendYears}
-                  currentFiscalYear={currentFiscalYear}
-                />
-              </Box>
-            )}
             <FullscreenPanel label={t("cost.fullscreen")}>
               {(isFullscreen) => (
                 <CostTreemapPanel
@@ -1190,6 +1209,7 @@ export default function CostReport() {
                 />
               )}
             </FullscreenPanel>
+            {trendChart}
           </>
         )
       ) : view === "sankey" ? (
@@ -1200,19 +1220,23 @@ export default function CostReport() {
             </Typography>
           </Box>
         ) : (
-          <FullscreenPanel label={t("cost.fullscreen")}>
-            {(isFullscreen) => (
-              <CostSankeyPanel
-                nodes={sankeyView.nodes}
-                links={sankeyView.links}
-                fullscreen={isFullscreen}
-                chrome={chartTheme}
-                fmt={fmt}
-              />
-            )}
-          </FullscreenPanel>
+          <>
+            <FullscreenPanel label={t("cost.fullscreen")}>
+              {(isFullscreen) => (
+                <CostSankeyPanel
+                  nodes={sankeyView.nodes}
+                  links={sankeyView.links}
+                  fullscreen={isFullscreen}
+                  chrome={chartTheme}
+                  fmt={fmt}
+                />
+              )}
+            </FullscreenPanel>
+            {trendChart}
+          </>
         )
       ) : (
+        <>
         <Paper variant="outlined" sx={{ overflow: "auto" }}>
           <Table size="small" stickyHeader>
             <TableHead>
@@ -1373,6 +1397,8 @@ export default function CostReport() {
             </TableBody>
           </Table>
         </Paper>
+        {trendChart}
+        </>
       )}
       <CardDetailSidePanel
         cardId={sidePanelCardId}
