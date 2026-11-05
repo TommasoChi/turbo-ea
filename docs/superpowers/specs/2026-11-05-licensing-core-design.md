@@ -48,6 +48,23 @@ Indicative mockups of every screen below (card section, report in its three view
 - **Events:** `card.licenses_updated` carries type keys only; legacy `card.updated` diffs of the four old keys are redacted for users without licensing access in the same feeds as `redact_cost_events`; a readable summary in History (like `cost_event_summaries`) and an entry in `rollback_service.py` for the non-rollbackable event. Workspace transfer: `LicenseTypes` a `ConfigSection` keyed on `key`, `CardLicenses` an `EntitySection` keyed on `(card_id, fiscal_year)`, and `CardLicenses` among the sheets that finalise cards.
 - **Seed:** the base catalogue is empty on a fresh install; the demo seed adds licence types and licensing data behind a `seed_markers` entry.
 
+## Rules settled by the second check
+
+- **Status is per selected metric in the report** (metric cards, chart bars, table status, picker); on the card each metric block has its own status. A card's `no_actual_data` therefore means "the selected metric has no actual in any type". The extension's "any active metric" rule applies only to the card's overall badge, if one is shown. On a card tile, a type with licensed but no actual shows a neutral "No data" pill that never changes the metric's status.
+- **`licensingModel` lives in an existing built-in section of `fields_schema`** (the general-fields section; fresh installs get it from `seed.py`, existing installs from the migration, **also on instances that never had the extension**). The card's Licensing section shows it read-only with a link to edit it where it lives; there is never a second "Licensing" section.
+- **Extension left installed:** the migration removes the contributed fields (`remove_field_contributions`) and sets the `extensions` row of key `licensing` to disabled, so re-enable or update cannot recreate the four empty fields or a second section; the CHANGELOG says "uninstall the extension". Orphan `ext.licensing.*` keys in role JSON are harmless and left.
+- **Lifecycle:** the current-year report applies `is_live_in_fiscal_year` and excludes archived cards, like the cost report; other years list the cards with a stored row.
+- **Table and export:** one header row (`Admin lic.`, `Admin act.`, `Admin %` per licence type, then `Total lic.`, `Total act.`, no total %), because `extractSheetsFromDOM` does not read colspan/rowspan; PPTX is offered only in the chart views, XLSX also in the table, as in the cost report.
+- **Platform aggregate:** direct links only (`relPlatformToApp`, `relPlatformToITC`), readable (`CardReadScope`), non-archived cards whose `licensingModel` has the selected metric; the toolbar's card type and scope are ignored while a Platform is picked; no status is shown for a Platform. `GET /reports/licensing` takes an optional `card_id` (Application, IT Component or Platform). Picking a card resets the drill; the picker ignores the toolbar card type.
+- **No drill in the By-licence-type view** (a licence type is not a card); the mockup's "right click on a type" is dropped. The Utilisation and Table views keep the cost report's gestures.
+- **No "combined" card type** either: one card type at a time.
+- **One report response carries the trend**: the series per year (`current-4 … current+1`, Forecast licensed only) for the active card, drill or scope, plus the rows of the selected year; no request per year.
+- **Import "Licence type" column** matches case-insensitively the key or the English label; an ambiguous value is skipped. A row for a metric the card does not track is applied and flagged in the preview ("metric not tracked by this card").
+- **Permission copy order:** defaults first, then the copy of the `true` values only (`ext.licensing.view` to `licenses.view`, `ext.licensing.manage` to `licenses.edit`).
+- **Saved reports:** type `licensing`, same config pattern as `cost` (card type, metric, licence type, group-by, view, scope, year, picked card).
+- **Utilisation edge cases:** licensed 0 and actual 0 or missing is 0 % and "compliant"; no top-N, the chart scrolls.
+- **Frontend route:** `/reports/licensing` is added to `ROUTE_PERMISSIONS` with `licenses.view`; a stakeholder without it sees the card section but not the report, as for costs.
+
 ## Non-goals
 
 - No real IAG / OneIdentity integration, no import history, no staging table.

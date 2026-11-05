@@ -100,7 +100,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--line)}
     <div class="tiles">
       <div class="tile"><h4>Admin <span class="pill bad">Over</span></h4><div class="n">12 <span class="m">/ 10</span></div><div class="m">actual / licensed · 120 %</div><div class="meter"><i style="width:100%;background:var(--bad)"></i></div></div>
       <div class="tile"><h4>End User <span class="pill ok">Compliant</span></h4><div class="n">150 <span class="m">/ 200</span></div><div class="m">actual / licensed · 75 %</div><div class="meter"><i style="width:75%;background:var(--ok)"></i></div></div>
-      <div class="tile"><h4>Dev <span class="pill none">No actual data</span></h4><div class="n">— <span class="m">/ 20</span></div><div class="m">licensed only</div><div class="meter"><i style="width:0"></i></div></div>
+      <div class="tile"><h4>Dev <span class="pill none">No data</span></h4><div class="n">— <span class="m">/ 20</span></div><div class="m">licensed only</div><div class="meter"><i style="width:0"></i></div></div>
     </div>
     <p class="note">Installations: a second block like this one (only the metrics selected in "Licensing Model" appear). Forecast year (FY27): the tiles show <b>licensed only</b>, the Actual input is disabled. The current year with no row shows the latest earlier year with a "carried forward, confirm" notice, as the Costs section does.</p>
   </div>
@@ -138,7 +138,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--line)}
       <div class="chip"><b>Card (Application, IT Component or Platform)</b>SAP ERP ▾</div><span class="tag">All cards in scope = totals</span><span class="sp"></span><span class="btn">▮ Utilisation</span><span class="btn">▮ By type</span><span class="btn">▤ Table</span></div>
     <div id="bytype"></div>
     <div class="legend"><span><i class="sw" style="background:var(--c1);opacity:.35"></i>Licensed</span><span><i class="sw" style="background:var(--c1)"></i>Actual</span><span>one colour per licence type (catalogue order)</span></div>
-    <p class="note">The card selector (a card picker over Application, IT Component and Platform) narrows the bars to one card; with a Platform, the bars sum the Applications and IT Components linked to it, each counted once. With nothing picked, all cards in scope are summed per licence type. A right click on a group of bars drills to the cards using that type; left click does nothing on a type (it is not a card).</p>
+    <p class="note">The card selector (a card picker over Application, IT Component and Platform) narrows the bars to one card; with a Platform, the bars sum the Applications and IT Components linked to it, each counted once. With nothing picked, all cards in scope are summed per licence type. There is no drill in this view: a licence type is not a card.</p>
   </div>
 </section>
 
@@ -146,20 +146,19 @@ tfoot td{font-weight:700;border-top:2px solid var(--line)}
 <section class="screen" id="s-table">
   <div class="frame">
     <div class="bar"><strong style="font-size:15px">Licensing</strong><span class="sp"></span>
-      <div class="chip"><b>Columns</b>2</div><span class="btn">Export ▾ (XLSX · PPTX)</span><span class="btn">Print</span></div>
+      <div class="chip"><b>Columns</b>2</div><span class="btn">Export ▾ (XLSX)</span><span class="btn">Print</span></div>
     <div class="crumb"><span>All</span><span class="hint">Click: open card · Right click: analyse</span></div>
     <div class="tbl"><table>
-      <thead><tr><th rowspan="2">Name</th><th colspan="2">Admin</th><th colspan="2">End User</th><th colspan="2">Dev</th><th colspan="2">Total</th><th rowspan="2">Used</th><th rowspan="2">Status</th></tr>
-      <tr><th>Lic.</th><th>Act.</th><th>Lic.</th><th>Act.</th><th>Lic.</th><th>Act.</th><th>Lic.</th><th>Act.</th></tr></thead>
+      <thead><tr><th>Name</th><th>Admin lic.</th><th>Admin act.</th><th>Admin %</th><th>End User lic.</th><th>End User act.</th><th>End User %</th><th>Dev lic.</th><th>Dev act.</th><th>Dev %</th><th>Total lic.</th><th>Total act.</th><th>Status</th></tr></thead>
       <tbody>
-        <tr><td>SAP ERP <span class="badge">Application</span></td><td>10</td><td>12</td><td>200</td><td>150</td><td>20</td><td>—</td><td>230</td><td>162</td><td>70 %</td><td><span class="pill bad">Over</span></td></tr>
-        <tr><td>Jira <span class="badge">Application</span></td><td>5</td><td>4</td><td>120</td><td>118</td><td>—</td><td>—</td><td>125</td><td>122</td><td>98 %</td><td><span class="pill warn">Approaching</span></td></tr>
-        <tr><td>Portale Assistenza Tecnica <span class="badge">Application</span></td><td>3</td><td>2</td><td>60</td><td>30</td><td>—</td><td>—</td><td>63</td><td>32</td><td>51 %</td><td><span class="pill ok">Compliant</span></td></tr>
-        <tr><td>Niuma <span class="badge">Application</span></td><td>2</td><td>—</td><td>40</td><td>—</td><td>—</td><td>—</td><td>42</td><td>—</td><td>—</td><td><span class="pill none">No actual data</span></td></tr>
+        <tr><td>SAP ERP <span class="badge">Application</span></td><td>10</td><td>12</td><td>120 %</td><td>200</td><td>150</td><td>75 %</td><td>20</td><td>—</td><td>—</td><td>230</td><td>162</td><td><span class="pill bad">Over</span></td></tr>
+        <tr><td>Jira <span class="badge">Application</span></td><td>5</td><td>4</td><td>80 %</td><td>120</td><td>118</td><td>98 %</td><td>—</td><td>—</td><td>—</td><td>125</td><td>122</td><td><span class="pill warn">Approaching</span></td></tr>
+        <tr><td>Portale Assistenza Tecnica <span class="badge">Application</span></td><td>3</td><td>2</td><td>67 %</td><td>60</td><td>30</td><td>50 %</td><td>—</td><td>—</td><td>—</td><td>63</td><td>32</td><td><span class="pill ok">Compliant</span></td></tr>
+        <tr><td>Niuma <span class="badge">Application</span></td><td>2</td><td>—</td><td>—</td><td>40</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>42</td><td>—</td><td><span class="pill none">No actual data</span></td></tr>
       </tbody>
-      <tfoot><tr><td>Total</td><td>20</td><td>18</td><td>420</td><td>298</td><td>20</td><td>—</td><td>460</td><td>316</td><td>69 %</td><td></td></tr></tfoot>
+      <tfoot><tr><td>Total</td><td>20</td><td>18</td><td></td><td>420</td><td>298</td><td></td><td>20</td><td>—</td><td></td><td>460</td><td>316</td><td></td></tr></tfoot>
     </table></div>
-    <p class="note">Same table family as the cost report: sortable columns, optional extra card fields (object-typed fields excluded), total row, group headers when group-by is on. The export menu is the shell's (XLSX / PPTX of the rendered table), so it downloads exactly what is on screen. Metric (Users / Installations) switches the numbers; the status uses the "Over &gt; Approaching &gt; No data &gt; Compliant" priority per licence type.</p>
+    <p class="note">Same table family as the cost report: one header row (so the XLSX export has one column per cell), sortable columns, optional extra card fields (object-typed fields excluded), total row without percentages, group headers when group-by is on. Export ▾ offers XLSX of the rendered table; PPTX is offered only in the chart views, as in the cost report. Metric (Users / Installations) switches the numbers; the status is per licence type with the priority "Over &gt; Approaching &gt; No data &gt; Compliant".</p>
   </div>
 </section>
 
