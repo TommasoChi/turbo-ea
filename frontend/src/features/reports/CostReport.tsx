@@ -222,6 +222,7 @@ function CostChartFrame({
   ariaLabel,
   testId,
   onClick,
+  onContextMenu,
   onInit,
 }: {
   option: EChartsCoreOption;
@@ -229,6 +230,7 @@ function CostChartFrame({
   ariaLabel: string;
   testId?: string;
   onClick?: (p: EChartClickParams) => void;
+  onContextMenu?: (p: EChartClickParams) => void;
   onInit?: (chart: ECharts) => void;
 }) {
   return (
@@ -236,6 +238,7 @@ function CostChartFrame({
       variant="outlined"
       sx={{ p: 1, ...(fullscreen && { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }) }}
       data-testid={testId}
+      onContextMenu={onContextMenu ? (e: React.MouseEvent) => e.preventDefault() : undefined}
     >
       {/* Drawn at the export's pixel ratio so the PPTX / PNG capture stays crisp. */}
       <EChart
@@ -244,6 +247,7 @@ function CostChartFrame({
         devicePixelRatio={EXPORT_DPR}
         ariaLabel={ariaLabel}
         onClick={onClick}
+        onContextMenu={onContextMenu}
         onInit={onInit}
       />
     </Paper>
@@ -257,10 +261,20 @@ interface CostSankeyPanelProps {
   fullscreen: boolean;
   chrome: EChartsThemeValue;
   fmt: { format: (v: number) => string };
+  onNodeClick?: (p: EChartClickParams) => void;
+  onNodeContextMenu?: (p: EChartClickParams) => void;
 }
 
 /** The Sankey view: cost items -> groups -> cards. */
-function CostSankeyPanel({ nodes, links, fullscreen, chrome, fmt }: CostSankeyPanelProps) {
+function CostSankeyPanel({
+  nodes,
+  links,
+  fullscreen,
+  chrome,
+  fmt,
+  onNodeClick,
+  onNodeContextMenu,
+}: CostSankeyPanelProps) {
   const { t } = useTranslation(["reports", "common"]);
   const option = useMemo(
     () =>
@@ -277,6 +291,8 @@ function CostSankeyPanel({ nodes, links, fullscreen, chrome, fmt }: CostSankeyPa
       fullscreen={fullscreen}
       ariaLabel={t("cost.sankeyChartView")}
       testId="cost-sankey-panel"
+      onClick={onNodeClick}
+      onContextMenu={onNodeContextMenu}
     />
   );
 }
