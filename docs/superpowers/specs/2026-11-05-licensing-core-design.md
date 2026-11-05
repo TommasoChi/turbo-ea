@@ -10,6 +10,8 @@ The `licensing` extension (folder `software/turbo-ea-licencing-Analisys`, v1.0.2
 
 ## What the user sees
 
+Indicative mockups of every screen below (card section, report in its three views, import, licence types): [`2026-11-05-licensing-core-design-assets/mockups.html`](2026-11-05-licensing-core-design-assets/mockups.html). Open it in a browser; where it and this text differ, the text wins.
+
 1. **Card section "Licensing"** on Application and IT Component, next to Costs, with the same year navigator (`current-4 … current+1`). For the selected year it shows, per metric (**Users**, **Installations**) and per **licence type**, the licensed count, the actual count, the utilisation % and the RAG status, plus a stacked bar like the Costs section. Edit/add dialog like `CostItemDialog`. The Forecast year (`current+1`) takes **licensed only**; actual cannot be entered for it.
 2. **Licence type catalogue** (admin dialog like `ManageCostItemsDialog`): stable `key`, label, translations, `archived`, never deleted. It replaces the free-text categories of the extension (Admin, End User, Prod, Dev…), so colours, order and legends are stable.
 3. **Report `Reports → Licensing`** (core route, same toolbar family as the cost report): card type (Application / IT Component), metric (Users, Installations), licence type (All + one per catalogue entry), group-by, fiscal year, scope filter. Metric cards on top (Compliant, Approaching, Over-licensed, No actual data, from the selected year's statuses).
