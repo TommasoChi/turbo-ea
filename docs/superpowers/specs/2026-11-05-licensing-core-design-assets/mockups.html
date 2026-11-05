@@ -134,10 +134,11 @@ tfoot td{font-weight:700;border-top:2px solid var(--line)}
 <!-- 3 BY TYPE -->
 <section class="screen" id="s-type">
   <div class="frame">
-    <div class="bar"><strong style="font-size:15px">Licensing</strong><span class="tag">Users · FY26 · Application</span><span class="sp"></span><span class="btn">▮ Utilisation</span><span class="btn">▮ By type</span><span class="btn">▤ Table</span></div>
+    <div class="bar"><strong style="font-size:15px">Licensing</strong><span class="tag">Users · FY26</span>
+      <div class="chip"><b>Card (Application, IT Component or Platform)</b>SAP ERP ▾</div><span class="tag">All cards in scope = totals</span><span class="sp"></span><span class="btn">▮ Utilisation</span><span class="btn">▮ By type</span><span class="btn">▤ Table</span></div>
     <div id="bytype"></div>
     <div class="legend"><span><i class="sw" style="background:var(--c1);opacity:.35"></i>Licensed</span><span><i class="sw" style="background:var(--c1)"></i>Actual</span><span>one colour per licence type (catalogue order)</span></div>
-    <p class="note">All cards in scope summed per licence type. A right click on a group of bars drills to the cards using that type; left click does nothing on a type (it is not a card).</p>
+    <p class="note">The card selector (a card picker over Application, IT Component and Platform) narrows the bars to one card; with a Platform, the bars sum the Applications and IT Components linked to it, each counted once. With nothing picked, all cards in scope are summed per licence type. A right click on a group of bars drills to the cards using that type; left click does nothing on a type (it is not a card).</p>
   </div>
 </section>
 
