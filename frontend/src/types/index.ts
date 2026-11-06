@@ -3314,3 +3314,42 @@ export interface CardLicensesResponse {
   years: YearLicenses[];
   catalogue: LicenseType[];
 }
+
+// ── Licensing report (GET /reports/licensing) ────────────────────────────
+export interface LicenseReportCell {
+  licensed: number;
+  actual: number | null;
+  pct: number | null;
+  no_licence: boolean;
+  status: LicenseTypeStatus;
+}
+export interface LicenseReportRow {
+  id: string;
+  name: string;
+  type: string;
+  attributes: Record<string, unknown>;
+  group?: string | null;
+  /** Null for a card listed under a picked Platform. */
+  status: LicenseStatus | null;
+  worst_pct: number | null;
+  worst_no_licence: boolean;
+  licensed_total: number;
+  actual_total: number | null;
+  by_type: Record<string, LicenseReportCell>;
+}
+export interface LicenseReportTrendYear {
+  fiscal_year: number;
+  /** card id -> license type key -> counts (the Forecast year carries `actual: null`). */
+  cards: Record<string, Record<string, { licensed: number; actual: number | null }>>;
+}
+export interface LicenseReportResponse {
+  fiscal_year: number;
+  current_fiscal_year: number;
+  fiscal_year_start: number;
+  metric: LicenseMetric;
+  years: number[];
+  license_types: LicenseType[];
+  aggregate: { id: string; name: string; type: string } | null;
+  rows: LicenseReportRow[];
+  trend: LicenseReportTrendYear[];
+}
