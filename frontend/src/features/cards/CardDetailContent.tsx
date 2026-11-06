@@ -50,7 +50,9 @@ import {
 } from "@/lib/extensionHost";
 import SoAWTab from "@/features/cards/sections/SoAWTab";
 import CostsSection from "@/features/cards/sections/CostsSection";
+import LicensingSection from "@/features/cards/sections/LicensingSection";
 import { DERIVED_COST_FIELD, isCostItemType } from "@/lib/costItems";
+import { isLicenseType } from "@/lib/licenses";
 import {
   customSectionAnchor,
   sectionAnchor,
@@ -325,6 +327,7 @@ export default function CardDetailContent({
   // attribute is not shown (nor editable) next to them.
   const hasCostItems = isCostItemType(card.type);
   if (hasCostItems) hiddenFieldKeys.add(DERIVED_COST_FIELD);
+  const hasLicensing = isLicenseType(card.type);
 
   const customSections = customSectionsOf(typeConfig?.fields_schema);
   const descExtraSection = (typeConfig?.fields_schema || []).find(
@@ -342,10 +345,25 @@ export default function CardDetailContent({
   const secExpanded = sectionCfg.expanded;
   const secHidden = sectionCfg.hidden;
 
+  // The Licensing section edits nothing about the model itself: it jumps to the
+  // section that holds the `licensingModel` field and opens it for editing.
+  const editLicensingModel = () => {
+    const section = customSections.find((s) => s.fields.some((f) => f.key === "licensingModel"));
+    if (!section) return;
+    const anchor = customSectionAnchor(section.section);
+    const nonce = Date.now();
+    setExpandRequest({ anchor, nonce });
+    setEditRequest({ anchor, nonce, fieldKey: "licensingModel" });
+    setTimeout(() => {
+      document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, FOCUS_SCROLL_DELAY_MS);
+  };
+
   const sectionOrder = buildSectionOrder(sc as Record<string, unknown>, customSections.length, {
     hierarchy: !!typeConfig?.has_hierarchy,
     successors: !!typeConfig?.has_successors,
     costs: hasCostItems,
+    licensing: hasLicensing,
   });
 
   // Saves name the section they came from (`onSaveOrigin`) right before the
@@ -499,6 +517,20 @@ export default function CardDetailContent({
             initialExpanded={exp}
             expandOn={expandOn(sectionAnchor("costs"))}
             onChanged={refreshFrom(sectionAnchor("costs"))}
+          />
+        </ErrorBoundary>
+      );
+    }
+    if (key === "licensing") {
+      if (!hasLicensing) return null;
+      return (
+        <ErrorBoundary key={key} label="Licensing" inline>
+          <LicensingSection
+            cardId={card.id}
+            initialExpanded={exp}
+            expandOn={expandOn(sectionAnchor("licensing"))}
+            onEditModel={editLicensingModel}
+            onChanged={refreshFrom(sectionAnchor("licensing"))}
           />
         </ErrorBoundary>
       );

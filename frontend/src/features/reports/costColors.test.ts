@@ -4,6 +4,7 @@ import {
   MAX_GROUP_HUES,
   OTHERS_KEY,
   assignGroupColors,
+  catalogueHues,
   cardColor,
   drillGroupKey,
   inkOn,
@@ -86,5 +87,17 @@ describe("inkOn", () => {
   it("picks dark on white and white on blue", () => {
     expect(inkOn("#ffffff")).toBe(CHART_LABEL_ON_LIGHT);
     expect(inkOn("#2a78d6")).toBe(CHART_LABEL_ON_DARK);
+  });
+});
+
+describe("catalogueHues", () => {
+  it("catalogueHues: sort order, 9th folds to other", () => {
+    const keys = Array.from({ length: 10 }, (_, i) => `k${i}`);
+    const hues = catalogueHues(keys, cat, "other-hue");
+    expect(hues.get("k0")).toBe(cat[0]);
+    expect(hues.get("k7")).toBe(cat[7]);
+    expect(hues.get("k8")).toBe("other-hue");
+    expect(hues.get("k9")).toBe("other-hue");
+    expect(hues.size).toBe(10);
   });
 });

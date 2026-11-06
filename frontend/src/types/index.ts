@@ -3270,3 +3270,47 @@ export interface CardCostsResponse {
   years: YearCosts[];
   catalogue: CostItemType[];
 }
+
+// ── Card licenses (GET /cards/{id}/licenses) ─────────────────────────────
+export type LicenseType = CostItemType;
+export type LicenseMetric = "users" | "installations";
+/** Per license type; `no_data` = licensed but no actual entered. */
+export type LicenseTypeStatus = "over" | "approaching" | "compliant" | "no_data";
+/** Per metric (and per card): `over` > `approaching` > `no_actual_data` > `compliant`. */
+export type LicenseStatus = "over" | "approaching" | "no_actual_data" | "compliant";
+export interface LicenseTypeResult {
+  key: string;
+  licensed: number;
+  actual: number | null;
+  /** actual / licensed in percent (one decimal); null with no actual or no license. */
+  pct: number | null;
+  /** Licensed 0 and actual > 0: over with no license at all. */
+  no_licence: boolean;
+  status: LicenseTypeStatus;
+}
+export interface LicenseMetricResult {
+  metric: LicenseMetric;
+  types: LicenseTypeResult[];
+  has_actual: boolean;
+  status: LicenseStatus;
+  worst_pct: number | null;
+  worst_no_licence: boolean;
+  licensed_total: number;
+  actual_total: number | null;
+}
+export interface YearLicenses {
+  fiscal_year: number;
+  is_current: boolean;
+  is_forecast: boolean;
+  confirmed: boolean;
+  fallback_from: number | null;
+  metrics: LicenseMetricResult[];
+  status: LicenseStatus | null;
+}
+export interface CardLicensesResponse {
+  can_edit: boolean;
+  /** The metrics the card tracks (its `licensingModel`). */
+  licensing_model: LicenseMetric[];
+  years: YearLicenses[];
+  catalogue: LicenseType[];
+}

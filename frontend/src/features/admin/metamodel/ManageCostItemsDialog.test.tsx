@@ -3,7 +3,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { mockApi } from "@/test/apiMock";
 import type { CostItemType } from "@/types";
-import ManageCostItemsDialog from "./ManageCostItemsDialog";
+import ManageCostItemsDialog, { TEXT_SUFFIXES } from "./ManageCostItemsDialog";
+import adminEn from "@/i18n/locales/en/admin.json";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
 
@@ -126,5 +127,36 @@ describe("ManageCostItemsDialog", () => {
     await user.type(screen.getByLabelText(/^name/i), "Bad");
     await user.click(screen.getByRole("button", { name: /^create$/i }));
     expect(await screen.findByText(/must start with a letter/i)).toBeInTheDocument();
+  });
+});
+
+describe("ManageCostItemsDialog as the license types catalogue", () => {
+  const LICENSE_PATH = "/metamodel/license-types";
+
+  it("uses the license types path and texts", async () => {
+    mockApi.on("get", LICENSE_PATH, [item({ key: "named", label: "Named user" })]);
+    mockApi.on("post", LICENSE_PATH, (_p, body) => ({ ...item({ key: "conc" }), ...(body as object) }));
+    const user = userEvent.setup();
+    render(
+      <ManageCostItemsDialog open onClose={vi.fn()} path={LICENSE_PATH} textKey="licenseTypes" />,
+    );
+    expect(await screen.findByText("Named user")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "License types" })).toBeInTheDocument();
+    expect(screen.queryByText("Licenses")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /new license type/i }));
+    await user.type(screen.getByLabelText(/^key/i), "conc");
+    await user.type(screen.getByLabelText(/^name/i), "Concurrent");
+    await user.click(screen.getByRole("button", { name: /^create$/i }));
+    await waitFor(() => expect(mockApi.callsOf("post", LICENSE_PATH)).toHaveLength(1));
+    expect(mockApi.callsOf("get", "/metamodel/cost-item-types")).toHaveLength(0);
+  });
+
+  it("every text key exists for both catalogues", () => {
+    const messages = adminEn as Record<string, string>;
+    for (const textKey of ["costItems", "licenseTypes"]) {
+      for (const suffix of TEXT_SUFFIXES) {
+        expect(messages[`metamodel.${textKey}.${suffix}`], `${textKey}.${suffix}`).toBeTruthy();
+      }
+    }
   });
 });

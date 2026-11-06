@@ -60,6 +60,7 @@ import { LOCALE_LABELS, SUPPORTED_LOCALES } from "@/i18n";
 import { api } from "@/api/client";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { isCostItemType } from "@/lib/costItems";
+import { isLicenseType } from "@/lib/licenses";
 
 // ── Constants ────────────────────────────────────────────────────
 
@@ -68,6 +69,7 @@ const BUILTIN_SECTIONS: { key: string; labelKey: string; icon: string; onlyIf?: 
   { key: "eol", labelKey: "cardLayout.builtinSections.eol", icon: "update" },
   { key: "lifecycle", labelKey: "cardLayout.builtinSections.lifecycle", icon: "timeline" },
   { key: "costs", labelKey: "cardLayout.builtinSections.costs", icon: "payments", onlyIf: (ct) => isCostItemType(ct.key) },
+  { key: "licensing", labelKey: "cardLayout.builtinSections.licensing", icon: "badge", onlyIf: (ct) => isLicenseType(ct.key) },
   { key: "hierarchy", labelKey: "cardLayout.builtinSections.hierarchy", icon: "account_tree", onlyIf: (ct) => ct.has_hierarchy },
   { key: "successors", labelKey: "cardLayout.builtinSections.successors", icon: "arrow_forward", onlyIf: (ct) => ct.has_successors },
   { key: "tags", labelKey: "cardLayout.builtinSections.tags", icon: "sell" },
@@ -1241,6 +1243,7 @@ export default function CardLayoutEditor({
     hierarchy: !!cardType.has_hierarchy,
     successors: !!cardType.has_successors,
     costs: isCostItemType(cardType.key),
+    licensing: isLicenseType(cardType.key),
   });
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {

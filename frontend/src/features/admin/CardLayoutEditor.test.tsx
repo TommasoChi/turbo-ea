@@ -367,6 +367,21 @@ describe("CardLayoutEditor — rendering", () => {
   });
 });
 
+describe("CardLayoutEditor — license-bearing types", () => {
+  it("lists Licensing right after Costs for Application, and for no other type", () => {
+    const app = makeCardType({ ...TYPE, key: "Application", section_config: {} });
+    setup({ cardType: app });
+    const headers = sectionHeaders();
+    expect(headers.indexOf("Licensing")).toBe(headers.indexOf("Costs") + 1);
+    expect(headers).toContain("Licensing");
+  });
+
+  it("does not list Licensing for a type that holds no licenses", () => {
+    setup();
+    expect(sectionHeaders()).not.toContain("Licensing");
+  });
+});
+
 describe("CardLayoutEditor — section switches", () => {
   it("collapsing a section writes defaultExpanded=false under its key", async () => {
     const { user, onRefresh } = setup();
