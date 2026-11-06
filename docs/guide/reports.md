@@ -254,6 +254,36 @@ The Sankey takes the same filters as the treemap: card type, card scope, cost fi
 
 The full-screen button on the treemap and the Sankey makes the chart fill the whole screen, in width and height, without distorting it.
 
+## Licensing Report
+
+![Licensing Report](../assets/img/en/103_report_licensing.png)
+
+The **Licensing Report** (**Reports → Licensing**) compares, for every Application or IT Component, the licenses under contract with the ones really used, and flags an overrun. It needs the `licenses.view` permission. The data is entered in the [Licensing section](card-details.md#licensing-section-application-and-it-component) of each card or imported from Excel.
+
+The toolbar picks the **card type** (Application or IT Component, one at a time), the **metric** (**Users** or **Installations**), the **license type** (all, or one entry of the catalogue), the **group by**, the **fiscal year** and the card scope. Only cards whose **Licensing model** field includes the selected metric are listed. Four tiles on top count the cards that are **Compliant**, **Approaching**, **Over-licensed** or have **No actual data** in the selected year.
+
+**Trend** — Above the view, a chart shows licensed against actual counts for the current year, the four before it and the **Forecast** year (licensed only), stacked by license type. It follows the license type filter, the scope and any drill-down.
+
+### Views
+
+| View | What it shows |
+|---|---|
+| **Utilisation** | One horizontal bar per card: actual divided by licensed, highest first. Green below 80 %, orange from 80 % to 100 %, red above 100 %, with reference lines at 80 % and 100 %. A card with no actual data is a grey bar at zero. |
+| **By license type** | Grouped bars of licensed against actual for each license type in the selected year. Without a card picked it shows the totals of the scope. The **Card** picker narrows it to one Application or IT Component; picking a **Platform** sums the Applications and IT Components linked to it, each counted once. |
+| **Table** | One row per card with licensed, actual and % for each license type, the totals and the status. The **Columns** menu adds card fields. Download to Excel or print it like the Cost Report. |
+
+**Status.** Each license type is judged alone, with no compensation between types: it is **over-licensed** when actual exceeds licensed, and **approaching** from 80 % of licensed. A card takes its worst status. A card with no actual count for the selected metric is **No actual data**. The bar of a card shows its worst license type. The Forecast year has no status.
+
+**Gestures** — A **left click** on a card opens its side panel. A **right click** on a card (or on a group when Group by is on) drills into it, with a breadcrumb and a **Back** button; the trend follows the drill. The By license type view has no drill-down.
+
+### Import
+
+**Import** in the toolbar loads license counts from an Excel file (needs `licenses.edit`). The first sheet has one row per count, with the columns **Component**, **Metric**, **License type**, **Year**, **Licensed** and **Actual**. The component is matched by exact name (case-insensitive); the license type by its key or English name; the year is the fiscal year as named in the toolbar (for example 2026). An empty cell leaves the stored value unchanged, and an Actual count cannot be set for the Forecast year.
+
+The dialog first shows a preview: the rows that will be applied and the rows skipped, each with its reason (card not found, unknown license type, year out of range, not a whole number, duplicate cell). Nothing is written until you click **Apply**. The import never creates a license type or edits the Licensing model of a card.
+
+Licensing reports can be saved like the other reports (see [Saved Reports](#saved-reports)).
+
 ## Matrix Report
 
 ![Matrix Report](../assets/img/en/35_report_matrix.png)

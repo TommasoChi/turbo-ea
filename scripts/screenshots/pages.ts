@@ -1104,6 +1104,30 @@ export const DOC_PAGES: PageDef[] = [
     },
   },
 
+  // ── Licensing ───────────────────────────────────────────────────────────
+  {
+    id: "103_report_licensing",
+    route: "/reports/licensing",
+    waitFor: ".echart-container",
+    actions: [{ type: "wait", ms: 1000 }],
+    filenames: {
+      en: "103_report_licensing",
+    },
+  },
+  // The Licensing section of the demo's sample Application, scrolled into view.
+  {
+    id: "104_card_licensing",
+    route: "/cards/{{cardId:sampleApp}}",
+    waitFor: "#card-section-licensing",
+    actions: [
+      { type: "scroll", target: "#card-section-licensing", align: "start" },
+      { type: "wait", ms: 800 },
+    ],
+    filenames: {
+      en: "104_card_licensing",
+    },
+  },
+
   // ── Admin Settings: ServiceNow ──────────────────────────────────────────
   {
     id: "31_admin_settings_servicenow",

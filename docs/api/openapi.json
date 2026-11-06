@@ -1007,6 +1007,20 @@
         "title": "Body_import_bpmn_api_v1_bpm_processes__process_id__diagram_import_post",
         "type": "object"
       },
+      "Body_import_licenses_api_v1_licenses_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_licenses_api_v1_licenses_import_post",
+        "type": "object"
+      },
       "Body_replace_file_attachment_api_v1_file_attachments__attachment_id__content_put": {
         "properties": {
           "category": {
@@ -2894,6 +2908,43 @@
           "affected_related_card_ids"
         ],
         "title": "CardDeleteResponse",
+        "type": "object"
+      },
+      "CardLicensesOut": {
+        "properties": {
+          "can_edit": {
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "catalogue": {
+            "items": {
+              "$ref": "#/components/schemas/LicenseTypeOut"
+            },
+            "title": "Catalogue",
+            "type": "array"
+          },
+          "licensing_model": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Licensing Model",
+            "type": "array"
+          },
+          "years": {
+            "items": {
+              "$ref": "#/components/schemas/YearLicensesOut"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "required": [
+          "can_edit",
+          "licensing_model",
+          "years",
+          "catalogue"
+        ],
+        "title": "CardLicensesOut",
         "type": "object"
       },
       "CardListResponse": {
@@ -7154,6 +7205,34 @@
         "title": "ImpersonateRequest",
         "type": "object"
       },
+      "ImportIssueOut": {
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row",
+          "component",
+          "reason"
+        ],
+        "title": "ImportIssueOut",
+        "type": "object"
+      },
       "ImportPrinciplesRequest": {
         "properties": {
           "catalogue_ids": {
@@ -7199,6 +7278,40 @@
           "catalogue_ids"
         ],
         "title": "ImportRequest",
+        "type": "object"
+      },
+      "ImportResultOut": {
+        "properties": {
+          "applied": {
+            "title": "Applied",
+            "type": "integer"
+          },
+          "flagged": {
+            "items": {
+              "$ref": "#/components/schemas/ImportIssueOut"
+            },
+            "title": "Flagged",
+            "type": "array"
+          },
+          "matched": {
+            "title": "Matched",
+            "type": "integer"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/ImportIssueOut"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "matched",
+          "applied",
+          "skipped",
+          "flagged"
+        ],
+        "title": "ImportResultOut",
         "type": "object"
       },
       "InstanceOut": {
@@ -7320,6 +7433,34 @@
         "title": "LeaderboardUser",
         "type": "object"
       },
+      "LicenseCellWrite": {
+        "properties": {
+          "actual": {
+            "anyOf": [
+              {
+                "maximum": 1000000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          },
+          "licensed": {
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Licensed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "licensed"
+        ],
+        "title": "LicenseCellWrite",
+        "type": "object"
+      },
       "LicenseIn": {
         "properties": {
           "confirm": {
@@ -7413,6 +7554,262 @@
           "entitlements"
         ],
         "title": "LicenseOut",
+        "type": "object"
+      },
+      "LicenseReportOut": {
+        "properties": {
+          "aggregate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportAggregate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_fiscal_year": {
+            "title": "Current Fiscal Year",
+            "type": "integer"
+          },
+          "fiscal_year": {
+            "title": "Fiscal Year",
+            "type": "integer"
+          },
+          "fiscal_year_start": {
+            "title": "Fiscal Year Start",
+            "type": "integer"
+          },
+          "license_types": {
+            "items": {
+              "$ref": "#/components/schemas/LicenseTypeOut"
+            },
+            "title": "License Types",
+            "type": "array"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ReportRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "trend": {
+            "items": {
+              "$ref": "#/components/schemas/ReportTrendYear"
+            },
+            "title": "Trend",
+            "type": "array"
+          },
+          "years": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fiscal_year",
+          "current_fiscal_year",
+          "fiscal_year_start",
+          "metric",
+          "years",
+          "license_types",
+          "aggregate",
+          "rows",
+          "trend"
+        ],
+        "title": "LicenseReportOut",
+        "type": "object"
+      },
+      "LicenseTypeCreate": {
+        "properties": {
+          "key": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "LicenseTypeCreate",
+        "type": "object"
+      },
+      "LicenseTypeOut": {
+        "properties": {
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "translations": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Translations",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "label",
+          "sort_order",
+          "archived"
+        ],
+        "title": "LicenseTypeOut",
+        "type": "object"
+      },
+      "LicenseTypeResultOut": {
+        "properties": {
+          "actual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "licensed": {
+            "title": "Licensed",
+            "type": "integer"
+          },
+          "no_licence": {
+            "title": "No Licence",
+            "type": "boolean"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "licensed",
+          "actual",
+          "pct",
+          "no_licence",
+          "status"
+        ],
+        "title": "LicenseTypeResultOut",
+        "type": "object"
+      },
+      "LicenseTypeUpdate": {
+        "properties": {
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations"
+          }
+        },
+        "title": "LicenseTypeUpdate",
         "type": "object"
       },
       "LoginBrandingPayload": {
@@ -7896,6 +8293,71 @@
           }
         },
         "title": "MessageFlowUpdate",
+        "type": "object"
+      },
+      "MetricResultOut": {
+        "properties": {
+          "actual_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Total"
+          },
+          "has_actual": {
+            "title": "Has Actual",
+            "type": "boolean"
+          },
+          "licensed_total": {
+            "title": "Licensed Total",
+            "type": "integer"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "types": {
+            "items": {
+              "$ref": "#/components/schemas/LicenseTypeResultOut"
+            },
+            "title": "Types",
+            "type": "array"
+          },
+          "worst_no_licence": {
+            "title": "Worst No Licence",
+            "type": "boolean"
+          },
+          "worst_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worst Pct"
+          }
+        },
+        "required": [
+          "metric",
+          "types",
+          "has_actual",
+          "status",
+          "worst_pct",
+          "worst_no_licence",
+          "licensed_total",
+          "actual_total"
+        ],
+        "title": "MetricResultOut",
         "type": "object"
       },
       "MigrationOut": {
@@ -12770,6 +13232,219 @@
           }
         },
         "title": "RelationUpdate",
+        "type": "object"
+      },
+      "ReportAggregate": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type"
+        ],
+        "title": "ReportAggregate",
+        "type": "object"
+      },
+      "ReportRow": {
+        "properties": {
+          "actual_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Total"
+          },
+          "attributes": {
+            "additionalProperties": true,
+            "title": "Attributes",
+            "type": "object"
+          },
+          "by_type": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReportTypeCell"
+            },
+            "title": "By Type",
+            "type": "object"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "licensed_total": {
+            "title": "Licensed Total",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "worst_no_licence": {
+            "title": "Worst No Licence",
+            "type": "boolean"
+          },
+          "worst_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worst Pct"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "attributes",
+          "status",
+          "worst_pct",
+          "worst_no_licence",
+          "licensed_total",
+          "actual_total",
+          "by_type"
+        ],
+        "title": "ReportRow",
+        "type": "object"
+      },
+      "ReportTrendCell": {
+        "properties": {
+          "actual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          },
+          "licensed": {
+            "title": "Licensed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "licensed",
+          "actual"
+        ],
+        "title": "ReportTrendCell",
+        "type": "object"
+      },
+      "ReportTrendYear": {
+        "properties": {
+          "cards": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/ReportTrendCell"
+              },
+              "type": "object"
+            },
+            "title": "Cards",
+            "type": "object"
+          },
+          "fiscal_year": {
+            "title": "Fiscal Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fiscal_year",
+          "cards"
+        ],
+        "title": "ReportTrendYear",
+        "type": "object"
+      },
+      "ReportTypeCell": {
+        "properties": {
+          "actual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          },
+          "licensed": {
+            "title": "Licensed",
+            "type": "integer"
+          },
+          "no_licence": {
+            "title": "No Licence",
+            "type": "boolean"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "licensed",
+          "actual",
+          "pct",
+          "no_licence",
+          "status"
+        ],
+        "title": "ReportTypeCell",
         "type": "object"
       },
       "ReporterOut": {
@@ -18487,6 +19162,131 @@
           "tco"
         ],
         "title": "YearCostsOut",
+        "type": "object"
+      },
+      "YearLicensesDetailOut": {
+        "properties": {
+          "can_edit": {
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "fallback_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback From"
+          },
+          "fiscal_year": {
+            "title": "Fiscal Year",
+            "type": "integer"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "is_forecast": {
+            "title": "Is Forecast",
+            "type": "boolean"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/MetricResultOut"
+            },
+            "title": "Metrics",
+            "type": "array"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "fiscal_year",
+          "is_current",
+          "is_forecast",
+          "confirmed",
+          "fallback_from",
+          "metrics",
+          "status",
+          "can_edit"
+        ],
+        "title": "YearLicensesDetailOut",
+        "type": "object"
+      },
+      "YearLicensesOut": {
+        "properties": {
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "fallback_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback From"
+          },
+          "fiscal_year": {
+            "title": "Fiscal Year",
+            "type": "integer"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "is_forecast": {
+            "title": "Is Forecast",
+            "type": "boolean"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/MetricResultOut"
+            },
+            "title": "Metrics",
+            "type": "array"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "fiscal_year",
+          "is_current",
+          "is_forecast",
+          "confirmed",
+          "fallback_from",
+          "metrics",
+          "status"
+        ],
+        "title": "YearLicensesOut",
         "type": "object"
       },
       "app__api__v1__migration__StagedRecordOut": {
@@ -26084,6 +26884,374 @@
         ]
       }
     },
+    "/api/v1/cards/{card_id}/licenses": {
+      "get": {
+        "operationId": "get_card_licenses_api_v1_cards__card_id__licenses_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardLicensesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Card Licenses",
+        "tags": [
+          "card-licenses"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/licenses/{fiscal_year}": {
+      "get": {
+        "operationId": "get_card_licenses_year_api_v1_cards__card_id__licenses__fiscal_year__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearLicensesDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Card Licenses Year",
+        "tags": [
+          "card-licenses"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/licenses/{fiscal_year}/confirm": {
+      "post": {
+        "operationId": "confirm_card_license_year_api_v1_cards__card_id__licenses__fiscal_year__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearLicensesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Card License Year",
+        "tags": [
+          "card-licenses"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/licenses/{fiscal_year}/items/{metric}/{key}": {
+      "delete": {
+        "operationId": "delete_card_license_cell_api_v1_cards__card_id__licenses__fiscal_year__items__metric___key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "metric",
+            "required": true,
+            "schema": {
+              "pattern": "^(users|installations)$",
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Card License Cell",
+        "tags": [
+          "card-licenses"
+        ]
+      },
+      "put": {
+        "operationId": "put_card_license_cell_api_v1_cards__card_id__licenses__fiscal_year__items__metric___key__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "metric",
+            "required": true,
+            "schema": {
+              "pattern": "^(users|installations)$",
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenseCellWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearLicensesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Card License Cell",
+        "tags": [
+          "card-licenses"
+        ]
+      }
+    },
+    "/api/v1/cards/{card_id}/licenses/{fiscal_year}/items/{metric}/{key}/copy-to-forecast": {
+      "post": {
+        "operationId": "copy_card_license_to_forecast_api_v1_cards__card_id__licenses__fiscal_year__items__metric___key__copy_to_forecast_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fiscal_year",
+            "required": true,
+            "schema": {
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Fiscal Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "metric",
+            "required": true,
+            "schema": {
+              "pattern": "^(users|installations)$",
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearLicensesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Copy Card License To Forecast",
+        "tags": [
+          "card-licenses"
+        ]
+      }
+    },
     "/api/v1/cards/{card_id}/logo": {
       "delete": {
         "description": "Remove the card's logo, falling the card back to its type icon.\n\nAllowed even when the type's ``allow_card_logo`` switch is off, so turning\nthe feature off for a type never strands existing images as undeletable.",
@@ -30469,6 +31637,60 @@
         ]
       }
     },
+    "/api/v1/licenses/import": {
+      "post": {
+        "description": "Excel import of license counts. ``dry_run`` (the default) reports and writes nothing;\nApply re-sends the file and the server revalidates it. Needs the global ``licenses.edit``.",
+        "operationId": "import_licenses_api_v1_licenses_import_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dry_run",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Dry Run",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_licenses_api_v1_licenses_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResultOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Licenses",
+        "tags": [
+          "card-licenses"
+        ]
+      }
+    },
     "/api/v1/metamodel/card-type-archimate-mapping": {
       "get": {
         "description": "Every card type's (and subtype's) current ArchiMate element type\nmapping, resolved from the EnterpriseObjectCardMapping bridge table --\nthe n:m replacement for the old single ``CardType.archimate_type``\ncolumn. Consumed by the MCP server's ``get_archimate_mapping`` tool.\n\nAuthenticated read, like ``GET /enterprise-objects`` \u2014 no\n``admin.metamodel`` gate, since this only reports the live mapping.\nExcludes hidden/soft-deleted types and orders by ``sort_order``, same as\n``GET /metamodel/types`` (the endpoint this one is meant to sit beside\nfor the MCP tool, which should not see a type a `DELETE /types/{key}`\nsoft-delete hid from everywhere else).",
@@ -31170,6 +32392,113 @@
           }
         },
         "summary": "Remove Card Mapping",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/license-types": {
+      "get": {
+        "description": "The whole catalogue (archived lines included, flagged). Any signed-in\nuser may read it: card license sections need the labels.",
+        "operationId": "list_license_types_api_v1_metamodel_license_types_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List License Types",
+        "tags": [
+          "metamodel"
+        ]
+      },
+      "post": {
+        "operationId": "create_license_type_api_v1_metamodel_license_types_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenseTypeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create License Type",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/license-types/{key}": {
+      "patch": {
+        "operationId": "update_license_type_api_v1_metamodel_license_types__key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenseTypeUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update License Type",
         "tags": [
           "metamodel"
         ]
@@ -37609,6 +38938,110 @@
           }
         },
         "summary": "Landscape",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/licensing": {
+      "get": {
+        "description": "Licensed vs actual per license type: the rows of ``fiscal_year`` (default the current\none; the Forecast year is not selectable) and the six-year trend, for the cards of one type,\none picked card or the cards linked to a picked Platform (see ``services/license_report``).",
+        "operationId": "licensing_report_api_v1_reports_licensing_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "default": "Application",
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric",
+            "required": false,
+            "schema": {
+              "default": "users",
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fiscal_year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2200,
+                  "minimum": 1900,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fiscal Year"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenseReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Licensing Report",
         "tags": [
           "reports"
         ]

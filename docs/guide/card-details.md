@@ -129,6 +129,20 @@ Applications and IT Components record their cost as a list of **cost items** (fo
 
 The card's **Total annual cost** field (`costTotalAnnual`) is derived from the current year's items and is read-only: the grid, spreadsheet import, drag-fill, the API, MCP, ServiceNow and LeanIX can no longer set it, and a value sent is overwritten. A card with no cost items has an empty cost field, not 0. Initiatives and Providers keep their ordinary cost fields.
 
+### Licensing Section (Application and IT Component)
+
+The **Licensing** section records, year by year, how many licenses the card has under contract and how many are really used. It sits next to Costs and has the same **‹ ›** navigator over six years: the four before the current one, the current one and the **Forecast**. Which metrics the card tracks (**Users**, **Installations**) comes from its **Licensing model** field, shown read-only at the top with a link to edit it.
+
+![Licensing section](../assets/img/en/104_card_licensing.png)
+
+- **Per metric and license type** — Each metric has a block with one tile per license type showing the **licensed** count, the **actual** count, the **utilisation %** and a status: **Compliant**, **Approaching** (from 80 %), **Over-licensed** (actual above licensed) or **No data**. A stacked bar sums the types. License types come from the catalogue an administrator manages under [Metamodel → License types](../admin/metamodel.md#license-types).
+- **Adding and editing** — Add, edit or delete a count in a dialog. Leaving **Actual** empty means "no data", which is different from 0.
+- **Forecast** — The Forecast year takes the licensed count only. **Copy to Forecast** copies the licensed counts of the year you are viewing.
+
+**A new fiscal year.** When a card has no licensing data for the new current year yet, the section shows the previous year's licensed counts marked **not confirmed**, with no actual count, so a new year never inherits last year's consumption. They stay that way until someone confirms them or edits a count.
+
+**Who can see and edit licenses.** You can **view** them with the `licenses.view` permission, or when you hold any stakeholder role on the card. You can **edit** them with the `licenses.edit` permission, or when you hold a stakeholder role on the card that allows editing the card. By default only administrators hold `licenses.edit`. A change appears in the History tab as **Licenses updated**, naming the license types touched but not the counts, and it cannot be rolled back.
+
 ### Hierarchy Section
 
 For card types that support hierarchy (e.g., Organization, Business Capability, Application):
