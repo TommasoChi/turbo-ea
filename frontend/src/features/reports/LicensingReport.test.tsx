@@ -275,9 +275,12 @@ describe("LicensingReport", () => {
   it("states the type, metric and year in the print header", async () => {
     renderReport();
     await waitFor(() => expect(reportPaths()).toHaveLength(1));
-    const text = document.querySelector(".report-print-params")?.textContent ?? "";
-    expect(text).toContain("Metric: Users");
-    expect(text).toContain("Fiscal year: FY26 - Current");
+    // The year label comes with the response, so wait for the content, not just the request.
+    await waitFor(() => {
+      const text = document.querySelector(".report-print-params")?.textContent ?? "";
+      expect(text).toContain("Metric: Users");
+      expect(text).toContain("Fiscal year: FY26 - Current");
+    });
   });
 
   describe("saved reports", () => {
