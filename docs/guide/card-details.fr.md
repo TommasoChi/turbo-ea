@@ -129,6 +129,20 @@ Les Applications et les Composants IT enregistrent leurs coûts sous la forme d'
 
 Le champ **Coût annuel total** (`costTotalAnnual`) de la fiche est dérivé des postes de l'exercice courant et est en lecture seule : la grille, l'import de tableur, la recopie par glissement, l'API, MCP, ServiceNow et LeanIX ne peuvent plus le définir, et toute valeur envoyée est écrasée. Une fiche sans poste de coûts a un champ de coût vide, pas 0. Les Initiatives et les Fournisseurs conservent leurs champs de coût habituels.
 
+### Section Licences (Application et composant IT)
+
+La section **Licences** enregistre, année par année, combien de licences la fiche a sous contrat et combien sont réellement utilisées. Elle se place à côté des Coûts et possède le même navigateur **‹ ›** sur six ans : les quatre années précédant l'exercice courant, l'exercice courant et le **Forecast**. Les indicateurs suivis par la fiche (**Utilisateurs**, **Installations**) viennent de son champ **Modèle de licence**, affiché en lecture seule en haut avec un lien pour le modifier.
+
+![Section Licences](../assets/img/en/104_card_licensing.png)
+
+- **Par indicateur et type de licence** — Chaque indicateur a un bloc avec une vignette par type de licence, indiquant la quantité **sous licence**, la quantité **réelle**, le **% d'utilisation** et un statut : **Conforme**, **Proche du seuil** (à partir de 80 %), **Surlicencié** (réel supérieur au sous licence) ou **Aucune donnée**. Une barre empilée additionne les types. Les types de licence viennent du catalogue géré par un administrateur sous [Métamodèle → Types de licence](../admin/metamodel.md#types-de-licence).
+- **Ajout et modification** — Une quantité s'ajoute, se modifie ou se supprime dans une boîte de dialogue. Laisser **Réel** vide signifie « aucune donnée », ce qui est différent de 0.
+- **Forecast** — L'exercice Forecast n'accepte que la quantité sous licence. **Copier vers Forecast** copie les quantités sous licence de l'exercice affiché.
+
+**Un nouvel exercice.** Lorsqu'une fiche n'a pas encore de données de licences pour le nouvel exercice courant, la section affiche les quantités sous licence de l'exercice précédent marquées **non confirmées**, sans quantité réelle, de sorte qu'un nouvel exercice n'hérite jamais de la consommation de l'ancien. Elles le restent jusqu'à ce que quelqu'un les confirme ou modifie une quantité.
+
+**Qui peut voir et modifier les licences.** Vous pouvez les **consulter** avec la permission `licenses.view`, ou si vous détenez un rôle de partie prenante sur la fiche. Vous pouvez les **modifier** avec la permission `licenses.edit`, ou si vous détenez sur la fiche un rôle de partie prenante qui permet de modifier la fiche. Par défaut, seuls les administrateurs détiennent `licenses.edit`. Une modification apparaît dans l'onglet Historique sous **Licences mises à jour**, avec les types de licence concernés mais sans les quantités, et ne peut pas être annulée.
+
 ### Section Hiérarchie
 
 Pour les types de fiches qui prennent en charge la hiérarchie (par ex. Organisation, Capacité Métier, Application) :

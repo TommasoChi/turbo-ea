@@ -254,6 +254,36 @@ Sankey tager de samme filtre som treemap'et: korttype, kortudvalg, omkostningsfe
 
 Fuldskærmsknappen på treemap'et og Sankey får diagrammet til at fylde hele skærmen i bredde og højde uden at fortrække det.
 
+## Licensrapport
+
+![Licensrapport](../assets/img/en/103_report_licensing.png)
+
+**Licensrapporten** (**Rapporter → Licensering**) sammenligner for hver applikation eller IT-komponent de licenser, der er under kontrakt, med dem, der reelt bruges, og markerer en overskridelse. Den kræver tilladelsen `licenses.view`. Dataene indtastes i [licenssektionen](card-details.md#licenssektion-applikation-og-it-komponent) på hvert kort eller importeres fra Excel.
+
+Værktøjslinjen vælger **korttype** (applikation eller IT-komponent, én ad gangen), **måling** (**Brugere** eller **Installationer**), **licenstype** (alle eller én post i kataloget), **gruppering**, **regnskabsår** og kortomfang. Kun kort, hvis felt **Licensmodel** indeholder den valgte måling, vises. Fire fliser øverst tæller kortene, der er **Kompatible**, **Tæt på grænsen**, **Overlicenserede** eller har **Ingen faktiske data** i det valgte år.
+
+**Tendens** — Over visningen viser et diagram licenserede mod faktiske antal for det nuværende år, de fire før og **Forecast**-året (kun licenseret), stablet efter licenstype. Det følger licenstypefilteret, omfanget og enhver nedbrydning.
+
+### Visninger
+
+| Visning | Hvad den viser |
+|---|---|
+| **Udnyttelse** | Én vandret søjle pr. kort: faktisk divideret med licenseret, højeste først. Grøn under 80 %, orange fra 80 % til 100 %, rød over 100 %, med referencelinjer ved 80 % og 100 %. Et kort uden faktiske data er en grå søjle ved nul. |
+| **Efter licenstype** | Grupperede søjler af licenseret mod faktisk for hver licenstype i det valgte år. Uden valgt kort viser den omfangets totaler. **Kort**-vælgeren indsnævrer til én applikation eller IT-komponent; vælger du en **platform**, summeres de applikationer og IT-komponenter, der er knyttet til den, hver talt én gang. |
+| **Tabel** | Én række pr. kort med licenseret, faktisk og % for hver licenstype, totalerne og status. Menuen **Kolonner** tilføjer kortfelter. Download til Excel eller udskriv som i Omkostningsrapporten. |
+
+**Status.** Hver licenstype vurderes for sig uden udligning mellem typer: den er **overlicenseret**, når faktisk overstiger licenseret, og **tæt på grænsen** fra 80 % af licenseret. Et kort får sin dårligste status. Et kort uden faktisk antal for den valgte måling har **Ingen faktiske data**. Et korts søjle viser dets dårligste licenstype. Forecast-året har ingen status.
+
+**Bevægelser** — Et **venstreklik** på et kort åbner dets sidepanel. Et **højreklik** på et kort (eller på en gruppe, når gruppering er slået til) bryder ned i det med en brødkrumme og en knap **Tilbage**; tendensen følger nedbrydningen. Visningen Efter licenstype har ingen nedbrydning.
+
+### Import
+
+**Importér** i værktøjslinjen indlæser licensantal fra en Excel-fil (kræver `licenses.edit`). Det første ark har én række pr. antal med kolonnerne **Component**, **Metric**, **License type**, **Year**, **Licensed** og **Actual**. Komponenten matches på det nøjagtige navn (uden forskel på store og små bogstaver); licenstypen på sin nøgle eller sit engelske navn; året er regnskabsåret, som det er benævnt i værktøjslinjen (for eksempel 2026). En tom celle lader den gemte værdi være uændret, og et faktisk antal kan ikke angives for Forecast-året.
+
+Dialogen viser først en forhåndsvisning: de rækker, der vil blive anvendt, og de rækker, der springes over, hver med sin årsag (kort ikke fundet, ukendt licenstype, år uden for vinduet, ikke et helt tal, dubleret celle). Der skrives intet, før du klikker på **Anvend**. Importen opretter aldrig en licenstype og redigerer aldrig et korts Licensmodel.
+
+Licensrapporter kan gemmes som de øvrige rapporter (se [Gemte rapporter](#gemte-rapporter)).
+
 ## Matrixrapport
 
 ![Matrixrapport](../assets/img/da/35_report_matrix.png)

@@ -8,6 +8,7 @@
   "reports.lifecycle": "Livscyklus",
   "reports.dependencies": "Afhængigheder",
   "reports.cost": "Omkostninger",
+  "reports.licensing": "Licensering",
   "reports.matrix": "Matrix",
   "reports.dataQuality": "Datakvalitet",
   "reports.endOfLife": "Udløb",

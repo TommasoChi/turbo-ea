@@ -13,6 +13,7 @@ L'esportazione cattura il workspace completo come bundle `.zip` contenente una c
 - **Impostazioni** — valuta, formato data, feature flag, branding di login, locale abilitate e il resto delle impostazioni generali dell'applicazione.
 - **Utenti** — email, nome visualizzato, ruolo e flag di attività (usati per ricollegare proprietà e assegnazioni sul target). Nessuna password né identità SSO.
 - **Elementi di costo** — il catalogo delle elementi di costo (chiavi, etichette, traduzioni, flag di archiviazione) e le elementi di costo di ogni Applicazione o Componente IT per anno fiscale.
+- **Tipi di licenza** — il catalogo dei tipi di licenza e le quantità di licenze di ogni Applicazione o Componente IT per anno fiscale.
 - **Inventario** — ogni carta (con la sua gerarchia, ciclo di vita e attributi), tag delle carte e relazioni.
 - **Contesto delle carte** — stakeholder, collegamenti a documenti, commenti, todo e allegati di file.
 - **Dati dei moduli** — BPM (diagrammi di processo, elementi, versioni di flusso, valutazioni), PPM (report di stato, costi, budget, rischi, attività, WBS, dipendenze), il registro dei rischi GRC (rischi, attività di mitigazione e relative occorrenze, collegamenti alle carte), le rilevazioni di conformità GRC (con le esecuzioni di analisi a cui fanno riferimento), decisioni architetturali e Statement of Architecture Work, diagrammi a mano libera, report salvati, segnalibri (viste salvate dell'inventario, incluse le loro condivisioni), portali web e sondaggi.

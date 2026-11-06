@@ -131,6 +131,20 @@ Las Aplicaciones y los Componentes de TI registran su coste como una lista de **
 
 El campo **Coste anual total** (`costTotalAnnual`) de la ficha se deriva de las partidas del año actual y es de solo lectura: la cuadrícula, la importación de hojas de cálculo, el arrastre de relleno, la API, MCP, ServiceNow y LeanIX ya no pueden establecerlo, y cualquier valor enviado se sobrescribe. Una ficha sin partidas de coste tiene el campo de coste vacío, no 0. Las Iniciativas y los Proveedores conservan sus campos de coste habituales.
 
+### Sección de Licencias (Aplicación y Componente de TI)
+
+La sección **Licencias** registra, año a año, cuántas licencias tiene contratadas la ficha y cuántas se usan realmente. Está junto a los Costes y tiene el mismo navegador **‹ ›** sobre seis años: los cuatro anteriores al actual, el actual y el **Forecast**. Las métricas que sigue la ficha (**Usuarios**, **Instalaciones**) proceden de su campo **Modelo de licencias**, que se muestra de solo lectura arriba con un enlace para editarlo.
+
+![Sección de Licencias](../assets/img/en/104_card_licensing.png)
+
+- **Por métrica y tipo de licencia** — Cada métrica tiene un bloque con un mosaico por tipo de licencia que muestra la cantidad **licenciada**, la cantidad **real**, el **% de utilización** y un estado: **Conforme**, **Cerca del límite** (desde el 80 %), **Sobrelicenciado** (real por encima de lo licenciado) o **Sin datos**. Una barra apilada suma los tipos. Los tipos de licencia proceden del catálogo que gestiona un administrador en [Metamodelo → Tipos de licencia](../admin/metamodel.md#tipos-de-licencia).
+- **Añadir y editar** — Una cantidad se añade, edita o elimina en un cuadro de diálogo. Dejar **Real** vacío significa «sin datos», que es distinto de 0.
+- **Forecast** — El año Forecast solo admite la cantidad licenciada. **Copiar a Forecast** copia las cantidades licenciadas del año que está viendo.
+
+**Un nuevo año fiscal.** Cuando una ficha aún no tiene datos de licencias para el nuevo año actual, la sección muestra las cantidades licenciadas del año anterior marcadas como **sin confirmar**, sin cantidad real, de modo que un año nuevo nunca hereda el consumo del anterior. Se mantienen así hasta que alguien las confirma o edita una cantidad.
+
+**Quién puede ver y editar las licencias.** Puede **verlas** con el permiso `licenses.view`, o si tiene cualquier rol de interesado en la ficha. Puede **editarlas** con el permiso `licenses.edit`, o si tiene en la ficha un rol de interesado que permite editarla. Por defecto, solo los administradores tienen `licenses.edit`. Un cambio aparece en la pestaña Historial como **Licencias actualizadas**, con los tipos de licencia afectados pero no las cantidades, y no se puede revertir.
+
 ### Sección de Jerarquía
 
 Para tipos de ficha que soportan jerarquía (por ejemplo, Organización, Capacidad de Negocio, Aplicación):

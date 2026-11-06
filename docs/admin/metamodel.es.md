@@ -291,6 +291,18 @@ Cada partida tiene una **clave** estable, una **etiqueta** y **traducciones** op
 
 Introducir importes en una ficha requiere `costs.edit` (o un rol de parte interesada que pueda editar la ficha); cambiar el catálogo requiere el permiso de administración del metamodelo.
 
+## Tipos de licencia
+
+Los **tipos de licencia** son el catálogo de clases de licencia que pueden tener las fichas de Aplicación y Componente de TI (véase la [sección de Licencias](../guide/card-details.md#sección-de-licencias-aplicación-y-componente-de-ti)), por ejemplo *Admin*, *Usuario final*, *Prod* o *Dev*. Se gestiona en **Admin > Metamodelo > Tipos de licencia**.
+
+Cada tipo tiene una **clave** estable (letras, dígitos y guiones bajos, fija tras crearla), un **nombre** y **traducciones** opcionales del nombre. Los tipos se **archivan**, no se eliminan: un tipo archivado ya no se puede añadir a una ficha, pero las cantidades ya introducidas siguen contando en los estados y en el [Informe de Licencias](../guide/reports.md#informe-de-licencias). Cada tipo conserva un color estable en los gráficos, según su orden en el catálogo.
+
+Dos permisos controlan las licencias. `licenses.view` permite a un rol leer las licencias de cualquier ficha, y `licenses.edit` permite modificarlas e importarlas desde el Informe de Licencias; un interesado de una ficha también puede leerla, y editarla cuando su rol puede editar la ficha. Por defecto, solo los administradores tienen `licenses.edit`. Cambiar el catálogo requiere el permiso de administración del metamodelo.
+
+### Paso desde la extensión Licensing Analysis
+
+Las licencias ahora forman parte de Turbo EA. Al actualizar, los datos de la antigua extensión *Licensing Analysis* se trasladan automáticamente: las cantidades licenciadas y reales pasan al año fiscal actual de cada ficha, cada categoría de texto libre se convierte en un tipo de licencia, los permisos `ext.licensing.view` y `ext.licensing.manage` de la extensión se copian a `licenses.view` y `licenses.edit`, y los cuatro campos de cantidad de la extensión se eliminan de las fichas. El campo *Modelo de licencias* se mantiene como un campo normal. Los valores que no se pudieron trasladar se listan en un informe guardado en la configuración de la aplicación. **Desinstale la extensión** tras actualizar (Admin → Extensiones); sus informes guardados no se convierten.
+
 ## Cálculos
 
 Los campos calculados usan fórmulas definidas por el administrador para calcular automáticamente valores cuando se guardan fichas. Ver [Cálculos](calculations.es.md) para la guía completa.

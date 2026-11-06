@@ -254,6 +254,36 @@ El Sankey admite los mismos filtros que el mapa de árbol: tipo de tarjeta, ámb
 
 El botón de pantalla completa del mapa de árbol y del Sankey hace que el gráfico ocupe toda la pantalla, a lo ancho y a lo alto, sin deformarlo.
 
+## Informe de Licencias
+
+![Informe de Licencias](../assets/img/en/103_report_licensing.png)
+
+El **Informe de Licencias** (**Informes → Licencias**) compara, para cada Aplicación o Componente de TI, las licencias contratadas con las realmente usadas, y señala un exceso. Requiere el permiso `licenses.view`. Los datos se introducen en la [sección de Licencias](card-details.md#sección-de-licencias-aplicación-y-componente-de-ti) de cada ficha o se importan desde Excel.
+
+La barra de herramientas elige el **tipo de ficha** (Aplicación o Componente de TI, uno cada vez), la **métrica** (**Usuarios** o **Instalaciones**), el **tipo de licencia** (todos, o una entrada del catálogo), la **agrupación**, el **año fiscal** y el alcance de las fichas. Solo se listan las fichas cuyo campo **Modelo de licencias** incluye la métrica seleccionada. Cuatro mosaicos arriba cuentan las fichas **Conformes**, **Cerca del límite**, **Sobrelicenciadas** o **Sin datos reales** en el año seleccionado.
+
+**Tendencia** — Sobre la vista, un gráfico muestra las cantidades licenciadas frente a las reales del año actual, los cuatro anteriores y el año **Forecast** (solo licenciado), apiladas por tipo de licencia. Sigue el filtro de tipo de licencia, el alcance y cualquier desglose.
+
+### Vistas
+
+| Vista | Qué muestra |
+|---|---|
+| **Utilización** | Una barra horizontal por ficha: real dividido por licenciado, de mayor a menor. Verde por debajo del 80 %, naranja del 80 % al 100 %, rojo por encima del 100 %, con líneas de referencia en el 80 % y el 100 %. Una ficha sin datos reales es una barra gris en cero. |
+| **Por tipo de licencia** | Barras agrupadas de licenciado frente a real para cada tipo de licencia en el año seleccionado. Sin ficha elegida muestra los totales del alcance. El selector **Ficha** la limita a una Aplicación o Componente de TI; elegir una **Plataforma** suma las Aplicaciones y Componentes de TI vinculados a ella, cada uno contado una sola vez. |
+| **Tabla** | Una fila por ficha con licenciado, real y % para cada tipo de licencia, los totales y el estado. El menú **Columnas** añade campos de la ficha. Descarga a Excel o impresión como en el Informe de Costes. |
+
+**Estado.** Cada tipo de licencia se juzga por separado, sin compensación entre tipos: está **sobrelicenciado** cuando lo real supera lo licenciado, y **cerca del límite** desde el 80 % de lo licenciado. Una ficha toma su peor estado. Una ficha sin cantidad real para la métrica seleccionada está **Sin datos reales**. La barra de una ficha muestra su peor tipo de licencia. El año Forecast no tiene estado.
+
+**Gestos** — Un **clic izquierdo** en una ficha abre su panel lateral. Un **clic derecho** en una ficha (o en un grupo cuando la agrupación está activa) la desglosa, con una ruta de navegación y un botón **Atrás**; la tendencia sigue el desglose. La vista Por tipo de licencia no tiene desglose.
+
+### Importación
+
+**Importar** en la barra de herramientas carga cantidades de licencias desde un archivo Excel (requiere `licenses.edit`). La primera hoja tiene una fila por cantidad, con las columnas **Component**, **Metric**, **License type**, **Year**, **Licensed** y **Actual**. El componente se identifica por su nombre exacto (sin distinguir mayúsculas); el tipo de licencia por su clave o su nombre en inglés; el año es el año fiscal tal como se nombra en la barra de herramientas (por ejemplo 2026). Una celda vacía deja el valor almacenado sin cambios, y no se puede fijar una cantidad real para el año Forecast.
+
+El cuadro de diálogo muestra primero una vista previa: las filas que se aplicarán y las omitidas, cada una con su motivo (ficha no encontrada, tipo de licencia desconocido, año fuera del periodo, no es un número entero, celda duplicada). No se escribe nada hasta que haga clic en **Aplicar**. La importación nunca crea un tipo de licencia ni edita el Modelo de licencias de una ficha.
+
+Los informes de licencias se pueden guardar como los demás informes (véase [Informes guardados](#informes-guardados)).
+
 ## Informe de Matriz
 
 ![Informe de Matriz](../assets/img/es/35_informe_matriz.png)

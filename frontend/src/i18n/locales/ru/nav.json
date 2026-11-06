@@ -8,6 +8,7 @@
   "reports.lifecycle": "Жизненный цикл",
   "reports.dependencies": "Зависимости",
   "reports.cost": "Затраты",
+  "reports.licensing": "Лицензирование",
   "reports.matrix": "Матрица",
   "reports.dataQuality": "Качество данных",
   "reports.endOfLife": "Окончание поддержки",

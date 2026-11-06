@@ -28,10 +28,48 @@ LICENSING_MODEL_FIELD: dict = {
     "type": "multiple_select",
     "weight": 0,
     "options": [
-        {"key": "users", "label": "Users", "translations": {}},
-        {"key": "installations", "label": "Installations", "translations": {}},
+        {
+            "key": "users",
+            "label": "Users",
+            "translations": {
+                "de": "Benutzer",
+                "fr": "Utilisateurs",
+                "es": "Usuarios",
+                "it": "Utenti",
+                "pt": "Utilizadores",
+                "zh": "用户",
+                "ru": "Пользователи",
+                "da": "Brugere",
+                "ar": "المستخدمون",
+            },
+        },
+        {
+            "key": "installations",
+            "label": "Installations",
+            "translations": {
+                "de": "Installationen",
+                "fr": "Installations",
+                "es": "Instalaciones",
+                "it": "Installazioni",
+                "pt": "Instalações",
+                "zh": "安装",
+                "ru": "Установки",
+                "da": "Installationer",
+                "ar": "التثبيتات",
+            },
+        },
     ],
-    "translations": {},
+    "translations": {
+        "de": "Lizenzmodell",
+        "fr": "Modèle de licence",
+        "es": "Modelo de licencia",
+        "it": "Modello di licenza",
+        "pt": "Modelo de licenciamento",
+        "zh": "许可模式",
+        "ru": "Модель лицензирования",
+        "da": "Licensmodel",
+        "ar": "نموذج الترخيص",
+    },
 }
 
 # old field key -> (metric, "licensed" | "actual")
