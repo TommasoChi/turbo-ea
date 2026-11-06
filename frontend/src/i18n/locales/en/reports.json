@@ -579,5 +579,12 @@
   "licensing.trendAria": "Licensed and actual counts per fiscal year",
   "licensing.utilisationAria": "Utilisation per card",
   "licensing.byTypeAria": "Licensed and actual counts per license type",
-  "licensing.loadFailed": "Could not load the licensing report."
+  "licensing.loadFailed": "Could not load the licensing report.",
+  "licensing.colLic": "{{label}} lic.",
+  "licensing.colAct": "{{label}} act.",
+  "licensing.colPct": "{{label}} %",
+  "licensing.totalLic": "Total lic.",
+  "licensing.totalAct": "Total act.",
+  "licensing.status": "Status",
+  "saved.typeLicensing": "Licensing"
 }

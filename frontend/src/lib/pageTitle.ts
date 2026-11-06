@@ -38,6 +38,7 @@ export const ROUTE_TITLES: RouteTitle[] = [
   { path: "/reports/lifecycle", titleKey: "reports.lifecycle" },
   { path: "/reports/dependencies", titleKey: "reports.dependencies" },
   { path: "/reports/cost", titleKey: "reports.cost" },
+  { path: "/reports/licensing", titleKey: "reports.licensing" },
   { path: "/reports/matrix", titleKey: "reports.matrix" },
   { path: "/reports/data-quality", titleKey: "reports.dataQuality" },
   { path: "/reports/eol", titleKey: "reports.endOfLife" },

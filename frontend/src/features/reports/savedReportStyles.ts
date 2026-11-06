@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { STATUS_COLORS } from "@/theme/tokens";
 
 export const REPORT_TYPE_STYLE: Record<string, { icon: string; color: string; path: string }> = {
   portfolio: { icon: "dashboard", color: "#1976d2", path: "/reports/portfolio" },
@@ -11,6 +12,7 @@ export const REPORT_TYPE_STYLE: Record<string, { icon: string; color: string; pa
   lifecycle: { icon: "timeline", color: "#2e7d32", path: "/reports/lifecycle" },
   dependencies: { icon: "hub", color: "#e65100", path: "/reports/dependencies" },
   cost: { icon: "payments", color: "#6a1b9a", path: "/reports/cost" },
+  licensing: { icon: "badge", color: STATUS_COLORS.info, path: "/reports/licensing" },
   matrix: { icon: "table_chart", color: "#6a1b9a", path: "/reports/matrix" },
   "data-quality": { icon: "verified", color: "#00695c", path: "/reports/data-quality" },
   eol: { icon: "update", color: "#bf360c", path: "/reports/eol" },
@@ -30,6 +32,7 @@ export function getReportTypeLabels(t: TFunction): Record<string, string> {
     lifecycle: t("reports:saved.typeLifecycle"),
     dependencies: t("reports:saved.typeDependencies"),
     cost: t("reports:saved.typeCost"),
+    licensing: t("reports:saved.typeLicensing"),
     matrix: t("reports:saved.typeMatrix"),
     "data-quality": t("reports:saved.typeDataQuality"),
     eol: t("reports:saved.typeEol"),

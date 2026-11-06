@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
+import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
+import ListItemText from "@mui/material/ListItemText";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import { api } from "@/api/client";
 import EChart, { type EChartClickParams } from "@/components/charts/EChart";
 import { useEChartsTheme } from "@/components/charts/echartsTheme";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
@@ -15,6 +18,9 @@ import CardPicker, { type CardOption } from "@/components/CardPicker";
 import CardScopeFilter from "@/components/CardScopeFilter";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useApiQuery } from "@/hooks/useApiQuery";
+import { useAbortableEffect } from "@/hooks/useLatestRequest";
+import { useSavedReport } from "@/hooks/useSavedReport";
+import { useThumbnailCapture } from "@/hooks/useThumbnailCapture";
 import { applyScope, useCardScope } from "@/hooks/useCardScope";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useReadableCardTypes } from "@/hooks/useReadableCardTypes";
@@ -24,6 +30,7 @@ import {
   useRelationLabel,
   useTypeLabel,
 } from "@/hooks/useResolveLabel";
+import { formatFieldValue, type FieldMeta } from "@/lib/cardDisplayFields";
 import { resolveFacetField } from "@/lib/fieldFacets";
 import { costFiscalYearName, costFiscalYearOptions } from "@/lib/fiscalYear";
 import { isLicenseType, LICENSE_METRICS, statusColor, STATUS_ORDER } from "@/lib/licenses";
@@ -41,7 +48,11 @@ import CostDrillBar from "./CostDrillBar";
 import CostLegend from "./CostLegend";
 import { catalogueHues } from "./costColors";
 import { applyDrill, crumbsOf, type Drill } from "./costDrill";
-import { commonGroupableFields, relationGroupOptions } from "./costReportOptions";
+import {
+  commonGroupableFields,
+  isBuiltInFieldType,
+  relationGroupOptions,
+} from "./costReportOptions";
 import { buildCostTrendOption, type CostTrendRow } from "./costTrendOption";
 import { buildByTypeOption, type ByTypeBar } from "./licensingByTypeOption";
 import {
@@ -49,8 +60,10 @@ import {
   utilisationHeight,
   type UtilisationBar,
 } from "./licensingUtilisationOption";
+import LicensingTable from "./LicensingTable";
 import MetricCard from "./MetricCard";
-import ReportShell from "./ReportShell";
+import ReportShell, { type PrintParam } from "./ReportShell";
+import SaveReportDialog from "./SaveReportDialog";
 
 export type LicensingView = "chart" | "bytype" | "table";
 
@@ -87,7 +100,10 @@ export default function LicensingReport() {
   const fieldLabel = useFieldLabel();
   const optLabel = useOptionLabel();
   const chrome = useEChartsTheme();
-  const chartRef = useRef<HTMLDivElement | null>(null);
+  const saved = useSavedReport("licensing");
+  const { chartRef, thumbnail, captureAndSave } = useThumbnailCapture(() =>
+    saved.setSaveDialogOpen(true),
+  );
 
   const [cardTypeKey, setCardTypeKey] = useState("Application");
   const [metric, setMetric] = useState<LicenseMetric>("users");
@@ -97,6 +113,13 @@ export default function LicensingReport() {
   // null = the current year (the param is omitted); the Forecast year is never offered.
   const [fiscalYearParam, setFiscalYearParam] = useState<number | null>(null);
   const [picked, setPicked] = useState<CardOption | null>(null);
+  const [extraColumns, setExtraColumns] = useState<string[]>([]);
+  const [sortK, setSortK] = useState("name");
+  const [sortD, setSortD] = useState<"asc" | "desc">("asc");
+  // A card id restored from a saved report, resolved to a CardOption once.
+  const [restorePickId, setRestorePickId] = useState<string | null>(null);
+  // True while the year in use came from a restored config rather than from the picker.
+  const restoredYear = useRef(false);
   const [drill, setDrill] = useState<Drill>({});
   const [sidePanelCardId, setSidePanelCardId] = useState<string | null>(null);
 
@@ -121,6 +144,23 @@ export default function LicensingReport() {
     const def = types.find((tp) => tp.key === cardTypeKey);
     return def ? [def.fields_schema] : [];
   }, [types, cardTypeKey]);
+  // Extra table columns: the built-in-typed fields of the card type (object-typed ones cannot show in a cell).
+  const allFields = useMemo(
+    () =>
+      schemas
+        .flatMap((sc) => sc)
+        .flatMap((sec) => sec.fields)
+        .filter((f) => isBuiltInFieldType(f.type))
+        .map((f) => ({ ...f, label: fieldLabel(f) })),
+    [schemas, fieldLabel],
+  );
+  // Picked columns the type no longer defines (card-type switch) are dropped.
+  useEffect(() => {
+    setExtraColumns((prev) => {
+      const next = prev.filter((key) => allFields.some((f) => f.key === key));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [allFields]);
   const groupableFields = useMemo<FieldDef[]>(() => {
     const yesNo = { yes: t("common:labels.yes"), no: t("common:labels.no") };
     return commonGroupableFields(schemas).map((f) =>
@@ -337,18 +377,21 @@ export default function LicensingReport() {
     const id = idOf(p);
     if (id && !id.startsWith(GROUP_PREFIX)) setSidePanelCardId(id);
   }, []);
-  const handleDrill = useCallback(
-    (p: EChartClickParams) => {
-      const id = idOf(p);
-      if (!id) return;
-      if (id.startsWith(GROUP_PREFIX)) {
-        setDrill({ group: id.slice(GROUP_PREFIX.length) });
-        return;
-      }
+  const drillToCard = useCallback(
+    (id: string) => {
       const row = viewRows.find((r) => r.id === id);
       setDrill({ ...(row?.group !== undefined && { group: row.group }), cardId: id });
     },
     [viewRows],
+  );
+  const handleDrill = useCallback(
+    (p: EChartClickParams) => {
+      const id = idOf(p);
+      if (!id) return;
+      if (id.startsWith(GROUP_PREFIX)) setDrill({ group: id.slice(GROUP_PREFIX.length) });
+      else drillToCard(id);
+    },
+    [drillToCard],
   );
   const crumbs = useMemo(
     () =>
@@ -390,6 +433,67 @@ export default function LicensingReport() {
     [byTypeBars, chrome, t],
   );
 
+  // ── Table: the same rows as the Utilisation view, one per card ────────────────────────────
+  const tableTypes = useMemo(
+    () =>
+      sortedTypes.filter(
+        (x) => (!licenseType || x.key === licenseType) && viewRows.some((r) => r.raw.by_type[x.key]),
+      ),
+    [sortedTypes, licenseType, viewRows],
+  );
+  const tableGroups = useMemo(() => {
+    if (!effectiveGroupBy || aggregate || drill.cardId !== undefined) return undefined;
+    const keys = [...new Set(drilledRows.map((r) => r.group ?? OTHER_GROUP))];
+    return keys
+      .map((key) => ({ key, label: groupLabel(key) }))
+      .sort((a, b) =>
+        a.key === OTHER_GROUP ? 1 : b.key === OTHER_GROUP ? -1 : a.label.localeCompare(b.label),
+      );
+  }, [effectiveGroupBy, aggregate, drill.cardId, drilledRows, groupLabel]);
+  const tableRows = useMemo(
+    () => (tableGroups ? drilledRows.map((r) => ({ ...r, group: r.group ?? OTHER_GROUP })) : drilledRows),
+    [tableGroups, drilledRows],
+  );
+  const yesNo = { yes: t("common:labels.yes"), no: t("common:labels.no") };
+  const extraValue = (row: { raw: LicenseReportRow }, key: string) => {
+    const f = allFields.find((fd) => fd.key === key);
+    return formatFieldValue(
+      row.raw.attributes?.[key],
+      f ? ({ ...f, typeKeys: [cardTypeKey] } as FieldMeta) : undefined,
+      { optionLabel: optLabel, yes: yesNo.yes, no: yesNo.no },
+    );
+  };
+  const onSort = (k: string) => {
+    setSortD(sortK === k && sortD === "asc" ? "desc" : "asc");
+    setSortK(k);
+  };
+
+  const printParams = useMemo(() => {
+    const params: PrintParam[] = [
+      { label: t("licensing.cardType"), value: typeOptions.find((o) => o.key === cardTypeKey)?.label ?? cardTypeKey },
+      { label: t("licensing.metric"), value: t(`licensing.metric_${metric}`) },
+    ];
+    if (licenseType) params.push({ label: t("licensing.licenseType"), value: labelOfType(licenseType) });
+    if (data)
+      params.push({
+        label: t("cost.fiscalYear"),
+        value: costFiscalYearName(data.fiscal_year, currentFiscalYear),
+      });
+    if (effectiveGroupBy)
+      params.push({
+        label: t("cost.groupBy"),
+        value: groupOptions.find((o) => o.value === effectiveGroupBy)?.label ?? effectiveGroupBy,
+      });
+    if (aggregate) params.push({ label: t("licensing.pickCard"), value: aggregate.name });
+    if (view === "table") params.push({ label: t("common.view"), value: t("common.table") });
+    if (effectiveScopeIds.length > 0)
+      params.push({
+        label: t("common.scope"),
+        value: t("cost.scopeCount", { count: effectiveScopeIds.length }),
+      });
+    return params;
+  }, [t, typeOptions, cardTypeKey, metric, licenseType, labelOfType, data, currentFiscalYear, effectiveGroupBy, groupOptions, aggregate, view, effectiveScopeIds]);
+
   const legendEntries = useMemo(
     () =>
       trend.components.map((k) => ({
@@ -400,7 +504,87 @@ export default function LicensingReport() {
     [trend.components, labelOfType, hues, chrome.mode],
   );
 
+  // ── saved reports: restore, persist, reset ────────────────────────────────────────────────
+  // A restored year the report no longer offers (the Forecast year, one older than the window)
+  // or the server refuses falls back to the current year; so does a vanished license type.
+  useEffect(() => {
+    if (data && fiscalYearParam != null && !yearOptions.some((o) => o.value === fiscalYearParam))
+      setFiscalYearParam(null);
+  }, [data, fiscalYearParam, yearOptions]);
+  useEffect(() => {
+    if (error && restoredYear.current && fiscalYearParam != null) {
+      restoredYear.current = false;
+      setFiscalYearParam(null);
+    }
+  }, [error, fiscalYearParam]);
+  useEffect(() => {
+    if (data && licenseType && !data.license_types.some((x) => x.key === licenseType))
+      setLicenseType("");
+  }, [data, licenseType]);
+  // The pick is saved as an id and fetched again: the card may be gone or hidden by now.
+  useAbortableEffect(async ({ signal, isCurrent }) => {
+    if (!restorePickId) return;
+    try {
+      const c = await api.get<CardOption>(`/cards/${restorePickId}`, { signal });
+      if (isCurrent() && PICKABLE_TYPES.includes(c.type))
+        setPicked({ id: c.id, name: c.name, type: c.type });
+    } catch {
+      /* deleted, hidden or aborted: no pick */
+    }
+    if (isCurrent()) setRestorePickId(null);
+  }, [restorePickId]);
+
+  useEffect(() => {
+    const cfg = saved.consumeConfig();
+    if (!cfg) return;
+    const restoredType =
+      typeof cfg.cardTypeKey === "string" && isLicenseType(cfg.cardTypeKey)
+        ? cfg.cardTypeKey
+        : undefined;
+    if (restoredType) setCardTypeKey(restoredType);
+    if (LICENSE_METRICS.includes(cfg.metric as LicenseMetric)) setMetric(cfg.metric as LicenseMetric);
+    if (typeof cfg.licenseType === "string") setLicenseType(cfg.licenseType);
+    if (typeof cfg.groupBy === "string") setGroupBy(cfg.groupBy);
+    if (cfg.view === "chart" || cfg.view === "bytype" || cfg.view === "table") setView(cfg.view);
+    if (typeof cfg.sortK === "string") setSortK(cfg.sortK);
+    if (cfg.sortD === "asc" || cfg.sortD === "desc") setSortD(cfg.sortD);
+    if (typeof cfg.fiscalYearParam === "number") {
+      restoredYear.current = true;
+      setFiscalYearParam(cfg.fiscalYearParam);
+    }
+    if (Array.isArray(cfg.extraColumns))
+      setExtraColumns((cfg.extraColumns as unknown[]).filter((v): v is string => typeof v === "string"));
+    if (Array.isArray(cfg.scopeIds))
+      setScopeIds(
+        (cfg.scopeIds as unknown[]).filter((v): v is string => typeof v === "string"),
+        restoredType,
+      );
+    if (typeof cfg.pickedCardId === "string") setRestorePickId(cfg.pickedCardId);
+  }, [saved.loadedConfig]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const getConfig = () => ({
+    cardTypeKey,
+    metric,
+    licenseType,
+    groupBy,
+    view,
+    scopeIds,
+    fiscalYearParam,
+    pickedCardId: picked?.id ?? null,
+    extraColumns,
+    sortK,
+    sortD,
+  });
+  useEffect(() => {
+    saved.persistConfig(getConfig());
+  }, [cardTypeKey, metric, licenseType, groupBy, view, scopeIds, fiscalYearParam, picked, extraColumns, sortK, sortD]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleReset = useCallback(() => {
+    saved.resetAll();
+    setExtraColumns([]);
+    setSortK("name");
+    setSortD("asc");
+    restoredYear.current = false;
     setCardTypeKey("Application");
     setMetric("users");
     setLicenseType("");
@@ -409,7 +593,7 @@ export default function LicensingReport() {
     setFiscalYearParam(null);
     setPicked(null);
     setScopeIds([]);
-  }, [setScopeIds]);
+  }, [setScopeIds, saved]);
 
   const statusCards: { status: LicenseStatus; label: string; icon: string }[] = [
     { status: "compliant", label: t("licensing.statusCompliant"), icon: "check_circle" },
@@ -430,6 +614,10 @@ export default function LicensingReport() {
       chartViewLabel={t("licensing.viewUtilisation")}
       extraViews={[{ value: "bytype", icon: "bar_chart", label: t("licensing.viewByType") }]}
       chartRef={chartRef}
+      onSaveReport={captureAndSave}
+      savedReportName={saved.savedReportName ?? undefined}
+      onResetSavedReport={saved.resetSavedReport}
+      printParams={printParams}
       onReset={handleReset}
       legend={view === "table" ? undefined : <CostLegend entries={legendEntries} />}
       toolbar={
@@ -505,6 +693,33 @@ export default function LicensingReport() {
             helperText={t("cost.scopeHelper")}
             tooltip={t("cost.scopeTooltip")}
           />
+          {view === "table" && allFields.length > 0 && (
+            <TextField
+              select
+              size="small"
+              label={t("cost.columns")}
+              value={extraColumns}
+              onChange={(e) => {
+                const v = e.target.value as unknown;
+                setExtraColumns(typeof v === "string" ? v.split(",") : (v as string[]));
+              }}
+              slotProps={{
+                select: {
+                  multiple: true,
+                  renderValue: (selected) =>
+                    (selected as string[]).length ? String((selected as string[]).length) : t("cost.columnsNone"),
+                },
+              }}
+              sx={{ minWidth: 150 }}
+            >
+              {allFields.map((f) => (
+                <MenuItem key={f.key} value={f.key}>
+                  <Checkbox checked={extraColumns.includes(f.key)} />
+                  <ListItemText primary={f.label} />
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
           {view === "bytype" && (
             <CardPicker
               types={PICKABLE_TYPES}
@@ -522,7 +737,10 @@ export default function LicensingReport() {
             label={t("cost.fiscalYear")}
             value={fiscalYearParam ?? ""}
             slotProps={{ select: { displayEmpty: true } }}
-            onChange={(e) => setFiscalYearParam(e.target.value === "" ? null : Number(e.target.value))}
+            onChange={(e) => {
+              restoredYear.current = false;
+              setFiscalYearParam(e.target.value === "" ? null : Number(e.target.value));
+            }}
             sx={{ minWidth: 130 }}
           >
             {yearOptions.map((o) => (
@@ -604,13 +822,48 @@ export default function LicensingReport() {
               <EChart option={byTypeOption} style={{ height: 360 }} ariaLabel={t("licensing.byTypeAria")} />
             ))}
 
-          {/* The Table view comes with the table (next task). */}
+          {view === "table" &&
+            (tableRows.length === 0 ? (
+              <Box sx={{ py: 8, textAlign: "center" }}>
+                <Typography color="text.secondary">{t("licensing.noData")}</Typography>
+              </Box>
+            ) : (
+              <>
+                <CostDrillBar crumbs={crumbs} onSelect={setDrill} hint={t("licensing.drillHint")} />
+                <LicensingTable
+                  rows={tableRows}
+                  types={tableTypes}
+                  labelOf={labelOfType}
+                  groups={tableGroups}
+                  extraColumns={extraColumns}
+                  extraLabel={(key) => allFields.find((f) => f.key === key)?.label ?? key}
+                  extraValue={extraValue}
+                  typeOf={(key) => {
+                    const tp = types.find((x) => x.key === key);
+                    return tp ? { icon: tp.icon, label: typeLabel(tp) } : null;
+                  }}
+                  showStatus={!aggregate}
+                  sortK={sortK}
+                  sortD={sortD}
+                  onSort={onSort}
+                  onOpen={setSidePanelCardId}
+                  onDrill={(target) => ("group" in target ? setDrill({ group: target.group }) : drillToCard(target.id))}
+                />
+              </>
+            ))}
         </>
       )}
       <CardDetailSidePanel
         cardId={sidePanelCardId}
         open={sidePanelCardId !== null}
         onClose={() => setSidePanelCardId(null)}
+      />
+      <SaveReportDialog
+        open={saved.saveDialogOpen}
+        onClose={() => saved.setSaveDialogOpen(false)}
+        reportType="licensing"
+        config={getConfig()}
+        thumbnail={thumbnail}
       />
     </ReportShell>
   );

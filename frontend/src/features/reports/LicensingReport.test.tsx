@@ -31,7 +31,17 @@ import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { echartState } from "@/test/echartMock";
 
-const APP_TYPE = { key: "Application", label: "Application", color: "#0f7eb5", is_hidden: false, has_hierarchy: false, fields_schema: [] };
+const FIELDS = [
+  {
+    section: "General",
+    fields: [
+      { key: "owner", label: "Owner", type: "text" },
+      { key: "seats", label: "Seats", type: "number" },
+      { key: "extra", label: "Extension thing", type: "ext.demo.rating" },
+    ],
+  },
+];
+const APP_TYPE = { key: "Application", label: "Application", color: "#0f7eb5", is_hidden: false, has_hierarchy: false, fields_schema: FIELDS };
 const ITC_TYPE = { key: "ITComponent", label: "IT Component", color: "#8e24aa", is_hidden: false, has_hierarchy: false, fields_schema: [] };
 
 const cell = (licensed: number, actual: number | null, pct: number | null, status: string) => ({
@@ -63,6 +73,7 @@ const report = (over = {}) => ({
   license_types: LICENSE_TYPES, aggregate: null, rows: ROWS, trend: TREND, ...over,
 });
 
+const extra: { handlers: Record<string, (path: string) => Promise<unknown>> } = { handlers: {} };
 const reportPaths = () =>
   vi.mocked(api.get).mock.calls.map(([p]) => String(p)).filter((p) => p.startsWith("/reports/licensing"));
 
@@ -70,7 +81,11 @@ beforeEach(async () => {
   await i18n.changeLanguage("en");
   vi.clearAllMocks();
   echartState.reset();
+  localStorage.clear();
+  extra.handlers = {};
   vi.mocked(api.get).mockImplementation((path: string) => {
+    const h = Object.entries(extra.handlers).find(([p]) => path.startsWith(p));
+    if (h) return h[1](path) as never;
     if (path.startsWith("/reports/licensing")) {
       return Promise.resolve(
         path.includes("card_id=plat")
@@ -89,9 +104,9 @@ beforeEach(async () => {
   } as never);
 });
 
-function renderReport() {
+function renderReport(entry = "/") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry]}>
       <LicensingReport />
     </MemoryRouter>,
   );
@@ -187,5 +202,143 @@ describe("LicensingReport", () => {
     expect(screen.queryByText("Over-licensed")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Utilisation" }));
     await waitFor(() => expect(util().option.yAxis.data).toHaveLength(3));
+  });
+
+  describe("table view", () => {
+    const toTable = () => userEvent.click(screen.getByRole("button", { name: "Table view" }));
+    const rowNames = () => screen.getAllByTestId("licensing-row-name").map((n) => n.textContent);
+
+    it("renders one row per card, left click opens, right click drills the trend", async () => {
+      renderReport();
+      await waitFor(() => expect(reportPaths()).toHaveLength(1));
+      await toTable();
+      expect(rowNames()).toEqual(["A", "B", "C"]);
+      expect(screen.getByTestId("licensing-total-row")).toBeInTheDocument();
+      const rowB = () => screen.getAllByTestId("licensing-row-name")[1];
+      await userEvent.click(rowB());
+      expect(screen.getByTestId("side-panel")).toHaveTextContent("B");
+      await userEvent.pointer({ keys: "[MouseRight]", target: rowB() });
+      await waitFor(() => expect(rowNames()).toEqual(["B"]));
+      expect(trendBars()[0].data[0]).toBe(5);
+    });
+
+    it("Columns menu lists only built-in field types", async () => {
+      renderReport();
+      await waitFor(() => expect(reportPaths()).toHaveLength(1));
+      expect(screen.queryByRole("combobox", { name: "Columns" })).toBeNull();
+      await toTable();
+      await userEvent.click(screen.getByRole("combobox", { name: "Columns" }));
+      const names = within(await screen.findByRole("listbox"))
+        .getAllByRole("option")
+        .map((o) => o.textContent);
+      expect(names).toEqual(["Owner", "Seats"]);
+    });
+
+    it("sorts by a header click and flips on a second click", async () => {
+      renderReport();
+      await waitFor(() => expect(reportPaths()).toHaveLength(1));
+      await toTable();
+      await userEvent.click(screen.getByText("Admin lic."));
+      expect(rowNames()).toEqual(["C", "A", "B"]); // 0, 10, 10 ascending, ties keep order
+      await userEvent.click(screen.getByText("Admin lic."));
+      expect(rowNames()[2]).toBe("C");
+    });
+  });
+
+  it("offers XLSX and not PPTX in the table view, PPTX in the chart views", async () => {
+    renderReport();
+    await waitFor(() => expect(reportPaths()).toHaveLength(1));
+    const openMenu = async () => {
+      await userEvent.click(screen.getByRole("button", { name: /more actions/i }));
+      await screen.findByText("Copy link");
+    };
+    await openMenu();
+    expect(screen.getByText("Export to PowerPoint (.pptx)")).toBeInTheDocument();
+    expect(screen.queryByText("Export to Excel (.xlsx)")).toBeNull();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: "Table view" }));
+    await openMenu();
+    expect(screen.getByText("Export to Excel (.xlsx)")).toBeInTheDocument();
+    expect(screen.queryByText("Export to PowerPoint (.pptx)")).toBeNull();
+  });
+
+  it("states the type, metric and year in the print header", async () => {
+    renderReport();
+    await waitFor(() => expect(reportPaths()).toHaveLength(1));
+    const text = document.querySelector(".report-print-params")?.textContent ?? "";
+    expect(text).toContain("Metric: Users");
+    expect(text).toContain("Fiscal year: FY26 - Current");
+  });
+
+  describe("saved reports", () => {
+    const savedConfig = (config: Record<string, unknown>) => {
+      extra.handlers["/saved-reports/r1"] = () => Promise.resolve({ id: "r1", name: "Mine", config });
+    };
+
+    it("persists and restores pickedCardId and the view through the saved config", async () => {
+      extra.handlers["/cards/plat"] = () => Promise.resolve({ id: "plat", name: "Plat", type: "Platform" });
+      savedConfig({ view: "bytype", pickedCardId: "plat", metric: "installations", fiscalYearParam: 2025 });
+      renderReport("/?saved_report_id=r1");
+      await waitFor(() => expect(reportPaths().some((p) => p.includes("card_id=plat"))).toBe(true));
+      const p = reportPaths().find((x) => x.includes("card_id=plat")) as string;
+      expect(p).toContain("metric=installations");
+      expect(p).toContain("fiscal_year=2025");
+      expect(screen.getByRole("button", { name: "By license type" })).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("auto-persists the keys of the saved config, the pick included", async () => {
+      renderReport();
+      await waitFor(() => expect(reportPaths()).toHaveLength(1));
+      await userEvent.click(screen.getByRole("button", { name: "By license type" }));
+      await userEvent.click(screen.getByText("pick-platform"));
+      await waitFor(() => {
+        const cfg = JSON.parse(localStorage.getItem("turboea-report:licensing") ?? "{}");
+        expect(cfg).toEqual({
+          cardTypeKey: "Application",
+          metric: "users",
+          licenseType: "",
+          groupBy: "",
+          view: "bytype",
+          scopeIds: [],
+          fiscalYearParam: null,
+          pickedCardId: "plat",
+          extraColumns: [],
+          sortK: "name",
+          sortD: "asc",
+        });
+      });
+    });
+
+    it("a picked card that no longer exists is dropped without breaking the report", async () => {
+      extra.handlers["/cards/gone"] = () => Promise.reject(new Error("404"));
+      savedConfig({ view: "bytype", pickedCardId: "gone" });
+      renderReport("/?saved_report_id=r1");
+      await waitFor(() => expect(vi.mocked(api.get).mock.calls.some(([p]) => p === "/cards/gone")).toBe(true));
+      await waitFor(() => expect(echartState.byName("Licensed and actual counts per license type")).toBeTruthy());
+      expect(reportPaths().some((p) => p.includes("card_id"))).toBe(false);
+    });
+
+    it("a fiscal year no longer offered falls back to the current year", async () => {
+      savedConfig({ fiscalYearParam: 2027 });
+      renderReport("/?saved_report_id=r1");
+      await waitFor(() => expect(reportPaths().some((p) => p.includes("fiscal_year=2027"))).toBe(true));
+      await waitFor(() => expect(reportPaths().at(-1)).toBe("/reports/licensing?type=Application&metric=users"));
+    });
+
+    it("a year the server refuses falls back to the current year", async () => {
+      savedConfig({ fiscalYearParam: 2019 });
+      extra.handlers["/reports/licensing?type=Application&metric=users&fiscal_year=2019"] = () =>
+        Promise.reject(new Error("400"));
+      renderReport("/?saved_report_id=r1");
+      await waitFor(() => expect(reportPaths().some((p) => p.includes("fiscal_year=2019"))).toBe(true));
+      await waitFor(() => expect(reportPaths().at(-1)).toBe("/reports/licensing?type=Application&metric=users"));
+    });
+
+    it("a license type the catalogue no longer has is cleared", async () => {
+      savedConfig({ licenseType: "retired" });
+      renderReport("/?saved_report_id=r1");
+      await waitFor(() => expect(card("Over-licensed")).toHaveTextContent("1"));
+      expect(screen.getByRole("combobox", { name: "License type" })).toHaveTextContent("All license types");
+    });
   });
 });

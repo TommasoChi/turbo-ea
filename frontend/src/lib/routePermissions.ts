@@ -68,6 +68,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // A report that is nothing but costs, so its subject permission is its only
   // gate — matching what the backend now checks.
   { path: "/reports/cost", permission: "costs.view" },
+  { path: "/reports/licensing", permission: "licenses.view" },
   { path: "/reports/matrix", permission: "reports.ea_dashboard" },
   { path: "/reports/data-quality", permission: "reports.ea_dashboard" },
   { path: "/reports/eol", permission: "reports.ea_dashboard" },

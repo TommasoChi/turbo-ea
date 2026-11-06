@@ -37,6 +37,7 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
       { labelKey: "reports.lifecycle", icon: "timeline", path: "/reports/lifecycle" },
       { labelKey: "reports.dependencies", icon: "hub", path: "/reports/dependencies" },
       { labelKey: "reports.cost", icon: "payments", path: "/reports/cost" },
+      { labelKey: "reports.licensing", icon: "badge", path: "/reports/licensing" },
       { labelKey: "reports.matrix", icon: "table_chart", path: "/reports/matrix" },
       { labelKey: "reports.dataQuality", icon: "verified", path: "/reports/data-quality" },
       { labelKey: "reports.endOfLife", icon: "update", path: "/reports/eol" },
