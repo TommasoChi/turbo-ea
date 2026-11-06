@@ -3353,3 +3353,16 @@ export interface LicenseReportResponse {
   rows: LicenseReportRow[];
   trend: LicenseReportTrendYear[];
 }
+
+export interface LicenseImportIssue {
+  row: number;
+  component: string;
+  reason: string;
+  detail: string;
+}
+export interface LicenseImportResult {
+  matched: number;
+  applied: number;
+  skipped: LicenseImportIssue[];
+  flagged: LicenseImportIssue[];
+}

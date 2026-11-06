@@ -11,6 +11,15 @@ import LicensingReport from "./LicensingReport";
 
 vi.mock("@/api/client", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 vi.mock("@/hooks/useMetamodel", () => ({ useMetamodel: vi.fn() }));
+const auth = vi.hoisted(() => ({ permissions: {} as Record<string, boolean> }));
+vi.mock("@/hooks/AuthContext", () => ({
+  useAuthContext: () => ({ user: { permissions: auth.permissions } }),
+  useOptionalAuthUser: () => ({ permissions: auth.permissions }),
+}));
+vi.mock("./LicensingImportDialog", () => ({
+  default: ({ open, onApplied }: { open: boolean; onApplied: () => void }) =>
+    open ? <button onClick={onApplied}>mock-apply</button> : null,
+}));
 vi.mock("@/components/charts/EChart", () => import("@/test/echartMock").then((m) => m.echartModule()));
 vi.mock("@/components/CardDetailSidePanel", () => ({
   default: ({ cardId, open }: { cardId: string | null; open: boolean }) =>
@@ -83,6 +92,7 @@ beforeEach(async () => {
   echartState.reset();
   localStorage.clear();
   extra.handlers = {};
+  auth.permissions = {};
   vi.mocked(api.get).mockImplementation((path: string) => {
     const h = Object.entries(extra.handlers).find(([p]) => path.startsWith(p));
     if (h) return h[1](path) as never;
@@ -339,6 +349,33 @@ describe("LicensingReport", () => {
       renderReport("/?saved_report_id=r1");
       await waitFor(() => expect(card("Over-licensed")).toHaveTextContent("1"));
       expect(screen.getByRole("combobox", { name: "License type" })).toHaveTextContent("All license types");
+    });
+  });
+
+  describe("Import", () => {
+    it("shows Import only with licenses.edit", async () => {
+      const { unmount } = renderReport();
+      await waitFor(() => expect(card("Over-licensed")).toHaveTextContent("1"));
+      expect(screen.queryByRole("button", { name: /Import/ })).not.toBeInTheDocument();
+      unmount();
+      auth.permissions = { "licenses.edit": true };
+      renderReport();
+      expect(await screen.findByRole("button", { name: /Import/ })).toBeInTheDocument();
+    });
+
+    it("shows Import for the * permission", async () => {
+      auth.permissions = { "*": true };
+      renderReport();
+      expect(await screen.findByRole("button", { name: /Import/ })).toBeInTheDocument();
+    });
+
+    it("reloads the report after an apply", async () => {
+      auth.permissions = { "licenses.edit": true };
+      renderReport();
+      await waitFor(() => expect(reportPaths()).toHaveLength(1));
+      await userEvent.click(await screen.findByRole("button", { name: /Import/ }));
+      await userEvent.click(screen.getByRole("button", { name: "mock-apply" }));
+      await waitFor(() => expect(reportPaths()).toHaveLength(2));
     });
   });
 });

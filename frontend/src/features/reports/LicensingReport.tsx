@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -17,6 +18,8 @@ import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import CardPicker, { type CardOption } from "@/components/CardPicker";
 import CardScopeFilter from "@/components/CardScopeFilter";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import { useAuthContext } from "@/hooks/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useSavedReport } from "@/hooks/useSavedReport";
@@ -60,6 +63,7 @@ import {
   utilisationHeight,
   type UtilisationBar,
 } from "./licensingUtilisationOption";
+import LicensingImportDialog from "./LicensingImportDialog";
 import LicensingTable from "./LicensingTable";
 import MetricCard from "./MetricCard";
 import ReportShell, { type PrintParam } from "./ReportShell";
@@ -201,7 +205,10 @@ export default function LicensingReport() {
     if (cardIdParam) p.set("card_id", cardIdParam);
     return `/reports/licensing?${p.toString()}`;
   }, [cardTypeKey, metric, fiscalYearParam, effectiveGroupBy, cardIdParam]);
-  const { data, loading, error } = useApiQuery<LicenseReportResponse>(path);
+  const { data, loading, error, refetch } = useApiQuery<LicenseReportResponse>(path);
+  const { user } = useAuthContext();
+  const canImport = usePermissions(user).can("licenses.edit");
+  const [importOpen, setImportOpen] = useState(false);
   const aggregate = data?.aggregate ?? null;
 
   // Ids named by a drill exist only under the current selection.
@@ -618,6 +625,18 @@ export default function LicensingReport() {
       savedReportName={saved.savedReportName ?? undefined}
       onResetSavedReport={saved.resetSavedReport}
       printParams={printParams}
+      actions={
+        canImport ? (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<MaterialSymbol icon="upload_file" size={18} />}
+            onClick={() => setImportOpen(true)}
+          >
+            {t("licensing.import.button")}
+          </Button>
+        ) : undefined
+      }
       onReset={handleReset}
       legend={view === "table" ? undefined : <CostLegend entries={legendEntries} />}
       toolbar={
@@ -864,6 +883,11 @@ export default function LicensingReport() {
         reportType="licensing"
         config={getConfig()}
         thumbnail={thumbnail}
+      />
+      <LicensingImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onApplied={refetch}
       />
     </ReportShell>
   );
