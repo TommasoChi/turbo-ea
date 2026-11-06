@@ -302,6 +302,7 @@
   "metamodel.typeDrawer.descriptionSection": "Description",
   "metamodel.typeDrawer.failedToSaveField": "Failed to save field",
   "metamodel.typeDrawer.failedToDeleteField": "Failed to delete field",
+  "metamodel.typeDrawer.licenseFieldLocked": "The Licensing Model field is required by licensing and cannot be deleted or changed. Edit a card's model from its Licensing section.",
   "metamodel.typeDrawer.failedToDeleteSection": "Failed to delete section",
   "metamodel.typeDrawer.failedToUpdateVisibility": "Failed to update visibility",
   "metamodel.typeDrawer.deleteField": "Delete Field",

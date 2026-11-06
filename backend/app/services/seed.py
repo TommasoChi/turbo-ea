@@ -30,7 +30,7 @@ from app.services.archimate.enterprise_object_seed import (
 from app.services.archimate.viewpoint_example_seed import seed_viewpoint_examples
 from app.services.archimate.viewpoint_seed import seed_viewpoints
 from app.services.hierarchy import HIERARCHY_LEVEL_KEY, hierarchy_level_field_def
-from app.services.licensing_migration import LICENSING_MODEL_FIELD
+from app.services.licensing_migration import licensing_section
 
 # ── Reusable option lists ──────────────────────────────────────────────
 
@@ -3311,9 +3311,9 @@ TYPES = [
                             "ar": "يحتوي على ميزات ذكاء اصطناعي",
                         },
                     },
-                    copy.deepcopy(LICENSING_MODEL_FIELD),
                 ],
             },
+            licensing_section(),
             {
                 "section": "Assessment",
                 "translations": {
@@ -3969,9 +3969,9 @@ TYPES = [
                             "ar": "يحتوي على ميزات ذكاء اصطناعي",
                         },
                     },
-                    copy.deepcopy(LICENSING_MODEL_FIELD),
                 ],
             },
+            licensing_section(),
             {
                 "section": "Cost",
                 "translations": {

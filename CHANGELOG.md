@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - **Licensing moved from the Licensing Analysis extension into the core.** Its data is migrated automatically and its four count fields are removed from the cards: uninstall the extension after upgrading.
+- **The Licensing Model field now has its own protected Licensing section.** It can no longer be deleted from the metamodel (deleting it also erased the values on the cards), it is no longer shown among a card's other fields, and the card's Licensing section edits it directly. A deleted field is restored on upgrade.
 - **New `licenses.view` and `licenses.edit` permissions**, copied from the extension's grants; by default only administrators edit.
 
 ## [2.189.0] - 2026-11-05

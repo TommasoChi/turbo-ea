@@ -4,6 +4,9 @@ import type { LicenseMetric, LicenseStatus, LicenseTypeStatus } from "@/types";
 
 /** Card types that hold licenses (mirrors `LICENSE_TYPES` in the backend). */
 export const LICENSE_TYPES: readonly string[] = ["Application", "ITComponent"];
+/** The model field and its dedicated section (mirror `MODEL_KEY` / `LICENSING_SECTION` in the backend). */
+export const LICENSING_MODEL_KEY = "licensingModel";
+export const LICENSING_SECTION = "Licensing";
 export const LICENSE_METRICS: readonly LicenseMetric[] = ["users", "installations"];
 
 export const isLicenseType = (typeKey: string): boolean => LICENSE_TYPES.includes(typeKey);

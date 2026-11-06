@@ -60,7 +60,7 @@ import { LOCALE_LABELS, SUPPORTED_LOCALES } from "@/i18n";
 import { api } from "@/api/client";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { isCostItemType } from "@/lib/costItems";
-import { isLicenseType } from "@/lib/licenses";
+import { isLicenseType, LICENSING_SECTION } from "@/lib/licenses";
 
 // ── Constants ────────────────────────────────────────────────────
 
@@ -86,6 +86,8 @@ function getSectionInfo(key: string, customSections: SectionDef[], type: CardTyp
   if (key.startsWith("custom:")) {
     const idx = parseInt(key.split(":")[1], 10);
     const sec = customSections[idx];
+    // The model field's dedicated section is edited from the card's Licensing section.
+    if (sec?.section === LICENSING_SECTION && isLicenseType(type.key)) return null;
     return sec ? { label: sec.section, icon: "tune", isCustom: true, idx, section: sec } : null;
   }
   const builtin = BUILTIN_SECTIONS.find((b) => b.key === key);

@@ -52,7 +52,7 @@ import SoAWTab from "@/features/cards/sections/SoAWTab";
 import CostsSection from "@/features/cards/sections/CostsSection";
 import LicensingSection from "@/features/cards/sections/LicensingSection";
 import { DERIVED_COST_FIELD, isCostItemType } from "@/lib/costItems";
-import { isLicenseType } from "@/lib/licenses";
+import { isLicenseType, LICENSING_MODEL_KEY, LICENSING_SECTION } from "@/lib/licenses";
 import {
   customSectionAnchor,
   sectionAnchor,
@@ -327,7 +327,15 @@ export default function CardDetailContent({
   // attribute is not shown (nor editable) next to them.
   const hasCostItems = isCostItemType(card.type);
   if (hasCostItems) hiddenFieldKeys.add(DERIVED_COST_FIELD);
+  // The Licensing section is where the model is shown and edited: the field (alone in its
+  // dedicated schema section) is not a generic one.
   const hasLicensing = isLicenseType(card.type);
+  if (hasLicensing) hiddenFieldKeys.add(LICENSING_MODEL_KEY);
+  const licensingModelField = hasLicensing
+    ? typeConfig?.fields_schema
+        ?.find((s) => s.section === LICENSING_SECTION)
+        ?.fields.find((f) => f.key === LICENSING_MODEL_KEY)
+    : undefined;
 
   const customSections = customSectionsOf(typeConfig?.fields_schema);
   const descExtraSection = (typeConfig?.fields_schema || []).find(
@@ -344,20 +352,6 @@ export default function CardDetailContent({
   const secRaw = sectionCfg.raw;
   const secExpanded = sectionCfg.expanded;
   const secHidden = sectionCfg.hidden;
-
-  // The Licensing section edits nothing about the model itself: it jumps to the
-  // section that holds the `licensingModel` field and opens it for editing.
-  const editLicensingModel = () => {
-    const section = customSections.find((s) => s.fields.some((f) => f.key === "licensingModel"));
-    if (!section) return;
-    const anchor = customSectionAnchor(section.section);
-    const nonce = Date.now();
-    setExpandRequest({ anchor, nonce });
-    setEditRequest({ anchor, nonce, fieldKey: "licensingModel" });
-    setTimeout(() => {
-      document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, FOCUS_SCROLL_DELAY_MS);
-  };
 
   const sectionOrder = buildSectionOrder(sc as Record<string, unknown>, customSections.length, {
     hierarchy: !!typeConfig?.has_hierarchy,
@@ -529,7 +523,15 @@ export default function CardDetailContent({
             cardId={card.id}
             initialExpanded={exp}
             expandOn={expandOn(sectionAnchor("licensing"))}
-            onEditModel={editLicensingModel}
+            modelField={licensingModelField}
+            onSaveModel={
+              perms.can_edit && licensingModelField
+                ? (next) =>
+                    saveFrom(sectionAnchor("licensing"))({
+                      attributes: { ...card.attributes, [LICENSING_MODEL_KEY]: next },
+                    })
+                : undefined
+            }
             onChanged={refreshFrom(sectionAnchor("licensing"))}
           />
         </ErrorBoundary>

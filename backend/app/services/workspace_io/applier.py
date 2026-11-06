@@ -51,6 +51,7 @@ from app.models.user import User
 from app.services import card_reference, card_type_categories
 from app.services.card_resolver import CardResolver
 from app.services.email_backends.runtime import apply_email_settings_to_runtime
+from app.services.licensing_migration import move_model_field
 from app.services.relation_orientation import oriented
 from app.services.workspace_io import exporter as exp
 from app.services.workspace_io import remap as rm
@@ -613,6 +614,12 @@ async def _apply_card_types(db, bundle: WorkspaceBundle, sr: SectionResult, dry_
             # (The row was matched by key, so the key itself never differs.)
             cols = [c for c in exp.CARD_TYPE_COLUMNS if c != "built_in"]
             _update_if_changed(current, data, cols, sr)
+    # ``licensingModel`` is protected (the metamodel route refuses to remove it): a bundle
+    # that lacks it must not strip it either.
+    for key, ct in existing.items():
+        restored = move_model_field(key, ct.fields_schema or [])
+        if restored is not None:
+            ct.fields_schema = restored
     await db.flush()
     # A bundle older than the category registry (or a content pack that ships
     # no CardTypeCategories sheet) still names its layers: adopt any the

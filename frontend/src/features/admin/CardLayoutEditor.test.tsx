@@ -376,6 +376,29 @@ describe("CardLayoutEditor — license-bearing types", () => {
     expect(headers).toContain("Licensing");
   });
 
+  it("does not offer the dedicated schema section holding licensingModel as a generic one", () => {
+    const licensing = makeSection({
+      section: "Licensing",
+      fields: [makeField({ key: "licensingModel", label: "Licensing Model", type: "multiple_select" })],
+    });
+    const app = makeCardType({
+      ...TYPE,
+      key: "Application",
+      fields_schema: [...(TYPE.fields_schema ?? []), licensing],
+      section_config: {},
+    });
+    setup({ cardType: app });
+    // Only the built-in Licensing section (items) is listed, once, not the schema one.
+    expect(sectionHeaders().filter((h) => h === "Licensing")).toHaveLength(1);
+    expect(screen.queryByText("Licensing Model")).not.toBeInTheDocument();
+  });
+
+  it("keeps a section named Licensing on a type that holds no licenses", () => {
+    const licensing = makeSection({ section: "Licensing", fields: [makeField({ key: "x" })] });
+    setup({ cardType: makeCardType({ ...TYPE, fields_schema: [...(TYPE.fields_schema ?? []), licensing] }) });
+    expect(sectionHeaders()).toContain("Licensing");
+  });
+
   it("does not list Licensing for a type that holds no licenses", () => {
     setup();
     expect(sectionHeaders()).not.toContain("Licensing");

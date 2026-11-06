@@ -61,6 +61,12 @@ from app.services.hierarchy import (
     backfill_hierarchy_levels_for_type,
     hierarchy_level_field_def,
 )
+from app.services.licensing_migration import (
+    LICENSING_SECTION,
+    LICENSING_TYPES,
+    MODEL_KEY,
+    REQUIRED_OPTIONS,
+)
 from app.services.permission_service import PermissionService
 from app.services.relation_orientation import side_key
 from app.services.seed import (
@@ -1399,6 +1405,33 @@ def _guard_derived_cost_field(key: str, old: list | None, new: list | None) -> N
         raise HTTPException(400, "use_cost_items")
 
 
+def _guard_license_model_field(key: str, old: list | None, new: list | None) -> None:
+    """``licensingModel`` on Application / ITComponent stays a multiple_select with its
+    ``users`` / ``installations`` options, alone in the ``Licensing`` section."""
+    if key not in LICENSING_TYPES:
+        return
+
+    def find(schema: list | None) -> tuple[str | None, dict | None]:
+        for sec in schema or []:
+            for f in sec.get("fields") or []:
+                if f.get("key") == MODEL_KEY:
+                    return sec.get("section"), f
+        return None, None
+
+    _, was = find(old)
+    if was is None or was.get("type") != "multiple_select":
+        return  # absent or an admin's own field of another type: nothing to protect
+    section, now = find(new)
+    options = {o.get("key") for o in (now or {}).get("options") or []}
+    if (
+        now is None
+        or section != LICENSING_SECTION
+        or now.get("type") != was.get("type")
+        or not REQUIRED_OPTIONS <= options
+    ):
+        raise HTTPException(400, "license_field_required")
+
+
 @router.patch("/types/{key}")
 async def update_type(
     key: str, body: dict, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
@@ -1443,6 +1476,7 @@ async def update_type(
     # ── Clean up card attributes when fields or options are removed ──
     if "fields_schema" in body:
         _guard_derived_cost_field(key, t.fields_schema, body["fields_schema"])
+        _guard_license_model_field(key, t.fields_schema, body["fields_schema"])
         await _cleanup_removed_fields_and_options(
             db,
             key,

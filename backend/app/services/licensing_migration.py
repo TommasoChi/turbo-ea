@@ -15,10 +15,16 @@ from collections.abc import Iterable
 
 EXT_KEY = "licensing"
 MODEL_KEY = "licensingModel"
+# The field lives alone in this section on both types, and the metamodel route refuses to
+# remove, retype, strip or move it (``_guard_license_model_field``).
+LICENSING_SECTION = "Licensing"
+# Where the field sat before migration 179 (still read by 178's and 179's tests).
 GENERAL_SECTION = {
     "Application": "Application Information",
     "ITComponent": "Component Information",
 }
+LICENSING_TYPES = frozenset(GENERAL_SECTION)
+REQUIRED_OPTIONS = frozenset({"users", "installations"})
 MAX_COUNT = 1_000_000_000
 
 # THE one definition of the field (migration 178 and the fresh-install seed both use it).
@@ -71,6 +77,28 @@ LICENSING_MODEL_FIELD: dict = {
         "ar": "نموذج الترخيص",
     },
 }
+
+LICENSING_SECTION_TRANSLATIONS: dict[str, str] = {
+    "de": "Lizenzierung",
+    "fr": "Licences",
+    "es": "Licencias",
+    "it": "Licenze",
+    "pt": "Licenciamento",
+    "zh": "许可",
+    "ru": "Лицензирование",
+    "da": "Licenser",
+    "ar": "التراخيص",
+}
+
+
+def licensing_section() -> dict:
+    """A fresh dedicated section holding the model field (the fresh-install seed uses it)."""
+    return {
+        "section": LICENSING_SECTION,
+        "translations": dict(LICENSING_SECTION_TRANSLATIONS),
+        "fields": [copy.deepcopy(LICENSING_MODEL_FIELD)],
+    }
+
 
 # old field key -> (metric, "licensed" | "actual")
 OLD_FIELDS: dict[str, tuple[str, str]] = {
@@ -178,24 +206,48 @@ def build_items(attrs: dict, keys: dict) -> tuple[dict, list[dict]]:
     return cells, problems
 
 
+def _model_fields(schema: list) -> list[tuple[dict, dict]]:
+    """``(section, field)`` for every non-extension ``licensingModel`` field of a schema."""
+    return [
+        (section, field)
+        for section in schema or []
+        if isinstance(section, dict)
+        for field in section.get("fields", [])
+        if isinstance(field, dict) and field.get("key") == MODEL_KEY and not field.get("ext")
+    ]
+
+
 def move_model_field(type_key: str, schema: list) -> list | None:
-    """The schema with ``licensingModel`` in the type's general section, or None when the type
-    has no such section name or already carries a (non-extension) field with that key."""
-    section_name = GENERAL_SECTION.get(type_key)
-    if section_name is None:
+    """The schema with ``licensingModel`` alone in its ``Licensing`` section, or None when the
+    type is not a licensing type, it is already there, or the key is taken by a field of
+    another type (an admin's own; left alone). The field keeps its stored definition when it
+    exists, and is restored from ``LICENSING_MODEL_FIELD`` when it does not."""
+    if type_key not in LICENSING_TYPES:
         return None
-    for section in schema or []:
-        for field in section.get("fields", []) if isinstance(section, dict) else []:
-            if isinstance(field, dict) and field.get("key") == MODEL_KEY and not field.get("ext"):
-                return None
+    found = _model_fields(schema)
+    if any(field.get("type") != "multiple_select" for _, field in found):
+        return None
     out = copy.deepcopy(schema or [])
-    field = copy.deepcopy(LICENSING_MODEL_FIELD)
+    field = copy.deepcopy(found[0][1]) if found else copy.deepcopy(LICENSING_MODEL_FIELD)
+    target = None
     for section in out:
-        if isinstance(section, dict) and section.get("section") == section_name:
-            section.setdefault("fields", []).append(field)
-            return out
-    out.append({"section": section_name, "fields": [field]})
-    return out
+        if not isinstance(section, dict) or section.get("ext"):
+            continue
+        if section.get("section") == LICENSING_SECTION:
+            target = section
+        else:
+            section["fields"] = [
+                f
+                for f in section.get("fields", [])
+                if not (isinstance(f, dict) and f.get("key") == MODEL_KEY and not f.get("ext"))
+            ]
+    if target is None:
+        target = licensing_section()
+        target["fields"] = []
+        out.append(target)
+    if not any(f.get("key") == MODEL_KEY for f in target.get("fields", []) if isinstance(f, dict)):
+        target.setdefault("fields", []).append(field)
+    return None if out == schema else out
 
 
 def citing_calculations(rows: Iterable[tuple[str, str, str]]) -> list[dict]:

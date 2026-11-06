@@ -6,7 +6,9 @@ import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import ButtonBase from "@mui/material/ButtonBase";
+import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import IconButton from "@mui/material/IconButton";
 import LinearProgress from "@mui/material/LinearProgress";
 import Typography from "@mui/material/Typography";
@@ -16,16 +18,17 @@ import EChart from "@/components/charts/EChart";
 import { useEChartsTheme } from "@/components/charts/echartsTheme";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useApiQuery } from "@/hooks/useApiQuery";
-import { useFieldLabel } from "@/hooks/useResolveLabel";
+import { useFieldLabel, useOptionLabel } from "@/hooks/useResolveLabel";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
 import { costFiscalYearName } from "@/lib/fiscalYear";
 import { shortFiscalYear } from "@/lib/costItems";
-import { formatPct, statusColor } from "@/lib/licenses";
+import { formatPct, LICENSE_METRICS, statusColor } from "@/lib/licenses";
 import { catalogueHues } from "@/features/reports/costColors";
 import { SECTION_SCROLL_MARGIN, sectionAnchor } from "@/features/cards/dataQualityJump";
 import { CHART_OTHER } from "@/theme/tokens";
 import type {
   CardLicensesResponse,
+  FieldDef,
   LicenseMetric,
   LicenseMetricResult,
   LicenseType,
@@ -38,8 +41,10 @@ interface Props {
   cardId: string;
   initialExpanded?: boolean;
   expandOn?: number;
-  /** Jump to where the card's `licensingModel` field is edited. */
-  onEditModel?: () => void;
+  /** The type's `licensingModel` field (its options and their labels). */
+  modelField?: FieldDef;
+  /** Saves the card's `licensingModel`; without it the model is read-only. */
+  onSaveModel?: (next: LicenseMetric[]) => Promise<void>;
   /** After an edit, confirm or delete went through. */
   onChanged?: () => void;
 }
@@ -55,12 +60,14 @@ export default function LicensingSection({
   cardId,
   initialExpanded = true,
   expandOn,
-  onEditModel,
+  modelField,
+  onSaveModel,
   onChanged,
 }: Props) {
   const { t } = useTranslation("cards");
   const chrome = useEChartsTheme();
   const fieldLabel = useFieldLabel();
+  const optionLabel = useOptionLabel();
   const [expanded, setExpanded] = useSyncedExpanded(initialExpanded, expandOn);
   const [version, setVersion] = useState(0);
   const { data, error } = useApiQuery<CardLicensesResponse>(`/cards/${cardId}/licenses`, {
@@ -69,6 +76,9 @@ export default function LicensingSection({
   const [picked, setPicked] = useState<number | null>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<LicenseMetric[] | null>(null); // non-null: editing the model
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [savingModel, setSavingModel] = useState(false);
 
   const catalogue = data?.catalogue;
   const byKey = useMemo(() => new Map((catalogue ?? []).map((c) => [c.key, c])), [catalogue]);
@@ -117,6 +127,66 @@ export default function LicensingSection({
       setActionError(apiErrorMessage(e, t("licensing.confirmFailed")));
     }
   };
+
+  const saveModel = async () => {
+    if (!onSaveModel || !draft) return;
+    setSavingModel(true);
+    setModelError(null);
+    try {
+      await onSaveModel(draft);
+      setDraft(null);
+      reload();
+    } catch (e) {
+      setModelError(apiErrorMessage(e, t("licensing.modelSaveFailed")));
+    } finally {
+      setSavingModel(false);
+    }
+  };
+  const editModelButton = onSaveModel && modelField && (
+    <Button
+      size="small"
+      onClick={() => {
+        setModelError(null);
+        setDraft([...model]);
+      }}
+    >
+      {t("licensing.editModel")}
+    </Button>
+  );
+  const modelEditor = draft && modelField && (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1, flexWrap: "wrap" }}>
+      {(modelField.options ?? [])
+        .filter((o) => (LICENSE_METRICS as readonly string[]).includes(o.key))
+        .map((o) => (
+          <FormControlLabel
+            key={o.key}
+            label={optionLabel(o)}
+            control={
+              <Checkbox
+                size="small"
+                checked={draft.includes(o.key as LicenseMetric)}
+                onChange={(_, on) =>
+                  setDraft(
+                    on ? [...draft, o.key as LicenseMetric] : draft.filter((m) => m !== o.key),
+                  )
+                }
+              />
+            }
+          />
+        ))}
+      <Button size="small" variant="contained" disabled={savingModel} onClick={saveModel}>
+        {t("common:actions.save")}
+      </Button>
+      <Button size="small" disabled={savingModel} onClick={() => setDraft(null)}>
+        {t("common:actions.cancel")}
+      </Button>
+      {modelError && (
+        <Typography variant="caption" color="error" role="alert">
+          {modelError}
+        </Typography>
+      )}
+    </Box>
+  );
 
   const nav = (step: number) => setPicked(years[idx + step].fiscal_year);
   const metricName = (m: LicenseMetric) => t(`licensing.metrics.${m}`);
@@ -275,23 +345,21 @@ export default function LicensingSection({
       </AccordionSummary>
       <AccordionDetails>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flex: 1, flexWrap: "wrap" }}>
-            {model.length > 0 ? (
-              <>
-                <Typography variant="caption" color="text.secondary">
-                  {t("licensing.model")}
-                </Typography>
-                {model.map((m) => (
-                  <Chip key={m} size="small" label={metricName(m)} />
-                ))}
-                {onEditModel && (
-                  <Button size="small" onClick={onEditModel}>
-                    {t("licensing.editModel")}
-                  </Button>
-                )}
-              </>
-            ) : null}
-          </Box>
+          {modelEditor || (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flex: 1, flexWrap: "wrap" }}>
+              {model.length > 0 ? (
+                <>
+                  <Typography variant="caption" color="text.secondary">
+                    {t("licensing.model")}
+                  </Typography>
+                  {model.map((m) => (
+                    <Chip key={m} size="small" label={metricName(m)} />
+                  ))}
+                  {editModelButton}
+                </>
+              ) : null}
+            </Box>
+          )}
           <IconButton
             size="small"
             aria-label={t("licensing.previousYear")}
@@ -318,11 +386,7 @@ export default function LicensingSection({
             <Typography variant="body2" color="text.secondary">
               {t("licensing.emptyModel")}
             </Typography>
-            {onEditModel && (
-              <Button size="small" onClick={onEditModel}>
-                {t("licensing.editModel")}
-              </Button>
-            )}
+            {!draft && editModelButton}
           </Box>
         ) : (
           <>

@@ -131,7 +131,7 @@ The card's **Total annual cost** field (`costTotalAnnual`) is derived from the c
 
 ### Licensing Section (Application and IT Component)
 
-The **Licensing** section records, year by year, how many licenses the card has under contract and how many are really used. It sits next to Costs and has the same **‹ ›** navigator over six years: the four before the current one, the current one and the **Forecast**. Which metrics the card tracks (**Users**, **Installations**) comes from its **Licensing model** field, shown read-only at the top with a link to edit it.
+The **Licensing** section records, year by year, how many licenses the card has under contract and how many are really used. It sits next to Costs and has the same **‹ ›** navigator over six years: the four before the current one, the current one and the **Forecast**. Which metrics the card tracks (**Users**, **Installations**) comes from its **Licensing model**, shown at the top of the section. Anyone who can edit the card changes it with **Edit** there: tick **Users** and/or **Installations**, then **Save**. The model is not shown among the card's other fields.
 
 ![Licensing section](../assets/img/en/104_card_licensing.png)
 

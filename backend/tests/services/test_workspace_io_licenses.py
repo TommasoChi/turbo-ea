@@ -88,3 +88,28 @@ def test_saved_report_picked_card_id_is_remapped():
     ids.record(rm.CARDS, old, new)
     out = rm.rewrite_saved_report_config({"pickedCardId": old}, ids, rm.RewriteTally())
     assert out == {"pickedCardId": new}
+
+
+async def test_import_restores_a_licensing_model_field_the_bundle_lacks(db):
+    """A bundle (or content pack) whose Application type has no ``licensingModel`` cannot
+    strip it from the target: the importer puts it back in its ``Licensing`` section."""
+    from app.models.card_type import CardType
+    from app.services.licensing_migration import LICENSING_SECTION
+
+    user = await create_user(db, email="lic-ws3@test.com", role="admin")
+    await create_card_type(
+        db,
+        key="Application",
+        label="Application",
+        fields_schema=[{"section": "General", "fields": [{"key": "a", "type": "text"}]}],
+    )
+    raw = await build_bundle(db)
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    db.expire_all()
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    sections = {s["section"]: [f["key"] for f in s["fields"]] for s in ct.fields_schema}
+    assert sections[LICENSING_SECTION] == ["licensingModel"]
+    assert sections["General"] == ["a"]

@@ -31,10 +31,19 @@ vi.mock("@/features/bpm/ProcessAssessmentPanel", () => ({ default: () => null })
 vi.mock("@/features/cards/sections/SoAWTab", () => ({ default: () => null }));
 vi.mock("@/features/cards/sections/CostsSection", () => ({ default: () => null }));
 vi.mock("@/features/cards/sections/LicensingSection", () => ({
-  default: ({ cardId, onEditModel }: { cardId: string; onEditModel?: () => void }) => (
+  default: ({
+    cardId,
+    modelField,
+    onSaveModel,
+  }: {
+    cardId: string;
+    modelField?: { key: string };
+    onSaveModel?: (next: string[]) => Promise<void>;
+  }) => (
     <div data-testid="licensing-section">
       {cardId}
-      <button onClick={onEditModel}>edit-model</button>
+      <span data-testid="model-field">{modelField?.key}</span>
+      <button onClick={() => onSaveModel?.(["users"])}>save-model</button>
     </div>
   ),
 }));
@@ -64,6 +73,7 @@ vi.mock("@/features/cards/sections", async () => {
   };
 });
 
+import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { resetExtensionHost } from "@/lib/extensionHost";
 import type { Card } from "@/types";
@@ -79,7 +89,7 @@ const typeOf = (key: string, sectionConfig: Record<string, unknown> = {}) => ({
   fields_schema: [
     { section: "Basics", fields: [{ key: "fieldA", label: "Indicator A", type: "text" }] },
     {
-      section: "Application Information",
+      section: "Licensing",
       fields: [{ key: "licensingModel", label: "Licensing model", type: "multiple_select" }],
     },
   ],
@@ -105,7 +115,11 @@ const perms = { can_view: true, can_edit: true, can_view_costs: true } as unknow
   typeof CardDetailContent
 >[0]["perms"];
 
-function renderFor(type: string, sectionConfig: Record<string, unknown> = {}) {
+function renderFor(
+  type: string,
+  sectionConfig: Record<string, unknown> = {},
+  permissions: typeof perms = perms,
+) {
   const def = typeOf(type, sectionConfig);
   vi.mocked(useMetamodel).mockReturnValue({
     types: [def],
@@ -119,7 +133,7 @@ function renderFor(type: string, sectionConfig: Record<string, unknown> = {}) {
     <MemoryRouter>
       <CardDetailContent
         card={cardOf(type)}
-        perms={perms}
+        perms={permissions}
         onCardUpdate={() => {}}
         showLdvSection={false}
       />
@@ -147,14 +161,30 @@ describe("CardDetailContent licensing section", () => {
     expect(screen.queryByTestId("licensing-section")).not.toBeInTheDocument();
   });
 
-  it("the model Edit link scrolls to the section that holds licensingModel", async () => {
-    const scroll = vi.fn();
-    Element.prototype.scrollIntoView = scroll;
+  it("does not render licensingModel (nor its dedicated section) as a generic field", async () => {
+    renderFor("Application");
+    expect(await screen.findByTestId("licensing-section")).toBeInTheDocument();
+    expect(screen.getByText("Indicator A")).toBeInTheDocument();
+    expect(screen.queryByText("Licensing model")).not.toBeInTheDocument();
+    expect(document.getElementById("card-section-custom-licensing")).toBeNull();
+  });
+
+  it("hands the Licensing section the model field and a save that merges the attributes", async () => {
     const user = userEvent.setup();
     renderFor("Application");
-    await user.click(await screen.findByRole("button", { name: "edit-model" }));
-    await waitFor(() => expect(scroll).toHaveBeenCalled());
-    const target = scroll.mock.instances[0] as HTMLElement;
-    expect(target.id).toBe("card-section-custom-application-information");
+    expect(await screen.findByTestId("model-field")).toHaveTextContent("licensingModel");
+    await user.click(screen.getByRole("button", { name: "save-model" }));
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith("/cards/card-1", {
+        attributes: { fieldA: "a", licensingModel: ["users"] },
+      }),
+    );
+  });
+
+  it("offers no model save to a reader", async () => {
+    renderFor("Application", {}, { ...perms, can_edit: false });
+    await screen.findByTestId("licensing-section");
+    await userEvent.setup().click(screen.getByRole("button", { name: "save-model" }));
+    expect(api.patch).not.toHaveBeenCalled();
   });
 });

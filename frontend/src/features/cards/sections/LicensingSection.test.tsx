@@ -20,6 +20,7 @@ import { api, ApiError } from "@/api/client";
 import { echartState } from "@/test/echartMock";
 import type {
   CardLicensesResponse,
+  FieldDef,
   LicenseMetricResult,
   LicenseTypeResult,
   YearLicenses,
@@ -183,20 +184,66 @@ describe("LicensingSection", () => {
     expect(tile).not.toHaveTextContent("Compliant");
   });
 
-  it("empty model shows the hint and calls onEditModel", async () => {
-    mockGet(
-      response({
-        licensing_model: [],
-        years: response().years.map((y) => ({ ...y, metrics: [] })),
-      }),
-    );
-    const user = userEvent.setup();
-    const onEditModel = vi.fn();
-    render(<LicensingSection cardId="c1" onEditModel={onEditModel} />);
+  const MODEL_FIELD: FieldDef = {
+    key: "licensingModel",
+    label: "Licensing Model",
+    type: "multiple_select",
+    options: [
+      { key: "users", label: "Users" },
+      { key: "installations", label: "Installations" },
+    ],
+  };
+  const emptyModel = () =>
+    response({
+      licensing_model: [],
+      years: response().years.map((y) => ({ ...y, metrics: [] })),
+    });
+
+  it("empty model shows the hint, and no editor without a way to save", async () => {
+    mockGet(emptyModel());
+    render(<LicensingSection cardId="c1" modelField={MODEL_FIELD} />);
     expect(await screen.findByText(/Choose which metrics this card tracks/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "+ Add license" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Edit" }));
-    expect(onEditModel).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
+  it("edits the model inline: tick a metric, Save sends the new list and reloads", async () => {
+    mockGet(emptyModel());
+    const onSaveModel = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<LicensingSection cardId="c1" modelField={MODEL_FIELD} onSaveModel={onSaveModel} />);
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("checkbox", { name: "Users" }));
+    const loads = vi.mocked(api.get).mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onSaveModel).toHaveBeenCalledWith(["users"]));
+    await waitFor(() => expect(vi.mocked(api.get).mock.calls.length).toBeGreaterThan(loads));
+    expect(screen.queryByRole("checkbox", { name: "Users" })).toBeNull();
+  });
+
+  it("starts from the current model and Cancel saves nothing", async () => {
+    mockGet(response({ licensing_model: ["installations"] }));
+    const onSaveModel = vi.fn();
+    const user = userEvent.setup();
+    render(<LicensingSection cardId="c1" modelField={MODEL_FIELD} onSaveModel={onSaveModel} />);
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("checkbox", { name: "Installations" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Users" })).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onSaveModel).not.toHaveBeenCalled();
+    expect(screen.queryByRole("checkbox", { name: "Users" })).toBeNull();
+  });
+
+  it("keeps the editor open and shows the error when the save fails", async () => {
+    mockGet(emptyModel());
+    const onSaveModel = vi.fn().mockRejectedValue(new Error("nope"));
+    const user = userEvent.setup();
+    render(<LicensingSection cardId="c1" modelField={MODEL_FIELD} onSaveModel={onSaveModel} />);
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("checkbox", { name: "Users" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("nope")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Users" })).toBeChecked();
   });
 
   it("opens the edit dialog from a tile and reloads after a save", async () => {

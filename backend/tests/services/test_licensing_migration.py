@@ -25,6 +25,7 @@ from app.services.fiscal_year import current_fiscal_year
 from app.services.licensing_migration import (
     GENERAL_SECTION,
     LICENSING_MODEL_FIELD,
+    LICENSING_SECTION,
     assign_keys,
     build_items,
     citing_calculations,
@@ -111,33 +112,42 @@ def _ext_field(key, ftype="multiple_select"):
     return {"key": key, "label": key, "type": ftype, "ext": "licensing"}
 
 
-def test_move_model_field_into_general_section_and_drop_ext_section():
-    schema = [
-        {"section": "Application Information", "fields": [{"key": "hostingType"}]},
-        {"section": "Licensing", "ext": "licensing", "fields": [_ext_field("licensingModel")]},
-    ]
+def test_move_model_field_adds_the_dedicated_section_after_the_extension_was_stripped():
+    schema = [{"section": "Application Information", "fields": [{"key": "hostingType"}]}]
     out = move_model_field("Application", schema)
-    # the caller strips the extension first; here only the add is under test
-    general = out[0]
-    assert general["fields"][-1] == LICENSING_MODEL_FIELD
-    assert general["fields"][-1] is not LICENSING_MODEL_FIELD
+    assert out[0] == schema[0]  # the general section is untouched
+    assert out[-1]["section"] == LICENSING_SECTION
+    assert out[-1]["fields"] == [LICENSING_MODEL_FIELD]
+    assert out[-1]["fields"][0] is not LICENSING_MODEL_FIELD
+    assert set(out[-1]["translations"]) == {"de", "fr", "es", "it", "pt", "zh", "ru", "da", "ar"}
 
 
 def test_move_model_field_adds_on_instance_without_extension():
     schema = [{"section": "Component Information", "fields": [{"key": "x"}]}]
     out = move_model_field("ITComponent", schema)
-    assert [f["key"] for f in out[0]["fields"]] == ["x", "licensingModel"]
+    assert [f["key"] for f in out[0]["fields"]] == ["x"]
+    assert [f["key"] for f in out[-1]["fields"]] == ["licensingModel"]
     assert [f["key"] for f in schema[0]["fields"]] == ["x"]  # input untouched
     assert move_model_field("ITComponent", out) is None  # second pass: no change
 
 
-def test_move_model_field_creates_the_section_when_an_admin_renamed_it():
-    out = move_model_field("Application", [{"section": "Renamed", "fields": []}])
-    assert out[-1]["section"] == GENERAL_SECTION["Application"]
-    assert out[-1]["fields"] == [LICENSING_MODEL_FIELD]
+def test_move_model_field_pulls_the_field_out_of_a_general_section_keeping_its_definition():
+    mine = {**copy.deepcopy(LICENSING_MODEL_FIELD), "label": "Our model"}
+    schema = [{"section": "Application Information", "fields": [{"key": "a"}, mine]}]
+    out = move_model_field("Application", schema)
+    assert [f["key"] for f in out[0]["fields"]] == ["a"]
+    assert out[-1]["section"] == LICENSING_SECTION
+    assert out[-1]["fields"] == [mine]  # the admin's label survives the move
 
 
-def test_move_model_field_keeps_an_admin_field_with_the_same_key():
+def test_move_model_field_reuses_an_existing_licensing_section():
+    schema = [{"section": LICENSING_SECTION, "fields": [{"key": "other"}]}]
+    out = move_model_field("Application", schema)
+    assert len(out) == 1
+    assert [f["key"] for f in out[0]["fields"]] == ["other", "licensingModel"]
+
+
+def test_move_model_field_keeps_an_admin_field_with_the_same_key_but_another_type():
     schema = [{"section": "Mine", "fields": [{"key": "licensingModel", "type": "text"}]}]
     assert move_model_field("Application", schema) is None
 
@@ -146,11 +156,20 @@ def test_move_model_field_ignores_other_types():
     assert move_model_field("Platform", []) is None
 
 
-def test_seed_uses_the_one_field_definition():
-    for type_key, section in GENERAL_SECTION.items():
+def test_seed_puts_the_one_field_definition_in_its_own_section():
+    for type_key in GENERAL_SECTION:
         type_def = next(t for t in seed.TYPES if t["key"] == type_key)
-        general = next(s for s in type_def["fields_schema"] if s["section"] == section)
-        assert general["fields"][-1] == LICENSING_MODEL_FIELD
+        sections = [s for s in type_def["fields_schema"] if s["section"] == LICENSING_SECTION]
+        assert len(sections) == 1
+        assert sections[0]["fields"] == [LICENSING_MODEL_FIELD]
+        assert set(sections[0]["translations"]) >= {"de", "ar"}
+        others = [
+            f["key"]
+            for s in type_def["fields_schema"]
+            if s["section"] != LICENSING_SECTION
+            for f in s["fields"]
+        ]
+        assert "licensingModel" not in others
 
 
 def test_citing_calculations_lists_formulas_naming_old_keys():
@@ -278,8 +297,10 @@ async def test_migration_moves_values_strips_keys_and_leaves_the_extension_row(d
 
     app_t = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
     sections = {s["section"]: s for s in app_t.fields_schema}
-    assert "Licensing" not in sections
-    assert sections["Application Information"]["fields"][-1] == LICENSING_MODEL_FIELD
+    assert [f["key"] for f in sections["Licensing"]["fields"]] == ["licensingModel"]
+    assert "ext" not in sections["Licensing"]  # the extension's section is gone, core's is not
+    assert sections["Licensing"]["fields"] == [LICENSING_MODEL_FIELD]
+    assert "licensingModel" not in [f["key"] for f in sections["Application Information"]["fields"]]
     itc_t = (await db.execute(select(CardType).where(CardType.key == "ITComponent"))).scalar_one()
     itc_fields = [f["key"] for s in itc_t.fields_schema for f in s["fields"]]
     assert itc_fields.count("licensingModel") == 1  # added on a type that never had the extension
@@ -336,7 +357,8 @@ async def test_migration_leaves_license_type_and_number_of_users_fields(db):
     before = copy.deepcopy(itc_t.fields_schema[-1])
     await _run(db)
     itc = (await db.execute(select(CardType).where(CardType.key == "ITComponent"))).scalar_one()
-    assert itc.fields_schema[-1] == before
+    # The dedicated Licensing section is appended after it, so look it up by name.
+    assert next(s for s in itc.fields_schema if s["section"] == "Extra") == before
 
 
 async def test_second_run_changes_nothing(db):
