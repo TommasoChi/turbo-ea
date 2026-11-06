@@ -133,7 +133,7 @@ El campo **Coste anual total** (`costTotalAnnual`) de la ficha se deriva de las 
 
 ### Sección de Licencias (Aplicación y Componente de TI)
 
-La sección **Licencias** registra, año a año, cuántas licencias tiene contratadas la ficha y cuántas se usan realmente. Está junto a los Costes y tiene el mismo navegador **‹ ›** sobre seis años: los cuatro anteriores al actual, el actual y el **Forecast**. Las métricas que sigue la ficha (**Usuarios**, **Instalaciones**) proceden de su campo **Modelo de licencias**, que se muestra de solo lectura arriba con un enlace para editarlo.
+La sección **Licencias** registra, año a año, cuántas licencias tiene contratadas la ficha y cuántas se usan realmente. Está junto a los Costes y tiene el mismo navegador **‹ ›** sobre seis años: los cuatro anteriores al actual, el actual y el **Forecast**. Las métricas que sigue la ficha (**Usuarios**, **Instalaciones**) proceden de su **Modelo de licencias**, que se muestra en la parte superior de la sección. Quien puede editar la ficha lo cambia con **Editar**: marque **Usuarios** y/o **Instalaciones** y pulse **Guardar**. El modelo no aparece entre los demás campos de la ficha.
 
 ![Sección de Licencias](../assets/img/en/104_card_licensing.png)
 

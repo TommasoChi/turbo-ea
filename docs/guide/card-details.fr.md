@@ -131,7 +131,7 @@ Le champ **Coût annuel total** (`costTotalAnnual`) de la fiche est dérivé des
 
 ### Section Licences (Application et composant IT)
 
-La section **Licences** enregistre, année par année, combien de licences la fiche a sous contrat et combien sont réellement utilisées. Elle se place à côté des Coûts et possède le même navigateur **‹ ›** sur six ans : les quatre années précédant l'exercice courant, l'exercice courant et le **Forecast**. Les indicateurs suivis par la fiche (**Utilisateurs**, **Installations**) viennent de son champ **Modèle de licence**, affiché en lecture seule en haut avec un lien pour le modifier.
+La section **Licences** enregistre, année par année, combien de licences la fiche a sous contrat et combien sont réellement utilisées. Elle se place à côté des Coûts et possède le même navigateur **‹ ›** sur six ans : les quatre années précédant l'exercice courant, l'exercice courant et le **Forecast**. Les indicateurs suivis par la fiche (**Utilisateurs**, **Installations**) viennent de son **Modèle de licence**, affiché en haut de la section. Toute personne pouvant modifier la fiche le change avec **Modifier** : cochez **Utilisateurs** et/ou **Installations**, puis **Enregistrer**. Le modèle n'apparaît pas parmi les autres champs de la fiche.
 
 ![Section Licences](../assets/img/en/104_card_licensing.png)
 

@@ -131,7 +131,7 @@ Il campo **Costo annuo totale** (`costTotalAnnual`) della card è derivato dalgl
 
 ### Sezione Licenze (Applicazione e Componente IT)
 
-La sezione **Licenze** registra, anno per anno, quante licenze la scheda ha a contratto e quante sono realmente utilizzate. Si trova accanto ai Costi e ha lo stesso navigatore **‹ ›** su sei anni: i quattro precedenti a quello corrente, quello corrente e il **Forecast**. Le metriche monitorate dalla scheda (**Utenti**, **Installazioni**) derivano dal suo campo **Modello di licenza**, mostrato in sola lettura in alto con un link per modificarlo.
+La sezione **Licenze** registra, anno per anno, quante licenze la scheda ha a contratto e quante sono realmente utilizzate. Si trova accanto ai Costi e ha lo stesso navigatore **‹ ›** su sei anni: i quattro precedenti a quello corrente, quello corrente e il **Forecast**. Le metriche monitorate dalla scheda (**Utenti**, **Installazioni**) derivano dal suo **Modello di licenza**, mostrato in alto nella sezione. Chi può modificare la scheda lo cambia con **Modifica**: seleziona **Utenti** e/o **Installazioni**, quindi **Salva**. Il modello non compare tra gli altri campi della scheda.
 
 ![Sezione Licenze](../assets/img/en/104_card_licensing.png)
 

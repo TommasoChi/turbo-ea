@@ -794,6 +794,7 @@
   "licensing.confirmFailed": "Das Jahr konnte nicht bestätigt werden.",
   "licensing.model": "Erfasste Kennzahlen",
   "licensing.editModel": "Bearbeiten",
+  "licensing.modelSaveFailed": "Could not save the tracked metrics.",
   "licensing.emptyModel": "Wählen Sie, welche Kennzahlen diese Karte erfasst (Benutzer, Installationen), um Lizenzen einzutragen.",
   "licensing.noLicense": "keine Lizenz",
   "licensing.noType": "Keine Lizenzmengen für dieses Jahr.",

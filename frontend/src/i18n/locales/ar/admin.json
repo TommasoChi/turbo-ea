@@ -330,6 +330,7 @@
   "metamodel.typeDrawer.descriptionSection": "الوصف",
   "metamodel.typeDrawer.failedToSaveField": "فشل حفظ الحقل",
   "metamodel.typeDrawer.failedToDeleteField": "فشل حذف الحقل",
+  "metamodel.typeDrawer.licenseFieldLocked": "The Licensing Model field is required by licensing and cannot be deleted or changed. Edit a card's model from its Licensing section.",
   "metamodel.typeDrawer.failedToDeleteSection": "فشل حذف القسم",
   "metamodel.typeDrawer.failedToUpdateVisibility": "فشل تحديث الظهور",
   "metamodel.typeDrawer.deleteField": "حذف الحقل",

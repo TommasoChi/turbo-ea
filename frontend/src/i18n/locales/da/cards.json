@@ -794,6 +794,7 @@
   "licensing.confirmFailed": "Året kunne ikke bekræftes.",
   "licensing.model": "Sporede målinger",
   "licensing.editModel": "Rediger",
+  "licensing.modelSaveFailed": "Could not save the tracked metrics.",
   "licensing.emptyModel": "Vælg, hvilke målinger dette kort sporer (brugere, installationer), for at indtaste licenser.",
   "licensing.noLicense": "ingen licens",
   "licensing.noType": "Ingen licensantal for dette år.",

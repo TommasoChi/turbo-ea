@@ -302,6 +302,7 @@
   "metamodel.typeDrawer.descriptionSection": "Beskrivelse",
   "metamodel.typeDrawer.failedToSaveField": "Kunne ikke gemme felt",
   "metamodel.typeDrawer.failedToDeleteField": "Kunne ikke slette felt",
+  "metamodel.typeDrawer.licenseFieldLocked": "The Licensing Model field is required by licensing and cannot be deleted or changed. Edit a card's model from its Licensing section.",
   "metamodel.typeDrawer.failedToDeleteSection": "Kunne ikke slette afsnit",
   "metamodel.typeDrawer.failedToUpdateVisibility": "Kunne ikke opdatere synlighed",
   "metamodel.typeDrawer.deleteField": "Slet felt",

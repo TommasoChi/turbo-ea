@@ -130,7 +130,7 @@ O campo **Custo anual total** (`costTotalAnnual`) do card é derivado dos itens 
 
 ### Seção de Licenças (Aplicação e Componente de TI)
 
-A seção **Licenciamento** regista, ano a ano, quantas licenças o card tem contratadas e quantas são realmente usadas. Fica junto dos Custos e tem o mesmo navegador **‹ ›** ao longo de seis anos: os quatro anteriores ao atual, o atual e o **Forecast**. As métricas que o card acompanha (**Utilizadores**, **Instalações**) vêm do seu campo **Modelo de licenciamento**, mostrado só de leitura no topo com uma ligação para o editar.
+A seção **Licenciamento** regista, ano a ano, quantas licenças o card tem contratadas e quantas são realmente usadas. Fica junto dos Custos e tem o mesmo navegador **‹ ›** ao longo de seis anos: os quatro anteriores ao atual, o atual e o **Forecast**. As métricas que o card acompanha (**Utilizadores**, **Instalações**) vêm do seu **Modelo de licenciamento**, mostrado no topo da secção. Quem pode editar o card altera-o com **Editar**: marque **Utilizadores** e/ou **Instalações** e depois **Guardar**. O modelo não aparece entre os restantes campos do card.
 
 ![Seção de Licenças](../assets/img/en/104_card_licensing.png)
 

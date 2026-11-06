@@ -794,6 +794,7 @@
   "licensing.confirmFailed": "无法确认该年度。",
   "licensing.model": "跟踪的指标",
   "licensing.editModel": "编辑",
+  "licensing.modelSaveFailed": "Could not save the tracked metrics.",
   "licensing.emptyModel": "选择此卡片跟踪的指标(用户、安装)以录入许可证。",
   "licensing.noLicense": "无许可证",
   "licensing.noType": "本年度没有许可证数量。",

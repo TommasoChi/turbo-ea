@@ -133,7 +133,7 @@ Das Feld **Jährliche Gesamtkosten** (`costTotalAnnual`) der Karte wird aus den 
 
 ### Lizenzabschnitt (Anwendung und IT-Komponente)
 
-Der Abschnitt **Lizenzierung** erfasst Jahr für Jahr, wie viele Lizenzen die Karte vertraglich hat und wie viele tatsächlich genutzt werden. Er steht neben den Kosten und hat denselben **‹ ›**-Navigator über sechs Jahre: die vier vor dem aktuellen, das aktuelle und das **Forecast**-Jahr. Welche Kennzahlen die Karte erfasst (**Benutzer**, **Installationen**), ergibt sich aus ihrem Feld **Lizenzmodell**, das oben schreibgeschützt mit einem Link zum Bearbeiten angezeigt wird.
+Der Abschnitt **Lizenzierung** erfasst Jahr für Jahr, wie viele Lizenzen die Karte vertraglich hat und wie viele tatsächlich genutzt werden. Er steht neben den Kosten und hat denselben **‹ ›**-Navigator über sechs Jahre: die vier vor dem aktuellen, das aktuelle und das **Forecast**-Jahr. Welche Kennzahlen die Karte erfasst (**Benutzer**, **Installationen**), ergibt sich aus ihrem **Lizenzmodell**, das oben im Abschnitt angezeigt wird. Wer die Karte bearbeiten darf, ändert es dort mit **Bearbeiten**: **Benutzer** und/oder **Installationen** anhaken, dann **Speichern**. Das Modell erscheint nicht unter den übrigen Feldern der Karte.
 
 ![Lizenzabschnitt](../assets/img/en/104_card_licensing.png)
 

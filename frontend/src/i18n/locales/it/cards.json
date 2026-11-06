@@ -794,6 +794,7 @@
   "licensing.confirmFailed": "Impossibile confermare l'anno.",
   "licensing.model": "Metriche monitorate",
   "licensing.editModel": "Modifica",
+  "licensing.modelSaveFailed": "Could not save the tracked metrics.",
   "licensing.emptyModel": "Scegli quali metriche monitora questa scheda (Utenti, Installazioni) per inserire le licenze.",
   "licensing.noLicense": "nessuna licenza",
   "licensing.noType": "Nessuna quantità di licenze per quest'anno.",

@@ -882,6 +882,7 @@
   "licensing.confirmFailed": "Не удалось подтвердить год.",
   "licensing.model": "Отслеживаемые показатели",
   "licensing.editModel": "Изменить",
+  "licensing.modelSaveFailed": "Could not save the tracked metrics.",
   "licensing.emptyModel": "Выберите показатели, которые отслеживает эта карточка (пользователи, установки), чтобы вводить лицензии.",
   "licensing.noLicense": "нет лицензии",
   "licensing.noType": "Нет количеств лицензий за этот год.",

@@ -794,6 +794,7 @@
   "licensing.confirmFailed": "Não foi possível confirmar o ano.",
   "licensing.model": "Métricas acompanhadas",
   "licensing.editModel": "Editar",
+  "licensing.modelSaveFailed": "Could not save the tracked metrics.",
   "licensing.emptyModel": "Escolha que métricas este cartão acompanha (Utilizadores, Instalações) para introduzir licenças.",
   "licensing.noLicense": "sem licença",
   "licensing.noType": "Sem quantidades de licenças para este ano.",

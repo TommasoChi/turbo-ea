@@ -970,6 +970,7 @@
   "licensing.confirmFailed": "تعذّر تأكيد السنة.",
   "licensing.model": "المقاييس المتتبَّعة",
   "licensing.editModel": "تعديل",
+  "licensing.modelSaveFailed": "Could not save the tracked metrics.",
   "licensing.emptyModel": "اختر المقاييس التي تتبّعها هذه البطاقة (المستخدمون، التثبيتات) لإدخال التراخيص.",
   "licensing.noLicense": "بلا ترخيص",
   "licensing.noType": "لا توجد أعداد تراخيص لهذه السنة.",

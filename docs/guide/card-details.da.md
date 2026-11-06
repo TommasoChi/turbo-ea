@@ -128,7 +128,7 @@ Kortets felt **Samlede årlige omkostninger** (`costTotalAnnual`) udledes af det
 
 ### Licenssektion (Applikation og IT-komponent)
 
-Sektionen **Licensering** registrerer år for år, hvor mange licenser kortet har under kontrakt, og hvor mange der reelt bruges. Den ligger ved siden af Omkostninger og har samme **‹ ›**-navigator over seks år: de fire før det nuværende, det nuværende og **Forecast**. Hvilke målinger kortet sporer (**Brugere**, **Installationer**), kommer fra feltet **Licensmodel**, som vises skrivebeskyttet øverst med et link til at redigere det.
+Sektionen **Licensering** registrerer år for år, hvor mange licenser kortet har under kontrakt, og hvor mange der reelt bruges. Den ligger ved siden af Omkostninger og har samme **‹ ›**-navigator over seks år: de fire før det nuværende, det nuværende og **Forecast**. Hvilke målinger kortet sporer (**Brugere**, **Installationer**), kommer fra kortets **Licensmodel**, som vises øverst i sektionen. Den, der kan redigere kortet, ændrer den med **Rediger**: markér **Brugere** og/eller **Installationer**, og vælg derefter **Gem**. Modellen vises ikke blandt kortets øvrige felter.
 
 ![Licenssektion](../assets/img/en/104_card_licensing.png)
 

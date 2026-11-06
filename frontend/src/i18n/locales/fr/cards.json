@@ -794,6 +794,7 @@
   "licensing.confirmFailed": "Impossible de confirmer l'exercice.",
   "licensing.model": "Indicateurs suivis",
   "licensing.editModel": "Modifier",
+  "licensing.modelSaveFailed": "Could not save the tracked metrics.",
   "licensing.emptyModel": "Choisissez les indicateurs suivis par cette fiche (Utilisateurs, Installations) pour saisir des licences.",
   "licensing.noLicense": "aucune licence",
   "licensing.noType": "Aucune quantité de licences pour cet exercice.",

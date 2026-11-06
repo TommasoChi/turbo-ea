@@ -316,6 +316,7 @@
   "metamodel.typeDrawer.descriptionSection": "Описание",
   "metamodel.typeDrawer.failedToSaveField": "Не удалось сохранить поле",
   "metamodel.typeDrawer.failedToDeleteField": "Не удалось удалить поле",
+  "metamodel.typeDrawer.licenseFieldLocked": "The Licensing Model field is required by licensing and cannot be deleted or changed. Edit a card's model from its Licensing section.",
   "metamodel.typeDrawer.failedToDeleteSection": "Не удалось удалить раздел",
   "metamodel.typeDrawer.failedToUpdateVisibility": "Не удалось обновить видимость",
   "metamodel.typeDrawer.deleteField": "Удалить поле",
