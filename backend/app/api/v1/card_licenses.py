@@ -61,10 +61,10 @@ async def _load_for_edit(db: AsyncSession, user: User, card_id: str) -> Card:
 async def _load_for_read(db: AsyncSession, user: User, card_id: str) -> Card:
     card_uuid = parse_uuid(card_id)
     card_type = await require_card_readable(db, user, card_uuid, mode="module")
-    if not await PermissionService.can_view_licenses(db, user, card_uuid):
-        raise HTTPException(403, "Not enough permissions")
     if card_type not in LICENSE_TYPES:
         raise HTTPException(404, "Card not found")
+    if not await PermissionService.can_view_licenses(db, user, card_uuid):
+        raise HTTPException(403, "Not enough permissions")
     return await _load_card(db, card_uuid)
 
 

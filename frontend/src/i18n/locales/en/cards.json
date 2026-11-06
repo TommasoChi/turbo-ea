@@ -779,6 +779,7 @@
   "costs.dialog.deleteFailed": "Could not delete the cost item.",
   "costs.confirmFailed": "Could not confirm the year.",
   "history.events.costsUpdated": "Costs updated",
+  "history.events.licensesUpdated": "Licenses updated",
   "history.fields.costItems": "Cost items",
   "costs.loadFailed": "Could not load the costs of this card.",
   "costs.dialog.copyFailed": "Could not copy to the Forecast year.",

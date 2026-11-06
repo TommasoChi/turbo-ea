@@ -92,7 +92,12 @@ const CATEGORY_COLORS: Record<ActivityCategory, string> = {
 
 function categorize(eventType: string): ActivityCategory {
   if (eventType === "card.created") return "create";
-  if (eventType === "card.updated" || eventType === "card.costs_updated") return "update";
+  if (
+    eventType === "card.updated" ||
+    eventType === "card.costs_updated" ||
+    eventType === "card.licenses_updated"
+  )
+    return "update";
   if (eventType === "card.archived") return "archive";
   if (eventType === "card.restored") return "restore";
   if (eventType === "card.deleted") return "delete";

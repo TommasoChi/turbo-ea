@@ -190,3 +190,12 @@ async def test_confirm_and_copy_to_forecast(client, env):
         headers=auth_headers(env["viewer"]),
     )
     assert bad.status_code == 403
+
+
+async def test_readable_wrong_type_card_is_404_for_everyone_even_without_permission(
+    client, db, env
+):
+    other = await create_card(db, card_type="Platform", name="P2", user_id=env["admin"].id)
+    for who in ("admin", "viewer"):  # the viewer lacks licenses.view: still 404, never 403
+        r = await client.get(url(other), headers=auth_headers(env[who]))
+        assert r.status_code == 404

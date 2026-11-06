@@ -308,3 +308,33 @@ async def test_hidden_card_is_not_found(db, env):
     await db.flush()
     plan = await plan_import(db, editor, [row(2)])
     assert [s.reason for s in plan.skipped] == ["card_not_found"]
+
+
+def test_parse_refuses_more_rows_than_the_cap():
+    from app.services import license_import
+
+    assert license_import.MAX_ROWS == 10_000
+    data = xlsx([["ERP", "users", "admin", CUR, 1, 1]] * 3)
+    original = license_import.MAX_ROWS
+    license_import.MAX_ROWS = 2
+    try:
+        with pytest.raises(ImportFileError, match="more than 2 rows"):
+            parse_workbook(data)
+    finally:
+        license_import.MAX_ROWS = original
+
+
+async def test_apply_failure_midway_leaves_nothing_after_rollback(db, env):
+    """The route answers 409 and rolls back: no card_licenses row and no event survive."""
+    plan = await plan_import(db, env["user"], [row(2), row(3, typ="dev", year=CUR - 1)])
+    assert plan.skipped == []
+    await license_types.update_item(
+        db, "dev", archived=True
+    )  # the catalogue changes after the plan
+    await db.flush()
+    with pytest.raises(LicenseError):
+        await apply_import(db, env["user"].id, plan)
+    await db.rollback()
+    assert (await db.execute(select(CardLicense))).scalars().all() == []
+    events = (await db.execute(select(Event))).scalars().all()
+    assert [e for e in events if e.event_type == "card.licenses_updated"] == []

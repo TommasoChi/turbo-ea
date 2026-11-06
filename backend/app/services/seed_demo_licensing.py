@@ -74,7 +74,19 @@ async def seed_licensing_demo_data(db: AsyncSession) -> dict:
             await license_types.create_item(db, key, label)
 
     year = current_fiscal_year(await get_fiscal_year_start(db))
+    # Natural-key skip: a card that already has any licence row (migrated or entered) is left alone.
+    licensed = set(
+        (
+            await db.execute(
+                select(CardLicense.card_id).where(
+                    CardLicense.card_id.in_([c.id for c in cards.values()])
+                )
+            )
+        ).scalars()
+    )
     for ident, card in cards.items():
+        if card.id in licensed:
+            continue
         # Reassign: JSONB does not track in-place mutation.
         card.attributes = {
             **(card.attributes or {}),

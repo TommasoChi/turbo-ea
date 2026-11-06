@@ -255,8 +255,8 @@ export default function LicensingReport() {
         if (!c) return [];
         return [{ ...base, pct: c.pct, noLicence: c.no_licence, status: cellStatus(c.status) }];
       }
-      const status =
-        raw.status ?? worstStatus(Object.values(raw.by_type).map((c) => cellStatus(c.status)));
+      // The server's status ignores a no-data type; a Platform's rows carry none: compliant.
+      const status = raw.status ?? "compliant";
       return [{ ...base, pct: raw.worst_pct, noLicence: raw.worst_no_licence, status }];
     });
   }, [data, licenseType, effectiveGroupBy, aggregate]);
@@ -739,7 +739,10 @@ export default function LicensingReport() {
             <CardPicker
               types={PICKABLE_TYPES}
               value={picked}
-              onChange={setPicked}
+              onChange={(v) => {
+                setRestorePickId(null); // a choice made while the saved pick loads wins
+                setPicked(v);
+              }}
               label={t("licensing.pickCard")}
               helperText={t("licensing.pickCardHelper")}
               size="small"

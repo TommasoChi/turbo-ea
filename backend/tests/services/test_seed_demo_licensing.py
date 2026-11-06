@@ -92,3 +92,20 @@ async def test_skips_without_demo_cards(db):
     assert result["skipped"] is True
     assert (await db.execute(select(LicenseType))).scalars().all() == []
     assert not await demo_seed_completed(db, SEEDER_KEY)
+
+
+async def test_card_with_existing_license_row_is_left_alone(db):
+    await create_card_type(db, key="Application", label="Application")
+    erp = await create_card(db, card_type="Application", name="SAP S/4HANA", attributes={})
+    await create_card(db, card_type="Application", name="SAP Ariba", attributes={})
+    year = current_fiscal_year(await get_fiscal_year_start(db))
+    db.add(CardLicense(card_id=erp.id, fiscal_year=year, items={"users": {"x": {"licensed": 1}}}))
+    await db.flush()
+    result = await seed_licensing_demo_data(db)  # no uq_card_licenses_card_year crash
+    assert result["skipped"] is False
+    mine = (
+        (await db.execute(select(CardLicense).where(CardLicense.card_id == erp.id))).scalars().all()
+    )
+    assert [(r.fiscal_year, r.items) for r in mine] == [(year, {"users": {"x": {"licensed": 1}}})]
+    await db.refresh(erp)
+    assert "licensingModel" not in erp.attributes

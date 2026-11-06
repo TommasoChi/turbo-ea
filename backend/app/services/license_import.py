@@ -54,7 +54,9 @@ METRIC_ALIASES = {
 }
 MAX_XLSX_MEMBER_BYTES = 50 * 1024 * 1024
 MAX_XLSX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
-MAX_ROWS = 100_000  # a plan is held in memory
+# shortcut: 10k rows; apply is one merge_cell per cell (several queries each) in one transaction;
+# upgrade to a batched or background apply when a real import needs more.
+MAX_ROWS = 10_000
 
 
 class ImportFileError(ValueError):

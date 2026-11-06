@@ -319,6 +319,19 @@ describe("LicensingReport", () => {
       });
     });
 
+    it("a pick made while the saved pick is still loading wins", async () => {
+      let resolveSaved: (v: unknown) => void = () => {};
+      extra.handlers["/cards/other"] = () => new Promise((r) => (resolveSaved = r));
+      savedConfig({ view: "bytype", pickedCardId: "other" });
+      renderReport("/?saved_report_id=r1");
+      await userEvent.click(await screen.findByText("pick-platform"));
+      await act(async () => {
+        resolveSaved({ id: "other", name: "Other", type: "Application" });
+      });
+      await waitFor(() => expect(reportPaths().some((p) => p.includes("card_id=plat"))).toBe(true));
+      expect(reportPaths().some((p) => p.includes("card_id=other"))).toBe(false);
+    });
+
     it("a picked card that no longer exists is dropped without breaking the report", async () => {
       extra.handlers["/cards/gone"] = () => Promise.reject(new Error("404"));
       savedConfig({ view: "bytype", pickedCardId: "gone" });

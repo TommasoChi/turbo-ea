@@ -34,6 +34,9 @@ async def all_cost_keys(db: AsyncSession) -> frozenset[str]:
     )
 
 
+# shortcut: field keys are not reserved, so an admin-created field named like a key below is
+# hidden from diffs for readers without licenses.view; upgrade by reserving these keys in the
+# field-key check.
 LICENSE_KEYS: frozenset[str] = frozenset({*LEGACY_KEYS, LIST_KEY})
 
 
