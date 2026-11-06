@@ -201,6 +201,7 @@ class TestMigrateAndSeed:
                 "saved_reports": 5,
                 "surveys": 6,
             },
+            "app.services.seed_demo_licensing.seed_licensing_demo_data": {"cards": 4},
             "app.services.seed_demo_security.seed_security_demo_data": {
                 "compliance_findings": 1,
                 "analysis_runs": 2,
@@ -236,6 +237,7 @@ class TestMigrateAndSeed:
         assert "[seed_ppm] Enabled PPM module" in out
         assert "[seed] Created demo admin user" in out
         assert "[seed_workspace] Seeded 1 web portals" in out
+        assert "[seed_licensing] Seeded licenses on 4 cards" in out
 
     async def test_bpm_only_seeding_keeps_an_existing_admin(self, boot, capsys):
         _engine(boot.mp, has_alembic=True, version="head123")
