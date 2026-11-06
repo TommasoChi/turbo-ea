@@ -78,3 +78,13 @@ describe("buildUtilisationOption", () => {
     expect(build([bar({ id: "a" })], true).xAxis.inverse).toBe(true);
   });
 });
+
+describe("utilisation tooltip", () => {
+  it("escapes card names and type labels", () => {
+    const o = build([bar({ id: "x", name: "<img src=x onerror=alert(1)>", typeLabel: "A&B" })]);
+    const html = o.tooltip.formatter({ data: { id: "x" } });
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+    expect(html).toContain("A&amp;B");
+  });
+});

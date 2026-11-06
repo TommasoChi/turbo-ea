@@ -9,6 +9,7 @@ import {
   axisLabel,
   base,
   BAR_MAX_THICKNESS,
+  escapeHtml,
   grid,
   splitLine,
   tooltip,
@@ -75,7 +76,7 @@ export function buildUtilisationOption(
         const b = sorted.find((x) => x.id === p.data.id);
         if (!b) return "";
         const value = b.noLicence ? o.noLicense : b.pct == null ? o.noData : `${b.pct} %`;
-        return `${b.name}${b.typeLabel ? ` (${b.typeLabel})` : ""}: ${value}`;
+        return `${escapeHtml(b.name)}${b.typeLabel ? ` (${escapeHtml(b.typeLabel)})` : ""}: ${escapeHtml(value)}`;
       },
     }),
     xAxis: {
