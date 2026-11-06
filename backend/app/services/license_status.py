@@ -91,8 +91,3 @@ def metric_result(metric: str, cells: dict[str, dict], order: list[str]) -> Metr
 def card_status(metrics: list[MetricResult]) -> MetricStatus:
     """The highest-priority status among the metrics (``compliant`` for none)."""
     return max((m.status for m in metrics), key=_PRIORITY.__getitem__, default="compliant")
-
-
-def worst_of(results: list[MetricResult]) -> tuple[float | None, bool]:
-    pcts = [r.worst_pct for r in results if r.worst_pct is not None]
-    return (max(pcts) if pcts else None, any(r.worst_no_licence for r in results))

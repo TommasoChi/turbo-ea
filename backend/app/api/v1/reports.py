@@ -1629,18 +1629,22 @@ async def licensing_report(
         picked_type = await require_card_readable(db, user, picked, mode="module")
         if picked_type not in LICENSE_TYPES | {PLATFORM_TYPE}:
             raise HTTPException(400, f"Card type {picked_type!r} holds no licenses")
-    type_def = (await db.execute(select(CardType).where(CardType.key == type))).scalar_one_or_none()
+    license_card_types = {
+        ct.key: ct
+        for ct in (await db.execute(select(CardType).where(CardType.key.in_(LICENSE_TYPES))))
+        .scalars()
+        .all()
+    }
+    type_def = license_card_types.get(type)
     field_keys = {
         f["key"] for s in (type_def.fields_schema if type_def else None) or [] for f in s["fields"]
     }
     hidden: dict[str, frozenset[str]] = {}
     if not await PermissionService.has_app_permission(db, user, "costs.view"):
-        for ct in (
-            (await db.execute(select(CardType).where(CardType.key.in_(LICENSE_TYPES))))
-            .scalars()
-            .all()
-        ):
-            hidden[ct.key] = cost_field_keys_from_card_schema(ct.fields_schema)
+        hidden = {
+            key: cost_field_keys_from_card_schema(ct.fields_schema)
+            for key, ct in license_card_types.items()
+        }
     try:
         return await build_license_report(
             db,

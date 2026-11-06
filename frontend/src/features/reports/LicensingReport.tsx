@@ -9,7 +9,6 @@ import CircularProgress from "@mui/material/CircularProgress";
 import ListItemText from "@mui/material/ListItemText";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
-import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { api } from "@/api/client";
 import EChart, { type EChartClickParams } from "@/components/charts/EChart";
@@ -279,6 +278,8 @@ export default function LicensingReport() {
     return null;
   }, [drill, viewRows]);
   const trend = useMemo(() => {
+    // Every type any counted card holds in any year, whatever the license type filter.
+    const present = new Set<string>();
     const totals = (data?.trend ?? []).map((y) => {
       const actual: Record<string, number> = {};
       let licensed = 0;
@@ -286,6 +287,7 @@ export default function LicensingReport() {
         if (closure && !closure.has(cardId)) continue;
         if (trendIds && !trendIds.has(cardId)) continue;
         for (const [key, c] of Object.entries(cells)) {
+          present.add(key);
           if (licenseType && key !== licenseType) continue;
           licensed += c.licensed;
           actual[key] = (actual[key] ?? 0) + (c.actual ?? 0);
@@ -293,18 +295,7 @@ export default function LicensingReport() {
       }
       return { fiscalYear: y.fiscal_year, actual, licensed };
     });
-    const components = sortedTypes
-      .map((x) => x.key)
-      .filter((k) =>
-        (data?.trend ?? []).some((y) =>
-          Object.entries(y.cards).some(
-            ([id, cells]) =>
-              cells[k] !== undefined &&
-              (!closure || closure.has(id)) &&
-              (!trendIds || trendIds.has(id)),
-          ),
-        ),
-      );
+    const components = sortedTypes.map((x) => x.key).filter((k) => present.has(k));
     return { totals, components };
   }, [data, closure, trendIds, licenseType, sortedTypes]);
   const trendOption = useMemo(() => {
@@ -356,7 +347,12 @@ export default function LicensingReport() {
       }));
     }
     const byGroup = new Map<string, ViewRow[]>();
-    for (const r of drilledRows) byGroup.set(r.group ?? OTHER_GROUP, [...(byGroup.get(r.group ?? OTHER_GROUP) ?? []), r]);
+    for (const r of drilledRows) {
+      const key = r.group ?? OTHER_GROUP;
+      const members = byGroup.get(key);
+      if (members) members.push(r);
+      else byGroup.set(key, [r]);
+    }
     return [...byGroup].map(([key, members]) => {
       const pcts = members.flatMap((m) => (m.pct == null ? [] : [m.pct]));
       return {
@@ -769,16 +765,14 @@ export default function LicensingReport() {
             ))}
           </TextField>
           {data && (
-            <Tooltip title="" arrow>
-              <Chip
-                variant="outlined"
-                icon={<MaterialSymbol icon="calendar_month" size={18} />}
-                label={t("licensing.fiscalYearIndicator", {
-                  fy: costFiscalYearName(data.fiscal_year, currentFiscalYear),
-                })}
-                data-testid="licensing-fiscal-year"
-              />
-            </Tooltip>
+            <Chip
+              variant="outlined"
+              icon={<MaterialSymbol icon="calendar_month" size={18} />}
+              label={t("licensing.fiscalYearIndicator", {
+                fy: costFiscalYearName(data.fiscal_year, currentFiscalYear),
+              })}
+              data-testid="licensing-fiscal-year"
+            />
           )}
         </>
       }

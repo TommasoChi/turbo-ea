@@ -13,6 +13,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Final
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -62,7 +63,7 @@ class YearLicenses:
     type_keys: list[str]  # sorted license type keys present in any stored metric (event payload)
 
 
-def licensed_only(items: dict, years: int = 0) -> dict:
+def licensed_only(items: dict, years: int) -> dict:
     """The carry: every cell keeps its licensed count, its actual is dropped."""
     return {
         metric: {k: {"licensed": c.get("licensed") or 0, "actual": None} for k, c in cells.items()}
@@ -105,14 +106,48 @@ async def _resolve(
     return await yearly_rows.resolve(db, CardLicense, card_id, fy, start_month, licensed_only)
 
 
-async def _order(db: AsyncSession) -> list[str]:
+async def items_by_card(
+    db: AsyncSession, card_ids: list[uuid.UUID], years: list[int], start_month: int
+) -> dict[uuid.UUID, dict[int, tuple[dict, bool, int | None]]]:
+    """``{card: {year: (items, confirmed, fallback_from)}}`` in one query.
+
+    Same resolution as a single year (``yearly_rows.resolve_year``): ``confirmed`` means
+    the year has a row; only the current year falls back, licensed counts only.
+    """
+    cur = current_fiscal_year(start_month)
+    stored: dict[uuid.UUID, dict[int, dict]] = {}
+    if card_ids:
+        rows = await db.execute(
+            select(CardLicense.card_id, CardLicense.fiscal_year, CardLicense.items).where(
+                CardLicense.card_id.in_(card_ids), CardLicense.fiscal_year <= max(years)
+            )
+        )
+        for card_id, fy, items in rows.all():
+            stored.setdefault(card_id, {})[fy] = items or {}
+    out: dict[uuid.UUID, dict[int, tuple[dict, bool, int | None]]] = {}
+    for card_id in card_ids:
+        mine = stored.get(card_id, {})
+        out[card_id] = {}
+        for fy in years:
+            earlier = [y for y in mine if y < fy]
+            prev = (max(earlier), mine[max(earlier)]) if earlier else None
+            out[card_id][fy] = yearly_rows.resolve_year(mine.get(fy), prev, fy, cur, licensed_only)
+    return out
+
+
+async def type_order(db: AsyncSession) -> list[str]:
     return [r.key for r in await license_types.list_items(db)]  # sort_order, archived included
 
 
 async def get_year(
-    db: AsyncSession, card: Card, fiscal_year: int, start_month: int
+    db: AsyncSession,
+    card: Card,
+    fiscal_year: int,
+    start_month: int,
+    order: list[str] | None = None,
 ) -> YearLicenses:
-    """Any single year, no window limit; ``metrics`` = ``licensingModel`` ∩ ``METRICS``."""
+    """Any single year, no window limit; ``metrics`` = ``licensingModel`` ∩ ``METRICS``.
+    ``order``: the catalogue key order, when the caller already holds it."""
     items, confirmed, fb = await _resolve(db, card.id, fiscal_year, start_month)
     return year_licenses(
         items,
@@ -121,13 +156,20 @@ async def get_year(
         fiscal_year,
         current_fiscal_year(start_month),
         model_of(card),
-        await _order(db),
+        await type_order(db) if order is None else order,
     )
 
 
-async def get_window(db: AsyncSession, card: Card, start_month: int) -> list[YearLicenses]:
+async def get_window(
+    db: AsyncSession, card: Card, start_month: int, order: list[str] | None = None
+) -> list[YearLicenses]:
+    """The section's six years from one row query (not one per year)."""
     cur = current_fiscal_year(start_month)
-    return [await get_year(db, card, y, start_month) for y in yearly_rows.window_years(cur)]
+    years = list(yearly_rows.window_years(cur))
+    data = (await items_by_card(db, [card.id], years, start_month))[card.id]
+    order = await type_order(db) if order is None else order
+    model = model_of(card)
+    return [year_licenses(*data[y], y, cur, model, order) for y in years]
 
 
 def check_count(name: str, value: object) -> None:
@@ -227,13 +269,20 @@ async def copy_to_forecast(
 
 
 async def publish_change(
-    db: AsyncSession, card: Card, user_id: uuid.UUID, fiscal_year: int, old: YearLicenses
+    db: AsyncSession,
+    card: Card,
+    user_id: uuid.UUID,
+    fiscal_year: int,
+    old: YearLicenses,
+    *,
+    start_month: int,
+    order: list[str],
 ) -> YearLicenses:
     """Read the new year and publish the event. Flush only.
 
     The event carries license type keys, never counts: it is readable without licenses.view.
     """
-    new = await get_year(db, card, fiscal_year, await get_fiscal_year_start(db))
+    new = await get_year(db, card, fiscal_year, start_month, order)
     await event_bus.publish(
         LICENSE_EVENT,
         {
@@ -257,7 +306,10 @@ async def apply_write(
     op: Callable[[], Awaitable[object]],
 ) -> YearLicenses:
     """Run ``op`` and publish the event; a no-op write (``False``) publishes nothing."""
-    old = await get_year(db, card, fiscal_year, await get_fiscal_year_start(db))
+    sm = await get_fiscal_year_start(db)
+    order = await type_order(db)
+    old = await get_year(db, card, fiscal_year, sm, order)
     if await op() is False:
         return old
-    return await publish_change(db, card, user_id, fiscal_year, old)
+    # The catalogue order cannot change inside a license write, so it is read once.
+    return await publish_change(db, card, user_id, fiscal_year, old, start_month=sm, order=order)

@@ -15,10 +15,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
-from app.models.card_license import CardLicense
 from app.models.relation import Relation
 from app.services import license_types, yearly_rows
-from app.services.card_licenses import LICENSE_TYPES, licensed_only
+from app.services.card_licenses import LICENSE_TYPES, items_by_card
 from app.services.card_read_scope import CardReadScope
 from app.services.cost_grouping import GroupBy, assign_groups
 from app.services.fiscal_year import (
@@ -31,35 +30,6 @@ from app.services.lifecycle import is_live_in_fiscal_year
 
 PLATFORM_RELATIONS = ("relPlatformToApp", "relPlatformToITC")
 PLATFORM_TYPE = "Platform"
-
-
-async def items_by_card(
-    db: AsyncSession, card_ids: list[uuid.UUID], years: list[int], start_month: int
-) -> dict[uuid.UUID, dict[int, tuple[dict, bool, int | None]]]:
-    """``{card: {year: (items, confirmed, fallback_from)}}`` in one query.
-
-    Same resolution as a card's section (``yearly_rows.resolve_year``): ``confirmed`` means
-    the year has a row; only the current year falls back, licensed counts only.
-    """
-    cur = current_fiscal_year(start_month)
-    stored: dict[uuid.UUID, dict[int, dict]] = {}
-    if card_ids:
-        rows = await db.execute(
-            select(CardLicense.card_id, CardLicense.fiscal_year, CardLicense.items).where(
-                CardLicense.card_id.in_(card_ids), CardLicense.fiscal_year <= max(years)
-            )
-        )
-        for card_id, fy, items in rows.all():
-            stored.setdefault(card_id, {})[fy] = items or {}
-    out: dict[uuid.UUID, dict[int, tuple[dict, bool, int | None]]] = {}
-    for card_id in card_ids:
-        mine = stored.get(card_id, {})
-        out[card_id] = {}
-        for fy in years:
-            earlier = [y for y in mine if y < fy]
-            prev = (max(earlier), mine[max(earlier)]) if earlier else None
-            out[card_id][fy] = yearly_rows.resolve_year(mine.get(fy), prev, fy, cur, licensed_only)
-    return out
 
 
 def counts_in_year(card: Card, has_row: bool, fy: int, cur: int, start_month: int) -> bool:

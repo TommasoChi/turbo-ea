@@ -95,14 +95,15 @@ async def get_card_licenses(
     user: User = Depends(get_current_user),
 ):
     card = await _load_for_read(db, user, card_id)
-    years = await card_licenses.get_window(db, card, await get_fiscal_year_start(db))
+    catalogue = await license_types.list_items(db)
+    years = await card_licenses.get_window(
+        db, card, await get_fiscal_year_start(db), [r.key for r in catalogue]
+    )
     return CardLicensesOut(
         can_edit=await PermissionService.can_edit_licenses(db, user, card.id),
         licensing_model=card_licenses.model_of(card),
         years=[_out(y) for y in years],
-        catalogue=[
-            LicenseTypeOut(**license_types.serialize(r)) for r in await license_types.list_items(db)
-        ],
+        catalogue=[LicenseTypeOut(**license_types.serialize(r)) for r in catalogue],
     )
 
 

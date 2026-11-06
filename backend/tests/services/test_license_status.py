@@ -7,12 +7,11 @@ from app.services.license_status import (
     card_status,
     metric_result,
     type_result,
-    worst_of,
 )
 
 
-def _m(status, worst_pct=None, no_licence=False) -> MetricResult:
-    return MetricResult("users", [], False, status, worst_pct, no_licence, 0, None)
+def _m(status) -> MetricResult:
+    return MetricResult("users", [], False, status, None, False, 0, None)
 
 
 def test_over_when_actual_above_licensed():
@@ -85,12 +84,6 @@ def test_worst_pct_is_the_highest_type_pct_and_no_licence_wins():
     )
     assert m.worst_pct == 120.0 and not m.worst_no_licence
     assert metric_result("users", {"a": {"licensed": 0, "actual": 2}}, ["a"]).worst_no_licence
-
-
-def test_worst_of_takes_max_pct_and_or_of_no_licence():
-    assert worst_of([_m("over", 120.0), _m("compliant", 50.0, True)]) == (120.0, True)
-    assert worst_of([_m("compliant"), _m("compliant")]) == (None, False)
-    assert worst_of([]) == (None, False)
 
 
 def test_order_follows_catalogue_then_unknown_keys_sorted():
