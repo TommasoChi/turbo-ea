@@ -224,6 +224,8 @@ async def delete_cell(
 ) -> bool:
     """``False`` (nothing written) when the year does not hold the cell; idempotent by design."""
     sm = await get_fiscal_year_start(db)
+    if not yearly_rows.in_window(fiscal_year, sm):
+        raise LicenseError("year_out_of_range", f"Fiscal year {fiscal_year} is outside the window")
     items, _, _ = await _resolve(db, card_id, fiscal_year, sm)
     if key not in (items.get(metric) or {}):
         return False

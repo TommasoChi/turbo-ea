@@ -199,3 +199,9 @@ async def test_readable_wrong_type_card_is_404_for_everyone_even_without_permiss
     for who in ("admin", "viewer"):  # the viewer lacks licenses.view: still 404, never 403
         r = await client.get(url(other), headers=auth_headers(env[who]))
         assert r.status_code == 404
+
+
+async def test_delete_outside_the_write_window_is_422(client, env):
+    path = url(env["card"], f"/{CUR - 6}/items/users/admin")
+    r = await client.delete(path, headers=auth_headers(env["admin"]))
+    assert r.status_code == 422 and r.json()["detail"] == "year_out_of_range"

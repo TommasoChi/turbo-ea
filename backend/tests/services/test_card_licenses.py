@@ -186,3 +186,14 @@ async def test_event_carries_type_keys_only(db):
     assert ev.data["fiscal_year"] == CUR
     blob = json.dumps(ev.data)
     assert "12345" not in blob and "678" not in blob and "licensed" not in blob
+
+
+@pytest.mark.parametrize("fy", [CUR - 6, CUR + 2])
+async def test_delete_outside_the_write_window_is_refused(db, fy):
+    card = await _setup(db)
+    await _row(db, card, fy, {"users": {"admin": cell(1, 1)}})
+    with pytest.raises(svc.LicenseError) as e:
+        await svc.delete_cell(db, card.id, fy, "users", "admin")
+    assert e.value.code == "year_out_of_range"
+    # the row is untouched
+    assert (await svc._resolve(db, card.id, fy, SM))[0] == {"users": {"admin": cell(1, 1)}}
