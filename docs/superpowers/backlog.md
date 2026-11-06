@@ -41,3 +41,11 @@ Things noticed while working on `fix/cost-report` that are out of scope for it. 
 **Why it matters.** The card-read-scope rule says a card the caller may not read does not exist for them. `tests/services/test_card_read_scope_guard.py` cannot see this: it only scans modules that query `Card` and lack any scope marker, `comments.py` and `stakeholders.py` already import `require_card_readable` for their GET handlers, and the sentinel sweep calls GET routes only. Not affected: relation PATCH/DELETE (`_relation_readable`), todos, the observe endpoints.
 
 **Size.** Small: one or two lines after each permission check plus a hidden-type test per endpoint, modelled on `tests/api/test_attachment_document_write_scope.py`. Worth adding a guard that fails a write handler taking a card id without the scope.
+
+## Cost year window reads one year at a time
+
+**What.** `card_costs.get_window` (the Costs section's `GET /cards/{id}/costs`) resolves each of its six years with its own query and one catalogue read per year, up to about 18 queries to open the section. The licensing work (`card_licenses.items_by_card`, built on `yearly_rows.resolve_year`) loads the card's rows once and resolves every year in memory, so the licensing section opens with 2 queries (rows + catalogue).
+
+**Why it matters.** Performance only, no behaviour change: one card at a time, so nobody is hurt today. It is also two code paths for the same year rules, which is how they drift.
+
+**Size.** Small and mechanical, in its own pull request after the licensing one merges: generalise `items_by_card` in `yearly_rows` over the row model, make `card_costs.get_window` call it, and keep the cost tests as the guard unchanged (`test_card_costs.py`, `test_card_costs_api.py`, `test_cost_rollover_loop.py`, the cost report tests). Use `simplify` as a step of that PR.
