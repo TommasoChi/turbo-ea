@@ -779,6 +779,7 @@
   "costs.dialog.deleteFailed": "Impossible de supprimer le poste de coûts.",
   "costs.confirmFailed": "Impossible de confirmer l'exercice.",
   "history.events.costsUpdated": "Coûts mis à jour",
+  "history.events.licensesUpdated": "Licences mises à jour",
   "history.fields.costItems": "Postes de coûts",
   "costs.loadFailed": "Impossible de charger les coûts de cette fiche.",
   "costs.dialog.copyFailed": "Impossible de copier vers l'exercice Forecast.",

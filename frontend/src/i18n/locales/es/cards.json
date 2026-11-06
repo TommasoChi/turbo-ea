@@ -779,6 +779,7 @@
   "costs.dialog.deleteFailed": "No se pudo eliminar la partida de coste.",
   "costs.confirmFailed": "No se pudo confirmar el año.",
   "history.events.costsUpdated": "Costes actualizados",
+  "history.events.licensesUpdated": "Licencias actualizadas",
   "history.fields.costItems": "Partidas de coste",
   "costs.loadFailed": "No se pudieron cargar los costes de esta ficha.",
   "costs.dialog.copyFailed": "No se pudo copiar al año Forecast.",

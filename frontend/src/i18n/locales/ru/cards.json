@@ -867,6 +867,7 @@
   "costs.dialog.deleteFailed": "Не удалось удалить статью затрат.",
   "costs.confirmFailed": "Не удалось подтвердить год.",
   "history.events.costsUpdated": "Затраты обновлены",
+  "history.events.licensesUpdated": "Лицензии обновлены",
   "history.fields.costItems": "Статьи затрат",
   "costs.loadFailed": "Не удалось загрузить затраты этой карточки.",
   "costs.dialog.copyFailed": "Не удалось скопировать в год Forecast.",

@@ -779,6 +779,7 @@
   "costs.dialog.deleteFailed": "无法删除成本项。",
   "costs.confirmFailed": "无法确认该年度。",
   "history.events.costsUpdated": "成本已更新",
+  "history.events.licensesUpdated": "许可证已更新",
   "history.fields.costItems": "成本项",
   "costs.loadFailed": "无法加载此卡片的成本。",
   "costs.dialog.copyFailed": "无法复制到 Forecast 年度。",

@@ -779,6 +779,7 @@
   "costs.dialog.deleteFailed": "Omkostningsposten kunne ikke slettes.",
   "costs.confirmFailed": "Året kunne ikke bekræftes.",
   "history.events.costsUpdated": "Omkostninger opdateret",
+  "history.events.licensesUpdated": "Licenser opdateret",
   "history.fields.costItems": "Omkostningsposter",
   "costs.loadFailed": "Omkostningerne for dette kort kunne ikke indlæses.",
   "costs.dialog.copyFailed": "Kunne ikke kopiere til Forecast-året.",

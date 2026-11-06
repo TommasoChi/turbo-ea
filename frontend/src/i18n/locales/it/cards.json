@@ -779,6 +779,7 @@
   "costs.dialog.deleteFailed": "Impossibile eliminare l'elemento di costo.",
   "costs.confirmFailed": "Impossibile confermare l'anno.",
   "history.events.costsUpdated": "Costi aggiornati",
+  "history.events.licensesUpdated": "Licenze aggiornate",
   "history.fields.costItems": "Elementi di costo",
   "costs.loadFailed": "Impossibile caricare i costi di questa scheda.",
   "costs.dialog.copyFailed": "Impossibile copiare nell'anno Forecast.",

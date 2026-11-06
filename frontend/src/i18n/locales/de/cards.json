@@ -779,6 +779,7 @@
   "costs.dialog.deleteFailed": "Das Kostenelement konnte nicht gelöscht werden.",
   "costs.confirmFailed": "Das Jahr konnte nicht bestätigt werden.",
   "history.events.costsUpdated": "Kosten aktualisiert",
+  "history.events.licensesUpdated": "Lizenzen aktualisiert",
   "history.fields.costItems": "Kostenelemente",
   "costs.loadFailed": "Die Kosten dieser Karte konnten nicht geladen werden.",
   "costs.dialog.copyFailed": "Das Kopieren in das Forecast-Jahr ist fehlgeschlagen.",
