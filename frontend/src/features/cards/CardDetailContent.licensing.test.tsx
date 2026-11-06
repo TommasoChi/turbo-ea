@@ -79,14 +79,18 @@ import { resetExtensionHost } from "@/lib/extensionHost";
 import type { Card } from "@/types";
 import CardDetailContent from "./CardDetailContent";
 
-const typeOf = (key: string, sectionConfig: Record<string, unknown> = {}) => ({
+const typeOf = (
+  key: string,
+  sectionConfig: Record<string, unknown> = {},
+  schema?: unknown[],
+) => ({
   key,
   label: key,
   icon: "apps",
   color: "#0f7eb5",
   has_hierarchy: false,
   subtypes: [],
-  fields_schema: [
+  fields_schema: schema ?? [
     { section: "Basics", fields: [{ key: "fieldA", label: "Indicator A", type: "text" }] },
     {
       section: "Licensing",
@@ -96,7 +100,7 @@ const typeOf = (key: string, sectionConfig: Record<string, unknown> = {}) => ({
   section_config: sectionConfig,
 });
 
-const cardOf = (type: string) =>
+const cardOf = (type: string, extra: Record<string, unknown> = {}) =>
   ({
     id: "card-1",
     name: "X",
@@ -106,7 +110,7 @@ const cardOf = (type: string) =>
     approval_status: "DRAFT",
     data_quality: 50,
     lifecycle: {},
-    attributes: { fieldA: "a" },
+    attributes: { fieldA: "a", ...extra },
     tags: [],
     stakeholders: [],
   }) as unknown as Card;
@@ -119,8 +123,9 @@ function renderFor(
   type: string,
   sectionConfig: Record<string, unknown> = {},
   permissions: typeof perms = perms,
+  extra: { schema?: unknown[]; attributes?: Record<string, unknown> } = {},
 ) {
-  const def = typeOf(type, sectionConfig);
+  const def = typeOf(type, sectionConfig, extra.schema);
   vi.mocked(useMetamodel).mockReturnValue({
     types: [def],
     relationTypes: [],
@@ -132,7 +137,7 @@ function renderFor(
   return render(
     <MemoryRouter>
       <CardDetailContent
-        card={cardOf(type)}
+        card={cardOf(type, extra.attributes)}
         perms={permissions}
         onCardUpdate={() => {}}
         showLdvSection={false}
@@ -186,5 +191,31 @@ describe("CardDetailContent licensing section", () => {
     await screen.findByTestId("licensing-section");
     await userEvent.setup().click(screen.getByRole("button", { name: "save-model" }));
     expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the stored options the editor does not show when it saves", async () => {
+    const user = userEvent.setup();
+    renderFor("Application", {}, perms, {
+      attributes: { licensingModel: ["installations", "cores"] },
+    });
+    await user.click(await screen.findByRole("button", { name: "save-model" }));
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith("/cards/card-1", {
+        attributes: { fieldA: "a", licensingModel: ["users", "cores"] },
+      }),
+    );
+  });
+
+  it("renders an admin's own licensingModel field of another section as a generic one", async () => {
+    renderFor("Application", {}, perms, {
+      schema: [
+        {
+          section: "Basics",
+          fields: [{ key: "licensingModel", label: "Own model", type: "text" }],
+        },
+      ],
+    });
+    expect(await screen.findByText("Own model")).toBeInTheDocument();
+    expect(screen.getByTestId("model-field")).toHaveTextContent("");
   });
 });

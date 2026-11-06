@@ -393,6 +393,24 @@ describe("CardLayoutEditor — license-bearing types", () => {
     expect(screen.queryByText("Licensing Model")).not.toBeInTheDocument();
   });
 
+  it("keeps an admin's own Licensing section that holds more than the model field", () => {
+    const licensing = makeSection({
+      section: "Licensing",
+      fields: [
+        makeField({ key: "licensingModel", label: "Licensing Model", type: "multiple_select" }),
+        makeField({ key: "vendorNote", label: "Vendor note", type: "text" }),
+      ],
+    });
+    const app = makeCardType({
+      ...TYPE,
+      key: "Application",
+      fields_schema: [...(TYPE.fields_schema ?? []), licensing],
+      section_config: {},
+    });
+    setup({ cardType: app });
+    expect(sectionHeaders().filter((h) => h === "Licensing")).toHaveLength(2);
+  });
+
   it("keeps a section named Licensing on a type that holds no licenses", () => {
     const licensing = makeSection({ section: "Licensing", fields: [makeField({ key: "x" })] });
     setup({ cardType: makeCardType({ ...TYPE, fields_schema: [...(TYPE.fields_schema ?? []), licensing] }) });

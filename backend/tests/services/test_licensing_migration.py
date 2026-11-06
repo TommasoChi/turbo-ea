@@ -152,6 +152,29 @@ def test_move_model_field_keeps_an_admin_field_with_the_same_key_but_another_typ
     assert move_model_field("Application", schema) is None
 
 
+def test_move_model_field_adds_the_missing_required_options_keeping_the_admin_ones():
+    mine = copy.deepcopy(LICENSING_MODEL_FIELD)
+    mine["label"] = "Our model"
+    mine["options"] = [{"key": "cores", "label": "Cores"}, mine["options"][0]]  # no installations
+    schema = [{"section": LICENSING_SECTION, "fields": [mine]}]  # already in place
+    out = move_model_field("Application", schema)
+    field = out[0]["fields"][0]
+    assert field["label"] == "Our model"
+    assert [o["key"] for o in field["options"]] == ["cores", "users", "installations"]
+    assert move_model_field("Application", out) is None
+
+
+def test_move_model_field_cleans_a_copy_left_in_an_extension_section():
+    schema = [
+        {"section": "Ext", "ext": "licensing", "fields": [copy.deepcopy(LICENSING_MODEL_FIELD)]}
+    ]
+    out = move_model_field("Application", schema)
+    assert out[0]["fields"] == []
+    assert out[-1]["section"] == LICENSING_SECTION
+    keys = [f["key"] for s in out for f in s["fields"]]
+    assert keys == ["licensingModel"]
+
+
 def test_move_model_field_ignores_other_types():
     assert move_model_field("Platform", []) is None
 

@@ -231,11 +231,12 @@ def move_model_field(type_key: str, schema: list) -> list | None:
     field = copy.deepcopy(found[0][1]) if found else copy.deepcopy(LICENSING_MODEL_FIELD)
     target = None
     for section in out:
-        if not isinstance(section, dict) or section.get("ext"):
+        if not isinstance(section, dict):
             continue
-        if section.get("section") == LICENSING_SECTION:
+        if section.get("section") == LICENSING_SECTION and not section.get("ext"):
             target = section
         else:
+            # An extension section is cleaned too: a copy left there would be a duplicate key.
             section["fields"] = [
                 f
                 for f in section.get("fields", [])
@@ -245,8 +246,18 @@ def move_model_field(type_key: str, schema: list) -> list | None:
         target = licensing_section()
         target["fields"] = []
         out.append(target)
-    if not any(f.get("key") == MODEL_KEY for f in target.get("fields", []) if isinstance(f, dict)):
+    present = [
+        f for f in target.get("fields", []) if isinstance(f, dict) and f.get("key") == MODEL_KEY
+    ]
+    if not present:
         target.setdefault("fields", []).append(field)
+        present = [field]
+    # Required options come back; the admin's label, translations and extra options stay.
+    options = present[0].setdefault("options", [])
+    have = {o.get("key") for o in options if isinstance(o, dict)}
+    options.extend(
+        copy.deepcopy(o) for o in LICENSING_MODEL_FIELD["options"] if o["key"] not in have
+    )
     return None if out == schema else out
 
 

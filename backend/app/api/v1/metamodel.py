@@ -1388,46 +1388,49 @@ async def create_type(
     return _serialize_type(t)
 
 
+def _fields_by_key(schema: list | None, field_key: str) -> list[tuple[str | None, dict]]:
+    """Every ``(section name, field)`` with this key. The guards want exactly one, because
+    ``_cleanup_removed_fields_and_options`` keeps the LAST definition of a repeated key."""
+    return [
+        (sec.get("section"), f)
+        for sec in schema or []
+        for f in sec.get("fields") or []
+        if f.get("key") == field_key
+    ]
+
+
 def _guard_derived_cost_field(key: str, old: list | None, new: list | None) -> None:
     """``costTotalAnnual`` on Application / ITComponent is derived from the card costs."""
     if key not in COST_ITEM_TYPES:
         return
-
-    def field_type(schema: list | None) -> str | None:
-        for sec in schema or []:
-            for f in sec.get("fields") or []:
-                if f.get("key") == DERIVED_KEY:
-                    return f.get("type")
-        return None
-
-    was = field_type(old)
-    if was is not None and field_type(new) != was:
+    was = _fields_by_key(old, DERIVED_KEY)
+    if not was:
+        return
+    now = _fields_by_key(new, DERIVED_KEY)
+    if len(now) != 1 or now[0][1].get("type") != was[0][1].get("type"):
         raise HTTPException(400, "use_cost_items")
 
 
 def _guard_license_model_field(key: str, old: list | None, new: list | None) -> None:
-    """``licensingModel`` on Application / ITComponent stays a multiple_select with its
-    ``users`` / ``installations`` options, alone in the ``Licensing`` section."""
+    """``licensingModel`` on Application / IT Component stays one multiple_select (not
+    extension-owned) with its ``users`` / ``installations`` options, alone in the
+    ``Licensing`` section. An option it already lacked does not block other edits."""
     if key not in LICENSING_TYPES:
         return
-
-    def find(schema: list | None) -> tuple[str | None, dict | None]:
-        for sec in schema or []:
-            for f in sec.get("fields") or []:
-                if f.get("key") == MODEL_KEY:
-                    return sec.get("section"), f
-        return None, None
-
-    _, was = find(old)
-    if was is None or was.get("type") != "multiple_select":
+    was = _fields_by_key(old, MODEL_KEY)
+    if not was or was[0][1].get("type") != "multiple_select":
         return  # absent or an admin's own field of another type: nothing to protect
-    section, now = find(new)
-    options = {o.get("key") for o in (now or {}).get("options") or []}
+    now = _fields_by_key(new, MODEL_KEY)
+    if len(now) != 1:
+        raise HTTPException(400, "license_field_required")
+    section, field = now[0]
+    options = {o.get("key") for o in field.get("options") or []}
+    before = {o.get("key") for o in was[0][1].get("options") or []}
     if (
-        now is None
-        or section != LICENSING_SECTION
-        or now.get("type") != was.get("type")
-        or not REQUIRED_OPTIONS <= options
+        section != LICENSING_SECTION
+        or field.get("type") != "multiple_select"
+        or field.get("ext")
+        or not (REQUIRED_OPTIONS & before) <= options
     ):
         raise HTTPException(400, "license_field_required")
 

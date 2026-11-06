@@ -72,6 +72,20 @@ async def test_metamodel_cannot_remove_or_retype_derived_field_on_cost_item_type
     assert r.status_code == 200, r.text
 
 
+async def test_metamodel_refuses_a_duplicate_of_the_derived_field(client, db, env):
+    """Guard and cleanup must read the same field: two definitions are refused."""
+    dup = [
+        *SCHEMA,
+        {"section": "Again", "fields": [{"key": "costTotalAnnual", "type": "text"}]},
+    ]
+    r = await client.patch(
+        "/api/v1/metamodel/types/Application",
+        json={"fields_schema": dup},
+        headers=auth_headers(env["admin"]),
+    )
+    assert r.status_code == 400 and r.json()["detail"] == "use_cost_items", r.text
+
+
 async def test_legacy_cost_history_writes_blocked_for_cost_item_types(client, db, env):
     h = auth_headers(env["admin"])
     body = {"fiscal_year": CUR - 1, "field_key": "costTotalAnnual", "value": 5}

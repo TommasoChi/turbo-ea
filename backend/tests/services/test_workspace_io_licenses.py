@@ -113,3 +113,34 @@ async def test_import_restores_a_licensing_model_field_the_bundle_lacks(db):
     sections = {s["section"]: [f["key"] for f in s["fields"]] for s in ct.fields_schema}
     assert sections[LICENSING_SECTION] == ["licensingModel"]
     assert sections["General"] == ["a"]
+
+
+async def test_the_restore_is_counted_as_an_update_and_adds_missing_options(db):
+    """The importer's licensingModel restore shows in the preview and the result, and a
+    stored field that lacks a required option gets it back."""
+    import copy
+
+    from app.models.card_type import CardType
+    from app.services.licensing_migration import LICENSING_MODEL_FIELD, LICENSING_SECTION
+    from app.services.workspace_io import diff_bundle
+
+    user = await create_user(db, email="lic-ws4@test.com", role="admin")
+    deficient = copy.deepcopy(LICENSING_MODEL_FIELD)
+    deficient["options"] = deficient["options"][:1]
+    await create_card_type(
+        db,
+        key="Application",
+        label="Application",
+        fields_schema=[{"section": LICENSING_SECTION, "fields": [deficient]}],
+    )
+    raw = await build_bundle(db)
+
+    preview = await diff_bundle(db, parse_bundle(raw), user)
+    assert next(s for s in preview.sections if s.sheet == "CardTypes").updated == 1
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert next(s for s in result.sections if s.sheet == "CardTypes").updated == 1
+    db.expire_all()
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    options = [o["key"] for o in ct.fields_schema[0]["fields"][0]["options"]]
+    assert options == ["users", "installations"]
