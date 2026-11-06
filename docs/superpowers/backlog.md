@@ -49,3 +49,11 @@ Things noticed while working on `fix/cost-report` that are out of scope for it. 
 **Why it matters.** Performance only, no behaviour change: one card at a time, so nobody is hurt today. It is also two code paths for the same year rules, which is how they drift.
 
 **Size.** Small and mechanical, in its own pull request after the licensing one merges: generalise `items_by_card` in `yearly_rows` over the row model, make `card_costs.get_window` call it, and keep the cost tests as the guard unchanged (`test_card_costs.py`, `test_card_costs_api.py`, `test_cost_rollover_loop.py`, the cost report tests). Use `simplify` as a step of that PR.
+
+## Compatibility shims left in the cost code by the licensing work
+
+**What.** Four shims exist only so the unchanged cost tests keep monkeypatching old names: `redact_event_costs` in `cost_field_filter.py` (no production caller, only `test_cost_field_filter.py`), the `FISCAL_YEAR_LOOKBACK` re-export with `# noqa: F401` in `card_costs.py`, the `row_fn` / `fallback_fn` hook parameters on `yearly_rows.resolve` / `editable`, and the `_row` / `_fallback_row` wrappers in `card_costs.py`.
+
+**Why it matters.** About 25 lines and a second code path for the same rules. No behaviour impact.
+
+**Size.** Small, with the "Cost year window reads one year at a time" item above: point those tests at `strip_change_keys`, `fiscal_year.FISCAL_YEAR_LOOKBACK` and `yearly_rows.row` / `fallback_row`, then delete the shims and the hook parameters.
