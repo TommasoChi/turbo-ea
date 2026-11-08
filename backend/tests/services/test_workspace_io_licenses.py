@@ -144,3 +144,44 @@ async def test_the_restore_is_counted_as_an_update_and_adds_missing_options(db):
     ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
     options = [o["key"] for o in ct.fields_schema[0]["fields"][0]["options"]]
     assert options == ["users", "installations"]
+
+
+def _cards_section(result):
+    return next(s for s in result.sections if s.sheet == "CardTypes")
+
+
+async def test_restore_on_a_type_the_bundle_also_changes_counts_once(db):
+    """The bundle updates the row (label) and the restore adds the field: one update, not two."""
+    from app.models.card_type import CardType
+    from app.services.licensing_migration import LICENSING_SECTION
+
+    user = await create_user(db, email="lic-ws5@test.com", role="admin")
+    await create_card_type(db, key="Application", label="Application")
+    raw = await build_bundle(db)
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    ct.label = "Renamed locally"
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert _cards_section(result).updated == 1
+    db.expire_all()
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    assert ct.label == "Application"
+    assert any(s["section"] == LICENSING_SECTION for s in ct.fields_schema)
+
+
+async def test_restore_counts_each_type_the_bundle_does_not_carry(db):
+    """Two licensing types missing from the bundle: each restore is its own update."""
+    from app.models.card_type import CardType
+
+    user = await create_user(db, email="lic-ws6@test.com", role="admin")
+    raw = await build_bundle(db)  # no card types in it
+    await create_card_type(db, key="Application", label="Application")
+    await create_card_type(db, key="ITComponent", label="IT Component")
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert _cards_section(result).updated == 2
+    db.expire_all()
+    for key in ("Application", "ITComponent"):
+        ct = (await db.execute(select(CardType).where(CardType.key == key))).scalar_one()
+        assert [f["key"] for s in ct.fields_schema for f in s["fields"]] == ["licensingModel"]

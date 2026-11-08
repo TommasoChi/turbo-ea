@@ -103,3 +103,73 @@ def test_rollback_declines_license_event():
     )
     assert plan["op"] == "unsupported"
     assert "edit the licenses instead" in plan["reason"]
+
+
+def test_touches_looks_at_top_level_and_attribute_sides_only():
+    keys = frozenset({"licensedUsers"})
+    touches = red._touches
+    assert touches({"changes": {"licensedUsers": {"new": 1}}}, keys) is True
+    assert touches({"changes": {"attributes": {"old": {"licensedUsers": 1}}}}, keys) is True
+    assert touches({"changes": {"attributes": {"new": {"licensedUsers": 1}}}}, keys) is True
+    assert touches({"changes": {"attributes": {"new": {"other": 1}}}}, keys) is False
+    assert touches({"changes": {"attributes": {"licensedUsers": 1}}}, keys) is False  # not a side
+    assert touches({"changes": {"attributes": {"new": 5, "old": {"x": 1}}}}, keys) is False
+    assert touches({"changes": {"attributes": "licensedUsers"}}, keys) is False
+    assert touches({"changes": ["licensedUsers"]}, keys) is False
+    assert touches({"changes": None}, keys) is False
+    assert touches({}, keys) is False
+    assert touches(None, keys) is False
+    assert touches("licensedUsers", keys) is False  # type: ignore[arg-type]
+
+
+async def test_reader_drop_keys_per_grant(db):
+    from app.services.cost_field_filter import COST_ITEMS_KEY
+
+    await create_role(db, key="only_costs", permissions={"costs.view": True})
+    await create_role(db, key="only_lic", permissions={"licenses.view": True})
+    await create_role(db, key="both", permissions={"costs.view": True, "licenses.view": True})
+    await create_role(db, key="none", permissions={"inventory.view": True})
+    users = {
+        k: await create_user(db, email=f"{k}@lic-drop.com", role=k)
+        for k in ("only_costs", "only_lic", "both", "none")
+    }
+    assert await red.reader_drop_keys(db, users["both"]) == frozenset()
+    only_costs = await red.reader_drop_keys(db, users["only_costs"])
+    assert only_costs == red.LICENSE_KEYS
+    only_lic = await red.reader_drop_keys(db, users["only_lic"])
+    assert COST_ITEMS_KEY in only_lic and not only_lic & red.LICENSE_KEYS
+    none = await red.reader_drop_keys(db, users["none"])
+    assert red.LICENSE_KEYS <= none and COST_ITEMS_KEY in none and none > only_lic
+
+
+async def test_redaction_is_decided_per_event_and_per_domain(db):
+    """A cost-only reader loses license keys, a license-only reader loses cost keys, each on
+    its own event; an event with no card is never touched."""
+    await create_card_type(db, key="Application")
+    await create_role(db, key="only_costs", permissions={"costs.view": True})
+    await create_role(db, key="only_lic", permissions={"licenses.view": True})
+    costs_user = await create_user(db, email="oc@lic-red2.com", role="only_costs")
+    lic_user = await create_user(db, email="ol@lic-red2.com", role="only_lic")
+    card = await create_card(db)
+    mixed = {
+        "changes": {
+            "licensedUsers": {"old": 1, "new": 2},
+            "costTotalAnnual": {"old": 1, "new": 2},
+            "cost_items": {"new": ["a"]},
+            "description": {"old": "a", "new": "b"},
+        }
+    }
+    events = [
+        Event(card_id=card.id, event_type="card.updated"),
+        Event(card_id=None, event_type="card.updated"),
+    ]
+    out = await red.redact_cost_events(db, costs_user, events, [mixed, mixed])
+    assert set(out[0]["changes"]) == {"costTotalAnnual", "cost_items", "description"}
+    assert out[1] == mixed
+    out = await red.redact_cost_events(db, lic_user, events, [mixed, mixed])
+    assert set(out[0]["changes"]) == {"licensedUsers", "description"}
+    assert out[1] == mixed
+    # a payload with no license key never needs the license access lookup
+    plain = {"changes": {"description": {"old": "a", "new": "b"}}}
+    out = await red.redact_cost_events(db, costs_user, events[:1], [plain])
+    assert out == [plain]
