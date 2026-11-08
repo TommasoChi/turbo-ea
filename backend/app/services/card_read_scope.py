@@ -54,11 +54,11 @@ from dataclasses import dataclass
 from typing import Literal
 
 from fastapi import HTTPException
-from sqlalchemy import ColumnElement, false, or_, select
+from sqlalchemy import UUID, ColumnElement, and_, case, cast, false, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from app.core.permissions import VIEW_PERMISSION
+from app.core.permissions import VIEW_PERMISSION, resolve_cell
 from app.models.card import Card
 from app.models.event import Event
 from app.models.stakeholder import Stakeholder
@@ -84,6 +84,7 @@ class CardReadScope:
     # (inventory-readable is a subset of module-readable, so this one set
     # serves both modes). Empty on the fast path.
     stakeholder_card_ids: frozenset[uuid.UUID]
+    subtype_denials: tuple[tuple[str, frozenset[str]], ...] = ()
 
     # ── Construction ──────────────────────────────────────────────────────
 
@@ -100,7 +101,14 @@ class CardReadScope:
         )
 
     @classmethod
-    async def load(cls, db: AsyncSession, user: User) -> CardReadScope:
+    async def load(
+        cls,
+        db: AsyncSession,
+        user: User,
+        *,
+        include_subtype_denials: bool = False,
+        include_stakeholders: bool = True,
+    ) -> CardReadScope:
         """Resolve the user's scope.
 
         Honours role impersonation (``effective_role_key``) for the role half;
@@ -118,18 +126,27 @@ class CardReadScope:
 
         denied: set[str] = set()
         allowed: set[str] = set()
+        subtype_denials: dict[str, frozenset[str]] = {}
         all_overrides = await PermissionService.load_all_type_role_permissions(db)
         for type_key, overrides in all_overrides.items():
             cell = ((overrides or {}).get(role_key) or {}).get(VIEW_PERMISSION)
-            if cell is False:
+            decision = resolve_cell(cell)
+            if decision is False:
                 denied.add(type_key)
-            elif cell is True:
+            elif decision is True:
                 allowed.add(type_key)
+            elif include_subtype_denials and isinstance(cell, dict) and cell.get("value") is False:
+                subtype_denials[type_key] = frozenset(cell["subtypes"])
 
         stakeholder_ids: frozenset[uuid.UUID] = _EMPTY
-        if denied or not base_view:
+        if include_stakeholders and (denied or subtype_denials or not base_view):
             stakeholder_ids = await _stakeholder_readable_ids(
-                db, user, base_view=base_view, denied=denied, allowed=allowed
+                db,
+                user,
+                base_view=base_view,
+                denied=denied,
+                allowed=allowed,
+                subtype_denials=subtype_denials,
             )
         return cls(
             role_key=role_key,
@@ -138,6 +155,7 @@ class CardReadScope:
             denied_types=frozenset(denied),
             allowed_types=frozenset(allowed),
             stakeholder_card_ids=stakeholder_ids,
+            subtype_denials=tuple(subtype_denials.items()),
         )
 
     # ── Questions ─────────────────────────────────────────────────────────
@@ -146,7 +164,7 @@ class CardReadScope:
         """True when this scope reads every card in ``mode`` — no filter needed."""
         if self.wildcard:
             return True
-        if self.denied_types:
+        if self.denied_types or self.subtype_denials:
             return False
         return mode == "module" or self.base_view
 
@@ -166,10 +184,18 @@ class CardReadScope:
         return mode == "module" or self.base_view
 
     def readable(
-        self, card_id: uuid.UUID | str | None, type_key: str | None, *, mode: ReadMode
+        self,
+        card_id: uuid.UUID | str | None,
+        type_key: str | None,
+        *,
+        mode: ReadMode,
+        subtype: str | None = None,
     ) -> bool:
         """Python twin of ``clause`` for rows that are already loaded."""
-        if self.type_readable(type_key, mode=mode):
+        subtype_denied = any(
+            type_key == key and subtype in subtypes for key, subtypes in self.subtype_denials
+        )
+        if self.type_readable(type_key, mode=mode) and not subtype_denied:
             return True
         if isinstance(card_id, str):
             try:
@@ -194,6 +220,14 @@ class CardReadScope:
             type_ok = card.type.in_(self.allowed_types)
         else:
             type_ok = false()
+        if self.subtype_denials:
+            type_ok = and_(
+                type_ok,
+                *(
+                    or_(card.type != key, card.subtype.is_(None), card.subtype.not_in(subtypes))
+                    for key, subtypes in self.subtype_denials
+                ),
+            )
         if self.stakeholder_card_ids:
             return or_(type_ok, card.id.in_(self.stakeholder_card_ids))
         return type_ok
@@ -215,6 +249,22 @@ class CardReadScope:
             type_ok = type_expr.in_(self.allowed_types)
         else:
             type_ok = false()
+        if self.subtype_denials:
+            # An event stores the peer UUID as text. Check its current
+            # subtype, and withhold references that cannot be resolved when
+            # the recorded type has a subtype deny.
+            canonical_uuid = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            peer_id = cast(case((id_expr.op("~*")(canonical_uuid), id_expr)), UUID)
+            peer = aliased(Card)
+            readable_peer = (
+                select(peer.id)
+                .where(peer.id == peer_id, peer.type == type_expr, *self.where(peer, mode=mode))
+                .exists()
+            )
+            type_ok = and_(
+                type_ok,
+                or_(type_expr.not_in([key for key, _ in self.subtype_denials]), readable_peer),
+            )
         branches = [type_expr.is_(None), type_ok]
         if self.stakeholder_card_ids:
             branches.append(id_expr.in_([str(i) for i in self.stakeholder_card_ids]))
@@ -239,8 +289,10 @@ class CardReadScope:
             return set()
         if self.is_unrestricted(mode=mode):
             return id_set
-        rows = await db.execute(select(Card.id, Card.type).where(Card.id.in_(id_set)))
-        return {cid for cid, ctype in rows.all() if self.readable(cid, ctype, mode=mode)}
+        rows = await db.execute(
+            select(Card.id).where(Card.id.in_(id_set), *self.where(Card, mode=mode))
+        )
+        return set(rows.scalars())
 
     async def hidden_card_ids(
         self, db: AsyncSession, ids: Iterable[uuid.UUID], *, mode: ReadMode
@@ -254,8 +306,12 @@ class CardReadScope:
         id_set = {i for i in ids if i is not None}
         if not id_set or self.is_unrestricted(mode=mode):
             return set()
-        rows = await db.execute(select(Card.id, Card.type).where(Card.id.in_(id_set)))
-        return {cid for cid, ctype in rows.all() if not self.readable(cid, ctype, mode=mode)}
+        rows = await db.execute(select(Card.id, Card.type, Card.subtype).where(Card.id.in_(id_set)))
+        return {
+            cid
+            for cid, ctype, subtype in rows
+            if not self.readable(cid, ctype, mode=mode, subtype=subtype)
+        }
 
     def keep_hidden(
         self,
@@ -284,6 +340,7 @@ async def _stakeholder_readable_ids(
     base_view: bool,
     denied: set[str],
     allowed: set[str],
+    subtype_denials: Mapping[str, frozenset[str]],
 ) -> frozenset[uuid.UUID]:
     """Cards readable through a ``card.view`` stakeholder role.
 
@@ -298,7 +355,15 @@ async def _stakeholder_readable_ids(
         .where(Stakeholder.user_id == user.id)
     )
     if base_view:
-        q = q.where(Card.type.in_(denied))
+        q = q.where(
+            or_(
+                Card.type.in_(denied),
+                *(
+                    and_(Card.type == key, Card.subtype.in_(subtypes))
+                    for key, subtypes in subtype_denials.items()
+                ),
+            )
+        )
     elif allowed:
         q = q.where(Card.type.not_in(allowed))
     out: set[uuid.UUID] = set()
@@ -327,7 +392,12 @@ def event_read_filters(read_scope: CardReadScope) -> tuple[ColumnElement[bool], 
     filters: list[ColumnElement[bool]] = [
         or_(Event.card_id.is_(None), Event.card_id.in_(select(event_card.id).where(card_ok)))
     ]
-    for type_key, id_key in (("type", "id"), ("peer_type", "peer_id")):
+    refs = [("type", "id"), ("peer_type", "peer_id")]
+    if read_scope.subtype_denials:
+        # A deleted card clears the event's FK. A relation event can still
+        # name it through the stored source/target even when its peer is visible.
+        refs.extend([("source_type", "source_id"), ("target_type", "target_id")])
+    for type_key, id_key in refs:
         clause = read_scope.ref_clause(
             Event.data[type_key].astext, Event.data[id_key].astext, mode="module"
         )

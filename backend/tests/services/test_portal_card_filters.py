@@ -12,7 +12,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import false, select
 
 from app.models.card import Card
 from app.models.tag import CardTag, Tag, TagGroup
@@ -38,6 +38,19 @@ FIELDS = [
         ],
     }
 ]
+
+
+def test_portal_cannot_filter_on_the_bo_master_marker():
+    condition = pcf.relation_subtype_condition(
+        "relAppToDataObj::dataOwnership", ["master"], relation_type_keys=["relAppToDataObj"]
+    )
+    assert condition is not None and condition.compare(false())
+    assert (
+        pcf.relation_subtype_condition(
+            "relAppToDataObj::crudRead", ["true"], relation_type_keys=["relAppToDataObj"]
+        )
+        is not None
+    )
 
 
 def _cf(**kwargs) -> dict:

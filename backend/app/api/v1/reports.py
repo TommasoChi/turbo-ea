@@ -28,6 +28,7 @@ from app.models.todo import Todo
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
 from app.schemas.licenses import LicenseReportOut
+from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
 from app.services.card_costs import COST_EVENT, COST_ITEM_TYPES, DERIVED_KEY
 from app.services.card_flags import (
     EOL_BUCKETS,
@@ -115,7 +116,7 @@ def _current_lifecycle_phase(lifecycle: dict | None) -> str | None:
 async def dashboard(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await PermissionService.require_permission(db, user, "reports.ea_dashboard")
     # Every aggregate below counts only the cards the caller may read.
-    read_scope = await CardReadScope.load(db, user)
+    read_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
     readable = read_scope.where(Card, mode="module")
     # Count by type
     type_counts = await db.execute(
@@ -599,9 +600,10 @@ async def admin_dashboard_summary(
     approval_pipeline.sort(key=lambda r: r["total"], reverse=True)
 
     # ---- Recent system activity (50 events) ------------------------------
+    activity_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
     sys_events_result = await db.execute(
         select(Event)
-        .where(*event_read_filters(await CardReadScope.load(db, user)))
+        .where(*event_read_filters(activity_scope))
         .options(selectinload(Event.user))
         .order_by(Event.created_at.desc())
         .limit(50)
@@ -621,9 +623,7 @@ async def admin_dashboard_summary(
             return sys_name_by_card_id.get(e.card_id)
         return None
 
-    sys_payloads = await scrub_event_payloads(
-        db, await CardReadScope.load(db, user), [e.data for e in sys_events_list]
-    )
+    sys_payloads = await scrub_event_payloads(db, activity_scope, [e.data for e in sys_events_list])
     sys_payloads = await redact_cost_events(db, user, sys_events_list, sys_payloads)
     recent_activity = [
         {
@@ -1183,6 +1183,13 @@ async def matrix(
         )
     ).all()
     all_schemas = {key: (schema or []) for key, schema, _, _ in rt_rows}
+    if APPLICATION_RELATION in all_schemas:
+        # The BO module projects ownership after applying its card visibility rules.
+        all_schemas[APPLICATION_RELATION] = [
+            field
+            for field in all_schemas[APPLICATION_RELATION]
+            if field.get("key") != OWNERSHIP_KEY
+        ]
     declared_keys = [
         key
         for key, _, src, tgt in rt_rows

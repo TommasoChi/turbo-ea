@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import uuid
+from typing import cast
 
-from sqlalchemy import ForeignKey, Index, Text, text
+from sqlalchemy import ForeignKey, Index, Table, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,7 +36,7 @@ Index(
     text("greatest(source_id, target_id)"),
     unique=True,
     postgresql_where=text("type = 'relDataObjectToDataObject'"),
-    _table=Relation.__table__,
+    _table=cast(Table, Relation.__table__),
 )
 Index(
     "uq_bo_master",

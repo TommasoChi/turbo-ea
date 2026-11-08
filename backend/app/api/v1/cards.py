@@ -1143,6 +1143,11 @@ async def get_card(
     card = result.scalar_one_or_none()
     if not card:
         raise HTTPException(404, "Card not found")
+    return await card_detail_response(db, user, card)
+
+
+async def card_detail_response(db: AsyncSession, user: User, card: Card) -> CardResponse:
+    """Project a loaded, authorized card for the inventory and module panels."""
     response = await _card_response_with_cost_check(db, user, card)
     # The header's provenance chip names the person beside the channel: one
     # query for both ids, and only ``display_name`` — never more of the user.
@@ -3114,13 +3119,15 @@ async def get_history(
     await _require_card_read(db, user, card_uuid)
     # A relation event names its peer; drop the ones whose peer is hidden from
     # the caller, so History does not list a card the Relations section omits.
-    read_scope = await CardReadScope.load(db, user)
+    read_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
+    if card_uuid not in await read_scope.readable_card_ids(db, {card_uuid}, mode="module"):
+        raise HTTPException(404, "Card not found")
     peer_ok = read_scope.ref_clause(
         Event.data["peer_type"].astext, Event.data["peer_id"].astext, mode="module"
     )
     q = (
         select(Event)
-        .where(Event.card_id == parse_uuid(card_id))
+        .where(Event.card_id == card_uuid)
         .where(*(() if peer_ok is None else (peer_ok,)))
         .options(selectinload(Event.user))
         .order_by(Event.created_at.desc())

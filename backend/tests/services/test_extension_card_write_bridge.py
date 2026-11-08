@@ -24,7 +24,7 @@ from app.services.extensions.data_service import ExtensionData
 from app.services.extensions.license import Entitlement, LicenseDocument
 from app.services.extensions.registry import ExtensionInfo, extension_registry
 from app.services.extensions.sdk import ExtensionDataError, ExtensionPermissionError
-from tests.conftest import create_card, create_card_type, create_relation_type
+from tests.conftest import create_card, create_card_type, create_relation, create_relation_type
 
 NOW = datetime.now(timezone.utc)
 KEY = "sample-connector"
@@ -272,6 +272,31 @@ class TestArchive:
 
 
 class TestUpsertRelation:
+    async def test_bo_marker_is_reserved_and_survives_an_sdk_crud_update(self, db, env):
+        load_registry(grants=["core.cards.write"])
+        await create_card_type(db, key="DataObject")
+        relation_type = "relAppToDataObj"
+        await create_relation_type(
+            db, key=relation_type, source_type_key="Application", target_type_key="DataObject"
+        )
+        app = await create_card(db)
+        obj = await create_card(db, card_type="DataObject")
+        link = await create_relation(
+            db,
+            type_key=relation_type,
+            source_id=app.id,
+            target_id=obj.id,
+            attributes={"dataOwnership": "master"},
+        )
+        bridge = ExtensionData(KEY)
+        args = {"type": relation_type, "source_id": str(app.id), "target_id": str(obj.id)}
+        with pytest.raises(ExtensionDataError, match="Data ownership"):
+            await bridge.upsert_relation(**args, attributes={"dataOwnership": None}, dry_run=True)
+        changed = await bridge.upsert_relation(**args, attributes={"crudRead": True})
+        assert changed.attributes == {"crudRead": True}
+        await db.refresh(link)
+        assert link.attributes == {"crudRead": True, "dataOwnership": "master"}
+
     async def test_upsert_and_idempotent_merge(self, db, env):
         load_registry(grants=["core.cards.write"])
         app = await create_card(db, card_type="Application", name="Src")

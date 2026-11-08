@@ -589,6 +589,43 @@ class TestMatrixRelationSemantics:
         attr_idx = _cell(data, e["app_a"].id, e["do_x"].id)["e"][0][2]
         assert data["attr_sets"][attr_idx] == {"usage": "user"}
 
+    async def test_matrix_does_not_expose_or_filter_the_bo_master_marker(
+        self, client, db, matrix_env
+    ):
+        e = matrix_env
+        await create_relation_type(
+            db,
+            key="relAppToDataObj",
+            source_type_key="Application",
+            target_type_key="DataObject",
+            attributes_schema=[
+                {"key": "dataOwnership", "type": "single_select"},
+                {"key": "crudRead", "type": "boolean"},
+            ],
+        )
+        await create_relation(
+            db,
+            type_key="relAppToDataObj",
+            source_id=e["app_a"].id,
+            target_id=e["do_x"].id,
+            attributes={"dataOwnership": "master", "crudRead": True},
+        )
+
+        data = await _matrix(client, e["admin"])
+        attr_idx = _cell(data, e["app_a"].id, e["do_x"].id)["e"][0][2]
+        assert data["attr_sets"][attr_idx] == {"crudRead": True}
+
+        response = await client.get(
+            "/api/v1/reports/matrix",
+            params={
+                "row_type": "Application",
+                "col_type": "DataObject",
+                "attr": "relAppToDataObj.dataOwnership:master",
+            },
+            headers=auth_headers(e["admin"]),
+        )
+        assert response.status_code == 400
+
     async def test_self_matrix_diagonal_carries_no_edges(self, client, db, env):
         """The diagonal of a same-type matrix is structure, not a relationship."""
         admin = env["admin"]

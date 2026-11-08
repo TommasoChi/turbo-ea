@@ -6499,7 +6499,7 @@ async def seed_metamodel(db: AsyncSession) -> None:
 
     # ── Seed RBAC roles ──────────────────────────────────────────────────
     existing_roles_result = await db.execute(select(Role))
-    existing_roles = {r.key for r in existing_roles_result.scalars().all()}
+    existing_roles = {r.key: r for r in existing_roles_result.scalars()}
 
     seed_roles = [
         {
@@ -6545,8 +6545,13 @@ async def seed_metamodel(db: AsyncSession) -> None:
     ]
 
     for r in seed_roles:
-        if r["key"] not in existing_roles:
+        existing = existing_roles.get(r["key"])
+        if existing is None:
             db.add(Role(**r))
+        elif r["permissions"].get("boRelationship.view") and "boRelationship.view" not in (
+            existing.permissions or {}
+        ):
+            existing.permissions = {**(existing.permissions or {}), "boRelationship.view": True}
 
     # ── Seed stakeholder role definitions ──────────────────────────────────
     # Flush first so that any newly-inserted card_types rows are

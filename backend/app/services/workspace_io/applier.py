@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import exists, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import (
@@ -49,7 +50,9 @@ from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
 from app.services import card_reference, card_type_categories
+from app.services.bo_relationship_constants import APPLICATION_RELATION, MASTER, OWNERSHIP_KEY
 from app.services.card_resolver import CardResolver
+from app.services.card_write_service import lock_bo_master
 from app.services.email_backends.runtime import apply_email_settings_to_runtime
 from app.services.licensing_migration import move_model_field
 from app.services.relation_orientation import oriented
@@ -1344,11 +1347,7 @@ async def _apply_relations(
             type_keys.add(r["target_type"])
     resolver = await CardResolver.load(db, type_keys)
     rt_by_key = {rt.key: rt for rt in (await db.execute(select(RelationType))).scalars().all()}
-    existing = {
-        (rel.type, rel.source_id, rel.target_id): rel.id
-        for rel in (await db.execute(select(Relation))).scalars().all()
-    }
-
+    resolved_rows = []
     for row in rows:
         data = _coerce(row, exp.RELATION_COLUMNS, exp.RELATION_JSON)
         resolved = _relation_key({**row, **data}, ids, resolver, rt_by_key)
@@ -1359,22 +1358,48 @@ async def _apply_relations(
                 f"({data.get('source_ref')!r} -> {data.get('target_ref')!r})"
             )
             continue
+        resolved_rows.append((row, data, resolved))
+
+    bo_ids = {target for _, _, (key, _, target) in resolved_rows if key == APPLICATION_RELATION}
+    for bo_id in sorted(bo_ids):
+        await lock_bo_master(db, bo_id)
+    existing = {
+        (rel.type, rel.source_id, rel.target_id): rel.id
+        for rel in (await db.execute(select(Relation))).scalars().all()
+    }
+    for row, data, resolved in resolved_rows:
         rtype, source_id, target_id = resolved
         key = (rtype, source_id, target_id)
         if key in existing:
             ids.record(rm.RELATIONS, row.get(schema.SOURCE_ID_COLUMN), existing[key])
             sr.skip("already_present")
             continue
-        relation = Relation(
+        attributes = data.get("attributes") or {}
+        values = dict(
             id=uuid.uuid4(),
             type=rtype,
             source_id=source_id,
             target_id=target_id,
             description=data.get("description"),
-            attributes=data.get("attributes") or {},
+            attributes=attributes,
         )
-        db.add(relation)
-        existing[key] = relation.id
-        ids.record(rm.RELATIONS, row.get(schema.SOURCE_ID_COLUMN), relation.id)
+        if rtype == APPLICATION_RELATION and attributes.get(OWNERSHIP_KEY) == MASTER:
+            # Keep the target's existing Master and import the incoming CRUD.
+            inserted = await db.scalar(
+                insert(Relation).values(**values).on_conflict_do_nothing().returning(Relation.id)
+            )
+            if inserted is None:
+                values["attributes"] = {
+                    key: value for key, value in attributes.items() if key != OWNERSHIP_KEY
+                }
+                db.add(Relation(**values))
+                tally = rm.RewriteTally()
+                tally.bump("bo_master_conflict")
+                tally.note("Imported the Application link and kept the target's existing Master")
+                sr.note_references(tally)
+        else:
+            db.add(Relation(**values))
+        existing[key] = values["id"]
+        ids.record(rm.RELATIONS, row.get(schema.SOURCE_ID_COLUMN), values["id"])
         sr.created += 1
     await db.flush()

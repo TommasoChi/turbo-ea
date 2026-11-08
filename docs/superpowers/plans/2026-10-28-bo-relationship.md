@@ -168,6 +168,8 @@ git commit -m "feat(bo-relationship): metamodel migration — fields, relation t
 
 ## Task 2: Read the saved graph, assign Master and persist the shared diagram
 
+**Implemented contract** Layout Save accepts inventory items identified by `kind`, `id` and a per-item `revision`. It returns stale items in `inventory_conflicts` while preserving disjoint changes. Task 8 supplies those revisions and extends acceptance to authorized hard-deletion tombstones.
+
 **Files:**
 - Create: `backend/app/api/v1/bo_relationship.py`
 - Modify `backend/app/api/v1/router.py` and `backend/app/core/permissions.py`. Add the typed schemas and service listed in File Structure.
@@ -184,7 +186,7 @@ git commit -m "feat(bo-relationship): metamodel migration — fields, relation t
 - `GET /api/v1/bo-relationship/objects/{object_id}/detail` (`boRelationship.view`) returns a BO-scoped card detail and effective panel permissions. Reuse the existing card response projections and redactions. Return 404 for a hidden BO and combine effective write actions with BO edit.
 - `GET /api/v1/bo-relationship/applications` (`boRelationship.edit`) accepts `search`, `page` and `page_size`. Use the existing ranked, paged search and return only readable Application picker records in `{items, total}`. Apply module scope on the server. Keep the default inventory search semantics for other callers.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # backend/tests/api/test_bo_relationship_api.py
@@ -249,27 +251,27 @@ async def test_saving_the_layout_merges_into_existing_positions_rather_than_repl
     assert resp.json()["positions"] == {str(a.id): {"x": 1, "y": 1}, str(b.id): {"x": 2, "y": 2}}
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `cd backend && PYTHONUTF8=1 POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_USER=turboea POSTGRES_PASSWORD=turboea TEST_POSTGRES_DB=turboea_test venv/Scripts/python.exe -m pytest tests/api/test_bo_relationship_api.py -v`
 Expected: FAIL — `404 Not Found` on every route.
 
-- [ ] **Step 3: Implement the router**
+- [x] **Step 3: Implement the router**
 
 Use `CardReadScope` for both card types and validate inputs in the schemas. Reserve the Master marker for the ownership operation. Preserve it when generic writers replace or merge CRUD attributes, and reject attempts to set it through those writers. Cover a valid CRUD-only PATCH on a Master link by an editor who lacks the Master capability. The CRUD change succeeds and the server retains the Master marker. Enforce one Master across API, import and restore. Test transfer, clear, link removal and two concurrent assignments. For the same partial editor, seed visible, hidden and absent Master variants and assert the same disabled capability and 403 from the Task 2 Master endpoint. Include a role with an Application subtype View deny. Verify the card detail and picker search with and without inventory grants and confirm hidden cards are omitted. For layout, test malformed positions, hidden and wrong-type IDs, simultaneous disjoint updates, and two editors saving different coordinates for the same node from the same initial revision. The last committed coordinate pair wins even if another operation in the same BO Save remains pending. A failed position write or a stale automatic proposal cannot overwrite it. Exercise two visual removal payloads from the same revision and assert a shared drawing with neither edge and both inventory relations still present. Task 6 adds the outgoing Sync check.
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: same command as Step 2.
 Expected: PASS.
 
-- [ ] **Step 5: Lint & regenerate OpenAPI**
+- [x] **Step 5: Lint & regenerate OpenAPI**
 
 Run: `cd backend && venv/Scripts/python.exe -m ruff check app/api/v1/bo_relationship.py tests/api/test_bo_relationship_api.py && venv/Scripts/python.exe -m ruff format app/api/v1/bo_relationship.py tests/api/test_bo_relationship_api.py`
 Then: `cd .. && PYTHONUTF8=1 backend/venv/Scripts/python.exe scripts/dump_openapi.py`
-Expected: ruff clean; the two new paths present in the diff.
+Expected: Ruff clean and all five BO Relationship paths present in the diff.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/app/api/v1/bo_relationship.py backend/app/api/v1/router.py backend/app/core/permissions.py backend/app/schemas/bo_relationship.py backend/app/services/bo_relationship.py backend/tests/api/test_bo_relationship_api.py docs/api/openapi.json

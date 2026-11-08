@@ -25,8 +25,9 @@ from app.schemas.relation import (
     RelationUpdate,
 )
 from app.services import card_write_service
+from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
 from app.services.calculation_engine import run_calculations_for_card
-from app.services.card_read_scope import CardReadScope, require_card_readable
+from app.services.card_read_scope import CardReadScope
 from app.services.card_resolver import CardResolver
 from app.services.cost_field_filter import cost_field_keys_from_relation_schema
 from app.services.data_quality import calc_data_quality
@@ -78,6 +79,8 @@ def _rel_to_response(
             subtype=r.target.subtype,
         )
     attrs = r.attributes
+    if r.type == APPLICATION_RELATION:
+        strip_cost_keys = strip_cost_keys | {OWNERSHIP_KEY}
     if strip_cost_keys and attrs:
         attrs = {k: v for k, v in attrs.items() if k not in strip_cost_keys}
     return RelationResponse(
@@ -131,7 +134,7 @@ async def _relation_cost_redaction(
 
 async def _relation_readable(db: AsyncSession, user: User, rel: Relation) -> bool:
     """Both ends of ``rel`` are readable by ``user`` (module mode)."""
-    read_scope = await CardReadScope.load(db, user)
+    read_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
     readable = await read_scope.readable_card_ids(db, {rel.source_id, rel.target_id}, mode="module")
     return rel.source_id in readable and rel.target_id in readable
 
@@ -185,7 +188,7 @@ async def list_relations(
     # Module mode: this route is ungated, so only an explicit card-type View
     # deny subtracts. Both ends are filtered — a relation to a card the caller
     # may not read does not exist for them.
-    read_scope = await CardReadScope.load(db, user)
+    read_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
 
     q = (
         select(
@@ -285,8 +288,13 @@ async def create_relation(
 ):
     await PermissionService.require_permission(db, user, "relations.manage")
     # An end hidden from the caller does not exist for them.
-    await require_card_readable(db, user, uuid.UUID(body.source_id), mode="module")
-    await require_card_readable(db, user, uuid.UUID(body.target_id), mode="module")
+    scope = await CardReadScope.load(db, user, include_subtype_denials=True)
+    ends = {uuid.UUID(body.source_id), uuid.UUID(body.target_id)}
+    readable = await db.scalars(
+        select(Card.id).where(Card.id.in_(ends), *scope.where(Card, mode="module"))
+    )
+    if set(readable) != ends:
+        raise HTTPException(404, "Card not found")
     # Idempotent upsert on (type, source, target) — discussion #905 — via the
     # shared card write service, so every write path merges instead of
     # duplicating.
@@ -324,6 +332,20 @@ async def update_relation(
     if not rel or not await _relation_readable(db, user, rel):
         raise HTTPException(404, "Relation not found")
     update_data = body.model_dump(exclude_unset=True)
+    if "attributes" in update_data and rel.type == APPLICATION_RELATION:
+        await card_write_service.lock_bo_master(db, rel.target_id)
+        # Read the marker under the same row lock a Master transfer takes.
+        rel = await db.scalar(
+            select(Relation)
+            .where(Relation.id == rel.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if rel is None:
+            raise HTTPException(404, "Relation not found")
+        update_data["attributes"] = card_write_service.relation_attributes_for_write(
+            rel.type, update_data["attributes"], rel.attributes
+        )
     # If the user lacks cost access on the source card, preserve any existing
     # cost-typed values on the relation. PATCH replaces `attributes` wholesale,
     # so we merge old cost values back into the incoming payload to prevent a
@@ -492,7 +514,7 @@ async def bulk_relations(
         list(body.operations),
         actor_id=user.id,
         dry_run=body.dry_run,
-        read_scope=await CardReadScope.load(db, user),
+        read_scope=await CardReadScope.load(db, user, include_subtype_denials=True),
     )
 
     if body.dry_run:
@@ -593,6 +615,26 @@ async def apply_relation_operations(
         type_keys.add(rt.target_type_key)
     resolver = await CardResolver.load(db, type_keys, read_scope=read_scope, mode="module")
     check_ids = read_scope is not None and not read_scope.is_unrestricted(mode="module")
+    # Match the BO Master transfer's lock order before taking any relation
+    # row locks. Resolve once and keep the normal per-op error handling.
+    resolved_app_links: dict[int, tuple[uuid.UUID, uuid.UUID]] = {}
+    app_rt = rt_by_key.get(APPLICATION_RELATION)
+    if app_rt is not None:
+        for index, op in enumerate(operations):
+            if op.type != APPLICATION_RELATION:
+                continue
+            try:
+                src = _resolve_ref_input(op.source, app_rt, endpoint="source", resolver=resolver)
+                tgt = _resolve_ref_input(op.target, app_rt, endpoint="target", resolver=resolver)
+            except HTTPException:
+                continue
+            if read_scope is not None and {src, tgt} != await read_scope.readable_card_ids(
+                db, {src, tgt}, mode="module"
+            ):
+                continue
+            resolved_app_links[index] = await orient_endpoints(db, app_rt, src, tgt)
+        for object_id in sorted({target for _, target in resolved_app_links.values()}):
+            await card_write_service.lock_bo_master(db, object_id)
 
     results: list[RelationBulkResult] = []
     upserted = 0
@@ -601,7 +643,7 @@ async def apply_relation_operations(
     impacted_cards: set[uuid.UUID] = set()
     events_to_emit: list[_PendingEvent] = []
 
-    for op in operations:
+    for index, op in enumerate(operations):
         # Per-op savepoint so a single failing op (e.g. a relation whose
         # source/target card no longer exists — a foreign-key violation at
         # flush time) rolls back only itself instead of poisoning the whole
@@ -632,7 +674,11 @@ async def apply_relation_operations(
             # Name refs are type-checked above; id refs are not, so turn a pair
             # sent the other way round before the lookup, the delete and the
             # cardinality guards all key on it (#1140).
-            source_id, target_id = await orient_endpoints(db, rt_def, source_id, target_id)
+            resolved_app_link = resolved_app_links.get(index)
+            if resolved_app_link is None:
+                source_id, target_id = await orient_endpoints(db, rt_def, source_id, target_id)
+            else:
+                source_id, target_id = resolved_app_link
 
             rel = await card_write_service.find_relation(db, op.type, source_id, target_id)
 

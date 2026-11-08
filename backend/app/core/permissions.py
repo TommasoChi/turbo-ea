@@ -27,6 +27,13 @@ APP_PERMISSIONS: dict[str, dict] = {
             "relations.manage": "Create, edit, and delete relations",
         },
     },
+    "boRelationship": {
+        "label": "BO Relationship",
+        "permissions": {
+            "boRelationship.view": "View the Business Object relationship diagram",
+            "boRelationship.edit": "Edit the shared Business Object relationship diagram",
+        },
+    },
     "stakeholders": {
         "label": "Stakeholders",
         "permissions": {
@@ -649,6 +656,8 @@ def _archimate_diagram_defaults(view: bool, manage: bool, publish: bool) -> dict
 ADMIN_PERMISSIONS: dict[str, bool] = {"*": True}
 
 BPM_ADMIN_PERMISSIONS: dict[str, bool] = {
+    "boRelationship.view": True,
+    "boRelationship.edit": False,
     "inventory.view": True,
     "inventory.create": True,
     "inventory.edit": True,
@@ -737,6 +746,8 @@ BPM_ADMIN_PERMISSIONS: dict[str, bool] = {
 }
 
 MEMBER_PERMISSIONS: dict[str, bool] = {
+    "boRelationship.view": True,
+    "boRelationship.edit": False,
     "inventory.view": True,
     "inventory.create": True,
     "inventory.edit": True,
@@ -823,6 +834,8 @@ MEMBER_PERMISSIONS: dict[str, bool] = {
 }
 
 VIEWER_PERMISSIONS: dict[str, bool] = {
+    "boRelationship.view": True,
+    "boRelationship.edit": False,
     "inventory.view": True,
     "inventory.create": False,
     "inventory.edit": False,

@@ -30,6 +30,7 @@ from app.services.workspace_io import (
 )
 from app.services.workspace_io import bundle as bundle_io
 from app.services.workspace_io import exporter as exp
+from app.services.workspace_io.applier import apply_selected
 from tests.conftest import (
     create_card,
     create_card_type,
@@ -38,6 +39,57 @@ from tests.conftest import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_import_keeps_target_master_and_imports_incoming_crud(db):
+    from tests.conftest import create_relation, create_relation_type
+
+    relation_type = "relAppToDataObj"
+    actor = await create_user(db)
+    await create_card_type(db, key="DataObject")
+    await create_card_type(db, key="Application")
+    await create_relation_type(
+        db, key=relation_type, source_type_key="Application", target_type_key="DataObject"
+    )
+    target = await create_card(db, card_type="DataObject", name="Customer")
+    master = await create_card(db, name="Current Master")
+    incoming = await create_card(db, name="New Link")
+    await create_relation(
+        db,
+        type_key=relation_type,
+        source_id=master.id,
+        target_id=target.id,
+        attributes={"dataOwnership": "master"},
+    )
+    bundle = bundle_io.WorkspaceBundle(
+        manifest={},
+        sheets={
+            schema.SHEET_RELATIONS: [
+                {
+                    "type": relation_type,
+                    "source_type": "Application",
+                    "source_ref": incoming.name,
+                    "target_type": "DataObject",
+                    "target_ref": target.name,
+                    "attributes": {"dataOwnership": "master", "update": True},
+                }
+            ]
+        },
+    )
+    preview = await apply_selected(db, bundle, actor, sheets={schema.SHEET_RELATIONS}, dry_run=True)
+    assert preview.sections[0].references == {"bo_master_conflict": 1}
+    assert await db.scalar(select(Relation).where(Relation.source_id == incoming.id)) is None
+    result = await apply_selected(db, bundle, actor, sheets={schema.SHEET_RELATIONS}, dry_run=False)
+    assert result.sections[0].created == 1
+    assert result.sections[0].references == {"bo_master_conflict": 1}
+    relations = await db.scalars(select(Relation).where(Relation.target_id == target.id))
+    assert {rel.source_id: rel.attributes for rel in relations} == {
+        master.id: {"dataOwnership": "master"},
+        incoming.id: {"update": True},
+    }
+    replay = await apply_selected(db, bundle, actor, sheets={schema.SHEET_RELATIONS}, dry_run=False)
+    assert replay.sections[0].skipped == 1
+    assert replay.sections[0].references == {}
 
 
 def _make_bundle(sheets: dict[str, tuple[tuple[str, ...], frozenset[str], list[dict]]]) -> bytes:

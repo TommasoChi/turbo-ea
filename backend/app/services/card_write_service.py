@@ -40,7 +40,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -49,6 +49,7 @@ from app.models.ppm_cost_line import PpmBudgetLine, PpmCostLine
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.services import card_approval, card_lifecycle, card_reference, notification_service
+from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_costs import COST_ITEM_TYPES, DERIVED_KEY, recompute_derived
 from app.services.card_uniqueness import check_sibling_name_unique
@@ -1402,15 +1403,33 @@ async def find_relation(
 
     The ends must already be in the relation type's direction.
     """
-    return (
-        await db.execute(
-            select(Relation).where(
-                Relation.type == type_key,
-                Relation.source_id == source_id,
-                Relation.target_id == target_id,
-            )
-        )
-    ).scalar_one_or_none()
+    stmt = select(Relation).where(
+        Relation.type == type_key, Relation.source_id == source_id, Relation.target_id == target_id
+    )
+    if type_key == APPLICATION_RELATION:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
+    return await db.scalar(stmt)
+
+
+async def lock_bo_master(db: AsyncSession, object_id: uuid.UUID) -> None:
+    """Serialize decisions and edits on Application links for one BO."""
+    # Independent of card rows so relation writers can retain their lock
+    # order. A key collision only serializes two unrelated BOs.
+    lock_key = int.from_bytes(object_id.bytes[:8], "big", signed=True)
+    await db.execute(select(func.pg_advisory_xact_lock(lock_key)))
+
+
+def relation_attributes_for_write(
+    type_key: str, attributes: dict | None, previous: dict | None = None
+) -> dict | None:
+    """Reject generic ownership writes and retain the marker on replacement."""
+    if type_key != APPLICATION_RELATION:
+        return attributes
+    if attributes is not None and OWNERSHIP_KEY in attributes:
+        raise HTTPException(422, "Data ownership must be set through BO Relationship")
+    if previous is not None and OWNERSHIP_KEY in previous:
+        return {**(attributes or {}), OWNERSHIP_KEY: previous[OWNERSHIP_KEY]}
+    return attributes
 
 
 def add_relation(
@@ -1427,7 +1446,7 @@ def add_relation(
         type=type_key,
         source_id=source_id,
         target_id=target_id,
-        attributes=attributes or {},
+        attributes=relation_attributes_for_write(type_key, attributes) or {},
         description=description,
     )
     db.add(rel)
@@ -1443,9 +1462,11 @@ def merge_relation_fields(
     Returns the fields whose value changed, in a fixed order.
     """
     changed: list[str] = []
-    if attributes is not None and attributes != (rel.attributes or {}):
-        rel.attributes = attributes
-        changed.append("attributes")
+    if attributes is not None:
+        replacement = relation_attributes_for_write(rel.type, attributes, rel.attributes)
+        if replacement != (rel.attributes or {}):
+            rel.attributes = replacement
+            changed.append("attributes")
     if description is not None and description != rel.description:
         rel.description = description
         changed.append("description")
@@ -1473,6 +1494,8 @@ async def upsert_relation(
     (``relation_orientation``), so a request sent the other way round merges
     into the existing row instead of forking a backwards one (#1140)."""
     source_id, target_id = await orient_endpoints(db, type_key, source_id, target_id)
+    if type_key == APPLICATION_RELATION:
+        await lock_bo_master(db, target_id)
     rel = await find_relation(db, type_key, source_id, target_id)
     reused = rel is not None
     changed: list[str] = []
