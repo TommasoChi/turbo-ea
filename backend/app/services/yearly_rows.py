@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, TypeVar, cast
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -24,27 +24,35 @@ from app.services.fiscal_year import (
 
 WINDOW_PAST = 4  # the card section shows current-4 .. current+1
 
+T = TypeVar("T")
 Carry = Callable[[dict, int], dict]
 # Lookups a caller may substitute (card_costs keeps its own ``_row`` / ``_fallback_row`` names).
 RowFn = Callable[..., Awaitable[Any]]
 
 
-async def row(db: AsyncSession, model, card_id: uuid.UUID, fy: int, lock: bool = False):
-    stmt = select(model).where(model.card_id == card_id, model.fiscal_year == fy)
+async def row(
+    db: AsyncSession, model: type[T], card_id: uuid.UUID, fy: int, lock: bool = False
+) -> T | None:
+    m: Any = model
+    stmt = select(m).where(m.card_id == card_id, m.fiscal_year == fy)
     if lock:
         stmt = stmt.with_for_update().execution_options(populate_existing=True)
-    return (await db.execute(stmt)).scalar_one_or_none()
+    return cast("T | None", (await db.execute(stmt)).scalar_one_or_none())
 
 
-async def fallback_row(db: AsyncSession, model, card_id: uuid.UUID, fy: int):
-    return (
-        await db.execute(
-            select(model)
-            .where(model.card_id == card_id, model.fiscal_year < fy)
-            .order_by(model.fiscal_year.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+async def fallback_row(db: AsyncSession, model: type[T], card_id: uuid.UUID, fy: int) -> T | None:
+    m: Any = model
+    return cast(
+        "T | None",
+        (
+            await db.execute(
+                select(m)
+                .where(m.card_id == card_id, m.fiscal_year < fy)
+                .order_by(m.fiscal_year.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none(),
+    )
 
 
 def resolve_year(
@@ -96,7 +104,7 @@ def window_years(cur: int) -> range:
 
 async def editable(
     db: AsyncSession,
-    model,
+    model: type[T],
     card_id: uuid.UUID,
     fy: int,
     start_month: int,
@@ -104,7 +112,7 @@ async def editable(
     *,
     row_fn: RowFn | None = None,
     fallback_fn: RowFn | None = None,
-):
+) -> T:
     """The year's row, locked FOR UPDATE; created (fallback set materialised) if missing.
 
     The insert is ON CONFLICT DO NOTHING and the row is re-selected FOR UPDATE, so the
@@ -128,4 +136,4 @@ async def editable(
         )
         r = await locked()
     assert r is not None
-    return r
+    return cast("T", r)

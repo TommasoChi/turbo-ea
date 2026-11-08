@@ -17,9 +17,10 @@ import math
 import uuid
 import zipfile
 from dataclasses import dataclass, field
+from typing import Any
 
 import openpyxl
-from sqlalchemy import select
+from sqlalchemy import Row, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -193,7 +194,7 @@ async def plan_import(db: AsyncSession, user: User, rows: list[ImportRow]) -> Im
             )
         )
     ).all()
-    by_name: dict[str, list] = {}
+    by_name: dict[str, list[Row[Any]]] = {}
     for card in found:
         by_name.setdefault(card.name.strip().casefold(), []).append(card)
     catalogue = await license_types.list_items(db)
@@ -205,7 +206,7 @@ async def plan_import(db: AsyncSession, user: User, rows: list[ImportRow]) -> Im
         plan.skipped.append(RowIssue(r.row, r.component, reason, detail))
 
     # 1. who and where: the cell each row names
-    resolved: list[tuple[ImportRow, object, int, str, str]] = []
+    resolved: list[tuple[ImportRow, Row[Any], int, str, str]] = []
     for r in rows:
         hits = by_name.get(r.component.strip().casefold(), [])
         if not hits:
