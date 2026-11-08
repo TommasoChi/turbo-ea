@@ -612,6 +612,19 @@ git commit -m "feat(bo-relationship): menu entry under Application & Data, permi
 - Load scoped Application groups and facet flags with the snapshot and compare live inventory separately. Keep the Application list in the side panel and select Applications from the diagram's link action.
 - Save position deltas and test concurrent saves. Use stable draft IDs for lost-response retries.
 
+## Agent assignments
+
+| Role | Model | Reasoning effort |
+| --- | --- | --- |
+| Development | GPT-6 Terra | `medium` |
+| Save and Sync | GPT-6.1 Sol | `medium` |
+| Integration testing | GPT-6 Terra | `medium` |
+| `simplify` | GPT-6 Sol | `medium` |
+| `ponytail-review` | GPT-6.1 Sol | `medium` |
+| `security-review` | GPT-6 Astra | `medium` |
+
+Assign integration testing to a fresh agent that derives its cases from the spec. Use a fresh agent for each review pass. Run the tests, apply `simplify`, rerun the affected tests, then run `ponytail-review` followed by `security-review`. Check that each requested model is available before assigning its agent.
+
 ## Review before execution
 
 - Verify the Task 10 conflict handling across import, updates and restores. Keep the approved shapes, indicators, legend and filters in the visual acceptance review.
