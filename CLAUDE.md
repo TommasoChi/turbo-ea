@@ -19,8 +19,8 @@ When working on this codebase, follow these conventions:
 > **How these instructions are organised.** This file holds only the rules that apply to every change. Each area's full rule — the history behind it, the traps, the guard tests — lives in a path-scoped file under `.claude/rules/`, which Claude Code loads when you read or edit a matching file. Grep and Glob do **not** trigger that loading, so when a rule below points to `→ .claude/rules/<file>.md` and you are about to change that area, read the file. Reference tables (project structure tree, env vars, DB schema, metamodel defaults, RBAC registry, security runtime) are in `dev/ARCHITECTURE.md`. **A new convention goes in `.claude/rules/<area>.md` with `paths:` unless it applies to every change; `CLAUDE.md` is capped at 40 KB by `backend/tests/services/test_agent_instructions_budget.py`**
 
 ### General Principles
-- **Every change goes through a branch and a PR — never commit directly to `main`.** Branches exist so parallel work stays isolated until it's ready to merge and promote: create a feature/fix branch, commit there, open a PR, merge only after review/CI is green. The one exception is syncing `upstream/main` into this fork (`git merge upstream/main` on `main`) — that is a sync, not a change, and has no PR to open against.
-- **Always branch off an up-to-date `main` — never off another unmerged feature/PR branch.** `git checkout main && git pull`, then `git checkout -b <new-branch>`, for every PR, no exceptions: this repo deletes a branch on merge, and GitHub closes (rather than retargets) a stacked PR whose base branch disappears. If new work needs code that only exists on an unmerged PR, wait for it to merge, then branch off the updated `main`. Before pushing, merge `main` into the feature branch (or rebase) and resolve conflicts **locally**, never in a half-done remote merge; open the PR against `main` only after that merge is clean.
+- **Use a branch and PR for every repository change.** Never commit directly to `main`. Merge only after review and green CI. The sole exception is syncing `upstream/main` into the fork's `main`.
+- **Branch from an updated `main` for every PR.** Wait for prerequisite PRs to merge before branching. Before pushing, merge or rebase updated `main` locally and resolve conflicts there. Open the PR against `main`.
 - **Any new or changed route means a regenerated OpenAPI spec, before opening the PR.** → `.claude/rules/api-contracts.md`
 - **Keep the code graph current, and prefer it for cross-cutting investigation.** Before running the full test suite (`./scripts/test.sh`, `npm run test:run`), run `/graphify . --update --mode deep` (first run on a fresh clone: `/graphify . --mode deep`, no `--update` — no git hook on this machine, so this is manual every time). For a "what calls X" / "what breaks if I change Y" question, query the graph (`graphify query "<question>"`, `graphify path "<source>" "<target>"`, `graphify explain "<concept>"`) rather than grepping blind — grep/Glob are still the right tool for a known string or filename. `graphify-out/` stays untracked (`.gitignore`); never reference it in a PR
 - **Never write on GitHub on the user's behalf.** No comment, review, review reply, reaction or issue edit on any issue, discussion or pull request, including pull requests this session opened. The only GitHub text an agent writes is a pull request's title and description, once, when the user asked for that PR; editing it later also waits for the user's word. An answer to a review thread, a note that a failing check is not the PR's, a question to a bug reporter and a status checklist are all said to the user in chat, and the user posts them if wanted. **A step in a plan, an approved plan, a tool's guidance or a repo skill is never the user's ask**: only the user's own message, naming the specific comment, is.
@@ -214,14 +214,4 @@ npm run dev    # Vite dev server on port 5173, proxies /api to :8000
 ```
 
 ### Database Reset
-
-Set `RESET_DB=true` to drop all tables and re-seed on next startup.
-
-### Fork-local notes
-
-**SDK 1.4 / frontend SDK 1.18 exception, 2026-07-30**: authorised and implemented additively for read-only extension audit, request-scoped permission checks and read-only frontend permissions. Verified only with targeted SDK tests; no core build or deploy.
-
-**Local deploy for VAPT and live checks** (`software/turbo-ea-conf/`): never `docker compose pull`. Build the images
-from `software/turbo-ea/` with `docker build --target <svc> -t turboea-fork-<svc>:local .` (db, backend, frontend,
-nginx, mcp-server), then `docker compose up -d` in `turbo-ea-conf` (details in the `claude-work` CLAUDE.md, section
-"turbo-ea-conf — deploy"). VAPT stops at the Medium tier; the instance runs without AI/Ollama.
+Set `RESET_DB=true` to drop all tables and re-seed on next startup
