@@ -254,6 +254,36 @@ Das Sankey übernimmt dieselben Filter wie die Treemap: Kartentyp, Kartenauswahl
 
 Die Vollbild-Schaltfläche an der Treemap und am Sankey lässt das Diagramm in Breite und Höhe den ganzen Bildschirm ausfüllen, ohne es zu verzerren.
 
+## Lizenzbericht
+
+![Lizenzbericht](../assets/img/en/103_report_licensing.png)
+
+Der **Lizenzbericht** (**Berichte → Lizenzierung**) vergleicht für jede Anwendung oder IT-Komponente die vertraglich vorhandenen mit den tatsächlich genutzten Lizenzen und meldet eine Überschreitung. Er erfordert die Berechtigung `licenses.view`. Die Daten werden im [Lizenzabschnitt](card-details.md#lizenzabschnitt-anwendung-und-it-komponente) jeder Karte erfasst oder aus Excel importiert.
+
+Die Symbolleiste wählt den **Kartentyp** (Anwendung oder IT-Komponente, jeweils einen), die **Kennzahl** (**Benutzer** oder **Installationen**), den **Lizenztyp** (alle oder ein Eintrag des Katalogs), die **Gruppierung**, das **Geschäftsjahr** und den Kartenumfang. Es werden nur Karten aufgelistet, deren Feld **Lizenzmodell** die gewählte Kennzahl enthält. Vier Kacheln oben zählen die Karten, die im gewählten Jahr **Konform**, **Nahe am Limit**, **Überlizenziert** sind oder **Keine Ist-Daten** haben.
+
+**Trend** — Über der Ansicht zeigt ein Diagramm lizenzierte gegenüber tatsächlichen Mengen für das aktuelle Jahr, die vier davor und das **Forecast**-Jahr (nur lizenziert), nach Lizenztyp gestapelt. Es folgt dem Lizenztypfilter, dem Umfang und jedem Drilldown.
+
+### Ansichten
+
+| Ansicht | Was sie zeigt |
+|---|---|
+| **Auslastung** | Ein horizontaler Balken je Karte: Ist geteilt durch Lizenziert, höchste zuerst. Grün unter 80 %, orange von 80 % bis 100 %, rot über 100 %, mit Referenzlinien bei 80 % und 100 %. Eine Karte ohne Ist-Daten ist ein grauer Balken bei null. |
+| **Nach Lizenztyp** | Gruppierte Balken von Lizenziert gegenüber Ist für jeden Lizenztyp im gewählten Jahr. Ohne gewählte Karte zeigt sie die Summen des Umfangs. Die Auswahl **Karte** schränkt auf eine Anwendung oder IT-Komponente ein; bei einer **Plattform** werden die mit ihr verknüpften Anwendungen und IT-Komponenten summiert, jede nur einmal gezählt. |
+| **Tabelle** | Eine Zeile je Karte mit Lizenziert, Ist und % für jeden Lizenztyp, den Summen und dem Status. Das Menü **Spalten** fügt Kartenfelder hinzu. Download nach Excel oder Drucken wie beim Kostenbericht. |
+
+**Status.** Jeder Lizenztyp wird für sich beurteilt, ohne Ausgleich zwischen den Typen: Er ist **überlizenziert**, wenn Ist über Lizenziert liegt, und **nahe am Limit** ab 80 % der Lizenzen. Eine Karte erhält ihren schlechtesten Status. Eine Karte ohne Ist-Menge für die gewählte Kennzahl hat **Keine Ist-Daten**. Der Balken einer Karte zeigt ihren schlechtesten Lizenztyp. Das Forecast-Jahr hat keinen Status.
+
+**Gesten** — Ein **Linksklick** auf eine Karte öffnet ihr Seitenpanel. Ein **Rechtsklick** auf eine Karte (oder auf eine Gruppe, wenn die Gruppierung aktiv ist) führt per Drilldown hinein, mit Brotkrumennavigation und einer Schaltfläche **Zurück**; der Trend folgt dem Drilldown. Die Ansicht Nach Lizenztyp hat keinen Drilldown.
+
+### Import
+
+**Importieren** in der Symbolleiste lädt Lizenzmengen aus einer Excel-Datei (erfordert `licenses.edit`). Das erste Blatt hat eine Zeile je Menge, mit den Spalten **Component**, **Metric**, **License type**, **Year**, **Licensed** und **Actual**. Die Komponente wird über den exakten Namen zugeordnet (ohne Beachtung der Groß-/Kleinschreibung); der Lizenztyp über seinen Schlüssel oder englischen Namen; das Jahr ist das Geschäftsjahr, wie es in der Symbolleiste benannt ist (zum Beispiel 2026). Eine leere Zelle lässt den gespeicherten Wert unverändert, und für das Forecast-Jahr kann keine Ist-Menge gesetzt werden.
+
+Der Dialog zeigt zuerst eine Vorschau: die Zeilen, die übernommen werden, und die übersprungenen Zeilen, jeweils mit Grund (Karte nicht gefunden, unbekannter Lizenztyp, Jahr außerhalb des Zeitraums, keine ganze Zahl, doppelte Zelle). Es wird nichts geschrieben, bevor Sie auf **Übernehmen** klicken. Der Import legt nie einen Lizenztyp an und ändert nie das Lizenzmodell einer Karte.
+
+Lizenzberichte können wie die anderen Berichte gespeichert werden (siehe [Gespeicherte Berichte](#gespeicherte-berichte)).
+
 ## Matrixbericht
 
 ![Matrixbericht](../assets/img/de/35_bericht_matrix.png)

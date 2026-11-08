@@ -8,6 +8,7 @@
   "reports.lifecycle": "Ciclo de vida",
   "reports.dependencies": "Dependencias",
   "reports.cost": "Costos",
+  "reports.licensing": "Licencias",
   "reports.matrix": "Matriz",
   "reports.dataQuality": "Calidad de datos",
   "reports.endOfLife": "Fin de vida",

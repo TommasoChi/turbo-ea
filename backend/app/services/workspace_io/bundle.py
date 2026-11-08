@@ -293,27 +293,39 @@ def open_bundle(
     return zf, manifest, workbook_bytes
 
 
-def _check_declared_sizes(zf: zipfile.ZipFile) -> None:
-    """Refuse a bundle whose central directory declares implausible sizes.
+def _check_declared_sizes(
+    zf: zipfile.ZipFile,
+    *,
+    max_member: int | None = None,
+    max_total: int | None = None,
+    error: type[Exception] = BundleFormatError,
+) -> None:
+    """Refuse an archive whose central directory declares implausible sizes.
 
     Walks the directory only — no member is read — so this costs one pass over
-    the entry list however large the archive is.
+    the entry list however large the archive is. The limits default to the
+    bundle's (read at call time) and ``error`` is what is raised, so the licensing
+    import can hold an .xlsx to its own, much smaller, limits.
     """
+    max_member = MAX_ASSET_BYTES if max_member is None else max_member
+    max_total = MAX_BUNDLE_UNCOMPRESSED_BYTES if max_total is None else max_total
     total = 0
     for info in zf.infolist():
         if info.is_dir():
             continue
-        if info.file_size > MAX_ASSET_BYTES:
-            raise BundleFormatError(
+        if info.file_size > max_member:
+            raise error(
                 f"Bundle member {info.filename} declares {info.file_size} bytes; "
-                f"the limit is {MAX_ASSET_BYTES // (1024 * 1024)} MB"
+                f"the limit is {max_member // (1024 * 1024)} MB"
             )
         total += info.file_size
-        if total > MAX_BUNDLE_UNCOMPRESSED_BYTES:
-            raise BundleFormatError(
-                "Bundle expands to more than "
-                f"{MAX_BUNDLE_UNCOMPRESSED_BYTES // 1024**3} GB and was refused"
+        if total > max_total:
+            limit = (
+                f"{max_total // 1024**3} GB"
+                if max_total >= 1024**3
+                else f"{max_total // 1024**2} MB"
             )
+            raise error(f"Bundle expands to more than {limit} and was refused")
 
 
 def unpack(raw: bytes) -> tuple[dict[str, Any], bytes, dict[str, bytes]]:

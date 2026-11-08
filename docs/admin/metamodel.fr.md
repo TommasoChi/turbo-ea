@@ -291,6 +291,18 @@ Chaque poste a une **clé** stable, un **libellé** et des **traductions** facul
 
 La saisie de montants sur une fiche requiert `costs.edit` (ou un rôle de partie prenante autorisé à modifier la fiche) ; la modification du catalogue requiert la permission d'administration du métamodèle.
 
+## Types de licence
+
+Les **types de licence** forment le catalogue des sortes de licences que les fiches Application et Composant IT peuvent porter (voir la [section Licences](../guide/card-details.md#section-licences-application-et-composant-it)), par exemple *Admin*, *Utilisateur final*, *Prod* ou *Dev*. Vous le gérez sous **Admin > Métamodèle > Types de licence**.
+
+Chaque type a une **clé** stable (lettres, chiffres et tirets bas, figée après la création), un **nom** et des **traductions** facultatives du nom. Les types sont **archivés**, pas supprimés : un type archivé ne peut plus être ajouté à une fiche, mais les quantités déjà saisies continuent de compter dans les statuts et dans le [Rapport Licences](../guide/reports.md#rapport-licences). Chaque type garde une couleur stable dans les graphiques, selon son ordre dans le catalogue.
+
+Deux permissions contrôlent les licences. `licenses.view` permet à un rôle de lire les licences de n'importe quelle fiche, et `licenses.edit` de les modifier et de les importer depuis le Rapport Licences ; une partie prenante d'une fiche peut aussi la lire, et la modifier lorsque son rôle peut modifier la fiche. Par défaut, seuls les administrateurs détiennent `licenses.edit`. La modification du catalogue nécessite la permission d'administration du métamodèle.
+
+### Passage depuis l'extension Licensing Analysis
+
+Les licences font désormais partie de Turbo EA. À la mise à niveau, les données de l'ancienne extension *Licensing Analysis* sont déplacées automatiquement : les quantités sous licence et réelles vont dans l'exercice courant de chaque fiche, chaque catégorie en texte libre devient un type de licence, les droits `ext.licensing.view` et `ext.licensing.manage` de l'extension sont copiés vers `licenses.view` et `licenses.edit`, et les quatre champs de quantité de l'extension sont retirés des fiches. Le champ *Modèle de licence* passe dans sa propre section **Licences** du type, et y est rétabli s'il avait été supprimé. Ce champ est protégé : il ne peut être ni supprimé, ni changé de type, ni sorti de sa section, ni privé de ses options **Utilisateurs** / **Installations** (vous pouvez toujours le renommer, le traduire ou ajouter des options), et l'éditeur de mise en page des fiches n'affiche pas sa section. Le modèle d'une fiche se modifie depuis la section Licences de la fiche. Les valeurs qui n'ont pas pu être déplacées sont listées dans un rapport conservé dans les paramètres de l'application. **Désinstallez l'extension** après la mise à niveau (Admin → Extensions) ; ses rapports enregistrés ne sont pas convertis.
+
 ## Calculs
 
 Les champs calculés utilisent des formules définies par l'administrateur pour calculer automatiquement des valeurs lorsque les fiches sont sauvegardées. Voir [Calculs](calculations.md) pour le guide complet.

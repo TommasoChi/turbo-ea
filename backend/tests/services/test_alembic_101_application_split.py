@@ -228,7 +228,13 @@ def test_split_matches_seed_layout():
     from app.services.seed import TYPES
 
     app_type = next(t for t in TYPES if t["key"] == "Application")
-    seed_layout = {s["section"]: [f["key"] for f in s["fields"]] for s in app_type["fields_schema"]}
+    # licensingModel joined the built-in schema later, alone in its own Licensing section
+    # (migrations 178 and 179).
+    seed_layout = {
+        s["section"]: [f["key"] for f in s["fields"]]
+        for s in app_type["fields_schema"]
+        if s["section"] != "Licensing"
+    }
 
     migrated = mig.split_schema(_legacy_app_schema())[0]
     migrated_layout = {s["section"]: [f["key"] for f in s["fields"]] for s in migrated}

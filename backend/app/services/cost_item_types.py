@@ -3,36 +3,19 @@ time and a row is archived, never deleted. Flushes, never commits."""
 
 from __future__ import annotations
 
-import re
-
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
 from app.models.card_type import CardType
 from app.models.cost_item_type import CostItemType
 from app.services import cost_items_migration as cim
+from app.services import item_catalogue
+from app.services.item_catalogue import CatalogueError
 
-KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
-
-
-class CostItemError(Exception):
-    """``code`` is one of ``invalid_key``, ``reserved_key``, ``duplicate_key``, ``not_found``."""
-
-    def __init__(self, code: str, message: str = "") -> None:
-        super().__init__(message or code)
-        self.code = code
-
-
-def serialize(row: CostItemType) -> dict:
-    return {
-        "id": str(row.id),
-        "key": row.key,
-        "label": row.label,
-        "sort_order": row.sort_order,
-        "archived": row.archived,
-        "translations": row.translations or {},
-    }
+NOUN = "Cost item"
+CostItemError = CatalogueError
+serialize = item_catalogue.serialize
 
 
 async def seed_default_items(db: AsyncSession) -> int:
@@ -50,44 +33,29 @@ async def seed_default_items(db: AsyncSession) -> int:
     return len(lines)
 
 
+async def _cost_reserved(db: AsyncSession) -> set[str]:
+    """Keys the redactors drop from every event diff: a card column or a field key would hide
+    that diff for everyone."""
+    reserved = {*Card.__table__.columns.keys(), "cost_items"}
+    for schema in (await db.execute(select(CardType.fields_schema))).scalars():
+        reserved.update(f.get("key") for sec in schema or [] for f in sec.get("fields", []))
+    return reserved
+
+
 async def get_item(db: AsyncSession, key: str) -> CostItemType | None:
-    return (
-        await db.execute(select(CostItemType).where(CostItemType.key == key))
-    ).scalar_one_or_none()
+    return await item_catalogue.get_item(db, CostItemType, key)
 
 
 async def list_items(db: AsyncSession, include_archived: bool = True) -> list[CostItemType]:
-    stmt = select(CostItemType).order_by(CostItemType.sort_order, CostItemType.label)
-    if not include_archived:
-        stmt = stmt.where(CostItemType.archived.is_(False))
-    return list((await db.execute(stmt)).scalars().all())
+    return await item_catalogue.list_items(db, CostItemType, include_archived)
 
 
 async def create_item(
     db: AsyncSession, key: str, label: str, translations: dict | None = None
 ) -> CostItemType:
-    if not isinstance(key, str) or not KEY_RE.match(key):
-        raise CostItemError("invalid_key", f"Invalid cost item key '{key}'")
-    # Keys are permanent and the redactors drop a catalogue key from every event diff, so one
-    # that equals a card column or a field key would hide that diff for everyone.
-    reserved = {*Card.__table__.columns.keys(), "cost_items"}
-    for schema in (await db.execute(select(CardType.fields_schema))).scalars():
-        reserved.update(f.get("key") for sec in schema or [] for f in sec.get("fields", []))
-    if key in reserved:
-        raise CostItemError("reserved_key", f"'{key}' is a card column or field key")
-    if await get_item(db, key) is not None:
-        raise CostItemError("duplicate_key", f"Cost item '{key}' already exists")
-    current = (await db.execute(select(func.max(CostItemType.sort_order)))).scalar()
-    row = CostItemType(
-        key=key,
-        label=label,
-        sort_order=(current if current is not None else -1) + 1,
-        archived=False,
-        translations=translations or {},
+    return await item_catalogue.create_item(
+        db, CostItemType, key, label, translations, noun=NOUN, reserved=_cost_reserved
     )
-    db.add(row)
-    await db.flush()
-    return row
 
 
 async def update_item(
@@ -98,16 +66,6 @@ async def update_item(
     archived: bool | None = None,
     sort_order: int | None = None,
 ) -> CostItemType:
-    row = await get_item(db, key)
-    if row is None:
-        raise CostItemError("not_found", f"Cost item '{key}' not found")
-    if label is not None:
-        row.label = label
-    if translations is not None:
-        row.translations = translations
-    if archived is not None:
-        row.archived = archived
-    if sort_order is not None:
-        row.sort_order = sort_order
-    await db.flush()
-    return row
+    return await item_catalogue.update_item(
+        db, CostItemType, key, label, translations, archived, sort_order, noun=NOUN
+    )

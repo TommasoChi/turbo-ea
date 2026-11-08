@@ -30,14 +30,41 @@ import { useFieldLabel } from "@/hooks/useResolveLabel";
 import { LOCALE_LABELS, SUPPORTED_LOCALES } from "@/i18n";
 import type { CostItemType, TranslationMap } from "@/types";
 
-const PATH = "/metamodel/cost-item-types";
+const COST_PATH = "/metamodel/cost-item-types";
 
-function costItemErrorMessage(err: unknown, t: (k: string) => string): string {
+export type CatalogueTextKey = "costItems" | "licenseTypes";
+
+/** The `metamodel.<textKey>.*` keys of `en/admin.json` this dialog reads, for both catalogues. */
+export const TEXT_SUFFIXES = [
+  "dialogTitle",
+  "description",
+  "archivedHelp",
+  "newItem",
+  "createTitle",
+  "editTitle",
+  "keyLabel",
+  "keyHelp",
+  "labelLabel",
+  "translationsLabel",
+  "translationsHelp",
+  "archived",
+  "archive",
+  "restore",
+  "errors.duplicate_key",
+  "errors.invalid_key",
+  "errors.generic",
+] as const;
+
+function costItemErrorMessage(
+  err: unknown,
+  t: (k: string) => string,
+  textKey: CatalogueTextKey,
+): string {
   const status = (err as { status?: number })?.status;
-  if (status === 409) return t("admin:metamodel.costItems.errors.duplicate_key");
-  if (status === 422) return t("admin:metamodel.costItems.errors.invalid_key");
+  if (status === 409) return t(`admin:metamodel.${textKey}.errors.duplicate_key`);
+  if (status === 422) return t(`admin:metamodel.${textKey}.errors.invalid_key`);
   if (err instanceof Error && err.message) return err.message;
-  return t("admin:metamodel.costItems.errors.generic");
+  return t(`admin:metamodel.${textKey}.errors.generic`);
 }
 
 function cleanTranslations(map: TranslationMap): TranslationMap {
@@ -50,13 +77,15 @@ function cleanTranslations(map: TranslationMap): TranslationMap {
 
 interface EditProps {
   open: boolean;
+  path: string;
+  textKey: CatalogueTextKey;
   /** The item to edit; `null` creates a new one. */
   item: CostItemType | null;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function CostItemEditDialog({ open, item, onClose, onSaved }: EditProps) {
+function CostItemEditDialog({ open, path, textKey, item, onClose, onSaved }: EditProps) {
   const { t } = useTranslation(["admin", "common"]);
   const [key, setKey] = useState("");
   const [label, setLabel] = useState("");
@@ -78,11 +107,11 @@ function CostItemEditDialog({ open, item, onClose, onSaved }: EditProps) {
     setError(null);
     const body = { label: label.trim(), translations: cleanTranslations(translations) };
     try {
-      if (item) await api.patch(`${PATH}/${encodeURIComponent(item.key)}`, body);
-      else await api.post(PATH, { key: key.trim(), ...body });
+      if (item) await api.patch(`${path}/${encodeURIComponent(item.key)}`, body);
+      else await api.post(path, { key: key.trim(), ...body });
       onSaved();
     } catch (err) {
-      setError(costItemErrorMessage(err, t));
+      setError(costItemErrorMessage(err, t, textKey));
       setSaving(false);
     }
   };
@@ -90,15 +119,15 @@ function CostItemEditDialog({ open, item, onClose, onSaved }: EditProps) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth disableRestoreFocus>
       <DialogTitle>
-        {item ? t("metamodel.costItems.editTitle") : t("metamodel.costItems.createTitle")}
+        {item ? t(`metamodel.${textKey}.editTitle`) : t(`metamodel.${textKey}.createTitle`)}
       </DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           {error && <Alert severity="error">{error}</Alert>}
           <TextField
             fullWidth
-            label={t("metamodel.costItems.keyLabel")}
-            helperText={t("metamodel.costItems.keyHelp")}
+            label={t(`metamodel.${textKey}.keyLabel`)}
+            helperText={t(`metamodel.${textKey}.keyHelp`)}
             value={key}
             disabled={Boolean(item)}
             onChange={(e) => setKey(e.target.value)}
@@ -107,7 +136,7 @@ function CostItemEditDialog({ open, item, onClose, onSaved }: EditProps) {
           <TextField
             autoFocus
             fullWidth
-            label={t("metamodel.costItems.labelLabel")}
+            label={t(`metamodel.${textKey}.labelLabel`)}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             inputProps={{ maxLength: 100 }}
@@ -115,10 +144,10 @@ function CostItemEditDialog({ open, item, onClose, onSaved }: EditProps) {
           <Divider />
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-              {t("metamodel.costItems.translationsLabel")}
+              {t(`metamodel.${textKey}.translationsLabel`)}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {t("metamodel.costItems.translationsHelp")}
+              {t(`metamodel.${textKey}.translationsHelp`)}
             </Typography>
             <Box
               sx={{
@@ -158,12 +187,21 @@ function CostItemEditDialog({ open, item, onClose, onSaved }: EditProps) {
 export interface ManageCostItemsDialogProps {
   open: boolean;
   onClose: () => void;
+  /** The catalogue endpoint; defaults to the cost item types. */
+  path?: string;
+  /** Which `admin:metamodel.*` texts to show; defaults to `costItems`. */
+  textKey?: CatalogueTextKey;
 }
 
-export default function ManageCostItemsDialog({ open, onClose }: ManageCostItemsDialogProps) {
+export default function ManageCostItemsDialog({
+  open,
+  onClose,
+  path = COST_PATH,
+  textKey = "costItems",
+}: ManageCostItemsDialogProps) {
   const { t } = useTranslation(["admin", "common"]);
   const fieldLabel = useFieldLabel();
-  const { data, refetch } = useApiQuery<CostItemType[]>(open ? PATH : null);
+  const { data, refetch } = useApiQuery<CostItemType[]>(open ? path : null);
   const [editing, setEditing] = useState<CostItemType | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -173,10 +211,10 @@ export default function ManageCostItemsDialog({ open, onClose }: ManageCostItems
     setBusy(true);
     setError(null);
     try {
-      await api.patch(`${PATH}/${encodeURIComponent(item.key)}`, { archived });
+      await api.patch(`${path}/${encodeURIComponent(item.key)}`, { archived });
       refetch();
     } catch (err) {
-      setError(costItemErrorMessage(err, t));
+      setError(costItemErrorMessage(err, t, textKey));
     } finally {
       setBusy(false);
     }
@@ -190,13 +228,13 @@ export default function ManageCostItemsDialog({ open, onClose }: ManageCostItems
   return (
     <>
       <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-        <DialogTitle>{t("metamodel.costItems.dialogTitle")}</DialogTitle>
+        <DialogTitle>{t(`metamodel.${textKey}.dialogTitle`)}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            {t("metamodel.costItems.description")}
+            {t(`metamodel.${textKey}.description`)}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t("metamodel.costItems.archivedHelp")}
+            {t(`metamodel.${textKey}.archivedHelp`)}
           </Typography>
           {error && (
             <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
@@ -228,7 +266,7 @@ export default function ManageCostItemsDialog({ open, onClose }: ManageCostItems
                     </Typography>
                   </Box>
                   {c.archived && (
-                    <Chip size="small" variant="outlined" label={t("metamodel.costItems.archived")} />
+                    <Chip size="small" variant="outlined" label={t(`metamodel.${textKey}.archived`)} />
                   )}
                   <Tooltip title={t("common:actions.edit")}>
                     <IconButton
@@ -241,12 +279,12 @@ export default function ManageCostItemsDialog({ open, onClose }: ManageCostItems
                     </IconButton>
                   </Tooltip>
                   <Tooltip
-                    title={c.archived ? t("metamodel.costItems.restore") : t("metamodel.costItems.archive")}
+                    title={c.archived ? t(`metamodel.${textKey}.restore`) : t(`metamodel.${textKey}.archive`)}
                   >
                     <IconButton
                       size="small"
                       aria-label={`${
-                        c.archived ? t("metamodel.costItems.restore") : t("metamodel.costItems.archive")
+                        c.archived ? t(`metamodel.${textKey}.restore`) : t(`metamodel.${textKey}.archive`)
                       }: ${name}`}
                       disabled={busy}
                       onClick={() => setArchived(c, !c.archived)}
@@ -264,12 +302,14 @@ export default function ManageCostItemsDialog({ open, onClose }: ManageCostItems
             startIcon={<MaterialSymbol icon="add" size={18} />}
             onClick={() => setCreating(true)}
           >
-            {t("metamodel.costItems.newItem")}
+            {t(`metamodel.${textKey}.newItem`)}
           </Button>
           <Button onClick={onClose}>{t("common:actions.close")}</Button>
         </DialogActions>
       </Dialog>
       <CostItemEditDialog
+        path={path}
+        textKey={textKey}
         open={creating || editing !== null}
         item={editing}
         onClose={closeEdit}

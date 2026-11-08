@@ -473,8 +473,9 @@ async def remove_subtype_contributions(
     return removed
 
 
-def _reindex_section_order(ct, kept_flags: list[bool]) -> None:
-    """Keep ``__order``'s ``custom:N`` keys pointing at the same sections.
+def _reindexed_config(config: dict | None, kept_flags: list[bool]) -> dict | None:
+    """``config`` with ``custom:N`` keys of ``__order`` pointing at the same sections, or
+    ``None`` when nothing changes.
 
     ``custom:N`` is a POSITIONAL index into ``fields_schema`` (minus
     ``__description``), so dropping a section shifts every later one down by
@@ -485,10 +486,10 @@ def _reindex_section_order(ct, kept_flags: list[bool]) -> None:
     comparing the two schemas, because that loop rebuilds every edited section
     as a NEW dict, which makes identity comparison read them all as removed.
     """
-    config = dict(ct.section_config or {})
+    config = dict(config or {})
     order = list(config.get("__order") or [])
     if not order:
-        return
+        return None
     new_index_of: dict[int, int] = {}
     cursor = 0
     for old_index, kept in enumerate(kept_flags):
@@ -508,10 +509,51 @@ def _reindex_section_order(ct, kept_flags: list[bool]) -> None:
         if new_index is None:
             continue  # already stale, or the section it pointed at was removed
         remapped.append(f"custom:{new_index}")
-    if remapped != order:
-        config["__order"] = remapped
-        ct.section_config = config
-        flag_modified(ct, "section_config")
+    if remapped == order:
+        return None
+    config["__order"] = remapped
+    return config
+
+
+def strip_ext_fields(
+    schema: list, section_config: dict | None, ext_key: str
+) -> tuple[list, dict | None, int]:
+    """Pure: ``(schema, section_config, removed)`` without this extension's stamped fields.
+
+    A contributed section left empty is dropped, a section that still holds admin fields
+    survives, and the ``custom:<i>`` entries of ``__order`` are re-indexed. Unchanged input
+    comes back as the same objects with ``removed == 0``.
+    """
+    out: list = []
+    kept_flags: list[bool] = []
+    changed = False
+    removed = 0
+    for section in schema or []:
+        custom = _is_custom_section(section)
+        if not isinstance(section, dict):
+            out.append(section)
+            if custom:
+                kept_flags.append(True)
+            continue
+        fields = section.get("fields", [])
+        kept = [f for f in fields if not (isinstance(f, dict) and f.get("ext") == ext_key)]
+        removed += len(fields) - len(kept)
+        if len(kept) != len(fields):
+            changed = True
+        if section.get("ext") == ext_key and not kept:
+            # drop the now-empty contributed section entirely
+            changed = True
+            if custom:
+                kept_flags.append(False)
+            continue
+        if custom:
+            kept_flags.append(True)
+        if len(kept) != len(fields):
+            section = {**section, "fields": kept}
+        out.append(section)
+    if not changed:
+        return schema, section_config, 0
+    return out, _reindexed_config(section_config, kept_flags) or section_config, removed
 
 
 async def remove_field_contributions(
@@ -532,37 +574,17 @@ async def remove_field_contributions(
     for ct in all_types:
         if ct.key in except_types:
             continue
-        schema = []
-        kept_flags: list[bool] = []
-        changed = False
-        for section in ct.fields_schema or []:
-            custom = _is_custom_section(section)
-            if not isinstance(section, dict):
-                schema.append(section)
-                if custom:
-                    kept_flags.append(True)
-                continue
-            fields = section.get("fields", [])
-            kept = [f for f in fields if not (isinstance(f, dict) and f.get("ext") == ext_key)]
-            removed += len(fields) - len(kept)
-            if len(kept) != len(fields):
-                changed = True
-            if section.get("ext") == ext_key and not kept:
-                # drop the now-empty contributed section entirely
-                changed = True
-                if custom:
-                    kept_flags.append(False)
-                continue
-            if custom:
-                kept_flags.append(True)
-            if len(kept) != len(fields):
-                section = {**section, "fields": kept}
-            schema.append(section)
-        if changed:
-            _reindex_section_order(ct, kept_flags)
-            ct.fields_schema = schema
-            flag_modified(ct, "fields_schema")
-            touched_types.add(ct.key)
+        before = ct.fields_schema or []
+        schema, config, n = strip_ext_fields(before, ct.section_config, ext_key)
+        if schema == before:
+            continue
+        removed += n
+        if config is not ct.section_config:
+            ct.section_config = config
+            flag_modified(ct, "section_config")
+        ct.fields_schema = schema
+        flag_modified(ct, "fields_schema")
+        touched_types.add(ct.key)
 
     if touched_types:
         await db.flush()

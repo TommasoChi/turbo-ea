@@ -384,3 +384,49 @@ describe("calculatedFieldKeys", () => {
     expect(calculatedFieldKeys(withGap, (k) => k === "score", [])).toEqual(["score"]);
   });
 });
+
+describe("buildSectionOrder licensing", () => {
+  const both = { hierarchy: false, successors: false, costs: true, licensing: true };
+  const none = { hierarchy: false, successors: false };
+
+  it("splices licensing after costs into an older stored order", () => {
+    const sc = { __order: ["description", "lifecycle", "relations"] };
+    expect(buildSectionOrder(sc, 0, both)).toEqual([
+      "description",
+      "lifecycle",
+      "costs",
+      "licensing",
+      "tags",
+      "relations",
+    ]);
+    const withCosts = { __order: ["description", "costs", "lifecycle", "relations"] };
+    expect(buildSectionOrder(withCosts, 0, both).slice(0, 4)).toEqual([
+      "description",
+      "costs",
+      "licensing",
+      "lifecycle",
+    ]);
+    expect(
+      buildSectionOrder(sc, 0, { hierarchy: false, successors: false, licensing: true }),
+    ).toEqual(["description", "lifecycle", "licensing", "tags", "relations"]);
+  });
+
+  it("is in the built-in order after costs, and dropped for other types", () => {
+    expect(buildSectionOrder(undefined, 0, both)).toEqual([
+      "description",
+      "eol",
+      "lifecycle",
+      "costs",
+      "licensing",
+      "tags",
+      "relations",
+    ]);
+    expect(buildSectionOrder(undefined, 0, none)).not.toContain("licensing");
+  });
+
+  it("drops licensing for another type even when a stored order names it", () => {
+    const sc = { __order: ["licensing", "description", "tags", "relations"] };
+    expect(buildSectionOrder(sc, 0, none)).toEqual(["description", "tags", "relations"]);
+    expect(buildSectionOrder(sc, 0, both)).toContain("licensing");
+  });
+});

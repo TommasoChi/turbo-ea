@@ -30,6 +30,11 @@ export const EVENT_META: Record<string, EventMeta> = {
     icon: "payments",
     color: STATUS_COLORS.info,
   },
+  "card.licenses_updated": {
+    labelKey: "history.events.licensesUpdated",
+    icon: "workspace_premium",
+    color: STATUS_COLORS.info,
+  },
   "card.archived": { labelKey: "history.events.archived", icon: "archive", color: "#ff9800" },
   "card.restored": { labelKey: "history.events.restored", icon: "restore", color: "#4caf50" },
   "card.deleted": { labelKey: "history.events.deleted", icon: "delete", color: "#f44336" },

@@ -290,6 +290,18 @@ Jedes Element hat einen festen **Schlüssel**, eine **Bezeichnung** und optional
 
 Für die Erfassung von Beträgen auf einer Karte ist `costs.edit` nötig (oder eine Stakeholder-Rolle, die die Karte bearbeiten darf); für Änderungen am Katalog ist die Berechtigung zur Metamodell-Verwaltung nötig.
 
+## Lizenztypen
+
+**Lizenztypen** sind der Katalog der Lizenzarten, die Karten vom Typ Anwendung und IT-Komponente tragen können (siehe den [Lizenzabschnitt](../guide/card-details.md#lizenzabschnitt-anwendung-und-it-komponente)), zum Beispiel *Admin*, *Endbenutzer*, *Prod* oder *Dev*. Sie verwalten ihn unter **Admin > Metamodell > Lizenztypen**.
+
+Jeder Typ hat einen festen **Schlüssel** (Buchstaben, Ziffern und Unterstriche, nach dem Anlegen unveränderlich), einen **Namen** und optionale **Übersetzungen** des Namens. Typen werden **archiviert**, nicht gelöscht: Ein archivierter Typ kann einer Karte nicht mehr hinzugefügt werden, bereits erfasste Mengen zählen aber weiterhin in den Status und im [Lizenzbericht](../guide/reports.md#lizenzbericht). Jeder Typ behält in den Diagrammen eine feste Farbe entsprechend seiner Reihenfolge im Katalog.
+
+Zwei Berechtigungen steuern die Lizenzierung. `licenses.view` erlaubt einer Rolle, die Lizenzen jeder Karte zu lesen, und `licenses.edit` erlaubt, sie zu ändern und aus dem Lizenzbericht zu importieren; ein Stakeholder einer Karte kann sie ebenfalls lesen und bearbeiten, wenn seine Rolle die Karte bearbeiten darf. Standardmäßig besitzen nur Administratoren `licenses.edit`. Für Änderungen am Katalog ist die Berechtigung zur Metamodell-Verwaltung nötig.
+
+### Umstieg von der Erweiterung Licensing Analysis
+
+Die Lizenzierung ist jetzt Teil von Turbo EA. Beim Upgrade werden die Daten der früheren Erweiterung *Licensing Analysis* automatisch übernommen: Die lizenzierten und tatsächlichen Mengen gehen in das aktuelle Geschäftsjahr jeder Karte, jede Freitext-Kategorie wird zu einem Lizenztyp, die Berechtigungen `ext.licensing.view` und `ext.licensing.manage` der Erweiterung werden nach `licenses.view` und `licenses.edit` kopiert, und die vier Mengenfelder der Erweiterung werden von den Karten entfernt. Das Feld *Lizenzmodell* wandert in einen eigenen Abschnitt **Lizenzierung** des Typs und wird dort wiederhergestellt, falls es gelöscht wurde. Das Feld ist geschützt: Es kann weder gelöscht noch umgewandelt, aus seinem Abschnitt verschoben noch seiner Optionen **Benutzer** / **Installationen** beraubt werden (Umbenennen, Übersetzen und Hinzufügen von Optionen bleiben möglich), und der Karten-Layout-Editor listet seinen Abschnitt nicht auf. Das Modell einer Karte wird im Abschnitt „Lizenzierung“ der Karte bearbeitet. Werte, die nicht übernommen werden konnten, stehen in einem Bericht in den Anwendungseinstellungen. **Deinstallieren Sie die Erweiterung** nach dem Upgrade (Admin → Erweiterungen); ihre gespeicherten Berichte werden nicht umgewandelt.
+
 ## Berechnungen
 
 Berechnete Felder verwenden vom Administrator definierte Formeln, um Werte automatisch zu berechnen, wenn Karten gespeichert werden. Siehe [Berechnungen](calculations.md) für die vollständige Anleitung.

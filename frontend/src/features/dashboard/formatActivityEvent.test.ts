@@ -61,6 +61,11 @@ describe("formatActivityEvent", () => {
     expect(out.cardLink).toBe("/cards/card-123");
   });
 
+  it("classifies card.licenses_updated as an update", () => {
+    const out = formatActivityEvent({ ...baseEvent, event_type: "card.licenses_updated" }, t);
+    expect(out.category).toBe("update");
+  });
+
   it("falls back to data.id when card_id is missing", () => {
     const out = formatActivityEvent(
       { ...baseEvent, card_id: undefined },

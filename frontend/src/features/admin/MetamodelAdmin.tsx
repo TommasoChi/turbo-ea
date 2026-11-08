@@ -93,6 +93,7 @@ export default function MetamodelAdmin() {
   const [createTypeError, setCreateTypeError] = useState<string | null>(null);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [manageCostItemsOpen, setManageCostItemsOpen] = useState(false);
+  const [manageLicenseTypesOpen, setManageLicenseTypesOpen] = useState(false);
   const [newType, setNewType] = useState<NewTypeDraft>(() => emptyNewType(null));
 
   /* ---- Data fetching ---- */
@@ -221,6 +222,13 @@ export default function MetamodelAdmin() {
                 onClick={() => setManageCostItemsOpen(true)}
               >
                 {t("metamodel.costItems.manage")}
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<MaterialSymbol icon="badge" size={18} />}
+                onClick={() => setManageLicenseTypesOpen(true)}
+              >
+                {t("metamodel.licenseTypes.manage")}
               </Button>
               <Button
                 variant="contained"
@@ -475,6 +483,12 @@ export default function MetamodelAdmin() {
       <ManageCostItemsDialog
         open={manageCostItemsOpen}
         onClose={() => setManageCostItemsOpen(false)}
+      />
+      <ManageCostItemsDialog
+        open={manageLicenseTypesOpen}
+        onClose={() => setManageLicenseTypesOpen(false)}
+        path="/metamodel/license-types"
+        textKey="licenseTypes"
       />
 
       {/* ============================================================ */}

@@ -13,6 +13,7 @@ L'export capture le workspace complet dans un bundle `.zip` contenant un classeu
 - **Paramètres** — devise, format de date, indicateurs de fonctionnalité, image de marque de connexion, langues activées, et le reste des paramètres généraux de l'application.
 - **Utilisateurs** — e-mail, nom affiché, rôle et indicateur d'activité (utilisés pour re-lier la propriété et les affectations sur la cible). Aucun mot de passe ni identité SSO.
 - **Postes de coûts** — le catalogue des postes de coûts (clés, libellés, traductions, indicateur d'archivage) et les postes de coûts de chaque Application ou Composant IT par exercice.
+- **Types de licence** — le catalogue des types de licence et les quantités de licences de chaque Application ou Composant IT par exercice.
 - **Inventaire** — chaque fiche (avec sa hiérarchie, son cycle de vie et ses attributs), les tags de fiches et les relations.
 - **Contexte de fiche** — parties prenantes, liens vers documents, commentaires, tâches et pièces jointes.
 - **Données des modules** — BPM (diagrammes de processus, éléments, versions de flux, évaluations), PPM (rapports de statut, coûts, budgets, risques, tâches, WBS, dépendances), le registre des risques GRC (risques, tâches d'atténuation et occurrences, liaisons de fiches), les constats de conformité GRC (avec les exécutions d'analyse qu'ils référencent), décisions d'architecture et Statements of Architecture Work, diagrammes en dessin libre, rapports enregistrés, favoris (vues enregistrées de l'inventaire, y compris leurs partages), portails web et enquêtes.

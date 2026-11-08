@@ -291,6 +291,18 @@ Cada item tem uma **chave** estável, um **rótulo** e **traduções** opcionais
 
 Introduzir montantes num card requer `costs.edit` (ou um papel de parte interessada que possa editar o card); alterar o catálogo requer a permissão de administração do metamodelo.
 
+## Tipos de licença
+
+Os **tipos de licença** são o catálogo das espécies de licença que os cards de Aplicação e Componente de TI podem ter (ver a [seção Licenciamento](../guide/card-details.md#seção-de-licenças-aplicação-e-componente-de-ti)), por exemplo *Admin*, *Utilizador final*, *Prod* ou *Dev*. Gere-o em **Admin > Metamodelo > Tipos de licença**.
+
+Cada tipo tem uma **chave** estável (letras, dígitos e sublinhados, fixa depois de criada), um **nome** e **traduções** opcionais do nome. Os tipos são **arquivados**, não eliminados: um tipo arquivado já não pode ser adicionado a um card, mas as quantidades já introduzidas continuam a contar nos estados e no [Relatório de Licenciamento](../guide/reports.md#relatório-de-licenciamento). Cada tipo mantém uma cor estável nos gráficos, conforme a sua ordem no catálogo.
+
+Duas permissões controlam o licenciamento. `licenses.view` permite a um papel ler as licenças de qualquer card, e `licenses.edit` permite alterá-las e importá-las a partir do Relatório de Licenciamento; um stakeholder de um card também pode lê-lo, e editá-lo quando o seu papel pode editar o card. Por predefinição, só os administradores têm `licenses.edit`. Alterar o catálogo requer a permissão de administração do metamodelo.
+
+### Passagem da extensão Licensing Analysis
+
+O licenciamento é agora parte do Turbo EA. Na atualização, os dados da antiga extensão *Licensing Analysis* são movidos automaticamente: as quantidades licenciadas e reais passam para o ano fiscal atual de cada card, cada categoria de texto livre torna-se um tipo de licença, as permissões `ext.licensing.view` e `ext.licensing.manage` da extensão são copiadas para `licenses.view` e `licenses.edit`, e os quatro campos de quantidade da extensão são removidos dos cards. O campo *Modelo de licenciamento* passa para uma secção **Licenciamento** própria do tipo e é aí restaurado se tiver sido eliminado. Esse campo é protegido: não pode ser eliminado, mudado de tipo, retirado da sua secção nem privado das opções **Utilizadores** / **Instalações** (pode continuar a renomeá-lo, traduzi-lo ou adicionar opções), e o editor de esquema dos cards não lista a sua secção. O modelo de um card edita-se na secção Licenciamento do card. Os valores que não puderam ser movidos ficam listados num relatório guardado nas definições da aplicação. **Desinstale a extensão** depois de atualizar (Admin → Extensões); os seus relatórios guardados não são convertidos.
+
 ## Cálculos
 
 Campos calculados usam fórmulas definidas pelo administrador para computar automaticamente valores quando cards são salvos. Veja [Cálculos](calculations.md) para o guia completo.

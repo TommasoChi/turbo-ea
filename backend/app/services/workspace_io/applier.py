@@ -51,6 +51,7 @@ from app.models.user import User
 from app.services import card_reference, card_type_categories
 from app.services.card_resolver import CardResolver
 from app.services.email_backends.runtime import apply_email_settings_to_runtime
+from app.services.licensing_migration import move_model_field
 from app.services.relation_orientation import oriented
 from app.services.workspace_io import exporter as exp
 from app.services.workspace_io import remap as rm
@@ -589,6 +590,7 @@ async def _apply_bookmark_shares(
 
 async def _apply_card_types(db, bundle: WorkspaceBundle, sr: SectionResult, dry_run: bool) -> None:
     existing = {ct.key: ct for ct in (await db.execute(select(CardType))).scalars().all()}
+    counted: set[str] = set()  # rows already in created / updated, so a restore adds no second
     for row in bundle.rows(schema.SHEET_CARD_TYPES):
         data = _coerce(row, exp.CARD_TYPE_COLUMNS, exp.CARD_TYPE_JSON)
         # NOT NULL JSONB columns: a hand-authored content pack may declare the
@@ -608,11 +610,23 @@ async def _apply_card_types(db, bundle: WorkspaceBundle, sr: SectionResult, dry_
             db.add(ct)
             existing[key] = ct
             sr.created += 1
+            counted.add(key)
         else:
             # Never flip a built-in type's identity; merge mutable schema only.
             # (The row was matched by key, so the key itself never differs.)
             cols = [c for c in exp.CARD_TYPE_COLUMNS if c != "built_in"]
+            before = sr.updated
             _update_if_changed(current, data, cols, sr)
+            if sr.updated > before:
+                counted.add(key)
+    # ``licensingModel`` is protected (the metamodel route refuses to remove it): a bundle
+    # that lacks it must not strip it either.
+    for key, ct in existing.items():
+        restored = move_model_field(key, ct.fields_schema or [])
+        if restored is not None:
+            ct.fields_schema = restored
+            if key not in counted:
+                sr.updated += 1
     await db.flush()
     # A bundle older than the category registry (or a content pack that ships
     # no CardTypeCategories sheet) still names its layers: adopt any the

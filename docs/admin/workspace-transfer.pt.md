@@ -13,6 +13,7 @@ A exportação captura o workspace completo como um pacote `.zip` contendo uma p
 - **Configurações** — moeda, formato de data, feature flags, branding de login, locales habilitados e o restante das configurações gerais da aplicação.
 - **Usuários** — e-mail, nome de exibição, papel e flag de ativo (usados para revincular propriedade e atribuições no destino). Sem senhas ou identidades SSO.
 - **Itens de custo** — o catálogo de itens de custo (chaves, rótulos, traduções, indicador de arquivamento) e os itens de custo de cada Aplicação ou Componente de TI por ano fiscal.
+- **Tipos de licença** — o catálogo de tipos de licença e as quantidades de licenças de cada Aplicação ou Componente de TI por ano fiscal.
 - **Inventário** — cada card (com sua hierarquia, ciclo de vida e atributos), tags de card e relações.
 - **Contexto do card** — partes interessadas, links de documentos, comentários, tarefas e anexos de arquivo.
 - **Dados de módulos** — BPM (diagramas de processo, elementos, versões de fluxo, avaliações), PPM (relatórios de status, custos, orçamentos, riscos, tarefas, WBS, dependências), o registro de riscos do GRC (riscos, tarefas de mitigação e ocorrências, vínculos de card), as descobertas de conformidade do GRC (com as execuções de análise que elas referenciam), decisões de arquitetura e Statements of Architecture Work, diagramas de desenho livre, relatórios salvos, marcadores (visualizações salvas do inventário, incluindo seus compartilhamentos), portais web e pesquisas.

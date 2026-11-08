@@ -99,6 +99,7 @@ export const DEFAULT_SECTION_ORDER = [
   "eol",
   "lifecycle",
   "costs",
+  "licensing",
   "__custom__",
   "hierarchy",
   "successors",
@@ -116,13 +117,14 @@ export const DEFAULT_SECTION_ORDER = [
  * are spliced in just before `relations` (or appended when there is none);
  * `hierarchy` and `successors` drop out for a type that has no such section;
  * `costs` (cost-item types only) is spliced in after `lifecycle` when the stored
- * order predates it, and drops out for every other type.
+ * order predates it, and drops out for every other type. `licensing` (license
+ * types only) is spliced in after `costs` (else after `lifecycle`) the same way.
  * With no stored order, `DEFAULT_SECTION_ORDER` applies.
  */
 export function buildSectionOrder(
   sectionConfig: Record<string, unknown> | undefined,
   customCount: number,
-  has: { hierarchy: boolean; successors: boolean; costs?: boolean },
+  has: { hierarchy: boolean; successors: boolean; costs?: boolean; licensing?: boolean },
 ): string[] {
   const customKeys = Array.from({ length: customCount }, (_, i) => `custom:${i}`);
   const stored = sectionConfig?.__order;
@@ -141,11 +143,16 @@ export function buildSectionOrder(
       const at = order.indexOf("lifecycle");
       order.splice(at >= 0 ? at + 1 : 0, 0, "costs");
     }
+    if (has.licensing && !named.has("licensing")) {
+      const at = order.includes("costs") ? order.indexOf("costs") : order.indexOf("lifecycle");
+      order.splice(at >= 0 ? at + 1 : 0, 0, "licensing");
+    }
     return order.filter(
       (k) =>
         (k !== "hierarchy" || has.hierarchy) &&
         (k !== "successors" || has.successors) &&
-        (k !== "costs" || has.costs),
+        (k !== "costs" || has.costs) &&
+        (k !== "licensing" || has.licensing),
     );
   }
   return DEFAULT_SECTION_ORDER.flatMap((key) => {
@@ -153,6 +160,7 @@ export function buildSectionOrder(
     if (key === "hierarchy" && !has.hierarchy) return [];
     if (key === "successors" && !has.successors) return [];
     if (key === "costs" && !has.costs) return [];
+    if (key === "licensing" && !has.licensing) return [];
     return [key];
   });
 }

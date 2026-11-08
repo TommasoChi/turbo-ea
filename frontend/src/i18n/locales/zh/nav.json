@@ -8,6 +8,7 @@
   "reports.lifecycle": "生命周期",
   "reports.dependencies": "依赖关系",
   "reports.cost": "成本",
+  "reports.licensing": "许可",
   "reports.matrix": "矩阵",
   "reports.dataQuality": "数据质量",
   "reports.endOfLife": "生命终止",

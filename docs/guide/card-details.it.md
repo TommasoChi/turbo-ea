@@ -129,6 +129,20 @@ Le Applicazioni e i Componenti IT registrano il proprio costo come elenco di **e
 
 Il campo **Costo annuo totale** (`costTotalAnnual`) della card è derivato dalgli elementi dell'anno corrente ed è di sola lettura: griglia, importazione da foglio di calcolo, trascinamento del riempimento, API, MCP, ServiceNow e LeanIX non possono più impostarlo, e un valore inviato viene sovrascritto. Una card senza elementi di costo ha il campo di costo vuoto, non 0. Le Iniziative e i Fornitori mantengono i loro normali campi di costo.
 
+### Sezione Licenze (Applicazione e Componente IT)
+
+La sezione **Licenze** registra, anno per anno, quante licenze la scheda ha a contratto e quante sono realmente utilizzate. Si trova accanto ai Costi e ha lo stesso navigatore **‹ ›** su sei anni: i quattro precedenti a quello corrente, quello corrente e il **Forecast**. Le metriche monitorate dalla scheda (**Utenti**, **Installazioni**) derivano dal suo **Modello di licenza**, mostrato in alto nella sezione. Chi può modificare la scheda lo cambia con **Modifica**: seleziona **Utenti** e/o **Installazioni**, quindi **Salva**. Il modello non compare tra gli altri campi della scheda.
+
+![Sezione Licenze](../assets/img/en/104_card_licensing.png)
+
+- **Per metrica e tipo di licenza** — Ogni metrica ha un blocco con una tessera per tipo di licenza che mostra la quantità **in licenza**, la quantità **effettiva**, la **% di utilizzo** e uno stato: **Conforme**, **Vicino al limite** (dall'80 %), **Sovralicenziato** (effettivo superiore al licenziato) o **Nessun dato**. Una barra impilata somma i tipi. I tipi di licenza provengono dal catalogo che un amministratore gestisce in [Metamodello → Tipi di licenza](../admin/metamodel.md#tipi-di-licenza).
+- **Aggiunta e modifica** — Una quantità si aggiunge, modifica o elimina in una finestra di dialogo. Lasciare **Effettivo** vuoto significa «nessun dato», che è diverso da 0.
+- **Forecast** — L'anno Forecast accetta solo la quantità in licenza. **Copia in Forecast** copia le quantità in licenza dell'anno visualizzato.
+
+**Un nuovo anno fiscale.** Quando una scheda non ha ancora dati di licenza per il nuovo anno corrente, la sezione mostra le quantità in licenza dell'anno precedente contrassegnate come **non confermate**, senza quantità effettiva, così un nuovo anno non eredita mai il consumo del precedente. Restano tali finché qualcuno non le conferma o modifica una quantità.
+
+**Chi può vedere e modificare le licenze.** Puoi **visualizzarle** con il permesso `licenses.view`, oppure se hai un qualsiasi ruolo di stakeholder sulla scheda. Puoi **modificarle** con il permesso `licenses.edit`, oppure se hai sulla scheda un ruolo di stakeholder che consente di modificare la scheda. Per impostazione predefinita solo gli amministratori hanno `licenses.edit`. Una modifica compare nella scheda Cronologia come **Licenze aggiornate**, con i tipi di licenza coinvolti ma non le quantità, e non può essere annullata.
+
 ### Sezione Gerarchia
 
 Per i tipi di card che supportano la gerarchia (es. Organization, Business Capability, Application):

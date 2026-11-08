@@ -41,3 +41,27 @@ Things noticed while working on `fix/cost-report` that are out of scope for it. 
 **Why it matters.** The card-read-scope rule says a card the caller may not read does not exist for them. `tests/services/test_card_read_scope_guard.py` cannot see this: it only scans modules that query `Card` and lack any scope marker, `comments.py` and `stakeholders.py` already import `require_card_readable` for their GET handlers, and the sentinel sweep calls GET routes only. Not affected: relation PATCH/DELETE (`_relation_readable`), todos, the observe endpoints.
 
 **Size.** Small: one or two lines after each permission check plus a hidden-type test per endpoint, modelled on `tests/api/test_attachment_document_write_scope.py`. Worth adding a guard that fails a write handler taking a card id without the scope.
+
+## Cost year window reads one year at a time
+
+**What.** `card_costs.get_window` (the Costs section's `GET /cards/{id}/costs`) resolves each of its six years with its own query and one catalogue read per year, up to about 18 queries to open the section. The licensing work (`card_licenses.items_by_card`, built on `yearly_rows.resolve_year`) loads the card's rows once and resolves every year in memory, so the licensing section opens with 2 queries (rows + catalogue).
+
+**Why it matters.** Performance only, no behaviour change: one card at a time, so nobody is hurt today. It is also two code paths for the same year rules, which is how they drift.
+
+**Size.** Small and mechanical, in its own pull request after the licensing one merges: generalise `items_by_card` in `yearly_rows` over the row model, make `card_costs.get_window` call it, and keep the cost tests as the guard unchanged (`test_card_costs.py`, `test_card_costs_api.py`, `test_cost_rollover_loop.py`, the cost report tests). Use `simplify` as a step of that PR.
+
+## Compatibility shims left in the cost code by the licensing work
+
+**What.** Four shims exist only so the unchanged cost tests keep monkeypatching old names: `redact_event_costs` in `cost_field_filter.py` (no production caller, only `test_cost_field_filter.py`), the `FISCAL_YEAR_LOOKBACK` re-export with `# noqa: F401` in `card_costs.py`, the `row_fn` / `fallback_fn` hook parameters on `yearly_rows.resolve` / `editable`, and the `_row` / `_fallback_row` wrappers in `card_costs.py`.
+
+**Why it matters.** About 25 lines and a second code path for the same rules. No behaviour impact.
+
+**Size.** Small, with the "Cost year window reads one year at a time" item above: point those tests at `strip_change_keys`, `fiscal_year.FISCAL_YEAR_LOOKBACK` and `yearly_rows.row` / `fallback_row`, then delete the shims and the hook parameters.
+
+## Cost delete ignores the write window; saved reports leak past their permission
+
+**What.** (1) `card_costs.delete_item` has no `in_window` check, so `DELETE /cards/{id}/costs/{fy}/items/{key}` can erase a year that PUT refuses (the licensing twin was fixed in the licensing branch). (2) `GET /saved-reports` returns `thumbnail` and `config` of public reports of any type without checking the permission that type needs: a viewer without `licenses.view` (or `costs.view`) receives the thumbnail, a picture of the figures, and a role that cannot read a card type receives the hidden card's id in `config.cardId` / `pickedCardId`. Creating a report is correctly gated.
+
+**Why it matters.** Both are Low (found by the licensing VAPT, `docs/superpowers/vapt-2026-11-06-licensing.md`): the first needs an old row to exist, the second shows a picture of numbers the caller cannot open.
+
+**Size.** (1) one line and a test in `card_costs.py`. (2) Small-medium, in its own pull request: in the saved-reports list, withhold `thumbnail` and `config` of reports whose type needs a permission the caller lacks, and drop card ids that `CardReadScope` hides; one test per report type that carries a card id.

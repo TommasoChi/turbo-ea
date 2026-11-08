@@ -32,6 +32,7 @@ const EVENT_TAB_MAP: Record<string, CardTabKey> = {
   "card.created": "card",
   "card.updated": "card",
   "card.costs_updated": "card",
+  "card.licenses_updated": "card",
   "card.archived": "card",
   "card.restored": "card",
   "card.approval_status.approve": "card",

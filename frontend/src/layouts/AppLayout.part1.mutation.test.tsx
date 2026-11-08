@@ -197,6 +197,7 @@ const CORE_REPORTS = [
   "/reports/lifecycle",
   "/reports/dependencies",
   "/reports/cost",
+  "/reports/licensing",
   "/reports/matrix",
   "/reports/data-quality",
   "/reports/eol",

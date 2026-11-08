@@ -290,6 +290,18 @@ Hver post har en fast **nøgle**, en **etiket** og valgfri **oversættelser** af
 
 Indtastning af beløb på et kort kræver `costs.edit` (eller en stakeholder-rolle, der må redigere kortet); ændring af kataloget kræver tilladelsen til administration af metamodellen.
 
+## Licenstyper
+
+**Licenstyper** er kataloget over de slags licenser, som kort for applikationer og IT-komponenter kan have (se [licenssektionen](../guide/card-details.md#licenssektion-applikation-og-it-komponent)), for eksempel *Admin*, *Slutbruger*, *Prod* eller *Dev*. Du administrerer det under **Admin > Metamodel > Licenstyper**.
+
+Hver type har en fast **nøgle** (bogstaver, cifre og understregninger, fast efter oprettelsen), et **navn** og valgfrie **oversættelser** af navnet. Typer **arkiveres**, de slettes ikke: En arkiveret type kan ikke længere føjes til et kort, men antal, der allerede er indtastet, tæller stadig med i statusser og i [Licensrapporten](../guide/reports.md#licensrapport). Hver type har en fast farve i diagrammerne efter sin rækkefølge i kataloget.
+
+To tilladelser styrer licensering. `licenses.view` lader en rolle læse licenserne på ethvert kort, og `licenses.edit` lader den ændre dem og importere dem fra Licensrapporten; en interessent på et kort kan også læse dem og redigere dem, når vedkommendes rolle må redigere kortet. Som standard har kun administratorer `licenses.edit`. Ændring af kataloget kræver tilladelsen til metamodeladministration.
+
+### Overgang fra udvidelsen Licensing Analysis
+
+Licensering er nu en del af Turbo EA. Ved opgradering flyttes data fra den tidligere udvidelse *Licensing Analysis* automatisk: De licenserede og faktiske antal går ind i det nuværende regnskabsår på hvert kort, hver fritekstkategori bliver en licenstype, udvidelsens rettigheder `ext.licensing.view` og `ext.licensing.manage` kopieres til `licenses.view` og `licenses.edit`, og udvidelsens fire antalsfelter fjernes fra kortene. Feltet *Licensmodel* flyttes til en egen sektion **Licensering** på typen og genskabes dér, hvis det var slettet. Feltet er beskyttet: Det kan ikke slettes, ændre type, flyttes ud af sin sektion eller fratages sine valgmuligheder **Brugere** / **Installationer** (du kan stadig omdøbe det, oversætte det eller tilføje valgmuligheder), og kortlayout-editoren viser ikke dets sektion. Et korts model redigeres fra kortets sektion Licensering. Værdier, der ikke kunne flyttes, er opført i en rapport, der gemmes i applikationsindstillingerne. **Afinstallér udvidelsen** efter opgraderingen (Admin → Udvidelser); dens gemte rapporter konverteres ikke.
+
 ## Beregninger
 
 Beregnede felter bruger admin-definerede formler til automatisk at beregne værdier, når kort gemmes. Se [Beregninger](calculations.md) for den fulde vejledning.

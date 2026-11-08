@@ -205,9 +205,15 @@ function HistoryTab({ fsId, cardType }: { fsId: string; cardType?: string }) {
         const summary = typeof e.data?.summary === "string" ? (e.data.summary as string) : null;
         // A costs update says which items changed in the backend's own words (labels):
         // with that summary the raw `cost_items` key list is dropped, the total's old/new stays.
-        const costsSummary = e.event_type === "card.costs_updated" && summary;
+        const costsSummary =
+          (e.event_type === "card.costs_updated" || e.event_type === "card.licenses_updated") &&
+          summary;
         const shownChanges =
-          changes && costsSummary ? Object.fromEntries(Object.entries(changes).filter(([k]) => k !== "cost_items")) : changes;
+          changes && costsSummary
+            ? Object.fromEntries(
+                Object.entries(changes).filter(([k]) => k !== "cost_items" && k !== "license_types"),
+              )
+            : changes;
         const rows = shownChanges
           ? parseChanges(shownChanges, {
               fields: fieldLabelsFor(e.event_type, fieldLabels, resourceLabels),

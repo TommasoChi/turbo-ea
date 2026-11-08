@@ -33,6 +33,7 @@ const CapabilityMapReport = lazy(() => import("@/features/reports/CapabilityMapR
 const LifecycleReport = lazy(() => import("@/features/reports/LifecycleReport"));
 const DependencyReport = lazy(() => import("@/features/reports/DependencyReport"));
 const CostReport = lazy(() => import("@/features/reports/CostReport"));
+const LicensingReport = lazy(() => import("@/features/reports/LicensingReport"));
 const MatrixReport = lazy(() => import("@/features/reports/MatrixReport"));
 const DataQualityReport = lazy(() => import("@/features/reports/DataQualityReport"));
 const EolReport = lazy(() => import("@/features/reports/EolReport"));
@@ -196,6 +197,7 @@ function AppRoutes() {
                 <Route path="/reports/lifecycle" element={<LifecycleReport />} />
                 <Route path="/reports/dependencies" element={<DependencyReport />} />
                 <Route path="/reports/cost" element={<CostReport />} />
+                <Route path="/reports/licensing" element={<LicensingReport />} />
                 <Route path="/reports/matrix" element={<MatrixReport />} />
                 <Route path="/reports/data-quality" element={<DataQualityReport />} />
                 <Route path="/reports/eol" element={<EolReport />} />

@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.card_type import CardType
 from app.models.card_type_category import CardTypeCategory
 from app.models.cost_item_type import CostItemType
+from app.models.license_type import LicenseType
 from app.models.role import Role
 
 # The longest free text (a description, a rationale) one side of an audit
@@ -112,6 +113,40 @@ async def cost_event_summaries(
         f"{text} (items: {', '.join(labels.get(k, k) for k in keys)})" if keys else text
         for keys in keysets
     ]
+
+
+async def license_type_labels(db: AsyncSession, keys: Iterable[str | None]) -> dict[str, str]:
+    """``{license type key: label}`` for ``keys``, in one query (none when empty)."""
+    wanted = _wanted(keys)
+    if not wanted:
+        return {}
+    rows = await db.execute(
+        select(LicenseType.key, LicenseType.label).where(LicenseType.key.in_(wanted))
+    )
+    return {key: label for key, label in rows.all() if label}
+
+
+async def license_event_summaries(
+    db: AsyncSession, card_name: str, payloads: Iterable[dict | None]
+) -> list[str]:
+    """Readable "Licensing of <card> changed (FY<yy>; license types: <labels>)" per
+    ``card.licenses_updated`` payload; the types part is left out when redacted."""
+    payloads = list(payloads)
+    keysets = []
+    for data in payloads:
+        types = ((data or {}).get("changes") or {}).get("license_types") or {}
+        keysets.append(sorted({*(types.get("old") or []), *(types.get("new") or [])}))
+    labels = await license_type_labels(db, [k for keys in keysets for k in keys])
+    out = []
+    for data, keys in zip(payloads, keysets):
+        fy = (data or {}).get("fiscal_year")
+        parts = [f"FY{fy % 100:02d}"] if isinstance(fy, int) else []
+        if keys:
+            parts.append(f"license types: {', '.join(labels.get(k, k) for k in keys)}")
+        out.append(
+            f"Licensing of {card_name} changed" + (f" ({'; '.join(parts)})" if parts else "")
+        )
+    return out
 
 
 def clip_text(text: str | None, limit: int = AUDIT_TEXT_LIMIT) -> str | None:

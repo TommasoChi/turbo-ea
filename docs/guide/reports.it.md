@@ -254,6 +254,36 @@ Il Sankey accetta gli stessi filtri della treemap: tipo di scheda, ambito delle 
 
 Il pulsante schermo intero sulla treemap e sul Sankey fa occupare al grafico tutto lo schermo, in larghezza e in altezza, senza deformarlo.
 
+## Report Licenze
+
+![Report Licenze](../assets/img/en/103_report_licensing.png)
+
+Il **Report Licenze** (**Report → Licenze**) confronta, per ogni Applicazione o Componente IT, le licenze a contratto con quelle realmente utilizzate e segnala un superamento. Richiede il permesso `licenses.view`. I dati si inseriscono nella [sezione Licenze](card-details.md#sezione-licenze-applicazione-e-componente-it) di ogni scheda o si importano da Excel.
+
+La barra degli strumenti sceglie il **tipo di scheda** (Applicazione o Componente IT, uno alla volta), la **metrica** (**Utenti** o **Installazioni**), il **tipo di licenza** (tutti, o una voce del catalogo), il **raggruppamento**, l'**anno fiscale** e l'ambito delle schede. Sono elencate solo le schede il cui campo **Modello di licenza** include la metrica selezionata. Quattro tessere in alto contano le schede **Conformi**, **Vicine al limite**, **Sovralicenziate** o **Senza dati effettivi** nell'anno selezionato.
+
+**Andamento** — Sopra la vista, un grafico mostra le quantità in licenza rispetto a quelle effettive per l'anno corrente, i quattro precedenti e l'anno **Forecast** (solo in licenza), impilate per tipo di licenza. Segue il filtro del tipo di licenza, l'ambito e qualsiasi approfondimento.
+
+### Viste
+
+| Vista | Cosa mostra |
+|---|---|
+| **Utilizzo** | Una barra orizzontale per scheda: effettivo diviso per in licenza, dal più alto. Verde sotto l'80 %, arancione dall'80 % al 100 %, rosso oltre il 100 %, con linee di riferimento all'80 % e al 100 %. Una scheda senza dati effettivi è una barra grigia a zero. |
+| **Per tipo di licenza** | Barre raggruppate di in licenza rispetto a effettivo per ogni tipo di licenza nell'anno selezionato. Senza una scheda scelta mostra i totali dell'ambito. Il selettore **Scheda** la restringe a una Applicazione o Componente IT; scegliere una **Piattaforma** somma le Applicazioni e i Componenti IT collegati, ciascuno contato una sola volta. |
+| **Tabella** | Una riga per scheda con in licenza, effettivo e % per ogni tipo di licenza, i totali e lo stato. Il menu **Colonne** aggiunge campi della scheda. Download in Excel o stampa come per il Report Costi. |
+
+**Stato.** Ogni tipo di licenza è valutato da solo, senza compensazione tra i tipi: è **sovralicenziato** quando l'effettivo supera il licenziato e **vicino al limite** dall'80 % del licenziato. Una scheda assume il suo stato peggiore. Una scheda senza quantità effettiva per la metrica selezionata è **Senza dati effettivi**. La barra di una scheda mostra il suo tipo di licenza peggiore. L'anno Forecast non ha stato.
+
+**Gesti** — Un **clic sinistro** su una scheda apre il suo pannello laterale. Un **clic destro** su una scheda (o su un gruppo quando il raggruppamento è attivo) la approfondisce, con una breadcrumb e un pulsante **Indietro**; l'andamento segue l'approfondimento. La vista Per tipo di licenza non ha approfondimento.
+
+### Importazione
+
+**Importa** nella barra degli strumenti carica le quantità di licenze da un file Excel (richiede `licenses.edit`). Il primo foglio ha una riga per quantità, con le colonne **Component**, **Metric**, **License type**, **Year**, **Licensed** e **Actual**. Il componente è individuato dal nome esatto (senza distinzione tra maiuscole e minuscole); il tipo di licenza dalla sua chiave o dal nome inglese; l'anno è l'anno fiscale come nominato nella barra degli strumenti (ad esempio 2026). Una cella vuota lascia invariato il valore memorizzato e non si può impostare una quantità effettiva per l'anno Forecast.
+
+La finestra mostra prima un'anteprima: le righe che verranno applicate e quelle saltate, ciascuna con il suo motivo (scheda non trovata, tipo di licenza sconosciuto, anno fuori dalla finestra, non è un numero intero, cella duplicata). Non viene scritto nulla finché non fai clic su **Applica**. L'importazione non crea mai un tipo di licenza né modifica il Modello di licenza di una scheda.
+
+I report sulle licenze possono essere salvati come gli altri report (vedi [Report salvati](#report-salvati)).
+
 ## Report Matrice
 
 ![Report Matrice](../assets/img/it/35_report_matrice.png)

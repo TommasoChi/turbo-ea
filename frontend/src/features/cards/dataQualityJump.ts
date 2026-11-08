@@ -60,7 +60,7 @@ export interface SectionEditRequest {
   relation?: { type: string; side: RelationSideName };
 }
 
-export type BuiltInSectionKey = "description" | "lifecycle" | "costs" | "tags" | "relations" | "hierarchy";
+export type BuiltInSectionKey = "description" | "lifecycle" | "costs" | "licensing" | "tags" | "relations" | "hierarchy";
 
 export function sectionAnchor(key: BuiltInSectionKey): string {
   return `card-section-${key}`;
