@@ -63,12 +63,13 @@
 **Files:**
 - Create: `backend/alembic/versions/<NEXT>_bo_relationship.py`
 - Modify: `backend/app/services/seed.py`
+- Modify the existing shared card writer and applicable single and bulk create/update entry points for subtype validation. Add API and writer tests.
 - Test: `backend/tests/services/test_alembic_<NEXT>_bo_relationship.py`
 
 **Interfaces:**
-- Add the native `data` and `document` options to `CardType.subtypes` for DataObject and `isPaymentData` to its Data Information fields. Keep `Card.type` equal to `DataObject`. Validate the subtype on normal creation paths. Preserve legacy unclassified BOs and allow explicit classification.
+- Add the native `data` and `document` options to `CardType.subtypes` for DataObject and `isPaymentData` to its Data Information fields. Keep `Card.type` equal to `DataObject`. Validate the subtype in the shared creation path and test single, bulk and diagram creates. Reject clearing an assigned subtype. Allow an unrelated edit to an existing unclassified BO and let the editor classify it explicitly.
 - Add the nullable explicit `dataOwnership=master` designation to `relAppToDataObj`. Derive Slave and Unclassified. Preserve CRUD and lineage. Seed `relDataObjectToDataObject` with its four cardinality options and one ER link per unordered BO pair.
-- The private `Diagram` of kind `boRelationship` stores the last accepted snapshot and positions. Initialize it with an empty positions map and no accepted snapshot. Exclude it from `/diagrams?kind=all` and the generic per-ID loader. Test publish, delete and direct UUID access. If the diagram transfers between workspaces, remap BO, Application and relation IDs in the snapshot and position keys.
+- The private `Diagram` of kind `boRelationship` stores the last accepted snapshot and positions. Initialize it with an empty positions map and no accepted snapshot. Exclude it from generic diagram routes and the diagrams SDK bridge, including list, direct UUID, favorites, card links, groups, publish, update and delete. Test each direct access path. If the diagram transfers between workspaces, remap BO, Application and relation IDs in the snapshot and position keys.
 
 - [ ] **Step 1: Determine the real revision number and write the failing tests**
 
@@ -136,7 +137,7 @@ Expected: FAIL — module not found (migration file doesn't exist yet).
 
 - [ ] **Step 3: Implement the migration**
 
-Use the guarded patch pattern of migration 168. Append missing subtype keys and the payment field without overwriting admin customizations. Add the relation metadata to the seed. Test upgrade, fresh bootstrap, subtype validation and visibility of existing unclassified BOs. Verify the generic diagram APIs cannot access the private snapshot.
+Use the guarded patch pattern of migration 168. Append missing subtype keys and the payment field without overwriting admin customizations. Add relation metadata to the seed. Define operation-receipt storage and database uniqueness guards in SQLAlchemy metadata and the migration, so upgrade, fresh boot and reset install the same guarantees. Retain receipts after a card is deleted. Test upgrade, fresh bootstrap, subtype validation and visibility of existing unclassified BOs. Verify the generic diagram APIs cannot access the private snapshot.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -243,7 +244,7 @@ Expected: FAIL — `404 Not Found` on every route.
 
 - [ ] **Step 3: Implement the router**
 
-Use `CardReadScope` for both card types and validate inputs in the schemas. For assignment, preserve CRUD attributes and enforce one persisted Master across API, import and other write paths that can set the marker. Test transfer, clear, link removal, a hidden Master, two concurrent assignments and denied writes. For layout, test malformed positions, hidden and wrong-type IDs, and simultaneous disjoint updates.
+Use `CardReadScope` for both card types and validate inputs in the schemas. Reserve the Master marker for the ownership operation. Preserve it when generic writers replace or merge CRUD attributes, and reject attempts to set it through those writers. Enforce one Master across API, import and restore. Test transfer, clear, link removal, a hidden Master, two concurrent assignments and denied writes. For layout, test malformed positions, hidden and wrong-type IDs, and simultaneous disjoint updates.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -399,7 +400,7 @@ Expected: FAIL — module does not exist.
 
 - [ ] **Step 7: Render the diagram and wire selection and Master controls.** Canvas Save arrives in Task 6.
 
-Render saved nodes, ER edges and positions. Use native subtype keys for Data and Document shapes and a neutral legacy fallback. Keep anchored nodes fixed. Show scoped Application groups and reuse the card drawer with a BO edit gate. Refresh after supported edits while preserving unsaved canvas state. Wire inventory check and acceptance in Task 8.
+Render saved nodes, ER edges and positions. Use native subtype keys for Data and Document shapes and a neutral legacy fallback. Keep anchored nodes fixed. Render GDPR and payment badges from the snapshot flags and explain them in the diagram legend. Show scoped Application groups and reuse the card drawer with a BO edit gate. Keep the card panel's existing save workflow for its own edits. Recheck the canvas after a successful edit and preserve unsaved canvas state. Wire inventory check and acceptance in Task 8.
 
 - [ ] **Step 8: Run to verify they pass**
 
@@ -477,9 +478,9 @@ git commit -m "feat(bo-relationship): optional filter panel on isPersonalData/is
 **Interfaces**
 - Give each draft object a stable UUID in the active session. `PUT /bo-relationship/objects/{draft_id}` requires a valid DataObject subtype. Check module edit and normal subtype-scoped creation permission. Claim a durable receipt keyed by actor and draft UUID, with the card ID and creation fingerprint. Commit receipt, card and event together. Replay identical requests for readable cards. Return 409 for different payloads and 404 for unavailable originals. Retain the receipt to prevent recreating a deleted card. Persist the pending queue across refresh only if the spec calls for it.
 - Serialize ER lookups and creation by unordered BO pair across write paths, including simultaneous A-to-B and B-to-A requests. Keep the first stored direction and preserve attributes on replay. Leave cardinality absent if unset.
-- Add a diagram action to choose an existing Application with `CardPicker` and connect it to a BO. On Save, validate endpoints and role. When Master is chosen, persist the link and transfer together. Slave requires another Master, including one persisted earlier in the same Save. Offer Unclassified for an Application link when there is no Master. Preserve CRUD flags and keep unresolved dependent operations pending.
+- Add a diagram action to choose an existing Application with `CardPicker` and connect it to a BO. Stage an operation ID and send `PUT /api/v1/bo-relationship/application-link-drafts/{draft_id}` with `object_id`, `application_id` and `role` (master, slave or unclassified). Require BO edit and normal link permissions. Persist the link and any Master transfer with a durable operation receipt in one transaction. A retry returns the prior result under current read scope without reapplying a transfer that has since changed. Slave requires a visible, committed Master, including one saved earlier in the batch. If that Master fails, keep its dependent links pending. Offer Unclassified for links without a visible Master. Preserve CRUD flags.
 
-- [ ] **Step 1: Add regression tests.** Cover partial success and a lost card response, reverse and concurrent ER creation, link retry after a cardinality edit, Application Master transfer, Slave with and without a Master, permission denial, required subtype and failure to save positions.
+- [ ] **Step 1: Add regression tests.** Cover partial success and a lost card response, reverse and concurrent ER creation, link retry after a cardinality edit, Application Master transfer, retry after a later Master change, Slave with and without a Master, a failed Master with a dependent Slave, permission denial, required subtype and failure to save positions.
 - [ ] **Step 2: Run the new API and page tests.** Verify that they fail for the missing behavior.
 - [ ] **Step 3: Track pending work by draft ID.** Stage BO cards, ER links, Application links and roles, manual moves and accepted inventory changes. On Save, create pending cards first, then eligible links and Master assignments, then persist the successfully added items, accepted inventory changes and position deltas in the diagram. Retain successes and retry unresolved items.
 - [ ] **Step 4: Run the API and page tests, typecheck and regenerate OpenAPI.** Verify Customer/Order with an injected link failure followed by a successful retry.
@@ -516,7 +517,7 @@ Expected: PASS already if Task 6 covers it (skip Steps 3-4 of this task's TDD cy
 
 - [ ] **Step 3: Add the route and menu entry**
 
-Add the lazy route and declare `boRelationship.view` in `ROUTE_PERMISSIONS`. Use the same gate for navigation. Test initial Administrator and viewer grants on new and upgraded workspaces and deny direct navigation without view access.
+Add the lazy route and declare `boRelationship.view` in `ROUTE_PERMISSIONS`. Use the same gate for navigation. Seed the initial grants for new workspaces and apply a guarded role migration for existing workspaces. Add view where absent and preserve explicit overrides. Verify that the Administrator starts with edit and other default roles with view only. Deny direct navigation without view access.
 
 - [ ] **Step 4: Run the full frontend reports+cards+boRelationship suite**
 
@@ -544,11 +545,12 @@ git commit -m "feat(bo-relationship): menu entry under Application & Data, permi
 - Update `BoRelationshipPage.tsx` and its tests. Follow the initial check, manual recheck and accept pattern in `frontend/src/features/diagrams/DiagramEditor.tsx` and `staleCheck.ts`.
 
 **Interfaces**
-- `GET /api/v1/bo-relationship/changes` (`boRelationship.view`) compares the saved snapshot with scoped live inventory. Return the readable additions, updates and removals for BOs and links. Include names, subtypes, flags, cardinality and ownership. Visibility loss must not be reported as deletion or disclose a hidden item.
-- Sync applies chosen changes in the open editor. Save sends accepted item identifiers and their comparison revision with position deltas. Resolve the accepted values server-side, preserve untouched saved state and require a recheck for any item that changed again.
+- `GET /api/v1/bo-relationship/changes` (`boRelationship.view`) compares the saved snapshot with scoped live inventory. Return the readable additions, updates and removals for BOs and links. Include names, subtypes, flags, cardinality and ownership. Distinguish removal or archive from a change in visibility with internal inventory checks. Expose a hard deletion only from a verifiable authorized tombstone. When authorization cannot be established, omit the removal details. Suppress hidden entries and retain them in the shared snapshot when the editor saves.
+- On the first Save, initialize one workspace baseline on the server and merge the allowed deltas. Use the inventory revision from the comparison and recheck a stale change. A layout-only Save also initializes the snapshot. A restricted editor must not publish a global snapshot limited to their visibility. Serialize concurrent initial saves.
+- Sync applies chosen changes in the open editor. Save sends accepted item identifiers and their comparison revision with position deltas. Resolve accepted values server-side, preserve untouched saved state including entries outside the editor's scope, and require a recheck for any item that changed again.
 
-- [ ] **Step 1: Test the normal flow.** Save a BO at a manually chosen position, rename it and change its subtype in inventory, then reload. Verify the old snapshot and a change notice. Sync updates the name and shape in the draft and preserves the position. Save and reopen as another user. Cover added, archived and removed BOs and changed ER and Application links.
-- [ ] **Step 2: Test authorization and failures.** An initial check has no writes. Hidden items produce no notice. A failed check preserves the drawing. A viewer cannot persist Sync. A change made after acceptance asks the editor to recheck.
+- [ ] **Step 1: Test the normal flow.** Save a BO at a manually chosen position, rename it and change its subtype in inventory, then reload. Verify the old snapshot and a change notice. Sync updates the name and shape in the draft and preserves the position. Save and reopen as another user. Test a first layout-only Save and concurrent first saves from editors with different scopes. Cover added, archived and removed BOs and changed ER and Application links.
+- [ ] **Step 2: Test authorization and failures.** An initial check has no writes. Test permission revocation separately from a readable item being removed or archived. Hidden items produce no notice and a restricted editor's Save preserves them. A failed check preserves the drawing. A viewer cannot persist Sync. A change made after acceptance asks the editor to recheck.
 - [ ] **Step 3: Implement the check and Sync.** Run the scoped comparison after load and from the manual check action. Use the request cancellation pattern. Update the editor only on Sync and share accepted changes and positions only on Save.
 - [ ] **Step 4: Run the API and page tests, typecheck and regenerate OpenAPI.** Run the targeted VAPT cases and document the check, Sync and Save sequence in the user manual.
 
